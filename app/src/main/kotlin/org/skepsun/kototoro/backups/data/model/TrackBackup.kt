@@ -7,7 +7,7 @@ import org.skepsun.kototoro.tracker.data.TrackEntity
 /**
  * Wire format of a tracked content row. `owner_id` / `entity_id` are kept as payload
  * fields so backups written by the entity-era app still deserialize, but they no longer
- * carry identity: a track is owned by its `manga_id` projection.
+ * carry identity: a track is owned by its `manga_id`.
  */
 @Serializable
 class TrackBackup(

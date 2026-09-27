@@ -208,8 +208,7 @@ class SuggestionsViewModel @Inject constructor(
     }
 
     /**
-     * Projection-first 分组：每条 content 自成一个分组，不再解析跨来源实体身份，
-     * 因此 projectionCount 恒为 1，entityId 恒为 null。
+     * 每条 content 自成一个分组，不解析跨来源实体身份，因此 entityId 恒为 null。
      */
     private suspend fun List<Content>.aggregateByEntity(): List<SuggestionGroup> {
         if (isEmpty()) {
@@ -222,26 +221,14 @@ class SuggestionsViewModel @Inject constructor(
                 mangaIds = setOf(item.id),
                 entityId = null,
                 preferredLocalMangaId = item.id,
-                projectionCount = 1,
             )
         }
     }
 
     private fun org.skepsun.kototoro.list.ui.model.ContentListModel.toGroupedListModel(group: SuggestionGroup): ListModel {
-        val groupSuffix = if (group.projectionCount > 1) {
-            "${group.projectionCount} 个投影来源"
-        } else {
-            null
-        }
         return when (this) {
-            is ContentCompactListModel -> copy(
-                id = group.uiId,
-                subtitle = listOfNotNull(subtitle?.takeIf { it.isNotBlank() }, groupSuffix).joinToString(" · "),
-            )
-            is ContentDetailedListModel -> copy(
-                id = group.uiId,
-                subtitle = listOfNotNull(subtitle.takeIf { !it.isNullOrBlank() }, groupSuffix).joinToString(" · "),
-            )
+            is ContentCompactListModel -> copy(id = group.uiId)
+            is ContentDetailedListModel -> copy(id = group.uiId)
             is ContentGridModel -> copy(
                 id = group.uiId,
             )
@@ -268,6 +255,5 @@ class SuggestionsViewModel @Inject constructor(
         val mangaIds: Set<Long>,
         val entityId: Long?,
         val preferredLocalMangaId: Long?,
-        val projectionCount: Int,
     )
 }

@@ -1281,17 +1281,6 @@ private fun LocalEntitySuggestionCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                Text(
-                    text = stringResource(
-                        R.string.search_local_entity_suggestion_meta,
-                        suggestion.projectionCount,
-                        suggestion.sourceCount,
-                    ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
     }

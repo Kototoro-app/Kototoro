@@ -139,14 +139,13 @@ fun MetadataSourceSheet(
                             ) {
                                 SourceOptionCard(
                                     displayModel = option.resolveDisplayModel(
-                                        role = DetailsSourceRole.ENTITY_METADATA,
+                                        role = DetailsSourceRole.METADATA,
                                         currentContent = currentContent,
                                         linkedTrackingItem = linked,
                                         strings = DetailsSourceDisplayStrings(
                                             unavailableText = unavailableText,
                                             metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
-                                            currentProjectionLabel = stringResource(R.string.details_current_projection),
-                                            switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
+                                            readingSourceLabel = stringResource(R.string.details_reading_source),
                                         ),
                                         isSelected = option == selectedOption || option.isSelected,
                                     ),
@@ -368,7 +367,7 @@ fun ReadingSourceSheet(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        text = stringResource(R.string.details_current_projection_sheet_hint, label),
+                        text = stringResource(R.string.details_reading_source_sheet_hint, label),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -380,14 +379,13 @@ fun ReadingSourceSheet(
                         ) { _, option ->
                             SourceOptionCard(
                                 displayModel = option.resolveDisplayModel(
-                                    role = DetailsSourceRole.READING_PROJECTION,
+                                    role = DetailsSourceRole.READING_SOURCE,
                                     currentContent = currentContent,
                                     linkedTrackingItem = null,
                                     strings = DetailsSourceDisplayStrings(
                                         unavailableText = unavailableText,
                                         metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
-                                        currentProjectionLabel = label,
-                                        switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
+                                        readingSourceLabel = label,
                                     ),
                                     isSelected = option == selectedOption || option.isSelected,
                                 ),

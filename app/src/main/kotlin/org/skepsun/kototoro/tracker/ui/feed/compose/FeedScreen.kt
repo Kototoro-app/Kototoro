@@ -435,25 +435,13 @@ private fun FeedFilterSection(
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(
-                horizontal = AppLayoutTokens.screenHorizontalPadding,
-                vertical = 4.dp,
-            ),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.82f),
-        border = BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f),
-        ),
-    ) {
-        org.skepsun.kototoro.list.ui.compose.QuickFilterSection(
-            quickFilter = quickFilter,
-            onQuickFilterOptionClick = onQuickFilterOptionClick,
-        )
-    }
+    // Plain chip rail, like the other top-level pages: the outlined container around it
+    // was the only filter row in the app drawn as a boxed pill.
+    org.skepsun.kototoro.list.ui.compose.QuickFilterSection(
+        quickFilter = quickFilter,
+        onQuickFilterOptionClick = onQuickFilterOptionClick,
+        modifier = modifier.padding(vertical = 2.dp),
+    )
 }
 
 @Composable

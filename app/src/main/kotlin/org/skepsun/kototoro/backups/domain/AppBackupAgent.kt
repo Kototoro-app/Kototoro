@@ -141,7 +141,7 @@ class AppBackupAgent : BackupAgent() {
                         ),
                     ),
                     sourceAvailabilityRepository = SourceAvailabilityRepository(appSettings),
-                    projectionContentTypeBackfill = org.skepsun.kototoro.space.data.ProjectionContentTypeBackfill(db),
+                    contentTypeBackfill = org.skepsun.kototoro.space.data.ContentTypeBackfill(db),
                 ),
                 savedFiltersRepository = SavedFiltersRepository(
                     context = applicationContext,
@@ -264,7 +264,7 @@ class AppBackupAgent : BackupAgent() {
                             ),
                         ),
                         sourceAvailabilityRepository = SourceAvailabilityRepository(appSettings),
-                        projectionContentTypeBackfill = org.skepsun.kototoro.space.data.ProjectionContentTypeBackfill(db),
+                        contentTypeBackfill = org.skepsun.kototoro.space.data.ContentTypeBackfill(db),
                     ),
                     savedFiltersRepository = SavedFiltersRepository(
                         context = applicationContext,

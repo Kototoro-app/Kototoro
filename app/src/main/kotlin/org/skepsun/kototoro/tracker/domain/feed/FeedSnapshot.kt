@@ -42,7 +42,7 @@ data class FeedCardRow(
     val createdAt: Long,
     val unread: Boolean,
     val isPinned: Boolean,
-    // display projection (COALESCE(preferred, anchor)); null title = broken row
+    // display manga (COALESCE(preferred, anchor)); null title = broken row
     val displayMangaId: Long?,
     val title: String,
     val altTitle: String?,

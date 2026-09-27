@@ -23,7 +23,7 @@ import javax.inject.Inject
 
 /**
  * Interface-level tests for [UpdatesSnapshotStore]: one group per tracked manga
- * with pending new chapters (projection-first).
+ * with pending new chapters (manga-keyed).
  */
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)

@@ -7,7 +7,7 @@ import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
 /**
  * Wire format of one scrobbling row. `owner_id` / `entity_id` are kept as payload fields
  * so backups written by the entity-era app still deserialize, but they no longer carry
- * identity: a scrobbling is owned by its `manga_id` projection.
+ * identity: a scrobbling is owned by its `manga_id`.
  */
 @Serializable
 class ScrobblingBackup(

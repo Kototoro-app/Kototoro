@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * Narrow read-only DAO for the tracker feed and updates snapshots
- * (projection-first architecture).
+ * (manga-keyed architecture).
  */
 @Dao
 abstract class TrackerReadDao {

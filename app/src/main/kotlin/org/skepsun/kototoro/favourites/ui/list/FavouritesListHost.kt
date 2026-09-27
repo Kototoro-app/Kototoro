@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
+import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
 import org.skepsun.kototoro.core.util.ext.EventFlow
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
@@ -18,12 +20,16 @@ import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.favourites.domain.FavoritesListQuickFilter
 import org.skepsun.kototoro.favourites.domain.library.FavouriteCardRow
 import org.skepsun.kototoro.favourites.domain.library.FavouritesCardMapper
+import org.skepsun.kototoro.favourites.domain.library.FavouritesShelfState
+import org.skepsun.kototoro.favourites.domain.library.selectFavouritesShelfRows
 import org.skepsun.kototoro.favourites.ui.container.FavouriteLibraryUiState
 import org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.QuickFilterListener
 import org.skepsun.kototoro.list.ui.ContentActionHostRequest
 import org.skepsun.kototoro.list.ui.ContentListHost
+import org.skepsun.kototoro.list.ui.model.ContentGridModel
+import org.skepsun.kototoro.list.ui.model.EmptyState
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.list.ui.model.QuickFilter
@@ -97,6 +103,22 @@ class FavouritesListHost internal constructor(
             initialValue = listOf<ListModel>(LoadingState),
         )
 
+    /**
+     * The "continue reading" shelf of this category, drawn above the grid. Empty when the
+     * user turned the shelf off or nothing in the (filtered) slice qualifies.
+     */
+    val shelf: StateFlow<FavouritesShelfState> = combine(
+        libraryState,
+        container.isShelfEnabled,
+    ) { library, isEnabled ->
+        buildShelf(library, isEnabled, cardMapper)
+    }.flowOn(Dispatchers.Default)
+        .stateIn(
+            scope = container.listScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = FavouritesShelfState(),
+        )
+
     /** Nothing to re-query: the snapshot is Room-invalidation driven. */
     override fun onRefresh() = Unit
 
@@ -136,7 +158,7 @@ class FavouritesListHost internal constructor(
         }
         val ids = library.visibleIdsByCategory[categoryId]
         if (ids.isNullOrEmpty()) {
-            return emptyList()
+            return listOf(emptyStateOf(library))
         }
         val byId = library.rowsByEntityId
         val rows = ArrayList<FavouriteCardRow>(ids.size)
@@ -149,6 +171,56 @@ class FavouritesListHost internal constructor(
                 mode = mode,
                 pinnedEntityIds = library.pinnedIdsByCategory[categoryId].orEmpty(),
             ),
+        )
+    }
+
+    /**
+     * An empty slice is either a category with nothing in it, or one whose works the
+     * space / filters hide — the latter gets "nothing found" with a reset action, so the
+     * page never looks empty while filters (e.g. Downloaded while offline) hide the library.
+     */
+    private fun emptyStateOf(library: FavouriteLibraryUiState): EmptyState {
+        val hasWorks = if (categoryId == NO_ID) {
+            library.allEntityIds.isNotEmpty()
+        } else {
+            library.membershipsByCategory[categoryId].orEmpty().isNotEmpty()
+        }
+        return if (hasWorks) {
+            EmptyState(
+                icon = R.drawable.ic_empty_favourites,
+                textPrimary = R.string.nothing_found,
+                textSecondary = R.string.text_empty_holder_secondary_filtered,
+                actionStringRes = R.string.reset_filter,
+            )
+        } else {
+            EmptyState(
+                icon = R.drawable.ic_empty_favourites,
+                textPrimary = R.string.text_empty_holder_primary,
+                textSecondary = R.string.you_have_not_favourites_yet,
+                actionStringRes = 0,
+            )
+        }
+    }
+
+    private fun buildShelf(
+        library: FavouriteLibraryUiState,
+        isEnabled: Boolean,
+        cardMapper: FavouritesCardMapper,
+    ): FavouritesShelfState {
+        if (!isEnabled || !library.isInitialized) {
+            return FavouritesShelfState()
+        }
+        val ids = library.visibleIdsByCategory[categoryId].orEmpty()
+        val byId = library.rowsByEntityId
+        val rows = ids.mapNotNull { byId[it] }
+        val items = cardMapper.map(
+            rows = selectFavouritesShelfRows(rows),
+            slice = FavouritesCardMapper.Slice(mode = ListMode.GRID),
+        ).filterIsInstance<ContentGridModel>()
+        return FavouritesShelfState(
+            items = items,
+            totalCount = rows.size,
+            updatedCount = rows.count { it.newChapters > 0 },
         )
     }
 

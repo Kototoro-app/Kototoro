@@ -14,7 +14,7 @@ import org.skepsun.kototoro.parsers.model.ContentType
  *   already grouped per entity — the paging-era per-page `aggregateByEntity`
  *   with its cross-page @Volatile accumulator maps is replaced by a single
  *   whole-list grouping that cannot split an entity at a page boundary;
- * - identity, pinned, display projection and the metadata authority are
+ * - identity, pinned, display manga and the metadata authority are
  *   resolved once in SQL (see [org.skepsun.kototoro.tracker.data.TrackerReadDao]);
  * - no filtering happened yet — quick filters, group tab, source tags, NSFW
  *   and the tag blacklist are derived later, in memory;
@@ -35,9 +35,9 @@ data class UpdatesSnapshot(
  * One entity group: the per-entity aggregate the updates page renders.
  *
  * Field budget follows the legacy `UpdateGroup` + `mapUpdatesPage`: the
- * representative (preferred projection first, else the freshest track), the
+ * representative (preferred manga first, else the freshest track), the
  * sum of new chapters, the max last-chapter date, the track manga ids (the
- * legacy "N projections" suffix counted tracks) and the metadata authority.
+ * legacy per-source suffix counted tracks) and the metadata authority.
  */
 data class UpdateGroupRow(
     /** UI id: `entityId.toUiGroupId(contentTypeOrdinal)` or the manga id. */
@@ -81,7 +81,7 @@ data class UpdateGroupRow(
     fun originGroup(origin: OriginGroup): Boolean = sourceOriginFlags and (1 shl origin.ordinal) != 0
 }
 
-/** One display tag of the representative projection: identity + title. */
+/** One display tag of the representative manga: identity + title. */
 data class UpdateCardTag(
     val tagId: Long,
     val title: String,

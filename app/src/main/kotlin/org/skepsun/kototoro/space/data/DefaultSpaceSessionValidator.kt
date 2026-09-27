@@ -39,8 +39,7 @@ class DefaultSpaceSessionValidator @Inject constructor() : SpaceSessionValidator
 
     private suspend fun SpaceRouteSnapshot.validate(): SpaceRouteSnapshot? = when (this) {
         is SpaceRouteSnapshot.TopLevel -> takeIf { key in VALID_TOP_LEVEL_KEYS }
-        // Projection-first: `WorkDetails` no longer names an entity, it names the anchor
-        // projection (manga) to reopen. There is no in-memory identity registry left to
+        // `WorkDetails` no longer names an entity, it names the manga to reopen. There is no in-memory identity registry left to
         // validate it against, and route restoration must not destructively discard a
         // valid saved destination before the details page has had a chance to resolve it,
         // so the route is kept as saved — the same policy as ContentList and Search.

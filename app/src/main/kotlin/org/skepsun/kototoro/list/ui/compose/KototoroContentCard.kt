@@ -324,7 +324,7 @@ fun KototoroContentCardGrid(
     val coverBounds = rememberDeferredContentCoverBounds()
     val badgeMetrics = remember(posterStyle.itemWidth) { contentCardBadgeMetricsFor(posterStyle.itemWidth) }
     val compactTitleHeight = remember(posterStyle.posterHeight) {
-        (posterStyle.posterHeight.value * 0.38f).dp.coerceIn(46.dp, 64.dp)
+        compactGridTitleOverlayHeight(posterStyle.posterHeight)
     }
     val compactTitleTextClearance = remember(posterStyle.posterHeight) {
         (posterStyle.posterHeight.value * 0.28f).dp.coerceIn(32.dp, 44.dp)
@@ -514,7 +514,7 @@ fun KototoroContentCardGrid(
                 CompactGridTitleOverlay(
                     title = renderModel.title,
                     height = compactTitleHeight,
-                    fontSize = titleFontSize,
+                    fontSize = resolveCompactGridTitleFontSize(gridScale),
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
@@ -617,7 +617,7 @@ private fun CompactGridTitleOverlay(
             .fillMaxWidth()
             .height(height)
             .background(overlayBrush)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         contentAlignment = Alignment.BottomStart,
     ) {
         Text(
@@ -627,6 +627,10 @@ private fun CompactGridTitleOverlay(
                 fontSize = fontSize,
                 lineHeight = (fontSize.value + 3.5f).sp,
                 fontWeight = FontWeight.SemiBold,
+                // Narrow rail covers cannot hold a long word on one line; hyphenate it
+                // instead of breaking it at an arbitrary letter ("Tide / r").
+                hyphens = androidx.compose.ui.text.style.Hyphens.Auto,
+                lineBreak = androidx.compose.ui.text.style.LineBreak.Paragraph,
                 shadow = Shadow(
                     color = Color.Black.copy(alpha = 0.75f),
                     offset = Offset(0f, 1.5f),
@@ -733,6 +737,17 @@ fun rememberCoverRimBorderBrush(isIosStyle: Boolean): Brush {
         )
     }
 }
+
+/**
+ * Title size of the compact grid, drawn over the cover: a notch under the below-cover title
+ * so two lines fit the scrim (at the full size one line was all that fit on phones).
+ */
+internal fun resolveCompactGridTitleFontSize(gridScale: Float): TextUnit =
+    (resolveGridTitleFontSize(gridScale).value - 1.5f).sp
+
+/** Scrim height of the compact grid title: room for two title lines on any cover size. */
+internal fun compactGridTitleOverlayHeight(posterHeight: androidx.compose.ui.unit.Dp): androidx.compose.ui.unit.Dp =
+    (posterHeight.value * 0.42f).dp.coerceIn(54.dp, 72.dp)
 
 internal fun resolveGridTitleFontSize(gridScale: Float): TextUnit {
     val normalized = ((gridScale.coerceIn(0.5f, 1.5f) - 0.5f) / 1f).coerceIn(0f, 1f)
@@ -1037,7 +1052,7 @@ fun KototoroContentCardList(
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Medium,
                         ),
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 3.dp)
@@ -1056,6 +1071,11 @@ fun KototoroContentCardList(
                         modifier = Modifier.padding(top = 3.dp)
                     )
                 }
+                ContentCardStatusRow(
+                    counter = renderModel.counter,
+                    progress = renderModel.progress,
+                    modifier = Modifier.padding(top = 5.dp),
+                )
             }
         }
         HorizontalDivider(
@@ -1117,7 +1137,6 @@ private fun ContentCardCornerBadges(
     val showSource = "source" in badges && resolvedSource != null
     val showLanguage = "language" in badges && !langText.isNullOrBlank()
     val showCounter = "counter" in badges && item.counter > 0
-    val showProjectionCount = "projection_count" in badges && item.projectionCount > 1
     val showScore = "score" in badges && !item.scoreText.isNullOrBlank()
     val showPin = "pin" in badges && item.isPinned
     val showNsfw = "nsfw" in badges && item.isNsfw
@@ -1128,7 +1147,6 @@ private fun ContentCardCornerBadges(
         !showSource &&
         !showLanguage &&
         !showCounter &&
-        !showProjectionCount &&
         !showScore &&
         !showPin
 
@@ -1139,7 +1157,6 @@ private fun ContentCardCornerBadges(
         !showSource &&
         !showLanguage &&
         !showCounter &&
-        !showProjectionCount &&
         !showScore &&
         !showNsfw &&
         !showPin
@@ -1155,7 +1172,6 @@ private fun ContentCardCornerBadges(
         !showSaved &&
         !showSource &&
         !showLanguage &&
-        !showProjectionCount &&
         !showScore &&
         !showNsfw &&
         !showPin
@@ -1212,7 +1228,7 @@ private fun ContentCardCornerBadges(
                         Icon(
                             painter = painterResource(id = R.drawable.ic_heart_outline),
                             contentDescription = "Favourite",
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = if (isIosStyle) Color.White else MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(metrics.iconSize),
                         )
                     }
@@ -1262,23 +1278,6 @@ private fun ContentCardCornerBadges(
                         )
                     }
                 }
-                "projection_count" -> {
-                    if (item.projectionCount > 1) {
-                        Text(
-                            text = "x${item.projectionCount}",
-                            color = if (showOnlyNsfw) {
-                                if (isIosStyle) Color.White else MaterialTheme.colorScheme.onErrorContainer
-                            } else {
-                                MaterialTheme.colorScheme.primary
-                            },
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = metrics.textSize,
-                                lineHeight = metrics.textSize,
-                            ),
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
                 "score" -> {
                     item.scoreText?.takeIf { it.isNotBlank() }?.let { scoreText ->
                         Text(
@@ -1310,7 +1309,9 @@ private fun ContentCardCornerBadges(
                         Icon(
                             painter = painterResource(id = R.drawable.ic_pin),
                             contentDescription = stringResource(R.string.pin),
-                            tint = MaterialTheme.colorScheme.primary,
+                            // Same rule as the saved badge: the iOS badge is a dark pill,
+                            // where a primary-tinted glyph all but disappears.
+                            tint = if (isIosStyle) Color.White else MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(metrics.iconSize),
                         )
                     }
@@ -1545,7 +1546,7 @@ fun KototoroContentCardDetailedList(
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Medium,
                         ),
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 4.dp)
@@ -1591,6 +1592,11 @@ fun KototoroContentCardDetailedList(
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
+                ContentCardStatusRow(
+                    counter = renderModel.counter,
+                    progress = renderModel.progress,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
         }
         HorizontalDivider(
@@ -1609,7 +1615,6 @@ fun ContentListModel.asBadgeModel(
     override = override,
     subtitle = null,
     counter = counter,
-    projectionCount = projectionCount,
     id = id,
     progress = when (this) {
         is ContentGridModel -> progress
@@ -1637,7 +1642,6 @@ fun hasVisibleCardBadges(
         ("source" in badges && resolvedSource != null) ||
         ("language" in badges && !langText.isNullOrBlank()) ||
         ("counter" in badges && item.counter > 0) ||
-        ("projection_count" in badges && item.projectionCount > 1) ||
         ("score" in badges && !item.scoreText.isNullOrBlank()) ||
         ("pin" in badges && item.isPinned) ||
         ("nsfw" in badges && item.isNsfw)

@@ -15,16 +15,16 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentType
 
-class ProjectionIdentityResolverTest {
+class StoredContentIdentityResolverTest {
 
 	private val mangaDao = mockk<MangaDao>()
 	private val db = mockk<MangaDatabase> {
 		every { getMangaDao() } returns mangaDao
 	}
-	private val resolver = ProjectionIdentityResolver(db)
+	private val resolver = StoredContentIdentityResolver(db)
 
 	@Test
-	fun `resolveStoredProjection reuses existing projection with same source and url`() = runTest {
+	fun `resolveStoredContent reuses existing content with same source and url`() = runTest {
 		coEvery { mangaDao.findBySourceAndUrl("source", "/work") } returns mangaWithTags(
 			id = 42L,
 			source = "source",
@@ -32,13 +32,13 @@ class ProjectionIdentityResolverTest {
 			publicUrl = "https://example.org/work",
 		)
 
-		val resolved = resolver.resolveStoredProjection(content(id = 7L, url = "/work"))
+		val resolved = resolver.resolveStoredContent(content(id = 7L, url = "/work"))
 
 		assertEquals(42L, resolved.id)
 	}
 
 	@Test
-	fun `resolveStoredProjection assigns local id when content id is occupied by another projection`() = runTest {
+	fun `resolveStoredContent assigns local id when content id is occupied by another content`() = runTest {
 		coEvery { mangaDao.findBySourceAndUrl("source", "/new") } returns null
 		coEvery { mangaDao.findBySourceAndPublicUrl("source", "https://example.org/new") } returns null
 		coEvery { mangaDao.find(7L) } returns mangaWithTags(
@@ -50,7 +50,7 @@ class ProjectionIdentityResolverTest {
 		coEvery { mangaDao.findMinId() } returns 0L
 		coEvery { mangaDao.contains(-1L) } returns false
 
-		val resolved = resolver.resolveStoredProjection(
+		val resolved = resolver.resolveStoredContent(
 			content(id = 7L, url = "/new", publicUrl = "https://example.org/new"),
 		)
 
@@ -58,8 +58,8 @@ class ProjectionIdentityResolverTest {
 	}
 
 	@Test
-	fun `resolveStoredProjection keeps original id when projection key is missing`() = runTest {
-		val resolved = resolver.resolveStoredProjection(content(id = 7L, url = "", publicUrl = ""))
+	fun `resolveStoredContent keeps original id when content key is missing`() = runTest {
+		val resolved = resolver.resolveStoredContent(content(id = 7L, url = "", publicUrl = ""))
 
 		assertEquals(7L, resolved.id)
 		coVerify(exactly = 0) { mangaDao.find(7L) }

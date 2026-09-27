@@ -39,7 +39,7 @@ class KotatsuBackupPayloadCompatTest {
     }
 
     @Test
-    fun `projection state remains decodable by Kotatsu backup models`() {
+    fun `content state remains decodable by Kotatsu backup models`() {
         val manga = testManga(id = 42L)
         val history = HistoryBackup(
             HistoryWithContent(

@@ -383,7 +383,7 @@ class FeedViewModel @Inject constructor(
         val feedItems = feedCardMapper.map(
             derived.visibleRows,
             org.skepsun.kototoro.tracker.domain.feed.FeedCardMapper.Request(
-                brokenTitle = appContext.getString(R.string.favourites_broken_projection_title),
+                brokenTitle = appContext.getString(R.string.untitled_content),
             ),
         )
         if (feedItems.isEmpty()) {
@@ -562,9 +562,9 @@ class FeedViewModel @Inject constructor(
             return emptyList()
         }
         val resolvedEntityIds = mapNotNull(ContentTracking::entityId).distinct()
-        // Projection-first: an entity id IS a manga id, so the preferred projection of an
-        // identity is that identity itself. Metadata authority lives on the manga
-        // projection, so it is looked up by every manga id in the feed.
+        // An entity id IS a manga id, so the preferred manga of an identity is that
+        // identity itself. Metadata authority lives on the manga, so it is looked up by
+        // every manga id in the feed.
         val preferredLocalIdsByEntity: Map<Long, Long?> = resolvedEntityIds.associateWith { it }
         val resolvedMangaIds = map { it.manga.id }.distinct()
         val metadataSelectionsByMangaId = dataRepository.getMetadataSourceSelections(resolvedMangaIds)

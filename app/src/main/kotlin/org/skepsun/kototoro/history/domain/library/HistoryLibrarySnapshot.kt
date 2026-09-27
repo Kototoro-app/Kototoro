@@ -10,7 +10,7 @@ import org.skepsun.kototoro.parsers.model.ContentType
  * Invariants:
  * - one row per active work_history entity (the table's primary key is
  *   `entity_id`), i.e. exactly the set the paging SQL produced;
- * - identity, display projection, tracking summary, favourite/pinned
+ * - identity, manga display fields, tracking summary, favourite/pinned
  *   membership, tags, local bindings, category memberships and the metadata
  *   authority are resolved once in SQL and folded here;
  * - no filtering and no ordering happened yet — the 10 sort orders, the
@@ -44,7 +44,7 @@ data class HistoryBinding(
 )
 
 /**
- * One history card row: entity identity + progress + the display projection.
+ * One history card row: identity + progress + the manga display fields.
  *
  * The UI id is `entityId.toUiGroupId(contentTypeOrdinal)` — the same negative
  * encoding the paging-era `foldAdjacentByEntity` produced, so selection and
@@ -68,16 +68,16 @@ data class HistoryCardEntry(
     // membership
     val isFavourite: Boolean,
     val isPinned: Boolean,
-    /** Any bound projection has a local download (the `Downloaded` filter). */
+    /** The manga has a local download (the `Downloaded` filter). */
     val isDownloaded: Boolean,
     val categoryIds: Set<Long>,
     // authoritative content type: anchor manga type first, entity type second
     val contentType: ContentType?,
     val displayContentTypeOrdinal: Int,
-    // local bindings (space filter + projection count)
+    // local manga ids (space filter)
     val localMangaIds: List<Long>,
     val bindings: List<HistoryBinding>,
-    // display projection
+    // manga display fields
     val title: String,
     val altTitle: String?,
     val coverUrl: String?,

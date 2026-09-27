@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.notes.ui
 
+import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -70,107 +71,42 @@ fun NotesOverviewScreen(
             .background(MaterialTheme.colorScheme.background)
             .padding(contentPadding),
     ) {
-        // Top Header
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp)
-                .clip(RoundedCornerShape(18.dp)),
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f),
+        // Top Header: the shared summary header of the top-level list pages.
+        org.skepsun.kototoro.core.ui.compose.PageSummaryHeader(
+            iconRes = R.drawable.ic_bookmark,
+            title = stringResource(R.string.notes),
+            subtitle = stringResource(
+                R.string.book_notes_overview_summary,
+                uiState.totalNotesCount,
+                uiState.totalBooksCount,
+            ),
         ) {
-            Column(
+            if (!uiState.isGlobalNsfwDisabled && onToggleNsfwFilter != null) {
+                org.skepsun.kototoro.core.ui.compose.PageSummaryAction(
+                    text = stringResource(R.string.nsfw),
+                    icon = if (uiState.isNsfwFiltered) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    onClick = onToggleNsfwFilter,
+                    emphasized = uiState.isNsfwFiltered,
+                )
+            }
+            org.skepsun.kototoro.core.ui.compose.PageSummaryAction(
+                text = null,
+                icon = if (searchBarVisible) Icons.Default.Close else Icons.Default.Search,
+                contentDescription = stringResource(R.string.search),
+                onClick = { searchBarVisible = !searchBarVisible },
+            )
+        }
+        if (searchBarVisible) {
+            OutlinedTextField(
+                value = uiState.searchQuery,
+                onValueChange = onSearchQueryChange,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            modifier = Modifier.size(36.dp),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_bookmark),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                        Column {
-                            Text(
-                                text = stringResource(R.string.notes),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(
-                                text = stringResource(
-                                    R.string.book_notes_overview_summary,
-                                    uiState.totalNotesCount,
-                                    uiState.totalBooksCount,
-                                ),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (!uiState.isGlobalNsfwDisabled && onToggleNsfwFilter != null) {
-                            FilterChip(
-                                selected = uiState.isNsfwFiltered,
-                                onClick = onToggleNsfwFilter,
-                                label = {
-                                    Text(
-                                        text = stringResource(R.string.nsfw),
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = if (uiState.isNsfwFiltered) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                },
-                                modifier = Modifier.padding(end = 4.dp),
-                            )
-                        }
-
-                        IconButton(onClick = { searchBarVisible = !searchBarVisible }) {
-                            Icon(
-                                imageVector = if (searchBarVisible) Icons.Default.Close else Icons.Default.Search,
-                                contentDescription = stringResource(R.string.search),
-                                tint = MaterialTheme.colorScheme.onBackground,
-                            )
-                        }
-                    }
-                }
-
-                if (searchBarVisible) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = uiState.searchQuery,
-                        onValueChange = onSearchQueryChange,
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text(stringResource(R.string.book_notes_overview_search_hint)) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                    )
-                }
-            }
+                    .padding(horizontal = AppLayoutTokens.screenHorizontalPadding, vertical = 4.dp),
+                placeholder = { Text(stringResource(R.string.book_notes_overview_search_hint)) },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+            )
         }
 
         // Empty state

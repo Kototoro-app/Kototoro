@@ -134,11 +134,11 @@ internal fun applyVisibility(
         if (input.allowedContentTypes != null && row.contentType !in input.allowedContentTypes) {
             continue@outer
         }
-        // Space source names apply to the bound projection sources.
-        if (input.allowedSourceNames != null && row.projectionSourceNames.none { it in input.allowedSourceNames }) {
+        // Space source names apply to the work's source.
+        if (input.allowedSourceNames != null && row.sourceName !in input.allowedSourceNames) {
             continue@outer
         }
-        // Source presets apply to the displayed projection source (legacy semantics).
+        // Source presets apply to the work's source.
         if (input.sourcePresetNames != null && row.sourceName !in input.sourcePresetNames) {
             continue@outer
         }
@@ -198,8 +198,6 @@ internal fun applyQuickFilters(
     val requireDownloaded = ListFilterOption.Downloaded in input.filters
     val requireNewChapters = ListFilterOption.Macro.NEW_CHAPTERS in input.filters
     val requireCompleted = ListFilterOption.Macro.COMPLETED in input.filters
-    val requireMultiProjection = ListFilterOption.Macro.MULTI_PROJECTION in input.filters
-    val requireBrokenProjection = ListFilterOption.Macro.BROKEN_PROJECTION in input.filters
 
     val result = HashSet<Long>(visible.size)
     outer@ for (entityId in visible) {
@@ -209,16 +207,10 @@ internal fun applyQuickFilters(
         if (nsfwMode == 0 && row.isNsfw) continue@outer
         if (requireNewChapters && row.newChapters <= 0) continue@outer
         if (requireCompleted && !(row.progressPercent != null && row.progressPercent >= COMPLETED_THRESHOLD)) continue@outer
-        if (requireMultiProjection && row.projectionCount <= 1) continue@outer
-        if (requireBrokenProjection && !row.hasBrokenProjection) continue@outer
         if (publicationStates.isNotEmpty() && row.publicationState !in publicationStates) continue@outer
         if (readingStatuses.isNotEmpty() && row.readingStatus !in readingStatuses) continue@outer
         if (tagIds.isNotEmpty() && row.tagIds.none { it in tagIds }) continue@outer
-        if (sourceNames.isNotEmpty() && row.sourceName !in sourceNames &&
-            row.projectionSourceNames.none { it in sourceNames }
-        ) {
-            continue@outer
-        }
+        if (sourceNames.isNotEmpty() && row.sourceName !in sourceNames) continue@outer
         result.add(entityId)
     }
     return result

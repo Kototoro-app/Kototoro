@@ -94,7 +94,7 @@ private const val RESTORE_TRANSACTION_BATCH_SIZE = 100
 
 private val DEFERRED_RESTORE_ORDER = listOf(
     BackupSection.CATEGORIES,
-    BackupSection.PROJECTIONS,
+    BackupSection.CONTENTS,
     BackupSection.HISTORY,
     BackupSection.FAVOURITES,
     BackupSection.BOOKMARKS,
@@ -113,7 +113,7 @@ private val MAPPING_SNAPSHOT_SECTIONS = setOf(
 private val BackupSection.requiresDeferredRestore: Boolean
     get() = this in DEFERRED_RESTORE_ORDER
 
-/** The table a section restores into; legacy WORK_* sections share the projection tables. */
+/** The table a section restores into; legacy WORK_* sections share the manga tables. */
 private val BackupSection.restoreTarget: BackupSection
     get() = when (this) {
         BackupSection.WORK_HISTORY -> BackupSection.HISTORY
@@ -264,7 +264,7 @@ class BackupRepository @Inject constructor(
             get() = transportGeneration >= BackupIndex.WRITER_GENERATION_V3 && !isLegacySemanticSchema
     }
 
-    private fun dumpProjectionSnapshots(): Flow<ContentBackup> = flow {
+    private fun dumpContentSnapshots(): Flow<ContentBackup> = flow {
         val anchorIds = LinkedHashSet<Long>()
         anchorIds += database.getHistoryDao().findAllEntriesIncludingDeleted().map { it.mangaId }
         anchorIds += database.getFavouritesDao().findAllEntriesIncludingDeleted().map { it.mangaId }
@@ -272,8 +272,8 @@ class BackupRepository @Inject constructor(
             return@flow
         }
         anchorIds.chunked(RESTORE_TRANSACTION_BATCH_SIZE).forEach { chunk ->
-            database.getMangaDao().findWithTagsByIds(chunk).forEach { projection ->
-                emit(ContentBackup(projection))
+            database.getMangaDao().findWithTagsByIds(chunk).forEach { content ->
+                emit(ContentBackup(content))
             }
         }
     }
@@ -413,9 +413,9 @@ class BackupRepository @Inject constructor(
                     serializer = serializer(),
                 )
 
-                BackupSection.PROJECTIONS -> output.writeJsonArray(
-                    section = BackupSection.PROJECTIONS,
-                    data = dumpProjectionSnapshots(),
+                BackupSection.CONTENTS -> output.writeJsonArray(
+                    section = BackupSection.CONTENTS,
+                    data = dumpContentSnapshots(),
                     serializer = serializer(),
                 )
 
@@ -561,7 +561,7 @@ class BackupRepository @Inject constructor(
                         }
                     }
 
-                    BackupSection.PROJECTIONS -> sectionInput.readJsonArray<ContentBackup>(serializer()).restoreToDb("PROJECTIONS") {
+                    BackupSection.CONTENTS -> sectionInput.readJsonArray<ContentBackup>(serializer()).restoreToDb("CONTENTS") {
                         upsertContent(it, restoreContext)
                     }
 
@@ -649,7 +649,7 @@ class BackupRepository @Inject constructor(
                         getStatsDao().upsert(it.toEntity())
                     }
 
-                    // Legacy WORK_* rows land on their anchor projection. PROJECTIONS is restored first,
+                    // Legacy WORK_* rows land on their anchor manga. CONTENTS is restored first,
                     // so a missing anchor means the row has nothing to attach to: skip it rather than
                     // leave a dangling foreign key. (0 and negative ids are valid manga ids.)
                     BackupSection.WORK_HISTORY -> sectionInput.readJsonArray<WorkHistoryBackup>(serializer()).restoreToDb("WORK_HISTORY") {
@@ -1055,7 +1055,7 @@ class BackupRepository @Inject constructor(
             BackupSection.WORK_FAVOURITES in expanded ||
             BackupSection.WORK_STATS in expanded
         ) {
-            expanded += BackupSection.PROJECTIONS
+            expanded += BackupSection.CONTENTS
         }
         return expanded
     }

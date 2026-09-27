@@ -33,7 +33,6 @@ class ContentCardRenderModelTest {
             subtitle = "Subtitle",
             supportingText = "Supporting",
             counter = 3,
-            projectionCount = 2,
             progress = null,
             isFavorite = true,
             isSaved = false,
@@ -53,7 +52,6 @@ class ContentCardRenderModelTest {
         assertTrue(renderModel.isFavorite)
         assertTrue(renderModel.isPinned)
         assertEquals(3, renderModel.counter)
-        assertEquals(2, renderModel.projectionCount)
         assertEquals("8.0", renderModel.scoreText)
     }
 

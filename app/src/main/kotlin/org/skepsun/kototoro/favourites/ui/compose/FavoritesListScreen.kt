@@ -1,16 +1,19 @@
 package org.skepsun.kototoro.favourites.ui.compose
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.favourites.ui.list.FavouritesListHost
 import org.skepsun.kototoro.list.ui.compose.AppContentListRoute
+import org.skepsun.kototoro.list.ui.compose.QuickFilterSection
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.list.ui.compose.SortOrderControl
 import org.skepsun.kototoro.list.domain.ListSortOrder
@@ -40,47 +43,53 @@ fun KototoroFavoritesListScreen(
     // The state holder is the favourites container, handed in as a per-category slice:
     // there is no page-level ViewModel and no space binding to do here (Phase 6).
     val quickFilter by listHost.topQuickFilter.collectAsStateWithLifecycle()
-    val library by listHost.libraryState.collectAsStateWithLifecycle()
-    val categoryRows = remember(library, categoryId) {
-        val ids = library.visibleIdsByCategory[categoryId].orEmpty()
-        val byId = library.rowsByEntityId
-        ids.mapNotNull { byId[it] }
-    }
-    val pinnedIds = remember(library, categoryId) {
-        library.pinnedIdsByCategory[categoryId].orEmpty()
-    }
-    val totalCount = categoryRows.size
-    val updatedCount = remember(categoryRows) {
-        categoryRows.count { it.newChapters > 0 }
-    }
-    val spotlightRows = remember(categoryRows, pinnedIds) {
-        if (categoryRows.isEmpty()) return@remember emptyList<org.skepsun.kototoro.favourites.domain.library.FavouriteCardRow>()
-        val pinned = categoryRows.filter { it.entityId in pinnedIds }
-        val withUpdates = categoryRows.filter { it.entityId !in pinnedIds && it.newChapters > 0 }
-        val recentlyRead = categoryRows.filter { it.entityId !in pinnedIds && it.newChapters <= 0 && (it.lastReadAt ?: 0L) > 0L }
-            .sortedByDescending { it.lastReadAt }
-        (pinned + withUpdates + recentlyRead).take(6)
+    val shelf by listHost.shelf.collectAsStateWithLifecycle()
+    val gridScale by listHost.gridScale.collectAsStateWithLifecycle()
+    val listMode by listHost.listMode.collectAsStateWithLifecycle()
+    val shelfInstanceKey = "main_favorites_shelf_$categoryId"
+    val sortControl: (@Composable () -> Unit)? = if (sortOrders.isNotEmpty()) {
+        {
+            SortOrderControl(
+                sortOrders = sortOrders,
+                selectedSortOrder = selectedSortOrder,
+                onSortOrderSelected = onSortOrderSelected,
+                compact = true,
+            )
+        }
+    } else {
+        null
     }
 
     AppContentListRoute(
         viewModel = listHost,
         contentPadding = contentPadding,
         appRouter = appRouter,
+        // The quick filters narrow the shelf as well as the grid, so they sit above both
+        // (right under the category tabs) instead of being rendered as the first list item,
+        // which put them between the shelf and the grid.
         listHeader = {
-            FavoritesSpotlightHeader(
-                totalCount = totalCount,
-                updatedCount = updatedCount,
-                spotlightRows = spotlightRows,
-                onItemClick = { row ->
-                    val mangaId = row.displayMangaId ?: row.entityId
-                    if (onNavigateToDetailsOrigin != null) {
-                        onNavigateToDetailsOrigin(DetailsOrigin.LocalMangaId(mangaId), "fav_spotlight_${row.entityId}")
-                    } else {
-                        appRouter.openDetails(mangaId)
-                    }
-                },
-                onCheckForUpdates = { listHost.checkForUpdates() },
-            )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                quickFilter?.let { filter ->
+                    QuickFilterSection(
+                        quickFilter = filter,
+                        onQuickFilterOptionClick = listHost::toggleFilterOption,
+                        leadingContent = sortControl,
+                    )
+                }
+                FavoritesShelf(
+                    state = shelf,
+                    gridScale = gridScale,
+                    compactOverlay = listMode == ListMode.COMPACT_GRID,
+                    sharedElementInstanceKey = shelfInstanceKey,
+                    onItemClick = { item, _, sharedKey ->
+                        if (onNavigateToDetails != null) {
+                            onNavigateToDetails(item.manga, sharedKey)
+                        } else {
+                            appRouter.openResolvedDetails(item.manga, sharedElementKey = sharedKey)
+                        }
+                    },
+                )
+            }
         },
         showRemoveOption = true,
         preferredSelectionInlineActions = listOf(
@@ -110,20 +119,7 @@ fun KototoroFavoritesListScreen(
         onPinSelection = { ids -> listHost.togglePinned(ids) },
         onMarkAsCompletedSelection = { items -> listHost.markAsRead(items.map { it.id }) },
         onResolveSelectionContents = { ids -> listHost.resolveSelectedContents(ids) },
-        showQuickFilterInline = true,
-        quickFilterLeadingContent = if (sortOrders.isNotEmpty()) {
-            {
-                SortOrderControl(
-                    sortOrders = sortOrders,
-                    selectedSortOrder = selectedSortOrder,
-                    onSortOrderSelected = onSortOrderSelected,
-                    compact = true,
-                )
-            }
-        } else {
-            null
-        },
-        quickFilterOverride = quickFilter,
+        showQuickFilterInline = false,
         enableItemAnimations = false,
     )
 }

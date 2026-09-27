@@ -195,8 +195,8 @@ class HomeViewModel @Inject constructor(
                         progressPercent = history.toProgressPercent(),
                     )
                     runCatching {
-                        // Projection-first: the content itself owns the state, so its work
-                        // identity and its preferred projection are its own id.
+                        // The content itself owns the state, so its work identity and its
+                        // preferred manga are its own id.
                         val representativeContent = contentDataRepository.findDisplayContentById(
                             content.id,
                             withChapters = false,

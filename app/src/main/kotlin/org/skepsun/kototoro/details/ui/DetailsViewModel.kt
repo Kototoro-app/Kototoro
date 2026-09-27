@@ -76,7 +76,6 @@ import org.skepsun.kototoro.details.data.DetailsTranslationCache
 import org.skepsun.kototoro.details.domain.BranchComparator
 import org.skepsun.kototoro.details.domain.DetailsInteractor
 import org.skepsun.kototoro.details.domain.DetailsLoadUseCase
-import org.skepsun.kototoro.details.domain.isDetailsProjectionAllowed
 import org.skepsun.kototoro.details.domain.ProgressUpdateUseCase
 import org.skepsun.kototoro.details.domain.ReadingTimeUseCase
 import org.skepsun.kototoro.details.domain.RelatedContentUseCase
@@ -173,7 +172,7 @@ internal fun List<EntityRelationSection>.deduplicateRelationItems(): List<Entity
         section.copy(items = section.items.distinctBy(EntityRelationItem::stableKey))
     }
 
-internal fun DetailsOrigin.initialProjectionLocalMangaIdOrNull(): Long? = when (this) {
+internal fun DetailsOrigin.initialLocalMangaIdOrNull(): Long? = when (this) {
     is DetailsOrigin.LocalMangaId -> mangaId
     is DetailsOrigin.LocalMangaContent -> manga.id
     is DetailsOrigin.TrackingEntity,
@@ -181,9 +180,9 @@ internal fun DetailsOrigin.initialProjectionLocalMangaIdOrNull(): Long? = when (
     -> null
 }
 
-internal fun DetailsOrigin.initialProjectionIntentOrNull(): ContentIntent? = when (this) {
+internal fun DetailsOrigin.initialContentIntentOrNull(): ContentIntent? = when (this) {
     is DetailsOrigin.LocalMangaContent -> ContentIntent.of(manga)
-    else -> initialProjectionLocalMangaIdOrNull()?.let(ContentIntent::of)
+    else -> initialLocalMangaIdOrNull()?.let(ContentIntent::of)
 }
 
 private const val ENTITY_RELATION_SECTIONS_DEBOUNCE_MS = 120L
@@ -229,7 +228,7 @@ private inline fun <T> flowOrFallback(
     block()
 }.getOrNull().orEmptyFlow(fallback)
 
-private data class WorkProjectionContext(
+private data class WorkContentContext(
     val entityId: Long?,
     val requestedMangaId: Long,
     val preferredLocalMangaId: Long?,
@@ -237,9 +236,9 @@ private data class WorkProjectionContext(
     val candidateMangaIds: List<Long>,
 )
 
-private data class CurrentWorkProjectionSnapshot(
+private data class CurrentWorkContentSnapshot(
     val activeLocalMangaId: Long?,
-    val currentReadingProjectionMangaId: Long?,
+    val currentReadingMangaId: Long?,
 )
 
 
@@ -393,18 +392,18 @@ class DetailsViewModel @Inject constructor(
         org.skepsun.kototoro.core.nav.AppRouter.KEY_TEMPORARY_DETAILS,
     ) == true
     private val originContent = (activeExternalOrigin as? org.skepsun.kototoro.details.ui.model.DetailsOrigin.LocalMangaContent)?.manga
-    private val initialProjectionIntentOverride = activeExternalOrigin?.initialProjectionIntentOrNull()
+    private val initialContentIntentOverride = activeExternalOrigin?.initialContentIntentOrNull()
     private var loadingJob: Job = Job()
     private var translateAvailabilityJob: Job? = null
     private var readingSearchJob: Job? = null
     private var sourceBindingsRefreshJob: Job? = null
     private var readingSearchGeneration: Int = 0
     private var allEnabledSourcesLoaded = false
-    private var currentLoadIntentOverride: ContentIntent? = initialProjectionIntentOverride
+    private var currentLoadIntentOverride: ContentIntent? = initialContentIntentOverride
     private var translationCacheSourceLang: String? = null
     private var translationCacheTargetLang: String? = null
     private val activeMangaIdFlow = kotlinx.coroutines.flow.MutableStateFlow(
-        activeExternalOrigin?.initialProjectionLocalMangaIdOrNull()
+        activeExternalOrigin?.initialLocalMangaIdOrNull()
             ?: intent.mangaId.takeIf { it != 0L },
     )
     val mangaId: Long get() = activeMangaIdFlow.value ?: intent.mangaId
@@ -423,7 +422,7 @@ class DetailsViewModel @Inject constructor(
     val metadataChapterTabs = MutableStateFlow<List<DetailsChapterSourceTab>>(emptyList())
     val readingChapterTabs = MutableStateFlow<List<DetailsChapterSourceTab>>(emptyList())
     private var detailsSpaceId: SpaceId? = null
-    private var activeProjectionStoredContentType: ContentType? = null
+    private var activeStoredContentType: ContentType? = null
     val supplementalMetadataProperties = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     val supplementalSections = MutableStateFlow<List<EntityRelationSection>>(emptyList())
     val supplementalActions = MutableStateFlow<List<DetailsSupplementAction>>(emptyList())
@@ -1197,7 +1196,7 @@ class DetailsViewModel @Inject constructor(
         Log.i(
             DETAILS_TRACE_TAG,
             "vm.init origin=${activeExternalOrigin.detailsTraceSummary()} intentId=${intent.mangaId} " +
-                "initialOverride=${initialProjectionIntentOverride?.mangaId} activeMangaId=${activeMangaIdFlow.value}",
+                "initialOverride=${initialContentIntentOverride?.mangaId} activeMangaId=${activeMangaIdFlow.value}",
         )
         // Apply instant first paint only from the explicit DetailsOrigin payload.
         // Raw intent seed should not predefine current details before real resolution.
@@ -1500,9 +1499,9 @@ class DetailsViewModel @Inject constructor(
     }
 
     private suspend fun resolveCurrentMetadataPersistenceMangaId(): Long? {
-        val projectionSnapshot = currentWorkProjectionSnapshot()
-        return projectionSnapshot.activeLocalMangaId
-            ?: projectionSnapshot.currentReadingProjectionMangaId
+        val contentSnapshot = currentWorkContentSnapshot()
+        return contentSnapshot.activeLocalMangaId
+            ?: contentSnapshot.currentReadingMangaId
             ?: baseLoadedDetails?.local?.manga?.id
             ?: resolveCurrentLocalMangaId()
     }
@@ -1521,8 +1520,8 @@ class DetailsViewModel @Inject constructor(
             "persistMetadataSourceSelection: fallbackMangaId=$resolvedFallbackMangaId, " +
                 "selection=$selection, fallbackTargetIds=$targetIds",
         )
-        // Projection-first: the metadata authority belongs to the manga projection itself,
-        // so it is persisted directly against every resolved projection id.
+        // The metadata authority belongs to the manga itself, so it is persisted directly
+        // against every resolved manga id.
         targetIds.forEach { mangaId ->
             dataRepository.setMetadataSourceSelection(
                 mangaId = mangaId,
@@ -1704,8 +1703,8 @@ class DetailsViewModel @Inject constructor(
         db.getTrackingSiteDao().observeLinksByManga(mangaId)
     }
 
-    private suspend fun resolveWorkProjectionContext(mangaId: Long): WorkProjectionContext {
-        return WorkProjectionContext(
+    private suspend fun resolveWorkContentContext(mangaId: Long): WorkContentContext {
+        return WorkContentContext(
             entityId = null,
             requestedMangaId = mangaId,
             preferredLocalMangaId = mangaId,
@@ -1715,7 +1714,7 @@ class DetailsViewModel @Inject constructor(
     }
 
     private fun selectTrackingLinksForWork(
-        context: WorkProjectionContext,
+        context: WorkContentContext,
         links: List<org.skepsun.kototoro.core.db.entity.TrackingSiteLinkEntity>,
     ): List<org.skepsun.kototoro.core.db.entity.TrackingSiteLinkEntity> {
         return links.groupBy { it.service to it.remoteId }
@@ -1770,12 +1769,12 @@ class DetailsViewModel @Inject constructor(
             ?: currentDetails?.toContent()?.takeIf { it.isLocal }?.id
     }
 
-    private fun currentWorkProjectionSnapshot(): CurrentWorkProjectionSnapshot {
-        // Projection-first: the displayed manga row is both the active and the reading source.
+    private fun currentWorkContentSnapshot(): CurrentWorkContentSnapshot {
+        // The displayed manga row is both the active and the reading source.
         val localMangaId = currentObservedLocalMangaIdSnapshot()
-        return CurrentWorkProjectionSnapshot(
+        return CurrentWorkContentSnapshot(
             activeLocalMangaId = localMangaId,
-            currentReadingProjectionMangaId = localMangaId,
+            currentReadingMangaId = localMangaId,
         )
     }
 
@@ -1796,7 +1795,7 @@ class DetailsViewModel @Inject constructor(
     }
 
     private fun refreshActiveLocalBrowserContent() {
-        val activeLocalId = currentWorkProjectionSnapshot().activeLocalMangaId
+        val activeLocalId = currentWorkContentSnapshot().activeLocalMangaId
         val baseContent = baseLoadedDetails?.toContent()
         if (activeLocalId == null || activeLocalId == baseLoadedDetails?.id) {
             activeLocalBrowserContent.value = baseContent?.takeIf { it.publicUrl.isNotBlank() }
@@ -1889,7 +1888,7 @@ class DetailsViewModel @Inject constructor(
         }.distinctBy(DetailsSourceOption::key)
         metadataSourceOptions.value = metadata
 
-        // Projection-first: the reading source is the manga row itself. It is always listed —
+        // The reading source is the manga row itself. It is always listed —
         // the content-type compatibility check is for foreign candidates, and an uninstalled
         // extension would otherwise make the current manga's own source look incompatible.
         val currentDisplayedDetails = mangaDetails.safeValueOrNull()
@@ -2664,7 +2663,7 @@ class DetailsViewModel @Inject constructor(
         get() = selectedBranch.value
 
     init {
-        if (initialProjectionIntentOverride?.mangaId?.takeIf { it != 0L } != null || intent.mangaId != 0L || intent.manga != null) {
+        if (initialContentIntentOverride?.mangaId?.takeIf { it != 0L } != null || intent.mangaId != 0L || intent.manga != null) {
             loadingJob = doLoad(force = false)
         }
         scrobblingInfo
@@ -3575,7 +3574,7 @@ class DetailsViewModel @Inject constructor(
     }
 
     private suspend fun resolveCurrentLocalMangaId(): Long? {
-        currentWorkProjectionSnapshot().activeLocalMangaId?.let { return it }
+        currentWorkContentSnapshot().activeLocalMangaId?.let { return it }
         val currentContent = manga.filterNotNull().firstOrNull()
         if (currentContent?.isLocal == true) {
             return currentContent.id
@@ -3584,10 +3583,10 @@ class DetailsViewModel @Inject constructor(
     }
 
     private fun preferredFallbackTrackingMangaIds(): List<Long> {
-        val projectionSnapshot = currentWorkProjectionSnapshot()
+        val contentSnapshot = currentWorkContentSnapshot()
         return buildList {
-            projectionSnapshot.currentReadingProjectionMangaId?.let(::add)
-            projectionSnapshot.activeLocalMangaId?.let(::add)
+            contentSnapshot.currentReadingMangaId?.let(::add)
+            contentSnapshot.activeLocalMangaId?.let(::add)
             baseLoadedDetails?.local?.manga?.id?.let(::add)
         }.distinct()
     }
@@ -3627,7 +3626,7 @@ class DetailsViewModel @Inject constructor(
 
     fun updateUnifiedReadingStatus(status: ScrobblingStatus) {
         launchJob(Dispatchers.Default) {
-            val currentMangaId = ensureCurrentWorkProjection() ?: return@launchJob
+            val currentMangaId = ensureCurrentWorkContent() ?: return@launchJob
             dataRepository.setReadingStatus(currentMangaId, status)
             linkedTrackingItems.value.forEach { linked ->
                 if (!linked.hasScrobblingBinding) return@forEach
@@ -3738,7 +3737,7 @@ class DetailsViewModel @Inject constructor(
         }
     }
 
-    private suspend fun ensureCurrentWorkProjection(): Long? {
+    private suspend fun ensureCurrentWorkContent(): Long? {
         resolveCurrentLocalMangaId()?.let { return it }
         val content = getContentOrNull() ?: return null
         val storedContent = dataRepository.storeContentAndReturn(content, replaceExisting = false)
@@ -3829,7 +3828,7 @@ class DetailsViewModel @Inject constructor(
                     "load.apply details=${finalDetails.toContent().detailsTraceSummary()} selectedBranchAfter=${selectedBranch.value}",
                 )
                 baseLoadedDetails = finalDetails
-                activeProjectionStoredContentType = db.getMangaDao().find(finalDetails.id)?.manga?.contentType?.let(::parseStoredContentType)
+                activeStoredContentType = db.getMangaDao().find(finalDetails.id)?.manga?.contentType?.let(::parseStoredContentType)
                 syncDisplayedState()
                 trackingRepository.clearReadUpdates(finalDetails.id)
                 if (!isTrackingOriginSelectionPinned()) {

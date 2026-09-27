@@ -1,6 +1,6 @@
 package org.skepsun.kototoro.sync.google.domain
 
-import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
+import org.skepsun.kototoro.core.model.ContentIdentityKeys
 import org.skepsun.kototoro.sync.google.data.model.GoogleDriveSyncSnapshot
 import org.skepsun.kototoro.sync.google.data.model.SyncConfig
 import org.skepsun.kototoro.sync.google.data.model.SyncExtensionPackage
@@ -67,12 +67,12 @@ object GoogleDriveSyncMerger {
 
     private fun compactSnapshot(snapshot: GoogleDriveSyncSnapshot): GoogleDriveSyncSnapshot {
         val norm = snapshot.normalizeToContentV3()
-        // 1. Content: rows sharing a projection identity (same source + url/publicUrl) are one
+        // 1. Content: rows sharing a content identity (same source + url/publicUrl) are one
         // manga, even when older snapshots carry them under different ids. Keep the lowest id
         // and re-point every piece of state at it, so the LWW passes below see one owner.
         val survivorIdById = HashMap<Long, Long>()
         val compactContent = norm.content
-            .groupBy { ProjectionIdentityKeys.contentCompactKey(it.source, it.id, it.url, it.publicUrl) }
+            .groupBy { ContentIdentityKeys.contentCompactKey(it.source, it.id, it.url, it.publicUrl) }
             .values
             .map { items ->
                 val survivor = items.minBy { it.id }

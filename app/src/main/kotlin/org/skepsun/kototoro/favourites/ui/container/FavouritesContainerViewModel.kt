@@ -111,6 +111,14 @@ class FavouritesContainerViewModel @Inject constructor(
         settings.isQuickFilterEnabled = enabled
     }
 
+    /** Whether a category page shows the "continue reading" shelf above its grid. */
+    val isShelfEnabled = settings.observeAsFlow(AppSettings.KEY_FAVOURITES_SHELF) { isFavouritesShelfEnabled }
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.isFavouritesShelfEnabled)
+
+    fun setShelfEnabled(enabled: Boolean) {
+        settings.isFavouritesShelfEnabled = enabled
+    }
+
     val allFavoritesSortOrder = settings.observeAsFlow(AppSettings.KEY_FAVORITES_ORDER) {
         allFavoritesSortOrder
     }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.allFavoritesSortOrder)
@@ -283,7 +291,7 @@ class FavouritesContainerViewModel @Inject constructor(
         }
     }
 
-    /** Mark the selected entities as read through their stored projections. */
+    /** Mark the selected entities as read through their stored manga. */
     internal fun markAsRead(entityIds: Collection<Long>) {
         if (entityIds.isEmpty()) return
         launchLoadingJob(Dispatchers.Default) {
@@ -294,7 +302,7 @@ class FavouritesContainerViewModel @Inject constructor(
         }
     }
 
-    /** Stored projections of the selection, for the actions that cannot use the card stub. */
+    /** Stored contents of the selection, for the actions that cannot use the card stub. */
     internal suspend fun resolveSelectedContents(ids: Collection<Long>): List<Content> =
         contentResolver.resolveByDisplayMangaIds(
             ids.mapNotNullTo(ArrayList(ids.size)) { libraryState.value.rowsByEntityId[it]?.displayMangaId },
@@ -345,8 +353,8 @@ class FavouritesContainerViewModel @Inject constructor(
     }
 
     /**
-     * Entity ids of a selection expanded to the projections the favourite DAOs address
-     * rows by. A row without any projection keeps the entity id (it has no manga to
+     * Entity ids of a selection expanded to the manga ids the favourite DAOs address
+     * rows by. A row without a stored manga keeps the entity id (it has no manga to
      * address, and the legacy chain dropped such rows instead of acting on them).
      */
     private fun expandToMangaIds(ids: Collection<Long>): Set<Long> {
@@ -418,40 +426,20 @@ class FavouritesContainerViewModel @Inject constructor(
         categoriesStateFlow,
         libraryState,
         currentGroupTab,
-        selectedSourceTags,
+        combine(selectedSourceTags, globalFavoritesState.appliedFilter, ::Pair),
         observeAllFavouritesVisibility(),
-    ) { list, libState, groupTab, sourceTags, showAll ->
+    ) { list, libState, groupTab, (sourceTags, quickFilters), showAll ->
         if (list == null || !libState.isInitialized) {
             return@combine FavoritesHostUiState()
         }
 
-        val activeCounts = libState.categoryCounts
-        val hasActiveFilter = groupTab != BrowseGroupTab.All || sourceTags.isNotEmpty()
-        val filteredList = if (hasActiveFilter) {
-            list.filter { activeCounts.getOrDefault(it.id, 0) > 0 }
-        } else {
-            list
-        }
-
-        val result = ArrayList<FavouriteTabModel>(if (showAll) filteredList.size + 1 else filteredList.size)
-        if (showAll) {
-            if (!hasActiveFilter || activeCounts.getOrDefault(NO_ID, 0) > 0) {
-                result.add(FavouriteTabModel(NO_ID, null))
-            }
-        }
-        filteredList.mapTo(result) { FavouriteTabModel(it.id, it.title, it.order) }
-
-        val isEmpty = if (hasActiveFilter) {
-            list.all { activeCounts.getOrDefault(it.id, 0) == 0 } &&
-                activeCounts.getOrDefault(NO_ID, 0) == 0
-        } else {
-            list.isEmpty() && !showAll
-        }
-
-        FavoritesHostUiState(
-            isLoading = false,
-            categories = result,
-            isEmpty = isEmpty,
+        buildFavoritesHostUiState(
+            categories = list.map { FavouriteTabModel(it.id, it.title, it.order) },
+            categoryCounts = libState.categoryCounts,
+            groupTab = groupTab,
+            hasSourceTags = sourceTags.isNotEmpty(),
+            hasQuickFilters = quickFilters.isNotEmpty(),
+            showAll = showAll,
         )
     }.runningFold(FavoritesHostUiState()) { previous, next ->
         if (next.isLoading && previous.categories.isNotEmpty()) {
@@ -753,7 +741,7 @@ class FavouritesContainerViewModel @Inject constructor(
 
         duplicatesJob = launchJob(Dispatchers.Default) {
             try {
-                val allFavs = favouritesRepository.observeAllProjectionContents(
+                val allFavs = favouritesRepository.observeAllContents(
                     order = ListSortOrder.NEWEST,
                     filterOptions = emptySet(),
                     limit = Int.MAX_VALUE
@@ -869,7 +857,7 @@ class FavouritesContainerViewModel @Inject constructor(
 
         duplicatesJob = launchJob(Dispatchers.Default) {
             try {
-                val allFavs = favouritesRepository.observeAllProjectionContents(
+                val allFavs = favouritesRepository.observeAllContents(
                     order = ListSortOrder.NEWEST,
                     filterOptions = emptySet(),
                     limit = Int.MAX_VALUE
@@ -1052,7 +1040,7 @@ class FavouritesContainerViewModel @Inject constructor(
         db.withTransaction {
             for (group in groupsToDelete) {
                 for (dup in group.duplicates) {
-                    // Projection-first: a duplicate is its own manga projection, so removing it
+                    // A duplicate is its own manga, so removing it
                     // means removing that manga row; the declared foreign keys cascade onto its
                     // favourites / history / preferences / stats / tracks state.
                     db.getMangaDao().find(dup.id)?.manga?.let { entity ->

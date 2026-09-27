@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * Narrow read-only DAO for the favourites library snapshot
- * (favourites-komikku-alignment plan, projection-first).
+ * (favourites-komikku-alignment plan).
  */
 @Dao
 abstract class FavouriteLibraryReadDao {
@@ -98,24 +98,6 @@ abstract class FavouriteLibraryReadDao {
         """,
     )
     abstract fun observeFavouriteMembershipRows(): Flow<List<FavouriteMembershipRow>>
-
-    /** Projection facets: every active favourite manga. */
-    @Query(
-        """
-        SELECT
-            f.manga_id AS entity_id,
-            f.manga_id AS manga_id,
-            m.source AS source,
-            m.content_type AS content_type
-        FROM (
-            SELECT DISTINCT manga_id
-            FROM favourites
-            WHERE deleted_at = 0
-        ) f
-        INNER JOIN manga m ON m.manga_id = f.manga_id
-        """,
-    )
-    abstract fun observeFavouriteProjectionFacets(): Flow<List<FavouriteProjectionFacetRow>>
 
     /** Manga↔tag relations of the favourites library. */
     @Query(

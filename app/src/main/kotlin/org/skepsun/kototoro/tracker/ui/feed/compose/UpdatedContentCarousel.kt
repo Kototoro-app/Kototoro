@@ -319,7 +319,13 @@ private fun FeedUpdatedContentCard(
         }
 
         val contentPadding = if (featured) 14.dp else 10.dp
-        Column(
+        // Side cards shrink with their distance from the focus. A multi-line title in a
+        // narrow card broke words letter by letter ("Holl / ow / Star"), so side cards keep
+        // one ellipsized line and drop the text entirely once too narrow to hold a word;
+        // the counter badge still carries the update.
+        val showText = featured || width >= FEED_CAROUSEL_MIN_TEXT_WIDTH
+        val showChapters = featured || width >= FEED_CAROUSEL_MIN_CHAPTERS_WIDTH
+        if (showText) Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
@@ -340,10 +346,10 @@ private fun FeedUpdatedContentCard(
                 },
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White,
-                maxLines = if (featured) 2 else 3,
+                maxLines = if (featured) 2 else 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (item.totalNewChapters > 0) {
+            if (showChapters && item.totalNewChapters > 0) {
                 Text(
                     text = pluralStringResource(
                         R.plurals.new_chapters,
@@ -359,6 +365,9 @@ private fun FeedUpdatedContentCard(
         }
     }
 }
+
+private val FEED_CAROUSEL_MIN_TEXT_WIDTH = 88.dp
+private val FEED_CAROUSEL_MIN_CHAPTERS_WIDTH = 120.dp
 
 private fun feedUpdatedFocusWidth(availableWidth: Dp, scale: Float): Dp {
     if (availableWidth == 0.dp) return 0.dp

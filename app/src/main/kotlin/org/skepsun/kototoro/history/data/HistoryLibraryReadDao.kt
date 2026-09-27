@@ -5,14 +5,14 @@ import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Narrow read-only projections of the history library
- * (history-updates-feed komikku-alignment plan, projection-first).
+ * Narrow read-only queries of the history library
+ * (history-updates-feed komikku-alignment plan).
  */
 @Dao
 abstract class HistoryLibraryReadDao {
 
     /**
-     * Every active history row with display projection,
+     * Every active history row with its manga,
      * tracking summary, favourite/pinned membership and metadata authority.
      */
     @Query(
@@ -71,7 +71,7 @@ abstract class HistoryLibraryReadDao {
     abstract fun observeHistoryCardBaseRows(): Flow<List<HistoryCardRow>>
 
     /**
-     * Tags of the history display projections.
+     * Tags of the history manga.
      */
     @Query(
         """
@@ -90,7 +90,7 @@ abstract class HistoryLibraryReadDao {
     )
     abstract fun observeHistoryTagFacets(): Flow<List<HistoryTagFacetRow>>
 
-    /** Content projections per history entry. */
+    /** Contents per history entry. */
     @Query(
         """
         SELECT

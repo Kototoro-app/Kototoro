@@ -1117,19 +1117,6 @@
     <string name="enabled_sources">已啓用的源</string>
     <string name="enter_name">用戶名</string>
     <string name="enter_source_url">輸入源地址</string>
-    <string name="entity_graph_active_local_sources">活躍的本地源</string>
-    <string name="entity_graph_aliases">別名</string>
-    <string name="entity_graph_bindings">綁定</string>
-    <string name="entity_graph_chapter_source">章節源</string>
-    <string name="entity_graph_chapter_source_selected_hint">章節從當前選定的本地源加載。</string>
-    <string name="entity_graph_chapter_source_unavailable">無活躍的本地源</string>
-    <string name="entity_graph_chapter_source_unavailable_hint">綁定或選擇一個本地源以瀏覽該實體的章節。</string>
-    <string name="entity_graph_detail_title">實體詳情</string>
-    <string name="entity_graph_no_bindings">暫無綁定</string>
-    <string name="entity_graph_no_relations">暫無相關實體。</string>
-    <string name="entity_graph_no_source_results">暫無源搜索結果。</string>
-    <string name="entity_graph_open_tracking_details">查看原始追蹤詳情</string>
-    <string name="entity_graph_relations">關聯</string>
     <string name="entity_graph_section_characters">角色</string>
     <string name="entity_graph_section_created_works">創作作品</string>
     <string name="entity_graph_section_creators">創作者</string>
@@ -1138,8 +1125,6 @@
     <string name="entity_graph_section_voice_actors">聲優</string>
     <string name="entity_graph_section_voiced_characters">配音角色</string>
     <string name="entity_graph_section_voiced_works">配音作品</string>
-    <string name="entity_graph_source_result_subtitle">%1$s · %2$d%% 匹配</string>
-    <string name="entity_graph_source_results">源搜索結果</string>
     <string name="entity_graph_type_character">角色</string>
     <string name="entity_graph_type_organization">組織</string>
     <string name="entity_graph_type_person">人物</string>
@@ -2599,19 +2584,13 @@ SHA-256 指紋:
     <string name="you_may_like">猜你喜歡</string>
 
     <!-- 批量源遷移 -->
-    <string name="batch_source_migration">批量源遷移</string>
-    <string name="source_migration_title">批量源遷移</string>
     <string name="source_migration_from_label">來源源</string>
     <string name="source_migration_to_label">目標源</string>
-    <string name="source_migration_start">開始遷移</string>
     <string name="source_migration_cancel">取消遷移</string>
     <string name="source_migration_concurrency">搜索併發數：%1$d</string>
-    <string name="source_migration_channel_name">源遷移</string>
-    <string name="source_migration_notification_title">源遷移</string>
     <string name="migration_progress">已遷移 %1$d / %2$d</string>
     <string name="migration_progress_detail">已完成：%1$d / %2$d\n失敗：%3$d\n未找到：%4$d</string>
     <string name="migration_status_active">正在遷移：%1$s</string>
-    <string name="migration_completed_title">遷移完成</string>
     <string name="migration_completed_summary">成功：%1$d，失敗：%2$d，未找到：%3$d</string>
     <string name="migration_same_source_error">來源和目標源不能相同</string>
     <string name="migration_no_sources">收藏中無可遷移的源</string>
@@ -2698,10 +2677,6 @@ SHA-256 指紋:
     <string name="font_preset_inter">Inter</string>
 
     <!-- 實體整理 - 混合內容類型 -->
-    <string name="entity_organize_repair_mixed_work_content_types_title">修復混合內容類型的作品實體</string>
-    <string name="entity_organize_repair_mixed_work_content_types_summary">%1$d 個作品實體包含 %2$d 個來自不同內容類型的本地投影。將投影拆分為獨立作品實體以恢復類型隔離。</string>
-    <string name="entity_organize_repair_mixed_work_content_types_action">拆分混合內容類型作品</string>
-    <string name="entity_organize_repair_mixed_work_content_types_feedback">已將 %1$d 個混合內容類型投影拆分為獨立作品實體。</string>
 
     <!-- Spaces 功能 -->
     <string name="space_switcher_title">切換 Space</string>
@@ -2745,7 +2720,6 @@ SHA-256 指紋:
     <string name="filter_group_reading_status">閱讀</string>
     <string name="filter_group_publication_status">連載</string>
     <string name="filter_group_content_rating">分級</string>
-    <string name="filter_group_work_relations">關聯</string>
     <string name="reading_status_planned">想讀</string>
     <string name="reading_status_reading">在讀</string>
     <string name="reading_status_re_reading">重讀</string>

@@ -24,7 +24,7 @@ import org.skepsun.kototoro.core.db.entity.toEntity
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.FavouriteCategory
-import org.skepsun.kototoro.core.parser.ProjectionIdentityResolver
+import org.skepsun.kototoro.core.parser.StoredContentIdentityResolver
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.util.ReversibleHandle
 import org.skepsun.kototoro.core.util.ext.mapItems
@@ -63,7 +63,7 @@ class FavouritesRepository @Inject constructor(
     private val db: MangaDatabase,
     private val settings: AppSettings,
     private val sourceTrackerEvents: SourceTrackerEventEmitter,
-    private val projectionIdentityResolver: ProjectionIdentityResolver,
+    private val storedContentIdentityResolver: StoredContentIdentityResolver,
 ) {
 
     suspend fun getAllContent(): List<Content> {
@@ -131,7 +131,7 @@ class FavouritesRepository @Inject constructor(
         return observeFavouriteContents(FavouriteCategory.NO_ID, order, filterOptions, limit)
     }
 
-    fun observeAllProjectionContents(
+    fun observeAllContents(
         order: ListSortOrder,
         filterOptions: Set<ListFilterOption>,
         limit: Int,
@@ -167,7 +167,7 @@ class FavouritesRepository @Inject constructor(
         return observeFavouriteContents(categoryId, order, filterOptions, limit)
     }
 
-    fun observeAllProjectionContents(
+    fun observeAllContents(
         categoryId: Long,
         order: ListSortOrder,
         filterOptions: Set<ListFilterOption>,
@@ -182,14 +182,14 @@ class FavouritesRepository @Inject constructor(
             .flatMapLatest { order -> observeAll(categoryId, order, filterOptions, limit) }
     }
 
-    fun observeAllProjectionContents(
+    fun observeAllContents(
         categoryId: Long,
         filterOptions: Set<ListFilterOption>,
         limit: Int,
         spaceId: SpaceId? = null,
     ): Flow<List<Content>> {
         return observeOrder(categoryId)
-            .flatMapLatest { order -> observeAllProjectionContents(categoryId, order, filterOptions, limit, spaceId) }
+            .flatMapLatest { order -> observeAllContents(categoryId, order, filterOptions, limit, spaceId) }
     }
 
     fun observeContentCount(): Flow<Int> {
@@ -374,7 +374,7 @@ class FavouritesRepository @Inject constructor(
         db.withTransaction {
             val currentTime = System.currentTimeMillis()
             for (manga in mangas) {
-                val stored = projectionIdentityResolver.preserveStoredRemoteIdentity(manga)
+                val stored = storedContentIdentityResolver.preserveStoredRemoteIdentity(manga)
                 val tags = stored.tags.toEntities()
                 db.getTagsDao().upsert(tags)
                 db.getMangaDao().upsert(stored.toEntity(), tags)

@@ -22,7 +22,7 @@ import javax.inject.Inject
 
 /**
  * Interface-level tests for [HistoryLibrarySnapshotStore]: one card per history row,
- * owned by its `manga_id` (projection-first).
+ * owned by its `manga_id` (manga-keyed).
  */
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)

@@ -17,7 +17,7 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.parsers.util.longHashCode
 
 /**
- * Semantics tests for the narrow favourites read DAO (projection-first).
+ * Semantics tests for the narrow favourites read DAO (manga-keyed).
  *
  * Every favourite manga row is its own library item: the read models keep the
  * `entity_id` column name for the card identity, but it is the favourite's `manga_id`.
@@ -140,19 +140,6 @@ class FavouriteLibraryReadDaoTest {
         assertTrue(byManga.getValue(M24).any { it.categoryId == 12L })
     }
 
-    // -------------------------------------------------------------------- facets
-
-    @Test
-    fun projectionFacetsAreTheFavouriteMangaItself() = runTest {
-        val facets = dao.observeFavouriteProjectionFacets().first().groupBy { it.entityId }
-
-        assertEquals(listOf(M1), facets.getValue(M1).map { it.mangaId })
-        assertEquals(listOf("OTHER"), facets.getValue(M3).map { it.source })
-        assertEquals(listOf("NOVEL"), facets.getValue(M13).map { it.contentType })
-        // M2 is in two categories but is still one facet
-        assertEquals(1, facets.getValue(M2).size)
-    }
-
     @Test
     fun tagRelationsResolveThroughTheDictionary() = runTest {
         val relations = dao.observeFavouriteTagIdRows().first().groupBy { it.entityId }
@@ -198,7 +185,6 @@ class FavouriteLibraryReadDaoTest {
         val before = countPreferences()
         dao.observeFavouriteCardBaseRows().first()
         dao.observeFavouriteMembershipRows().first()
-        dao.observeFavouriteProjectionFacets().first()
         dao.observeFavouriteTagIdRows().first()
         dao.observeFavouriteTagDictionary().first()
         dao.observeDownloadedFavouriteRows().first()
@@ -213,8 +199,7 @@ class FavouriteLibraryReadDaoTest {
 
         // every membership references a base row; every base row has >=1 membership
         assertEquals(baseIds, membershipIds)
-        // facets / tags / downloads never reference unknown items
-        assertTrue(baseIds.containsAll(dao.observeFavouriteProjectionFacets().first().map { it.entityId }))
+        // tags / downloads never reference unknown items
         assertTrue(baseIds.containsAll(dao.observeFavouriteTagIdRows().first().map { it.entityId }))
         assertTrue(baseIds.containsAll(dao.observeDownloadedFavouriteRows().first().map { it.entityId }))
     }
@@ -317,7 +302,7 @@ class FavouriteLibraryReadDaoTest {
 
                 // Display metadata authority (the tracking site behind the card title/cover):
                 // M25 has a cached site item, M26 points at a missing one, M27 chooses the
-                // local base projection as authority.
+                // local base content as authority.
                 insertManga(sql, M25, "Psi")
                 insertFavourite(sql, M25, 10, createdAt = 10, updatedAt = 10)
                 insertPrefs(sql, M25, metadataSourceKind = "tracking", metadataService = 3, metadataRemoteId = 777L)
@@ -330,7 +315,7 @@ class FavouriteLibraryReadDaoTest {
                 insertManga(sql, M27, "Phi")
                 insertFavourite(sql, M27, 10, createdAt = 10, updatedAt = 10)
                 // Stale numeric columns with kind='base': the kind guard, not the id match,
-                // decides, so the card must keep the projection display.
+                // decides, so the card must keep the content display.
                 insertPrefs(sql, M27, metadataSourceKind = "base", metadataService = 3, metadataRemoteId = 779L)
                 insertTrackingSiteItem(sql, 3, 779L, "Phi site title", "https://site/phi.jpg")
             }

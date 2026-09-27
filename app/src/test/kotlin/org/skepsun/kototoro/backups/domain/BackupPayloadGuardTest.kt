@@ -59,7 +59,7 @@ class BackupPayloadGuardTest {
 	fun `completed work history with unknown chapter count remains restorable`() {
 		val backup = backupFile(
 			BackupSection.CATEGORIES to "[]",
-			BackupSection.PROJECTIONS to """[{"id":42}]""",
+			BackupSection.CONTENTS to """[{"id":42}]""",
 			BackupSection.ENTITY_GRAPH_ENTITIES to """[{"id":1,"type":"WORK","sync_id":"work-1"}]""",
 			BackupSection.ENTITY_GRAPH_BINDINGS to """[{"entity_id":1}]""",
 			BackupSection.WORK_HISTORY to """
@@ -86,10 +86,10 @@ class BackupPayloadGuardTest {
 	}
 
 	@Test
-	fun `work history still rejects missing projection anchors`() {
+	fun `work history still rejects missing content anchors`() {
 		val backup = backupFile(
 			BackupSection.CATEGORIES to "[]",
-			BackupSection.PROJECTIONS to "[]",
+			BackupSection.CONTENTS to "[]",
 			BackupSection.ENTITY_GRAPH_ENTITIES to """[{"id":1,"type":"WORK","sync_id":"work-1"}]""",
 			BackupSection.ENTITY_GRAPH_BINDINGS to """[{"entity_id":1}]""",
 			BackupSection.WORK_HISTORY to """
@@ -110,7 +110,7 @@ class BackupPayloadGuardTest {
 			""".trimIndent(),
 		)
 
-		assertThrows(BackupPayloadGuard.MissingProjectionAnchorsException::class.java) {
+		assertThrows(BackupPayloadGuard.MissingAnchorContentsException::class.java) {
 			BackupPayloadGuard.requireRestorableWorkSnapshot(backup, operation = "manual backup creation")
 		}
 	}
@@ -119,7 +119,7 @@ class BackupPayloadGuardTest {
 	fun `local backup guard errors do not mention WebDAV`() {
 		val backup = backupFile(
 			BackupSection.CATEGORIES to "[]",
-			BackupSection.PROJECTIONS to """[{"id":42}]""",
+			BackupSection.CONTENTS to """[{"id":42}]""",
 			BackupSection.ENTITY_GRAPH_ENTITIES to """[{"id":1,"type":"WORK","sync_id":"work-1"}]""",
 			BackupSection.ENTITY_GRAPH_BINDINGS to """[{"entity_id":1}]""",
 			BackupSection.WORK_FAVOURITES to """[{"entity_id":1,"category_id":99,"anchor_manga_id":42,"deleted_at":0}]""",
@@ -134,9 +134,9 @@ class BackupPayloadGuardTest {
 
 	@Test
 	fun `legacy work state with a missing entity is still restorable onto its anchor`() {
-		// Projection-first restore only needs anchor_manga_id; entity ids are payload.
+		// Manga-keyed restore only needs anchor_manga_id; entity ids are payload.
 		val backup = backupFile(
-			BackupSection.PROJECTIONS to """[{"id":42,"title":"Readable title","source":"test-source"}]""",
+			BackupSection.CONTENTS to """[{"id":42,"title":"Readable title","source":"test-source"}]""",
 			BackupSection.ENTITY_GRAPH_ENTITIES to "[]",
 			BackupSection.ENTITY_GRAPH_BINDINGS to "[]",
 			BackupSection.WORK_HISTORY to """[{"entity_id":99,"anchor_manga_id":42,"deleted_at":0}]""",

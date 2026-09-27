@@ -24,9 +24,9 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
  * (favourites-komikku-alignment Phase 5, `buildFavouriteCardModel`).
  *
  * Pins the card contract the aggregate chain used to provide — entity-id item identity,
- * membership-scoped pin, tracking counter, history progress, download badge, projection
+ * membership-scoped pin, tracking counter, history progress, download badge,
  * count, per-mode subtitles and the manual override chain — without a device, a database
- * or a `Content` projection.
+ * or a `Content` content.
  */
 class FavouritesCardMapperTest {
 
@@ -44,7 +44,6 @@ class FavouritesCardMapperTest {
         newChapters: Int = 0,
         progressPercent: Float? = null,
         progressTotalChapters: Int? = null,
-        projectionCount: Int = 1,
         displayTags: List<FavouriteCardTag> = listOf(FavouriteCardTag(11L, "Action"), FavouriteCardTag(12L, "Comedy")),
         isDownloaded: Boolean = false,
         overrideTitle: String? = null,
@@ -73,12 +72,9 @@ class FavouritesCardMapperTest {
         progressPercent = progressPercent,
         progressTotalChapters = progressTotalChapters,
         lastReadAt = null,
-        projectionCount = projectionCount,
-        projectionSourceNames = setOf(sourceName),
         tagIds = displayTags.mapTo(LinkedHashSet()) { it.tagId },
         displayTags = displayTags,
         isDownloaded = isDownloaded,
-        hasBrokenProjection = displayMangaId == null,
         overrideTitle = overrideTitle,
         overrideCoverUrl = overrideCoverUrl,
         metadataTrackingService = metadataTrackingService,
@@ -93,16 +89,16 @@ class FavouritesCardMapperTest {
         source: FavouriteCardRow = row(),
         mode: ListMode = ListMode.GRID,
         isPinned: Boolean = false,
-        groupSuffix: String? = "Current projection: Test",
+        sourceLabel: String? = "Test",
         progressMode: ProgressIndicatorMode = ProgressIndicatorMode.PERCENT_READ,
-        brokenTitle: String = "Missing projection",
+        brokenTitle: String = "Untitled",
         tagTint: (String) -> Int = { 0 },
     ) = FavouriteCardModelRequest(
         row = source,
         mode = mode,
         progressMode = progressMode,
         isPinned = isPinned,
-        groupSuffix = groupSuffix,
+        sourceLabel = sourceLabel,
         brokenTitle = brokenTitle,
         tagTint = tagTint,
     )
@@ -113,7 +109,7 @@ class FavouritesCardMapperTest {
             val model = buildFavouriteCardModel(request(mode = mode))
             assertEquals(1L, model.id, "id of $mode")
         }
-        // Representative projection / cover / title changes never move a card.
+        // Cover / title changes never move a card.
         val before = buildFavouriteCardModel(request()) as ContentGridModel
         val after = buildFavouriteCardModel(
             request(source = row(coverUrl = "https://other", title = "Renamed", displayMangaId = 999L)),
@@ -124,36 +120,35 @@ class FavouritesCardMapperTest {
     fun `grid modes never read the group suffix`() {
         // The batch mapper skips building the suffix for these modes because it is not part
         // of the model. This is that assumption: if a grid card ever starts showing the
-        // projection suffix, mapping a whole library has to format it again.
+        // source label, mapping a whole library has to format it again.
         for (mode in listOf(ListMode.GRID, ListMode.COMPACT_GRID)) {
-            val withSuffix = buildFavouriteCardModel(request(mode = mode, groupSuffix = "Current: Test"))
-            val withoutSuffix = buildFavouriteCardModel(request(mode = mode, groupSuffix = null))
-            assertEquals(withSuffix, withoutSuffix, "$mode must not depend on groupSuffix")
+            val withSuffix = buildFavouriteCardModel(request(mode = mode, sourceLabel = "Current: Test"))
+            val withoutSuffix = buildFavouriteCardModel(request(mode = mode, sourceLabel = null))
+            assertEquals(withSuffix, withoutSuffix, "$mode must not depend on sourceLabel")
         }
         // The list modes do show it, so the skip is limited to the grid.
         for (mode in listOf(ListMode.LIST, ListMode.DETAILED_LIST)) {
-            val withSuffix = buildFavouriteCardModel(request(mode = mode, groupSuffix = "Current: Test"))
-            val withoutSuffix = buildFavouriteCardModel(request(mode = mode, groupSuffix = null))
-            assertNotEquals(withSuffix, withoutSuffix, "$mode must keep the projection suffix")
+            val withSuffix = buildFavouriteCardModel(request(mode = mode, sourceLabel = "Current: Test"))
+            val withoutSuffix = buildFavouriteCardModel(request(mode = mode, sourceLabel = null))
+            assertNotEquals(withSuffix, withoutSuffix, "$mode must keep the source label")
         }
     }
 
 
     @Test
-    fun `grid card carries counter progress projection pin and download badges`() {
+    fun `grid card carries counter progress pin and download badges`() {
         val model = buildFavouriteCardModel(
             request(
-                source = row(newChapters = 4, progressPercent = 0.5f, progressTotalChapters = 20, projectionCount = 3, isDownloaded = true),
+                source = row(newChapters = 4, progressPercent = 0.5f, progressTotalChapters = 20, isDownloaded = true),
                 isPinned = true,
             ),
         ) as ContentGridModel
         assertEquals(4, model.counter)
-        assertEquals(3, model.projectionCount)
         assertTrue(model.isPinned)
         assertTrue(model.isSaved)
         assertFalse(model.isFavorite, "the favourites page never shows the heart badge")
         assertEquals(0.5f, model.progress?.percent)
-        assertEquals("Alpha Alt", model.subtitle, "grid subtitle is the alt title, no projection suffix")
+        assertEquals("Alpha Alt", model.subtitle, "grid subtitle is the alt title, no source label")
         assertEquals("Alpha Work", model.title)
         assertEquals("https://cover/1", model.coverUrl)
         assertEquals("Author A", model.manga.authors.joinToString())
@@ -200,7 +195,7 @@ class FavouritesCardMapperTest {
     }
 
     @Test
-    fun `without an authority there is no badge and the projection display stays`() {
+    fun `without an authority there is no badge and the manga display stays`() {
         val model = buildFavouriteCardModel(request()) as ContentGridModel
         assertNull(model.metadataTrackingService)
         assertEquals("Alpha Work", model.title)
@@ -240,17 +235,17 @@ class FavouritesCardMapperTest {
     }
 
     @Test
-    fun `list card subtitle joins the tag line with the projection suffix`() {
+    fun `list card subtitle joins the tag line with the source label`() {
         val model = buildFavouriteCardModel(request(mode = ListMode.LIST)) as ContentCompactListModel
-        assertEquals("Action, Comedy · Current projection: Test", model.subtitle)
+        assertEquals("Action, Comedy · Test", model.subtitle)
 
         val withoutTags = buildFavouriteCardModel(
             request(mode = ListMode.LIST, source = row(displayTags = emptyList())),
         ) as ContentCompactListModel
-        assertEquals("Current projection: Test", withoutTags.subtitle)
+        assertEquals("Test", withoutTags.subtitle)
 
         val withoutSuffix = buildFavouriteCardModel(
-            request(mode = ListMode.LIST, groupSuffix = null),
+            request(mode = ListMode.LIST, sourceLabel = null),
         ) as ContentCompactListModel
         assertEquals("Action, Comedy", withoutSuffix.subtitle)
     }
@@ -260,7 +255,7 @@ class FavouritesCardMapperTest {
         val model = buildFavouriteCardModel(
             request(mode = ListMode.DETAILED_LIST, tagTint = { if (it == "Comedy") 7 else 0 }),
         ) as ContentDetailedListModel
-        assertEquals("Alpha Alt · Current projection: Test", model.subtitle)
+        assertEquals("Alpha Alt · Test", model.subtitle)
         assertEquals(listOf<CharSequence>("Action", "Comedy"), model.tags.map { it.title })
         assertEquals(listOf(0, 7), model.tags.map { it.tint })
         assertFalse(model.isSaved)
@@ -273,14 +268,14 @@ class FavouritesCardMapperTest {
         )
         assertEquals("Chosen", overridden.title)
         assertEquals("https://chosen", overridden.coverUrl)
-        assertEquals("Alpha Work", overridden.manga.title, "the stub keeps the raw projection title")
+        assertEquals("Alpha Work", overridden.manga.title, "the stub keeps the raw manga title")
         assertNull(buildFavouriteCardModel(request()).override)
     }
 
     @Test
-    fun `rows without a display projection stay visible with a placeholder title`() {
+    fun `blank titles fall back to a placeholder title`() {
         val model = buildFavouriteCardModel(request(source = row(displayMangaId = null, title = "", coverUrl = null)))
-        assertEquals("Missing projection", model.title)
+        assertEquals("Untitled", model.title)
         assertEquals(1L, model.id, "the entity id still identifies the broken row")
         assertEquals(1L, model.manga.id, "a broken stub falls back to the entity id")
     }

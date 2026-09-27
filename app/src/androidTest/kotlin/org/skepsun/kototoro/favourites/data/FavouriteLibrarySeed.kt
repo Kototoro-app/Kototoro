@@ -168,7 +168,7 @@ internal object FavouriteLibrarySeed {
         try {
             (1L..count).forEach { index ->
                 val mangaId = index + 10_000L
-                insertManga(sql, mangaId, "Projection $mangaId")
+                insertManga(sql, mangaId, "Work $mangaId")
                 insertFavourite(sql, mangaId, 1, createdAt = index, updatedAt = index)
                 if (index % 10L == 0L) {
                     insertFavourite(sql, mangaId, 2, createdAt = index, updatedAt = index)

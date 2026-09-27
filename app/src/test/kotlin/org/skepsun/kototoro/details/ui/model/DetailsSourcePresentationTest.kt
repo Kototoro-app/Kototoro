@@ -16,12 +16,11 @@ class DetailsSourcePresentationTest {
 
         val model = option.toPresentationModel(
             context = DetailsSourceDisplayContext(
-                role = DetailsSourceRole.ENTITY_METADATA,
+                role = DetailsSourceRole.METADATA,
                 currentContentTitle = "Current Title",
                 currentContentSourceName = TestContentSource.name,
                 resolvedSourceTitle = "Test Source",
                 strings = displayStrings,
-                isSelected = true,
             ),
         )
 
@@ -30,53 +29,30 @@ class DetailsSourcePresentationTest {
     }
 
     @Test
-    fun `reading role marks selected option as current projection`() {
+    fun `reading role labels the option as the reading source`() {
         val option = DetailsSourceOption(
             key = "reading:1",
             source = TestContentSource,
-            title = "Projection A",
+            title = "Work A",
         )
 
         val model = option.toPresentationModel(
             context = DetailsSourceDisplayContext(
-                role = DetailsSourceRole.READING_PROJECTION,
+                role = DetailsSourceRole.READING_SOURCE,
                 resolvedSourceTitle = "Test Source",
                 strings = displayStrings,
-                isSelected = true,
             ),
         )
 
-        assertEquals("Projection A", model.title)
-        assertEquals("Current projection · Test Source", model.subtitle)
-    }
-
-    @Test
-    fun `reading role marks non selected option as switchable projection`() {
-        val option = DetailsSourceOption(
-            key = "reading:2",
-            source = TestContentSource,
-            title = "Projection B",
-        )
-
-        val model = option.toPresentationModel(
-            context = DetailsSourceDisplayContext(
-                role = DetailsSourceRole.READING_PROJECTION,
-                resolvedSourceTitle = "Test Source",
-                strings = displayStrings,
-                isSelected = false,
-            ),
-        )
-
-        assertEquals("Projection B", model.title)
-        assertEquals("Switchable projection · Test Source", model.subtitle)
+        assertEquals("Work A", model.title)
+        assertEquals("Reading source · Test Source", model.subtitle)
     }
 
     private companion object {
         val displayStrings = DetailsSourceDisplayStrings(
             unavailableText = "Unavailable",
             metadataBindingLabel = "Metadata binding",
-            currentProjectionLabel = "Current projection",
-            switchableProjectionLabel = "Switchable projection",
+            readingSourceLabel = "Reading source",
         )
     }
 }

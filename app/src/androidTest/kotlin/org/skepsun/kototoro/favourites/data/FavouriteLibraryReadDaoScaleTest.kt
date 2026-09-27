@@ -21,7 +21,7 @@ import org.skepsun.kototoro.core.db.MangaDatabase
  * - the 10k synthetic library loads through every flow with a FIXED number of DAO
  *   calls (no N+1: one call per flow, regardless of entity count);
  * - rows never carry `description` / `source_data` / full entity graphs (the column
- *   list is the contract; it is asserted by the Room projection itself);
+ *   list is the contract; it is asserted by the Room content itself);
  * - warm full read stays far below the 500 ms snapshot-build budget (the store adds
  *   only in-memory assembly on top of these queries).
  */
@@ -56,9 +56,8 @@ class FavouriteLibraryReadDaoScaleTest {
         // every 10th entity has a second membership (see seedLargeLibrary)
         assertEquals(11_000, memberships.size)
 
-        // facets / tags / downloads only reference known entities
+        // tags / downloads only reference known entities
         val entities = base.map { it.entityId }.toSet()
-        dao.observeFavouriteProjectionFacets().first().forEach { assertTrue(it.entityId in entities) }
         dao.observeDownloadedFavouriteRows().first().forEach { assertTrue(it.entityId in entities) }
         dao.observeFavouriteTagIdRows().first().forEach { assertTrue(it.entityId in entities) }
         dao.observeFavouriteTagDictionary().first()
@@ -82,7 +81,6 @@ class FavouriteLibraryReadDaoScaleTest {
 
     private suspend fun readAll(): List<FavouriteCardBaseRow> {
         dao.observeFavouriteMembershipRows().first()
-        dao.observeFavouriteProjectionFacets().first()
         dao.observeFavouriteTagIdRows().first()
         dao.observeFavouriteTagDictionary().first()
         dao.observeDownloadedFavouriteRows().first()

@@ -397,6 +397,7 @@ internal fun FavoritesFilterPanelRoute(
     val selectedSourceTags by containerViewModel.selectedSourceTags.collectAsStateWithLifecycle()
     val sourceTagEntries by containerViewModel.availableSourceTags.collectAsStateWithLifecycle()
     val isInlineQuickFilterEnabled by containerViewModel.isQuickFilterEnabled.collectAsStateWithLifecycle()
+    val isShelfEnabled by containerViewModel.isShelfEnabled.collectAsStateWithLifecycle()
 
     FavoritesFilterPanelContent(
         quickFilter = quickFilter,
@@ -415,6 +416,8 @@ internal fun FavoritesFilterPanelRoute(
         },
         isInlineQuickFilterEnabled = isInlineQuickFilterEnabled,
         onInlineQuickFilterEnabledChange = containerViewModel::setQuickFilterEnabled,
+        isShelfEnabled = isShelfEnabled,
+        onShelfEnabledChange = containerViewModel::setShelfEnabled,
         close = close,
     )
 }

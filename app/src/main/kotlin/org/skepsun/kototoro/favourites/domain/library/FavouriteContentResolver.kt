@@ -9,11 +9,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * On-demand resolution of the real projections behind favourites cards
+ * On-demand resolution of the stored contents behind favourites cards
  * (favourites-komikku-alignment plan, section 7.2).
  *
  * The library rows carry a display stub instead of a full [Content] (share links,
- * downloads, the category dialog and the override editor need the stored projection),
+ * downloads, the category dialog and the override editor need the stored content),
  * so those actions resolve the selected entities *after* the user triggers them — in one
  * batched query, never eagerly for the whole library.
  */
@@ -23,9 +23,9 @@ class FavouriteContentResolver @Inject constructor(
 ) {
 
     /**
-     * Stored projections of the given display manga ids, in the order they were asked
+     * Stored contents of the given display manga ids, in the order they were asked
      * for (selection order is preserved for the share/category dialogs). Ids of broken
-     * rows (no display projection) and unknown ids are skipped.
+     * rows without a stored manga and unknown ids are skipped.
      */
     suspend fun resolveByDisplayMangaIds(displayMangaIds: Collection<Long>): List<Content> =
         withContext(Dispatchers.Default) {

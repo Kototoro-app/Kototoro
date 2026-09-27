@@ -17,7 +17,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
  * (history-updates-feed komikku-alignment Phase U4, `buildUpdateCardModel`).
  *
  * Pins the card contract the paging chain used to provide — group ui id as the
- * list item identity, summed new-chapter counter, projection-count suffix,
+ * list item identity, summed new-chapter counter, source label,
  * per-mode subtitles, the manual-override-then-metadata chain and the
  * tracking-service badge — without a device, a database or a `Content` lookup.
  */
@@ -80,11 +80,11 @@ class UpdatesCardMapperTest {
     private fun request(
         row: UpdateGroupRow,
         mode: ListMode = ListMode.LIST,
-        groupSuffix: String? = "Projection: TEST",
+        sourceLabel: String? = "TEST",
     ) = UpdateCardModelRequest(
         group = row,
         mode = mode,
-        groupSuffix = groupSuffix,
+        sourceLabel = sourceLabel,
         brokenTitle = "(broken)",
         tagTint = { 0 },
     )
@@ -97,20 +97,19 @@ class UpdatesCardMapperTest {
         model as ContentGridModel
         assertEquals(-1L, model.id)
         assertEquals(6, model.counter)
-        assertEquals(1, model.projectionCount)
         assertEquals("Alpha Work", model.manga.title)
         assertEquals("https://cover/-1", model.manga.coverUrl)
     }
 
     @Test
-    fun `list mode joins tags subtitle and projection suffix`() {
+    fun `list mode joins tags subtitle and source label`() {
         val model = buildUpdateCardModel(request(group(uiId = 5), mode = ListMode.LIST))
 
         assertTrue(model is ContentCompactListModel)
         model as ContentCompactListModel
         assertEquals(5L, model.id)
         assertEquals(4, model.counter)
-        assertEquals("Action, Comedy · Projection: TEST", model.subtitle)
+        assertEquals("Action, Comedy · TEST", model.subtitle)
     }
 
     @Test
@@ -119,7 +118,7 @@ class UpdatesCardMapperTest {
 
         assertTrue(model is ContentDetailedListModel)
         model as ContentDetailedListModel
-        assertEquals("Alpha Alt · Projection: TEST", model.subtitle)
+        assertEquals("Alpha Alt · TEST", model.subtitle)
         assertEquals(listOf("Action", "Comedy"), model.tags.map { it.title })
         assertNull(model.progress)
     }
@@ -163,18 +162,9 @@ class UpdatesCardMapperTest {
     }
 
     @Test
-    fun `blank title falls back to the broken projection placeholder`() {
+    fun `blank title falls back to the untitled placeholder`() {
         val model = buildUpdateCardModel(request(group(title = "  ")))
 
         assertEquals("(broken)", model.manga.title)
-    }
-
-    @Test
-    fun `multi projection group keeps every manga id for removal`() {
-        val row = group(mangaIds = listOf(101L, 102L, 103L), displayMangaId = 102L)
-
-        val model = buildUpdateCardModel(request(row, mode = ListMode.GRID))
-
-        assertEquals(3, (model as ContentGridModel).projectionCount)
     }
 }

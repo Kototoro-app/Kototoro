@@ -40,10 +40,6 @@ private fun ListFilterOption.favoritesMetaFilterGroup(): FavoritesMetaFilterGrou
 
     ListFilterOption.Macro.COMPLETED -> FavoritesMetaFilterGroup.READING_STATUS
     ListFilterOption.Macro.NSFW -> FavoritesMetaFilterGroup.CONTENT_RATING
-    ListFilterOption.Macro.MULTI_PROJECTION,
-    ListFilterOption.Macro.BROKEN_PROJECTION,
-    -> FavoritesMetaFilterGroup.WORK_RELATIONS
-
     is ListFilterOption.Tag -> FavoritesMetaFilterGroup.TAGS
     is ListFilterOption.Source -> FavoritesMetaFilterGroup.SOURCES
 
@@ -67,7 +63,6 @@ private enum class FavoritesMetaFilterGroup(
     READING_STATUS(R.string.filter_group_reading_status, R.drawable.ic_state_finished),
     PUBLICATION_STATUS(R.string.filter_group_publication_status, R.drawable.ic_state_ongoing),
     CONTENT_RATING(R.string.filter_group_content_rating, R.drawable.ic_nsfw),
-    WORK_RELATIONS(R.string.filter_group_work_relations, R.drawable.ic_list_group),
     TAGS(R.string.tags, R.drawable.ic_tag),
     SOURCES(R.string.source, R.drawable.ic_web),
 }

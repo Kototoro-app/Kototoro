@@ -325,7 +325,7 @@ class RestoreCheckpointTest {
 	}
 
 	@Test
-	fun legacyWorkSectionsRestoreOntoAnchorProjections() = runTest {
+	fun legacyWorkSectionsRestoreOntoAnchorContents() = runTest {
 		// v3 时代的备份把用户状态写在 WORK_* 节（按 entity 归属、带 anchor_manga_id）。
 		// 投影优先下这些行必须按 anchor 落到 history / favourites，entity_id 只是载荷。
 		val (content, categoryTitle) = seedBackupData()
@@ -361,7 +361,7 @@ class RestoreCheckpointTest {
 		runRestore(legacy, restoreSections(), BackupRepository.RestoreMode.SNAPSHOT_REPLACE, null)
 
 		val history = historyRepository.getOne(content)
-		assertNotNull("legacy work history must land on its anchor projection", history)
+		assertNotNull("legacy work history must land on its anchor manga", history)
 		assertEquals(0.6f, history!!.percent)
 		val favourites = database.getFavouritesDao().findAllActiveEntries()
 		assertEquals(listOf(content.id), favourites.map { it.mangaId })

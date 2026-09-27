@@ -9,7 +9,7 @@ import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 
-/** Immutable projection containing only values read while a content card is drawn. */
+/** Immutable snapshot of the values read while a content card is drawn. */
 @Immutable
 data class ContentCardRenderModel(
     val id: Long,
@@ -20,7 +20,6 @@ data class ContentCardRenderModel(
     val authorText: String,
     val tagsText: String,
     val counter: Int,
-    val projectionCount: Int,
     val progress: ReadingProgress?,
     val isFavorite: Boolean,
     val isSaved: Boolean,
@@ -50,7 +49,6 @@ internal fun ContentListModel.toContentCardRenderModel(): ContentCardRenderModel
         else -> ""
     },
     counter = counter,
-    projectionCount = projectionCount,
     progress = when (this) {
         is ContentCompactListModel -> progress
         is ContentDetailedListModel -> progress

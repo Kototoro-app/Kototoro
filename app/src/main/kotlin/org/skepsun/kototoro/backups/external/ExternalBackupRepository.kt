@@ -11,7 +11,7 @@ import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.SourceOriginEntity
 import org.skepsun.kototoro.core.db.entity.TagEntity
 import org.skepsun.kototoro.core.extensions.GlobalExtensionManager
-import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
+import org.skepsun.kototoro.core.model.ContentIdentityKeys
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.FavouriteEntity

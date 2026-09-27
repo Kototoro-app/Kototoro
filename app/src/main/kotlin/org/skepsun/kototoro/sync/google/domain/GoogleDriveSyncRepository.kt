@@ -25,7 +25,7 @@ import org.skepsun.kototoro.core.db.entity.JsonSourceEntity
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
 import org.skepsun.kototoro.core.extensions.GlobalExtensionManager
-import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
+import org.skepsun.kototoro.core.model.ContentIdentityKeys
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.extensions.runtime.ExternalExtensionLoaderSupport
 import org.skepsun.kototoro.extensions.runtime.LocalApkExtensionSupport
@@ -402,9 +402,9 @@ class GoogleDriveSyncRepository @Inject constructor(
             var nextImportedMangaId = minOf(database.getMangaDao().findMinId() ?: 0L, 0L) - 1L
             runSyncStep("apply content") {
                 norm.content.forEach { content ->
-                    val existingByProjection = content.findLocalProjection(database)
+                    val existingByIdentity = content.findLocalContent(database)
                     val existingById = database.getMangaDao().find(content.id)?.manga
-                    val local = existingByProjection ?: existingById?.takeIf { it.hasSameProjectionIdentity(content) } ?: run {
+                    val local = existingByIdentity ?: existingById?.takeIf { it.hasSameContentIdentity(content) } ?: run {
                         val localId = if (existingById != null || database.getMangaDao().contains(content.id)) {
                             nextImportedMangaId--
                         } else {
@@ -412,7 +412,7 @@ class GoogleDriveSyncRepository @Inject constructor(
                         }
                         content.toEntity(localId)
                     }
-                    if (existingByProjection == null && existingById?.id != local.id) {
+                    if (existingByIdentity == null && existingById?.id != local.id) {
                         database.getMangaDao().upsert(local)
                     }
                     mangaIdMapping[content.id] = local.id
@@ -618,7 +618,7 @@ class GoogleDriveSyncRepository @Inject constructor(
         return "favourites=${getFavouritesDao().findAllActiveEntries().size} history=${getHistoryDao().findAllEntriesIncludingDeleted().size}"
     }
 
-    private suspend fun SyncContent.findLocalProjection(database: MangaDatabase): MangaEntity? {
+    private suspend fun SyncContent.findLocalContent(database: MangaDatabase): MangaEntity? {
         if (url.isNotBlank()) {
             database.getMangaDao().findBySourceAndUrl(source, url)?.manga?.let { return it }
             database.getMangaDao().findBySourceAndPublicUrl(source, url)?.manga?.let { return it }
@@ -630,8 +630,8 @@ class GoogleDriveSyncRepository @Inject constructor(
         return null
     }
 
-    private fun MangaEntity.hasSameProjectionIdentity(remote: SyncContent): Boolean {
-        return ProjectionIdentityKeys.hasSameIdentity(
+    private fun MangaEntity.hasSameContentIdentity(remote: SyncContent): Boolean {
+        return ContentIdentityKeys.hasSameIdentity(
             source = source,
             url = url,
             publicUrl = publicUrl,

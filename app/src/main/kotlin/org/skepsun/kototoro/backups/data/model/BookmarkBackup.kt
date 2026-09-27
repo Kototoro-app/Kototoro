@@ -12,7 +12,7 @@ class BookmarkBackup(
     @SerialName("tags") val tags: Set<TagBackup>,
     @SerialName("bookmarks") val bookmarks: List<Bookmark>,
 ) {
-    // Bookmarks keep a projection/content snapshot for legacy restore.
+    // Bookmarks keep a content snapshot for legacy restore.
     // Entity/work state is restored from graph/work sections, not from this payload.
 
     @Serializable

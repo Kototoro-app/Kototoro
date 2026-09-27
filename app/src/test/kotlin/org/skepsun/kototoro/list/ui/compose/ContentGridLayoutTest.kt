@@ -2,6 +2,7 @@ package org.skepsun.kototoro.list.ui.compose
 
 import androidx.compose.ui.unit.dp
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
@@ -40,6 +41,19 @@ class ContentGridLayoutTest {
         assertEquals(14f, resolveGridTitleFontSize(1f).value)
         assertEquals(16f, resolveGridTitleFontSize(1.5f).value)
         assertEquals(15f, resolveGridTitleFontSize(1.25f).value)
+    }
+
+    @Test
+    fun `compact overlay title fits two lines inside the scrim`() {
+        // The overlay title sits on the cover, 1.5sp under the below-cover title, and its
+        // scrim is tall enough for two lines at every grid scale.
+        assertEquals(12.5f, resolveCompactGridTitleFontSize(1f).value)
+        for (scale in listOf(0.5f, 1f, 1.5f)) {
+            val fontSize = resolveCompactGridTitleFontSize(scale).value
+            val posterHeight = compactPosterCardStyle(scale).posterHeight
+            val textRoom = compactGridTitleOverlayHeight(posterHeight).value - 2 * 6f
+            assertTrue(textRoom >= 2 * (fontSize + 3.5f), "scale=$scale")
+        }
     }
 
     @Test

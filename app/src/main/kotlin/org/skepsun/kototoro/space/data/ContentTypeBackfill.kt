@@ -7,7 +7,7 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import javax.inject.Inject
 
 @Reusable
-class ProjectionContentTypeBackfill @Inject constructor(
+class ContentTypeBackfill @Inject constructor(
     private val db: MangaDatabase,
 ) {
 

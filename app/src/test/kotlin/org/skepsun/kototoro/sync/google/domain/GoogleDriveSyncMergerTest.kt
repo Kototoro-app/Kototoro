@@ -35,7 +35,7 @@ class GoogleDriveSyncMergerTest {
 	}
 
 	@Test
-	fun `legacy work state lands on its anchor projection`() {
+	fun `legacy work state lands on its anchor content`() {
 		val snapshot = GoogleDriveSyncSnapshot(
 			namespace = GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2,
 			semanticSchemaVersion = GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION,
@@ -48,7 +48,7 @@ class GoogleDriveSyncMergerTest {
 				),
 				favourites = listOf(
 					workFavourite(entityId = 20L, anchorMangaId = 3L),
-					// No anchor: the entity-era row has no projection to land on.
+					// No anchor: the entity-era row has no content to land on.
 					workFavourite(entityId = 40L, anchorMangaId = null),
 				),
 			),
@@ -86,7 +86,7 @@ class GoogleDriveSyncMergerTest {
 	}
 
 	@Test
-	fun `compact does not merge projections by weak title and cover fallback`() {
+	fun `compact does not merge contents by weak title and cover fallback`() {
 		val snapshot = snapshot(
 			content = listOf(
 				content(id = 2L, title = "Same", url = "", publicUrl = "", coverUrl = "same-cover"),
@@ -102,7 +102,7 @@ class GoogleDriveSyncMergerTest {
 	}
 
 	@Test
-	fun `compact merges same source url projection across legacy content ids`() {
+	fun `compact merges same source url content across legacy content ids`() {
 		val snapshot = snapshot(
 			content = listOf(
 				content(id = 2L, url = "/same", publicUrl = "https://public.example.test/same"),
@@ -122,7 +122,7 @@ class GoogleDriveSyncMergerTest {
 	}
 
 	@Test
-	fun `compact merges same source public url projection when url is missing`() {
+	fun `compact merges same source public url content when url is missing`() {
 		val snapshot = snapshot(
 			content = listOf(
 				content(id = 2L, url = "", publicUrl = "https://public.example.test/same"),
@@ -152,7 +152,7 @@ class GoogleDriveSyncMergerTest {
 	}
 
 	@Test
-	fun `mergeSnapshots keeps newest state when local and remote carry the same projection under different ids`() {
+	fun `mergeSnapshots keeps newest state when local and remote carry the same content under different ids`() {
 		val local = snapshot(
 			content = listOf(content(id = 1L, url = "https://mangadex.org/title/123")),
 			history = listOf(history(mangaId = 1L, updatedAt = 10L)),

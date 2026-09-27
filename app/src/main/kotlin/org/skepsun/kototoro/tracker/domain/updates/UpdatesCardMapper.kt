@@ -46,7 +46,7 @@ class UpdatesCardMapper @Inject constructor(
         if (groups.isEmpty()) {
             return emptyList()
         }
-        val brokenTitle = context.getString(R.string.favourites_broken_projection_title)
+        val brokenTitle = context.getString(R.string.untitled_content)
         val tagTint = contentListMapper::tagTint
         val sourceLabels = HashMap<String, String>(8)
         return groups.map { group ->
@@ -54,7 +54,7 @@ class UpdatesCardMapper @Inject constructor(
                 UpdateCardModelRequest(
                     group = group,
                     mode = slice.mode,
-                    groupSuffix = groupSuffixOf(group, sourceLabels),
+                    sourceLabel = sourceLabelOf(group, sourceLabels),
                     brokenTitle = brokenTitle,
                     tagTint = tagTint,
                 ),
@@ -62,21 +62,11 @@ class UpdatesCardMapper @Inject constructor(
         }
     }
 
-    /** Localized source title of the representative projection, cached per mapping batch. */
-    private fun groupSuffixOf(group: UpdateGroupRow, labelCache: MutableMap<String, String>): String {
-        val sourceTitle = labelCache.getOrPut(group.sourceName) {
+    /** Localized source title of the work, cached per mapping batch. */
+    private fun sourceLabelOf(group: UpdateGroupRow, labelCache: MutableMap<String, String>): String =
+        labelCache.getOrPut(group.sourceName) {
             ContentSource(group.sourceName).getTitle(context)
         }
-        return if (group.mangaIds.size > 1) {
-            context.getString(
-                R.string.favourites_entity_current_projection_with_count,
-                sourceTitle,
-                group.mangaIds.size,
-            )
-        } else {
-            context.getString(R.string.favourites_entity_current_projection, sourceTitle)
-        }
-    }
 }
 
 /** Pure mapping inputs: everything [buildUpdateCardModel] needs, Android resolved. */
@@ -84,12 +74,12 @@ class UpdatesCardMapper @Inject constructor(
 data class UpdateCardModelRequest(
     val group: UpdateGroupRow,
     val mode: ListMode,
-    val groupSuffix: String?,
+    val sourceLabel: String?,
     val brokenTitle: String,
     val tagTint: (String) -> Int = { 0 },
 )
 
-/** Pure group -> card model projection (unit-tested without Android). */
+/** Pure group -> card model mapping (unit-tested without Android). */
 internal fun buildUpdateCardModel(request: UpdateCardModelRequest): ContentListModel {
     val group = request.group
     val manga = group.toStubContent(request.brokenTitle)
@@ -103,7 +93,6 @@ internal fun buildUpdateCardModel(request: UpdateCardModelRequest): ContentListM
             override = override,
             subtitle = group.altTitle?.takeIf { it.isNotBlank() },
             counter = group.totalNewChapters,
-            projectionCount = group.mangaIds.size,
             id = group.uiId,
             progress = null,
             isFavorite = false,
@@ -117,10 +106,9 @@ internal fun buildUpdateCardModel(request: UpdateCardModelRequest): ContentListM
             override = override,
             subtitle = joinSubtitles(
                 group.tags.joinToString(", ") { it.title }.ifBlank { null },
-                request.groupSuffix,
+                request.sourceLabel,
             ),
             counter = group.totalNewChapters,
-            projectionCount = group.mangaIds.size,
             id = group.uiId,
             progress = null,
             isPinned = group.isPinned,
@@ -130,9 +118,8 @@ internal fun buildUpdateCardModel(request: UpdateCardModelRequest): ContentListM
         ListMode.DETAILED_LIST -> ContentDetailedListModel(
             manga = manga,
             override = override,
-            subtitle = joinSubtitles(group.altTitle?.takeIf { it.isNotBlank() }, request.groupSuffix),
+            subtitle = joinSubtitles(group.altTitle?.takeIf { it.isNotBlank() }, request.sourceLabel),
             counter = group.totalNewChapters,
-            projectionCount = group.mangaIds.size,
             id = group.uiId,
             progress = null,
             isFavorite = false,

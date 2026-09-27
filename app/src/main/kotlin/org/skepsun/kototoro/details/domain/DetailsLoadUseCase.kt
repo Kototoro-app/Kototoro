@@ -74,7 +74,7 @@ class DetailsLoadUseCase @Inject constructor(
         }
         val repairedManga = repairLostKomiicIdentity(intentManga)
             ?: repairLostRemoteIdentity(intentManga)
-        val manga = repairedManga ?: mangaDataRepository.resolveStoredProjection(intentManga)
+        val manga = repairedManga ?: mangaDataRepository.resolveStoredContent(intentManga)
         android.util.Log.i(
             DETAILS_TRACE_TAG,
             "load.invoke intentId=${intent.mangaId} force=$force intentManga=${intentManga.traceSummary()} " +
@@ -140,7 +140,7 @@ class DetailsLoadUseCase @Inject constructor(
                 hasCoverOverride = override?.coverUrl?.takeIfUsableImageUri() != null,
             ).getOrNull()
             val storedDetails = if (remoteDetails != null) {
-                mangaDataRepository.updateProjectionSnapshot(remoteDetails)
+                mangaDataRepository.updateContentSnapshot(remoteDetails)
             } else {
                 null
             }
@@ -172,37 +172,37 @@ class DetailsLoadUseCase @Inject constructor(
         force: Boolean
     ) = coroutineScope {
         val localContent = localContentRepository.findSavedContent(manga, withDetails = true)
-        val cachedProjection = if (!force && manga.id != 0L) {
+        val cachedStoredContent = if (!force && manga.id != 0L) {
             mangaDataRepository.findContentById(manga.id, withChapters = true)
         } else {
             null
         }
-        val hasCachedDetails = !force && cachedProjection?.hasCompleteDetailsSnapshot() == true
+        val hasCachedDetails = !force && cachedStoredContent?.hasCompleteDetailsSnapshot() == true
 
         val isOfflineOrRestricted = !force && networkState.isOfflineOrRestricted()
         val skipNetworkLoad = !force && (isOfflineOrRestricted || hasCachedDetails)
         val hasAlternativeCover = override?.coverUrl?.takeIfUsableImageUri() != null ||
             localContent?.manga?.coverUrl?.takeIfUsableImageUri() != null ||
             localContent?.manga?.largeCoverUrl?.takeIfUsableImageUri() != null
-        val resolvedCachedProjection = if (
+        val resolvedCachedStoredContent = if (
             skipNetworkLoad &&
             !isOfflineOrRestricted &&
             !hasAlternativeCover &&
-            cachedProjection != null
+            cachedStoredContent != null
         ) {
-            val resolved = cachedProjection.withFirstPageCoverFallback()
-            if (resolved != cachedProjection) {
-                runCatchingCancellable { mangaDataRepository.updateProjectionSnapshot(resolved) }
+            val resolved = cachedStoredContent.withFirstPageCoverFallback()
+            if (resolved != cachedStoredContent) {
+                runCatchingCancellable { mangaDataRepository.updateContentSnapshot(resolved) }
                     .getOrDefault(resolved)
             } else {
-                cachedProjection
+                cachedStoredContent
             }
         } else {
-            cachedProjection
+            cachedStoredContent
         }
         android.util.Log.d(
             DETAILS_TRACE_TAG,
-            "load.remote manga=${manga.traceSummary()} cached=${cachedProjection?.traceSummary()} " +
+            "load.remote manga=${manga.traceSummary()} cached=${cachedStoredContent?.traceSummary()} " +
                 "localContent=${localContent?.manga?.traceSummary()} skipNetworkLoad=$skipNetworkLoad " +
                 "hasCachedDetails=$hasCachedDetails offline=$isOfflineOrRestricted",
         )
@@ -211,16 +211,16 @@ class DetailsLoadUseCase @Inject constructor(
             if (localContent != null) {
                 emit(
                     ContentDetails(
-                        manga = resolvedCachedProjection ?: manga,
+                        manga = resolvedCachedStoredContent ?: manga,
                         localContent = localContent,
                         override = override,
-                        description = (cachedProjection?.description ?: localContent.manga.description ?: manga.description)?.parseAsHtml(withImages = true),
+                        description = (cachedStoredContent?.description ?: localContent.manga.description ?: manga.description)?.parseAsHtml(withImages = true),
                         isLoaded = true,
                     ),
                 )
                 return@coroutineScope
             } else if (hasCachedDetails) {
-                val cachedDetails = checkNotNull(resolvedCachedProjection)
+                val cachedDetails = checkNotNull(resolvedCachedStoredContent)
                 emit(
                     ContentDetails(
                         manga = cachedDetails,
@@ -244,10 +244,10 @@ class DetailsLoadUseCase @Inject constructor(
         if (localContent != null) {
             emit(
                 ContentDetails(
-                    manga = cachedProjection ?: manga,
+                    manga = cachedStoredContent ?: manga,
                     localContent = localContent,
                     override = override,
-                    description = (cachedProjection?.description ?: localContent.manga.description ?: manga.description)?.parseAsHtml(withImages = true),
+                    description = (cachedStoredContent?.description ?: localContent.manga.description ?: manga.description)?.parseAsHtml(withImages = true),
                     isLoaded = false,
                 ),
             )
@@ -265,7 +265,7 @@ class DetailsLoadUseCase @Inject constructor(
             remoteResult.getOrThrow()
         }
         if (remoteDetails != null) {
-            val storedDetails = mangaDataRepository.updateProjectionSnapshot(remoteDetails)
+            val storedDetails = mangaDataRepository.updateContentSnapshot(remoteDetails)
             android.util.Log.d(
                 DETAILS_TRACE_TAG,
                 "loadRemote: remote details ready, mangaId=${storedDetails.id}, chapters=${storedDetails.chapters?.size ?: 0}, localChapters=${localContent?.manga?.chapters?.size ?: 0}",
@@ -284,10 +284,10 @@ class DetailsLoadUseCase @Inject constructor(
             // Network failed but we have local content — mark as loaded with local data
             emit(
                 ContentDetails(
-                    manga = cachedProjection ?: manga,
+                    manga = cachedStoredContent ?: manga,
                     localContent = localContent,
                     override = override,
-                    description = (cachedProjection?.description ?: localContent.manga.description ?: manga.description)?.parseAsHtml(withImages = true),
+                    description = (cachedStoredContent?.description ?: localContent.manga.description ?: manga.description)?.parseAsHtml(withImages = true),
                     isLoaded = true,
                 ),
             )
@@ -396,7 +396,7 @@ class DetailsLoadUseCase @Inject constructor(
             "load.repair restored Komiic identity for mangaId=${content.id}: comicId=$comicId",
         )
         return runCatchingCancellable {
-            mangaDataRepository.updateProjectionSnapshotAtAnchor(repaired, content.id)
+            mangaDataRepository.updateContentSnapshotAtAnchor(repaired, content.id)
         }.getOrNull()
     }
 

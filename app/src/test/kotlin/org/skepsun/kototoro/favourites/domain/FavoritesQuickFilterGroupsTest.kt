@@ -32,8 +32,6 @@ class FavoritesQuickFilterGroupsTest {
 			ListFilterOption.PublicationState(ContentState.FINISHED),
 			ListFilterOption.SFW,
 			ListFilterOption.Macro.NSFW,
-			ListFilterOption.Macro.MULTI_PROJECTION,
-			ListFilterOption.Macro.BROKEN_PROJECTION,
 			tagOption,
 			sourceOption,
 		)
@@ -53,13 +51,12 @@ class FavoritesQuickFilterGroupsTest {
 				"READING_STATUS",
 				"PUBLICATION_STATUS",
 				"CONTENT_RATING",
-				"WORK_RELATIONS",
 				"TAGS",
 				"SOURCES",
 			),
 			filter.groups.map { it.key },
 		)
-		assertEquals(listOf(6, 2, 2, 2, 1, 1), filter.groups.map { it.items.size })
+		assertEquals(listOf(6, 2, 2, 1, 1), filter.groups.map { it.items.size })
 		assertEquals(2, filter.items.size)
 		assertSame(ListFilterOption.Downloaded, filter.items.first().data)
 	}

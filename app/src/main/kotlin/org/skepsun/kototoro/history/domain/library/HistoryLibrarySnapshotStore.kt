@@ -26,7 +26,7 @@ import javax.inject.Singleton
  * complete self-consistent emissions, no writes, no network, no per-entity
  * lookups. Everything the paging-era `buildHistoryPagingAggregates` resolved
  * per page (bindings, categories, entity content types, tags of the display
- * projections) is folded here once.
+ * manga) is folded here once.
  */
 @Singleton
 class HistoryLibrarySnapshotStore @Inject constructor(

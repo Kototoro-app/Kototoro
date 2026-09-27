@@ -21,11 +21,11 @@ object BackupPayloadGuard {
         "The selected file is not a Kototoro or Kotatsu backup: it has no readable backup index.",
     )
 
-    class MissingProjectionAnchorsException(
+    class MissingAnchorContentsException(
         val operation: String,
         val anchorIds: List<Long>,
     ) : IllegalStateException(
-        "Refusing $operation: backup has work state with missing projection anchors: " +
+        "Refusing $operation: backup has work state with missing anchor manga: " +
             anchorIds.joinToString(),
     )
 
@@ -141,20 +141,20 @@ object BackupPayloadGuard {
             }
         if (activeFavouriteWithoutAnchor != null) {
             throw IllegalStateException(
-                "Refusing $operation: backup has an active work favourite without projection anchor " +
+                "Refusing $operation: backup has an active work favourite without anchor manga " +
                     "for entity_id=${activeFavouriteWithoutAnchor.long("entity_id")}.",
             )
         }
 
-        // Legacy WORK_* rows are restored onto their `anchor_manga_id` projection, so only the
+        // Legacy WORK_* rows are restored onto their `anchor_manga_id` manga, so only the
         // anchors matter; entity ids / sync ids no longer carry identity and are not checked.
-        val projectionIds = sections[BackupSection.PROJECTIONS].ids("id")
+        val contentIds = sections[BackupSection.CONTENTS].ids("id")
         val anchorIds = sections[BackupSection.WORK_FAVOURITES].activeIds("anchor_manga_id") +
             sections[BackupSection.WORK_HISTORY].activeIds("anchor_manga_id") +
             sections[BackupSection.WORK_STATS].ids("anchor_manga_id")
-        val missingAnchorIds = anchorIds - projectionIds
+        val missingAnchorIds = anchorIds - contentIds
         if (missingAnchorIds.isNotEmpty()) {
-            throw MissingProjectionAnchorsException(
+            throw MissingAnchorContentsException(
                 operation = operation,
                 anchorIds = missingAnchorIds.take(MAX_REPORTED_IDS),
             )
@@ -261,7 +261,7 @@ object BackupPayloadGuard {
     }
     private val SEMANTIC_GUARD_SECTIONS = setOf(
         BackupSection.CATEGORIES,
-        BackupSection.PROJECTIONS,
+        BackupSection.CONTENTS,
         BackupSection.WORK_HISTORY,
         BackupSection.WORK_FAVOURITES,
         BackupSection.WORK_STATS,

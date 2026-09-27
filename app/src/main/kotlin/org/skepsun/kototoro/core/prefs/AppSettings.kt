@@ -2331,6 +2331,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getEnumValue(KEY_FAVORITES_ORDER, ListSortOrder.NEWEST)
         set(value) = prefs.edit { putEnumValue(KEY_FAVORITES_ORDER, value) }
 
+    var isFavouritesShelfEnabled: Boolean
+        get() = prefs.getBoolean(KEY_FAVOURITES_SHELF, true)
+        set(value) = prefs.edit { putBoolean(KEY_FAVOURITES_SHELF, value) }
+
     var isRelatedContentEnabled: Boolean
         get() = prefs.getBoolean(KEY_RELATED_MANGA, true)
         set(value) = prefs.edit { putBoolean(KEY_RELATED_MANGA, value) }
@@ -3205,6 +3209,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_LOCAL_LIST_ORDER = "local_order"
         const val KEY_HISTORY_ORDER = "history_order"
         const val KEY_FAVORITES_ORDER = "fav_order"
+        const val KEY_FAVOURITES_SHELF = "favourites_shelf"
         const val KEY_WEBTOON_GAPS = "webtoon_gaps"
         const val KEY_WEBTOON_ZOOM = "webtoon_zoom"
         const val KEY_WEBTOON_ZOOM_OUT = "webtoon_zoom_out"

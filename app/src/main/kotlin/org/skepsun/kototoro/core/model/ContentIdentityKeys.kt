@@ -1,6 +1,6 @@
 package org.skepsun.kototoro.core.model
 
-object ProjectionIdentityKeys {
+object ContentIdentityKeys {
 
     fun bindingKeys(url: String, publicUrl: String): Set<String> {
         return buildSet {

@@ -16,7 +16,7 @@ import org.skepsun.kototoro.core.db.entity.TagEntity
 @Dao
 abstract class MangaDao {
 
-    data class MissingContentTypeProjection(
+    data class MissingContentTypeRow(
         val id: Long,
         val source: String,
     )
@@ -82,7 +82,7 @@ abstract class MangaDao {
     abstract suspend fun findMissingContentTypes(
         sources: Collection<String>,
         limit: Int,
-    ): List<MissingContentTypeProjection>
+    ): List<MissingContentTypeRow>
 
     @Query("UPDATE manga SET content_type = :contentType WHERE manga_id = :id AND content_type IS NULL")
     abstract suspend fun setContentTypeIfMissing(id: Long, contentType: String): Int

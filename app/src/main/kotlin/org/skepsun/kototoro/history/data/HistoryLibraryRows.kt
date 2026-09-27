@@ -6,7 +6,7 @@ import androidx.room.ColumnInfo
  * One row per active work_history entity — the history page base row
  * (history-updates-feed komikku-alignment plan, Phase H1).
  *
- * Narrow on purpose: history progress + identity + the display projection +
+ * Narrow on purpose: history progress + identity + the manga +
  * the per-entity tracking summary + favourite/pinned membership + the metadata
  * authority, all resolved once in SQL. No filters, no order — those are derived
  * in memory (Phase H3).
@@ -35,7 +35,7 @@ data class HistoryCardRow(
     @ColumnInfo(name = "metadata_tracking_service") val metadataTrackingService: Int?,
     @ColumnInfo(name = "metadata_tracking_title") val metadataTrackingTitle: String?,
     @ColumnInfo(name = "metadata_tracking_cover_url") val metadataTrackingCoverUrl: String?,
-    // display projection columns (COALESCE(preferred, anchor))
+    // manga columns (COALESCE(preferred, anchor))
     @ColumnInfo(name = "display_manga_id") val displayMangaId: Long?,
     @ColumnInfo(name = "display_title") val displayTitle: String?,
     @ColumnInfo(name = "display_alt_title") val displayAltTitle: String?,
@@ -49,7 +49,7 @@ data class HistoryCardRow(
     @ColumnInfo(name = "display_content_type") val displayContentType: String?,
 )
 
-/** Tag facet of a history display projection — the Tag quick filter's key (title + key). */
+/** Tag facet of a history manga — the Tag quick filter's key (title + key). */
 data class HistoryTagFacetRow(
     @ColumnInfo(name = "manga_id") val mangaId: Long,
     @ColumnInfo(name = "tag_title") val tagTitle: String,
@@ -72,7 +72,7 @@ data class HistoryCategoryFacetRow(
 )
 
 /**
- * Downloaded history entities via the local download index on bound projections
+ * Downloaded history entities via the local download index
  * (the `Downloaded` quick filter). Mirrors [FavouriteDownloadedRow].
  */
 data class HistoryDownloadedRow(
@@ -80,7 +80,7 @@ data class HistoryDownloadedRow(
     @ColumnInfo(name = "manga_id") val mangaId: Long,
 )
 
-/** Manual title/cover override of a history display projection. */
+/** Manual title/cover override of a history manga. */
 data class HistoryOverrideRow(
     @ColumnInfo(name = "manga_id") val mangaId: Long,
     @ColumnInfo(name = "title_override") val titleOverride: String?,

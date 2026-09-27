@@ -861,8 +861,12 @@ fun QuickFilterSection(
             )
         }.getOrNull()
     }
-    val orderedChips = remember(quickFilter.items) {
-        quickFilter.items.sortedBy { chip -> !chip.isChecked }
+    // Applied chips lead the rail, ahead of the group dropdowns: an applied filter that
+    // sat off-screen (e.g. Downloaded, applied automatically while offline) left the page
+    // looking empty with no visible reason.
+    val railEntries: List<Any> = remember(quickFilter.items, quickFilter.groups) {
+        val (checked, unchecked) = quickFilter.items.partition { chip -> chip.isChecked }
+        checked + quickFilter.groups + unchecked
     }
     LazyRow(
         state = listState,
@@ -882,26 +886,29 @@ fun QuickFilterSection(
             }
         }
         items(
-            items = quickFilter.groups,
-            key = { group -> "filter_group:${group.key}" },
-            contentType = { "filter_group" },
-        ) { group ->
-            QuickFilterGroupChip(
-                group = group,
-                isIosStyle = isIosStyle,
-                context = context,
-                entryPoint = entryPoint,
-                onQuickFilterOptionClick = onQuickFilterOptionClick,
-            )
-        }
-        items(
-            items = orderedChips,
-            key = { chip ->
-                val option = chip.data as? ListFilterOption
-                option?.let { "${it::class.qualifiedName}:${it.hashCode()}" } ?: chip.hashCode()
+            items = railEntries,
+            key = { entry ->
+                if (entry is QuickFilterGroup) {
+                    "filter_group:${entry.key}"
+                } else {
+                    val chip = entry as ChipModel
+                    val option = chip.data as? ListFilterOption
+                    option?.let { "${it::class.qualifiedName}:${it.hashCode()}" } ?: chip.hashCode()
+                }
             },
-            contentType = { "filter_chip" },
-        ) { chip ->
+            contentType = { entry -> if (entry is QuickFilterGroup) "filter_group" else "filter_chip" },
+        ) { entry ->
+            if (entry is QuickFilterGroup) {
+                QuickFilterGroupChip(
+                    group = entry,
+                    isIosStyle = isIosStyle,
+                    context = context,
+                    entryPoint = entryPoint,
+                    onQuickFilterOptionClick = onQuickFilterOptionClick,
+                )
+                return@items
+            }
+            val chip = entry as ChipModel
             val option = chip.data as? ListFilterOption
             val contentColor = when {
                 isIosStyle && chip.isChecked -> MaterialTheme.colorScheme.inverseOnSurface

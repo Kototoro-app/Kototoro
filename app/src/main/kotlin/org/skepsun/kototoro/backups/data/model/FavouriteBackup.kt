@@ -17,7 +17,7 @@ class FavouriteBackup(
     @SerialName("updated_at") val updatedAt: Long = 0L,
     @SerialName("manga") val manga: ContentBackup,
 ) {
-    // Projection-first: a favourite is owned by the manga projection itself.
+    // A favourite is owned by the manga itself.
     // Legacy backups may still carry separate work/entity sections; they are
     // translated into this shape on restore by [BackupRepository].
 

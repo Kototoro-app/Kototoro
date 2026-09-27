@@ -25,12 +25,12 @@ fun contentCoverCacheKey(
 ): String? {
     return sharedCoverMemoryCacheKey(
         sourceName = content.source.name,
-        ownerKey = content.projectionOwnerKey(),
+        ownerKey = content.contentOwnerKey(),
         url = url,
     )
 }
 
-fun Content.projectionOwnerKey(): String? {
+fun Content.contentOwnerKey(): String? {
     return url.takeIf { it.isNotBlank() }
         ?: publicUrl.takeIf { it.isNotBlank() }
 }

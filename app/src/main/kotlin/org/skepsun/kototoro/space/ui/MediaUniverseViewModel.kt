@@ -15,7 +15,7 @@ data class MediaUniverseUiState(
 )
 
 /**
- * Projection-first merge of the history and favourites feeds: the projection
+ * Merge of the history and favourites feeds: the manga
  * (content) id is now the work identity, so equal ids coalesce into one row that
  * records both memberships.
  */

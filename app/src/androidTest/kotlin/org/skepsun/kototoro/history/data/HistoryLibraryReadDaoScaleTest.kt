@@ -89,16 +89,16 @@ class HistoryLibraryReadDaoScaleTest {
         val downloaded = dao.observeHistoryDownloadedRows().first()
 
         // Every facet row must be reachable from the snapshot: the store keys the tag and
-        // override lookups by the *display* projection, so a facet row filed under any
+        // override lookups by the *display* content, so a facet row filed under any
         // other manga id is bytes read, objects built and never shown.
         val unreachableTags = tagFacets.map { it.mangaId }.filterNotTo(HashSet()) { it in displayIds }
         assertTrue(
-            "tag facets outside the display projections: ${unreachableTags.size} of ${tagFacets.size} $unreachableTags",
+            "tag facets outside the display manga: ${unreachableTags.size} of ${tagFacets.size} $unreachableTags",
             unreachableTags.isEmpty(),
         )
         val unreachableOverrides = overrides.map { it.mangaId }.filterNotTo(HashSet()) { it in displayIds }
         assertTrue(
-            "override rows outside the display projections: ${unreachableOverrides.size} of ${overrides.size}",
+            "override rows outside the display manga: ${unreachableOverrides.size} of ${overrides.size}",
             unreachableOverrides.isEmpty(),
         )
         val entities = base.map { it.entityId }.toSet()
@@ -132,7 +132,7 @@ class HistoryLibraryReadDaoScaleTest {
         // on thermal state and whatever else the device is doing, so it fails on correct code.
         // What this test pins down deterministically is the row set above — nothing read that
         // the snapshot cannot reach. The coldMs it logs is what the cold-page work is planned
-        // from: on the real library, driving the tag facet from the display projections
+        // from: on the real library, driving the tag facet from the display contents
         // instead of scanning manga_tags is what took it from 1078ms to 156ms.
     }
 
@@ -176,7 +176,7 @@ internal object HistoryLibrarySeed {
             }
             for (index in 1L..MANGA) {
                 val mangaId = MANGA_BASE + index
-                FavouriteLibrarySeed.insertManga(sql, mangaId, "Projection $mangaId")
+                FavouriteLibrarySeed.insertManga(sql, mangaId, "Work $mangaId")
 
                 if (index <= HISTORY) {
                     FavouriteLibrarySeed.insertHistory(sql, mangaId, percent = 0.5f, updatedAt = index)

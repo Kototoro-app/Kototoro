@@ -41,8 +41,6 @@ import kotlin.math.abs
 data class LocalEntitySuggestion(
     val entityId: Long?,
     val representative: Content,
-    val projectionCount: Int,
-    val sourceCount: Int,
 )
 
 @Reusable
@@ -96,7 +94,7 @@ class ContentSearchRepository @Inject constructor(
     }
 
     /**
-     * Projection-first 聚合：每条已持久化的 content 独立成立，跨来源不再存在实体身份（entity identity），
+     * 聚合：每条已持久化的 content 独立成立，跨来源不再存在实体身份（entity identity），
      * 因此不解析 entityId、不跨条目合并，仅按 limit 截断。
      */
     private suspend fun List<Content>.aggregateByEntity(limit: Int): List<LocalEntitySuggestion> {
@@ -108,8 +106,6 @@ class ContentSearchRepository @Inject constructor(
                 LocalEntitySuggestion(
                     entityId = null,
                     representative = content,
-                    projectionCount = 1,
-                    sourceCount = 1,
                 )
             }
             .take(limit)

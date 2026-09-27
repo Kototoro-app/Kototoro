@@ -52,7 +52,7 @@ class TracksDaoTest {
 	}
 
 	@Test
-	fun insertTracksFromUnreadLogsSkipsOrphanProjection() = runTest {
+	fun insertTracksFromUnreadLogsSkipsOrphanContent() = runTest {
 		insertLog(mangaId = 100L, createdAt = 300L, unread = true)
 		enableForeignKeys()
 
@@ -62,7 +62,7 @@ class TracksDaoTest {
 	}
 
 	@Test
-	fun deleteOrphansOnlyRemovesMissingProjections() = runTest {
+	fun deleteOrphansOnlyRemovesMissingContents() = runTest {
 		insertManga(100L)
 		insertManga(200L)
 		insertLog(mangaId = 100L, createdAt = 300L, unread = true)

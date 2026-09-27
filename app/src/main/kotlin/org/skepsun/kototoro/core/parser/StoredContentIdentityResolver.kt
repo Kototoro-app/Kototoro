@@ -5,17 +5,17 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.dao.MangaDao
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.MangaWithTags
-import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
+import org.skepsun.kototoro.core.model.ContentIdentityKeys
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.parsers.model.Content
 import javax.inject.Inject
 
 @Reusable
-class ProjectionIdentityResolver @Inject constructor(
+class StoredContentIdentityResolver @Inject constructor(
     private val db: MangaDatabase,
 ) {
 
-    suspend fun resolveStoredProjection(content: Content): Content {
+    suspend fun resolveStoredContent(content: Content): Content {
         if (content.isLocal) {
             return content
         }
@@ -77,7 +77,7 @@ class ProjectionIdentityResolver @Inject constructor(
     }
 
     private fun MangaEntity.hasSameRemoteIdentity(other: Content): Boolean {
-        return ProjectionIdentityKeys.hasSameIdentity(
+        return ContentIdentityKeys.hasSameIdentity(
             source = source,
             url = url,
             publicUrl = publicUrl,

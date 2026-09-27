@@ -27,7 +27,7 @@ import javax.inject.Inject
 /**
  * Interface-level tests for [FavouriteLibrarySnapshotStore]: the caller only needs
  * `observe()` — everything about flow combination, memberships and invalidation is
- * behind that single function. Each favourite manga is one library row (projection-first).
+ * behind that single function. Each favourite manga is one library row (manga-keyed).
  */
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
@@ -82,15 +82,12 @@ class FavouriteLibrarySnapshotStoreTest {
     fun rowsCarryCardFieldsOverridesAndFacets() = runTest {
         val snapshot = store.observe().first()
 
-        // each row displays its own manga; no projection fan-out
+        // each row displays its own manga
         val m5 = snapshot.rowsByEntityId.getValue(M5)
         assertEquals(M5, m5.displayMangaId)
         assertEquals("Epsilon", m5.title)
         assertEquals(0.9f, m5.rating)
         assertEquals(setOf(M5), m5.localMangaIds)
-        assertEquals(1, m5.projectionCount)
-        assertTrue(m5.hasDisplayProjection)
-        assertFalse(m5.hasBrokenProjection)
 
         // the manga's preferences override is the card title
         val m1 = snapshot.rowsByEntityId.getValue(M1)

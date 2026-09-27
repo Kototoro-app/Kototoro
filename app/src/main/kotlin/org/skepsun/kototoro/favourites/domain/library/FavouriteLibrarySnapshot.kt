@@ -15,10 +15,8 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
  * entities, `WorkAggregate` and the entity graph never cross this boundary.
  *
  * Semantics kept from the characterization suites:
- * - [localMangaIds] / [projectionSourceNames] / [projectionCount] are binding-based
- *   (the favourites anchor never inflates them — the MULTI_PROJECTION contract);
- * - a row without a display projection is *broken*, not dropped: it stays visible for
- *   entity organize with [hasDisplayProjection] = false;
+ * - one row per favourite manga: [entityId], [displayMangaId] and the single entry of
+ *   [localMangaIds] are that manga's id;
  * - [sourceGroupFlags] / [sourceOriginFlags] are pre-normalized filter dimensions
  *   (bit sets), not display strings — localized source titles resolve at UI mapping
  *   time so a language change does not rebuild the snapshot.
@@ -45,12 +43,9 @@ data class FavouriteCardRow(
     val progressPercent: Float?,
     val progressTotalChapters: Int?,
     val lastReadAt: Long?,
-    val projectionCount: Int,
-    val projectionSourceNames: Set<String>,
     val tagIds: Set<Long>,
     val displayTags: List<FavouriteCardTag>,
     val isDownloaded: Boolean,
-    val hasBrokenProjection: Boolean,
     val overrideTitle: String?,
     val overrideCoverUrl: String?,
     // display metadata authority: id of the tracking service whose cached site item feeds
@@ -64,9 +59,6 @@ data class FavouriteCardRow(
     val createdAt: Long,
     val updatedAt: Long,
 ) {
-    val hasDisplayProjection: Boolean
-        get() = displayMangaId != null
-
     /** Display title after the entity-level manual override. */
     val resolvedTitle: String
         get() = overrideTitle?.takeIf { it.isNotBlank() } ?: title

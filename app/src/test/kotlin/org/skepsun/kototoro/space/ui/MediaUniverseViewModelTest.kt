@@ -9,7 +9,7 @@ import org.skepsun.kototoro.parsers.model.Content
 class MediaUniverseViewModelTest {
 
 	@Test
-	fun `same projection is merged across history and favorites`() {
+	fun `same content is merged across history and favorites`() {
 		val history = content(contentId = 1L)
 		val favorite = content(contentId = 1L)
 
@@ -22,7 +22,7 @@ class MediaUniverseViewModelTest {
 	}
 
 	@Test
-	fun `distinct projections stay isolated by content id`() {
+	fun `distinct contents stay isolated by content id`() {
 		val first = content(contentId = 1L)
 		val duplicate = content(contentId = 1L)
 		val second = content(contentId = 2L)

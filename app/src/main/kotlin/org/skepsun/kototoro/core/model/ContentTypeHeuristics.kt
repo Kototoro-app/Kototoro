@@ -46,9 +46,9 @@ fun Content.looksLikeLocalVideoContent(): Boolean {
 }
 
 /**
- * Projection-first replacement for the former Work-level content-type rule.
+ * Replacement for the former Work-level content-type rule.
  *
- * A details page may only expose projections that belong to the same content-type
+ * A details page may only expose works that belong to the same content-type
  * family (manga / novel / video / other) as the selected one. Unknown types are
  * rejected so legacy data cannot widen the result set.
  */

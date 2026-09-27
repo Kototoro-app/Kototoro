@@ -15,22 +15,22 @@ import org.skepsun.kototoro.core.model.LocalVideoSource
 import org.skepsun.kototoro.core.model.UnknownContentSource
 import org.skepsun.kototoro.parsers.model.ContentType
 
-class ProjectionContentTypeBackfillTest {
+class ContentTypeBackfillTest {
 
 	private val dao = mockk<MangaDao>()
 	private val db = mockk<MangaDatabase> {
 		every { getMangaDao() } returns dao
 	}
-	private val backfill = ProjectionContentTypeBackfill(db)
+	private val backfill = ContentTypeBackfill(db)
 
 	@Test
 	fun `backfill writes resolved content types`() = runTest {
 		coEvery {
 			dao.findMissingContentTypes(any(), 10)
 		} returns listOf(
-			MangaDao.MissingContentTypeProjection(1L, LocalMangaSource.name),
-			MangaDao.MissingContentTypeProjection(2L, LocalNovelSource.name),
-			MangaDao.MissingContentTypeProjection(3L, LocalVideoSource.name),
+			MangaDao.MissingContentTypeRow(1L, LocalMangaSource.name),
+			MangaDao.MissingContentTypeRow(2L, LocalNovelSource.name),
+			MangaDao.MissingContentTypeRow(3L, LocalVideoSource.name),
 		)
 		coEvery { dao.setContentTypeIfMissing(any(), any()) } returns 1
 
@@ -58,14 +58,14 @@ class ProjectionContentTypeBackfillTest {
 	fun `conditional update result makes repeated backfill idempotent`() = runTest {
 		coEvery {
 			dao.findMissingContentTypes(any(), 10)
-		} returns listOf(MangaDao.MissingContentTypeProjection(1L, LocalMangaSource.name))
+		} returns listOf(MangaDao.MissingContentTypeRow(1L, LocalMangaSource.name))
 		coEvery { dao.setContentTypeIfMissing(1L, ContentType.MANGA.name) } returns 0
 
 		assertEquals(0, backfill.backfill(listOf(LocalMangaSource), limit = 10))
 	}
 
 	@Test
-	fun `bulk backfill updates each content type without per projection writes`() = runTest {
+	fun `bulk backfill updates each content type without per content writes`() = runTest {
 		coEvery { dao.setContentTypeIfMissingForSources(any(), any()) } returns 2
 
 		val updated = backfill.backfillAll(

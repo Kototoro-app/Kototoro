@@ -41,7 +41,7 @@ class ContentDataRepository @Inject constructor(
     private val db: MangaDatabase,
     private val resolverProvider: Provider<ContentLinkResolver>,
     private val appShortcutManagerProvider: Provider<AppShortcutManager>,
-    private val projectionIdentityResolver: ProjectionIdentityResolver,
+    private val storedContentIdentityResolver: StoredContentIdentityResolver,
 ) {
 
     sealed interface MetadataSourceSelection {
@@ -112,7 +112,7 @@ class ContentDataRepository @Inject constructor(
     }
 
     suspend fun getIgnoredTrackingSuggestion(mangaId: Long): IgnoredTrackingSuggestion? {
-        // Tracking suggestion suppression remains projection-local on purpose.
+        // Tracking suggestion suppression remains manga-local on purpose.
         // It is a hint for one local manifestation, not a work-owned user state.
         val entity = db.getPreferencesDao().find(mangaId) ?: return null
         val serviceId = entity.ignoredTrackingSuggestionService ?: return null
@@ -290,7 +290,7 @@ class ContentDataRepository @Inject constructor(
         if (other.url.isBlank() && other.publicUrl.isBlank()) {
             // Display stubs (feed / favourites / history cards, reader snapshots) are built without
             // urls on purpose, so there is no remote identity to compare. They must not shadow the
-            // stored projection: the source resolves details through the stored url, and an empty one
+            // stored content: the source resolves details through the stored url, and an empty one
             // makes parsers such as Komiic query with an empty comic id.
             return true
         }
@@ -307,8 +307,8 @@ class ContentDataRepository @Inject constructor(
         return db.withTransaction {
             // Progress saves hand over whatever the reader was opened with; keep the stored remote
             // identity so a url-less stub cannot erase it.
-            val stored = projectionIdentityResolver.resolveStoredProjection(
-                projectionIdentityResolver.preserveStoredRemoteIdentity(manga),
+            val stored = storedContentIdentityResolver.resolveStoredContent(
+                storedContentIdentityResolver.preserveStoredRemoteIdentity(manga),
             )
             if (!replaceExisting && db.getMangaDao().find(stored.id) != null) {
                 return@withTransaction stored
@@ -333,25 +333,25 @@ class ContentDataRepository @Inject constructor(
         }
     }
 
-    suspend fun resolveStoredProjection(content: Content): Content {
-        return projectionIdentityResolver.resolveStoredProjection(content)
+    suspend fun resolveStoredContent(content: Content): Content {
+        return storedContentIdentityResolver.resolveStoredContent(content)
     }
 
-    suspend fun updateProjectionSnapshot(manga: Content): Content {
+    suspend fun updateContentSnapshot(manga: Content): Content {
         return db.withTransaction {
-            upsertProjectionSnapshot(resolveStoredProjection(manga))
+            upsertContentSnapshot(resolveStoredContent(manga))
         }
     }
 
-    suspend fun updateProjectionSnapshotAtAnchor(manga: Content, anchorMangaId: Long): Content {
+    suspend fun updateContentSnapshotAtAnchor(manga: Content, anchorMangaId: Long): Content {
         return db.withTransaction {
-            check(db.getMangaDao().contains(anchorMangaId)) { "Unknown projection anchor: $anchorMangaId" }
-            upsertProjectionSnapshot(manga.copy(id = anchorMangaId))
+            check(db.getMangaDao().contains(anchorMangaId)) { "Unknown anchor manga: $anchorMangaId" }
+            upsertContentSnapshot(manga.copy(id = anchorMangaId))
         }
     }
 
-    private suspend fun upsertProjectionSnapshot(stored: Content): Content {
-        val manga = projectionIdentityResolver.preserveStoredRemoteIdentity(stored)
+    private suspend fun upsertContentSnapshot(stored: Content): Content {
+        val manga = storedContentIdentityResolver.preserveStoredRemoteIdentity(stored)
         val tags = manga.tags.toEntities()
         db.getTagsDao().upsert(tags)
         db.getMangaDao().upsert(manga.toEntity(), tags)

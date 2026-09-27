@@ -142,8 +142,6 @@ object HistoryLibraryDeriver {
                 ListFilterOption.Downloaded -> isDownloaded
                 ListFilterOption.Macro.COMPLETED -> ReadingProgress.isCompleted(percent)
                 ListFilterOption.Macro.NEW_CHAPTERS -> newChapters > 0
-                ListFilterOption.Macro.MULTI_PROJECTION -> true
-                ListFilterOption.Macro.BROKEN_PROJECTION -> true
                 ListFilterOption.Macro.FAVORITE -> categoryIds.isNotEmpty()
                 ListFilterOption.Macro.NSFW -> isNsfw
                 ListFilterOption.NOT_FAVORITE -> categoryIds.isEmpty()

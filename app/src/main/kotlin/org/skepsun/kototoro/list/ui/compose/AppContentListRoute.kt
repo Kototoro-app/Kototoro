@@ -113,7 +113,7 @@ fun AppContentListRoute(
     onPinSelection: ((Set<Long>) -> Unit)? = null,
     onMarkAsCompletedSelection: ((List<ContentListModel>) -> Unit)? = null,
     /**
-     * Resolves the stored projections behind the selected cards before an action needs a
+     * Resolves the stored contents behind the selected cards before an action needs a
      * real [org.skepsun.kototoro.parsers.model.Content] (share, download, category dialog,
      * override editor). The favourites library maps its cards from a narrow snapshot whose
      * content is display-only, so that page resolves by entity id on demand instead of
@@ -312,9 +312,9 @@ fun AppContentListRoute(
                         fixActionTitleRes = fixSelectionActionTitleRes,
                         onClearSelection = { updateSelection(emptySet()) },
                         onActionClick = { action ->
-                            // Actions that need a real projection: a page whose cards are
+                            // Actions that need the full content: a page whose cards are
                             // display-only (the favourites library) resolves the stored
-                            // projections by id on demand, every other page already
+                            // contents by id on demand, every other page already
                             // carries the full Content on the card itself.
                             val resolveContents: suspend (Set<Long>) -> List<Content> = { ids ->
                                 onResolveSelectionContents?.invoke(ids) ?: selectedModels.map { it.manga }

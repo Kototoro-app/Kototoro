@@ -4,7 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import org.skepsun.kototoro.core.db.MangaDatabase
 
-private const val SCROBBLING_SCORE_LOCAL_PROJECTION = 8
+private const val SCROBBLING_SCORE_LOCAL_MANGA = 8
 private const val SCROBBLING_SCORE_RATING = 4
 private const val SCROBBLING_SCORE_COMMENT = 2
 private const val SCROBBLING_SCORE_PROGRESS = 1
@@ -162,7 +162,7 @@ private inline fun <K, V, R : Any> Map<K, V>.mapValuesNotNull(transform: (Map.En
 
 private fun ScrobblingEntity.scrobblingOwnershipScore(): Int {
     var score = 0
-    if (mangaId != 0L) score += SCROBBLING_SCORE_LOCAL_PROJECTION
+    if (mangaId != 0L) score += SCROBBLING_SCORE_LOCAL_MANGA
     if (rating > 0f) score += SCROBBLING_SCORE_RATING
     if (!comment.isNullOrBlank()) score += SCROBBLING_SCORE_COMMENT
     if (chapter > 0) score += SCROBBLING_SCORE_PROGRESS

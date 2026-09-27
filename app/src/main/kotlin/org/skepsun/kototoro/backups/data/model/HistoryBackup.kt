@@ -20,7 +20,7 @@ class HistoryBackup(
     @SerialName("deleted_at") val deletedAt: Long = 0L,
     @SerialName("manga") val manga: ContentBackup,
 ) {
-    // Projection-first: history is owned by the manga projection itself.
+    // History is owned by the manga itself.
     // Legacy backups may still carry a separate work history section; it is
     // translated into this shape on restore by [BackupRepository].
 

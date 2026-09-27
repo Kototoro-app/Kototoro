@@ -13,7 +13,7 @@ import org.skepsun.kototoro.parsers.model.ContentType
 /**
  * Pure planning logic for the external backup bulk import. Everything here is memory-only so
  * it can be unit tested without a database; the repository only orchestrates the actual bulk
- * writes around it. Identity is the persisted manga row (projection-first): records that
+ * writes around it. Identity is the persisted manga row: records that
  * resolve to the same manga id are merged, nothing else is deduplicated.
  */
 

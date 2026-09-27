@@ -6,13 +6,13 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
-class ProjectionIdentityKeysTest {
+class ContentIdentityKeysTest {
 
 	@Test
 	fun `bindingKey prefers url over public url`() {
 		assertEquals(
 			"url:/work",
-			ProjectionIdentityKeys.bindingKey(
+			ContentIdentityKeys.bindingKey(
 				url = " /work ",
 				publicUrl = " https://example.test/work ",
 			),
@@ -23,7 +23,7 @@ class ProjectionIdentityKeysTest {
 	fun `bindingKey falls back to public url`() {
 		assertEquals(
 			"public_url:https://example.test/work",
-			ProjectionIdentityKeys.bindingKey(
+			ContentIdentityKeys.bindingKey(
 				url = " ",
 				publicUrl = " https://example.test/work ",
 			),
@@ -32,14 +32,14 @@ class ProjectionIdentityKeysTest {
 
 	@Test
 	fun `bindingKey returns null when remote identity is missing`() {
-		assertNull(ProjectionIdentityKeys.bindingKey(url = "", publicUrl = " "))
+		assertNull(ContentIdentityKeys.bindingKey(url = "", publicUrl = " "))
 	}
 
 	@Test
 	fun `bindingKeys retains url and public url aliases`() {
 		assertEquals(
 			setOf("url:/work", "public_url:https://example.test/work"),
-			ProjectionIdentityKeys.bindingKeys(
+			ContentIdentityKeys.bindingKeys(
 				url = " /work ",
 				publicUrl = " https://example.test/work ",
 			),
@@ -47,10 +47,10 @@ class ProjectionIdentityKeysTest {
 	}
 
 	@Test
-	fun `contentCompactKey uses projection key before legacy id fallback`() {
+	fun `contentCompactKey uses content key before legacy id fallback`() {
 		assertEquals(
 			"projection:source:url:/work",
-			ProjectionIdentityKeys.contentCompactKey(
+			ContentIdentityKeys.contentCompactKey(
 				source = "source",
 				id = 7L,
 				url = "/work",
@@ -59,7 +59,7 @@ class ProjectionIdentityKeysTest {
 		)
 		assertEquals(
 			"projection-id:7",
-			ProjectionIdentityKeys.contentCompactKey(
+			ContentIdentityKeys.contentCompactKey(
 				source = "source",
 				id = 7L,
 				url = "",
@@ -69,9 +69,9 @@ class ProjectionIdentityKeysTest {
 	}
 
 	@Test
-	fun `hasSameIdentity requires same source and matching projection key`() {
+	fun `hasSameIdentity requires same source and matching content key`() {
 		assertTrue(
-			ProjectionIdentityKeys.hasSameIdentity(
+			ContentIdentityKeys.hasSameIdentity(
 				source = "source",
 				url = "/work",
 				publicUrl = "",
@@ -81,7 +81,7 @@ class ProjectionIdentityKeysTest {
 			),
 		)
 		assertFalse(
-			ProjectionIdentityKeys.hasSameIdentity(
+			ContentIdentityKeys.hasSameIdentity(
 				source = "source",
 				url = "/work",
 				publicUrl = "",

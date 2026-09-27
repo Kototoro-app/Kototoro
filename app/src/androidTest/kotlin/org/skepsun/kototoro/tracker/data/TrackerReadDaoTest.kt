@@ -19,7 +19,7 @@ import org.skepsun.kototoro.favourites.data.FavouriteLibrarySeed
 
 /**
  * The narrow tracker read DAO: feed logs and pending updates, each owned by its own
- * `manga_id` (projection-first), with no filter parameters and no writes.
+ * `manga_id` (manga-keyed), with no filter parameters and no writes.
  */
 @RunWith(AndroidJUnit4::class)
 class TrackerReadDaoTest {

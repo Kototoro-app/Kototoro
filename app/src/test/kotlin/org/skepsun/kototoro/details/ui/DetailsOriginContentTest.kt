@@ -8,16 +8,16 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentType
 
-class DetailsOriginProjectionTest {
+class DetailsOriginContentTest {
 
 	@Test
-	fun `local content origin keeps the projection seed for initial details loading`() {
+	fun `local content origin keeps the content seed for initial details loading`() {
 		val content = content("MH1234")
 		val origin = DetailsOrigin.LocalMangaContent(
 			org.skepsun.kototoro.core.model.parcelable.ParcelableContent(content),
 		)
 
-		val intent = origin.initialProjectionIntentOrNull()
+		val intent = origin.initialContentIntentOrNull()
 
 		assertSame(content, intent?.manga)
 		assertEquals(content.id, intent?.mangaId)

@@ -1,6 +1,6 @@
 package org.skepsun.kototoro.details.domain
 
-import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
+import org.skepsun.kototoro.core.model.ContentIdentityKeys
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.parsers.model.Content
@@ -36,7 +36,7 @@ internal fun filterCurrentWorkFromRelated(
             return@filterNot false
         }
         candidate.id == seed.id ||
-            ProjectionIdentityKeys.hasSameIdentity(
+            ContentIdentityKeys.hasSameIdentity(
                 source = seed.source.name,
                 url = seed.url,
                 publicUrl = seed.publicUrl,
