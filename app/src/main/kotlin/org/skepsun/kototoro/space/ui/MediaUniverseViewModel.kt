@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.space.ui
 
 import org.skepsun.kototoro.parsers.model.Content
-import org.skepsun.kototoro.work.domain.WorkAggregate
 
 data class MediaUniverseItem(
     val content: Content,
@@ -15,16 +14,19 @@ data class MediaUniverseUiState(
     val items: List<MediaUniverseItem> = emptyList(),
 )
 
+/**
+ * Merge of the history and favourites feeds: the manga
+ * (content) id is now the work identity, so equal ids coalesce into one row that
+ * records both memberships.
+ */
 internal fun mergeMediaUniverseItems(
-    history: List<WorkAggregate>,
-    favorites: List<WorkAggregate>,
+    history: List<Content>,
+    favorites: List<Content>,
 ): List<MediaUniverseItem> {
-    val merged = LinkedHashMap<Any, MediaUniverseItem>()
-    fun add(aggregate: WorkAggregate, inHistory: Boolean, inFavorites: Boolean) {
-        val content = aggregate.displayProjection ?: return
-        val key = aggregate.identity.entityId?.let { "entity:$it" } ?: "content:${content.id}"
-        val existing = merged[key]
-        merged[key] = MediaUniverseItem(
+    val merged = LinkedHashMap<Long, MediaUniverseItem>()
+    fun add(content: Content, inHistory: Boolean, inFavorites: Boolean) {
+        val existing = merged[content.id]
+        merged[content.id] = MediaUniverseItem(
             content = existing?.content ?: content,
             inHistory = existing?.inHistory == true || inHistory,
             inFavorites = existing?.inFavorites == true || inFavorites,

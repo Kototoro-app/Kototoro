@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.BuildConfig
+import org.skepsun.kototoro.backups.data.BackupRepository
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -13,69 +14,44 @@ import java.util.zip.ZipOutputStream
 class BackupPayloadGuardTest {
 
 	@Test
-	fun `current Kototoro restore accepts only current semantic schema`() {
-		val current = indexedBackup("org.skepsun.kototoro", semanticSchemaVersion = 3)
-		val nightly = indexedBackup("org.skepsun.kototoro.nightly", semanticSchemaVersion = 3)
-		val debug = indexedBackup("org.skepsun.kototoro.debug", semanticSchemaVersion = 3)
-		val legacy = indexedBackup(BuildConfig.APPLICATION_ID, semanticSchemaVersion = 2)
-
-		assertDoesNotThrow {
-			BackupPayloadGuard.requireRestoreFormat(current, BackupRestoreFormat.KOTOTORO_CURRENT)
-		}
-		assertDoesNotThrow {
-			BackupPayloadGuard.requireRestoreFormat(nightly, BackupRestoreFormat.KOTOTORO_CURRENT)
-		}
-		assertDoesNotThrow {
-			BackupPayloadGuard.requireRestoreFormat(debug, BackupRestoreFormat.KOTOTORO_CURRENT)
-		}
-		assertThrows(BackupPayloadGuard.UnexpectedBackupFormatException::class.java) {
-			BackupPayloadGuard.requireRestoreFormat(legacy, BackupRestoreFormat.KOTOTORO_CURRENT)
+	fun `current Kototoro backups are detected by app id and semantic schema`() {
+		for (appId in listOf("org.skepsun.kototoro", "org.skepsun.kototoro.nightly", "org.skepsun.kototoro.debug")) {
+			for (schema in listOf(3, 4)) {
+				assertEquals(
+					BackupRestoreFormat.KOTOTORO_CURRENT,
+					BackupPayloadGuard.detectRestoreFormat(indexedBackup(appId, semanticSchemaVersion = schema)),
+				)
+			}
 		}
 	}
 
 	@Test
-	fun `compat restore accepts Kotatsu and legacy Kototoro but rejects current Kototoro`() {
-		val kotatsu = indexedBackup("io.github.kotatsuredo.kotatsu", semanticSchemaVersion = 1)
-		val legacyKototoro = indexedBackup(BuildConfig.APPLICATION_ID, semanticSchemaVersion = 1)
-		val currentKototoro = indexedBackup(BuildConfig.APPLICATION_ID, semanticSchemaVersion = 3)
-		val unrelatedCurrentFormat = indexedBackup("example.unrelated", semanticSchemaVersion = 3)
+	fun `Kotatsu, legacy Kototoro and other apps are detected as the compat format`() {
+		val compat = listOf(
+			indexedBackup("io.github.kotatsuredo.kotatsu", semanticSchemaVersion = 1),
+			indexedBackup(BuildConfig.APPLICATION_ID, semanticSchemaVersion = 2),
+			indexedBackup("example.unrelated", semanticSchemaVersion = 3),
+		)
 
-		assertDoesNotThrow {
-			BackupPayloadGuard.requireRestoreFormat(kotatsu, BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO)
+		compat.forEach { backup ->
+			assertEquals(BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO, BackupPayloadGuard.detectRestoreFormat(backup))
 		}
-		assertDoesNotThrow {
-			BackupPayloadGuard.requireRestoreFormat(
-				legacyKototoro,
-				BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO,
-			)
-		}
-		assertThrows(BackupPayloadGuard.UnexpectedBackupFormatException::class.java) {
-			BackupPayloadGuard.requireRestoreFormat(
-				currentKototoro,
-				BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO,
-			)
-		}
-		assertThrows(BackupPayloadGuard.UnexpectedBackupFormatException::class.java) {
-			BackupPayloadGuard.requireRestoreFormat(
-				unrelatedCurrentFormat,
-				BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO,
-			)
-		}
+		assertEquals(
+			BackupRepository.RestoreMode.MERGE,
+			BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO.defaultRestoreMode,
+		)
+		assertEquals(
+			BackupRepository.RestoreMode.SNAPSHOT_REPLACE,
+			BackupRestoreFormat.KOTOTORO_CURRENT.defaultRestoreMode,
+		)
 	}
 
 	@Test
-	fun `schema 4 backup is accepted as current and rejected as legacy`() {
-		val schema4 = indexedBackup(BuildConfig.APPLICATION_ID, semanticSchemaVersion = 4)
-		val schema3 = indexedBackup(BuildConfig.APPLICATION_ID, semanticSchemaVersion = 3)
+	fun `a file without a backup index is rejected`() {
+		val notABackup = backupFile(BackupSection.HISTORY to "[]")
 
-		assertDoesNotThrow {
-			BackupPayloadGuard.requireRestoreFormat(schema4, BackupRestoreFormat.KOTOTORO_CURRENT)
-		}
-		assertDoesNotThrow {
-			BackupPayloadGuard.requireRestoreFormat(schema3, BackupRestoreFormat.KOTOTORO_CURRENT)
-		}
 		assertThrows(BackupPayloadGuard.UnexpectedBackupFormatException::class.java) {
-			BackupPayloadGuard.requireRestoreFormat(schema4, BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO)
+			BackupPayloadGuard.detectRestoreFormat(notABackup)
 		}
 	}
 
@@ -83,7 +59,7 @@ class BackupPayloadGuardTest {
 	fun `completed work history with unknown chapter count remains restorable`() {
 		val backup = backupFile(
 			BackupSection.CATEGORIES to "[]",
-			BackupSection.PROJECTIONS to """[{"id":42}]""",
+			BackupSection.CONTENTS to """[{"id":42}]""",
 			BackupSection.ENTITY_GRAPH_ENTITIES to """[{"id":1,"type":"WORK","sync_id":"work-1"}]""",
 			BackupSection.ENTITY_GRAPH_BINDINGS to """[{"entity_id":1}]""",
 			BackupSection.WORK_HISTORY to """
@@ -110,10 +86,10 @@ class BackupPayloadGuardTest {
 	}
 
 	@Test
-	fun `work history still rejects missing projection anchors`() {
+	fun `work history still rejects missing content anchors`() {
 		val backup = backupFile(
 			BackupSection.CATEGORIES to "[]",
-			BackupSection.PROJECTIONS to "[]",
+			BackupSection.CONTENTS to "[]",
 			BackupSection.ENTITY_GRAPH_ENTITIES to """[{"id":1,"type":"WORK","sync_id":"work-1"}]""",
 			BackupSection.ENTITY_GRAPH_BINDINGS to """[{"entity_id":1}]""",
 			BackupSection.WORK_HISTORY to """
@@ -134,7 +110,7 @@ class BackupPayloadGuardTest {
 			""".trimIndent(),
 		)
 
-		assertThrows(BackupPayloadGuard.MissingProjectionAnchorsException::class.java) {
+		assertThrows(BackupPayloadGuard.MissingAnchorContentsException::class.java) {
 			BackupPayloadGuard.requireRestorableWorkSnapshot(backup, operation = "manual backup creation")
 		}
 	}
@@ -143,7 +119,7 @@ class BackupPayloadGuardTest {
 	fun `local backup guard errors do not mention WebDAV`() {
 		val backup = backupFile(
 			BackupSection.CATEGORIES to "[]",
-			BackupSection.PROJECTIONS to """[{"id":42}]""",
+			BackupSection.CONTENTS to """[{"id":42}]""",
 			BackupSection.ENTITY_GRAPH_ENTITIES to """[{"id":1,"type":"WORK","sync_id":"work-1"}]""",
 			BackupSection.ENTITY_GRAPH_BINDINGS to """[{"entity_id":1}]""",
 			BackupSection.WORK_FAVOURITES to """[{"entity_id":1,"category_id":99,"anchor_manga_id":42,"deleted_at":0}]""",
@@ -157,21 +133,16 @@ class BackupPayloadGuardTest {
 	}
 
 	@Test
-	fun `missing work entity ids include the projection title when available`() {
+	fun `legacy work state with a missing entity is still restorable onto its anchor`() {
+		// Manga-keyed restore only needs anchor_manga_id; entity ids are payload.
 		val backup = backupFile(
-			BackupSection.PROJECTIONS to """[{"id":42,"title":"Readable title","source":"test-source"}]""",
+			BackupSection.CONTENTS to """[{"id":42,"title":"Readable title","source":"test-source"}]""",
 			BackupSection.ENTITY_GRAPH_ENTITIES to "[]",
 			BackupSection.ENTITY_GRAPH_BINDINGS to "[]",
 			BackupSection.WORK_HISTORY to """[{"entity_id":99,"anchor_manga_id":42,"deleted_at":0}]""",
 		)
 
-		val error = assertThrows(ActiveWorkStateMissingEntityException::class.java) {
-			BackupPayloadGuard.requireRestorableWorkSnapshot(backup, operation = "manual backup creation")
-		}
-
-		assertEquals(1, error.report.totalCount)
-		assertEquals("Readable title", error.report.items.single().title)
-		assertEquals("test-source", error.report.items.single().source)
+		BackupPayloadGuard.requireRestorableWorkSnapshot(backup, operation = "manual backup creation")
 	}
 
 	private fun backupFile(vararg sections: Pair<BackupSection, String>): File {

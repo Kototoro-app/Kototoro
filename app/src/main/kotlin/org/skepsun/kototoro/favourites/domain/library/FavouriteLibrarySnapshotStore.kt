@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.favourites.domain.library
 
-import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -47,7 +46,6 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
         return combine(
             dao.observeFavouriteCardBaseRows().distinctUntilChanged(),
             dao.observeFavouriteMembershipRows().distinctUntilChanged(),
-            dao.observeFavouriteProjectionFacets().distinctUntilChanged(),
             dao.observeFavouriteTagIdRows().distinctUntilChanged(),
             dao.observeFavouriteTagDictionary().distinctUntilChanged(),
             dao.observeDownloadedFavouriteRows().distinctUntilChanged(),
@@ -57,11 +55,10 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
             buildSnapshot(
                 baseRows = values[0] as List<FavouriteCardBaseRow>,
                 membershipRows = values[1] as List<org.skepsun.kototoro.favourites.data.FavouriteMembershipRow>,
-                projectionFacets = values[2] as List<org.skepsun.kototoro.favourites.data.FavouriteProjectionFacetRow>,
-                tagRelations = values[3] as List<org.skepsun.kototoro.favourites.data.FavouriteTagIdRow>,
-                tagDictionary = values[4] as List<org.skepsun.kototoro.favourites.data.FavouriteTagDictionaryRow>,
-                downloadedRows = values[5] as List<org.skepsun.kototoro.favourites.data.FavouriteDownloadedRow>,
-                legacyOverrides = values[6] as List<org.skepsun.kototoro.favourites.data.FavouriteLegacyOverrideRow>,
+                tagRelations = values[2] as List<org.skepsun.kototoro.favourites.data.FavouriteTagIdRow>,
+                tagDictionary = values[3] as List<org.skepsun.kototoro.favourites.data.FavouriteTagDictionaryRow>,
+                downloadedRows = values[4] as List<org.skepsun.kototoro.favourites.data.FavouriteDownloadedRow>,
+                legacyOverrides = values[5] as List<org.skepsun.kototoro.favourites.data.FavouriteLegacyOverrideRow>,
             )
         }.distinctUntilChanged().flowOn(Dispatchers.Default)
     }
@@ -69,7 +66,6 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
     internal fun buildSnapshot(
         baseRows: List<FavouriteCardBaseRow>,
         membershipRows: List<org.skepsun.kototoro.favourites.data.FavouriteMembershipRow>,
-        projectionFacets: List<org.skepsun.kototoro.favourites.data.FavouriteProjectionFacetRow>,
         tagRelations: List<org.skepsun.kototoro.favourites.data.FavouriteTagIdRow>,
         tagDictionary: List<org.skepsun.kototoro.favourites.data.FavouriteTagDictionaryRow>,
         downloadedRows: List<org.skepsun.kototoro.favourites.data.FavouriteDownloadedRow>,
@@ -79,14 +75,11 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
             return FavouriteLibrarySnapshot.Empty
         }
 
-        // ---- projection facets: binding-based projection set per entity
-        val projectionIdsByEntity = HashMap<Long, LinkedHashSet<Long>>(baseRows.size)
-        val projectionSourcesByEntity = HashMap<Long, LinkedHashSet<String>>(baseRows.size)
-        val projectionSourcePresence = HashMap<String, MutableSet<Long>>(64)
-        for (facet in projectionFacets) {
-            projectionIdsByEntity.getOrPut(facet.entityId) { LinkedHashSet() }.add(facet.mangaId)
-            projectionSourcesByEntity.getOrPut(facet.entityId) { LinkedHashSet() }.add(facet.source)
-            projectionSourcePresence.getOrPut(facet.source) { LinkedHashSet() }.add(facet.entityId)
+        // ---- source facet: favourite works per source (quick-filter source chips)
+        val sourcePresence = HashMap<String, Int>(64)
+        for (base in baseRows) {
+            val source = base.displaySource?.takeIf { it.isNotEmpty() } ?: continue
+            sourcePresence[source] = (sourcePresence[source] ?: 0) + 1
         }
 
         // ---- tag dictionary: identity and title, once per tag rather than once per relation
@@ -130,16 +123,12 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
 
         // ---- assemble rows
         val rowsByEntityId = HashMap<Long, FavouriteCardRow>(baseRows.size)
-        var brokenCount = 0
         for (base in baseRows) {
-            val projectionIds = projectionIdsByEntity[base.entityId].orEmpty()
             val legacyOverride = base.displayMangaId?.let(legacyOverrideByMangaId::get)
-            val broken = base.displayMangaId == null || projectionIds.isEmpty()
-            if (broken) brokenCount++
             rowsByEntityId[base.entityId] = FavouriteCardRow(
                 entityId = base.entityId,
                 displayMangaId = base.displayMangaId,
-                localMangaIds = projectionIds,
+                localMangaIds = setOfNotNull(base.displayMangaId),
                 title = base.displayTitle.orEmpty(),
                 altTitle = base.displayAltTitle,
                 coverUrl = base.displayCoverUrl?.takeIf { it.isNotBlank() },
@@ -159,13 +148,10 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
                 progressPercent = base.historyPercent,
                 progressTotalChapters = base.historyChapters,
                 lastReadAt = base.historyUpdatedAt,
-                projectionCount = projectionIds.size,
-                projectionSourceNames = projectionSourcesByEntity[base.entityId].orEmpty(),
                 tagIds = tagIdsByEntity[base.entityId].orEmpty(),
                 displayTags = displayTagsByEntity[base.entityId].orEmpty()
                     .map { (tagId, title) -> FavouriteCardTag(tagId, title) },
                 isDownloaded = base.entityId in downloadedEntities,
-                hasBrokenProjection = broken,
                 overrideTitle = base.titleOverride?.takeIf { it.isNotBlank() }
                     ?: legacyOverride?.titleOverride?.takeIf { it.isNotBlank() },
                 overrideCoverUrl = base.coverOverride?.takeIf { it.isNotBlank() }
@@ -203,8 +189,8 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
                 tag to entities.size
             }
             .sortedWith(compareByDescending<Pair<FavouriteFacetTag, Int>> { it.second }.thenBy { it.first.title })
-        val sources = projectionSourcePresence.entries
-            .map { it.key to it.value.size }
+        val sources = sourcePresence.entries
+            .map { it.key to it.value }
             .sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first })
 
         val snapshot = FavouriteLibrarySnapshot(
@@ -218,9 +204,6 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
                 sourceEntityCounts = sources.associate { it.first to it.second },
             ),
         )
-        if (brokenCount > 0) {
-            Log.d(TAG, "snapshot rows=${rowsByEntityId.size} broken=$brokenCount")
-        }
         return snapshot
     }
 
@@ -241,8 +224,6 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
     }
 
     private companion object {
-        const val TAG = "FavouriteLibrary"
-
         fun parseContentType(name: String): ContentType? = runCatching { ContentType.valueOf(name) }.getOrNull()
 
         fun parseContentState(name: String): ContentState? = runCatching { ContentState.valueOf(name) }.getOrNull()

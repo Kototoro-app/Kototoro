@@ -5,14 +5,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_BINDING
-import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
+import org.skepsun.kototoro.core.db.TABLE_HISTORY
 import org.skepsun.kototoro.core.db.TABLE_READING_SESSIONS
-import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
-import org.skepsun.kototoro.core.db.TABLE_WORK_STATS
+import org.skepsun.kototoro.core.db.TABLE_STATS
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
@@ -27,8 +24,6 @@ import org.skepsun.kototoro.stats.domain.toStatsContentKind
 import org.skepsun.kototoro.stats.domain.calculateCurrentStatsStreak
 import org.skepsun.kototoro.stats.domain.calculateHourlyStatsActivity
 import org.skepsun.kototoro.parsers.model.Content
-import org.skepsun.kototoro.work.domain.WorkAggregateRepository
-import org.skepsun.kototoro.work.domain.WorkResolver
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -40,13 +35,11 @@ import javax.inject.Inject
 class StatsRepository @Inject constructor(
     private val settings: AppSettings,
     private val db: MangaDatabase,
-    private val workResolver: WorkResolver,
-    private val workAggregateRepository: WorkAggregateRepository,
 ) {
 
     /**
      * Reactive dashboard for summaries: recomputes whenever reading sessions,
-     * stats rows or entity identities change.
+     * stats rows or history change.
      */
     fun observeDashboard(
         period: StatsPeriod,
@@ -56,10 +49,8 @@ class StatsRepository @Inject constructor(
         val invalidations = db.invalidationTracker.createFlow(
             tables = arrayOf(
                 TABLE_READING_SESSIONS,
-                TABLE_WORK_STATS,
-                TABLE_WORK_HISTORY,
-                TABLE_ENTITY_GRAPH_BINDING,
-                TABLE_ENTITY_PREFERENCES,
+                TABLE_STATS,
+                TABLE_HISTORY,
             ),
             emitInitialState = true,
         )
@@ -74,7 +65,7 @@ class StatsRepository @Inject constructor(
         } else {
             System.currentTimeMillis() - TimeUnit.DAYS.toMillis(period.days.toLong())
         }
-        val stats = db.getWorkStatsDao().getDurationStats(fromDate, null, categories)
+        val stats = db.getStatsDao().getDurationStats(fromDate, null, categories)
         val result = ArrayList<StatsRecord>(stats.size)
         var other = StatsRecord(null, 0)
         val total = stats.values.sum()
@@ -114,32 +105,19 @@ class StatsRepository @Inject constructor(
             return getLegacyDashboard(period, categories, kind, fromDate, zoneId)
         }
 
-        val identities = sessions.asSequence()
-            .map { it.mangaId }
-            .distinct()
-            .associateWith { workResolver.resolveByMangaId(it) }
-        val aggregates = workAggregateRepository.findAggregatesByEntityIds(
-            identities.values.mapNotNull { it.entityId }.distinct(),
-        )
-        val grouped = sessions.groupBy { session ->
-            identities[session.mangaId]?.entityId?.let { "entity:$it" } ?: "manga:${session.mangaId}"
-        }
-        val records = grouped.values.mapNotNull { workSessions ->
-            val anchorId = workSessions.first().mangaId
-            val identity = identities[anchorId]
-            val aggregate = identity?.entityId?.let(aggregates::get)
-            if (categories.isNotEmpty() && aggregate?.categories?.none { it.id in categories } != false) {
-                return@mapNotNull null
+        val grouped = sessions.groupBy { it.mangaId }
+        val records = grouped.entries.mapNotNull { (mangaId, workSessions) ->
+            if (categories.isNotEmpty()) {
+                val mangaCategories = db.getFavouritesDao().findCategories(mangaId)
+                if (mangaCategories.none { it in categories }) return@mapNotNull null
             }
-            val content = aggregate?.displayProjection
-                ?: db.getMangaDao().find(anchorId)?.toContent()
+            val content = db.getMangaDao().find(mangaId)?.toContent()
             val contentKind = content?.source?.contentType.toStatsContentKind()
             if (kind != StatsContentKind.ALL && contentKind != kind) return@mapNotNull null
             val duration = workSessions.sumOf { (it.endAt - it.startAt).coerceAtLeast(0L) }
             val units = when (contentKind) {
                 StatsContentKind.MANGA -> {
-                    val entityId = identity?.entityId
-                    if (entityId == null) 0 else db.getWorkStatsDao().findAll(entityId)
+                    db.getStatsDao().findAll(mangaId)
                         .asSequence()
                         .filter { it.startedAt >= fromDate }
                         .sumOf { it.pages }
@@ -162,9 +140,7 @@ class StatsRepository @Inject constructor(
         val includedIds = records.mapNotNull { it.manga?.id }.toSet()
         val includedKinds = records.associate { it.manga?.id to it.kind }
         val filteredSessions = sessions.filter { session ->
-            val identity = identities[session.mangaId]
-            val displayId = identity?.entityId?.let(aggregates::get)?.displayProjection?.id ?: session.mangaId
-            displayId in includedIds && (kind == StatsContentKind.ALL || includedKinds[displayId] == kind)
+            session.mangaId in includedIds && (kind == StatsContentKind.ALL || includedKinds[session.mangaId] == kind)
         }
         val activityByDate = filteredSessions.groupBy { session ->
             Instant.ofEpochMilli(session.startAt).atZone(zoneId).toLocalDate()
@@ -213,16 +189,14 @@ class StatsRepository @Inject constructor(
         fromDate: Long,
         zoneId: ZoneId,
     ): StatsDashboard {
-        val durationStats = db.getWorkStatsDao().getDurationStats(fromDate, null, categories)
+        val durationStats = db.getStatsDao().getDurationStats(fromDate, null, categories)
         val activityByDate = mutableMapOf<LocalDate, Long>()
         val activityIntervals = mutableListOf<Pair<Long, Long>>()
         val records = durationStats.mapNotNull { (mangaEntity, duration) ->
             val content = mangaEntity.toContent(emptySet(), null)
             val contentKind = content.source.contentType.toStatsContentKind()
             if (kind != StatsContentKind.ALL && contentKind != kind) return@mapNotNull null
-            val entityId = workResolver.resolveByMangaId(content.id).entityId
-            val entries = entityId?.let { db.getWorkStatsDao().findAll(it) }
-                .orEmpty()
+            val entries = db.getStatsDao().findAll(content.id)
                 .filter { it.startedAt >= fromDate }
             entries.forEach { entry ->
                 val date = Instant.ofEpochMilli(entry.startedAt).atZone(zoneId).toLocalDate()
@@ -274,34 +248,29 @@ class StatsRepository @Inject constructor(
     }
 
     suspend fun getTimePerPage(mangaId: Long): Long = db.withTransaction {
-        val aggregate = workAggregateRepository.findAggregateByMangaId(mangaId) ?: return@withTransaction 0L
-        val pages = aggregate.stats?.totalPages ?: 0
-        val time = if (pages >= 10) {
-            aggregate.stats?.averageTimePerPage ?: 0L
+        val pages = db.getStatsDao().getReadPagesCount(mangaId)
+        if (pages >= 10) {
+            db.getStatsDao().getAverageTimePerPage(mangaId)
         } else {
-            db.getWorkStatsDao().getAverageTimePerPage()
+            db.getStatsDao().getAverageTimePerPage()
         }
-        time
     }
 
     suspend fun getTotalPagesRead(mangaId: Long): Int {
-        return workAggregateRepository.findAggregateByMangaId(mangaId)?.stats?.totalPages ?: 0
+        return db.getStatsDao().getReadPagesCount(mangaId)
     }
 
     suspend fun getContentTimeline(mangaId: Long): NavigableMap<Long, Int> {
-        val entityId = resolveStatsEntityId(mangaId) ?: return TreeMap()
-        val workEntities = db.getWorkStatsDao().findAll(entityId)
+        val entries = db.getStatsDao().findAll(mangaId)
         val map = TreeMap<Long, Int>()
-        for (e in workEntities) {
+        for (e in entries) {
             map[e.startedAt] = e.pages
         }
         return map
     }
 
     suspend fun getContentSnapshot(content: Content): StatsContentSnapshot {
-        val identity = workResolver.resolveByMangaId(content.id)
-        val mangaIds = identity.localMangaIds.ifEmpty { setOf(content.id) }.toList()
-        val sessions = db.getReadingRecordDao().findSessions(mangaIds)
+        val sessions = db.getReadingRecordDao().findSessions(listOf(content.id))
             .filter { it.endAt > it.startAt }
         val kind = content.source.contentType.toStatsContentKind()
         if (sessions.isNotEmpty()) {
@@ -319,9 +288,7 @@ class StatsRepository @Inject constructor(
                 date.plusDays(1).takeIf { it <= today }
             }.map { activityByDate[it] ?: 0 }.toList()
             val units = when (kind) {
-                StatsContentKind.MANGA -> identity.entityId
-                    ?.let { db.getWorkStatsDao().findAll(it).sumOf { entry -> entry.pages } }
-                    ?: 0
+                StatsContentKind.MANGA -> db.getStatsDao().findAll(content.id).sumOf { it.pages }
                 StatsContentKind.NOVEL,
                 StatsContentKind.VIDEO,
                 -> sessions.map { it.endChapterId }.distinct().size
@@ -337,29 +304,27 @@ class StatsRepository @Inject constructor(
             )
         }
 
-        val entityId = identity.entityId ?: return StatsContentSnapshot(kind = kind)
-        val legacyEntries = db.getWorkStatsDao().findAll(entityId)
-        if (legacyEntries.isEmpty()) return StatsContentSnapshot(kind = kind)
+        val entries = db.getStatsDao().findAll(content.id)
+        if (entries.isEmpty()) return StatsContentSnapshot(kind = kind)
         val zoneId = ZoneId.systemDefault()
-        val activityByDate = legacyEntries.groupBy {
+        val activityByDate = entries.groupBy {
             Instant.ofEpochMilli(it.startedAt).atZone(zoneId).toLocalDate()
-        }.mapValues { (_, entries) -> entries.sumOf { it.pages } }
+        }.mapValues { (_, dayEntries) -> dayEntries.sumOf { it.pages } }
         val firstDate = activityByDate.keys.minOrNull() ?: LocalDate.now(zoneId)
         val today = LocalDate.now(zoneId)
         return StatsContentSnapshot(
             dailyActivity = generateSequence(firstDate) { date ->
                 date.plusDays(1).takeIf { it <= today }
             }.map { activityByDate[it] ?: 0 }.toList(),
-            firstActivityAt = legacyEntries.minOf { it.startedAt },
-            totalDuration = legacyEntries.sumOf { it.duration },
-            sessionCount = legacyEntries.size,
-            units = if (kind == StatsContentKind.MANGA) legacyEntries.sumOf { it.pages } else 0,
+            firstActivityAt = entries.minOf { it.startedAt },
+            totalDuration = entries.sumOf { it.duration },
+            sessionCount = entries.size,
+            units = if (kind == StatsContentKind.MANGA) entries.sumOf { it.pages } else 0,
             kind = kind,
         )
     }
 
     suspend fun clearStats() {
-        db.getWorkStatsDao().clear()
         db.getStatsDao().clear()
         db.getReadingRecordDao().clearAllSessions()
     }
@@ -375,11 +340,6 @@ class StatsRepository @Inject constructor(
     }.distinctUntilChanged()
 
     private suspend fun hasStats(mangaId: Long): Boolean {
-        return (workAggregateRepository.findAggregateByMangaId(mangaId)?.stats?.entryCount ?: 0) > 0
-    }
-
-    // The incoming mangaId is a projection/local anchor. User-visible stats are work-owned.
-    private suspend fun resolveStatsEntityId(mangaId: Long): Long? {
-        return workResolver.resolveByMangaId(mangaId).entityId
+        return db.getStatsDao().getReadPagesCount(mangaId) > 0
     }
 }

@@ -24,10 +24,6 @@
 		<item quantity="one">%1$d enabled source</item>
 		<item quantity="other">%1$d enabled sources</item>
 	</plurals>
-	<plurals name="history_grouped_records">
-		<item quantity="one">%1$d record</item>
-		<item quantity="other">%1$d records</item>
-	</plurals>
 	<plurals name="history_grouped_sources">
 		<item quantity="one">%1$d source</item>
 		<item quantity="other">%1$d sources</item>

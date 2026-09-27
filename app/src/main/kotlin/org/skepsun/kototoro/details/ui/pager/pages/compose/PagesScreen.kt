@@ -268,7 +268,7 @@ fun PagesScreen(
                     count = items.size,
                     key = { index ->
                         when (val item = items[index]) {
-                            is PageThumbnail -> "page_${item.page.id}"
+                            is PageThumbnail -> item.listKey
                             is PageThumbnailPlaceholder -> "placeholder_${item.chapterId}"
                             is ListHeader -> "header_${item.getText(context)}_$index"
                             else -> "item_${item::class.java.simpleName}_$index"

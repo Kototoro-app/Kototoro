@@ -34,7 +34,7 @@ data class FavouritesQuickFilterInput(
  * a chip never hides the sibling chips. Tags keep the legacy limit of three, ordered by
  * entity count then title ignoring case; sources are ordered by entity count then name.
  * Both count the field the corresponding filter matches on (the row's tag set and the
- * display projection's source), so a chip never filters everything away.
+ * work's source), so a chip never filters everything away.
  */
 internal fun buildFavouritesFilterOptions(input: FavouritesQuickFilterInput): List<ListFilterOption> {
     val entityIds: List<Long> =
@@ -67,8 +67,6 @@ internal fun buildFavouritesFilterOptions(input: FavouritesQuickFilterInput): Li
         if (input.isTrackerEnabled) {
             add(ListFilterOption.Macro.NEW_CHAPTERS)
         }
-        add(ListFilterOption.Macro.MULTI_PROJECTION)
-        add(ListFilterOption.Macro.BROKEN_PROJECTION)
         ScrobblingStatus.entries.mapTo(this) { ListFilterOption.ReadingStatus(it) }
         ContentState.entries.mapTo(this) { ListFilterOption.PublicationState(it) }
         tagCounts.entries

@@ -179,15 +179,6 @@ class UpdatesViewModel @Inject constructor(
         // Paging prefetches from LazyPagingItems access.
     }
 
-    override fun resolveEntityIdForUiItemId(id: Long): Long? {
-        return groupsById[id]?.entityId
-    }
-
-    override fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? {
-        val group = groupsById[id] ?: return null
-        return group.displayMangaId ?: group.mangaIds.firstOrNull()
-    }
-
     private fun buildStaticContent(
         groups: List<org.skepsun.kototoro.tracker.domain.updates.UpdateGroupRow>,
         grouped: Boolean,

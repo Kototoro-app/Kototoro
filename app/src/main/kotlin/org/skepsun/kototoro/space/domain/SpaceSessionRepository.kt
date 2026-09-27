@@ -14,7 +14,7 @@ sealed interface SpaceRouteSnapshot {
     @Serializable
     data class WorkDetails(
         val entityId: Long,
-        val requestedProjectionId: Long?,
+        val requestedStoredId: Long?,
     ) : SpaceRouteSnapshot
 
     @Serializable

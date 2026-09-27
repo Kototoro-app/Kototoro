@@ -30,7 +30,7 @@ import javax.inject.Singleton
  * Same discipline as the favourites/updates card mappers: display-only
  * [Content] stub, manual override first with the tracking-site metadata
  * authority as fallback, the ui id as the list item id, and the history
- * progress of the display projection. The counter stays the tracking badge
+ * progress of the manga. The counter stays the tracking badge
  * ([ContentListMapper]'s COUNTER option) the paging path resolved.
  */
 @Singleton
@@ -49,17 +49,17 @@ class HistoryCardMapper @Inject constructor(
         if (rows.isEmpty()) {
             return emptyList()
         }
-        val brokenTitle = context.getString(R.string.favourites_broken_projection_title)
+        val brokenTitle = context.getString(R.string.untitled_content)
         val tagTint = contentListMapper::tagTint
-        val shouldComputeGroupSuffix = slice.mode == ListMode.LIST || slice.mode == ListMode.DETAILED_LIST
-        val sourceLabels = if (shouldComputeGroupSuffix) HashMap<String, String>(8) else null
+        val needsSourceLabel = slice.mode == ListMode.LIST || slice.mode == ListMode.DETAILED_LIST
+        val sourceLabels = if (needsSourceLabel) HashMap<String, String>(8) else null
         return rows.map { row ->
             buildHistoryCardModel(
                 HistoryCardModelRequest(
                     row = row,
                     mode = slice.mode,
                     progressMode = slice.progressMode,
-                    groupSuffix = if (shouldComputeGroupSuffix && sourceLabels != null) groupSuffixOf(row, sourceLabels) else null,
+                    sourceLabel = sourceLabels?.let { sourceLabelOf(row, it) },
                     brokenTitle = brokenTitle,
                     tagTint = tagTint,
                 ),
@@ -67,33 +67,11 @@ class HistoryCardMapper @Inject constructor(
         }
     }
 
-    /**
-     * The "Current projection: X · N projections · N records" suffix of the
-     * list rows (plural string included when the entity has several records).
-     */
-    private fun groupSuffixOf(row: HistoryCardEntry, labelCache: MutableMap<String, String>): String? {
-        val sourceTitle = labelCache.getOrPut(row.sourceName) {
+    /** Localized source title of the work, cached per mapping batch. */
+    private fun sourceLabelOf(row: HistoryCardEntry, labelCache: MutableMap<String, String>): String =
+        labelCache.getOrPut(row.sourceName) {
             ContentSource(row.sourceName).getTitle(context)
         }
-        val currentProjectionLabel = if (row.localMangaIds.size > 1) {
-            context.getString(
-                R.string.favourites_entity_current_projection_with_count,
-                sourceTitle,
-                row.localMangaIds.size,
-            )
-        } else {
-            context.getString(R.string.favourites_entity_current_projection, sourceTitle)
-        }
-        if (row.localMangaIds.size <= 1) {
-            return currentProjectionLabel
-        }
-        val recordsLabel = context.resources.getQuantityString(
-            R.plurals.history_grouped_records,
-            row.localMangaIds.size,
-            row.localMangaIds.size,
-        )
-        return listOf(currentProjectionLabel, recordsLabel).joinToString(" · ")
-    }
 }
 
 /** Pure mapping inputs: everything [buildHistoryCardModel] needs, Android resolved. */
@@ -102,12 +80,12 @@ data class HistoryCardModelRequest(
     val row: HistoryCardEntry,
     val mode: ListMode,
     val progressMode: ProgressIndicatorMode,
-    val groupSuffix: String?,
+    val sourceLabel: String?,
     val brokenTitle: String,
     val tagTint: (String) -> Int = { 0 },
 )
 
-/** Pure row -> card model projection (unit-tested without Android). */
+/** Pure row -> card model mapping (unit-tested without Android). */
 internal fun buildHistoryCardModel(request: HistoryCardModelRequest): ContentListModel {
     val row = request.row
     val manga = row.toStubContent(request.brokenTitle)
@@ -126,7 +104,6 @@ internal fun buildHistoryCardModel(request: HistoryCardModelRequest): ContentLis
             override = override,
             subtitle = row.altTitle?.takeIf { it.isNotBlank() },
             counter = 0,
-            projectionCount = row.localMangaIds.size,
             id = row.uiId,
             progress = progress,
             isFavorite = false,
@@ -140,10 +117,9 @@ internal fun buildHistoryCardModel(request: HistoryCardModelRequest): ContentLis
             override = override,
             subtitle = joinSubtitles(
                 row.tags.joinToString(", ") { it.title }.ifBlank { null },
-                request.groupSuffix,
+                request.sourceLabel,
             ),
             counter = 0,
-            projectionCount = row.localMangaIds.size,
             id = row.uiId,
             progress = progress,
             isPinned = row.isPinned,
@@ -153,9 +129,8 @@ internal fun buildHistoryCardModel(request: HistoryCardModelRequest): ContentLis
         ListMode.DETAILED_LIST -> ContentDetailedListModel(
             manga = manga,
             override = override,
-            subtitle = joinSubtitles(row.altTitle?.takeIf { it.isNotBlank() }, request.groupSuffix),
+            subtitle = joinSubtitles(row.altTitle?.takeIf { it.isNotBlank() }, request.sourceLabel),
             counter = 0,
-            projectionCount = row.localMangaIds.size,
             id = row.uiId,
             progress = progress,
             isFavorite = false,

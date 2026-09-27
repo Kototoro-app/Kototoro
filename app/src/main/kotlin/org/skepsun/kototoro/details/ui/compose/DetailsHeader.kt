@@ -247,7 +247,7 @@ fun DetailsHeader(
         else -> R.string.details_reading_language_short
     }
     val metadataDisplayModel = metadataSourceOption?.resolveDisplayModel(
-        role = DetailsSourceRole.ENTITY_METADATA,
+        role = DetailsSourceRole.METADATA,
         currentContent = content,
         linkedTrackingItem = metadataSourceOption.trackingService?.let { service ->
             linkedTrackingItems.firstOrNull {
@@ -257,21 +257,19 @@ fun DetailsHeader(
         strings = DetailsSourceDisplayStrings(
             unavailableText = stringResource(R.string.details_metadata_binding_unavailable),
             metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
-            currentProjectionLabel = stringResource(R.string.details_current_projection),
-            switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
+            readingSourceLabel = stringResource(R.string.details_reading_source),
         ),
         isSelected = true,
     )
     val readingDisplayModel = if (showWorkActions) {
         readingSourceOption?.resolveDisplayModel(
-            role = DetailsSourceRole.READING_PROJECTION,
+            role = DetailsSourceRole.READING_SOURCE,
             currentContent = content,
             linkedTrackingItem = null,
             strings = DetailsSourceDisplayStrings(
                 unavailableText = stringResource(R.string.details_reading_source_unavailable),
                 metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
-                currentProjectionLabel = stringResource(readingSourceLabelRes),
-                switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
+                readingSourceLabel = stringResource(readingSourceLabelRes),
             ),
             isSelected = true,
         )

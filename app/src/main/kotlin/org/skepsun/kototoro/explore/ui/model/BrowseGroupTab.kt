@@ -80,7 +80,7 @@ sealed class BrowseGroupTab(
     /**
      * Check if a work matches this tab based on its persisted content type.
      * Unlike [matchesContentGroup], which classifies by the *source*, this
-     * matches the type recorded on the entity / projection — so novels and
+     * matches the type recorded on the work — so novels and
      * videos whose sources the source-group heuristic labels as MANGA/OTHER
      * (e.g. anonymous or legacy JSON sources restored from backups) still
      * appear under the Novel/Video chips.

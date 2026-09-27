@@ -4,7 +4,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.db.entity.ChapterEntity
-import org.skepsun.kototoro.favourites.data.FavouriteCategoryMembership
+import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
+import org.skepsun.kototoro.favourites.data.FavouriteEntity
 import org.skepsun.kototoro.history.data.HistoryEntity
 
 class MihonBackupExportMapperTest {
@@ -65,8 +66,8 @@ class MihonBackupExportMapperTest {
     @Test
     fun `manga categories export uses category order instead of local id`() {
         val memberships = listOf(
-            FavouriteCategoryMembership(mangaId = 1L, categoryId = 42L),
-            FavouriteCategoryMembership(mangaId = 1L, categoryId = 7L),
+            favourite(categoryId = 42L),
+            favourite(categoryId = 7L),
         )
 
         val exported = MihonBackupExportMapper.mapCategoryOrders(
@@ -79,6 +80,27 @@ class MihonBackupExportMapperTest {
 
         assertEquals(listOf(1L, 3L), exported)
     }
+
+    @Test
+    fun `category orders stay unique when sort keys collide`() {
+        // Mihon identifies a manga's categories by order, so equal sort keys must not merge.
+        val orders = MihonBackupExportMapper.assignCategoryOrders(
+            listOf(category(id = 2, sortKey = 1), category(id = 10, sortKey = 9), category(id = 1, sortKey = 1)),
+        )
+
+        assertEquals(mapOf(1L to 0L, 2L to 1L, 10L to 2L), orders)
+    }
+
+    private fun category(id: Int, sortKey: Int) = FavouriteCategoryEntity(
+        categoryId = id,
+        createdAt = 0L,
+        sortKey = sortKey,
+        title = "c$id",
+        order = "NEWEST",
+        track = true,
+        isVisibleInLibrary = true,
+        deletedAt = 0L,
+    )
 
     private fun buildChapters(count: Int): List<ChapterEntity> {
         return (1..count).map { index ->
@@ -97,4 +119,14 @@ class MihonBackupExportMapperTest {
             )
         }
     }
+
+    private fun favourite(categoryId: Long) = FavouriteEntity(
+        mangaId = 1L,
+        categoryId = categoryId,
+        sortKey = 0,
+        isPinned = false,
+        createdAt = 0L,
+        deletedAt = 0L,
+        updatedAt = 0L,
+    )
 }

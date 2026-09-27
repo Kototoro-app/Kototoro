@@ -38,8 +38,8 @@ import org.skepsun.kototoro.download.domain.DownloadState
 import org.skepsun.kototoro.download.ui.list.DownloadsActivity
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.format
+import org.skepsun.kototoro.parsers.util.format
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
-import org.skepsun.kototoro.work.domain.WorkResolver
 import java.util.UUID
 import androidx.appcompat.R as appcompatR
 
@@ -52,7 +52,6 @@ class DownloadNotificationFactory @AssistedInject constructor(
     private val workManager: WorkManager,
     private val coil: ImageLoader,
     private val contentDataRepository: ContentDataRepository,
-    private val workResolver: WorkResolver,
     @Assisted private val uuid: UUID,
     @Assisted val isSilent: Boolean,
 ) {
@@ -301,18 +300,10 @@ class DownloadNotificationFactory @AssistedInject constructor(
         false,
     )
 
-    private suspend fun resolveDetailsIntent(content: Content): Intent {
-        val entityId = workResolver.resolveByMangaId(content.id).entityId
-        val origin = if (entityId != null) {
-            DetailsOrigin.EntityGraph(
-                entityId = entityId,
-                initialProjectionLocalMangaId = content.id,
-            )
-        } else {
-            DetailsOrigin.LocalMangaContent(
-                org.skepsun.kototoro.core.model.parcelable.ParcelableContent(content),
-            )
-        }
+    private fun resolveDetailsIntent(content: Content): Intent {
+        val origin = DetailsOrigin.LocalMangaContent(
+            org.skepsun.kototoro.core.model.parcelable.ParcelableContent(content),
+        )
         return AppRouter.detailsIntent(context, origin)
     }
 

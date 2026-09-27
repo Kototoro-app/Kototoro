@@ -1,5 +1,9 @@
 package org.skepsun.kototoro.local.ui.compose
 
+import androidx.compose.foundation.layout.Box
+import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -92,8 +96,10 @@ internal fun LocalDownloadsCard(
     val statusColor = if (featured?.workState == WorkInfo.State.FAILED) colors.error else colors.primary
     Surface(
         onClick = onOpenDownloads,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = MaterialTheme.shapes.large,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = AppLayoutTokens.screenHorizontalPadding, vertical = 4.dp),
+        shape = RoundedCornerShape(20.dp),
         color = colors.surfaceContainer,
     ) {
         Box {
@@ -118,7 +124,7 @@ internal fun LocalDownloadsCard(
                     )
                 }
             }
-            Column(Modifier.padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 12.dp)) {
+            Column(Modifier.padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 12.dp)) {
                 CardHeader(summary, isLoading, featured, onPauseAll, onResumeAll)
                 if (featured != null) {
                     FeaturedTask(
@@ -183,13 +189,22 @@ private fun CardHeader(
 ) {
     val colors = MaterialTheme.colorScheme
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            painter = painterResource(R.drawable.ic_download),
-            contentDescription = null,
-            tint = colors.primary,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.width(10.dp))
+        // Same accent tile as PageSummaryHeader on the other top-level pages.
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(colors.primary.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_download),
+                contentDescription = null,
+                tint = colors.primary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
             Text(
                 text = stringResource(R.string.local_download_manager),

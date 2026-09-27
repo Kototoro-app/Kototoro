@@ -339,13 +339,20 @@ internal enum class SceneReaderPageOverlay {
  * overlay for every visible page that has no asset yet - so "unknown" is the normal transient state
  * of a page that is about to be drawn. Reading it as loading made every page turn flash "加载中…"
  * at the start of the turn, even for pages whose bitmap was already decoded in the memory cache.
+ *
+ * [unresolvedIsLoading] is for the continuous hosts, which match the legacy webtoon reader: a page
+ * scrolled into view with nothing to draw shows the spinner whatever the pipeline recorded, since
+ * a blank placeholder gives no sign that anything is happening.
  */
 internal fun resolveSceneReaderPageOverlay(
 	state: ReaderImageLoadState?,
 	hasRenderableAsset: Boolean,
+	unresolvedIsLoading: Boolean = false,
 ): SceneReaderPageOverlay = when {
 	state is ReaderImageLoadState.Failed -> SceneReaderPageOverlay.ERROR
-	state is ReaderImageLoadState.Loading && !hasRenderableAsset -> SceneReaderPageOverlay.LOADING
+	hasRenderableAsset -> SceneReaderPageOverlay.NONE
+	state is ReaderImageLoadState.Loading -> SceneReaderPageOverlay.LOADING
+	state == null && unresolvedIsLoading -> SceneReaderPageOverlay.LOADING
 	else -> SceneReaderPageOverlay.NONE
 }
 
@@ -366,16 +373,17 @@ internal fun SceneReaderPageLoadOverlay(
 	resolveErrorStringId: (Throwable) -> Int,
 	onRetry: () -> Unit,
 	modifier: Modifier = Modifier,
+	unresolvedIsLoading: Boolean = false,
 ) {
 	val states by pipeline.loadStates.collectAsStateWithLifecycle()
 	val assets by pipeline.assets.collectAsStateWithLifecycle()
 	val state = states[pageId]
-	when (resolveSceneReaderPageOverlay(state, assets.containsKey(pageId))) {
+	when (resolveSceneReaderPageOverlay(state, assets.containsKey(pageId), unresolvedIsLoading)) {
 		SceneReaderPageOverlay.NONE -> Unit
-		// The placeholder geometry already communicates the loading state; a centered
-		// spinner on top of it added churn (and drifted during scroll) without adding
-		// information, so loading pages render nothing.
-		SceneReaderPageOverlay.LOADING -> Unit
+		// The same indicator as the legacy readers draw on a loading page.
+		SceneReaderPageOverlay.LOADING -> Box(modifier) {
+			ReaderPageLoading((state as? ReaderImageLoadState.Loading)?.progress)
+		}
 		SceneReaderPageOverlay.ERROR -> {
 			// Guarded by resolveSceneReaderPageOverlay above.
 			val failure = state as ReaderImageLoadState.Failed

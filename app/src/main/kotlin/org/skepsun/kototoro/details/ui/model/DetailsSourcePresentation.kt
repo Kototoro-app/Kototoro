@@ -3,13 +3,12 @@ package org.skepsun.kototoro.details.ui.model
 data class DetailsSourceDisplayStrings(
     val unavailableText: String,
     val metadataBindingLabel: String,
-    val currentProjectionLabel: String,
-    val switchableProjectionLabel: String,
+    val readingSourceLabel: String,
 )
 
 enum class DetailsSourceRole {
-    ENTITY_METADATA,
-    READING_PROJECTION,
+    METADATA,
+    READING_SOURCE,
 }
 
 data class DetailsSourceDisplayContext(
@@ -19,7 +18,6 @@ data class DetailsSourceDisplayContext(
     val linkedTrackingTitle: String? = null,
     val resolvedSourceTitle: String = "",
     val resolvedTrackingTitle: String = "",
-    val isSelected: Boolean = false,
     val strings: DetailsSourceDisplayStrings,
 )
 
@@ -50,14 +48,8 @@ fun DetailsSourceOption.toPresentationModel(
         else -> ""
     }
     val roleLabel = when (context.role) {
-        DetailsSourceRole.ENTITY_METADATA -> context.strings.metadataBindingLabel
-        DetailsSourceRole.READING_PROJECTION -> {
-            if (context.isSelected) {
-                context.strings.currentProjectionLabel
-            } else {
-                context.strings.switchableProjectionLabel
-            }
-        }
+        DetailsSourceRole.METADATA -> context.strings.metadataBindingLabel
+        DetailsSourceRole.READING_SOURCE -> context.strings.readingSourceLabel
     }
     val subtitle = buildString {
         append(roleLabel)

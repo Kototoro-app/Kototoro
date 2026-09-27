@@ -9,34 +9,107 @@ import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
-import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
-import org.skepsun.kototoro.history.data.WorkHistoryEntity
-import org.skepsun.kototoro.stats.data.WorkStatsEntity
+import org.skepsun.kototoro.favourites.data.FavouriteEntity
+import org.skepsun.kototoro.history.data.HistoryEntity
+import org.skepsun.kototoro.stats.data.StatsEntity
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
-import org.skepsun.kototoro.tracker.data.resolveTrackOwnerId
 
 @Serializable
 class GoogleDriveSyncSnapshot(
     @SerialName("schema") val schemaVersion: Int = SCHEMA_VERSION,
-    @SerialName("namespace") val namespace: String = NAMESPACE_WORK_V2,
+    @SerialName("namespace") val namespace: String = NAMESPACE_CONTENT_V3,
     @SerialName("semantic_schema") val semanticSchemaVersion: Int = SEMANTIC_SCHEMA_VERSION,
     @SerialName("device_id") val deviceId: String = "",
     @SerialName("synced_at") val syncedAt: Long = 0L,
-    @SerialName("entity_graph") val entityGraph: SyncEntityGraph = SyncEntityGraph(),
     @SerialName("content") val content: List<SyncContent> = emptyList(),
-    @SerialName("work") val work: SyncWorkState = SyncWorkState(),
+    @SerialName("categories") val categories: List<SyncFavouriteCategory> = emptyList(),
+    @SerialName("history") val history: List<SyncHistory> = emptyList(),
+    @SerialName("favourites") val favourites: List<SyncFavourite> = emptyList(),
+    @SerialName("stats") val stats: List<SyncStats> = emptyList(),
     @SerialName("feed") val feed: SyncFeedState = SyncFeedState(),
     @SerialName("config") val config: SyncConfig? = null,
     @SerialName("repositories") val repositories: List<SyncExtensionRepo> = emptyList(),
     @SerialName("source_states") val sourceStates: List<SyncSourceState> = emptyList(),
     @SerialName("json_sources") val jsonSources: List<SyncJsonSource> = emptyList(),
     @SerialName("extensions") val extensions: List<SyncExtensionPackage> = emptyList(),
+    // Legacy fields for backward compatibility with kototoro.work.v2 snapshots
+    @SerialName("entity_graph") val entityGraph: SyncEntityGraph = SyncEntityGraph(),
+    @SerialName("work") val work: SyncWorkState = SyncWorkState(),
 ) {
 
-    companion object {
+    fun normalizeToContentV3(): GoogleDriveSyncSnapshot {
+        if (namespace == NAMESPACE_CONTENT_V3) {
+            return this
+        }
+        val normalizedCategories = if (categories.isNotEmpty()) categories else work.categories
+        val normalizedHistory = if (history.isNotEmpty()) history else {
+            // Any anchor id (0 and negatives included) may be a real manga; the apply step
+            // skips anchors that do not exist locally.
+            work.history.map {
+                SyncHistory(
+                    mangaId = it.anchorMangaId,
+                    createdAt = it.createdAt,
+                    updatedAt = it.updatedAt,
+                    chapterId = it.chapterId,
+                    page = it.page,
+                    scroll = it.scroll,
+                    percent = it.percent,
+                    chaptersCount = it.chaptersCount,
+                    parentChapterId = it.parentChapterId,
+                    deletedAt = it.deletedAt,
+                )
+            }
+        }
+        val normalizedFavourites = if (favourites.isNotEmpty()) favourites else {
+            work.favourites.mapNotNull {
+                val anchorId = it.anchorMangaId
+                if (anchorId != null) {
+                    SyncFavourite(
+                        mangaId = anchorId,
+                        categoryId = it.categoryId,
+                        sortKey = it.sortKey,
+                        isPinned = it.isPinned,
+                        createdAt = it.createdAt,
+                        updatedAt = it.updatedAt,
+                        deletedAt = it.deletedAt,
+                    )
+                } else null
+            }
+        }
+        val normalizedStats = if (stats.isNotEmpty()) stats else {
+            work.stats.map {
+                SyncStats(
+                    mangaId = it.anchorMangaId,
+                    startedAt = it.startedAt,
+                    duration = it.duration,
+                    pages = it.pages,
+                )
+            }
+        }
+        return GoogleDriveSyncSnapshot(
+            schemaVersion = SCHEMA_VERSION,
+            namespace = NAMESPACE_CONTENT_V3,
+            semanticSchemaVersion = SEMANTIC_SCHEMA_VERSION,
+            deviceId = deviceId,
+            syncedAt = syncedAt,
+            content = content,
+            categories = normalizedCategories,
+            history = normalizedHistory,
+            favourites = normalizedFavourites,
+            stats = normalizedStats,
+            feed = feed,
+            config = config,
+            repositories = repositories,
+            sourceStates = sourceStates,
+            jsonSources = jsonSources,
+            extensions = extensions,
+        )
+    }
 
-        const val SCHEMA_VERSION = 1
+    companion object {
+        const val SCHEMA_VERSION = 2
+        const val NAMESPACE_CONTENT_V3 = "kototoro.content.v3"
         const val NAMESPACE_WORK_V2 = "kototoro.work.v2"
         const val SEMANTIC_SCHEMA_VERSION = 1
     }
@@ -157,6 +230,99 @@ class SyncEntityPrefsRecord(
 )
 
 @Serializable
+class SyncHistory(
+    @SerialName("manga_id") val mangaId: Long,
+    @SerialName("created_at") val createdAt: Long,
+    @SerialName("updated_at") val updatedAt: Long,
+    @SerialName("chapter_id") val chapterId: Long = 0L,
+    @SerialName("page") val page: Int = 0,
+    @SerialName("scroll") val scroll: Float = 0f,
+    @SerialName("percent") val percent: Float = 0f,
+    @SerialName("chapters") val chaptersCount: Int = 0,
+    @SerialName("parent_chapter_id") val parentChapterId: Long? = null,
+    @SerialName("deleted_at") val deletedAt: Long = 0L,
+) {
+    constructor(entity: HistoryEntity) : this(
+        mangaId = entity.mangaId,
+        createdAt = entity.createdAt,
+        updatedAt = entity.updatedAt,
+        chapterId = entity.chapterId,
+        page = entity.page,
+        scroll = entity.scroll,
+        percent = entity.percent,
+        chaptersCount = entity.chaptersCount,
+        parentChapterId = entity.parentChapterId,
+        deletedAt = entity.deletedAt,
+    )
+
+    fun toEntity(targetMangaId: Long = mangaId) = HistoryEntity(
+        mangaId = targetMangaId,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        chapterId = chapterId,
+        page = page,
+        scroll = scroll,
+        percent = percent,
+        deletedAt = deletedAt,
+        chaptersCount = chaptersCount,
+        parentChapterId = parentChapterId,
+    )
+}
+
+@Serializable
+class SyncFavourite(
+    @SerialName("manga_id") val mangaId: Long,
+    @SerialName("category_id") val categoryId: Long,
+    @SerialName("sort_key") val sortKey: Int = 0,
+    @SerialName("pinned") val isPinned: Boolean = false,
+    @SerialName("created_at") val createdAt: Long = 0L,
+    @SerialName("updated_at") val updatedAt: Long = 0L,
+    @SerialName("deleted_at") val deletedAt: Long = 0L,
+) {
+    constructor(entity: FavouriteEntity) : this(
+        mangaId = entity.mangaId,
+        categoryId = entity.categoryId,
+        sortKey = entity.sortKey,
+        isPinned = entity.isPinned,
+        createdAt = entity.createdAt,
+        updatedAt = entity.updatedAt,
+        deletedAt = entity.deletedAt,
+    )
+
+    fun toEntity(targetMangaId: Long = mangaId, targetCategoryId: Long = categoryId) = FavouriteEntity(
+        mangaId = targetMangaId,
+        categoryId = targetCategoryId,
+        sortKey = sortKey,
+        isPinned = isPinned,
+        createdAt = createdAt,
+        deletedAt = deletedAt,
+        updatedAt = maxOf(updatedAt, createdAt),
+    )
+}
+
+@Serializable
+class SyncStats(
+    @SerialName("manga_id") val mangaId: Long,
+    @SerialName("started_at") val startedAt: Long,
+    @SerialName("duration") val duration: Long,
+    @SerialName("pages") val pages: Int,
+) {
+    constructor(entity: StatsEntity) : this(
+        mangaId = entity.mangaId,
+        startedAt = entity.startedAt,
+        duration = entity.duration,
+        pages = entity.pages,
+    )
+
+    fun toEntity(targetMangaId: Long = mangaId) = StatsEntity(
+        mangaId = targetMangaId,
+        startedAt = startedAt,
+        duration = duration,
+        pages = pages,
+    )
+}
+
+@Serializable
 class SyncWorkState(
     @SerialName("categories") val categories: List<SyncFavouriteCategory> = emptyList(),
     @SerialName("history") val history: List<SyncWorkHistory> = emptyList(),
@@ -203,10 +369,10 @@ class SyncFavouriteCategory(
 
 @Serializable
 class SyncWorkHistory(
-    @SerialName("entity_id") val entityId: Long,
-    @SerialName("anchor_manga_id") val anchorMangaId: Long,
-    @SerialName("created_at") val createdAt: Long,
-    @SerialName("updated_at") val updatedAt: Long,
+    @SerialName("entity_id") val entityId: Long = 0L,
+    @SerialName("anchor_manga_id") val anchorMangaId: Long = 0L,
+    @SerialName("created_at") val createdAt: Long = 0L,
+    @SerialName("updated_at") val updatedAt: Long = 0L,
     @SerialName("chapter_id") val chapterId: Long = 0L,
     @SerialName("page") val page: Int = 0,
     @SerialName("scroll") val scroll: Float = 0f,
@@ -214,103 +380,28 @@ class SyncWorkHistory(
     @SerialName("chapters") val chaptersCount: Int = 0,
     @SerialName("parent_chapter_id") val parentChapterId: Long? = null,
     @SerialName("deleted_at") val deletedAt: Long = 0L,
-) {
-
-    constructor(entity: WorkHistoryEntity) : this(
-        entityId = entity.entityId,
-        anchorMangaId = entity.anchorMangaId,
-        createdAt = entity.createdAt,
-        updatedAt = entity.updatedAt,
-        chapterId = entity.chapterId,
-        page = entity.page,
-        scroll = entity.scroll,
-        percent = entity.percent,
-        chaptersCount = entity.chaptersCount,
-        parentChapterId = entity.parentChapterId,
-        deletedAt = entity.deletedAt,
-    )
-
-    fun toEntity(localEntityId: Long, localMangaId: Long): WorkHistoryEntity {
-        return WorkHistoryEntity(
-            entityId = localEntityId,
-            anchorMangaId = localMangaId,
-            createdAt = createdAt,
-            updatedAt = updatedAt,
-            chapterId = chapterId,
-            page = page,
-            scroll = scroll,
-            percent = percent,
-            deletedAt = deletedAt,
-            chaptersCount = chaptersCount,
-            parentChapterId = parentChapterId,
-        )
-    }
-}
+)
 
 @Serializable
 class SyncWorkFavourite(
-    @SerialName("entity_id") val entityId: Long,
-    @SerialName("category_id") val categoryId: Long,
+    @SerialName("entity_id") val entityId: Long = 0L,
+    @SerialName("category_id") val categoryId: Long = 0L,
     @SerialName("anchor_manga_id") val anchorMangaId: Long? = null,
-    @SerialName("sort_key") val sortKey: Int,
-    @SerialName("pinned") val isPinned: Boolean,
-    @SerialName("created_at") val createdAt: Long,
-    @SerialName("updated_at") val updatedAt: Long,
-    @SerialName("deleted_at") val deletedAt: Long,
-) {
-
-    constructor(entity: WorkFavouriteEntity) : this(
-        entityId = entity.entityId,
-        categoryId = entity.categoryId,
-        anchorMangaId = entity.anchorMangaId,
-        sortKey = entity.sortKey,
-        isPinned = entity.isPinned,
-        createdAt = entity.createdAt,
-        updatedAt = entity.updatedAt,
-        deletedAt = entity.deletedAt,
-    )
-
-    fun toEntity(localEntityId: Long, localCategoryId: Long, localMangaId: Long?): WorkFavouriteEntity {
-        return WorkFavouriteEntity(
-            entityId = localEntityId,
-            categoryId = localCategoryId,
-            anchorMangaId = localMangaId,
-            sortKey = sortKey,
-            isPinned = isPinned,
-            createdAt = createdAt,
-            deletedAt = deletedAt,
-            updatedAt = updatedAt,
-        )
-    }
-}
+    @SerialName("sort_key") val sortKey: Int = 0,
+    @SerialName("pinned") val isPinned: Boolean = false,
+    @SerialName("created_at") val createdAt: Long = 0L,
+    @SerialName("updated_at") val updatedAt: Long = 0L,
+    @SerialName("deleted_at") val deletedAt: Long = 0L,
+)
 
 @Serializable
 class SyncWorkStats(
-    @SerialName("entity_id") val entityId: Long,
-    @SerialName("anchor_manga_id") val anchorMangaId: Long,
-    @SerialName("started_at") val startedAt: Long,
-    @SerialName("duration") val duration: Long,
-    @SerialName("pages") val pages: Int,
-) {
-
-    constructor(entity: WorkStatsEntity) : this(
-        entityId = entity.entityId,
-        anchorMangaId = entity.anchorMangaId,
-        startedAt = entity.startedAt,
-        duration = entity.duration,
-        pages = entity.pages,
-    )
-
-    fun toEntity(localEntityId: Long, localMangaId: Long): WorkStatsEntity {
-        return WorkStatsEntity(
-            entityId = localEntityId,
-            anchorMangaId = localMangaId,
-            startedAt = startedAt,
-            duration = duration,
-            pages = pages,
-        )
-    }
-}
+    @SerialName("entity_id") val entityId: Long = 0L,
+    @SerialName("anchor_manga_id") val anchorMangaId: Long = 0L,
+    @SerialName("started_at") val startedAt: Long = 0L,
+    @SerialName("duration") val duration: Long = 0L,
+    @SerialName("pages") val pages: Int = 0,
+)
 
 @Serializable
 class SyncFeedState(
@@ -320,13 +411,13 @@ class SyncFeedState(
 
 @Serializable
 class SyncTrack(
-    @SerialName("owner_id") val ownerId: Long,
+    @SerialName("owner_id") val ownerId: Long = 0L,
     @SerialName("manga_id") val mangaId: Long,
     @SerialName("entity_id") val entityId: Long? = null,
-    @SerialName("last_chapter_id") val lastChapterId: Long,
-    @SerialName("chapters_new") val newChapters: Int,
-    @SerialName("last_check_time") val lastCheckTime: Long,
-    @SerialName("last_chapter_date") val lastChapterDate: Long,
+    @SerialName("last_chapter_id") val lastChapterId: Long = 0L,
+    @SerialName("chapters_new") val newChapters: Int = 0,
+    @SerialName("last_check_time") val lastCheckTime: Long = 0L,
+    @SerialName("last_chapter_date") val lastChapterDate: Long = 0L,
     @SerialName("last_result") val lastResult: Int = TrackEntity.RESULT_NONE,
     @SerialName("last_error") val lastError: String? = null,
 ) {
@@ -334,7 +425,7 @@ class SyncTrack(
     constructor(entity: TrackEntity) : this(
         ownerId = entity.ownerId,
         mangaId = entity.mangaId,
-        entityId = entity.entityId,
+        entityId = null,
         lastChapterId = entity.lastChapterId,
         newChapters = entity.newChapters,
         lastCheckTime = entity.lastCheckTime,
@@ -343,11 +434,9 @@ class SyncTrack(
         lastError = entity.lastError,
     )
 
-    fun toEntity(): TrackEntity {
+    fun toEntity(targetMangaId: Long = mangaId): TrackEntity {
         return TrackEntity(
-            ownerId = resolveTrackOwnerId(entityId, mangaId).takeIf { it != 0L } ?: ownerId,
-            mangaId = mangaId,
-            entityId = entityId,
+            mangaId = targetMangaId,
             lastChapterId = lastChapterId,
             newChapters = newChapters.coerceAtLeast(0),
             lastCheckTime = lastCheckTime.coerceAtLeast(0L),
@@ -360,7 +449,7 @@ class SyncTrack(
 
 @Serializable
 class SyncTrackLog(
-    @SerialName("owner_id") val ownerId: Long,
+    @SerialName("owner_id") val ownerId: Long = 0L,
     @SerialName("manga_id") val mangaId: Long,
     @SerialName("entity_id") val entityId: Long? = null,
     @SerialName("chapters") val chapters: String,
@@ -371,17 +460,15 @@ class SyncTrackLog(
     constructor(entity: TrackLogEntity) : this(
         ownerId = entity.ownerId,
         mangaId = entity.mangaId,
-        entityId = entity.entityId,
+        entityId = null,
         chapters = entity.chapters,
         createdAt = entity.createdAt,
         isUnread = entity.isUnread,
     )
 
-    fun toEntity(): TrackLogEntity {
+    fun toEntity(targetMangaId: Long = mangaId): TrackLogEntity {
         return TrackLogEntity(
-            ownerId = resolveTrackOwnerId(entityId, mangaId).takeIf { it != 0L } ?: ownerId,
-            mangaId = mangaId,
-            entityId = entityId,
+            mangaId = targetMangaId,
             chapters = chapters,
             createdAt = createdAt.coerceAtLeast(0L),
             isUnread = isUnread,

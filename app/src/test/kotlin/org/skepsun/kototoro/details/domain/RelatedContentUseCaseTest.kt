@@ -34,30 +34,7 @@ class RelatedContentUseCaseTest {
 
         assertEquals(
             listOf(unrelated),
-            filterCurrentWorkFromRelated(seed, listOf(sameWork, unrelated), emptySet()),
-        )
-    }
-
-    @Test
-    fun `entity projection key excludes current work even when metadata changed`() {
-        val seed = content(
-            id = 1L,
-            title = "旧标题",
-            url = "",
-            publicUrl = "",
-            coverUrl = null,
-        )
-        val sameWork = content(
-            id = 2L,
-            title = "新标题",
-            url = "4178",
-            publicUrl = "https://komiic.cc/comic/4178",
-            coverUrl = "https://public.komiic.cc/comics/new/cover.jpg",
-        )
-
-        assertEquals(
-            emptyList<Content>(),
-            filterCurrentWorkFromRelated(seed, listOf(sameWork), setOf("url:4178")),
+            filterCurrentWorkFromRelated(seed, listOf(sameWork, unrelated)),
         )
     }
 
@@ -81,7 +58,7 @@ class RelatedContentUseCaseTest {
 
         assertEquals(
             listOf(otherSourceWork),
-            filterCurrentWorkFromRelated(seed, listOf(otherSourceWork), emptySet()),
+            filterCurrentWorkFromRelated(seed, listOf(otherSourceWork)),
         )
     }
 

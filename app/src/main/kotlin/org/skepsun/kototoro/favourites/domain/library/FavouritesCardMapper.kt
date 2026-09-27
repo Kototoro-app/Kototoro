@@ -30,26 +30,24 @@ import javax.inject.Inject
  * (favourites-komikku-alignment Phase 5).
  *
  * The [Content] a card carries is a display **stub** built from the narrow row: no
- * description, no `sourceData`, no chapters, empty urls. Actions that need a real
- * projection resolve it on demand by entity id ([FavouriteContentResolver]) instead of
- * keeping a wide domain object in every row. Item identity is the entity id, so a
- * representative/cover/title change never moves a card.
+ * description, no `sourceData`, no chapters, empty urls. Actions that need the full
+ * content resolve it on demand by id ([FavouriteContentResolver]) instead of keeping a
+ * wide domain object in every row. Item identity is the favourite manga id, so a
+ * cover/title change never moves a card.
  *
  * Card fields follow the legacy aggregate mapping (see `FavouriteCardFieldContractTest`):
  * `counter` is the tracked new-chapter count (zero once reading is complete), `progress`
- * comes from the work history, `projectionCount` is binding-based, `isSaved` is the
- * download flag and `isPinned` is the *membership* flag of the mapped slice. Grid and
- * compact/detailed differ only in the subtitle: grid shows the alt title, the list rows
- * show the tag line plus the "current projection" suffix.
+ * comes from the history, `isSaved` is the download flag and `isPinned` is the
+ * *membership* flag of the mapped slice. Grid and compact/detailed differ only in the
+ * subtitle: grid shows the alt title, the list rows show the tag line plus the source.
  *
  * The display metadata authority survives the narrow row: an entity whose metadata
  * authority is a tracking site draws its cached title/cover (the legacy
  * `ContentListMapper.resolveDisplayOverride` merge — the manual override wins field by
- * field) plus the service badge, everything else follows the display projection.
+ * field) plus the service badge, everything else follows the manga itself.
  *
- * Deliberate deviations from the aggregate chain, both documented in the migration plan:
- * - rows without a display projection stay visible (the legacy mapper dropped them) with
- *   a placeholder title so entity organize stays reachable;
+ * Deliberate deviations from the aggregate chain, documented in the migration plan:
+ * - a blank title falls back to a placeholder instead of dropping the card;
  * - the NSFW badge follows the persisted row flag (mapped to an explicit content rating
  *   on the stub) instead of re-running the tag heuristic, which is also what the NSFW
  *   quick filter matches on.
@@ -73,16 +71,16 @@ class FavouritesCardMapper @Inject constructor(
             return emptyList()
         }
         val progressMode = settings.progressIndicatorMode
-        val brokenTitle = context.getString(R.string.favourites_broken_projection_title)
+        val brokenTitle = context.getString(R.string.untitled_content)
         // Tag tint depends on the title alone, and a detailed list repeats the same few
         // thousand titles over every card carrying them (a 6.6k-favourite library has 113k
         // tag relations against 9.7k distinct tags), so it resolves once per title per batch.
         val tintByTitle = HashMap<String, Int>(64)
         val tagTint: (String) -> Int = { title -> tintByTitle.getOrPut(title) { contentListMapper.tagTint(title) } }
-        val projectionLabels = HashMap<String, String>(8)
-        // Only the list modes put the projection suffix on a card. Formatting it for a grid
+        val sourceLabels = HashMap<String, String>(8)
+        // Only the list modes put the source label on a card. Formatting it for a grid
         // was one localized string per card that no model ever reads (65ms of a 263ms batch).
-        val needsGroupSuffix = slice.mode == ListMode.LIST || slice.mode == ListMode.DETAILED_LIST
+        val needsSourceLabel = slice.mode == ListMode.LIST || slice.mode == ListMode.DETAILED_LIST
         val sourcesByName = HashMap<String, ContentSource>(8)
         val sourceResolver: (String) -> ContentSource = { name -> sourcesByName.getOrPut(name) { createContentSource(name) } }
         return rows.map { row ->
@@ -92,7 +90,7 @@ class FavouritesCardMapper @Inject constructor(
                     mode = slice.mode,
                     progressMode = progressMode,
                     isPinned = row.entityId in slice.pinnedEntityIds,
-                    groupSuffix = if (needsGroupSuffix) groupSuffixOf(row, projectionLabels) else null,
+                    sourceLabel = if (needsSourceLabel) sourceLabelOf(row, sourceLabels) else null,
                     brokenTitle = brokenTitle,
                     tagTint = tagTint,
                     sourceResolver = sourceResolver,
@@ -101,17 +99,11 @@ class FavouritesCardMapper @Inject constructor(
         }
     }
 
-    /** Localized source title of the display projection, cached per mapping batch. */
-    private fun groupSuffixOf(row: FavouriteCardRow, labelCache: MutableMap<String, String>): String {
-        val sourceTitle = labelCache.getOrPut(row.sourceName) {
+    /** Localized source title of the work, cached per mapping batch. */
+    private fun sourceLabelOf(row: FavouriteCardRow, labelCache: MutableMap<String, String>): String =
+        labelCache.getOrPut(row.sourceName) {
             createContentSource(row.sourceName).getTitle(context)
         }
-        return if (row.projectionCount > 1) {
-            context.getString(R.string.favourites_entity_current_projection_with_count, sourceTitle, row.projectionCount)
-        } else {
-            context.getString(R.string.favourites_entity_current_projection, sourceTitle)
-        }
-    }
 }
 
 /**
@@ -124,13 +116,13 @@ data class FavouriteCardModelRequest(
     val mode: ListMode,
     val progressMode: ProgressIndicatorMode,
     val isPinned: Boolean,
-    val groupSuffix: String?,
+    val sourceLabel: String?,
     val brokenTitle: String,
     val tagTint: (String) -> Int = { 0 },
     val sourceResolver: (String) -> ContentSource = { createContentSource(it) },
 )
 
-/** Pure row -> card model projection, unit-tested without Android (see `FavouritesCardMapperTest`). */
+/** Pure row -> card model mapping, unit-tested without Android (see `FavouritesCardMapperTest`). */
 internal fun buildFavouriteCardModel(request: FavouriteCardModelRequest): ContentListModel {
     val row = request.row
     val manga = row.toStubContent(request.brokenTitle, request.mode, request.sourceResolver)
@@ -146,7 +138,6 @@ internal fun buildFavouriteCardModel(request: FavouriteCardModelRequest): Conten
             override = override,
             subtitle = row.altTitle?.takeIf { it.isNotBlank() },
             counter = counter,
-            projectionCount = row.projectionCount,
             id = row.entityId,
             progress = progress,
             isFavorite = false,
@@ -160,10 +151,9 @@ internal fun buildFavouriteCardModel(request: FavouriteCardModelRequest): Conten
             override = override,
             subtitle = joinSubtitles(
                 row.displayTags.joinToString(", ") { it.title }.ifBlank { null },
-                request.groupSuffix,
+                request.sourceLabel,
             ),
             counter = counter,
-            projectionCount = row.projectionCount,
             id = row.entityId,
             progress = progress,
             isPinned = request.isPinned,
@@ -173,9 +163,8 @@ internal fun buildFavouriteCardModel(request: FavouriteCardModelRequest): Conten
         ListMode.DETAILED_LIST -> ContentDetailedListModel(
             manga = manga,
             override = override,
-            subtitle = joinSubtitles(row.altTitle?.takeIf { it.isNotBlank() }, request.groupSuffix),
+            subtitle = joinSubtitles(row.altTitle?.takeIf { it.isNotBlank() }, request.sourceLabel),
             counter = counter,
-            projectionCount = row.projectionCount,
             id = row.entityId,
             progress = progress,
             isFavorite = false,
@@ -207,7 +196,7 @@ private fun FavouriteCardRow.toDisplayOverride(): ContentOverride? {
     return if (merged.title == null && merged.coverUrl == null) null else merged
 }
 
-/** The "Current projection: X · N projections" suffix of the list rows. */
+/** The "Source · N sources" suffix of the list rows. */
 private fun joinSubtitles(base: String?, suffix: String?): String? =
     listOfNotNull(base?.takeIf { it.isNotBlank() }, suffix?.takeIf { it.isNotBlank() })
         .ifEmpty { null }

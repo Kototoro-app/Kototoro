@@ -27,7 +27,7 @@ class ContentIntentResolutionTest {
             db = database,
             resolverProvider = mockk(),
             appShortcutManagerProvider = mockk(),
-            projectionIdentityResolver = mockk(),
+            storedContentIdentityResolver = mockk(),
         ),
     )
 
@@ -59,7 +59,7 @@ class ContentIntentResolutionTest {
     }
 
     @Test
-    fun `favourite card with whitespace urls restores the saved projection`() = runTest {
+    fun `favourite card with whitespace urls restores the saved content`() = runTest {
         val saved = content()
         val card = saved.copy(url = "  ", publicUrl = "\t")
         coEvery { repository.findContentById(saved.id, withChapters = false) } returns saved
@@ -68,7 +68,7 @@ class ContentIntentResolutionTest {
     }
 
     @Test
-    fun `id only intent restores the saved projection`() = runTest {
+    fun `id only intent restores the saved content`() = runTest {
         val saved = content()
         coEvery { repository.findContentById(saved.id, withChapters = false) } returns saved
 
@@ -103,7 +103,7 @@ class ContentIntentResolutionTest {
     }
 
     @Test
-    fun `url-less content from another source must not use a colliding saved projection`() = runTest {
+    fun `url-less content from another source must not use a colliding saved content`() = runTest {
         val saved = content()
         val result = saved.copy(url = "", publicUrl = "", source = source("OTHER"))
         coEvery { repository.findContentById(saved.id, withChapters = false) } returns saved

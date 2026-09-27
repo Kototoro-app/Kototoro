@@ -2,7 +2,7 @@ package org.skepsun.kototoro.backups.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import org.skepsun.kototoro.history.data.WorkHistoryEntity
+import org.skepsun.kototoro.history.data.HistoryEntity
 
 @Serializable
 class WorkHistoryBackup(
@@ -18,24 +18,8 @@ class WorkHistoryBackup(
     @SerialName("chapters") val chaptersCount: Int,
     @SerialName("parent_chapter_id") val parentChapterId: Long? = null,
 ) {
-
-    constructor(entity: WorkHistoryEntity) : this(
-        entityId = entity.entityId,
-        anchorMangaId = entity.anchorMangaId,
-        createdAt = entity.createdAt,
-        updatedAt = entity.updatedAt,
-        chapterId = entity.chapterId,
-        page = entity.page,
-        scroll = entity.scroll,
-        percent = entity.percent,
-        deletedAt = entity.deletedAt,
-        chaptersCount = entity.chaptersCount,
-        parentChapterId = entity.parentChapterId,
-    )
-
-    fun toEntity() = WorkHistoryEntity(
-        entityId = entityId,
-        anchorMangaId = anchorMangaId,
+    fun toHistoryEntity(targetMangaId: Long = anchorMangaId) = HistoryEntity(
+        mangaId = targetMangaId,
         createdAt = createdAt,
         updatedAt = updatedAt,
         chapterId = chapterId,

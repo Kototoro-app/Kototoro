@@ -23,7 +23,6 @@ import org.skepsun.kototoro.list.ui.ContentListHost
 import org.skepsun.kototoro.list.ui.RetainedPagingSnapshotHost
 import org.skepsun.kototoro.list.ui.ContentListViewModel
 import org.skepsun.kototoro.main.ui.LocalMainChromeController
-import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.core.parser.tvbox.TVBoxActionHostActivity
 import androidx.compose.runtime.saveable.rememberSaveable
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
@@ -49,7 +48,6 @@ import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.core.util.ext.getCauseUrl
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.core.BaseApp
-import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 
 /**
  * Lets a parent own the multi-select state instead of [AppContentListRoute]'s internal
@@ -115,7 +113,7 @@ fun AppContentListRoute(
     onPinSelection: ((Set<Long>) -> Unit)? = null,
     onMarkAsCompletedSelection: ((List<ContentListModel>) -> Unit)? = null,
     /**
-     * Resolves the stored projections behind the selected cards before an action needs a
+     * Resolves the stored contents behind the selected cards before an action needs a
      * real [org.skepsun.kototoro.parsers.model.Content] (share, download, category dialog,
      * override editor). The favourites library maps its cards from a narrow snapshot whose
      * content is display-only, so that page resolves by entity id on demand instead of
@@ -141,7 +139,6 @@ fun AppContentListRoute(
     onLoadMore: () -> Unit = {},
     loadMoreVisibleThreshold: Int = 4,
     onNavigateToDetails: ((ContentListModel, org.skepsun.kototoro.parsers.model.Content, String?) -> Unit)? = null,
-    onNavigateToEntityDetails: ((ContentListModel, org.skepsun.kototoro.parsers.model.Content, Long, Long?, String?) -> Unit)? = null,
     onAddMenuProvider: ((androidx.activity.ComponentActivity, ContentListHost, androidx.lifecycle.LifecycleOwner) -> androidx.core.view.MenuProvider?)? = null,
     listHeader: (@Composable () -> Unit)? = null,
     showQuickFilterInline: Boolean = true,
@@ -205,7 +202,6 @@ fun AppContentListRoute(
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val mainActivity = activity as? MainActivity
     val entryPoint = remember(context.applicationContext) {
         runCatching {
             EntryPointAccessors.fromApplication(
@@ -316,9 +312,9 @@ fun AppContentListRoute(
                         fixActionTitleRes = fixSelectionActionTitleRes,
                         onClearSelection = { updateSelection(emptySet()) },
                         onActionClick = { action ->
-                            // Actions that need a real projection: a page whose cards are
+                            // Actions that need the full content: a page whose cards are
                             // display-only (the favourites library) resolves the stored
-                            // projections by id on demand, every other page already
+                            // contents by id on demand, every other page already
                             // carries the full Content on the card itself.
                             val resolveContents: suspend (Set<Long>) -> List<Content> = { ids ->
                                 onResolveSelectionContents?.invoke(ids) ?: selectedModels.map { it.manga }
@@ -649,34 +645,10 @@ fun AppContentListRoute(
                     )
                 }
                 val sharedElementKey = contentListSharedElementKey(item, sharedElementInstanceKey)
-                val entityId = viewModel.resolveEntityIdForUiItemId(item.id)
-                if (entityId != null) {
-                    val preferredLocalMangaId =
-                        viewModel.resolvePreferredLocalMangaIdForUiItemId(item.id) ?: content.id
-                    if (onNavigateToEntityDetails != null) {
-                        onNavigateToEntityDetails(item, content, entityId, preferredLocalMangaId, sharedElementKey)
-                    } else {
-                        appRouter.openEntityDetails(
-                            entityId = entityId,
-                            preferredLocalMangaId = preferredLocalMangaId,
-                            sharedElementKey = sharedElementKey,
-                        )
-                    }
-                } else if (onNavigateToDetails != null) {
+                if (onNavigateToDetails != null) {
                     onNavigateToDetails(item, content, sharedElementKey)
                 } else {
-                    mainActivity?.resolveDetailsOriginForContent(content) { origin ->
-                        when (origin) {
-                            is DetailsOrigin.EntityGraph -> {
-                                appRouter.openEntityDetails(
-                                    entityId = origin.entityId,
-                                    initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
-                                    sharedElementKey = sharedElementKey,
-                                )
-                            }
-                            else -> appRouter.openResolvedDetails(content, sharedElementKey = sharedElementKey)
-                        }
-                    } ?: appRouter.openResolvedDetails(content, sharedElementKey = sharedElementKey)
+                    appRouter.openResolvedDetails(content, sharedElementKey = sharedElementKey)
                 }
             }
         },

@@ -75,6 +75,8 @@ fun FavoritesFilterPanelContent(
     onSourceTagSelected: (SourceTag?) -> Unit,
     isInlineQuickFilterEnabled: Boolean,
     onInlineQuickFilterEnabledChange: (Boolean) -> Unit,
+    isShelfEnabled: Boolean,
+    onShelfEnabledChange: (Boolean) -> Unit,
     close: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -114,6 +116,11 @@ fun FavoritesFilterPanelContent(
                 title = stringResource(R.string.show_quick_filters),
                 checked = isInlineQuickFilterEnabled,
                 onCheckedChange = onInlineQuickFilterEnabledChange,
+            )
+            FilterPanelSwitchRow(
+                title = stringResource(R.string.favourites_shelf_toggle),
+                checked = isShelfEnabled,
+                onCheckedChange = onShelfEnabledChange,
             )
         }
 

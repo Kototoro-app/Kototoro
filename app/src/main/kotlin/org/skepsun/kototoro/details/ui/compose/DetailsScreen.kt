@@ -119,16 +119,14 @@ import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.details.ui.DetailsViewModel
-import org.skepsun.kototoro.details.ui.model.ActiveLocalSourceOption
 import org.skepsun.kototoro.details.ui.model.DetailsSourceOption
 import org.skepsun.kototoro.details.ui.model.DetailsSupplementAction
-import org.skepsun.kototoro.details.ui.model.EntityChapterSourceInfo
 import org.skepsun.kototoro.details.ui.model.HistoryInfo
 import org.skepsun.kototoro.details.ui.compose.pane.DetailsPaneHost
 import org.skepsun.kototoro.details.ui.compose.state.CompactDetailsPaneAnchor
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneState
-import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationSection
-import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationItem
+import org.skepsun.kototoro.details.ui.model.EntityRelationSection
+import org.skepsun.kototoro.details.ui.model.EntityRelationItem
 import org.skepsun.kototoro.details.ui.pager.bookmarks.BookmarksViewModel
 import org.skepsun.kototoro.details.ui.pager.pages.PagesViewModel
 import org.skepsun.kototoro.download.ui.dialog.DownloadDialogViewModel
@@ -143,7 +141,6 @@ import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.ui.SpaceSwitcherIcon
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
 import org.skepsun.kototoro.reader.ui.ReaderState
-import org.skepsun.kototoro.favourites.ui.categories.select.compose.DuplicateFavoritePromptDialog
 import org.skepsun.kototoro.favourites.ui.categories.select.compose.FavoriteCategoryDialog
 import org.skepsun.kototoro.main.ui.compose.TopBarControlSurface
 import org.skepsun.kototoro.stats.ui.sheet.ContentStatsViewModel
@@ -309,8 +306,6 @@ private fun DetailsScreenContent(
     val showMergeRepeatedChapters = chaptersPaneControlsUiState.showMergeRepeatedChapters
     val isDownloadedOnly = chaptersPaneControlsUiState.isDownloadedOnly
     val chapterEmptyReason = chaptersPaneControlsUiState.emptyReason
-    val activeLocalSourceOptions = sourceBindingUiState.activeLocalSourceOptions
-    val entityChapterSourceInfo = sourceBindingUiState.entityChapterSourceInfo
     val metadataSourceOptions = sourceBindingUiState.metadataSourceOptions
     val readingSourceOptions = sourceBindingUiState.readingSourceOptions
     val metadataChapterTabs = sourceBindingUiState.metadataChapterTabs
@@ -842,16 +837,8 @@ private fun DetailsScreenContent(
         val service = item.trackingService
         val remoteId = item.remoteId
         when {
-            entityType == org.skepsun.kototoro.entitygraph.domain.EntityType.WORK && item.entityId != null -> {
-                appRouter.openEntityDetails(
-                    entityId = item.entityId,
-                    service = service,
-                    remoteId = remoteId,
-                    url = item.url,
-                )
-            }
             entityType != null &&
-                entityType != org.skepsun.kototoro.entitygraph.domain.EntityType.WORK &&
+                entityType != org.skepsun.kototoro.tracking.discovery.domain.EntityType.WORK &&
                 service != null &&
                 remoteId != null -> {
                 appRouter.openTrackingEntityDetails(
@@ -865,14 +852,6 @@ private fun DetailsScreenContent(
             }
             service != null && remoteId != null -> {
                 handleActionClick(DetailsAction.OpenTrackingDetails(service, remoteId, item.url))
-            }
-            item.entityId != null -> {
-                appRouter.openEntityDetails(
-                    entityId = item.entityId,
-                    service = service,
-                    remoteId = remoteId,
-                    url = item.url,
-                )
             }
             !item.url.isNullOrBlank() -> {
                 handleActionClick(DetailsAction.OpenWebUrl(item.url))
@@ -1265,8 +1244,6 @@ private fun DetailsScreenContent(
                                     trackingSuggestion = trackingSuggestion,
                                     metadataSourceOptions = metadataSourceOptions,
                                     readingSourceOptions = readingSourceOptions,
-                                    activeLocalSourceOptions = activeLocalSourceOptions,
-                                    entityChapterSourceInfo = entityChapterSourceInfo,
                                     relatedContent = relatedContent,
                                     supplementalMetadataProperties = supplementalMetadataProperties,
                                     supplementalSections = supplementalSections,
@@ -1362,9 +1339,8 @@ private fun DetailsScreenContent(
                                             ?: return@DetailsPaneContent
                                         viewModel.selectMetadataSource(matchingOption)
                                     },
-                                    onSelectReadingChapterTab = { tab ->
-                                        tab.targetMangaId?.let(viewModel::selectActiveLocalSource)
-                                    },
+                                    // A single reading source: its chapter tab has nothing to switch to.
+                                    onSelectReadingChapterTab = {},
                                     selectedTabId = sheetTabSelection,
                                     availableTabIds = availableTabIds,
                                     isSheetFullyExpanded = false,
@@ -1450,8 +1426,6 @@ private fun DetailsScreenContent(
                                 trackingSuggestion = trackingSuggestion,
                                 metadataSourceOptions = metadataSourceOptions,
                                 readingSourceOptions = readingSourceOptions,
-                                activeLocalSourceOptions = activeLocalSourceOptions,
-                                entityChapterSourceInfo = entityChapterSourceInfo,
                                 relatedContent = relatedContent,
                                 supplementalMetadataProperties = supplementalMetadataProperties,
                                 supplementalSections = supplementalSections,
@@ -1542,9 +1516,8 @@ private fun DetailsScreenContent(
                                 val matchingOption = metadataSourceOptions.firstOrNull { option -> option.key == tab.key } ?: return@DetailsPaneContent
                                 viewModel.selectMetadataSource(matchingOption)
                             },
-                            onSelectReadingChapterTab = { tab ->
-                                tab.targetMangaId?.let(viewModel::selectActiveLocalSource)
-                            },
+                            // A single reading source: its chapter tab has nothing to switch to.
+                            onSelectReadingChapterTab = {},
                             selectedTabId = sheetTabSelection,
                             availableTabIds = availableTabIds,
                             isSheetFullyExpanded = isCompactPaneFullyExpanded,
@@ -1703,7 +1676,6 @@ private fun DetailsScreenContent(
 
             if (showFavoriteDialog && isWorkActionEnabled && content != null) {
             val allCategories by viewModel.allCategories.collectAsStateWithLifecycle()
-            val duplicateFavoritePrompt by viewModel.duplicateFavoritePrompt.collectAsStateWithLifecycle()
             val memberCategoryIds = remember(favouriteCategories) {
                 favouriteCategories.mapTo(mutableSetOf()) { it.id }
             }
@@ -1719,12 +1691,6 @@ private fun DetailsScreenContent(
                     handleActionClick(DetailsAction.ManageCategories)
                 },
                 onDismiss = { detailsScreenState.setShowFavoriteDialog(false) },
-            )
-            DuplicateFavoritePromptDialog(
-                prompt = duplicateFavoritePrompt,
-                onConfirm = viewModel::confirmDuplicateFavourite,
-                onMergeBack = viewModel::mergeBackDuplicateFavourite,
-                onDismiss = viewModel::dismissDuplicateFavourite,
             )
             }
 
@@ -1828,9 +1794,7 @@ private fun DetailsScreenContent(
                     languagePresets = languagePresets,
                     activeLanguagePresetId = activeLanguagePresetId,
                     currentContent = content,
-                    entityChapterSourceInfo = entityChapterSourceInfo,
                     unavailableText = stringResource(R.string.details_reading_source_unavailable),
-                    onSelectOption = { option -> option.targetMangaId?.let(viewModel::selectActiveLocalSource) },
                     onSearchQueryChange = viewModel::updateReadingSearchQuery,
                     onSearch = viewModel::searchReadingBindings,
                     onLanguagePresetSelected = viewModel::setActiveLanguagePreset,
@@ -1843,15 +1807,9 @@ private fun DetailsScreenContent(
                         appRouter.openTemporaryDetails(candidate)
                     },
                     onMigrateResult = { candidate ->
-                        viewModel.bindReadingCandidateToTracking(candidate) {
+                        viewModel.switchReadingSource(candidate) {
                             detailsScreenState.setShowReadingSourceDialog(false)
                         }
-                    },
-                    onDeleteProjection = { option ->
-                        option.targetMangaId?.let(viewModel::removeActiveLocalSource)
-                    },
-                    onActivateProjection = { option ->
-                        option.targetMangaId?.let(viewModel::selectActiveLocalSource)
                     },
                     onDismissRequest = { detailsScreenState.setShowReadingSourceDialog(false) },
                 )

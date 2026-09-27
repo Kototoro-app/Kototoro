@@ -109,25 +109,25 @@ class CheckNewChaptersUseCase @Inject constructor(
     }
 
     private suspend fun invokeImpl(track: ContentTracking): MangaUpdates = runCatchingCancellable {
-        val entityId = checkNotNull(track.entityId) { "Tracking requires a valid Work identity" }
-        check(repository.hasValidTrackingIdentity(track)) { "Tracking identity requires migration review" }
-        val executionSeed = repository.getExecutionTrackingContent(track)
-        val details = getFullContent(executionSeed, forceFetch = true).copy(id = track.anchorMangaId)
+        // The persisted manga row owns its own tracking state, so the track's anchor
+        // manga is the identity. There is no Work/entity to resolve.
+        val ownerId = track.anchorMangaId
+        val details = getFullContent(track.manga, forceFetch = true).copy(id = ownerId)
         compare(
             track = track,
-            entityId = entityId,
+            entityId = ownerId,
             manga = details,
             branch = getBranch(details, track.lastChapterId),
         )
     }.getOrElse { error ->
         MangaUpdates.Failure(
-            manga = repository.getExecutionTrackingContentOrNull(track.anchorMangaId) ?: track.manga,
-            entityId = track.entityId,
+            manga = track.manga,
+            entityId = track.anchorMangaId,
             anchorMangaId = track.anchorMangaId,
             error = error,
         )
     }.also { updates ->
-        repository.saveUpdates(updates)
+        repository.updateTrack(updates.manga, updates)
     }
 
     private suspend fun getBranch(manga: Content, trackChapterId: Long): String? {

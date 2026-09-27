@@ -115,16 +115,14 @@ import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.details.ui.DetailsViewModel
-import org.skepsun.kototoro.details.ui.model.ActiveLocalSourceOption
 import org.skepsun.kototoro.details.ui.model.DetailsSourceOption
 import org.skepsun.kototoro.details.ui.model.DetailsSupplementAction
-import org.skepsun.kototoro.details.ui.model.EntityChapterSourceInfo
 import org.skepsun.kototoro.details.ui.model.HistoryInfo
 import org.skepsun.kototoro.details.ui.compose.pane.DetailsPaneHost
 import org.skepsun.kototoro.details.ui.compose.state.CompactDetailsPaneAnchor
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneState
-import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationSection
-import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationItem
+import org.skepsun.kototoro.details.ui.model.EntityRelationSection
+import org.skepsun.kototoro.details.ui.model.EntityRelationItem
 import org.skepsun.kototoro.details.ui.pager.bookmarks.BookmarksViewModel
 import org.skepsun.kototoro.details.ui.pager.pages.PagesViewModel
 import org.skepsun.kototoro.download.ui.dialog.DownloadDialogViewModel
@@ -139,7 +137,6 @@ import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.ui.SpaceSwitcherIcon
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
 import org.skepsun.kototoro.reader.ui.ReaderState
-import org.skepsun.kototoro.favourites.ui.categories.select.compose.DuplicateFavoritePromptDialog
 import org.skepsun.kototoro.favourites.ui.categories.select.compose.FavoriteCategoryDialog
 import org.skepsun.kototoro.main.ui.compose.TopBarControlSurface
 import org.skepsun.kototoro.stats.ui.sheet.ContentStatsViewModel
@@ -162,8 +159,6 @@ internal fun DetailsScrollableContent(
     trackingSuggestion: org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult?,
     metadataSourceOptions: List<DetailsSourceOption>,
     readingSourceOptions: List<DetailsSourceOption>,
-    activeLocalSourceOptions: List<ActiveLocalSourceOption>,
-    entityChapterSourceInfo: EntityChapterSourceInfo?,
     relatedContent: List<ContentListModel>,
     supplementalMetadataProperties: List<Pair<String, String>>,
     supplementalSections: List<EntityRelationSection>,
@@ -353,7 +348,7 @@ internal fun DetailsScrollableContent(
                     val service = item.trackingService
                     val remoteId = item.remoteId
                     when {
-                        item.entityId != null || item.type != null -> {
+                        item.type != null -> {
                             onEntityClick(item)
                         }
                         service != null && remoteId != null -> {

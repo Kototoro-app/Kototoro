@@ -12,8 +12,8 @@ import androidx.room.ColumnInfo
  * (`entityId` / `preferredLocalMangaId` / `anchorMangaId`), the entity grouping keys
  * and the read/new-chapter actions. Anything without a consumer is deleted.
  *
- * `display_*` columns follow the same representative-projection rule as the favourites
- * library: `preferred_local_manga_id` when the entity prefers a local projection that
+ * `display_*` columns follow the same representative-manga rule as the favourites
+ * library: `preferred_local_manga_id` when the entity prefers a local manga that
  * exists, otherwise the log's own `manga_id` (the anchor). The chapters string stays
  * raw (the legacy split('\n') happens in the store, once per snapshot, not per row).
  */
@@ -29,7 +29,7 @@ data class FeedLogRow(
     @ColumnInfo(name = "preferred_local_manga_id") val preferredLocalMangaId: Long?,
     // pinned flag of the resolved entity's favourite (pinned sorts first in the feed)
     @ColumnInfo(name = "entity_pinned") val entityPinned: Boolean,
-    // display projection columns (COALESCE(preferred, anchor))
+    // display manga columns (COALESCE(preferred, anchor))
     @ColumnInfo(name = "display_manga_id") val displayMangaId: Long?,
     @ColumnInfo(name = "display_title") val displayTitle: String?,
     @ColumnInfo(name = "display_alt_title") val displayAltTitle: String?,
@@ -42,7 +42,7 @@ data class FeedLogRow(
     @ColumnInfo(name = "display_nsfw") val displayNsfw: Boolean?,
     @ColumnInfo(name = "display_rating") val displayRating: Float?,
 ) {
-    /** True when the display projection exists (a dangling anchor yields a broken row). */
+    /** True when the display manga exists (a dangling anchor yields a broken row). */
     val hasDisplay: Boolean
         get() = displayMangaId != null
 }
@@ -69,7 +69,7 @@ data class UpdateTrackRow(
     @ColumnInfo(name = "metadata_tracking_service") val metadataTrackingService: Int?,
     @ColumnInfo(name = "metadata_tracking_title") val metadataTrackingTitle: String?,
     @ColumnInfo(name = "metadata_tracking_cover_url") val metadataTrackingCoverUrl: String?,
-    // display projection columns (COALESCE(preferred, anchor))
+    // display manga columns (COALESCE(preferred, anchor))
     @ColumnInfo(name = "display_manga_id") val displayMangaId: Long?,
     @ColumnInfo(name = "display_title") val displayTitle: String?,
     @ColumnInfo(name = "display_alt_title") val displayAltTitle: String?,

@@ -24,8 +24,7 @@ import org.skepsun.kototoro.scrobbling.common.data.ScrobblerRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerStorage
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerUserProfileRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
-import org.skepsun.kototoro.scrobbling.common.data.attachEntityOwnership
-import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByManga
 import org.skepsun.kototoro.scrobbling.common.data.preferredMangaMappingByTargetId
 import org.skepsun.kototoro.scrobbling.common.data.upsertScrobbling
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContent
@@ -35,8 +34,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUserProfile
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUserStats
-import org.skepsun.kototoro.entitygraph.domain.EntityType
-import org.skepsun.kototoro.work.domain.WorkResolver
+import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
@@ -61,7 +59,6 @@ class AniListRepository @Inject constructor(
     @ScrobblerType(ScrobblerService.ANILIST) private val okHttp: OkHttpClient,
     @ScrobblerType(ScrobblerService.ANILIST) private val storage: ScrobblerStorage,
     private val db: MangaDatabase,
-    private val workResolver: WorkResolver,
 ) : ScrobblerRepository, ScrobblerUserProfileRepository {
 
     private val clientId = context.getString(R.string.anilist_clientId)
@@ -153,7 +150,7 @@ class AniListRepository @Inject constructor(
         }
 
     override suspend fun unregister(mangaId: Long) {
-        return db.deleteScrobblingByWorkOrManga(ScrobblerService.ANILIST.id, mangaId, workResolver)
+        return db.deleteScrobblingByManga(ScrobblerService.ANILIST.id, mangaId)
     }
 
     override fun logout() {
@@ -879,7 +876,7 @@ class AniListRepository @Inject constructor(
         db.withTransaction {
             db.getScrobblingDao().deleteByScrobbler(ScrobblerService.ANILIST.id)
             synced.forEach { entity ->
-                db.upsertScrobbling(entity, workResolver)
+                db.upsertScrobbling(entity)
             }
         }
         return synced.size
@@ -897,7 +894,7 @@ class AniListRepository @Inject constructor(
             comment = json.getString("notes"),
             rating = scoreFormat.normalize(json.getDouble("score").toFloat()),
         )
-        db.upsertScrobbling(entity, workResolver)
+        db.upsertScrobbling(entity)
     }
 
     private fun preferredTitle(title: JSONObject): String? {

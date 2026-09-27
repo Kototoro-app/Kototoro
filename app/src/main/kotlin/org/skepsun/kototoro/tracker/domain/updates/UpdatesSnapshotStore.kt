@@ -148,7 +148,7 @@ class UpdatesSnapshotStore @Inject constructor(
     }
 
     /**
-     * The representative: the preferred projection when one of the tracks is
+     * The representative: the preferred manga when one of the tracks is
      * it, else the freshest track (lastChapterDate, lastCheck, newChapters).
      */
     private fun List<TrackRowSeed>.toUpdateGroupRow(

@@ -56,7 +56,7 @@ class DefaultSpaceSessionRepository internal constructor(
             selectedTopLevel = snapshot.selectedTopLevel,
             resumeKind = encodedResume?.kind ?: SpaceRouteCodec.KIND_NONE,
             resumeEntityId = (snapshot.resumeRoute as? SpaceRouteSnapshot.WorkDetails)?.entityId,
-            resumeProjectionId = (snapshot.resumeRoute as? SpaceRouteSnapshot.WorkDetails)?.requestedProjectionId,
+            resumeProjectionId = (snapshot.resumeRoute as? SpaceRouteSnapshot.WorkDetails)?.requestedStoredId,
             resumeRoute = encodedResume?.payload,
             routeSchemaVersion = SPACE_ROUTE_SCHEMA_VERSION,
             lastAccessed = snapshot.lastAccessed,

@@ -152,14 +152,6 @@ fun buildSettingsRootSections(
                 summary = context.summaryOf(R.string.suggestions, R.string.reading_stats),
                 onClick = { onOpenDestination(SettingsDestination.ServicesSettings) },
             ),
-            settingsRootItem(
-                key = "entity_organize_settings",
-                iconRes = R.drawable.ic_select_group,
-                iosIconColor = SettingsRootIconColor.ORANGE,
-                title = context.getString(R.string.entity_organize_title),
-                summary = context.getString(R.string.entity_organize_settings_summary),
-                onClick = { onOpenDestination(SettingsDestination.EntityOrganizeSettings) },
-            ),
         ),
     )
 

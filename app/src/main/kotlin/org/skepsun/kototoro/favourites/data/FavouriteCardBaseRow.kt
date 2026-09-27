@@ -11,10 +11,7 @@ import androidx.room.ColumnInfo
  * here has a real consumer in GRID / COMPACT_GRID / LIST / DETAILED_LIST, a sort order,
  * a quick filter, or the action routing. Anything without a consumer is deleted.
  *
- * `display_*` columns follow the representative projection: `preferred_local_manga_id`
- * when it points at an existing manga of this entity, otherwise `anchor_manga_id`.
- * Both can dangle (see [hasDisplay]); the row survives so the user can still reach
- * entity organize.
+ * `display_*` columns are the favourite manga itself (one row per favourite manga).
  */
 data class FavouriteCardBaseRow(
     @ColumnInfo(name = "entity_id") val entityId: Long,
@@ -52,7 +49,7 @@ data class FavouriteCardBaseRow(
     @ColumnInfo(name = "metadata_tracking_title") val metadataTrackingTitle: String?,
     @ColumnInfo(name = "metadata_tracking_cover_url") val metadataTrackingCoverUrl: String?,
 ) {
-    /** True when the display projection itself is missing (dangling preferred/anchor). */
+    /** True when the favourite manga row itself is present. */
     val hasDisplay: Boolean
         get() = displayMangaId != null
 }

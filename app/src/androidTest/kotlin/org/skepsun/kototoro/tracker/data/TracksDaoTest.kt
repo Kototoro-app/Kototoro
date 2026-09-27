@@ -32,28 +32,28 @@ class TracksDaoTest {
 	}
 
 	@Test
-	fun unreadWorkCountDeduplicatesEntitiesAcrossTracksAndLogs() = runTest {
-		insertTrack(ownerId = 10L, mangaId = 100L, entityId = 10L, newChapters = 2, checkedAt = 200L)
-		insertLog(mangaId = 100L, entityId = 10L, createdAt = 210L, unread = true)
-		insertLog(mangaId = 101L, entityId = 10L, createdAt = 220L, unread = true)
-		insertLog(mangaId = 200L, entityId = 20L, createdAt = 230L, unread = true)
+	fun unreadCountDeduplicatesMangaAcrossTracksAndLogs() = runTest {
+		insertTrack(mangaId = 100L, newChapters = 2, checkedAt = 200L)
+		insertLog(mangaId = 100L, createdAt = 210L, unread = true)
+		insertLog(mangaId = 100L, createdAt = 220L, unread = true)
+		insertLog(mangaId = 200L, createdAt = 230L, unread = true)
 
 		db.getTracksDao().observeUnreadWorkCount().first() shouldBe 2
 	}
 
 	@Test
-	fun unreadWorkCountIncludesExistingUnreadRegardlessOfTimestamps() = runTest {
-		insertTrack(ownerId = -100L, mangaId = 100L, entityId = null, newChapters = 3, checkedAt = 300L)
-		insertTrack(ownerId = 20L, mangaId = 200L, entityId = 20L, newChapters = 1, checkedAt = 100L)
-		insertLog(mangaId = 300L, entityId = 30L, createdAt = 300L, unread = false)
-		insertLog(mangaId = 400L, entityId = null, createdAt = 300L, unread = true)
+	fun unreadCountIncludesExistingUnreadRegardlessOfTimestamps() = runTest {
+		insertTrack(mangaId = 100L, newChapters = 3, checkedAt = 300L)
+		insertTrack(mangaId = 200L, newChapters = 1, checkedAt = 100L)
+		insertLog(mangaId = 300L, createdAt = 300L, unread = false)
+		insertLog(mangaId = 400L, createdAt = 300L, unread = true)
 
 		db.getTracksDao().observeUnreadWorkCount().first() shouldBe 3
 	}
 
 	@Test
-	fun insertTracksFromUnreadLogsSkipsOrphanProjection() = runTest {
-		insertLog(mangaId = 100L, entityId = null, createdAt = 300L, unread = true)
+	fun insertTracksFromUnreadLogsSkipsOrphanContent() = runTest {
+		insertLog(mangaId = 100L, createdAt = 300L, unread = true)
 		enableForeignKeys()
 
 		db.getTracksDao().insertTracksFromUnreadLogs()
@@ -62,28 +62,13 @@ class TracksDaoTest {
 	}
 
 	@Test
-	fun repairWorkIdentitiesUsesProjectionBinding() = runTest {
-		insertManga(100L)
-		insertEntity(20L)
-		insertBinding(mangaId = 100L, entityId = 20L)
-		insertLog(mangaId = 100L, entityId = 10L, createdAt = 300L, unread = true)
-
-		db.getTrackLogsDao().repairWorkIdentities()
-
-		val log = db.getTrackLogsDao().dump().single()
-		log.entityId shouldBe 20L
-		log.ownerId shouldBe 20L
-	}
-
-	@Test
-	fun deleteOrphansOnlyRemovesMissingProjections() = runTest {
+	fun deleteOrphansOnlyRemovesMissingContents() = runTest {
 		insertManga(100L)
 		insertManga(200L)
-		insertEntity(10L)
-		insertLog(mangaId = 100L, entityId = 10L, createdAt = 300L, unread = true)
-		insertLog(mangaId = 200L, entityId = null, createdAt = 301L, unread = true)
-		insertLog(mangaId = 300L, entityId = null, createdAt = 302L, unread = true)
-		insertLog(mangaId = 100L, entityId = 20L, createdAt = 303L, unread = true)
+		insertLog(mangaId = 100L, createdAt = 300L, unread = true)
+		insertLog(mangaId = 200L, createdAt = 301L, unread = true)
+		insertLog(mangaId = 300L, createdAt = 302L, unread = true)
+		insertLog(mangaId = 100L, createdAt = 303L, unread = true)
 
 		db.getTrackLogsDao().deleteOrphans()
 
@@ -93,15 +78,13 @@ class TracksDaoTest {
 	@Test
 	fun insertTracksFromUnreadLogsRestoresValidLog() = runTest {
 		insertManga(100L)
-		insertEntity(10L)
-		insertLog(mangaId = 100L, entityId = 10L, createdAt = 300L, unread = true)
+		insertLog(mangaId = 100L, createdAt = 300L, unread = true)
 		enableForeignKeys()
 
 		db.getTracksDao().insertTracksFromUnreadLogs()
 
-		val track = db.getTracksDao().findByOwnerId(10L)
+		val track = db.getTracksDao().find(100L)
 		track?.mangaId shouldBe 100L
-		track?.entityId shouldBe 10L
 		track?.newChapters shouldBe 1
 	}
 
@@ -121,59 +104,32 @@ class TracksDaoTest {
 		)
 	}
 
-	private fun insertEntity(entityId: Long) {
-		db.openHelper.writableDatabase.execSQL(
-			"""
-			INSERT INTO entity(
-				id, type, sync_id, primary_name, name_hash, aliases, created_at, last_accessed, access_count
-			) VALUES (?, 'WORK', ?, 'Title', ?, NULL, 0, 0, 0)
-			""".trimIndent(),
-			arrayOf<Any?>(entityId, "test-$entityId", entityId),
-		)
-	}
-
-	private fun insertBinding(mangaId: Long, entityId: Long) {
-		db.openHelper.writableDatabase.execSQL(
-			"""
-			INSERT INTO entity_binding(
-				entity_id, source, external_id, confidence, is_primary, source_kind,
-				state, created_by, updated_at
-			) VALUES (?, 'local_manga', ?, 1, 1, 'LOCAL', 'CONFIRMED', 'MIGRATION', 0)
-			""".trimIndent(),
-			arrayOf<Any?>(entityId, mangaId.toString()),
-		)
-	}
-
 	private fun insertTrack(
-		ownerId: Long,
 		mangaId: Long,
-		entityId: Long?,
 		newChapters: Int,
 		checkedAt: Long,
 	) {
 		db.openHelper.writableDatabase.execSQL(
 			"""
 			INSERT INTO tracks(
-				owner_id, manga_id, entity_id, last_chapter_id, chapters_new,
-				last_check_time, last_chapter_date, last_result, last_error
-			) VALUES (?, ?, ?, 0, ?, ?, 0, 0, NULL)
+				manga_id, last_chapter_id, chapters_new, last_check_time, last_chapter_date, last_result, last_error
+			) VALUES (?, 0, ?, ?, 0, 0, NULL)
 			""".trimIndent(),
-			arrayOf<Any?>(ownerId, mangaId, entityId, newChapters, checkedAt),
+			arrayOf<Any?>(mangaId, newChapters, checkedAt),
 		)
 	}
 
 	private fun insertLog(
 		mangaId: Long,
-		entityId: Long?,
 		createdAt: Long,
 		unread: Boolean,
 	) {
 		db.openHelper.writableDatabase.execSQL(
 			"""
-			INSERT INTO track_logs(owner_id, manga_id, entity_id, chapters, created_at, unread)
-			VALUES (?, ?, ?, 'Chapter', ?, ?)
+			INSERT INTO track_logs(manga_id, chapters, created_at, unread)
+			VALUES (?, 'Chapter', ?, ?)
 			""".trimIndent(),
-			arrayOf(entityId ?: -mangaId, mangaId, entityId, createdAt, if (unread) 1 else 0),
+			arrayOf(mangaId, createdAt, if (unread) 1 else 0),
 		)
 	}
 }

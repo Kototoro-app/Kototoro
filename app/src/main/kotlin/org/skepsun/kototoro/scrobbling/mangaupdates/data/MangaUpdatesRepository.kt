@@ -19,7 +19,7 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.entitygraph.domain.EntityType
+import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 import org.skepsun.kototoro.parsers.util.await
 import org.skepsun.kototoro.parsers.util.json.getStringOrNull
 import org.skepsun.kototoro.parsers.util.parseJson
@@ -29,9 +29,8 @@ import org.skepsun.kototoro.scrobbling.common.data.ScrobblerRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerStorage
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerUserProfileRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
-import org.skepsun.kototoro.scrobbling.common.data.attachEntityOwnership
-import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByWorkOrManga
-import org.skepsun.kototoro.scrobbling.common.data.findScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByManga
+import org.skepsun.kototoro.scrobbling.common.data.findScrobblingByManga
 import org.skepsun.kototoro.scrobbling.common.data.preferredScrobblingEntity
 import org.skepsun.kototoro.scrobbling.common.data.upsertScrobbling
 import org.skepsun.kototoro.scrobbling.common.data.upsertScrobblingPreview
@@ -42,7 +41,6 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUserProfile
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUserStats
-import org.skepsun.kototoro.work.domain.WorkResolver
 import java.io.IOException
 import java.time.LocalDate
 import kotlin.math.roundToInt
@@ -101,7 +99,6 @@ class MangaUpdatesRepository(
     private val cookieJar: MutableCookieJar,
     private val storage: ScrobblerStorage,
     private val db: MangaDatabase,
-    private val workResolver: WorkResolver,
 ) : ScrobblerRepository, ScrobblerUserProfileRepository {
 
     override val oauthUrl: String = "kototoro+mangaupdates://auth"
@@ -259,7 +256,7 @@ class MangaUpdatesRepository(
     }
 
     override suspend fun unregister(mangaId: Long) {
-        db.deleteScrobblingByWorkOrManga(ScrobblerService.MANGAUPDATES.id, mangaId, workResolver)
+        db.deleteScrobblingByManga(ScrobblerService.MANGAUPDATES.id, mangaId)
     }
 
     override suspend fun findContent(query: String, offset: Int, isAnime: Boolean): List<ScrobblerContent> {
@@ -858,7 +855,7 @@ class MangaUpdatesRepository(
                 comment = null,
                 rating = 0f
             )
-            db.upsertScrobblingForManga(entity, workResolver, mangaId = mangaId)
+            db.upsertScrobblingForManga(entity, mangaId = mangaId)
         } else {
             Log.e(TAG, "createRate: FAILED code=$responseCode")
             throw IOException("Failed to create rate: $responseCode")
@@ -866,7 +863,7 @@ class MangaUpdatesRepository(
     }
 
     override suspend fun updateRate(rateId: Int, mangaId: Long, chapter: Int) {
-        val entity = db.findScrobblingByWorkOrManga(ScrobblerService.MANGAUPDATES.id, mangaId, workResolver)
+        val entity = db.findScrobblingByManga(ScrobblerService.MANGAUPDATES.id, mangaId)
         if (entity == null) {
             Log.w(TAG, "updateRate(chapter): no entity for mangaId=$mangaId, skipping")
             return
@@ -893,11 +890,11 @@ class MangaUpdatesRepository(
         }
 
         val updated = entity.copy(chapter = chapter)
-        db.upsertScrobblingForManga(updated, workResolver, mangaId = mangaId)
+        db.upsertScrobblingForManga(updated, mangaId = mangaId)
     }
 
     override suspend fun updateRate(rateId: Int, mangaId: Long, rating: Float, status: String?, comment: String?) {
-        val entity = db.findScrobblingByWorkOrManga(ScrobblerService.MANGAUPDATES.id, mangaId, workResolver)
+        val entity = db.findScrobblingByManga(ScrobblerService.MANGAUPDATES.id, mangaId)
             ?: return
 
         val payload = JSONArray().apply {
@@ -943,7 +940,7 @@ class MangaUpdatesRepository(
         }
 
         val updated = entity.copy(status = status, rating = rating, comment = comment)
-        db.upsertScrobblingForManga(updated, workResolver, mangaId = mangaId)
+        db.upsertScrobblingForManga(updated, mangaId = mangaId)
     }
 
     suspend fun syncLibraryFromRemote(): Int {
@@ -981,7 +978,7 @@ class MangaUpdatesRepository(
         db.withTransaction {
             db.getScrobblingDao().deleteByScrobbler(ScrobblerService.MANGAUPDATES.id)
             hydratedEntries.forEach { entity ->
-                db.upsertScrobbling(entity, workResolver)
+                db.upsertScrobbling(entity)
             }
         }
 
@@ -1199,7 +1196,7 @@ class MangaUpdatesRepository(
         val coverUrl = fetchSeriesCover(targetId)?.takeIf { it.isNotBlank() } ?: return false
         entities.forEach { entity ->
             if (entity.remoteCoverUrl.isNullOrBlank()) {
-                db.upsertScrobblingPreview(entity, workResolver, coverUrl = coverUrl)
+                db.upsertScrobblingPreview(entity, coverUrl = coverUrl)
             }
         }
         Log.d(TAG, "persistRemoteCoverIfMissing: targetId=$targetId ownerMangaId=${preferred.mangaId} updated=${entities.size}")

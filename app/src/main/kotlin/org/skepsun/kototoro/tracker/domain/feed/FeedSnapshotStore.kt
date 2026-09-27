@@ -47,7 +47,7 @@ class FeedSnapshotStore @Inject constructor(
             dao.observeUpdateTrackRows().distinctUntilChanged(),
             dao.observeTrackedTagFacets(includeFeedLogs = true).distinctUntilChanged(),
             dao.observeTrackedOverrides(includeFeedLogs = true).distinctUntilChanged(),
-            dao.observeTrackedChapterCounts().distinctUntilChanged(),
+            dao.observeTrackedChapterCounts(includeFeedLogs = true).distinctUntilChanged(),
         ) { values: Array<*> ->
             @Suppress("UNCHECKED_CAST")
             buildSnapshot(

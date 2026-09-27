@@ -53,14 +53,14 @@ class DetailsLoadUseCaseTest {
 		val remote = content(id = 1L, title = "Remote")
 		val repository = mockk<ContentRepository>()
 		coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns seed
-		coEvery { dataRepository.resolveStoredProjection(seed) } returns seed
+		coEvery { dataRepository.resolveStoredContent(seed) } returns seed
 		coEvery { dataRepository.getOverride(seed.id) } returns null
 		coEvery { localContentRepository.findSavedContent(seed, withDetails = true) } returns null
 		coEvery { dataRepository.findContentById(seed.id, withChapters = true) } returns null
 		every { networkState.isOfflineOrRestricted() } returns false
 		every { repositoryFactory.create(TestContentSource) } returns repository
 		coEvery { repository.getDetails(seed) } returns remote
-		coEvery { dataRepository.updateProjectionSnapshot(remote) } returns remote
+		coEvery { dataRepository.updateContentSnapshot(remote) } returns remote
 
 		val emissions = useCase(ContentIntent.of(seed), force = false).toList()
 
@@ -82,17 +82,17 @@ class DetailsLoadUseCaseTest {
 		val remote = content(id = 2L, title = "Remote")
 		val repository = mockk<ContentRepository>()
 		coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns seed
-		coEvery { dataRepository.resolveStoredProjection(seed) } returns seed
+		coEvery { dataRepository.resolveStoredContent(seed) } returns seed
 		coEvery { dataRepository.getOverride(seed.id) } returns null
 		coEvery { localContentRepository.findSavedContent(seed, withDetails = true) } returns null
 		every { repositoryFactory.create(TestContentSource) } returns repository
 		coEvery { repository.getDetails(seed) } returns remote
-		coEvery { dataRepository.updateProjectionSnapshot(remote) } returns remote
+		coEvery { dataRepository.updateContentSnapshot(remote) } returns remote
 
 		val emissions = useCase(ContentIntent.of(seed), force = true).toList()
 
 		assertSame(remote.source, emissions.last().toContent().source)
-		coVerify(exactly = 1) { dataRepository.updateProjectionSnapshot(remote) }
+		coVerify(exactly = 1) { dataRepository.updateContentSnapshot(remote) }
 	}
 
 	@Test
@@ -108,14 +108,14 @@ class DetailsLoadUseCaseTest {
 			source = TestMangaSource,
 		)
 		coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns seed
-		coEvery { dataRepository.resolveStoredProjection(seed) } returns seed
+		coEvery { dataRepository.resolveStoredContent(seed) } returns seed
 		coEvery { dataRepository.getOverride(seed.id) } returns null
 		coEvery { localContentRepository.findSavedContent(seed, withDetails = true) } returns null
 		every { repositoryFactory.create(TestMangaSource) } returns repository
 		coEvery { repository.getDetails(seed) } returns remote
 		coEvery { repository.getPages(firstChapter) } returns listOf(firstPage)
 		coEvery { repository.getPageUrl(firstPage) } returns "https://example.org/page/1.jpg"
-		coEvery { dataRepository.updateProjectionSnapshot(any()) } answers { firstArg() }
+		coEvery { dataRepository.updateContentSnapshot(any()) } answers { firstArg() }
 
 		val result = useCase(ContentIntent.of(seed), force = true).toList().last().toContent()
 
@@ -135,12 +135,12 @@ class DetailsLoadUseCaseTest {
 		)
 		val repository = mockk<ContentRepository>()
 		coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns seed
-		coEvery { dataRepository.resolveStoredProjection(seed) } returns seed
+		coEvery { dataRepository.resolveStoredContent(seed) } returns seed
 		coEvery { dataRepository.getOverride(seed.id) } returns null
 		coEvery { localContentRepository.findSavedContent(seed, withDetails = true) } returns null
 		every { repositoryFactory.create(TestMangaSource) } returns repository
 		coEvery { repository.getDetails(seed) } returns remote
-		coEvery { dataRepository.updateProjectionSnapshot(remote) } returns remote
+		coEvery { dataRepository.updateContentSnapshot(remote) } returns remote
 
 		val result = useCase(ContentIntent.of(seed), force = true).toList().last().toContent()
 
@@ -165,7 +165,7 @@ class DetailsLoadUseCaseTest {
 			source = TestMangaSource,
 		)
 		coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns cached
-		coEvery { dataRepository.resolveStoredProjection(cached) } returns cached
+		coEvery { dataRepository.resolveStoredContent(cached) } returns cached
 		coEvery { dataRepository.getOverride(cached.id) } returns null
 		coEvery { localContentRepository.findSavedContent(cached, withDetails = true) } returns null
 		coEvery { dataRepository.findContentById(cached.id, withChapters = true) } returns cached
@@ -173,13 +173,13 @@ class DetailsLoadUseCaseTest {
 		every { repositoryFactory.create(TestMangaSource) } returns repository
 		coEvery { repository.getPages(firstChapter) } returns listOf(firstPage)
 		coEvery { repository.getPageUrl(firstPage) } returns "https://example.org/cached-page.jpg"
-		coEvery { dataRepository.updateProjectionSnapshot(any()) } answers { firstArg() }
+		coEvery { dataRepository.updateContentSnapshot(any()) } answers { firstArg() }
 
 		val result = useCase(ContentIntent.of(cached), force = false).toList().last().toContent()
 
 		assertEquals("https://example.org/cached-page.jpg", result.coverUrl)
 		coVerify(exactly = 0) { repository.getDetails(any()) }
-		coVerify(exactly = 1) { dataRepository.updateProjectionSnapshot(any()) }
+		coVerify(exactly = 1) { dataRepository.updateContentSnapshot(any()) }
 	}
 
     @Test
@@ -193,17 +193,17 @@ class DetailsLoadUseCaseTest {
         }
         coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
         coEvery { dataRepository.findContentById(damaged.id, withChapters = true) } returns damaged
-        coEvery { dataRepository.resolveStoredProjection(any()) } answers { firstArg() }
+        coEvery { dataRepository.resolveStoredContent(any()) } answers { firstArg() }
         coEvery { dataRepository.getOverride(damaged.id) } returns null
         every { repositoryFactory.create(KomiicSource) } returns parserRepository
-        coEvery { dataRepository.updateProjectionSnapshotAtAnchor(repaired, damaged.id) } returns repaired
+        coEvery { dataRepository.updateContentSnapshotAtAnchor(repaired, damaged.id) } returns repaired
         coEvery { localContentRepository.findSavedContent(any(), withDetails = true) } coAnswers { awaitCancellation() }
 
         val first = useCase(ContentIntent.of(damaged.id), force = false).first().toContent()
 
         assertEquals(repaired, first)
-        coVerify(exactly = 1) { dataRepository.updateProjectionSnapshotAtAnchor(repaired, damaged.id) }
-        coVerify(exactly = 0) { dataRepository.resolveStoredProjection(any()) }
+        coVerify(exactly = 1) { dataRepository.updateContentSnapshotAtAnchor(repaired, damaged.id) }
+        coVerify(exactly = 0) { dataRepository.resolveStoredContent(any()) }
     }
 
     @Test
@@ -225,7 +225,7 @@ class DetailsLoadUseCaseTest {
 
         assertEquals(recovered, first)
         coVerify(exactly = 1) { recoverUseCase(damaged) }
-        coVerify(exactly = 0) { dataRepository.resolveStoredProjection(any()) }
+        coVerify(exactly = 0) { dataRepository.resolveStoredContent(any()) }
     }
 
     @Test
@@ -241,13 +241,13 @@ class DetailsLoadUseCaseTest {
         coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
         coEvery { dataRepository.findContentById(damaged.id, withChapters = true) } returns damaged
         coEvery { recoverUseCase(damaged) } returns null
-        coEvery { dataRepository.resolveStoredProjection(damaged) } returns damaged
+        coEvery { dataRepository.resolveStoredContent(damaged) } returns damaged
         coEvery { dataRepository.getOverride(damaged.id) } returns null
 
         coEvery { localContentRepository.findSavedContent(any(), withDetails = true) } coAnswers { awaitCancellation() }
 
         assertEquals(damaged, useCase(ContentIntent.of(damaged.id), force = false).first().toContent())
-        coVerify(exactly = 0) { dataRepository.updateProjectionSnapshotAtAnchor(any(), any()) }
+        coVerify(exactly = 0) { dataRepository.updateContentSnapshotAtAnchor(any(), any()) }
     }
 
     @Test
@@ -258,12 +258,12 @@ class DetailsLoadUseCaseTest {
         coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
         coEvery { dataRepository.findContentById(damaged.id, withChapters = true) } returns damaged.copy(chapters = null)
         coEvery { recoverUseCase(damaged) } returns null
-        coEvery { dataRepository.resolveStoredProjection(damaged) } returns damaged
+        coEvery { dataRepository.resolveStoredContent(damaged) } returns damaged
         coEvery { dataRepository.getOverride(damaged.id) } returns null
         coEvery { localContentRepository.findSavedContent(any(), withDetails = true) } coAnswers { awaitCancellation() }
 
         assertEquals(damaged, useCase(ContentIntent.of(damaged), force = false).first().toContent())
-        coVerify(exactly = 0) { dataRepository.updateProjectionSnapshotAtAnchor(any(), any()) }
+        coVerify(exactly = 0) { dataRepository.updateContentSnapshotAtAnchor(any(), any()) }
     }
 
     @Test
@@ -277,16 +277,16 @@ class DetailsLoadUseCaseTest {
         }
         coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
         coEvery { dataRepository.findContentById(damaged.id, withChapters = true) } returns damaged
-        coEvery { dataRepository.resolveStoredProjection(any()) } answers { firstArg() }
+        coEvery { dataRepository.resolveStoredContent(any()) } answers { firstArg() }
         coEvery { dataRepository.getOverride(damaged.id) } returns null
         every { repositoryFactory.create(KomiicSource) } returns parserRepository
-        coEvery { dataRepository.updateProjectionSnapshotAtAnchor(repaired, damaged.id) } returns repaired
+        coEvery { dataRepository.updateContentSnapshotAtAnchor(repaired, damaged.id) } returns repaired
         coEvery { localContentRepository.findSavedContent(any(), withDetails = true) } coAnswers { awaitCancellation() }
 
         val first = useCase(ContentIntent.of(damaged.id), force = false).first().toContent()
 
         assertEquals(repaired, first)
-        coVerify(exactly = 1) { dataRepository.updateProjectionSnapshotAtAnchor(repaired, damaged.id) }
+        coVerify(exactly = 1) { dataRepository.updateContentSnapshotAtAnchor(repaired, damaged.id) }
     }
 
     @Test
@@ -296,12 +296,12 @@ class DetailsLoadUseCaseTest {
         }
         coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
         coEvery { recoverUseCase(damaged) } returns null
-        coEvery { dataRepository.resolveStoredProjection(damaged) } returns damaged
+        coEvery { dataRepository.resolveStoredContent(damaged) } returns damaged
         coEvery { dataRepository.getOverride(damaged.id) } returns null
         coEvery { localContentRepository.findSavedContent(any(), withDetails = true) } coAnswers { awaitCancellation() }
 
         assertEquals(damaged, useCase(ContentIntent.of(damaged.id), force = false).first().toContent())
-        coVerify(exactly = 0) { dataRepository.updateProjectionSnapshotAtAnchor(any(), any()) }
+        coVerify(exactly = 0) { dataRepository.updateContentSnapshotAtAnchor(any(), any()) }
     }
 
     @Test
@@ -311,12 +311,12 @@ class DetailsLoadUseCaseTest {
         }
         coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
         coEvery { recoverUseCase(damaged) } returns null
-        coEvery { dataRepository.resolveStoredProjection(damaged) } returns damaged
+        coEvery { dataRepository.resolveStoredContent(damaged) } returns damaged
         coEvery { dataRepository.getOverride(damaged.id) } returns null
         coEvery { localContentRepository.findSavedContent(any(), withDetails = true) } coAnswers { awaitCancellation() }
 
         assertEquals(damaged, useCase(ContentIntent.of(damaged.id), force = false).first().toContent())
-        coVerify(exactly = 0) { dataRepository.updateProjectionSnapshotAtAnchor(any(), any()) }
+        coVerify(exactly = 0) { dataRepository.updateContentSnapshotAtAnchor(any(), any()) }
     }
 
     private data object KomiicSource : ContentSource {

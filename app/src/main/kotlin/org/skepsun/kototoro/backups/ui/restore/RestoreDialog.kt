@@ -27,18 +27,16 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.data.BackupRepository
-import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
 
 @Composable
 fun RestoreDialogRoute(
     uri: Uri,
-    restoreFormat: BackupRestoreFormat,
     onRestoreStarted: () -> Unit,
     onUnsupported: () -> Unit,
     onDismiss: () -> Unit,
-    viewModel: RestoreViewModel = hiltViewModel(key = "restore-${restoreFormat.name}-${uri.hashCode()}"),
+    viewModel: RestoreViewModel = hiltViewModel(key = "restore-${uri.hashCode()}"),
 ) {
-    LaunchedEffect(uri, restoreFormat) { viewModel.initialize(uri, restoreFormat) }
+    LaunchedEffect(uri) { viewModel.initialize(uri) }
     LaunchedEffect(viewModel.onError) {
         viewModel.onError.collect { event ->
             event?.consume {
@@ -54,27 +52,17 @@ fun RestoreDialogRoute(
     AlertDialog(
         onDismissRequest = {},
         title = {
-            Text(
-                stringResource(
-                    when (restoreFormat) {
-                        BackupRestoreFormat.KOTOTORO_CURRENT -> R.string.restore_kototoro_backup
-                        BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO ->
-                            R.string.import_kotatsu_or_legacy_backup
-                    },
-                ),
-            )
+            Text(stringResource(R.string.restore_kototoro_backup))
         },
         text = {
             if (loading) {
                 CircularProgressIndicator()
             } else {
                 Column {
-                    if (restoreFormat == BackupRestoreFormat.KOTOTORO_CURRENT) {
-                        RestoreModeSelector(
-                            selected = restoreMode,
-                            onSelect = viewModel::onRestoreModeChange,
-                        )
-                    }
+                    RestoreModeSelector(
+                        selected = restoreMode,
+                        onSelect = viewModel::onRestoreModeChange,
+                    )
                     LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
                         items(entries, key = { it.section }) { item ->
                             Row(
@@ -100,8 +88,7 @@ fun RestoreDialogRoute(
             TextButton(
                 enabled = !loading && entries.any { it.isChecked },
                 onClick = {
-                    val mode = restoreMode.takeIf { restoreFormat == BackupRestoreFormat.KOTOTORO_CURRENT }
-                    if (RestoreService.start(context, uri, viewModel.getCheckedSections(), restoreFormat, mode)) {
+                    if (RestoreService.start(context, uri, viewModel.getCheckedSections(), restoreMode)) {
                         onRestoreStarted()
                     } else {
                         onUnsupported()

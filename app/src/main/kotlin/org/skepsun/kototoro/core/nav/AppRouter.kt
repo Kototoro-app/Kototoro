@@ -37,7 +37,6 @@ import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.alternatives.ui.compose.AlternativesSheetRoute
 import org.skepsun.kototoro.backups.ui.restore.RestoreDialogRoute
-import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
 import org.skepsun.kototoro.browser.BrowserActivity
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.image.CoilMemoryCacheKey
@@ -54,8 +53,7 @@ import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContentPage
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContentListFilter
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
-import org.skepsun.kototoro.entitygraph.domain.EntityType
-import org.skepsun.kototoro.work.domain.WorkResolver
+import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 import org.skepsun.kototoro.core.network.CommonHeaders
 import org.skepsun.kototoro.core.network.webview.CF_CLEARANCE_COOKIE
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
@@ -194,10 +192,6 @@ class AppRouter(
         EntryPointAccessors.fromApplication<AppRouterEntryPoint>(checkNotNull(contextOrNull())).contentDataRepository
     }
 
-    private val workResolver: WorkResolver by lazy {
-        EntryPointAccessors.fromApplication<AppRouterEntryPoint>(checkNotNull(contextOrNull())).workResolver
-    }
-
     private val jsonSourceManager: org.skepsun.kototoro.core.jsonsource.JsonSourceManager by lazy {
         EntryPointAccessors.fromApplication<AppRouterEntryPoint>(checkNotNull(contextOrNull())).jsonSourceManager
     }
@@ -281,21 +275,7 @@ class AppRouter(
         anchor: View? = null,
         sharedElementKey: String? = null,
     ) {
-        val lifecycleOwner = getLifecycleOwner() ?: return
-        lifecycleOwner.lifecycleScope.launch {
-            when (val origin = resolveDetailsOriginForContent(manga)) {
-                is DetailsOrigin.EntityGraph -> {
-                    openEntityDetails(
-                        entityId = origin.entityId,
-                        initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId ?: manga.id,
-                        sharedElementKey = sharedElementKey,
-                    )
-                }
-                is DetailsOrigin.LocalMangaContent -> openDetails(manga, anchor)
-                is DetailsOrigin.LocalMangaId -> openDetails(origin.mangaId)
-                else -> openDetails(manga, anchor)
-            }
-        }
+        openDetails(manga, anchor)
     }
 
     fun openTemporaryDetails(manga: Content) {
@@ -313,32 +293,6 @@ class AppRouter(
         startActivity(
             Intent(contextOrNull() ?: return, DetailsActivity::class.java)
                 .setData(link),
-        )
-    }
-
-    fun openEntityDetails(
-        entityId: Long,
-        preferredLocalMangaId: Long? = null,
-        initialProjectionLocalMangaId: Long? = null,
-        service: ScrobblerService? = null,
-        remoteId: Long? = null,
-        url: String? = null,
-        sharedElementKey: String? = null,
-    ) {
-        val origin = DetailsOrigin.EntityGraph(
-            entityId = entityId,
-            preferredLocalMangaId = preferredLocalMangaId,
-            initialProjectionLocalMangaId = initialProjectionLocalMangaId,
-            serviceId = service?.id?.toString(),
-            remoteId = remoteId,
-            url = url,
-        )
-        PendingDetailsNavigation.set(origin, sharedElementKey)
-        startActivity(
-            detailsIntent(
-                contextOrNull() ?: return,
-                origin,
-            ),
         )
     }
 
@@ -724,17 +678,6 @@ class AppRouter(
         hostActivity?.applyHorizontalRouteOpenTransition()
     }
 
-    fun openEntityOrganizeSettings(selectedContentIds: Set<Long> = emptySet()) {
-        val hostActivity = activity
-        startActivity(
-            SettingsActivity.newEntityOrganizeIntent(
-                context = contextOrNull() ?: return,
-                selectedContentIds = selectedContentIds,
-            ),
-            hostActivity?.let(::activityTransitionOptionsOf),
-        )
-    }
-
     fun openTranslationSettings() {
         val hostActivity = activity
         startActivity(
@@ -1113,15 +1056,11 @@ class AppRouter(
         )
     }
 
-    fun showBackupRestoreDialog(
-        fileUri: Uri,
-        restoreFormat: BackupRestoreFormat = BackupRestoreFormat.KOTOTORO_CURRENT,
-    ) {
+    fun showBackupRestoreDialog(fileUri: Uri) {
         val composeActivity = activity as? BaseComposeActivity ?: return
         composeActivity.showComposeModal {
             RestoreDialogRoute(
                 uri = fileUri,
-                restoreFormat = restoreFormat,
                 onRestoreStarted = {
                     closeWelcomeSheet()
                     composeActivity.dismissComposeModal()
@@ -1344,22 +1283,6 @@ class AppRouter(
         return source.getContentType()
     }
 
-    private suspend fun resolveDetailsOriginForContent(content: Content): DetailsOrigin {
-        return withContext(Dispatchers.IO) {
-            val entityId = workResolver.resolveByMangaId(content.id).entityId
-            val canResolveProjection = entityId != null &&
-                contentDataRepository.findContentById(content.id, withChapters = false) != null
-            if (entityId != null && canResolveProjection) {
-                DetailsOrigin.EntityGraph(
-                    entityId = entityId,
-                    initialProjectionLocalMangaId = content.id,
-                )
-            } else {
-                DetailsOrigin.LocalMangaContent(ParcelableContent(content))
-            }
-        }
-    }
-
     /** Private utils **/
 
     private fun startActivity(intent: Intent, options: Bundle? = null) {
@@ -1481,10 +1404,7 @@ class AppRouter(
         fun entityOrganizeSettingsIntent(
             context: Context,
             selectedContentIds: Set<Long> = emptySet(),
-        ) = SettingsActivity.newEntityOrganizeIntent(
-            context = context,
-            selectedContentIds = selectedContentIds,
-        )
+        ) = Intent(context, SettingsActivity::class.java)
 
         fun trackerSettingsIntent(context: Context) =
             Intent(context, SettingsActivity::class.java)
@@ -1654,7 +1574,6 @@ class AppRouter(
         val ACTION_HISTORY = "${BuildConfig.APPLICATION_ID}.action.MANAGE_HISTORY"
         val ACTION_MANAGE_DOWNLOADS = "${BuildConfig.APPLICATION_ID}.action.MANAGE_DOWNLOADS"
         val ACTION_MANAGE_SOURCES = "${BuildConfig.APPLICATION_ID}.action.MANAGE_SOURCES_LIST"
-        val ACTION_ENTITY_ORGANIZE = "${BuildConfig.APPLICATION_ID}.action.ENTITY_ORGANIZE"
         val ACTION_MANGA_EXPLORE = "${BuildConfig.APPLICATION_ID}.action.EXPLORE_MANGA"
         val ACTION_PROXY = "${BuildConfig.APPLICATION_ID}.action.MANAGE_PROXY"
         val ACTION_READER = "${BuildConfig.APPLICATION_ID}.action.MANAGE_READER_SETTINGS"

@@ -14,7 +14,10 @@ internal fun ChaptersLoader.buildPageThumbnailList(
     val pagesByChapter = snapshot.groupBy { it.chapterId }
     return buildList(snapshot.size + (chapters?.size ?: size) * 2) {
         if (chapters != null) {
+            val emittedChapterIds = HashSet<Long>(chapters.size)
             for (chapter in chapters) {
+                // Sources may list the same chapter twice; emitting it again would repeat its page keys.
+                if (!emittedChapterIds.add(chapter.id)) continue
                 add(ListHeader(chapter))
                 val pages = pagesByChapter[chapter.id]
                 if (pages.isNullOrEmpty()) {

@@ -27,7 +27,8 @@ enum class BackupSection(
     ENTITY_GRAPH_PREFS("entity_graph_prefs"),
     TRACKS("tracks"),
     TRACK_LOGS("track_logs"),
-    PROJECTIONS("projections"),
+    // Entry name stays "projections" so older and newer backups remain compatible.
+    CONTENTS("projections"),
     WORK_HISTORY("work_history"),
     WORK_FAVOURITES("work_favourites"),
     WORK_STATS("work_stats"),

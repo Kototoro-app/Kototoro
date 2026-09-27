@@ -17,28 +17,16 @@ import java.util.zip.ZipInputStream
 
 object BackupPayloadGuard {
 
-    class UnexpectedBackupFormatException(
-        val expected: BackupRestoreFormat,
-        val actualAppId: String? = null,
-        val actualSemanticSchemaVersion: Int? = null,
-    ) : IllegalArgumentException(
-        "The selected backup does not match the requested restore format: expected=$expected, " +
-            "appId=$actualAppId, semanticSchemaVersion=$actualSemanticSchemaVersion",
+    class UnexpectedBackupFormatException : IllegalArgumentException(
+        "The selected file is not a Kototoro or Kotatsu backup: it has no readable backup index.",
     )
 
-    class MissingProjectionAnchorsException(
+    class MissingAnchorContentsException(
         val operation: String,
         val anchorIds: List<Long>,
     ) : IllegalStateException(
-        "Refusing $operation: backup has work state with missing projection anchors: " +
+        "Refusing $operation: backup has work state with missing anchor manga: " +
             anchorIds.joinToString(),
-    )
-
-    class WorkEntityMissingSyncIdException(
-        val operation: String,
-        val entityId: Long,
-    ) : IllegalStateException(
-        "Refusing $operation: backup has a WORK entity without sync_id: id=$entityId.",
     )
 
     data class Inspection(
@@ -79,10 +67,9 @@ object BackupPayloadGuard {
     fun requireRestorableWorkSnapshot(
         file: File,
         operation: String,
-        allowIdentityOnlyWorkSnapshot: Boolean = false,
     ): Inspection {
         return inspect(file).also { inspection ->
-            if (!allowIdentityOnlyWorkSnapshot && inspection.isIdentityOnlyWorkSnapshot()) {
+            if (inspection.isIdentityOnlyWorkSnapshot()) {
                 throw IllegalStateException(
                     "Refusing $operation: backup snapshot contains entity identity data but no work " +
                         "favourites, history, or statistics. This incomplete snapshot would clear local user state.",
@@ -92,24 +79,20 @@ object BackupPayloadGuard {
         }
     }
 
-    fun requireRestoreFormat(file: File, expected: BackupRestoreFormat): BackupIndex {
-        val index = readBackupIndex(file) ?: throw UnexpectedBackupFormatException(expected)
-        val matches = when (expected) {
-            BackupRestoreFormat.KOTOTORO_CURRENT ->
-                index.appId.isKototoroApplicationId() &&
-                    index.semanticSchemaVersion >= BackupIndex.LEGACY_SEMANTIC_SCHEMA_BOUNDARY
-
-            BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO ->
-                index.semanticSchemaVersion < BackupIndex.LEGACY_SEMANTIC_SCHEMA_BOUNDARY
+    /**
+     * Detects which kind of backup [file] is. A file without a readable backup index is not a
+     * Kototoro/Kotatsu backup at all.
+     */
+    fun detectRestoreFormat(file: File): BackupRestoreFormat {
+        val index = readBackupIndex(file) ?: throw UnexpectedBackupFormatException()
+        return if (
+            index.appId.isKototoroApplicationId() &&
+            index.semanticSchemaVersion >= BackupIndex.LEGACY_SEMANTIC_SCHEMA_BOUNDARY
+        ) {
+            BackupRestoreFormat.KOTOTORO_CURRENT
+        } else {
+            BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO
         }
-        if (!matches) {
-            throw UnexpectedBackupFormatException(
-                expected = expected,
-                actualAppId = index.appId,
-                actualSemanticSchemaVersion = index.semanticSchemaVersion,
-            )
-        }
-        return index
     }
 
     private fun String.isKototoroApplicationId(): Boolean {
@@ -158,56 +141,22 @@ object BackupPayloadGuard {
             }
         if (activeFavouriteWithoutAnchor != null) {
             throw IllegalStateException(
-                "Refusing $operation: backup has an active work favourite without projection anchor " +
+                "Refusing $operation: backup has an active work favourite without anchor manga " +
                     "for entity_id=${activeFavouriteWithoutAnchor.long("entity_id")}.",
             )
         }
 
-        val entityIds = sections[BackupSection.ENTITY_GRAPH_ENTITIES].ids("id")
-        val workStateEntityIds = sections[BackupSection.WORK_FAVOURITES].ids("entity_id") +
-            sections[BackupSection.WORK_HISTORY].ids("entity_id") +
-            sections[BackupSection.WORK_STATS].ids("entity_id")
-        val missingEntityIds = workStateEntityIds - entityIds
-        if (missingEntityIds.isNotEmpty()) {
-            throw ActiveWorkStateMissingEntityException(
-                report = buildMissingWorkEntityReport(sections, missingEntityIds),
-                operation = operation,
-            )
-        }
-
-        val projectionIds = sections[BackupSection.PROJECTIONS].ids("id")
+        // Legacy WORK_* rows are restored onto their `anchor_manga_id` manga, so only the
+        // anchors matter; entity ids / sync ids no longer carry identity and are not checked.
+        val contentIds = sections[BackupSection.CONTENTS].ids("id")
         val anchorIds = sections[BackupSection.WORK_FAVOURITES].activeIds("anchor_manga_id") +
             sections[BackupSection.WORK_HISTORY].activeIds("anchor_manga_id") +
             sections[BackupSection.WORK_STATS].ids("anchor_manga_id")
-        val missingAnchorIds = anchorIds - projectionIds
+        val missingAnchorIds = anchorIds - contentIds
         if (missingAnchorIds.isNotEmpty()) {
-            throw MissingProjectionAnchorsException(
+            throw MissingAnchorContentsException(
                 operation = operation,
                 anchorIds = missingAnchorIds.take(MAX_REPORTED_IDS),
-            )
-        }
-
-        val workEntities = sections[BackupSection.ENTITY_GRAPH_ENTITIES]
-            .orEmpty()
-            .filter { it.string("type") == "WORK" }
-        val blankSyncIdEntity = workEntities.firstOrNull { it.string("sync_id", "syncId").isBlank() }
-        if (blankSyncIdEntity != null) {
-            throw WorkEntityMissingSyncIdException(
-                operation = operation,
-                entityId = blankSyncIdEntity.long("id"),
-            )
-        }
-        val duplicateSyncId = workEntities
-            .map { it.string("sync_id", "syncId") }
-            .filter { it.isNotBlank() }
-            .groupingBy { it }
-            .eachCount()
-            .entries
-            .firstOrNull { it.value > 1 }
-            ?.key
-        if (duplicateSyncId != null) {
-            throw IllegalStateException(
-                "Refusing $operation: backup snapshot has duplicate WORK sync_id: $duplicateSyncId.",
             )
         }
     }
@@ -239,14 +188,14 @@ object BackupPayloadGuard {
 
     private fun JsonArray?.ids(name: String): Set<Long> {
         if (this == null) return emptySet()
-        return mapNotNullTo(LinkedHashSet()) { it.longOrNull(name)?.takeIf { id -> id > 0L } }
+        return mapNotNullTo(LinkedHashSet()) { it.longOrNull(name)?.takeIf { id -> id != 0L } }
     }
 
     private fun JsonArray?.activeIds(name: String): Set<Long> {
         if (this == null) return emptySet()
         return mapNotNullTo(LinkedHashSet()) { item ->
             item.longOrNull(name)
-                ?.takeIf { id -> id > 0L && item.long("deleted_at") == 0L }
+                ?.takeIf { id -> id != 0L && item.long("deleted_at") == 0L }
         }
     }
 
@@ -281,65 +230,6 @@ object BackupPayloadGuard {
         }.orEmpty()
     }
 
-    private fun buildMissingWorkEntityReport(
-        sections: Map<BackupSection, JsonArray>,
-        missingEntityIds: Set<Long>,
-    ): BackupOrphanReport {
-        val anchorsByEntity = LinkedHashMap<Long, Long?>()
-        val kindsByEntity = LinkedHashMap<Long, LinkedHashSet<BackupOrphanInfo.StateKind>>()
-
-        fun add(
-            entityId: Long,
-            anchorMangaId: Long?,
-            kind: BackupOrphanInfo.StateKind,
-        ) {
-            if (entityId !in missingEntityIds) return
-            anchorsByEntity.putIfAbsent(entityId, anchorMangaId)
-            kindsByEntity.getOrPut(entityId) { LinkedHashSet() } += kind
-        }
-
-        sections[BackupSection.WORK_HISTORY].orEmpty().forEach { item ->
-            add(
-                entityId = item.long("entity_id"),
-                anchorMangaId = item.longOrNull("anchor_manga_id"),
-                kind = BackupOrphanInfo.StateKind.HISTORY,
-            )
-        }
-        sections[BackupSection.WORK_FAVOURITES].orEmpty().forEach { item ->
-            add(
-                entityId = item.long("entity_id"),
-                anchorMangaId = item.longOrNull("anchor_manga_id"),
-                kind = BackupOrphanInfo.StateKind.FAVOURITE,
-            )
-        }
-        sections[BackupSection.WORK_STATS].orEmpty().forEach { item ->
-            add(
-                entityId = item.long("entity_id"),
-                anchorMangaId = item.longOrNull("anchor_manga_id"),
-                kind = BackupOrphanInfo.StateKind.STATISTICS,
-            )
-        }
-
-        val projectionsById = sections[BackupSection.PROJECTIONS].orEmpty()
-            .mapNotNull { item -> item.longOrNull("id")?.let { id -> id to item } }
-            .toMap()
-        val items = missingEntityIds.take(MAX_REPORTED_IDS).map { entityId ->
-            val anchorMangaId = anchorsByEntity[entityId]
-            val projection = anchorMangaId?.let(projectionsById::get)
-            BackupOrphanInfo(
-                entityId = entityId,
-                anchorMangaId = anchorMangaId,
-                title = projection?.string("title")?.takeIf(String::isNotBlank),
-                source = projection?.string("source")?.takeIf(String::isNotBlank),
-                stateKinds = kindsByEntity[entityId].orEmpty().toList(),
-            )
-        }
-        return BackupOrphanReport(
-            totalCount = missingEntityIds.size,
-            items = items,
-        )
-    }
-
     private fun Inspection.isIdentityOnlyWorkSnapshot(): Boolean {
         val hasAuthoritativeIdentity = bytesOf(BackupSection.ENTITY_GRAPH_ENTITIES) > EMPTY_JSON_ARRAY_BYTES &&
             bytesOf(BackupSection.ENTITY_GRAPH_BINDINGS) > EMPTY_JSON_ARRAY_BYTES
@@ -371,8 +261,7 @@ object BackupPayloadGuard {
     }
     private val SEMANTIC_GUARD_SECTIONS = setOf(
         BackupSection.CATEGORIES,
-        BackupSection.PROJECTIONS,
-        BackupSection.ENTITY_GRAPH_ENTITIES,
+        BackupSection.CONTENTS,
         BackupSection.WORK_HISTORY,
         BackupSection.WORK_FAVOURITES,
         BackupSection.WORK_STATS,

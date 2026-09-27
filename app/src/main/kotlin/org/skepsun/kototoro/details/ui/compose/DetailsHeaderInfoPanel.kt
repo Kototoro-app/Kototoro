@@ -714,7 +714,7 @@ internal data class SourceOptionDisplayModel(
     val linkedTrackingItem: LinkedTrackingItemUiModel?,
     val isSelected: Boolean,
     val badgeText: String? = null,
-    val isActiveProjection: Boolean = false,
+    val isActiveSource: Boolean = false,
 )
 
 @Composable
@@ -735,7 +735,6 @@ internal fun DetailsSourceOption.resolveDisplayModel(
             linkedTrackingTitle = linkedTrackingItem?.title,
             resolvedSourceTitle = sourceTitle,
             resolvedTrackingTitle = trackingTitle,
-            isSelected = isSelected,
             strings = strings,
         ),
     )
@@ -790,7 +789,7 @@ internal fun SourceOptionCard(
             ),
         shape = RoundedCornerShape(if (expressive) 20.dp else 12.dp),
         color = when {
-            displayModel.isActiveProjection -> if (expressive) {
+            displayModel.isActiveSource -> if (expressive) {
                 MaterialTheme.colorScheme.primaryContainer
             } else {
                 MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
@@ -804,7 +803,7 @@ internal fun SourceOptionCard(
             else -> optionCardColors.containerColor
         },
         border = when {
-            displayModel.isActiveProjection -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+            displayModel.isActiveSource -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
             displayModel.isSelected -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
             else -> optionCardColors.border
         },

@@ -1,11 +1,6 @@
 package org.skepsun.kototoro.main.ui.compose
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -55,17 +50,8 @@ internal fun BoxScope.TopChromeGlow(
         scheme.isDarkTheme() -> 0.32f
         else -> 0.23f
     }
-    val motion = rememberInfiniteTransition(label = "top_glow_motion")
-    val drift = motion.animateFloat(
-        initialValue = -1f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(14_000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "top_glow_drift",
-    )
-
+    // Static on purpose: an infinite drift here re-rendered the whole window (glass chrome
+    // samples this layer) at the panel refresh rate on every idle top-level page.
     Box(
         modifier = modifier
             .height(height)
@@ -77,9 +63,7 @@ internal fun BoxScope.TopChromeGlow(
                 .graphicsLayer {
                     scaleX = 1.16f
                     scaleY = 1.08f
-                    translationX = size.width * 0.045f * drift.value
-                    translationY = size.height * 0.018f * drift.value
-                    alpha = 0.94f + 0.06f * drift.value
+                    alpha = 0.94f
                 }
                 .drawWithCache {
                     val brush = Brush.radialGradient(
@@ -96,9 +80,7 @@ internal fun BoxScope.TopChromeGlow(
                 .graphicsLayer {
                     scaleX = 1.16f
                     scaleY = 1.08f
-                    translationX = -size.width * 0.05f * drift.value
-                    translationY = -size.height * 0.012f * drift.value
-                    alpha = 0.94f - 0.06f * drift.value
+                    alpha = 0.94f
                 }
                 .drawWithCache {
                     val brush = Brush.radialGradient(

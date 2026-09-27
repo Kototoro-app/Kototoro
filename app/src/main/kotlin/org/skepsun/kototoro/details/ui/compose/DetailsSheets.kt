@@ -54,7 +54,7 @@ import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
-import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationItem
+import org.skepsun.kototoro.details.ui.model.EntityRelationItem
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)

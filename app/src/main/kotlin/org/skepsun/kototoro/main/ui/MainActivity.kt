@@ -33,7 +33,6 @@ import org.skepsun.kototoro.backups.domain.BackupStartupCoordinator
 import org.skepsun.kototoro.browser.AdListUpdateWorker
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.nav.SystemInstallLauncherHost
-import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.os.VoiceInputContract
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentLinkResolver
@@ -46,9 +45,7 @@ import org.skepsun.kototoro.core.util.ext.animatorDurationScale
 import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.details.service.ContentPrefetchService
-import org.skepsun.kototoro.details.ui.model.DetailsOrigin
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
-import org.skepsun.kototoro.entitygraph.domain.EntityType
+import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
@@ -83,7 +80,6 @@ import org.skepsun.kototoro.space.domain.SpaceRepository
 import org.skepsun.kototoro.space.data.SpaceRoutePreferencesController
 import org.skepsun.kototoro.space.data.SpaceSourcePresetController
 import org.skepsun.kototoro.tracker.work.TrackWorker
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -147,13 +143,6 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
 
     @Inject
     lateinit var contentDataRepository: ContentDataRepository
-
-    @Inject
-    lateinit var entityGraphRepository: EntityGraphRepository
-
-    @Inject
-    lateinit var workResolver: WorkResolver
-
 
     private val spaceViewModel by viewModels<SpaceViewModel>()
     private val spaceNavigationSessionViewModel by viewModels<SpaceNavigationSessionViewModel>()
@@ -314,35 +303,10 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
                         {}
                     },
                     onContentSuggestionClick = { content ->
-                        resolveDetailsOriginForContent(content) { origin ->
-                            when (origin) {
-                                is DetailsOrigin.EntityGraph -> {
-                                    router.openEntityDetails(
-                                        entityId = origin.entityId,
-                                        initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
-                                    )
-                                }
-                                else -> router.openResolvedDetails(content)
-                            }
-                        }
+                        router.openResolvedDetails(content)
                     },
                     onLocalEntitySuggestionClick = { suggestion ->
-                        suggestion.entityId?.let { entityId ->
-                            openEntityDetailsWithPreferredProjection(
-                                entityId = entityId,
-                                fallbackLocalMangaId = suggestion.representative.id,
-                            )
-                        } ?: resolveDetailsOriginForContent(suggestion.representative) { origin ->
-                            when (origin) {
-                                is DetailsOrigin.EntityGraph -> {
-                                    router.openEntityDetails(
-                                        entityId = origin.entityId,
-                                        initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
-                                    )
-                                }
-                                else -> router.openResolvedDetails(suggestion.representative)
-                            }
-                        }
+                        router.openResolvedDetails(suggestion.representative)
                     },
                     onTrackingEntitySuggestionClick = { entity ->
                         when (entity.entityType) {
@@ -596,54 +560,6 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
             animated = !settings.isReducedVisualEffectsEnabled && animatorDurationScale > 0f,
             showOnTarget = showOnTarget,
         )
-    }
-
-    private fun openEntityDetailsWithPreferredProjection(entityId: Long, fallbackLocalMangaId: Long) {
-        lifecycleScope.launch {
-            val preferredLocalMangaId = withContext(Dispatchers.IO) {
-                workResolver.selectPreferredProjection(entityId)
-            }
-            router.openEntityDetails(
-                entityId = entityId,
-                preferredLocalMangaId = preferredLocalMangaId ?: fallbackLocalMangaId,
-            )
-        }
-    }
-
-    fun resolveDetailsOriginForContent(
-        content: Content,
-        onResolved: (DetailsOrigin) -> Unit,
-    ) {
-        lifecycleScope.launch {
-            val origin = withContext(Dispatchers.IO) {
-                val entityId = workResolver.resolveByMangaId(content.id).entityId
-                val cachedProjection = entityId?.let {
-                    contentDataRepository.findContentById(content.id, withChapters = false)
-                }
-                val canResolveProjection = entityId != null && cachedProjection != null
-                android.util.Log.i(
-                    "DetailsTrace",
-                    "origin.resolve inputId=${content.id} inputSource=${content.source.name} " +
-                        "inputLocale=${content.source.locale} entityId=$entityId " +
-                        "cached=${cachedProjection != null} cachedSource=${cachedProjection?.source?.name} " +
-                        "cachedLocale=${cachedProjection?.source?.locale}",
-                )
-                if (entityId != null && canResolveProjection) {
-                    android.util.Log.i(
-                        "DetailsTrace",
-                        "origin.entityGraph entityId=$entityId initialProjectionId=${content.id}",
-                    )
-                    DetailsOrigin.EntityGraph(
-                        entityId = entityId,
-                        initialProjectionLocalMangaId = content.id,
-                    )
-                } else {
-                    android.util.Log.i("DetailsTrace", "origin.localContent id=${content.id}")
-                    DetailsOrigin.LocalMangaContent(ParcelableContent(content))
-                }
-            }
-            onResolved(origin)
-        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

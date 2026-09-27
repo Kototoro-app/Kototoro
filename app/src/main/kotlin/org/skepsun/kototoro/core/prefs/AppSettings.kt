@@ -466,18 +466,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_NAV_LABELS_ALWAYS_VISIBLE, true)
         set(value) = prefs.edit { putBoolean(KEY_NAV_LABELS_ALWAYS_VISIBLE, value) }
 
-    var isEntityGraphMigrated: Boolean
-        get() = prefs.getBoolean(KEY_ENTITY_GRAPH_MIGRATED, false)
-        set(value) = prefs.edit { putBoolean(KEY_ENTITY_GRAPH_MIGRATED, value) }
-
-    var isLegacyFavouriteProjectionMigrationCompleted: Boolean
-        get() = prefs.getBoolean(KEY_LEGACY_FAVOURITE_PROJECTION_MIGRATION_COMPLETED, false)
-        set(value) = prefs.edit { putBoolean(KEY_LEGACY_FAVOURITE_PROJECTION_MIGRATION_COMPLETED, value) }
-
-    var isLegacyEntityNameCollisionRepairCompleted: Boolean
-        get() = prefs.getBoolean(KEY_LEGACY_ENTITY_NAME_COLLISION_REPAIR_COMPLETED, false)
-        set(value) = prefs.edit { putBoolean(KEY_LEGACY_ENTITY_NAME_COLLISION_REPAIR_COMPLETED, value) }
-
     var isNavBarPinned: Boolean
         get() = prefs.getBoolean(KEY_NAV_PINNED, true)
         set(value) = prefs.edit { putBoolean(KEY_NAV_PINNED, value) }
@@ -2343,6 +2331,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getEnumValue(KEY_FAVORITES_ORDER, ListSortOrder.NEWEST)
         set(value) = prefs.edit { putEnumValue(KEY_FAVORITES_ORDER, value) }
 
+    var isFavouritesShelfEnabled: Boolean
+        get() = prefs.getBoolean(KEY_FAVOURITES_SHELF, true)
+        set(value) = prefs.edit { putBoolean(KEY_FAVOURITES_SHELF, value) }
+
     var isRelatedContentEnabled: Boolean
         get() = prefs.getBoolean(KEY_RELATED_MANGA, true)
         set(value) = prefs.edit { putBoolean(KEY_RELATED_MANGA, value) }
@@ -2551,10 +2543,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getSafeLong(KEY_BACKUP_WEBDAV_LAST_SEEN_LEGACY_CREATED_AT, 0L)
         set(value) = prefs.edit { putLong(KEY_BACKUP_WEBDAV_LAST_SEEN_LEGACY_CREATED_AT, value) }
 
-    var isBackupWebDavAutoUploadBlockedByLegacyRestore: Boolean
-        get() = prefs.getBoolean(KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE, false)
-        set(value) = prefs.edit { putBoolean(KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE, value) }
-
     var backupWebDavLastImportedSemanticSchemaVersion: Int
         get() = prefs.getSafeInt(KEY_BACKUP_WEBDAV_LAST_IMPORTED_SEMANTIC_SCHEMA_VERSION, 1).coerceAtLeast(1)
         set(value) = prefs.edit {
@@ -2566,14 +2554,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         set(value) = prefs.edit {
             putInt(KEY_BACKUP_WEBDAV_LAST_AUTHORITATIVE_SEMANTIC_SCHEMA_VERSION, value.coerceAtLeast(1))
         }
-
-    var isWorkMigrationSyncWriteBlocked: Boolean
-        get() = prefs.getBoolean(KEY_WORK_MIGRATION_SYNC_WRITE_BLOCKED, false)
-        set(value) = prefs.edit { putBoolean(KEY_WORK_MIGRATION_SYNC_WRITE_BLOCKED, value) }
-
-    var requiresWorkMigrationNormalization: Boolean
-        get() = prefs.getBoolean(KEY_WORK_MIGRATION_REQUIRES_NORMALIZATION, false)
-        set(value) = prefs.edit { putBoolean(KEY_WORK_MIGRATION_REQUIRES_NORMALIZATION, value) }
 
     var isReadingTimeEstimationEnabled: Boolean
         get() = prefs.getBoolean(KEY_READING_TIME, true)
@@ -2756,10 +2736,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
             putInt(KEY_BACKUP_WEBDAV_WRITER_GENERATION, backupWebDavWriterGeneration)
             putBoolean(KEY_BACKUP_WEBDAV_V2_MIGRATED, hasCompletedBackupWebDavV2Migration)
             putLong(KEY_BACKUP_WEBDAV_LAST_SEEN_LEGACY_CREATED_AT, backupWebDavLastSeenLegacyCreatedAt)
-            putBoolean(
-                KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE,
-                isBackupWebDavAutoUploadBlockedByLegacyRestore,
-            )
         }
     }
 
@@ -3233,6 +3209,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_LOCAL_LIST_ORDER = "local_order"
         const val KEY_HISTORY_ORDER = "history_order"
         const val KEY_FAVORITES_ORDER = "fav_order"
+        const val KEY_FAVOURITES_SHELF = "favourites_shelf"
         const val KEY_WEBTOON_GAPS = "webtoon_gaps"
         const val KEY_WEBTOON_ZOOM = "webtoon_zoom"
         const val KEY_WEBTOON_ZOOM_OUT = "webtoon_zoom_out"
@@ -3387,16 +3364,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_BACKUP_WEBDAV_WRITER_GENERATION = "backup_periodic_webdav_writer_generation"
         const val KEY_BACKUP_WEBDAV_V2_MIGRATED = "backup_periodic_webdav_v2_migrated"
         const val KEY_BACKUP_WEBDAV_LAST_SEEN_LEGACY_CREATED_AT = "backup_periodic_webdav_last_seen_legacy_created_at"
-        const val KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE =
-            "backup_periodic_webdav_block_auto_upload_after_legacy_restore"
         const val KEY_BACKUP_WEBDAV_LAST_IMPORTED_SEMANTIC_SCHEMA_VERSION =
             "backup_periodic_webdav_last_imported_semantic_schema_version"
         const val KEY_BACKUP_WEBDAV_LAST_AUTHORITATIVE_SEMANTIC_SCHEMA_VERSION =
             "backup_periodic_webdav_last_authoritative_semantic_schema_version"
-        const val KEY_WORK_MIGRATION_SYNC_WRITE_BLOCKED =
-            "work_migration_sync_write_blocked"
-        const val KEY_WORK_MIGRATION_REQUIRES_NORMALIZATION =
-            "work_migration_requires_normalization"
         const val KEY_BACKUP_WEBDAV_LAST_ACTIONS = "backup_periodic_webdav_last_actions"
 
         // WebDAV 自动同步与数据版本
@@ -3423,11 +3394,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_SELECTED_SOURCE_FILTER = "selected_source_filter"
         const val KEY_SELECTED_SOURCE_TAGS = "selected_source_tags"
         const val KEY_SELECTED_ADULT_FILTER = "selected_adult_filter"
-        const val KEY_ENTITY_GRAPH_MIGRATED = "entity_graph_migrated"
-        const val KEY_LEGACY_FAVOURITE_PROJECTION_MIGRATION_COMPLETED =
-            "legacy_favourite_projection_migration_completed"
-        const val KEY_LEGACY_ENTITY_NAME_COLLISION_REPAIR_COMPLETED =
-            "legacy_entity_name_collision_repair_completed"
 
         // keys for non-persistent preferences
         const val KEY_APP_VERSION = "app_version"

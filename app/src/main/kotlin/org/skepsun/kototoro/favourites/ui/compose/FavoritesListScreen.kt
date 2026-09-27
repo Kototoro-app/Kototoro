@@ -1,16 +1,19 @@
 package org.skepsun.kototoro.favourites.ui.compose
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.favourites.ui.list.FavouritesListHost
 import org.skepsun.kototoro.list.ui.compose.AppContentListRoute
+import org.skepsun.kototoro.list.ui.compose.QuickFilterSection
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.list.ui.compose.SortOrderControl
 import org.skepsun.kototoro.list.domain.ListSortOrder
@@ -18,7 +21,6 @@ import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
 import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
-import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.parsers.model.Content
 
 @Composable
@@ -28,8 +30,7 @@ fun KototoroFavoritesListScreen(
     appRouter: AppRouter,
     contentPadding: PaddingValues,
     onNavigateToDetails: ((Content, String?) -> Unit)? = null,
-    onNavigateToEntityDetails: ((DetailsOrigin, String?) -> Unit)? = null,
-    onEntityOrganizeSelection: ((Set<Long>) -> Unit)? = null,
+    onNavigateToDetailsOrigin: ((DetailsOrigin, String?) -> Unit)? = null,
     sharedTransitionEnabled: Boolean = true,
     isActivePage: Boolean = true,
     sortOrders: List<ListSortOrder> = emptyList(),
@@ -39,58 +40,56 @@ fun KototoroFavoritesListScreen(
     onFilterRailOverrideChanged: (CompactFilterRailOverrideState?) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val mainActivity = LocalContext.current as? MainActivity
     // The state holder is the favourites container, handed in as a per-category slice:
     // there is no page-level ViewModel and no space binding to do here (Phase 6).
     val quickFilter by listHost.topQuickFilter.collectAsStateWithLifecycle()
-    val library by listHost.libraryState.collectAsStateWithLifecycle()
-    val categoryRows = remember(library, categoryId) {
-        val ids = library.visibleIdsByCategory[categoryId].orEmpty()
-        val byId = library.rowsByEntityId
-        ids.mapNotNull { byId[it] }
-    }
-    val pinnedIds = remember(library, categoryId) {
-        library.pinnedIdsByCategory[categoryId].orEmpty()
-    }
-    val totalCount = categoryRows.size
-    val updatedCount = remember(categoryRows) {
-        categoryRows.count { it.newChapters > 0 }
-    }
-    val spotlightRows = remember(categoryRows, pinnedIds) {
-        if (categoryRows.isEmpty()) return@remember emptyList<org.skepsun.kototoro.favourites.domain.library.FavouriteCardRow>()
-        val pinned = categoryRows.filter { it.entityId in pinnedIds }
-        val withUpdates = categoryRows.filter { it.entityId !in pinnedIds && it.newChapters > 0 }
-        val recentlyRead = categoryRows.filter { it.entityId !in pinnedIds && it.newChapters <= 0 && (it.lastReadAt ?: 0L) > 0L }
-            .sortedByDescending { it.lastReadAt }
-        (pinned + withUpdates + recentlyRead).take(6)
+    val shelf by listHost.shelf.collectAsStateWithLifecycle()
+    val gridScale by listHost.gridScale.collectAsStateWithLifecycle()
+    val listMode by listHost.listMode.collectAsStateWithLifecycle()
+    val shelfInstanceKey = "main_favorites_shelf_$categoryId"
+    val sortControl: (@Composable () -> Unit)? = if (sortOrders.isNotEmpty()) {
+        {
+            SortOrderControl(
+                sortOrders = sortOrders,
+                selectedSortOrder = selectedSortOrder,
+                onSortOrderSelected = onSortOrderSelected,
+                compact = true,
+            )
+        }
+    } else {
+        null
     }
 
     AppContentListRoute(
         viewModel = listHost,
         contentPadding = contentPadding,
         appRouter = appRouter,
+        // The quick filters narrow the shelf as well as the grid, so they sit above both
+        // (right under the category tabs) instead of being rendered as the first list item,
+        // which put them between the shelf and the grid.
         listHeader = {
-            FavoritesSpotlightHeader(
-                totalCount = totalCount,
-                updatedCount = updatedCount,
-                spotlightRows = spotlightRows,
-                onItemClick = { row ->
-                    val origin = DetailsOrigin.EntityGraph(
-                        entityId = row.entityId,
-                        preferredLocalMangaId = row.displayMangaId,
+            Column(modifier = Modifier.fillMaxWidth()) {
+                quickFilter?.let { filter ->
+                    QuickFilterSection(
+                        quickFilter = filter,
+                        onQuickFilterOptionClick = listHost::toggleFilterOption,
+                        leadingContent = sortControl,
                     )
-                    if (onNavigateToEntityDetails != null) {
-                        onNavigateToEntityDetails(origin, "fav_spotlight_${row.entityId}")
-                    } else {
-                        appRouter.openEntityDetails(
-                            entityId = row.entityId,
-                            preferredLocalMangaId = row.displayMangaId,
-                            sharedElementKey = "fav_spotlight_${row.entityId}",
-                        )
-                    }
-                },
-                onCheckForUpdates = { listHost.checkForUpdates() },
-            )
+                }
+                FavoritesShelf(
+                    state = shelf,
+                    gridScale = gridScale,
+                    compactOverlay = listMode == ListMode.COMPACT_GRID,
+                    sharedElementInstanceKey = shelfInstanceKey,
+                    onItemClick = { item, _, sharedKey ->
+                        if (onNavigateToDetails != null) {
+                            onNavigateToDetails(item.manga, sharedKey)
+                        } else {
+                            appRouter.openResolvedDetails(item.manga, sharedElementKey = sharedKey)
+                        }
+                    },
+                )
+            }
         },
         showRemoveOption = true,
         preferredSelectionInlineActions = listOf(
@@ -113,59 +112,14 @@ fun KototoroFavoritesListScreen(
             if (onNavigateToDetails != null) {
                 onNavigateToDetails(content, sharedKey)
             } else {
-                mainActivity?.resolveDetailsOriginForContent(content) { origin ->
-                    when (origin) {
-                        is DetailsOrigin.EntityGraph -> {
-                            appRouter.openEntityDetails(
-                                entityId = origin.entityId,
-                                initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
-                                sharedElementKey = sharedKey,
-                            )
-                        }
-                        else -> appRouter.openResolvedDetails(content, sharedElementKey = sharedKey)
-                    }
-                } ?: appRouter.openResolvedDetails(content, sharedElementKey = sharedKey)
-            }
-        },
-        onNavigateToEntityDetails = { _, content, entityId, preferredLocalMangaId, sharedKey ->
-            // Item ids are entity ids now, so only a real display projection may seed the page.
-            val preferred = preferredLocalMangaId ?: content.id.takeIf { it != entityId }
-            val origin = DetailsOrigin.EntityGraph(
-                entityId = entityId,
-                preferredLocalMangaId = preferred,
-            )
-            if (onNavigateToEntityDetails != null) {
-                onNavigateToEntityDetails(origin, sharedKey)
-            } else {
-                appRouter.openEntityDetails(
-                    entityId = entityId,
-                    preferredLocalMangaId = preferred,
-                    sharedElementKey = sharedKey,
-                )
+                appRouter.openResolvedDetails(content, sharedElementKey = sharedKey)
             }
         },
         onRemoveSelection = { ids -> listHost.removeFromFavourites(ids) },
         onPinSelection = { ids -> listHost.togglePinned(ids) },
         onMarkAsCompletedSelection = { items -> listHost.markAsRead(items.map { it.id }) },
         onResolveSelectionContents = { ids -> listHost.resolveSelectedContents(ids) },
-        onFixSelection = { ids ->
-            onEntityOrganizeSelection?.invoke(listHost.resolveSelectionToMangaIds(ids))
-        },
-        fixSelectionActionTitleRes = R.string.entity_organize_title,
-        showQuickFilterInline = true,
-        quickFilterLeadingContent = if (sortOrders.isNotEmpty()) {
-            {
-                SortOrderControl(
-                    sortOrders = sortOrders,
-                    selectedSortOrder = selectedSortOrder,
-                    onSortOrderSelected = onSortOrderSelected,
-                    compact = true,
-                )
-            }
-        } else {
-            null
-        },
-        quickFilterOverride = quickFilter,
+        showQuickFilterInline = false,
         enableItemAnimations = false,
     )
 }

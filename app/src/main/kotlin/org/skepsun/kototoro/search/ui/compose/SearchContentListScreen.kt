@@ -102,7 +102,6 @@ import org.skepsun.kototoro.core.parser.tvbox.TVBoxActionHostActivity
 import org.skepsun.kototoro.list.ui.compose.KototoroSelectionTopBar
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.list.ui.compose.contentListSharedElementKey
-import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
@@ -116,7 +115,6 @@ import org.skepsun.kototoro.list.ui.model.ErrorState
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.list.ui.model.QuickFilter
-import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.remotelist.ui.RemoteListViewModel
 import org.skepsun.kototoro.parsers.model.Content
@@ -311,7 +309,6 @@ fun AppSearchContentListRoute(
 
     val context = LocalContext.current
     val activity = context as? Activity
-    val mainActivity = context as? MainActivity
     val configuration = LocalConfiguration.current
     val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
     val gridSize = settings.observeAsState(AppSettings.KEY_GRID_SIZE) { gridSize }.value
@@ -342,20 +339,9 @@ fun AppSearchContentListRoute(
     val contentListItems = preparedItems.contentListItems
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     val exceptionResolver = (context as? org.skepsun.kototoro.core.ui.BaseComposeActivity)?.exceptionResolver
-    val openDetailsHandler = remember(appRouter, mainActivity, onOpenDetails) {
+    val openDetailsHandler = remember(appRouter, onOpenDetails) {
         onOpenDetails ?: { content: Content, sharedKey: String? ->
-            mainActivity?.resolveDetailsOriginForContent(content) { origin ->
-                when (origin) {
-                    is DetailsOrigin.EntityGraph -> {
-                        appRouter.openEntityDetails(
-                            entityId = origin.entityId,
-                            initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
-                            sharedElementKey = sharedKey,
-                        )
-                    }
-                    else -> appRouter.openResolvedDetails(content, sharedElementKey = sharedKey)
-                }
-            } ?: appRouter.openResolvedDetails(content, sharedElementKey = sharedKey)
+            appRouter.openResolvedDetails(content, sharedElementKey = sharedKey)
         }
     }
 

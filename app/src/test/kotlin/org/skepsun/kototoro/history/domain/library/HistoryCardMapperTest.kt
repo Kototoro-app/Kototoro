@@ -82,12 +82,12 @@ class HistoryCardMapperTest {
     private fun request(
         row: HistoryCardEntry,
         mode: ListMode = ListMode.LIST,
-        groupSuffix: String? = "Projection: TEST",
+        sourceLabel: String? = "TEST",
     ) = HistoryCardModelRequest(
         row = row,
         mode = mode,
         progressMode = ProgressIndicatorMode.NONE,
-        groupSuffix = groupSuffix,
+        sourceLabel = sourceLabel,
         brokenTitle = "(broken)",
         tagTint = { 0 },
     )
@@ -100,18 +100,17 @@ class HistoryCardMapperTest {
         model as ContentGridModel
         assertEquals(row().uiId, model.id)
         assertEquals(0, model.counter)
-        assertEquals(1, model.projectionCount)
         assertEquals("Alpha Work", model.manga.title)
         assertNull(model.progress) // ProgressIndicatorMode.NONE
     }
 
     @Test
-    fun `list mode joins tags subtitle and projection suffix`() {
+    fun `list mode joins tags subtitle and source label`() {
         val model = buildHistoryCardModel(request(row()))
 
         assertTrue(model is ContentCompactListModel)
         model as ContentCompactListModel
-        assertEquals("Action, Comedy · Projection: TEST", model.subtitle)
+        assertEquals("Action, Comedy · TEST", model.subtitle)
         assertEquals(row().uiId, model.id)
     }
 
@@ -121,7 +120,7 @@ class HistoryCardMapperTest {
 
         assertTrue(model is ContentDetailedListModel)
         model as ContentDetailedListModel
-        assertEquals("Alpha Alt · Projection: TEST", model.subtitle)
+        assertEquals("Alpha Alt · TEST", model.subtitle)
         assertEquals(listOf("Action", "Comedy"), model.tags.map { it.title })
     }
 
@@ -160,7 +159,7 @@ class HistoryCardMapperTest {
     }
 
     @Test
-    fun `blank title falls back to the broken projection placeholder`() {
+    fun `blank title falls back to the untitled placeholder`() {
         val model = buildHistoryCardModel(request(row(title = "  ")))
 
         assertEquals("(broken)", model.manga.title)

@@ -111,13 +111,9 @@ private fun Throwable.getDisplayMessageOrNull(resources: Resources): String? = w
     is SQLiteFullException -> resources.getString(R.string.error_no_space_left)
     is UnsupportedFileException -> resources.getString(R.string.text_file_not_supported)
     is BadBackupFormatException -> resources.getString(R.string.unsupported_backup_message)
-    is BackupPayloadGuard.MissingProjectionAnchorsException -> resources.getString(
-        R.string.backup_guard_missing_projection_anchors,
+    is BackupPayloadGuard.MissingAnchorContentsException -> resources.getString(
+        R.string.backup_guard_missing_anchor_contents,
         anchorIds.joinToString(),
-    )
-    is BackupPayloadGuard.WorkEntityMissingSyncIdException -> resources.getString(
-        R.string.backup_guard_work_entity_missing_sync_id,
-        entityId,
     )
     is FileNotFoundException -> parseMessage(resources) ?: message
     is AccessDeniedException -> resources.getString(R.string.no_access_to_file)

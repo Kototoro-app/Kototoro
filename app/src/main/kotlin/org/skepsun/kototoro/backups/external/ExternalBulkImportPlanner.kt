@@ -7,20 +7,14 @@ import org.skepsun.kototoro.core.model.containsAdultTagKeyword
 import org.skepsun.kototoro.core.model.isAdultTagKeyword
 import org.skepsun.kototoro.core.model.isExplicitlySafeTagKeyword
 import org.skepsun.kototoro.core.model.isNsfw
-import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
-import org.skepsun.kototoro.entitygraph.data.EntityRecord
-import org.skepsun.kototoro.entitygraph.data.computeNameHash
-import org.skepsun.kototoro.entitygraph.data.computeProjectionSyncId
-import org.skepsun.kototoro.entitygraph.data.hasSameNormalizedEntityName
-import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.parsers.model.ContentRating
 import org.skepsun.kototoro.parsers.model.ContentType
-import org.skepsun.kototoro.parsers.util.longHashCode
 
 /**
- * Pure planning logic for the external backup bulk import (phase 1). Everything here is
- * memory-only so it can be unit tested without a database; the repository only orchestrates
- * the actual bulk writes around it.
+ * Pure planning logic for the external backup bulk import. Everything here is memory-only so
+ * it can be unit tested without a database; the repository only orchestrates the actual bulk
+ * writes around it. Identity is the persisted manga row: records that
+ * resolve to the same manga id are merged, nothing else is deduplicated.
  */
 
 /**
@@ -46,15 +40,6 @@ internal class BulkImportEntry(
 
     var mangaEntity: MangaEntity = buildMangaEntity()
         private set
-
-    /** Resolved WORK entity id after [planWorkEntityAssignment]; valid only afterwards. */
-    var entityId: Long = 0L
-
-    /** True when a fresh provisional entity must be inserted for this entry. */
-    var isNewEntity: Boolean = false
-
-    /** The provisional entity to insert (aligned-order input for the batch insert). */
-    var newEntityRecord: EntityRecord? = null
 
     fun mergeFrom(other: ExternalBackupContentRecord) {
         val keepHistory = (other.historyTimestamp ?: 0L) > (record.historyTimestamp ?: 0L)
@@ -132,110 +117,4 @@ internal class BulkImportEntry(
             contentType = record.contentType.name,
         )
     }
-}
-
-/**
- * Assigns every entry to a WORK entity, in memory:
- *  - Exact normalized-name match with a pre-existing entity -> attach to it (same identity
- *    evidence rule as `EntityGraphRepository.createEntity`).
- *  - Otherwise a fresh provisional entity; within-batch (nameHash, contentType) slot
- *    collisions fall back to a deterministic salted hash, mirroring createEntity's
- *    collision path. Cross-source / near-name merging is deferred to phase 2
- *    (EntityConsolidationWorker).
- *
- * Populates [BulkImportEntry.entityId], [BulkImportEntry.isNewEntity] and
- * [BulkImportEntry.newEntityRecord]. The returned list holds the provisional entities
- * in stable order, ready for the batch insert.
- */
-internal fun planWorkEntityAssignment(
-    entries: List<BulkImportEntry>,
-    existingEntitiesByHash: Map<Long, List<EntityRecord>>,
-    now: Long,
-    takenSlots: MutableSet<String> = HashSet(),
-    localBindingByMangaId: Map<Long, Long> = emptyMap(),
-    existingEntitiesBySyncId: Map<String, EntityRecord> = emptyMap(),
-    takenSyncIds: MutableSet<String> = HashSet(),
-): List<EntityRecord> {
-    val newEntities = ArrayList<EntityRecord>()
-    takenSyncIds.addAll(existingEntitiesBySyncId.keys)
-
-    for (entry in entries) {
-        // Highest precedence: a manga id that already carries a local binding belongs to
-        // that entity — re-anchoring it elsewhere would steal the (source, external_id)
-        // primary key from its current owner (the old per-record path checked
-        // findEntityByLocalMangaId first, this mirrors that).
-        val boundEntityId = localBindingByMangaId[entry.mangaId]
-        if (boundEntityId != null) {
-            entry.entityId = boundEntityId
-            entry.isNewEntity = false
-            entry.newEntityRecord = null
-            continue
-        }
-        val contentTypeName = entry.record.contentType.name
-        val projectionKey = ProjectionIdentityKeys.bindingKey(
-            url = entry.record.url,
-            publicUrl = entry.record.publicUrl,
-        )
-        val projectionSyncId = projectionKey?.let {
-            computeProjectionSyncId(entry.record.sourceName, it)
-        }
-
-        // Secondary precedence: if an existing entity in the database already carries this
-        // projection's exact sync_id and matching content type, attach to it directly.
-        val existingBySync = projectionSyncId?.let(existingEntitiesBySyncId::get)
-        if (existingBySync != null && existingBySync.contentType == contentTypeName) {
-            entry.entityId = existingBySync.id
-            entry.isNewEntity = false
-            entry.newEntityRecord = null
-            continue
-        }
-
-        val baseHash = computeNameHash(entry.title)
-        val attachTarget = existingEntitiesByHash[baseHash].orEmpty().firstOrNull { candidate ->
-            candidate.contentType == contentTypeName &&
-                hasSameNormalizedEntityName(candidate.primaryName, entry.title)
-        }
-        if (attachTarget != null) {
-            entry.entityId = attachTarget.id
-            entry.isNewEntity = false
-            entry.newEntityRecord = null
-            continue
-        }
-        val slotKey = "$baseHash\u0000$contentTypeName"
-        val nameHash = if (slotKey in takenSlots) {
-            "$baseHash|${entry.title}|${entry.mangaId}".longHashCode()
-        } else {
-            baseHash
-        }
-        takenSlots += slotKey
-
-        // Ensure the syncId is strictly unique across both existing DB entities and newly created ones.
-        val resolvedSyncId = if (projectionSyncId != null && projectionSyncId !in takenSyncIds) {
-            projectionSyncId
-        } else {
-            var candidateUuid = java.util.UUID.randomUUID().toString()
-            while (candidateUuid in takenSyncIds) {
-                candidateUuid = java.util.UUID.randomUUID().toString()
-            }
-            candidateUuid
-        }
-        takenSyncIds += resolvedSyncId
-
-        val entityRecord = EntityRecord(
-            type = EntityType.WORK.name,
-            contentType = contentTypeName,
-            syncId = resolvedSyncId,
-            primaryName = entry.title,
-            nameHash = nameHash,
-            aliases = null,
-            createdAt = now,
-            lastAccessed = now,
-            accessCount = 1,
-        )
-        entry.entityId = 0L
-        entry.isNewEntity = true
-        entry.newEntityRecord = entityRecord
-        newEntities += entityRecord
-    }
-    return newEntities
 }

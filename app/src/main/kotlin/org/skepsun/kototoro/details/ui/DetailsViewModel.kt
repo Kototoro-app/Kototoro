@@ -46,9 +46,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.favourites.domain.AttachReadingSourceToEntityUseCase
-import org.skepsun.kototoro.details.ui.model.ActiveLocalSourceOption
-import org.skepsun.kototoro.details.ui.model.EntityChapterSourceInfo
 import org.skepsun.kototoro.details.ui.model.LinkedTrackingItemUiModel
 import org.skepsun.kototoro.bookmarks.domain.BookmarksRepository
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
@@ -79,15 +76,14 @@ import org.skepsun.kototoro.details.data.DetailsTranslationCache
 import org.skepsun.kototoro.details.domain.BranchComparator
 import org.skepsun.kototoro.details.domain.DetailsInteractor
 import org.skepsun.kototoro.details.domain.DetailsLoadUseCase
-import org.skepsun.kototoro.details.domain.isDetailsProjectionAllowed
 import org.skepsun.kototoro.details.domain.ProgressUpdateUseCase
-import org.skepsun.kototoro.work.domain.WorkProjectionBindingResult
 import org.skepsun.kototoro.details.domain.ReadingTimeUseCase
 import org.skepsun.kototoro.details.domain.RelatedContentUseCase
 import org.skepsun.kototoro.details.ui.model.HistoryInfo
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.details.ui.model.ContentBranch
 import org.skepsun.kototoro.details.ui.model.DetailsSourceOption
+import org.skepsun.kototoro.alternatives.domain.MigrateUseCase
 import org.skepsun.kototoro.details.ui.model.DetailsChapterSourceTab
 import org.skepsun.kototoro.details.ui.model.ChapterListItem.Companion.FLAG_DOWNLOADED
 import org.skepsun.kototoro.details.ui.model.findChapterByHistory
@@ -109,8 +105,6 @@ import org.skepsun.kototoro.local.domain.DeleteLocalContentUseCase
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.local.domain.model.computeStoredSize
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
-import org.skepsun.kototoro.favourites.domain.MergeBackAndAddFavouriteUseCase
-import org.skepsun.kototoro.favourites.ui.categories.select.FavoriteDuplicatePrompt
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -139,21 +133,9 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository.MetadataSourceSele
 import javax.inject.Inject
 import kotlin.experimental.or
 import org.skepsun.kototoro.parsers.model.ContentType
-import org.skepsun.kototoro.entitygraph.data.observeLinksByWorkOrMangaCandidates
-import org.skepsun.kototoro.entitygraph.domain.Entity
-import org.skepsun.kototoro.entitygraph.domain.EntityBinding
-import org.skepsun.kototoro.entitygraph.domain.EntityType
-import org.skepsun.kototoro.entitygraph.domain.Relation
-import org.skepsun.kototoro.entitygraph.domain.RelationType
-import org.skepsun.kototoro.entitygraph.domain.TrackingCharacterDto
-import org.skepsun.kototoro.entitygraph.domain.TrackingPersonDto
-import org.skepsun.kototoro.entitygraph.domain.TrackingStaffDto
-import org.skepsun.kototoro.entitygraph.domain.TrackingWorkDto
-import org.skepsun.kototoro.entitygraph.domain.isLocalReadingSource
-import org.skepsun.kototoro.entitygraph.domain.stripEntityDisambiguationTitleSuffix
-import org.skepsun.kototoro.entitygraph.domain.trackingServiceOrNull
-import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationSection
-import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationItem
+import org.skepsun.kototoro.details.ui.model.EntityRelationSection
+import org.skepsun.kototoro.details.ui.model.EntityRelationItem
+import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.details.ui.model.DetailsSupplementAction
 import org.skepsun.kototoro.filter.ui.model.UiTagGroup
@@ -161,7 +143,6 @@ import org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS
 import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
 import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.matches
-import org.skepsun.kototoro.work.domain.WorkDuplicateCandidateRepository
 import org.skepsun.kototoro.space.domain.SpaceContentPolicy
 import org.skepsun.kototoro.space.domain.SpaceId
 import kotlinx.coroutines.channels.BufferOverflow
@@ -170,7 +151,6 @@ import java.io.File
 import java.util.Locale
 
 
-private const val SYNTHETIC_ENTITY_GRAPH_SOURCE = "Entity Graph"
 private const val DETAILS_TRACE_TAG = "DetailsTrace"
 
 private fun Content?.detailsTraceSummary(): String {
@@ -181,8 +161,6 @@ private fun Content?.detailsTraceSummary(): String {
 
 private fun DetailsOrigin?.detailsTraceSummary(): String = when (this) {
     null -> "null"
-    is DetailsOrigin.EntityGraph ->
-        "EntityGraph(entityId=$entityId, preferred=$preferredLocalMangaId, initial=$initialProjectionLocalMangaId)"
     is DetailsOrigin.LocalMangaId -> "LocalMangaId(mangaId=$mangaId)"
     is DetailsOrigin.LocalMangaContent -> "LocalMangaContent(${manga.detailsTraceSummary()})"
     is DetailsOrigin.TrackingEntity -> "TrackingEntity(service=$serviceId, type=$entityTypeName, remote=$remoteId)"
@@ -194,8 +172,7 @@ internal fun List<EntityRelationSection>.deduplicateRelationItems(): List<Entity
         section.copy(items = section.items.distinctBy(EntityRelationItem::stableKey))
     }
 
-internal fun DetailsOrigin.initialProjectionLocalMangaIdOrNull(): Long? = when (this) {
-    is DetailsOrigin.EntityGraph -> initialProjectionLocalMangaId
+internal fun DetailsOrigin.initialLocalMangaIdOrNull(): Long? = when (this) {
     is DetailsOrigin.LocalMangaId -> mangaId
     is DetailsOrigin.LocalMangaContent -> manga.id
     is DetailsOrigin.TrackingEntity,
@@ -203,12 +180,10 @@ internal fun DetailsOrigin.initialProjectionLocalMangaIdOrNull(): Long? = when (
     -> null
 }
 
-internal fun DetailsOrigin.initialProjectionIntentOrNull(): ContentIntent? = when (this) {
+internal fun DetailsOrigin.initialContentIntentOrNull(): ContentIntent? = when (this) {
     is DetailsOrigin.LocalMangaContent -> ContentIntent.of(manga)
-    else -> initialProjectionLocalMangaIdOrNull()?.let(ContentIntent::of)
+    else -> initialLocalMangaIdOrNull()?.let(ContentIntent::of)
 }
-
-internal fun Content.isSyntheticEntityGraphContent(): Boolean = source.name == SYNTHETIC_ENTITY_GRAPH_SOURCE
 
 private const val ENTITY_RELATION_SECTIONS_DEBOUNCE_MS = 120L
 private const val TRACKING_SUGGESTION_THRESHOLD = 0.9f
@@ -253,24 +228,7 @@ private inline fun <T> flowOrFallback(
     block()
 }.getOrNull().orEmptyFlow(fallback)
 
-private data class PersonWorkPresentation(
-    val work: Entity,
-    val coverUrl: String?,
-    val subtitle: String?,
-    val supportingText: String?,
-    val detailLines: List<String>,
-    val trackingService: ScrobblerService? = null,
-    val remoteId: Long? = null,
-    val url: String? = null,
-)
-
-private data class EntityTrackingOrigin(
-    val service: ScrobblerService,
-    val remoteId: Long,
-    val url: String? = null,
-)
-
-private data class WorkProjectionContext(
+private data class WorkContentContext(
     val entityId: Long?,
     val requestedMangaId: Long,
     val preferredLocalMangaId: Long?,
@@ -278,9 +236,9 @@ private data class WorkProjectionContext(
     val candidateMangaIds: List<Long>,
 )
 
-private data class CurrentWorkProjectionSnapshot(
+private data class CurrentWorkContentSnapshot(
     val activeLocalMangaId: Long?,
-    val currentReadingProjectionMangaId: Long?,
+    val currentReadingMangaId: Long?,
 )
 
 
@@ -333,8 +291,6 @@ private data class ReadingSearchFilterState(
 )
 
 private data class SourceOptionsUiState(
-    val activeLocalSourceOptions: List<ActiveLocalSourceOption> = emptyList(),
-    val entityChapterSourceInfo: EntityChapterSourceInfo? = null,
     val metadataSourceOptions: List<DetailsSourceOption> = emptyList(),
     val readingSourceOptions: List<DetailsSourceOption> = emptyList(),
 )
@@ -394,15 +350,12 @@ class DetailsViewModel @Inject constructor(
     private val detailsLoadUseCase: DetailsLoadUseCase,
     private val progressUpdateUseCase: ProgressUpdateUseCase,
     private val readingTimeUseCase: ReadingTimeUseCase,
-    private val attachReadingSourceToEntityUseCase: AttachReadingSourceToEntityUseCase,
     statsRepository: StatsRepository,
     private val epubChapterMappingDao: org.skepsun.kototoro.core.db.dao.EpubChapterMappingDao,
     private val localEpubSource: org.skepsun.kototoro.local.epub.LocalEpubSource,
     private val epubStorageManager: org.skepsun.kototoro.local.epub.EpubStorageManager,
     private val videoDownloadIndex: VideoDownloadIndex,
     private val favouritesRepository: FavouritesRepository,
-    private val duplicateCandidateRepository: WorkDuplicateCandidateRepository,
-    private val mergeBackAndAddFavouriteUseCase: MergeBackAndAddFavouriteUseCase,
     mangaRepositoryFactory: org.skepsun.kototoro.core.parser.ContentRepository.Factory,
     private val contentSourcesRepository: ContentSourcesRepository,
     private val mihonExtensionManager: MihonExtensionManager,
@@ -411,15 +364,14 @@ class DetailsViewModel @Inject constructor(
     private val contentSourceResolutionPipeline: ContentSourceResolutionPipeline,
     private val sourcePresetsRepository: SourcePresetsRepository,
     private val trackingSiteMatcher: TrackingSiteMatcher,
+    private val migrateUseCase: MigrateUseCase,
     private val dataRepository: org.skepsun.kototoro.core.parser.ContentDataRepository,
     private val detailsTranslationCache: DetailsTranslationCache,
     private val db: org.skepsun.kototoro.core.db.MangaDatabase,
     private val trackingSiteCacheRepository: org.skepsun.kototoro.tracking.discovery.data.TrackingSiteCacheRepository,
-    private val entityGraphRepository: org.skepsun.kototoro.entitygraph.data.EntityGraphRepository,
     private val trackingSiteDiscoveryService: org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryService,
     private val sourceTypeIdentifier: SourceTypeIdentifier,
     private val trackingRepository: TrackingRepository,
-    private val workResolver: org.skepsun.kototoro.work.domain.WorkResolver,
     private val spaceContentPolicy: SpaceContentPolicy,
 ) : ChaptersPagesViewModel(
     settings = settings,
@@ -440,18 +392,18 @@ class DetailsViewModel @Inject constructor(
         org.skepsun.kototoro.core.nav.AppRouter.KEY_TEMPORARY_DETAILS,
     ) == true
     private val originContent = (activeExternalOrigin as? org.skepsun.kototoro.details.ui.model.DetailsOrigin.LocalMangaContent)?.manga
-    private val initialProjectionIntentOverride = activeExternalOrigin?.initialProjectionIntentOrNull()
+    private val initialContentIntentOverride = activeExternalOrigin?.initialContentIntentOrNull()
     private var loadingJob: Job = Job()
     private var translateAvailabilityJob: Job? = null
     private var readingSearchJob: Job? = null
     private var sourceBindingsRefreshJob: Job? = null
     private var readingSearchGeneration: Int = 0
     private var allEnabledSourcesLoaded = false
-    private var currentLoadIntentOverride: ContentIntent? = initialProjectionIntentOverride
+    private var currentLoadIntentOverride: ContentIntent? = initialContentIntentOverride
     private var translationCacheSourceLang: String? = null
     private var translationCacheTargetLang: String? = null
     private val activeMangaIdFlow = kotlinx.coroutines.flow.MutableStateFlow(
-        activeExternalOrigin?.initialProjectionLocalMangaIdOrNull()
+        activeExternalOrigin?.initialLocalMangaIdOrNull()
             ?: intent.mangaId.takeIf { it != 0L },
     )
     val mangaId: Long get() = activeMangaIdFlow.value ?: intent.mangaId
@@ -465,18 +417,12 @@ class DetailsViewModel @Inject constructor(
         .debounce(ENTITY_RELATION_SECTIONS_DEBOUNCE_MS)
         .distinctUntilChanged()
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
-    val activeLocalSourceOptions = MutableStateFlow<List<ActiveLocalSourceOption>>(emptyList())
-    val entityChapterSourceInfo = MutableStateFlow<EntityChapterSourceInfo?>(null)
     val metadataSourceOptions = MutableStateFlow<List<DetailsSourceOption>>(emptyList())
     val readingSourceOptions = MutableStateFlow<List<DetailsSourceOption>>(emptyList())
     val metadataChapterTabs = MutableStateFlow<List<DetailsChapterSourceTab>>(emptyList())
     val readingChapterTabs = MutableStateFlow<List<DetailsChapterSourceTab>>(emptyList())
     private var detailsSpaceId: SpaceId? = null
-    private var activeEntityContextId: Long? = null
-    private var activeEntityContextBindings: List<EntityBinding> = emptyList()
-    private var activeEntityContextBoundLocalId: Long? = null
-    private var activeProjectionStoredContentType: ContentType? = null
-    private val sessionReadingProjectionLocalMangaId = MutableStateFlow<Long?>(null)
+    private var activeStoredContentType: ContentType? = null
     val supplementalMetadataProperties = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     val supplementalSections = MutableStateFlow<List<EntityRelationSection>>(emptyList())
     val supplementalActions = MutableStateFlow<List<DetailsSupplementAction>>(emptyList())
@@ -655,14 +601,10 @@ class DetailsViewModel @Inject constructor(
     val resolvedMetadataLanguage = MutableStateFlow<String?>(null)
     val resolvedReadingLanguage = MutableStateFlow<String?>(null)
     private val sourceOptionsUiState = combine(
-        activeLocalSourceOptions,
-        entityChapterSourceInfo,
         metadataSourceOptions,
         readingSourceOptions,
-    ) { activeLocalSourceOptions, entityChapterSourceInfo, metadataSourceOptions, readingSourceOptions ->
+    ) { metadataSourceOptions, readingSourceOptions ->
         SourceOptionsUiState(
-            activeLocalSourceOptions = activeLocalSourceOptions,
-            entityChapterSourceInfo = entityChapterSourceInfo,
             metadataSourceOptions = metadataSourceOptions,
             readingSourceOptions = readingSourceOptions,
         )
@@ -693,8 +635,6 @@ class DetailsViewModel @Inject constructor(
         sourceResolutionUiState,
     ) { sourceOptions, sourceTabs, sourceResolution ->
         SourceBindingUiState(
-            activeLocalSourceOptions = sourceOptions.activeLocalSourceOptions,
-            entityChapterSourceInfo = sourceOptions.entityChapterSourceInfo,
             metadataSourceOptions = sourceOptions.metadataSourceOptions,
             readingSourceOptions = sourceOptions.readingSourceOptions,
             metadataChapterTabs = sourceTabs.metadataChapterTabs,
@@ -825,17 +765,16 @@ class DetailsViewModel @Inject constructor(
     }
 
     private fun Content.readingSearchTitle(): String {
-        return stripEntityDisambiguationTitleSuffix(title, listOf(source.name)).trim()
+        return title.trim()
     }
 
     private fun cleanSourceSearchQuery(value: String): String {
-        return stripEntityDisambiguationTitleSuffix(value, knownSearchSourceNames()).trim()
+        return value.trim()
     }
 
     private fun knownSearchSourceNames(): Set<String> {
         val readingSearchSourceSnapshot = readingSearchSources.safeValueOrNull().orEmpty()
         val enabledSourceInfoSnapshot = allEnabledSourceInfos.safeValueOrNull().orEmpty()
-        val activeLocalSourceOptionSnapshot = activeLocalSourceOptions.safeValueOrNull().orEmpty()
         val metadataSourceOptionSnapshot = metadataSourceOptions.safeValueOrNull().orEmpty()
         val readingSourceOptionSnapshot = readingSourceOptions.safeValueOrNull().orEmpty()
         return buildSet {
@@ -844,7 +783,6 @@ class DetailsViewModel @Inject constructor(
             originContent?.source?.name?.let(::add)
             readingSearchSourceSnapshot.forEach { add(it.mangaSource.name) }
             enabledSourceInfoSnapshot.forEach { add(it.mangaSource.name) }
-            activeLocalSourceOptionSnapshot.forEach { add(it.source.name) }
             metadataSourceOptionSnapshot.mapNotNull { it.source?.name }.forEach(::add)
             readingSourceOptionSnapshot.mapNotNull { it.source?.name }.forEach(::add)
         }
@@ -915,13 +853,6 @@ class DetailsViewModel @Inject constructor(
             ?.source
             ?.locale
             ?.takeIf { it.isNotBlank() }
-            ?: activeLocalSourceOptions.safeValueOrNull()
-                .orEmpty()
-                .firstOrNull { it.isActive }
-                ?.source
-                ?.resolveDetailsSource()
-                ?.locale
-                ?.takeIf { it.isNotBlank() }
             ?: baseLoadedDetails?.local?.manga?.source
                 ?.resolveDetailsSource()
                 ?.locale
@@ -1013,7 +944,7 @@ class DetailsViewModel @Inject constructor(
         if (activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingItem) {
             return
         }
-        if (!allEnabledSourcesLoaded || !isWorkDetails.value || activeLocalSourceOptions.value.isNotEmpty()) {
+        if (!allEnabledSourcesLoaded || !isWorkDetails.value || currentObservedLocalMangaIdSnapshot() != null) {
             return
         }
         val canRetryEmptySearch = readingSearchHasSearched.value &&
@@ -1251,291 +1182,21 @@ class DetailsViewModel @Inject constructor(
         return raw.substringBefore(" (").substringBefore("（").trim()
     }
 
-    private fun parseTrackingCharacterCredit(raw: String): TrackingCharacterDto? {
-        val match = CHARACTER_VOICE_ACTOR_REGEX.matchEntire(raw.trim()) ?: return null
-        val characterName = normalizeContributorName(match.groupValues[1]).takeIf { it.isNotBlank() } ?: return null
-        val voiceActors = splitTrackingNames(match.groupValues[2]).mapNotNull { actor ->
-            normalizeContributorName(actor).takeIf { it.isNotBlank() }?.let { TrackingPersonDto(primaryName = it) }
-        }
-        return TrackingCharacterDto(
-            primaryName = characterName,
-            voiceActors = voiceActors,
-        )
-    }
 
-    private fun buildTrackingWorkDto(
-        details: org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails,
-    ): TrackingWorkDto {
-        val staffByName = LinkedHashMap<String, TrackingStaffDto>()
-        val charactersByName = LinkedHashMap<String, TrackingCharacterDto>()
-
-        fun addStaff(
-            raw: String,
-            externalId: String? = null,
-            role: String? = null,
-        ) {
-            val normalized = normalizeContributorName(raw)
-            if (normalized.isBlank()) {
-                return
-            }
-            val existing = staffByName[normalized]
-            staffByName[normalized] = if (existing == null) {
-                TrackingStaffDto(
-                    externalId = externalId,
-                    primaryName = normalized,
-                    role = role,
-                )
-            } else {
-                existing.copy(
-                    externalId = existing.externalId ?: externalId,
-                    role = existing.role ?: role,
-                )
-            }
-        }
-
-        fun addCharacter(character: TrackingCharacterDto) {
-            val key = character.primaryName.trim()
-            if (key.isBlank()) {
-                return
-            }
-            val existing = charactersByName[key]
-            charactersByName[key] = if (existing == null) {
-                character.copy(primaryName = key)
-            } else {
-                existing.copy(
-                    voiceActors = (existing.voiceActors + character.voiceActors)
-                        .distinctBy { it.primaryName },
-                )
-            }
-        }
-
-        details.characters.forEach { character ->
-            addCharacter(
-                TrackingCharacterDto(
-                    externalId = character.id.toString(),
-                    primaryName = normalizeContributorName(character.name),
-                    voiceActors = character.voiceActors.mapNotNull { actor ->
-                        normalizeContributorName(actor.name).takeIf { it.isNotBlank() }?.let { actorName ->
-                            TrackingPersonDto(
-                                externalId = actor.id?.toString(),
-                                primaryName = actorName,
-                            )
-                        }
-                    },
-                ),
-            )
-        }
-        details.staff.forEach { person ->
-            addStaff(
-                raw = person.name,
-                externalId = person.id?.toString(),
-                role = person.role,
-            )
-        }
-        details.authors.forEach { author ->
-            parseTrackingCharacterCredit(author)?.let(::addCharacter) ?: addStaff(author)
-        }
-        details.infoboxProperties.forEach { (key, value) ->
-            when {
-                key.isCharacterProperty() -> {
-                    splitTrackingNames(value).forEach { item ->
-                        parseTrackingCharacterCredit(item)?.let(::addCharacter)
-                    }
-                }
-                key.isAuthorProperty() -> {
-                    splitTrackingNames(value).forEach(::addStaff)
-                }
-            }
-        }
-
-        return TrackingWorkDto(
-            externalId = details.remoteId.toString(),
-            primaryName = details.title,
-            contentType = details.contentType,
-            aliases = listOfNotNull(details.altTitle?.takeIf { it.isNotBlank() }),
-            characters = charactersByName.values.toList(),
-            staff = staffByName.values.toList(),
-        )
-    }
-
-    private suspend fun ingestTrackingDetailsIntoEntityGraph(
-        details: org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails,
-    ) {
-        entityGraphRepository.ingestWorkFromTracking(
-            source = details.service.id.toString(),
-            workDto = buildTrackingWorkDto(details),
-        )
-    }
-
-    private suspend fun applyEntityContext(
-        entityId: Long,
-        preferredLocalMangaId: Long? = null,
-        initialProjectionLocalMangaId: Long? = null,
-        populateSyntheticHeader: Boolean,
-    ) {
-        Log.i(
-            DETAILS_TRACE_TAG,
-            "entity.apply start entityId=$entityId preferred=$preferredLocalMangaId " +
-                "initial=$initialProjectionLocalMangaId populateSyntheticHeader=$populateSyntheticHeader " +
-                "activeMangaId=${activeMangaIdFlow.value} displayed=${mangaDetails.value?.toContent().detailsTraceSummary()}",
-        )
-        val entity = entityGraphRepository.getEntity(entityId) ?: return
-        isWorkDetails.value = entity.type == EntityType.WORK
-        val cachedProjectionId = (initialProjectionLocalMangaId ?: preferredLocalMangaId)
-            ?.takeIf { it != 0L }
-        val cachedProjection = if (populateSyntheticHeader) {
-            cachedProjectionId?.let { projectionId ->
-                dataRepository.findContentById(projectionId, withChapters = true)
-                }
-        } else {
-            null
-        }
-        activeProjectionStoredContentType = cachedProjectionId?.let { projectionId ->
-            db.getMangaDao().find(projectionId)?.manga?.contentType?.let(::parseStoredContentType)
-        }
-        Log.i(
-            DETAILS_TRACE_TAG,
-            "entity.apply cache entityId=$entityId cachedProjection=${cachedProjection.detailsTraceSummary()} " +
-                "storedContentType=$activeProjectionStoredContentType",
-        )
-        if (populateSyntheticHeader && cachedProjection != null && mangaDetails.value == null) {
-            baseLoadedDetails = ContentDetails(cachedProjection)
-            Log.i(DETAILS_TRACE_TAG, "entity.apply initialState=cached ${cachedProjection.detailsTraceSummary()}")
-            syncDisplayedState()
-        }
-        val entityTrackingDetails = if (populateSyntheticHeader && mangaDetails.value == null) {
-            loadEntityTrackingDetails(entity)
-        } else {
-            null
-        }
-        if (populateSyntheticHeader && mangaDetails.value == null) {
-            val entityCoverUrl = entityTrackingDetails?.coverUrl.normalizedImageUrl() ?: resolveEntityCoverUrl(entityId)
-            baseLoadedDetails = ContentDetails(
-                cachedProjection ?: Content(
-                    id = entityId,
-                    title = entity.primaryName,
-                    altTitles = setOfNotNull(entityTrackingDetails?.altTitle?.takeIf { it.isNotBlank() }),
-                    url = "",
-                    publicUrl = entityTrackingDetails?.url.orEmpty(),
-                    rating = 0f,
-                    contentRating = null,
-                    coverUrl = entityCoverUrl,
-                    largeCoverUrl = entityCoverUrl,
-                    tags = emptySet(),
-                    state = null,
-                    authors = emptySet(),
-                    description = entityTrackingDetails?.description,
-                    chapters = null,
-                    source = syntheticSource(SYNTHETIC_ENTITY_GRAPH_SOURCE, ContentType.MANGA),
-                ),
-            )
-            Log.i(
-                DETAILS_TRACE_TAG,
-                "entity.apply initialState=synthetic entityId=$entityId source=$SYNTHETIC_ENTITY_GRAPH_SOURCE",
-            )
-            syncDisplayedState()
-        }
-        val bindings = entityGraphRepository.getBindings(entityId)
-        activeEntityContextId = entityId
-        activeEntityContextBindings = bindings
-        if (entity.type != EntityType.WORK) {
-            activeEntityContextBoundLocalId = null
-            activeLocalSourceOptions.value = emptyList()
-            sessionReadingProjectionLocalMangaId.value = null
-            updateSourceOptions()
-            entityChapterSourceInfo.value = null
-            if (!isTrackingOriginSelectionPinned()) {
-                restoreEntityMetadataSourceSelection(entityId = entityId)
-            }
-            submitEntityRelationSections(buildEntityRelationSections(entityId))
-            return
-        }
-        val persistedPreferredLocalId = workResolver.selectPreferredProjection(entityId)
-        val requestedProjectionLocalId = initialProjectionLocalMangaId?.takeIf { projectionId ->
-            bindings.any { binding ->
-                binding.isLocalReadingSource() &&
-                    binding.externalId.toLongOrNull() == projectionId
-            }
-        }
-        val boundLocalId = requestedProjectionLocalId ?: persistedPreferredLocalId?.takeIf { persistedId ->
-            bindings.any { binding ->
-                binding.isLocalReadingSource() &&
-                    binding.externalId.toLongOrNull() == persistedId
-            }
-        } ?: preferredLocalMangaId?.takeIf { preferredId ->
-            bindings.any { binding ->
-                binding.isLocalReadingSource() &&
-                    binding.externalId.toLongOrNull() == preferredId
-            }
-        } ?: bindings.firstOrNull { it.isLocalReadingSource() }?.externalId?.toLongOrNull()
-        activeEntityContextBoundLocalId = boundLocalId
-        activeProjectionStoredContentType = boundLocalId?.let { projectionId ->
-            db.getMangaDao().find(projectionId)?.manga?.contentType?.let(::parseStoredContentType)
-        }
-        val localBindingCount = bindings.count { binding ->
-            binding.isLocalReadingSource()
-        }
-        android.util.Log.d(
-            DETAILS_TRACE_TAG,
-            "applyEntityContext: entityId=$entityId, preferredLocalMangaId=$preferredLocalMangaId, " +
-                "initialProjectionLocalMangaId=$initialProjectionLocalMangaId, " +
-                "persistedPreferredLocalId=$persistedPreferredLocalId, boundLocalId=$boundLocalId, " +
-                "populateSyntheticHeader=$populateSyntheticHeader, localBindings=$localBindingCount",
-        )
-        activeLocalSourceOptions.value = buildActiveLocalSourceOptions(bindings, boundLocalId)
-        sessionReadingProjectionLocalMangaId.value = requestedProjectionLocalId ?: boundLocalId
-        Log.i(
-            DETAILS_TRACE_TAG,
-            "entity.apply bindings entityId=$entityId boundLocalId=$boundLocalId requestedProjection=$requestedProjectionLocalId " +
-                "activeOptions=${activeLocalSourceOptions.value.map { "${it.mangaId}:${it.source.name}:${it.source.locale}:${it.isActive}" }}",
-        )
-        updateSourceOptions()
-        if (boundLocalId != null && activeMangaIdFlow.value != boundLocalId) {
-            currentLoadIntentOverride = ContentIntent.of(boundLocalId)
-            activeMangaIdFlow.value = boundLocalId
-            loadingJob.cancel()
-            loadingJob = doLoad(force = false)
-        }
-        entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(boundLocalId)
-        if (!isTrackingOriginSelectionPinned()) {
-            restoreEntityMetadataSourceSelection(entityId = entityId)
-        }
-        submitEntityRelationSections(buildEntityRelationSections(entityId))
-    }
-
-    private suspend fun refreshActiveEntitySourceOptions() {
-        if (activeEntityContextId == null) {
-            return
-        }
-        val activeMangaId = activeMangaIdFlow.value ?: activeEntityContextBoundLocalId
-        activeLocalSourceOptions.value = buildActiveLocalSourceOptions(
-            bindings = activeEntityContextBindings,
-            activeMangaId = activeMangaId,
-        )
-        entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(activeMangaId)
-    }
 
     fun setSpaceContext(spaceId: SpaceId?) {
         if (detailsSpaceId == spaceId) {
             return
         }
         detailsSpaceId = spaceId
-        val entityId = activeEntityContextId ?: return
-        viewModelScope.launch {
-            val bindings = activeEntityContextBindings
-            val boundLocalId = activeEntityContextBoundLocalId
-            activeLocalSourceOptions.value = buildActiveLocalSourceOptions(bindings, boundLocalId)
-            updateSourceOptions()
-            entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(boundLocalId)
-            Log.d("DetailsViewModel", "setSpaceContext: entityId=$entityId, spaceId=$spaceId")
-        }
+        Log.d("DetailsViewModel", "setSpaceContext: spaceId=$spaceId")
     }
 
     init {
         Log.i(
             DETAILS_TRACE_TAG,
             "vm.init origin=${activeExternalOrigin.detailsTraceSummary()} intentId=${intent.mangaId} " +
-                "initialOverride=${initialProjectionIntentOverride?.mangaId} activeMangaId=${activeMangaIdFlow.value}",
+                "initialOverride=${initialContentIntentOverride?.mangaId} activeMangaId=${activeMangaIdFlow.value}",
         )
         // Apply instant first paint only from the explicit DetailsOrigin payload.
         // Raw intent seed should not predefine current details before real resolution.
@@ -1559,15 +1220,9 @@ class DetailsViewModel @Inject constructor(
         activeMangaIdFlow.value
             ?.takeIf { activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingItem }
             ?.let { _ ->
-                    launchJob(Dispatchers.IO) {
-                        val observedLocalMangaId = currentObservedLocalMangaIdSnapshot() ?: return@launchJob
-                        val localEntityId = entityGraphRepository.findEntityByBinding("0", observedLocalMangaId.toString())?.id
-                            ?: entityGraphRepository.findEntityByBinding("local_manga", observedLocalMangaId.toString())?.id
-                    if (localEntityId != null) {
-                        restoreEntityMetadataSourceSelection(entityId = localEntityId)
-                    } else {
-                        restorePersistedMetadataSourceSelection(observedLocalMangaId)
-                    }
+                launchJob(Dispatchers.IO) {
+                    val observedLocalMangaId = currentObservedLocalMangaIdSnapshot() ?: return@launchJob
+                    restorePersistedMetadataSourceSelection(observedLocalMangaId)
                 }
             }
 
@@ -1610,7 +1265,6 @@ class DetailsViewModel @Inject constructor(
                 aniyomiExtensionManager.changes,
                 ireaderExtensionManager.changes,
             ).collect {
-                refreshActiveEntitySourceOptions()
                 updateSourceOptions()
                 refreshResolvedPresentationState()
             }
@@ -1638,42 +1292,7 @@ class DetailsViewModel @Inject constructor(
             }
         }
 
-        if (
-            !isTemporaryReadOnly &&
-            activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph &&
-            activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingEntity &&
-            activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingItem
-        ) {
-                launchJob(Dispatchers.IO) {
-                    val localContent = originContent
-                        ?: currentObservedLocalMangaIdSnapshot()?.let { mangaId -> db.getMangaDao().find(mangaId)?.toContent() }
-                        ?: return@launchJob
-                val storedContent = dataRepository.storeContentAndReturn(localContent, replaceExisting = false)
-                val identity = workResolver.ensureForProjection(
-                    content = storedContent,
-                    provenance = org.skepsun.kototoro.work.domain.WorkIdentityProvenance.USER,
-                )
-                val entityId = identity.entityId ?: return@launchJob
-                applyEntityContext(
-                    entityId = entityId,
-                    preferredLocalMangaId = storedContent.id,
-                    initialProjectionLocalMangaId = storedContent.id,
-                    populateSyntheticHeader = false,
-                )
-            }
-        }
-
-        if (activeExternalOrigin is org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph) {
-            launchJob(Dispatchers.IO) {
-                applyEntityContext(
-                    entityId = activeExternalOrigin.entityId,
-                    preferredLocalMangaId = activeExternalOrigin.preferredLocalMangaId,
-                    initialProjectionLocalMangaId = activeExternalOrigin.initialProjectionLocalMangaId,
-                    populateSyntheticHeader = true,
-                )
-            }
-        } else if (activeExternalOrigin is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingEntity) {
-            entityChapterSourceInfo.value = null
+        if (activeExternalOrigin is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingEntity) {
             launchJob(Dispatchers.IO) {
                 val service = ScrobblerService.entries.firstOrNull {
                     it.id == activeExternalOrigin.serviceId.toIntOrNull()
@@ -1709,7 +1328,6 @@ class DetailsViewModel @Inject constructor(
                 }
             }
         } else if (activeExternalOrigin is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingItem) {
-            entityChapterSourceInfo.value = null
             launchJob(Dispatchers.IO) {
                 val service = ScrobblerService.entries.firstOrNull { it.id == activeExternalOrigin.serviceId.toIntOrNull() } ?: return@launchJob
                 val cached = trackingSiteCacheRepository.readDetails(service, activeExternalOrigin.remoteId)
@@ -1725,7 +1343,6 @@ class DetailsViewModel @Inject constructor(
 
                 if (mangaDetails.value == null && cached != null) {
                     cacheTrackingDetails(cached)
-                    ingestTrackingDetailsIntoEntityGraph(cached)
                     baseLoadedDetails = ContentDetails(trackingDetailsToSyntheticContent(cached))
                     syncDisplayedState()
                 }
@@ -1733,55 +1350,23 @@ class DetailsViewModel @Inject constructor(
                 val remoteDetails = try { trackingSiteDiscoveryService.getDetails(service, activeExternalOrigin.remoteId, activeExternalOrigin.url) } catch (e: Exception) { null }
                 if (remoteDetails != null) {
                     cacheTrackingDetails(remoteDetails)
-                    ingestTrackingDetailsIntoEntityGraph(remoteDetails)
                     baseLoadedDetails = ContentDetails(trackingDetailsToSyntheticContent(remoteDetails))
                     syncDisplayedState()
                 }
 
-                val trackedEntity = entityGraphRepository.findEntityByBinding(
-                    source = service.id.toString(),
-                    externalId = activeExternalOrigin.remoteId.toString(),
-                ) ?: remoteDetails?.let {
-                    entityGraphRepository.findEntityByBinding(
-                        source = service.id.toString(),
-                        externalId = it.remoteId.toString(),
-                    )
-                }
                 if (remoteDetails != null) {
                     trackingSiteCacheRepository.saveDetails(remoteDetails)
                 }
 
-                    flowOrFallback(emptyList()) {
-                        db.getTrackingSiteDao().observeLinks(service.id, activeExternalOrigin.remoteId)
-                    }.collect { links ->
-                    val trackedLocalAnchor = trackedEntity?.let { entity ->
-                        links.firstOrNull { link ->
-                            link.entityId == entity.id && link.mangaId != 0L
-                        }?.mangaId
-                    }
-                        when {
-                            trackedEntity != null -> {
-                                applyEntityContext(
-                                    entityId = trackedEntity.id,
-                                    preferredLocalMangaId = trackedLocalAnchor ?: currentObservedLocalMangaIdSnapshot(),
-                                    populateSyntheticHeader = true,
-                                )
-                            }
-                        links.isNotEmpty() && activeMangaIdFlow.value == null -> {
-                            // Legacy compatibility only: without a confirmed entity binding we may still open
-                            // one local projection anchor. Prefer current work/projection context first so
-                            // link cache ordering does not silently redefine the displayed projection.
-                            val trackingMangaId = selectLegacyTrackingLinkAnchor(
-                                links = links,
-                                preferredMangaIds = preferredFallbackTrackingMangaIds(),
-                            )
-                            if (trackingMangaId != null) {
-                                currentLoadIntentOverride = ContentIntent.of(trackingMangaId)
-                                activeMangaIdFlow.value = trackingMangaId
-                                persistMetadataSourceSelectionForCurrentEntity(fallbackMangaId = trackingMangaId)
-                                loadingJob = doLoad(force = false)
-                            }
-                        }
+                flowOrFallback(emptyList()) {
+                    db.getTrackingSiteDao().observeLinks(service.id, activeExternalOrigin.remoteId)
+                }.collect { links ->
+                    val trackingMangaId = links.firstOrNull { it.mangaId != 0L }?.mangaId
+                    if (trackingMangaId != null && activeMangaIdFlow.value == null) {
+                        currentLoadIntentOverride = ContentIntent.of(trackingMangaId)
+                        activeMangaIdFlow.value = trackingMangaId
+                        persistMetadataSourceSelectionForCurrentEntity(fallbackMangaId = trackingMangaId)
+                        loadingJob = doLoad(force = false)
                     }
                 }
             }
@@ -1849,22 +1434,6 @@ class DetailsViewModel @Inject constructor(
         return cachedTrackingDetails[trackingMetadataKey(selection.service, selection.remoteId)]
     }
 
-    private fun currentEntityTrackingOrigin(): EntityTrackingOrigin? {
-        val origin = activeExternalOrigin as? org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph
-        val service = origin?.serviceId
-            ?.toIntOrNull()
-            ?.let { serviceId -> ScrobblerService.entries.firstOrNull { it.id == serviceId } }
-        val remoteId = origin?.remoteId
-        if (service != null && remoteId != null && remoteId > 0L) {
-            return EntityTrackingOrigin(
-                service = service,
-                remoteId = remoteId,
-                url = origin.url,
-            )
-        }
-        return null
-    }
-
     private fun currentSupplementalTrackingDetails(): org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails? {
         currentTrackingMetadataDetails()?.let { return it }
         val origin = activeExternalOrigin as? org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingEntity
@@ -1881,111 +1450,9 @@ class DetailsViewModel @Inject constructor(
             }
     }
 
-    private suspend fun loadEntityTrackingDetails(
-        entity: Entity,
-    ): org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails? {
-        val origin = currentEntityTrackingOrigin()
-        val candidateOrigins = buildList {
-            origin?.takeIf { supportsEntityTrackingDetails(it.service, entity.type) }?.let(::add)
-            entityGraphRepository.getBindings(entity.id)
-                .mapNotNull { binding ->
-                    val service = binding.trackingServiceOrNull() ?: return@mapNotNull null
-                    val remoteId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
-                    EntityTrackingOrigin(service = service, remoteId = remoteId)
-                }
-                .filter { candidate ->
-                    (entity.type == EntityType.PERSON || entity.type == EntityType.CHARACTER) &&
-                        supportsEntityTrackingDetails(candidate.service, entity.type)
-                }
-                .forEach(::add)
-        }.distinctBy { Triple(it.service, it.remoteId, it.url) }
-        for (candidate in candidateOrigins) {
-            val key = entityTrackingKey(entity.type, candidate.service, candidate.remoteId)
-            cachedEntityTrackingDetails[key]?.let { return it }
-            trackingSiteCacheRepository.readEntityDetails(candidate.service, entity.type, candidate.remoteId)?.let { cached ->
-                cacheEntityTrackingDetails(entity.type, cached)
-                return cached
-            }
-            val remote = runCatching {
-                trackingSiteDiscoveryService.getEntityDetails(
-                    service = candidate.service,
-                    entityType = entity.type,
-                    remoteId = candidate.remoteId,
-                    urlHint = candidate.url,
-                )
-            }.getOrNull()
-            if (remote != null) {
-                cacheEntityTrackingDetails(entity.type, remote)
-                return remote
-            }
-        }
-        resolveEntityTrackingDetailsByName(entity)?.let { return it }
-        return null
-    }
 
-    private suspend fun resolveEntityTrackingDetailsByName(
-        entity: Entity,
-    ): org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails? {
-        if (entity.type != EntityType.PERSON && entity.type != EntityType.CHARACTER) {
-            return null
-        }
-        val queries = mergeEntitySearchNames(entity).take(3)
-        if (queries.isEmpty()) {
-            return null
-        }
-        for (service in ENTITY_TRACKING_SEARCH_SERVICES) {
-            if (!supportsEntityTrackingDetails(service, entity.type)) {
-                continue
-            }
-            for (query in queries) {
-                val match = runCatching {
-                    trackingSiteDiscoveryService.searchEntities(
-                        service = service,
-                        entityType = entity.type,
-                        query = query,
-                    )
-                }.getOrDefault(emptyList())
-                    .asSequence()
-                    .take(ENTITY_TRACKING_SEARCH_RESULT_LIMIT)
-                    .firstOrNull { it.matchesEntityName(entity) }
-                    ?: continue
-                val remote = runCatching {
-                    trackingSiteDiscoveryService.getEntityDetails(
-                        service = match.service,
-                        entityType = entity.type,
-                        remoteId = match.remoteId,
-                        urlHint = match.url,
-                    )
-                }.getOrNull() ?: continue
-                cacheEntityTrackingDetails(entity.type, remote)
-                entityGraphRepository.attachEntityTrackingBinding(
-                    entityId = entity.id,
-                    service = match.service,
-                    remoteId = match.remoteId,
-                    confidence = 0.92f,
-                )
-                return remote
-            }
-        }
-        return null
-    }
 
-    private fun mergeEntitySearchNames(entity: Entity): List<String> {
-        return (listOf(entity.primaryName) + entity.aliases)
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .distinctBy { it.lowercase() }
-    }
 
-    private fun TrackingEntitySearchResult.matchesEntityName(entity: Entity): Boolean {
-        val expectedNames = mergeEntitySearchNames(entity)
-        val candidateNames = listOfNotNull(name, altName)
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-        return expectedNames.any { expected ->
-            candidateNames.any { candidate -> candidate.equals(expected, ignoreCase = true) }
-        }
-    }
 
     private fun supportsEntityTrackingDetails(
         service: ScrobblerService,
@@ -2032,9 +1499,9 @@ class DetailsViewModel @Inject constructor(
     }
 
     private suspend fun resolveCurrentMetadataPersistenceMangaId(): Long? {
-        val projectionSnapshot = currentWorkProjectionSnapshot()
-        return projectionSnapshot.activeLocalMangaId
-            ?: projectionSnapshot.currentReadingProjectionMangaId
+        val contentSnapshot = currentWorkContentSnapshot()
+        return contentSnapshot.activeLocalMangaId
+            ?: contentSnapshot.currentReadingMangaId
             ?: baseLoadedDetails?.local?.manga?.id
             ?: resolveCurrentLocalMangaId()
     }
@@ -2046,36 +1513,20 @@ class DetailsViewModel @Inject constructor(
             return
         }
         val selection = selectedMetadataSource.value.toPersistedSelection()
-        val entityId = resolveContextualEntityId()
         val resolvedFallbackMangaId = fallbackMangaId ?: resolveCurrentMetadataPersistenceMangaId()
         val targetIds = listOfNotNull(resolvedFallbackMangaId)
         android.util.Log.d(
             "DetailsViewModel",
-            "persistMetadataSourceSelectionForCurrentEntity: entityId=$entityId, fallbackMangaId=$resolvedFallbackMangaId, " +
+            "persistMetadataSourceSelection: fallbackMangaId=$resolvedFallbackMangaId, " +
                 "selection=$selection, fallbackTargetIds=$targetIds",
         )
-        if (entityId != null) {
-            dataRepository.setEntityMetadataSourceSelection(
-                entityId = entityId,
+        // The metadata authority belongs to the manga itself, so it is persisted directly
+        // against every resolved manga id.
+        targetIds.forEach { mangaId ->
+            dataRepository.setMetadataSourceSelection(
+                mangaId = mangaId,
                 selection = selection,
             )
-        } else {
-            targetIds.forEach { mangaId ->
-                dataRepository.setMetadataSourceSelection(
-                    mangaId = mangaId,
-                    selection = selection,
-                )
-            }
-        }
-    }
-
-    private suspend fun persistPreferredLocalSourceForCurrentEntity(mangaId: Long) {
-        if (isTemporaryReadOnly) {
-            return
-        }
-        val entityId = resolveContextualEntityId()
-        if (entityId != null) {
-            dataRepository.setEntityPreferredLocalMangaId(entityId = entityId, mangaId = mangaId)
         }
     }
 
@@ -2084,92 +1535,13 @@ class DetailsViewModel @Inject constructor(
         fallbackMangaId: Long? = null,
     ) {
         val resolvedFallbackMangaId = fallbackMangaId ?: resolveCurrentMetadataPersistenceMangaId()
-        val entitySelection = dataRepository.getEntityMetadataSourceSelection(entityId)
-        android.util.Log.d(
-            "DetailsViewModel",
-            "restoreEntityMetadataSourceSelection: entityId=$entityId, fallbackMangaId=$resolvedFallbackMangaId, entitySelection=$entitySelection",
-        )
-        if (entitySelection != null) {
-            when (entitySelection) {
-                PersistedMetadataSourceSelection.Base -> {
-                    if (selectedMetadataSource.value != MetadataSourceSelection.Base) {
-                        selectedMetadataSource.value = MetadataSourceSelection.Base
-                        syncDisplayedState()
-                    }
-                }
-                is PersistedMetadataSourceSelection.Tracking -> {
-                    restorePersistedMetadataSelection(entitySelection)
-                }
-            }
-            return
-        }
         resolvedFallbackMangaId?.let { restorePersistedMetadataSourceSelection(it) }
-        // Fallback: if still no tracking source selected, resolve from entity tracking bindings.
-        if (selectedMetadataSource.value == MetadataSourceSelection.Base) {
-            resolveTrackingSourceFromEntityBindings(entityId)
-        }
     }
 
-    private suspend fun resolveTrackingSourceFromEntityBindings(entityId: Long) {
-        val bindings = entityGraphRepository.getBindings(entityId)
+    private suspend fun applyTrackingSource(service: ScrobblerService, remoteId: Long) {
         android.util.Log.d(
             "DetailsViewModel",
-            "resolveTrackingSourceFromEntityBindings: entityId=$entityId, bindingCount=${bindings.size}, " +
-                "sources=${bindings.map { it.source }}",
-        )
-        // Method 1: direct tracking bindings (source = ScrobblerService id like 1,2,3...)
-        val directTrackingBindings = bindings.filter { binding ->
-            binding.trackingServiceOrNull() != null
-        }.sortedByDescending { it.confidence }
-        if (directTrackingBindings.isNotEmpty()) {
-            val preferredService = settings.preferredTrackingSite
-            val bestBinding = directTrackingBindings.firstOrNull { binding ->
-                binding.trackingServiceOrNull() == preferredService
-            } ?: directTrackingBindings.first()
-            val service = bestBinding.trackingServiceOrNull()
-            val remoteId = bestBinding.externalId.toLongOrNull()
-            if (service != null && remoteId != null) {
-                applyTrackingSource(entityId, service, remoteId)
-                return
-            }
-        }
-        // Method 2: check if any bound local manga is from a tracking source (TRACKING_*)
-        val localMangaIds = bindings.asSequence()
-            .filter { it.isLocalReadingSource() }
-            .mapNotNull { it.externalId.toLongOrNull() }
-            .distinct()
-            .toList()
-        android.util.Log.d(
-            "DetailsViewModel",
-            "resolveTrackingSourceFromEntityBindings: checking local manga sources, mangaIds=$localMangaIds",
-        )
-        for (mangaId in localMangaIds) {
-            val mangaSource = db.getMangaDao().find(mangaId)?.manga?.source ?: continue
-            if (!mangaSource.startsWith("TRACKING_")) continue
-            val serviceName = mangaSource.removePrefix("TRACKING_")
-            val service = ScrobblerService.entries.firstOrNull {
-                it.name.equals(serviceName, ignoreCase = true)
-            } ?: continue
-            // For tracking-sourced manga, the mangaId IS the tracking remoteId
-            val remoteId = mangaId
-            android.util.Log.d(
-                "DetailsViewModel",
-                "resolveTrackingSourceFromEntityBindings: found tracking-sourced manga, " +
-                    "mangaId=$mangaId, source=$mangaSource, service=${service.name}, remoteId=$remoteId",
-            )
-            applyTrackingSource(entityId, service, remoteId)
-            return
-        }
-        android.util.Log.d(
-            "DetailsViewModel",
-            "resolveTrackingSourceFromEntityBindings: no tracking source found for entityId=$entityId",
-        )
-    }
-
-    private suspend fun applyTrackingSource(entityId: Long, service: ScrobblerService, remoteId: Long) {
-        android.util.Log.d(
-            "DetailsViewModel",
-            "applyTrackingSource: entityId=$entityId, service=${service.name}, remoteId=$remoteId",
+            "applyTrackingSource: service=${service.name}, remoteId=$remoteId",
         )
         val cached = trackingSiteCacheRepository.readDetails(service, remoteId)
         if (cached != null) {
@@ -2209,7 +1581,6 @@ class DetailsViewModel @Inject constructor(
         )
         if (cached != null) {
             cacheTrackingDetails(cached)
-            ingestTrackingDetailsIntoEntityGraph(cached)
         }
         trackingMetadataCandidates.value = mergeTrackingMetadataCandidates(
             trackingMetadataCandidates.value + TrackingMetadataCandidate(
@@ -2328,59 +1699,22 @@ class DetailsViewModel @Inject constructor(
         )
     }
 
-    private fun observeTrackingLinksByWork(mangaId: Long) = db.invalidationTracker.createFlow(
-        tables = arrayOf(
-            "entity_binding",
-            "entity_preferences",
-        ),
-        emitInitialState = true,
-    ).mapLatest {
-        resolveWorkProjectionContext(mangaId)
-    }.distinctUntilChanged().flatMapLatest { context ->
-        flowOrFallback(emptyList()) {
-            db.getTrackingSiteDao().observeLinksByWorkOrMangaCandidates(
-                entityId = context.entityId,
-                mangaIds = context.candidateMangaIds,
-            )
-        }.map { links ->
-            selectTrackingLinksForWork(context, links)
-        }
+    private fun observeTrackingLinksByWork(mangaId: Long) = flowOrFallback(emptyList()) {
+        db.getTrackingSiteDao().observeLinksByManga(mangaId)
     }
 
-    private suspend fun resolveWorkProjectionContext(mangaId: Long): WorkProjectionContext {
-        val identity = workResolver.resolveByMangaId(mangaId)
-        val entityId = identity.entityId
-        if (entityId == null) {
-            return WorkProjectionContext(
-                entityId = null,
-                requestedMangaId = mangaId,
-                preferredLocalMangaId = mangaId,
-                persistedLocalMangaId = mangaId,
-                candidateMangaIds = listOf(mangaId),
-            )
-        }
-        val localMangaIds = identity.localMangaIds
-            .filter { localId -> db.getMangaDao().contains(localId) }
-        val persistedLocalMangaId = identity.preferredMangaId
-            ?.takeIf { preferredId -> db.getMangaDao().contains(preferredId) }
-            ?: localMangaIds.firstOrNull()
-            ?: mangaId
-        val candidateMangaIds = buildList {
-            add(mangaId)
-            add(persistedLocalMangaId)
-            addAll(localMangaIds)
-        }.distinct()
-        return WorkProjectionContext(
-            entityId = entityId,
+    private suspend fun resolveWorkContentContext(mangaId: Long): WorkContentContext {
+        return WorkContentContext(
+            entityId = null,
             requestedMangaId = mangaId,
-            preferredLocalMangaId = persistedLocalMangaId,
-            persistedLocalMangaId = persistedLocalMangaId,
-            candidateMangaIds = candidateMangaIds.ifEmpty { listOf(mangaId) },
+            preferredLocalMangaId = mangaId,
+            persistedLocalMangaId = mangaId,
+            candidateMangaIds = listOf(mangaId),
         )
     }
 
     private fun selectTrackingLinksForWork(
-        context: WorkProjectionContext,
+        context: WorkContentContext,
         links: List<org.skepsun.kototoro.core.db.entity.TrackingSiteLinkEntity>,
     ): List<org.skepsun.kototoro.core.db.entity.TrackingSiteLinkEntity> {
         return links.groupBy { it.service to it.remoteId }
@@ -2417,16 +1751,14 @@ class DetailsViewModel @Inject constructor(
         Log.i(
             DETAILS_TRACE_TAG,
             "state.sync base=${base?.toContent().detailsTraceSummary()} displayed=${mangaDetails.value?.toContent().detailsTraceSummary()} " +
-                "tracking=${trackingDetails != null} entityId=$activeEntityContextId activeMangaId=${activeMangaIdFlow.value}",
+                "tracking=${trackingDetails != null} activeMangaId=${activeMangaIdFlow.value}",
         )
         updateSourceOptions()
         refreshReadingSearchSources()
         maybeAutoSearchReadingSourcesForTrackingWork()
         updateSupplementalDetailsState(supplementalTrackingDetails)
         refreshResolvedPresentationState()
-        if (activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph) {
-            refreshContextualEntityRelations()
-        }
+        refreshContextualEntityRelations()
     }
 
     private fun currentObservedLocalMangaIdSnapshot(): Long? {
@@ -2437,18 +1769,12 @@ class DetailsViewModel @Inject constructor(
             ?: currentDetails?.toContent()?.takeIf { it.isLocal }?.id
     }
 
-    private fun currentWorkProjectionSnapshot(): CurrentWorkProjectionSnapshot {
-        val activeLocalSourceOption = activeLocalSourceOptions.safeValueOrNull().orEmpty().firstOrNull { it.isActive }
-        val activeLocalMangaId = activeLocalSourceOption?.mangaId
-            ?: currentObservedLocalMangaIdSnapshot()
-        val currentReadingProjectionMangaId = sessionReadingProjectionLocalMangaId.safeValueOrNull()
-            ?.takeIf { readingId ->
-                activeLocalSourceOptions.safeValueOrNull().orEmpty().any { it.mangaId == readingId }
-            }
-            ?: activeLocalMangaId
-        return CurrentWorkProjectionSnapshot(
-            activeLocalMangaId = activeLocalMangaId,
-            currentReadingProjectionMangaId = currentReadingProjectionMangaId,
+    private fun currentWorkContentSnapshot(): CurrentWorkContentSnapshot {
+        // The displayed manga row is both the active and the reading source.
+        val localMangaId = currentObservedLocalMangaIdSnapshot()
+        return CurrentWorkContentSnapshot(
+            activeLocalMangaId = localMangaId,
+            currentReadingMangaId = localMangaId,
         )
     }
 
@@ -2469,7 +1795,7 @@ class DetailsViewModel @Inject constructor(
     }
 
     private fun refreshActiveLocalBrowserContent() {
-        val activeLocalId = currentWorkProjectionSnapshot().activeLocalMangaId
+        val activeLocalId = currentWorkContentSnapshot().activeLocalMangaId
         val baseContent = baseLoadedDetails?.toContent()
         if (activeLocalId == null || activeLocalId == baseLoadedDetails?.id) {
             activeLocalBrowserContent.value = baseContent?.takeIf { it.publicUrl.isNotBlank() }
@@ -2562,66 +1888,38 @@ class DetailsViewModel @Inject constructor(
         }.distinctBy(DetailsSourceOption::key)
         metadataSourceOptions.value = metadata
 
+        // The reading source is the manga row itself. It is always listed —
+        // the content-type compatibility check is for foreign candidates, and an uninstalled
+        // extension would otherwise make the current manga's own source look incompatible.
         val currentDisplayedDetails = mangaDetails.safeValueOrNull()
-        val activeLocalOptions = activeLocalSourceOptions.safeValueOrNull().orEmpty()
-        readingSourceOptions.value = if (activeLocalOptions.isNotEmpty()) {
-            val selectedReadingProjectionId = sessionReadingProjectionLocalMangaId.safeValueOrNull()
-                ?.takeIf { projectionId -> activeLocalOptions.any { it.mangaId == projectionId } }
-                ?: activeLocalOptions.firstOrNull { it.isActive }?.mangaId
-            activeLocalOptions.map { option ->
-                DetailsSourceOption(
-                    key = "reading:${option.mangaId}",
-                    source = option.source,
-                    targetMangaId = option.mangaId,
-                    title = option.title,
-                    isSelected = option.mangaId == selectedReadingProjectionId,
-                )
-            }
-        } else {
-            val source = baseSource
+        val readingSource = baseSource
+            ?.takeUnless { it.name.startsWith("TRACKING_") }
+            ?: currentDisplayedDetails
+                ?.toContent()
+                ?.source
+                ?.resolveDetailsSource()
                 ?.takeUnless { it.name.startsWith("TRACKING_") }
-                ?: currentDisplayedDetails
-                    ?.toContent()
-                    ?.source
-                    ?.resolveDetailsSource()
-                    ?.takeUnless { it.name.startsWith("TRACKING_") }
-                ?: currentDisplayedDetails
-                    ?.takeIf { it.isLocal }
-                    ?.local
-                    ?.manga
-                    ?.source
-            val spaceAllowedTypes = detailsSpaceId?.let(spaceContentPolicy::allowedTypes)
-            val currentType = currentBaseContentType()
-            val projectionType = source?.resolvedContentTypeForSnapshot() ?: activeProjectionStoredContentType
-            val isAllowed = source != null && isDetailsProjectionAllowed(
-                currentType = currentType,
-                projectionType = projectionType,
-                spaceAllowedTypes = spaceAllowedTypes,
+            ?: currentDisplayedDetails
+                ?.takeIf { it.isLocal }
+                ?.local
+                ?.manga
+                ?.source
+        readingSourceOptions.value = readingSource?.let {
+            listOf(
+                DetailsSourceOption(
+                    key = "reading:${it.name}",
+                    source = it,
+                    targetMangaId = currentObservedLocalMangaIdSnapshot(),
+                    title = baseContent?.title,
+                    coverUrl = baseContent?.coverUrl.normalizedImageUrl(),
+                    isSelected = true,
+                ),
             )
-            Log.i(
-                DETAILS_TRACE_TAG,
-                "state.readingCandidate source=${source?.name} sourceLocale=${source?.locale} " +
-                    "currentType=$currentType projectionType=$projectionType spaceId=$detailsSpaceId " +
-                    "spaceAllowedTypes=$spaceAllowedTypes storedContentType=$activeProjectionStoredContentType accepted=$isAllowed",
-            )
-            source
-                ?.takeIf { isAllowed }
-                    ?.let {
-                        listOf(
-                            DetailsSourceOption(
-                                key = "reading:${it.name}",
-                                source = it,
-                                title = baseContent?.title,
-                                coverUrl = baseContent?.coverUrl.normalizedImageUrl(),
-                                isSelected = true,
-                            ),
-                        )
-                    }.orEmpty()
-        }
+        }.orEmpty()
         updateChapterSourceTabs()
         Log.i(
             DETAILS_TRACE_TAG,
-            "state.options base=${baseContent.detailsTraceSummary()} activeLocal=${activeLocalOptions.map { "${it.mangaId}:${it.source.name}:${it.source.locale}:${it.isActive}" }} " +
+            "state.options base=${baseContent.detailsTraceSummary()} " +
                 "metadata=${metadataSourceOptions.value.map { "${it.key}:${it.source?.name}:${it.isSelected}" }} " +
                 "reading=${readingSourceOptions.value.map { "${it.key}:${it.source?.name}:${it.source?.locale}:${it.isSelected}" }}",
         )
@@ -2852,47 +2150,8 @@ class DetailsViewModel @Inject constructor(
 
     private fun refreshContextualEntityRelations() {
         launchJob(Dispatchers.IO) {
-            val entityId = resolveContextualEntityId()
-            val sections = if (entityId != null) {
-                buildEntityRelationSections(entityId)
-            } else {
-                emptyList()
-            }
-            submitEntityRelationSections(sections)
+            submitEntityRelationSections(buildEntityRelationSections())
         }
-    }
-
-    private suspend fun resolveContextualEntityId(): Long? {
-        activeEntityContextId?.let { return it }
-        val localMangaId = currentObservedLocalMangaIdSnapshot() ?: baseLoadedDetails?.local?.manga?.id
-        if (localMangaId != null) {
-            workResolver.resolveByMangaId(localMangaId).entityId?.let { entityId ->
-                android.util.Log.d(
-                    "DetailsViewModel",
-                    "resolveContextualEntityId: resolved localMangaId=$localMangaId, entityId=$entityId",
-                )
-                return entityId
-            }
-        }
-        val currentSelection = selectedMetadataSource.value
-        if (currentSelection is MetadataSourceSelection.Tracking) {
-            entityGraphRepository.findEntityByBinding(
-                source = currentSelection.service.id.toString(),
-                externalId = currentSelection.remoteId.toString(),
-            )?.let {
-                android.util.Log.d(
-                    "DetailsViewModel",
-                    "resolveContextualEntityId: resolved from tracking selection service=${currentSelection.service.name}, " +
-                        "remoteId=${currentSelection.remoteId}, entityId=${it.id}",
-                )
-                return it.id
-            }
-        }
-        android.util.Log.d(
-            "DetailsViewModel",
-            "resolveContextualEntityId: unresolved, activeMangaId=${activeMangaIdFlow.value}, baseId=${baseLoadedDetails?.id}, selection=$currentSelection",
-        )
-        return null
     }
 
     private suspend fun ensureTrackingDetailsLoaded(
@@ -2914,7 +2173,6 @@ class DetailsViewModel @Inject constructor(
         }
         trackingSiteCacheRepository.readDetails(service, remoteId)?.let { cached ->
             cacheTrackingDetails(cached)
-            ingestTrackingDetailsIntoEntityGraph(cached)
             if (cached.hasRichMetadata()) {
                 val currentSelection = selectedMetadataSource.value
                 if (currentSelection is MetadataSourceSelection.Tracking &&
@@ -2931,7 +2189,6 @@ class DetailsViewModel @Inject constructor(
             trackingSiteDiscoveryService.getDetails(service, remoteId, url)
         }.getOrNull() ?: return
         cacheTrackingDetails(details)
-        ingestTrackingDetailsIntoEntityGraph(details)
         trackingSiteCacheRepository.saveDetails(details)
         val currentSelection = selectedMetadataSource.value
         if (currentSelection is MetadataSourceSelection.Tracking &&
@@ -3172,7 +2429,6 @@ class DetailsViewModel @Inject constructor(
                             val cached = trackingSiteCacheRepository.readDetails(selection.service, entity.targetId)
                             ScrobblingInfo(
                                 scrobbler = selection.service,
-                                entityId = entity.entityId,
                                 preferredLocalMangaId = entity.mangaId.takeIf { it != 0L },
                                 mangaId = entity.mangaId,
                                 targetId = entity.targetId,
@@ -3254,7 +2510,7 @@ class DetailsViewModel @Inject constructor(
     }.mapLatest { (localMangaId, details) ->
         val seed = localMangaId
             ?.let { db.getMangaDao().find(it)?.toContent() }
-            ?: details?.toContent()?.takeUnless { it.isSyntheticEntityGraphContent() }
+            ?: details?.toContent()
         if (seed != null && settings.isRelatedContentEnabled) {
             val related = relatedContentUseCase(seed).orEmpty()
                 .distinctBy { "${it.source.name}:${it.id}:${it.url}" }
@@ -3407,7 +2663,7 @@ class DetailsViewModel @Inject constructor(
         get() = selectedBranch.value
 
     init {
-        if (initialProjectionIntentOverride?.mangaId?.takeIf { it != 0L } != null || intent.mangaId != 0L || intent.manga != null) {
+        if (initialContentIntentOverride?.mangaId?.takeIf { it != 0L } != null || intent.mangaId != 0L || intent.manga != null) {
             loadingJob = doLoad(force = false)
         }
         scrobblingInfo
@@ -3447,887 +2703,119 @@ class DetailsViewModel @Inject constructor(
         }
     }
 
-    private suspend fun buildEntityRelationSections(entityId: Long): List<EntityRelationSection> {
-        val anchorEntity = entityGraphRepository.getEntity(entityId) ?: return emptyList()
-        val entityTrackingDetails = loadEntityTrackingDetails(anchorEntity)
-        val trackingDetails = currentTrackingMetadataDetails()
-        val selectedTracking = selectedMetadataSource.value as? MetadataSourceSelection.Tracking
-        val relations = if (selectedTracking != null) {
-            entityGraphRepository.getRelationsForTrackingSource(
-                entityId = entityId,
-                service = selectedTracking.service,
-                remoteId = selectedTracking.remoteId,
-            )
-        } else {
-            entityGraphRepository.getRelations(entityId)
-        }
-        if (relations.isEmpty() && entityTrackingDetails == null && trackingDetails == null) {
-            return emptyList()
-        }
-        val currentTrackingWorkSections = if (anchorEntity.type == EntityType.WORK && trackingDetails != null) {
-            buildCurrentTrackingWorkRelationSections(trackingDetails)
-        } else {
-            emptyList()
-        }
-        if (anchorEntity.type == EntityType.WORK && trackingDetails != null) {
-            return currentTrackingWorkSections
-        }
-        val graphRelations = if (anchorEntity.type == EntityType.WORK && trackingDetails != null) {
-            relations.filterNot { relation ->
-                relation.type == RelationType.CREATED_BY || relation.type == RelationType.HAS_CHARACTER
-            }
-        } else {
-            relations
-        }
-        val relatedIds = graphRelations.mapNotNull { relation ->
-            relation.toEntityId.takeIf { it != entityId } ?: relation.fromEntityId.takeIf { it != entityId }
-        }.distinct()
-        val relatedEntities = entityGraphRepository.getEntitiesByIds(relatedIds).associateBy(Entity::id)
-        val relationSections = graphRelations.groupBy(Relation::type).mapNotNull { (relationType, typeRelations) ->
-            if (anchorEntity.type == EntityType.WORK && relationType == RelationType.BELONGS_TO) {
-                return@mapNotNull null
-            }
-            val items = typeRelations.mapNotNull { relation ->
-                val relatedId = relation.relatedEntityId(entityId) ?: return@mapNotNull null
-                val related = relatedEntities[relatedId] ?: return@mapNotNull null
-                val trackingCharacterPresentation = resolveTrackingCharacterPresentation(related, trackingDetails)
-                    ?: resolveTrackingCharacterPresentationFromRelatedWorks(related)
-                val trackingStaffRole = if (relationType == RelationType.CREATED_BY) {
-                    resolveTrackingStaffRole(related, trackingDetails)
-                } else {
-                    null
-                }
-                EntityRelationItem(
-                    stableKey = "entity:${related.id}",
-                    entityId = related.id,
-                    name = related.primaryName,
-                    type = related.type,
-                    coverUrl = resolveEntityCoverUrl(related.id)
-                        ?: trackingCharacterPresentation?.coverUrl
-                        ?: resolveTrackingRelatedCoverUrl(related, trackingDetails),
-                    subtitle = trackingCharacterPresentation?.role ?: trackingStaffRole,
-                    supportingText = trackingCharacterPresentation?.supportingText,
-                    detailLines = trackingCharacterPresentation?.detailLines.orEmpty(),
-                    trackingService = trackingDetails?.service,
-                    remoteId = resolveTrackingEntityRemoteId(related, trackingDetails?.service),
-                    url = trackingCharacterPresentation?.url,
-                )
-            }.distinctBy(EntityRelationItem::stableKey)
-            val titleRes = relationSectionTitleRes(anchorEntity.type, typeRelations.first().type) ?: return@mapNotNull null
-            items.takeIf { it.isNotEmpty() }?.let {
-                EntityRelationSection(
-                    titleRes = titleRes,
-                    items = it,
-                )
-            }
-        }
-        if (anchorEntity.type != EntityType.PERSON) {
-            return mergeEntityTrackingSections(
-                baseSections = currentTrackingWorkSections + relationSections,
-                entity = anchorEntity,
-                details = entityTrackingDetails,
-            )
-        }
-        val voicedWorks = buildPersonVoicedWorkItems(anchorEntity)
-        val merged = buildList {
-            addAll(relationSections)
-            if (voicedWorks.isNotEmpty()) {
-                add(
-                    EntityRelationSection(
-                        titleRes = R.string.entity_graph_section_voiced_works,
-                        items = voicedWorks.map { presentation ->
-                            EntityRelationItem(
-                                stableKey = "entity:${presentation.work.id}:voiced-work",
-                                entityId = presentation.work.id,
-                                name = presentation.work.primaryName,
-                                type = presentation.work.type,
-                                coverUrl = presentation.coverUrl,
-                                subtitle = presentation.subtitle,
-                                supportingText = presentation.supportingText,
-                                detailLines = presentation.detailLines,
-                                trackingService = presentation.trackingService,
-                                remoteId = presentation.remoteId,
-                                url = presentation.url,
-                            )
-                        },
-                    ),
-                )
-            }
-        }
-        return mergeEntityTrackingSections(
-            baseSections = merged,
-            entity = anchorEntity,
-            details = entityTrackingDetails,
-        )
+    private suspend fun buildEntityRelationSections(): List<EntityRelationSection> {
+        val trackingDetails = currentTrackingMetadataDetails() ?: return emptyList()
+        return buildCurrentTrackingWorkRelationSections(trackingDetails)
     }
 
-    private suspend fun buildCurrentTrackingWorkRelationSections(
+    private fun buildCurrentTrackingWorkRelationSections(
         details: TrackingSiteItemDetails,
     ): List<EntityRelationSection> {
-        val workDto = buildTrackingWorkDto(details)
         return buildList {
-            workDto.staff
+            details.staff
                 .takeIf { it.isNotEmpty() }
                 ?.let { staff ->
                     add(
                         EntityRelationSection(
                             titleRes = R.string.entity_graph_section_creators,
                             items = staff.map { person ->
-                                val remoteId = person.externalId?.toLongOrNull()
+                                val remoteId = person.id
                                 EntityRelationItem(
-                                    stableKey = "tracking:${details.service.id}:staff:${person.primaryName}:${remoteId.orEmptyKey()}",
-                                    name = person.primaryName,
+                                    stableKey = "tracking:${details.service.id}:staff:${person.name}:${remoteId.orEmptyKey()}",
+                                    name = person.name,
                                     type = EntityType.PERSON,
-                                    coverUrl = resolveTrackingPersonAvatarUrl(details, remoteId, person.primaryName),
+                                    coverUrl = person.avatarUrl.normalizedImageUrl(),
                                     subtitle = person.role?.takeIf { it.isNotBlank() },
                                     trackingService = details.service.takeIf { remoteId != null },
                                     remoteId = remoteId,
-                                    url = resolveTrackingPersonUrl(details, remoteId, person.primaryName),
+                                    url = person.url,
                                 )
                             }.distinctBy(EntityRelationItem::stableKey),
                         ),
                     )
                 }
-            workDto.characters
+            details.characters
                 .takeIf { it.isNotEmpty() }
                 ?.let { characters ->
                     add(
                         EntityRelationSection(
                             titleRes = R.string.entity_graph_section_characters,
                             items = characters.map { character ->
-                                val remoteId = character.externalId?.toLongOrNull()
-                                val sourceCharacter = details.characters.firstOrNull { it.id == remoteId }
-                                    ?: details.characters.firstOrNull {
-                                        it.name.equals(character.primaryName, ignoreCase = true)
-                                    }
+                                val remoteId = character.id.takeIf { it > 0 }
                                 EntityRelationItem(
-                                    stableKey = "tracking:${details.service.id}:character:${character.primaryName}:${remoteId.orEmptyKey()}",
-                                    name = character.primaryName,
+                                    stableKey = "tracking:${details.service.id}:character:${character.name}:${remoteId.orEmptyKey()}",
+                                    name = character.name,
                                     type = EntityType.CHARACTER,
-                                    coverUrl = sourceCharacter?.coverUrl.normalizedImageUrl(),
-                                    subtitle = sourceCharacter?.role?.takeIf { it.isNotBlank() },
-                                    supportingText = sourceCharacter?.let(::buildTrackingCharacterVoiceActorsText),
+                                    coverUrl = character.coverUrl.normalizedImageUrl(),
+                                    subtitle = character.role?.takeIf { it.isNotBlank() },
+                                    supportingText = buildTrackingCharacterVoiceActorsText(character),
                                     detailLines = character.voiceActors
-                                        .mapNotNull { it.primaryName.takeIf(String::isNotBlank) }
+                                        .mapNotNull { it.name.takeIf(String::isNotBlank) }
                                         .distinct(),
                                     trackingService = details.service.takeIf { remoteId != null },
                                     remoteId = remoteId,
-                                    url = sourceCharacter?.url?.takeIf { it.isNotBlank() },
+                                    url = character.url.takeIf { it.isNotBlank() },
                                 )
                             }.distinctBy(EntityRelationItem::stableKey),
                         ),
                     )
                 }
+            details.relatedWorks
+                .takeIf { it.isNotEmpty() }
+                ?.let { works ->
+                    add(
+                        EntityRelationSection(
+                            titleRes = R.string.details_related_works,
+                            items = works.map { work ->
+                                EntityRelationItem(
+                                    stableKey = "tracking:${details.service.id}:work:${work.id}",
+                                    name = work.title,
+                                    type = EntityType.WORK,
+                                    coverUrl = work.coverUrl.normalizedImageUrl(),
+                                    subtitle = work.relationship,
+                                    trackingService = details.service,
+                                    remoteId = work.id,
+                                    url = work.url,
+                                )
+                            }.distinctBy(EntityRelationItem::stableKey),
+                        ),
+                    )
+                }
+            details.extraSections.forEach { section ->
+                if (section.items.isNotEmpty()) {
+                    add(
+                        EntityRelationSection(
+                            title = section.title,
+                            items = section.items.mapIndexed { index, item ->
+                                EntityRelationItem(
+                                    stableKey = "tracking:${details.service.id}:extra:${item.id}:$index",
+                                    name = item.title,
+                                    coverUrl = item.coverUrl.normalizedImageUrl(),
+                                    type = EntityType.WORK,
+                                    trackingService = details.service.takeIf { item.id > 0L },
+                                    remoteId = item.id.takeIf { item.id > 0L },
+                                    subtitle = item.relationship,
+                                    url = item.url,
+                                )
+                            },
+                        ),
+                    )
+                }
+            }
         }
-    }
-
-    private fun resolveTrackingPersonAvatarUrl(
-        details: TrackingSiteItemDetails,
-        remoteId: Long?,
-        name: String,
-    ): String? {
-        val staffMatch = details.staff.firstOrNull { person ->
-            (remoteId != null && person.id == remoteId) || person.name.equals(name, ignoreCase = true)
-        }
-        staffMatch?.avatarUrl.normalizedImageUrl()?.let { return it }
-        details.characters.forEach { character ->
-            character.voiceActors.firstOrNull { person ->
-                (remoteId != null && person.id == remoteId) || person.name.equals(name, ignoreCase = true)
-            }?.avatarUrl.normalizedImageUrl()?.let { return it }
-        }
-        return null
-    }
-
-    private fun resolveTrackingPersonUrl(
-        details: TrackingSiteItemDetails,
-        remoteId: Long?,
-        name: String,
-    ): String? {
-        val staffMatch = details.staff.firstOrNull { person ->
-            (remoteId != null && person.id == remoteId) || person.name.equals(name, ignoreCase = true)
-        }
-        staffMatch?.url?.takeIf { it.isNotBlank() }?.let { return it }
-        details.characters.forEach { character ->
-            character.voiceActors.firstOrNull { person ->
-                (remoteId != null && person.id == remoteId) || person.name.equals(name, ignoreCase = true)
-            }?.url?.takeIf { it.isNotBlank() }?.let { return it }
-        }
-        return null
     }
 
     private fun Long?.orEmptyKey(): String {
         return this?.toString() ?: "none"
     }
 
-    private suspend fun buildPersonVoicedWorkItems(
-        person: Entity,
-    ): List<PersonWorkPresentation> {
-        val bindings = entityGraphRepository.getBindings(person.id)
-        val voicedCharacterIds = entityGraphRepository.getRelations(person.id)
-            .filter { it.type == RelationType.VOICED_BY }
-            .mapNotNull { it.relatedEntityId(person.id) }
-            .distinct()
-        if (voicedCharacterIds.isEmpty()) {
-            return emptyList()
-        }
-        val characters = entityGraphRepository.getEntitiesByIds(voicedCharacterIds).associateBy(Entity::id)
-        val workIds = linkedSetOf<Long>()
-        val characterIdsByWork = LinkedHashMap<Long, MutableList<Long>>()
-        voicedCharacterIds.forEach { characterId ->
-            entityGraphRepository.getRelations(characterId)
-                .filter { relation ->
-                    relation.type == RelationType.BELONGS_TO || relation.type == RelationType.HAS_CHARACTER
-                }
-                .mapNotNull { it.relatedEntityId(characterId) }
-                .forEach { workId ->
-                    workIds += workId
-                    characterIdsByWork.getOrPut(workId) { mutableListOf() } += characterId
-                }
-        }
-        if (workIds.isEmpty()) {
-            return emptyList()
-        }
-        val works = entityGraphRepository.getEntitiesByIds(workIds).associateBy(Entity::id)
-        val detailsByWorkId = mutableMapOf<Long, List<TrackingSiteItemDetails>>()
-        return workIds.mapNotNull { workId ->
-            val work = works[workId]?.takeIf { it.type == EntityType.WORK } ?: return@mapNotNull null
-            val characterIds = characterIdsByWork[workId].orEmpty()
-            val relatedDetails = detailsByWorkId.getOrPut(workId) { readTrackingDetailsForRelatedWorks(workId) }
-            val characterPresentations = characterIds.mapNotNull { characterId ->
-                val character = characters[characterId] ?: return@mapNotNull null
-                resolveCharacterPresentationForPersonWork(
-                    person = person,
-                    personBindings = bindings,
-                    character = character,
-                    detailsList = relatedDetails,
-                )
-            }
-            val uniqueCharacterNames = characterPresentations.map { it.name }.distinct()
-            val voiceActorDetails = characterPresentations
-                .flatMap { it.detailLines }
-                .distinct()
-            val supportingText = when {
-                uniqueCharacterNames.isEmpty() -> null
-                uniqueCharacterNames.size == 1 -> uniqueCharacterNames.first()
-                else -> uniqueCharacterNames.take(2).joinToString(" / ")
-            }
-            val subtitle = characterPresentations
-                .mapNotNull { it.role }
-                .distinct()
-                .firstOrNull()
-            PersonWorkPresentation(
-                work = work,
-                coverUrl = resolveEntityCoverUrl(work.id),
-                subtitle = subtitle,
-                supportingText = supportingText,
-                detailLines = voiceActorDetails,
-                trackingService = relatedDetails.firstOrNull()?.service,
-                remoteId = relatedDetails.firstOrNull()?.remoteId,
-                url = relatedDetails.firstOrNull()?.url,
-            )
-        }
-    }
-
-    private fun mergeEntityTrackingSections(
-        baseSections: List<EntityRelationSection>,
-        entity: Entity,
-        details: TrackingSiteItemDetails?,
-    ): List<EntityRelationSection> {
-        if (details == null) {
-            return baseSections
-        }
-        val extraSections = when (entity.type) {
-            EntityType.PERSON -> buildPersonEntityTrackingSections(details)
-            EntityType.CHARACTER -> buildCharacterEntityTrackingSections(details)
-            else -> emptyList()
-        }
-        if (extraSections.isEmpty()) {
-            return baseSections
-        }
-        val existingKeys = baseSections.map { it.titleRes to it.title.orEmpty() }.toSet()
-        return buildList {
-            addAll(baseSections)
-            extraSections.forEach { section ->
-                val key = section.titleRes to section.title.orEmpty()
-                val isDuplicate = key in existingKeys && baseSections.any { base ->
-                    base.titleRes == section.titleRes &&
-                        base.title == section.title &&
-                        base.items.map(EntityRelationItem::stableKey).toSet() == section.items.map(EntityRelationItem::stableKey).toSet()
-                }
-                if (!isDuplicate) {
-                    add(section)
-                }
-            }
-        }
-    }
-
-    private fun buildPersonEntityTrackingSections(
-        details: TrackingSiteItemDetails,
-    ): List<EntityRelationSection> {
-        return details.extraSections.mapNotNull { section ->
-            section.items.takeIf { it.isNotEmpty() }?.let { works ->
-                val isCharacterLikeSection = section.title.contains("character", ignoreCase = true) ||
-                    section.title.contains("角色")
-                EntityRelationSection(
-                    title = section.title,
-                    items = works.map { work ->
-                        val supportsCharacterDetails = supportsEntityTrackingDetails(details.service, EntityType.CHARACTER)
-                        EntityRelationItem(
-                            stableKey = "tracking:${details.service.id}:${work.id}:entity-person",
-                            name = work.title,
-                            coverUrl = work.coverUrl.normalizedImageUrl(),
-                            type = if (isCharacterLikeSection) EntityType.CHARACTER else EntityType.WORK,
-                            trackingService = when {
-                                !isCharacterLikeSection -> details.service
-                                supportsCharacterDetails && work.id > 0L -> details.service
-                                else -> null
-                            },
-                            remoteId = when {
-                                !isCharacterLikeSection -> work.id
-                                supportsCharacterDetails && work.id > 0L -> work.id
-                                else -> null
-                            },
-                            subtitle = work.relationship,
-                            url = work.url,
-                        )
-                    },
-                )
-            }
-        }
-    }
-
-    private fun buildCharacterEntityTrackingSections(
-        details: TrackingSiteItemDetails,
-    ): List<EntityRelationSection> {
-        val sections = mutableListOf<EntityRelationSection>()
-        details.extraSections
-            .firstOrNull {
-                it.title.contains("声优") ||
-                    it.title.contains("配音") ||
-                    it.title.contains("CV", ignoreCase = true) ||
-                    it.title.contains("voice actor", ignoreCase = true)
-            }
-            ?.items
-            ?.takeIf { it.isNotEmpty() }
-            ?.let { actors ->
-                sections += EntityRelationSection(
-                    titleRes = R.string.entity_graph_section_voice_actors,
-                    items = actors.mapIndexed { index, actor ->
-                        EntityRelationItem(
-                            stableKey = "tracking:${details.service.id}:character-actor:${actor.id}:$index",
-                            name = actor.title,
-                            coverUrl = actor.coverUrl.normalizedImageUrl(),
-                            type = EntityType.PERSON,
-                            trackingService = details.service.takeIf { actor.id > 0L },
-                            remoteId = actor.id.takeIf { it > 0L },
-                            subtitle = actor.relationship,
-                            url = actor.url,
-                        )
-                    },
-                )
-            }
-        details.relatedWorks
-            .takeIf { it.isNotEmpty() }
-            ?.let { works ->
-                sections += EntityRelationSection(
-                    titleRes = R.string.details_related_works,
-                    items = works.map { work ->
-                        EntityRelationItem(
-                            stableKey = "tracking:${details.service.id}:${work.id}:entity-character",
-                            name = work.title,
-                            coverUrl = work.coverUrl.normalizedImageUrl(),
-                            type = EntityType.WORK,
-                            trackingService = details.service,
-                            remoteId = work.id,
-                            subtitle = work.relationship,
-                            url = work.url,
-                        )
-                    },
-                )
-            }
-        return sections
-    }
-
-    private suspend fun resolveCharacterPresentationForPersonWork(
-        person: Entity,
-        personBindings: List<EntityBinding>,
-        character: Entity,
-        detailsList: List<TrackingSiteItemDetails>,
-    ): CharacterPresentationForPersonWork? {
-        val characterBindings = entityGraphRepository.getBindings(character.id)
-        val remoteIdsByService = characterBindings.remoteIdsByService()
-        for (details in detailsList) {
-            val candidateIds = remoteIdsByService[details.service.id].orEmpty().toSet()
-            val matchedCharacter = details.characters.firstOrNull { it.id in candidateIds }
-                ?: details.characters.firstOrNull { it.name.equals(character.primaryName, ignoreCase = true) }
-                ?: continue
-            val matchedPerson = matchedCharacter.voiceActors.firstOrNull { actor ->
-                actor.matchesEntity(person, personBindings, details.service)
-            }
-            val detailLines = matchedCharacter.voiceActors
-                .mapNotNull { it.name.takeIf(String::isNotBlank) }
-                .distinct()
-            return CharacterPresentationForPersonWork(
-                name = matchedCharacter.name,
-                role = matchedCharacter.role?.takeIf { it.isNotBlank() },
-                detailLines = if (matchedPerson != null) detailLines else emptyList(),
-            )
-        }
-        return CharacterPresentationForPersonWork(
-            name = character.primaryName,
-            role = null,
-            detailLines = emptyList(),
-        )
-    }
-
-    private data class CharacterPresentationForPersonWork(
-        val name: String,
-        val role: String?,
-        val detailLines: List<String>,
-    )
-
-    private suspend fun resolveTrackingRelatedCoverUrl(
-        entity: Entity,
-        details: org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails?,
-    ): String? {
-        if (details == null || entity.type != EntityType.CHARACTER) {
-            return null
-        }
-        val binding = entityGraphRepository.getBindings(entity.id).firstOrNull {
-            it.source == details.service.id.toString()
-        } ?: return null
-        val characterId = binding.externalId.toLongOrNull() ?: return null
-        return details.characters.firstOrNull { it.id == characterId }?.coverUrl.normalizedImageUrl()
-    }
-
-    private suspend fun resolveTrackingEntityRemoteId(
-        entity: Entity,
-        service: ScrobblerService?,
-    ): Long? {
-        if (service == null) {
-            return null
-        }
-        return entityGraphRepository.getBindings(entity.id)
-            .firstOrNull { it.source == service.id.toString() }
-            ?.externalId
-            ?.toLongOrNull()
-    }
-
-    private suspend fun resolveTrackingCharacterPresentation(
-        entity: Entity,
-        details: TrackingSiteItemDetails?,
-    ): TrackingCharacterPresentation? {
-        if (details == null || entity.type != EntityType.CHARACTER) {
-            return null
-        }
-        val bindings = entityGraphRepository.getBindings(entity.id)
-        val remoteIds = bindings
-            .filter { it.source == details.service.id.toString() }
-            .mapNotNull { it.externalId.toLongOrNull() }
-            .toSet()
-        val matched = details.characters.firstOrNull { it.id in remoteIds }
-            ?: details.characters.firstOrNull { it.name.equals(entity.primaryName, ignoreCase = true) }
-            ?: return null
-        val detailLines = matched.voiceActors
-            .mapNotNull { it.name.takeIf(String::isNotBlank) }
-            .distinct()
-        return TrackingCharacterPresentation(
-            coverUrl = matched.coverUrl.normalizedImageUrl(),
-            role = matched.role?.takeIf { it.isNotBlank() },
-            supportingText = buildTrackingCharacterVoiceActorsText(matched),
-            detailLines = detailLines,
-            url = matched.url.takeIf { it.isNotBlank() },
-        )
-    }
-
-    private suspend fun resolveTrackingCharacterPresentationFromRelatedWorks(
-        entity: Entity,
-    ): TrackingCharacterPresentation? {
-        if (entity.type != EntityType.CHARACTER) {
-            return null
-        }
-        val bindings = entityGraphRepository.getBindings(entity.id)
-        val remoteIdsByService = bindings.remoteIdsByService()
-        val detailsList = readTrackingDetailsForRelatedWorks(entity.id)
-        for (details in detailsList) {
-            val candidateIds = remoteIdsByService[details.service.id].orEmpty().toSet()
-            val matched = details.characters.firstOrNull { it.id in candidateIds }
-                ?: details.characters.firstOrNull { it.name.equals(entity.primaryName, ignoreCase = true) }
-                ?: continue
-            val detailLines = matched.voiceActors
-                .mapNotNull { it.name.takeIf(String::isNotBlank) }
-                .distinct()
-            return TrackingCharacterPresentation(
-                coverUrl = matched.coverUrl.normalizedImageUrl(),
-                role = matched.role?.takeIf { it.isNotBlank() },
-                supportingText = buildTrackingCharacterVoiceActorsText(matched),
-                detailLines = detailLines,
-                url = matched.url.takeIf { it.isNotBlank() },
-            )
-        }
-        return null
-    }
-
-    private fun resolveTrackingStaffRole(
-        entity: Entity,
-        details: TrackingSiteItemDetails?,
-    ): String? {
-        if (details == null || entity.type != EntityType.PERSON && entity.type != EntityType.ORGANIZATION) {
-            return null
-        }
-        val candidateNames = (listOf(entity.primaryName) + entity.aliases)
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-        details.staff.firstOrNull { staff ->
-            candidateNames.any { it.equals(staff.name, ignoreCase = true) }
-        }?.role?.takeIf { it.isNotBlank() }?.let { return it }
-        return trackingStaffCredits(details).firstNotNullOfOrNull { raw ->
-            val name = normalizeContributorName(raw)
-            if (candidateNames.none { it.equals(name, ignoreCase = true) }) {
-                null
-            } else {
-                extractTrackingCreditRole(raw)
-            }
-        }
-    }
-
-    private fun trackingStaffCredits(details: TrackingSiteItemDetails): List<String> {
-        return buildList {
-            addAll(details.authors)
-            details.infoboxProperties.forEach { (key, value) ->
-                if (key.isAuthorProperty()) {
-                    addAll(splitTrackingNames(value))
-                }
-            }
-        }
-    }
-
-    private fun extractTrackingCreditRole(raw: String): String? {
-        val trimmed = raw.trim()
-        val asciiRole = Regex("""\(([^()]*)\)\s*$""").find(trimmed)?.groupValues?.getOrNull(1)
-        val fullWidthRole = Regex("""（([^（）]*)）\s*$""").find(trimmed)?.groupValues?.getOrNull(1)
-        return (asciiRole ?: fullWidthRole)
-            ?.trim()
-            ?.takeIf { it.isNotBlank() }
-    }
-
-    private suspend fun resolveEntityCoverUrl(entityId: Long): String? {
-        val entity = entityGraphRepository.getEntity(entityId) ?: return null
-        loadEntityTrackingDetails(entity)?.coverUrl.normalizedImageUrl()?.let { return it }
-        val bindings = entityGraphRepository.getBindings(entityId)
-            .sortedWith(compareByDescending<EntityBinding> { it.isPrimary }.thenByDescending { it.confidence })
-        for (binding in bindings) {
-            resolveBindingCoverUrl(binding)?.let { return it }
-        }
-        if (entity.type == EntityType.CHARACTER) {
-            resolveCharacterCoverUrlFromRelatedWorks(entity, bindings)?.let { return it }
-        }
-        if (entity.type == EntityType.PERSON) {
-            resolvePersonAvatarUrlFromVoicedCharacters(entity, bindings)?.let { return it }
-        }
-        return null
-    }
-
-    private suspend fun resolveCharacterCoverUrlFromRelatedWorks(
-        entity: Entity,
-        bindings: List<EntityBinding>,
-    ): String? {
-        val remoteIdsByService = bindings.remoteIdsByService()
-        for (details in readTrackingDetailsForRelatedWorks(entity.id)) {
-            val candidateIds = remoteIdsByService[details.service.id].orEmpty().toSet()
-            val matched = details.characters.firstOrNull { it.id in candidateIds }
-                ?: details.characters.firstOrNull { it.name.equals(entity.primaryName, ignoreCase = true) }
-            matched?.coverUrl.normalizedImageUrl()?.let { return it }
-        }
-        return null
-    }
-
-    private suspend fun resolvePersonAvatarUrlFromVoicedCharacters(
-        entity: Entity,
-        bindings: List<EntityBinding>,
-    ): String? {
-        val characterIds = entityGraphRepository.getRelations(entity.id)
-            .filter { it.type == RelationType.VOICED_BY }
-            .mapNotNull { it.relatedEntityId(entity.id) }
-            .distinct()
-        for (characterId in characterIds) {
-            val character = entityGraphRepository.getEntity(characterId) ?: continue
-            val characterBindings = entityGraphRepository.getBindings(character.id)
-            val remoteIdsByService = characterBindings.remoteIdsByService()
-            for (details in readTrackingDetailsForRelatedWorks(character.id)) {
-                val candidateIds = remoteIdsByService[details.service.id].orEmpty().toSet()
-                val matchedCharacter = details.characters.firstOrNull { it.id in candidateIds }
-                    ?: details.characters.firstOrNull { it.name.equals(character.primaryName, ignoreCase = true) }
-                    ?: continue
-                matchedCharacter.voiceActors
-                    .firstOrNull { actor -> actor.matchesEntity(entity, bindings, details.service) }
-                    ?.avatarUrl
-                    .normalizedImageUrl()
-                    ?.let { return it }
-            }
-        }
-        return null
-    }
-
-    private suspend fun readTrackingDetailsForRelatedWorks(entityId: Long): List<TrackingSiteItemDetails> {
-        val workIds = entityGraphRepository.getRelations(entityId)
-            .filter { it.type == RelationType.BELONGS_TO || it.type == RelationType.HAS_CHARACTER }
-            .mapNotNull { it.relatedEntityId(entityId) }
-            .distinct()
-        return buildList {
-            workIds.forEach { workId ->
-                entityGraphRepository.getBindings(workId).forEach { binding ->
-                    val service = binding.trackingServiceOrNull() ?: return@forEach
-                    val remoteId = binding.externalId.toLongOrNull() ?: return@forEach
-                    val cacheKey = trackingMetadataKey(service, remoteId)
-                    val details = cachedTrackingDetails[cacheKey]
-                        ?: trackingSiteCacheRepository.readDetails(service, remoteId)?.also(::cacheTrackingDetails)
-                        ?: return@forEach
-                    add(details)
-                }
-            }
-        }.distinctBy { trackingMetadataKey(it.service, it.remoteId) }
-    }
-
-    private fun List<EntityBinding>.remoteIdsByService(): Map<Int, List<Long>> {
-        return mapNotNull { binding ->
-            val serviceId = binding.trackingServiceOrNull()?.id ?: return@mapNotNull null
-            val remoteId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
-            serviceId to remoteId
-        }.groupBy(
-            keySelector = { it.first },
-            valueTransform = { it.second },
-        )
-    }
-
-    private fun TrackingSiteItemDetails.PersonInfo.matchesEntity(
-        entity: Entity,
-        bindings: List<EntityBinding>,
-        service: ScrobblerService,
-    ): Boolean {
-        val remoteId = id?.toString()
-        if (remoteId != null && bindings.any { it.source == service.id.toString() && it.externalId == remoteId }) {
-            return true
-        }
-        return name.equals(entity.primaryName, ignoreCase = true) ||
-            entity.aliases.any { alias -> name.equals(alias, ignoreCase = true) }
-    }
-
-    private suspend fun resolveBindingCoverUrl(binding: EntityBinding): String? {
-        if (binding.isLocalReadingSource()) {
-            val localMangaId = binding.externalId.toLongOrNull() ?: return null
-            val localManga = db.getMangaDao().find(localMangaId)?.manga ?: return null
-            return localManga.largeCoverUrl.ifNullOrEmpty { localManga.coverUrl }.normalizedImageUrl()
-        }
-        val service = binding.trackingServiceOrNull() ?: return null
-        val remoteId = binding.externalId.toLongOrNull() ?: return null
-        return trackingSiteCacheRepository.readDetails(service, remoteId)?.coverUrl.normalizedImageUrl()
-    }
-
-    private fun relationSectionTitleRes(
-        anchorType: EntityType,
-        relationType: RelationType,
-    ): Int? = when (relationType) {
-        RelationType.HAS_CHARACTER -> when (anchorType) {
-            EntityType.CHARACTER -> null
-            else -> R.string.entity_graph_section_characters
-        }
-        RelationType.CREATED_BY -> when (anchorType) {
-            EntityType.PERSON, EntityType.ORGANIZATION -> R.string.entity_graph_section_created_works
-            else -> R.string.entity_graph_section_creators
-        }
-        RelationType.RELATED_TO -> R.string.entity_graph_section_related_entities
-        RelationType.VOICED_BY -> when (anchorType) {
-            EntityType.PERSON -> R.string.entity_graph_section_voiced_characters
-            else -> R.string.entity_graph_section_voice_actors
-        }
-        RelationType.BELONGS_TO -> R.string.entity_graph_section_parent_work
-    }
-
-    private fun Relation.relatedEntityId(anchorEntityId: Long): Long? {
-        return toEntityId.takeIf { it != anchorEntityId } ?: fromEntityId.takeIf { it != anchorEntityId }
-    }
-
-    private suspend fun buildActiveLocalSourceOptions(
-        bindings: List<EntityBinding>,
-        activeMangaId: Long?,
-    ): List<ActiveLocalSourceOption> {
-        val currentType = activeMangaId
-            ?.let { localMangaId ->
-                db.getMangaDao().find(localMangaId)?.manga?.let { manga ->
-                    parseStoredContentType(manga.contentType) ?: ContentSource(manga.source).resolvedContentTypeForSnapshot()
-                }
-            }
-            ?: currentBaseContentType()
-        val spaceAllowedTypes = detailsSpaceId?.let(spaceContentPolicy::allowedTypes)
-        val localMangaIds = bindings.asSequence()
-            .filter { it.isLocalReadingSource() }
-            .mapNotNull { it.externalId.toLongOrNull() }
-            .distinct()
-            .toList()
-        val localMangaOptions = localMangaIds.mapNotNull { localMangaId ->
-            val manga = db.getMangaDao().find(localMangaId)?.manga ?: return@mapNotNull null
-            if (manga.source.startsWith("TRACKING_")) {
-                return@mapNotNull null
-            }
-            val source = ContentSource(manga.source).resolveDetailsSource()
-            val projectionType = parseStoredContentType(manga.contentType)
-                ?: source.resolvedContentTypeForSnapshot()
-            if (!isDetailsProjectionAllowed(currentType, projectionType, spaceAllowedTypes)) {
-                return@mapNotNull null
-            }
-            ActiveLocalSourceOption(
-                mangaId = localMangaId,
-                title = manga.title,
-                source = source,
-                isActive = localMangaId == activeMangaId,
-            )
-        }
-        if (localMangaOptions.size <= 1) {
-            return emptyList()
-        }
-        return localMangaOptions
-    }
-
     private fun parseStoredContentType(value: String?): ContentType? {
         return value?.let { raw -> runCatching { ContentType.valueOf(raw) }.getOrNull() }
-    }
-
-    private fun updateActiveLocalSourceSelection(activeMangaId: Long) {
-        activeLocalSourceOptions.value = activeLocalSourceOptions.value.map { option ->
-            option.copy(isActive = option.mangaId == activeMangaId)
-        }
-        updateSourceOptions()
     }
 
     private fun submitEntityRelationSections(sections: List<EntityRelationSection>) {
         pendingEntityRelationSections.tryEmit(sections)
     }
-
-    private suspend fun resolveEntityChapterSourceInfo(
-        mangaId: Long?,
-        activeProjectionMangaId: Long? = null,
-        currentReadingProjectionMangaId: Long? = null,
-    ): EntityChapterSourceInfo {
-        val manga = mangaId?.let { localMangaId ->
-            db.getMangaDao().find(localMangaId)?.manga
-        }
-        val source = manga?.source?.let(::ContentSource)
-        val projectionType = manga?.let { localManga ->
-            parseStoredContentType(localManga.contentType)
-                ?: source?.resolvedContentTypeForSnapshot()
-        }
-        val isVisibleInDetails = isDetailsProjectionAllowed(
-            currentType = projectionType,
-            projectionType = projectionType,
-            spaceAllowedTypes = detailsSpaceId?.let(spaceContentPolicy::allowedTypes),
-        )
-        val projectionSnapshot = currentWorkProjectionSnapshot()
-        return EntityChapterSourceInfo(
-            source = source?.takeIf { isVisibleInDetails },
-            projectionTitle = manga?.title?.takeIf { isVisibleInDetails },
-            projectionCount = if (isVisibleInDetails) {
-                activeLocalSourceOptions.value.size.coerceAtLeast(if (manga != null) 1 else 0)
-            } else {
-                0
-            },
-            activeProjectionMangaId = (activeProjectionMangaId ?: projectionSnapshot.activeLocalMangaId)
-                .takeIf { isVisibleInDetails },
-            currentReadingProjectionMangaId = (
-                currentReadingProjectionMangaId ?: projectionSnapshot.currentReadingProjectionMangaId
-            ).takeIf { isVisibleInDetails },
-        )
-    }
-
-    fun selectActiveLocalSource(mangaId: Long) {
-        if (activeLocalSourceOptions.value.none { it.mangaId == mangaId }) {
-            return
-        }
-        if (activeMangaIdFlow.value == mangaId) {
-            // Already active; persist preferred source and clear any temporary session projection
-            launchJob(Dispatchers.IO) {
-                persistPreferredLocalSourceForCurrentEntity(mangaId)
-            }
-            if (sessionReadingProjectionLocalMangaId.value != mangaId) {
-                sessionReadingProjectionLocalMangaId.value = mangaId
-                launchJob(Dispatchers.IO) {
-                    entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(mangaId)
-                }
-                updateSourceOptions()
-            }
-            return
-        }
-        sessionReadingProjectionLocalMangaId.value = mangaId
-        val shouldFollowSelectedLocalSource = selectedMetadataSource.value !is MetadataSourceSelection.Tracking
-        currentLoadIntentOverride = ContentIntent.of(mangaId)
-        activeMangaIdFlow.value = mangaId
-        selectedBranch.value = null
-        if (shouldFollowSelectedLocalSource) {
-            selectedMetadataSource.value = MetadataSourceSelection.Base
-        }
-        updateActiveLocalSourceSelection(mangaId)
-        syncDisplayedState()
-        loadingJob.cancel()
-        launchJob(Dispatchers.IO) {
-            persistPreferredLocalSourceForCurrentEntity(mangaId)
-            persistMetadataSourceSelectionForCurrentEntity(fallbackMangaId = mangaId)
-            entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(mangaId)
-            loadingJob = doLoad(force = false)
-        }
-    }
-
-    fun removeActiveLocalSource(mangaId: Long) {
-        launchJob(Dispatchers.IO) {
-            val entityId = resolveContextualEntityId() ?: return@launchJob
-            val bindings = entityGraphRepository.getBindings(entityId)
-            val localBindings = bindings.filter {
-                it.isLocalReadingSource() && it.externalId.toLongOrNull() != null
-            }
-            android.util.Log.i("DetailsVM", "removeActiveLocalSource: entityId=$entityId mangaId=$mangaId localBindings=${localBindings.map { it.externalId }} activeMangaId=${activeMangaIdFlow.value}")
-            if (localBindings.isEmpty()) {
-                return@launchJob
-            }
-            localBindings.firstOrNull { it.externalId.toLongOrNull() == mangaId } ?: return@launchJob
-            entityGraphRepository.splitLocalWorkProjection(mangaId)
-            val nextActiveMangaId = if (activeMangaIdFlow.value == mangaId) {
-                localBindings.firstNotNullOfOrNull { binding ->
-                    binding.externalId.toLongOrNull()?.takeIf { it != mangaId }
-                }
-            } else {
-                activeMangaIdFlow.value
-            }
-            if (nextActiveMangaId != null && nextActiveMangaId != activeMangaIdFlow.value) {
-                currentLoadIntentOverride = ContentIntent.of(nextActiveMangaId)
-                activeMangaIdFlow.value = nextActiveMangaId
-                selectedBranch.value = null
-                selectedMetadataSource.value = MetadataSourceSelection.Base
-                updateActiveLocalSourceSelection(nextActiveMangaId)
-                syncDisplayedState()
-                persistPreferredLocalSourceForCurrentEntity(nextActiveMangaId)
-                persistMetadataSourceSelectionForCurrentEntity(fallbackMangaId = nextActiveMangaId)
-                loadingJob.cancel()
-                loadingJob = doLoad(force = false)
-            }
-            refreshEntityBoundLocalSources(
-                entityId = entityId,
-                activeMangaId = nextActiveMangaId ?: return@launchJob,
-            )
-        }
-    }
-
-    fun selectReadingProjection(mangaId: Long) {
-        if (activeLocalSourceOptions.value.none { it.mangaId == mangaId }) {
-            return
-        }
-        if (sessionReadingProjectionLocalMangaId.value == mangaId) {
-            return
-        }
-            sessionReadingProjectionLocalMangaId.value = mangaId
-            launchJob(Dispatchers.IO) {
-                entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(currentWorkProjectionSnapshot().activeLocalMangaId)
-            }
-            updateSourceOptions()
-        }
 
     fun selectMetadataSource(option: DetailsSourceOption) {
         when {
@@ -4383,7 +2871,6 @@ class DetailsViewModel @Inject constructor(
         val remoteId = option.remoteId ?: return
         launchJob(Dispatchers.IO) {
             val activeLocalMangaId = resolveCurrentMetadataPersistenceMangaId()
-            entityGraphRepository.deleteTrackingBinding(service, remoteId)
             if (activeLocalMangaId != null) {
                 trackingSiteMatcher.removeMatch(service, activeLocalMangaId)
             }
@@ -4501,7 +2988,6 @@ class DetailsViewModel @Inject constructor(
             }.getOrNull()
             if (details != null) {
                 cacheTrackingDetails(details)
-                ingestTrackingDetailsIntoEntityGraph(details)
                 trackingSiteCacheRepository.saveDetails(details)
             }
             val localMangaId = resolveCurrentLocalMangaId()
@@ -5053,83 +3539,42 @@ class DetailsViewModel @Inject constructor(
         return filter
     }
 
-    fun bindReadingCandidateToTracking(content: Content, onComplete: (() -> Unit)? = null) {
+    /**
+     * Switches the reading source to [content] from another source.
+     *
+     * With a local manga on screen this is a migration: favourites, history (mapped to the
+     * new source's chapters), preferences, tracking and scrobbling move to the new manga row,
+     * as in the alternatives screen. A details page opened from a tracking item has no local
+     * manga yet, so the candidate simply becomes its first reading source.
+     */
+    fun switchReadingSource(content: Content, onComplete: (() -> Unit)? = null) {
         val selection = selectedMetadataSource.value as? MetadataSourceSelection.Tracking
-        launchJob(Dispatchers.IO + SkipErrors) {
-            var bindingSucceeded = false
-            try {
-                val targetEntityId = activeEntityContextId ?: resolveContextualEntityId()
-                if (targetEntityId == null) {
-                    errorEvent.call(IllegalStateException("Unable to resolve the current Work"))
-                    return@launchJob
+        launchLoadingJob(Dispatchers.IO) {
+            val currentContent = resolveCurrentLocalContent()
+            val targetContent = dataRepository.storeContentAndReturn(content, replaceExisting = false)
+            if (currentContent != null && currentContent.id != targetContent.id) {
+                migrateUseCase(currentContent, targetContent)
+            }
+            activeMangaIdFlow.value = targetContent.id
+            currentLoadIntentOverride = ContentIntent.of(targetContent.id)
+            loadingJob.cancel()
+            loadingJob = doLoad(force = true)
+            if (selection != null) {
+                runCatchingCancellable {
+                    trackingSiteMatcher.confirmMatch(selection.service, targetContent.id, selection.remoteId)
                 }
-                val bindingResult = attachReadingSourceToEntityUseCase.attachToEntity(
-                    targetEntityId = targetEntityId,
-                    newContent = content,
-                )
-                if (bindingResult !is WorkProjectionBindingResult.Success) {
-                    val conflict = bindingResult as WorkProjectionBindingResult.Conflict
-                    Log.w(
-                        DETAILS_TRACE_TAG,
-                        "reading source bind rejected: targetEntityId=$targetEntityId " +
-                            "projectionId=${conflict.projectionId} reason=${conflict.reason}",
-                    )
-                    errorEvent.call(IllegalStateException("Reading source binding failed: ${conflict.reason}"))
-                    return@launchJob
+                runCatchingCancellable {
+                    persistMetadataSourceSelectionForCurrentEntity()
                 }
-                val targetContent = bindingResult.projection
-                refreshEntityBoundLocalSources(
-                    entityId = bindingResult.entityId,
-                    activeMangaId = targetContent.id,
-                )
-                activeMangaIdFlow.value = targetContent.id
-                currentLoadIntentOverride = ContentIntent.of(targetContent.id)
-                loadingJob.cancel()
-                loadingJob = doLoad(force = true)
-                if (selection != null) {
-                    runCatchingCancellable {
-                        trackingSiteMatcher.confirmMatch(selection.service, targetContent.id, selection.remoteId)
-                    }
-                    runCatchingCancellable {
-                        persistMetadataSourceSelectionForCurrentEntity()
-                    }
-                }
-                bindingSucceeded = true
-            } finally {
-                if (bindingSucceeded) {
-                    withContext(Dispatchers.Main) {
-                        onComplete?.invoke()
-                    }
-                }
+            }
+            withContext(Dispatchers.Main) {
+                onComplete?.invoke()
             }
         }
     }
 
-    private suspend fun refreshEntityBoundLocalSources(
-        entityId: Long,
-        activeMangaId: Long,
-    ) {
-        val identity = workResolver.resolveByEntityId(entityId) ?: return
-        if (activeMangaId !in identity.localMangaIds) {
-            return
-        }
-        val bindings = workResolver.resolveBindingsByEntityId(entityId)
-        activeEntityContextId = entityId
-        activeEntityContextBindings = bindings
-        activeEntityContextBoundLocalId = activeMangaId
-        sessionReadingProjectionLocalMangaId.value = activeMangaId
-        activeLocalSourceOptions.value = buildActiveLocalSourceOptions(bindings, activeMangaId)
-        entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(
-            mangaId = activeMangaId,
-            activeProjectionMangaId = activeMangaId,
-            currentReadingProjectionMangaId = activeMangaId,
-        )
-        updateSourceOptions()
-        refreshResolvedPresentationState()
-    }
-
     private suspend fun resolveCurrentLocalMangaId(): Long? {
-        currentWorkProjectionSnapshot().activeLocalMangaId?.let { return it }
+        currentWorkContentSnapshot().activeLocalMangaId?.let { return it }
         val currentContent = manga.filterNotNull().firstOrNull()
         if (currentContent?.isLocal == true) {
             return currentContent.id
@@ -5138,10 +3583,10 @@ class DetailsViewModel @Inject constructor(
     }
 
     private fun preferredFallbackTrackingMangaIds(): List<Long> {
-        val projectionSnapshot = currentWorkProjectionSnapshot()
+        val contentSnapshot = currentWorkContentSnapshot()
         return buildList {
-            projectionSnapshot.currentReadingProjectionMangaId?.let(::add)
-            projectionSnapshot.activeLocalMangaId?.let(::add)
+            contentSnapshot.currentReadingMangaId?.let(::add)
+            contentSnapshot.activeLocalMangaId?.let(::add)
             baseLoadedDetails?.local?.manga?.id?.let(::add)
         }.distinct()
     }
@@ -5161,7 +3606,6 @@ class DetailsViewModel @Inject constructor(
     fun refreshSourceBindings() {
         sourceBindingsRefreshJob?.cancel()
         sourceBindingsRefreshJob = launchJob(Dispatchers.IO) {
-            refreshActiveEntitySourceOptions()
             updateSourceOptions()
             refreshResolvedPresentationState()
         }
@@ -5182,7 +3626,7 @@ class DetailsViewModel @Inject constructor(
 
     fun updateUnifiedReadingStatus(status: ScrobblingStatus) {
         launchJob(Dispatchers.Default) {
-            val currentMangaId = ensureCurrentWorkProjection() ?: return@launchJob
+            val currentMangaId = ensureCurrentWorkContent() ?: return@launchJob
             dataRepository.setReadingStatus(currentMangaId, status)
             linkedTrackingItems.value.forEach { linked ->
                 if (!linked.hasScrobblingBinding) return@forEach
@@ -5282,77 +3726,22 @@ class DetailsViewModel @Inject constructor(
         .withErrorHandling()
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, emptyList())
 
-    val duplicateFavoritePrompt = MutableStateFlow<FavoriteDuplicatePrompt?>(null)
-
     fun setFavouriteCategory(categoryId: Long, isChecked: Boolean) {
         launchJob(Dispatchers.Default) {
             val content = getContentOrNull() ?: return@launchJob
             if (isChecked) {
-                val candidates = duplicateCandidateRepository.findCandidates(content)
-                if (candidates.isNotEmpty()) {
-                    duplicateFavoritePrompt.value = FavoriteDuplicatePrompt(
-                        categoryId = categoryId,
-                        contentTitle = content.title,
-                        candidates = candidates.take(MAX_DUPLICATE_PROMPT_CANDIDATES),
-                    )
-                    return@launchJob
-                }
                 favouritesRepository.addToCategory(categoryId, listOf(content))
             } else {
                 favouritesRepository.removeFromCategory(categoryId, listOf(content.id))
             }
-            activateStoredWorkProjection(content)
         }
     }
 
-    fun confirmDuplicateFavourite() {
-        val prompt = duplicateFavoritePrompt.value ?: return
-        duplicateFavoritePrompt.value = null
-        launchJob(Dispatchers.Default) {
-            val content = getContentOrNull() ?: return@launchJob
-            favouritesRepository.addToCategoryAsSeparateWorks(prompt.categoryId, listOf(content))
-            activateStoredWorkProjection(content)
-        }
-    }
-
-    fun dismissDuplicateFavourite() {
-        duplicateFavoritePrompt.value = null
-    }
-
-    fun mergeBackDuplicateFavourite() {
-        val prompt = duplicateFavoritePrompt.value ?: return
-        val targetEntityId = prompt.mergeBackTargetEntityId ?: return
-        duplicateFavoritePrompt.value = null
-        launchJob(Dispatchers.Default) {
-            val content = getContentOrNull() ?: return@launchJob
-            mergeBackAndAddFavouriteUseCase(
-                categoryId = prompt.categoryId,
-                content = content,
-                targetEntityId = targetEntityId,
-            )
-            activateStoredWorkProjection(content)
-        }
-    }
-
-    private suspend fun ensureCurrentWorkProjection(): Long? {
+    private suspend fun ensureCurrentWorkContent(): Long? {
         resolveCurrentLocalMangaId()?.let { return it }
         val content = getContentOrNull() ?: return null
         val storedContent = dataRepository.storeContentAndReturn(content, replaceExisting = false)
-        workResolver.ensureForProjection(
-            content = storedContent,
-            provenance = org.skepsun.kototoro.work.domain.WorkIdentityProvenance.USER,
-        )
-        return activateStoredWorkProjection(storedContent)
-    }
-
-    private suspend fun activateStoredWorkProjection(content: Content): Long? {
-        val storedContent = dataRepository.resolveStoredProjection(content)
-        val entityId = workResolver.resolveByMangaId(storedContent.id).entityId ?: return null
         activeMangaIdFlow.value = storedContent.id
-        refreshEntityBoundLocalSources(
-            entityId = entityId,
-            activeMangaId = storedContent.id,
-        )
         return storedContent.id
     }
 
@@ -5439,16 +3828,13 @@ class DetailsViewModel @Inject constructor(
                     "load.apply details=${finalDetails.toContent().detailsTraceSummary()} selectedBranchAfter=${selectedBranch.value}",
                 )
                 baseLoadedDetails = finalDetails
-                activeProjectionStoredContentType = db.getMangaDao().find(finalDetails.id)?.manga?.contentType?.let(::parseStoredContentType)
-                refreshActiveEntitySourceOptions()
+                activeStoredContentType = db.getMangaDao().find(finalDetails.id)?.manga?.contentType?.let(::parseStoredContentType)
                 syncDisplayedState()
                 trackingRepository.clearReadUpdates(finalDetails.id)
-                val localEntityId = entityGraphRepository.findEntityByBinding("0", finalDetails.id.toString())?.id
-                    ?: entityGraphRepository.findEntityByBinding("local_manga", finalDetails.id.toString())?.id
-                if (localEntityId != null && !isTrackingOriginSelectionPinned()) {
-                    restoreEntityMetadataSourceSelection(entityId = localEntityId)
+                if (!isTrackingOriginSelectionPinned()) {
+                    restorePersistedMetadataSourceSelection(finalDetails.id)
                 }
-                }
+            }
         } catch (error: Throwable) {
             if (error !is CancellationException) {
                 Log.e(DETAILS_TRACE_TAG, "load.failed force=$force requestedMangaId=$requestedMangaId", error)

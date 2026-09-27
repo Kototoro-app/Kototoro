@@ -52,12 +52,9 @@ class FavouritesQuickFilterOptionsTest {
         progressPercent = null,
         progressTotalChapters = null,
         lastReadAt = null,
-        projectionCount = 1,
-        projectionSourceNames = setOf(sourceName),
         tagIds = tagIds,
         displayTags = emptyList(),
         isDownloaded = false,
-        hasBrokenProjection = false,
         overrideTitle = null,
         overrideCoverUrl = null,
         metadataTrackingService = null,
@@ -180,7 +177,6 @@ class FavouritesQuickFilterOptionsTest {
         assertTrue(ListFilterOption.Macro.NEW_CHAPTERS !in gated, "tracker off hides new chapters")
         assertTrue(ListFilterOption.SFW !in gated, "an nsfw-excluded library hides the rating chips")
         assertTrue(ListFilterOption.Macro.NSFW !in gated)
-        assertTrue(ListFilterOption.Macro.MULTI_PROJECTION in gated, "the entity chips always stay")
         assertTrue(gated.any { it is ListFilterOption.Source }, "the plain source chip stays")
     }
 }

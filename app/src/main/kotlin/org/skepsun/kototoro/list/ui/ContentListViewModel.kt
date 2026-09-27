@@ -226,8 +226,6 @@ abstract class ContentListViewModel(
         selectedCategoryIds.value = ids
     }
 
-    override fun resolveEntityIdForUiItemId(id: Long): Long? = null
-
     override fun retainPagingSnapshot(snapshot: RetainedPagingSnapshot) =
         retainedPagingSnapshotStore.retainPagingSnapshot(snapshot)
 
@@ -236,8 +234,6 @@ abstract class ContentListViewModel(
 
     override fun clearRetainedPagingSnapshot(generation: Long) =
         retainedPagingSnapshotStore.clearRetainedPagingSnapshot(generation)
-
-    override fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? = null
 
     val isIncognitoModeEnabled: Boolean
         get() = settings.isIncognitoModeEnabled

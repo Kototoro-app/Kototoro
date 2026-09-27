@@ -3,7 +3,7 @@ package org.skepsun.kototoro.search.ui.suggestion.model
 import androidx.annotation.StringRes
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.ui.widgets.ChipModel
-import org.skepsun.kototoro.entitygraph.domain.EntityType
+import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 import org.skepsun.kototoro.list.ui.ListModelDiffCallback
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.parsers.model.Content

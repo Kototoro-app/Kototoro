@@ -9,8 +9,6 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.ChapterEntity
 import org.skepsun.kototoro.core.db.entity.MangaEntity
-import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
-import org.skepsun.kototoro.favourites.data.FavouriteCategoryMembership
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
 import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.core.util.progress.Progress
@@ -30,8 +28,8 @@ class AniyomiBackupExportRepository @Inject constructor(
     ): MihonBackupExportSummary {
         progress?.emit(Progress.INDETERMINATE)
 
-        val workState = database.readExternalBackupWorkState()
-        val candidateIds = workState.candidateMangaIds
+        val library = database.readExternalBackupLibrary()
+        val candidateIds = library.candidateMangaIds
         val mangaById = database.getMangaDao().findEntitiesByIds(candidateIds).associateBy(MangaEntity::id)
         val mangaIds = candidateIds.filter { mangaById[it]?.source.toSourceIdOrNull(MIHON_SOURCE_PREFIX) != null }
         val animeIds = candidateIds.filter { mangaById[it]?.source.toSourceIdOrNull(ANIYOMI_SOURCE_PREFIX) != null }
@@ -41,22 +39,22 @@ class AniyomiBackupExportRepository @Inject constructor(
         }
 
         val exportedIds = (mangaIds + animeIds).distinct()
-        val historyByMangaId = workState.historyByMangaId
+        val historyByMangaId = library.historyByMangaId
             .filterKeys { it in exportedIds }
         val chaptersByMangaId = database.getChaptersDao()
             .findAllByMangaIds(exportedIds)
             .groupBy(ChapterEntity::mangaId)
-        val favoriteEntriesByMangaId = workState.favouriteEntriesByMangaId
-        val categoryMembershipsByMangaId = workState.categoryMembershipsByMangaId
+        val favoriteEntriesByMangaId = library.favouriteEntriesByMangaId
             .filterKeys { it in exportedIds }
         val categoriesById = database.getFavouriteCategoriesDao()
             .findAll()
             .associateBy { it.categoryId.toLong() }
-        val categoryOrderById = categoriesById.mapValues { (_, category) -> category.sortKey.toLong() }
-        val exportedCategoryIds = categoryMembershipsByMangaId.values
+        val exportedCategories = favoriteEntriesByMangaId.values
             .flatten()
-            .map(FavouriteCategoryMembership::categoryId)
+            .map(FavouriteEntity::categoryId)
             .distinct()
+            .mapNotNull(categoriesById::get)
+        val categoryOrderById = MihonBackupExportMapper.assignCategoryOrders(exportedCategories)
         val tagTitlesByMangaId = loadTagTitlesByMangaId(exportedIds)
 
         val total = exportedIds.size
@@ -95,7 +93,7 @@ class AniyomiBackupExportRepository @Inject constructor(
                     favorite = isFavorite,
                     chapters = chapterBackups,
                     categories = MihonBackupExportMapper.mapCategoryOrders(
-                        categoryMemberships = categoryMembershipsByMangaId[mangaId].orEmpty(),
+                        categoryMemberships = favoriteEntriesByMangaId[mangaId].orEmpty(),
                         categoryOrderById = categoryOrderById,
                     ),
                     history = listOfNotNull(historyBackup),
@@ -146,7 +144,7 @@ class AniyomiBackupExportRepository @Inject constructor(
                     favorite = isFavorite,
                     episodes = episodeBackups,
                     categories = MihonBackupExportMapper.mapCategoryOrders(
-                        categoryMemberships = categoryMembershipsByMangaId[mangaId].orEmpty(),
+                        categoryMemberships = favoriteEntriesByMangaId[mangaId].orEmpty(),
                         categoryOrderById = categoryOrderById,
                     ),
                     history = listOfNotNull(historyBackup),
@@ -164,15 +162,15 @@ class AniyomiBackupExportRepository @Inject constructor(
 
         val backup = AniyomiBackup(
             backupManga = backupManga,
-            backupCategories = exportedCategoryIds.mapNotNull(categoriesById::get)
-                .sortedBy(FavouriteCategoryEntity::sortKey)
+            backupCategories = exportedCategories
                 .map { category ->
                     MihonBackupCategory(
                         name = category.title,
-                        order = category.sortKey.toLong(),
+                        order = categoryOrderById.getValue(category.categoryId.toLong()),
                         id = category.categoryId.toLong(),
                     )
-                },
+                }
+                .sortedBy(MihonBackupCategory::order),
             backupAnime = backupAnime,
         )
         GZIPOutputStream(output).use { gzip ->

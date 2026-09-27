@@ -34,7 +34,6 @@ import org.skepsun.kototoro.main.domain.ReadingResumeEnabledUseCase
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 data class MainReaderRequest(
@@ -52,7 +51,6 @@ class MainViewModel @Inject constructor(
     readingResumeEnabledUseCase: ReadingResumeEnabledUseCase,
     private val sourcesRepository: ContentSourcesRepository,
     private val contentDataRepository: ContentDataRepository,
-    private val workResolver: WorkResolver,
 ) : BaseViewModel() {
 
     val onOpenReader = MutableEventFlow<MainReaderRequest>()
@@ -157,12 +155,7 @@ class MainViewModel @Inject constructor(
                 excludeNsfw = settings.isHistoryExcludeNsfw,
             ) ?: throw EmptyHistoryException()
             val history = historyRepository.getOne(rawContent)
-            val entityId = workResolver.resolveByMangaId(rawContent.id).entityId
-            val preferredLocalMangaId = entityId?.let { workResolver.selectPreferredProjection(it) }
-            val resolvedBase = preferredLocalMangaId
-                ?.takeIf { it != rawContent.id }
-                ?.let { contentDataRepository.findDisplayContentById(it, withChapters = false) }
-                ?: rawContent
+            val resolvedBase = rawContent
             val content = if (
                 resolvedBase.looksLikeLocalVideoContent() &&
                 resolvedBase.source.getContentType() != org.skepsun.kototoro.parsers.model.ContentType.VIDEO

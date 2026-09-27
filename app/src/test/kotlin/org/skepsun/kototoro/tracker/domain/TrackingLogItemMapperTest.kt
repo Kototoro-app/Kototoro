@@ -80,42 +80,17 @@ class TrackingLogItemMapperTest {
 	}
 
 	@Test
-	fun `fromAllTrackedContent matches unread state by work owner`() {
-		val workTrack = contentTracking(
-			mangaId = 7L,
-			entityId = 70L,
-			newChapters = 1,
-		)
-		val legacyTrack = contentTracking(
-			mangaId = 8L,
-			entityId = null,
-			newChapters = 1,
-		)
+	fun `fromAllTrackedContent matches unread state by manga owner`() {
+		val unread = contentTracking(mangaId = 7L, newChapters = 1)
+		val read = contentTracking(mangaId = 8L, newChapters = 1)
 
 		val result = TrackingLogItemMapper.fromAllTrackedContent(
-			tracks = listOf(workTrack, legacyTrack),
-			chapters = emptyList(),
-			unreadOwnerIds = setOf(70L, -8L),
-		)
-
-		result.map { it.isNew } shouldContainExactly listOf(true, true)
-	}
-
-	@Test
-	fun `fromAllTrackedContent does not treat manga id as unread work owner`() {
-		val track = contentTracking(
-			mangaId = 7L,
-			entityId = 70L,
-			newChapters = 1,
-		)
-
-		val result = TrackingLogItemMapper.fromAllTrackedContent(
-			tracks = listOf(track),
+			tracks = listOf(unread, read),
 			chapters = emptyList(),
 			unreadOwnerIds = setOf(7L),
 		)
 
-		result.single().isNew shouldBe false
+		result.map { it.isNew } shouldContainExactly listOf(true, false)
 	}
 
 	private fun contentTracking(

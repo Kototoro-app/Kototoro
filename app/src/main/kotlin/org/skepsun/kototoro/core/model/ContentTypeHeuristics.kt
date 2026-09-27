@@ -44,3 +44,48 @@ fun Content.looksLikeLocalVideoContent(): Boolean {
     }
     return chapters?.any { it.looksLikeVideoChapter() } == true
 }
+
+/**
+ * Replacement for the former Work-level content-type rule.
+ *
+ * A details page may only expose works that belong to the same content-type
+ * family (manga / novel / video / other) as the selected one. Unknown types are
+ * rejected so legacy data cannot widen the result set.
+ */
+fun ContentType?.isSameContentFamilyAs(other: ContentType?): Boolean {
+    if (this == null || other == null) {
+        return false
+    }
+    return contentFamily() == other.contentFamily()
+}
+
+private fun ContentType.contentFamily(): ContentTypeFamily = when (this) {
+    ContentType.MANGA,
+    ContentType.MANHWA,
+    ContentType.MANHUA,
+    ContentType.HENTAI_MANGA,
+    ContentType.COMICS,
+    ContentType.ONE_SHOT,
+    ContentType.DOUJINSHI,
+    ContentType.IMAGE_SET,
+    ContentType.ARTIST_CG,
+    ContentType.GAME_CG,
+        -> ContentTypeFamily.MANGA
+
+    ContentType.NOVEL,
+    ContentType.HENTAI_NOVEL,
+        -> ContentTypeFamily.NOVEL
+
+    ContentType.VIDEO,
+    ContentType.HENTAI_VIDEO,
+        -> ContentTypeFamily.VIDEO
+
+    ContentType.OTHER -> ContentTypeFamily.OTHER
+}
+
+private enum class ContentTypeFamily {
+    MANGA,
+    NOVEL,
+    VIDEO,
+    OTHER,
+}

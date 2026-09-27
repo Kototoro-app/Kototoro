@@ -13,7 +13,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.util.ext.toRequestBody
-import org.skepsun.kototoro.entitygraph.domain.EntityType
+import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 import org.skepsun.kototoro.parsers.util.await
 import org.skepsun.kototoro.parsers.util.json.getStringOrNull
 import org.skepsun.kototoro.parsers.util.json.mapJSON
@@ -26,8 +26,7 @@ import org.skepsun.kototoro.scrobbling.common.data.ScrobblerRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerStorage
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingTargetKey
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
-import org.skepsun.kototoro.scrobbling.common.data.attachEntityOwnership
-import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByManga
 import org.skepsun.kototoro.scrobbling.common.data.preferredScrobblingByTargetAndMediaType
 import org.skepsun.kototoro.scrobbling.common.data.upsertScrobbling
 import org.skepsun.kototoro.scrobbling.common.domain.ScrobblerAuthRequiredException
@@ -36,7 +35,6 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContentInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -55,7 +53,6 @@ class ShikimoriRepository @Inject constructor(
     @ScrobblerType(ScrobblerService.SHIKIMORI) private val okHttp: OkHttpClient,
     @ScrobblerType(ScrobblerService.SHIKIMORI) private val storage: ScrobblerStorage,
     private val db: MangaDatabase,
-    private val workResolver: WorkResolver,
 ) : ScrobblerRepository {
 
     private val clientId = context.getString(R.string.shikimori_clientId)
@@ -106,7 +103,7 @@ class ShikimoriRepository @Inject constructor(
         }
 
     override suspend fun unregister(mangaId: Long) {
-        return db.deleteScrobblingByWorkOrManga(ScrobblerService.SHIKIMORI.id, mangaId, workResolver)
+        return db.deleteScrobblingByManga(ScrobblerService.SHIKIMORI.id, mangaId)
     }
 
     override fun logout() {
@@ -304,7 +301,7 @@ class ShikimoriRepository @Inject constructor(
         db.withTransaction {
             db.getScrobblingDao().deleteByScrobbler(ScrobblerService.SHIKIMORI.id)
             synced.forEach { entity ->
-                db.upsertScrobbling(entity, workResolver)
+                db.upsertScrobbling(entity)
             }
         }
         return synced.size
@@ -1085,7 +1082,7 @@ class ShikimoriRepository @Inject constructor(
             rating = (json.getDouble("score").toFloat() / 10f).coerceIn(0f, 1f),
             mediaType = json.getStringOrNull("target_type").orEmpty(),
         )
-        db.upsertScrobbling(entity, workResolver)
+        db.upsertScrobbling(entity)
     }
 
     private fun ScrobblerContent(json: JSONObject, sourceTitle: String): ScrobblerContent {

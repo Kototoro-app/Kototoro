@@ -154,9 +154,8 @@ class AppBackupAgentTest {
 		}
 		runTest {
 			// 旧备份含 6 条历史，其中「Воспоминания Эманон」出现两次（不同 URL）；
-			// work 实体模型下同名漫画按标题合并为同一 WORK，work_history 以实体为
-			// 主键 upsert，聚合后为 5 条——这是当前架构的预期结果。
-			assertEquals(5, historyRepository.observeAll().first().size)
+			// 投影优先下每个 (source, url) 都是独立的 manga，不按标题合并，所以是 6 条。
+			assertEquals(6, historyRepository.observeAll().first().size)
 			assertEquals(2, favouritesRepository.observeCategories().first().size)
 			assertEquals(15, favouritesRepository.getAllContent().size)
 		}

@@ -233,7 +233,7 @@ class ComposeSceneHorizontalInteractionTest {
     }
 
     @Test
-    fun `SceneAxisProjection maps physical drag velocities to forward reading velocity`() {
+    fun `SceneAxisContent maps physical drag velocities to forward reading velocity`() {
         // In LTR: dragging finger left (deltaX > 0) -> velocityX is positive -> forward velocity is positive
         val motionLtrForward = ViewportMotion(velocityX = 1500f, velocityY = 0f)
         val ltrForwardVelocity = SceneAxisProjection.forwardVelocity(motionLtrForward, SceneReadingDirection.LEFT_TO_RIGHT)
@@ -252,7 +252,7 @@ class ComposeSceneHorizontalInteractionTest {
     }
 
     @Test
-    fun `SceneAxisProjection expands viewport ahead and behind based on reading direction`() {
+    fun `SceneAxisContent expands viewport ahead and behind based on reading direction`() {
         val baseVp = ReaderViewport(FloatRect.fromLtwh(1000f, 0f, 1000f, 1200f))
 
         // LTR expansion: ahead = +2000 (right), behind = -500 (left)

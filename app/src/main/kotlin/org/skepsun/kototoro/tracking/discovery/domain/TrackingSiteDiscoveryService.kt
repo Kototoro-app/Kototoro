@@ -1,7 +1,7 @@
 package org.skepsun.kototoro.tracking.discovery.domain
 
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
-import org.skepsun.kototoro.entitygraph.domain.EntityType
+import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 
 interface TrackingSiteDiscoveryService {
 

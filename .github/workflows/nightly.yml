@@ -7,11 +7,15 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: nightly-build
+  group: nightly-build-${{ github.ref_name }}
   cancel-in-progress: true
 
 env:
   NIGHTLY_REPOSITORY: Kototoro-app/Kototoro-Nightly
+  # Scheduled runs build devel; a manual run builds the branch it was dispatched on.
+  BUILD_REF: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || 'devel' }}
+  # Only devel builds reach the public Nightly channel that users update from over OTA.
+  PUBLISH_NIGHTLY: ${{ github.event_name != 'workflow_dispatch' || github.ref_name == 'devel' }}
 
 jobs:
   build:
@@ -21,10 +25,10 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout devel
+      - name: Checkout ${{ env.BUILD_REF }}
         uses: actions/checkout@v4
         with:
-          ref: devel
+          ref: ${{ env.BUILD_REF }}
           submodules: recursive
           fetch-depth: 0
 
@@ -78,18 +82,33 @@ jobs:
           done
 
           echo "version_name=${version_name}" >> "$GITHUB_OUTPUT"
+          echo "built_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=Kototoro-${version_name}-$(echo "$BUILD_REF" | tr '/' '-')" >> "$GITHUB_OUTPUT"
           echo "tag=nightly-${date_utc}" >> "$GITHUB_OUTPUT"
           find release -type f -maxdepth 1 -print
 
+      # Branch builds are for device testing: ship the arm64-v8a APK only, not every ABI.
+      - name: Upload branch build
+        if: env.PUBLISH_NIGHTLY != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.assets.outputs.artifact_name }}
+          path: release/*-arm64-v8a-nightly.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
       - name: Publish Nightly Release
+        if: env.PUBLISH_NIGHTLY == 'true'
         env:
           GH_TOKEN: ${{ secrets.NIGHTLY_RELEASE_TOKEN }}
           TAG_NAME: ${{ steps.assets.outputs.tag }}
           VERSION_NAME: ${{ steps.assets.outputs.version_name }}
+          BUILT_SHA: ${{ steps.assets.outputs.built_sha }}
         run: |
           set -euo pipefail
           test -n "$GH_TOKEN"
-          notes="Automated Nightly build from devel at ${GITHUB_SHA}."
+          notes="Automated Nightly build from ${BUILD_REF} at ${BUILT_SHA}."
 
           if gh release view "$TAG_NAME" --repo "$NIGHTLY_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG_NAME" release/*.apk \

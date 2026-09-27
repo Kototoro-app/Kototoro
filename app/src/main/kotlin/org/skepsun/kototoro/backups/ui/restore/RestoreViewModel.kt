@@ -43,12 +43,13 @@ class RestoreViewModel @Inject constructor(
     val availableEntries = MutableStateFlow<List<BackupSectionModel>>(emptyList())
     val backupDate = MutableStateFlow<Date?>(null)
     val restoreMode = MutableStateFlow(BackupRepository.RestoreMode.SNAPSHOT_REPLACE)
+    val restoreFormat = MutableStateFlow<BackupRestoreFormat?>(null)
 
-    fun initialize(uri: Uri, restoreFormat: BackupRestoreFormat) {
+    fun initialize(uri: Uri) {
         if (this.uri != null) return
         this.uri = uri
         launchLoadingJob(Dispatchers.Default) {
-            loadBackupInfo(restoreFormat)
+            loadBackupInfo()
         }
     }
 
@@ -56,7 +57,7 @@ class RestoreViewModel @Inject constructor(
         restoreMode.value = mode
     }
 
-    private suspend fun loadBackupInfo(restoreFormat: BackupRestoreFormat) {
+    private suspend fun loadBackupInfo() {
         val sourceUri = uri ?: throw FileNotFoundException()
         val sections = runInterruptible(Dispatchers.IO) {
             val tempFile = File.createTempFile("manual_backup_restore_inspect", ".bk.zip", cacheDir)
@@ -68,7 +69,9 @@ class RestoreViewModel @Inject constructor(
                     file = tempFile,
                     operation = "manual backup restore inspection",
                 )
-                BackupPayloadGuard.requireRestoreFormat(tempFile, restoreFormat)
+                val format = BackupPayloadGuard.detectRestoreFormat(tempFile)
+                restoreFormat.value = format
+                restoreMode.value = format.defaultRestoreMode
             } finally {
                 if (tempFile.exists()) tempFile.delete()
             }
@@ -89,15 +92,16 @@ class RestoreViewModel @Inject constructor(
                 result
             }
         }
+        val format = checkNotNull(restoreFormat.value)
         availableEntries.value = BackupSection.entries.mapNotNull { entry ->
-            if (entry == BackupSection.INDEX || !restoreFormat.supports(entry)) {
+            // Only sections the archive contains and its format may restore are offered.
+            if (entry == BackupSection.INDEX || entry !in sections || !format.supports(entry)) {
                 return@mapNotNull null
             }
-            val present = entry in sections
             val model = BackupSectionModel(
                 section = entry,
-                isChecked = present,
-                isEnabled = present,
+                isChecked = true,
+                isEnabled = true,
             )
             if (model.titleResId == 0) {
                 return@mapNotNull null

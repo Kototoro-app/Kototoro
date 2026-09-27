@@ -36,9 +36,6 @@
     <plurals name="home_enabled_sources">
         <item quantity="other">已启用 %1$d 个内容源</item>
     </plurals>
-    <plurals name="history_grouped_records">
-        <item quantity="other">%1$d 条记录</item>
-    </plurals>
     <plurals name="history_grouped_sources">
         <item quantity="other">%1$d 个来源</item>
     </plurals>

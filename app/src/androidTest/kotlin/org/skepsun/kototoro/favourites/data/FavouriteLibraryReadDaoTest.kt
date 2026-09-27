@@ -17,13 +17,10 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.parsers.util.longHashCode
 
 /**
- * Semantics tests for the narrow favourites read DAO
- * (favourites-komikku-alignment plan, section 5.1 / 5.2).
+ * Semantics tests for the narrow favourites read DAO (manga-keyed).
  *
- * The fixture mirrors [FavouriteLibrarySemanticsCharacterizationTest] so the semantics
- * documented there are directly comparable here; once the snapshot store replaces the
- * paging path, the characterization suite is deleted and this file remains the
- * authoritative contract.
+ * Every favourite manga row is its own library item: the read models keep the
+ * `entity_id` column name for the card identity, but it is the favourite's `manga_id`.
  */
 @RunWith(AndroidJUnit4::class)
 class FavouriteLibraryReadDaoTest {
@@ -49,410 +46,306 @@ class FavouriteLibraryReadDaoTest {
     // ------------------------------------------------------------------ base rows
 
     @Test
-    fun baseRowsReturnOneRowPerEntityWithRepresentativeMembership() = runTest {
+    fun baseRowsReturnOneRowPerMangaWithRepresentativeMembership() = runTest {
         val rows = dao.observeFavouriteCardBaseRows().first()
-        val byEntity = rows.associateBy { it.entityId }
+        val byManga = rows.associateBy { it.entityId }
 
-        // one row per entity
+        // one row per favourite manga
         assertEquals(rows.size, rows.map { it.entityId }.distinct().size)
-        // pinned wins over created_at (E2's representative is the older cat-11 row)
-        assertEquals(11L, byEntity.getValue(2L).let { it.entityId }.let { representeeOf(it) })
-        assertEquals(true, representativeIsPinned(2L))
+        // pinned wins over created_at (M2's representative is the older cat-11 row)
+        assertEquals(11L, representeeOf(M2))
+        assertTrue(byManga.getValue(M2).representativePinned)
         // identical everything -> lower category id
-        assertEquals(10L, representeeOf(3L))
+        assertEquals(10L, representeeOf(M3))
         // identical pinned/created -> newer updated_at
-        assertEquals(11L, representeeOf(4L))
-        // unanchored / deleted memberships never show up
-        assertNull(byEntity[21L])
-        assertNull(byEntity[22L])
+        assertEquals(11L, representeeOf(M4))
+        // deleted memberships never show up
+        assertNull(byManga[M22])
+    }
+
+    @Test
+    fun cardIdentityIsTheFavouriteManga() = runTest {
+        val rows = dao.observeFavouriteCardBaseRows().first()
+
+        rows.forEach { row ->
+            assertEquals(row.entityId, row.displayMangaId)
+            assertEquals(row.entityId, row.preferredLocalMangaId)
+            assertTrue(row.hasDisplay)
+        }
+        assertEquals("Beta", rows.single { it.entityId == M1 }.displayTitle)
     }
 
     @Test
     fun metadataAuthorityReadsTheCachedSiteItem() = runTest {
-        val byEntity = dao.observeFavouriteCardBaseRows().first().associateBy { it.entityId }
+        val byManga = dao.observeFavouriteCardBaseRows().first().associateBy { it.entityId }
 
         // 'tracking' authority with a cached item: service + title + cover arrive together
-        val tracking = byEntity.getValue(25L)
+        val tracking = byManga.getValue(M25)
         assertEquals(3, tracking.metadataTrackingService)
         assertEquals("Site Title", tracking.metadataTrackingTitle)
         assertEquals("https://site/cover.jpg", tracking.metadataTrackingCoverUrl)
 
         // authority without a cached item stays entirely null (no half-resolved display)
-        val missing = byEntity.getValue(26L)
+        val missing = byManga.getValue(M26)
         assertNull(missing.metadataTrackingService)
         assertNull(missing.metadataTrackingTitle)
         assertNull(missing.metadataTrackingCoverUrl)
 
         // 'base' authority never joins, even when a site item would match by id
-        val base = byEntity.getValue(27L)
+        val base = byManga.getValue(M27)
         assertNull(base.metadataTrackingService)
         assertNull(base.metadataTrackingTitle)
 
-        // no prefs row at all
-        assertNull(byEntity.getValue(1L).metadataTrackingService)
-    }
-
-    @Test
-    fun displayMangaFollowsPreferredThenAnchorAndKeepsBrokenRows() = runTest {
-        val byEntity = dao.observeFavouriteCardBaseRows().first().associateBy { it.entityId }
-
-        // preferred projection wins (E5)
-        assertEquals(5002L, byEntity.getValue(5L).displayMangaId)
-        assertEquals("Epsilon preferred", byEntity.getValue(5L).displayTitle)
-        // anchor fallback (E1)
-        assertEquals(1001L, byEntity.getValue(1L).displayMangaId)
-        // dangling preferred -> broken row survives with null display (E6)
-        assertNull(byEntity.getValue(6L).displayMangaId)
-        assertNull(byEntity.getValue(6L).displayTitle)
-        assertTrue(byEntity.getValue(6L).hasDisplay.not())
+        // no metadata selection at all
+        assertNull(byManga.getValue(M2).metadataTrackingService)
     }
 
     @Test
     fun baseRowsCarrySortAndFilterFields() = runTest {
-        val byEntity = dao.observeFavouriteCardBaseRows().first().associateBy { it.entityId }
+        val byManga = dao.observeFavouriteCardBaseRows().first().associateBy { it.entityId }
 
-        // history (E11)
-        assertEquals(0.5f, byEntity.getValue(11L).historyPercent)
-        assertEquals(5000L, byEntity.getValue(11L).historyUpdatedAt)
-        // tracking aggregate (E10: 2 + 3 chapters over two tracks)
-        assertEquals(5, byEntity.getValue(10L).trackingNewChapters)
-        assertEquals(2000L, byEntity.getValue(10L).trackingLastChapterDate)
-        // display fields (E14)
-        assertEquals("ONGOING", byEntity.getValue(14L).displayState)
-        assertEquals(true, byEntity.getValue(8L).displayNsfw)
-        assertEquals(0.9f, byEntity.getValue(5L).displayRating)
-        // entity prefs reading status + overrides (E7 / E16)
-        assertEquals("ON_HOLD", byEntity.getValue(7L).readingStatus)
-        assertEquals("Renamed", byEntity.getValue(16L).titleOverride)
-        // entity content type (E13 NOVEL entity)
-        assertEquals("NOVEL", byEntity.getValue(13L).entityContentType)
-        // alt title (E15 subtitle source)
-        assertEquals("Alternate", byEntity.getValue(15L).displayAltTitle)
+        // history
+        assertEquals(0.5f, byManga.getValue(M11).historyPercent)
+        assertEquals(5000L, byManga.getValue(M11).historyUpdatedAt)
+        // a deleted history row is not the reading progress
+        assertNull(byManga.getValue(M12).historyPercent)
+        // tracking
+        assertEquals(2, byManga.getValue(M10).trackingNewChapters)
+        assertEquals(1000L, byManga.getValue(M10).trackingLastChapterDate)
+        // display fields
+        assertEquals("ONGOING", byManga.getValue(M14).displayState)
+        assertEquals(true, byManga.getValue(M8).displayNsfw)
+        assertEquals(0.9f, byManga.getValue(M5).displayRating)
+        // preferences: reading status + overrides
+        assertEquals("ON_HOLD", byManga.getValue(M7).readingStatus)
+        assertEquals("Renamed", byManga.getValue(M16).titleOverride)
+        // content type of the manga itself
+        assertEquals("NOVEL", byManga.getValue(M13).entityContentType)
+        // alt title
+        assertEquals("Alternate", byManga.getValue(M15).displayAltTitle)
     }
 
     // ---------------------------------------------------------------- memberships
 
     @Test
     fun membershipRowsExposeEveryActiveMembership() = runTest {
-        val memberships = dao.observeFavouriteMembershipRows().first()
-        val byEntity = memberships.groupBy { it.entityId }
+        val byManga = dao.observeFavouriteMembershipRows().first().groupBy { it.entityId }
 
-        assertEquals(2, byEntity.getValue(2L).size)
-        assertEquals(true, byEntity.getValue(2L).first { it.categoryId == 11L }.isPinned)
-        assertEquals(false, byEntity.getValue(2L).first { it.categoryId == 10L }.isPinned)
-        // unanchored (E21) and deleted (E22) are excluded
-        assertNull(byEntity[21L])
-        assertNull(byEntity[22L])
-        // dangling-category membership (E24) is still listed, matching the legacy SQL
-        assertTrue(byEntity.getValue(24L).any { it.categoryId == 12L })
-    }
-
-    // -------------------------------------------------------------------- facets
-
-    @Test
-    fun projectionFacetsAreBindingBased() = runTest {
-        val facets = dao.observeFavouriteProjectionFacets().first().groupBy { it.entityId }
-
-        // E1: single binding
-        assertEquals(setOf(1001L), facets.getValue(1L).map { it.mangaId }.toSet())
-        // E4: the unbound anchor is NOT a facet (binding-based, MULTI_PROJECTION safe)
-        assertEquals(setOf(4002L), facets.getValue(4L).map { it.mangaId }.toSet())
-        // E3: two bindings from different sources
-        val e3Sources = facets.getValue(3L).map { it.source }.toSet()
-        assertTrue("TEST" in e3Sources)
-        assertTrue("OTHER" in e3Sources)
-        // E13: candidate-state binding is excluded
-        assertFalse(facets.getValue(13L).any { it.mangaId == 13002L })
+        assertEquals(2, byManga.getValue(M2).size)
+        assertEquals(true, byManga.getValue(M2).first { it.categoryId == 11L }.isPinned)
+        assertEquals(false, byManga.getValue(M2).first { it.categoryId == 10L }.isPinned)
+        // deleted membership is excluded
+        assertNull(byManga[M22])
+        // dangling-category membership is still listed
+        assertTrue(byManga.getValue(M24).any { it.categoryId == 12L })
     }
 
     @Test
-    fun tagRelationsCoverEveryBoundProjectionAndResolveThroughTheDictionary() = runTest {
+    fun tagRelationsResolveThroughTheDictionary() = runTest {
         val relations = dao.observeFavouriteTagIdRows().first().groupBy { it.entityId }
         val dictionary = dao.observeFavouriteTagDictionary().first().associateBy { it.tagId }
 
-        // E12: the tag lives on the bound projection, not the display manga
-        val e12Tags = relations.getValue(12L).map { dictionary.getValue(it.tagId).tagTitle }.toSet()
-        assertTrue("Drama" in e12Tags)
+        val m12Tags = relations.getValue(M12).map { dictionary.getValue(it.tagId).tagTitle }.toSet()
+        assertTrue("Drama" in m12Tags)
         // tag identity uses the deterministic TagEntity id
-        val dramaTagId = "drama_TEST".longHashCode()
-        assertTrue(dramaTagId in relations.getValue(12L).map { it.tagId })
+        assertTrue("drama_TEST".longHashCode() in relations.getValue(M12).map { it.tagId })
 
-        // The two flows must compose: every relation resolves to the identity and title the
-        // filter and the detailed-list chip show. Per-entity rows carry ids only, so the tag
-        // strings travel once per tag instead of once per entity-tag pair.
+        // Every relation resolves to the identity and title the filter and the chip show.
         val allRelations = dao.observeFavouriteTagIdRows().first()
         assertTrue(allRelations.all { it.tagId in dictionary })
         assertTrue(dictionary.values.all { it.tagTitle.isNotEmpty() && it.tagKey.isNotEmpty() })
     }
 
     @Test
-    fun downloadedRowsMapTheLocalIndexOntoEntities() = runTest {
-        val downloaded = dao.observeDownloadedFavouriteRows().first()
-        val entityIds = downloaded.map { it.entityId }.toSet()
+    fun downloadedRowsMapTheLocalIndexOntoFavourites() = runTest {
+        val downloaded = dao.observeDownloadedFavouriteRows().first().map { it.entityId }.toSet()
 
-        // E9: display manga in local_index
-        assertTrue(9L in entityIds)
-        // E17: download only on the secondary binding still counts
-        assertTrue(17L in entityIds)
-        // E1 has no download
-        assertFalse(1L in entityIds)
+        assertTrue(M9 in downloaded)
+        assertFalse(M1 in downloaded)
+        // a download of a non-favourite manga is outside this read model
+        assertFalse(NOT_FAVOURITE in downloaded)
     }
 
     @Test
     fun legacyOverridesExposeTitleAndCoverOnly() = runTest {
         val overrides = dao.observeFavouriteLegacyOverrides().first().associateBy { it.mangaId }
 
-        assertEquals("Legacy Title", overrides.getValue(1001L)?.titleOverride)
-        assertEquals("/cover/legacy.jpg", overrides.getValue(1001L)?.coverOverride)
+        assertEquals("Legacy Title", overrides.getValue(M1).titleOverride)
+        assertEquals("/cover/legacy.jpg", overrides.getValue(M1).coverOverride)
         // rows without any override are not returned at all
-        assertNull(overrides[2001L])
+        assertNull(overrides[M2])
         // overrides unrelated to an active favourite are outside this read model
-        assertNull(overrides[99_001L])
+        assertNull(overrides[NOT_FAVOURITE])
     }
 
     // ------------------------------------------------------- read-only guarantee
 
     @Test
-    fun readingNeverWritesEntityPreferences() = runTest {
-        val before = db.openHelper.writableDatabase
-            .query("SELECT COUNT(*) FROM entity_preferences")
-            .use { it.moveToFirst(); it.getLong(0) }
+    fun readingNeverWritesPreferences() = runTest {
+        val before = countPreferences()
         dao.observeFavouriteCardBaseRows().first()
         dao.observeFavouriteMembershipRows().first()
-        dao.observeFavouriteProjectionFacets().first()
         dao.observeFavouriteTagIdRows().first()
         dao.observeFavouriteTagDictionary().first()
         dao.observeDownloadedFavouriteRows().first()
         dao.observeFavouriteLegacyOverrides().first()
-        val after = db.openHelper.writableDatabase
-            .query("SELECT COUNT(*) FROM entity_preferences")
-            .use { it.moveToFirst(); it.getLong(0) }
-        assertEquals(before, after)
+        assertEquals(before, countPreferences())
     }
 
     @Test
     fun snapshotIsSelfConsistentAcrossAllFlows() = runTest {
-        val base = dao.observeFavouriteCardBaseRows().first()
-        val memberships = dao.observeFavouriteMembershipRows().first()
+        val baseIds = dao.observeFavouriteCardBaseRows().first().map { it.entityId }.toSet()
+        val membershipIds = dao.observeFavouriteMembershipRows().first().map { it.entityId }.toSet()
 
-        // every membership references a base row entity; every base row has >=1 membership
-        val baseEntities = base.map { it.entityId }.toSet()
-        val membershipEntities = memberships.map { it.entityId }.toSet()
-        assertEquals(baseEntities, membershipEntities)
-        // facets / tags / downloads never reference unknown entities
-        val facetEntities = dao.observeFavouriteProjectionFacets().first().map { it.entityId }.toSet()
-        val tagEntities = dao.observeFavouriteTagIdRows().first().map { it.entityId }.toSet()
-        val downloadedEntities = dao.observeDownloadedFavouriteRows().first().map { it.entityId }.toSet()
-        assertTrue(baseEntities.containsAll(facetEntities))
-        assertTrue(baseEntities.containsAll(tagEntities))
-        assertTrue(baseEntities.containsAll(downloadedEntities))
+        // every membership references a base row; every base row has >=1 membership
+        assertEquals(baseIds, membershipIds)
+        // tags / downloads never reference unknown items
+        assertTrue(baseIds.containsAll(dao.observeFavouriteTagIdRows().first().map { it.entityId }))
+        assertTrue(baseIds.containsAll(dao.observeDownloadedFavouriteRows().first().map { it.entityId }))
     }
 
     // ------------------------------------------------------------------ helpers
 
     /** Category id of the representative membership, recovered from the membership flow. */
-    private suspend fun representeeOf(entityId: Long): Long {
-        val memberships = dao.observeFavouriteMembershipRows().first()
-            .filter { it.entityId == entityId }
-        // mirror the representative ranking in memory
-        return memberships.sortedWith(
-            compareByDescending<FavouriteMembershipRow> { it.isPinned }
-                .thenByDescending { it.createdAt }
-                .thenByDescending { it.updatedAt }
-                .thenBy { it.categoryId },
-        ).first().categoryId
+    private suspend fun representeeOf(mangaId: Long): Long {
+        return dao.observeFavouriteMembershipRows().first()
+            .filter { it.entityId == mangaId }
+            .sortedWith(
+                compareByDescending<FavouriteMembershipRow> { it.isPinned }
+                    .thenByDescending { it.createdAt }
+                    .thenByDescending { it.updatedAt }
+                    .thenBy { it.categoryId },
+            ).first().categoryId
     }
 
-    private suspend fun representativeIsPinned(entityId: Long): Boolean {
-        return dao.observeFavouriteCardBaseRows().first().single { it.entityId == entityId }.representativePinned
+    private fun countPreferences(): Long {
+        return db.openHelper.writableDatabase
+            .query("SELECT COUNT(*) FROM preferences")
+            .use { it.moveToFirst(); it.getLong(0) }
     }
 
     private fun seed() {
         val sql = db.openHelper.writableDatabase
         sql.beginTransaction()
         try {
-            FavouriteLibrarySeed.insertCategory(sql, 10, "Reading")
-            FavouriteLibrarySeed.insertCategory(sql, 11, "Planned")
-            FavouriteLibrarySeed.insertCategory(sql, 12, "Deleted", deletedAt = 1)
+            with(FavouriteLibrarySeed) {
+                insertCategory(sql, 10, "Reading")
+                insertCategory(sql, 11, "Planned")
+                insertCategory(sql, 12, "Deleted", deletedAt = 1)
 
-            FavouriteLibrarySeed.insertEntity(sql, 1, "E1")
-            FavouriteLibrarySeed.insertManga(sql, 1001, "Beta", altTitle = null)
-            FavouriteLibrarySeed.insertFavourite(sql, 1, 10, 1001, createdAt = 100, updatedAt = 100)
-            FavouriteLibrarySeed.insertBinding(sql, 1, 1001)
-            FavouriteLibrarySeed.insertPrefs(sql, 1) // no prefs
-            // legacy override on the display manga
-            sql.execSQL(
-                """
-                INSERT INTO preferences (
-                    manga_id, mode, cf_brightness, cf_contrast, cf_invert, cf_grayscale,
-                    cf_book, title_override, cover_override
-                ) VALUES (?, 0, 0, 0, 0, 0, 0, ?, ?)
-                """.trimIndent(),
-                arrayOf<Any?>(1001, "Legacy Title", "/cover/legacy.jpg"),
-            )
-            FavouriteLibrarySeed.insertManga(sql, 99_001, "Not a favourite")
-            sql.execSQL(
-                """
-                INSERT INTO preferences (
-                    manga_id, mode, cf_brightness, cf_contrast, cf_invert, cf_grayscale,
-                    cf_book, title_override
-                ) VALUES (?, 0, 0, 0, 0, 0, 0, ?)
-                """.trimIndent(),
-                arrayOf<Any?>(99_001, "Unrelated override"),
-            )
+                insertManga(sql, M1, "Beta")
+                insertFavourite(sql, M1, 10, createdAt = 100, updatedAt = 100)
+                insertPrefs(sql, M1, titleOverride = "Legacy Title", coverOverride = "/cover/legacy.jpg")
+                insertManga(sql, NOT_FAVOURITE, "Not a favourite")
+                insertPrefs(sql, NOT_FAVOURITE, titleOverride = "Unrelated override")
+                insertDownloaded(sql, NOT_FAVOURITE)
 
-            FavouriteLibrarySeed.insertEntity(sql, 2, "E2")
-            FavouriteLibrarySeed.insertManga(sql, 2001, "Alpha")
-            FavouriteLibrarySeed.insertFavourite(sql, 2, 10, 2001, pinned = false, createdAt = 100, updatedAt = 100)
-            FavouriteLibrarySeed.insertFavourite(sql, 2, 11, 2001, pinned = true, createdAt = 50, updatedAt = 50)
-            FavouriteLibrarySeed.insertBinding(sql, 2, 2001)
+                insertManga(sql, M2, "Alpha")
+                insertFavourite(sql, M2, 10, pinned = false, createdAt = 100, updatedAt = 100)
+                insertFavourite(sql, M2, 11, pinned = true, createdAt = 50, updatedAt = 50)
 
-            FavouriteLibrarySeed.insertEntity(sql, 3, "E3")
-            FavouriteLibrarySeed.insertManga(sql, 3001, "Gamma")
-            FavouriteLibrarySeed.insertFavourite(sql, 3, 10, 3001, createdAt = 200, updatedAt = 200)
-            FavouriteLibrarySeed.insertFavourite(sql, 3, 11, 3001, createdAt = 200, updatedAt = 200)
-            FavouriteLibrarySeed.insertBinding(sql, 3, 3001)
-            FavouriteLibrarySeed.insertManga(sql, 3002, "Gamma remote", source = "OTHER")
-            FavouriteLibrarySeed.insertBinding(sql, 3, 3002)
+                insertManga(sql, M3, "Gamma", source = "OTHER")
+                insertFavourite(sql, M3, 10, createdAt = 200, updatedAt = 200)
+                insertFavourite(sql, M3, 11, createdAt = 200, updatedAt = 200)
 
-            FavouriteLibrarySeed.insertEntity(sql, 4, "E4")
-            FavouriteLibrarySeed.insertManga(sql, 4001, "Delta orphan anchor")
-            FavouriteLibrarySeed.insertManga(sql, 4002, "Delta bound")
-            FavouriteLibrarySeed.insertFavourite(sql, 4, 10, 4001, createdAt = 300, updatedAt = 10)
-            FavouriteLibrarySeed.insertFavourite(sql, 4, 11, 4001, createdAt = 300, updatedAt = 99)
-            // anchor 4001 is NOT a binding: only 4002 is bound, so the facet set must
-            // exclude the anchor (binding-based projection identity).
-            FavouriteLibrarySeed.insertBinding(sql, 4, 4002)
+                insertManga(sql, M4, "Delta")
+                insertFavourite(sql, M4, 10, createdAt = 300, updatedAt = 10)
+                insertFavourite(sql, M4, 11, createdAt = 300, updatedAt = 99)
 
-            FavouriteLibrarySeed.insertEntity(sql, 5, "E5")
-            FavouriteLibrarySeed.insertManga(sql, 5001, "Epsilon anchor", rating = 0.5f)
-            FavouriteLibrarySeed.insertManga(sql, 5002, "Epsilon preferred", rating = 0.9f)
-            FavouriteLibrarySeed.insertFavourite(sql, 5, 10, 5001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 5, 5001)
-            FavouriteLibrarySeed.insertBinding(sql, 5, 5002)
-            FavouriteLibrarySeed.insertPrefs(sql, 5, preferredLocalMangaId = 5002)
+                insertManga(sql, M5, "Epsilon", rating = 0.9f)
+                insertFavourite(sql, M5, 10, createdAt = 10, updatedAt = 10)
 
-            FavouriteLibrarySeed.insertEntity(sql, 6, "E6")
-            FavouriteLibrarySeed.insertManga(sql, 6001, "Zeta")
-            FavouriteLibrarySeed.insertFavourite(sql, 6, 10, 6001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 6, 6001)
-            FavouriteLibrarySeed.insertPrefs(sql, 6, preferredLocalMangaId = 999_999)
+                insertManga(sql, M7, "Eta")
+                insertFavourite(sql, M7, 10, createdAt = 10, updatedAt = 10)
+                insertPrefs(sql, M7, readingStatus = "ON_HOLD")
 
-            FavouriteLibrarySeed.insertEntity(sql, 7, "E7")
-            FavouriteLibrarySeed.insertManga(sql, 7001, "Eta")
-            FavouriteLibrarySeed.insertFavourite(sql, 7, 10, 7001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 7, 7001)
-            FavouriteLibrarySeed.insertPrefs(sql, 7, readingStatus = "ON_HOLD")
+                insertManga(sql, M8, "Theta", nsfw = true)
+                insertFavourite(sql, M8, 10, createdAt = 10, updatedAt = 10)
 
-            FavouriteLibrarySeed.insertEntity(sql, 8, "E8")
-            FavouriteLibrarySeed.insertManga(sql, 8001, "Theta", nsfw = true)
-            FavouriteLibrarySeed.insertFavourite(sql, 8, 10, 8001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 8, 8001)
+                insertManga(sql, M9, "Iota")
+                insertFavourite(sql, M9, 10, createdAt = 10, updatedAt = 10)
+                insertDownloaded(sql, M9)
 
-            FavouriteLibrarySeed.insertEntity(sql, 9, "E9")
-            FavouriteLibrarySeed.insertManga(sql, 9001, "Iota")
-            FavouriteLibrarySeed.insertFavourite(sql, 9, 10, 9001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 9, 9001)
-            FavouriteLibrarySeed.insertDownloaded(sql, 9001)
+                insertManga(sql, M10, "Kappa")
+                insertFavourite(sql, M10, 10, createdAt = 10, updatedAt = 10)
+                insertTrack(sql, M10, newChapters = 2, lastChapterDate = 1000, lastCheckTime = 1500)
 
-            FavouriteLibrarySeed.insertEntity(sql, 10, "E10")
-            FavouriteLibrarySeed.insertManga(sql, 10001, "Kappa")
-            FavouriteLibrarySeed.insertManga(sql, 10002, "Kappa alt")
-            FavouriteLibrarySeed.insertFavourite(sql, 10, 10, 10001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 10, 10001)
-            FavouriteLibrarySeed.insertBinding(sql, 10, 10002)
-            FavouriteLibrarySeed.insertTrack(sql, 10, 10001, newChapters = 2, lastChapterDate = 1000, lastCheckTime = 1500)
-            FavouriteLibrarySeed.insertTrack(sql, 10, 10002, newChapters = 3, lastChapterDate = 2000, lastCheckTime = 2500, ownerId = 10_000L)
+                insertManga(sql, M11, "Lambda")
+                insertFavourite(sql, M11, 10, createdAt = 10, updatedAt = 10)
+                insertHistory(sql, M11, percent = 0.5f, updatedAt = 5000)
 
-            FavouriteLibrarySeed.insertEntity(sql, 11, "E11")
-            FavouriteLibrarySeed.insertManga(sql, 11001, "Lambda")
-            FavouriteLibrarySeed.insertFavourite(sql, 11, 10, 11001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 11, 11001)
-            FavouriteLibrarySeed.insertHistory(sql, 11, 11001, percent = 0.5f, updatedAt = 5000)
+                insertManga(sql, M12, "Mu")
+                insertFavourite(sql, M12, 10, createdAt = 10, updatedAt = 10)
+                insertHistory(sql, M12, percent = 0.7f, updatedAt = 6000, deletedAt = 6000)
+                val dramaTagId = "drama_TEST".longHashCode()
+                insertTag(sql, dramaTagId, "Drama")
+                insertMangaTag(sql, M12, dramaTagId)
 
-            FavouriteLibrarySeed.insertEntity(sql, 12, "E12")
-            FavouriteLibrarySeed.insertManga(sql, 12001, "Mu display", source = "OTHER")
-            FavouriteLibrarySeed.insertManga(sql, 12002, "Mu binding")
-            FavouriteLibrarySeed.insertFavourite(sql, 12, 10, 12001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 12, 12002)
-            val dramaTagId = "drama_TEST".longHashCode()
-            FavouriteLibrarySeed.insertTag(sql, dramaTagId, "Drama")
-            FavouriteLibrarySeed.insertMangaTag(sql, 12002, dramaTagId)
+                insertManga(sql, M13, "Nu", contentType = "NOVEL")
+                insertFavourite(sql, M13, 10, createdAt = 10, updatedAt = 10)
 
-            FavouriteLibrarySeed.insertEntity(sql, 13, "E13", contentType = "NOVEL")
-            FavouriteLibrarySeed.insertManga(sql, 13001, "Nu", contentType = "NOVEL")
-            FavouriteLibrarySeed.insertManga(sql, 13002, "Nu candidate", contentType = "NOVEL")
-            FavouriteLibrarySeed.insertFavourite(sql, 13, 10, 13001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 13, 13001)
-            FavouriteLibrarySeed.insertBinding(sql, 13, 13002, state = "CANDIDATE")
+                insertManga(sql, M14, "Xi", state = "ONGOING")
+                insertFavourite(sql, M14, 10, createdAt = 10, updatedAt = 10)
 
-            FavouriteLibrarySeed.insertEntity(sql, 14, "E14")
-            FavouriteLibrarySeed.insertManga(sql, 14001, "Xi", state = "ONGOING")
-            FavouriteLibrarySeed.insertFavourite(sql, 14, 10, 14001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 14, 14001)
+                insertManga(sql, M15, "abc", altTitle = "Alternate")
+                insertFavourite(sql, M15, 10, createdAt = 10, updatedAt = 10)
 
-            FavouriteLibrarySeed.insertEntity(sql, 15, "E15")
-            FavouriteLibrarySeed.insertManga(sql, 15001, "abc", altTitle = "Alternate")
-            FavouriteLibrarySeed.insertFavourite(sql, 15, 10, 15001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 15, 15001)
+                insertManga(sql, M16, "XYZ")
+                insertFavourite(sql, M16, 10, createdAt = 10, updatedAt = 10)
+                insertPrefs(sql, M16, titleOverride = "Renamed")
 
-            FavouriteLibrarySeed.insertEntity(sql, 16, "E16")
-            FavouriteLibrarySeed.insertManga(sql, 16001, "XYZ")
-            FavouriteLibrarySeed.insertFavourite(sql, 16, 10, 16001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 16, 16001)
-            FavouriteLibrarySeed.insertPrefs(sql, 16, titleOverride = "Renamed")
+                insertManga(sql, M22, "Upsilon")
+                insertFavourite(sql, M22, 10, createdAt = 10, updatedAt = 10, deletedAt = 5)
 
-            FavouriteLibrarySeed.insertEntity(sql, 17, "E17")
-            FavouriteLibrarySeed.insertManga(sql, 17001, "Omicron")
-            FavouriteLibrarySeed.insertManga(sql, 17002, "Omicron alt")
-            FavouriteLibrarySeed.insertFavourite(sql, 17, 10, 17001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 17, 17001)
-            FavouriteLibrarySeed.insertBinding(sql, 17, 17002)
-            FavouriteLibrarySeed.insertDownloaded(sql, 17002)
+                insertManga(sql, M24, "Chi")
+                insertFavourite(sql, M24, 12, createdAt = 10, updatedAt = 10)
 
-            FavouriteLibrarySeed.insertEntity(sql, 21, "E21")
-            FavouriteLibrarySeed.insertManga(sql, 21001, "Tau")
-            FavouriteLibrarySeed.insertFavourite(sql, 21, 10, null, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 21, 21001)
+                // Display metadata authority (the tracking site behind the card title/cover):
+                // M25 has a cached site item, M26 points at a missing one, M27 chooses the
+                // local base content as authority.
+                insertManga(sql, M25, "Psi")
+                insertFavourite(sql, M25, 10, createdAt = 10, updatedAt = 10)
+                insertPrefs(sql, M25, metadataSourceKind = "tracking", metadataService = 3, metadataRemoteId = 777L)
+                insertTrackingSiteItem(sql, 3, 777L, "Site Title", "https://site/cover.jpg")
 
-            FavouriteLibrarySeed.insertEntity(sql, 22, "E22")
-            FavouriteLibrarySeed.insertManga(sql, 22001, "Upsilon")
-            FavouriteLibrarySeed.insertFavourite(sql, 22, 10, 22001, createdAt = 10, updatedAt = 10, deletedAt = 5)
-            FavouriteLibrarySeed.insertBinding(sql, 22, 22001)
+                insertManga(sql, M26, "Omega")
+                insertFavourite(sql, M26, 10, createdAt = 10, updatedAt = 10)
+                insertPrefs(sql, M26, metadataSourceKind = "tracking", metadataService = 3, metadataRemoteId = 778L)
 
-            FavouriteLibrarySeed.insertEntity(sql, 24, "E24")
-            FavouriteLibrarySeed.insertManga(sql, 24001, "Chi")
-            FavouriteLibrarySeed.insertFavourite(sql, 24, 12, 24001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 24, 24001)
-
-            // Display metadata authority (the tracking site behind the card title/cover):
-            // E25 has a cached site item, E26 points at a missing one, E27 chooses the
-            // local base projection as authority.
-            FavouriteLibrarySeed.insertEntity(sql, 25, "E25")
-            FavouriteLibrarySeed.insertManga(sql, 25001, "Psi projection")
-            FavouriteLibrarySeed.insertFavourite(sql, 25, 10, 25001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 25, 25001)
-            FavouriteLibrarySeed.insertPrefs(sql, 25, metadataSourceKind = "tracking", metadataService = 3, metadataRemoteId = 777L)
-            FavouriteLibrarySeed.insertTrackingSiteItem(sql, 3, 777L, "Site Title", "https://site/cover.jpg")
-
-            FavouriteLibrarySeed.insertEntity(sql, 26, "E26")
-            FavouriteLibrarySeed.insertManga(sql, 26001, "Omega projection")
-            FavouriteLibrarySeed.insertFavourite(sql, 26, 10, 26001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 26, 26001)
-            FavouriteLibrarySeed.insertPrefs(sql, 26, metadataSourceKind = "tracking", metadataService = 3, metadataRemoteId = 778L)
-
-            FavouriteLibrarySeed.insertEntity(sql, 27, "E27")
-            FavouriteLibrarySeed.insertManga(sql, 27001, "Phi projection")
-            FavouriteLibrarySeed.insertFavourite(sql, 27, 10, 27001, createdAt = 10, updatedAt = 10)
-            FavouriteLibrarySeed.insertBinding(sql, 27, 27001)
-            // Stale numeric columns with kind='base': the kind guard, not the id match,
-            // decides, so the card must keep the projection display.
-            FavouriteLibrarySeed.insertPrefs(sql, 27, metadataSourceKind = "base", metadataService = 3, metadataRemoteId = 779L)
-            FavouriteLibrarySeed.insertTrackingSiteItem(sql, 3, 779L, "Phi site title", "https://site/phi.jpg")
-
+                insertManga(sql, M27, "Phi")
+                insertFavourite(sql, M27, 10, createdAt = 10, updatedAt = 10)
+                // Stale numeric columns with kind='base': the kind guard, not the id match,
+                // decides, so the card must keep the content display.
+                insertPrefs(sql, M27, metadataSourceKind = "base", metadataService = 3, metadataRemoteId = 779L)
+                insertTrackingSiteItem(sql, 3, 779L, "Phi site title", "https://site/phi.jpg")
+            }
             sql.setTransactionSuccessful()
         } finally {
             sql.endTransaction()
         }
+    }
+
+    private companion object {
+        const val M1 = 1001L
+        const val M2 = 2001L
+        const val M3 = 3001L
+        const val M4 = 4001L
+        const val M5 = 5001L
+        const val M7 = 7001L
+        const val M8 = 8001L
+        const val M9 = 9001L
+        const val M10 = 10001L
+        const val M11 = 11001L
+        const val M12 = 12001L
+        const val M13 = 13001L
+        const val M14 = 14001L
+        const val M15 = 15001L
+        const val M16 = 16001L
+        const val M22 = 22001L
+        const val M24 = 24001L
+        const val M25 = 25001L
+        const val M26 = 26001L
+        const val M27 = 27001L
+        const val NOT_FAVOURITE = 99_001L
     }
 }

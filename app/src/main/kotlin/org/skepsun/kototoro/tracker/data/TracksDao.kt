@@ -27,13 +27,10 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
     @Query("SELECT * FROM tracks WHERE manga_id = :mangaId LIMIT 1")
     abstract suspend fun find(mangaId: Long): TrackEntity?
 
-    @Query("SELECT * FROM tracks WHERE owner_id = :ownerId LIMIT 1")
-    abstract suspend fun findByOwnerId(ownerId: Long): TrackEntity?
-
-    @Query("SELECT * FROM tracks WHERE entity_id IN (:entityIds) ORDER BY last_chapter_date DESC, last_check_time DESC")
+    @Query("SELECT * FROM tracks WHERE manga_id IN (:entityIds) ORDER BY last_chapter_date DESC, last_check_time DESC")
     abstract suspend fun findByEntityIds(entityIds: Collection<Long>): List<TrackEntity>
 
-    @Query("SELECT IFNULL(chapters_new,0) FROM tracks WHERE manga_id = :mangaId LIMIT 1")
+    @Query("SELECT IFNULL(chapters_new, 0) FROM tracks WHERE manga_id = :mangaId LIMIT 1")
     abstract suspend fun findNewChapters(mangaId: Long): Int
 
     @Query("SELECT manga_id, IFNULL(chapters_new, 0) AS chapters_new FROM tracks WHERE manga_id IN (:mangaIds)")
@@ -47,16 +44,16 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 
     @Query(
         """
-		SELECT COUNT(*)
-		FROM (
-			SELECT owner_id
-			FROM track_logs
-			WHERE unread = 1
-			UNION
-			SELECT owner_id
-			FROM tracks
-			WHERE chapters_new > 0
-		)
+        SELECT COUNT(*)
+        FROM (
+            SELECT manga_id
+            FROM track_logs
+            WHERE unread = 1
+            UNION
+            SELECT manga_id
+            FROM tracks
+            WHERE chapters_new > 0
+        )
         """,
     )
     abstract fun observeUnreadWorkCount(): Flow<Int>
@@ -99,101 +96,97 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 
     @Query(
         """
-		INSERT OR IGNORE INTO tracks(
-			owner_id,
-			manga_id,
-			entity_id,
-			last_chapter_id,
-			chapters_new,
-			last_check_time,
-			last_chapter_date,
-			last_result,
-			last_error
-		)
-		SELECT owner_id,
-			manga_id,
-			entity_id,
-			0,
-			SUM(
-				CASE
-					WHEN chapters LIKE 'New chapters x %' THEN CAST(SUBSTR(chapters, 16) AS INTEGER)
-					WHEN chapters = '' THEN 1
-					ELSE LENGTH(chapters) - LENGTH(REPLACE(chapters, CHAR(10), '')) + 1
-				END
-			),
-			MAX(created_at),
-			MAX(created_at),
-			1,
-			NULL
-		FROM track_logs
-		WHERE unread = 1
-			AND EXISTS (
-				SELECT 1
-				FROM manga
-				WHERE manga.manga_id = track_logs.manga_id
-			)
-			AND NOT EXISTS (
-				SELECT 1
-				FROM tracks
-				WHERE tracks.owner_id = track_logs.owner_id
-			)
-		GROUP BY owner_id, manga_id, entity_id
+        INSERT OR IGNORE INTO tracks(
+            manga_id,
+            last_chapter_id,
+            chapters_new,
+            last_check_time,
+            last_chapter_date,
+            last_result,
+            last_error
+        )
+        SELECT manga_id,
+            0,
+            SUM(
+                CASE
+                    WHEN chapters LIKE 'New chapters x %' THEN CAST(SUBSTR(chapters, 16) AS INTEGER)
+                    WHEN chapters = '' THEN 1
+                    ELSE LENGTH(chapters) - LENGTH(REPLACE(chapters, CHAR(10), '')) + 1
+                END
+            ),
+            MAX(created_at),
+            MAX(created_at),
+            1,
+            NULL
+        FROM track_logs
+        WHERE unread = 1
+            AND EXISTS (
+                SELECT 1
+                FROM manga
+                WHERE manga.manga_id = track_logs.manga_id
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM tracks
+                WHERE tracks.manga_id = track_logs.manga_id
+            )
+        GROUP BY manga_id
         """,
     )
     abstract suspend fun insertTracksFromUnreadLogs()
 
     @Query(
         """
-		UPDATE tracks
-		SET
-			chapters_new = MAX(
-				chapters_new,
-				(
-					SELECT SUM(
-						CASE
-							WHEN track_logs.chapters LIKE 'New chapters x %' THEN CAST(SUBSTR(track_logs.chapters, 16) AS INTEGER)
-							WHEN track_logs.chapters = '' THEN 1
-							ELSE LENGTH(track_logs.chapters) - LENGTH(REPLACE(track_logs.chapters, CHAR(10), '')) + 1
-						END
-					)
-					FROM track_logs
-					WHERE track_logs.owner_id = tracks.owner_id
-						AND track_logs.unread = 1
-				)
-			),
-			last_check_time = MAX(
-				last_check_time,
-				IFNULL((
-					SELECT MAX(created_at)
-					FROM track_logs
-					WHERE track_logs.owner_id = tracks.owner_id
-						AND track_logs.unread = 1
-				), 0)
-			),
-			last_chapter_date = MAX(
-				last_chapter_date,
-				IFNULL((
-					SELECT MAX(created_at)
-					FROM track_logs
-					WHERE track_logs.owner_id = tracks.owner_id
-						AND track_logs.unread = 1
-				), 0)
-			),
-			last_result = CASE
-				WHEN (
-					SELECT COUNT(*)
-					FROM track_logs
-					WHERE track_logs.owner_id = tracks.owner_id
-						AND track_logs.unread = 1
-				) > 0 THEN 1
-				ELSE last_result
-			END
-		WHERE EXISTS (
-			SELECT 1
-			FROM track_logs
-			WHERE track_logs.owner_id = tracks.owner_id
-				AND track_logs.unread = 1
-		)
+        UPDATE tracks
+        SET
+            chapters_new = MAX(
+                chapters_new,
+                (
+                    SELECT SUM(
+                        CASE
+                            WHEN track_logs.chapters LIKE 'New chapters x %' THEN CAST(SUBSTR(track_logs.chapters, 16) AS INTEGER)
+                            WHEN track_logs.chapters = '' THEN 1
+                            ELSE LENGTH(track_logs.chapters) - LENGTH(REPLACE(track_logs.chapters, CHAR(10), '')) + 1
+                        END
+                    )
+                    FROM track_logs
+                    WHERE track_logs.manga_id = tracks.manga_id
+                        AND track_logs.unread = 1
+                )
+            ),
+            last_check_time = MAX(
+                last_check_time,
+                IFNULL((
+                    SELECT MAX(created_at)
+                    FROM track_logs
+                    WHERE track_logs.manga_id = tracks.manga_id
+                        AND track_logs.unread = 1
+                ), 0)
+            ),
+            last_chapter_date = MAX(
+                last_chapter_date,
+                IFNULL((
+                    SELECT MAX(created_at)
+                    FROM track_logs
+                    WHERE track_logs.manga_id = tracks.manga_id
+                        AND track_logs.unread = 1
+                ), 0)
+            ),
+            last_result = CASE
+                WHEN (
+                    SELECT COUNT(*)
+                    FROM track_logs
+                    WHERE track_logs.manga_id = tracks.manga_id
+                        AND track_logs.unread = 1
+                ) > 0 THEN 1
+                ELSE last_result
+            END
+        WHERE EXISTS (
+            SELECT 1
+            FROM track_logs
+            WHERE track_logs.manga_id = tracks.manga_id
+                AND track_logs.unread = 1
+        )
         """,
     )
     abstract suspend fun restoreCountersFromUnreadLogs()
@@ -203,22 +196,21 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 
     @Query(
         """
-		DELETE FROM tracks
-		WHERE owner_id NOT IN (
-			SELECT entity_id
-			FROM work_history
-			WHERE deleted_at = 0
+        DELETE FROM tracks
+        WHERE manga_id NOT IN (
+            SELECT manga_id
+            FROM history
+            WHERE deleted_at = 0
 
-			UNION
+            UNION
 
-			SELECT wf.entity_id
-			FROM work_favourites wf
-			INNER JOIN favourite_categories fc ON fc.category_id = wf.category_id
-			WHERE wf.deleted_at = 0
-				AND wf.anchor_manga_id IS NOT NULL
-				AND fc.deleted_at = 0
-				AND fc.track = 1
-		)
+            SELECT f.manga_id
+            FROM favourites f
+            INNER JOIN favourite_categories fc ON fc.category_id = f.category_id
+            WHERE f.deleted_at = 0
+                AND fc.deleted_at = 0
+                AND fc.track = 1
+        )
         """,
     )
     abstract suspend fun gc()
@@ -233,41 +225,23 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
         ListFilterOption.Macro.FAVORITE -> favouriteExistsExpr("tracks.manga_id")
         is ListFilterOption.Favorite -> favouriteExistsExpr("tracks.manga_id", option.category.id)
         is ListFilterOption.Tag -> "EXISTS(SELECT * FROM manga_tags " +
-            "WHERE manga_tags.manga_id = ${representativeLocalMangaIdExpr("tracks.manga_id")} " +
+            "WHERE manga_tags.manga_id = tracks.manga_id " +
             "AND tag_id = ${option.tagId})"
         ListFilterOption.Macro.NSFW -> "(SELECT nsfw FROM manga " +
-            "WHERE manga.manga_id = ${representativeLocalMangaIdExpr("tracks.manga_id")}) = 1"
+            "WHERE manga.manga_id = tracks.manga_id) = 1"
         else -> null
     }
 
-    private fun entityIdExpr(localMangaIdExpr: String): String =
-        "COALESCE(tracks.entity_id, (" +
-            "SELECT entity_id FROM entity_binding " +
-            "WHERE source IN ('local_manga', '0') " +
-            "AND external_id = CAST($localMangaIdExpr AS TEXT) " +
-            "AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY') " +
-            "LIMIT 1" +
-        "))"
-
-    private fun representativeLocalMangaIdExpr(localMangaIdExpr: String): String =
-        "COALESCE((" +
-            "SELECT m.manga_id FROM entity_preferences ep " +
-            "INNER JOIN manga m ON m.manga_id = ep.preferred_local_manga_id " +
-            "WHERE ep.entity_id = ${entityIdExpr(localMangaIdExpr)} LIMIT 1" +
-            "), $localMangaIdExpr)"
-
     private fun favouriteExistsExpr(localMangaIdExpr: String, categoryId: Long? = null): String {
-        val entityIdExpr = entityIdExpr(localMangaIdExpr)
-        val categoryFilter = categoryId?.let { " AND wf.category_id = $it" }.orEmpty()
-        return "EXISTS(SELECT 1 FROM work_favourites wf " +
-            "WHERE wf.entity_id = $entityIdExpr AND wf.anchor_manga_id IS NOT NULL AND wf.deleted_at = 0$categoryFilter)"
+        val categoryFilter = categoryId?.let { " AND f.category_id = $it" }.orEmpty()
+        return "EXISTS(SELECT 1 FROM favourites f " +
+            "WHERE f.manga_id = $localMangaIdExpr AND f.deleted_at = 0$categoryFilter)"
     }
 
     private fun pinnedSortExpr(localMangaIdExpr: String): String {
-        val entityIdExpr = entityIdExpr(localMangaIdExpr)
         return "IFNULL((" +
-            "SELECT MAX(pinned) FROM work_favourites wf " +
-            "WHERE wf.entity_id = $entityIdExpr AND wf.anchor_manga_id IS NOT NULL AND wf.deleted_at = 0" +
+            "SELECT MAX(pinned) FROM favourites f " +
+            "WHERE f.manga_id = $localMangaIdExpr AND f.deleted_at = 0" +
             "), 0)"
     }
 }

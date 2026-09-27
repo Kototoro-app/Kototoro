@@ -21,9 +21,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.LocalizedAppContext
-import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
+import org.skepsun.kototoro.core.db.TABLE_HISTORY
 import org.skepsun.kototoro.core.db.TABLE_MANGA
-import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ReaderIntent
@@ -35,14 +34,12 @@ import org.skepsun.kototoro.core.util.ext.getDrawableOrThrow
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.processLifecycleScope
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.util.ifNullOrEmpty
 import org.skepsun.kototoro.parsers.util.mapNotNullToSet
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -53,11 +50,8 @@ class AppShortcutManager @Inject constructor(
     private val historyRepository: HistoryRepository,
     private val mangaRepository: ContentDataRepository,
     private val settings: AppSettings,
-    private val entityGraphRepository: EntityGraphRepository,
-    private val workResolver: WorkResolver,
 ) : InvalidationTracker.Observer(
-    TABLE_WORK_HISTORY,
-    TABLE_ENTITY_PREFERENCES,
+    TABLE_HISTORY,
     TABLE_MANGA,
 ), SharedPreferences.OnSharedPreferenceChangeListener {
 
@@ -163,12 +157,9 @@ class AppShortcutManager @Inject constructor(
     }
 
     private suspend fun buildShortcutInfo(manga: Content): ShortcutInfoCompat = withContext(Dispatchers.Default) {
-        val entityId = workResolver.resolveByMangaId(manga.id).entityId
-        val preferredLocalMangaId = entityId?.let { workResolver.selectPreferredProjection(it) }
-        val resolvedId = preferredLocalMangaId ?: manga.id
-        val currentManga = mangaRepository.findDisplayContentById(resolvedId, withChapters = false)
-            ?: mangaRepository.findPreferredLocalContentById(resolvedId, withChapters = false)
-            ?: mangaRepository.findContentById(resolvedId, withChapters = false)
+        val currentManga = mangaRepository.findDisplayContentById(manga.id, withChapters = false)
+            ?: mangaRepository.findPreferredLocalContentById(manga.id, withChapters = false)
+            ?: mangaRepository.findContentById(manga.id, withChapters = false)
             ?: manga
         val icon = runCatchingCancellable {
             coil.execute(

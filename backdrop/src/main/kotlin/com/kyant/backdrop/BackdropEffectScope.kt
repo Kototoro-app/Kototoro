@@ -35,10 +35,13 @@ internal abstract class BackdropEffectScopeImpl : BackdropEffectScope, RuntimeSh
         return runtimeShaderCache.obtainRuntimeShader(key, string)
     }
 
-    fun update(scope: DrawScope): Boolean {
-        val newDensity = scope.density
+    // Kototoro patch -- `resolutionScale` > 1 makes effects see the downsampled backdrop layer:
+    // density and size shrink together, so dp-based parameters stay visually identical.
+    // See backdrop/UPSTREAM.md.
+    fun update(scope: DrawScope, resolutionScale: Float = 1f): Boolean {
+        val newDensity = scope.density / resolutionScale
         val newFontScale = scope.fontScale
-        val newSize = scope.size
+        val newSize = scope.size / resolutionScale
         val newLayoutDirection = scope.layoutDirection
 
         val changed = newDensity != density ||

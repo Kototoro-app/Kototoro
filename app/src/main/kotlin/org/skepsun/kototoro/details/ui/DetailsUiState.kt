@@ -1,8 +1,6 @@
 package org.skepsun.kototoro.details.ui
 
 
-import org.skepsun.kototoro.details.ui.model.ActiveLocalSourceOption
-import org.skepsun.kototoro.details.ui.model.EntityChapterSourceInfo
 import org.skepsun.kototoro.details.ui.model.LinkedTrackingItemUiModel
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.jsonsource.SourceType
@@ -23,7 +21,7 @@ import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItem
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails
 import org.skepsun.kototoro.parsers.model.ContentType
-import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationSection
+import org.skepsun.kototoro.details.ui.model.EntityRelationSection
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.details.ui.model.DetailsSupplementAction
 import org.skepsun.kototoro.filter.ui.model.UiTagGroup
@@ -119,8 +117,6 @@ data class ReadingSearchScopeFilterUiState(
 }
 
 data class SourceBindingUiState(
-    val activeLocalSourceOptions: List<ActiveLocalSourceOption> = emptyList(),
-    val entityChapterSourceInfo: EntityChapterSourceInfo? = null,
     val metadataSourceOptions: List<DetailsSourceOption> = emptyList(),
     val readingSourceOptions: List<DetailsSourceOption> = emptyList(),
     val metadataChapterTabs: List<DetailsChapterSourceTab> = emptyList(),

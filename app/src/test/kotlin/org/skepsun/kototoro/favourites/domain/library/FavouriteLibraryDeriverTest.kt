@@ -45,12 +45,9 @@ class FavouriteLibraryDeriverTest {
         lastChapterDate: Long = 0L,
         progressPercent: Float? = null,
         lastReadAt: Long? = null,
-        projectionCount: Int = 1,
-        projectionSourceNames: Set<String> = setOf(sourceName),
         tagIds: Set<Long> = emptySet(),
         displayTags: List<FavouriteCardTag> = emptyList(),
         isDownloaded: Boolean = false,
-        hasBrokenProjection: Boolean = false,
         overrideTitle: String? = null,
         overrideCoverUrl: String? = null,
         metadataTrackingService: Int? = null,
@@ -82,12 +79,9 @@ class FavouriteLibraryDeriverTest {
         progressPercent = progressPercent,
         progressTotalChapters = null,
         lastReadAt = lastReadAt,
-        projectionCount = projectionCount,
-        projectionSourceNames = projectionSourceNames,
         tagIds = tagIds,
         displayTags = displayTags,
         isDownloaded = isDownloaded,
-        hasBrokenProjection = hasBrokenProjection,
         overrideTitle = overrideTitle,
         overrideCoverUrl = overrideCoverUrl,
         metadataTrackingService = metadataTrackingService,
@@ -288,13 +282,13 @@ class FavouriteLibraryDeriverTest {
             row(2, isNsfw = true),
             row(3, newChapters = 4),
             row(4, progressPercent = 1f),
-            row(5, projectionCount = 3),
-            row(6, hasBrokenProjection = true),
+            row(5),
+            row(6),
             row(7, publicationState = ContentState.ONGOING),
             row(8, readingStatus = ScrobblingStatus.ON_HOLD),
             row(9, tagIds = setOf(dramaTagId), displayTags = listOf(FavouriteCardTag(dramaTagId, "Drama"))),
-            row(10, sourceName = "OTHER", projectionSourceNames = setOf("OTHER")),
-            row(11, sourceName = "TEST", projectionSourceNames = setOf("TEST", "OTHER")),
+            row(10, sourceName = "OTHER"),
+            row(11, sourceName = "TEST"),
         )
         val snap = snapshot(rows)
         fun idsOf(vararg options: ListFilterOption): Set<Long> = deriveFavouriteLibraryState(
@@ -307,17 +301,15 @@ class FavouriteLibraryDeriverTest {
         assertEquals((1L..11L).toSet() - 2L, idsOf(ListFilterOption.SFW))
         assertEquals(setOf(3L), idsOf(ListFilterOption.Macro.NEW_CHAPTERS))
         assertEquals(setOf(4L), idsOf(ListFilterOption.Macro.COMPLETED))
-        assertEquals(setOf(5L), idsOf(ListFilterOption.Macro.MULTI_PROJECTION))
-        assertEquals(setOf(6L), idsOf(ListFilterOption.Macro.BROKEN_PROJECTION))
         assertEquals(setOf(7L), idsOf(ListFilterOption.PublicationState(ContentState.ONGOING)))
         assertEquals(setOf(8L), idsOf(ListFilterOption.ReadingStatus(ScrobblingStatus.ON_HOLD)))
         assertEquals(
             setOf(9L),
             idsOf(ListFilterOption.Tag(ContentTag(title = "Drama", key = "drama", source = TestContentSource))),
         )
-        // source filter matches the display OR any bound projection
+        // source filter matches the work's source
         assertEquals(
-            setOf(10L, 11L),
+            setOf(10L),
             idsOf(ListFilterOption.Source(org.skepsun.kototoro.core.model.ContentSource("OTHER"))),
         )
     }
@@ -375,11 +367,11 @@ class FavouriteLibraryDeriverTest {
     // -------------------------------------------------------------- visibility
 
     @Test
-    fun `space content types and source names filter the projection set`() {
+    fun `space content types and source names filter the library`() {
         val rows = listOf(
-            row(1, contentType = ContentType.MANGA, projectionSourceNames = setOf("TEST")),
-            row(2, contentType = ContentType.NOVEL, projectionSourceNames = setOf("TEST")),
-            row(3, contentType = ContentType.MANGA, projectionSourceNames = setOf("OTHER")),
+            row(1, contentType = ContentType.MANGA, sourceName = "TEST"),
+            row(2, contentType = ContentType.NOVEL, sourceName = "TEST"),
+            row(3, contentType = ContentType.MANGA, sourceName = "OTHER"),
         )
         val snap = snapshot(rows)
 
@@ -406,17 +398,16 @@ class FavouriteLibraryDeriverTest {
     }
 
     @Test
-    fun `source preset filters the displayed projection`() {
+    fun `source preset filters by the work's source`() {
         val rows = listOf(
-            row(1, sourceName = "TEST", projectionSourceNames = setOf("TEST", "OTHER")),
-            row(2, sourceName = "OTHER", projectionSourceNames = setOf("OTHER")),
+            row(1, sourceName = "TEST"),
+            row(2, sourceName = "OTHER"),
         )
         val snap = snapshot(rows)
         val ids = deriveFavouriteLibraryState(
             snap,
             FavouriteLibraryDerivationInput(sourcePresetNames = setOf("TEST")),
         ).visibleIdsByCategory.getValue(FavouriteLibraryAllCategoryId).toSet()
-        // the preset checks the DISPLAY source only (legacy semantics)
         assertEquals(setOf(1L), ids)
     }
 

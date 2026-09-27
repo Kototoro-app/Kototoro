@@ -11,19 +11,11 @@ import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.SourceOriginEntity
 import org.skepsun.kototoro.core.db.entity.TagEntity
 import org.skepsun.kototoro.core.extensions.GlobalExtensionManager
-import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
+import org.skepsun.kototoro.core.model.ContentIdentityKeys
 import org.skepsun.kototoro.core.model.getTitle
-import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
-import org.skepsun.kototoro.entitygraph.data.EntityRecord
-import org.skepsun.kototoro.entitygraph.data.computeNameHash
-import org.skepsun.kototoro.entitygraph.data.computeProjectionSyncId
-import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
-import org.skepsun.kototoro.entitygraph.domain.EntityBindingSourceKind
-import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
-import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
-import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
-import org.skepsun.kototoro.history.data.WorkHistoryEntity
+import org.skepsun.kototoro.favourites.data.FavouriteEntity
+import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
 import org.skepsun.kototoro.mihon.MihonExtensionManager
@@ -42,7 +34,6 @@ class ExternalBackupRepository @Inject constructor(
     suspend fun import(payload: ExternalBackupPayload): ExternalBackupImportSummary {
         if (payload.records.isEmpty()) return ExternalBackupImportSummary(0, 0)
         return database.withTransaction {
-            val dao = database.getEntityGraphDao()
             val sourceMatcher = SourceMatcher(context, database, mihonExtensionManager, aniyomiExtensionManager)
             val externalCategories = ensureImportedCategories(payload.favoriteCategories)
             val defaultCategoryId = ensureDefaultCategoryId(externalCategories.values)
@@ -94,66 +85,12 @@ class ExternalBackupRepository @Inject constructor(
             }
             val pending = pendingById.values.toList()
 
-            // Pass 2 (memory + chunked batch queries): anchor each record to a WORK entity.
-            // Exact-name matches attach to the existing entity; everything else becomes a
-            // provisional entity (binding createdBy=IMPORT) merged later by phase 2.
-            // Pass 2 (memory + chunked batch queries): anchor each record to a WORK entity.
-            // Local-binding owners take precedence; exact-name matches attach to the
-            // existing entity; everything else becomes a provisional entity (binding
-            // createdBy=IMPORT) merged later by phase 2.
-            val localBindingByMangaId = HashMap<Long, Long>()
-            pending.map { it.mangaId.toString() }.distinct().chunked(MAX_BATCH_QUERY_PARAMS).forEach { chunk ->
-                dao.findActiveBindingsBySources(
-                    sources = listOf("local_manga", "0"),
-                    externalIds = chunk,
-                ).forEach { binding ->
-                    binding.externalId.toLongOrNull()?.let { mangaId ->
-                        localBindingByMangaId.putIfAbsent(mangaId, binding.entityId)
-                    }
-                }
-            }
-            val nameHashes = pending.map { computeNameHash(it.title) }.distinct()
-            val existingByHash = LinkedHashMap<Long, List<EntityRecord>>()
-            nameHashes.chunked(MAX_BATCH_QUERY_PARAMS).forEach { chunk ->
-                dao.findEntitiesByTypeAndNameHashes(EntityType.WORK.name, chunk)
-                    .filter { it.type == EntityType.WORK.name }
-                    .groupBy { it.nameHash }
-                    .forEach { (hash, records) -> existingByHash.merge(hash, records) { old, new -> old + new } }
-            }
-            val candidateSyncIds = pending.mapNotNull { entry ->
-                val projectionKey = ProjectionIdentityKeys.bindingKey(
-                    url = entry.record.url,
-                    publicUrl = entry.record.publicUrl,
-                )
-                projectionKey?.let { computeProjectionSyncId(entry.record.sourceName, it) }
-            }.distinct()
-            val existingBySyncId = HashMap<String, EntityRecord>()
-            candidateSyncIds.chunked(MAX_BATCH_QUERY_PARAMS).forEach { chunk ->
-                dao.findEntitiesBySyncIds(chunk).forEach { record ->
-                    existingBySyncId[record.syncId] = record
-                }
-            }
-            val newEntities = planWorkEntityAssignment(
-                entries = pending,
-                existingEntitiesByHash = existingByHash,
-                now = now,
-                localBindingByMangaId = localBindingByMangaId,
-                existingEntitiesBySyncId = existingBySyncId,
-            )
-
-            // Pass 3 (bulk writes, single transaction):
             var favorites = 0
             var historyRows = 0
-            val insertedIds = dao.insertEntities(newEntities)
-            var insertIndex = 0
             val tagsById = LinkedHashMap<Long, TagEntity>()
-            val favourites = ArrayList<WorkFavouriteEntity>()
-            val histories = ArrayList<WorkHistoryEntity>()
-            val bindings = ArrayList<EntityBindingRecord>(pending.size * 2)
+            val favourites = ArrayList<FavouriteEntity>()
+            val histories = ArrayList<HistoryEntity>()
             for (entry in pending) {
-                if (entry.isNewEntity) {
-                    entry.entityId = insertedIds[insertIndex++]
-                }
                 entry.tags.forEach { tag -> tagsById.putIfAbsent(tag.id, tag) }
             }
             database.getTagsDao().upsert(tagsById.values.toList())
@@ -161,7 +98,6 @@ class ExternalBackupRepository @Inject constructor(
                 database.getMangaDao().upsert(entry.mangaEntity, entry.tags)
             }
             for (entry in pending) {
-                val entityId = entry.entityId
                 val resolved = entry.record
                 if (resolved.isFavorite) {
                     val favoriteTimestamp = resolved.favoriteTimestamp ?: now
@@ -169,14 +105,13 @@ class ExternalBackupRepository @Inject constructor(
                         .mapNotNull(externalCategories::get)
                         .ifEmpty { listOf(defaultCategoryId.toLong()) }
                     targetCategoryIds.distinct().forEach { categoryId ->
-                        favourites += WorkFavouriteEntity(
-                            entityId = entityId,
+                        favourites += FavouriteEntity(
+                            mangaId = entry.mangaId,
                             categoryId = categoryId,
-                            anchorMangaId = entry.mangaId,
-                            createdAt = favoriteTimestamp,
                             sortKey = 0,
-                            deletedAt = 0L,
                             isPinned = false,
+                            createdAt = favoriteTimestamp,
+                            deletedAt = 0L,
                             updatedAt = favoriteTimestamp,
                         )
                         favorites++
@@ -185,9 +120,8 @@ class ExternalBackupRepository @Inject constructor(
                 if (resolved.historyTimestamp != null && !resolved.historyChapterUrl.isNullOrBlank()) {
                     val chapterId = generateChapterId(resolved, resolved.historyChapterUrl)
                     val percent = resolved.progressPercent?.coerceIn(PROGRESS_NONE, 1f) ?: PROGRESS_NONE
-                    histories += WorkHistoryEntity(
-                        entityId = entityId,
-                        anchorMangaId = entry.mangaId,
+                    histories += HistoryEntity(
+                        mangaId = entry.mangaId,
                         createdAt = resolved.historyTimestamp,
                         updatedAt = resolved.historyTimestamp,
                         chapterId = chapterId,
@@ -200,38 +134,9 @@ class ExternalBackupRepository @Inject constructor(
                     )
                     historyRows++
                 }
-                bindings += EntityBindingRecord(
-                    entityId = entityId,
-                    source = "local_manga",
-                    externalId = entry.mangaId.toString(),
-                    confidence = 1f,
-                    isPrimary = entry.isNewEntity,
-                    sourceKind = EntityBindingSourceKind.READING_SOURCE.name,
-                    state = EntityBindingState.CONFIRMED.name,
-                    createdBy = EntityBindingCreatedBy.IMPORT.name,
-                    updatedAt = now,
-                )
-                val projectionKey = ProjectionIdentityKeys.bindingKey(
-                    url = resolved.url,
-                    publicUrl = resolved.publicUrl,
-                )
-                if (projectionKey != null) {
-                    bindings += EntityBindingRecord(
-                        entityId = entityId,
-                        source = resolved.sourceName,
-                        externalId = projectionKey,
-                        confidence = 1f,
-                        isPrimary = false,
-                        sourceKind = EntityBindingSourceKind.READING_SOURCE.name,
-                        state = EntityBindingState.CONFIRMED.name,
-                        createdBy = EntityBindingCreatedBy.IMPORT.name,
-                        updatedAt = now,
-                    )
-                }
             }
-            database.getWorkFavouritesDao().upsert(favourites)
-            database.getWorkHistoryDao().upsert(histories)
-            dao.upsertBindings(bindings)
+            database.getFavouritesDao().upsert(favourites)
+            database.getHistoryDao().upsert(histories)
 
             registerUninstalledSourceOrigins(uninstalledSources, now)
 

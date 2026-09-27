@@ -40,10 +40,7 @@ class BackupWebDavUploadCoordinator @Inject constructor(
         settings.backupWebDavDataVersion = targetVersion
         settings.backupWebDavWriterGeneration = RemoteNamespace.V3.writerGeneration
         settings.backupWebDavLastAuthoritativeSemanticSchemaVersion = BackupIndex.CURRENT_SYNC_SCHEMA_VERSION
-        settings.isWorkMigrationSyncWriteBlocked = false
-        settings.requiresWorkMigrationNormalization = false
         settings.hasCompletedBackupWebDavV2Migration = true
-        settings.isBackupWebDavAutoUploadBlockedByLegacyRestore = false
         return UploadCommitResult(
             uploadedAt = now,
             targetVersion = targetVersion,

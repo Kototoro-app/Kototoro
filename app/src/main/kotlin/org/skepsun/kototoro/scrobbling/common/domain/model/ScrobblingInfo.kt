@@ -5,7 +5,6 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 
 data class ScrobblingInfo(
     val scrobbler: ScrobblerService,
-    val entityId: Long? = null,
     val preferredLocalMangaId: Long? = null,
     val mangaId: Long,
     val targetId: Long,
@@ -28,15 +27,13 @@ data class ScrobblingInfo(
      * Stable identity used for list diffing and for Compose LazyColumn item keys.
      * It must be unique for every distinct [ScrobblingInfo] in a list: the same
      * `scrobblings` table row can be duplicated in the database (rows differ only
-     * in the PK columns `id`/`owner_id`), so the key intentionally covers every
+     * in the PK columns `id`), so the key intentionally covers every
      * field that distinguishes one scrobbling entry from another. Failing to keep
      * this unique crashes LazyColumn with "Key was already used".
      */
     fun identityKey(): String = buildString {
         append("info:")
         append(scrobbler.id)
-        append(':')
-        append(entityId)
         append(':')
         append(preferredLocalMangaId)
         append(':')

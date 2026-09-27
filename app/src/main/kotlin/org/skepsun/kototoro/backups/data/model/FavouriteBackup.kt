@@ -5,7 +5,6 @@ import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.core.db.entity.MangaWithTags
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
 import org.skepsun.kototoro.favourites.data.FavouriteContent
-import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 
 @Serializable
 class FavouriteBackup(
@@ -18,8 +17,9 @@ class FavouriteBackup(
     @SerialName("updated_at") val updatedAt: Long = 0L,
     @SerialName("manga") val manga: ContentBackup,
 ) {
-    // Legacy favourites payload keeps a projection snapshot only.
-    // Work/entity favourites state is exported via dedicated work sections.
+    // A favourite is owned by the manga itself.
+    // Legacy backups may still carry separate work/entity sections; they are
+    // translated into this shape on restore by [BackupRepository].
 
     constructor(entity: FavouriteContent) : this(
         mangaId = entity.manga.id,
@@ -30,17 +30,6 @@ class FavouriteBackup(
         deletedAt = entity.favourite.deletedAt,
         updatedAt = entity.favourite.updatedAt,
         manga = ContentBackup(MangaWithTags(entity.manga, entity.tags)),
-    )
-
-    constructor(entity: WorkFavouriteEntity, manga: MangaWithTags) : this(
-        mangaId = manga.manga.id,
-        categoryId = entity.categoryId,
-        sortKey = entity.sortKey,
-        isPinned = entity.isPinned,
-        createdAt = entity.createdAt,
-        deletedAt = entity.deletedAt,
-        updatedAt = entity.updatedAt,
-        manga = ContentBackup(manga),
     )
 
     fun toEntity() = FavouriteEntity(

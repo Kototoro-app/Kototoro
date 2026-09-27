@@ -473,16 +473,7 @@
     <string name="backup_orphan_state_statistics">阅读统计</string>
     <string name="backup_orphan_source">来源：%1$s</string>
     <string name="backup_orphan_more_items">还有 %1$d 条记录未显示</string>
-    <string name="backup_guard_missing_projection_anchors">备份已阻止：部分作品状态引用了不存在的本地投影（%1$s）。请前往实体整理修复悬空投影锚点后重试。</string>
-    <string name="backup_guard_work_entity_missing_sync_id">备份已阻止：作品实体 %1$d 缺少同步身份。请前往实体整理修复缺失的作品同步身份后重试。</string>
-    <string name="entity_organize_repair_dangling_work_anchors_title">修复悬空投影锚点</string>
-    <string name="entity_organize_repair_dangling_work_anchors_summary">%1$d 条作品状态指向已不存在的本地投影，可能阻止备份和同步。修复会在同一实体仍有可用投影时，将这些锚点迁移到可用投影。</string>
-    <string name="entity_organize_repair_dangling_work_anchors_action">修复锚点</string>
-    <string name="entity_organize_repair_dangling_work_anchors_feedback">已修复 %1$d 个悬空投影锚点。</string>
-    <string name="entity_organize_repair_work_sync_ids_title">修复缺失的作品同步身份</string>
-    <string name="entity_organize_repair_work_sync_ids_summary">%1$d 个作品实体缺少同步身份，可能阻止备份和跨设备同步。修复会为它们分配稳定的本地同步身份，不会重建实体。</string>
-    <string name="entity_organize_repair_work_sync_ids_action">修复同步身份</string>
-    <string name="entity_organize_repair_work_sync_ids_feedback">已修复 %1$d 个缺失的作品同步身份。</string>
+    <string name="backup_guard_missing_anchor_contents">无法恢复：备份中的阅读状态引用了备份里不存在的作品（%1$s），该备份不完整，请换用较新的备份文件。</string>
     <string name="backup_tg_check">检查 API 是否可用</string>
     <string name="backup_tg_echo">测试消息</string>
     <string name="backup_tg_id_not_set">未设置聊天ID</string>
@@ -939,19 +930,6 @@
     <string name="enhanced_colors_summary">减少色带，但可能会影响性能</string>
     <string name="enter_name">用户名</string>
     <string name="enter_password">密码</string>
-    <string name="entity_graph_active_local_sources">活跃的本地源</string>
-    <string name="entity_graph_aliases">别名</string>
-    <string name="entity_graph_bindings">绑定</string>
-    <string name="entity_graph_chapter_source">章节源</string>
-    <string name="entity_graph_chapter_source_selected_hint">章节从当前选定的本地源加载。</string>
-    <string name="entity_graph_chapter_source_unavailable">无活跃的本地源</string>
-    <string name="entity_graph_chapter_source_unavailable_hint">绑定或选择一个本地源以浏览该实体的章节。</string>
-    <string name="entity_graph_detail_title">实体详情</string>
-    <string name="entity_graph_no_bindings">暂无绑定</string>
-    <string name="entity_graph_no_relations">暂无相关实体。</string>
-    <string name="entity_graph_no_source_results">暂无源搜索结果。</string>
-    <string name="entity_graph_open_tracking_details">查看原始追踪详情</string>
-    <string name="entity_graph_relations">关联</string>
     <string name="entity_graph_section_characters">角色</string>
     <string name="entity_graph_section_created_works">创作作品</string>
     <string name="entity_graph_section_creators">创作者</string>
@@ -960,8 +938,6 @@
     <string name="entity_graph_section_voice_actors">声优</string>
     <string name="entity_graph_section_voiced_characters">配音角色</string>
     <string name="entity_graph_section_voiced_works">配音作品</string>
-    <string name="entity_graph_source_result_subtitle">%1$s · %2$d%% 匹配</string>
-    <string name="entity_graph_source_results">源搜索结果</string>
     <string name="entity_graph_type_character">角色</string>
     <string name="entity_graph_type_organization">组织</string>
     <string name="entity_graph_type_person">人物</string>
@@ -2904,19 +2880,13 @@ SHA-256 指纹:
     <string name="reading_chapter_record_format">%1$d 次 · %2$s</string>
 
     <!-- 批量源迁移 -->
-    <string name="batch_source_migration">批量源迁移</string>
-    <string name="source_migration_title">批量源迁移</string>
     <string name="source_migration_from_label">源来源</string>
     <string name="source_migration_to_label">目标源</string>
-    <string name="source_migration_start">开始迁移</string>
     <string name="source_migration_cancel">取消迁移</string>
     <string name="source_migration_concurrency">搜索并发数：%1$d</string>
-    <string name="source_migration_channel_name">源迁移</string>
-    <string name="source_migration_notification_title">源迁移</string>
     <string name="migration_progress">已迁移 %1$d / %2$d</string>
     <string name="migration_progress_detail">已完成：%1$d / %2$d\n失败：%3$d\n未找到：%4$d</string>
     <string name="migration_status_active">正在迁移：%1$s</string>
-    <string name="migration_completed_title">迁移完成</string>
     <string name="migration_completed_summary">成功：%1$d，失败：%2$d，未找到：%3$d</string>
     <string name="migration_same_source_error">来源和目标源不能相同</string>
     <string name="migration_no_sources">收藏中无可迁移的源</string>
@@ -2994,18 +2964,8 @@ SHA-256 指纹:
     <string name="font_preset_inter">Inter</string>
 
     <!-- 实体整理 - 混合内容类型 -->
-    <string name="entity_organize_repair_mixed_work_content_types_title">修复混合内容类型的作品实体</string>
-    <string name="entity_organize_repair_mixed_work_content_types_summary">%1$d 个作品实体包含 %2$d 个来自不同内容类型的本地投影。将投影拆分为独立作品实体以恢复类型隔离。</string>
-    <string name="entity_organize_repair_mixed_work_content_types_action">拆分混合内容类型作品</string>
-    <string name="entity_organize_repair_mixed_work_content_types_feedback">已将 %1$d 个混合内容类型投影拆分为独立作品实体。</string>
 
     <!-- 实体整理 - 重复本地投影 -->
-    <string name="entity_organize_repair_duplicate_projections_title">清理重复和冲突的本地投影</string>
-    <string name="entity_organize_repair_duplicate_projections_summary">检测到 %1$d 组作品包含 %2$d 个同源重复或冲突投影。修复会识别来源镜像域名及跨实体重复，保留收藏和历史锚点，清理重复项，并将同一来源下的不同作品拆回独立实体。</string>
-    <string name="entity_organize_repair_duplicate_projections_action">一键修复投影</string>
-    <string name="entity_organize_repair_duplicate_projections_feedback">已清理 %1$d 个重复投影，并拆分 %2$d 个错合作品。</string>
-    <string name="entity_organize_duplicate_projections_badge">重复 ×%1$d</string>
-    <string name="entity_organize_clean_duplicate_projections_action">清理</string>
 
     <!-- Spaces 功能 -->
     <string name="space_switcher_title">切换 Space</string>
@@ -3049,7 +3009,6 @@ SHA-256 指纹:
     <string name="filter_group_reading_status">阅读</string>
     <string name="filter_group_publication_status">连载</string>
     <string name="filter_group_content_rating">分级</string>
-    <string name="filter_group_work_relations">关联</string>
     <string name="reading_status_planned">想读</string>
     <string name="reading_status_reading">在读</string>
     <string name="reading_status_re_reading">重读</string>

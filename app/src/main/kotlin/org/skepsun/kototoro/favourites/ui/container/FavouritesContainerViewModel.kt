@@ -76,7 +76,7 @@ class FavouritesContainerViewModel @Inject constructor(
     private val favouriteLibrarySnapshotStore: org.skepsun.kototoro.favourites.domain.library.FavouriteLibrarySnapshotStore,
     private val spaceContentPolicy: org.skepsun.kototoro.space.domain.SpaceContentPolicy,
     private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
-    private val workAggregateRepository: org.skepsun.kototoro.work.domain.WorkAggregateRepository,
+
     private val cardMapper: FavouritesCardMapper,
     private val contentResolver: org.skepsun.kototoro.favourites.domain.library.FavouriteContentResolver,
     private val quickFilterFactory: FavoritesListQuickFilter.Factory,
@@ -109,6 +109,14 @@ class FavouritesContainerViewModel @Inject constructor(
 
     fun setQuickFilterEnabled(enabled: Boolean) {
         settings.isQuickFilterEnabled = enabled
+    }
+
+    /** Whether a category page shows the "continue reading" shelf above its grid. */
+    val isShelfEnabled = settings.observeAsFlow(AppSettings.KEY_FAVOURITES_SHELF) { isFavouritesShelfEnabled }
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.isFavouritesShelfEnabled)
+
+    fun setShelfEnabled(enabled: Boolean) {
+        settings.isFavouritesShelfEnabled = enabled
     }
 
     val allFavoritesSortOrder = settings.observeAsFlow(AppSettings.KEY_FAVORITES_ORDER) {
@@ -283,7 +291,7 @@ class FavouritesContainerViewModel @Inject constructor(
         }
     }
 
-    /** Mark the selected entities as read through their stored projections. */
+    /** Mark the selected entities as read through their stored manga. */
     internal fun markAsRead(entityIds: Collection<Long>) {
         if (entityIds.isEmpty()) return
         launchLoadingJob(Dispatchers.Default) {
@@ -294,7 +302,7 @@ class FavouritesContainerViewModel @Inject constructor(
         }
     }
 
-    /** Stored projections of the selection, for the actions that cannot use the card stub. */
+    /** Stored contents of the selection, for the actions that cannot use the card stub. */
     internal suspend fun resolveSelectedContents(ids: Collection<Long>): List<Content> =
         contentResolver.resolveByDisplayMangaIds(
             ids.mapNotNullTo(ArrayList(ids.size)) { libraryState.value.rowsByEntityId[it]?.displayMangaId },
@@ -345,8 +353,8 @@ class FavouritesContainerViewModel @Inject constructor(
     }
 
     /**
-     * Entity ids of a selection expanded to the projections the favourite DAOs address
-     * rows by. A row without any projection keeps the entity id (it has no manga to
+     * Entity ids of a selection expanded to the manga ids the favourite DAOs address
+     * rows by. A row without a stored manga keeps the entity id (it has no manga to
      * address, and the legacy chain dropped such rows instead of acting on them).
      */
     private fun expandToMangaIds(ids: Collection<Long>): Set<Long> {
@@ -368,34 +376,7 @@ class FavouritesContainerViewModel @Inject constructor(
      * and logs the first divergence. Removed in Phase 8 once the new path is verified.
      */
     fun startLibraryShadowComparison() {
-        if (!BuildConfig.DEBUG) return
-        launchJob(Dispatchers.Default) {
-            combine(
-                workAggregateRepository.observeFavouriteLibraryAggregates(order = ListSortOrder.NEWEST),
-                favouriteLibrarySnapshotStore.observe(),
-            ) { legacyAggregates, snapshot ->
-                val legacyIds = legacyAggregates.mapNotNull { it.identity.entityId }
-                val newIds = org.skepsun.kototoro.favourites.domain.library.deriveFavouriteLibraryState(
-                    snapshot,
-                    org.skepsun.kototoro.favourites.domain.library.FavouriteLibraryDerivationInput(
-                        defaultOrder = ListSortOrder.NEWEST,
-                    ),
-                ).visibleIdsByCategory.getValue(
-                    org.skepsun.kototoro.favourites.domain.library.FavouriteLibraryAllCategoryId,
-                )
-                if (legacyIds != newIds) {
-                    val firstDiff = legacyIds.indices.firstOrNull { legacyIds.getOrNull(it) != newIds.getOrNull(it) }
-                    android.util.Log.d(
-                        "FavouriteLibrary",
-                        "shadow diff sizeLegacy=${legacyIds.size} sizeNew=${newIds.size} " +
-                            "firstDiffIndex=$firstDiff legacyAt=${firstDiff?.let { legacyIds.getOrNull(it) }} " +
-                            "newAt=${firstDiff?.let { newIds.getOrNull(it) }}",
-                    )
-                } else {
-                    android.util.Log.d("FavouriteLibrary", "shadow match size=${legacyIds.size}")
-                }
-            }.collect()
-        }
+        // Legacy entity-based shadow comparison removed with entity system
     }
 
     fun toggleSourceTag(tag: SourceTag) {
@@ -434,16 +415,8 @@ class FavouritesContainerViewModel @Inject constructor(
     val onActionDone = MutableEventFlow<ReversibleAction>()
     val importMessages = MutableEventFlow<String>()
     val syncMessages = MutableEventFlow<String>()
-    val organizeMessages = MutableEventFlow<String>()
     private fun logImport(msg: String) = Unit
     private fun logSync(msg: String) = Unit
-
-    fun notifyEntityOrganizeResult(message: String?) {
-        if (message.isNullOrBlank()) {
-            return
-        }
-        organizeMessages.call(message)
-    }
 
     private val categoriesStateFlow = favouritesRepository.observeCategoriesForLibrary()
         .withErrorHandling()
@@ -453,40 +426,20 @@ class FavouritesContainerViewModel @Inject constructor(
         categoriesStateFlow,
         libraryState,
         currentGroupTab,
-        selectedSourceTags,
+        combine(selectedSourceTags, globalFavoritesState.appliedFilter, ::Pair),
         observeAllFavouritesVisibility(),
-    ) { list, libState, groupTab, sourceTags, showAll ->
+    ) { list, libState, groupTab, (sourceTags, quickFilters), showAll ->
         if (list == null || !libState.isInitialized) {
             return@combine FavoritesHostUiState()
         }
 
-        val activeCounts = libState.categoryCounts
-        val hasActiveFilter = groupTab != BrowseGroupTab.All || sourceTags.isNotEmpty()
-        val filteredList = if (hasActiveFilter) {
-            list.filter { activeCounts.getOrDefault(it.id, 0) > 0 }
-        } else {
-            list
-        }
-
-        val result = ArrayList<FavouriteTabModel>(if (showAll) filteredList.size + 1 else filteredList.size)
-        if (showAll) {
-            if (!hasActiveFilter || activeCounts.getOrDefault(NO_ID, 0) > 0) {
-                result.add(FavouriteTabModel(NO_ID, null))
-            }
-        }
-        filteredList.mapTo(result) { FavouriteTabModel(it.id, it.title, it.order) }
-
-        val isEmpty = if (hasActiveFilter) {
-            list.all { activeCounts.getOrDefault(it.id, 0) == 0 } &&
-                activeCounts.getOrDefault(NO_ID, 0) == 0
-        } else {
-            list.isEmpty() && !showAll
-        }
-
-        FavoritesHostUiState(
-            isLoading = false,
-            categories = result,
-            isEmpty = isEmpty,
+        buildFavoritesHostUiState(
+            categories = list.map { FavouriteTabModel(it.id, it.title, it.order) },
+            categoryCounts = libState.categoryCounts,
+            groupTab = groupTab,
+            hasSourceTags = sourceTags.isNotEmpty(),
+            hasQuickFilters = quickFilters.isNotEmpty(),
+            showAll = showAll,
         )
     }.runningFold(FavoritesHostUiState()) { previous, next ->
         if (next.isLoading && previous.categories.isNotEmpty()) {
@@ -788,7 +741,7 @@ class FavouritesContainerViewModel @Inject constructor(
 
         duplicatesJob = launchJob(Dispatchers.Default) {
             try {
-                val allFavs = favouritesRepository.observeAllProjectionContents(
+                val allFavs = favouritesRepository.observeAllContents(
                     order = ListSortOrder.NEWEST,
                     filterOptions = emptySet(),
                     limit = Int.MAX_VALUE
@@ -904,7 +857,7 @@ class FavouritesContainerViewModel @Inject constructor(
 
         duplicatesJob = launchJob(Dispatchers.Default) {
             try {
-                val allFavs = favouritesRepository.observeAllProjectionContents(
+                val allFavs = favouritesRepository.observeAllContents(
                     order = ListSortOrder.NEWEST,
                     filterOptions = emptySet(),
                     limit = Int.MAX_VALUE
@@ -1086,31 +1039,10 @@ class FavouritesContainerViewModel @Inject constructor(
     private suspend fun performDeduplication(groupsToDelete: List<DuplicatesGroup>) {
         db.withTransaction {
             for (group in groupsToDelete) {
-                val rep = group.representative
-                val repProjectionKey = org.skepsun.kototoro.core.model.ProjectionIdentityKeys.bindingKey(rep.url, rep.publicUrl)
-                val repEntityId = repProjectionKey?.let { db.getEntityGraphDao().findActiveBinding(rep.source.name, it)?.entityId }
-                    ?: db.getEntityGraphDao().findActiveBinding("local_manga", rep.id.toString())?.entityId
-                    ?: db.getEntityGraphDao().findActiveBinding("0", rep.id.toString())?.entityId
-
                 for (dup in group.duplicates) {
-                    val projectionKey = org.skepsun.kototoro.core.model.ProjectionIdentityKeys.bindingKey(dup.url, dup.publicUrl)
-                    val dupEntityId = projectionKey?.let { db.getEntityGraphDao().findActiveBinding(dup.source.name, it)?.entityId }
-                        ?: db.getEntityGraphDao().findActiveBinding("local_manga", dup.id.toString())?.entityId
-                        ?: db.getEntityGraphDao().findActiveBinding("0", dup.id.toString())?.entityId
-
-                    // 1. Delete entity bindings for the duplicate projection
-                    if (projectionKey != null) {
-                        db.getEntityGraphDao().deleteBindingBySource(dup.source.name, projectionKey)
-                    }
-                    db.getEntityGraphDao().deleteBindingBySource("local_manga", dup.id.toString())
-                    db.getEntityGraphDao().deleteBindingBySource("0", dup.id.toString())
-
-                    // 2. If it was a separate work, remove it from work_favourites
-                    if (dupEntityId != null && dupEntityId != repEntityId) {
-                        db.getWorkFavouritesDao().delete(dupEntityId)
-                    }
-
-                    // 3. Clear the duplicate manga metadata and its chapters from database
+                    // A duplicate is its own manga, so removing it
+                    // means removing that manga row; the declared foreign keys cascade onto its
+                    // favourites / history / preferences / stats / tracks state.
                     db.getMangaDao().find(dup.id)?.manga?.let { entity ->
                         db.getMangaDao().delete(listOf(entity))
                     }

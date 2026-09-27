@@ -13,7 +13,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.ScrobblerRepositoryMap
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContent
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContentInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
-import org.skepsun.kototoro.entitygraph.domain.EntityType
+import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteCapabilities
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteCatalog

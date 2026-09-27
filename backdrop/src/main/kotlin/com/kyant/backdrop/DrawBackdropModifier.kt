@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.MeasureResult
@@ -28,6 +29,7 @@ import androidx.compose.ui.node.observeReads
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.kyant.backdrop.backdrops.LayerBackdrop
@@ -39,6 +41,7 @@ import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.InnerShadowElement
 import com.kyant.backdrop.shadow.Shadow
 import com.kyant.backdrop.shadow.ShadowElement
+import kotlin.math.ceil
 
 private val DefaultHighlight = { Highlight.Default }
 private val DefaultShadow = { Shadow.Default }
@@ -273,21 +276,40 @@ private class DrawBackdropNode(
 
     private var padding by mutableFloatStateOf(0f)
 
+    // Kototoro patch -- the backdrop layer (blur + lens over everything behind the surface) is
+    // re-rendered every frame while content scrolls underneath, and on the glass chrome that was
+    // the dominant RenderThread/GPU cost. When an effect is present the layer is recorded at
+    // 1/BackdropResolutionScale and scaled back up; the blur hides the lost detail. Effects see a
+    // matching density/size (BackdropEffectScopeImpl.update), so dp parameters are unchanged,
+    // while the backdrop itself is still positioned with the real density. See backdrop/UPSTREAM.md.
+    private var resolutionScale = 1f
+    private val drawDensity = object : Density {
+        override var density: Float = 1f
+        override var fontScale: Float = 1f
+    }
+
     private val recordBackdropBlock: (DrawScope.() -> Unit) = {
         val canvas = drawContext.canvas
         val padding = padding
+        val scale = resolutionScale
 
         if (padding != 0f) {
             canvas.translate(padding, padding)
         }
+        if (scale != 1f) {
+            canvas.scale(1f / scale, 1f / scale)
+        }
         onDrawBackdrop {
             with(backdrop) {
                 drawBackdrop(
-                    density = effectScope,
+                    density = if (scale != 1f) drawDensity else effectScope,
                     coordinates = layoutCoordinates,
                     layerBlock = layerBlock
                 )
             }
+        }
+        if (scale != 1f) {
+            canvas.scale(scale, scale)
         }
         if (padding != 0f) {
             canvas.translate(-padding, -padding)
@@ -298,19 +320,23 @@ private class DrawBackdropNode(
         val layer = graphicsLayer
         if (layer != null) {
             val padding = padding
+            val scale = resolutionScale
 
             recordLayer(
                 layer,
                 size = IntSize(
-                    size.width.toInt() + padding.toInt() * 2,
-                    size.height.toInt() + padding.toInt() * 2
+                    ceil(size.width / scale).toInt() + padding.toInt() * 2,
+                    ceil(size.height / scale).toInt() + padding.toInt() * 2
                 ),
                 block = recordBackdropBlock
             )
 
             layer.topLeft =
-                if (padding != 0f) IntOffset(-padding.toInt(), -padding.toInt())
+                if (padding != 0f) IntOffset(-(padding * scale).toInt(), -(padding * scale).toInt())
                 else IntOffset.Zero
+            layer.pivotOffset = Offset.Zero
+            layer.scaleX = scale
+            layer.scaleY = scale
             drawLayer(layer)
         }
     }
@@ -326,7 +352,9 @@ private class DrawBackdropNode(
     }
 
     override fun ContentDrawScope.draw() {
-        if (effectScope.update(this)) {
+        drawDensity.density = density
+        drawDensity.fontScale = fontScale
+        if (effectScope.update(this, resolutionScale)) {
             updateEffects()
         }
 
@@ -394,6 +422,16 @@ private class DrawBackdropNode(
         if (!isRenderEffectSupported()) return
 
         effectScope.apply(effects)
+        val wantedScale = if (effectScope.renderEffect != null) BackdropResolutionScale else 1f
+        if (wantedScale != resolutionScale) {
+            // Effects were resolved against the other scale; resolve them again at the new one.
+            effectScope.density = effectScope.density * resolutionScale / wantedScale
+            if (effectScope.size.isSpecified) {
+                effectScope.size = effectScope.size * (resolutionScale / wantedScale)
+            }
+            resolutionScale = wantedScale
+            effectScope.apply(effects)
+        }
         graphicsLayer?.renderEffect = effectScope.renderEffect
         padding = effectScope.padding
     }
@@ -413,7 +451,11 @@ private class DrawBackdropNode(
         }
 
         effectScope.reset()
+        resolutionScale = 1f
         clearPublishedCoordinates()
         exportedBackdrop?.layerCoordinates = null
     }
 }
+
+// Kototoro patch -- see the resolutionScale note in DrawBackdropNode.
+private const val BackdropResolutionScale = 2f

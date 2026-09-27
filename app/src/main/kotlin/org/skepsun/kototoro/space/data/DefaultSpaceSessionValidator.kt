@@ -3,15 +3,11 @@ package org.skepsun.kototoro.space.data
 import org.skepsun.kototoro.space.domain.SpaceRouteSnapshot
 import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
 import org.skepsun.kototoro.space.domain.SpaceSessionValidator
-import org.skepsun.kototoro.space.domain.SpaceSourceAvailability
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class DefaultSpaceSessionValidator @Inject constructor(
-    private val workResolver: WorkResolver,
-) : SpaceSessionValidator {
+class DefaultSpaceSessionValidator @Inject constructor() : SpaceSessionValidator {
 
     override suspend fun validate(snapshot: SpaceSessionSnapshot): SpaceSessionSnapshot {
         val validatedStacks = snapshot.stacks.mapNotNull { (stackKey, routes) ->
@@ -43,10 +39,11 @@ class DefaultSpaceSessionValidator @Inject constructor(
 
     private suspend fun SpaceRouteSnapshot.validate(): SpaceRouteSnapshot? = when (this) {
         is SpaceRouteSnapshot.TopLevel -> takeIf { key in VALID_TOP_LEVEL_KEYS }
-        is SpaceRouteSnapshot.WorkDetails -> {
-            val identity = workResolver.resolveByEntityId(entityId) ?: return null
-            copy(requestedProjectionId = requestedProjectionId?.takeIf { it in identity.localMangaIds })
-        }
+        // `WorkDetails` no longer names an entity, it names the manga to reopen. There is no in-memory identity registry left to
+        // validate it against, and route restoration must not destructively discard a
+        // valid saved destination before the details page has had a chance to resolve it,
+        // so the route is kept as saved — the same policy as ContentList and Search.
+        is SpaceRouteSnapshot.WorkDetails -> this
         // Runtime source registries are transiently empty during cold start. Route restoration must not
         // destructively discard a valid saved destination before extension discovery finishes.
         is SpaceRouteSnapshot.ContentList -> this

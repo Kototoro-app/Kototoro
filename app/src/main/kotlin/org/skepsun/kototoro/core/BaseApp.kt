@@ -8,7 +8,6 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.room.InvalidationTracker
 import androidx.work.Configuration
-import androidx.work.ExistingWorkPolicy
 import dagger.hilt.EntryPoint
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
@@ -20,8 +19,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import okhttp3.OkHttp
 import org.acra.ACRA
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
 import org.acra.ReportField
 import org.acra.config.dialog
 import org.acra.data.StringFormat
@@ -90,30 +87,8 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
                 ACRA.errorReporter.putCustomData("isMiui", RomCompat.isMiui.getOrNull().toString())
             }
         }
-        if (!entryPoint.settings().isEntityGraphMigrated ||
-            !entryPoint.settings().isLegacyFavouriteProjectionMigrationCompleted
-        ) {
-            val request = OneTimeWorkRequestBuilder<org.skepsun.kototoro.entitygraph.work.EntityGraphMigrationWorker>().build()
-            WorkManager.getInstance(this).enqueue(request)
-            entryPoint.settings().isEntityGraphMigrated = true
-        }
-        if (!entryPoint.settings().isLegacyEntityNameCollisionRepairCompleted) {
-            val request = OneTimeWorkRequestBuilder<
-                org.skepsun.kototoro.entitygraph.work.EntityNameCollisionRepairWorker,
-            >().build()
-            WorkManager.getInstance(this).enqueueUniqueWork(
-                org.skepsun.kototoro.entitygraph.work.EntityNameCollisionRepairWorker.UNIQUE_WORK_NAME,
-                ExistingWorkPolicy.KEEP,
-                request,
-            )
-        }
         processLifecycleScope.launch(Dispatchers.Default) {
             runCatching {
-                if (entryPoint.settings().requiresWorkMigrationNormalization) {
-                    entryPoint.favouritesRepository().normalizeWorkFavouritesIfNeeded()
-                    entryPoint.historyRepository().normalizeWorkHistoryIfNeeded()
-                    entryPoint.settings().requiresWorkMigrationNormalization = false
-                }
                 setupDatabaseObservers()
                 entryPoint.localStorageChanges().collect(entryPoint.localContentIndexProvider().get())
             }
@@ -231,7 +206,6 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
         fun contentSourcesRepository(): org.skepsun.kototoro.explore.data.ContentSourcesRepository
         fun favouritesRepository(): org.skepsun.kototoro.favourites.domain.FavouritesRepository
         fun historyRepository(): org.skepsun.kototoro.history.data.HistoryRepository
-        fun workResolver(): org.skepsun.kototoro.work.domain.WorkResolver
         fun imageLoader(): ImageLoader
     }
 }

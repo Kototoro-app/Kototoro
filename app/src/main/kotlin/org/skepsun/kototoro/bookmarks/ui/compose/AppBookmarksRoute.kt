@@ -44,8 +44,6 @@ import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.ui.compose.ScrollToTopEffect
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
-import org.skepsun.kototoro.details.ui.model.DetailsOrigin
-import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
 
 private fun bookmarkListModelKey(model: Any): String = when (model) {
@@ -80,7 +78,6 @@ fun AppBookmarksRoute(
 
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
     val hapticFeedback = LocalHapticFeedback.current
-    val mainActivity = activity as? MainActivity
     val rootView = LocalView.current
 
     LaunchedEffect(viewModel.onError) {
@@ -150,17 +147,7 @@ fun AppBookmarksRoute(
                                         .clickable {
                                             val manga = listModel.payload as? Content
                                             if (manga != null) {
-                                                mainActivity?.resolveDetailsOriginForContent(manga) { origin ->
-                                                    when (origin) {
-                                                        is DetailsOrigin.EntityGraph -> {
-                                                            appRouter.openEntityDetails(
-                                                                entityId = origin.entityId,
-                                                                initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
-                                                            )
-                                                        }
-                                                        else -> appRouter.openResolvedDetails(manga, rootView)
-                                                    }
-                                                } ?: appRouter.openResolvedDetails(manga, rootView)
+                                                appRouter.openResolvedDetails(manga, rootView)
                                             }
                                         }
                                         .padding(horizontal = 16.dp, vertical = 24.dp),

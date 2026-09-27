@@ -3,14 +3,14 @@ package org.skepsun.kototoro.stats.data
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
-import org.skepsun.kototoro.history.data.HistoryEntity
+import org.skepsun.kototoro.core.db.entity.MangaEntity
 
 @Entity(
     tableName = "stats",
     primaryKeys = ["manga_id", "started_at"],
     foreignKeys = [
         ForeignKey(
-            entity = HistoryEntity::class,
+            entity = MangaEntity::class,
             parentColumns = ["manga_id"],
             childColumns = ["manga_id"],
             onDelete = ForeignKey.CASCADE,

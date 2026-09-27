@@ -1,8 +1,21 @@
 package org.skepsun.kototoro.backups.domain
 
-enum class BackupRestoreFormat {
-    KOTOTORO_CURRENT,
-    KOTATSU_OR_LEGACY_KOTOTORO,
+import org.skepsun.kototoro.backups.data.BackupRepository
+
+/**
+ * Kind of backup detected from its index when restoring. Every kind restores through the
+ * same path; the kind picks the default restore mode and, for Kotatsu / older Kototoro
+ * backups, limits restore to the library sections: their sources, settings and auth use
+ * keys this app does not share.
+ */
+enum class BackupRestoreFormat(
+    val defaultRestoreMode: BackupRepository.RestoreMode,
+) {
+    /** A backup written by a current Kototoro (semantic schema >= 3). */
+    KOTOTORO_CURRENT(BackupRepository.RestoreMode.SNAPSHOT_REPLACE),
+
+    /** A Kotatsu backup or one written by an older Kototoro. */
+    KOTATSU_OR_LEGACY_KOTOTORO(BackupRepository.RestoreMode.MERGE),
     ;
 
     fun supports(section: BackupSection): Boolean {

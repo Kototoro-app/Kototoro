@@ -58,7 +58,6 @@ class HistoryLibraryReadDaoScaleTest {
             MangaDatabase::class.java,
         ).build()
         val sql = db.openHelper.writableDatabase
-        sql.execSQL("PRAGMA foreign_keys = OFF")
         dao = db.getHistoryLibraryReadDao()
         store = HistoryLibrarySnapshotStore(db, sourceGroupManager)
         val seedStart = SystemClock.elapsedRealtime()
@@ -90,16 +89,16 @@ class HistoryLibraryReadDaoScaleTest {
         val downloaded = dao.observeHistoryDownloadedRows().first()
 
         // Every facet row must be reachable from the snapshot: the store keys the tag and
-        // override lookups by the *display* projection, so a facet row filed under any
+        // override lookups by the *display* content, so a facet row filed under any
         // other manga id is bytes read, objects built and never shown.
         val unreachableTags = tagFacets.map { it.mangaId }.filterNotTo(HashSet()) { it in displayIds }
         assertTrue(
-            "tag facets outside the display projections: ${unreachableTags.size} of ${tagFacets.size} $unreachableTags",
+            "tag facets outside the display manga: ${unreachableTags.size} of ${tagFacets.size} $unreachableTags",
             unreachableTags.isEmpty(),
         )
         val unreachableOverrides = overrides.map { it.mangaId }.filterNotTo(HashSet()) { it in displayIds }
         assertTrue(
-            "override rows outside the display projections: ${unreachableOverrides.size} of ${overrides.size}",
+            "override rows outside the display manga: ${unreachableOverrides.size} of ${overrides.size}",
             unreachableOverrides.isEmpty(),
         )
         val entities = base.map { it.entityId }.toSet()
@@ -133,7 +132,7 @@ class HistoryLibraryReadDaoScaleTest {
         // on thermal state and whatever else the device is doing, so it fails on correct code.
         // What this test pins down deterministically is the row set above — nothing read that
         // the snapshot cannot reach. The coldMs it logs is what the cold-page work is planned
-        // from: on the real library, driving the tag facet from the display projections
+        // from: on the real library, driving the tag facet from the display contents
         // instead of scanning manga_tags is what took it from 1078ms to 156ms.
     }
 
@@ -150,24 +149,19 @@ class HistoryLibraryReadDaoScaleTest {
 
 /**
  * Raw-SQL seeding of a large history corpus, shaped like a real heavily-used library:
- * 8.4k entities with one display projection each, 4.6k of them in the history, 10.8k tags
- * with ~14 tags per projection (≈118k `manga_tags` links), local bindings, category
- * memberships, tracks and a set of `preferred_local_manga_id` overrides so every branch of
- * the display-projection joins is exercised.
+ * 8.4k manga, 4.6k of them in the history, 10.8k tags with ~14 tags per manga
+ * (~118k `manga_tags` links), category memberships, tracks, downloads and a set of
+ * preferences overrides so every branch of the read-model joins is exercised.
  */
 internal object HistoryLibrarySeed {
 
-    const val ENTITIES = 8_400L
+    const val MANGA = 8_400L
     const val HISTORY = 4_650L
     const val TAGS = 10_833
     const val TAGS_PER_MANGA = 14
     private const val MANGA_BASE = 10_000L
-    private const val LOCAL_BASE = 500_000L
 
-    /** Local projections the `preferred_local_manga_id` overrides point at. */
-    private const val LOCAL_POOL = 60L
-
-    /** Every n-th history entity displays a local projection instead of its anchor. */
+    /** Every n-th history row carries a title override in its preferences. */
     private const val OVERRIDE_EVERY = 100L
 
     fun seedHistoryCorpus(sql: SupportSQLiteDatabase) {
@@ -180,64 +174,46 @@ internal object HistoryLibrarySeed {
             for (tagId in 1L..TAGS) {
                 FavouriteLibrarySeed.insertTag(sql, tagId, "Tag $tagId")
             }
-            val localIds = (0L until LOCAL_POOL).map { LOCAL_BASE + it }
-            localIds.forEachIndexed { index, id ->
-                FavouriteLibrarySeed.insertManga(sql, id, "Local projection $index")
-            }
+            for (index in 1L..MANGA) {
+                val mangaId = MANGA_BASE + index
+                FavouriteLibrarySeed.insertManga(sql, mangaId, "Work $mangaId")
 
-            for (entityId in 1L..ENTITIES) {
-                val mangaId = MANGA_BASE + entityId
-                FavouriteLibrarySeed.insertEntity(sql, entityId, "Work $entityId")
-                FavouriteLibrarySeed.insertManga(sql, mangaId, "Projection $mangaId")
-
-                if (entityId <= HISTORY) {
-                    FavouriteLibrarySeed.insertHistory(
-                        sql = sql,
-                        entityId = entityId,
-                        anchorMangaId = mangaId,
-                        percent = 0.5f,
-                        updatedAt = entityId,
-                    )
-                    if (entityId % 2L == 0L) {
+                if (index <= HISTORY) {
+                    FavouriteLibrarySeed.insertHistory(sql, mangaId, percent = 0.5f, updatedAt = index)
+                    if (index % 2L == 0L) {
                         FavouriteLibrarySeed.insertFavourite(
                             sql = sql,
-                            entityId = entityId,
-                            categoryId = entityId % 3L + 1L,
-                            anchorMangaId = mangaId,
-                            createdAt = entityId,
-                            updatedAt = entityId,
+                            mangaId = mangaId,
+                            categoryId = index % 3L + 1L,
+                            createdAt = index,
+                            updatedAt = index,
                         )
                     }
-                    if (entityId % OVERRIDE_EVERY == 0L) {
-                        // A manual local projection wins over the anchor, so this history
-                        // row's display manga id is not its anchor manga id.
-                        val localId = localIds[(entityId / OVERRIDE_EVERY % LOCAL_POOL).toInt()]
-                        FavouriteLibrarySeed.insertPrefs(sql, entityId, preferredLocalMangaId = localId)
-                        FavouriteLibrarySeed.insertBinding(sql, entityId, localId)
+                    if (index % OVERRIDE_EVERY == 0L) {
+                        FavouriteLibrarySeed.insertPrefs(sql, mangaId, titleOverride = "Renamed $mangaId")
+                    }
+                    if (index % 7L == 0L) {
+                        FavouriteLibrarySeed.insertDownloaded(sql, mangaId, path = "/tmp/$mangaId")
                     }
                 }
-                if (entityId % 3L == 0L) {
-                    FavouriteLibrarySeed.insertBinding(sql, entityId, mangaId)
-                }
-                if (entityId % 6L == 0L) {
+                if (index % 6L == 0L) {
                     FavouriteLibrarySeed.insertTrack(
                         sql = sql,
-                        entityId = entityId,
                         mangaId = mangaId,
                         newChapters = 2,
-                        lastChapterDate = entityId,
-                        lastCheckTime = entityId,
+                        lastChapterDate = index,
+                        lastCheckTime = index,
                     )
                 }
             }
 
-            // ~14 tags per projection, spread deterministically over the tag pool so every
-            // run measures the same shape. Within one projection the ids stay distinct
-            // because the window never covers the whole tag pool.
-            val taggedManga = (1L..ENTITIES).map { MANGA_BASE + it } + localIds
-            taggedManga.forEachIndexed { index, mangaId ->
+            // ~14 tags per manga, spread deterministically over the tag pool so every run
+            // measures the same shape. Within one manga the ids stay distinct because the
+            // window never covers the whole tag pool.
+            for (index in 0L until MANGA) {
+                val mangaId = MANGA_BASE + index + 1L
                 for (offset in 0 until TAGS_PER_MANGA) {
-                    val tagId = (index.toLong() * TAGS_PER_MANGA + offset) % TAGS + 1L
+                    val tagId = (index * TAGS_PER_MANGA + offset) % TAGS + 1L
                     FavouriteLibrarySeed.insertMangaTag(sql, mangaId, tagId)
                 }
             }

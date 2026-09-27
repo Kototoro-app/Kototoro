@@ -8,7 +8,6 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.scrobbling.shikimori.data.ShikimoriRepository
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,8 +18,7 @@ class ShikimoriScrobbler @Inject constructor(
     private val repository: ShikimoriRepository,
     db: MangaDatabase,
     mangaRepositoryFactory: ContentRepository.Factory,
-    workResolver: WorkResolver,
-) : Scrobbler(db, ScrobblerService.SHIKIMORI, repository, mangaRepositoryFactory, workResolver) {
+) : Scrobbler(db, ScrobblerService.SHIKIMORI, repository, mangaRepositoryFactory) {
 
     init {
         statuses[ScrobblingStatus.PLANNED] = "planned"

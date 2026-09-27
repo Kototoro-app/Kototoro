@@ -81,6 +81,7 @@ import org.skepsun.kototoro.reader.image.ReaderImagePipeline
 import org.skepsun.kototoro.reader.render.arr.AdaptiveRefreshRateHelper
 import org.skepsun.kototoro.reader.render.compose.ComposeHorizontalSceneRenderer
 import org.skepsun.kototoro.reader.render.compose.SceneImagePresentationCoordinator
+import org.skepsun.kototoro.reader.render.compose.resolvePlaceholderIndicatorCenters
 import org.skepsun.kototoro.reader.render.compose.rememberComposeScenePrimaryScrollState
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import kotlin.math.roundToInt
@@ -258,6 +259,10 @@ fun ComposeSceneHorizontalReader(
     // match the real image size once the chapter's ratio has converged. Keyed by chapter so
     // boundary-loading window expansions keep the converged estimate.
     val ratioEstimator = remember(pages.firstOrNull()?.chapterId) { ReaderChapterRatioEstimator() }
+    // The asset callback outlives window expansions: it must relay out the current window with the
+    // current estimator, or a relayout rebuilds the scene from the launch chapter alone.
+    val currentPages = rememberUpdatedState(pages)
+    val currentRatioEstimator = rememberUpdatedState(ratioEstimator)
 
     val activeScene = scene
 
@@ -302,7 +307,8 @@ fun ComposeSceneHorizontalReader(
         SceneImagePresentationCoordinator.coordinateVisibleTiles(frame, adapter)
     }
 
-    LaunchedEffect(pages, scene) {
+    // Keyed on the launch position too: a window expansion landing before it is applied must replay.
+    LaunchedEffect(pages, scene, hasAppliedInitialPosition) {
         if (scene != null && hasAppliedInitialPosition) {
             val currentVp = ReaderViewport(
                 FloatRect.fromLtwh(scrollState.offset, 0f, viewportWidthPx, viewportHeightPx),
@@ -341,7 +347,7 @@ fun ComposeSceneHorizontalReader(
         val currentVp = ReaderViewport(
             FloatRect.fromLtwh(scrollState.offset, 0f, viewportWidthPx, viewportHeightPx),
         )
-        val newHints = createInitialScenePageHints(pages, adapter, unknownPageRatio = ratio)
+        val newHints = createInitialScenePageHints(currentPages.value, adapter, unknownPageRatio = ratio)
         val compensation = currentScene.updatePages(newHints, currentVp)
         scrollState.maxOffset = (currentScene.totalSceneWidth - viewportWidthPx).coerceAtLeast(0f)
         if (compensation != null && compensation.deltaX != 0f) {
@@ -560,7 +566,7 @@ fun ComposeSceneHorizontalReader(
                     }
                     // Let the chapter-average ratio converge the still-loading placeholders
                     // toward their real size.
-                    ratioEstimator.onDecoded(exactSize.width, exactSize.height)?.let(::applyRatioRelayout)
+                    currentRatioEstimator.value.onDecoded(exactSize.width, exactSize.height)?.let(::applyRatioRelayout)
                     updateResourceWindow(activeScene, scrollState.offset, currentMotion)
                 }
             }
@@ -791,33 +797,6 @@ fun ComposeSceneHorizontalReader(
                 },
         ) {
             if (activeScene != null) {
-                val pageLabelFormat = stringResource(R.string.reader_page_label)
-                ComposeHorizontalSceneRenderer(
-                    scene = activeScene,
-                    scrollState = scrollState,
-                    placeholderColor = Color.DarkGray,
-                    pageLabelProvider = { pageId ->
-                        pageLookup(pageId)?.index?.let { pageLabelFormat.format(it + 1) } ?: ""
-                    },
-                    imageColorFilter = imageColorFilter,
-                    readerAssetProvider = { id ->
-                        retainedAssets[id]
-                    },
-                    tileStore = adapter.tileStore,
-                    onScrollProgressChanged = { currentX, _ ->
-                        updateResourceWindow(activeScene, currentX, currentMotion)
-                    },
-                    onMotionChanged = { motion ->
-                        currentMotion = motion
-                        AdaptiveRefreshRateHelper.applyPreference(view, motion)
-                        if (motion.isIdle) {
-                            updateResourceWindow(activeScene, scrollState.offset, motion)
-                        }
-                    },
-                    onOverScroll = ::handleOverScroll,
-                    onReleaseOverScroll = ::handleReleaseOverScroll,
-                    modifier = Modifier.fillMaxSize(),
-                )
                 val horizontalLoadingOverlays = remember(
                     activeScene,
                     lastReportedPages,
@@ -849,56 +828,76 @@ fun ComposeSceneHorizontalReader(
                             ),
                         )
                         val frame = activeScene.resolve(viewport)
-                        val items = mutableListOf<Triple<PageId, Float, Float>>()
+                        val items = mutableListOf<AnchoredLoadingOverlay>()
                         for (node in frame.visibleNodes) {
                             if (retainedAssets[node.pageId] == null) {
-                                val screenLeft = node.sceneBounds.left - anchorX
-                                val screenRight = node.sceneBounds.right - anchorX
-                                val screenTop = verticalOffset + node.sceneBounds.top
-                                val screenBottom = verticalOffset + node.sceneBounds.bottom
-                                val visibleLeft = maxOf(screenLeft, 0f)
-                                val visibleRight = minOf(screenRight, vWidth)
-                                val visibleTop = maxOf(screenTop, 0f)
-                                val visibleBottom = minOf(screenBottom, vHeight)
-                                val (cx, cy) = if (visibleRight > visibleLeft && visibleBottom > visibleTop) {
-                                    (visibleLeft + visibleRight) / 2f to (visibleTop + visibleBottom) / 2f
-                                } else {
-                                    // Page within the margin but off-screen: anchor at the
-                                    // page's own center; the overlay glides in glued to the
-                                    // placeholder when the page scrolls into view.
-                                    (screenLeft + screenRight) / 2f to (screenTop + screenBottom) / 2f
+                                // Fixed to the page, not to its visible slice, so a re-anchor
+                                // never moves an overlay and a wide page always shows one.
+                                val cy = verticalOffset + (node.sceneBounds.top + node.sceneBounds.bottom) / 2f
+                                resolvePlaceholderIndicatorCenters(
+                                    pageStart = node.sceneBounds.left - anchorX,
+                                    pageExtent = node.sceneBounds.width,
+                                    viewportExtent = vWidth,
+                                ).forEachIndexed { slot, cx ->
+                                    if (cx in -margin..(vWidth + margin)) {
+                                        items.add(AnchoredLoadingOverlay(node.pageId, slot, cx, cy))
+                                    }
                                 }
-                                items.add(Triple(node.pageId, cx, cy))
                             }
                         }
                         AnchoredLoadingOverlays(anchorX, items)
                     }
                 }
 
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clipToBounds(),
+                ComposeHorizontalSceneRenderer(
+                    scene = activeScene,
+                    scrollState = scrollState,
+                    placeholderColor = Color(readerBackgroundColor),
+                    imageColorFilter = imageColorFilter,
+                    readerAssetProvider = { id ->
+                        retainedAssets[id]
+                    },
+                    tileStore = adapter.tileStore,
+                    onScrollProgressChanged = { currentX, _ ->
+                        updateResourceWindow(activeScene, currentX, currentMotion)
+                    },
+                    onMotionChanged = { motion ->
+                        currentMotion = motion
+                        AdaptiveRefreshRateHelper.applyPreference(view, motion)
+                        if (motion.isIdle) {
+                            updateResourceWindow(activeScene, scrollState.offset, motion)
+                        }
+                    },
+                    onOverScroll = ::handleOverScroll,
+                    onReleaseOverScroll = ::handleReleaseOverScroll,
+                    modifier = Modifier.fillMaxSize(),
                 ) {
-                    for ((pageId, centerX, centerY) in horizontalLoadingOverlays.items) {
-                        key(pageId) {
-                            CenteredOverlay(
-                                centerX = centerX,
-                                centerY = centerY,
-                                modifier = Modifier.loadingOverlayHorizontalAnchor(
-                                    horizontalLoadingOverlays.anchorScroll,
-                                    scrollState,
-                                ),
-                            ) {
-                                SceneReaderPageLoadOverlay(
-                                    pipeline = adapter,
-                                    pageId = pageId,
-                                    page = pageLookup(pageId),
-                                    onRetryError = onRetryError,
-                                    onShowErrorDetails = onShowErrorDetails,
-                                    resolveErrorStringId = resolveErrorStringId,
-                                    onRetry = { coroutineScope.launch { adapter.retryAsset(pageId) } },
-                                )
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clipToBounds(),
+                    ) {
+                        for ((pageId, slot, centerX, centerY) in horizontalLoadingOverlays.items) {
+                            key(pageId, slot) {
+                                CenteredOverlay(
+                                    centerX = centerX,
+                                    centerY = centerY,
+                                    modifier = Modifier.loadingOverlayHorizontalAnchor(
+                                        horizontalLoadingOverlays.anchorScroll,
+                                        scrollState,
+                                    ),
+                                ) {
+                                    SceneReaderPageLoadOverlay(
+                                        pipeline = adapter,
+                                        pageId = pageId,
+                                        page = pageLookup(pageId),
+                                        onRetryError = onRetryError,
+                                        onShowErrorDetails = onShowErrorDetails,
+                                        resolveErrorStringId = resolveErrorStringId,
+                                        onRetry = { coroutineScope.launch { adapter.retryAsset(pageId) } },
+                                        unresolvedIsLoading = true,
+                                    )
+                                }
                             }
                         }
                     }

@@ -4,27 +4,23 @@ import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
-import org.skepsun.kototoro.entitygraph.domain.EntityBinding
-import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceRouteSnapshot
 import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
-import org.skepsun.kototoro.work.domain.WorkIdentity
-import org.skepsun.kototoro.work.domain.WorkIdentityProvenance
-import org.skepsun.kototoro.work.domain.WorkMigrationState
-import org.skepsun.kototoro.work.domain.WorkProjectionBindingResult
-import org.skepsun.kototoro.work.domain.WorkResolver
 
 class DefaultSpaceSessionValidatorTest {
 
 	@Test
-	fun `missing work truncates it and all dependent routes`() = runTest {
-		val validator = DefaultSpaceSessionValidator(FakeWorkResolver())
+	fun `unknown top level key is dropped`() = runTest {
+		val validator = DefaultSpaceSessionValidator()
 		val snapshot = snapshot(
 			routes = listOf(
 				SpaceRouteSnapshot.TopLevel("home"),
-				SpaceRouteSnapshot.WorkDetails(404L, null),
 				SpaceRouteSnapshot.ContentList("AVAILABLE"),
+			),
+			stacks = mapOf(
+				"home" to listOf(SpaceRouteSnapshot.TopLevel("home")),
+				"not_a_top_level" to listOf(SpaceRouteSnapshot.TopLevel("not_a_top_level")),
 			),
 		)
 
@@ -36,10 +32,8 @@ class DefaultSpaceSessionValidatorTest {
 	}
 
 	@Test
-	fun `invalid projection falls back to entity details`() = runTest {
-		val validator = DefaultSpaceSessionValidator(
-			FakeWorkResolver(entityIds = setOf(42L), projections = setOf(7L)),
-		)
+	fun `work details route is kept as saved`() = runTest {
+		val validator = DefaultSpaceSessionValidator()
 		val snapshot = snapshot(
 			routes = listOf(
 				SpaceRouteSnapshot.TopLevel("home"),
@@ -49,14 +43,12 @@ class DefaultSpaceSessionValidatorTest {
 
 		val validated = validator.validate(snapshot)
 
-		validated.stacks.getValue("home").last() shouldBe SpaceRouteSnapshot.WorkDetails(42L, null)
+		validated.stacks.getValue("home").last() shouldBe SpaceRouteSnapshot.WorkDetails(42L, 99L)
 	}
 
 	@Test
 	fun `temporarily unavailable source keeps content list route for cold start restoration`() = runTest {
-		val validator = DefaultSpaceSessionValidator(
-			FakeWorkResolver(),
-		)
+		val validator = DefaultSpaceSessionValidator()
 		val snapshot = snapshot(
 			routes = listOf(
 				SpaceRouteSnapshot.TopLevel("home"),
@@ -72,49 +64,15 @@ class DefaultSpaceSessionValidatorTest {
 		)
 	}
 
-	private fun snapshot(routes: List<SpaceRouteSnapshot>) = SpaceSessionSnapshot(
+	private fun snapshot(
+		routes: List<SpaceRouteSnapshot>,
+		stacks: Map<String, List<SpaceRouteSnapshot>> = mapOf("home" to routes),
+	) = SpaceSessionSnapshot(
 		spaceId = BuiltInSpaces.Manga,
 		selectedTopLevel = "home",
 		resumeRoute = routes.lastOrNull(),
-		stacks = mapOf("home" to routes),
+		stacks = stacks,
 		lastAccessed = 1L,
 		updatedAt = 1L,
 	)
-}
-
-private class FakeWorkResolver(
-	private val entityIds: Set<Long> = emptySet(),
-	private val projections: Set<Long> = emptySet(),
-) : WorkResolver {
-	override suspend fun resolveByMangaId(mangaId: Long): WorkIdentity = error("Not used")
-
-	override suspend fun resolveByEntityId(entityId: Long): WorkIdentity? {
-		if (entityId !in entityIds) return null
-		return WorkIdentity(
-			entityId = entityId,
-			requestedMangaId = null,
-			preferredMangaId = projections.firstOrNull(),
-			localMangaIds = projections,
-			migrationState = WorkMigrationState.VALID,
-		)
-	}
-
-	override suspend fun resolveManyByEntityIds(entityIds: Collection<Long>): Map<Long, WorkIdentity> =
-		entityIds.mapNotNull { entityId ->
-			resolveByEntityId(entityId)?.let { entityId to it }
-		}.toMap()
-
-	override suspend fun resolveManyByMangaIds(mangaIds: Collection<Long>): Map<Long, WorkIdentity> = error("Not used")
-
-	override suspend fun resolveBindingsByEntityId(entityId: Long): List<EntityBinding> = error("Not used")
-
-	override suspend fun ensureForProjection(content: Content, provenance: WorkIdentityProvenance): WorkIdentity =
-		error("Not used")
-
-	override suspend fun bindProjectionToEntity(
-		targetEntityId: Long,
-		projection: Content,
-	): WorkProjectionBindingResult = error("Not used")
-
-	override suspend fun selectPreferredProjection(entityId: Long): Long? = error("Not used")
 }

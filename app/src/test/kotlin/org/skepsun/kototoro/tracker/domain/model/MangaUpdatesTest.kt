@@ -8,7 +8,7 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 
 class MangaUpdatesTest : StringSpec({
 
-    "update event retains work owner projection anchor and source scoped chapter keys" {
+    "update event retains work owner content anchor and source scoped chapter keys" {
         val chapter = ContentChapter(
             id = 7L,
             title = "Chapter 7",

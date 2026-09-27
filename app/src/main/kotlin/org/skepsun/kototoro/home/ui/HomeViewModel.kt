@@ -48,7 +48,6 @@ import org.skepsun.kototoro.core.ui.model.ContentOverride
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
@@ -65,12 +64,9 @@ import org.skepsun.kototoro.tracking.discovery.data.TrackingSiteCacheRepository
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
-import org.skepsun.kototoro.work.domain.WorkAggregate
-import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
 import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 @HiltViewModel
@@ -87,15 +83,12 @@ class HomeViewModel @Inject constructor(
     private val backupWebDavRestoreCoordinator: BackupWebDavRestoreCoordinator,
     private val backupStorage: ExternalBackupStorage,
     private val repository: BackupRepository,
-    private val entityGraphRepository: EntityGraphRepository,
     private val sourceGroupManager: org.skepsun.kototoro.core.jsonsource.SourceGroupManager,
     private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
     private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
     private val contentSearchRepository: ContentSearchRepository,
     private val contentDataRepository: ContentDataRepository,
     private val trackingSiteCacheRepository: TrackingSiteCacheRepository,
-    private val workResolver: WorkResolver,
-    private val workAggregateRepository: WorkAggregateRepository,
     @ApplicationContext private val appContext: Context,
     spaceBrowseScope: SpaceBrowseScope,
 ) : BaseViewModel(), SpaceBindableViewModel {
@@ -202,14 +195,10 @@ class HomeViewModel @Inject constructor(
                         progressPercent = history.toProgressPercent(),
                     )
                     runCatching {
-                        val entityId = workResolver.resolveByMangaId(content.id).entityId
-                        val preferredLocalMangaId = if (entityId != null) {
-                            workResolver.selectPreferredProjection(entityId)
-                        } else {
-                            null
-                        }
+                        // The content itself owns the state, so its work identity and its
+                        // preferred manga are its own id.
                         val representativeContent = contentDataRepository.findDisplayContentById(
-                            preferredLocalMangaId ?: content.id,
+                            content.id,
                             withChapters = false,
                         ) ?: contentDataRepository.findPreferredLocalContentById(
                             content.id,
@@ -217,8 +206,8 @@ class HomeViewModel @Inject constructor(
                         ) ?: content
                         baseState.copy(
                             content = representativeContent,
-                            entityId = entityId,
-                            preferredLocalMangaId = preferredLocalMangaId ?: representativeContent.id,
+                            entityId = content.id,
+                            preferredLocalMangaId = content.id,
                         )
                     }.getOrElse {
                         it.printStackTraceDebug()
@@ -368,23 +357,6 @@ class HomeViewModel @Inject constructor(
             ),
         )
 
-    private val entityIdsFlow = contentDataFlow.map { snapshot ->
-        buildSet {
-            addAll(snapshot.history.map { it.id })
-            addAll(snapshot.updates.map { it.manga.id })
-            addAll(snapshot.recommendations.map { it.id })
-        }
-    }.distinctUntilChanged().map { ids ->
-        resolveEntityIdsByMangaIds(ids)
-    }
-        .distinctUntilChanged()
-        .onEach { entityIdsByMangaId ->
-            Log.d(
-                TAG,
-                "entityIdsFlow localIds=${entityIdsByMangaId.size} entityIds=${entityIdsByMangaId.values.toSet().size}",
-            )
-        }
-
     private val primaryCountsFlow = combine(
         favoritesCountFlow,
         favoriteCategoriesCountFlow,
@@ -429,7 +401,6 @@ class HomeViewModel @Inject constructor(
         selectedTabFlow,
         combine(selectedSourceTagsFlow, activePresetFlow, ::Pair),
         contentDataFlow,
-        entityIdsFlow,
         metaFlow,
         combine(
             recentSearchesFlow,
@@ -443,11 +414,9 @@ class HomeViewModel @Inject constructor(
         @Suppress("UNCHECKED_CAST")
         val tagsAndPreset = values[1] as Pair<Set<org.skepsun.kototoro.explore.ui.model.SourceTag>, org.skepsun.kototoro.explore.data.SourcePreset?>
         val contentData = values[2] as ContentDataSnapshot
+        val meta = values[3] as HomeMetaSnapshot
         @Suppress("UNCHECKED_CAST")
-        val entityIdsByMangaId = values[3] as Map<Long, Long>
-        val meta = values[4] as HomeMetaSnapshot
-        @Suppress("UNCHECKED_CAST")
-        val extras = values[5] as Pair<List<String>, Boolean>
+        val extras = values[4] as Pair<List<String>, Boolean>
         val selectedSourceTags = tagsAndPreset.first
         val preset = tagsAndPreset.second
         val isSuggestionNsfwDisabled = extras.second
@@ -457,7 +426,7 @@ class HomeViewModel @Inject constructor(
         runCatching {
             Log.d(
                 TAG,
-                "summaryState start tab=$selectedTab tags=${selectedSourceTags.size} presetId=${preset?.id ?: -1L} history=${contentData.history.size} updates=${contentData.updates.size} recommendations=${contentData.recommendations.size} entities=${entityIdsByMangaId.size}",
+                "summaryState start tab=$selectedTab tags=${selectedSourceTags.size} presetId=${preset?.id ?: -1L} history=${contentData.history.size} updates=${contentData.updates.size} recommendations=${contentData.recommendations.size}",
             )
 
             val allRecommendations = if (isSuggestionNsfwDisabled) {
@@ -465,9 +434,6 @@ class HomeViewModel @Inject constructor(
             } else {
                 contentData.recommendations
             }
-            val progressIndicatorMode = settings.progressIndicatorMode
-            val preferredLocalIdsByEntity = resolvePreferredMangaIdsByEntityIds(entityIdsByMangaId.values)
-            val workAggregatesByEntity = workAggregateRepository.findAggregatesByEntityIds(entityIdsByMangaId.values)
             val displayContentOverrides = buildDisplayContentOverrides(
                 resumeContent = contentData.resumeState.content,
                 history = contentData.history,
@@ -486,41 +452,44 @@ class HomeViewModel @Inject constructor(
                     preset = preset,
                 )
                 .filteredNsfw(false)
-                .withGroupKey(entityIdsByMangaId)
             val recentHistory = contentData.history
                 .map { content -> content.withOverride(displayContentOverrides[content.id]) }
-                .aggregateHomeContentByEntity(entityIdsByMangaId, preferredLocalIdsByEntity, workAggregatesByEntity, progressIndicatorMode)
+                .map { content -> HomeRecentItem(content = content, groupKey = content.id) }
                 .selectHomeHistoryByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
             val recentUpdates = contentData.updates
                 .map { tracking ->
                     val override = displayContentOverrides[tracking.manga.id]
-                    if (override == null) tracking else tracking.copy(manga = tracking.manga.withOverride(override))
+                    val m = if (override == null) tracking.manga else tracking.manga.withOverride(override)
+                    HomeUpdateItem(
+                        content = m,
+                        newChapters = tracking.newChapters,
+                        groupKey = m.id,
+                        counter = tracking.newChapters,
+                    )
                 }
-                .aggregateHomeUpdatesByEntity(entityIdsByMangaId, preferredLocalIdsByEntity)
-                .withWorkBadges(entityIdsByMangaId, workAggregatesByEntity, progressIndicatorMode)
                 .selectHomeUpdatesByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
             val recommendations = allRecommendations
                 .map { content -> content.withOverride(displayContentOverrides[content.id]) }
-                .aggregateHomeRecommendationsByEntity(entityIdsByMangaId, preferredLocalIdsByEntity, workAggregatesByEntity, progressIndicatorMode)
+                .map { content -> HomeRecommendationItem(content = content, groupKey = content.id) }
                 .selectHomeRecommendationsByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
 
-                HomeSummaryState(
-                    selectedTab = selectedTab,
-                    recentHistoryCount = meta.recentHistoryCount,
-                    recentHistoryItems = recentHistory,
-                    resumeState = resumeState,
-                    favoritesCount = meta.favoritesCount,
-                    favoriteCategoriesCount = meta.favoriteCategoriesCount,
-                    unreadUpdatesCount = meta.unreadUpdatesCount,
-                    recentUpdates = recentUpdates,
-                    recommendationsCount = meta.recommendationsCount,
-                    recommendations = recommendations,
-                    recentSearches = recentSearches.map { HomeRecentSearchItem(it) },
-                    enabledSourcesCount = meta.enabledSourcesCount,
-                    sourceBreakdown = meta.sourceBreakdown,
-                    selectedSourceTags = selectedSourceTags,
-                    isInitialized = true,
-                )
+            HomeSummaryState(
+                selectedTab = selectedTab,
+                recentHistoryCount = meta.recentHistoryCount,
+                recentHistoryItems = recentHistory,
+                resumeState = resumeState,
+                favoritesCount = meta.favoritesCount,
+                favoriteCategoriesCount = meta.favoriteCategoriesCount,
+                unreadUpdatesCount = meta.unreadUpdatesCount,
+                recentUpdates = recentUpdates,
+                recommendationsCount = meta.recommendationsCount,
+                recommendations = recommendations,
+                recentSearches = recentSearches.map { HomeRecentSearchItem(it) },
+                enabledSourcesCount = meta.enabledSourcesCount,
+                sourceBreakdown = meta.sourceBreakdown,
+                selectedSourceTags = selectedSourceTags,
+                isInitialized = true,
+            )
         }.onSuccess { summary ->
             Log.d(
                 TAG,
@@ -546,7 +515,6 @@ class HomeViewModel @Inject constructor(
             )
         }
     }
-
         .distinctUntilChanged()
         .flowOn(Dispatchers.Default)
         .stateIn(
@@ -557,22 +525,6 @@ class HomeViewModel @Inject constructor(
                 selectedSourceTags = globalFavoritesState.selectedSourceTags.value,
             ),
         )
-
-    private suspend fun resolveEntityIdsByMangaIds(mangaIds: Collection<Long>): Map<Long, Long> {
-        return workResolver.resolveManyByMangaIds(mangaIds)
-            .mapValues { (_, identity) -> identity.entityId }
-            .filterValues { it != null }
-            .mapValues { (_, entityId) -> requireNotNull(entityId) }
-    }
-
-    private suspend fun resolvePreferredMangaIdsByEntityIds(entityIds: Collection<Long>): Map<Long, Long> {
-        return entityIds.distinct()
-            .mapNotNull { entityId ->
-                val preferredMangaId = workResolver.selectPreferredProjection(entityId)
-                if (preferredMangaId == null) null else entityId to preferredMangaId
-            }
-            .toMap()
-    }
 
     fun setSelectedTab(tab: HomeContentTab?) {
         val groupTab = when (tab) {
@@ -607,17 +559,9 @@ class HomeViewModel @Inject constructor(
             isRandomLoading.value = true
             try {
                 val manga = exploreRepository.findRandomContent(tagsLimit = 8)
-                val entityId = workResolver.resolveByMangaId(manga.id).entityId
-                val preferredLocalMangaId = if (entityId != null) {
-                    workResolver.selectPreferredProjection(entityId)
-                } else {
-                    null
-                }
                 onOpenContent.call(
                     HomeOpenContentEvent(
                         content = manga,
-                        entityId = entityId,
-                        preferredLocalMangaId = preferredLocalMangaId,
                     ),
                 )
             } finally {
@@ -628,17 +572,9 @@ class HomeViewModel @Inject constructor(
 
     fun openContent(content: Content) {
         viewModelScope.launch(Dispatchers.Default) {
-            val entityId = workResolver.resolveByMangaId(content.id).entityId
-            val preferredLocalMangaId = if (entityId != null) {
-                workResolver.selectPreferredProjection(entityId)
-            } else {
-                null
-            }
             onOpenContent.call(
                 HomeOpenContentEvent(
                     content = content,
-                    entityId = entityId,
-                    preferredLocalMangaId = preferredLocalMangaId,
                 ),
             )
         }
@@ -727,11 +663,7 @@ class HomeViewModel @Inject constructor(
                     )
                     onActionDone.call(
                         ReversibleAction(
-                            if (restoreContext.isLegacySemanticSchema && restoreResult.legacyJarReposImported) {
-                                R.string.webdav_restore_success_legacy_requires_normalization_with_jar_hint
-                            } else if (restoreContext.isLegacySemanticSchema) {
-                                R.string.webdav_restore_success_legacy_requires_normalization
-                            } else if (restoreResult.legacyJarReposImported) {
+                            if (restoreResult.legacyJarReposImported) {
                                 R.string.webdav_restore_success_legacy_jar_hint
                             } else {
                                 R.string.webdav_restore_success
@@ -923,132 +855,6 @@ private fun Content.matchesHomeFilters(
     val contentGroup = sourceGroupManager.getContentGroup(source)
     val originGroup = sourceGroupManager.getOriginGroup(source)
     return sourceTags.any { it.matches(contentGroup, originGroup) }
-}
-
-private fun List<Content>.aggregateHomeContentByEntity(
-    entityIdsByMangaId: Map<Long, Long>,
-    preferredLocalIdsByEntity: Map<Long, Long?>,
-    workAggregatesByEntity: Map<Long, WorkAggregate>,
-    progressIndicatorMode: org.skepsun.kototoro.core.prefs.ProgressIndicatorMode,
-): List<HomeRecentItem> {
-    if (isEmpty()) {
-        return emptyList()
-    }
-    val grouped = LinkedHashMap<Long, MutableList<Content>>()
-    for (item in this) {
-        val groupKey = entityIdsByMangaId[item.id]?.toHomeGroupKey(item.source.getContentType().ordinal) ?: item.id
-        grouped.getOrPut(groupKey) { ArrayList(1) }.add(item)
-    }
-    val result = ArrayList<HomeRecentItem>(grouped.size)
-    grouped.forEach { (groupKey, items) ->
-        val entityId = entityIdsByMangaId[items.first().id]
-        val preferredLocalId = entityId?.let(preferredLocalIdsByEntity::get)
-        val representative = items.firstOrNull { it.id == preferredLocalId } ?: items.first()
-        val aggregate = entityId?.let(workAggregatesByEntity::get)
-        result += HomeRecentItem(
-            content = representative,
-            groupKey = groupKey,
-            counter = aggregate?.homeCounter() ?: 0,
-            progress = aggregate?.toHomeReadingProgress(progressIndicatorMode),
-        )
-    }
-    return result
-}
-
-private fun List<ContentTracking>.aggregateHomeUpdatesByEntity(
-    entityIdsByMangaId: Map<Long, Long>,
-    preferredLocalIdsByEntity: Map<Long, Long?>,
-): List<HomeUpdateItem> {
-    if (isEmpty()) {
-        return emptyList()
-    }
-    val grouped = LinkedHashMap<Long, MutableList<ContentTracking>>()
-    for (item in this) {
-        val groupKey = entityIdsByMangaId[item.manga.id]?.toHomeGroupKey(item.manga.source.getContentType().ordinal) ?: item.manga.id
-        grouped.getOrPut(groupKey) { ArrayList(1) }.add(item)
-    }
-    return grouped.map { (groupKey, items) ->
-        val entityId = entityIdsByMangaId[items.first().manga.id]
-        val preferredLocalId = entityId?.let(preferredLocalIdsByEntity::get)
-        val representative = items.firstOrNull { it.manga.id == preferredLocalId }
-            ?: items.maxWithOrNull(
-                compareBy<ContentTracking>(
-                    { it.lastChapterDate ?: java.time.Instant.EPOCH },
-                    { it.lastCheck ?: java.time.Instant.EPOCH },
-                    { it.newChapters },
-                ),
-            )
-            ?: items.first()
-        HomeUpdateItem(
-            content = representative.manga,
-            newChapters = items.sumOf { it.newChapters },
-            groupKey = groupKey,
-        )
-    }
-}
-
-private fun List<Content>.aggregateHomeRecommendationsByEntity(
-    entityIdsByMangaId: Map<Long, Long>,
-    preferredLocalIdsByEntity: Map<Long, Long?>,
-    workAggregatesByEntity: Map<Long, WorkAggregate>,
-    progressIndicatorMode: org.skepsun.kototoro.core.prefs.ProgressIndicatorMode,
-): List<HomeRecommendationItem> {
-    if (isEmpty()) {
-        return emptyList()
-    }
-    val grouped = LinkedHashMap<Long, MutableList<Content>>()
-    for (item in this) {
-        val groupKey = entityIdsByMangaId[item.id]?.toHomeGroupKey(item.source.getContentType().ordinal) ?: item.id
-        grouped.getOrPut(groupKey) { ArrayList(1) }.add(item)
-    }
-    val result = ArrayList<HomeRecommendationItem>(grouped.size)
-    grouped.forEach { (groupKey, items) ->
-        val entityId = entityIdsByMangaId[items.first().id]
-        val preferredLocalId = entityId?.let(preferredLocalIdsByEntity::get)
-        val representative = items.firstOrNull { it.id == preferredLocalId } ?: items.first()
-        val aggregate = entityId?.let(workAggregatesByEntity::get)
-        result += HomeRecommendationItem(
-            content = representative,
-            groupKey = groupKey,
-            counter = aggregate?.homeCounter() ?: 0,
-            progress = aggregate?.toHomeReadingProgress(progressIndicatorMode),
-        )
-    }
-    return result
-}
-
-private fun List<HomeUpdateItem>.withWorkBadges(
-    entityIdsByMangaId: Map<Long, Long>,
-    workAggregatesByEntity: Map<Long, WorkAggregate>,
-    progressIndicatorMode: org.skepsun.kototoro.core.prefs.ProgressIndicatorMode,
-): List<HomeUpdateItem> {
-    return map { item ->
-        val aggregate = entityIdsByMangaId[item.content.id]?.let(workAggregatesByEntity::get)
-        item.copy(
-            counter = aggregate?.homeCounter() ?: item.newChapters,
-            progress = aggregate?.toHomeReadingProgress(progressIndicatorMode),
-        )
-    }
-}
-
-private fun WorkAggregate.homeCounter(): Int {
-    return if (history?.percent?.let(ReadingProgress::isCompleted) == true) {
-        0
-    } else {
-        tracking?.newChapters ?: 0
-    }
-}
-
-private fun WorkAggregate.toHomeReadingProgress(
-    progressIndicatorMode: org.skepsun.kototoro.core.prefs.ProgressIndicatorMode,
-): ReadingProgress? {
-    val history = history ?: return null
-    val fixedPercent = if (ReadingProgress.isCompleted(history.percent)) 1f else history.percent
-    return ReadingProgress(
-        percent = fixedPercent,
-        totalChapters = history.chaptersCount,
-        mode = progressIndicatorMode,
-    ).takeIf { it.isValid() }
 }
 
 private fun List<ContentTracking>.isSameForHomeUpdates(other: List<ContentTracking>): Boolean {

@@ -15,7 +15,7 @@ class SpaceRouteCodecTest {
 	fun `supported routes round trip through explicit payloads`() {
 		val routes = listOf(
 			SpaceRouteSnapshot.TopLevel("history"),
-			SpaceRouteSnapshot.WorkDetails(entityId = 42L, requestedProjectionId = 7L),
+			SpaceRouteSnapshot.WorkDetails(entityId = 42L, requestedStoredId = 7L),
 			SpaceRouteSnapshot.ContentList(sourceName = "TEST_SOURCE"),
 			SpaceRouteSnapshot.Search(
 				query = "one piece",

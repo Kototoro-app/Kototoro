@@ -9,6 +9,7 @@ import androidx.compose.animation.splineBasedDecay
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -28,7 +29,6 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.nativeCanvas
@@ -37,12 +37,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.CancellationException
@@ -79,7 +73,6 @@ fun ComposeSceneRenderer(
     initialScrollY: Float = 0f,
     scrollState: ComposeSceneScrollState = rememberComposeSceneScrollState(initialScrollY),
     placeholderColor: Color = Color.DarkGray,
-    pageLabelProvider: ((PageId) -> String)? = null,
     imageColorFilter: ColorFilter? = null,
     assetProvider: (PageId) -> ImageBitmap? = { null },
     readerAssetProvider: ((PageId) -> ReaderImageAsset?)? = null,
@@ -89,6 +82,12 @@ fun ComposeSceneRenderer(
     onMotionChanged: (ViewportMotion) -> Unit = {},
     onOverScroll: ((deltaY: Float) -> Unit)? = null,
     onReleaseOverScroll: (() -> Unit)? = null,
+    /**
+     * Drawn over the scene inside the node that owns the scroll gesture, so a drag that starts on
+     * an overlay (a loading indicator, an error card) still scrolls: as a sibling above the
+     * renderer the overlay would win the hit test and swallow it.
+     */
+    content: @Composable BoxScope.() -> Unit = {},
 ) {
     var viewportWidth by remember { mutableFloatStateOf(0f) }
     var viewportHeight by remember { mutableFloatStateOf(0f) }
@@ -103,7 +102,6 @@ fun ComposeSceneRenderer(
     var flingJob by remember { mutableStateOf<Job?>(null) }
     val density = LocalDensity.current
     val decaySpec = remember(density) { splineBasedDecay<Float>(density) }
-    val textMeasurer = rememberTextMeasurer()
 
     Box(
         modifier = modifier
@@ -271,8 +269,6 @@ fun ComposeSceneRenderer(
                         horizontalOffset = horizontalOffset,
                         seamPolicy = seamPolicy,
                         placeholderColor = placeholderColor,
-                        pageLabelProvider = pageLabelProvider,
-                        textMeasurer = textMeasurer,
                         imageColorFilter = imageColorFilter,
                         assetProvider = assetProvider,
                         readerAssetProvider = readerAssetProvider,
@@ -282,7 +278,9 @@ fun ComposeSceneRenderer(
 
                 drawContent()
             },
-    )
+    ) {
+        content()
+    }
 }
 
 /**
@@ -296,8 +294,6 @@ internal fun DrawScope.drawFrameNodes(
     verticalOffset: Float = 0f,
     seamPolicy: PageSeamPolicy = PageSeamPolicy.VerticalContinuous,
     placeholderColor: Color,
-    pageLabelProvider: ((PageId) -> String)? = null,
-    textMeasurer: TextMeasurer? = null,
     imageColorFilter: ColorFilter? = null,
     assetProvider: (PageId) -> ImageBitmap? = { null },
     readerAssetProvider: ((PageId) -> ReaderImageAsset?)? = null,
@@ -343,8 +339,6 @@ internal fun DrawScope.drawFrameNodes(
                 heightInt = heightInt,
                 imageColorFilter = imageColorFilter,
                 placeholderColor = placeholderColor,
-                pageLabelProvider = pageLabelProvider,
-                textMeasurer = textMeasurer,
             )
             continue
         }
@@ -381,14 +375,11 @@ internal fun DrawScope.drawFrameNodes(
             )
         } else {
             drawPlaceholder(
-                pageId = node.pageId,
                 screenLeft = screenLeft,
                 screenTop = screenTop,
                 nodeWidth = nodeWidth,
                 nodeHeight = nodeHeight,
                 placeholderColor = placeholderColor,
-                pageLabelProvider = pageLabelProvider,
-                textMeasurer = textMeasurer,
             )
         }
     }
@@ -402,8 +393,6 @@ internal fun DrawScope.drawFrameNodes(
     viewportScrollY: Float,
     horizontalOffset: Float = 0f,
     placeholderColor: Color,
-    pageLabelProvider: ((PageId) -> String)? = null,
-    textMeasurer: TextMeasurer? = null,
     imageColorFilter: ColorFilter? = null,
     assetProvider: (PageId) -> ImageBitmap? = { null },
     readerAssetProvider: ((PageId) -> ReaderImageAsset?)? = null,
@@ -415,8 +404,6 @@ internal fun DrawScope.drawFrameNodes(
     horizontalOffset = horizontalOffset,
     seamPolicy = PageSeamPolicy.VerticalContinuous,
     placeholderColor = placeholderColor,
-    pageLabelProvider = pageLabelProvider,
-    textMeasurer = textMeasurer,
     imageColorFilter = imageColorFilter,
     assetProvider = assetProvider,
     readerAssetProvider = readerAssetProvider,
@@ -582,8 +569,6 @@ private fun DrawScope.drawTiledPage(
     heightInt: Int,
     imageColorFilter: ColorFilter?,
     placeholderColor: Color,
-    pageLabelProvider: ((PageId) -> String)?,
-    textMeasurer: TextMeasurer?,
 ) {
     val renderedBase = drawTileLayer(
         layer = asset.base,
@@ -627,14 +612,11 @@ private fun DrawScope.drawTiledPage(
     // Fallback placeholder if neither overview nor any tiles were ready
     if (!renderedBase && !renderedTarget) {
         drawPlaceholder(
-            pageId = node.pageId,
             screenLeft = screenLeft,
             screenTop = screenTop,
             nodeWidth = nodeWidth,
             nodeHeight = nodeHeight,
             placeholderColor = placeholderColor,
-            pageLabelProvider = pageLabelProvider,
-            textMeasurer = textMeasurer,
         )
     }
 }
@@ -677,90 +659,22 @@ private fun DrawScope.drawBitmapTransformed(
     }
 }
 
+/**
+ * A page with nothing drawable yet is painted with the reader background, like the legacy reader:
+ * the loading indicator is a Compose overlay placed by [resolvePlaceholderIndicatorCenters].
+ */
 private fun DrawScope.drawPlaceholder(
-    pageId: PageId,
     screenLeft: Float,
     screenTop: Float,
     nodeWidth: Float,
     nodeHeight: Float,
     placeholderColor: Color,
-    pageLabelProvider: ((PageId) -> String)?,
-    textMeasurer: TextMeasurer?,
 ) {
-    // 1. Base placeholder background fill
     drawRect(
         color = placeholderColor,
         topLeft = Offset(screenLeft, screenTop),
         size = Size(nodeWidth, nodeHeight),
     )
-
-    // Subtle alternating tint for adjacent placeholders
-    val isEven = (pageId.value % 2L == 0L)
-    if (!isEven) {
-        drawRect(
-            color = Color(0x0FFFFFFF),
-            topLeft = Offset(screenLeft, screenTop),
-            size = Size(nodeWidth, nodeHeight),
-        )
-    }
-
-    // 2. Light outline border
-    drawRect(
-        color = Color(0x33FFFFFF),
-        topLeft = Offset(screenLeft, screenTop),
-        size = Size(nodeWidth, nodeHeight),
-        style = Stroke(width = 2f),
-    )
-
-    // 3. Top and bottom boundary divider lines
-    drawLine(
-        color = Color(0xFF4A4A4D),
-        start = Offset(screenLeft, screenTop),
-        end = Offset(screenLeft + nodeWidth, screenTop),
-        strokeWidth = 3f,
-    )
-    drawLine(
-        color = Color(0xFF4A4A4D),
-        start = Offset(screenLeft, screenTop + nodeHeight),
-        end = Offset(screenLeft + nodeWidth, screenTop + nodeHeight),
-        strokeWidth = 3f,
-    )
-
-    // 4. Centered floating page label badge in visible viewport slice
-    if (pageLabelProvider != null && textMeasurer != null) {
-        val label = pageLabelProvider(pageId)
-        if (label.isNotBlank()) {
-            val textLayout = textMeasurer.measure(
-                text = label,
-                style = TextStyle(
-                    color = Color(0x99FFFFFF),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                ),
-            )
-            val visibleNodeTop = maxOf(screenTop, 0f)
-            val visibleNodeBottom = minOf(screenTop + nodeHeight, size.height)
-            if (visibleNodeBottom > visibleNodeTop) {
-                val badgePaddingH = 24f
-                val badgePaddingV = 12f
-                val badgeWidth = textLayout.size.width + badgePaddingH * 2
-                val badgeHeight = textLayout.size.height + badgePaddingV * 2
-                val centerY = (visibleNodeTop + visibleNodeBottom) / 2f
-                val centerX = screenLeft + (nodeWidth - badgeWidth) / 2f
-
-                drawRoundRect(
-                    color = Color(0xCC141416),
-                    topLeft = Offset(centerX, centerY - badgeHeight / 2f),
-                    size = Size(badgeWidth, badgeHeight),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(16f, 16f),
-                )
-                drawText(
-                    textLayoutResult = textLayout,
-                    topLeft = Offset(centerX + badgePaddingH, centerY - textLayout.size.height / 2f),
-                )
-            }
-        }
-    }
 }
 
 internal object TiledPageDrawMath {

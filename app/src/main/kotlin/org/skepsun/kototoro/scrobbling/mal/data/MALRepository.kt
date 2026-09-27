@@ -16,7 +16,7 @@ import org.json.JSONObject
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.model.getContentType
-import org.skepsun.kototoro.entitygraph.domain.EntityType
+import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.util.await
 import org.skepsun.kototoro.parsers.util.json.getStringOrNull
@@ -26,8 +26,7 @@ import org.skepsun.kototoro.scrobbling.common.data.ScrobblerRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerStorage
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerUserProfileRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
-import org.skepsun.kototoro.scrobbling.common.data.attachEntityOwnership
-import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByManga
 import org.skepsun.kototoro.scrobbling.common.data.preferredScrobblingByTargetAndMediaType
 import org.skepsun.kototoro.scrobbling.common.data.preferredScrobblingByTargetId
 import org.skepsun.kototoro.scrobbling.common.data.upsertScrobbling
@@ -38,7 +37,6 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUserProfile
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUserStats
-import org.skepsun.kototoro.work.domain.WorkResolver
 import java.security.SecureRandom
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -55,7 +53,6 @@ class MALRepository @Inject constructor(
     @ScrobblerType(ScrobblerService.MAL) private val okHttp: OkHttpClient,
     @ScrobblerType(ScrobblerService.MAL) private val storage: ScrobblerStorage,
     private val db: MangaDatabase,
-    private val workResolver: WorkResolver,
 ) : ScrobblerRepository, ScrobblerUserProfileRepository {
 
     private val clientId = context.getString(R.string.mal_clientId)
@@ -136,7 +133,7 @@ class MALRepository @Inject constructor(
     }
 
     override suspend fun unregister(mangaId: Long) {
-        return db.deleteScrobblingByWorkOrManga(ScrobblerService.MAL.id, mangaId, workResolver)
+        return db.deleteScrobblingByManga(ScrobblerService.MAL.id, mangaId)
     }
 
     override suspend fun findContent(query: String, offset: Int, isAnime: Boolean): List<ScrobblerContent> {
@@ -485,7 +482,7 @@ class MALRepository @Inject constructor(
         db.withTransaction {
             db.getScrobblingDao().deleteByScrobbler(ScrobblerService.MAL.id)
             synced.forEach { entity ->
-                db.upsertScrobbling(entity, workResolver)
+                db.upsertScrobbling(entity)
             }
         }
         android.util.Log.d(
@@ -512,7 +509,7 @@ class MALRepository @Inject constructor(
             rating = (statusJson.optDouble("score", 0.0).toFloat() / 10f).coerceIn(0f, 1f),
             mediaType = endpoint,
         )
-        db.upsertScrobbling(entity, workResolver)
+        db.upsertScrobbling(entity)
     }
 
     private suspend fun buildOldMappings(): Map<RemoteListKey, Long> {

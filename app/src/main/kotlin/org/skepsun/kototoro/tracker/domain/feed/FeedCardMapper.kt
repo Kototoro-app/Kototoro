@@ -47,7 +47,7 @@ class FeedCardMapper @Inject constructor(
     }
 }
 
-/** Pure row -> card model projection, unit-tested without Android (see `FeedCardMapperTest`). */
+/** Pure row -> card model mapping, unit-tested without Android (see `FeedCardMapperTest`). */
 internal fun buildFeedCardModel(row: FeedCardRow, request: FeedCardMapper.Request): FeedItem {
     return FeedItem(
         id = row.logId,

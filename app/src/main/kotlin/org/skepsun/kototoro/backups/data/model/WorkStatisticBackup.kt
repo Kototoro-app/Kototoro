@@ -2,7 +2,7 @@ package org.skepsun.kototoro.backups.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import org.skepsun.kototoro.stats.data.WorkStatsEntity
+import org.skepsun.kototoro.stats.data.StatsEntity
 
 @Serializable
 class WorkStatisticBackup(
@@ -12,18 +12,8 @@ class WorkStatisticBackup(
     @SerialName("duration") val duration: Long,
     @SerialName("pages") val pages: Int,
 ) {
-
-    constructor(entity: WorkStatsEntity) : this(
-        entityId = entity.entityId,
-        anchorMangaId = entity.anchorMangaId,
-        startedAt = entity.startedAt,
-        duration = entity.duration,
-        pages = entity.pages,
-    )
-
-    fun toEntity() = WorkStatsEntity(
-        entityId = entityId,
-        anchorMangaId = anchorMangaId,
+    fun toStatsEntity(targetMangaId: Long = anchorMangaId) = StatsEntity(
+        mangaId = targetMangaId,
         startedAt = startedAt,
         duration = duration,
         pages = pages,

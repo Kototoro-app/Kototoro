@@ -120,21 +120,12 @@ import org.skepsun.kototoro.core.db.migrations.Migration7To8
 import org.skepsun.kototoro.core.db.migrations.Migration8To9
 import org.skepsun.kototoro.core.db.migrations.Migration9To10
 import org.skepsun.kototoro.core.util.ext.processLifecycleScope
-import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
-import org.skepsun.kototoro.entitygraph.data.EntityGraphDao
-import org.skepsun.kototoro.entitygraph.data.EntityPrefsRecord
-import org.skepsun.kototoro.entitygraph.data.EntityRecord
-import org.skepsun.kototoro.entitygraph.data.RelationRecord
 import org.skepsun.kototoro.favourites.data.FavouriteCategoriesDao
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
 import org.skepsun.kototoro.favourites.data.FavouritesDao
-import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
-import org.skepsun.kototoro.favourites.data.WorkFavouritesDao
 import org.skepsun.kototoro.history.data.HistoryDao
 import org.skepsun.kototoro.history.data.HistoryEntity
-import org.skepsun.kototoro.history.data.WorkHistoryDao
-import org.skepsun.kototoro.history.data.WorkHistoryEntity
 import org.skepsun.kototoro.local.data.index.LocalContentIndexDao
 import org.skepsun.kototoro.local.data.index.LocalContentIndexEntity
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingDao
@@ -144,15 +135,11 @@ import org.skepsun.kototoro.readingrecord.data.ReadingRecordDao
 import org.skepsun.kototoro.readingrecord.data.ReadingRecordEntity
 import org.skepsun.kototoro.stats.data.StatsDao
 import org.skepsun.kototoro.stats.data.StatsEntity
-import org.skepsun.kototoro.stats.data.WorkStatsDao
-import org.skepsun.kototoro.stats.data.WorkStatsEntity
 import org.skepsun.kototoro.suggestions.data.SuggestionDao
 import org.skepsun.kototoro.suggestions.data.SuggestionEntity
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
 import org.skepsun.kototoro.tracker.data.TracksDao
-import org.skepsun.kototoro.work.data.WorkMigrationLedgerDao
-import org.skepsun.kototoro.work.data.WorkMigrationLedgerEntity
 import org.skepsun.kototoro.space.data.SpaceNavigationEntryEntity
 import org.skepsun.kototoro.space.data.SpaceSessionDao
 import org.skepsun.kototoro.space.data.SpaceSessionEntity
@@ -172,18 +159,16 @@ import org.skepsun.kototoro.core.dictionary.DictionaryRuleDao
 import org.skepsun.kototoro.core.dictionary.TranslationDictionaryDao
 import org.skepsun.kototoro.core.dictionary.TranslationDictionaryEntity
 
-const val DATABASE_VERSION = 83
+const val DATABASE_VERSION = 84
 
 @Database(
     entities = [
-        MangaEntity::class, TagEntity::class, HistoryEntity::class, WorkHistoryEntity::class, MangaTagsEntity::class, ChapterEntity::class,
-        FavouriteCategoryEntity::class, FavouriteEntity::class, WorkFavouriteEntity::class, MangaPrefsEntity::class, TrackEntity::class,
+        MangaEntity::class, TagEntity::class, HistoryEntity::class, MangaTagsEntity::class, ChapterEntity::class,
+        FavouriteCategoryEntity::class, FavouriteEntity::class, MangaPrefsEntity::class, TrackEntity::class,
         TrackLogEntity::class, SuggestionEntity::class, BookmarkEntity::class, ScrobblingEntity::class,
-        MangaSourceEntity::class, StatsEntity::class, WorkStatsEntity::class, LocalContentIndexEntity::class, EpubChapterMappingEntity::class,
+        MangaSourceEntity::class, StatsEntity::class, LocalContentIndexEntity::class, EpubChapterMappingEntity::class,
         JsonSourceEntity::class, ExternalExtensionRepoEntity::class,
         TrackingSiteItemEntity::class, TrackingSiteLinkEntity::class, SourcePresetEntity::class,
-        EntityRecord::class, EntityBindingRecord::class, RelationRecord::class, EntityPrefsRecord::class,
-        WorkMigrationLedgerEntity::class,
         ReadingRecordEntity::class, ReadingJumpPointEntity::class, RestoreCheckpointEntity::class,
         SpaceSessionEntity::class, SpaceNavigationEntryEntity::class, SpaceRoutePreferencesEntity::class,
         SpaceDefinitionEntity::class,
@@ -201,8 +186,6 @@ abstract class MangaDatabase : RoomDatabase() {
 
     abstract fun getHistoryDao(): HistoryDao
 
-    abstract fun getWorkHistoryDao(): WorkHistoryDao
-
     abstract fun getHistoryLibraryReadDao(): org.skepsun.kototoro.history.data.HistoryLibraryReadDao
 
     abstract fun getTagsDao(): TagsDao
@@ -210,8 +193,6 @@ abstract class MangaDatabase : RoomDatabase() {
     abstract fun getMangaDao(): MangaDao
 
     abstract fun getFavouritesDao(): FavouritesDao
-
-    abstract fun getWorkFavouritesDao(): WorkFavouritesDao
 
     abstract fun getFavouriteLibraryReadDao(): org.skepsun.kototoro.favourites.data.FavouriteLibraryReadDao
 
@@ -235,8 +216,6 @@ abstract class MangaDatabase : RoomDatabase() {
 
     abstract fun getStatsDao(): StatsDao
 
-    abstract fun getWorkStatsDao(): WorkStatsDao
-
     abstract fun getLocalContentIndexDao(): LocalContentIndexDao
 
     abstract fun getChaptersDao(): ChaptersDao
@@ -250,10 +229,6 @@ abstract class MangaDatabase : RoomDatabase() {
     abstract fun getTrackingSiteDao(): TrackingSiteDao
 
     abstract fun getSourcePresetsDao(): SourcePresetsDao
-
-    abstract fun getEntityGraphDao(): EntityGraphDao
-
-    abstract fun getWorkMigrationLedgerDao(): WorkMigrationLedgerDao
 
     abstract fun getReadingRecordDao(): ReadingRecordDao
 
@@ -366,6 +341,7 @@ fun getDatabaseMigrations(context: Context): Array<Migration> = arrayOf(
     Migration80To81(),
     Migration81To82(),
     Migration82To83(),
+    org.skepsun.kototoro.core.db.migrations.Migration83To84(),
 )
 
 fun MangaDatabase(context: Context): MangaDatabase = Room

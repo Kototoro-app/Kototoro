@@ -1,18 +1,16 @@
 package org.skepsun.kototoro.details.domain
 
-import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
+import org.skepsun.kototoro.core.model.ContentIdentityKeys
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
-import org.skepsun.kototoro.entitygraph.domain.normalizeStrictTitleKey
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import org.skepsun.kototoro.tracking.discovery.domain.normalizeStrictTitleKey
 import java.net.URI
 import javax.inject.Inject
 
 class RelatedContentUseCase @Inject constructor(
     private val mangaRepositoryFactory: ContentRepository.Factory,
-    private val entityGraphRepository: EntityGraphRepository,
 ) {
 
     suspend operator fun invoke(seed: Content) = runCatchingCancellable {
@@ -22,41 +20,23 @@ class RelatedContentUseCase @Inject constructor(
     }.getOrNull()
 
     suspend fun getOrThrow(seed: Content): List<Content> {
-        val boundProjectionKeys = findBoundProjectionKeys(seed)
         return filterCurrentWorkFromRelated(
             seed = seed,
             candidates = mangaRepositoryFactory.create(seed.source).getRelated(seed),
-            boundProjectionKeys = boundProjectionKeys,
         )
-    }
-
-    private suspend fun findBoundProjectionKeys(seed: Content): Set<String> {
-        if (seed.id == 0L) {
-            return emptySet()
-        }
-        val entity = entityGraphRepository.findEntityByBinding("local_manga", seed.id.toString())
-            ?: entityGraphRepository.findEntityByBinding("0", seed.id.toString())
-            ?: return emptySet()
-        return entityGraphRepository.getBindings(entity.id)
-            .asSequence()
-            .filter { binding -> binding.source == seed.source.name }
-            .mapTo(LinkedHashSet()) { binding -> binding.externalId }
     }
 }
 
 internal fun filterCurrentWorkFromRelated(
     seed: Content,
     candidates: List<Content>,
-    boundProjectionKeys: Set<String>,
 ): List<Content> {
     return candidates.filterNot { candidate ->
         if (candidate.source.name != seed.source.name) {
             return@filterNot false
         }
         candidate.id == seed.id ||
-            ProjectionIdentityKeys.bindingKeys(candidate.url, candidate.publicUrl)
-                .any(boundProjectionKeys::contains) ||
-            ProjectionIdentityKeys.hasSameIdentity(
+            ContentIdentityKeys.hasSameIdentity(
                 source = seed.source.name,
                 url = seed.url,
                 publicUrl = seed.publicUrl,

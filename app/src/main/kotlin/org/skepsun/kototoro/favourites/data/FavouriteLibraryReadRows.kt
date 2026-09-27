@@ -17,18 +17,6 @@ data class FavouriteMembershipRow(
 )
 
 /**
- * Batch projection facet for one entity: how many local projections are bound and from
- * which sources. Feeds MULTI_PROJECTION / BROKEN_PROJECTION filters, the projection
- * count badge and the per-source quick filter — without loading any `Content`.
- */
-data class FavouriteProjectionFacetRow(
-    @ColumnInfo(name = "entity_id") val entityId: Long,
-    @ColumnInfo(name = "manga_id") val mangaId: Long,
-    @ColumnInfo(name = "source") val source: String,
-    @ColumnInfo(name = "content_type") val contentType: String?,
-)
-
-/**
  * One entity↔tag relation of the favourites library: ids only. A heavily-tagged library has
  * over 100k of these, so the tag strings deliberately do not ride along — they come from
  * [FavouriteTagDictionaryRow] once per tag instead of once per relation.
@@ -51,8 +39,7 @@ data class FavouriteTagDictionaryRow(
 )
 
 /**
- * Downloaded favourite id: the mapping of the local download index onto favourite
- * entity ids. `manga_id` is any bound projection present in `local_index`.
+ * Downloaded favourite id: a favourite manga present in the local download index.
  */
 data class FavouriteDownloadedRow(
     @ColumnInfo(name = "entity_id") val entityId: Long,

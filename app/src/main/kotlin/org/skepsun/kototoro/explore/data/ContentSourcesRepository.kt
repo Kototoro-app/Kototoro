@@ -67,7 +67,7 @@ import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.core.model.LocalVideoSource
-import org.skepsun.kototoro.space.data.ProjectionContentTypeBackfill
+import org.skepsun.kototoro.space.data.ContentTypeBackfill
 
 private const val BrowseSourcesTraceTag = "BrowseSourcesTrace"
 
@@ -98,7 +98,7 @@ class ContentSourcesRepository @Inject constructor(
     private val tsundokuExtensionManager: org.skepsun.kototoro.tsundoku.TsundokuExtensionManager,
     private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
     private val sourceAvailabilityRepository: SourceAvailabilityRepository,
-    private val projectionContentTypeBackfill: ProjectionContentTypeBackfill,
+    private val contentTypeBackfill: ContentTypeBackfill,
 ) {
 
     private val dao get() = db.getSourcesDao()
@@ -207,7 +207,7 @@ class ContentSourcesRepository @Inject constructor(
             candidates
         }
         val sources = canonicalizeSourcesByName(filteredCandidates)
-        projectionContentTypeBackfill.backfillAll(
+        contentTypeBackfill.backfillAll(
             resolvedSources = sources + listOf(LocalMangaSource, LocalNovelSource, LocalVideoSource),
         )
         return sources

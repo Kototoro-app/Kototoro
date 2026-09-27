@@ -7,7 +7,6 @@ import org.skepsun.kototoro.scrobbling.common.domain.Scrobbler
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,8 +15,7 @@ class BangumiScrobbler @Inject constructor(
     private val repository: BangumiRepository,
     db: MangaDatabase,
     mangaRepositoryFactory: ContentRepository.Factory,
-    workResolver: WorkResolver,
-) : Scrobbler(db, ScrobblerService.BANGUMI, repository, mangaRepositoryFactory, workResolver) {
+) : Scrobbler(db, ScrobblerService.BANGUMI, repository, mangaRepositoryFactory) {
 
     init {
         statuses[ScrobblingStatus.PLANNED] = "wish"

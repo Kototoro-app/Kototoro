@@ -29,7 +29,6 @@ sealed interface SettingsDestination {
     data object SuggestionsSettings : SettingsDestination
     data object SyncSettings : SettingsDestination
     data object BackupsSettings : SettingsDestination
-    data object EntityOrganizeSettings : SettingsDestination
     data object TranslationSettings : SettingsDestination
     data object TranslationApiSettings : SettingsDestination
     data object TranslationE2EApiSettings : SettingsDestination

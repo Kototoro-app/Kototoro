@@ -26,9 +26,6 @@ class FavouritesActivity : BaseComposeActivity() {
                 contentPadding = WindowInsets.safeDrawing.asPaddingValues(),
                 initialCategoryId = initialCategoryId,
                 initialCategoryTitle = initialCategoryTitle,
-                onOpenEntityOrganize = { selectedIds ->
-                    router.openEntityOrganizeSettings(selectedIds)
-                },
             )
         }
     }

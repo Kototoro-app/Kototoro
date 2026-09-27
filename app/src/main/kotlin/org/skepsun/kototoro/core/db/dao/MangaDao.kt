@@ -16,7 +16,7 @@ import org.skepsun.kototoro.core.db.entity.TagEntity
 @Dao
 abstract class MangaDao {
 
-    data class MissingContentTypeProjection(
+    data class MissingContentTypeRow(
         val id: Long,
         val source: String,
     )
@@ -82,7 +82,7 @@ abstract class MangaDao {
     abstract suspend fun findMissingContentTypes(
         sources: Collection<String>,
         limit: Int,
-    ): List<MissingContentTypeProjection>
+    ): List<MissingContentTypeRow>
 
     @Query("UPDATE manga SET content_type = :contentType WHERE manga_id = :id AND content_type IS NULL")
     abstract suspend fun setContentTypeIfMissing(id: Long, contentType: String): Int
@@ -115,16 +115,10 @@ abstract class MangaDao {
 		SELECT * FROM manga
 		WHERE (title LIKE :query OR alt_title LIKE :query)
 			AND (
-				EXISTS(SELECT 1 FROM work_history WHERE work_history.anchor_manga_id = manga.manga_id AND work_history.deleted_at = 0)
-				OR EXISTS(SELECT 1 FROM work_favourites WHERE work_favourites.anchor_manga_id = manga.manga_id AND work_favourites.deleted_at = 0)
-				OR EXISTS(SELECT 1 FROM work_stats WHERE work_stats.anchor_manga_id = manga.manga_id)
-				OR EXISTS(SELECT 1 FROM entity_preferences WHERE entity_preferences.preferred_local_manga_id = manga.manga_id)
-				OR EXISTS(
-					SELECT 1 FROM entity_binding
-					WHERE entity_binding.source IN ('local_manga', '0')
-						AND entity_binding.external_id = CAST(manga.manga_id AS TEXT)
-						AND entity_binding.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-				)
+				EXISTS(SELECT 1 FROM history WHERE history.manga_id = manga.manga_id AND history.deleted_at = 0)
+				OR EXISTS(SELECT 1 FROM favourites WHERE favourites.manga_id = manga.manga_id AND favourites.deleted_at = 0)
+				OR EXISTS(SELECT 1 FROM stats WHERE stats.manga_id = manga.manga_id)
+				OR EXISTS(SELECT 1 FROM preferences WHERE preferences.manga_id = manga.manga_id)
 			)
 		LIMIT :limit
         """,
@@ -138,16 +132,10 @@ abstract class MangaDao {
 		WHERE (title LIKE :query OR alt_title LIKE :query)
 			AND source = :source
 			AND (
-				EXISTS(SELECT 1 FROM work_history WHERE work_history.anchor_manga_id = manga.manga_id AND work_history.deleted_at = 0)
-				OR EXISTS(SELECT 1 FROM work_favourites WHERE work_favourites.anchor_manga_id = manga.manga_id AND work_favourites.deleted_at = 0)
-				OR EXISTS(SELECT 1 FROM work_stats WHERE work_stats.anchor_manga_id = manga.manga_id)
-				OR EXISTS(SELECT 1 FROM entity_preferences WHERE entity_preferences.preferred_local_manga_id = manga.manga_id)
-				OR EXISTS(
-					SELECT 1 FROM entity_binding
-					WHERE entity_binding.source IN ('local_manga', '0')
-						AND entity_binding.external_id = CAST(manga.manga_id AS TEXT)
-						AND entity_binding.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-				)
+				EXISTS(SELECT 1 FROM history WHERE history.manga_id = manga.manga_id AND history.deleted_at = 0)
+				OR EXISTS(SELECT 1 FROM favourites WHERE favourites.manga_id = manga.manga_id AND favourites.deleted_at = 0)
+				OR EXISTS(SELECT 1 FROM stats WHERE stats.manga_id = manga.manga_id)
+				OR EXISTS(SELECT 1 FROM preferences WHERE preferences.manga_id = manga.manga_id)
 			)
 		LIMIT :limit
         """,
@@ -176,16 +164,10 @@ abstract class MangaDao {
     @Query(
         """
 		DELETE FROM manga
-		WHERE NOT EXISTS(SELECT 1 FROM work_history WHERE work_history.anchor_manga_id = manga.manga_id AND work_history.deleted_at = 0)
-			AND NOT EXISTS(SELECT 1 FROM work_favourites WHERE work_favourites.anchor_manga_id = manga.manga_id AND work_favourites.deleted_at = 0)
-			AND NOT EXISTS(SELECT 1 FROM work_stats WHERE work_stats.anchor_manga_id = manga.manga_id)
-			AND NOT EXISTS(SELECT 1 FROM entity_preferences WHERE entity_preferences.preferred_local_manga_id = manga.manga_id)
-			AND NOT EXISTS(
-				SELECT 1 FROM entity_binding
-				WHERE entity_binding.source IN ('local_manga', '0')
-					AND entity_binding.external_id = CAST(manga.manga_id AS TEXT)
-					AND entity_binding.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-			)
+		WHERE NOT EXISTS(SELECT 1 FROM history WHERE history.manga_id = manga.manga_id AND history.deleted_at = 0)
+			AND NOT EXISTS(SELECT 1 FROM favourites WHERE favourites.manga_id = manga.manga_id AND favourites.deleted_at = 0)
+			AND NOT EXISTS(SELECT 1 FROM stats WHERE stats.manga_id = manga.manga_id)
+			AND NOT EXISTS(SELECT 1 FROM preferences WHERE preferences.manga_id = manga.manga_id)
 			AND NOT EXISTS(SELECT * FROM bookmarks WHERE bookmarks.manga_id == manga.manga_id)
 			AND NOT EXISTS(SELECT * FROM suggestions WHERE suggestions.manga_id == manga.manga_id)
 			AND NOT EXISTS(SELECT * FROM scrobblings WHERE scrobblings.manga_id == manga.manga_id)
@@ -198,33 +180,16 @@ abstract class MangaDao {
     @Query(
         """
 		DELETE FROM manga
-		WHERE NOT EXISTS(SELECT 1 FROM work_history WHERE work_history.anchor_manga_id = manga.manga_id AND work_history.deleted_at = 0)
-			AND NOT EXISTS(SELECT 1 FROM work_favourites WHERE work_favourites.anchor_manga_id = manga.manga_id AND work_favourites.deleted_at = 0)
-			AND NOT EXISTS(SELECT 1 FROM work_stats WHERE work_stats.anchor_manga_id = manga.manga_id)
-			AND NOT EXISTS(SELECT 1 FROM entity_preferences WHERE entity_preferences.preferred_local_manga_id = manga.manga_id)
-			AND NOT EXISTS(
-				SELECT 1 FROM entity_binding
-				WHERE entity_binding.source IN ('local_manga', '0')
-					AND entity_binding.external_id = CAST(manga.manga_id AS TEXT)
-					AND entity_binding.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-			)
+		WHERE NOT EXISTS(SELECT 1 FROM history WHERE history.manga_id = manga.manga_id AND history.deleted_at = 0)
+			AND NOT EXISTS(SELECT 1 FROM favourites WHERE favourites.manga_id = manga.manga_id AND favourites.deleted_at = 0)
+			AND NOT EXISTS(SELECT 1 FROM stats WHERE stats.manga_id = manga.manga_id)
+			AND NOT EXISTS(SELECT 1 FROM preferences WHERE preferences.manga_id = manga.manga_id)
 			AND NOT EXISTS(SELECT * FROM bookmarks WHERE bookmarks.manga_id == manga.manga_id)
 			AND NOT EXISTS(SELECT * FROM suggestions WHERE suggestions.manga_id == manga.manga_id)
 			AND NOT EXISTS(SELECT * FROM scrobblings WHERE scrobblings.manga_id == manga.manga_id)
 			AND NOT EXISTS(SELECT * FROM local_index WHERE local_index.manga_id == manga.manga_id)
 			AND NOT EXISTS(SELECT * FROM tracks WHERE tracks.manga_id == manga.manga_id)
 			AND NOT EXISTS(SELECT * FROM track_logs WHERE track_logs.manga_id == manga.manga_id)
-			AND NOT EXISTS(SELECT * FROM work_history WHERE work_history.anchor_manga_id == manga.manga_id)
-			AND NOT EXISTS(SELECT * FROM work_stats WHERE work_stats.anchor_manga_id == manga.manga_id)
-			AND NOT EXISTS(
-				SELECT * FROM entity_preferences
-				WHERE entity_preferences.preferred_local_manga_id == manga.manga_id
-			)
-			AND NOT EXISTS(
-				SELECT * FROM entity_binding
-				WHERE entity_binding.source IN ('local_manga', '0')
-					AND entity_binding.external_id == CAST(manga.manga_id AS TEXT)
-			)
         """,
     )
     abstract suspend fun cleanupSyncResidue(): Int

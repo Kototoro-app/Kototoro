@@ -78,12 +78,10 @@ fun KototoroFavoritesHostRoute(
     contentPadding: PaddingValues,
     initialCategoryId: Long = NO_ID,
     initialCategoryTitle: String? = null,
-    onOpenEntityOrganize: (Set<Long>) -> Unit = {},
     onNavigateToDetails: ((Content, String?) -> Unit)? = null,
-    onNavigateToEntityDetails: ((DetailsOrigin, String?) -> Unit)? = null,
+    onNavigateToDetailsOrigin: ((DetailsOrigin, String?) -> Unit)? = null,
     registerFilterCallback: Boolean = true,
     refreshGeneration: Int = 0,
-    consumeOrganizeMessages: Boolean = true,
     onTopBarOverrideChanged: (TopBarOverrideState?) -> Unit = {},
     viewModel: FavouritesContainerViewModel = hiltViewModel(),
     /**
@@ -298,18 +296,6 @@ fun KototoroFavoritesHostRoute(
         onDispose { onTopBarOverrideChanged(null) }
     }
 
-    if (consumeOrganizeMessages) {
-        LaunchedEffect(viewModel.organizeMessages) {
-            viewModel.organizeMessages.collect { event ->
-                event?.consume(
-                    FlowCollector { message ->
-                        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
-                    },
-                )
-            }
-        }
-    }
-
     if (uiState.isLoading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
@@ -374,8 +360,7 @@ fun KototoroFavoritesHostRoute(
                         appRouter = appRouter,
                         contentPadding = innerPadding,
                         onNavigateToDetails = onNavigateToDetails,
-                        onNavigateToEntityDetails = onNavigateToEntityDetails,
-                        onEntityOrganizeSelection = onOpenEntityOrganize,
+                        onNavigateToDetailsOrigin = onNavigateToDetailsOrigin,
                         sharedTransitionEnabled = enabled,
                         isActivePage = enabled,
                         sortOrders = ListSortOrder.FAVORITES.sortedBy { it.ordinal },
@@ -412,6 +397,7 @@ internal fun FavoritesFilterPanelRoute(
     val selectedSourceTags by containerViewModel.selectedSourceTags.collectAsStateWithLifecycle()
     val sourceTagEntries by containerViewModel.availableSourceTags.collectAsStateWithLifecycle()
     val isInlineQuickFilterEnabled by containerViewModel.isQuickFilterEnabled.collectAsStateWithLifecycle()
+    val isShelfEnabled by containerViewModel.isShelfEnabled.collectAsStateWithLifecycle()
 
     FavoritesFilterPanelContent(
         quickFilter = quickFilter,
@@ -430,6 +416,8 @@ internal fun FavoritesFilterPanelRoute(
         },
         isInlineQuickFilterEnabled = isInlineQuickFilterEnabled,
         onInlineQuickFilterEnabledChange = containerViewModel::setQuickFilterEnabled,
+        isShelfEnabled = isShelfEnabled,
+        onShelfEnabledChange = containerViewModel::setShelfEnabled,
         close = close,
     )
 }

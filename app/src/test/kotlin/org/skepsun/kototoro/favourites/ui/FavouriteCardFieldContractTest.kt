@@ -22,7 +22,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
  * This test pins down exactly which fields the three favourites library card modes
  * (GRID / COMPACT_GRID / LIST / DETAILED_LIST) actually consume, so the new narrow
  * `FavouriteCardRow` read model can be sized against real consumers instead of the wide
- * `MangaEntity`/`Content` projection the paging query drags around today.
+ * `MangaEntity`/`Content` content the paging query drags around today.
  *
  * ## Contract (mechanically enforced below)
  *
@@ -36,7 +36,6 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
  * | `contentRating` (NSFW)    |  x   |       x       |       x       | nsfwBadgeComesFromContentRating      |
  * | `counter` (new chapters)  |  x   |       x       |       x       | cardModelFieldsFlowThrough           |
  * | `progress`                |  x   |       x       |       x       | cardModelFieldsFlowThrough            |
- * | `projectionCount`         |  x   |       x       |       x       | cardModelFieldsFlowThrough            |
  * | `isPinned` (per membership)| x   |       x       |       x       | cardModelFieldsFlowThrough            |
  * | `isSaved` (downloaded)    |  x   |       -       |       x       | cardModelFieldsFlowThrough            |
  * | `metadataTrackingService` |  x   |       x       |       x       | cardModelFieldsFlowThrough            |
@@ -51,7 +50,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
  * full `chapters` (only `chapters.size` inside info text), full entity graph objects.
  *
  * The mechanical guarantee below is one-directional by design: if a new field starts
- * flowing into `toContentCardRenderModel()` (the pure projection the cards draw from),
+ * flowing into `toContentCardRenderModel()` (the pure content the cards draw from),
  * the full-vs-stripped equality breaks and this test fails, forcing the contract — and
  * the row — to be widened consciously.
  */
@@ -60,7 +59,7 @@ class FavouriteCardFieldContractTest {
     private val actionTag = ContentTag(title = "Action", key = "action", source = TestContentSource)
     private val dramaTag = ContentTag(title = "Drama", key = "drama", source = TestContentSource)
 
-    /** A Content with every wide field populated, like today's paging projection. */
+    /** A Content with every wide field populated, like today's paging content. */
     private val fullContent = content()
 
     /**
@@ -114,7 +113,6 @@ class FavouriteCardFieldContractTest {
         override = override,
         subtitle = manga.altTitles.firstOrNull(),
         counter = 3,
-        projectionCount = 2,
         progress = null,
         isFavorite = false,
         isSaved = true,
@@ -127,7 +125,6 @@ class FavouriteCardFieldContractTest {
         override = override,
         subtitle = manga.tags.joinToString(", ") { it.title }.ifBlank { null },
         counter = 3,
-        projectionCount = 2,
         progress = null,
         isPinned = true,
         metadataTrackingService = ScrobblerService.MAL,
@@ -207,7 +204,7 @@ class FavouriteCardFieldContractTest {
     }
 
     @Test
-    fun `manual title and cover overrides win over the projection fields`() {
+    fun `manual title and cover overrides win over the content fields`() {
         val override = ContentOverride(
             title = "Overridden",
             coverUrl = "https://example.com/overridden.jpg",
@@ -221,17 +218,15 @@ class FavouriteCardFieldContractTest {
 
     @Test
     fun `card model fields flow through the render model unchanged`() {
-        // counter / progress / projectionCount / isPinned / isSaved / metadataTrackingService
+        // counter / progress / isPinned / isSaved / metadataTrackingService
         // are set by the favourites mapping (aggregate history/tracking + membership state),
-        // not by the Content projection - the row must keep carrying them.
+        // not by the Content content - the row must keep carrying them.
         val base = grid(fullContent).toContentCardRenderModel()
         val changedCounter = grid(fullContent).copy(counter = 9).toContentCardRenderModel()
-        val changedProjectionCount = grid(fullContent).copy(projectionCount = 1).toContentCardRenderModel()
         val changedPinned = grid(fullContent).copy(isPinned = false).toContentCardRenderModel()
         val changedSaved = grid(fullContent).copy(isSaved = false).toContentCardRenderModel()
         val changedService = grid(fullContent).copy(metadataTrackingService = null).toContentCardRenderModel()
         assertNotEquals(base, changedCounter)
-        assertNotEquals(base, changedProjectionCount)
         assertNotEquals(base, changedPinned)
         assertNotEquals(base, changedSaved)
         assertNotEquals(base, changedService)

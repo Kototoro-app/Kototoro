@@ -69,11 +69,7 @@ import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
 import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.list.ui.model.QuickFilter
-import org.skepsun.kototoro.work.domain.WorkResolver
-import org.skepsun.kototoro.work.domain.WorkAggregate
-import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
 import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
@@ -142,7 +138,6 @@ class HistoryListViewModel @Inject constructor(
 
     override val isFilterBarVisible = MutableStateFlow(true)
     private val activeSpaceScope = spaceBinding.spaceId
-
 
     override val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
         spaceGroupTab = spaceBinding.groupTab,
@@ -373,18 +368,8 @@ class HistoryListViewModel @Inject constructor(
         }
     }
 
-
     fun requestMoreItems() {
         // The static list has no prefetch: the whole snapshot is already loaded.
-    }
-
-    override fun resolveEntityIdForUiItemId(id: Long): Long? {
-        return rowsByUiId[id]?.entityId
-    }
-
-    override fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? {
-        val row = rowsByUiId[id] ?: return null
-        return row.displayMangaId ?: row.anchorMangaId
     }
 
     /**

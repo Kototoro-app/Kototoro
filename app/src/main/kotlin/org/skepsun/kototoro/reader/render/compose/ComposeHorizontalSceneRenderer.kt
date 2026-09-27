@@ -6,6 +6,7 @@ import androidx.compose.animation.splineBasedDecay
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -25,7 +26,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.rememberTextMeasurer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -53,7 +53,6 @@ fun ComposeHorizontalSceneRenderer(
     initialScrollX: Float = 0f,
     scrollState: ComposeScenePrimaryScrollState = rememberComposeScenePrimaryScrollState(initialScrollX),
     placeholderColor: Color = Color.DarkGray,
-    pageLabelProvider: ((PageId) -> String)? = null,
     imageColorFilter: ColorFilter? = null,
     assetProvider: (PageId) -> ImageBitmap? = { null },
     readerAssetProvider: ((PageId) -> ReaderImageAsset?)? = null,
@@ -63,6 +62,12 @@ fun ComposeHorizontalSceneRenderer(
     onMotionChanged: (ViewportMotion) -> Unit = {},
     onOverScroll: ((deltaX: Float) -> Unit)? = null,
     onReleaseOverScroll: (() -> Unit)? = null,
+    /**
+     * Drawn over the scene inside the node that owns the scroll gesture, so a drag that starts on
+     * an overlay (a loading indicator, an error card) still scrolls: as a sibling above the
+     * renderer the overlay would win the hit test and swallow it.
+     */
+    content: @Composable BoxScope.() -> Unit = {},
 ) {
     var viewportWidth by remember { mutableFloatStateOf(0f) }
     var viewportHeight by remember { mutableFloatStateOf(0f) }
@@ -77,7 +82,6 @@ fun ComposeHorizontalSceneRenderer(
     var flingJob by remember { mutableStateOf<Job?>(null) }
     val density = LocalDensity.current
     val decaySpec = remember(density) { splineBasedDecay<Float>(density) }
-    val textMeasurer = rememberTextMeasurer()
 
     Box(
         modifier = modifier
@@ -248,8 +252,6 @@ fun ComposeHorizontalSceneRenderer(
                         verticalOffset = verticalOffset,
                         seamPolicy = seamPolicy,
                         placeholderColor = placeholderColor,
-                        pageLabelProvider = pageLabelProvider,
-                        textMeasurer = textMeasurer,
                         imageColorFilter = imageColorFilter,
                         assetProvider = assetProvider,
                         readerAssetProvider = readerAssetProvider,
@@ -259,5 +261,7 @@ fun ComposeHorizontalSceneRenderer(
 
                 drawContent()
             },
-    )
+    ) {
+        content()
+    }
 }
