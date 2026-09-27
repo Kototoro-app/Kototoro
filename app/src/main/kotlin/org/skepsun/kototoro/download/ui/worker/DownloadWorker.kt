@@ -115,6 +115,7 @@ import org.skepsun.kototoro.video.data.VideoDownloadIndex
 import org.skepsun.kototoro.video.data.TorrentResolvedStream
 import org.skepsun.kototoro.video.data.TorrentStreamService
 import org.skepsun.kototoro.video.domain.resolveVideoCandidates
+import org.skepsun.kototoro.video.player.PlaybackMediaKind
 import org.skepsun.kototoro.parsers.exception.TooManyRequestExceptions
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -1913,7 +1914,11 @@ class DownloadWorker @AssistedInject constructor(
             } else {
                 null
             }
-            val fileName = buildVideoFileName(chapter, target.extension(torrentStream))
+            val downloadAsHls = torrentStream == null &&
+                shouldDownloadVideoAsHls(target.mediaKind, target.url) {
+                    probeResponsePrefix(repo.source, target.url, target.headers)
+                }
+            val fileName = buildVideoFileName(chapter, target.extension(torrentStream, downloadAsHls))
             val outputFile = mangaDir.findOrCreateFile(fileName)
             val partialFile = mangaDir.findOrCreateFile("$fileName.part")
             try {
@@ -1938,7 +1943,7 @@ class DownloadWorker @AssistedInject constructor(
                 }
                 if (torrentStream != null) {
                     downloadDirectVideo(repo.source, torrentStream.streamUrl, null, partialFile, progress)
-                } else if (target.isHls) {
+                } else if (downloadAsHls) {
                     downloadHls(repo.source, target.url, target.headers, partialFile, progress)
                 } else {
                     downloadDirectVideo(repo.source, target.url, target.headers, partialFile, progress)
@@ -2030,6 +2035,7 @@ class DownloadWorker @AssistedInject constructor(
                 },
                 audios = selected.audioTracks,
                 isTorrent = selected.isTorrent,
+                mediaKind = selected.mediaKind,
             )
         }
         val pages = repo.getPages(chapter, nextChapterUrl = null)
@@ -2286,6 +2292,21 @@ class DownloadWorker @AssistedInject constructor(
         }
     }
 
+    /** Reads the beginning of the response at [url], or null when it cannot be fetched. */
+    private suspend fun probeResponsePrefix(
+        source: ContentSource,
+        url: String,
+        headers: Map<String, String>?,
+    ): String? = runCatchingCancellable {
+        val request = PageLoader.createPageRequest(url, source, headers)
+        okHttp.newCall(request).await().use { response ->
+            if (!response.isSuccessful) return@use null
+            val buffer = okio.Buffer()
+            response.body.source().read(buffer, VIDEO_PROBE_BYTE_LIMIT)
+            buffer.readUtf8()
+        }
+    }.getOrNull()
+
     private suspend fun fetchText(source: ContentSource, url: String, headers: Map<String, String>?): String {
         val request = PageLoader.createPageRequest(url, source, headers)
             .newBuilder()
@@ -2491,9 +2512,9 @@ class DownloadWorker @AssistedInject constructor(
         val subtitles: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList(),
         val audios: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList(),
         val isTorrent: Boolean = false,
+        val mediaKind: PlaybackMediaKind = PlaybackMediaKind.AUTO,
     ) {
-        val isHls: Boolean = url.contains(".m3u8", ignoreCase = true)
-        fun extension(torrentStream: TorrentResolvedStream?): String = when {
+        fun extension(torrentStream: TorrentResolvedStream?, isHls: Boolean): String = when {
             torrentStream != null -> guessExt(torrentStream.fileName, fallback = "mkv")
             isHls -> "ts"
             else -> guessExt(url, fallback = "mp4")
@@ -2919,6 +2940,7 @@ class DownloadWorker @AssistedInject constructor(
         const val MAX_RETRY_DELAY = 7_200_000L // 2 hours
         const val TAG = "download"
         private const val PAGE_NAME_PATTERN = "%08d_%04d%04d"
+        private const val VIDEO_PROBE_BYTE_LIMIT = 1024L
     }
 
     @AssistedFactory
