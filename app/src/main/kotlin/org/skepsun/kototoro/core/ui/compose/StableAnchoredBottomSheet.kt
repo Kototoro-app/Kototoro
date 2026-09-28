@@ -31,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -55,6 +56,7 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -93,7 +95,21 @@ internal fun stableSheetAnchorOffsets(hostHeightPx: Float, peekHeightPx: Float?)
 internal fun stableSheetInitialAnchor(usePeekAnchor: Boolean): StableSheetAnchor =
     if (usePeekAnchor) StableSheetAnchor.Middle else StableSheetAnchor.ThreeQuarter
 
+/** [preferred], or three quarters when [offsets] has no such anchor (a peek too tall for a middle anchor). */
+internal fun stableSheetOpenAnchor(
+    offsets: Map<StableSheetAnchor, Float>,
+    preferred: StableSheetAnchor,
+): StableSheetAnchor = preferred.takeIf { it in offsets } ?: StableSheetAnchor.ThreeQuarter
+
+/**
+ * The sheet slides in only once its anchors are final; opening on a guessed anchor would show it
+ * in the wrong place first (at the top before the host is measured, at half before the peek is).
+ */
+internal fun stableSheetReadyToOpen(hostHeightPx: Float, peekHeightPx: Float?, waitForPeek: Boolean): Boolean =
+    hostHeightPx > 0f && (!waitForPeek || peekHeightPx != null)
+
 private const val StableSheetMaxScrimAlpha = 0.42f
+private const val STABLE_SHEET_PEEK_WAIT_MS = 500L
 
 private val StableSheetAnimationSpec = spring<Float>(
     dampingRatio = Spring.DampingRatioNoBouncy,
@@ -108,21 +124,32 @@ internal fun calculateStableSheetWidth(availableWidth: Dp, sheetMaxWidth: Dp?): 
 @Stable
 private class StableSheetState(
     private val density: androidx.compose.ui.unit.Density,
-    initialAnchor: StableSheetAnchor,
+    private val openAnchor: StableSheetAnchor,
+    private val waitForPeek: Boolean,
 ) {
-    val anchoredState = AnchoredDraggableState(initialValue = initialAnchor)
+    // Starts hidden and slides to openAnchor once the anchors are known (see open()).
+    val anchoredState = AnchoredDraggableState(initialValue = StableSheetAnchor.Hidden)
 
     private var hostHeightPx by mutableFloatStateOf(0f)
-    private var peekHeightPx: Float? = null
+    private var peekHeightPx: Float? by mutableStateOf(null)
     private var nestedDragInProgress = false
 
+    /** Until then the sheet sits hidden only because it has not opened yet, not because it was dismissed. */
+    private var hasOpened by mutableStateOf(false)
+
+    val isReadyToOpen: Boolean
+        get() = stableSheetReadyToOpen(hostHeightPx, peekHeightPx, waitForPeek)
+
+    val hasAnchors: Boolean
+        get() = anchoredState.anchors.positionOf(StableSheetAnchor.Hidden).isFinite()
+
+    /** Unmeasured anchors mean the sheet has not opened yet, so it is below the host. */
     val offset: Float
-        get() = anchoredState.offset.takeIf(Float::isFinite)
-            ?: hostHeightPx * STABLE_SHEET_THREE_QUARTER_OFFSET_FRACTION
+        get() = anchoredState.offset.takeIf(Float::isFinite) ?: hostHeightPx
 
     val scrimAlpha: Float
         get() = if (hostHeightPx <= 0f) {
-            StableSheetMaxScrimAlpha
+            0f
         } else {
             StableSheetMaxScrimAlpha * (1f - offset / hostHeightPx).coerceIn(0f, 1f)
         }
@@ -130,7 +157,8 @@ private class StableSheetState(
     val isHidden: Boolean
         get() {
             val hiddenOffset = anchoredState.anchors.positionOf(StableSheetAnchor.Hidden)
-            return hiddenOffset.isFinite() &&
+            return hasOpened &&
+                hiddenOffset.isFinite() &&
                 anchoredState.settledValue == StableSheetAnchor.Hidden &&
                 anchoredState.targetValue == StableSheetAnchor.Hidden &&
                 !anchoredState.isAnimationRunning &&
@@ -173,7 +201,15 @@ private class StableSheetState(
         return target
     }
 
+    suspend fun open() {
+        if (hasOpened) return
+        hasOpened = true
+        val target = stableSheetOpenAnchor(stableSheetAnchorOffsets(hostHeightPx, peekHeightPx), openAnchor)
+        anchoredState.animateTo(target, animationSpec = StableSheetAnimationSpec)
+    }
+
     suspend fun dismiss(): Boolean {
+        hasOpened = true
         if (!anchoredState.anchors.positionOf(StableSheetAnchor.Hidden).isFinite()) return false
         anchoredState.animateTo(StableSheetAnchor.Hidden, animationSpec = StableSheetAnimationSpec)
         return true
@@ -282,7 +318,9 @@ fun StableAnchoredSheetLayout(
     sheet: @Composable (StableSheetSlotScope) -> Unit,
 ) {
     val density = LocalDensity.current
-    val state = remember(density) { StableSheetState(density, stableSheetInitialAnchor(usePeekAnchor)) }
+    val state = remember(density) {
+        StableSheetState(density, stableSheetInitialAnchor(usePeekAnchor), waitForPeek = usePeekAnchor)
+    }
     val coroutineScope = rememberCoroutineScope()
     val currentOnDismissRequest = rememberUpdatedState(onDismissRequest)
     val nestedScrollConnection = rememberStableSheetNestedScrollConnection(state)
@@ -312,6 +350,14 @@ fun StableAnchoredSheetLayout(
     }
     val peekHeightPx = peekHeight?.let { with(density) { it.toPx() } }
     LaunchedEffect(state, peekHeightPx) { state.updatePeekHeight(peekHeightPx) }
+    LaunchedEffect(state) {
+        // A peek that never arrives must not keep the sheet closed.
+        withTimeoutOrNull(STABLE_SHEET_PEEK_WAIT_MS) {
+            snapshotFlow { state.isReadyToOpen }.first { it }
+        }
+        snapshotFlow { state.hasAnchors }.first { it }
+        state.open()
+    }
     BackHandler(onBack = dismissWithAnimation)
 
     BoxWithConstraints(
@@ -331,7 +377,9 @@ fun StableAnchoredSheetLayout(
                 )
                 .clickable(onClick = dismissWithAnimation),
         )
-        val offset = state.offset.coerceAtLeast(0f)
+        // Before the first measure pass the host height is unknown, so place the sheet by the constraints.
+        val offset = state.anchoredState.offset.takeIf(Float::isFinite)?.coerceAtLeast(0f)
+            ?: constraints.maxHeight.toFloat()
         Box(
             modifier = Modifier
                 .width(sheetWidth)

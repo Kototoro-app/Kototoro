@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -140,6 +141,10 @@ internal fun ReaderPanelHost(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
                             .fillMaxWidth()
+                            // The peek is the header's natural height. While the sheet is hidden or
+                            // dragged down the column above is shorter than that; measured inside it
+                            // the header would shrink and the peek anchor would follow the finger.
+                            .wrapContentHeight(align = Alignment.Top, unbounded = true)
                             .then(scope.dragModifier)
                             .onSizeChanged { headerHeightPx = it.height },
                     ) {

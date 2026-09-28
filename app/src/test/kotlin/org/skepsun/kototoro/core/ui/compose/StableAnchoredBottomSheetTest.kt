@@ -2,7 +2,9 @@ package org.skepsun.kototoro.core.ui.compose
 
 import androidx.compose.ui.unit.dp
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class StableAnchoredBottomSheetTest {
@@ -56,5 +58,29 @@ class StableAnchoredBottomSheetTest {
     fun `peek sheets open at the middle anchor, others at three quarters`() {
         assertEquals(StableSheetAnchor.Middle, stableSheetInitialAnchor(usePeekAnchor = true))
         assertEquals(StableSheetAnchor.ThreeQuarter, stableSheetInitialAnchor(usePeekAnchor = false))
+    }
+
+    @Test
+    fun `the sheet opens at its preferred anchor when it exists`() {
+        val offsets = stableSheetAnchorOffsets(1000f, 360f)
+        assertEquals(StableSheetAnchor.Middle, stableSheetOpenAnchor(offsets, StableSheetAnchor.Middle))
+    }
+
+    @Test
+    fun `a peek sheet without a middle anchor opens at three quarters`() {
+        val offsets = stableSheetAnchorOffsets(1000f, 700f)
+        assertEquals(StableSheetAnchor.ThreeQuarter, stableSheetOpenAnchor(offsets, StableSheetAnchor.Middle))
+    }
+
+    @Test
+    fun `the sheet waits for the host height before opening`() {
+        assertFalse(stableSheetReadyToOpen(hostHeightPx = 0f, peekHeightPx = null, waitForPeek = false))
+        assertTrue(stableSheetReadyToOpen(hostHeightPx = 1000f, peekHeightPx = null, waitForPeek = false))
+    }
+
+    @Test
+    fun `a peek sheet waits for its peek before opening`() {
+        assertFalse(stableSheetReadyToOpen(hostHeightPx = 1000f, peekHeightPx = null, waitForPeek = true))
+        assertTrue(stableSheetReadyToOpen(hostHeightPx = 1000f, peekHeightPx = 360f, waitForPeek = true))
     }
 }
