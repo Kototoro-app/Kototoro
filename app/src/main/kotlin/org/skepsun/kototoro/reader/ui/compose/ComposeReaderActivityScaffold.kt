@@ -137,6 +137,13 @@ import org.skepsun.kototoro.reader.ui.autoScrollSpeedMultiplier
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlTokens
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderChapterPanelHeader
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelTabBar
+import org.skepsun.kototoro.reader.ui.compose.design.forEInk
+import org.skepsun.kototoro.reader.ui.compose.design.mangaReaderPanelColors
+import org.skepsun.kototoro.reader.ui.compose.design.readerChapterPanelSubtitle
+import org.skepsun.kototoro.reader.ui.compose.panel.ReaderPanelHost
+import org.skepsun.kototoro.reader.ui.compose.panel.rememberReaderPanelSurfaceMode
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressBar
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressDock
 import org.skepsun.kototoro.reader.ui.compose.design.readerControlContentColor
@@ -273,108 +280,50 @@ internal data class ReaderChapterPanelCallbacks(
     val onToggleDownloadedOnly: () -> Unit = {},
 )
 
+private val ReaderChapterPanelTabs = listOf(
+    DETAILS_TAB_CHAPTERS to R.string.chapters,
+    DETAILS_TAB_PAGES to R.string.pages,
+    DETAILS_TAB_BOOKMARKS to R.string.bookmarks,
+)
+
+/** Search and list options for the chapters tab, at the end of the chapter panel header. */
 @Composable
-private fun ReaderChapterPanelToolbar(
-    selectedTabId: Int,
-    isFullyExpanded: Boolean,
+private fun ReaderChapterPanelActions(
     state: ReaderChapterPanelUiState,
     callbacks: ReaderChapterPanelCallbacks,
 ) {
     var moreMenuExpanded by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(52.dp)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ReaderChapterPanelTab(
-            selected = selectedTabId == DETAILS_TAB_CHAPTERS,
-            iconResId = R.drawable.ic_list,
-            contentDescription = stringResource(R.string.chapters),
-            onClick = { callbacks.onTabSelected(DETAILS_TAB_CHAPTERS) },
-        )
-        ReaderChapterPanelTab(
-            selected = selectedTabId == DETAILS_TAB_PAGES,
-            iconResId = R.drawable.ic_grid,
-            contentDescription = stringResource(R.string.pages),
-            onClick = { callbacks.onTabSelected(DETAILS_TAB_PAGES) },
-        )
-        ReaderChapterPanelTab(
-            selected = selectedTabId == DETAILS_TAB_BOOKMARKS,
-            iconResId = R.drawable.ic_bookmark,
-            contentDescription = stringResource(R.string.bookmarks),
-            onClick = { callbacks.onTabSelected(DETAILS_TAB_BOOKMARKS) },
-        )
-
-        Box(modifier = Modifier.weight(1f))
-
-        AnimatedVisibility(visible = isFullyExpanded && selectedTabId == DETAILS_TAB_CHAPTERS) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = callbacks.onSearchToggle,
-                    enabled = state.searchEnabled,
-                    modifier = Modifier.size(44.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = stringResource(R.string.search_chapters),
-                        tint = if (state.searchVisible) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
-                Box {
-                    IconButton(
-                        onClick = { moreMenuExpanded = true },
-                        modifier = Modifier.size(44.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = stringResource(R.string.options),
-                        )
-                    }
-                    ReaderChapterPanelMoreMenu(
-                        expanded = moreMenuExpanded,
-                        state = state,
-                        callbacks = callbacks,
-                        onDismissRequest = { moreMenuExpanded = false },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReaderChapterPanelTab(
-    selected: Boolean,
-    iconResId: Int,
-    contentDescription: String,
-    onClick: () -> Unit,
-) {
-    Surface(
-        shape = RoundedRectangle(18.dp),
-        color = if (selected) {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        } else {
-            Color.Transparent
-        },
-    ) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         IconButton(
-            onClick = onClick,
+            onClick = callbacks.onSearchToggle,
+            enabled = state.searchEnabled,
             modifier = Modifier.size(44.dp),
         ) {
             Icon(
-                painter = painterResource(iconResId),
-                contentDescription = contentDescription,
-                tint = if (selected) {
+                imageVector = Icons.Default.Search,
+                contentDescription = stringResource(R.string.search_chapters),
+                tint = if (state.searchVisible) {
                     MaterialTheme.colorScheme.primary
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
+            )
+        }
+        Box {
+            IconButton(
+                onClick = { moreMenuExpanded = true },
+                modifier = Modifier.size(44.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = stringResource(R.string.options),
+                )
+            }
+            ReaderChapterPanelMoreMenu(
+                expanded = moreMenuExpanded,
+                state = state,
+                callbacks = callbacks,
+                onDismissRequest = { moreMenuExpanded = false },
             )
         }
     }
@@ -683,37 +632,52 @@ internal fun ComposeReaderActivityScaffold(
         }
 
             if (state.chaptersVisible) {
-                ReaderAnchoredBottomSheet(
+                // In the reader window (not a dialog), like the options panel, so it shares its
+                // glass and page-derived colours.
+                val chapterPanelColors = mangaReaderPanelColors(
+                    state.options.background,
+                    isSystemInDarkTheme(),
+                    MaterialTheme.colorScheme,
+                )
+                ReaderPanelHost(
+                    colors = if (state.eInkModeEnabled) chapterPanelColors.forEInk() else chapterPanelColors,
+                    surfaceMode = rememberReaderPanelSurfaceMode(state.eInkModeEnabled),
                     onDismissRequest = callbacks.onBackPressed,
-                ) { sheetDragModifier ->
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
+                    header = {
                         val selectionState = chapterSelectionState
-                        Box(modifier = sheetDragModifier.fillMaxWidth()) {
-                            if (chapterPanelTabId == DETAILS_TAB_CHAPTERS && selectionState != null) {
-                                ChapterSelectionBar(
-                                    state = selectionState,
-                                    modifier = Modifier.height(52.dp),
-                                )
-                            } else {
-                                ReaderChapterPanelToolbar(
-                                    selectedTabId = chapterPanelTabId,
-                                    isFullyExpanded = true,
-                                    state = state.chapterPanel,
-                                    callbacks = callbacks.chapterPanel,
-                                )
-                            }
-                        }
-                        Box(modifier = Modifier.weight(1f)) {
-                            chaptersPanelContent(
-                                chapterPanelTabId,
-                                state.chapterPanel,
-                                { chapterSelectionState = it },
-                                sheetDragModifier,
+                        if (chapterPanelTabId == DETAILS_TAB_CHAPTERS && selectionState != null) {
+                            ChapterSelectionBar(
+                                state = selectionState,
+                                modifier = Modifier.height(52.dp),
+                            )
+                        } else {
+                            ReaderChapterPanelHeader(
+                                title = state.title,
+                                subtitle = readerChapterPanelSubtitle(
+                                    listOf(state.subtitle, state.infoBar.text, state.infoBar.progressText),
+                                ),
+                                actions = {
+                                    if (chapterPanelTabId == DETAILS_TAB_CHAPTERS) {
+                                        ReaderChapterPanelActions(state.chapterPanel, callbacks.chapterPanel)
+                                    }
+                                },
+                            )
+                            ReaderPanelTabBar(
+                                labels = ReaderChapterPanelTabs.map { stringResource(it.second) },
+                                selectedIndex = ReaderChapterPanelTabs
+                                    .indexOfFirst { it.first == chapterPanelTabId }
+                                    .coerceAtLeast(0),
+                                onSelected = { callbacks.chapterPanel.onTabSelected(ReaderChapterPanelTabs[it].first) },
                             )
                         }
-                    }
+                    },
+                ) { dragModifier ->
+                    chaptersPanelContent(
+                        chapterPanelTabId,
+                        state.chapterPanel,
+                        { chapterSelectionState = it },
+                        dragModifier,
+                    )
                 }
             }
 

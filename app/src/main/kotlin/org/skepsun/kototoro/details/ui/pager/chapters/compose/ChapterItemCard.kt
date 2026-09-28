@@ -43,13 +43,17 @@ fun ChapterListCard(
         modifier = modifier
             .fillMaxWidth()
             .then(
-                if (isSelected) {
-                    Modifier.background(
+                when {
+                    isSelected -> Modifier.background(
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                         shape = RoundedCornerShape(8.dp),
                     )
-                } else {
-                    Modifier
+                    // The small marker alone is hard to spot while scanning a long list.
+                    item.isCurrent -> Modifier.background(
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(12.dp),
+                    )
+                    else -> Modifier
                 },
             )
             .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
