@@ -145,6 +145,10 @@ private fun ContentChapter.isAfter(current: ContentChapter): Boolean {
     }
 }
 
+/** A lone "Unknown volume" header says nothing; only group when some chapter has a volume or group name. */
+internal fun shouldShowVolumeHeaders(chapters: List<ContentChapter>): Boolean =
+    chapters.any { it.volume > 0 || !it.scanlator.isNullOrBlank() }
+
 fun List<ChapterListItem>.withVolumeHeaders(context: Context): MutableList<ListModel> {
     // 检查是否有EPUB章节（通过URL判断）
     val hasEpubChapters = any { it.chapter.url.startsWith("epub://") || it.chapter.url.contains("#chapter/") }
@@ -154,6 +158,7 @@ fun List<ChapterListItem>.withVolumeHeaders(context: Context): MutableList<ListM
         return withEpubVolumeGroups(context)
     } else {
         // 普通章节：使用原有的volume分组逻辑
+        if (!shouldShowVolumeHeaders(map { it.chapter })) return toMutableList<ListModel>()
         var prevVolume = -1 // Start with -1 to ensure first volume always gets a header
         var prevCustomHeader: String? = null
         val result = ArrayList<ListModel>((size * 1.4).toInt())
