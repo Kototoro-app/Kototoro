@@ -718,20 +718,15 @@ internal fun ComposeReaderActivityScaffold(
             }
 
             if (state.options.visible) {
-                ReaderAnchoredBottomSheet(
-                    onDismissRequest = callbacks.options.onDismiss,
-                ) { sheetDragModifier ->
-                    ComposeReaderOptionsSheet(
-                        state = state.options,
-                        callbacks = callbacks.options,
-                        embedded = true,
-                        translationTaskPanelContent = translationTaskPanelContent,
-                        headerModifier = sheetDragModifier,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxSize(),
-                    )
-                }
+                // In the reader window (not a dialog) so the panel's glass can show the page.
+                ComposeReaderOptionsPanel(
+                    state = state.options,
+                    callbacks = callbacks.options,
+                    translationAvailable = state.actions.translateRequestedVisible,
+                    translationActive = state.actions.translateActive,
+                    eInkMode = state.eInkModeEnabled,
+                    translationTaskPanelContent = translationTaskPanelContent,
+                )
         }
 
         if (state.toolsVisible) {
