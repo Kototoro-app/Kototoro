@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -40,7 +41,7 @@ fun SourceHealthBanner(
         ) {
             Row(Modifier.padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    stringResource(R.string.migration_health_hint, state.sourceCount),
+                    pluralStringResource(R.plurals.migration_health_hint, state.sourceCount, state.sourceCount),
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     modifier = Modifier.weight(1f),
                 )

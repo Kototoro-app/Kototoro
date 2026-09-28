@@ -3755,7 +3755,9 @@ SHA-256 指纹:
     <string name="migration_candidates_title">候选</string>
     <string name="migration_search_hint">在目标来源中搜索</string>
     <string name="migration_sources_title">按来源换源</string>
-    <string name="migration_health_banner">%1$d 个来源可能已失效，涉及 %2$d 部收藏</string>
+    <plurals name="migration_health_banner">
+        <item quantity="other">%1$d 个来源可能已失效，涉及 %2$d 部收藏</item>
+    </plurals>
     <string name="migration_health_banner_action">一键换源这 %d 部</string>
     <string name="migration_health_needs_attention">需要处理</string>
     <string name="migration_health_ok">正常</string>
@@ -3767,7 +3769,10 @@ SHA-256 指纹:
     <string name="migration_health_disabled">已停用</string>
     <string name="migration_health_disabled_summary">你在来源管理中关闭了它</string>
     <string name="migration_next">下一步</string>
-    <string name="migration_health_hint">%d 个来源可能失效</string>
+    <plurals name="migration_health_hint">
+        <item quantity="other">%d 个来源可能失效</item>
+    </plurals>
+    <string name="migration_no_available_sources">还没有启用这类来源</string>
     <string name="migration_health_details_warning">此来源可能已失效（%s）</string>
     <string name="duplicate_title">书架里可能已经有这部作品</string>
     <string name="duplicate_subtitle">你正在收藏：%1$s · %2$s · %3$d 话</string>

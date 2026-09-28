@@ -57,7 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.migration.domain.MatchCandidate
 import org.skepsun.kototoro.migration.domain.MigrationMode
 import org.skepsun.kototoro.parsers.model.Content
@@ -194,7 +194,7 @@ private fun MigrationRow(
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = stringResource(R.string.migration_chapters, item.origin.source.getTitle(context), item.originChapters) + " → ",
+                    text = stringResource(R.string.migration_chapters, item.origin.source.migrationTitle(context), item.originChapters) + " → ",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -239,7 +239,7 @@ private fun RowScope.StatusText(item: MigrationItemState) {
         MigrationItemStatus.MATCHED -> {
             val target = item.target ?: return
             Text(
-                stringResource(R.string.migration_chapters, target.source.getTitle(context), item.targetChapters ?: 0),
+                stringResource(R.string.migration_chapters, target.source.migrationTitle(context), item.targetChapters ?: 0),
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,

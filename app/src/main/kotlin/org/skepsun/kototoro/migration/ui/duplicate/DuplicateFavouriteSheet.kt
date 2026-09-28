@@ -38,7 +38,7 @@ import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.chaptersCount
-import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.parsers.model.Content
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,7 +65,7 @@ fun DuplicateFavouriteSheet(
             Column(Modifier.padding(horizontal = 20.dp)) {
                 Text(stringResource(R.string.duplicate_title), style = MaterialTheme.typography.titleLarge)
                 Text(
-                    stringResource(R.string.duplicate_subtitle, content.title, content.source.getTitle(context), content.chaptersCount()),
+                    stringResource(R.string.duplicate_subtitle, content.title, content.source.migrationTitle(context), content.chaptersCount()),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -133,7 +133,7 @@ private fun DuplicateCard(entry: DuplicateEntry, onOpen: () -> Unit, onSwitch: (
             }
             Text(row.title, style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
-                "${ContentSource(row.source).getTitle(context)} · ${row.chaptersCount}",
+                "${ContentSource(row.source).migrationTitle(context)} · ${row.chaptersCount}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

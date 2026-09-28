@@ -35,11 +35,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.migration.domain.SourceHealth
 import org.skepsun.kototoro.migration.domain.SourceHealthStatus
@@ -55,6 +56,16 @@ fun MigrationSourcesScreen(
     SettingsTopBarScaffold(title = stringResource(R.string.migration_sources_title), onNavigateUp = onNavigateUp) { padding ->
         if (state.isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            return@SettingsTopBarScaffold
+        }
+        if (state.sources.isEmpty()) {
+            Box(Modifier.fillMaxSize().padding(padding).padding(32.dp), contentAlignment = Alignment.Center) {
+                Text(
+                    stringResource(R.string.migration_no_sources),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             return@SettingsTopBarScaffold
         }
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
@@ -96,7 +107,7 @@ private fun AttentionBanner(sourceCount: Int, contentCount: Int, onMigrate: () -
     ) {
         Column(Modifier.padding(16.dp)) {
             Text(
-                stringResource(R.string.migration_health_banner, sourceCount, contentCount),
+                pluralStringResource(R.plurals.migration_health_banner, sourceCount, sourceCount, contentCount),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
@@ -130,7 +141,7 @@ private fun SourceRow(health: SourceHealth, onClick: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(health.source.getTitle(context), fontWeight = FontWeight.SemiBold)
+                Text(health.source.migrationTitle(context), fontWeight = FontWeight.SemiBold)
                 StatusTag(health.status)
             }
             statusSummary(health)?.let {
@@ -185,7 +196,7 @@ private fun SourceContentPicker(
         modifier = Modifier.fillMaxHeight(0.85f),
     ) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(source.source.getTitle(context), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            Text(source.source.migrationTitle(context), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             Checkbox(
                 checked = selected.size == source.contentIds.size,
                 onCheckedChange = { selected = if (it) source.contentIds.toSet() else emptySet() },

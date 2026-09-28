@@ -3936,7 +3936,10 @@
     <string name="migration_candidates_title">Candidates</string>
     <string name="migration_search_hint">Search in target sources</string>
     <string name="migration_sources_title">Migrate by source</string>
-    <string name="migration_health_banner">%1$d sources may be broken, affecting %2$d favourites</string>
+    <plurals name="migration_health_banner">
+        <item quantity="one">%1$d source may be broken, affecting %2$d favourites</item>
+        <item quantity="other">%1$d sources may be broken, affecting %2$d favourites</item>
+    </plurals>
     <string name="migration_health_banner_action">Migrate these %d</string>
     <string name="migration_health_needs_attention">Needs attention</string>
     <string name="migration_health_ok">OK</string>
@@ -3948,7 +3951,11 @@
     <string name="migration_health_disabled">Disabled</string>
     <string name="migration_health_disabled_summary">You turned this source off</string>
     <string name="migration_next">Next</string>
-    <string name="migration_health_hint">%d sources may be broken</string>
+    <plurals name="migration_health_hint">
+        <item quantity="one">%d source may be broken</item>
+        <item quantity="other">%d sources may be broken</item>
+    </plurals>
+    <string name="migration_no_available_sources">No enabled sources of this type yet</string>
     <string name="migration_health_details_warning">This source may be broken (%s)</string>
     <string name="duplicate_title">This may already be in your library</string>
     <string name="duplicate_subtitle">Favouriting: %1$s · %2$s · %3$d ch.</string>

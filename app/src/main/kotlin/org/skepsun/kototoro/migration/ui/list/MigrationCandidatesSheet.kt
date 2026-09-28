@@ -37,7 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.migration.domain.MatchCandidate
 import kotlin.math.roundToInt
 
@@ -88,7 +88,7 @@ fun MigrationCandidatesSheet(
                     Column(Modifier.weight(1f)) {
                         Text(candidate.content.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(
-                            text = "${candidate.content.source.getTitle(context)} · ${(candidate.score * 100).roundToInt()}%",
+                            text = "${candidate.content.source.migrationTitle(context)} · ${(candidate.score * 100).roundToInt()}%",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

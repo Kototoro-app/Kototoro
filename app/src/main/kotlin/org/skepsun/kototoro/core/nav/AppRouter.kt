@@ -522,6 +522,10 @@ class AppRouter(
                     )
                 },
                 onDismiss = { composeActivity.dismissComposeModal(key) },
+                onManageSources = {
+                    composeActivity.dismissComposeModal(key)
+                    openManageSources()
+                },
             )
         }
     }

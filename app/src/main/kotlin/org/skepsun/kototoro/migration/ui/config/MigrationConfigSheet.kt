@@ -50,7 +50,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.ContentTypeFamily
-import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.migration.domain.MatchMode
 import org.skepsun.kototoro.migration.domain.MigrationDataFlag
@@ -61,6 +61,7 @@ fun MigrationConfigSheet(
     ids: LongArray,
     onStart: () -> Unit,
     onDismiss: () -> Unit,
+    onManageSources: () -> Unit,
     viewModel: MigrationConfigViewModel = hiltViewModel(key = "migration-config-${ids.contentHashCode()}"),
 ) {
     LaunchedEffect(ids) { viewModel.load(ids) }
@@ -83,6 +84,7 @@ fun MigrationConfigSheet(
                 state = state,
                 viewModel = viewModel,
                 onEdit = { editingFamily = it },
+                onManageSources = onManageSources,
                 onStart = {
                     viewModel.save()
                     onStart()
@@ -98,6 +100,7 @@ private fun ConfigContent(
     state: MigrationConfigState,
     viewModel: MigrationConfigViewModel,
     onEdit: (ContentTypeFamily) -> Unit,
+    onManageSources: () -> Unit,
     onStart: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -112,7 +115,7 @@ private fun ConfigContent(
         Text(stringResource(R.string.migration_config_title, state.count), style = MaterialTheme.typography.titleLarge)
         if (state.originSourceNames.isNotEmpty()) {
             Text(
-                text = state.originSourceNames.joinToString("、") { ContentSource(it).getTitle(context) },
+                text = state.originSourceNames.joinToString("、") { ContentSource(it).migrationTitle(context) },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -121,14 +124,23 @@ private fun ConfigContent(
             SectionLabel(stringResource(R.string.migration_config_sources)) {
                 TextButton(onClick = { onEdit(family.family) }) { Text(stringResource(R.string.migration_config_edit)) }
             }
-            if (family.selected.isEmpty()) {
+            if (family.available.isEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.migration_no_available_sources),
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onManageSources) { Text(stringResource(R.string.manage_sources)) }
+                }
+            } else if (family.selected.isEmpty()) {
                 Text(stringResource(R.string.migration_pick_source), color = MaterialTheme.colorScheme.error)
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 family.selected.take(MAX_VISIBLE_SOURCES).forEachIndexed { index, name ->
                     AssistChip(
                         onClick = { onEdit(family.family) },
-                        label = { Text("${index + 1}  ${ContentSource(name).getTitle(context)}") },
+                        label = { Text("${index + 1}  ${ContentSource(name).migrationTitle(context)}") },
                     )
                 }
                 val rest = family.selected.size - MAX_VISIBLE_SOURCES
@@ -240,7 +252,7 @@ private fun SourcePicker(
                     Checkbox(checked = order >= 0, onCheckedChange = { onToggle(source.name) })
                     ContentSourceIcon(source = source, modifier = Modifier.size(28.dp))
                     Spacer(Modifier.width(12.dp))
-                    Text(source.getTitle(context), modifier = Modifier.weight(1f))
+                    Text(source.migrationTitle(context), modifier = Modifier.weight(1f))
                     if (order >= 0) Badge { Text("${order + 1}") }
                 }
             }
