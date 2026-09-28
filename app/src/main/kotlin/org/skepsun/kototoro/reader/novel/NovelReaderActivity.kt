@@ -110,6 +110,10 @@ import org.skepsun.kototoro.reader.novel.compose.NovelComposeImageContext
 import org.skepsun.kototoro.reader.novel.compose.NovelComposeChapterContent
 import org.skepsun.kototoro.reader.novel.compose.NovelReadingPosition
 import org.skepsun.kototoro.reader.novel.compose.ComposeNovelReaderRoute
+import org.skepsun.kototoro.reader.novel.compose.ComposeNovelChaptersSheet
+import androidx.compose.foundation.isSystemInDarkTheme
+import org.skepsun.kototoro.reader.novel.compose.NovelChromeTheme
+import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
 import org.skepsun.kototoro.reader.novel.compose.ComposeNovelReaderOptionsSheet
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderBottomChrome
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderChromeCallbacks
@@ -762,24 +766,35 @@ class NovelReaderActivity :
                                 .fillMaxSize()
                                 .then(readerBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier),
                         )
+                        // Under MD3 the chrome falls back to opaque surfaces; tint them with the
+                        // reading theme instead of the app's cool surface colours.
+                        val chromePalette = novelReaderPalette(
+                            state.settings?.themePreset ?: NovelReaderThemePreset.PAPER,
+                            isSystemInDarkTheme(),
+                        )
+                        val tintChrome = LocalInterfaceStyle.current != InterfaceStyle.IOS
                         Box(modifier = Modifier.align(Alignment.TopCenter)) {
-                            NovelReaderTopChrome(
-                                state = state,
-                                callbacks = callbacks,
-                                animationsEnabled = !isEInkModeEnabled,
-                            )
+                            NovelChromeTheme(chromePalette, enabled = tintChrome) {
+                                NovelReaderTopChrome(
+                                    state = state,
+                                    callbacks = callbacks,
+                                    animationsEnabled = !isEInkModeEnabled,
+                                )
+                            }
                         }
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter),
                         ) {
-                            NovelReaderBottomChrome(
-                                state = state,
-                                callbacks = callbacks,
-                                controls = floatingControls,
-                                showFloatingControlLabels = showFloatingControlLabels || presentationConfig.isTv,
-                                animationsEnabled = !isEInkModeEnabled,
-                            )
+                            NovelChromeTheme(chromePalette, enabled = tintChrome) {
+                                NovelReaderBottomChrome(
+                                    state = state,
+                                    callbacks = callbacks,
+                                    controls = floatingControls,
+                                    showFloatingControlLabels = showFloatingControlLabels || presentationConfig.isTv,
+                                    animationsEnabled = !isEInkModeEnabled,
+                                )
+                            }
                         }
 
                         state.settings?.let { novelSettings ->
@@ -801,6 +816,28 @@ class NovelReaderActivity :
                                     eInkMode = isEInkModeEnabled,
                                 )
                             }
+                        }
+
+                        if (state.chaptersSheetVisible) {
+                            ComposeNovelChaptersSheet(
+                                chapters = state.chapters,
+                                currentIndex = state.currentChapterIndex,
+                                searchDocuments = state.continuousChapters,
+                                markings = state.novelMarkings,
+                                bookmarks = state.novelBookmarks,
+                                initialTab = state.chaptersSheetInitialTab,
+                                themePreset = state.settings?.themePreset ?: NovelReaderThemePreset.PAPER,
+                                onDismiss = callbacks.onDismissChapters,
+                                onChapterSelected = callbacks.onChapterSelected,
+                                onSearchResultSelected = callbacks.onSearchResultSelected,
+                                onJumpToMarking = callbacks.onJumpToMarking,
+                                onOpenBookmark = callbacks.onOpenBookmark,
+                                onEditMarkingNote = callbacks.onEditMarkingNote,
+                                onDeleteMarking = callbacks.onDeleteMarking,
+                                onDeleteBookmark = callbacks.onDeleteBookmark,
+                                bookTitle = state.workTitle,
+                                eInkMode = isEInkModeEnabled,
+                            )
                         }
 
                         ttsVoiceDialogState?.let { NovelTtsVoiceDialog(it) }
