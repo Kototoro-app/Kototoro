@@ -141,6 +141,11 @@
     <string name="reader_a11y_next_chapter">Next chapter</string>
     <string name="reader_more_tab_reading">Reading</string>
     <string name="reader_more_tab_display">Display</string>
+    <string name="reader_more_tab_layout">Layout</string>
+    <string name="reader_panel_section_two_pages">Two pages</string>
+    <string name="reader_panel_section_renderer">Renderer</string>
+    <string name="reader_panel_section_performance">Performance</string>
+    <string name="novel_reader_tab_translation_tools">Translation &amp; tools</string>
     <string name="reader_more_tab_page">Page</string>
     <string name="reader_more_tab_translation">Translation</string>
     <string name="reader_more_tab_tools">Tools</string>
