@@ -74,3 +74,5 @@ pnpm-lock.yaml
 /.trellis/.runtime/
 /.trellis/.developer
 /.trellis/.current-task
+
+/.superpowers/
