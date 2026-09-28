@@ -52,7 +52,7 @@
 
 | 条件 | 表面 |
 |------|------|
-| iOS 风格且非 E-ink | `GlassSurface(componentRole = Sheet)`，backdrop 为 `readerBackdrop`，容器不透明度约 0.86，scrim 0.32 |
+| iOS 风格且非 E-ink | `GlassSurface(componentRole = Sheet)`，backdrop 为 `readerBackdrop`，scrim 0.32。liquid glass 的 tint 透明度由玻璃调校参数决定（约 0.4），不读 `containerAlpha`，因此表面内再铺一层 0.62 透明度的面板色，保证繁杂页面上文字可读；面板贴近顶部时内容按状态栏高度下移 |
 | MD3 风格 | 不透明表面，颜色取 `ReaderPanelColors.container` |
 | E-ink | 不透明高对比表面，无 scrim 渐变、无阴影、无透明度 |
 
@@ -81,7 +81,7 @@ val LocalReaderPanelColors = staticCompositionLocalOf<ReaderPanelColors> { error
 - 小说：`readerPanelColors(palette: NovelReaderPalette)`，由 `novelReaderPalette(themePreset, isDark)` 派生。
 - 漫画：`readerPanelColors(background: ReaderBackground, isSystemDark: Boolean, scheme: ColorScheme)`。先把 `ReaderBackground` 解析为明 / 暗（`DEFAULT` / `AUTO` 跟随系统），底色取对应的中性色，accent 取 `scheme.primary`。
 - 两个都是纯函数，可单元测试。
-- 面板内的 `MaterialTheme` 仍需提供给 Material 组件（Switch、Slider）。从 `ReaderPanelColors` **完整**生成一份 `ColorScheme`（包含所有 `surfaceContainer*`），不再做局部 copy，以消除 P1。
+- 面板内的 `MaterialTheme` 仍需提供给 Material 组件（Switch、Slider）。从 `ReaderPanelColors` **完整**生成一份 `ColorScheme`（包含所有 `surfaceContainer*`），不再做局部 copy，以消除 P1。`surfaceVariant` 取面板色而非卡片色，让卡片内的 chip（如小说字体行）与卡片区分开。
 
 ## 4. 共用组件（`reader/ui/compose/design/`）
 
@@ -89,12 +89,12 @@ val LocalReaderPanelColors = staticCompositionLocalOf<ReaderPanelColors> { error
 
 | 组件 | 规格 |
 |------|------|
-| `ReaderPanelTabBar` | 居中胶囊分段控件，滑动指示器（`animateDpAsState`）；右侧齿轮按钮打开完整设置（漫画 `onOpenSettings`；小说无对应入口时隐藏）；整行作为拖动区域 |
+| `ReaderPanelTabBar` | 居中胶囊分段控件，只显示文字，选中态用颜色过渡动画（`animateColorAsState`）；右侧齿轮按钮打开完整设置（漫画 `onOpenSettings`；小说无对应入口时隐藏）；整行作为拖动区域 |
 | `ReaderOptionGroup`（改） | `card` 色、20dp 圆角；可选 `title` 作为组内小号 label 标题；分割线仅在行间 |
 | `ReaderChoiceChips` | 2–4 项：56dp 高、「图标 + 单行文字」，文字过长时 `autoSize` 缩小至 11sp 仍不够则省略号；选中项 `selectedContainer` + 1dp accent 描边，未选中无描边 |
 | `ReaderIconChoiceBar` | ≥5 项：图标胶囊（每项 44dp），下方居中显示选中项名称；每项有 contentDescription |
 | `ReaderQuickTile` | 4 列网格单元：44dp 圆形图标底 + 单行短标签；`toggled` 参数用于开关类（高亮 = 开） |
-| `ReaderStepperRow` | 标签 + `−` 数值 `+`，长按连续调整；数值点击展开内联滑块 |
+| `ReaderStepperRow` | 标签 + `−` 数值 `+`（不做长按连发）；点击数值展开内联滑块 |
 | `ReaderSliderRow` | 标签 + 数值 + 内联 Slider（替代 `SliderEditorDialog`） |
 | `ReaderOptionSwitchRow` / `ReaderOptionValueRow`（改） | 仅改为读取面板配色 |
 
@@ -108,7 +108,7 @@ val LocalReaderPanelColors = staticCompositionLocalOf<ReaderPanelColors> { error
 
 快捷层：
 1. `ReaderIconChoiceBar`：翻页模式（标准 / 从右到左 / 垂直 / 条漫 / 连续横向）。
-2. `ReaderQuickTile` 网格（2 行 × 4）：章节与页面、添加书签、保存页面、裁剪与笔记、自动滚动、旋转屏幕、下载、在浏览器打开。翻译可用时追加「翻译」开关 tile（第 9 个，网格自动换行）。
+2. `ReaderQuickTile` 网格（2 行 × 4）：章节与页面、添加书签、保存页面、裁剪与笔记、自动滚动、旋转屏幕、下载、在浏览器打开。翻译可用（`state.actions.translateRequestedVisible`）时追加「翻译」开关 tile（第 9 个，网格自动换行），开关状态取 `state.actions.translateActive`。
 
 详细 tab：
 - **版式**：连续横向反向（仅连续横向模式）、翻页动画（`ReaderChoiceChips`）、双页组（横屏双页 / 折叠屏双页 / 封面单页 / 灵敏度）、缩放模式、裁边 / 拆分双页、渲染器组（条漫 / 分页场景渲染器）、性能组（优化 / 减少预加载）、全屏 / 页码 / 章节标题置底。
@@ -120,7 +120,7 @@ val LocalReaderPanelColors = staticCompositionLocalOf<ReaderPanelColors> { error
 ### 5.2 小说
 
 快捷层：
-1. `ReaderSliderRow` 亮度 + 行尾「跟随系统」图标开关。
+1. `ReaderSliderRow` 亮度 + 行尾「跟随系统」胶囊开关。滑块始终可拖，拖动即关闭跟随系统；跟随系统时数值处留空，由胶囊表达状态。
 2. `ReaderStepperRow` 字号（A− 数值 A+）。
 3. 主题色块（4 个圆形色块，选中带 accent 环）。
 4. `ReaderQuickTile`：朗读、添加书签、书签与笔记、翻译开关。
