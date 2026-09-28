@@ -532,6 +532,37 @@ private fun DetailsScreenContent(
         )
     }
     val snackbarHostState = remember { SnackbarHostState() }
+    val duplicateViewModel: org.skepsun.kototoro.migration.ui.duplicate.DuplicateFavouriteViewModel = hiltViewModel()
+    val duplicateResult by duplicateViewModel.duplicates.collectAsStateWithLifecycle()
+    var pendingDuplicateCheck by remember { mutableStateOf(false) }
+    var skipDuplicateSheet by remember { mutableStateOf(false) }
+    val sourceHealth by duplicateViewModel.health.collectAsStateWithLifecycle()
+    val isFavourite = favouriteCategories.isNotEmpty()
+    LaunchedEffect(content?.id, isFavourite) {
+        val current = content ?: return@LaunchedEffect
+        if (isFavourite) duplicateViewModel.loadHealth(current)
+    }
+    val healthLabel = when (sourceHealth) {
+        org.skepsun.kototoro.migration.domain.SourceHealthStatus.UNINSTALLED -> stringResource(R.string.migration_health_uninstalled)
+        org.skepsun.kototoro.migration.domain.SourceHealthStatus.BROKEN -> stringResource(R.string.migration_health_broken)
+        org.skepsun.kototoro.migration.domain.SourceHealthStatus.FAILING -> stringResource(R.string.migration_health_failing)
+        org.skepsun.kototoro.migration.domain.SourceHealthStatus.DISABLED -> stringResource(R.string.migration_health_disabled)
+        org.skepsun.kototoro.migration.domain.SourceHealthStatus.HEALTHY -> null
+    }
+    val healthMessage = healthLabel?.let { stringResource(R.string.migration_health_details_warning, it) }
+    val migrateLabel = stringResource(R.string.migrate)
+    LaunchedEffect(healthMessage) {
+        val message = healthMessage ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = message,
+            actionLabel = migrateLabel,
+            withDismissAction = true,
+            duration = androidx.compose.material3.SnackbarDuration.Long,
+        )
+        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+            content?.let { appRouter.openMigration(longArrayOf(it.id)) }
+        }
+    }
     val toolbarGapPx = with(density) { 12.dp.toPx() }
 
     LaunchedEffect(availableTabIds) {
@@ -1277,7 +1308,16 @@ private fun DetailsScreenContent(
                                         detailsScreenState.setPendingAuthorSearch(PendingAuthorSearch(author = author, source = source))
                                     },
                                     onInfoCardBoundsSync = syncInfoCardBounds,
-                                    onFavoriteClick = { detailsScreenState.setShowFavoriteDialog(true) },
+                                    onFavoriteClick = {
+                                        val current = content
+                                        if (current != null && favouriteCategories.isEmpty()) {
+                                            skipDuplicateSheet = false
+                                            pendingDuplicateCheck = true
+                                            duplicateViewModel.check(current)
+                                        } else {
+                                            detailsScreenState.setShowFavoriteDialog(true)
+                                        }
+                                    },
                                     onSupplementalRelationClick = { item ->
                                         when {
                                             shouldOpenTrackingRelationSheet(item) -> {
@@ -1459,7 +1499,16 @@ private fun DetailsScreenContent(
                                     detailsScreenState.setPendingAuthorSearch(PendingAuthorSearch(author = author, source = source))
                                 },
                                 onInfoCardBoundsSync = syncInfoCardBounds,
-                                onFavoriteClick = { detailsScreenState.setShowFavoriteDialog(true) },
+                                onFavoriteClick = {
+                                    val current = content
+                                    if (current != null && favouriteCategories.isEmpty()) {
+                                        skipDuplicateSheet = false
+                                        pendingDuplicateCheck = true
+                                        duplicateViewModel.check(current)
+                                    } else {
+                                        detailsScreenState.setShowFavoriteDialog(true)
+                                    }
+                                },
                                 onSupplementalRelationClick = { item ->
                                     when {
                                         shouldOpenTrackingRelationSheet(item) -> {
@@ -1679,6 +1728,28 @@ private fun DetailsScreenContent(
                     handleActionClick(DetailsAction.DeleteLocal)
                 },
             )
+            }
+
+            if (pendingDuplicateCheck && content != null) {
+                val found = duplicateResult
+                when {
+                    found == null -> Unit
+                    found.isEmpty() || skipDuplicateSheet -> {
+                        pendingDuplicateCheck = false
+                        detailsScreenState.setShowFavoriteDialog(true)
+                    }
+                    else -> org.skepsun.kototoro.migration.ui.duplicate.DuplicateFavouriteSheet(
+                        content = content,
+                        duplicates = found,
+                        viewModel = duplicateViewModel,
+                        onOpen = { id ->
+                            pendingDuplicateCheck = false
+                            appRouter.openDetails(id)
+                        },
+                        onAddAnyway = { skipDuplicateSheet = true },
+                        onDismiss = { pendingDuplicateCheck = false },
+                    )
+                }
             }
 
             if (showFavoriteDialog && isWorkActionEnabled && content != null) {

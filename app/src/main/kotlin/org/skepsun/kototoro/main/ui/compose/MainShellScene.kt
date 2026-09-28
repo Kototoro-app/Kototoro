@@ -1905,6 +1905,12 @@ internal fun FavoritesTopLevelRouteContent(
                         showSyncDialog()
                     },
                     KototoroTopBarMenuAction(
+                        org.skepsun.kototoro.R.string.migration_sources_title,
+                        org.skepsun.kototoro.R.drawable.ic_swap_vert,
+                    ) {
+                        appRouter.openMigrationSources()
+                    },
+                    KototoroTopBarMenuAction(
                         org.skepsun.kototoro.R.string.duplicates_finder,
                         org.skepsun.kototoro.R.drawable.ic_search,
                     ) {

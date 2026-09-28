@@ -376,6 +376,12 @@ fun KototoroFavoritesHostRoute(
                     )
                 }
             }
+        org.skepsun.kototoro.migration.ui.health.SourceHealthBanner(
+            onOpen = appRouter::openMigrationSources,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = contentPadding.calculateBottomPadding()),
+        )
         }
     }
 
