@@ -137,7 +137,9 @@ internal fun ReaderPanelColors.toColorScheme(base: ColorScheme): ColorScheme = b
     onBackground = content,
     surface = container,
     onSurface = content,
-    surfaceVariant = card,
+    // Chips inside cards (e.g. the novel font row) use surfaceVariant; the panel colour keeps them
+    // visible against the card.
+    surfaceVariant = container,
     onSurfaceVariant = contentSecondary,
     surfaceTint = accent,
     surfaceBright = card,

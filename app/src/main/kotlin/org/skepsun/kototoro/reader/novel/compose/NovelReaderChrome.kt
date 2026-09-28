@@ -318,9 +318,9 @@ internal fun NovelReaderBottomChrome(
     val floatingControls = ReaderControl.NOVEL_FLOATING
         .filter(controls::contains)
         .take(ReaderControl.MAX_FLOATING_CONTROLS)
-    BackHandler(enabled = dismissiblePanelVisible) {
+    // The options panel (rendered at the activity root) handles back itself, with its hide animation.
+    BackHandler(enabled = dismissiblePanelVisible && !state.settingsSheetVisible) {
         when {
-            state.settingsSheetVisible -> callbacks.onDismissSettings()
             state.replaceRulesSheetVisible -> callbacks.onDismissReplaceRules()
             state.markingsSheetVisible -> callbacks.onDismissMarkings()
             state.chaptersSheetVisible -> callbacks.onDismissChapters()
@@ -517,23 +517,6 @@ internal fun NovelReaderBottomChrome(
             onOpenBookmark = callbacks.onOpenBookmark,
             onJumpToMarking = callbacks.onJumpToMarking,
         )
-    }
-    state.settings?.let { settings ->
-        if (state.settingsSheetVisible) {
-            ComposeNovelReaderOptionsSheet(
-                settings = settings,
-                onDismiss = callbacks.onDismissSettings,
-                onSettingsChanged = callbacks.onSettingsChanged,
-                onToggleTranslation = callbacks.onToggleTranslation,
-                replaceRulesEnabled = state.replaceRulesEnabled,
-                onToggleReplaceRules = callbacks.onToggleReplaceRules,
-                onShowReplaceRules = callbacks.onShowReplaceRules,
-                onShowMarkings = callbacks.onShowMarkings,
-                onBookmark = callbacks.onBookmark,
-                onTts = callbacks.onTts,
-                onClearTranslationCache = callbacks.onClearTranslationCache,
-            )
-        }
     }
     if (toolsPanelVisible) {
         ModalBottomSheet(onDismissRequest = callbacks.onDismissTools) {

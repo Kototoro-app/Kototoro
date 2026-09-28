@@ -110,6 +110,7 @@ import org.skepsun.kototoro.reader.novel.compose.NovelComposeImageContext
 import org.skepsun.kototoro.reader.novel.compose.NovelComposeChapterContent
 import org.skepsun.kototoro.reader.novel.compose.NovelReadingPosition
 import org.skepsun.kototoro.reader.novel.compose.ComposeNovelReaderRoute
+import org.skepsun.kototoro.reader.novel.compose.ComposeNovelReaderOptionsSheet
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderBottomChrome
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderChromeCallbacks
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderTopChrome
@@ -779,6 +780,27 @@ class NovelReaderActivity :
                                 showFloatingControlLabels = showFloatingControlLabels || presentationConfig.isTv,
                                 animationsEnabled = !isEInkModeEnabled,
                             )
+                        }
+
+                        state.settings?.let { novelSettings ->
+                            if (state.settingsSheetVisible) {
+                                // In the reader window (not a dialog, not inside the bottom-aligned
+                                // chrome) so the panel covers the screen and its glass shows the page.
+                                ComposeNovelReaderOptionsSheet(
+                                    settings = novelSettings,
+                                    onDismiss = callbacks.onDismissSettings,
+                                    onSettingsChanged = callbacks.onSettingsChanged,
+                                    onToggleTranslation = callbacks.onToggleTranslation,
+                                    replaceRulesEnabled = state.replaceRulesEnabled,
+                                    onToggleReplaceRules = callbacks.onToggleReplaceRules,
+                                    onShowReplaceRules = callbacks.onShowReplaceRules,
+                                    onShowMarkings = callbacks.onShowMarkings,
+                                    onBookmark = callbacks.onBookmark,
+                                    onTts = callbacks.onTts,
+                                    onClearTranslationCache = callbacks.onClearTranslationCache,
+                                    eInkMode = isEInkModeEnabled,
+                                )
+                            }
                         }
 
                         ttsVoiceDialogState?.let { NovelTtsVoiceDialog(it) }
