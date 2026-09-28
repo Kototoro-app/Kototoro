@@ -20,6 +20,7 @@ import org.skepsun.kototoro.core.network.CloudflareHostCooldown
 import org.skepsun.kototoro.core.util.ext.bypassFailureCooldownKey
 import org.skepsun.kototoro.core.util.ext.mangaKey
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Coil interceptor that short-circuits clearly deterministic failures and applies a short,
@@ -30,7 +31,8 @@ import java.io.File
  * - Transient server errors (5xx) are NOT negatively cached: a weak VPN must be able to retry
  *   the same cover as soon as the network recovers, instead of showing a blank placeholder for
  *   ten minutes.
- * - Cloudflare-protected 403s cool the whole host for a short window via [CloudflareHostCooldown]
+ * - Consecutive Cloudflare-protected 403s ([CLOUDFLARE_FAILURES_TO_COOL_HOST] in a row, reset by any
+ *   cover that loads) cool the whole host for a short window via [CloudflareHostCooldown]
  *   instead of permanently failing one specific URL. While the host is cooling down, cover
  *   requests for that host are served from the memory/disk cache only and never touch the
  *   network; after the window expires the same covers are attempted again and can succeed.
@@ -42,6 +44,9 @@ class ImageFailureSuppressingInterceptor(
         request.newBuilder().networkCachePolicy(CachePolicy.DISABLED).build()
     },
 ) : Interceptor {
+
+    /** Consecutive Cloudflare-blocked covers per host; any cover that loads resets it. */
+    private val cloudflareFailureStreaks = ConcurrentHashMap<String, Int>()
 
     override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
         val request = chain.request
@@ -78,10 +83,32 @@ class ImageFailureSuppressingInterceptor(
 
         val result = chain.proceed()
         logResult(request, result)
-        if (isCover && result is ErrorResult && result.throwable.isCloudflareProtected()) {
-            cloudflareHostCooldown.coolDown(host)
+        if (isCover) {
+            recordCoverOutcome(host, result)
         }
         return result
+    }
+
+    /**
+     * Cools the host only once several covers in a row come back Cloudflare-blocked. Sites such as
+     * Rawkuma block individual images while the rest load, and one such image used to cool the
+     * whole host and blank every uncached cover on it; a host Cloudflare really blocks fails every
+     * request, so it still trips almost at once.
+     */
+    private fun recordCoverOutcome(host: String, result: ImageResult) {
+        if (host.isBlank()) return
+        when {
+            result is SuccessResult -> cloudflareFailureStreaks.remove(host)
+            result is ErrorResult && result.throwable.isCloudflareProtected() -> {
+                val streak = cloudflareFailureStreaks.merge(host, 1, Int::plus) ?: 1
+                if (BuildConfig.DEBUG) Log.w(IMAGE_DIAG_TAG, "cloudflare cover failure host=$host streak=$streak")
+                if (streak >= CLOUDFLARE_FAILURES_TO_COOL_HOST) {
+                    cloudflareFailureStreaks.remove(host)
+                    cloudflareHostCooldown.coolDown(host)
+                    if (BuildConfig.DEBUG) Log.w(IMAGE_DIAG_TAG, "cloudflare cooldown host=$host")
+                }
+            }
+        }
     }
 
     private fun ImageRequest.shouldDeterministicShortCircuit(identity: String?): Boolean {
@@ -200,7 +227,8 @@ class ImageFailureSuppressingInterceptor(
         return raw.replace('\n', ' ').take(240)
     }
 
-    private companion object {
+    internal companion object {
+        const val CLOUDFLARE_FAILURES_TO_COOL_HOST = 3
         private const val HTTP_FORBIDDEN = 403
         private const val SHARED_COVER_KEY_PREFIX = "shared-cover#"
         private const val IMAGE_DIAG_TAG = "ImageRequestDiag"

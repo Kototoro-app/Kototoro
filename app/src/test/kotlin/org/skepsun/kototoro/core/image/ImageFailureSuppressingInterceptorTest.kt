@@ -84,21 +84,37 @@ class ImageFailureSuppressingInterceptorTest {
     }
 
     @Test
-    fun `cloudflare 403 on a cover cools the host`() = runTest {
+    fun `a single cloudflare 403 does not cool the host`() = runTest {
         val cooldown = CloudflareHostCooldown()
         val interceptor = ImageFailureSuppressingInterceptor(cooldown)
-        val request = coverRequest(COVER_URL)
 
-        val failingChain = chain(
-            request,
-            failing = ErrorResult(
-                image = null,
-                request = request,
-                throwable = cloudflare403(COVER_URL),
-            ),
-        )
-        assertTrue(interceptor.intercept(failingChain) is ErrorResult)
+        // Rawkuma-style: one cover is blocked while the rest of the host loads fine.
+        assertTrue(interceptor.intercept(cloudflareFailure()) is ErrorResult)
+        assertFalse(cooldown.isInCooldown(HOST))
+    }
+
+    @Test
+    fun `consecutive cloudflare 403s on a cover cool the host`() = runTest {
+        val cooldown = CloudflareHostCooldown()
+        val interceptor = ImageFailureSuppressingInterceptor(cooldown)
+
+        repeat(ImageFailureSuppressingInterceptor.CLOUDFLARE_FAILURES_TO_COOL_HOST) {
+            interceptor.intercept(cloudflareFailure())
+        }
         assertTrue(cooldown.isInCooldown(HOST))
+    }
+
+    @Test
+    fun `a successful cover resets the cloudflare failure streak`() = runTest {
+        val cooldown = CloudflareHostCooldown()
+        val interceptor = ImageFailureSuppressingInterceptor(cooldown)
+
+        repeat(ImageFailureSuppressingInterceptor.CLOUDFLARE_FAILURES_TO_COOL_HOST - 1) {
+            interceptor.intercept(cloudflareFailure())
+        }
+        interceptor.intercept(chain(coverRequest(COVER_URL), result = mockk<SuccessResult>()))
+        interceptor.intercept(cloudflareFailure())
+        assertFalse(cooldown.isInCooldown(HOST))
     }
 
     @Test
@@ -187,15 +203,9 @@ class ImageFailureSuppressingInterceptorTest {
 
         // The host fails once with a Cloudflare challenge at t=1000.
         now = 1_000L
-        val failingChain = chain(
-            request,
-            failing = ErrorResult(
-                image = null,
-                request = request,
-                throwable = cloudflare403(COVER_URL),
-            ),
-        )
-        assertTrue(interceptor.intercept(failingChain) is ErrorResult)
+        repeat(ImageFailureSuppressingInterceptor.CLOUDFLARE_FAILURES_TO_COOL_HOST) {
+            assertTrue(interceptor.intercept(cloudflareFailure()) is ErrorResult)
+        }
         assertTrue(cooldown.isInCooldown(HOST))
 
         // While the cooldown window is active a new cover request is skipped.
@@ -256,6 +266,14 @@ class ImageFailureSuppressingInterceptorTest {
     }
 
     // --- helpers -------------------------------------------------------------
+
+    private fun cloudflareFailure(): Interceptor.Chain {
+        val request = coverRequest(COVER_URL)
+        return chain(
+            request,
+            failing = ErrorResult(image = null, request = request, throwable = cloudflare403(COVER_URL)),
+        )
+    }
 
     private fun coverRequest(url: String, cover: Boolean = true, bypass: Boolean = false): ImageRequest = mockk {
         every { data } returns if (cover) url else "https://cdn.example.com/page/42.jpg"
