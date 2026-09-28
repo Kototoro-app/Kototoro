@@ -183,6 +183,17 @@ fun ContentSource.getLocale(): Locale? = unwrap().locale.takeIf { it.isNotEmpty(
 
 fun ContentSource.getContentType(): ContentType = unwrap().contentType
 
+/**
+ * True when the source name could not be resolved to a loaded source: the extension was
+ * uninstalled, the rule was deleted, or the stored name is unknown. Local sources are
+ * never unresolved.
+ */
+val ContentSource.isUnresolved: Boolean
+    get() {
+        val resolved = unwrap()
+        return resolved === UnknownContentSource || resolved is AnonymousContentSource
+    }
+
 fun ContentSource.resolvedContentTypeForSnapshot(): ContentType? {
     val resolved = unwrap()
     return resolved.contentType.takeUnless {

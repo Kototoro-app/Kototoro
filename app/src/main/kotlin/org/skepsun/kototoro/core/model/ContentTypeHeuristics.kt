@@ -59,7 +59,7 @@ fun ContentType?.isSameContentFamilyAs(other: ContentType?): Boolean {
     return contentFamily() == other.contentFamily()
 }
 
-private fun ContentType.contentFamily(): ContentTypeFamily = when (this) {
+fun ContentType.contentFamily(): ContentTypeFamily = when (this) {
     ContentType.MANGA,
     ContentType.MANHWA,
     ContentType.MANHUA,
@@ -83,7 +83,7 @@ private fun ContentType.contentFamily(): ContentTypeFamily = when (this) {
     ContentType.OTHER -> ContentTypeFamily.OTHER
 }
 
-private enum class ContentTypeFamily {
+enum class ContentTypeFamily {
     MANGA,
     NOVEL,
     VIDEO,
