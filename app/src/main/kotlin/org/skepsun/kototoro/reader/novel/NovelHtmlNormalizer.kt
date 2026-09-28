@@ -50,4 +50,25 @@ object NovelHtmlNormalizer {
         if (html.isBlank()) return ""
         return Jsoup.clean(html, baseUrl ?: "", SAFELIST, OUTPUT_SETTINGS)
     }
+
+    /**
+     * 把纯文本章节（本地 .txt）转成等价 HTML：空行分段为 `<p>`，段内换行为 `<br>`，`& < >` 转义。
+     *
+     * 本地章节统一按 HTML 处理（Jsoup 改写图片 src、再转纯文本），纯文本直接进入时空行只是
+     * 无意义空白，整章会被折叠成一段，正文里的 `<` 也会被当成标签吞掉。
+     */
+    fun fromPlainText(text: String): String = text
+        .replace("\r\n", "\n")
+        .replace('\r', '\n')
+        .split(Regex("\\n[ \\t]*\\n"))
+        .map { it.trim('\n') }
+        .filter { it.isNotBlank() }
+        .joinToString("\n") { paragraph ->
+            "<p>" + paragraph.lines().joinToString("<br>") { line -> escape(line.trim()) } + "</p>"
+        }
+
+    private fun escape(text: String): String = text
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
 }
