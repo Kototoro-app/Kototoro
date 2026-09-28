@@ -41,6 +41,7 @@ import org.skepsun.kototoro.local.data.hasZipExtension
 import org.skepsun.kototoro.local.data.isZipArchive
 import org.skepsun.kototoro.local.data.output.LocalContentOutput.Companion.ENTRY_NAME_INDEX
 import org.skepsun.kototoro.local.epub.LocalEpubParser
+import org.skepsun.kototoro.local.epub.buildEpubChapterUrl
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -144,7 +145,8 @@ class LocalContentParser {
                     }
                 val updatedContent = content.copy(
                     chapters = if (withDetails) updatedChapters else null,
-                    coverUrl = extractedCoverUrl ?: ""
+                    // The parser resolves the declared cover; the first image is only a fallback.
+                    coverUrl = content.coverUrl?.takeIf(String::isNotBlank) ?: extractedCoverUrl ?: ""
                 )
                 return LocalContent(updatedContent, rootFile)
             }
@@ -174,7 +176,7 @@ class LocalContentParser {
                     val updatedContent = epubContent.copy(
                         id = rootFile.absolutePath.longHashCode(),
                         chapters = if (withDetails) updatedChapters else null,
-                        coverUrl = extractedCoverUrl ?: ""
+                        coverUrl = epubContent.coverUrl?.takeIf(String::isNotBlank) ?: extractedCoverUrl ?: ""
                     )
                     return LocalContent(updatedContent, rootFile)
                 }
@@ -560,6 +562,7 @@ class LocalContentParser {
         val chapters = ArrayList<Pair<ContentChapter, String?>>()
         val authors = LinkedHashSet<String>()
         var description: String? = null
+        var epubCoverUrl: String? = null
         var order = 0
         var volume = 0
 
@@ -574,12 +577,21 @@ class LocalContentParser {
                     val parsed = runCatchingCancellable { LocalEpubParser(materialize(child)).parseContent() }.getOrNull()
                     parsed?.authors?.filterTo(authors) { it.isNotBlank() }
                     if (description == null) description = parsed?.description?.takeIf(String::isNotBlank)
+                    // The parser saw a cache copy of the book: point the cover at the original.
+                    if (epubCoverUrl == null) {
+                        epubCoverUrl = parsed?.coverUrl?.toUri()?.takeIf(Uri::isZipUri)?.fragment
+                            ?.takeIf(String::isNotBlank)
+                            ?.let { entry -> child.uri.toZipUri(entry).toString() }
+                    }
                     val internalChapters = parsed?.chapters.orEmpty()
                     if (internalChapters.isNotEmpty()) {
                         volume++
                         internalChapters.forEachIndexed { chapterIndex, chapter ->
                             order++
-                            val chapterUri = child.uri.buildUpon().fragment("chapter/$chapterIndex").build().toString()
+                            val chapterUri = buildEpubChapterUrl(
+                                child.uri.buildUpon().fragment(null).build().toString(),
+                                chapterIndex,
+                            )
                             chapters += chapter.copy(
                                 id = chapterUri.longHashCode(),
                                 number = order.toFloat(),
@@ -611,7 +623,7 @@ class LocalContentParser {
         }
 
         check(chapters.isNotEmpty()) { "No supported local content in ${root.uri}" }
-        val coverUrl = imageEntries.firstOrNull()?.second?.uri?.toString().orEmpty()
+        val coverUrl = imageEntries.firstOrNull()?.second?.uri?.toString() ?: epubCoverUrl.orEmpty()
         val content = Content(
             id = root.uri.toString().longHashCode(),
             title = root.name.orEmpty().fileNameToTitle(),

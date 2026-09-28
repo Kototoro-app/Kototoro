@@ -33,6 +33,21 @@ internal fun parseEpubChapterReference(url: String): EpubChapterReference? {
     return EpubChapterReference(fileReference, chapterIndex)
 }
 
+/**
+ * Rewrites an encoded `#chapter%2F<n>` fragment to the literal `#chapter/<n>` that every reader of
+ * EPUB chapter URLs matches. `Uri.Builder.fragment("chapter/0")` encodes the slash, and local indexes
+ * written that way lost their chapter index when read back.
+ */
+internal fun normalizeEpubChapterUrl(url: String): String {
+    val hash = url.lastIndexOf('#')
+    if (hash < 0 || !url.regionMatches(hash + 1, ENCODED_CHAPTER_PREFIX, 0, ENCODED_CHAPTER_PREFIX.length, ignoreCase = true)) {
+        return url
+    }
+    return url.substring(0, hash) + "#chapter/" + url.substring(hash + 1 + ENCODED_CHAPTER_PREFIX.length)
+}
+
+private const val ENCODED_CHAPTER_PREFIX = "chapter%2F"
+
 internal fun buildEpubChapterUrl(fileReference: String, chapterIndex: Int): String {
     require(chapterIndex >= 0) { "EPUB chapter index must not be negative" }
     val normalizedFileReference = if (fileReference.substringBefore(':', missingDelimiterValue = "").isEmpty()) {

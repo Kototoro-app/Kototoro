@@ -3,6 +3,7 @@ package org.skepsun.kototoro.local.epub
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.model.LocalMangaSource
+import org.skepsun.kototoro.core.util.ext.toZipUri
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentState
@@ -109,7 +110,10 @@ class LocalEpubParser(private val cbzFile: File, private val cache: EpubContentC
                 publicUrl = cbzFile.absolutePath,
                 rating = -1f,
                 contentRating = null,
-                coverUrl = "", // EPUB封面可以后续添加
+                coverUrl = runCatching { ZipFile(cbzFile).use(EpubCoverLocator::locate) }
+                    .getOrNull()
+                    ?.let { entry -> cbzFile.toZipUri(entry).toString() }
+                    .orEmpty(),
                 tags = setOf(
                     ContentTag(
                         key = "epub",
