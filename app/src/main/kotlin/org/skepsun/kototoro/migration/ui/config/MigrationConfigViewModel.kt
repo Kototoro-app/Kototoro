@@ -14,6 +14,7 @@ import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.migration.domain.MatchMode
 import org.skepsun.kototoro.migration.domain.MigrationDataFlag
 import org.skepsun.kototoro.migration.domain.MigrationSettings
+import org.skepsun.kototoro.migration.domain.resolveContentFamily
 import org.skepsun.kototoro.parsers.model.ContentSource
 import javax.inject.Inject
 
@@ -43,6 +44,7 @@ data class MigrationConfigState(
 @HiltViewModel
 class MigrationConfigViewModel @Inject constructor(
     private val contentDataRepository: ContentDataRepository,
+    private val database: org.skepsun.kototoro.core.db.MangaDatabase,
     private val sourcesRepository: ContentSourcesRepository,
     private val settings: MigrationSettings,
 ) : BaseViewModel() {
@@ -60,9 +62,15 @@ class MigrationConfigViewModel @Inject constructor(
             val originNames = contents.mapTo(LinkedHashSet()) { it.source.name }
             val enabled = sourcesRepository.getEnabledSources()
             val pinned = sourcesRepository.getPinnedSources().mapTo(HashSet()) { it.name }
-            val families = contents.map { it.source.getContentType().contentFamily() }.distinct().map { family ->
+            val migrationDao = database.getMigrationDao()
+            val families = contents.map {
+                resolveContentFamily(it.source.getContentType(), migrationDao.findStoredContentType(it.id))
+            }.distinct().map { family ->
                 val available = enabled
-                    .filter { it.getContentType().contentFamily() == family && it.name !in originNames }
+                    .filter {
+                        (family == ContentTypeFamily.OTHER || it.getContentType().contentFamily() == family) &&
+                            it.name !in originNames
+                    }
                     .sortedByDescending { it.name in pinned }
                 val availableNames = available.mapTo(HashSet()) { it.name }
                 val saved = settings.getTargetSourceNames(family)?.filter { it in availableNames }

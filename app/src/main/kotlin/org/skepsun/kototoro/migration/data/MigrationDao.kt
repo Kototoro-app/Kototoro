@@ -28,6 +28,9 @@ abstract class MigrationDao {
     )
     abstract suspend fun findLibraryRows(): List<LibraryRow>
 
+    @Query("SELECT content_type FROM manga WHERE manga_id = :mangaId")
+    abstract suspend fun findStoredContentType(mangaId: Long): String?
+
     @Query("SELECT COUNT(*) FROM chapters WHERE manga_id = :mangaId")
     abstract suspend fun countChapters(mangaId: Long): Int
 

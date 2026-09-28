@@ -26,6 +26,8 @@ import org.skepsun.kototoro.migration.domain.MatchCandidate
 import org.skepsun.kototoro.migration.domain.MigrationMode
 import org.skepsun.kototoro.migration.domain.MigrationSettings
 import org.skepsun.kototoro.migration.domain.SmartMatchEngine
+import org.skepsun.kototoro.migration.domain.resolveContentFamily
+import org.skepsun.kototoro.core.model.ContentTypeFamily
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
@@ -53,6 +55,7 @@ class MigrationListViewModel @Inject constructor(
     val onFinished = MutableEventFlow<Unit>()
 
     private val itemJobs = ConcurrentHashMap<Long, Job>()
+    private val families = ConcurrentHashMap<Long, ContentTypeFamily>()
     private val sourcePermits = ConcurrentHashMap<String, Semaphore>()
     private val itemPermits = Semaphore(MAX_PARALLEL_ITEMS)
     private var migrateJob: Job? = null
@@ -72,6 +75,7 @@ class MigrationListViewModel @Inject constructor(
             val chaptersDao = database.getMigrationDao()
             val items = ids.toList().mapNotNull { id ->
                 val content = contentDataRepository.findContentById(id, withChapters = false) ?: return@mapNotNull null
+                families[id] = resolveContentFamily(content.source.getContentType(), chaptersDao.findStoredContentType(id))
                 MigrationItemState(origin = content, originChapters = chaptersDao.countChapters(id))
             }
             _state.update { it.copy(items = items, isLoading = false) }
@@ -232,7 +236,7 @@ class MigrationListViewModel @Inject constructor(
     }
 
     private fun targetSources(origin: Content): List<ContentSource> {
-        val family = origin.source.getContentType().contentFamily()
+        val family = families[origin.id] ?: origin.source.getContentType().contentFamily()
         return settings.getTargetSourceNames(family).orEmpty()
             .filter { it != origin.source.name }
             .map { ContentSource(it) }
