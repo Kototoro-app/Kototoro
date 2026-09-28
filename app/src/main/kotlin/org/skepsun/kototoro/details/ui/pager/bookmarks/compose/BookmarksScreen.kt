@@ -38,7 +38,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.annotation.StringRes
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
@@ -54,7 +57,10 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.artworkAwareContainerColor
+import org.skepsun.kototoro.list.ui.model.EmptyState
 import org.skepsun.kototoro.list.ui.model.ListHeader
+import org.skepsun.kototoro.list.ui.model.ListModel
+import org.skepsun.kototoro.list.ui.model.LoadingState
 import java.io.File
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -208,14 +214,17 @@ fun BookmarksScreen(
         }
     }
     Box(modifier = Modifier.fillMaxSize()) {
-        if (items.isEmpty()) {
-            Text(
-                text = "No bookmarks",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.Center),
+        when (val displayState = remember(items) { bookmarksDisplayState(items) }) {
+            // Anchored to the top: this pane is often much taller than the visible part of its sheet,
+            // so a centred message ends up below the screen.
+            BookmarksDisplayState.Loading -> CircularProgressIndicator(
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 48.dp),
             )
-        } else {
+            is BookmarksDisplayState.Empty -> BookmarksEmptyState(
+                state = displayState,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 48.dp),
+            )
+            BookmarksDisplayState.Content -> {
             LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.Adaptive(minSize = gridMinSize),
@@ -261,6 +270,7 @@ fun BookmarksScreen(
                     }
                 }
             }
+            }
         }
 
         androidx.compose.animation.AnimatedVisibility(
@@ -298,5 +308,53 @@ fun BookmarksScreen(
                 }
             }
         }
+    }
+}
+
+internal sealed interface BookmarksDisplayState {
+    data object Loading : BookmarksDisplayState
+    data class Empty(@StringRes val textPrimary: Int, @StringRes val textSecondary: Int) : BookmarksDisplayState
+    data object Content : BookmarksDisplayState
+}
+
+/**
+ * The view model emits a single [LoadingState] or [EmptyState] instead of an empty list, and the
+ * grid renders neither, so "no bookmarks" used to show as a blank page.
+ */
+internal fun bookmarksDisplayState(items: List<ListModel>): BookmarksDisplayState {
+    if (items.any { it is Bookmark }) return BookmarksDisplayState.Content
+    if (items.any { it is LoadingState }) return BookmarksDisplayState.Loading
+    val empty = items.firstNotNullOfOrNull { it as? EmptyState }
+    return BookmarksDisplayState.Empty(
+        textPrimary = empty?.textPrimary?.takeIf { it != 0 } ?: R.string.no_bookmarks_yet,
+        textSecondary = empty?.textSecondary?.takeIf { it != 0 } ?: R.string.no_bookmarks_summary,
+    )
+}
+
+@Composable
+private fun BookmarksEmptyState(state: BookmarksDisplayState.Empty, modifier: Modifier = Modifier) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier.padding(horizontal = 32.dp),
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_bookmark),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            modifier = Modifier.size(40.dp),
+        )
+        Text(
+            text = stringResource(state.textPrimary),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = stringResource(state.textSecondary),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
     }
 }

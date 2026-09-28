@@ -42,6 +42,8 @@ fun ChapterListCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            // Inset so a highlighted row reads as a card rather than an edge-to-edge band.
+            .padding(horizontal = 8.dp)
             .then(
                 when {
                     isSelected -> Modifier.background(
@@ -63,7 +65,7 @@ fun ChapterListCard(
                 onLongClick = onLongClick,
             )
             .heightIn(min = 56.dp)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (item.isCurrent) {
