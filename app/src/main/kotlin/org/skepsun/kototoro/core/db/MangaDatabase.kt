@@ -250,6 +250,8 @@ abstract class MangaDatabase : RoomDatabase() {
 
     abstract fun getMediaNoteDao(): MediaNoteDao
 
+    abstract fun getMigrationDao(): org.skepsun.kototoro.migration.data.MigrationDao
+
     abstract fun getDictionaryRuleDao(): DictionaryRuleDao
 
     abstract fun getTranslationDictionaryDao(): TranslationDictionaryDao
