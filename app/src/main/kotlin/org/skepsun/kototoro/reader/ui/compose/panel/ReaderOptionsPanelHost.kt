@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.reader.ui.compose.panel
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -22,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -39,6 +42,9 @@ import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlTokens
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelColors
 
 internal enum class ReaderPanelSurfaceMode { Glass, Opaque, EInk }
+
+private val GlassShape = RoundedRectangle(28.dp)
+private const val GLASS_VEIL_ALPHA = 0.62f
 
 internal fun readerPanelSurfaceMode(isIosStyle: Boolean, eInk: Boolean, hasBackdrop: Boolean): ReaderPanelSurfaceMode =
     when {
@@ -77,6 +83,7 @@ internal fun ReaderOptionsPanelHost(
 ) {
     val density = LocalDensity.current
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val statusBarInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     var quickLayerHeightPx by remember { mutableIntStateOf(0) }
     val peekHeight = if (quickLayerHeightPx > 0) {
         with(density) { quickLayerHeightPx.toDp() } + navigationInset
@@ -96,7 +103,12 @@ internal fun ReaderOptionsPanelHost(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(bottom = scope.contentBottomPadding),
+                        // The sheet's offset from the top equals contentBottomPadding; only once it
+                        // slides under the status bar does the content need pushing down.
+                        .padding(
+                            top = (statusBarInset - scope.contentBottomPadding).coerceAtLeast(0.dp),
+                            bottom = scope.contentBottomPadding,
+                        ),
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -132,12 +144,21 @@ private fun ReaderPanelSurface(
     when (mode) {
         ReaderPanelSurfaceMode.Glass -> GlassSurface(
             modifier = Modifier.fillMaxSize(),
-            // Inside ProvideReaderPanelColors, so the glass tint comes from the panel scheme.
-            style = GlassDefaults.prominentStyle().copy(containerAlpha = 0.86f),
-            shape = RoundedRectangle(28.dp),
+            style = GlassDefaults.prominentStyle(),
+            shape = GlassShape,
             componentRole = GlassComponentRole.Sheet,
         ) {
-            content()
+            // The liquid glass tint alpha comes from the glass tuning (about 0.4), which lets a busy
+            // manga page drown the panel text; this veil in the panel colour keeps the blur visible
+            // but the text readable.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(GlassShape)
+                    .background(colors.container.copy(alpha = GLASS_VEIL_ALPHA)),
+            ) {
+                content()
+            }
         }
         ReaderPanelSurfaceMode.Opaque -> Surface(
             shape = sheetShape,
