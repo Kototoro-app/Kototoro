@@ -11,6 +11,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -28,6 +31,9 @@ import org.skepsun.kototoro.main.ui.navigation3.SuggestionsNavKey
 import org.skepsun.kototoro.main.ui.navigation3.TopLevelNavKey
 import org.skepsun.kototoro.main.ui.navigation3.UpdatedNavKey
 import kotlin.math.max
+
+/** Fraction of the glow's height after which it fades out, so its clipped bottom edge is clear. */
+private const val TOP_GLOW_FADE_START = 0.45f
 
 @Composable
 internal fun BoxScope.TopChromeGlow(
@@ -55,7 +61,21 @@ internal fun BoxScope.TopChromeGlow(
     Box(
         modifier = modifier
             .height(height)
-            .clipToBounds(),
+            .clipToBounds()
+            // The glow radii follow the window width, so on a landscape tablet they reach far past
+            // this box and clipping left a hard colour edge across the screen. Fading the whole
+            // layer to nothing over its lower part keeps the edge invisible at any width.
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        TOP_GLOW_FADE_START to Color.Black,
+                        1f to Color.Transparent,
+                    ),
+                    blendMode = BlendMode.DstIn,
+                )
+            },
     ) {
         Box(
             modifier = Modifier
