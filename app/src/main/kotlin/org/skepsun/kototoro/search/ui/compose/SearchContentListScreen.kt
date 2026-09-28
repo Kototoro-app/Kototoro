@@ -1,6 +1,18 @@
 package org.skepsun.kototoro.search.ui.compose
 
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.draw.clip
+import org.skepsun.kototoro.core.ui.adaptive.TabletLayoutTokens
+import org.skepsun.kototoro.core.ui.adaptive.tabletOverlaysFitTogether
+import org.skepsun.kototoro.core.ui.adaptive.tabletPreviewCardWidth
 import android.app.Activity
 import android.util.Log
 import android.widget.Toast
@@ -127,10 +139,6 @@ private val SearchFilterSheetLightMaxAlpha = 0.92f
 private val SearchFilterSheetDarkMinAlpha = 0.82f
 private val SearchFilterSheetDarkMaxAlpha = 0.88f
 
-private enum class SearchSidePaneMode {
-    Filter,
-    Preview,
-}
 
 private data class SearchContentPreparedItems(
     val quickFilter: QuickFilter?,
@@ -328,10 +336,9 @@ fun AppSearchContentListRoute(
     val isWideAdaptiveLayout = remember(context, configuration.orientation, configuration.screenWidthDp, tabletUiMode) {
         FoldableUtils.shouldUseTabletLayout(context, settings, configuration)
     }
-    val isSidePanePreviewAvailable = tabletListPreviewMode == TabletListPreviewMode.SIDE_PANE &&
-        isWideAdaptiveLayout
-    val isFloatingPreviewAvailable = tabletListPreviewMode == TabletListPreviewMode.FLOATING &&
-        isWideAdaptiveLayout
+    // Side pane and floating both mean the floating preview card now; the grid never reflows.
+    val isPreviewAvailable = isWideAdaptiveLayout && tabletListPreviewMode != TabletListPreviewMode.OFF
+    val windowWidth = configuration.screenWidthDp.dp
 
     val preparedItems = remember(items) { prepareSearchContentItems(items) }
     val quickFilter = preparedItems.quickFilter
@@ -363,21 +370,20 @@ fun AppSearchContentListRoute(
     var searchMode by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf(filterSnapshot.listFilter.query.orEmpty()) }
     var collapseOffsetPx by rememberSaveable { mutableStateOf(0f) }
-    var showFilterPanel by rememberSaveable(isWideAdaptiveLayout) {
-        mutableStateOf(isWideAdaptiveLayout && isTabletListFilterPanelDefaultOpen)
-    }
-    var wasFilterPanelOpenBeforePreview by rememberSaveable(isWideAdaptiveLayout) { mutableStateOf(false) }
-    var sidePaneMode by rememberSaveable(isWideAdaptiveLayout) { mutableStateOf(SearchSidePaneMode.Filter) }
-    var previewContentId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var previewContent by remember { mutableStateOf<Content?>(null) }
+    // Tablet panels live in the view model so they survive a trip to details; the phone's filter
+    // sheet is local.
+    val panels by viewModel.panels.state.collectAsStateWithLifecycle()
+    val previewContent = panels.previewContent
+    var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     var isPreviewDetailsLoading by remember { mutableStateOf(false) }
     var hasPreviewDetailsError by remember { mutableStateOf(false) }
-    fun clearPreview() {
-        previewContentId = null
-        previewContent = null
-        isPreviewDetailsLoading = false
-        hasPreviewDetailsError = false
-        sidePaneMode = SearchSidePaneMode.Filter
+    var previewReloadKey by remember { mutableIntStateOf(0) }
+
+    fun setFilterDrawerOpen(open: Boolean) {
+        if (open && panels.previewContentId != null && !tabletOverlaysFitTogether(windowWidth)) {
+            viewModel.panels.closePreview()
+        }
+        viewModel.panels.setFilterOpen(open)
     }
     fun openContentOrPreview(item: ContentListModel) {
         val content = item.toContentWithOverride()
@@ -385,37 +391,14 @@ fun AppSearchContentListRoute(
 
         val sharedElementKey = contentListSharedElementKey(item, null)
         when {
-            isSidePanePreviewAvailable -> {
-                if (previewContent?.id == content.id) {
-                    openDetailsHandler(previewContent ?: content, sharedElementKey)
-                } else {
-                    if (sidePaneMode != SearchSidePaneMode.Preview) {
-                        wasFilterPanelOpenBeforePreview = showFilterPanel
-                    }
-                    previewContentId = content.id
-                    previewContent = content
-                    sidePaneMode = SearchSidePaneMode.Preview
-                    // The persistent preview owns the second pane, regardless of
-                    // whether the filter pane was previously visible.
-                    showFilterPanel = true
-                }
-            }
-
-            isFloatingPreviewAvailable -> {
-                if (previewContent?.id == content.id) {
-                    openDetailsHandler(previewContent ?: content, sharedElementKey)
-                } else {
-                    previewContentId = content.id
-                    previewContent = content
-                    sidePaneMode = SearchSidePaneMode.Filter
-                    // The floating card is most useful when the list remains full-width.
-                    showFilterPanel = false
-                }
-            }
-
+            !isPreviewAvailable -> openDetailsHandler(content, sharedElementKey)
+            // A second tap on the previewed work opens its details.
+            panels.previewContentId == content.id -> openDetailsHandler(previewContent ?: content, sharedElementKey)
             else -> {
-                clearPreview()
-                openDetailsHandler(content, sharedElementKey)
+                if (panels.filterOpen && !tabletOverlaysFitTogether(windowWidth)) {
+                    viewModel.panels.setFilterOpen(false)
+                }
+                viewModel.panels.openPreview(content)
             }
         }
     }
@@ -446,8 +429,8 @@ fun AppSearchContentListRoute(
     }
 
     var autoApplyDone by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(showFilterPanel, isWideAdaptiveLayout) {
-        val shouldAutoApply = (isWideAdaptiveLayout || showFilterPanel) && !autoApplyDone
+    LaunchedEffect(showFilterSheet, isWideAdaptiveLayout) {
+        val shouldAutoApply = (isWideAdaptiveLayout || showFilterSheet) && !autoApplyDone
         if (shouldAutoApply) {
             autoApplyDone = true
             savedFiltersProperty.availableItems
@@ -486,71 +469,24 @@ fun AppSearchContentListRoute(
         }
     }
 
-    LaunchedEffect(
-        isWideAdaptiveLayout,
-        tabletListPreviewMode,
-        isTabletListFilterPanelDefaultOpen,
-    ) {
-        when {
-            !isWideAdaptiveLayout -> {
-                clearPreview()
-                showFilterPanel = false
-            }
-
-            tabletListPreviewMode == TabletListPreviewMode.OFF -> {
-                clearPreview()
-                showFilterPanel = isTabletListFilterPanelDefaultOpen
-            }
-
-            tabletListPreviewMode == TabletListPreviewMode.SIDE_PANE -> {
-                if (sidePaneMode != SearchSidePaneMode.Preview) {
-                    sidePaneMode = SearchSidePaneMode.Filter
-                    showFilterPanel = isTabletListFilterPanelDefaultOpen
-                }
-            }
-
-            tabletListPreviewMode == TabletListPreviewMode.FLOATING -> {
-                sidePaneMode = SearchSidePaneMode.Filter
-                showFilterPanel = if (previewContentId == null) {
-                    isTabletListFilterPanelDefaultOpen
-                } else {
-                    false
-                }
-            }
-        }
+    LaunchedEffect(isPreviewAvailable) {
+        if (!isPreviewAvailable) viewModel.panels.closePreview()
     }
 
-    LaunchedEffect(contentItems, contentListItems, previewContentId) {
-        val previewId = previewContentId ?: return@LaunchedEffect
-        val restoredContent = contentListItems
-            .firstOrNull { it.id == previewId }
-            ?.toContentWithOverride()
-        if (restoredContent != null && previewContent?.id != previewId) {
-            previewContent = restoredContent
-        } else if (restoredContent == null && contentItems.none { it === LoadingState }) {
-            clearPreview()
-        }
+    // Only fills in the content after process death; an empty or loading list never closes the preview.
+    LaunchedEffect(contentListItems) {
+        viewModel.panels.restorePreviewFrom(contentListItems.map { it.toContentWithOverride() })
     }
 
-    LaunchedEffect(previewContentId, contentListItems) {
-        val previewId = previewContentId ?: return@LaunchedEffect
+    LaunchedEffect(panels.previewContentId, previewReloadKey) {
+        val previewId = panels.previewContentId ?: return@LaunchedEffect
         val previewItem = contentListItems.firstOrNull { it.id == previewId } ?: return@LaunchedEffect
         isPreviewDetailsLoading = true
         hasPreviewDetailsError = false
         runCatchingCancellable { viewModel.loadPreviewDetails(previewItem) }
-            .onSuccess { details ->
-                if (previewContentId == previewId) {
-                    previewContent = details
-                }
-            }
-            .onFailure {
-                if (previewContentId == previewId) {
-                    hasPreviewDetailsError = true
-                }
-            }
-        if (previewContentId == previewId) {
-            isPreviewDetailsLoading = false
-        }
+            .onSuccess(viewModel.panels::updatePreviewContent)
+            .onFailure { hasPreviewDetailsError = true }
+        isPreviewDetailsLoading = false
     }
 
     LaunchedEffect(contentListItems) {
@@ -570,7 +506,6 @@ fun AppSearchContentListRoute(
     }
     val statusBarTopPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val maxCollapsePx = topActionsHeightPx
-    val isWideSplitLayout = isWideAdaptiveLayout && showFilterPanel
     val showSelectionTopBar = selectedItemsIds.isNotEmpty()
     val extractedPinnedTags = remember(contentListItems, filterSnapshot.listFilter.tags, tagsProperty.availableItems) {
         buildSourcePinnedTags(
@@ -603,26 +538,8 @@ fun AppSearchContentListRoute(
         Modifier
     }
 
-    fun closePreviewPane() {
-        val restoreFilter = wasFilterPanelOpenBeforePreview
-        clearPreview()
-        showFilterPanel = restoreFilter
-    }
-
-    fun openFilterPaneFromPreview() {
-        clearPreview()
-        showFilterPanel = true
-    }
-
-    val isFloatingPreviewVisible = isFloatingPreviewAvailable && previewContent != null
-    BackHandler(
-        enabled = (isWideSplitLayout && sidePaneMode == SearchSidePaneMode.Preview) || isFloatingPreviewVisible,
-    ) {
-        if (sidePaneMode == SearchSidePaneMode.Preview) {
-            closePreviewPane()
-        } else {
-            clearPreview()
-        }
+    BackHandler(enabled = previewContent != null || (isWideAdaptiveLayout && panels.filterOpen)) {
+        if (previewContent != null) viewModel.panels.closePreview() else viewModel.panels.setFilterOpen(false)
     }
 
     val nestedScrollConnection = remember(maxCollapsePx, searchMode) {
@@ -745,14 +662,9 @@ fun AppSearchContentListRoute(
                 onRandomClick = viewModel::openRandom,
                 onFilterClick = {
                     if (isWideAdaptiveLayout) {
-                        when {
-                            sidePaneMode == SearchSidePaneMode.Preview -> {
-                                openFilterPaneFromPreview()
-                            }
-                            else -> showFilterPanel = !showFilterPanel
-                        }
+                        setFilterDrawerOpen(!panels.filterOpen)
                     } else {
-                        showFilterPanel = !showFilterPanel
+                        showFilterSheet = !showFilterSheet
                     }
                 },
                 onResetFilterClick = viewModel.filterCoordinator::reset,
@@ -778,301 +690,192 @@ fun AppSearchContentListRoute(
         LocalLiquidGlassLayerBackdrop provides listLayerBackdrop,
     ) {
         androidx.compose.material3.Scaffold(contentWindowInsets = WindowInsets.navigationBars) { paddingValues ->
-            if (isWideSplitLayout) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .then(liquidGlassSourceModifier),
-                        ) {
-                            KototoroContentListScreen(
-                                items = contentItems,
-                                gridScale = gridScale,
-                                listMode = listMode,
-                                isRefreshing = false,
-                                contentPadding = PaddingValues(0.dp, topOverlayHeight, 0.dp, 0.dp),
-                                sharedTransitionEnabled = sharedTransitionEnabled,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .nestedScroll(nestedScrollConnection),
-                                onPrepareItemTransition = { _, _ -> },
-                                onItemClick = itemClick@{ item ->
-                                    if (selectedItemsIds.isNotEmpty()) {
-                                        hapticFeedback.performSelectionHapticFeedback()
-                                        selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
-                                    } else {
-                                        openContentOrPreview(item)
-                                    }
-                                },
-                                onItemLongClick = { item ->
-                                    selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
-                                },
-                                onLoadMore = { viewModel.loadNextPage() },
-                                onRefresh = { viewModel.onRefresh() },
-                                onClearSelection = { selectedItemsIds = emptySet() },
-                                onSelectionAction = { action ->
-                                    when (action) {
-                                        SelectionAction.SHARE -> {
-                                            ShareHelper(context).shareContentLinks(selectedItems)
-                                            selectedItemsIds = emptySet()
-                                            true
-                                        }
-
-                                        SelectionAction.FAVOURITE -> {
-                                            appRouter.showFavoriteDialog(selectedItems)
-                                            selectedItemsIds = emptySet()
-                                            true
-                                        }
-
-                                        SelectionAction.SAVE -> {
-                                            if (isAllNonLocal) {
-                                                appRouter.showDownloadDialog(selectedItems)
-                                                selectedItemsIds = emptySet()
-                                                true
-                                            } else {
-                                                false
-                                            }
-                                        }
-
-                                        else -> false
-                                    }
-                                },
-                                selectedItemsIds = selectedItemsIds,
-                                showInlineSelectionTopBar = false,
-                                onRetry = ::resolveErrorAndRetry,
-                                onSecondaryAction = ::openErrorInBrowser,
-                                highlightedItemId = previewContent?.id,
-                                gridState = if (listMode == ListMode.GRID || listMode == ListMode.COMPACT_GRID) {
-                                    wideGridState
-                                } else {
-                                    null
-                                },
-                                listState = if (listMode == ListMode.LIST) wideListState else null,
-                                detailedListState = if (listMode == ListMode.DETAILED_LIST) wideDetailedListState else null,
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.TopStart),
-                        ) {
-                            topBarContent()
-                        }
-                    }
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(1.dp)
-                            .padding(vertical = 12.dp)
-                            .alpha(0.7f)
-                            .background(MaterialTheme.colorScheme.outlineVariant),
-                    )
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                    ) {
-                        if (sidePaneMode == SearchSidePaneMode.Preview && previewContent != null) {
-                            Crossfade(
-                                targetState = requireNotNull(previewContent),
-                                label = "search-preview-content",
-                            ) { content ->
-                                SearchPreviewPane(
-                                    content = content,
-                                    isLoading = isPreviewDetailsLoading,
-                                    hasLoadError = hasPreviewDetailsError,
-                                    onClose = ::closePreviewPane,
-                                    onAddToFavorites = { appRouter.showFavoriteDialog(content) },
-                                    onOpenDetails = {
-                                        val sharedElementKey = contentCoverSharedKey(content, content.coverUrl)
-                                        openDetailsHandler(
-                                            content,
-                                            sharedElementKey,
-                                        )
-                                    },
-                                    onOpenChapter = { chapter ->
-                                        appRouter.openReader(
-                                            manga = content,
-                                            state = ReaderState(chapterId = chapter.id, page = 0, scroll = 0),
-                                        )
-                                    },
-                                )
-                            }
-                        } else {
-                            SearchFilterPanel(
-                                sourceName = viewModel.source.name,
-                                sortOrders = sortOrderProperty.availableItems,
-                                selectedSortOrder = sortOrderProperty.selectedItems.firstOrNull(),
-                                tagGroups = tagsProperty.availableItems,
-                                excludedTagGroups = tagsExcludedProperty.availableItems,
-                                contentTypes = contentTypesProperty.availableItems,
-                                selectedContentTypes = contentTypesProperty.selectedItems,
-                                states = statesProperty.availableItems,
-                                selectedStates = statesProperty.selectedItems,
-                                locales = localeProperty.availableItems,
-                                selectedLocale = localeProperty.selectedItems.firstOrNull(),
-                                authors = authorsProperty.availableItems,
-                                selectedAuthor = authorsProperty.selectedItems.firstOrNull(),
-                                blacklistedTagCount = globalTagBlacklist.size,
-                                onOpenGlobalTagBlacklist = appRouter::openGlobalTagBlacklist,
-                                onRefreshFilters = viewModel.filterCoordinator::refreshFilters,
-                                onSortOrderChange = viewModel.filterCoordinator::setSortOrder,
-                                onToggleTag = { tag, selected, excludeMode ->
-                                    if (excludeMode) {
-                                        viewModel.filterCoordinator.toggleTagExclude(tag, selected)
-                                    } else {
-                                        viewModel.filterCoordinator.toggleTag(tag, selected)
-                                    }
-                                },
-                                onToggleContentType = { type, selected -> viewModel.filterCoordinator.toggleContentType(type, selected) },
-                                onToggleState = { state, selected -> viewModel.filterCoordinator.toggleState(state, selected) },
-                                onLocaleChange = viewModel.filterCoordinator::setLocale,
-                                onAuthorChange = viewModel.filterCoordinator::setAuthor,
-                                onReset = viewModel.filterCoordinator::reset,
-                                isTextInputTag = viewModel.filterCoordinator::isTextInputTag,
-                                textInputValue = viewModel.filterCoordinator::getTextInputValue,
-                                textInputLabel = viewModel.filterCoordinator::getTextInputLabel,
-                                onSetTextInputValue = viewModel.filterCoordinator::setTextInputValue,
-                                modifier = Modifier.fillMaxHeight(),
-                                contentPadding = PaddingValues(
-                                    start = 16.dp,
-                                    top = statusBarTopPadding,
-                                    end = 16.dp,
-                                    bottom = 12.dp,
-                                ),
-                                savedFilters = savedFiltersProperty,
-                                isSaveEnabled = isFilterSaveEnabled,
-                                onToggleSavedFilter = viewModel.filterCoordinator::toggleSavedFilter,
-                                onSaveFilter = viewModel.filterCoordinator::saveCurrentFilter,
-                                onRenameSavedFilter = viewModel.filterCoordinator::renameSavedFilter,
-                                onDeleteSavedFilter = viewModel.filterCoordinator::deleteSavedFilter,
-                                onSetSavedFilterAutoEnabled = viewModel.filterCoordinator::setSavedFilterAutoEnabled,
-                            )
-                        }
-                    }
-                }
-            } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize(),
+            ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize(),
+                        .fillMaxSize()
+                        .then(liquidGlassSourceModifier),
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(liquidGlassSourceModifier),
-                    ) {
-                        KototoroContentListScreen(
-                            items = contentItems,
-                            gridScale = gridScale,
-                            listMode = listMode,
-                            isRefreshing = false,
-                            contentPadding = PaddingValues(
-                                top = topOverlayHeight,
-                                bottom = paddingValues.calculateBottomPadding(),
-                            ),
-                            sharedTransitionEnabled = sharedTransitionEnabled,
-                            modifier = Modifier.nestedScroll(nestedScrollConnection),
-                            onPrepareItemTransition = { _, _ -> },
-                            onItemClick = itemClick@{ item ->
-                                if (selectedItemsIds.isNotEmpty()) {
-                                    hapticFeedback.performSelectionHapticFeedback()
-                                    selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
-                                } else {
-                                    openContentOrPreview(item)
-                                }
-                            },
-                            onItemLongClick = { item ->
+                    KototoroContentListScreen(
+                        items = contentItems,
+                        gridScale = gridScale,
+                        listMode = listMode,
+                        isRefreshing = false,
+                        contentPadding = PaddingValues(
+                            top = topOverlayHeight,
+                            bottom = paddingValues.calculateBottomPadding(),
+                        ),
+                        sharedTransitionEnabled = sharedTransitionEnabled,
+                        modifier = Modifier.nestedScroll(nestedScrollConnection),
+                        onPrepareItemTransition = { _, _ -> },
+                        onItemClick = itemClick@{ item ->
+                            if (selectedItemsIds.isNotEmpty()) {
+                                hapticFeedback.performSelectionHapticFeedback()
                                 selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
-                            },
-                            onLoadMore = { viewModel.loadNextPage() },
-                            onRefresh = { viewModel.onRefresh() },
-                            onClearSelection = { selectedItemsIds = emptySet() },
-                            onSelectionAction = { action ->
-                                when (action) {
-                                    SelectionAction.SHARE -> {
-                                        ShareHelper(context).shareContentLinks(selectedItems)
-                                        selectedItemsIds = emptySet()
-                                        true
-                                    }
-
-                                    SelectionAction.FAVOURITE -> {
-                                        appRouter.showFavoriteDialog(selectedItems)
-                                        selectedItemsIds = emptySet()
-                                        true
-                                    }
-
-                                    SelectionAction.SAVE -> {
-                                        if (isAllNonLocal) {
-                                            appRouter.showDownloadDialog(selectedItems)
-                                            selectedItemsIds = emptySet()
-                                            true
-                                        } else {
-                                            false
-                                        }
-                                    }
-
-                                    else -> false
+                            } else {
+                                openContentOrPreview(item)
+                            }
+                        },
+                        onItemLongClick = { item ->
+                            selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
+                        },
+                        onLoadMore = { viewModel.loadNextPage() },
+                        onRefresh = { viewModel.onRefresh() },
+                        onClearSelection = { selectedItemsIds = emptySet() },
+                        onSelectionAction = { action ->
+                            when (action) {
+                                SelectionAction.SHARE -> {
+                                    ShareHelper(context).shareContentLinks(selectedItems)
+                                    selectedItemsIds = emptySet()
+                                    true
                                 }
-                            },
-                            selectedItemsIds = selectedItemsIds,
-                            showInlineSelectionTopBar = false,
-                            onRetry = ::resolveErrorAndRetry,
-                            onSecondaryAction = ::openErrorInBrowser,
-                            highlightedItemId = previewContent?.id,
-                        )
-                    }
-                    Box(
+
+                                SelectionAction.FAVOURITE -> {
+                                    appRouter.showFavoriteDialog(selectedItems)
+                                    selectedItemsIds = emptySet()
+                                    true
+                                }
+
+                                SelectionAction.SAVE -> {
+                                    if (isAllNonLocal) {
+                                        appRouter.showDownloadDialog(selectedItems)
+                                        selectedItemsIds = emptySet()
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+
+                                else -> false
+                            }
+                        },
+                        selectedItemsIds = selectedItemsIds,
+                        showInlineSelectionTopBar = false,
+                        onRetry = ::resolveErrorAndRetry,
+                        onSecondaryAction = ::openErrorInBrowser,
+                        highlightedItemId = panels.previewContentId,
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopStart),
+                ) {
+                    topBarContent()
+                }
+                if (isWideAdaptiveLayout) {
+                    val navigationBottomPadding = paddingValues.calculateBottomPadding()
+                    AnimatedVisibility(
+                        visible = panels.filterOpen,
+                        enter = slideInHorizontally { -it } + fadeIn(),
+                        exit = slideOutHorizontally { -it } + fadeOut(),
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.TopStart),
+                            .align(Alignment.TopStart)
+                            .padding(
+                                start = TabletLayoutTokens.OverlayMargin,
+                                top = statusBarTopPadding + topActionsHeight + 4.dp,
+                                bottom = navigationBottomPadding + TabletLayoutTokens.OverlayMargin,
+                            )
+                            .width(TabletLayoutTokens.FilterDrawerWidth)
+                            .fillMaxHeight(),
                     ) {
-                        topBarContent()
+                        SearchFilterDrawerSurface(modifier = Modifier.fillMaxSize()) {
+                                SearchFilterPanel(
+                                    sourceName = viewModel.source.name,
+                                    sortOrders = sortOrderProperty.availableItems,
+                                    selectedSortOrder = sortOrderProperty.selectedItems.firstOrNull(),
+                                    tagGroups = tagsProperty.availableItems,
+                                    excludedTagGroups = tagsExcludedProperty.availableItems,
+                                    contentTypes = contentTypesProperty.availableItems,
+                                    selectedContentTypes = contentTypesProperty.selectedItems,
+                                    states = statesProperty.availableItems,
+                                    selectedStates = statesProperty.selectedItems,
+                                    locales = localeProperty.availableItems,
+                                    selectedLocale = localeProperty.selectedItems.firstOrNull(),
+                                    authors = authorsProperty.availableItems,
+                                    selectedAuthor = authorsProperty.selectedItems.firstOrNull(),
+                                    blacklistedTagCount = globalTagBlacklist.size,
+                                    onOpenGlobalTagBlacklist = appRouter::openGlobalTagBlacklist,
+                                    onRefreshFilters = viewModel.filterCoordinator::refreshFilters,
+                                    onSortOrderChange = viewModel.filterCoordinator::setSortOrder,
+                                    onToggleTag = { tag, selected, excludeMode ->
+                                        if (excludeMode) {
+                                            viewModel.filterCoordinator.toggleTagExclude(tag, selected)
+                                        } else {
+                                            viewModel.filterCoordinator.toggleTag(tag, selected)
+                                        }
+                                    },
+                                    onToggleContentType = { type, selected -> viewModel.filterCoordinator.toggleContentType(type, selected) },
+                                    onToggleState = { state, selected -> viewModel.filterCoordinator.toggleState(state, selected) },
+                                    onLocaleChange = viewModel.filterCoordinator::setLocale,
+                                    onAuthorChange = viewModel.filterCoordinator::setAuthor,
+                                    onReset = viewModel.filterCoordinator::reset,
+                                    isTextInputTag = viewModel.filterCoordinator::isTextInputTag,
+                                    textInputValue = viewModel.filterCoordinator::getTextInputValue,
+                                    textInputLabel = viewModel.filterCoordinator::getTextInputLabel,
+                                    onSetTextInputValue = viewModel.filterCoordinator::setTextInputValue,
+                                    modifier = Modifier.fillMaxHeight(),
+                                    contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 12.dp, bottom = 12.dp),
+                                    onClose = { viewModel.panels.setFilterOpen(false) },
+                                    savedFilters = savedFiltersProperty,
+                                    isSaveEnabled = isFilterSaveEnabled,
+                                    onToggleSavedFilter = viewModel.filterCoordinator::toggleSavedFilter,
+                                    onSaveFilter = viewModel.filterCoordinator::saveCurrentFilter,
+                                    onRenameSavedFilter = viewModel.filterCoordinator::renameSavedFilter,
+                                    onDeleteSavedFilter = viewModel.filterCoordinator::deleteSavedFilter,
+                                    onSetSavedFilterAutoEnabled = viewModel.filterCoordinator::setSavedFilterAutoEnabled,
+                                )
+                        }
                     }
-                    if (isFloatingPreviewVisible && previewContent != null) {
-                        val content = requireNotNull(previewContent)
-                        SearchFloatingPreviewCard(
-                            content = content,
-                            isLoading = isPreviewDetailsLoading,
-                            hasLoadError = hasPreviewDetailsError,
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(
-                                    top = topOverlayHeight + 12.dp,
-                                    end = 16.dp,
-                                )
-                                .fillMaxWidth(0.86f)
-                                .widthIn(max = 420.dp),
-                            onDismiss = ::clearPreview,
-                            onAddToFavorites = { appRouter.showFavoriteDialog(content) },
-                            onOpenDetails = {
-                                openDetailsHandler(
-                                    content,
-                                    contentCoverSharedKey(content, content.coverUrl),
-                                )
-                            },
-                            onOpenChapter = { chapter ->
-                                appRouter.openReader(
-                                    manga = content,
-                                    state = ReaderState(chapterId = chapter.id, page = 0, scroll = 0),
-                                )
-                            },
-                        )
+                    AnimatedVisibility(
+                        visible = previewContent != null,
+                        enter = slideInHorizontally { it } + fadeIn(),
+                        exit = slideOutHorizontally { it } + fadeOut(),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(
+                                end = TabletLayoutTokens.OverlayMargin,
+                                top = statusBarTopPadding + topActionsHeight + 4.dp,
+                                bottom = navigationBottomPadding + TabletLayoutTokens.OverlayMargin,
+                            )
+                            .width(tabletPreviewCardWidth(windowWidth))
+                            .fillMaxHeight(),
+                    ) {
+                        // Keeps the last card on screen while it slides out.
+                        var lastPreview by remember { mutableStateOf(previewContent) }
+                        if (previewContent != null) lastPreview = previewContent
+                        val shownPreview = lastPreview ?: return@AnimatedVisibility
+                        Crossfade(targetState = shownPreview, label = "search-preview-card") { content ->
+                            SearchPreviewCard(
+                                content = content,
+                                isLoading = isPreviewDetailsLoading,
+                                hasLoadError = hasPreviewDetailsError,
+                                onClose = viewModel.panels::closePreview,
+                                onRetry = { previewReloadKey++ },
+                                onRead = { appRouter.openReader(content) },
+                                onOpenDetails = {
+                                    openDetailsHandler(content, contentCoverSharedKey(content, content.coverUrl))
+                                },
+                                onAddToFavorites = { appRouter.showFavoriteDialog(content) },
+                                onOpenChapter = { chapter ->
+                                    appRouter.openReader(
+                                        manga = content,
+                                        state = ReaderState(chapterId = chapter.id, page = 0, scroll = 0),
+                                    )
+                                },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                     }
                 }
             }
 
-            if (!isWideAdaptiveLayout && showFilterPanel) {
+            if (!isWideAdaptiveLayout && showFilterSheet) {
                 StableAnchoredBottomSheet(
-                    onDismissRequest = { showFilterPanel = false },
+                    onDismissRequest = { showFilterSheet = false },
                     shape = RectangleShape,
                     containerColor = Color.Transparent,
                     dragHandle = null,
@@ -1131,5 +934,38 @@ fun AppSearchContentListRoute(
             }
         }
 
+    }
+}
+
+internal const val GLASS_PANEL_VEIL_ALPHA = 0.9f
+
+/** The tablet filter drawer's surface: glass under the iOS style, an opaque card otherwise. */
+@Composable
+private fun SearchFilterDrawerSurface(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+        val shape = RoundedRectangle(28.dp)
+        GlassSurface(
+            modifier = modifier.clip(shape),
+            shape = shape,
+            style = GlassDefaults.prominentStyle(),
+            componentRole = GlassComponentRole.BottomPanel,
+        ) {
+            // The glass tint alone lets the grid's covers and titles show through the controls.
+            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface.copy(alpha = GLASS_PANEL_VEIL_ALPHA))) {
+                content()
+            }
+        }
+    } else {
+        Surface(
+            modifier = modifier,
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shadowElevation = 8.dp,
+        ) {
+            content()
+        }
     }
 }
