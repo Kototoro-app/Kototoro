@@ -57,7 +57,7 @@ fun tabletLayoutClass(widthDp: Int, tabletLayoutEnabled: Boolean): TabletLayoutC
 ### 3.1 布局原则：面板一律浮层，列表永不 reflow
 - 网格的列数与位置只取决于窗口宽度，任何面板的开关都不改变它。
 - 过滤：从左侧滑入的**浮层抽屉**（300dp，全高，圆角右侧，阴影），**默认关闭**。
-  - 由顶栏过滤按钮开关；点抽屉外、返回键或左滑可关闭。
+  - 由顶栏过滤按钮开关；✕、返回键可关闭。不做「点抽屉外关闭」：否则点作品会先关掉抽屉，与「两者可同开」冲突。
   - 过滤即时生效，抽屉背后的结果实时刷新。
   - 过滤按钮在有生效条件时显示数字角标。
 - 预览：从右侧滑入的**浮层卡片**（380dp，四周 12dp 边距，28dp 圆角，阴影）。
@@ -66,6 +66,7 @@ fun tabletLayoutClass(widthDp: Int, tabletLayoutEnabled: Boolean): TabletLayoutC
   - 无 scrim，网格保持可交互。
 - 两者可同时打开。若 `窗口宽 - 两者宽度 - 2×边距 < 240dp`，打开一个时关闭另一个（MEDIUM 下通常成立）。
 - 选中作品卡片显示 2dp accent 描边（沿用 `highlightedItemId`）。
+- 两个浮层都从顶栏下方开始，不遮挡返回 / 过滤 / 搜索按钮；iOS 风格的玻璃表面内叠 0.9 透明度的 surface 色，避免网格封面透过控件。
 - 返回键顺序：预览 → 过滤 → 离开页面。
 - 玻璃：iOS 风格用 `GlassSurface`（`componentRole = BottomPanel`，与现有浮层一致），MD3 用 `surfaceContainerHigh` 不透明卡片。
 - `TabletListPreviewMode`：
