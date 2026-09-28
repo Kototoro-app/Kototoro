@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -247,19 +248,25 @@ fun ReaderQuickActionGrid(
     actions: List<ReaderQuickAction>,
     onClick: (ReaderQuickAction) -> Unit,
     modifier: Modifier = Modifier,
-    columns: Int = 4,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = modifier.fillMaxWidth()) {
-        actions.chunked(columns).forEach { row ->
-            Row(modifier = Modifier.fillMaxWidth()) {
-                row.forEach { action ->
-                    ReaderQuickTile(action = action, onClick = { onClick(action) }, modifier = Modifier.weight(1f))
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        // Wide panels (landscape, tablets) fit more tiles per row, which keeps the quick layer
+        // short enough to open at its peek height.
+        val columns = quickActionColumns(maxWidth)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+            actions.chunked(columns).forEach { row ->
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    row.forEach { action ->
+                        ReaderQuickTile(action = action, onClick = { onClick(action) }, modifier = Modifier.weight(1f))
+                    }
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 }
-                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
 }
+
+internal fun quickActionColumns(width: Dp): Int = (width / 84.dp).toInt().coerceIn(4, 8)
 
 @Composable
 fun ReaderQuickTile(

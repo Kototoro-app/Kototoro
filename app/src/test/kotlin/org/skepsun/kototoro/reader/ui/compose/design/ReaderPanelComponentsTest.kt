@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.reader.ui.compose.design
 
+import androidx.compose.ui.unit.dp
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -26,5 +27,12 @@ class ReaderPanelComponentsTest {
     @Test
     fun `fractional steps do not drift`() {
         assertEquals(1.7f, steppedValue(1.6f, step = 0.1f, direction = 1, range = 1.2f..2.0f), 1e-4f)
+    }
+
+    @Test
+    fun `quick actions use four columns on phones and up to eight on wide panels`() {
+        assertEquals(4, quickActionColumns(328.dp))
+        assertEquals(8, quickActionColumns(728.dp))
+        assertEquals(8, quickActionColumns(1200.dp))
     }
 }
