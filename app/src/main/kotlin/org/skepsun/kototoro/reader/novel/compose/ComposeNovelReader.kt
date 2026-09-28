@@ -1451,12 +1451,16 @@ private fun ComposeNovelPagedChapter(
         val statusBarInset = WindowInsets.statusBarsIgnoringVisibility
             .asPaddingValues()
             .calculateTopPadding()
+        // 下边距同理从导航栏（手势条）安全区上缘开始：页脚状态栏与正文都不压在手势条上。
+        val navigationBarInset = WindowInsets.navigationBarsIgnoringVisibility
+            .asPaddingValues()
+            .calculateBottomPadding()
         val contentWidthPx = with(density) {
             (maxWidth - settings.marginHorizontal.dp * 2).coerceAtLeast(1.dp).roundToPx()
         }
         val contentHeightPx = with(density) {
             (
-                maxHeight - statusBarInset - settings.marginVertical.dp * 2 -
+                maxHeight - statusBarInset - navigationBarInset - settings.marginVertical.dp * 2 -
                     if (settings.showReadingStatus) NovelReadingStatusReservedHeight else 0.dp
                 ).coerceAtLeast(1.dp).roundToPx()
         }
@@ -1830,7 +1834,7 @@ private fun ComposeNovelPagedChapter(
                                 start = settings.marginHorizontal.dp,
                                 top = statusBarInset + settings.marginVertical.dp,
                                 end = settings.marginHorizontal.dp,
-                                bottom = settings.marginVertical.dp +
+                                bottom = navigationBarInset + settings.marginVertical.dp +
                                     if (settings.showReadingStatus) NovelReadingStatusReservedHeight else 0.dp,
                             ),
                     ) {
@@ -1872,7 +1876,7 @@ private fun ComposeNovelPagedChapter(
                                 start = settings.marginHorizontal.dp,
                                 top = statusBarInset + settings.marginVertical.dp,
                                 end = settings.marginHorizontal.dp,
-                                bottom = settings.marginVertical.dp +
+                                bottom = navigationBarInset + settings.marginVertical.dp +
                                     if (settings.showReadingStatus) NovelReadingStatusReservedHeight else 0.dp,
                             ),
                     ) {
@@ -1906,6 +1910,7 @@ private fun ComposeNovelPagedChapter(
                             chapterTitle = chapterTitle,
                             progressLabel = "${localPage + 1} / $localPageCount",
                             settings = settings,
+                            bottomInset = navigationBarInset,
                         )
                     }
                 }
@@ -1972,6 +1977,7 @@ private fun NovelPageReadingStatus(
     chapterTitle: String,
     progressLabel: String,
     settings: NovelReaderSettings,
+    bottomInset: Dp,
 ) {
     val palette = novelReaderPalette(settings.themePreset, isSystemInDarkTheme())
     val contentColor = Color(palette.chromeTextColor).copy(alpha = 0.78f)
@@ -1988,9 +1994,12 @@ private fun NovelPageReadingStatus(
         Row(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
+            // The background still reaches the screen edge; only the text clears the gesture handle.
             modifier = Modifier.padding(
-                horizontal = settings.marginHorizontal.dp,
-                vertical = 5.dp,
+                start = settings.marginHorizontal.dp,
+                top = 5.dp,
+                end = settings.marginHorizontal.dp,
+                bottom = 5.dp + bottomInset,
             ),
         ) {
             Text(
