@@ -543,8 +543,36 @@ internal fun DetailsPaneActionsRow(
                             }
 
                             DetailsPaneTopBarMode.ExpandedGridTools -> {
+                                if (!showCollapsedHandle) {
+                                    // The two-column layout has no other read button: keep it next to
+                                    // the grid tools rather than dropping it on the pages/bookmarks tabs.
+                                    ReadDock(
+                                        modifier = Modifier.weight(1f),
+                                        modernStyle = isModernDockEnabled,
+                                        compact = compactModernDock,
+                                        readLabel = resolveReadActionLabel(
+                                            contentType = contentType,
+                                            historyInfo = historyInfo,
+                                            isLoading = isLoading,
+                                        ),
+                                        contentType = contentType,
+                                        branches = branches,
+                                        historyInfo = historyInfo,
+                                        isDownloadAvailable = historyInfo.canDownload,
+                                        isEnabled = !isLoading && historyInfo.isValid,
+                                        isMergeRepeatedChapters = isMergeRepeatedChapters,
+                                        showMergeRepeatedChapters = showMergeRepeatedChapters,
+                                        onToggleMergeRepeatedChapters = onToggleMergeRepeatedChapters,
+                                        onReadClick = { onActionClick(DetailsAction.Resume) },
+                                        onIncognitoClick = { onActionClick(DetailsAction.ResumeIncognito) },
+                                        onForgetClick = { onActionClick(DetailsAction.ForgetHistory) },
+                                        onDownloadClick = { onActionClick(DetailsAction.Download) },
+                                        onBranchSelected = { onActionClick(DetailsAction.SelectBranch(it)) },
+                                    )
+                                    Spacer(modifier = Modifier.width(DualPaneDetailsDockGap))
+                                }
                                 Box(
-                                    modifier = Modifier.weight(1f),
+                                    modifier = if (showCollapsedHandle) Modifier.weight(1f) else Modifier,
                                     contentAlignment = Alignment.CenterEnd,
                                 ) {
                                     DetailsDockContainer(

@@ -3,6 +3,8 @@ package org.skepsun.kototoro.details.ui.compose
 
 
 
+import org.skepsun.kototoro.core.ui.adaptive.tabletLayoutClass
+import org.skepsun.kototoro.core.ui.adaptive.TabletLayoutClass
 import android.os.Build
 import android.util.Log
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -440,7 +442,12 @@ private fun DetailsScreenContent(
         tabletUiMode,
         isTvPresentation,
     ) {
-        isTvPresentation || FoldableUtils.shouldUseTabletLayout(context, settings, configuration)
+        // Two columns only once each can breathe (expanded windows); a portrait tablet halved into
+        // ~400dp columns squeezed the chapter dock, so it keeps the single-column layout.
+        isTvPresentation || tabletLayoutClass(
+            widthDp = configuration.screenWidthDp,
+            tabletLayoutEnabled = FoldableUtils.shouldUseTabletLayout(context, settings, configuration),
+        ) == TabletLayoutClass.EXPANDED
     }
     val isModernDetailsDockEnabled by settings.observeAsState(AppSettings.KEY_MODERN_DETAILS_DOCK) {
         isModernDetailsDockEnabled
