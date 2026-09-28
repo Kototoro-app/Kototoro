@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
@@ -106,6 +107,8 @@ internal fun SearchFilterPanel(
     onRenameSavedFilter: (Int, String) -> Unit = { _, _ -> },
     onDeleteSavedFilter: (Int) -> Unit = {},
     onSetSavedFilterAutoEnabled: (Int, Boolean) -> Unit = { _, _ -> },
+    /** Shows a close button in the header (the tablet drawer). */
+    onClose: (() -> Unit)? = null,
 ) {
     val scrollState = rememberScrollState()
     var sortExpanded by rememberSaveable { mutableStateOf(false) }
@@ -115,12 +118,7 @@ internal fun SearchFilterPanel(
     var pendingOverwriteName by remember { mutableStateOf<String?>(null) }
     var pendingRenameFilter by remember { mutableStateOf<PersistableFilter?>(null) }
     var savedFilterMenuPreset by remember { mutableStateOf<PersistableFilter?>(null) }
-    var showTagBlacklist by rememberSaveable { mutableStateOf(blacklistedTagCount > 0) }
-    LaunchedEffect(blacklistedTagCount) {
-        if (blacklistedTagCount == 0) {
-            showTagBlacklist = false
-        }
-    }
+    var headerMenuExpanded by remember { mutableStateOf(false) }
     val selectedFilterCount = remember(
         tagGroups,
         excludedTagGroups,
@@ -169,49 +167,70 @@ internal fun SearchFilterPanel(
                     }
                 }
             }
+            // Clear stays one tap away; the rarer actions share one menu so the header reads plainly.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(
-                    onClick = onRefreshFilters,
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_sync),
-                        contentDescription = stringResource(R.string.refresh_filters),
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-                IconButton(
-                    onClick = { pendingSaveName = "" },
-                    enabled = isSaveEnabled,
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_save),
-                        contentDescription = stringResource(R.string.save_filter),
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-                TextButton(
-                    onClick = { showTagBlacklist = !showTagBlacklist },
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_cancel_multiple),
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(stringResource(if (showTagBlacklist) R.string.hide else R.string.show))
-                }
                 TextButton(
                     onClick = onReset,
+                    enabled = selectedFilterCount > 0,
                 ) {
                     Text(stringResource(R.string.clear))
+                }
+                Box {
+                    IconButton(onClick = { headerMenuExpanded = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = stringResource(R.string.more),
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = headerMenuExpanded,
+                        onDismissRequest = { headerMenuExpanded = false },
+                        containerColor = MaterialTheme.colorScheme.popupMenuContainerColor(),
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.refresh_filters)) },
+                            leadingIcon = { Icon(painterResource(R.drawable.ic_sync), contentDescription = null) },
+                            onClick = {
+                                headerMenuExpanded = false
+                                onRefreshFilters()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.save_filter)) },
+                            leadingIcon = { Icon(painterResource(R.drawable.ic_save), contentDescription = null) },
+                            enabled = isSaveEnabled,
+                            onClick = {
+                                headerMenuExpanded = false
+                                pendingSaveName = ""
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.blacklisted_tags)) },
+                            leadingIcon = {
+                                Icon(painterResource(R.drawable.ic_cancel_multiple), contentDescription = null)
+                            },
+                            onClick = {
+                                headerMenuExpanded = false
+                                onOpenGlobalTagBlacklist()
+                            },
+                        )
+                    }
+                }
+                if (onClose != null) {
+                    IconButton(onClick = onClose) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.close),
+                        )
+                    }
                 }
             }
         }
 
-        if (showTagBlacklist) {
+        if (blacklistedTagCount > 0) {
             GlobalTagBlacklistStatus(
                 blacklistedTagCount = blacklistedTagCount,
                 onClick = onOpenGlobalTagBlacklist,
