@@ -23,10 +23,6 @@ internal fun openDetailsReader(
     snackbarHost: View,
 ) {
     val manga = viewModel.getContentOrNull() ?: return
-    if (viewModel.historyInfo.value.isChapterMissing) {
-        Snackbar.make(snackbarHost, R.string.chapter_is_missing, Snackbar.LENGTH_SHORT).show()
-        return
-    }
 
     val intentBuilder = ReaderIntent.Builder(context)
         .manga(manga)
@@ -35,6 +31,28 @@ internal fun openDetailsReader(
             sourceLanguage = viewModel.resolvedMetadataLanguage.value,
         )
         .branch(viewModel.selectedBranchValue)
+
+    fun launch() {
+        if (isIncognitoMode) {
+            intentBuilder.incognito()
+        }
+        router.openReader(intentBuilder.build())
+        if (isIncognitoMode) {
+            Toast.makeText(context, R.string.incognito_mode, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    if (viewModel.historyInfo.value.isChapterMissing) {
+        // The saved chapter no longer exists (its files were replaced or re-imported). Say so, and
+        // offer to start over instead of leaving Read as a dead end.
+        Snackbar.make(snackbarHost, R.string.chapter_is_missing, Snackbar.LENGTH_LONG)
+            .setAction(R.string.start_reading) {
+                intentBuilder.state(ReaderState(manga, viewModel.selectedBranchValue))
+                launch()
+            }
+            .show()
+        return
+    }
 
     runCatching {
         val source = manga.source.unwrap()
@@ -127,11 +145,5 @@ internal fun openDetailsReader(
         }
     }.getOrElse { }
 
-    if (isIncognitoMode) {
-        intentBuilder.incognito()
-    }
-    router.openReader(intentBuilder.build())
-    if (isIncognitoMode) {
-        Toast.makeText(context, R.string.incognito_mode, Toast.LENGTH_SHORT).show()
-    }
+    launch()
 }

@@ -1,5 +1,9 @@
 # EntityGraph 数据完整性加固方案
 
+> [!WARNING]
+> Archived: the entity graph and work ownership model was removed in September 2026, so this page
+> does not describe the current app. See [Entity System (Archived)](./index.md).
+
 ## 目的
 
 本文档是对 `entity-graph-implementation-plan.md` 的安全补充，聚焦于当前 entitygraph 模块已发现的 7 个数据完整性/性能漏洞的修复方案。

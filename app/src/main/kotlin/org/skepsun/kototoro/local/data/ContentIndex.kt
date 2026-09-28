@@ -32,6 +32,7 @@ import org.skepsun.kototoro.parsers.util.json.mapJSONToSet
 import org.skepsun.kototoro.parsers.util.json.toStringSet
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.parsers.util.toTitleCase
+import org.skepsun.kototoro.local.epub.normalizeEpubChapterUrl
 import java.io.File
 
 class ContentIndex(source: String?) {
@@ -316,7 +317,8 @@ class ContentIndex(source: String?) {
                 ContentChapter(
                     id = k.toLong(),
                     title = v.getStringOrNull(KEY_NAME),
-                    url = v.getString(KEY_URL),
+                    // Indexes written before EPUB chapter URLs were built literally carry "#chapter%2F<n>".
+                    url = normalizeEpubChapterUrl(v.getString(KEY_URL)),
                     number = v.getFloatOrDefault(KEY_NUMBER, 0f),
                     volume = v.getIntOrDefault(KEY_VOLUME, 0),
                     uploadDate = v.getLongOrDefault(KEY_UPLOAD_DATE, 0L),

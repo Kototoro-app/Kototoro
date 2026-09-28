@@ -1,5 +1,9 @@
 # Work Ownership Matrix（2026-06）
 
+> [!WARNING]
+> Archived: the entity graph and work ownership model was removed in September 2026, so this page
+> does not describe the current app. See [Entity System (Archived)](./index.md).
+
 ## 目的
 
 本文档定义 Kototoro 从 `Entity -> Work`、`Manga -> Projection` 迁移期间的 ownership 归属矩阵。

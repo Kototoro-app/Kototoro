@@ -413,7 +413,12 @@ class NovelContentLoader @Inject constructor(
             when {
                 uri.scheme.equals("file", ignoreCase = true) -> {
                     val file = File(uri.path) // Use path to avoid fragment issues
-                    if (file.exists()) file.readText() else null
+                    when {
+                        !file.isFile -> null
+                        // Plain text: its paragraphs would collapse in the HTML handling below.
+                        file.extension.equals("txt", ignoreCase = true) -> NovelHtmlNormalizer.fromPlainText(file.readText())
+                        else -> file.readText()
+                    }
                 }
 
                 uri.scheme.equals("data", ignoreCase = true) -> {

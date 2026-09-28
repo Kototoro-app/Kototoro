@@ -1,5 +1,9 @@
 # 同名不同内容类型作品的 Work 身份合并与详情投影泄漏：根因分析与修复计划（2026-07）
 
+> [!WARNING]
+> Archived: the entity graph and work ownership model was removed in September 2026, so this page
+> does not describe the current app. See [Entity System (Archived)](./index.md).
+
 ## 摘要
 
 已确认这是一个以实体身份污染为主、详情页 fallback 泄漏为表现的组合问题：

@@ -1,5 +1,9 @@
 # Entity System And Organize Guide
 
+> [!WARNING]
+> Archived: the entity graph and work ownership model was removed in September 2026, so this page
+> does not describe the current app. See [Entity System (Archived)](./index.md).
+
 Kototoro uses the entity system as a stable work identity layer. Its job is to keep one real work represented as one library item, even when that work has several source entries, local files, or tracking-site matches.
 
 In daily use, this means favorites, categories, history, progress, statistics, and tracking state belong to the work, not to one replaceable source entry. Source entries are still required for reading, playback, updates, and downloads, but they are treated as windows into the work rather than the work itself.

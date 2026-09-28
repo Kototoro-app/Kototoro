@@ -49,4 +49,24 @@ class EpubFileReferenceTest {
 		assertEquals(File(localPath).toURI().toString(), internalUrl.substringBefore("#chapter/"))
 		assertEquals(2, parseEpubChapterReference(internalUrl)?.chapterIndex)
 	}
+
+	@Test
+	fun `an encoded chapter fragment is normalized to the literal form every reader matches`() {
+		// Uri.Builder.fragment("chapter/0") encodes the slash; readers match the literal "#chapter/", so an
+		// EPUB inside a folder lost its chapter index and opened as "The chapter is missing".
+		val encoded = "file:///storage/emulated/0/Novel/Folder%20Book/Folder%20Book.epub#chapter%2F4"
+		val normalized = normalizeEpubChapterUrl(encoded)
+		assertEquals("file:///storage/emulated/0/Novel/Folder%20Book/Folder%20Book.epub#chapter/4", normalized)
+		assertEquals(4, parseEpubChapterReference(normalized)?.chapterIndex)
+		assertEquals("file:///a.epub#chapter/1", normalizeEpubChapterUrl("file:///a.epub#chapter%2f1"))
+	}
+
+	@Test
+	fun `urls without an encoded chapter fragment are left untouched`() {
+		listOf(
+			"file:///a.epub#chapter/1",
+			"file:///Novel/Title#Chapter%201.txt",
+			"content://x/document/primary%3ABooks%2Fchapter%2Fa.epub",
+		).forEach { assertEquals(it, normalizeEpubChapterUrl(it)) }
+	}
 }

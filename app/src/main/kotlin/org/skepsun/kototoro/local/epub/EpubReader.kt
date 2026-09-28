@@ -157,7 +157,7 @@ class EpubReaderImpl(
      */
     override fun extractTextFromHtml(htmlBytes: ByteArray): String {
         val html = String(htmlBytes, Charsets.UTF_8)
-        return htmlToText(html)
+        return epubHtmlToText(html, keepImages = false)
     }
 
     /**
@@ -305,7 +305,7 @@ class EpubReaderImpl(
 
                 // Convert HTML content to readable text format (Requirement 2.4)
                 // 对于图片章节，保留图片标签
-                val textContent = htmlToTextWithImages(htmlContent)
+                val textContent = epubHtmlToText(htmlContent, keepImages = true)
 
                 chapters.add(
                     EpubChapter(
@@ -483,80 +483,6 @@ class EpubReaderImpl(
 
         // 如果文本内容很少，认为是图片章节
         return textContent.length < 100
-    }
-
-    /**
-     * HTML转文本，保留图片信息
-     * 用于图片章节（封面、插图等）
-     */
-    private fun htmlToTextWithImages(html: String): String {
-        return html
-            // 移除script和style标签及其内容
-            .replace(Regex("<script[^>]*>.*?</script>", RegexOption.DOT_MATCHES_ALL), "")
-            .replace(Regex("<style[^>]*>.*?</style>", RegexOption.DOT_MATCHES_ALL), "")
-            // 保留图片标签，转换为描述性文本
-            .replace(Regex("<img[^>]*src=[\"']([^\"']+)[\"'][^>]*(?:alt=[\"']([^\"']*)[\"'])?[^>]*>", RegexOption.IGNORE_CASE)) { matchResult ->
-                val src = matchResult.groupValues[1]
-                val alt = matchResult.groupValues.getOrNull(2)
-                // Create a more user-friendly placeholder
-                // 保留原始 src 以便后续相对路径解析
-                val displayText = when {
-                    !src.isNullOrBlank() -> src
-                    !alt.isNullOrBlank() -> alt
-                    else -> src
-                }
-
-                "\n\n📷 [图片: $displayText]\n\n"
-            }
-            // 将<br>和<p>标签转换为换行
-            .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
-            .replace(Regex("<p[^>]*>", RegexOption.IGNORE_CASE), "\n")
-            .replace(Regex("</p>", RegexOption.IGNORE_CASE), "\n")
-            // 移除其他HTML标签
-            .replace(Regex("<[^>]+>"), "")
-            // 解码HTML实体
-            .replace("&nbsp;", " ")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&amp;", "&")
-            .replace("&quot;", "\"")
-            .replace("&#39;", "'")
-            // 清理多余的空白
-            .replace(Regex("[ \\t]+"), " ")
-            .replace(Regex("\n[ \\t]+"), "\n")
-            .replace(Regex("[ \\t]+\n"), "\n")
-            .replace(Regex("\n{3,}"), "\n\n")
-            .trim()
-    }
-
-    /**
-     * 简单的HTML转文本
-     * 移除HTML标签，保留文本内容
-     */
-    private fun htmlToText(html: String): String {
-        return html
-            // 移除script和style标签及其内容
-            .replace(Regex("<script[^>]*>.*?</script>", RegexOption.DOT_MATCHES_ALL), "")
-            .replace(Regex("<style[^>]*>.*?</style>", RegexOption.DOT_MATCHES_ALL), "")
-            // 将<br>和<p>标签转换为换行
-            .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
-            .replace(Regex("<p[^>]*>", RegexOption.IGNORE_CASE), "\n")
-            .replace(Regex("</p>", RegexOption.IGNORE_CASE), "\n")
-            // 移除所有HTML标签
-            .replace(Regex("<[^>]+>"), "")
-            // 解码HTML实体
-            .replace("&nbsp;", " ")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&amp;", "&")
-            .replace("&quot;", "\"")
-            .replace("&#39;", "'")
-            // 清理多余的空白
-            .replace(Regex("[ \\t]+"), " ")
-            .replace(Regex("\n[ \\t]+"), "\n")
-            .replace(Regex("[ \\t]+\n"), "\n")
-            .replace(Regex("\n{3,}"), "\n\n")
-            .trim()
     }
 
     /**

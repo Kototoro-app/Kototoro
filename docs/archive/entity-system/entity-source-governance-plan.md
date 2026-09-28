@@ -1,5 +1,9 @@
 # Entity Source Governance Plan
 
+> [!WARNING]
+> Archived: the entity graph and work ownership model was removed in September 2026, so this page
+> does not describe the current app. See [Entity System (Archived)](./index.md).
+
 ## Purpose
 
 This plan defines how Kototoro should govern entities across favourites, history, updates, subscriptions, and local content.
