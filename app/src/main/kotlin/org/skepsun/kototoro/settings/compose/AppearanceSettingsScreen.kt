@@ -543,13 +543,17 @@ fun AppearanceSettingsScreen(
                 title = stringResource(R.string.appearance_group_tablet_list),
             ) {
                 item {
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.pref_tablet_list_preview),
+                    // The side pane and floating modes are one floating card now, so this is on/off.
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.pref_tablet_list_preview_card),
                         iconRes = R.drawable.ic_view_column,
-                        value = state.tabletListPreviewMode,
-                        options = options.tabletListPreviewModes,
-                        summary = stringResource(R.string.pref_tablet_list_preview_summary),
-                        onValueChange = onTabletListPreviewModeChange,
+                        checked = state.tabletListPreviewMode != TabletListPreviewMode.OFF,
+                        summary = stringResource(R.string.pref_tablet_list_preview_card_summary),
+                        onCheckedChange = { enabled ->
+                            onTabletListPreviewModeChange(
+                                if (enabled) TabletListPreviewMode.FLOATING else TabletListPreviewMode.OFF,
+                            )
+                        },
                     )
                 }
                 item {

@@ -3492,6 +3492,8 @@
     <string name="appearance_group_home_display">Home presentation</string>
     <string name="appearance_group_list_layout">List layout</string>
     <string name="appearance_group_tablet_list">Tablet list behavior</string>
+    <string name="pref_tablet_list_preview_card">Preview card on tap</string>
+    <string name="pref_tablet_list_preview_card_summary">On tablets, tapping a work in a list opens a preview card over the list; tap it again for details. When off, a tap opens details.</string>
     <string name="pref_tablet_list_preview">List preview mode</string>
     <string name="pref_tablet_list_preview_summary">Choose off, a persistent right-side preview, or a floating preview card on large screens.</string>
     <string name="pref_tablet_list_preview_off">Off</string>
