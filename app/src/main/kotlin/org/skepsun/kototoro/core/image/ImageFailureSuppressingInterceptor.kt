@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.core.net.toUri
 import coil3.intercept.Interceptor
 import coil3.network.HttpException
+import coil3.request.CachePolicy
 import coil3.request.ErrorResult
 import coil3.request.ImageRequest
 import coil3.request.ImageResult
@@ -30,13 +31,16 @@ import java.io.File
  *   the same cover as soon as the network recovers, instead of showing a blank placeholder for
  *   ten minutes.
  * - Cloudflare-protected 403s cool the whole host for a short window via [CloudflareHostCooldown]
- *   instead of permanently failing one specific URL. While the host is cooling down, new cover
- *   requests for that host are skipped without touching the network; after the window expires
- *   the same covers are attempted again and can succeed.
+ *   instead of permanently failing one specific URL. While the host is cooling down, cover
+ *   requests for that host are served from the memory/disk cache only and never touch the
+ *   network; after the window expires the same covers are attempted again and can succeed.
  * - User-initiated refreshes can bypass the cooldown by setting [bypassFailureCooldownKey].
  */
 class ImageFailureSuppressingInterceptor(
     private val cloudflareHostCooldown: CloudflareHostCooldown = CloudflareHostCooldown(),
+    private val cacheOnlyRequest: (ImageRequest) -> ImageRequest = { request ->
+        request.newBuilder().networkCachePolicy(CachePolicy.DISABLED).build()
+    },
 ) : Interceptor {
 
     override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
@@ -60,6 +64,11 @@ class ImageFailureSuppressingInterceptor(
         val host = identity.hostOf()
         val bypass = request.extras[bypassFailureCooldownKey] == true
         if (isCover && !bypass && cloudflareHostCooldown.isInCooldown(host)) {
+            // The cooldown protects the host, not the cache: Coil's memory and disk caches sit
+            // behind this interceptor, so refusing outright blanked every cover a list already
+            // held (a list returning from a details page whose related covers hit Cloudflare).
+            val cached = chain.withRequest(cacheOnlyRequest(request)).proceed()
+            if (cached is SuccessResult) return cached
             return ErrorResult(
                 image = request.error(),
                 request = request,

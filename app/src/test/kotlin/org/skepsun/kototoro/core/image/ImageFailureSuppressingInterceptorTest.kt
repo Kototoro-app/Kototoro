@@ -120,14 +120,35 @@ class ImageFailureSuppressingInterceptorTest {
     }
 
     @Test
-    fun `cover request for a cooled host is short circuited without touching the network`() = runTest {
+    fun `cover for a cooled host is still served from the cache`() = runTest {
         val cooldown = CloudflareHostCooldown().apply { coolDown(HOST) }
-        val interceptor = ImageFailureSuppressingInterceptor(cooldown)
-        val request = coverRequest(COVER_URL)
+        val cacheOnlyRequest = mockk<ImageRequest>()
+        val interceptor = ImageFailureSuppressingInterceptor(cooldown) { cacheOnlyRequest }
+        val cached = mockk<SuccessResult>()
+        val cacheOnlyChain = mockk<Interceptor.Chain> { coEvery { proceed() } returns cached }
+        val chain = mockk<Interceptor.Chain> {
+            every { request } returns coverRequest(COVER_URL)
+            every { withRequest(cacheOnlyRequest) } returns cacheOnlyChain
+        }
 
-        val chain = chain(request, result = mockk<SuccessResult>())
+        // A list returning from details must not lose covers it already holds in memory.
+        assertSame(cached, interceptor.intercept(chain))
+        coVerify(exactly = 0) { chain.proceed() }
+    }
+
+    @Test
+    fun `cover for a cooled host that is not cached is suppressed without the network`() = runTest {
+        val cooldown = CloudflareHostCooldown().apply { coolDown(HOST) }
+        val cacheOnlyRequest = mockk<ImageRequest>()
+        val interceptor = ImageFailureSuppressingInterceptor(cooldown) { cacheOnlyRequest }
+        val cacheMiss = ErrorResult(image = null, request = cacheOnlyRequest, throwable = IllegalStateException("miss"))
+        val cacheOnlyChain = mockk<Interceptor.Chain> { coEvery { proceed() } returns cacheMiss }
+        val chain = mockk<Interceptor.Chain> {
+            every { request } returns coverRequest(COVER_URL)
+            every { withRequest(cacheOnlyRequest) } returns cacheOnlyChain
+        }
+
         val result = interceptor.intercept(chain)
-
         assertTrue(result is ErrorResult)
         assertTrue((result as ErrorResult).throwable is SuppressedImageRequestException)
         coVerify(exactly = 0) { chain.proceed() }
@@ -161,7 +182,7 @@ class ImageFailureSuppressingInterceptorTest {
     fun `after host cooldown expires the same cover can succeed again`() = runTest {
         var now = 0L
         val cooldown = CloudflareHostCooldown().apply { nowMillis = { now } }
-        val interceptor = ImageFailureSuppressingInterceptor(cooldown)
+        val interceptor = ImageFailureSuppressingInterceptor(cooldown) { it }
         val request = coverRequest(COVER_URL)
 
         // The host fails once with a Cloudflare challenge at t=1000.
@@ -179,7 +200,14 @@ class ImageFailureSuppressingInterceptorTest {
 
         // While the cooldown window is active a new cover request is skipped.
         now = 10_000L
-        val suppressedChain = chain(request, result = mockk<SuccessResult>())
+        val cacheMissChain = chain(
+            request,
+            failing = ErrorResult(image = null, request = request, throwable = IllegalStateException("miss")),
+        )
+        val suppressedChain = mockk<Interceptor.Chain> {
+            every { this@mockk.request } returns request
+            every { withRequest(any()) } returns cacheMissChain
+        }
         assertTrue(interceptor.intercept(suppressedChain) is ErrorResult)
         coVerify(exactly = 0) { suppressedChain.proceed() }
 
