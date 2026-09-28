@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -65,6 +66,7 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 
 private const val PREVIEW_TAG_LIMIT = 6
 private const val PREVIEW_DESCRIPTION_LINES = 4
+private val PREVIEW_COMPACT_CARD_HEIGHT = 520.dp
 
 /**
  * The tablet works list's preview: a floating card with a cover header (blurred art behind a sharp
@@ -85,18 +87,34 @@ internal fun SearchPreviewCard(
 ) {
     val cardShape = RoundedRectangle(28.dp)
     val body: @Composable () -> Unit = {
-        Column(modifier = Modifier.fillMaxSize()) {
-            SearchPreviewHeader(content = content, onClose = onClose, onOpenDetails = onOpenDetails)
-            SearchPreviewBody(
-                content = content,
-                isLoading = isLoading,
-                hasLoadError = hasLoadError,
-                onRetry = onRetry,
-                onRead = onRead,
-                onOpenDetails = onOpenDetails,
-                onAddToFavorites = onAddToFavorites,
-                onOpenChapter = onOpenChapter,
-            )
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            // A short card (a phone in landscape) cannot spare a fixed 200dp header: the body was
+            // left a sliver with the actions cut off. There the header shrinks and scrolls away
+            // with the body instead.
+            val compact = maxHeight < PREVIEW_COMPACT_CARD_HEIGHT
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (compact) Modifier.verticalScroll(rememberScrollState()) else Modifier),
+            ) {
+                SearchPreviewHeader(
+                    content = content,
+                    compact = compact,
+                    onClose = onClose,
+                    onOpenDetails = onOpenDetails,
+                )
+                SearchPreviewBody(
+                    content = content,
+                    isLoading = isLoading,
+                    hasLoadError = hasLoadError,
+                    scrollable = !compact,
+                    onRetry = onRetry,
+                    onRead = onRead,
+                    onOpenDetails = onOpenDetails,
+                    onAddToFavorites = onAddToFavorites,
+                    onOpenChapter = onOpenChapter,
+                )
+            }
         }
     }
     if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
@@ -125,6 +143,7 @@ internal fun SearchPreviewCard(
 @Composable
 private fun SearchPreviewHeader(
     content: Content,
+    compact: Boolean,
     onClose: () -> Unit,
     onOpenDetails: () -> Unit,
 ) {
@@ -134,7 +153,7 @@ private fun SearchPreviewHeader(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(200.dp)
+            .height(if (compact) 132.dp else 200.dp)
             .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)),
     ) {
         AsyncImage(
@@ -167,7 +186,7 @@ private fun SearchPreviewHeader(
                 contentDescription = content.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(width = 112.dp, height = 160.dp)
+                    .size(width = if (compact) 70.dp else 112.dp, height = if (compact) 100.dp else 160.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .clickable(onClick = onOpenDetails),
             )
@@ -179,7 +198,7 @@ private fun SearchPreviewHeader(
             ) {
                 Text(
                     text = content.title,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White,
                     maxLines = 2,
@@ -228,6 +247,7 @@ private fun SearchPreviewBody(
     content: Content,
     isLoading: Boolean,
     hasLoadError: Boolean,
+    scrollable: Boolean,
     onRetry: () -> Unit,
     onRead: () -> Unit,
     onOpenDetails: () -> Unit,
@@ -241,7 +261,7 @@ private fun SearchPreviewBody(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+            .then(if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
             .padding(16.dp),
     ) {
         if (isLoading) {
