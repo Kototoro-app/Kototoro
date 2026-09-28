@@ -401,6 +401,12 @@
 			android:name="org.skepsun.kototoro.stats.ui.StatsActivity"
 			android:label="@string/reading_stats" />
 		<activity
+			android:name="org.skepsun.kototoro.migration.ui.list.MigrationListActivity"
+			android:label="@string/migration_title" />
+		<activity
+			android:name="org.skepsun.kototoro.migration.ui.sources.MigrationSourcesActivity"
+			android:label="@string/migration_sources_title" />
+		<activity
 			android:name="org.skepsun.kototoro.settings.about.AppUpdateActivity"
 			android:label="@string/app_update_available" />
 		<activity

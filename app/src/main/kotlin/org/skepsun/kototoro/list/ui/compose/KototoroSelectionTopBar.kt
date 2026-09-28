@@ -57,7 +57,7 @@ enum class SelectionAction {
     FAVOURITE,
     SAVE,
     EDIT_OVERRIDE,
-    FIX,
+    MIGRATE,
     REMOVE,
     PIN,
     MARK_AS_COMPLETED,
@@ -104,8 +104,8 @@ fun KototoroSelectionTopBar(
         allActions.filterTo(mutableListOf()) { it !in inlineActions }
     }
     if (includeContextualActions) {
-        if (isAllNonLocal && SelectionAction.FIX !in inlineActions && SelectionAction.FIX !in overflowActions) {
-            overflowActions += SelectionAction.FIX
+        if (isAllNonLocal && SelectionAction.MIGRATE !in inlineActions && SelectionAction.MIGRATE !in overflowActions) {
+            overflowActions += SelectionAction.MIGRATE
         }
         if (isSingleSelection &&
             SelectionAction.EDIT_OVERRIDE !in inlineActions &&
@@ -185,7 +185,7 @@ fun KototoroSelectionTopBar(
                         }
                     }
 
-                    // Overflow menu - shows actions beyond the inline set, plus FIX/EDIT_OVERRIDE.
+                    // Overflow menu - shows actions beyond the inline set, plus MIGRATE/EDIT_OVERRIDE.
                     if (overflowActions.isNotEmpty()) {
                         Box(
                             modifier = Modifier.onGloballyPositioned { overflowAnchorBounds = it.boundsInRoot() },
@@ -320,7 +320,7 @@ private fun SelectionActionIconButton(
                 )
             }
             SelectionAction.EDIT_OVERRIDE,
-            SelectionAction.FIX -> Unit
+            SelectionAction.MIGRATE -> Unit
         }
     }
 }
@@ -369,7 +369,7 @@ private fun selectionActionTitle(
         SelectionAction.FAVOURITE -> stringResource(R.string.categories)
         SelectionAction.SAVE -> stringResource(R.string.download)
         SelectionAction.EDIT_OVERRIDE -> stringResource(R.string.edit)
-        SelectionAction.FIX -> stringResource(fixActionTitleRes ?: R.string.fix)
+        SelectionAction.MIGRATE -> stringResource(fixActionTitleRes ?: R.string.migrate)
         SelectionAction.REMOVE -> stringResource(removeActionTitleRes ?: R.string.remove)
         SelectionAction.PIN -> if (allPinned) stringResource(R.string.unpin) else stringResource(R.string.pin)
         SelectionAction.MARK_AS_COMPLETED -> stringResource(R.string.mark_as_completed)

@@ -14,6 +14,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.view.View
 import android.util.Log
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.annotation.CheckResult
 import androidx.annotation.UiContext
 import androidx.core.app.ShareCompat
@@ -506,6 +507,28 @@ class AppRouter(
         }
     }
 
+    /** Opens the migration config sheet; starting it launches the migration list. */
+    fun openMigration(ids: LongArray) {
+        if (ids.isEmpty()) return
+        val composeActivity = activity as? BaseComposeActivity ?: return
+        val key = "migration-config"
+        composeActivity.showComposeModal(key) {
+            org.skepsun.kototoro.migration.ui.config.MigrationConfigSheet(
+                ids = ids,
+                onStart = {
+                    composeActivity.dismissComposeModal(key)
+                    startActivity(
+                        org.skepsun.kototoro.migration.ui.list.MigrationListActivity.newIntent(composeActivity, ids),
+                    )
+                },
+                onDismiss = { composeActivity.dismissComposeModal(key) },
+            )
+        }
+    }
+
+    fun openMigrationSources() =
+        startActivity(org.skepsun.kototoro.migration.ui.sources.MigrationSourcesActivity::class.java)
+
     fun openRelated(manga: Content) {
         startActivity(
             Intent(contextOrNull(), RelatedContentActivity::class.java)
@@ -877,14 +900,48 @@ class AppRouter(
         val composeActivity = activity as? BaseComposeActivity
         if (composeActivity != null) {
             val mangaList = manga.toList()
-            composeActivity.showComposeModal {
-                FavoriteCategoryDialogRoute(
-                    manga = mangaList,
-                    onManageCategories = ::openFavoriteCategories,
-                    onDismiss = composeActivity::dismissComposeModal,
-                )
+            val key = "favourite-dialog"
+            composeActivity.showComposeModal(key) {
+                val single = mangaList.singleOrNull()
+                if (single == null) {
+                    FavoriteCategoryDialogRoute(
+                        manga = mangaList,
+                        onManageCategories = ::openFavoriteCategories,
+                        onDismiss = { composeActivity.dismissComposeModal(key) },
+                    )
+                } else {
+                    DuplicateAwareFavoriteDialog(single, key, composeActivity)
+                }
             }
             return
+        }
+    }
+
+    @androidx.compose.runtime.Composable
+    private fun DuplicateAwareFavoriteDialog(single: Content, key: String, composeActivity: BaseComposeActivity) {
+        val duplicateViewModel: org.skepsun.kototoro.migration.ui.duplicate.DuplicateFavouriteViewModel =
+            androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel(key = "dup-${single.id}")
+        androidx.compose.runtime.LaunchedEffect(single.id) { duplicateViewModel.check(single) }
+        val found = duplicateViewModel.duplicates.collectAsStateWithLifecycle().value
+        val addAnyway = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+        when {
+            found == null -> Unit
+            found.isEmpty() || addAnyway.value -> FavoriteCategoryDialogRoute(
+                manga = listOf(single),
+                onManageCategories = ::openFavoriteCategories,
+                onDismiss = { composeActivity.dismissComposeModal(key) },
+            )
+            else -> org.skepsun.kototoro.migration.ui.duplicate.DuplicateFavouriteSheet(
+                content = single,
+                duplicates = found,
+                viewModel = duplicateViewModel,
+                onOpen = { id ->
+                    composeActivity.dismissComposeModal(key)
+                    openDetails(id)
+                },
+                onAddAnyway = { addAnyway.value = true },
+                onDismiss = { composeActivity.dismissComposeModal(key) },
+            )
         }
     }
 

@@ -26,7 +26,6 @@ import org.skepsun.kototoro.main.ui.LocalMainChromeController
 import org.skepsun.kototoro.core.parser.tvbox.TVBoxActionHostActivity
 import androidx.compose.runtime.saveable.rememberSaveable
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
-import org.skepsun.kototoro.alternatives.ui.AutoFixService
 import org.skepsun.kototoro.core.util.ShareHelper
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.parsers.model.Content
@@ -109,7 +108,6 @@ fun AppContentListRoute(
     registerFilterCallback: Boolean = true,
     onRemoveSelection: ((Set<Long>) -> Unit)? = null,
     onShareSelection: ((Set<Long>) -> Unit)? = null,
-    onFixSelection: ((Set<Long>) -> Unit)? = null,
     onPinSelection: ((Set<Long>) -> Unit)? = null,
     onMarkAsCompletedSelection: ((List<ContentListModel>) -> Unit)? = null,
     /**
@@ -184,7 +182,6 @@ fun AppContentListRoute(
 
     var composeSelectionIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
     val hapticFeedback = LocalHapticFeedback.current
-    var pendingFixIds by remember { mutableStateOf<Set<Long>?>(null) }
     var pendingMarkAsCompletedItems by remember { mutableStateOf<List<ContentListModel>?>(null) }
 
     // When the parent supplies [selectionControl], the parent owns selection state and this
@@ -367,13 +364,9 @@ fun AppContentListRoute(
                                     updateSelection(emptySet())
                                 }
 
-                                SelectionAction.FIX -> {
-                                    if (onFixSelection != null) {
-                                        onFixSelection(currentSelectionIds)
-                                        updateSelection(emptySet())
-                                    } else {
-                                        pendingFixIds = currentSelectionIds
-                                    }
+                                SelectionAction.MIGRATE -> {
+                                    appRouter.openMigration(currentSelectionIds.toLongArray())
+                                    updateSelection(emptySet())
                                 }
 
                                 SelectionAction.PIN -> {
@@ -407,29 +400,6 @@ fun AppContentListRoute(
                 },
             )
         }
-    }
-
-    pendingFixIds?.let { ids ->
-        AlertDialog(
-            onDismissRequest = { pendingFixIds = null },
-            title = { Text(text = stringResource(org.skepsun.kototoro.R.string.fix)) },
-            text = { Text(text = stringResource(org.skepsun.kototoro.R.string.manga_fix_prompt)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        AutoFixService.start(context, ids)
-                        pendingFixIds = null
-                    },
-                ) {
-                    Text(text = stringResource(org.skepsun.kototoro.R.string.fix))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingFixIds = null }) {
-                    Text(text = stringResource(android.R.string.cancel))
-                }
-            },
-        )
     }
 
     pendingMarkAsCompletedItems?.let { itemsToMark ->
