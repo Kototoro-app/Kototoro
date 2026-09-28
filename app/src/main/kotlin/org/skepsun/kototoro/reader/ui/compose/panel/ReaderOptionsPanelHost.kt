@@ -67,11 +67,9 @@ internal fun rememberReaderPanelSurfaceMode(eInk: Boolean): ReaderPanelSurfaceMo
 )
 
 /**
- * The reader options panel. Must be placed in the reader's own window, beside (not inside) the
- * content that carries `layerBackdrop`, so the glass surface can show the page through it.
- * Opens at the peek anchor, which shows exactly [quickLayer].
+ * The reader options panel: [ReaderPanelHost] opening at the peek anchor, which shows exactly
+ * [quickLayer].
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ReaderOptionsPanelHost(
     colors: ReaderPanelColors,
@@ -81,12 +79,40 @@ internal fun ReaderOptionsPanelHost(
     details: @Composable (dragModifier: Modifier) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    ReaderPanelHost(
+        colors = colors,
+        surfaceMode = surfaceMode,
+        onDismissRequest = onDismissRequest,
+        modifier = modifier,
+        usePeekAnchor = true,
+        header = quickLayer,
+        content = details,
+    )
+}
+
+/**
+ * A reader panel (options, chapters). Must be placed in the reader's own window, beside (not
+ * inside) the content that carries `layerBackdrop`, so the glass surface can show the page through
+ * it. [header] sits in the drag area under the handle; with [usePeekAnchor] the panel opens showing
+ * exactly the header.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ReaderPanelHost(
+    colors: ReaderPanelColors,
+    surfaceMode: ReaderPanelSurfaceMode,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    usePeekAnchor: Boolean = false,
+    header: @Composable ColumnScope.() -> Unit = {},
+    content: @Composable (dragModifier: Modifier) -> Unit,
+) {
     val density = LocalDensity.current
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusBarInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    var quickLayerHeightPx by remember { mutableIntStateOf(0) }
-    val peekHeight = if (quickLayerHeightPx > 0) {
-        with(density) { quickLayerHeightPx.toDp() } + navigationInset
+    var headerHeightPx by remember { mutableIntStateOf(0) }
+    val peekHeight = if (usePeekAnchor && headerHeightPx > 0) {
+        with(density) { headerHeightPx.toDp() } + navigationInset
     } else {
         null
     }
@@ -96,7 +122,7 @@ internal fun ReaderOptionsPanelHost(
             modifier = modifier,
             sheetMaxWidth = ReaderControlTokens.SheetMaxWidth,
             scrimColor = Color.Black.copy(alpha = readerPanelScrimAlpha(surfaceMode)),
-            usePeekAnchor = true,
+            usePeekAnchor = usePeekAnchor,
             peekHeight = peekHeight,
         ) { scope ->
             ReaderPanelSurface(surfaceMode, colors) {
@@ -115,10 +141,10 @@ internal fun ReaderOptionsPanelHost(
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(scope.dragModifier)
-                            .onSizeChanged { quickLayerHeightPx = it.height },
+                            .onSizeChanged { headerHeightPx = it.height },
                     ) {
                         BottomSheetDefaults.DragHandle(color = colors.contentSecondary.copy(alpha = 0.6f))
-                        quickLayer()
+                        header()
                     }
                     Box(
                         modifier = Modifier
@@ -126,7 +152,7 @@ internal fun ReaderOptionsPanelHost(
                             .weight(1f)
                             .navigationBarsPadding(),
                     ) {
-                        details(scope.dragModifier)
+                        content(scope.dragModifier)
                     }
                 }
             }
