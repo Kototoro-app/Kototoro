@@ -319,11 +319,12 @@ internal fun NovelReaderBottomChrome(
         .filter(controls::contains)
         .take(ReaderControl.MAX_FLOATING_CONTROLS)
     // The options panel (rendered at the activity root) handles back itself, with its hide animation.
-    BackHandler(enabled = dismissiblePanelVisible && !state.settingsSheetVisible) {
+    BackHandler(
+        enabled = dismissiblePanelVisible && !state.settingsSheetVisible && !state.chaptersSheetVisible,
+    ) {
         when {
             state.replaceRulesSheetVisible -> callbacks.onDismissReplaceRules()
             state.markingsSheetVisible -> callbacks.onDismissMarkings()
-            state.chaptersSheetVisible -> callbacks.onDismissChapters()
             toolsPanelVisible -> callbacks.onDismissTools()
         }
     }
@@ -474,25 +475,6 @@ internal fun NovelReaderBottomChrome(
         }
     }
 
-    if (state.chaptersSheetVisible) {
-        ComposeNovelChaptersSheet(
-            chapters = state.chapters,
-            currentIndex = state.currentChapterIndex,
-            searchDocuments = state.continuousChapters,
-            markings = state.novelMarkings,
-            bookmarks = state.novelBookmarks,
-            initialTab = state.chaptersSheetInitialTab,
-            themePreset = state.settings?.themePreset ?: NovelReaderThemePreset.PAPER,
-            onDismiss = callbacks.onDismissChapters,
-            onChapterSelected = callbacks.onChapterSelected,
-            onSearchResultSelected = callbacks.onSearchResultSelected,
-            onJumpToMarking = callbacks.onJumpToMarking,
-            onOpenBookmark = callbacks.onOpenBookmark,
-            onEditMarkingNote = callbacks.onEditMarkingNote,
-            onDeleteMarking = callbacks.onDeleteMarking,
-            onDeleteBookmark = callbacks.onDeleteBookmark,
-        )
-    }
     if (state.replaceRulesSheetVisible) {
         ComposeNovelReplaceRulesSheet(
             rules = state.replaceRules,

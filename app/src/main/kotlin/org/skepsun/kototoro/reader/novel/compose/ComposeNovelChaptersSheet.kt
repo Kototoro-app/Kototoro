@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -28,25 +27,19 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,7 +62,19 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
 import org.skepsun.kototoro.reader.novel.novelReaderPalette
 import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingEntity
-import org.skepsun.kototoro.reader.ui.compose.ReaderAnchoredBottomSheet
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.text.style.TextAlign
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderChapterPanelHeader
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelTabBar
+import org.skepsun.kototoro.reader.ui.compose.design.currentReaderPanelColors
+import org.skepsun.kototoro.reader.ui.compose.design.forEInk
+import org.skepsun.kototoro.reader.ui.compose.design.readerChapterPanelSubtitle
+import org.skepsun.kototoro.reader.ui.compose.panel.ReaderPanelHost
+import org.skepsun.kototoro.reader.ui.compose.panel.rememberReaderPanelSurfaceMode
 
 internal sealed interface NovelChapterListItem {
     val key: String
@@ -91,7 +96,6 @@ internal data class NovelChapterSearchResult(
     val matchRanges: List<IntRange> = emptyList(),
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ComposeNovelChaptersSheet(
     chapters: List<ContentChapter>,
@@ -109,6 +113,8 @@ internal fun ComposeNovelChaptersSheet(
     onEditMarkingNote: (NovelMarkingEntity) -> Unit = {},
     onDeleteMarking: (NovelMarkingEntity) -> Unit = {},
     onDeleteBookmark: (Bookmark) -> Unit = {},
+    bookTitle: String = "",
+    eInkMode: Boolean = false,
 ) {
     val pagerState = rememberPagerState(
         initialPage = initialTab.ordinal.coerceIn(0, NovelChaptersSheetTab.entries.lastIndex),
@@ -121,162 +127,89 @@ internal fun ComposeNovelChaptersSheet(
             pagerState.scrollToPage(target)
         }
     }
+    var locateRequest by remember { mutableIntStateOf(0) }
+    val panelColors = novelReaderPanelColors(novelReaderPalette(themePreset, isSystemInDarkTheme()))
 
-    val palette = novelReaderPalette(themePreset, isSystemInDarkTheme())
-    val sheetColor = Color(palette.backgroundColor)
-    val sheetContentColor = Color(palette.textColor)
-
-    ReaderAnchoredBottomSheet(
+    ReaderPanelHost(
+        colors = if (eInkMode) panelColors.forEInk() else panelColors,
+        surfaceMode = rememberReaderPanelSurfaceMode(eInkMode),
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = sheetColor,
-        contentColor = sheetContentColor,
-        scrimColor = Color.Black.copy(alpha = if (palette.isDark) 0.58f else 0.42f),
-        dragHandle = {
-            BottomSheetDefaults.DragHandle(color = Color(palette.secondaryTextColor))
-        },
-    ) { sheetDragModifier ->
-        val readerColors = MaterialTheme.colorScheme.copy(
-            primary = Color(palette.chromeTextColor),
-            onPrimary = sheetColor,
-            primaryContainer = Color(palette.placeholderColor),
-            onPrimaryContainer = Color(palette.textColor),
-            secondaryContainer = Color(palette.highlightColor),
-            onSecondaryContainer = Color(palette.textColor),
-            background = sheetColor,
-            surface = sheetColor,
-            surfaceVariant = Color(palette.placeholderColor),
-            onSurface = sheetContentColor,
-            onSurfaceVariant = Color(palette.secondaryTextColor),
-        )
-        MaterialTheme(colorScheme = readerColors) {
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
-                val contentWidth = if (maxWidth >= 720.dp) 680.dp else maxWidth
-                Column(
-                    modifier = Modifier
-                        .widthIn(max = contentWidth)
-                        .fillMaxHeight()
-                        .navigationBarsPadding()
-                        .align(Alignment.TopCenter),
-                ) {
-                    NovelChaptersTabRow(
-                        currentPage = pagerState.currentPage,
-                        chaptersCount = chapters.size,
-                        notesCount = markings.size + bookmarks.size,
-                        onPageSelected = { index ->
-                            coroutineScope.launch { pagerState.scrollToPage(index) }
+        header = {
+            ReaderChapterPanelHeader(
+                title = bookTitle,
+                subtitle = readerChapterPanelSubtitle(
+                    listOf(
+                        chapters.getOrNull(currentIndex)?.title,
+                        if (chapters.isNotEmpty()) "${currentIndex + 1}/${chapters.size}" else null,
+                    ),
+                ),
+                actions = {
+                    IconButton(
+                        onClick = {
+                            coroutineScope.launch { pagerState.scrollToPage(NovelChaptersSheetTab.CHAPTERS.ordinal) }
+                            locateRequest++
                         },
-                        modifier = sheetDragModifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                    )
-
-                    HorizontalPager(
-                        state = pagerState,
-                        overscrollEffect = null,
-                        modifier = Modifier.fillMaxWidth().weight(1f),
-                    ) { pageIndex ->
-                        when (NovelChaptersSheetTab.entries[pageIndex]) {
-                            NovelChaptersSheetTab.CHAPTERS -> {
-                                ComposeNovelChaptersContent(
-                                    chapters = chapters,
-                                    currentIndex = currentIndex,
-                                    onChapterSelected = onChapterSelected,
-                                    dragModifier = sheetDragModifier,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                            }
-                            NovelChaptersSheetTab.NOTES -> {
-                                ComposeNovelNotesContent(
-                                    bookmarks = bookmarks,
-                                    markings = markings,
-                                    chapters = chapters,
-                                    onDismiss = onDismiss,
-                                    onJumpToMarking = onJumpToMarking,
-                                    onOpenBookmark = onOpenBookmark,
-                                    onEditNote = onEditMarkingNote,
-                                    onDelete = onDeleteMarking,
-                                    onDeleteBookmark = onDeleteBookmark,
-                                    showTitle = false,
-                                    dragModifier = sheetDragModifier,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                            }
-                            NovelChaptersSheetTab.SEARCH -> {
-                                ComposeNovelChapterSearchContent(
-                                    chapters = chapters,
-                                    documents = searchDocuments,
-                                    onChapterSelected = onChapterSelected,
-                                    onSearchResultSelected = onSearchResultSelected,
-                                    dragModifier = sheetDragModifier,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NovelChaptersTabRow(
-    currentPage: Int,
-    chaptersCount: Int,
-    notesCount: Int,
-    onPageSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
-        modifier = modifier.fillMaxWidth(),
-    ) {
-        Row(modifier = Modifier.padding(4.dp)) {
-            NovelChaptersSheetTab.entries.forEachIndexed { index, tab ->
-                val selected = currentPage == index
-                val label = when (tab) {
-                    NovelChaptersSheetTab.CHAPTERS -> "${stringResource(R.string.chapters)}  $chaptersCount"
-                    NovelChaptersSheetTab.NOTES -> "${stringResource(R.string.notes)}  $notesCount"
-                    NovelChaptersSheetTab.SEARCH -> stringResource(R.string.novel_reader_chapter_search_tab)
-                }
-                val iconRes = when (tab) {
-                    NovelChaptersSheetTab.CHAPTERS -> R.drawable.ic_list
-                    NovelChaptersSheetTab.NOTES -> R.drawable.ic_bookmark
-                    NovelChaptersSheetTab.SEARCH -> R.drawable.ic_search
-                }
-                Surface(
-                    onClick = { onPageSelected(index) },
-                    shape = RoundedCornerShape(20.dp),
-                    color = if (selected) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        Color.Transparent
-                    },
-                    contentColor = if (selected) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 6.dp, vertical = 9.dp),
+                        enabled = chapters.isNotEmpty(),
                     ) {
                         Icon(
-                            painter = painterResource(iconRes),
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
+                            painter = painterResource(R.drawable.ic_current_chapter),
+                            contentDescription = stringResource(R.string.novel_chapters_locate_current),
                         )
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                    }
+                },
+            )
+            ReaderPanelTabBar(
+                labels = NovelChaptersSheetTab.entries.map { stringResource(it.labelRes) },
+                selectedIndex = pagerState.currentPage,
+                onSelected = { index -> coroutineScope.launch { pagerState.animateScrollToPage(index) } },
+            )
+        },
+    ) { sheetDragModifier ->
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val contentWidth = if (maxWidth >= 720.dp) 680.dp else maxWidth
+            HorizontalPager(
+                state = pagerState,
+                overscrollEffect = null,
+                modifier = Modifier
+                    .widthIn(max = contentWidth)
+                    .fillMaxHeight()
+                    .align(Alignment.TopCenter),
+            ) { pageIndex ->
+                when (NovelChaptersSheetTab.entries[pageIndex]) {
+                    NovelChaptersSheetTab.CHAPTERS -> {
+                        ComposeNovelChaptersContent(
+                            chapters = chapters,
+                            currentIndex = currentIndex,
+                            onChapterSelected = onChapterSelected,
+                            locateRequest = locateRequest,
+                            dragModifier = sheetDragModifier,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    NovelChaptersSheetTab.NOTES -> {
+                        ComposeNovelNotesContent(
+                            bookmarks = bookmarks,
+                            markings = markings,
+                            chapters = chapters,
+                            onDismiss = onDismiss,
+                            onJumpToMarking = onJumpToMarking,
+                            onOpenBookmark = onOpenBookmark,
+                            onEditNote = onEditMarkingNote,
+                            onDelete = onDeleteMarking,
+                            onDeleteBookmark = onDeleteBookmark,
+                            showTitle = false,
+                            dragModifier = sheetDragModifier,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    NovelChaptersSheetTab.SEARCH -> {
+                        ComposeNovelChapterSearchContent(
+                            chapters = chapters,
+                            documents = searchDocuments,
+                            onChapterSelected = onChapterSelected,
+                            onSearchResultSelected = onSearchResultSelected,
+                            dragModifier = sheetDragModifier,
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
                 }
@@ -284,16 +217,25 @@ private fun NovelChaptersTabRow(
         }
     }
 }
+
+private val NovelChaptersSheetTab.labelRes: Int
+    get() = when (this) {
+        NovelChaptersSheetTab.CHAPTERS -> R.string.chapters
+        NovelChaptersSheetTab.NOTES -> R.string.notes
+        NovelChaptersSheetTab.SEARCH -> R.string.novel_reader_chapter_search_tab
+    }
 
 @Composable
 internal fun ComposeNovelChaptersContent(
     chapters: List<ContentChapter>,
     currentIndex: Int,
     onChapterSelected: (Int) -> Unit,
+    locateRequest: Int = 0,
     dragModifier: Modifier = Modifier,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val colors = currentReaderPanelColors()
     var reversed by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     val items = remember(chapters, reversed, query, context) {
@@ -301,7 +243,9 @@ internal fun ComposeNovelChaptersContent(
     }
     val currentPosition = chapterListPositionForCurrent(items, currentIndex)
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentPosition.coerceAtLeast(0))
-    var locateRequest by remember { mutableStateOf(0) }
+    LaunchedEffect(locateRequest) {
+        if (locateRequest > 0) query = ""
+    }
     LaunchedEffect(reversed, query, locateRequest) {
         if (query.isBlank() && currentPosition >= 0 && items.isNotEmpty()) {
             listState.scrollToItem(currentPosition)
@@ -309,7 +253,7 @@ internal fun ComposeNovelChaptersContent(
     }
 
     Column(
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
             .fillMaxWidth()
             .imePadding()
@@ -317,74 +261,27 @@ internal fun ComposeNovelChaptersContent(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             modifier = dragModifier.fillMaxWidth(),
         ) {
-            Column {
-                Text(
-                    stringResource(R.string.novel_chapters_count, chapters.size),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            NovelReaderSearchField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = stringResource(R.string.search_chapters),
+                clearContentDescription = stringResource(R.string.clear),
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = { reversed = !reversed }) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_sort_desc),
+                    contentDescription = stringResource(R.string.reverse_order),
+                    tint = if (reversed) colors.accent else colors.contentSecondary,
                 )
-                Text(
-                    text = stringResource(
-                        if (reversed) {
-                            R.string.novel_chapters_order_descending
-                        } else {
-                            R.string.novel_chapters_order_ascending
-                        },
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                )
-            }
-            Surface(
-                onClick = { reversed = !reversed },
-                shape = RoundedCornerShape(12.dp),
-                color = if (reversed) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                },
-                contentColor = if (reversed) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_sort_desc),
-                        contentDescription = stringResource(R.string.reverse_order),
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(
-                        text = stringResource(
-                            if (reversed) {
-                                R.string.novel_chapters_order_descending
-                            } else {
-                                R.string.novel_chapters_order_ascending
-                            },
-                        ),
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                }
             }
         }
-        NovelReaderSearchField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = stringResource(R.string.search_chapters),
-            clearContentDescription = stringResource(R.string.clear),
-            modifier = dragModifier.fillMaxWidth(),
-        )
         LazyColumn(
             state = listState,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
             contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp),
             modifier = Modifier.fillMaxWidth().weight(1f),
         ) {
@@ -395,189 +292,72 @@ internal fun ComposeNovelChaptersContent(
                             item.title,
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = colors.accent,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
                         )
                     }
                     is NovelChapterListItem.Chapter -> {
-                        val selected = item.originalIndex == currentIndex
-                        ListItem(
-                            headlineContent = {
-                                Text(
-                                    item.chapter.title ?: stringResource(R.string.unnamed_chapter),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    fontWeight = if (selected) {
-                                        FontWeight.SemiBold
-                                    } else {
-                                        FontWeight.Normal
-                                    },
-                                )
-                            },
-                            supportingContent = {
-                                val subtitle = if (selected) {
-                                    stringResource(R.string.novel_reader_current_chapter)
-                                } else {
-                                    item.chapter.branch
-                                }
-                                subtitle?.takeIf { it.isNotBlank() }?.let { branch ->
-                                    Text(
-                                        text = branch,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            },
-                            leadingContent = if (selected) {
-                                {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_current_chapter),
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                    )
-                                }
-                            } else {
-                                null
-                            },
-                            trailingContent = {
-                                Text(
-                                    text = (item.originalIndex + 1).toString(),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = if (selected) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                )
-                            },
-                            colors = ListItemDefaults.colors(
-                                containerColor = if (selected) {
-                                    MaterialTheme.colorScheme.primaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
-                                },
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .clickable { onChapterSelected(item.originalIndex) },
+                        NovelChapterRow(
+                            number = item.originalIndex + 1,
+                            title = item.chapter.title ?: stringResource(R.string.unnamed_chapter),
+                            state = novelChapterRowState(item.originalIndex, currentIndex),
+                            onClick = { onChapterSelected(item.originalIndex) },
                         )
                     }
                 }
             }
-        }
-        FilledTonalButton(
-            onClick = {
-                if (chapters.isNotEmpty()) {
-                    query = ""
-                    locateRequest++
-                }
-            },
-            enabled = chapters.isNotEmpty(),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_current_chapter),
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                text = stringResource(R.string.novel_chapters_locate_current),
-                modifier = Modifier.padding(start = 8.dp),
-            )
         }
     }
 }
 
+/** A light row: read chapters fade, the current one gets a tinted background and an accent bar. */
 @Composable
-internal fun ComposeNovelChaptersPanel(
-    chapters: List<ContentChapter>,
-    currentIndex: Int,
-    onChapterSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier,
+private fun NovelChapterRow(
+    number: Int,
+    title: String,
+    state: NovelChapterRowState,
+    onClick: () -> Unit,
 ) {
-    val context = LocalContext.current
-    var reversed by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
-    val items = remember(chapters, reversed, query, context) {
-        buildChapterItems(chapters, reversed, query) { context.getString(R.string.volume_, it) }
-    }
-    val currentPosition = chapterListPositionForCurrent(items, currentIndex)
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentPosition.coerceAtLeast(0))
-    LaunchedEffect(reversed, query) {
-        if (query.isBlank() && currentPosition >= 0 && items.isNotEmpty()) {
-            listState.scrollToItem(currentPosition)
-        }
-    }
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = modifier
+    val colors = currentReaderPanelColors()
+    val current = state == NovelChapterRowState.CURRENT
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (current) colors.selectedContainer else Color.Transparent)
+            .clickable(onClick = onClick)
+            .heightIn(min = 48.dp)
+            .alpha(if (state == NovelChapterRowState.READ) 0.6f else 1f),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.chapters), style = MaterialTheme.typography.titleMedium)
-                Text(
-                    stringResource(R.string.novel_chapters_count, chapters.size),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(onClick = { reversed = !reversed }) {
-                Icon(painterResource(R.drawable.ic_sort_desc), stringResource(R.string.reverse_order))
-            }
-        }
-        NovelReaderSearchField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = stringResource(R.string.search_chapters),
-            clearContentDescription = stringResource(R.string.clear),
-            modifier = Modifier.fillMaxWidth(),
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(24.dp)
+                .background(if (current) colors.accent else Color.Transparent, RoundedCornerShape(2.dp)),
         )
-        LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().heightIn(max = 330.dp)) {
-            items(items, key = NovelChapterListItem::key) { item ->
-                when (item) {
-                    is NovelChapterListItem.Header -> Text(
-                        item.title,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                    )
-                    is NovelChapterListItem.Chapter -> {
-                        val selected = item.originalIndex == currentIndex
-                        ListItem(
-                            headlineContent = {
-                                Text(
-                                    item.chapter.title ?: stringResource(R.string.unnamed_chapter),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                                )
-                            },
-                            leadingContent = if (selected) {
-                                { Icon(painterResource(R.drawable.ic_current_chapter), null) }
-                            } else {
-                                null
-                            },
-                            colors = ListItemDefaults.colors(
-                                containerColor = if (selected) {
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                } else {
-                                    androidx.compose.ui.graphics.Color.Transparent
-                                },
-                            ),
-                            modifier = Modifier.clickable { onChapterSelected(item.originalIndex) },
-                        )
-                        HorizontalDivider()
-                    }
-                }
-            }
-        }
+        Text(
+            text = number.toString(),
+            style = MaterialTheme.typography.labelMedium,
+            color = colors.contentSecondary,
+            textAlign = TextAlign.End,
+            modifier = Modifier
+                .width(40.dp)
+                .padding(end = 12.dp),
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
+            color = colors.content,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 16.dp),
+        )
     }
 }
 
