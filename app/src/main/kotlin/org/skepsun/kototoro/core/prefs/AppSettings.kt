@@ -623,7 +623,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         }
 
     var isTabletListFilterPanelDefaultOpen: Boolean
-        get() = prefs.getBoolean(KEY_TABLET_LIST_FILTER_PANEL_DEFAULT, true)
+        get() = prefs.getBoolean(KEY_TABLET_LIST_FILTER_PANEL_DEFAULT, false)
         set(value) = prefs.edit { putBoolean(KEY_TABLET_LIST_FILTER_PANEL_DEFAULT, value) }
 
     var isShowLanguagePresetFilter: Boolean

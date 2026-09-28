@@ -86,6 +86,12 @@ open class RemoteListViewModel @Inject constructor(
 ) : ContentListViewModel(settings, mangaDataRepository, localStorageChanges), FilterCoordinator.Owner {
 
     private val initialSource = resolveInitialSource(savedStateHandle)
+
+    /** Tablet filter drawer and preview card; kept here so they survive opening details. */
+    val panels = org.skepsun.kototoro.search.ui.SearchPanelsController(
+        savedStateHandle,
+        settings.isTabletListFilterPanelDefaultOpen,
+    )
     val isRandomLoading = MutableStateFlow(false)
     val onOpenContent = MutableEventFlow<Content>()
     val onSourceBroken = MutableEventFlow<Unit>()
