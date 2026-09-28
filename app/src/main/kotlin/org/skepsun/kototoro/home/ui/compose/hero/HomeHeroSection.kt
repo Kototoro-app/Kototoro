@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.home.ui.compose.hero
 
+import org.skepsun.kototoro.core.ui.adaptive.TabletLayoutClass
+import org.skepsun.kototoro.home.ui.compose.homeHeroCardWidth
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -107,6 +109,7 @@ internal fun HomeHeroSection(
     topContentInset: Dp = 0.dp,
     modifier: Modifier = Modifier,
     autoAdvance: Boolean = false,
+    layoutClass: TabletLayoutClass = TabletLayoutClass.COMPACT,
 ) {
     if (entries.isEmpty()) return
     val pagerState = rememberPagerState(pageCount = { entries.size })
@@ -171,11 +174,12 @@ internal fun HomeHeroSection(
             .padding(top = topContentInset),
     ) {
         val edgePadding = CompactTopBarHorizontalPadding
-        val preferredCardWidth = if (isTvPresentation) 440.dp else 312.dp
-        val cardWidth = minOf(preferredCardWidth, maxWidth * 0.78f).coerceAtMost(
-            (maxWidth - edgePadding * 2).coerceAtLeast(0.dp),
-        )
         val pageSpacing = if (isTvPresentation) 16.dp else 6.dp
+        val cardWidth = if (isTvPresentation) {
+            minOf(440.dp, maxWidth * 0.78f).coerceAtMost((maxWidth - edgePadding * 2).coerceAtLeast(0.dp))
+        } else {
+            homeHeroCardWidth(maxWidth, edgePadding, pageSpacing, layoutClass)
+        }
         val contentPadding = PaddingValues(horizontal = edgePadding)
         val viewportWidth = maxWidth
         val density = LocalDensity.current

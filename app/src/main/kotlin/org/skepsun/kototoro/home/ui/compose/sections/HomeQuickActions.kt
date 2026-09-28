@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.home.ui.compose.sections
 
+import androidx.compose.ui.unit.Dp
+import org.skepsun.kototoro.home.ui.compose.balancedGridColumns
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
@@ -7,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -51,6 +54,8 @@ private const val QUICK_ACTION_ARTWORK_GLASS_ALPHA = 0.45f
 internal fun QuickActionsSection(
     actions: List<HomeQuickAction>,
     modifier: Modifier = Modifier,
+    /** Wider tiles for the tablet side column, where fewer, larger tiles read better. */
+    preferredTileWidth: Dp? = null,
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     Column(
@@ -68,10 +73,12 @@ internal fun QuickActionsSection(
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val itemSpacing = if (isTvPresentation) 12.dp else 6.dp
             val rowSpacing = if (isTvPresentation) 12.dp else 6.dp
-            val preferredItemWidth = if (isTvPresentation) 112.dp else 68.dp
-            val columns = ((maxWidth + itemSpacing) / (preferredItemWidth + itemSpacing))
+            val preferredItemWidth = preferredTileWidth ?: if (isTvPresentation) 112.dp else 68.dp
+            val maxColumns = ((maxWidth + itemSpacing) / (preferredItemWidth + itemSpacing))
                 .toInt()
                 .coerceAtLeast(2)
+            // Even rows: a lone last tile would otherwise stretch across the whole row.
+            val columns = balancedGridColumns(actions.size, maxColumns)
             // Chunk into full-width Rows where every item uses weight(1f), so a
             // row always fills the entire width — including partial last rows on
             // uncommon screen widths that would otherwise leave a large gap on
@@ -96,6 +103,8 @@ internal fun QuickActionsSection(
                                         .height(if (isTvPresentation) 88.dp else 64.dp),
                                 )
                             }
+                            // A short last row keeps the tile width instead of stretching its tiles.
+                            repeat(columns - rowItems.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
             }

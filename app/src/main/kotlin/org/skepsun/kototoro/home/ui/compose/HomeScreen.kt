@@ -1,5 +1,11 @@
 package org.skepsun.kototoro.home.ui.compose
 
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.widthIn
+import org.skepsun.kototoro.core.ui.adaptive.TabletLayoutClass
+import org.skepsun.kototoro.core.ui.adaptive.tabletLayoutClass
+import org.skepsun.kototoro.core.util.FoldableUtils
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -242,7 +248,7 @@ fun HomeScreen(
     val heroHeightDp by remember(heroPx, density) {
         derivedStateOf { with(density) { heroPx.toDp() } }
     }
-    val heroContent: @Composable (Modifier) -> Unit = { heroModifier ->
+    val heroContent: @Composable (Modifier, TabletLayoutClass) -> Unit = { heroModifier, heroLayoutClass ->
         HomeHeroSection(
             entries = heroEntries,
             mode = heroMode,
@@ -252,12 +258,21 @@ fun HomeScreen(
             topContentInset = topInset + 8.dp,
             autoAdvance = autoAdvanceHero,
             modifier = heroModifier,
+            layoutClass = heroLayoutClass,
         )
     }
-    Box(modifier = modifier.fillMaxSize()) {
+    val contentMaxWidth = HomeContentMaxWidth + CompactTopBarHorizontalPadding * 2
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+    // Resolved from the home pane's own width (the navigation rail is already outside it).
+    val layoutClass = tabletLayoutClass(
+        widthDp = maxWidth.value.toInt(),
+        tabletLayoutEnabled = FoldableUtils.shouldUseTabletLayout(context, settings),
+    )
         LazyColumn(
             state = listState,
             modifier = Modifier
+                .align(Alignment.TopCenter)
+                .widthIn(max = contentMaxWidth)
                 .fillMaxSize()
                 .then(if (isTvPresentation) Modifier.focusGroup() else Modifier)
                 .nestedScroll(rememberNestedScrollInteropConnection())
@@ -282,7 +297,7 @@ fun HomeScreen(
                         // Keep the focused pager inside the vertical lazy layout so D-pad
                         // search can compose and scroll to content below the viewport.
                         item(key = "home_hero") {
-                            heroContent(Modifier)
+                            heroContent(Modifier, layoutClass)
                         }
                     } else {
                         item(key = "home_hero_spacer") {
@@ -298,6 +313,10 @@ fun HomeScreen(
                     }
                 }
                 item(key = "home_highlights") {
+                  HomeSideBySide(
+                    enabled = layoutClass == TabletLayoutClass.EXPANDED,
+                    side = { QuickActionsSection(actions = quickActions, preferredTileWidth = 96.dp) },
+                  ) {
                     HomeHighlightsSections(
                         historyItems = state.recentHistoryItems,
                         recentHistoryCount = state.recentHistoryCount,
@@ -318,6 +337,7 @@ fun HomeScreen(
                         onConfigureRecommendationsClick = actions.onConfigureRecommendationsClick,
                         onRecentSearchClick = actions.onRecentSearchClick,
                     )
+                  }
                 }
             }
             if (!hasHighlights && !state.isInitialized) {
@@ -326,8 +346,11 @@ fun HomeScreen(
                 }
             }
 
-            item(key = "home_quick_actions") {
-                QuickActionsSection(actions = quickActions)
+            // On expanded windows quick access sits beside the highlights instead.
+            if (!(hasHighlights && layoutClass == TabletLayoutClass.EXPANDED)) {
+                item(key = "home_quick_actions") {
+                    QuickActionsSection(actions = quickActions)
+                }
             }
         }
 
@@ -335,6 +358,7 @@ fun HomeScreen(
             heroContent(
                 Modifier
                     .align(Alignment.TopCenter)
+                    .widthIn(max = contentMaxWidth)
                     // A layout offset, not a draw-phase graphicsLayer: the cover's
                     // shared-element rect is measured from this subtree's layout
                     // coordinates, and a layer-only translation never re-places the
@@ -353,9 +377,30 @@ fun HomeScreen(
                         val newHeight = coordinates.size.height
                         if (heroPx != newHeight) heroPx = newHeight
                     },
+                layoutClass,
             )
         }
     }
 }
 
 internal val HOME_SECTION_GAP = 4.dp
+
+/**
+ * On expanded windows, the highlights take the wider left column and [side] (quick access) a right
+ * one, filling what would otherwise be an empty half screen below short sections.
+ */
+@Composable
+private fun HomeSideBySide(
+    enabled: Boolean,
+    side: @Composable () -> Unit,
+    main: @Composable () -> Unit,
+) {
+    if (!enabled) {
+        main()
+        return
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+        Box(modifier = Modifier.weight(0.62f)) { main() }
+        Box(modifier = Modifier.weight(0.38f).padding(top = 8.dp)) { side() }
+    }
+}
