@@ -2117,11 +2117,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         set(value) = prefs.edit { putBoolean(KEY_DOWNLOADS_AUTO_RETRY, value) }
 
     var downloadThreads: Int
-        get() = prefs.getSafeInt(KEY_DOWNLOADS_THREADS, readerThreads).coerceIn(1, 10)
+        get() = prefs.getSafeInt(KEY_DOWNLOADS_THREADS, DOWNLOADS_THREADS_DEFAULT).coerceIn(1, 10)
         set(value) = prefs.edit { putInt(KEY_DOWNLOADS_THREADS, value.coerceIn(1, 10)) }
 
     var downloadMaxActiveSeries: Int
-        get() = prefs.getSafeInt(KEY_DOWNLOADS_MAX_ACTIVE_SERIES, 5).coerceIn(1, UNLIMITED_SERIES)
+        get() = prefs.getSafeInt(KEY_DOWNLOADS_MAX_ACTIVE_SERIES, DOWNLOADS_MAX_ACTIVE_SERIES_DEFAULT).coerceIn(1, UNLIMITED_SERIES)
         set(value) = prefs.edit { putInt(KEY_DOWNLOADS_MAX_ACTIVE_SERIES, value.coerceIn(1, UNLIMITED_SERIES)) }
 
     var downloadRequestDelayMs: Int
@@ -3217,8 +3217,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val DEFAULT_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE = 90
         const val MIN_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE = 10
         const val MAX_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE = 100
+        const val DOWNLOADS_THREADS_DEFAULT = 4
+        const val DOWNLOADS_MAX_ACTIVE_SERIES_DEFAULT = 4
         private const val DOWNLOADS_REQUEST_DELAY_DEFAULT = 1600
-        private const val DOWNLOADS_RETRY_COUNT_DEFAULT = 5
+        private const val DOWNLOADS_RETRY_COUNT_DEFAULT = 2
         private const val DOWNLOADS_RETRY_DELAY_DEFAULT = 2000
         const val KEY_WEBTOON_PULL_GESTURE = "webtoon_pull_gesture"
         const val KEY_PREFETCH_CONTENT = "prefetch_content"

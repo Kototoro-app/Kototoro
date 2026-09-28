@@ -22,8 +22,6 @@ class DownloadSlowdownDispatcher @Inject constructor(
         if (!repo.isSlowdownEnabled()) {
             return
         }
-        // The old global delay is retained as a migration input, but a value below the
-        // safe floor can no longer disable source-level slowdown.
         val delayMs = DownloadPolicy.sourceDelayMs(settings.downloadRequestDelayMs)
         if (delayMs <= 0L) {
             return

@@ -33,7 +33,7 @@ object ActiveDownloadRegistry {
 
     @Synchronized
     fun isTurn(id: UUID, limit: Int): Boolean {
-        if (limit == 11) { // AppSettings.UNLIMITED_SERIES
+        if (limit >= 11) { // AppSettings.UNLIMITED_SERIES
             return true
         }
         val runningList = activeWorkers.filter { it !in pausedWorkers }

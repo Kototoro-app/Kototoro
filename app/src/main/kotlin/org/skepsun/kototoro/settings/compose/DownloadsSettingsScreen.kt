@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.DownloadFormat
 import org.skepsun.kototoro.core.prefs.TriStateOption
 
@@ -30,6 +31,11 @@ data class DownloadsSettingsUiState(
     val isDozeIgnoreVisible: Boolean,
     val pagesDirectorySummary: String,
     val isPagesSavingAskEnabled: Boolean,
+    val downloadThreads: Int,
+    val downloadMaxActiveSeries: Int,
+    val downloadRequestDelayMs: Int,
+    val downloadRetryCount: Int,
+    val downloadRetryDelayMs: Int,
 )
 
 @Composable
@@ -48,6 +54,11 @@ fun DownloadsSettingsScreen(
     onIgnoreDozeClick: () -> Unit,
     onPagesDirectoryClick: () -> Unit,
     onPagesSavingAskChange: (Boolean) -> Unit,
+    onDownloadThreadsChange: (Int) -> Unit,
+    onDownloadMaxActiveSeriesChange: (Int) -> Unit,
+    onDownloadRequestDelayChange: (Int) -> Unit,
+    onDownloadRetryCountChange: (Int) -> Unit,
+    onDownloadRetryDelayChange: (Int) -> Unit,
 ) {
     Scaffold(
         snackbarHost = {
@@ -132,6 +143,71 @@ fun DownloadsSettingsScreen(
                                 onClick = onIgnoreDozeClick,
                             )
                         }
+                    }
+                }
+            }
+            item(key = "download_speed") {
+                val uncappedText = stringResource(R.string.download_max_active_series_uncapped)
+                SettingsPreferenceGroup(title = stringResource(R.string.download_speed_and_retries)) {
+                    item {
+                        SettingsSliderPreference(
+                            title = stringResource(R.string.download_threads),
+                            iconRes = R.drawable.ic_network_cellular,
+                            value = state.downloadThreads,
+                            valueRange = 1..10,
+                            step = 1,
+                            summary = stringResource(R.string.download_threads_summary),
+                            valueText = { it.toString() },
+                            onValueChange = onDownloadThreadsChange,
+                        )
+                    }
+                    item {
+                        SettingsSliderPreference(
+                            title = stringResource(R.string.download_max_active_series),
+                            iconRes = R.drawable.ic_list_group,
+                            value = state.downloadMaxActiveSeries,
+                            valueRange = 1..AppSettings.UNLIMITED_SERIES,
+                            step = 1,
+                            summary = stringResource(R.string.download_max_active_series_summary),
+                            valueText = { if (it == AppSettings.UNLIMITED_SERIES) uncappedText else it.toString() },
+                            onValueChange = onDownloadMaxActiveSeriesChange,
+                        )
+                    }
+                    item {
+                        SettingsSliderPreference(
+                            title = stringResource(R.string.download_request_delay),
+                            iconRes = R.drawable.ic_schedule,
+                            value = state.downloadRequestDelayMs,
+                            valueRange = 0..5000,
+                            step = 100,
+                            summary = stringResource(R.string.download_request_delay_summary),
+                            valueText = { "$it ms" },
+                            onValueChange = onDownloadRequestDelayChange,
+                        )
+                    }
+                    item {
+                        SettingsSliderPreference(
+                            title = stringResource(R.string.download_retry_count),
+                            iconRes = R.drawable.ic_retry,
+                            value = state.downloadRetryCount,
+                            valueRange = 1..10,
+                            step = 1,
+                            summary = stringResource(R.string.download_retry_count_summary),
+                            valueText = { it.toString() },
+                            onValueChange = onDownloadRetryCountChange,
+                        )
+                    }
+                    item {
+                        SettingsSliderPreference(
+                            title = stringResource(R.string.download_retry_delay),
+                            iconRes = R.drawable.ic_schedule,
+                            value = state.downloadRetryDelayMs,
+                            valueRange = 500..10_000,
+                            step = 500,
+                            summary = stringResource(R.string.download_retry_delay_summary),
+                            valueText = { "$it ms" },
+                            onValueChange = onDownloadRetryDelayChange,
+                        )
                     }
                 }
             }

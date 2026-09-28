@@ -6,21 +6,28 @@ import org.junit.jupiter.api.Test
 class DownloadPolicyTest {
 
     @Test
-    fun sourceDelayCannotBeDisabledByLegacyZero() {
-        DownloadPolicy.sourceDelayMs(0) shouldBe DownloadPolicy.MIN_SOURCE_DELAY_MS
+    fun sourceDelayFollowsTheSettingAndZeroDisablesIt() {
+        DownloadPolicy.sourceDelayMs(1600) shouldBe 1_600L
+        DownloadPolicy.sourceDelayMs(0) shouldBe 0L
+        DownloadPolicy.sourceDelayMs(-5) shouldBe 0L
     }
 
     @Test
-    fun retryDelayGrowsButRemainsBounded() {
-        DownloadPolicy.retryDelayMs(0, -1L) shouldBe 2_000L
-        DownloadPolicy.retryDelayMs(1, -1L) shouldBe 4_000L
-        DownloadPolicy.retryDelayMs(2, -1L) shouldBe 8_000L
-        DownloadPolicy.retryDelayMs(20, -1L) shouldBe 8_000L
+    fun retryDelayIsFixedLikeKotatsuRedo() {
+        DownloadPolicy.retryDelayMs(2_000, -1L) shouldBe 2_000L
+        DownloadPolicy.retryDelayMs(500, -1L) shouldBe 500L
     }
 
     @Test
     fun serverRetryDelayTakesPrecedence() {
-        DownloadPolicy.retryDelayMs(0, 15_000L) shouldBe 15_000L
+        DownloadPolicy.retryDelayMs(2_000, 15_000L) shouldBe 15_000L
+    }
+
+    @Test
+    fun activeSeriesLimitIsDisabledAtTheUnlimitedValue() {
+        DownloadPolicy.activeSeriesLimit(4, unlimited = 11) shouldBe 4
+        DownloadPolicy.activeSeriesLimit(0, unlimited = 11) shouldBe 1
+        DownloadPolicy.activeSeriesLimit(11, unlimited = 11) shouldBe null
     }
 
     @Test

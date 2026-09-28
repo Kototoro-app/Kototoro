@@ -1,35 +1,29 @@
 package org.skepsun.kototoro.download.ui.worker
 
 import java.io.IOException
-import kotlin.math.min
 
 /**
- * Download behaviour that should remain safe for ordinary users.
- *
- * These limits are deliberately kept out of the regular settings screen. A source can
- * still request a slower mode through [DownloadSlowdownDispatcher], while the global
- * scheduler prevents several tasks from multiplying their own concurrency.
+ * Download behaviour. Defaults follow Kotatsu-Redo (4 pages in parallel, 2 retries 2s apart,
+ * 1600ms spacing only for sources that ask for slowdown); the user-facing values come from
+ * [org.skepsun.kototoro.core.prefs.AppSettings] and are passed in by the worker.
  */
 internal object DownloadPolicy {
-    const val MAX_ACTIVE_SERIES = 2
-    const val IMAGE_CONCURRENCY = 3
     const val HLS_SEGMENT_CONCURRENCY = 3
-    const val MAX_ATTEMPTS = 3
     const val MAX_WORK_RETRIES = 2
-    const val BASE_RETRY_DELAY_MS = 2_000L
-    const val MIN_SOURCE_DELAY_MS = 1_000L
 
-    fun sourceDelayMs(legacyDelayMs: Int): Long {
-        return legacyDelayMs.toLong().coerceAtLeast(MIN_SOURCE_DELAY_MS)
-    }
+    /** Spacing between requests to a slowdown-enabled source; 0 turns the spacing off. */
+    fun sourceDelayMs(settingDelayMs: Int): Long = settingDelayMs.toLong().coerceAtLeast(0L)
 
-    fun retryDelayMs(attempt: Int, serverDelayMs: Long): Long {
+    /** A server-provided Retry-After wins; otherwise the fixed user delay, as in Kotatsu-Redo. */
+    fun retryDelayMs(settingDelayMs: Int, serverDelayMs: Long): Long {
         if (serverDelayMs > 0L) {
             return serverDelayMs
         }
-        val exponent = attempt.coerceIn(0, 2)
-        return min(BASE_RETRY_DELAY_MS shl exponent, 10_000L)
+        return settingDelayMs.toLong().coerceAtLeast(0L)
     }
+
+    /** `null` when the series cap is disabled. */
+    fun activeSeriesLimit(setting: Int, unlimited: Int): Int? = if (setting >= unlimited) null else setting.coerceAtLeast(1)
 
     fun shouldRetry(error: Throwable): Boolean = error is IOException
 }

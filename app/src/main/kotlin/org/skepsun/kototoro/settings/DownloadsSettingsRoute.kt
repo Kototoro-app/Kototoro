@@ -11,12 +11,16 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.lifecycleScope
@@ -41,7 +45,9 @@ import org.skepsun.kototoro.core.util.ext.tryLaunch
 import org.skepsun.kototoro.local.data.LocalStorageManager
 import org.skepsun.kototoro.settings.compose.DownloadsSettingsScreen
 import org.skepsun.kototoro.settings.compose.DownloadsSettingsUiState
+import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
+import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 
 @Composable
 fun DownloadsSettingsRoute(
@@ -67,6 +73,16 @@ fun DownloadsSettingsRoute(
         settings.observeAsState(AppSettings.KEY_PAGES_SAVE_DIR) { getPagesSaveDir(context)?.uri?.toString() }.value
     val isPagesSavingAskEnabled =
         settings.observeAsState(AppSettings.KEY_PAGES_SAVE_ASK) { isPagesSavingAskEnabled }.value
+    val downloadThreads = settings.observeAsState(AppSettings.KEY_DOWNLOADS_THREADS) { downloadThreads }.value
+    val downloadMaxActiveSeries =
+        settings.observeAsState(AppSettings.KEY_DOWNLOADS_MAX_ACTIVE_SERIES) { downloadMaxActiveSeries }.value
+    val downloadRequestDelayMs =
+        settings.observeAsState(AppSettings.KEY_DOWNLOADS_REQUEST_DELAY) { downloadRequestDelayMs }.value
+    val downloadRetryCount =
+        settings.observeAsState(AppSettings.KEY_DOWNLOADS_RETRY_COUNT) { downloadRetryCount }.value
+    val downloadRetryDelayMs =
+        settings.observeAsState(AppSettings.KEY_DOWNLOADS_RETRY_DELAY) { downloadRetryDelayMs }.value
+    var showUncappedWarning by remember { mutableStateOf(false) }
     val mangaDirectoriesSummary = rememberMangaDirectoriesSummary(storageManager, storageRefreshKey)
     val pagesDirectorySummary = rememberPagesDirectorySummary(storageRefreshKey, pagesSaveDirKey, settings)
     val snackbarHostState = remember { SnackbarHostState() }
@@ -92,7 +108,35 @@ fun DownloadsSettingsRoute(
         isDozeIgnoreVisible = isDozeIgnoreAvailable(context, dozeRefreshKey),
         pagesDirectorySummary = pagesDirectorySummary,
         isPagesSavingAskEnabled = isPagesSavingAskEnabled,
+        downloadThreads = downloadThreads,
+        downloadMaxActiveSeries = downloadMaxActiveSeries,
+        downloadRequestDelayMs = downloadRequestDelayMs,
+        downloadRetryCount = downloadRetryCount,
+        downloadRetryDelayMs = downloadRetryDelayMs,
     )
+
+    if (showUncappedWarning) {
+        SettingsAlertDialog(
+            title = stringResource(R.string.download_max_active_series_warning_title),
+            onDismissRequest = { showUncappedWarning = false },
+            text = { Text(stringResource(R.string.download_max_active_series_warning_message)) },
+            confirmButton = {
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.continue_action),
+                    onClick = {
+                        settings.downloadMaxActiveSeries = AppSettings.UNLIMITED_SERIES
+                        showUncappedWarning = false
+                    },
+                )
+            },
+            dismissButton = {
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.cancel),
+                    onClick = { showUncappedWarning = false },
+                )
+            },
+        )
+    }
 
     DownloadsSettingsScreen(
         downloadsTitle = context.getString(R.string.downloads),
@@ -129,6 +173,18 @@ fun DownloadsSettingsRoute(
             }
         },
         onPagesSavingAskChange = { settings.isPagesSavingAskEnabled = it },
+        onDownloadThreadsChange = { settings.downloadThreads = it },
+        onDownloadMaxActiveSeriesChange = { newValue ->
+            if (newValue != AppSettings.UNLIMITED_SERIES) {
+                settings.downloadMaxActiveSeries = newValue
+            } else if (downloadMaxActiveSeries != AppSettings.UNLIMITED_SERIES) {
+                // Uncapped is opt-in behind a warning; the slider snaps back until confirmed.
+                showUncappedWarning = true
+            }
+        },
+        onDownloadRequestDelayChange = { settings.downloadRequestDelayMs = it },
+        onDownloadRetryCountChange = { settings.downloadRetryCount = it },
+        onDownloadRetryDelayChange = { settings.downloadRetryDelayMs = it },
     )
 }
 

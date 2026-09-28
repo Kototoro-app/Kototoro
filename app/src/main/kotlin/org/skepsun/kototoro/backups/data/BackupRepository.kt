@@ -602,7 +602,7 @@ class BackupRepository @Inject constructor(
                             map
                         } else {
                             map.toMutableMap().apply {
-                                this[AppSettings.KEY_DOWNLOADS_MAX_ACTIVE_SERIES] = 5
+                                this[AppSettings.KEY_DOWNLOADS_MAX_ACTIVE_SERIES] = AppSettings.DOWNLOADS_MAX_ACTIVE_SERIES_DEFAULT
                             }
                         }
                         settings.upsertAll(finalMap)

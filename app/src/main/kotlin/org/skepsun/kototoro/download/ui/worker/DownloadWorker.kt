@@ -875,7 +875,7 @@ class DownloadWorker @AssistedInject constructor(
             val pageCounter = AtomicInteger(0)
             val successCounter = AtomicInteger(0)
             channelFlow {
-                val semaphore = Semaphore(DownloadPolicy.IMAGE_CONCURRENCY)
+                val semaphore = Semaphore(settings.downloadThreads)
                 for ((pageIndex, page) in pages.withIndex()) {
                     checkIsPaused()
                     launch {
@@ -958,17 +958,17 @@ class DownloadWorker @AssistedInject constructor(
         block: suspend () -> R,
     ): R? {
         checkIsPaused()
-        val maxAttempts = DownloadPolicy.MAX_ATTEMPTS
+        val maxAttempts = settings.downloadRetryCount
+        val settingRetryDelay = settings.downloadRetryDelayMs
         var countDown = maxAttempts
-        var attempt = 0
         failsafe@ while (true) {
             try {
                 return block()
             } catch (e: IOException) {
                 val retryDelay = if (e is TooManyRequestExceptions) {
-                    DownloadPolicy.retryDelayMs(attempt, e.getRetryDelay())
+                    DownloadPolicy.retryDelayMs(settingRetryDelay, e.getRetryDelay())
                 } else {
-                    DownloadPolicy.retryDelayMs(attempt, -1L)
+                    DownloadPolicy.retryDelayMs(settingRetryDelay, -1L)
                 }
                 Log.w(
                     "DownloadWorker",
@@ -1001,7 +1001,6 @@ class DownloadWorker @AssistedInject constructor(
                     }
                 } else {
                     countDown--
-                    attempt++
                     delay(retryDelay)
                 }
             }
@@ -1019,8 +1018,8 @@ class DownloadWorker @AssistedInject constructor(
                     publishState(currentState.copy(isPaused = false))
                 }
             }
-            val limit = DownloadPolicy.MAX_ACTIVE_SERIES
-            if (ActiveDownloadRegistry.isTurn(id, limit)) {
+            val limit = DownloadPolicy.activeSeriesLimit(settings.downloadMaxActiveSeries, AppSettings.UNLIMITED_SERIES)
+            if (limit == null || ActiveDownloadRegistry.isTurn(id, limit)) {
                 break
             }
             delay(1000)
