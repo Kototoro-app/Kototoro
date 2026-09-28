@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.core.ui.compose
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -25,6 +26,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -55,12 +58,40 @@ import kotlinx.coroutines.flow.first
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-private enum class StableSheetAnchor {
+internal enum class StableSheetAnchor {
     Full,
     ThreeQuarter,
-    Half,
+
+    /** Half height, or the caller's peek height when the sheet uses a peek anchor. */
+    Middle,
     Hidden,
 }
+
+internal const val STABLE_SHEET_THREE_QUARTER_OFFSET_FRACTION = 0.25f
+internal const val STABLE_SHEET_HALF_OFFSET_FRACTION = 0.5f
+internal const val STABLE_SHEET_MAX_PEEK_FRACTION = 0.6f
+
+/**
+ * Offset from the top of the host for each anchor. A peek taller than
+ * [STABLE_SHEET_MAX_PEEK_FRACTION] of the host has no middle anchor (landscape, large fonts);
+ * an unmeasured peek (`null` or `<= 0`) keeps the half anchor until it is measured.
+ */
+internal fun stableSheetAnchorOffsets(hostHeightPx: Float, peekHeightPx: Float?): Map<StableSheetAnchor, Float> {
+    val middle = when {
+        peekHeightPx == null || peekHeightPx <= 0f -> hostHeightPx * STABLE_SHEET_HALF_OFFSET_FRACTION
+        peekHeightPx > hostHeightPx * STABLE_SHEET_MAX_PEEK_FRACTION -> null
+        else -> hostHeightPx - peekHeightPx
+    }
+    return buildMap {
+        put(StableSheetAnchor.Full, 0f)
+        put(StableSheetAnchor.ThreeQuarter, hostHeightPx * STABLE_SHEET_THREE_QUARTER_OFFSET_FRACTION)
+        middle?.let { put(StableSheetAnchor.Middle, it) }
+        put(StableSheetAnchor.Hidden, hostHeightPx)
+    }
+}
+
+internal fun stableSheetInitialAnchor(usePeekAnchor: Boolean): StableSheetAnchor =
+    if (usePeekAnchor) StableSheetAnchor.Middle else StableSheetAnchor.ThreeQuarter
 
 private const val StableSheetMaxScrimAlpha = 0.42f
 
@@ -77,14 +108,17 @@ internal fun calculateStableSheetWidth(availableWidth: Dp, sheetMaxWidth: Dp?): 
 @Stable
 private class StableSheetState(
     private val density: androidx.compose.ui.unit.Density,
+    initialAnchor: StableSheetAnchor,
 ) {
-    val anchoredState = AnchoredDraggableState(initialValue = StableSheetAnchor.ThreeQuarter)
+    val anchoredState = AnchoredDraggableState(initialValue = initialAnchor)
 
     private var hostHeightPx by mutableFloatStateOf(0f)
+    private var peekHeightPx: Float? = null
     private var nestedDragInProgress = false
 
     val offset: Float
-        get() = anchoredState.offset.takeIf(Float::isFinite) ?: hostHeightPx * THREE_QUARTER_OFFSET_FRACTION
+        get() = anchoredState.offset.takeIf(Float::isFinite)
+            ?: hostHeightPx * STABLE_SHEET_THREE_QUARTER_OFFSET_FRACTION
 
     val scrimAlpha: Float
         get() = if (hostHeightPx <= 0f) {
@@ -106,14 +140,21 @@ private class StableSheetState(
     fun updateHostHeight(heightPx: Float) {
         if (heightPx <= 0f || hostHeightPx == heightPx) return
         hostHeightPx = heightPx
+        updateAnchors()
+    }
+
+    fun updatePeekHeight(heightPx: Float?) {
+        if (peekHeightPx == heightPx) return
+        peekHeightPx = heightPx
+        if (hostHeightPx > 0f) updateAnchors()
+    }
+
+    private fun updateAnchors() {
+        val offsets = stableSheetAnchorOffsets(hostHeightPx, peekHeightPx)
+        val target = anchoredState.targetValue.takeIf { it in offsets } ?: StableSheetAnchor.ThreeQuarter
         anchoredState.updateAnchors(
-            DraggableAnchors {
-                StableSheetAnchor.Full at 0f
-                StableSheetAnchor.ThreeQuarter at heightPx * THREE_QUARTER_OFFSET_FRACTION
-                StableSheetAnchor.Half at heightPx * HALF_OFFSET_FRACTION
-                StableSheetAnchor.Hidden at heightPx
-            },
-            anchoredState.targetValue,
+            DraggableAnchors { offsets.forEach { (anchor, position) -> anchor at position } },
+            target,
         )
     }
 
@@ -139,9 +180,10 @@ private class StableSheetState(
     }
 
     private fun targetAnchor(velocityY: Float): StableSheetAnchor {
+        val visibleAnchors = StableSheetAnchor.entries.filter { anchoredState.anchors.positionOf(it).isFinite() }
         val current = anchoredState.settledValue
         val currentOffset = anchoredState.anchors.positionOf(current)
-        val currentIndex = VisibleAnchors.indexOf(current)
+        val currentIndex = visibleAnchors.indexOf(current)
         val velocityThreshold = with(density) { 96.dp.toPx() }
         val direction = when {
             abs(velocityY) >= velocityThreshold -> if (velocityY < 0f) -1 else 1
@@ -149,7 +191,7 @@ private class StableSheetState(
             offset > currentOffset -> 1
             else -> 0
         }
-        val adjacent = VisibleAnchors.getOrNull(currentIndex + direction) ?: return current
+        val adjacent = visibleAnchors.getOrNull(currentIndex + direction) ?: return current
         if (abs(velocityY) >= velocityThreshold) return adjacent
         val adjacentOffset = anchoredState.anchors.positionOf(adjacent)
         return if (abs(offset - currentOffset) >= positionalThreshold(abs(adjacentOffset - currentOffset))) {
@@ -167,14 +209,6 @@ private class StableSheetState(
     }
 
     private companion object {
-        val VisibleAnchors = listOf(
-            StableSheetAnchor.Full,
-            StableSheetAnchor.ThreeQuarter,
-            StableSheetAnchor.Half,
-            StableSheetAnchor.Hidden,
-        )
-        const val THREE_QUARTER_OFFSET_FRACTION = 0.25f
-        const val HALF_OFFSET_FRACTION = 0.5f
         const val DEFAULT_POSITIONAL_THRESHOLD_FRACTION = 0.28f
         val MAX_POSITIONAL_THRESHOLD = 48.dp
         const val HIDDEN_OFFSET_TOLERANCE_PX = 0.5f
@@ -221,21 +255,34 @@ private fun rememberStableSheetNestedScrollConnection(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+/** What [StableAnchoredSheetLayout] hands to its sheet slot. */
+@Immutable
+class StableSheetSlotScope internal constructor(
+    /** Apply to the drag handle / header so they drag the sheet. */
+    val dragModifier: Modifier,
+    /** Bottom padding that keeps content inside the visible part of the sheet. */
+    val contentBottomPadding: Dp,
+    /** Animates the sheet away, then calls `onDismissRequest`. */
+    val dismiss: () -> Unit,
+)
+
+/**
+ * The anchored sheet without a window of its own, so it can live in the same window as a
+ * `layerBackdrop` and draw real glass over it. Handles back itself.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun StableAnchoredBottomSheet(
+fun StableAnchoredSheetLayout(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     sheetMaxWidth: Dp? = null,
-    shape: Shape = MaterialTheme.shapes.extraLarge,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
-    contentColor: Color = Color.Unspecified,
     scrimColor: Color = Color.Black.copy(alpha = StableSheetMaxScrimAlpha),
-    dragHandle: (@Composable () -> Unit)? = { BottomSheetDefaults.DragHandle() },
-    content: @Composable (dragModifier: Modifier) -> Unit,
+    usePeekAnchor: Boolean = false,
+    peekHeight: Dp? = null,
+    sheet: @Composable (StableSheetSlotScope) -> Unit,
 ) {
     val density = LocalDensity.current
-    val state = remember(density) { StableSheetState(density) }
+    val state = remember(density) { StableSheetState(density, stableSheetInitialAnchor(usePeekAnchor)) }
     val coroutineScope = rememberCoroutineScope()
     val currentOnDismissRequest = rememberUpdatedState(onDismissRequest)
     val nestedScrollConnection = rememberStableSheetNestedScrollConnection(state)
@@ -257,68 +304,105 @@ fun StableAnchoredBottomSheet(
             Unit
         }
     }
-    androidx.compose.runtime.LaunchedEffect(state) {
+    LaunchedEffect(state) {
         snapshotFlow { state.isHidden }
             .filter { it }
             .first()
         currentOnDismissRequest.value()
     }
+    val peekHeightPx = peekHeight?.let { with(density) { it.toPx() } }
+    LaunchedEffect(state, peekHeightPx) { state.updatePeekHeight(peekHeightPx) }
+    BackHandler(onBack = dismissWithAnimation)
 
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxSize()
+            .onSizeChanged { state.updateHostHeight(it.height.toFloat()) },
+    ) {
+        val sheetWidth = calculateStableSheetWidth(maxWidth, sheetMaxWidth)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    scrimColor.copy(
+                        alpha = (scrimColor.alpha * state.scrimAlpha / StableSheetMaxScrimAlpha)
+                            .coerceIn(0f, 1f),
+                    ),
+                )
+                .clickable(onClick = dismissWithAnimation),
+        )
+        val offset = state.offset.coerceAtLeast(0f)
+        Box(
+            modifier = Modifier
+                .width(sheetWidth)
+                .fillMaxHeight()
+                .align(Alignment.TopCenter)
+                .offset { IntOffset(0, offset.roundToInt()) }
+                .nestedScroll(nestedScrollConnection),
+        ) {
+            sheet(
+                StableSheetSlotScope(
+                    dragModifier = sheetDragModifier,
+                    contentBottomPadding = with(density) { offset.toDp() },
+                    dismiss = dismissWithAnimation,
+                ),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StableAnchoredBottomSheet(
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    sheetMaxWidth: Dp? = null,
+    shape: Shape = MaterialTheme.shapes.extraLarge,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    contentColor: Color = Color.Unspecified,
+    scrimColor: Color = Color.Black.copy(alpha = StableSheetMaxScrimAlpha),
+    dragHandle: (@Composable () -> Unit)? = { BottomSheetDefaults.DragHandle() },
+    content: @Composable (dragModifier: Modifier) -> Unit,
+) {
     Dialog(
-        onDismissRequest = dismissWithAnimation,
+        // Back is handled (with the hide animation) by StableAnchoredSheetLayout's BackHandler.
+        onDismissRequest = {},
         properties = DialogProperties(
-            dismissOnBackPress = true,
+            dismissOnBackPress = false,
             dismissOnClickOutside = false,
             usePlatformDefaultWidth = false,
             decorFitsSystemWindows = false,
         ),
     ) {
-        BoxWithConstraints(
-            modifier = modifier
-                .fillMaxSize()
-                .onSizeChanged { state.updateHostHeight(it.height.toFloat()) },
-        ) {
-            val sheetWidth = calculateStableSheetWidth(maxWidth, sheetMaxWidth)
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        scrimColor.copy(
-                            alpha = (scrimColor.alpha * state.scrimAlpha / StableSheetMaxScrimAlpha)
-                                .coerceIn(0f, 1f),
-                        ),
-                    )
-                    .clickable(onClick = dismissWithAnimation),
-            )
-            val offset = state.offset.coerceAtLeast(0f)
+        StableAnchoredSheetLayout(
+            onDismissRequest = onDismissRequest,
+            modifier = modifier,
+            sheetMaxWidth = sheetMaxWidth,
+            scrimColor = scrimColor,
+        ) { scope ->
             Surface(
                 shape = shape,
                 color = containerColor,
                 contentColor = contentColor,
-                modifier = Modifier
-                    .width(sheetWidth)
-                    .fillMaxHeight()
-                    .align(Alignment.TopCenter)
-                    .offset { IntOffset(0, offset.roundToInt()) }
-                    .nestedScroll(nestedScrollConnection),
+                modifier = Modifier.fillMaxSize(),
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(bottom = with(density) { offset.toDp() }),
+                        .padding(bottom = scope.contentBottomPadding),
                 ) {
                     if (dragHandle != null) {
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .then(sheetDragModifier),
+                                .then(scope.dragModifier),
                         ) {
                             dragHandle()
                         }
                     }
                     Box(modifier = Modifier.weight(1f)) {
-                        content(sheetDragModifier)
+                        content(scope.dragModifier)
                     }
                 }
             }
