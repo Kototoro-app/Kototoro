@@ -3807,4 +3807,10 @@ SHA-256 指纹:
         <item quantity="other">已合并 %d 组，没有剩余的重复</item>
     </plurals>
     <string name="duplicate_read_percent">已读 %d%%</string>
+    <string name="migration_match_first_hit_desc">按顺序搜索，找到即停，更快</string>
+    <string name="migration_match_most_chapters_desc">搜索全部来源，选章节最多，更准</string>
+    <string name="migration_sources_summary">%1$s 等 %2$d 个</string>
+    <string name="migration_config_family">%1$s · %2$d 部</string>
+    <string name="migration_selected_count">已选 %d 个</string>
+    <string name="migration_config_categories_locked">收藏分类总会保留</string>
 </resources>
