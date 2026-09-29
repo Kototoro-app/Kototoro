@@ -41,6 +41,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.migration.ui.rememberCoverRequest
+import org.skepsun.kototoro.migration.ui.duplicates.readingLabel
+import org.skepsun.kototoro.core.ui.glass.GlassDefaults
+import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
+import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
+import coil3.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.clip
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.PaddingValues
 import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.migration.domain.RefreshError
@@ -214,39 +226,102 @@ private fun SourceContentPicker(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    val total = source.contentIds.size
     var selected by remember(source.source.name) { mutableStateOf(source.contentIds.toSet()) }
+    val allSelected = selected.size == total
+    // Floating glass sheet sized to its content, like the migration config sheet.
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = Modifier.fillMaxHeight(0.85f),
+        dragHandle = null,
+        shape = RoundedCornerShape(0.dp),
+        containerColor = Color.Transparent,
+        tonalElevation = 0.dp,
     ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(source.source.migrationTitle(context), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            Checkbox(
-                checked = selected.size == source.contentIds.size,
-                onCheckedChange = { selected = if (it) source.contentIds.toSet() else emptySet() },
-            )
-        }
-        LazyColumn(Modifier.weight(1f)) {
-            items(source.contentIds, key = { it }) { id ->
-                val row = state.rowsById[id] ?: return@items
+        KototoroSheetSurface(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            style = GlassDefaults.prominentStyle().copy(containerAlpha = 0.8f, minimumContainerAlpha = 0.6f),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                SheetDragHandle(Modifier.align(Alignment.CenterHorizontally))
                 Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { selected = if (id in selected) selected - id else selected + id }
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Checkbox(checked = id in selected, onCheckedChange = { selected = if (it) selected + id else selected - id })
-                    Text(row.title, modifier = Modifier.weight(1f))
-                    Text("${row.chaptersCount}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    ContentSourceIcon(source = source.source, modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                source.siteHint ?: source.source.migrationTitle(context),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            StatusTag(source.status)
+                        }
+                        Text(
+                            stringResource(R.string.migration_selected_of, selected.size, total),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(onClick = { selected = if (allSelected) emptySet() else source.contentIds.toSet() }) {
+                        Text(stringResource(if (allSelected) R.string.migration_select_none else R.string.migration_select_all))
+                    }
+                }
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                ) {
+                    items(source.contentIds, key = { it }) { id ->
+                        val row = state.rowsById[id] ?: return@items
+                        val checked = id in selected
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { selected = if (checked) selected - id else selected + id }
+                                .padding(horizontal = 20.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            AsyncImage(
+                                model = rememberCoverRequest(row.coverUrl, source.source),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.width(40.dp).aspectRatio(13f / 18f).clip(RoundedCornerShape(8.dp)),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    row.title,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    readingLabel(row),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Checkbox(checked = checked, onCheckedChange = { selected = if (it) selected + id else selected - id })
+                        }
+                    }
+                }
+                Button(
+                    onClick = { onNext(selected.toLongArray()) },
+                    enabled = selected.isNotEmpty(),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).heightIn(min = 52.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.migration_next_with_count, selected.size),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
                 }
             }
         }
-        Button(
-            onClick = { onNext(selected.toLongArray()) },
-            enabled = selected.isNotEmpty(),
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-        ) { Text(stringResource(R.string.migration_next)) }
     }
 }

@@ -3813,4 +3813,6 @@ SHA-256 指纹:
     <string name="migration_config_family">%1$s · %2$d 部</string>
     <string name="migration_selected_count">已选 %d 个</string>
     <string name="migration_config_categories_locked">收藏分类总会保留</string>
+    <string name="migration_selected_of">已选 %1$d / %2$d 部</string>
+    <string name="migration_next_with_count">下一步 · %d 部</string>
 </resources>

@@ -274,7 +274,7 @@ internal fun readingLabel(row: org.skepsun.kototoro.migration.data.LibraryRow): 
             R.string.duplicate_read_to,
             if (chapter % 1f == 0f) chapter.toInt().toString() else chapter.toString(),
         )
-        percent > 0f -> stringResource(R.string.duplicate_read_percent, (percent.coerceIn(0f, 1f) * 100).toInt())
+        percent > 0f -> stringResource(R.string.duplicate_read_percent, (percent.coerceIn(0f, 1f) * 100).toInt().coerceAtLeast(1))
         else -> stringResource(R.string.duplicate_unread)
     }
 }

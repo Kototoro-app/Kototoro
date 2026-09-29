@@ -3999,4 +3999,6 @@
     <string name="migration_config_family">%1$s · %2$d entries</string>
     <string name="migration_selected_count">%d selected</string>
     <string name="migration_config_categories_locked">Categories are always kept</string>
+    <string name="migration_selected_of">%1$d of %2$d selected</string>
+    <string name="migration_next_with_count">Next · %d</string>
 </resources>
