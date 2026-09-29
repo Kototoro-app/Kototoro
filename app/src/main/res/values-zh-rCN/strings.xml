@@ -3105,6 +3105,13 @@ SHA-256 指纹:
     <string name="package_filter_installed">已安装</string>
     <string name="package_filter_available">未安装</string>
     <string name="update_all_available_banner">发现 %1$d 个可更新扩展</string>
+    <string name="packages_recommended_header">推荐扩展</string>
+    <string name="packages_recommended_count">%1$d 个扩展包</string>
+    <string name="packages_recommended_missing_count">缺失 %1$d 个源</string>
+    <string name="packages_recommended_caption">收藏或历史记录中用到、但尚未安装的源对应的扩展</string>
+    <string name="packages_recommended_covers">可补全：%1$s</string>
+    <string name="packages_missing_sources_hint">有 %1$d 个缺失的源在已添加的仓库中找不到：</string>
+    <string name="packages_missing_sources_add_repo">可以添加仓库来查找它们，例如：</string>
     <string name="uninstall">卸载</string>
     <string name="untrusted_extension">未信任</string>
     <string name="untrusted_extension_message">%1$s（%2$s）已安装，但其签名与所选仓库指纹不匹配。

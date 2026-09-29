@@ -343,7 +343,6 @@ internal fun UnifiedSourceList(
             state = listState,
             alwaysVisible = true,
             contentPadding = PaddingValues(vertical = 4.dp),
-            endInset = 4.dp,
         )
     }
 }
@@ -880,8 +879,9 @@ internal fun UnifiedRepositoryList(
         VerticalScrollbar(
             state = listState,
             alwaysVisible = true,
-            contentPadding = unifiedCardListPadding,
-            endInset = 4.dp,
+            // Vertical padding only: the scrollbar hugs the screen edge (global end inset);
+            // the cards' horizontal padding must not push it inwards.
+            contentPadding = PaddingValues(vertical = 8.dp),
         )
     }
 }
@@ -1007,7 +1007,7 @@ internal fun UnifiedPackageList(
     onImportLocalJar: () -> Unit,
     onAddRecommendedRepository: (UnifiedRecommendedRepository) -> Unit = {},
 ) {
-    var recommendedExpanded by rememberSaveable { mutableStateOf(true) }
+    var recommendedExpanded by rememberSaveable { mutableStateOf(false) }
     val updateAvailableCount = remember(packages) {
         packages.count { it.state == UnifiedSourcePackageState.UPDATE_AVAILABLE }
     }
@@ -1050,7 +1050,9 @@ internal fun UnifiedPackageList(
                     }
                 }
             }
-            if (updateAvailableCount > 0) {
+            // The banner is the single "update all" entry point; keep it while a run is in
+            // progress so it can still be cancelled after the last update is applied.
+            if (updateAvailableCount > 0 || updateAllInProgress) {
                 item(key = "update_all_banner") {
                     val style = rememberUnifiedSourcesVisualStyle()
                     ElevatedCard(
@@ -1121,29 +1123,6 @@ internal fun UnifiedPackageList(
                         .padding(bottom = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    item(key = "update_all_packages") {
-                        CompactActionChip(
-                            onClick = onUpdateAllPackages,
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Filled.AutoAwesome,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                            },
-                            label = {
-                                Text(
-                                    stringResource(
-                                        if (updateAllInProgress) {
-                                            R.string.cancel_update_all_packages
-                                        } else {
-                                            R.string.update_all_packages
-                                        },
-                                    ),
-                                )
-                            },
-                        )
-                    }
                     item(key = "import_local_jar") {
                         CompactActionChip(
                             onClick = onImportLocalJar,
@@ -1181,8 +1160,9 @@ internal fun UnifiedPackageList(
         VerticalScrollbar(
             state = listState,
             alwaysVisible = true,
-            contentPadding = unifiedCardListPadding,
-            endInset = 4.dp,
+            // Vertical padding only: the scrollbar hugs the screen edge (global end inset);
+            // the cards' horizontal padding must not push it inwards.
+            contentPadding = PaddingValues(vertical = 8.dp),
         )
     }
 }
