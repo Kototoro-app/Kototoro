@@ -161,11 +161,13 @@ abstract class MangaDao {
     @Delete
     abstract suspend fun delete(subjects: Collection<MangaEntity>)
 
+    // Soft-deleted history/favourites cascade with their manga, and sync needs those tombstones to beat
+    // stale remote rows, so any history/favourites row (deleted or not) keeps the manga alive.
     @Query(
         """
 		DELETE FROM manga
-		WHERE NOT EXISTS(SELECT 1 FROM history WHERE history.manga_id = manga.manga_id AND history.deleted_at = 0)
-			AND NOT EXISTS(SELECT 1 FROM favourites WHERE favourites.manga_id = manga.manga_id AND favourites.deleted_at = 0)
+		WHERE NOT EXISTS(SELECT 1 FROM history WHERE history.manga_id = manga.manga_id)
+			AND NOT EXISTS(SELECT 1 FROM favourites WHERE favourites.manga_id = manga.manga_id)
 			AND NOT EXISTS(SELECT 1 FROM stats WHERE stats.manga_id = manga.manga_id)
 			AND NOT EXISTS(SELECT 1 FROM preferences WHERE preferences.manga_id = manga.manga_id)
 			AND NOT EXISTS(SELECT * FROM bookmarks WHERE bookmarks.manga_id == manga.manga_id)
@@ -180,8 +182,8 @@ abstract class MangaDao {
     @Query(
         """
 		DELETE FROM manga
-		WHERE NOT EXISTS(SELECT 1 FROM history WHERE history.manga_id = manga.manga_id AND history.deleted_at = 0)
-			AND NOT EXISTS(SELECT 1 FROM favourites WHERE favourites.manga_id = manga.manga_id AND favourites.deleted_at = 0)
+		WHERE NOT EXISTS(SELECT 1 FROM history WHERE history.manga_id = manga.manga_id)
+			AND NOT EXISTS(SELECT 1 FROM favourites WHERE favourites.manga_id = manga.manga_id)
 			AND NOT EXISTS(SELECT 1 FROM stats WHERE stats.manga_id = manga.manga_id)
 			AND NOT EXISTS(SELECT 1 FROM preferences WHERE preferences.manga_id = manga.manga_id)
 			AND NOT EXISTS(SELECT * FROM bookmarks WHERE bookmarks.manga_id == manga.manga_id)
