@@ -17,7 +17,7 @@ abstract class MigrationDao {
             m.content_type AS contentType, m.cover_url AS coverUrl, m.public_url AS publicUrl,
             (SELECT COUNT(*) FROM chapters c WHERE c.manga_id = m.manga_id) AS chaptersCount,
             t.last_result AS trackResult, t.last_check_time AS trackCheckTime, t.last_error AS trackError,
-            h.percent AS historyPercent,
+            h.percent AS historyPercent, h.chapters AS historyChaptersCount,
             (SELECT c2.number FROM chapters c2 WHERE c2.manga_id = m.manga_id AND c2.chapter_id = h.chapter_id)
                 AS historyChapterNumber
         FROM manga m

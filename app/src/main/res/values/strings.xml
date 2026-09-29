@@ -3972,4 +3972,25 @@
     <string name="migration_config_from_sources">%1$s and %2$d sources in total</string>
     <string name="migration_config_family_sources">%1$s · %2$d entries · search in order</string>
     <string name="migration_candidates_empty">No candidates. Edit the keywords and tap search</string>
+    <string name="library_duplicates_title">Find duplicates</string>
+    <string name="library_duplicates_none">No duplicate favourites found</string>
+    <string name="library_duplicates_hint">Tap a card to choose which entry to keep. Merging moves categories, notes, stats and tracking to it and keeps the furthest reading progress</string>
+    <string name="library_duplicates_merge">Merge</string>
+    <string name="library_duplicates_not_duplicates">Not duplicates</string>
+    <string name="library_duplicates_keep">Keep</string>
+    <string name="library_duplicates_chapters">%d ch.</string>
+    <string name="library_duplicates_merge_all_message">Each group is merged into its highlighted entry. The other entries leave favourites and history; downloads are kept.</string>
+    <plurals name="library_duplicates_entries">
+        <item quantity="one">%d entry</item>
+        <item quantity="other">%d entries</item>
+    </plurals>
+    <plurals name="library_duplicates_merge_all">
+        <item quantity="one">Merge %d group</item>
+        <item quantity="other">Merge all %d groups</item>
+    </plurals>
+    <plurals name="library_duplicates_merged">
+        <item quantity="one">Merged %d group. No duplicates left</item>
+        <item quantity="other">Merged %d groups. No duplicates left</item>
+    </plurals>
+    <string name="duplicate_read_percent">Read %d%%</string>
 </resources>

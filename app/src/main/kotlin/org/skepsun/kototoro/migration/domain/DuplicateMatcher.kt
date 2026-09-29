@@ -1,14 +1,18 @@
 package org.skepsun.kototoro.migration.domain
 
 import org.skepsun.kototoro.core.model.contentFamily
+import org.skepsun.kototoro.core.util.ChineseConverter
 import org.skepsun.kototoro.migration.data.LibraryRow
 import org.skepsun.kototoro.parsers.model.ContentType
 
 /** Exact (normalized) title or alt-title matching; no fuzzy matching on purpose. */
 object DuplicateMatcher {
 
+    /** Normalized keys; traditional Chinese is folded to simplified so 繁/简 releases match. */
     fun keys(title: String, altTitles: Collection<String>): Set<String> =
-        (listOf(title) + altTitles).map(TitleNormalizer::normalize).filterTo(mutableSetOf()) { it.isNotEmpty() }
+        (listOf(title) + altTitles)
+            .map { TitleNormalizer.normalize(ChineseConverter.t2s(it)) }
+            .filterTo(mutableSetOf()) { it.isNotEmpty() }
 
     fun find(
         id: Long,

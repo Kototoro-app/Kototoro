@@ -530,6 +530,9 @@ class AppRouter(
         }
     }
 
+    fun openLibraryDuplicates() =
+        startActivity(org.skepsun.kototoro.migration.ui.duplicates.LibraryDuplicatesActivity::class.java)
+
     fun openMigrationSources() =
         startActivity(org.skepsun.kototoro.migration.ui.sources.MigrationSourcesActivity::class.java)
 

@@ -3789,4 +3789,22 @@ SHA-256 指纹:
     <string name="migration_config_from_sources">来自 %1$s 等 %2$d 个来源</string>
     <string name="migration_config_family_sources">%1$s · %2$d 部 · 按顺序搜索</string>
     <string name="migration_candidates_empty">没有候选。修改关键词后点搜索</string>
+    <string name="library_duplicates_title">查找重复</string>
+    <string name="library_duplicates_none">没有发现重复的收藏</string>
+    <string name="library_duplicates_hint">点卡片选择保留哪一本。合并会把收藏分类、笔记、统计和追踪并入保留的那本，并保留读得最远的进度</string>
+    <string name="library_duplicates_merge">合并</string>
+    <string name="library_duplicates_not_duplicates">不是重复</string>
+    <string name="library_duplicates_keep">保留</string>
+    <string name="library_duplicates_chapters">%d 话</string>
+    <string name="library_duplicates_merge_all_message">每组都会合并到高亮的那一本。其余条目会移出收藏和历史，已下载的内容会保留。</string>
+    <plurals name="library_duplicates_entries">
+        <item quantity="other">%d 个条目</item>
+    </plurals>
+    <plurals name="library_duplicates_merge_all">
+        <item quantity="other">全部合并 %d 组</item>
+    </plurals>
+    <plurals name="library_duplicates_merged">
+        <item quantity="other">已合并 %d 组，没有剩余的重复</item>
+    </plurals>
+    <string name="duplicate_read_percent">已读 %d%%</string>
 </resources>

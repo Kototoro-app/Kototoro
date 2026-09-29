@@ -53,7 +53,13 @@ class MigrationSettings @Inject constructor(@ApplicationContext context: Context
         get() = prefs.getString(KEY_DISMISSED_HEALTH, null)
         set(value) = prefs.edit { putString(KEY_DISMISSED_HEALTH, value) }
 
+    /** Duplicate groups (see [LibraryDuplicateGroup.key]) the user marked as not duplicates. */
+    var ignoredDuplicateKeys: Set<String>
+        get() = prefs.getStringSet(KEY_IGNORED_DUPLICATES, emptySet()).orEmpty()
+        set(value) = prefs.edit { putStringSet(KEY_IGNORED_DUPLICATES, value) }
+
     private companion object {
+        const val KEY_IGNORED_DUPLICATES = "ignored_duplicates"
         const val KEY_SOURCES_PREFIX = "sources_"
         const val KEY_FLAGS = "flags"
         const val KEY_MATCH_MODE = "match_mode"

@@ -134,22 +134,23 @@ private fun DuplicateCard(entry: DuplicateEntry, onOpen: () -> Unit, onSwitch: (
             }
             Text(row.title, style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
-                "${ContentSource(row.source).migrationTitle(context)} · ${row.chaptersCount}",
+                listOfNotNull(
+                    ContentSource(row.source).migrationTitle(context),
+                    row.knownChapters.takeIf { it > 0 }?.let { stringResource(R.string.library_duplicates_chapters, it) },
+                ).joinToString(" · "),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
             Text(
-                row.historyChapterNumber?.let {
-                    stringResource(R.string.duplicate_read_to, if (it % 1f == 0f) it.toInt().toString() else it.toString())
-                } ?: stringResource(R.string.duplicate_unread),
+                org.skepsun.kototoro.migration.ui.duplicates.readingLabel(row),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            LinearProgressIndicator(
-                progress = { (row.historyPercent ?: 0f).coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            )
+            val percent = (row.historyPercent ?: 0f).coerceIn(0f, 1f)
+            if (percent > 0f) {
+                LinearProgressIndicator(progress = { percent }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
+            }
             if (entry.sourceBroken) {
                 Button(onClick = onSwitch, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.duplicate_switch_source), style = MaterialTheme.typography.labelSmall)

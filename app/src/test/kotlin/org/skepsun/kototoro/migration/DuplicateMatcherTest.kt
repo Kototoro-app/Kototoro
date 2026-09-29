@@ -33,6 +33,15 @@ class DuplicateMatcherTest {
     }
 
     @Test
+    fun `traditional chinese matches simplified`() {
+        val result = DuplicateMatcher.find(
+            id = 99, title = "間諜過家家", altTitles = emptySet(), family = ContentType.MANGA,
+            library = listOf(row(1, "间谍过家家")),
+        )
+        assertEquals(listOf(1L), result.map { it.id })
+    }
+
+    @Test
     fun `different content family is ignored`() {
         val result = DuplicateMatcher.find(
             id = 99, title = "Frieren", altTitles = emptySet(), family = ContentType.MANGA,

@@ -1911,10 +1911,10 @@ internal fun FavoritesTopLevelRouteContent(
                         appRouter.openMigrationSources()
                     },
                     KototoroTopBarMenuAction(
-                        org.skepsun.kototoro.R.string.duplicates_finder,
+                        org.skepsun.kototoro.R.string.library_duplicates_title,
                         org.skepsun.kototoro.R.drawable.ic_search,
                     ) {
-                        viewModel.openDuplicatesFinder()
+                        appRouter.openLibraryDuplicates()
                     },
                 ),
             ),

@@ -34,6 +34,11 @@ class MigrateUseCase @Inject constructor(
         newContent: Content,
         mode: MigrationMode = MigrationMode.REPLACE,
         flags: Set<MigrationDataFlag> = MigrationDataFlag.ALL,
+        /**
+         * The target already lives in the library (merging duplicates): use it as stored,
+         * without refetching details or rewriting its row, so a dead target source is fine.
+         */
+        targetInLibrary: Boolean = false,
     ) {
         val oldDetails = if (oldContent.chapters.isNullOrEmpty()) {
             mangaDataRepository.findContentById(oldContent.id, withChapters = true)
@@ -44,12 +49,16 @@ class MigrateUseCase @Inject constructor(
         } else {
             oldContent
         }
-        val newDetails = if (newContent.chapters.isNullOrEmpty()) {
-            mangaRepositoryFactory.create(newContent.source).getDetails(newContent)
-        } else {
+        val stored = if (targetInLibrary) {
             newContent
+        } else {
+            val newDetails = if (newContent.chapters.isNullOrEmpty()) {
+                mangaRepositoryFactory.create(newContent.source).getDetails(newContent)
+            } else {
+                newContent
+            }
+            mangaDataRepository.storeContentAndReturn(newDetails, replaceExisting = true)
         }
-        val stored = mangaDataRepository.storeContentAndReturn(newDetails, replaceExisting = true)
         val migrationDao = database.getMigrationDao()
         val oldId = oldDetails.id
         val plan = database.withTransaction {

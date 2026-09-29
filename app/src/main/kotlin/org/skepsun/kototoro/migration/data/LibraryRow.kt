@@ -15,7 +15,12 @@ data class LibraryRow(
     val historyPercent: Float?,
     val historyChapterNumber: Float?,
     val publicUrl: String? = null,
+    val historyChaptersCount: Int? = null,
 ) {
+    /** Best known chapter count: cached chapters, else the count remembered by history. */
+    val knownChapters: Int
+        get() = maxOf(chaptersCount, historyChaptersCount ?: 0)
+
     val altTitleList: List<String>
         get() = altTitles?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
 }

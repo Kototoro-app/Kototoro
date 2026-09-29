@@ -407,6 +407,9 @@
 			android:name="org.skepsun.kototoro.migration.ui.sources.MigrationSourcesActivity"
 			android:label="@string/migration_sources_title" />
 		<activity
+			android:name="org.skepsun.kototoro.migration.ui.duplicates.LibraryDuplicatesActivity"
+			android:label="@string/library_duplicates_title" />
+		<activity
 			android:name="org.skepsun.kototoro.settings.about.AppUpdateActivity"
 			android:label="@string/app_update_available" />
 		<activity
