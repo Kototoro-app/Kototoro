@@ -39,6 +39,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.chaptersCount
 import org.skepsun.kototoro.migration.ui.migrationTitle
+import org.skepsun.kototoro.migration.ui.rememberCoverRequest
 import org.skepsun.kototoro.parsers.model.Content
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,7 +112,7 @@ private fun DuplicateCard(entry: DuplicateEntry, onOpen: () -> Unit, onSwitch: (
         Column(Modifier.padding(8.dp)) {
             Box(Modifier.clickable(onClick = onOpen)) {
                 AsyncImage(
-                    model = row.coverUrl,
+                    model = rememberCoverRequest(row.coverUrl, ContentSource(row.source)),
                     contentDescription = row.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxWidth().aspectRatio(13f / 18f).clip(RoundedCornerShape(10.dp)),

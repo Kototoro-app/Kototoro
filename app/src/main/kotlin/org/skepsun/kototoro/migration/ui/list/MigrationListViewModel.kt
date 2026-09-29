@@ -8,6 +8,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -76,7 +78,8 @@ class MigrationListViewModel @Inject constructor(
             val items = ids.toList().mapNotNull { id ->
                 val content = contentDataRepository.findContentById(id, withChapters = false) ?: return@mapNotNull null
                 families[id] = resolveContentFamily(content.source.getContentType(), chaptersDao.findStoredContentType(id))
-                MigrationItemState(origin = content, originChapters = chaptersDao.countChapters(id))
+                val originChapters = maxOf(chaptersDao.countChapters(id), chaptersDao.findHistoryChaptersCount(id))
+                MigrationItemState(origin = content, originChapters = originChapters)
             }
             _state.update { it.copy(items = items, isLoading = false) }
             if (items.isEmpty()) onFinished.call(Unit)
@@ -118,13 +121,25 @@ class MigrationListViewModel @Inject constructor(
         itemJobs.remove(originId)?.cancel()
         _state.update { s -> s.updateItem(originId) { it.copy(status = MigrationItemStatus.SEARCHING, candidates = emptyList()) } }
         itemJobs[originId] = launchJob(Dispatchers.Default) {
-            val outcomes = targetSources(item.origin).map { engine.searchSource(item.origin, it, query) }
-            val candidates = outcomes.flatMap { it.candidates }.sortedByDescending { it.score }
+            // Results stream in per source so one slow site does not hold back the rest.
+            kotlinx.coroutines.coroutineScope {
+                targetSources(item.origin).map { source ->
+                    async {
+                        val outcome = engine.searchSource(item.origin, source, query, minScore = 0.0)
+                        if (outcome.candidates.isNotEmpty()) {
+                            _state.update { s ->
+                                s.updateItem(originId) {
+                                    it.copy(candidates = (it.candidates + outcome.candidates).sortedByDescending { c -> c.score })
+                                }
+                            }
+                        }
+                    }
+                }.awaitAll()
+            }
             _state.update { s ->
                 s.updateItem(originId) {
                     it.copy(
                         status = if (it.target != null) MigrationItemStatus.MATCHED else MigrationItemStatus.NOT_FOUND,
-                        candidates = candidates,
                     )
                 }
             }

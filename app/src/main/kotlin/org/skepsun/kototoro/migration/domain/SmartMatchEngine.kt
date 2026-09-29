@@ -43,9 +43,23 @@ class SmartMatchEngine(
         MatchMode.MOST_CHAPTERS -> matchMostChapters(origin, sources, extraQuery, deepSearch)
     }
 
-    /** Searches one source with one query (used by manual search). */
-    suspend fun searchSource(origin: Content, source: ContentSource, query: String): SourceOutcome =
-        searchSource(origin, source, listOf(query), deepSearch = false)
+    /**
+     * Searches one source with one query (used by manual search). A manual query is the
+     * user's own judgement, so [minScore] lets it keep results unlike the original title.
+     */
+    suspend fun searchSource(
+        origin: Content,
+        source: ContentSource,
+        query: String,
+        minScore: Double = TitleSimilarity.MIN_ELIGIBLE,
+    ): SourceOutcome = searchSource(
+        origin = origin,
+        source = source,
+        queries = listOf(query),
+        deepSearch = false,
+        minScore = minScore,
+        referenceTitles = if (minScore < TitleSimilarity.MIN_ELIGIBLE) listOf(query) else null,
+    )
 
     private suspend fun matchFirstHit(
         origin: Content,
@@ -98,9 +112,11 @@ class SmartMatchEngine(
         source: ContentSource,
         queries: List<String>,
         deepSearch: Boolean,
+        minScore: Double = TitleSimilarity.MIN_ELIGIBLE,
+        referenceTitles: List<String>? = null,
     ): SourceOutcome {
         var error: Throwable? = null
-        val originTitles = originTitles(origin, deepSearch)
+        val originTitles = referenceTitles ?: originTitles(origin, deepSearch)
         val found = LinkedHashMap<Long, MatchCandidate>()
         for (query in queries) {
             var results: List<Content> = emptyList()
@@ -116,14 +132,15 @@ class SmartMatchEngine(
                 } else {
                     TitleSimilarity.bestSimilarity(originTitles, candidateTitles(candidate, deepSearch))
                 }
-                if (score < TitleSimilarity.MIN_ELIGIBLE) continue
+                if (score < minScore) continue
                 val previous = found[candidate.id]
                 if (previous == null || previous.score < score) {
                     found[candidate.id] = MatchCandidate(candidate, score)
                 }
             }
         }
-        return SourceOutcome(source, found.values.sortedByDescending { it.score }.take(MAX_PER_SOURCE), error)
+        val limit = if (minScore < TitleSimilarity.MIN_ELIGIBLE) MAX_PER_SOURCE_MANUAL else MAX_PER_SOURCE
+        return SourceOutcome(source, found.values.sortedByDescending { it.score }.take(limit), error)
     }
 
     private fun queriesFor(origin: Content, extraQuery: String, deepSearch: Boolean): List<String> {
@@ -152,5 +169,6 @@ class SmartMatchEngine(
 
     private companion object {
         const val MAX_PER_SOURCE = 3
+        const val MAX_PER_SOURCE_MANUAL = 10
     }
 }

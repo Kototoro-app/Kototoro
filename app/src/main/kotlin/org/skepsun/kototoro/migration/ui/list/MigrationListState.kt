@@ -18,8 +18,9 @@ data class MigrationItemState(
     val sourceErrors: List<String> = emptyList(),
     val failure: String? = null,
 ) {
+    /** Null when either side is unknown; an entry never cached locally reports 0 chapters. */
     val chapterDelta: Int?
-        get() = if (target != null && targetChapters != null) targetChapters - originChapters else null
+        get() = if (target != null && targetChapters != null && originChapters > 0) targetChapters - originChapters else null
 
     val otherCandidatesCount: Int
         get() = candidates.count { it.content.id != target?.id }

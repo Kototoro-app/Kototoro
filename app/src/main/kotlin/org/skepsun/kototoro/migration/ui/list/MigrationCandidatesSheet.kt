@@ -14,7 +14,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -31,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,8 +44,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.migration.ui.migrationTitle
+import org.skepsun.kototoro.migration.ui.rememberCoverRequest
 import org.skepsun.kototoro.migration.domain.MatchCandidate
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,6 +57,11 @@ fun MigrationCandidatesSheet(
 ) {
     val context = LocalContext.current
     var query by remember(item.origin.id) { mutableStateOf(item.origin.title) }
+    val focusManager = LocalFocusManager.current
+    val search = {
+        focusManager.clearFocus()
+        onSearch(query)
+    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -64,9 +75,25 @@ fun MigrationCandidatesSheet(
                 singleLine = true,
                 label = { Text(stringResource(R.string.migration_search_hint)) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),
+                keyboardActions = KeyboardActions(onSearch = { search() }),
+                trailingIcon = {
+                    IconButton(onClick = { search() }, enabled = query.isNotBlank()) {
+                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.migration_action_search))
+                    }
+                },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             )
+            val searching = item.status == MigrationItemStatus.SEARCHING
+            if (searching) {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+            } else if (item.candidates.isEmpty()) {
+                Text(
+                    stringResource(R.string.migration_candidates_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 24.dp),
+                )
+            }
         }
         LazyColumn {
             items(item.candidates, key = { it.content.id }) { candidate ->
@@ -79,7 +106,7 @@ fun MigrationCandidatesSheet(
                 ) {
                     RadioButton(selected = candidate.content.id == item.target?.id, onClick = { onSelect(candidate) })
                     AsyncImage(
-                        model = candidate.content.coverUrl,
+                        model = rememberCoverRequest(candidate.content),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.width(40.dp).aspectRatio(13f / 18f).clip(RoundedCornerShape(6.dp)),
@@ -88,7 +115,7 @@ fun MigrationCandidatesSheet(
                     Column(Modifier.weight(1f)) {
                         Text(candidate.content.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(
-                            text = "${candidate.content.source.migrationTitle(context)} · ${(candidate.score * 100).roundToInt()}%",
+                            text = candidate.content.source.migrationTitle(context),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

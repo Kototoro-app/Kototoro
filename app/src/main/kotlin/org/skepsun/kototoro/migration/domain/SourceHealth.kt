@@ -25,6 +25,8 @@ data class SourceHealth(
     val status: SourceHealthStatus,
     val errorSummary: String?,
     val contentIds: List<Long>,
+    /** Website of the entries, shown instead of an opaque id when the source is gone. */
+    val siteHint: String? = null,
 ) {
     val favouriteCount: Int get() = contentIds.size
 }

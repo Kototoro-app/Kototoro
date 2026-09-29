@@ -57,6 +57,13 @@ class MigrationListReducerTest {
     }
 
     @Test
+    fun `unknown old chapter count gives no delta and never counts as fewer`() {
+        val unknown = item(9, MigrationItemStatus.MATCHED, old = 0, new = 5)
+        assertEquals(null, unknown.chapterDelta)
+        assertEquals(0, MigrationListState(items = listOf(unknown)).count(MigrationFilter.FEWER_CHAPTERS))
+    }
+
+    @Test
     fun `update item replaces by origin id`() {
         val updated = state.updateItem(3) { it.copy(status = MigrationItemStatus.SEARCHING) }
         assertEquals(MigrationItemStatus.SEARCHING, updated.items[2].status)

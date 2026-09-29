@@ -14,7 +14,7 @@ abstract class MigrationDao {
     @Query(
         """
         SELECT m.manga_id AS id, m.title AS title, m.alt_title AS altTitles, m.source AS source,
-            m.content_type AS contentType, m.cover_url AS coverUrl,
+            m.content_type AS contentType, m.cover_url AS coverUrl, m.public_url AS publicUrl,
             (SELECT COUNT(*) FROM chapters c WHERE c.manga_id = m.manga_id) AS chaptersCount,
             t.last_result AS trackResult, t.last_check_time AS trackCheckTime, t.last_error AS trackError,
             h.percent AS historyPercent,
@@ -33,6 +33,10 @@ abstract class MigrationDao {
 
     @Query("SELECT COUNT(*) FROM chapters WHERE manga_id = :mangaId")
     abstract suspend fun countChapters(mangaId: Long): Int
+
+    /** Chapter count remembered by history; covers entries whose chapters were never cached. */
+    @Query("SELECT IFNULL(MAX(chapters), 0) FROM history WHERE manga_id = :mangaId")
+    abstract suspend fun findHistoryChaptersCount(mangaId: Long): Int
 
     @Query("SELECT * FROM media_notes WHERE manga_id = :mangaId")
     abstract suspend fun findNotes(mangaId: Long): List<MediaNoteEntity>

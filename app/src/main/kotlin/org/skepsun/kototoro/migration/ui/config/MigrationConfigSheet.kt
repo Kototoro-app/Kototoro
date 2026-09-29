@@ -44,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -114,14 +115,34 @@ private fun ConfigContent(
     ) {
         Text(stringResource(R.string.migration_config_title, state.count), style = MaterialTheme.typography.titleLarge)
         if (state.originSourceNames.isNotEmpty()) {
+            val names = state.originSourceNames.map { ContentSource(it).migrationTitle(context) }
             Text(
-                text = state.originSourceNames.joinToString("、") { ContentSource(it).migrationTitle(context) },
+                text = if (names.size <= MAX_ORIGIN_NAMES) {
+                    names.joinToString("、")
+                } else {
+                    stringResource(
+                        R.string.migration_config_from_sources,
+                        names.take(MAX_ORIGIN_NAMES).joinToString("、"),
+                        names.size,
+                    )
+                },
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         state.families.forEach { family ->
-            SectionLabel(stringResource(R.string.migration_config_sources)) {
+            val label = if (state.families.size > 1) {
+                stringResource(
+                    R.string.migration_config_family_sources,
+                    stringResource(family.family.titleRes()),
+                    family.contentCount,
+                )
+            } else {
+                stringResource(R.string.migration_config_sources)
+            }
+            SectionLabel(label) {
                 TextButton(onClick = { onEdit(family.family) }) { Text(stringResource(R.string.migration_config_edit)) }
             }
             if (family.available.isEmpty()) {
@@ -297,4 +318,12 @@ private fun MigrationDataFlag.titleRes(): Int = when (this) {
     MigrationDataFlag.STATS -> R.string.migration_flag_stats
 }
 
+private fun ContentTypeFamily.titleRes(): Int = when (this) {
+    ContentTypeFamily.MANGA -> R.string.content_type_manga
+    ContentTypeFamily.NOVEL -> R.string.content_type_novel
+    ContentTypeFamily.VIDEO -> R.string.content_type_video
+    ContentTypeFamily.OTHER -> R.string.content_type_other
+}
+
 private const val MAX_VISIBLE_SOURCES = 3
+private const val MAX_ORIGIN_NAMES = 2

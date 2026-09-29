@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.migration.ui.migrationTitle
+import org.skepsun.kototoro.migration.ui.rememberCoverRequest
 import org.skepsun.kototoro.migration.domain.MatchCandidate
 import org.skepsun.kototoro.migration.domain.MigrationMode
 import org.skepsun.kototoro.parsers.model.Content
@@ -173,7 +174,7 @@ private fun MigrationRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AsyncImage(
-            model = (item.target ?: item.origin).coverUrl,
+            model = rememberCoverRequest(item.target ?: item.origin),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             colorFilter = if (matched) null else ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }),
@@ -193,8 +194,13 @@ private fun MigrationRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
+                val originSource = item.origin.source.migrationTitle(context)
                 Text(
-                    text = stringResource(R.string.migration_chapters, item.origin.source.migrationTitle(context), item.originChapters) + " → ",
+                    text = if (item.originChapters > 0) {
+                        stringResource(R.string.migration_chapters, originSource, item.originChapters)
+                    } else {
+                        originSource
+                    } + " → ",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

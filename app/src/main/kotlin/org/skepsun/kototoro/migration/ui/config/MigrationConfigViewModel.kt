@@ -23,6 +23,7 @@ data class FamilySources(
     val available: List<ContentSource>,
     val pinned: Set<String>,
     val selected: List<String>,
+    val contentCount: Int = 0,
 )
 
 data class MigrationConfigState(
@@ -63,19 +64,26 @@ class MigrationConfigViewModel @Inject constructor(
             val enabled = sourcesRepository.getEnabledSources()
             val pinned = sourcesRepository.getPinnedSources().mapTo(HashSet()) { it.name }
             val migrationDao = database.getMigrationDao()
-            val families = contents.map {
+            // Sources the user already relies on come first: pinned, then by favourite count.
+            val usage = migrationDao.findLibraryRows().groupingBy { it.source }.eachCount()
+            val contentFamilies = contents.map {
                 resolveContentFamily(it.source.getContentType(), migrationDao.findStoredContentType(it.id))
-            }.distinct().map { family ->
+            }
+            val familyCounts = contentFamilies.groupingBy { it }.eachCount()
+            val families = familyCounts.keys.sortedByDescending { familyCounts[it] }.map { family ->
                 val available = enabled
                     .filter {
                         (family == ContentTypeFamily.OTHER || it.getContentType().contentFamily() == family) &&
                             it.name !in originNames
                     }
-                    .sortedByDescending { it.name in pinned }
+                    .sortedWith(
+                        compareByDescending<ContentSource> { it.name in pinned }
+                            .thenByDescending { usage[it.name] ?: 0 },
+                    )
                 val availableNames = available.mapTo(HashSet()) { it.name }
                 val saved = settings.getTargetSourceNames(family)?.filter { it in availableNames }
                 val selected = saved?.takeIf { it.isNotEmpty() } ?: available.map { it.name }
-                FamilySources(family, available, pinned, selected)
+                FamilySources(family, available, pinned, selected, familyCounts[family] ?: 0)
             }
             _state.value = MigrationConfigState(
                 count = contents.size,

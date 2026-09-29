@@ -38,10 +38,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
+import org.skepsun.kototoro.migration.domain.RefreshError
 import org.skepsun.kototoro.migration.domain.SourceHealth
 import org.skepsun.kototoro.migration.domain.SourceHealthStatus
 import org.skepsun.kototoro.settings.compose.SettingsTopBarScaffold
@@ -141,11 +143,23 @@ private fun SourceRow(health: SourceHealth, onClick: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(health.source.migrationTitle(context), fontWeight = FontWeight.SemiBold)
+                Text(
+                    health.siteHint ?: health.source.migrationTitle(context),
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
                 StatusTag(health.status)
             }
             statusSummary(health)?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
         Text("${health.favouriteCount}", fontWeight = FontWeight.SemiBold)
@@ -172,10 +186,21 @@ private fun StatusTag(status: SourceHealthStatus) {
 }
 
 @Composable
+private fun refreshErrorText(error: RefreshError?): String? = when (error) {
+    null -> null
+    RefreshError.Challenge -> stringResource(R.string.migration_error_challenge)
+    is RefreshError.Http -> stringResource(R.string.migration_error_http, error.code)
+    RefreshError.Parse -> stringResource(R.string.migration_error_parse)
+    RefreshError.Network -> stringResource(R.string.migration_error_network)
+    is RefreshError.Other -> error.message
+}
+
+@Composable
 private fun statusSummary(health: SourceHealth): String? = when (health.status) {
-    SourceHealthStatus.UNINSTALLED -> stringResource(R.string.migration_health_uninstalled_summary)
+    SourceHealthStatus.UNINSTALLED -> stringResource(R.string.migration_health_uninstalled_summary) +
+        (health.siteHint?.let { " · ${health.source.name}" } ?: "")
     SourceHealthStatus.BROKEN -> stringResource(R.string.migration_health_broken_summary)
-    SourceHealthStatus.FAILING -> health.errorSummary
+    SourceHealthStatus.FAILING -> refreshErrorText(RefreshError.parse(health.errorSummary))
     SourceHealthStatus.DISABLED -> stringResource(R.string.migration_health_disabled_summary)
     SourceHealthStatus.HEALTHY -> null
 }

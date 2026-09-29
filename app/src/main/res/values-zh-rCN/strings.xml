@@ -3782,4 +3782,11 @@ SHA-256 指纹:
     <string name="duplicate_add_anyway">仍然收藏</string>
     <string name="duplicate_dont_ask">不再提醒</string>
     <string name="duplicate_source_broken">来源失效</string>
+    <string name="migration_error_challenge">被人机验证拦截（如 Cloudflare），可在浏览器中打开网站通过验证</string>
+    <string name="migration_error_http">网站返回 HTTP %d</string>
+    <string name="migration_error_parse">网站页面结构已变化，无法解析</string>
+    <string name="migration_error_network">网络连接失败或超时</string>
+    <string name="migration_config_from_sources">来自 %1$s 等 %2$d 个来源</string>
+    <string name="migration_config_family_sources">%1$s · %2$d 部 · 按顺序搜索</string>
+    <string name="migration_candidates_empty">没有候选。修改关键词后点搜索</string>
 </resources>

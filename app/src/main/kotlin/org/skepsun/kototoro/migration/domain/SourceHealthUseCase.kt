@@ -1,8 +1,8 @@
 package org.skepsun.kototoro.migration.domain
 
 import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.core.extensions.PluginContentSource
 import org.skepsun.kototoro.core.model.ContentSource
+import org.skepsun.kototoro.core.model.isBroken
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.isUnresolved
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
@@ -30,16 +30,21 @@ class SourceHealthUseCase @Inject constructor(
         return evaluate(sourceName, rows, disabled, now)?.status ?: SourceHealthStatus.HEALTHY
     }
 
+    private fun hostOf(url: String?): String? = url?.let {
+        runCatching { java.net.URI(it).host }.getOrNull()?.removePrefix("www.")?.takeIf(String::isNotBlank)
+    }
+
     private fun evaluate(name: String, rows: List<LibraryRow>, disabled: Set<String>, now: Long): SourceHealth? {
         val source = ContentSource(name)
         if (source.isLocal) return null
         val signals = SourceSignals(
             isUnresolved = source.isUnresolved,
-            isBroken = (source as? PluginContentSource)?.isBroken == true,
+            isBroken = source.isBroken,
             isDisabled = name in disabled,
         )
         val tracks = rows.map { TrackSignal(it.trackResult, it.trackCheckTime, it.trackError) }
         val verdict = SourceHealthClassifier.classify(signals, tracks, now)
-        return SourceHealth(source, verdict.status, verdict.errorSummary, rows.map { it.id })
+        val siteHint = if (signals.isUnresolved) rows.firstNotNullOfOrNull { hostOf(it.publicUrl) } else null
+        return SourceHealth(source, verdict.status, verdict.errorSummary, rows.map { it.id }, siteHint)
     }
 }

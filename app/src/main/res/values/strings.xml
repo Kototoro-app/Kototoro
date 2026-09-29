@@ -3965,4 +3965,11 @@
     <string name="duplicate_add_anyway">Favourite anyway</string>
     <string name="duplicate_dont_ask">Don\'t ask again</string>
     <string name="duplicate_source_broken">Source broken</string>
+    <string name="migration_error_challenge">Blocked by a verification challenge (e.g. Cloudflare). Opening the site in the browser may help</string>
+    <string name="migration_error_http">The site answered HTTP %d</string>
+    <string name="migration_error_parse">The site layout changed and can no longer be parsed</string>
+    <string name="migration_error_network">Network error or timeout</string>
+    <string name="migration_config_from_sources">%1$s and %2$d sources in total</string>
+    <string name="migration_config_family_sources">%1$s · %2$d entries · search in order</string>
+    <string name="migration_candidates_empty">No candidates. Edit the keywords and tap search</string>
 </resources>

@@ -14,6 +14,7 @@ data class LibraryRow(
     val trackError: String?,
     val historyPercent: Float?,
     val historyChapterNumber: Float?,
+    val publicUrl: String? = null,
 ) {
     val altTitleList: List<String>
         get() = altTitles?.split('\n')?.filter { it.isNotBlank() }.orEmpty()

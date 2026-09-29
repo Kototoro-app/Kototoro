@@ -96,6 +96,20 @@ class SmartMatchEngineTest {
     }
 
     @Test
+    fun `manual search keeps results that do not resemble the original title`() = runTest {
+        val engine = engine(mapOf(a to listOf(item(10, "Sousou", a), item(11, "Other", a))))
+        val outcome = engine.searchSource(origin, a, query = "Sousou", minScore = 0.0)
+        assertEquals(setOf(10L, 11L), outcome.candidates.map { it.content.id }.toSet())
+    }
+
+    @Test
+    fun `manual search ranks by similarity to the typed query`() = runTest {
+        val engine = engine(mapOf(a to listOf(item(10, "Frieren", a), item(11, "Sousou", a))))
+        val outcome = engine.searchSource(origin, a, query = "Sousou", minScore = 0.0)
+        assertEquals(listOf(11L, 10L), outcome.candidates.map { it.content.id })
+    }
+
+    @Test
     fun `search source returns scored candidates sorted`() = runTest {
         val engine = engine(mapOf(a to listOf(item(10, "Frieren 2", a), item(11, "Frieren", a))))
         val outcome = engine.searchSource(origin, a, query = "Frieren")
