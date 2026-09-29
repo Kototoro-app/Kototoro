@@ -53,4 +53,11 @@ class BackupIndexCompatTest {
         )
         assertFalse(sections.any { it.name.startsWith("WORK_") || it.name.startsWith("ENTITY_GRAPH_") })
     }
+
+    @Test
+    fun `current export does not write legacy entity sections`() {
+        val sections = BackupRepository.ExportFormat.KOTOTORO.sections
+
+        assertFalse(sections.any { it.name.startsWith("WORK_") || it.name.startsWith("ENTITY_GRAPH_") })
+    }
 }

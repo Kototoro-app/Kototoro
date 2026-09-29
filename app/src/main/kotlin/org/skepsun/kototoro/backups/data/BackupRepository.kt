@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.collectIndexed
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -44,6 +43,7 @@ import org.skepsun.kototoro.backups.data.model.ScrobblingBackup
 import org.skepsun.kototoro.backups.data.model.SourceBackup
 import org.skepsun.kototoro.backups.data.model.SourceOriginBackup
 import org.skepsun.kototoro.backups.data.model.StatisticBackup
+import org.skepsun.kototoro.backups.data.model.TagBackup
 import org.skepsun.kototoro.backups.data.model.TrackBackup
 import org.skepsun.kototoro.backups.data.model.TrackLogBackup
 import org.skepsun.kototoro.backups.data.model.WorkFavouriteBackup
@@ -91,6 +91,16 @@ import javax.inject.Inject
 
 private const val TAG = "BackupRepo"
 private const val RESTORE_TRANSACTION_BATCH_SIZE = 100
+
+private val LEGACY_RESTORE_ONLY_SECTIONS = setOf(
+    BackupSection.ENTITY_GRAPH_ENTITIES,
+    BackupSection.ENTITY_GRAPH_BINDINGS,
+    BackupSection.ENTITY_GRAPH_RELATIONS,
+    BackupSection.ENTITY_GRAPH_PREFS,
+    BackupSection.WORK_HISTORY,
+    BackupSection.WORK_FAVOURITES,
+    BackupSection.WORK_STATS,
+)
 
 private val DEFERRED_RESTORE_ORDER = listOf(
     BackupSection.CATEGORIES,
@@ -226,7 +236,7 @@ class BackupRepository @Inject constructor(
     enum class ExportFormat(
         val sections: List<BackupSection>,
     ) {
-        KOTOTORO(BackupSection.entries),
+        KOTOTORO(BackupSection.entries.filterNot { it in LEGACY_RESTORE_ONLY_SECTIONS }),
         KOTATSU(BackupRestoreFormat.KOTATSU_COMPATIBLE_SECTIONS),
     }
 
@@ -436,11 +446,7 @@ class BackupRepository @Inject constructor(
                 BackupSection.ENTITY_GRAPH_ENTITIES,
                 BackupSection.ENTITY_GRAPH_BINDINGS,
                 BackupSection.ENTITY_GRAPH_RELATIONS,
-                BackupSection.ENTITY_GRAPH_PREFS -> output.writeJsonArray(
-                    section = section,
-                    data = emptyFlow<String>(),
-                    serializer = serializer(),
-                )
+                BackupSection.ENTITY_GRAPH_PREFS -> error("Legacy entity sections are restore-only")
 
                 BackupSection.SAVED_FILTERS -> {
                     val sources = mangaSourcesRepository.getEnabledSources().filter { source ->
@@ -615,7 +621,7 @@ class BackupRepository @Inject constructor(
                     }
 
                     BackupSection.BOOKMARKS -> sectionInput.readJsonArray<BookmarkBackup>(serializer()).restoreToDb("BOOKMARKS") {
-                        upsertContent(it.manga, restoreContext)
+                        upsertContent(it.manga, restoreContext, it.tags.ifEmpty { it.manga.tags })
                         getBookmarksDao().upsert(it.bookmarks.map { b -> b.toEntity() })
                     }
 
@@ -905,11 +911,12 @@ class BackupRepository @Inject constructor(
     private suspend fun MangaDatabase.upsertContent(
         manga: ContentBackup,
         restoreContext: RestoreSemanticContext,
+        tags: Set<TagBackup> = manga.tags,
     ) {
-        val tags = manga.tags.map { it.toEntity() }
-        getTagsDao().upsert(tags)
+        val tagEntities = tags.map { it.toEntity() }
+        getTagsDao().upsert(tagEntities)
         val entity = manga.toEntity()
-        getMangaDao().upsert(entity, tags)
+        getMangaDao().upsert(entity, tagEntities)
     }
 
     private suspend fun MangaDatabase.restoreLegacyCategory(
