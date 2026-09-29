@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import androidx.room.Upsert
+import kotlinx.coroutines.flow.Flow
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.MangaTagsEntity
 import org.skepsun.kototoro.core.db.entity.MangaWithTags
@@ -50,6 +51,23 @@ abstract class MangaDao {
     /** Distinct source keys referenced by any stored work (T2B.3 origin materialization). */
     @Query("SELECT DISTINCT source FROM manga WHERE source IS NOT NULL AND source <> ''")
     abstract suspend fun distinctSources(): List<String>
+
+    /**
+     * Distinct Mihon/Aniyomi source keys still backing an active (non-deleted) favourite or
+     * history entry. Drives the missing-extension recommendations, so tombstones and plain
+     * browse-cache rows never keep an extension recommended.
+     */
+    @Query(
+        """
+        SELECT DISTINCT m.source FROM manga AS m
+        WHERE (m.source LIKE 'MIHON\_%' ESCAPE '\' OR m.source LIKE 'ANIYOMI\_%' ESCAPE '\')
+            AND (
+                EXISTS (SELECT 1 FROM favourites AS f WHERE f.manga_id = m.manga_id AND f.deleted_at = 0)
+                OR EXISTS (SELECT 1 FROM history AS h WHERE h.manga_id = m.manga_id AND h.deleted_at = 0)
+            )
+        """,
+    )
+    abstract fun observeExtensionSourcesReferencedByUserState(): Flow<List<String>>
 
     @Transaction
     @Query("SELECT * FROM manga WHERE source IN (:sources)")

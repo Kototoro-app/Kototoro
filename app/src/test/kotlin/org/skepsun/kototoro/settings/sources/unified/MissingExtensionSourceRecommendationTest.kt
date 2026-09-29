@@ -24,6 +24,34 @@ class MissingExtensionSourceRecommendationTest {
     }
 
     @Test
+    fun `candidates come only from source keys still referenced by user state`() {
+        val candidates = missingExtensionSourceCandidates(
+            referencedSourceKeys = listOf("MIHON_6902"),
+            displayNamesByKey = mapOf("MIHON_6902" to "漫画柜", "MIHON_1234" to "Deleted favourite source"),
+            installedSourceIds = emptySet(),
+        )
+
+        assertEquals(
+            listOf(MissingExtensionSourceCandidate("MIHON_6902", 6902L, UnifiedSourceKind.MIHON, "漫画柜")),
+            candidates,
+        )
+    }
+
+    @Test
+    fun `candidates keep the extension kind and skip installed or non extension sources`() {
+        val candidates = missingExtensionSourceCandidates(
+            referencedSourceKeys = listOf("ANIYOMI_42", "MIHON_7", "MIHON_7", "MANGADEX", "MIHON_abc", "IREADER_5"),
+            displayNamesByKey = emptyMap(),
+            installedSourceIds = setOf(7L),
+        )
+
+        assertEquals(
+            listOf(MissingExtensionSourceCandidate("ANIYOMI_42", 42L, UnifiedSourceKind.ANIYOMI, null)),
+            candidates,
+        )
+    }
+
+    @Test
     fun `catalog source name replaces a stable source key`() {
         assertEquals(
             "漫画柜",

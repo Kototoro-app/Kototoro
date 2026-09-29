@@ -95,6 +95,36 @@ internal fun shouldRecommendMissingExtensionSource(
     installedSourceIds: Set<Long>,
 ): Boolean = sourceId !in installedSourceIds
 
+internal data class MissingExtensionSourceCandidate(
+    val sourceKey: String,
+    val sourceId: Long,
+    val kind: UnifiedSourceKind,
+    val persistedDisplayName: String?,
+)
+
+/**
+ * Missing Mihon/Aniyomi sources worth recommending: those still referenced by the user's
+ * active favourites/history ([referencedSourceKeys]) whose extension is not installed.
+ * [displayNamesByKey] (from `source_origins`) only supplies labels, never candidates.
+ */
+internal fun missingExtensionSourceCandidates(
+    referencedSourceKeys: Collection<String>,
+    displayNamesByKey: Map<String, String?>,
+    installedSourceIds: Set<Long>,
+): List<MissingExtensionSourceCandidate> = referencedSourceKeys.asSequence()
+    .distinct()
+    .mapNotNull { sourceKey ->
+        val kind = when {
+            sourceKey.startsWith("MIHON_") -> UnifiedSourceKind.MIHON
+            sourceKey.startsWith("ANIYOMI_") -> UnifiedSourceKind.ANIYOMI
+            else -> return@mapNotNull null
+        }
+        val sourceId = sourceKey.substringAfter('_').toLongOrNull() ?: return@mapNotNull null
+        MissingExtensionSourceCandidate(sourceKey, sourceId, kind, displayNamesByKey[sourceKey])
+    }
+    .filter { shouldRecommendMissingExtensionSource(it.sourceId, installedSourceIds) }
+    .toList()
+
 internal fun resolveMissingExtensionSourceLabel(
     sourceKey: String,
     persistedDisplayName: String?,
@@ -222,9 +252,10 @@ class UnifiedSourcesViewModel @Inject constructor(
                 .withAvailableJsonPackages(lnReaderSnapshot.jsonPackages)
         },
         database.getSourceOriginsDao().observeAll(),
+        database.getMangaDao().observeExtensionSourcesReferencedByUserState(),
         availableExternalExtensions,
-    ) { catalog, sourceOrigins, availableExtensions ->
-        catalog.toFullCatalogData(sourceOrigins, availableExtensions)
+    ) { catalog, sourceOrigins, referencedSourceKeys, availableExtensions ->
+        catalog.toFullCatalogData(sourceOrigins, referencedSourceKeys, availableExtensions)
     }.flowOn(Dispatchers.Default).catch { e ->
         Log.e(TAG, "Error in fullCatalogState flow", e)
         emit(FullCatalogData())
@@ -1863,6 +1894,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 
     private fun UnifiedSourceCatalogState.toFullCatalogData(
         sourceOrigins: List<org.skepsun.kototoro.core.db.entity.SourceOriginEntity>,
+        referencedSourceKeys: List<String>,
         availableExtensions: List<RepoAvailableExtension>,
     ): FullCatalogData {
         val repositoriesById = repositories.associateBy { it.id }
@@ -1888,6 +1920,7 @@ class UnifiedSourcesViewModel @Inject constructor(
             allPackages = enrichedPackages,
             repositories = repositories,
             sourceOrigins = sourceOrigins,
+            referencedSourceKeys = referencedSourceKeys,
             availableExtensions = availableExtensions,
         )
 
@@ -1910,9 +1943,9 @@ class UnifiedSourcesViewModel @Inject constructor(
     }
 
     /**
-     * Builds the "Recommended" package group for the packages tab: sources recorded in
-     * `source_origins` by external backup imports (kind MIHON/ANIYOMI, numeric id) whose
-     * extension is not installed are matched against the store indexes by source id.
+     * Builds the "Recommended" package group for the packages tab: Mihon/Aniyomi sources still
+     * referenced by active favourites/history whose extension is not installed are matched
+     * against the store indexes by source id. `source_origins` only supplies display names.
      * Matched extensions become install recommendations; the rest are surfaced together
      * with suggested repositories.
      */
@@ -1921,30 +1954,25 @@ class UnifiedSourcesViewModel @Inject constructor(
         allPackages: List<UnifiedSourcePackageItem>,
         repositories: List<UnifiedSourceRepositoryItem>,
         sourceOrigins: List<org.skepsun.kototoro.core.db.entity.SourceOriginEntity>,
+        referencedSourceKeys: List<String>,
         availableExtensions: List<RepoAvailableExtension>,
     ): MissingRecommendations {
-        val candidates = sourceOrigins.asSequence()
-            .filter { it.kind == "MIHON" || it.kind == "ANIYOMI" }
-            .mapNotNull { origin ->
-                val id = origin.sourceKey.substringAfter('_', "").toLongOrNull() ?: return@mapNotNull null
-                val kind = if (origin.kind == "ANIYOMI") UnifiedSourceKind.ANIYOMI else UnifiedSourceKind.MIHON
-                Triple(origin, id, kind)
-            }
-            .toList()
-        if (candidates.isEmpty()) {
+        if (referencedSourceKeys.isEmpty()) {
             return MissingRecommendations()
         }
         val installedSourceIds = allSources.asSequence()
             .filter { it.kind == UnifiedSourceKind.MIHON || it.kind == UnifiedSourceKind.ANIYOMI }
             .mapNotNull { it.source.name.substringAfter('_', "").toLongOrNull() }
             .toSet()
-        val missingCandidates = candidates.filter { (_, id, _) ->
-            shouldRecommendMissingExtensionSource(id, installedSourceIds)
-        }
+        val missingCandidates = missingExtensionSourceCandidates(
+            referencedSourceKeys = referencedSourceKeys,
+            displayNamesByKey = sourceOrigins.associate { it.sourceKey to it.displayName },
+            installedSourceIds = installedSourceIds,
+        )
         if (missingCandidates.isEmpty()) {
             return MissingRecommendations()
         }
-        val candidateIds = missingCandidates.mapTo(HashSet()) { it.second }
+        val candidateIds = missingCandidates.mapTo(HashSet()) { it.sourceId }
         val catalogNamesById = availableExtensions.asSequence()
             .flatMap { extension ->
                 extension.sourceNamesById.asSequence().map { (id, name) -> id to name }
@@ -1952,10 +1980,10 @@ class UnifiedSourcesViewModel @Inject constructor(
             .filter { (_, name) -> name.isNotBlank() }
             .toMap()
         val labelById = HashMap<Long, String>()
-        missingCandidates.forEach { (origin, id, _) ->
-            labelById[id] = resolveMissingExtensionSourceLabel(
-                sourceKey = origin.sourceKey,
-                persistedDisplayName = origin.displayName,
+        missingCandidates.forEach { candidate ->
+            labelById[candidate.sourceId] = resolveMissingExtensionSourceLabel(
+                sourceKey = candidate.sourceKey,
+                persistedDisplayName = candidate.persistedDisplayName,
                 catalogNamesById = catalogNamesById,
             )
         }
@@ -1978,12 +2006,12 @@ class UnifiedSourcesViewModel @Inject constructor(
             .flatMap { it.item.installPayload?.sourceIds.orEmpty().asSequence() }
             .toSet()
         val missingSourcesWithoutMatch = missingCandidates
-            .filter { (_, id, _) -> id !in coveredIds }
-            .map { (origin, _, kind) ->
+            .filter { it.sourceId !in coveredIds }
+            .map { candidate ->
                 MissingSourceHint(
-                    kind = kind,
-                    sourceKey = origin.sourceKey,
-                    displayName = labelById[origin.sourceKey.substringAfter('_', "").toLongOrNull()],
+                    kind = candidate.kind,
+                    sourceKey = candidate.sourceKey,
+                    displayName = labelById[candidate.sourceId],
                 )
             }
         val suggestedKinds = missingSourcesWithoutMatch.map { it.kind }.toSet()
