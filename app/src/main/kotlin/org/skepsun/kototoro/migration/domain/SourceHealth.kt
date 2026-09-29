@@ -11,7 +11,8 @@ enum class SourceHealthStatus {
     HEALTHY,
     ;
 
-    val needsAttention: Boolean get() = this != HEALTHY
+    /** A disabled source is only hidden from browsing: its entries still open and still get update checks. */
+    val needsAttention: Boolean get() = this != HEALTHY && this != DISABLED
 }
 
 data class SourceSignals(val isUnresolved: Boolean, val isBroken: Boolean, val isDisabled: Boolean)

@@ -3774,7 +3774,9 @@ SHA-256 指纹:
     <string name="migration_health_broken_summary">扩展仓库声明此来源已损坏</string>
     <string name="migration_health_failing">连续更新失败</string>
     <string name="migration_health_disabled">已停用</string>
-    <string name="migration_health_disabled_summary">你在来源管理中关闭了它</string>
+    <plurals name="migration_health_disabled_summary">
+        <item quantity="other">%d 部收藏 · 已在来源管理中关闭，仍可阅读并检查更新</item>
+    </plurals>
     <string name="migration_next">下一步</string>
     <plurals name="migration_health_hint">
         <item quantity="other">%d 个来源可能失效</item>

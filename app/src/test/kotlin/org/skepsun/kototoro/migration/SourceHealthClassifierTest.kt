@@ -63,4 +63,10 @@ class SourceHealthClassifierTest {
             SourceHealthClassifier.classify(ok.copy(isDisabled = true), emptyList(), now).status,
         )
     }
+
+    @Test
+    fun `disabled sources still work so they need no attention`() {
+        assertEquals(false, SourceHealthStatus.DISABLED.needsAttention)
+        assertEquals(true, SourceHealthStatus.FAILING.needsAttention)
+    }
 }

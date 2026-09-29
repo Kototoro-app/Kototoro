@@ -21,6 +21,7 @@ class MigrationSourcesActivity : BaseComposeActivity() {
                 state = state,
                 onNavigateUp = ::finish,
                 onMigrate = { ids -> router.openMigration(ids) },
+                onEnable = viewModel::enable,
             )
         }
     }
