@@ -25,7 +25,6 @@ import org.skepsun.kototoro.core.db.entity.JsonSourceEntity
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
 import org.skepsun.kototoro.core.extensions.GlobalExtensionManager
-import org.skepsun.kototoro.core.model.ContentIdentityKeys
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.extensions.runtime.ExternalExtensionLoaderSupport
 import org.skepsun.kototoro.extensions.runtime.LocalApkExtensionSupport
@@ -411,25 +410,8 @@ class GoogleDriveSyncRepository @Inject constructor(
     private suspend fun applyToDatabase(snapshot: GoogleDriveSyncSnapshot) {
         val norm = snapshot.normalizeToContentV3()
         database.withTransaction {
-            val mangaIdMapping = LinkedHashMap<Long, Long>()
-            var nextImportedMangaId = minOf(database.getMangaDao().findMinId() ?: 0L, 0L) - 1L
-            runSyncStep("apply content") {
-                norm.content.forEach { content ->
-                    val existingByIdentity = content.findLocalContent(database)
-                    val existingById = database.getMangaDao().find(content.id)?.manga
-                    val local = existingByIdentity ?: existingById?.takeIf { it.hasSameContentIdentity(content) } ?: run {
-                        val localId = if (existingById != null || database.getMangaDao().contains(content.id)) {
-                            nextImportedMangaId--
-                        } else {
-                            content.id
-                        }
-                        content.toEntity(localId)
-                    }
-                    if (existingByIdentity == null && existingById?.id != local.id) {
-                        database.getMangaDao().upsert(local)
-                    }
-                    mangaIdMapping[content.id] = local.id
-                }
+            val contentImport = runSyncStep("apply content") {
+                importSyncContent(norm.content, database.syncContentStore())
             }
 
             val categoryIdMapping = LinkedHashMap<Long, Long>()
@@ -445,7 +427,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 
             runSyncStep("apply history") {
                 norm.history.forEach { remote ->
-                    val localMangaId = mangaIdMapping[remote.mangaId] ?: remote.mangaId
+                    val localMangaId = contentImport.localIdOf(remote.mangaId) ?: return@forEach
                     if (!database.getMangaDao().contains(localMangaId)) return@forEach
                     val local = database.getHistoryDao().find(localMangaId)
                     if (local == null || remote.updatedAt >= local.updatedAt) {
@@ -456,7 +438,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 
             runSyncStep("apply favourites") {
                 norm.favourites.forEach { remote ->
-                    val localMangaId = mangaIdMapping[remote.mangaId] ?: remote.mangaId
+                    val localMangaId = contentImport.localIdOf(remote.mangaId) ?: return@forEach
                     val localCategoryId = categoryIdMapping[remote.categoryId] ?: remote.categoryId
                     if (!database.getMangaDao().contains(localMangaId)) return@forEach
                     val local = database.getFavouritesDao().find(localMangaId, localCategoryId)
@@ -468,7 +450,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 
             runSyncStep("apply stats") {
                 norm.stats.forEach { remote ->
-                    val localMangaId = mangaIdMapping[remote.mangaId] ?: remote.mangaId
+                    val localMangaId = contentImport.localIdOf(remote.mangaId) ?: return@forEach
                     if (!database.getMangaDao().contains(localMangaId)) return@forEach
                     database.getStatsDao().upsert(remote.toEntity(localMangaId))
                 }
@@ -476,7 +458,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 
             runSyncStep("apply feed") {
                 norm.feed.tracks.forEach { track ->
-                    val localMangaId = mangaIdMapping[track.mangaId] ?: track.mangaId
+                    val localMangaId = contentImport.localIdOf(track.mangaId) ?: return@forEach
                     if (database.getMangaDao().contains(localMangaId)) {
                         database.mergeTrack(
                             track.toEntity(localMangaId),
@@ -484,7 +466,7 @@ class GoogleDriveSyncRepository @Inject constructor(
                     }
                 }
                 norm.feed.logs.forEach { log ->
-                    val localMangaId = mangaIdMapping[log.mangaId] ?: log.mangaId
+                    val localMangaId = contentImport.localIdOf(log.mangaId) ?: return@forEach
                     if (database.getMangaDao().contains(localMangaId)) {
                         database.mergeTrackLog(
                             log.toEntity(localMangaId),
@@ -515,6 +497,10 @@ class GoogleDriveSyncRepository @Inject constructor(
     }
 
     private suspend fun MangaDatabase.pruneLocalSyncResidue() {
+        val deletedUnidentifiable = getMangaDao().deleteUnidentifiableRemote()
+        if (deletedUnidentifiable > 0) {
+            Log.d(TAG, "sync pruned url-less content=$deletedUnidentifiable")
+        }
         val deletedContent = getMangaDao().cleanupSyncResidue()
         if (deletedContent > 0) {
             Log.d(TAG, "sync pruned unreferenced content=$deletedContent")
@@ -622,27 +608,27 @@ class GoogleDriveSyncRepository @Inject constructor(
         return "favourites=${getFavouritesDao().findAllActiveEntries().size} history=${getHistoryDao().findAllEntriesIncludingDeleted().size}"
     }
 
-    private suspend fun SyncContent.findLocalContent(database: MangaDatabase): MangaEntity? {
-        if (url.isNotBlank()) {
-            database.getMangaDao().findBySourceAndUrl(source, url)?.manga?.let { return it }
-            database.getMangaDao().findBySourceAndPublicUrl(source, url)?.manga?.let { return it }
+    private fun MangaDatabase.syncContentStore(): SyncContentStore = object : SyncContentStore {
+        override suspend fun findByIdentity(content: SyncContent): MangaEntity? {
+            val dao = getMangaDao()
+            if (content.url.isNotBlank()) {
+                dao.findBySourceAndUrl(content.source, content.url)?.manga?.let { return it }
+                dao.findBySourceAndPublicUrl(content.source, content.url)?.manga?.let { return it }
+            }
+            if (content.publicUrl.isNotBlank()) {
+                dao.findBySourceAndPublicUrl(content.source, content.publicUrl)?.manga?.let { return it }
+                dao.findBySourceAndUrl(content.source, content.publicUrl)?.manga?.let { return it }
+            }
+            return null
         }
-        if (publicUrl.isNotBlank()) {
-            database.getMangaDao().findBySourceAndPublicUrl(source, publicUrl)?.manga?.let { return it }
-            database.getMangaDao().findBySourceAndUrl(source, publicUrl)?.manga?.let { return it }
-        }
-        return null
-    }
 
-    private fun MangaEntity.hasSameContentIdentity(remote: SyncContent): Boolean {
-        return ContentIdentityKeys.hasSameIdentity(
-            source = source,
-            url = url,
-            publicUrl = publicUrl,
-            otherSource = remote.source,
-            otherUrl = remote.url,
-            otherPublicUrl = remote.publicUrl,
-        )
+        override suspend fun findById(id: Long): MangaEntity? = getMangaDao().find(id)?.manga
+
+        override suspend fun contains(id: Long): Boolean = getMangaDao().contains(id)
+
+        override suspend fun findMinId(): Long? = getMangaDao().findMinId()
+
+        override suspend fun upsert(entity: MangaEntity) = getMangaDao().upsert(entity)
     }
 
     private fun GoogleDriveSyncSnapshot.copyForUpload(syncedAt: Long): GoogleDriveSyncSnapshot {

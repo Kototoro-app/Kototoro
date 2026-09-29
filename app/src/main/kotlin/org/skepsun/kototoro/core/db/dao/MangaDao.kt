@@ -196,6 +196,20 @@ abstract class MangaDao {
     )
     abstract suspend fun cleanupSyncResidue(): Int
 
+    /**
+     * Remote manga without url and public url cannot be opened, and sync can never match
+     * them to their own copy; their favourites/history/tracks cascade with them.
+     */
+    @Query(
+        """
+		DELETE FROM manga
+		WHERE url = '' AND public_url = ''
+			AND source != 'LOCAL'
+			AND NOT EXISTS(SELECT * FROM local_index WHERE local_index.manga_id == manga.manga_id)
+        """,
+    )
+    abstract suspend fun deleteUnidentifiableRemote(): Int
+
     @Transaction
     open suspend fun upsert(manga: MangaEntity, tags: Iterable<TagEntity>? = null) {
         val stableManga = if (manga.contentType == null) {
