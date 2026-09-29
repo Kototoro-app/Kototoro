@@ -14,7 +14,9 @@ import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.migration.domain.MatchMode
 import org.skepsun.kototoro.migration.domain.MigrationDataFlag
 import org.skepsun.kototoro.migration.domain.MigrationSettings
+import org.skepsun.kototoro.migration.domain.assignFamilies
 import org.skepsun.kototoro.migration.domain.resolveContentFamily
+import org.skepsun.kototoro.migration.domain.sectionOrder
 import org.skepsun.kototoro.parsers.model.ContentSource
 import javax.inject.Inject
 
@@ -66,11 +68,13 @@ class MigrationConfigViewModel @Inject constructor(
             val migrationDao = database.getMigrationDao()
             // Sources the user already relies on come first: pinned, then by favourite count.
             val usage = migrationDao.findLibraryRows().groupingBy { it.source }.eachCount()
-            val contentFamilies = contents.map {
-                resolveContentFamily(it.source.getContentType(), migrationDao.findStoredContentType(it.id))
-            }
+            val contentFamilies = assignFamilies(
+                contents.associate {
+                    it.id to resolveContentFamily(it.source.getContentType(), migrationDao.findStoredContentType(it.id))
+                },
+            ).values
             val familyCounts = contentFamilies.groupingBy { it }.eachCount()
-            val families = familyCounts.keys.sortedByDescending { familyCounts[it] }.map { family ->
+            val families = familyCounts.keys.sortedBy { it.sectionOrder }.map { family ->
                 val available = enabled
                     .filter {
                         (family == ContentTypeFamily.OTHER || it.getContentType().contentFamily() == family) &&

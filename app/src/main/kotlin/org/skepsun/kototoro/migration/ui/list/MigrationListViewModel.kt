@@ -28,6 +28,7 @@ import org.skepsun.kototoro.migration.domain.MatchCandidate
 import org.skepsun.kototoro.migration.domain.MigrationMode
 import org.skepsun.kototoro.migration.domain.MigrationSettings
 import org.skepsun.kototoro.migration.domain.SmartMatchEngine
+import org.skepsun.kototoro.migration.domain.assignFamilies
 import org.skepsun.kototoro.migration.domain.resolveContentFamily
 import org.skepsun.kototoro.core.model.ContentTypeFamily
 import org.skepsun.kototoro.parsers.model.Content
@@ -81,6 +82,9 @@ class MigrationListViewModel @Inject constructor(
                 val originChapters = maxOf(chaptersDao.countChapters(id), chaptersDao.findHistoryChaptersCount(id))
                 MigrationItemState(origin = content, originChapters = originChapters)
             }
+            // Same folding as the config sheet, so unknown entries search the sources picked there.
+            val assigned = assignFamilies(families.toMap())
+            families.putAll(assigned)
             _state.update { it.copy(items = items, isLoading = false) }
             if (items.isEmpty()) onFinished.call(Unit)
             items.forEach { startMatching(it.origin) }
