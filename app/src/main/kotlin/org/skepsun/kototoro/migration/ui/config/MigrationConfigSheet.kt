@@ -64,7 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.model.ContentSource
+import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.core.model.ContentTypeFamily
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
@@ -153,8 +153,8 @@ private fun ConfigContent(
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
         )
-        if (state.originSourceNames.isNotEmpty()) {
-            val names = state.originSourceNames.map { ContentSource(it).migrationTitle(context) }
+        if (state.originSources.isNotEmpty()) {
+            val names = state.originSources.map { it.migrationTitle(context) }
             Text(
                 text = if (names.size <= MAX_ORIGIN_NAMES) {
                     names.joinToString("、")
@@ -354,9 +354,9 @@ private fun FamilySourcesCard(
                         color = MaterialTheme.colorScheme.error,
                     )
                     else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        StackedSourceIcons(family.selected.take(MAX_STACKED_ICONS))
+                        StackedSourceIcons(family.selectedSources.take(MAX_STACKED_ICONS))
                         Spacer(Modifier.width(10.dp))
-                        val names = family.selected.take(MAX_VISIBLE_SOURCES).map { ContentSource(it).migrationTitle(context) }
+                        val names = family.selectedSources.take(MAX_VISIBLE_SOURCES).map { it.migrationTitle(context) }
                         Text(
                             text = if (family.selected.size <= MAX_VISIBLE_SOURCES) {
                                 names.joinToString("、")
@@ -390,9 +390,9 @@ private fun FamilySourcesCard(
 }
 
 @Composable
-private fun StackedSourceIcons(names: List<String>) {
+private fun StackedSourceIcons(sources: List<ContentSource>) {
     Box {
-        names.forEachIndexed { index, name ->
+        sources.forEachIndexed { index, source ->
             Box(
                 Modifier
                     .offset(x = (index * 18).dp)
@@ -401,11 +401,11 @@ private fun StackedSourceIcons(names: List<String>) {
                     .background(MaterialTheme.colorScheme.surface)
                     .padding(2.dp),
             ) {
-                ContentSourceIcon(source = ContentSource(name), modifier = Modifier.size(24.dp).clip(CircleShape))
+                ContentSourceIcon(source = source, modifier = Modifier.size(24.dp).clip(CircleShape))
             }
         }
         // Reserve the width the offsets draw into.
-        Spacer(Modifier.width((28 + (names.size - 1).coerceAtLeast(0) * 18).dp))
+        Spacer(Modifier.width((28 + (sources.size - 1).coerceAtLeast(0) * 18).dp))
     }
 }
 

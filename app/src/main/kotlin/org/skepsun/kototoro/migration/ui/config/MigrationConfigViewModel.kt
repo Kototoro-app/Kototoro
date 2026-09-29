@@ -26,11 +26,15 @@ data class FamilySources(
     val pinned: Set<String>,
     val selected: List<String>,
     val contentCount: Int = 0,
-)
+) {
+    /** [selected] as loaded sources, in search order; they always come from [available]. */
+    val selectedSources: List<ContentSource>
+        get() = selected.mapNotNull { name -> available.firstOrNull { it.name == name } }
+}
 
 data class MigrationConfigState(
     val count: Int = 0,
-    val originSourceNames: List<String> = emptyList(),
+    val originSources: List<ContentSource> = emptyList(),
     val families: List<FamilySources> = emptyList(),
     val flags: Set<MigrationDataFlag> = MigrationDataFlag.ALL,
     val matchMode: MatchMode = MatchMode.FIRST_HIT,
@@ -91,7 +95,7 @@ class MigrationConfigViewModel @Inject constructor(
             }
             _state.value = MigrationConfigState(
                 count = contents.size,
-                originSourceNames = originNames.toList(),
+                originSources = originNames.map(sourcesRepository::resolveSource),
                 families = families,
                 flags = settings.dataFlags,
                 matchMode = settings.matchMode,

@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.migration.domain
 
 import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.isBroken
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.isUnresolved
@@ -35,7 +34,8 @@ class SourceHealthUseCase @Inject constructor(
     }
 
     private fun evaluate(name: String, rows: List<LibraryRow>, disabled: Set<String>, now: Long): SourceHealth? {
-        val source = ContentSource(name)
+        // ContentSource(name) only knows jar/Cloudstream sources; the repository also resolves Mihon, Aniyomi, etc.
+        val source = sourcesRepository.resolveSource(name)
         if (source.isLocal) return null
         val signals = SourceSignals(
             isUnresolved = source.isUnresolved,

@@ -1453,6 +1453,14 @@ class ContentSourcesRepository @Inject constructor(
         return if (fallback == org.skepsun.kototoro.core.model.UnknownContentSource) null else fallback
     }
 
+    /**
+     * Loaded source for [sourceName] across every ecosystem (Mihon, Aniyomi, IReader, JSON…), or the
+     * static/unresolved placeholder from [org.skepsun.kototoro.core.model.ContentSource] when nothing provides it.
+     */
+    fun resolveSource(sourceName: String): ContentSource =
+        sourceName.toContentSourceOrNull(allowFallback = false)
+            ?: org.skepsun.kototoro.core.model.ContentSource(sourceName)
+
     fun isSourceAvailable(sourceName: String): Boolean {
         val source = org.skepsun.kototoro.core.model.ContentSource(sourceName)
         return when (source) {
