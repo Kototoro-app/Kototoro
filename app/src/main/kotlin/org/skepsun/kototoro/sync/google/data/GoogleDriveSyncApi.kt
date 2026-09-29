@@ -56,11 +56,10 @@ class GoogleDriveSyncApi @Inject constructor() {
         @SerialName("id") val id: String,
     )
 
-    suspend fun findCurrentSyncFiles(token: String): List<DriveFile> {
-        val current = findSyncFiles(token, CURRENT_FILE_NAME)
-        if (current.isNotEmpty()) return current
-        return findSyncFiles(token, WORK_V2_FILE_NAME)
-    }
+    suspend fun findCurrentSyncFiles(token: String): List<DriveFile> = findSyncFiles(token, CURRENT_FILE_NAME)
+
+    /** Snapshots written by versions before 2.2.0; read-only seeds so older devices keep syncing. */
+    suspend fun findWorkV2SyncFiles(token: String): List<DriveFile> = findSyncFiles(token, WORK_V2_FILE_NAME)
 
     suspend fun findLegacySyncFiles(token: String): List<DriveFile> = findSyncFiles(token, LEGACY_FILE_NAME)
 

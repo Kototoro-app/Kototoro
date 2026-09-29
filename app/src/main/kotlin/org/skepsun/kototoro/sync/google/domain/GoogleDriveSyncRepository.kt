@@ -161,7 +161,7 @@ class GoogleDriveSyncRepository @Inject constructor(
         }
         return try {
             val token = auth.requireAccessToken()
-            api.findCurrentSyncFiles(token).forEach { file ->
+            api.findCurrentSyncFiles(token).ifEmpty { api.findWorkV2SyncFiles(token) }.forEach { file ->
                 runCatching { api.delete(token, file.id) }
             }
             settings.lastSyncTimestamp = 0L
@@ -233,10 +233,23 @@ class GoogleDriveSyncRepository @Inject constructor(
             val files = runSyncStep("list drive files") {
                 api.findCurrentSyncFiles(token)
             }
+            // Without a current snapshot, seed from pre-2.2.0 work v2 files but never write back to them.
+            val seedFiles = if (files.isEmpty()) {
+                runSyncStep("list work v2 drive files") {
+                    api.findWorkV2SyncFiles(token)
+                }
+            } else {
+                emptyList()
+            }
             val canonical = files.firstOrNull()
             val baseVersion = canonical?.version
-            val decoded = ArrayList<GoogleDriveSyncSnapshot>(files.size)
+            val decoded = ArrayList<GoogleDriveSyncSnapshot>(files.size + seedFiles.size)
             val decodedIds = HashSet<String>(files.size)
+            for (file in seedFiles) {
+                runSyncStep("download work v2 ${file.id}") {
+                    decodeCurrentSnapshot(api.download(token, file.id))
+                }?.let { decoded += it }
+            }
             for (file in files) {
                 val snapshot = runSyncStep("download ${file.id}") {
                     decodeCurrentSnapshot(api.download(token, file.id))
@@ -583,20 +596,11 @@ class GoogleDriveSyncRepository @Inject constructor(
         val namespace = probe?.namespace
         val semanticSchemaVersion = probe?.semanticSchemaVersion
         when {
-            version == null && requireCurrentProtocol -> throw GoogleDriveSyncProtocolException()
             version != null && version > GoogleDriveSyncSnapshot.SCHEMA_VERSION -> {
                 throw GoogleDriveSyncSchemaException(version)
             }
-            requireCurrentProtocol && version != GoogleDriveSyncSnapshot.SCHEMA_VERSION -> {
-                throw GoogleDriveSyncProtocolException()
-            }
             requireCurrentProtocol &&
-                namespace != GoogleDriveSyncSnapshot.NAMESPACE_CONTENT_V3 &&
-                namespace != GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2 -> {
-                throw GoogleDriveSyncProtocolException()
-            }
-            requireCurrentProtocol &&
-                semanticSchemaVersion != GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION -> {
+                !GoogleDriveSyncSnapshot.isSupportedProtocol(version, namespace, semanticSchemaVersion) -> {
                 throw GoogleDriveSyncProtocolException()
             }
         }

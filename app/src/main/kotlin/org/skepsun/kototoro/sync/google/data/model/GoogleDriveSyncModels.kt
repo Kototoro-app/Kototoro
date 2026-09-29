@@ -112,6 +112,20 @@ class GoogleDriveSyncSnapshot(
         const val NAMESPACE_CONTENT_V3 = "kototoro.content.v3"
         const val NAMESPACE_WORK_V2 = "kototoro.work.v2"
         const val SEMANTIC_SCHEMA_VERSION = 1
+
+        /** Schema version written into `kototoro.work.v2` snapshots by versions before 2.2.0. */
+        const val WORK_V2_SCHEMA_VERSION = 1
+
+        fun isSupportedProtocol(schemaVersion: Int?, namespace: String?, semanticSchemaVersion: Int?): Boolean {
+            if (semanticSchemaVersion != SEMANTIC_SCHEMA_VERSION) {
+                return false
+            }
+            return when (namespace) {
+                NAMESPACE_CONTENT_V3 -> schemaVersion == SCHEMA_VERSION
+                NAMESPACE_WORK_V2 -> schemaVersion == WORK_V2_SCHEMA_VERSION || schemaVersion == SCHEMA_VERSION
+                else -> false
+            }
+        }
     }
 }
 
