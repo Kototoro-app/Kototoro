@@ -1436,7 +1436,6 @@ private fun DetailsScreenContent(
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     containerColor = Color.Transparent,
-                    snackbarHost = { SnackbarHost(snackbarHostState) },
                 ) { paddingValues ->
                             KototoroPullToRefreshBox(
                                 isRefreshing = isLoading,
@@ -1609,6 +1608,14 @@ private fun DetailsScreenContent(
                         }
                     }
                 }
+                // Hosted above the pane: inside the Scaffold the bottom dock drew over it.
+                SnackbarHost(
+                    snackbarHostState,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = if (isWorkDetails) compactPaneCollapsedHeight else navigationBarBottomPadding)
+                        .zIndex(2f),
+                )
             }
             val detailsImmersiveStrength = ((LocalGlassPrefs.current?.immersiveStrengthPercent ?: 65).coerceIn(0, 100)) / 100f
             val detailsImmersiveIsDark = isSystemInDarkTheme()
