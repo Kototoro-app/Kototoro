@@ -258,6 +258,12 @@ open class RemoteListViewModel @Inject constructor(
         }
     }
 
+    // A committed data change must trigger a fresh query even when an older load is still active.
+    protected suspend fun reloadListAfterCurrentLoad() {
+        loadingJob?.join()
+        loadList(filterCoordinator.snapshot(), append = false).join()
+    }
+
     protected fun loadList(filterState: FilterCoordinator.Snapshot, append: Boolean): Job {
         loadingJob?.let {
             if (it.isActive) {

@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.core.lnreader
 
 import android.util.Log
+import eu.kanade.tachiyomi.network.await
+import kotlinx.coroutines.CancellationException
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -29,6 +31,7 @@ class LNReaderFetchBridge(
             "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
     }
 
+    @Volatile
     var pendingFatalException: Exception? = null
 
     /**
@@ -39,7 +42,7 @@ class LNReaderFetchBridge(
      * @param initStr Optional RequestInit JSON string (method, headers, body)
      * @return Response JSON string {ok, status, statusText, url, text, headers}
      */
-    fun fetch(url: String, initStr: String? = null): String {
+    suspend fun fetch(url: String, initStr: String? = null): String {
         return try {
             Log.d(TAG, "[$pluginId] Fetching: $url")
 
@@ -91,27 +94,30 @@ class LNReaderFetchBridge(
             }
 
             // Execute request
-            val response = httpClient.newCall(requestBuilder.build()).execute()
-            val responseBody = response.body?.string() ?: ""
-            val responseHeaders = mutableMapOf<String, String>()
-            response.headers.forEach { (name, value) ->
-                responseHeaders[name] = value
+            httpClient.newCall(requestBuilder.build()).await().use { response ->
+                val responseBody = response.body?.string() ?: ""
+                val responseHeaders = mutableMapOf<String, String>()
+                response.headers.forEach { (name, value) ->
+                    responseHeaders[name] = value
+                }
+
+                Log.d(TAG, "[$pluginId] Success: ${response.code} (${responseBody.length} bytes)")
+
+                val responseJson = org.json.JSONObject()
+                responseJson.put("ok", response.isSuccessful)
+                responseJson.put("status", response.code)
+                responseJson.put("statusText", response.message.ifEmpty { "OK" })
+                responseJson.put("url", url)
+                responseJson.put("text", responseBody)
+
+                val jsHeaders = org.json.JSONObject()
+                responseHeaders.forEach { (k, v) -> jsHeaders.put(k, v) }
+                responseJson.put("headers", jsHeaders)
+
+                responseJson.toString()
             }
-
-            Log.d(TAG, "[$pluginId] Success: ${response.code} (${responseBody.length} bytes)")
-
-            val responseJson = org.json.JSONObject()
-            responseJson.put("ok", response.isSuccessful)
-            responseJson.put("status", response.code)
-            responseJson.put("statusText", response.message.ifEmpty { "OK" })
-            responseJson.put("url", url)
-            responseJson.put("text", responseBody)
-
-            val jsHeaders = org.json.JSONObject()
-            responseHeaders.forEach { (k, v) -> jsHeaders.put(k, v) }
-            responseJson.put("headers", jsHeaders)
-
-            responseJson.toString()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val interactiveEx = e.findInteractiveException()
             if (interactiveEx != null) {
@@ -256,9 +262,9 @@ class LNReaderFetchBridge(
 			}
 			globalThis.Headers = Headers;
 			
-			globalThis.fetchApi = function(url, init) {
+			globalThis.fetchApi = async function(url, init) {
 				var initStr = init ? JSON.stringify(init) : "{}";
-				var responseStr = __nativeFetch(url, initStr);
+				var responseStr = await __nativeFetch(url, initStr);
 				var response = responseStr ? JSON.parse(responseStr) : {};
 				
 				if (response.error) {

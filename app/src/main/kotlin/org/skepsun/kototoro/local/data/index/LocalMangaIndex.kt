@@ -6,6 +6,8 @@ import androidx.core.content.edit
 import androidx.room.withTransaction
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.skepsun.kototoro.core.db.MangaDatabase
@@ -63,6 +65,12 @@ suspend fun update() = mutex.withLock {
             update()
         }
     }
+
+    // Import notifications also drive this index's writer. List consumers must wait for the
+    // committed index change rather than racing the writer on the same notification.
+    fun observeChanges(): Flow<Unit> = db.invalidationTracker
+        .createFlow("local_index", emitInitialState = false)
+        .map { Unit }
 
     suspend fun get(mangaId: Long, withDetails: Boolean): LocalContent? {
         updateIfRequired()

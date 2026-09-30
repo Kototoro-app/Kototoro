@@ -18,8 +18,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.TABLE_FAVOURITE_CATEGORIES
-import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
-import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
+import org.skepsun.kototoro.core.db.TABLE_FAVOURITES
+import org.skepsun.kototoro.core.db.TABLE_HISTORY
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.logSyncFlow
 import org.skepsun.kototoro.core.util.ext.processLifecycleScope
@@ -35,8 +35,8 @@ class SyncController @Inject constructor(
     private val syncAuthorityExecutor: SyncAuthorityExecutor,
 ) : InvalidationTracker.Observer(
     arrayOf(
-        TABLE_WORK_HISTORY,
-        TABLE_WORK_FAVOURITES,
+        TABLE_HISTORY,
+        TABLE_FAVOURITES,
         TABLE_FAVOURITE_CATEGORIES,
     ),
 ) {

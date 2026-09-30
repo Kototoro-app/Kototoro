@@ -4,7 +4,9 @@ import android.content.Context
 import android.util.Log
 import com.dokar.quickjs.QuickJs
 import com.dokar.quickjs.binding.FunctionBinding
+import com.dokar.quickjs.binding.AsyncFunctionBinding
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -107,11 +109,11 @@ class LNReaderEngine(
      * JS code calls fetchApi(url, init) which delegates to OkHttp.
      */
     private suspend fun registerFetchBridge(qjs: QuickJs) {
-        // Register __nativeFetch as a native function
-        qjs.defineBinding("__nativeFetch", FunctionBinding<String?> { args ->
-            val url = args.getOrNull(0) as? String ?: return@FunctionBinding null
+        // Async binding keeps Promise.all requests concurrent instead of blocking the JS thread.
+        qjs.defineBinding("__nativeFetch", AsyncFunctionBinding<String?> { args ->
+            val url = args.getOrNull(0) as? String ?: return@AsyncFunctionBinding null
             val init = args.getOrNull(1) as? String
-            fetchBridge.fetch(url, init)
+            withContext(Dispatchers.IO) { fetchBridge.fetch(url, init) }
         })
         qjs.defineBinding("__nativeFetchProto", FunctionBinding<String?> { args ->
             val url = args.getOrNull(0) as? String ?: return@FunctionBinding null
@@ -128,7 +130,7 @@ class LNReaderEngine(
             "<fetch-init>"
         )
 
-        // Inject fetchApi wrapper that uses synchronous __nativeFetch
+        // Inject the Promise-based fetch API wrapper.
         val fetchScript = fetchBridge.toJavaScriptFunction()
         qjs.evaluate<Any?>(fetchScript, "<fetch-bridge>")
     }
@@ -636,6 +638,7 @@ class LNReaderEngine(
      */
     private fun registerCheerioBridge(qjs: QuickJs) {
         val parsedElements = mutableMapOf<Int, org.jsoup.nodes.Element>()
+        val contentNodes = mutableMapOf<Int, org.jsoup.nodes.Node>()
         var cheerioIdCounter = 0
 
         fun parseNodes(htmlOrText: String): List<org.jsoup.nodes.Node> {
@@ -650,7 +653,47 @@ class LNReaderEngine(
         qjs.defineBinding("__nativeCheerio", FunctionBinding<String> { args ->
             val type = args.getOrNull(0) as? String ?: return@FunctionBinding "{}"
 
-            if (type == "parse") {
+            if (type == "outerHtml") {
+                val id = args.getOrNull(1)?.toString()?.toIntOrNull()
+                return@FunctionBinding (contentNodes[id] ?: parsedElements[id])?.outerHtml().orEmpty()
+            } else if (type == "contents") {
+                val id = args.getOrNull(1)?.toString()?.toIntOrNull()
+                val items = org.json.JSONArray()
+                for (node in parsedElements[id]?.childNodes().orEmpty()) {
+                    val nodeId = cheerioIdCounter++
+                    contentNodes[nodeId] = node
+                    val element = node as? org.jsoup.nodes.Element
+                    if (element != null) parsedElements[nodeId] = element
+                    val attrs = org.json.JSONObject()
+                    element?.attributes()?.forEach { attrs.put(it.key, it.value) }
+                    val nodeType = when (node) {
+                        is org.jsoup.nodes.TextNode -> "text"
+                        is org.jsoup.nodes.Comment -> "comment"
+                        is org.jsoup.nodes.DataNode -> "text"
+                        else -> "tag"
+                    }
+                    val data = when (node) {
+                        is org.jsoup.nodes.TextNode -> node.wholeText
+                        is org.jsoup.nodes.Comment -> node.data
+                        is org.jsoup.nodes.DataNode -> node.wholeData
+                        else -> ""
+                    }
+                    items.put(
+                        org.json.JSONObject().apply {
+                            put("id", nodeId.toString())
+                            put("type", nodeType)
+                            put("data", data)
+                            put("name", element?.normalName().orEmpty())
+                            put("tagName", element?.tagName().orEmpty())
+                            put("text", element?.text() ?: data)
+                            put("html", element?.html().orEmpty())
+                            put("attrs", attrs)
+                            put("attribs", attrs)
+                        },
+                    )
+                }
+                return@FunctionBinding org.json.JSONObject().put("items", items).toString()
+            } else if (type == "parse") {
                 val html = args.getOrNull(1) as? String ?: ""
                 val docId = cheerioIdCounter++
                 try {
@@ -1218,7 +1261,12 @@ class LNReaderEngine(
 								return createSelection(docId, parseQuery(result.items[0].id, q));
 							},
 							contents: function() {
-								return this.children();
+								let items = [];
+								(result.items || []).forEach(function(item) {
+									const nodes = JSON.parse(globalThis.__nativeCheerio('contents', item.id));
+									items = items.concat(nodes.items || []);
+								});
+								return selectionFromItems(items);
 							},
 							remove: function(subSel) {
 								if (result.items) {
@@ -1396,7 +1444,14 @@ class LNReaderEngine(
 					${'$'}.text = function() {
 						return globalThis.__nativeCheerio('query', docId, '__root_text__') || '';
 					};
-					${'$'}.html = function() {
+					${'$'}.html = function(node) {
+						if (node && node.id !== undefined) {
+							return globalThis.__nativeCheerio('outerHtml', node.id) || '';
+						}
+						if (Array.isArray(node)) {
+							return node.map(function(item) { return ${'$'}.html(item); }).join('');
+						}
+						if (node && node._result) return ${'$'}.html(node._result.items || []);
 						return globalThis.__nativeCheerio('query', docId, '__root_html__') || '';
 					};
 					${'$'}.root = function() {

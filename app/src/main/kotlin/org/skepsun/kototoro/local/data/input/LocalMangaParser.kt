@@ -931,7 +931,9 @@ class LocalContentParser {
 
         private fun File.buildChildUriString(path: Path, resolve: Boolean): String {
             val relative = path.toString().removePrefix(Path.DIRECTORY_SEPARATOR)
-            return if (isZipArchive || !resolve) {
+            return if (isZipArchive) {
+                toZipUri(relative).toString()
+            } else if (!resolve) {
                 if (relative.isBlank()) {
                     toURI().toString()
                 } else {

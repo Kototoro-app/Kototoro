@@ -33,6 +33,7 @@ import org.skepsun.kototoro.list.ui.model.QuickFilter
 import org.skepsun.kototoro.list.ui.model.TipModel
 import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.data.LocalStorageManager
+import org.skepsun.kototoro.local.data.index.LocalContentIndex
 import org.skepsun.kototoro.local.domain.DeleteLocalContentUseCase
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.core.model.LocalMangaSource
@@ -55,7 +56,7 @@ class LocalListViewModel @Inject constructor(
     mangaListMapper: ContentListMapper,
     private val deleteLocalContentUseCase: DeleteLocalContentUseCase,
     exploreRepository: ExploreRepository,
-    @param:LocalStorageChanges private val localStorageChanges: SharedFlow<LocalContent?>,
+    @param:LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
     private val localStorageManager: LocalStorageManager,
     sourcesRepository: ContentSourcesRepository,
     sourceAvailabilityRepository: SourceAvailabilityRepository,
@@ -63,6 +64,7 @@ class LocalListViewModel @Inject constructor(
     captchaAutoResolveCoordinator: org.skepsun.kototoro.core.exceptions.resolve.CaptchaAutoResolveCoordinator,
     detailsLoadUseCase: DetailsLoadUseCase,
     private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
+    localContentIndex: LocalContentIndex,
 ) : RemoteListViewModel(
     savedStateHandle = savedStateHandle,
     mangaRepositoryFactory = mangaRepositoryFactory,
@@ -84,9 +86,9 @@ class LocalListViewModel @Inject constructor(
 
     init {
         launchJob(Dispatchers.Default) {
-            localStorageChanges
+            localContentIndex.observeChanges()
                 .collect {
-                    loadList(filterCoordinator.snapshot(), append = false).join()
+                    reloadListAfterCurrentLoad()
                 }
         }
         settings.subscribe(this)

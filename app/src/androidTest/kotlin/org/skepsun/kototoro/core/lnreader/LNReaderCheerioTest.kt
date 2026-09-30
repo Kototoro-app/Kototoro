@@ -15,6 +15,57 @@ import org.junit.runner.RunWith
 class LNReaderCheerioTest {
 
     @Test
+    fun contentsPreservesTextCommentsAndOuterHtml() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val engine = LNReaderEngine(context, LNReaderFetchBridge(OkHttpClient(), "contents"))
+        val qjs = engine.createPluginContext("", "contents")
+        try {
+            val result = qjs.evaluate<String>(
+                """
+                (function() {
+                    const ${'$'} = require('cheerio').load('<nav>outside</nav><div id="chapter">Hello <b>world</b><br>Next<!--note--></div>');
+                    return JSON.stringify(${'$'}('#chapter').contents().toArray().map(function(node) {
+                        return { type: node.type, data: node.data, html: ${'$'}.html(node) };
+                    }));
+                })()
+                """.trimIndent(),
+            )
+            val nodes = org.json.JSONArray(result)
+            assertEquals(5, nodes.length())
+            assertEquals("text", nodes.getJSONObject(0).getString("type"))
+            assertEquals("Hello ", nodes.getJSONObject(0).getString("data"))
+            assertEquals("<b>world</b>", nodes.getJSONObject(1).getString("html"))
+            assertEquals("<br>", nodes.getJSONObject(2).getString("html"))
+            assertEquals("comment", nodes.getJSONObject(4).getString("type"))
+        } finally {
+            qjs.close()
+        }
+    }
+
+    @Test
+    fun chapterNodeSerializationDoesNotRepeatTheWholeDocument() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val engine = LNReaderEngine(context, LNReaderFetchBridge(OkHttpClient(), "large-chapter"))
+        val qjs = engine.createPluginContext("", "large-chapter")
+        try {
+            // Read From Net serializes every node returned by contents(). Keep a realistic document
+            // size and enough line breaks to expose repeated whole-document serialization/OOM.
+            val length = qjs.evaluate<Long>(
+                """
+                (function() {
+                    const ${'$'} = require('cheerio').load('<nav>' + 'x'.repeat(100000) + '</nav><div id="chapter">' + 'line<br>'.repeat(600) + '</div>');
+                    const nodes = ${'$'}('#chapter').contents().toArray();
+                    return nodes.map(function(node) { return ${'$'}.html(node); }).join('').length;
+                })()
+                """.trimIndent(),
+            )
+            assertEquals(4800L, length)
+        } finally {
+            qjs.close()
+        }
+    }
+
+    @Test
     fun testCheerioMutationsAndFormatting() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val fetchBridge = LNReaderFetchBridge(OkHttpClient(), "test")
