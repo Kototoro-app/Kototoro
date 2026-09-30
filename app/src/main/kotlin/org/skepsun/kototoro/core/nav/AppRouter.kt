@@ -664,11 +664,13 @@ class AppRouter(
     fun openFavorites() = startActivity(FavouritesActivity::class.java)
 
 
-    fun openFavorites(category: FavouriteCategory) {
+    fun openFavorites(category: FavouriteCategory, matchingIds: List<Long>? = null, query: String? = null) {
         startActivity(
             Intent(contextOrNull() ?: return, FavouritesActivity::class.java)
                 .putExtra(KEY_ID, category.id)
-                .putExtra(KEY_TITLE, category.title),
+                .putExtra(KEY_TITLE, category.title)
+                .putExtra(FavouritesActivity.EXTRA_MATCHING_IDS, matchingIds?.toLongArray())
+                .putExtra(KEY_QUERY, query),
         )
     }
 

@@ -97,6 +97,12 @@ class ExploreViewModel @Inject constructor(
         valueProducer = { isEmptySourcesHiddenInExplore },
     )
 
+    suspend fun loadSourceOrder(): List<org.skepsun.kototoro.core.ui.compose.ReorderItem> =
+        sourcesRepository.loadSourceOrder()
+
+    suspend fun saveSourceOrder(names: List<String>) =
+        sourcesRepository.saveSourceOrder(names)
+
     val tvBoxRepositorySelection: StateFlow<TVBoxRepositorySelection> =
         sourcesRepository.observeTvBoxRepositorySelection()
 

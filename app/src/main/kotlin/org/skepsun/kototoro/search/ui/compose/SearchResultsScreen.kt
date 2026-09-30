@@ -169,6 +169,7 @@ fun SearchResultsRoute(
     onOpenContent: (Content, String?) -> Unit,
     onPickContent: (Content) -> Unit,
     onOpenSourceResults: (SearchResultsListModel) -> Unit,
+    onOpenFavouriteCategory: (org.skepsun.kototoro.favourites.domain.FavouriteSearchMatch, String) -> Unit,
     onManageLanguagePresets: () -> Unit,
     onOpenGlobalTagBlacklist: () -> Unit,
     onSubmitSearch: (
@@ -190,6 +191,38 @@ fun SearchResultsRoute(
     val activeLanguagePresetId by viewModel.activeLanguagePresetId.collectAsStateWithLifecycle()
     val globalTagBlacklist by viewModel.globalTagBlacklist.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val favouriteMatches by viewModel.favouriteMatches.collectAsStateWithLifecycle()
+    LaunchedEffect(favouriteMatches) {
+        favouriteMatches?.singleOrNull()?.let { match ->
+            viewModel.dismissFavouriteCategories()
+            onOpenFavouriteCategory(match, viewModel.query)
+        }
+    }
+    favouriteMatches?.takeUnless { it.size == 1 }?.let { matches ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = viewModel::dismissFavouriteCategories,
+            title = { Text(stringResource(R.string.favourites)) },
+            text = {
+                androidx.compose.foundation.lazy.LazyColumn {
+                    if (matches.isEmpty()) item { Text(stringResource(R.string.nothing_found)) }
+                    items(matches.size) { index ->
+                        val match = matches[index]
+                        androidx.compose.material3.TextButton(onClick = {
+                            viewModel.dismissFavouriteCategories()
+                            onOpenFavouriteCategory(match, viewModel.query)
+                        }) {
+                            Text(stringResource(R.string.favourite_search_category, match.category.title, match.mangaIds.size))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = viewModel::dismissFavouriteCategories) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
     val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
     val screenPrefs by settings.observeAsState(
         AppSettings.KEY_BADGES_TOP_LEFT,
@@ -364,7 +397,13 @@ fun SearchResultsRoute(
                     cardUiPrefs = cardUiPrefs,
                     selectedItemsIds = selectedItemsIds,
                     selectionEnabled = selectedItemsIds.isNotEmpty() && !isPickMode,
-                    onSectionClick = { onOpenSourceResults(section) },
+                    onSectionClick = {
+                        if (section.titleResId == R.string.favourites) {
+                            viewModel.showFavouriteCategories(section.list.map { it.id })
+                        } else {
+                            onOpenSourceResults(section)
+                        }
+                    },
                     onItemClick = { item ->
                         if (selectedItemsIds.isNotEmpty() && !isPickMode) {
                             hapticFeedback.performSelectionHapticFeedback()
@@ -634,7 +673,14 @@ private fun SearchResultsSection(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (section.source !== UnknownContentSource) {
+            if (section.titleResId == R.string.favourites) {
+                IconButton(onClick = onSectionClick) {
+                    Icon(
+                        painterResource(R.drawable.ic_arrow_forward),
+                        contentDescription = stringResource(R.string.favourites),
+                    )
+                }
+            } else if (section.source !== UnknownContentSource) {
                 Button(
                     onClick = onSectionClick,
                     modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),

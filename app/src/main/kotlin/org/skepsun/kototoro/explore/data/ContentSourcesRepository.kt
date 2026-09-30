@@ -12,6 +12,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import org.skepsun.kototoro.BuildConfig
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.dao.MangaSourcesDao
@@ -42,6 +44,7 @@ import org.skepsun.kototoro.core.jsonsource.TVBoxRepositorySelector
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.unwrap
 import org.skepsun.kototoro.core.model.isBroken
@@ -913,6 +916,13 @@ class ContentSourcesRepository @Inject constructor(
         .combine(tvBoxRepositorySelection) { sources, selection ->
             sources.filter { it.mangaSource.isVisibleForTvBoxRepository(selection.activeId) }
         }
+        .combine(dao.observeAll()) { sources, positions ->
+            if (settings.sourcesSortOrder != SourcesSortOrder.MANUAL) sources else {
+                val keys = positions.associate { it.source to it.sortKey }
+                sources.sortedWith(compareBy<ContentSourceInfo> { !it.isPinned }
+                    .thenBy { keys[it.name] ?: Int.MAX_VALUE })
+            }
+        }
 
     /**
      * 对齐 legado-with-MD3：浏览(发现)仅展示具备 exploreUrl 的源；仅提供 searchUrl 的源不应出现在浏览页。
@@ -1035,10 +1045,51 @@ class ContentSourcesRepository @Inject constructor(
 
     suspend fun setPositions(sources: List<ContentSource>) {
         db.withTransaction {
-            for ((index, item) in sources.withIndex()) {
-                dao.setSortKey(item.name, index)
+            val existing = dao.findAll()
+            var nextKey = (existing.maxOfOrNull { it.sortKey } ?: -1) + 1
+            dao.insertIfAbsent(sources.distinctBy { it.name }.map { source ->
+                MangaSourceEntity(
+                    source = source.name,
+                    isEnabled = true,
+                    sortKey = nextKey++,
+                    addedIn = BuildConfig.VERSION_CODE,
+                    lastUsedAt = 0,
+                    isPinned = (source as? ContentSourceInfo)?.isPinned == true,
+                    cfState = CloudFlareHelper.PROTECTION_NOT_DETECTED,
+                )
+            })
+            val order = org.skepsun.kototoro.core.util.mergeManualOrder(
+                dao.findAll().map { it.source }, sources.map { it.name },
+            )
+            for ((index, name) in order.withIndex()) {
+                dao.setSortKey(name, index)
             }
         }
+    }
+
+    suspend fun getSourcesForReorder(): List<ContentSourceInfo> {
+        assimilateNewSources()
+        return createEnabledSourcesFlow().first().filterNot { it.isLocal }
+    }
+
+    suspend fun loadSourceOrder(): List<org.skepsun.kototoro.core.ui.compose.ReorderItem> =
+        withContext(Dispatchers.IO) {
+            getSourcesForReorder().map { source ->
+                org.skepsun.kototoro.core.ui.compose.ReorderItem(
+                    key = source.name,
+                    title = source.getTitle(context),
+                    group = buildList {
+                        if (source.isPinned) add(context.getString(R.string.source_pinned))
+                        if (settings.isSourcesGroupedByLanguage) add(source.locale.ifBlank { "—" })
+                    }.joinToString(" · "),
+                )
+            }.sortedBy { it.group }
+        }
+
+    suspend fun saveSourceOrder(names: List<String>) = withContext(Dispatchers.IO) {
+        val available = getSourcesForReorder().associateBy { it.name }
+        setPositions(names.mapNotNull(available::get))
+        settings.sourcesSortOrder = SourcesSortOrder.MANUAL
     }
 
     fun observeHasNewSources(): Flow<Boolean> = observeIsNsfwDisabled().map { skipNsfw ->
@@ -1346,6 +1397,8 @@ class ContentSourcesRepository @Inject constructor(
         val result = ArrayList<ContentSourceInfo>(size)
         for (entity in this) {
             val source = entity.source.toContentSourceOrNull() ?: continue
+            // JSON enable/pin state is owned by its own table; merge it in observeJsonSources instead.
+            if (source is JsonContentSource) continue
             if (skipNsfwSources && source.isNsfw()) {
                 continue
             }

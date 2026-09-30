@@ -946,6 +946,12 @@
     <string name="random">Random</string>
     <string name="categories_delete_confirm">Are you sure you want to delete the selected favorite categories?\nAll manga in it will be lost and this cannot be undone.</string>
     <string name="reorder">Reorder</string>
+    <string name="reorder_hint">Drag the handle or long-press an item to reorder, then save.</string>
+    <string name="reorder_move_up">Move up</string>
+    <string name="reorder_move_down">Move down</string>
+    <string name="reorder_select_category_hint">Please select a specific category to reorder</string>
+    <string name="order_manual">Custom order</string>
+    <string name="favourite_search_category">%1$s (%2$d)</string>
     <string name="move_up">Move up</string>
     <string name="move_down">Move down</string>
     <string name="empty">Empty</string>

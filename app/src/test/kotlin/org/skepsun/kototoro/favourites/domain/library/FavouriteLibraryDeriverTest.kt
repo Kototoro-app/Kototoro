@@ -92,8 +92,8 @@ class FavouriteLibraryDeriverTest {
         updatedAt = updatedAt,
     )
 
-    private fun membership(entityId: Long, categoryId: Long, pinned: Boolean = false, createdAt: Long = entityId) =
-        FavouriteMembership(entityId = entityId, categoryId = categoryId, isPinned = pinned, sortKey = 0, createdAt = createdAt, updatedAt = createdAt)
+    private fun membership(entityId: Long, categoryId: Long, pinned: Boolean = false, createdAt: Long = entityId, sortKey: Int = 0) =
+        FavouriteMembership(entityId = entityId, categoryId = categoryId, isPinned = pinned, sortKey = sortKey, createdAt = createdAt, updatedAt = createdAt)
 
     private fun snapshot(
         rows: List<FavouriteCardRow>,
@@ -526,4 +526,21 @@ class FavouriteLibraryDeriverTest {
         assertEquals(first, second)
         assertTrue(input.filters.isEmpty() && input.ordersByCategory.isEmpty())
     }
+
+    @Test
+    fun `manual sort order respects sortKey within category`() {
+        val rows = listOf(row(1), row(2), row(3))
+        val memberships = listOf(
+            membership(entityId = 1, categoryId = 10L, sortKey = 2),
+            membership(entityId = 2, categoryId = 10L, sortKey = 0),
+            membership(entityId = 3, categoryId = 10L, sortKey = 1),
+        )
+        val snap = snapshot(rows, mapOf(10L to memberships))
+        val input = FavouriteLibraryDerivationInput(
+            defaultOrder = ListSortOrder.MANUAL,
+        )
+        val state = deriveFavouriteLibraryState(snap, input)
+        assertEquals(listOf(2L, 3L, 1L), state.visibleIdsByCategory[10L])
+    }
 }
+

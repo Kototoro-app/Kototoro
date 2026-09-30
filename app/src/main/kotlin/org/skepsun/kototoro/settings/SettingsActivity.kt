@@ -1426,6 +1426,15 @@ class SettingsActivity :
                 val readyState = state as? UnifiedSourcesUiState.Ready
                 val pagerState = rememberPagerState(pageCount = { UNIFIED_SOURCES_TAB_COUNT })
                 val coroutineScope = rememberCoroutineScope()
+                var sourceOrder by remember { mutableStateOf<List<org.skepsun.kototoro.core.ui.compose.ReorderItem>?>(null) }
+                var loadingOrder by remember { mutableStateOf(false) }
+                sourceOrder?.let { items ->
+                    org.skepsun.kototoro.core.ui.compose.ReorderDialog(
+                        items = items,
+                        onDismissRequest = { sourceOrder = null },
+                        onSave = unifiedSourcesViewModel::saveSourceOrder,
+                    )
+                }
                 var tabReselectTrigger by remember { mutableStateOf<Pair<Int, Long>?>(null) }
                 val closeSearch = {
                     updateUnifiedSourcesSearchActive(false)
@@ -1439,6 +1448,22 @@ class SettingsActivity :
                         readyState = readyState,
                         onSearchClick = { updateUnifiedSourcesSearchActive(true) },
                         onFilterClick = openFilter,
+                        onReorderClick = if (loadingOrder || readyState == null || readyState.filters.query.isNotBlank()) null else {
+                            {
+                                loadingOrder = true
+                                coroutineScope.launch {
+                                    try {
+                                        sourceOrder = unifiedSourcesViewModel.loadSourceOrder()
+                                    } catch (e: kotlinx.coroutines.CancellationException) {
+                                        throw e
+                                    } catch (e: Exception) {
+                                        // ignore
+                                    } finally {
+                                        loadingOrder = false
+                                    }
+                                }
+                            }
+                        },
                         modifier = modifier,
                     )
                 }

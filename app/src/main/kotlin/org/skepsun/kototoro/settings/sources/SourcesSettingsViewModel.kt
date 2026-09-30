@@ -33,10 +33,16 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SourcesSettingsViewModel @Inject constructor(
-    sourcesRepository: ContentSourcesRepository,
+    private val sourcesRepository: ContentSourcesRepository,
     @ApplicationContext private val context: Context,
     private val settings: AppSettings,
 ) : BaseViewModel() {
+
+    suspend fun loadSourceOrder(): List<org.skepsun.kototoro.core.ui.compose.ReorderItem> =
+        sourcesRepository.loadSourceOrder()
+
+    suspend fun saveSourceOrder(names: List<String>) =
+        sourcesRepository.saveSourceOrder(names)
 
     private val linksHandlerActivity = ComponentName(context, "org.skepsun.kototoro.details.ui.DetailsByLinkActivity")
 

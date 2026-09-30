@@ -352,6 +352,12 @@
     <string name="send">發送</string>
     <string name="status_planned">計畫</string>
     <string name="reorder">重新排序</string>
+    <string name="reorder_hint">拖動控制手柄或長按條目調整排序，完成後儲存。</string>
+    <string name="reorder_move_up">上移</string>
+    <string name="reorder_move_down">下移</string>
+    <string name="reorder_select_category_hint">全部收藏不支援手動排序，請切換至具體分類進行排序</string>
+    <string name="order_manual">自訂排序</string>
+    <string name="favourite_search_category">%1$s (%2$d)</string>
     <string name="empty">空白</string>
     <string name="explore">瀏覽</string>
     <string name="exit_confirmation">退出確認</string>

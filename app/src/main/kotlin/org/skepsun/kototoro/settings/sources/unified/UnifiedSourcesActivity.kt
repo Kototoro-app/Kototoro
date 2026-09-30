@@ -112,6 +112,15 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
         val readyState = state as? UnifiedSourcesUiState.Ready
         val pagerState = rememberPagerState(pageCount = { UNIFIED_SOURCES_TAB_COUNT })
         val coroutineScope = rememberCoroutineScope()
+        var sourceOrder by remember { mutableStateOf<List<org.skepsun.kototoro.core.ui.compose.ReorderItem>?>(null) }
+        var loadingOrder by remember { mutableStateOf(false) }
+        sourceOrder?.let { items ->
+            org.skepsun.kototoro.core.ui.compose.ReorderDialog(
+                items = items,
+                onDismissRequest = { sourceOrder = null },
+                onSave = viewModel::saveSourceOrder,
+            )
+        }
         var tabReselectTrigger by remember { mutableStateOf<Pair<Int, Long>?>(null) }
         val closeSearch = {
             searchActive = false
@@ -160,6 +169,22 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
                     readyState = readyState,
                     onSearchClick = { searchActive = true },
                     onFilterClick = openFilter,
+                    onReorderClick = if (loadingOrder || readyState == null || readyState.filters.query.isNotBlank()) null else {
+                        {
+                            loadingOrder = true
+                            coroutineScope.launch {
+                                try {
+                                    sourceOrder = viewModel.loadSourceOrder()
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    Toast.makeText(this@UnifiedSourcesActivity, e.localizedMessage, Toast.LENGTH_SHORT).show()
+                                } finally {
+                                    loadingOrder = false
+                                }
+                            }
+                        }
+                    },
                 )
             },
             modifier = modifier,

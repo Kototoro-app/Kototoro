@@ -83,6 +83,7 @@ fun SourcesSettingsScreen(
     onHandleLinksEnabledChange: (Boolean) -> Unit,
     onExtensionInstallPolicyChange: (String, ExtensionInstallPolicy) -> Unit,
     onBatchSetExtensionInstallPolicy: (ExtensionInstallPolicy) -> Unit,
+    onReorderSourcesClick: () -> Unit = {},
 ) {
     val adultContentFilterOptions = listOf(
         SettingsChoiceOption(
@@ -135,6 +136,14 @@ fun SourcesSettingsScreen(
                         options = sortOrderOptions,
                         onValueChange = onSourcesSortOrderChange,
                     ) }
+                    if (state.sourcesSortOrder == SourcesSortOrder.MANUAL) {
+                        item { SettingsActionPreference(
+                            title = stringResource(R.string.reorder),
+                            summary = stringResource(R.string.reorder_hint),
+                            iconRes = R.drawable.ic_reorder_handle,
+                            onClick = onReorderSourcesClick,
+                        ) }
+                    }
                     item { SettingsActionPreference(
                         title = stringResource(R.string.show_in_grid_view),
                         summary = stringResource(R.string.browse_display_options_summary),

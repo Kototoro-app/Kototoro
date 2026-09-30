@@ -57,6 +57,7 @@ recyclerview = "1.4.0"
 room = "2.8.4"
 serialization = "1.11.0"
 telephoto = "0.19.0"
+reorderable = "3.1.0"
 swiperefreshlayout = "1.1.0"
 testRules = "1.7.0"
 testRunner = "1.7.0"
@@ -208,6 +209,7 @@ okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 telephoto-subsampling = { module = "me.saket.telephoto:sub-sampling-image", version.ref = "telephoto" }
 telephoto-zoomable-image-coil3 = { module = "me.saket.telephoto:zoomable-image-coil3", version.ref = "telephoto" }
 workinspector = { module = "com.github.Koitharu:WorkInspector", version.ref = "workinspector" }
+reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
 androidx-window = { module = "androidx.window:window", version.ref = "window" }
 androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
 androidx-media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }

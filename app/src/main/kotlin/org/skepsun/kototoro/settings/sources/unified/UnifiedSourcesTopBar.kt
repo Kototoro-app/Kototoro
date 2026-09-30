@@ -214,6 +214,7 @@ fun UnifiedSourcesActionCapsule(
     readyState: UnifiedSourcesUiState.Ready?,
     onSearchClick: () -> Unit,
     onFilterClick: () -> Unit,
+    onReorderClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
@@ -241,6 +242,14 @@ fun UnifiedSourcesActionCapsule(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) {
+            onReorderClick?.let { action ->
+                IconButton(onClick = action, modifier = Modifier.size(tokens.topBarButtonSize - 4.dp)) {
+                    Icon(
+                        painter = rememberSafePainter(R.drawable.ic_reorder_handle),
+                        contentDescription = stringResource(R.string.reorder),
+                    )
+                }
+            }
             // Search button
             Box(
                 modifier = Modifier

@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.favourites.ui.container
 
 import android.content.Context
+import kotlinx.coroutines.flow.first
 import androidx.room.withTransaction
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -185,11 +186,26 @@ class FavouritesContainerViewModel @Inject constructor(
         )
     }.distinctUntilChanged()
 
+    private val searchMatchingIds = MutableStateFlow<Set<Long>?>(null)
+
+    fun setSearchMatchingIds(ids: Set<Long>?) {
+        searchMatchingIds.value = ids
+    }
+
     val libraryState: StateFlow<FavouriteLibraryUiState> = combine(
         favouriteLibrarySnapshotStore.observe(),
         combineLibraryDerivationParams(),
-    ) { snapshot, params ->
-        buildFavouriteLibraryUiState(snapshot, params, spaceContentPolicy)
+        searchMatchingIds,
+    ) { snapshot, params, matchingIds ->
+        val state = buildFavouriteLibraryUiState(snapshot, params, spaceContentPolicy)
+        if (matchingIds == null) state else {
+            val visible = state.visibleIdsByCategory.mapValues { (_, ids) -> ids.filter { it in matchingIds } }
+            state.copy(
+                visibleIdsByCategory = visible,
+                categoryCounts = visible.mapValues { it.value.size },
+                totalCount = visible[NO_ID].orEmpty().size,
+            )
+        }
     }.withErrorHandling()
         .stateIn(
             viewModelScope + Dispatchers.Default,
@@ -494,11 +510,42 @@ class FavouritesContainerViewModel @Inject constructor(
     fun setSortOrder(categoryId: Long, order: ListSortOrder) {
         launchJob(Dispatchers.Default) {
             if (categoryId == NO_ID) {
-                settings.allFavoritesSortOrder = order
+                if (order != ListSortOrder.MANUAL) settings.allFavoritesSortOrder = order
+            } else if (order == ListSortOrder.MANUAL) {
+                favouritesRepository.reorderCategory(categoryId, currentCategoryOrder(categoryId))
             } else {
                 favouritesRepository.setCategoryOrder(categoryId, order)
             }
         }
+    }
+
+    private suspend fun currentCategoryOrder(categoryId: Long): List<Long> {
+        val snapshot = favouriteLibrarySnapshotStore.observe().first()
+        val order = favouritesRepository.getCategory(categoryId).order
+        return org.skepsun.kototoro.favourites.domain.library.deriveFavouriteLibraryState(
+            snapshot,
+            org.skepsun.kototoro.favourites.domain.library.FavouriteLibraryDerivationInput(
+                ordersByCategory = mapOf(categoryId to order),
+            ),
+        ).visibleIdsByCategory[categoryId].orEmpty()
+    }
+
+    fun categoryOrderItems(categoryId: Long): List<org.skepsun.kototoro.core.ui.compose.ReorderItem> {
+        val state = libraryState.value
+        val pinned = state.pinnedIdsByCategory[categoryId].orEmpty()
+        return state.visibleIdsByCategory[categoryId].orEmpty().mapNotNull { id ->
+            state.rowsByEntityId[id]?.let { row ->
+                org.skepsun.kototoro.core.ui.compose.ReorderItem(
+                    key = id.toString(), title = row.overrideTitle ?: row.title,
+                    group = if (id in pinned) appContext.getString(R.string.source_pinned) else "",
+                )
+            }
+        }
+    }
+
+    suspend fun saveCategoryOrder(categoryId: Long, ids: List<String>) = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        val order = org.skepsun.kototoro.core.util.mergeManualOrder(currentCategoryOrder(categoryId), ids.map(String::toLong))
+        favouritesRepository.reorderCategory(categoryId, order)
     }
 
     private fun observeAllFavouritesVisibility() = settings.observeAsFlow(
@@ -692,5 +739,3 @@ class FavouritesContainerViewModel @Inject constructor(
         return runCatching { provider.fetchFavoriteFolders() }.getOrNull()
     }
 }
-
-

@@ -441,6 +441,7 @@ dependencies {
 	implementation libs.lifecycle.runtime.compose
 	implementation project(':backdrop')
 	implementation libs.kyant.shapes
+	implementation libs.reorderable
 
 	coreLibraryDesugaring libs.desugar.jdk.libs
 	implementation libs.kotlin.stdlib

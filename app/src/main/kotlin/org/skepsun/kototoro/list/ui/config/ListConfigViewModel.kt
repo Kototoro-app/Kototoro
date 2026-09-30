@@ -372,7 +372,7 @@ class ListConfigViewModel @Inject constructor(
     fun getSortOrders(): List<ListSortOrder>? = getSortOrdersForSection(sectionState.value)
 
     private fun getSortOrdersForSection(section: ListConfigSection?): List<ListSortOrder>? = when (section) {
-        is ListConfigSection.Favorites -> ListSortOrder.FAVORITES
+        is ListConfigSection.Favorites -> ListSortOrder.favourites(section.categoryId)
         ListConfigSection.General -> null
         ListConfigSection.Home -> null
         ListConfigSection.HomeHistory, ListConfigSection.HomeUpdates, ListConfigSection.HomeRecommendations -> null

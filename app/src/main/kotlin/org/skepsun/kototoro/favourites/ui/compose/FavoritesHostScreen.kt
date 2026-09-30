@@ -272,7 +272,7 @@ fun KototoroFavoritesHostRoute(
             tabsState = compactTabsState,
             contextualOverrideState = effectiveChildTopBarOverrideState,
             keepTabsExpandedWhenCollapsed = true,
-            sortOrders = ListSortOrder.FAVORITES.sortedBy { it.ordinal },
+            sortOrders = ListSortOrder.favourites(activeCategoryId ?: NO_ID),
             selectedSortOrder = selectedSortOrder,
             onSortOrderSelected = { order ->
                 viewModel.setSortOrder(activeCategoryId ?: NO_ID, order)
@@ -363,7 +363,7 @@ fun KototoroFavoritesHostRoute(
                         onNavigateToDetailsOrigin = onNavigateToDetailsOrigin,
                         sharedTransitionEnabled = enabled,
                         isActivePage = enabled,
-                        sortOrders = ListSortOrder.FAVORITES.sortedBy { it.ordinal },
+                        sortOrders = ListSortOrder.favourites(category.id),
                         selectedSortOrder = categorySortOrder,
                         onSortOrderSelected = { order -> viewModel.setSortOrder(category.id, order) },
                         onTopBarOverrideChanged = { overrideState ->
@@ -427,4 +427,3 @@ internal fun FavoritesFilterPanelRoute(
         close = close,
     )
 }
-

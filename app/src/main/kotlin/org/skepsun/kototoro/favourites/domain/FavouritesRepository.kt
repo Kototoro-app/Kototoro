@@ -7,6 +7,7 @@ import dagger.Reusable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -156,6 +157,16 @@ class FavouritesRepository @Inject constructor(
 
     suspend fun getContent(categoryId: Long): List<Content> {
         return buildFavouriteContents(categoryId = categoryId, order = ListSortOrder.NEWEST)
+    }
+
+    suspend fun findSearchCategories(mangaIds: List<Long>): List<FavouriteSearchMatch> {
+        val memberships = mangaIds.distinct().chunked(500).flatMap {
+            db.getFavouritesDao().findAllActiveByMangaIds(it)
+        }.groupBy { it.categoryId }
+        return observeCategories().first().mapNotNull { category ->
+            val members = memberships[category.id]?.mapTo(HashSet()) { it.mangaId } ?: return@mapNotNull null
+            FavouriteSearchMatch(category, mangaIds.distinct().filter { it in members })
+        }
     }
 
     fun observeAll(
@@ -360,6 +371,19 @@ class FavouritesRepository @Inject constructor(
         db.getFavouriteCategoriesDao().updateOrder(id, order.name)
     }
 
+    suspend fun reorderCategory(categoryId: Long, orderedIds: List<Long>) {
+        require(categoryId != FavouriteCategory.NO_ID)
+        db.withTransaction {
+            val dao = db.getFavouritesDao()
+            val entries = dao.findActive(categoryId).sortedWith(compareBy<FavouriteEntity> { it.sortKey }.thenBy { it.mangaId })
+            val byId = entries.associateBy { it.mangaId }
+            val ids = org.skepsun.kototoro.core.util.mergeManualOrder(entries.map { it.mangaId }, orderedIds)
+            val now = maxOf(System.currentTimeMillis(), (entries.maxOfOrNull { it.updatedAt } ?: 0L) + 1)
+            dao.upsert(ids.mapIndexed { index, id -> byId.getValue(id).copy(sortKey = index, updatedAt = now) })
+            setCategoryOrder(categoryId, ListSortOrder.MANUAL)
+        }
+    }
+
     suspend fun reorderCategories(orderedIds: List<Long>) {
         val dao = db.getFavouriteCategoriesDao()
         db.withTransaction {
@@ -373,17 +397,21 @@ class FavouritesRepository @Inject constructor(
         if (mangas.isEmpty()) return
         db.withTransaction {
             val currentTime = System.currentTimeMillis()
+            val existing = db.getFavouritesDao().findActive(categoryId).associateBy { it.mangaId }
+            val addedIds = existing.keys.toMutableSet()
+            var nextSortKey = (existing.values.maxOfOrNull { it.sortKey } ?: -1) + 1
             for (manga in mangas) {
                 val stored = storedContentIdentityResolver.preserveStoredRemoteIdentity(manga)
                 val tags = stored.tags.toEntities()
                 db.getTagsDao().upsert(tags)
                 db.getMangaDao().upsert(stored.toEntity(), tags)
+                if (!addedIds.add(stored.id)) continue
                 db.getFavouritesDao().upsert(
                     FavouriteEntity(
                         mangaId = stored.id,
                         categoryId = categoryId,
                         createdAt = currentTime,
-                        sortKey = 0,
+                        sortKey = nextSortKey++,
                         deletedAt = 0L,
                         isPinned = false,
                         updatedAt = currentTime,

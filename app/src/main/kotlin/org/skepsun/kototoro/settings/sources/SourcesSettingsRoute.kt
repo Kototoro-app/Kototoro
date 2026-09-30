@@ -9,6 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,6 +78,16 @@ fun SourcesSettingsRoute(
     }.value
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    var sourceOrder by remember { mutableStateOf<List<org.skepsun.kototoro.core.ui.compose.ReorderItem>?>(null) }
+    var loadingOrder by remember { mutableStateOf(false) }
+
+    sourceOrder?.let { items ->
+        org.skepsun.kototoro.core.ui.compose.ReorderDialog(
+            items = items,
+            onDismissRequest = { sourceOrder = null },
+            onSave = viewModel::saveSourceOrder,
+        )
+    }
 
     val sortOrderOptions = SourcesSortOrder.entries.map {
         SettingsChoiceOption(it, stringResource(it.titleResId))
@@ -137,6 +149,22 @@ fun SourcesSettingsRoute(
         incognitoOptions = incognitoOptions,
         extensionInstallPolicyOptions = extensionInstallPolicyOptions,
         onSourcesSortOrderChange = { settings.sourcesSortOrder = it },
+        onReorderSourcesClick = {
+            if (!loadingOrder) {
+                loadingOrder = true
+                coroutineScope.launch {
+                    try {
+                        sourceOrder = viewModel.loadSourceOrder()
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // ignore
+                    } finally {
+                        loadingOrder = false
+                    }
+                }
+            }
+        },
         onSourcesGridModeChange = { settings.isSourcesGridMode = it },
         onSourcesGroupedByLanguageChange = { settings.isSourcesGroupedByLanguage = it },
         onSetupWizardClick = onSetupWizardClick,

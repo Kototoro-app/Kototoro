@@ -4,9 +4,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.FilterChip
@@ -20,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -37,6 +40,7 @@ internal fun SortOrderControl(
     onSortOrderSelected: (ListSortOrder) -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    onReorderClick: (() -> Unit)? = null,
 ) {
     val options = remember(sortOrders) { listSortOptions(sortOrders) }
     val supportsDirection = options.any { it.ascending != null && it.descending != null }
@@ -55,13 +59,14 @@ internal fun SortOrderControl(
             if (compact) {
                 IconButton(
                     onClick = { expanded = true },
-                    modifier = Modifier.size(36.dp),
+                    modifier = Modifier.size(32.dp),
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_sort),
                         contentDescription = "${stringResource(R.string.sort_order)}: $label, " +
                             stringResource(if (descending) R.string.sort_order_desc else R.string.sort_order_asc),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             } else {
@@ -112,10 +117,37 @@ internal fun SortOrderControl(
                     HorizontalDivider()
                 }
                 options.forEach { option ->
+                    val isManual = option.contains(ListSortOrder.MANUAL)
                     CompactDropdownMenuItem(
-                        text = { CompactDropdownMenuText(stringResource(option.titleResId)) },
+                        text = {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CompactDropdownMenuText(stringResource(option.titleResId))
+                                if (isManual && onReorderClick != null) {
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_reorder_handle),
+                                        contentDescription = stringResource(R.string.reorder),
+                                        tint = if (option == selected) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            }
+                        },
                         onClick = {
-                            selectOrder(option.orderFor(descending))
+                            val targetOrder = option.orderFor(descending)
+                            selectOrder(targetOrder)
+                            if (targetOrder == ListSortOrder.MANUAL && onReorderClick != null) {
+                                expanded = false
+                                onReorderClick()
+                            }
                         },
                         leadingIcon = {
                             Icon(
@@ -124,6 +156,7 @@ internal fun SortOrderControl(
                                 ),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(18.dp),
                             )
                         },
                     )

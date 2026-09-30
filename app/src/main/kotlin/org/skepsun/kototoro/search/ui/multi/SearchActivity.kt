@@ -57,6 +57,9 @@ class SearchActivity : BaseComposeActivity() {
                             router.openList(item.source, item.listFilter, item.sortOrder)
                         }
                     },
+                    onOpenFavouriteCategory = { match, query ->
+                        router.openFavorites(match.category, match.mangaIds, query)
+                    },
                     onManageLanguagePresets = router::openSourcePresets,
                     onOpenGlobalTagBlacklist = router::openGlobalTagBlacklist,
                     onSubmitSearch = { query, kind, sourceTypes, contentKinds, advancedQuery, pinnedOnly, hideEmpty ->

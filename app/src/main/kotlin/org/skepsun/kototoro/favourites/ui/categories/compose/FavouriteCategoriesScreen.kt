@@ -2,10 +2,12 @@ package org.skepsun.kototoro.favourites.ui.categories.compose
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.Box
@@ -48,6 +50,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -66,13 +69,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
@@ -120,9 +118,31 @@ internal fun FavouriteCategoriesScreen(
     val localItems = remember { mutableStateListOf<ListModel>() }
     val listState = rememberLazyListState()
     var pendingDelete by remember { mutableStateOf(false) }
-    var draggedCategoryId by remember { mutableStateOf<Long?>(null) }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var hasMoved by remember { mutableStateOf(false) }
+
+    val reorderableLazyListState = rememberReorderableLazyListState(listState) { from, to ->
+        val fromIndex = from.index
+        val toIndex = to.index
+        if (fromIndex !in localItems.indices || toIndex !in localItems.indices || fromIndex == toIndex) {
+            return@rememberReorderableLazyListState
+        }
+        val fromItem = localItems[fromIndex]
+        val toItem = localItems[toIndex]
+        if (fromItem !is CategoryListModel || toItem !is CategoryListModel) {
+            return@rememberReorderableLazyListState
+        }
+        localItems.add(toIndex, localItems.removeAt(fromIndex))
+        hasMoved = true
+    }
+
+    LaunchedEffect(reorderableLazyListState.isAnyItemDragging) {
+        if (!reorderableLazyListState.isAnyItemDragging && hasMoved) {
+            hasMoved = false
+            onSaveOrder(localItems.toList())
+        }
+    }
 
     LaunchedEffect(items) {
         localItems.clear()
@@ -249,39 +269,32 @@ internal fun FavouriteCategoriesScreen(
                             onClick = { if (selectedIds.isEmpty()) onOpenAll() },
                             onVisibilityChanged = { onShowAllChanged(!item.isVisible) },
                         )
-                        is CategoryListModel -> CategoryRow(
-                            modifier = Modifier
-                                .then(
-                                    if (draggedCategoryId == item.category.id) Modifier else Modifier.animateItem(),
+                        is CategoryListModel -> {
+                            ReorderableItem(
+                                state = reorderableLazyListState,
+                                key = itemKey(item),
+                                enabled = selectedIds.isEmpty() && normalizedSearchQuery.isEmpty(),
+                            ) { isDragging ->
+                                CategoryRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    item = item,
+                                    isSelected = item.category.id in selectedIds,
+                                    isDragging = isDragging,
+                                    actionsEnabled = selectedIds.isEmpty() && normalizedSearchQuery.isEmpty() && item.isActionsEnabled,
+                                    onClick = {
+                                        if (selectedIds.isEmpty()) onOpenCategory(item.category) else toggleSelection(item.category.id, selectedIds, onSelectionChanged)
+                                    },
+                                    onLongClick = { toggleSelection(item.category.id, selectedIds, onSelectionChanged) },
+                                    onEdit = {
+                                        if (selectedIds.isEmpty()) onEditCategory(item.category)
+                                        else toggleSelection(item.category.id, selectedIds, onSelectionChanged)
+                                    },
+                                    handleModifier = Modifier.draggableHandle(
+                                        enabled = selectedIds.isEmpty() && normalizedSearchQuery.isEmpty() && item.isActionsEnabled,
+                                    ),
                                 )
-                                .zIndex(if (draggedCategoryId == item.category.id) 1f else 0f),
-                            item = item,
-                            isSelected = item.category.id in selectedIds,
-                            isDragging = draggedCategoryId == item.category.id,
-                            actionsEnabled = selectedIds.isEmpty() && normalizedSearchQuery.isEmpty() && item.isActionsEnabled,
-                            onClick = {
-                                if (selectedIds.isEmpty()) onOpenCategory(item.category) else toggleSelection(item.category.id, selectedIds, onSelectionChanged)
-                            },
-                            onLongClick = { toggleSelection(item.category.id, selectedIds, onSelectionChanged) },
-                            onEdit = {
-                                if (selectedIds.isEmpty()) onEditCategory(item.category)
-                                else toggleSelection(item.category.id, selectedIds, onSelectionChanged)
-                            },
-                            onMove = { targetIndex ->
-                                val currentIndex = localItems.indexOfFirst {
-                                    (it as? CategoryListModel)?.category?.id == item.category.id
-                                }
-                                selectedIds.isEmpty() && normalizedSearchQuery.isEmpty() && moveItem(localItems, currentIndex, targetIndex)
-                            },
-                            onDragStateChanged = { isDragging ->
-                                draggedCategoryId = item.category.id.takeIf { isDragging }
-                            },
-                            onDragFinished = { moved ->
-                                draggedCategoryId = null
-                                if (moved) onSaveOrder(localItems.toList())
-                            },
-                            listState = listState,
-                        )
+                            }
+                        }
                     }
                 }
             }
@@ -553,15 +566,13 @@ private fun CategoryRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onEdit: () -> Unit,
-    onMove: (Int) -> Boolean,
-    onDragStateChanged: (Boolean) -> Unit,
-    onDragFinished: (Boolean) -> Unit,
-    listState: LazyListState,
+    handleModifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(dimensionResource(R.dimen.list_selector_corner))
-    val hapticFeedback = LocalHapticFeedback.current
-    val density = LocalDensity.current
-    var dragOffsetY by remember(item.category.id) { mutableFloatStateOf(0f) }
+    val elevation by animateDpAsState(
+        targetValue = if (isDragging) 8.dp else 0.dp,
+        label = "categoryDragElevation",
+    )
     val backgroundColor by animateColorAsState(
         targetValue = when {
             isDragging -> MaterialTheme.colorScheme.secondaryContainer
@@ -572,88 +583,50 @@ private fun CategoryRow(
     )
     val rowModifier = modifier
         .fillMaxWidth()
-        .graphicsLayer {
-            val scale = if (isDragging) 1.02f else 1f
-            scaleX = scale
-            scaleY = scale
-            translationY = if (isDragging) dragOffsetY else 0f
-            shadowElevation = if (isDragging) with(density) { 8.dp.toPx() } else 0f
-            this.shape = shape
-            clip = false
-        }
         .clip(shape)
         .background(backgroundColor)
         .combinedClickable(onClick = onClick, onLongClick = onLongClick)
         .padding(start = dimensionResource(androidx.appcompat.R.dimen.abc_action_bar_content_inset_material), top = 4.dp, bottom = 4.dp)
 
-    Row(modifier = rowModifier, verticalAlignment = Alignment.CenterVertically) {
-        CoverStack(item.covers, Modifier.height(dimensionResource(R.dimen.category_covers_height)).aspectRatio(13f / 18f))
-        Column(
-            modifier = Modifier.weight(1f).padding(start = dimensionResource(R.dimen.margin_normal), end = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(item.category.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = if (item.mangaCount == 0) stringResource(R.string.empty) else pluralStringResource(R.plurals.items, item.mangaCount, item.mangaCount),
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (item.category.isTrackingEnabled) Icon(painterResource(R.drawable.ic_notification), stringResource(R.string.check_for_new_chapters), Modifier.padding(horizontal = 4.dp).size(16.dp))
-                if (!item.category.isVisibleInLibrary) Icon(painterResource(R.drawable.ic_eye_off), stringResource(R.string.hide_from_main_screen), Modifier.size(16.dp))
+    Surface(
+        shape = shape,
+        color = Color.Transparent,
+        tonalElevation = elevation,
+        shadowElevation = elevation,
+    ) {
+        Row(modifier = rowModifier, verticalAlignment = Alignment.CenterVertically) {
+            CoverStack(item.covers, Modifier.height(dimensionResource(R.dimen.category_covers_height)).aspectRatio(13f / 18f))
+            Column(
+                modifier = Modifier.weight(1f).padding(start = dimensionResource(R.dimen.margin_normal), end = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(item.category.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = if (item.mangaCount == 0) stringResource(R.string.empty) else pluralStringResource(R.plurals.items, item.mangaCount, item.mangaCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (item.category.isTrackingEnabled) Icon(painterResource(R.drawable.ic_notification), stringResource(R.string.check_for_new_chapters), Modifier.padding(horizontal = 4.dp).size(16.dp))
+                    if (!item.category.isVisibleInLibrary) Icon(painterResource(R.drawable.ic_eye_off), stringResource(R.string.hide_from_main_screen), Modifier.size(16.dp))
+                }
             }
-        }
-        if (actionsEnabled) {
-            IconButton(onClick = onEdit) { Icon(painterResource(R.drawable.ic_edit), stringResource(R.string.edit)) }
-            Icon(
-                painter = painterResource(R.drawable.ic_reorder_handle),
-                contentDescription = stringResource(R.string.reorder),
-                modifier = Modifier
-                    .size(48.dp)
-                    .pointerInput(item.category.id) {
-                        var dragStarted = false
-                        var hasMoved = false
-                        detectDragGestures(
-                            onDragStart = {
-                                dragStarted = listState.layoutInfo.visibleItemsInfo.any { it.key == itemKey(item) }
-                                dragOffsetY = 0f
-                                if (dragStarted) {
-                                    onDragStateChanged(true)
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                }
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                if (!dragStarted) return@detectDragGestures
-                                dragOffsetY += dragAmount.y
-                                val currentItem = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == itemKey(item) }
-                                    ?: return@detectDragGestures
-                                val center = currentItem.offset + currentItem.size / 2 + dragOffsetY.toInt()
-                                val targetItem = listState.layoutInfo.visibleItemsInfo.minByOrNull {
-                                    kotlin.math.abs(it.offset + it.size / 2 - center)
-                                } ?: return@detectDragGestures
-                                if (targetItem.index != currentItem.index && targetItem.index > 0) {
-                                    if (onMove(targetItem.index)) {
-                                        dragOffsetY += currentItem.offset - targetItem.offset
-                                        hasMoved = true
-                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    }
-                                }
-                            },
-                            onDragCancel = {
-                                dragOffsetY = 0f
-                                onDragStateChanged(false)
-                                onDragFinished(hasMoved)
-                            },
-                            onDragEnd = {
-                                dragOffsetY = 0f
-                                onDragStateChanged(false)
-                                onDragFinished(hasMoved)
-                            },
-                        )
-                    }
-            )
+            if (actionsEnabled) {
+                IconButton(onClick = onEdit) { Icon(painterResource(R.drawable.ic_edit), stringResource(R.string.edit)) }
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .then(handleModifier),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_reorder_handle),
+                        contentDescription = stringResource(R.string.reorder),
+                        tint = if (isDragging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }
@@ -742,13 +715,6 @@ private fun EmptyCategoryState(item: EmptyState) {
 
 private fun toggleSelection(id: Long, selectedIds: Set<Long>, onSelectionChanged: (Set<Long>) -> Unit) {
     onSelectionChanged(if (id in selectedIds) selectedIds - id else selectedIds + id)
-}
-
-private fun moveItem(items: MutableList<ListModel>, from: Int, to: Int): Boolean {
-    if (from == to || from !in items.indices || to !in items.indices || items[from] !is CategoryListModel || items[to] !is CategoryListModel) return false
-    val item = items.removeAt(from)
-    items.add(to, item)
-    return true
 }
 
 private fun itemKey(item: ListModel): String = when (item) {

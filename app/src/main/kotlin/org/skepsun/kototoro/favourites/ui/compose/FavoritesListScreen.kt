@@ -5,6 +5,16 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import org.skepsun.kototoro.core.ui.compose.ReorderDialog
+import org.skepsun.kototoro.core.ui.compose.ReorderItem
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -47,6 +57,11 @@ fun KototoroFavoritesListScreen(
     val gridScale by listHost.gridScale.collectAsStateWithLifecycle()
     val listMode by listHost.listMode.collectAsStateWithLifecycle()
     val shelfInstanceKey = "main_favorites_shelf_$categoryId"
+    var orderItems by remember(categoryId) { mutableStateOf<List<ReorderItem>?>(null) }
+    orderItems?.let { items ->
+        ReorderDialog(items, onDismissRequest = { orderItems = null }, onSave = listHost::saveOrder)
+    }
+    val canReorder = categoryId != org.skepsun.kototoro.core.model.FavouriteCategory.NO_ID
     val sortControl: (@Composable () -> Unit)? = if (sortOrders.isNotEmpty()) {
         {
             SortOrderControl(
@@ -54,6 +69,7 @@ fun KototoroFavoritesListScreen(
                 selectedSortOrder = selectedSortOrder,
                 onSortOrderSelected = onSortOrderSelected,
                 compact = true,
+                onReorderClick = if (canReorder) { { orderItems = listHost.orderItems() } } else null,
             )
         }
     } else {
@@ -69,12 +85,21 @@ fun KototoroFavoritesListScreen(
         // which put them between the shelf and the grid.
         listHeader = {
             Column(modifier = Modifier.fillMaxWidth()) {
-                quickFilter?.let { filter ->
+                if (quickFilter != null) {
                     QuickFilterSection(
-                        quickFilter = filter,
+                        quickFilter = quickFilter!!,
                         onQuickFilterOptionClick = listHost::toggleFilterOption,
                         leadingContent = sortControl,
                     )
+                } else if (sortControl != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        sortControl()
+                    }
                 }
                 FavoritesShelf(
                     state = shelf,

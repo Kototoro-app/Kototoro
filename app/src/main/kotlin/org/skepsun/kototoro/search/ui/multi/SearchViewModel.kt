@@ -14,6 +14,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.map
@@ -179,7 +180,7 @@ class SearchViewModel @AssistedInject constructor(
 
     fun getItems(ids: LongSet): Set<Content> {
         val snapshot = results.value
-        val result = ArraySet<Content>(ids.size)
+        val result = LinkedHashSet<Content>(ids.size)
         snapshot.forEach { x ->
             for (item in x.list) {
                 if (item.id in ids) {
@@ -192,7 +193,7 @@ class SearchViewModel @AssistedInject constructor(
 
     fun getItems(ids: Set<Long>): Set<Content> {
         val snapshot = results.value
-        val result = ArraySet<Content>(ids.size)
+        val result = LinkedHashSet<Content>(ids.size)
         snapshot.forEach { x ->
             for (item in x.list) {
                 if (item.id in ids) {
@@ -208,6 +209,19 @@ class SearchViewModel @AssistedInject constructor(
         results.value = emptyList()
         includeDisabledSources.value = false
         doSearch()
+    }
+
+    private val _favouriteMatches = MutableStateFlow<List<org.skepsun.kototoro.favourites.domain.FavouriteSearchMatch>?>(null)
+    val favouriteMatches = _favouriteMatches.asStateFlow()
+
+    fun showFavouriteCategories(ids: List<Long>) {
+        launchJob(Dispatchers.IO) {
+            _favouriteMatches.value = favouritesRepository.findSearchCategories(ids)
+        }
+    }
+
+    fun dismissFavouriteCategories() {
+        _favouriteMatches.value = null
     }
 
     fun setPinnedOnly(value: Boolean) {

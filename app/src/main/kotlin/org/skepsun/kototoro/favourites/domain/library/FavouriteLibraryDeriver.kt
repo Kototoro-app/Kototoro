@@ -63,6 +63,7 @@ internal class FavouriteOrderingContext private constructor(
     private val pinnedByEntity: Map<Long, Boolean>,
     private val createdAtByEntity: Map<Long, Long>,
     private val updatedAtByEntity: Map<Long, Long>,
+    private val sortKeys: Map<Long, Int> = emptyMap(),
 ) {
     companion object {
         fun forAllSlice(snapshot: FavouriteLibrarySnapshot): FavouriteOrderingContext {
@@ -81,18 +82,21 @@ internal class FavouriteOrderingContext private constructor(
             val pinned = HashMap<Long, Boolean>(memberships.size)
             val created = HashMap<Long, Long>(memberships.size)
             val updated = HashMap<Long, Long>(memberships.size)
+            val sortKeys = HashMap<Long, Int>(memberships.size)
             for (membership in memberships) {
                 pinned[membership.entityId] = membership.isPinned
                 created[membership.entityId] = membership.createdAt
                 updated[membership.entityId] = membership.updatedAt
+                sortKeys[membership.entityId] = membership.sortKey
             }
-            return FavouriteOrderingContext(snapshot.rowsByEntityId, pinned, created, updated)
+            return FavouriteOrderingContext(snapshot.rowsByEntityId, pinned, created, updated, sortKeys)
         }
     }
 
     fun pinned(entityId: Long): Boolean = pinnedByEntity[entityId] == true
     fun createdAt(entityId: Long): Long = createdAtByEntity[entityId] ?: 0L
     fun updatedAt(entityId: Long): Long = updatedAtByEntity[entityId] ?: 0L
+    fun sortKey(entityId: Long): Int = sortKeys[entityId] ?: 0
     fun row(entityId: Long): FavouriteCardRow? = rows[entityId]
 
     /** Membership-pinned subset of [ids], in the order they are given. */
@@ -309,8 +313,9 @@ private fun ListSortOrder.comparator(context: FavouriteOrderingContext): Compara
     return byPinned.then(
         when (this) {
             ListSortOrder.RATING -> compareByDescending { context.row(it)?.rating ?: -1f }
-            ListSortOrder.NEWEST -> compareByDescending { context.createdAt(it) }
-            ListSortOrder.OLDEST -> compareBy { context.createdAt(it) }
+            ListSortOrder.NEWEST -> compareByDescending<Long> { context.createdAt(it) }.thenBy { context.sortKey(it) }
+            ListSortOrder.OLDEST -> compareBy<Long> { context.createdAt(it) }.thenBy { context.sortKey(it) }
+            ListSortOrder.MANUAL -> compareBy { context.sortKey(it) }
             ListSortOrder.PROGRESS -> compareByDescending { context.row(it)?.progressPercent ?: 0f }
             ListSortOrder.UNREAD -> compareBy { context.row(it)?.progressPercent ?: 0f }
             ListSortOrder.LAST_READ -> compareByDescending { context.row(it)?.lastReadAt ?: 0L }

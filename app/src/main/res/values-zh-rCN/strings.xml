@@ -565,6 +565,12 @@
     <string name="random">随机</string>
     <string name="categories_delete_confirm">确定删除选中分类？ \n该分类中的所有漫画将丢失且无法恢复。</string>
     <string name="reorder">重新排序</string>
+    <string name="reorder_hint">拖动手柄或长按条目调整排序，完成后保存。</string>
+    <string name="reorder_move_up">上移</string>
+    <string name="reorder_move_down">下移</string>
+    <string name="reorder_select_category_hint">全部收藏不支持手动排序，请切换到具体分类进行排序</string>
+    <string name="order_manual">自定义排序</string>
+    <string name="favourite_search_category">%1$s (%2$d)</string>
     <string name="empty">分类为空</string>
     <string name="explore">浏览</string>
     <string name="automatic_scroll">自动翻页</string>

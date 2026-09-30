@@ -601,6 +601,9 @@ private fun MainShellTopLevelEntryContent(
                                     mainNavigator.openContentList(item.source, item.listFilter, item.sortOrder)
                                 }
                             },
+                            onOpenFavouriteCategory = { match, query ->
+                                appRouter.openFavorites(match.category, match.mangaIds, query)
+                            },
                             onManageLanguagePresets = appRouter::openSourcePresets,
                             onOpenGlobalTagBlacklist = appRouter::openGlobalTagBlacklist,
                             onSubmitSearch = { query, kind, sourceTypes, contentKinds, advancedQuery, pinnedOnly, hideEmpty ->
@@ -651,12 +654,42 @@ internal fun BrowseTopLevelRouteContent(
     val selectedGroupTab by exploreViewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by exploreViewModel.currentSourceTags.collectAsStateWithLifecycle()
     val isEmptySourcesHidden by exploreViewModel.isEmptySourcesHidden.collectAsStateWithLifecycle()
+    val coroutineScope = rememberCoroutineScope()
+    var sourceOrder by remember { mutableStateOf<List<org.skepsun.kototoro.core.ui.compose.ReorderItem>?>(null) }
+    var loadingOrder by remember { mutableStateOf(false) }
+
+    sourceOrder?.let { items ->
+        org.skepsun.kototoro.core.ui.compose.ReorderDialog(
+            items = items,
+            onDismissRequest = { sourceOrder = null },
+            onSave = exploreViewModel::saveSourceOrder,
+        )
+    }
 
     DisposableEffect(ownerRoute, exploreViewModel, isEmptySourcesHidden) {
         onContextualMenuActionsChanged(
             RouteScopedTopBarMenuActions(
                 ownerRoute,
                 listOf(
+                    KototoroTopBarMenuAction(
+                        org.skepsun.kototoro.R.string.reorder,
+                        org.skepsun.kototoro.R.drawable.ic_reorder_handle,
+                    ) {
+                        if (!loadingOrder) {
+                            loadingOrder = true
+                            coroutineScope.launch {
+                                try {
+                                    sourceOrder = exploreViewModel.loadSourceOrder()
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    // ignore
+                                } finally {
+                                    loadingOrder = false
+                                }
+                            }
+                        }
+                    },
                     KototoroTopBarMenuAction(
                         org.skepsun.kototoro.R.string.manage_sources,
                         org.skepsun.kototoro.R.drawable.ic_manga_source,
@@ -1733,6 +1766,8 @@ internal fun FavoritesTopLevelRouteContent(
     var nextFavoritesDialogId by remember { mutableLongStateOf(0L) }
     var pendingFavoritesDialog by remember { mutableStateOf<PendingFavoritesDialog?>(null) }
     var favoritesSelectionDialog by remember { mutableStateOf<FavoritesSelectionDialogState?>(null) }
+    var activeReorderItems by remember { mutableStateOf<List<org.skepsun.kototoro.core.ui.compose.ReorderItem>?>(null) }
+    var activeReorderCategoryHost by remember { mutableStateOf<FavouritesListHost?>(null) }
 
     fun showToast(messageRes: Int) {
         android.widget.Toast.makeText(context, messageRes, android.widget.Toast.LENGTH_SHORT).show()
@@ -1875,11 +1910,41 @@ internal fun FavoritesTopLevelRouteContent(
         )
     }
 
+    activeReorderItems?.let { items ->
+        val host = activeReorderCategoryHost
+        if (host != null) {
+            org.skepsun.kototoro.core.ui.compose.ReorderDialog(
+                items = items,
+                onDismissRequest = {
+                    activeReorderItems = null
+                    activeReorderCategoryHost = null
+                },
+                onSave = { ids ->
+                    host.saveOrder(ids)
+                    activeReorderItems = null
+                    activeReorderCategoryHost = null
+                },
+            )
+        }
+    }
+
     DisposableEffect(appRouter, viewModel) {
         onContextualMenuActionsChanged(
             RouteScopedTopBarMenuActions(
                 ownerRoute = TOP_BAR_OWNER_FAVORITES,
                 actions = listOf(
+                    KototoroTopBarMenuAction(
+                        org.skepsun.kototoro.R.string.reorder,
+                        org.skepsun.kototoro.R.drawable.ic_reorder_handle,
+                    ) {
+                        val activeHost = activeFavouritesHostRef.value
+                        if (activeHost == null || activeHost.categoryId == org.skepsun.kototoro.core.model.FavouriteCategory.NO_ID) {
+                            showToast(org.skepsun.kototoro.R.string.reorder_select_category_hint)
+                        } else {
+                            activeReorderCategoryHost = activeHost
+                            activeReorderItems = activeHost.orderItems()
+                        }
+                    },
                     KototoroTopBarMenuAction(
                         org.skepsun.kototoro.R.string.reset_filter,
                         org.skepsun.kototoro.R.drawable.ic_revert,

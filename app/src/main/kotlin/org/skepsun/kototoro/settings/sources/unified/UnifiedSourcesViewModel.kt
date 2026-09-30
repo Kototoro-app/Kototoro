@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.settings.sources.unified
 
 import android.content.Context
+import org.skepsun.kototoro.core.model.getTitle
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -170,6 +171,12 @@ class UnifiedSourcesViewModel @Inject constructor(
     private val mirrorRepository: org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository,
     private val savedStateHandle: SavedStateHandle,
 ) : BaseViewModel() {
+
+    suspend fun loadSourceOrder(): List<org.skepsun.kototoro.core.ui.compose.ReorderItem> =
+        contentSourcesRepository.loadSourceOrder()
+
+    suspend fun saveSourceOrder(names: List<String>) =
+        contentSourcesRepository.saveSourceOrder(names)
 
     private val availableExternalExtensions = MutableStateFlow<List<RepoAvailableExtension>>(emptyList())
     private val availableLnReaderPlugins = MutableStateFlow<List<LnReaderAvailablePlugin>>(emptyList())

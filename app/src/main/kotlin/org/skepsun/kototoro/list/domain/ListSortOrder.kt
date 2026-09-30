@@ -21,6 +21,7 @@ enum class ListSortOrder(
     LAST_READ(R.string.last_read),
     LONG_AGO_READ(R.string.long_ago_read),
     UPDATED(R.string.updated),
+    MANUAL(R.string.order_manual),
     ;
 
     fun isGroupingSupported() = this == LAST_READ || this == NEWEST || this == PROGRESS
@@ -51,8 +52,16 @@ enum class ListSortOrder(
             LAST_READ,
             LONG_AGO_READ,
             UPDATED,
+            MANUAL,
         )
         val SUGGESTIONS: Set<ListSortOrder> = EnumSet.of(RELEVANCE)
+
+        fun favourites(categoryId: Long): List<ListSortOrder> =
+            if (categoryId == -1L) {
+                FAVORITES.filter { it != MANUAL }.sortedBy { it.ordinal }
+            } else {
+                FAVORITES.sortedBy { it.ordinal }
+            }
 
         operator fun invoke(value: String, fallback: ListSortOrder) = entries.find(value) ?: fallback
     }

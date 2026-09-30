@@ -148,6 +148,10 @@ class FavouritesListHost internal constructor(
 
     fun checkForUpdates() = container.checkForUpdates()
 
+    fun orderItems() = container.categoryOrderItems(categoryId)
+
+    suspend fun saveOrder(ids: List<String>) = container.saveCategoryOrder(categoryId, ids)
+
     private fun buildCards(
         library: FavouriteLibraryUiState,
         mode: ListMode,
