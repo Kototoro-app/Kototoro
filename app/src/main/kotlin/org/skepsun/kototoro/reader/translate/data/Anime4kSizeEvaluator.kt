@@ -5,7 +5,9 @@ import kotlin.math.roundToInt
 object Anime4kSizeEvaluator {
     fun evaluate(expression: String, textureSizes: Map<String, Pair<Int, Int>>): Int {
         val tokens = expression.split(Regex("\\s+")).filter { it.isNotEmpty() }
-        val stack = mutableListOf<Float>()
+        // kotlin.collections.ArrayDeque, not a MutableList: on a List, removeLast() compiles to the JDK 21
+        // List.removeLast member, which is absent before Android 15 (NoSuchMethodError).
+        val stack = ArrayDeque<Float>()
 
         for (token in tokens) {
             when (token) {
