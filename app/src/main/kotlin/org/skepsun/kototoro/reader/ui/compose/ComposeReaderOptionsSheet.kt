@@ -94,8 +94,8 @@ internal data class ComposeReaderOptionsState(
     val visible: Boolean = false,
     val mode: ReaderMode = ReaderMode.STANDARD,
     val continuousHorizontalReversed: Boolean = false,
-    /** Scene renderer for the webtoon mode; on by default, matching the released behaviour. */
-    val webtoonSceneReader: Boolean = true,
+    /** Scene renderer for the webtoon mode; off by default. */
+    val webtoonSceneReader: Boolean = false,
     /** Scene renderer for single/double page; off by default, matching the released behaviour. */
     val pagedSceneReader: Boolean = false,
     val animation: ReaderAnimation = ReaderAnimation.DEFAULT,

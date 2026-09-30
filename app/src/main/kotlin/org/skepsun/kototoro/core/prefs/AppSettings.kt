@@ -1036,7 +1036,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         set(value) = prefs.edit { putBoolean(KEY_READER_REDUCE_PRELOAD, value) }
 
     var isExperimentalSceneReaderEnabled: Boolean
-        get() = prefs.getBoolean(KEY_READER_EXPERIMENTAL_SCENE_ENGINE, true)
+        get() = prefs.getBoolean(KEY_READER_EXPERIMENTAL_SCENE_ENGINE, false)
         set(value) = prefs.edit { putBoolean(KEY_READER_EXPERIMENTAL_SCENE_ENGINE, value) }
 
     var isExperimentalPagedSceneReaderEnabled: Boolean

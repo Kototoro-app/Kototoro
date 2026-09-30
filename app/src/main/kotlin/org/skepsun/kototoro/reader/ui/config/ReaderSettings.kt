@@ -31,7 +31,7 @@ data class ReaderSettings(
     val colorFilter: ReaderColorFilter?,
     val isReaderOptimizationEnabled: Boolean,
     val isReaderPreloadReductionEnabled: Boolean,
-    val isExperimentalSceneReaderEnabled: Boolean = true,
+    val isExperimentalSceneReaderEnabled: Boolean = false,
     val isExperimentalPagedSceneReaderEnabled: Boolean = false,
     val isContinuousHorizontalReversed: Boolean = false,
     val bitmapConfig: Bitmap.Config,
