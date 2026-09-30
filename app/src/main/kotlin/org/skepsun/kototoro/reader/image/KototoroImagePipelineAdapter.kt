@@ -13,6 +13,7 @@ import coil3.request.ImageRequest
 import coil3.request.CachePolicy
 import coil3.request.ErrorResult
 import coil3.request.SuccessResult
+import coil3.request.allowConversionToBitmap
 import coil3.request.allowHardware
 import coil3.request.maxBitmapSize
 import coil3.request.transformations
@@ -40,6 +41,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.core.image.AvifAnimatedDrawable
 import org.skepsun.kototoro.reader.core.FloatRect
 import org.skepsun.kototoro.reader.core.IntRect
 import org.skepsun.kototoro.reader.core.IntSize
@@ -215,23 +217,37 @@ class KototoroImagePipelineAdapter(
         pageId: PageId,
         asset: ReaderImageAsset,
         publishPresentation: Boolean = true,
-    ): Boolean {
+    ): Boolean = synchronized(cachedAssets) {
         val readinessMap = desiredReadiness
         if (readinessMap != null) {
-            val targetReadiness = readinessMap[pageId] ?: return false
+            val targetReadiness = readinessMap[pageId] ?: return@synchronized false
             if (asset !is ReaderImageAsset.Encoded && targetReadiness != PrefetchReadiness.PRESENTATION_READY) {
-                return false
+                return@synchronized false
             }
         }
         val existing = cachedAssets[pageId]
         if (existing?.isAuthoritativePresentation == true && !asset.isAuthoritativePresentation) {
-            return false
+            return@synchronized false
         }
         cachedAssets[pageId] = asset
+        if (existing !== asset) releaseAnimation(existing)
         if (asset !is ReaderImageAsset.Encoded && publishPresentation) {
             publishStoredPresentation(pageId, asset)
         }
-        return true
+        true
+    }
+
+    /** Presentation ownership ends at eviction, replacement, or disposal of the scene host. */
+    private fun releaseAnimation(asset: ReaderImageAsset?) {
+        val drawable = (asset as? ReaderImageAsset.Animated)?.drawable ?: return
+        if (drawable is AvifAnimatedDrawable) drawable.release() else (drawable as? Animatable)?.stop()
+        drawable.callback = null
+    }
+
+    fun close() = synchronized(cachedAssets) {
+        desiredReadiness = emptyMap()
+        onAssetLoaded = null
+        evictOutside(emptySet())
     }
 
     /** Publishes a staged presentation asset if the resource window still owns it. */
@@ -330,6 +346,7 @@ class KototoroImagePipelineAdapter(
                         if (states.containsKey(pageId)) states else states + (pageId to ReaderImageLoadState.Loading())
                     }
                 }
+                var decodedAsset: ReaderImageAsset? = null
                 try {
                     val readyState = composePipeline.observe(page, force).onEach {
                         if (it is ComposeReaderImageState.Downloading && loadingAnnounced.get()) {
@@ -457,6 +474,8 @@ class KototoroImagePipelineAdapter(
                     }
                     val request = ImageRequest.Builder(context)
                         .data(uri)
+                        // A decoder can discover animation even when the metadata hint missed it.
+                        .allowConversionToBitmap(false)
                         .apply {
                             plannedDecodeSize?.let { size(it.width, it.height) }
                             if (bitmapConfig == Bitmap.Config.RGB_565) {
@@ -465,7 +484,9 @@ class KototoroImagePipelineAdapter(
                             if (isReaderOptimizationEnabled) {
                                 memoryCachePolicy(CachePolicy.DISABLED)
                             }
-                            transformations(ComposeReaderPageTransformation(isCropEnabled, page.split))
+                            if (!isAnimatedHint) {
+                                transformations(ComposeReaderPageTransformation(isCropEnabled, page.split))
+                            }
                         }
                         // Coil's own ceiling defaults to 4096x4096 and is applied *in addition to* the
                         // requested size (DecodeUtils.computeDstSize(..., maxSize)), so a 720x7768 page
@@ -484,7 +505,7 @@ class KototoroImagePipelineAdapter(
                     val result = imageLoader.execute(request)
                     if (result is SuccessResult) {
                         val drawable = result.image.asDrawable(context.resources)
-                        val isAnimatedDrawable = isAnimatedHint || (drawable is Animatable)
+                        val isAnimatedDrawable = drawable is Animatable
                         val presentationAsset: ReaderImageAsset = if (isAnimatedDrawable) {
                             val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 1080
                             val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 1920
@@ -502,7 +523,9 @@ class KototoroImagePipelineAdapter(
                             ReaderImageAsset.ComposeImage(pageId, bmp.asImageBitmap())
                         }
 
+                        decodedAsset = presentationAsset
                         val retained = storeAsset(pageId, presentationAsset, publishPresentation = false)
+                        if (!retained) return@async null
                         val width = when (presentationAsset) {
                             is ReaderImageAsset.Animated -> presentationAsset.width
                             is ReaderImageAsset.ComposeImage -> presentationAsset.imageBitmap.width
@@ -534,6 +557,9 @@ class KototoroImagePipelineAdapter(
                     // A pending "loading" must never land after the page resolved, failed, or was
                     // cancelled - including the early returns above.
                     loadingPublish.cancel()
+                    decodedAsset?.let { asset ->
+                        if (cachedAssets[pageId] !== asset) releaseAnimation(asset)
+                    }
                 }
             }.also { task ->
                 inFlightLoads[pageId] = task
@@ -631,7 +657,7 @@ class KototoroImagePipelineAdapter(
                 if (current is ReaderImageAsset.Tiled) {
                     actualTileManager.releasePage(pageId)
                 } else if (current is ReaderImageAsset.Animated) {
-                    (current.drawable as? Animatable)?.stop()
+                    releaseAnimation(current)
                 }
                 // Remove presentation asset from renderer-facing state flow and ready state
                 updateAssets { it - pageId }
@@ -684,7 +710,7 @@ class KototoroImagePipelineAdapter(
         inFlightLoads.remove(pageId)?.cancel()
         val current = cachedAssets.remove(pageId)
         if (current is ReaderImageAsset.Animated) {
-            (current.drawable as? Animatable)?.stop()
+            releaseAnimation(current)
         }
         inFlightSourceLoads.remove(pageId)?.cancel()
         actualTileManager.releasePage(pageId)

@@ -176,6 +176,10 @@ fun ComposeSceneWebtoonReader(
         )
     }
 
+    DisposableEffect(adapter) {
+        onDispose { adapter.close() }
+    }
+
     val resourceWindowPlanner = remember(isPreloadReductionEnabled) {
         val config = if (isPreloadReductionEnabled) {
             ReaderPredictionConfig(
@@ -1059,4 +1063,3 @@ private fun CenteredOverlay(
         }
     }
 }
-

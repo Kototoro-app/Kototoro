@@ -4,12 +4,17 @@ import android.graphics.drawable.Animatable
 import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.platform.InspectorInfo
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import org.skepsun.kototoro.reader.core.PageId
 
 /**
@@ -26,6 +31,8 @@ class AnimatedDrawBridge(
     private val mainHandler = Handler(Looper.getMainLooper())
     private var drawNode: DrawModifierNode? = null
     private val registeredDrawables = HashMap<PageId, Drawable>()
+    private var visiblePageIds: Set<PageId> = emptySet()
+    private var playbackEnabled = true
 
     internal fun attachNode(node: DrawModifierNode) {
         drawNode = node
@@ -41,8 +48,7 @@ class AnimatedDrawBridge(
     fun register(pageId: PageId, drawable: Drawable) {
         val existing = registeredDrawables[pageId]
         if (existing === drawable) return
-        existing?.callback = null
-        if (existing is Animatable) existing.stop()
+        existing?.let(::detachDrawable)
 
         drawable.callback = object : Drawable.Callback {
             override fun invalidateDrawable(who: Drawable) {
@@ -58,37 +64,73 @@ class AnimatedDrawBridge(
             }
         }
         registeredDrawables[pageId] = drawable
+        if (drawable is Animatable) {
+            if (playbackEnabled && pageId in visiblePageIds) {
+                if (!drawable.isRunning) drawable.start()
+            } else {
+                drawable.stop()
+            }
+        }
     }
 
     fun updateVisiblePages(visiblePageIds: Set<PageId>) {
-        for ((pageId, drawable) in registeredDrawables) {
-            if (drawable is Animatable) {
-                val shouldRun = pageId in visiblePageIds
-                if (shouldRun && !drawable.isRunning) {
-                    drawable.start()
-                } else if (!shouldRun && drawable.isRunning) {
-                    drawable.stop()
-                }
+        this.visiblePageIds = visiblePageIds
+        val iterator = registeredDrawables.iterator()
+        while (iterator.hasNext()) {
+            val (pageId, drawable) = iterator.next()
+            if (pageId !in visiblePageIds) {
+                detachDrawable(drawable)
+                iterator.remove()
+            } else if (playbackEnabled && drawable is Animatable && !drawable.isRunning) {
+                drawable.start()
             }
+        }
+    }
+
+    fun setPlaybackEnabled(enabled: Boolean) {
+        playbackEnabled = enabled
+        for ((pageId, drawable) in registeredDrawables) {
+            if (drawable !is Animatable) continue
+            if (enabled && pageId in visiblePageIds && !drawable.isRunning) drawable.start()
+            else if (!enabled) drawable.stop()
         }
     }
 
     fun unregister(pageId: PageId) {
         val drawable = registeredDrawables.remove(pageId) ?: return
-        drawable.callback = null
-        if (drawable is Animatable && drawable.isRunning) {
-            drawable.stop()
-        }
+        detachDrawable(drawable)
     }
 
     fun stopAll() {
         for (drawable in registeredDrawables.values) {
-            drawable.callback = null
-            if (drawable is Animatable && drawable.isRunning) {
-                drawable.stop()
-            }
+            detachDrawable(drawable)
         }
         registeredDrawables.clear()
+        visiblePageIds = emptySet()
+    }
+
+    private fun detachDrawable(drawable: Drawable) {
+        if (drawable is Animatable) drawable.stop()
+        mainHandler.removeCallbacksAndMessages(drawable)
+        drawable.callback = null
+    }
+}
+
+/** Pause frame timers when the host leaves the foreground; retain visible frames for resume. */
+@Composable
+internal fun AnimatedDrawBridgeLifecycle(bridge: AnimatedDrawBridge?) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(bridge, lifecycleOwner) {
+        fun updatePlayback() {
+            bridge?.setPlaybackEnabled(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+        }
+        val observer = LifecycleEventObserver { _, _ -> updatePlayback() }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        updatePlayback()
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            bridge?.stopAll()
+        }
     }
 }
 

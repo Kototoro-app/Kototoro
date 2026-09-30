@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -92,11 +91,7 @@ fun ComposeSceneRenderer(
     var viewportWidth by remember { mutableFloatStateOf(0f) }
     var viewportHeight by remember { mutableFloatStateOf(0f) }
 
-    DisposableEffect(animatedBridge) {
-        onDispose {
-            animatedBridge?.stopAll()
-        }
-    }
+    AnimatedDrawBridgeLifecycle(animatedBridge)
 
     val coroutineScope = rememberCoroutineScope()
     var flingJob by remember { mutableStateOf<Job?>(null) }
@@ -351,6 +346,8 @@ internal fun DrawScope.drawFrameNodes(
             }
             continue
         }
+
+        animatedBridge?.unregister(node.pageId)
 
         val authoritativeBitmap: ImageBitmap? = when (asset) {
             is ReaderImageAsset.ComposeImage -> asset.imageBitmap
@@ -732,4 +729,3 @@ internal object TiledPageDrawMath {
         )
     }
 }
-

@@ -45,6 +45,7 @@ class AvifAnimatedDrawable(
     private var loopsDone = 0
     private var disposed = false
 
+    @Synchronized
     override fun draw(canvas: Canvas) {
         if (disposed) return
         val frame = frames.getOrNull(currentFrame) ?: return
@@ -67,12 +68,14 @@ class AvifAnimatedDrawable(
     override fun getIntrinsicWidth(): Int = intrinsicW
     override fun getIntrinsicHeight(): Int = intrinsicH
 
+    @Synchronized
     override fun start() {
         if (disposed || frames.size <= 1) return
         if (!running.compareAndSet(false, true)) return
         scheduleNextFrame()
     }
 
+    @Synchronized
     override fun stop() {
         if (!running.compareAndSet(true, false)) return
         handler.removeCallbacks(this)
@@ -94,6 +97,7 @@ class AvifAnimatedDrawable(
         return changed
     }
 
+    @Synchronized
     override fun run() {
         if (!running.get() || disposed) return
         val nextIndex = currentFrame + 1
@@ -117,6 +121,7 @@ class AvifAnimatedDrawable(
         handler.postAtTime(this, SystemClock.uptimeMillis() + delay)
     }
 
+    @Synchronized
     fun release() {
         if (disposed) return
         disposed = true

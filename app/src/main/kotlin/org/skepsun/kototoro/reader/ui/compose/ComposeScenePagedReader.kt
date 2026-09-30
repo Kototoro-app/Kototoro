@@ -106,6 +106,7 @@ import org.skepsun.kototoro.reader.image.ReaderImageLoadState
 import org.skepsun.kototoro.reader.image.ReaderImagePipeline
 import org.skepsun.kototoro.reader.image.RendererCapabilities
 import org.skepsun.kototoro.reader.render.compose.AnimatedDrawBridge
+import org.skepsun.kototoro.reader.render.compose.AnimatedDrawBridgeLifecycle
 import org.skepsun.kototoro.reader.render.compose.PageSeamPolicy
 import org.skepsun.kototoro.reader.render.compose.SceneImagePresentationCoordinator
 import org.skepsun.kototoro.reader.render.compose.ScenePageTransform
@@ -247,6 +248,10 @@ fun ComposeScenePagedReader(
         )
     }
 
+    DisposableEffect(adapter) {
+        onDispose { adapter.close() }
+    }
+
     val scene = remember(viewportWidthPx, viewportHeightPx, isDoublePage, coverPage, readingDirection, zoomMode) {
         if (viewportWidthPx <= 0f || viewportHeightPx <= 0f) null
         else {
@@ -266,11 +271,7 @@ fun ComposeScenePagedReader(
     }
 
     val animatedBridge = remember { AnimatedDrawBridge(autoUpdateVisiblePages = false) }
-    DisposableEffect(animatedBridge) {
-        onDispose {
-            animatedBridge.stopAll()
-        }
-    }
+    AnimatedDrawBridgeLifecycle(animatedBridge)
 
     val shouldAnimate = isAnimationEnabled && pageAnimation != ReaderAnimation.NONE
 

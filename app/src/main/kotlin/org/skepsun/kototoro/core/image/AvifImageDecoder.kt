@@ -40,8 +40,7 @@ class AvifImageDecoder(
             // bitmap swap. Per-frame JIT decoding of AV1 is too slow on typical devices
             // to hold the nominal frame rate — decoding all frames once trades a longer
             // initial decode + memory for smooth playback and no main-thread CPU during
-            // animation. Falls back to the static path if the total would exceed the
-            // memory budget (guards against pathological sequences / OOM).
+            // animation. Sample the frames to the requested size and a bounded working set.
             if (decoder.frameCount > 1) {
                 val animated = tryDecodeAllFrames(decoder, config)
                 if (animated != null) {
@@ -50,10 +49,11 @@ class AvifImageDecoder(
                         // be recycled via release(); it must not be served from Coil's
                         // memory cache to a second consumer after the first disposes it.
                         image = animated.asImage(shareable = false),
-                        isSampled = false,
+                        isSampled = animated.intrinsicWidth < decoder.width ||
+                            animated.intrinsicHeight < decoder.height,
                     )
                 }
-                // Budget exceeded — fall through to static first-frame rendering.
+                // Even one pixel per frame cannot fit — render only the first frame.
             }
             val bitmap = createBitmap(decoder.width, decoder.height, config)
             val result = decoder.nextFrame(bitmap)
@@ -97,8 +97,20 @@ class AvifImageDecoder(
     ): AvifAnimatedDrawable? {
         val frameCount = decoder.frameCount
         val bytesPerPixel = if (config == Bitmap.Config.ARGB_8888) 4 else 2
-        val totalBytes = frameCount.toLong() * decoder.width * decoder.height * bytesPerPixel
-        if (totalBytes > ANIMATED_MEMORY_BUDGET_BYTES) return null
+        val (requestedWidth, requestedHeight) = DecodeUtils.computeDstSize(
+            srcWidth = decoder.width,
+            srcHeight = decoder.height,
+            targetSize = options.size,
+            scale = options.scale,
+            maxSize = options.maxBitmapSize,
+        )
+        val (frameWidth, frameHeight) = resolveAvifAnimatedDecodeSize(
+            width = requestedWidth.coerceAtMost(decoder.width),
+            height = requestedHeight.coerceAtMost(decoder.height),
+            frameCount = frameCount,
+            bytesPerPixel = bytesPerPixel,
+            memoryBudgetBytes = minOf(ANIMATED_MEMORY_BUDGET_BYTES, Runtime.getRuntime().maxMemory() / 8),
+        ) ?: return null
 
         val rawDurations = decoder.frameDurations
         val durationsMs = LongArray(frameCount) { idx ->
@@ -109,18 +121,19 @@ class AvifImageDecoder(
         val frames = ArrayList<Bitmap>(frameCount)
         try {
             for (i in 0 until frameCount) {
-                val bitmap = createBitmap(decoder.width, decoder.height, config)
+                if (Thread.currentThread().isInterrupted) throw InterruptedException("AVIF decoding cancelled")
+                // libavif scales directly into the destination bitmap, avoiding full-size RGB frames.
+                val bitmap = createBitmap(frameWidth, frameHeight, config)
+                frames.add(bitmap)
                 val result = decoder.nthFrame(i, bitmap)
                 if (result != 0) {
-                    bitmap.recycle()
-                    frames.forEach { it.recycle() }
                     throw ImageDecodeException(
                         uri = source.fileOrNull()?.toString(),
                         format = "avif",
                         message = AvifDecoder.resultToString(result),
                     )
                 }
-                frames.add(bitmap)
+                if (Thread.currentThread().isInterrupted) throw InterruptedException("AVIF decoding cancelled")
             }
         } catch (e: Throwable) {
             frames.forEach { if (!it.isRecycled) it.recycle() }
@@ -131,9 +144,7 @@ class AvifImageDecoder(
 
     private companion object {
         private const val DEFAULT_FRAME_DURATION_SEC = 0.042
-
-
-        private const val ANIMATED_MEMORY_BUDGET_BYTES = 1000L * 1024 * 1024
+        private const val ANIMATED_MEMORY_BUDGET_BYTES = 64L * 1024 * 1024
     }
 
     class Factory : Decoder.Factory {

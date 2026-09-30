@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -72,11 +71,7 @@ fun ComposeHorizontalSceneRenderer(
     var viewportWidth by remember { mutableFloatStateOf(0f) }
     var viewportHeight by remember { mutableFloatStateOf(0f) }
 
-    DisposableEffect(animatedBridge) {
-        onDispose {
-            animatedBridge?.stopAll()
-        }
-    }
+    AnimatedDrawBridgeLifecycle(animatedBridge)
 
     val coroutineScope = rememberCoroutineScope()
     var flingJob by remember { mutableStateOf<Job?>(null) }
