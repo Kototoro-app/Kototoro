@@ -63,9 +63,8 @@ internal fun LocalDownloadsCardRoute(
     val summary = remember(items) { summarizeLocalDownloads(items.filterIsInstance<DownloadItemModel>()) }
     val isLoading = items.any { it is LoadingState }
     val isIdle = !isLoading && summary.pendingCount == 0
-    // Directory scans are cheap enough once the queue settles; rescan whenever it returns to idle.
-    LaunchedEffect(isIdle) {
-        if (isIdle) storageViewModel.refresh()
+    LaunchedEffect(storageViewModel, isIdle) {
+        storageViewModel.onDownloadQueueIdleChanged(isIdle)
     }
     LocalDownloadsCard(
         summary = summary,
