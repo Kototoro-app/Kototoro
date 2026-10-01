@@ -1228,7 +1228,7 @@ private fun ContentCardCornerBadges(
                         Icon(
                             painter = painterResource(id = R.drawable.ic_heart_outline),
                             contentDescription = "Favourite",
-                            tint = if (isIosStyle) Color.White else MaterialTheme.colorScheme.primary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(metrics.iconSize),
                         )
                     }
@@ -1309,9 +1309,7 @@ private fun ContentCardCornerBadges(
                         Icon(
                             painter = painterResource(id = R.drawable.ic_pin),
                             contentDescription = stringResource(R.string.pin),
-                            // Same rule as the saved badge: the iOS badge is a dark pill,
-                            // where a primary-tinted glyph all but disappears.
-                            tint = if (isIosStyle) Color.White else MaterialTheme.colorScheme.primary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(metrics.iconSize),
                         )
                     }

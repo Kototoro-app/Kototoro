@@ -140,7 +140,7 @@ internal fun buildFavouriteCardModel(request: FavouriteCardModelRequest): Conten
             counter = counter,
             id = row.entityId,
             progress = progress,
-            isFavorite = false,
+            isFavorite = true,
             isSaved = row.isDownloaded,
             isPinned = request.isPinned,
             metadataTrackingService = trackingService,
@@ -167,7 +167,7 @@ internal fun buildFavouriteCardModel(request: FavouriteCardModelRequest): Conten
             counter = counter,
             id = row.entityId,
             progress = progress,
-            isFavorite = false,
+            isFavorite = true,
             isSaved = row.isDownloaded,
             tags = row.displayTags.map {
                 ChipModel(

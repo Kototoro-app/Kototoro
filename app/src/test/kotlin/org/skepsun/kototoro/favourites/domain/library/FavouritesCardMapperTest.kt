@@ -10,6 +10,7 @@ import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.list.domain.ReadingProgress
+import org.skepsun.kototoro.list.ui.compose.hasVisibleCardBadges
 import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
 import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
@@ -146,12 +147,21 @@ class FavouritesCardMapperTest {
         assertEquals(4, model.counter)
         assertTrue(model.isPinned)
         assertTrue(model.isSaved)
-        assertFalse(model.isFavorite, "the favourites page never shows the heart badge")
+        assertTrue(model.isFavorite, "library membership must reach the configurable heart badge")
         assertEquals(0.5f, model.progress?.percent)
         assertEquals("Alpha Alt", model.subtitle, "grid subtitle is the alt title, no source label")
         assertEquals("Alpha Work", model.title)
         assertEquals("https://cover/1", model.coverUrl)
         assertEquals("Author A", model.manga.authors.joinToString())
+    }
+
+    @Test
+    fun `favorite badge follows the configured corners for library cards`() {
+        for (mode in listOf(ListMode.GRID, ListMode.COMPACT_GRID, ListMode.DETAILED_LIST)) {
+            val model = buildFavouriteCardModel(request(mode = mode))
+            assertTrue(hasVisibleCardBadges(setOf("favorite"), model), "enabled heart badge in $mode")
+            assertFalse(hasVisibleCardBadges(emptySet(), model), "disabled heart badge in $mode")
+        }
     }
 
     @Test
