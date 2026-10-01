@@ -1,7 +1,9 @@
 package org.skepsun.kototoro.core.lnreader
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.net.URI
+import java.util.Base64
 
 /**
  * Metadata extracted from a LNReader JS plugin.
@@ -20,7 +22,17 @@ data class LNReaderPluginMetadata(
         return copy(name = sanitizeDisplayName(name, site, id))
     }
 
+    /** Keeps catalog metadata alongside the executable bundle without changing the database schema. */
+    fun withMetadataHeader(jsCode: String): String {
+        val code = if (jsCode.startsWith(METADATA_HEADER)) jsCode.substringAfter('\n', "") else jsCode
+        val metadata = Json.encodeToString(serializer(), sanitized()).toByteArray(Charsets.UTF_8)
+        // Base64 keeps names, newlines and comment delimiters inert in a single JS comment.
+        return METADATA_HEADER + Base64.getEncoder().encodeToString(metadata) + "\n" + code
+    }
+
     companion object {
+        private const val METADATA_HEADER = "// kototoro-lnreader-metadata:"
+
         /**
          * Extract metadata from JS source code without executing it.
          * Uses regex patterns matching IReader's extractMetadataFromCode.
@@ -30,6 +42,14 @@ data class LNReaderPluginMetadata(
             if (jsCode.contains("404") && jsCode.contains("Not Found") && jsCode.length < 1000) return null
             if (jsCode.trim().startsWith("<!DOCTYPE") || jsCode.trim().startsWith("<html")) return null
             if (jsCode.isBlank()) return null
+
+            if (jsCode.startsWith(METADATA_HEADER)) {
+                val metadata = runCatching {
+                    val bytes = Base64.getDecoder().decode(jsCode.lineSequence().first().removePrefix(METADATA_HEADER))
+                    Json.decodeFromString(serializer(), String(bytes, Charsets.UTF_8)).sanitized()
+                }.getOrNull()
+                if (metadata != null) return metadata
+            }
 
             val id = listOf(
                 """(?s)id\s*[:=]\s*['"`]([^'"`]+)['"`]""".toRegex(),

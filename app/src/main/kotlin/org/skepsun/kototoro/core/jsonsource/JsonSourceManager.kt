@@ -484,7 +484,7 @@ class JsonSourceManager @Inject constructor(
                 id = sourceId,
                 name = meta.name,
                 type = JsonSourceType.LNREADER,
-                config = jsContent,
+                config = if (metadataOverride != null) meta.withMetadataHeader(jsContent) else jsContent,
                 enabled = enabled ?: jsonSourceDao.getById(sourceId)?.enabled ?: true,
                 createdAt = timestamp,
                 updatedAt = timestamp,
