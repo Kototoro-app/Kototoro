@@ -14,6 +14,7 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.local.data.LocalMangaRepository
+import org.skepsun.kototoro.local.data.LocalStorageManager
 import org.skepsun.kototoro.local.data.input.LocalContentParser
 import org.skepsun.kototoro.local.novel.LocalNovelRepository
 import org.skepsun.kototoro.local.domain.model.LocalContent
@@ -30,14 +31,14 @@ class LocalContentIndex @Inject constructor(
     @ApplicationContext context: Context,
     private val localContentRepositoryProvider: Provider<LocalMangaRepository>,
     private val localNovelRepositoryProvider: Provider<LocalNovelRepository>,
+    private val storageManager: LocalStorageManager,
 ) : FlowCollector<LocalContent?> {
 
 private val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
 private val mutex = Mutex()
 
-private var currentVersion: Int
+private val currentVersion: Int
     get() = prefs.getInt(KEY_VERSION, 0)
-    set(value) = prefs.edit { putInt(KEY_VERSION, value) }
 
 override suspend fun emit(value: LocalContent?) {
     if (value != null) {
@@ -46,6 +47,10 @@ override suspend fun emit(value: LocalContent?) {
 }
 
 suspend fun update() = mutex.withLock {
+    updateIndex(readableRootKeys())
+}
+
+private suspend fun updateIndex(rootKeys: Set<String>) {
     db.withTransaction {
         val dao = db.getLocalContentIndexDao()
         dao.clear()
@@ -57,12 +62,17 @@ suspend fun update() = mutex.withLock {
             .getAllLocalNovels()
             .forEach { upsert(it) }
     }
-    currentVersion = VERSION
+    // Capture roots before scanning so a concurrent directory change remains pending.
+    prefs.edit {
+        putInt(KEY_VERSION, VERSION)
+        putStringSet(KEY_ROOTS, rootKeys)
+    }
 }
 
-    suspend fun updateIfRequired() {
-        if (isUpdateRequired()) {
-            update()
+    suspend fun updateIfRequired() = mutex.withLock {
+        val roots = readableRootKeys()
+        if (currentVersion < VERSION || prefs.getStringSet(KEY_ROOTS, null) != roots) {
+            updateIndex(roots)
         }
     }
 
@@ -129,12 +139,14 @@ suspend fun update() = mutex.withLock {
         path = toUri().toString(),
     )
 
-    private fun isUpdateRequired() = currentVersion < VERSION
+    private suspend fun readableRootKeys(): Set<String> =
+        storageManager.getAllReadableRoots().mapTo(HashSet()) { it.key }
 
     companion object {
 
         private const val PREF_NAME = "_local_index"
         private const val KEY_VERSION = "ver"
+        private const val KEY_ROOTS = "readable_roots"
         private const val VERSION = 4
     }
 }

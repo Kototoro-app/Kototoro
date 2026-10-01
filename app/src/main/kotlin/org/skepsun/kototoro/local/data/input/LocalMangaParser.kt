@@ -95,12 +95,14 @@ class LocalContentParser {
     private val rootFile: File
     private val uniFile: UniFile?
     private val cacheDir: File
+    private val displayName: String
 
-    constructor(file: File) {
+    constructor(file: File, displayName: String = file.name) {
         this.uri = null
         this.rootFile = file
         this.uniFile = null
         this.cacheDir = file.parentFile ?: App.getInstance().cacheDir
+        this.displayName = displayName
     }
 
     constructor(uri: Uri) {
@@ -116,6 +118,7 @@ class LocalContentParser {
             File(App.getInstance().cacheDir, "saf_${uri.toString().longHashCode()}")
         }
         this.cacheDir = App.getInstance().cacheDir
+        this.displayName = uniFile?.name ?: rootFile.name
     }
 
     constructor(file: UniFile, cacheDir: File) {
@@ -123,6 +126,7 @@ class LocalContentParser {
         this.rootFile = file.filePath?.let(::File) ?: File(cacheDir, "saf_${file.uri.toString().longHashCode()}")
         this.uniFile = file
         this.cacheDir = cacheDir
+        this.displayName = file.name ?: rootFile.name
     }
 
     suspend fun getContent(withDetails: Boolean, forceRefresh: Boolean = false): LocalContent {
@@ -261,7 +265,7 @@ class LocalContentParser {
                     },
                 )
             } else {
-                val title = rootFile.name.fileNameToTitle()
+                val title = displayName.fileNameToTitle()
                 var inferedSource: org.skepsun.kototoro.parsers.model.ContentSource = org.skepsun.kototoro.core.model.LocalMangaSource
                 val flatFiles = fileSystem.listRecursively(rootPath).toList()
                 if (flatFiles.any {
@@ -480,7 +484,7 @@ class LocalContentParser {
                 return LocalContentParser(directFile).getContent(withDetails, forceRefresh)
             }
             val localFile = materialize(file, forceRefresh)
-            val parsed = LocalContentParser(localFile).getContent(withDetails)
+            val parsed = LocalContentParser(localFile, file.name ?: localFile.name).getContent(withDetails)
             val stableCoverUrl = parsed.manga.coverUrl
                 ?.toUri()
                 ?.takeIf(Uri::isZipUri)

@@ -29,6 +29,7 @@ import org.skepsun.kototoro.core.util.ext.isReadable
 import org.skepsun.kototoro.core.util.ext.isWriteable
 import org.skepsun.kototoro.core.util.ext.resolveFile
 import org.skepsun.kototoro.core.util.ext.takeIfWriteable
+import org.skepsun.kototoro.local.domain.model.computeTreeSize
 import org.skepsun.kototoro.parsers.util.mapToSet
 import java.io.File
 import javax.inject.Inject
@@ -69,7 +70,7 @@ class LocalStorageManager @Inject constructor(
     }
 
     suspend fun computeStorageSize(kind: StorageContentKind) = withContext(Dispatchers.IO) {
-        getReadableDirs(kind).toSet().sumOf { it.computeSize() }
+        getReadableRoots(kind).sumOf { it.file.computeTreeSize() }
     }
 
     suspend fun computeCacheSize() = withContext(Dispatchers.IO) {
@@ -77,7 +78,7 @@ class LocalStorageManager @Inject constructor(
     }
 
     suspend fun computeStorageSize() = withContext(Dispatchers.IO) {
-        getAllReadableDirs().toSet().sumOf { it.computeSize() }
+        getAllReadableRoots().sumOf { it.file.computeTreeSize() }
     }
 
     suspend fun computeAiModelsSize() = withContext(Dispatchers.IO) {

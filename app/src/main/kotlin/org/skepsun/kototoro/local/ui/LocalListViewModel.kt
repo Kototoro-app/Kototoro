@@ -64,7 +64,7 @@ class LocalListViewModel @Inject constructor(
     captchaAutoResolveCoordinator: org.skepsun.kototoro.core.exceptions.resolve.CaptchaAutoResolveCoordinator,
     detailsLoadUseCase: DetailsLoadUseCase,
     private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
-    localContentIndex: LocalContentIndex,
+    private val localContentIndex: LocalContentIndex,
 ) : RemoteListViewModel(
     savedStateHandle = savedStateHandle,
     mangaRepositoryFactory = mangaRepositoryFactory,
@@ -169,8 +169,21 @@ class LocalListViewModel @Inject constructor(
     }
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
-        if (key == AppSettings.KEY_LOCAL_MANGA_DIRS) {
-            onRefresh()
+        if (key == null || key in setOf(
+                AppSettings.KEY_LOCAL_MANGA_DIRS,
+                AppSettings.KEY_LOCAL_MANGA_DIR_URIS,
+                AppSettings.KEY_LOCAL_NOVEL_DIR_URIS,
+                AppSettings.KEY_LOCAL_VIDEO_DIR_URIS,
+                AppSettings.KEY_LOCAL_NOVEL_STORAGE,
+                AppSettings.KEY_LOCAL_NOVEL_STORAGE_URI,
+                AppSettings.KEY_LOCAL_VIDEO_STORAGE,
+                AppSettings.KEY_LOCAL_VIDEO_STORAGE_URI,
+            )
+        ) {
+            launchJob(Dispatchers.IO) {
+                // The committed index change reloads the list after newly selected roots are scanned.
+                localContentIndex.updateIfRequired()
+            }
         }
     }
 

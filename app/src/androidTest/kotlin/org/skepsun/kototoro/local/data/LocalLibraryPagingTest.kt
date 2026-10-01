@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -46,6 +47,9 @@ class LocalLibraryPagingTest {
 	@Inject
 	lateinit var db: MangaDatabase
 
+	@Inject
+	lateinit var storageManager: LocalStorageManager
+
 	private companion object {
 		const val INDEX_PREF_NAME = "_local_index"
 		const val INDEX_VERSION = 4
@@ -58,10 +62,12 @@ class LocalLibraryPagingTest {
 	@Before
 	fun setUp() {
 		hiltRule.inject()
-		// 让 LocalContentIndex.updateIfRequired() 判定为已是最新，跳过清库+扫描。
+		// 数据库分页测试预置完整索引标记；目录扫描由 LocalDirectoryIndexTest 覆盖。
+		val rootKeys = runBlocking { storageManager.getAllReadableRoots().mapTo(HashSet()) { it.key } }
 		context.getSharedPreferences(INDEX_PREF_NAME, Context.MODE_PRIVATE)
 			.edit()
 			.putInt("ver", INDEX_VERSION)
+			.putStringSet("readable_roots", rootKeys)
 			.commit()
 		db.openHelper.writableDatabase.execSQL("DELETE FROM local_index")
 		db.openHelper.writableDatabase.execSQL("DELETE FROM manga")

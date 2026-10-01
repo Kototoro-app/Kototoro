@@ -144,6 +144,7 @@ class TrackingSnapshotTest {
             contentRepository, db, context,
             Provider { localRepository },
             Provider { LocalNovelRepository(storage) },
+            storage,
         )
         localRepository = LocalMangaRepository(
             storage, db, index, MutableSharedFlow(), isolatedSettings, ContentLock(), Provider { repositoryFactory },
