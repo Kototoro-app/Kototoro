@@ -80,6 +80,7 @@ class SourcesSettingsViewModel @Inject constructor(
 
     val isLinksEnabled = MutableStateFlow(isLinksEnabled())
     val installedJarNames: StateFlow<List<String>> = GlobalExtensionManager.installedJarNames
+    val installedPlugins = MutableLiveData<List<File>>()
 
     fun refreshLinksEnabled() {
         isLinksEnabled.value = isLinksEnabled()
@@ -102,8 +103,6 @@ class SourcesSettingsViewModel @Inject constructor(
         val state = context.packageManager.getComponentEnabledSetting(linksHandlerActivity)
         return state == COMPONENT_ENABLED_STATE_ENABLED || state == COMPONENT_ENABLED_STATE_DEFAULT
     }
-
-    val installedPlugins = MutableLiveData<List<File>>()
 
     fun loadPlugins() {
         viewModelScope.launch(Dispatchers.IO) {
