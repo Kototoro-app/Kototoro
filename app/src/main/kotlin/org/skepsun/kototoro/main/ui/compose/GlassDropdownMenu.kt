@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.main.ui.compose
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
@@ -93,6 +94,11 @@ internal fun RootGlassMenuOverlay(
     modifier: Modifier = Modifier,
 ) {
     val request = host.request ?: return
+    val dismissClick: () -> Unit = {
+        host.request = null
+        request.onDismissRequest()
+    }
+    BackHandler(onBack = dismissClick)
     val surfaceColor = MaterialTheme.colorScheme.surfaceContainer
     val density = LocalDensity.current
     val menuGapPx = with(density) { 4.dp.roundToPx() }
@@ -119,10 +125,6 @@ internal fun RootGlassMenuOverlay(
         // over the anchor button so a tap there falls through to the toggle
         // pill below — keeping its press gloss while closing the menu (the
         // button's onClick toggles the menu shut).
-        val dismissClick: () -> Unit = {
-            host.request = null
-            request.onDismissRequest()
-        }
         if (request.anchorTapThrough) {
             val rootSizePx = IntSize(
                 width = with(density) { maxWidth.roundToPx() },
