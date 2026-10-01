@@ -12,6 +12,7 @@ import org.skepsun.kototoro.core.db.entity.MangaTagsEntity
 import org.skepsun.kototoro.core.db.entity.TagEntity
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.db.entity.toContentTags
+import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.ext.toInstantOrNull
@@ -151,6 +152,14 @@ class TrackingRepository @Inject constructor(
     }
 
     suspend fun updateTrack(manga: Content, updates: MangaUpdates): TrackEntity = db.withTransaction {
+        if (updates is MangaUpdates.Success) {
+            val owner = contentDataRepository.findContentById(manga.id, withChapters = false)
+            if (owner != null && !owner.isLocal) {
+                // Feed and details must read the same committed snapshot. A remote check for a
+                // local owner carries its id, so never replace that owner's files/source.
+                contentDataRepository.updateContentSnapshotAtAnchor(updates.manga, manga.id)
+            }
+        }
         val prev = getOrCreateTrack(manga.id)
         val entity = prev.mergeWith(updates, manga.id)
         db.getTracksDao().upsert(entity)
