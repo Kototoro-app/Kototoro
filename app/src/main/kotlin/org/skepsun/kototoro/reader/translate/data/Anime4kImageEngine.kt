@@ -83,6 +83,7 @@ class Anime4kImageEngine(private val context: Context) {
 
         val allCreatedTextures = mutableListOf<Int>()
         val allCreatedFbos = mutableListOf<Int>()
+        val textureFbos = mutableMapOf<Int, Int>()
 
         val freePoolDims = mutableMapOf<Int, Pair<Int, Int>>()
         val freePool = mutableListOf<Int>()
@@ -91,7 +92,7 @@ class Anime4kImageEngine(private val context: Context) {
             val texIdx = freePool.indexOfFirst { freePoolDims[it]?.first == w && freePoolDims[it]?.second == h }
             if (texIdx >= 0) {
                 val tex = freePool.removeAt(texIdx)
-                val fbo = allCreatedFbos[allCreatedTextures.indexOf(tex)]
+                val fbo = textureFbos.getValue(tex)
                 GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fbo)
                 return Pair(tex, fbo)
             }
@@ -100,6 +101,7 @@ class Anime4kImageEngine(private val context: Context) {
             freePoolDims[tex] = Pair(w, h)
             val fbo = IntArray(1).also { GLES30.glGenFramebuffers(1, it, 0) }[0]
             allCreatedFbos.add(fbo)
+            textureFbos[tex] = fbo
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fbo)
             GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_TEXTURE_2D, tex, 0)
             val status = GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER)

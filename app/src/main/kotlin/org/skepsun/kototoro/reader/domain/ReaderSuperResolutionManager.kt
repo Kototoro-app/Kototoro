@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.GlobalScope
+import okio.ByteString.Companion.encodeUtf8
 import org.skepsun.kototoro.reader.translate.data.OnnxModelManager
 import org.skepsun.kototoro.reader.translate.data.RealCuganNcnnEngine
 import org.skepsun.kototoro.reader.translate.data.RealEsrganNcnnEngine
@@ -65,7 +66,14 @@ class ReaderSuperResolutionManager @Inject constructor(
         val originalFile = originalUri.toFile()
         if (!originalFile.exists()) return@withContext null
 
-        val hash = "${originalFile.name}_${modelId}_sr".hashCode().toString()
+        // Filenames repeat across chapters; a replaced source file must also invalidate its result.
+        val hash = listOf(
+            originalFile.canonicalPath,
+            originalFile.length().toString(),
+            originalFile.lastModified().toString(),
+            modelId,
+            noiseLevel.toString(),
+        ).joinToString("\u0000").encodeUtf8().sha256().hex()
         val outputFile = File(cacheDir, "sr_$hash.webp")
 
         if (outputFile.exists() && outputFile.length() > 0) {
