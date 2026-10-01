@@ -4010,4 +4010,10 @@
     <string name="migration_config_categories_locked">Categories are always kept</string>
     <string name="migration_selected_of">%1$d of %2$d selected</string>
     <string name="migration_next_with_count">Next · %d</string>
+    <string name="migration_filter_selected">Selected</string>
+    <string name="migration_filter_unselected">Unselected</string>
+    <string name="migration_select_visible">Select shown</string>
+    <string name="migration_clear_visible">Clear shown</string>
+    <string name="migration_visible_count">Showing %1$d of %2$d sources</string>
+    <string name="migration_sources_fast_scroll">Fast scroll sources</string>
 </resources>

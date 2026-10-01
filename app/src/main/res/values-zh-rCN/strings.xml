@@ -3830,4 +3830,10 @@ SHA-256 指纹:
     <string name="migration_config_categories_locked">收藏分类总会保留</string>
     <string name="migration_selected_of">已选 %1$d / %2$d 部</string>
     <string name="migration_next_with_count">下一步 · %d 部</string>
+    <string name="migration_filter_selected">已选</string>
+    <string name="migration_filter_unselected">未选</string>
+    <string name="migration_select_visible">全选结果</string>
+    <string name="migration_clear_visible">清除结果</string>
+    <string name="migration_visible_count">显示 %1$d / %2$d 个来源</string>
+    <string name="migration_sources_fast_scroll">快速滚动来源</string>
 </resources>

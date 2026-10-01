@@ -22,15 +22,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -100,31 +96,51 @@ fun MigrationConfigSheet(
             style = GlassDefaults.prominentStyle().copy(containerAlpha = 0.8f, minimumContainerAlpha = 0.6f),
         ) {
             val family = editingFamily?.let { f -> state.families.firstOrNull { it.family == f } }
-            AnimatedContent(
-                targetState = family,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "migration-config-page",
-            ) { editing ->
-                if (editing != null) {
-                    SourcePicker(
-                        family = editing,
-                        onToggle = { viewModel.toggleSource(editing.family, it) },
-                        onPreset = { viewModel.selectPreset(editing.family, it) },
-                        onDone = { editingFamily = null },
-                    )
-                } else {
-                    ConfigContent(
-                        state = state,
-                        viewModel = viewModel,
-                        onEdit = { editingFamily = it },
-                        onManageSources = onManageSources,
-                        onStart = {
-                            viewModel.save()
-                            onStart()
-                        },
-                    )
-                }
+            MigrationConfigPages(
+                family = family,
+                onToggle = viewModel::toggleSource,
+                onPreset = viewModel::selectPreset,
+                onDone = { editingFamily = null },
+            ) {
+                ConfigContent(
+                    state = state,
+                    viewModel = viewModel,
+                    onEdit = { editingFamily = it },
+                    onManageSources = onManageSources,
+                    onStart = {
+                        viewModel.save()
+                        onStart()
+                    },
+                )
             }
+        }
+    }
+}
+
+@Composable
+internal fun MigrationConfigPages(
+    family: FamilySources?,
+    onToggle: (ContentTypeFamily, String) -> Unit,
+    onPreset: (ContentTypeFamily, SourcePreset, List<String>) -> Unit,
+    onDone: () -> Unit,
+    configContent: @Composable () -> Unit,
+) {
+    AnimatedContent(
+        targetState = family,
+        // Selecting sources updates the current page; only switching families changes its identity.
+        contentKey = { it?.family },
+        transitionSpec = { fadeIn() togetherWith fadeOut() },
+        label = "migration-config-page",
+    ) { editing ->
+        if (editing != null) {
+            MigrationSourcePicker(
+                family = editing,
+                onToggle = { onToggle(editing.family, it) },
+                onPreset = { preset, names -> onPreset(editing.family, preset, names) },
+                onDone = onDone,
+            )
+        } else {
+            configContent()
         }
     }
 }
@@ -447,104 +463,6 @@ private fun MatchModeCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
-        }
-    }
-}
-
-@Composable
-private fun SourcePicker(
-    family: FamilySources,
-    onToggle: (String) -> Unit,
-    onPreset: (SourcePreset) -> Unit,
-    onDone: () -> Unit,
-) {
-    val context = LocalContext.current
-    Column(Modifier.fillMaxWidth().heightIn(max = 640.dp).padding(bottom = 12.dp)) {
-        SheetDragHandle(Modifier.align(Alignment.CenterHorizontally))
-        Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onDone) {
-                Icon(
-                    painterResource(R.drawable.ic_arrow_forward),
-                    contentDescription = null,
-                    modifier = Modifier.rotate(180f),
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    stringResource(R.string.migration_sources_picker_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    stringResource(R.string.migration_selected_count, family.selected.size) + " · " +
-                        stringResource(R.string.migration_sources_picker_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            TextButton(onClick = onDone) { Text(stringResource(android.R.string.ok)) }
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            listOf(SourcePreset.PINNED, SourcePreset.ALL, SourcePreset.NONE).forEach { preset ->
-                AssistChip(
-                    onClick = { onPreset(preset) },
-                    label = {
-                        Text(
-                            stringResource(
-                                when (preset) {
-                                    SourcePreset.ALL, SourcePreset.ENABLED -> R.string.migration_select_all
-                                    SourcePreset.PINNED -> R.string.migration_select_pinned
-                                    SourcePreset.NONE -> R.string.migration_select_none
-                                },
-                            ),
-                        )
-                    },
-                )
-            }
-        }
-        LazyColumn {
-            items(family.available, key = { it.name }) { source ->
-                val order = family.selected.indexOf(source.name)
-                val checked = order >= 0
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onToggle(source.name) }
-                        .padding(horizontal = 20.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ContentSourceIcon(source = source, modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)))
-                    Spacer(Modifier.width(14.dp))
-                    Text(
-                        source.migrationTitle(context),
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (checked) {
-                        Box(
-                            Modifier
-                                .size(26.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                "${order + 1}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-                    } else {
-                        Checkbox(checked = false, onCheckedChange = { onToggle(source.name) }, modifier = Modifier.size(26.dp))
-                    }
-                }
-            }
         }
     }
 }

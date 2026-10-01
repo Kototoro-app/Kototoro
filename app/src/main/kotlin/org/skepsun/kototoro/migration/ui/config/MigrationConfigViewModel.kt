@@ -114,15 +114,8 @@ class MigrationConfigViewModel @Inject constructor(
         it.copy(selected = if (name in it.selected) it.selected - name else it.selected + name)
     }
 
-    fun selectPreset(family: ContentTypeFamily, preset: SourcePreset) = updateFamily(family) { f ->
-        f.copy(
-            selected = when (preset) {
-                SourcePreset.ALL, SourcePreset.ENABLED -> f.available.map { it.name }
-                SourcePreset.PINNED -> f.available.filter { it.name in f.pinned }.map { it.name }
-                SourcePreset.NONE -> emptyList()
-            },
-        )
-    }
+    fun selectPreset(family: ContentTypeFamily, preset: SourcePreset, visibleNames: List<String>? = null) =
+        updateFamily(family) { it.withPreset(preset, visibleNames) }
 
     fun toggleFlag(flag: MigrationDataFlag) {
         if (flag == MigrationDataFlag.CATEGORIES) return
