@@ -36,6 +36,8 @@ class MigrationListActivity : BaseComposeActivity() {
                 onManualSearch = viewModel::manualSearch,
                 onMigrateNow = { viewModel.migrateNow(it) },
                 onOpenOriginal = { router.openDetails(it) },
+                onOpenCandidate = { router.openDetails(it) },
+                onLoadCandidateDetails = viewModel::loadCandidateDetails,
                 onRequestMigrate = viewModel::requestMigrate,
                 onConfirmMigrate = viewModel::confirmMigrate,
                 onCancelMigrate = viewModel::cancelMigrate,

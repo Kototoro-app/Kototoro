@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -58,6 +59,7 @@ class MigrationListViewModel @Inject constructor(
     val onFinished = MutableEventFlow<Unit>()
 
     private val itemJobs = ConcurrentHashMap<Long, Job>()
+    private val candidateDetailsJobs = ConcurrentHashMap<Long, Job>()
     private val families = ConcurrentHashMap<Long, ContentTypeFamily>()
     private val sourcePermits = ConcurrentHashMap<String, Semaphore>()
     private val itemPermits = Semaphore(MAX_PARALLEL_ITEMS)
@@ -104,8 +106,10 @@ class MigrationListViewModel @Inject constructor(
         _state.update { s -> s.updateItem(originId) { it.copy(status = MigrationItemStatus.SEARCHING) } }
         itemJobs[originId] = launchJob(Dispatchers.Default) {
             val details = runCatchingCancellable {
-                val content = candidate.content
-                if (content.chapters.isNullOrEmpty()) repositoryFactory.create(content.source).getDetails(content) else content
+                val item = _state.value.items.firstOrNull { it.origin.id == originId }
+                val current = item?.candidates?.firstOrNull { it.content.id == candidate.content.id } ?: candidate
+                val content = item?.candidateWithDetails(current)?.content ?: current.content
+                if (content.chapters == null) repositoryFactory.create(content.source).getDetails(content) else content
             }.getOrNull()
             _state.update { s ->
                 s.updateItem(originId) {
@@ -113,10 +117,36 @@ class MigrationListViewModel @Inject constructor(
                         it.copy(status = MigrationItemStatus.NOT_FOUND, target = null, targetChapters = null)
                     } else {
                         it.copy(status = MigrationItemStatus.MATCHED, target = details, targetChapters = details.chaptersCount())
+                            .withCandidateDetails(details)
                     }
                 }
             }
         }
+    }
+
+    /** Only candidates rendered on screen fetch details; previews share the matching concurrency limits. */
+    fun loadCandidateDetails(originId: Long, candidateId: Long) {
+        val item = _state.value.items.firstOrNull { it.origin.id == originId } ?: return
+        val candidate = item.candidates.firstOrNull { it.content.id == candidateId } ?: return
+        val content = item.candidateWithDetails(candidate).content
+        if (content.chapters != null || candidateDetailsJobs.containsKey(candidateId)) return
+        val job = launchJob(Dispatchers.Default, start = CoroutineStart.LAZY) {
+            try {
+                val details = runCatchingCancellable {
+                    itemPermits.withPermit {
+                        sourcePermits.getOrPut(content.source.name) { Semaphore(MAX_PER_SOURCE) }.withPermit {
+                            repositoryFactory.create(content.source).getDetails(content)
+                        }
+                    }
+                }.getOrNull() ?: return@launchJob
+                _state.update { state ->
+                    state.copy(items = state.items.map { it.withCandidateDetails(details) })
+                }
+            } finally {
+                candidateDetailsJobs.remove(candidateId)
+            }
+        }
+        if (candidateDetailsJobs.putIfAbsent(candidateId, job) == null) job.start() else job.cancel()
     }
 
     /** Manual search across the target sources; replaces the item's candidate list. */
@@ -230,13 +260,14 @@ class MigrationListViewModel @Inject constructor(
                 val best = result?.best
                 _state.update { s ->
                     s.updateItem(origin.id) {
-                        it.copy(
+                        val matched = it.copy(
                             status = if (best != null) MigrationItemStatus.MATCHED else MigrationItemStatus.NOT_FOUND,
                             target = best,
                             targetChapters = best?.chaptersCount(),
                             candidates = result?.candidates.orEmpty(),
                             sourceErrors = result?.errors?.map { (name, e) -> "$name: ${e.message}" }.orEmpty(),
                         )
+                        if (best != null) matched.withCandidateDetails(best) else matched
                     }
                 }
                 applyHideRules(origin.id)

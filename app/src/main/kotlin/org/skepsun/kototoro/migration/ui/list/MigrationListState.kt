@@ -24,6 +24,15 @@ data class MigrationItemState(
 
     val otherCandidatesCount: Int
         get() = candidates.count { it.content.id != target?.id }
+
+    /** Reuse details already fetched for the selected match instead of displaying its search summary. */
+    fun candidateWithDetails(candidate: MatchCandidate): MatchCandidate =
+        target?.takeIf { it.id == candidate.content.id && it.chapters != null }
+            ?.let { candidate.copy(content = it) } ?: candidate
+
+    fun withCandidateDetails(details: Content): MigrationItemState = copy(
+        candidates = candidates.map { if (it.content.id == details.id) it.copy(content = details) else it },
+    )
 }
 
 sealed interface MigrationDialog {

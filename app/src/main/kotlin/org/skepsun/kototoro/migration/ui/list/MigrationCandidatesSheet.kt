@@ -27,6 +27,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,14 +39,17 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.model.chaptersCount
 import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.migration.ui.rememberCoverRequest
 import org.skepsun.kototoro.migration.domain.MatchCandidate
+import org.skepsun.kototoro.parsers.model.Content
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,9 +57,10 @@ fun MigrationCandidatesSheet(
     item: MigrationItemState,
     onSelect: (MatchCandidate) -> Unit,
     onSearch: (String) -> Unit,
+    onLoadDetails: (MatchCandidate) -> Unit,
+    onOpen: (Content) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val context = LocalContext.current
     var query by remember(item.origin.id) { mutableStateOf(item.origin.title) }
     val focusManager = LocalFocusManager.current
     val search = {
@@ -97,31 +102,60 @@ fun MigrationCandidatesSheet(
         }
         LazyColumn {
             items(item.candidates, key = { it.content.id }) { candidate ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSelect(candidate) }
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RadioButton(selected = candidate.content.id == item.target?.id, onClick = { onSelect(candidate) })
-                    AsyncImage(
-                        model = rememberCoverRequest(candidate.content),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.width(40.dp).aspectRatio(13f / 18f).clip(RoundedCornerShape(6.dp)),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(candidate.content.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            text = candidate.content.source.migrationTitle(context),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                MigrationCandidateRow(
+                    candidate = item.candidateWithDetails(candidate),
+                    selected = candidate.content.id == item.target?.id,
+                    onSelect = onSelect,
+                    onLoadDetails = onLoadDetails,
+                    onOpen = onOpen,
+                )
             }
+        }
+    }
+}
+
+/** Shared by the inline preview and the full candidate list. Opening details never selects a match. */
+@Composable
+internal fun MigrationCandidateRow(
+    candidate: MatchCandidate,
+    selected: Boolean,
+    onSelect: (MatchCandidate) -> Unit,
+    onLoadDetails: (MatchCandidate) -> Unit,
+    onOpen: (Content) -> Unit,
+) {
+    val content = candidate.content
+    val context = LocalContext.current
+    LaunchedEffect(content.id) {
+        if (content.chapters == null) onLoadDetails(candidate)
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onSelect(candidate) }
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = { onSelect(candidate) })
+        AsyncImage(
+            model = rememberCoverRequest(content),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.width(40.dp).aspectRatio(13f / 18f).clip(RoundedCornerShape(6.dp)),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(content.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            val source = content.source.migrationTitle(context)
+            Text(
+                text = if (content.chapters == null) {
+                    "$source · ${stringResource(R.string.unknown)}"
+                } else {
+                    stringResource(R.string.migration_chapters, source, content.chaptersCount())
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        IconButton(onClick = { onOpen(content) }) {
+            Icon(painterResource(R.drawable.ic_info_outline), contentDescription = stringResource(R.string.details))
         }
     }
 }

@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,6 +75,8 @@ fun MigrationListScreen(
     onManualSearch: (Long, String) -> Unit,
     onMigrateNow: (Long) -> Unit,
     onOpenOriginal: (Content) -> Unit,
+    onOpenCandidate: (Content) -> Unit,
+    onLoadCandidateDetails: (Long, Long) -> Unit,
     onRequestMigrate: (MigrationMode) -> Unit,
     onConfirmMigrate: (MigrationMode) -> Unit,
     onCancelMigrate: () -> Unit,
@@ -107,6 +110,27 @@ fun MigrationListScreen(
                         onMigrateNow = { onMigrateNow(item.origin.id) },
                         onOpenOriginal = { onOpenOriginal(item.origin) },
                     )
+                    if (item.candidates.isNotEmpty()) {
+                        Column(Modifier.padding(start = 12.dp)) {
+                            item.candidates.take(3).forEach { candidate ->
+                                key(candidate.content.id) {
+                                    MigrationCandidateRow(
+                                        candidate = item.candidateWithDetails(candidate),
+                                        selected = candidate.content.id == item.target?.id,
+                                        onSelect = { onSelectCandidate(item.origin.id, it) },
+                                        onLoadDetails = { onLoadCandidateDetails(item.origin.id, it.content.id) },
+                                        onOpen = onOpenCandidate,
+                                    )
+                                }
+                            }
+                            TextButton(
+                                onClick = { sheetItemId = item.origin.id },
+                                modifier = Modifier.align(Alignment.End).padding(end = 16.dp),
+                            ) {
+                                Text(stringResource(R.string.migration_candidates_title))
+                            }
+                        }
+                    }
                     HorizontalDivider()
                 }
             }
@@ -126,6 +150,8 @@ fun MigrationListScreen(
                     sheetItemId = null
                 },
                 onSearch = { query -> onManualSearch(id, query) },
+                onLoadDetails = { onLoadCandidateDetails(id, it.content.id) },
+                onOpen = onOpenCandidate,
                 onDismiss = { sheetItemId = null },
             )
         }
