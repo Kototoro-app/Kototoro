@@ -26,8 +26,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.kyant.shapes.RoundedRectangle
@@ -141,6 +143,17 @@ internal fun ReaderPanelHost(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clipToBounds()
+                            .layout { measurable, constraints ->
+                                // Keep measuring the full header so collapsing it never moves the peek anchor.
+                                val header = measurable.measure(constraints)
+                                val visibleHeight = if (scope.isExpandedPastPeek) {
+                                    minOf(header.height, 48.dp.roundToPx())
+                                } else {
+                                    header.height
+                                }
+                                layout(header.width, visibleHeight) { header.placeRelative(0, 0) }
+                            }
                             // The peek is the header's natural height. While the sheet is hidden or
                             // dragged down the column above is shorter than that; measured inside it
                             // the header would shrink and the peek anchor would follow the finger.

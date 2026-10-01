@@ -300,6 +300,8 @@ class StableSheetSlotScope internal constructor(
     val contentBottomPadding: Dp,
     /** Animates the sheet away, then calls `onDismissRequest`. */
     val dismiss: () -> Unit,
+    /** Expanded beyond an available peek anchor, which can restore the header when dragged down. */
+    val isExpandedPastPeek: Boolean = false,
 )
 
 /**
@@ -393,6 +395,10 @@ fun StableAnchoredSheetLayout(
                     dragModifier = sheetDragModifier,
                     contentBottomPadding = with(density) { offset.toDp() },
                     dismiss = dismissWithAnimation,
+                    isExpandedPastPeek = usePeekAnchor &&
+                        state.anchoredState.anchors.positionOf(StableSheetAnchor.Middle).isFinite() &&
+                        (state.anchoredState.targetValue == StableSheetAnchor.Full ||
+                            state.anchoredState.targetValue == StableSheetAnchor.ThreeQuarter),
                 ),
             )
         }
