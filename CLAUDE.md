@@ -138,15 +138,19 @@ npm run docs:build
 
 ### 模块结构
 - `app/` - 主应用模块，包含所有功能实现（compose + view）
-- `parser-api/` - 共享的解析器接口定义
+- `parser-api/` - 共享的解析器接口定义（KMP：纯叶子模型在 `commonMain`；`Content*` 等带二进制兼容垫片的类和 `org.koitharu.kotatsu.parsers.*` 外部 ABI 在 `androidMain`，不要改动其 JVM 签名）
+- `core-db/` - 共享 Room 数据库（KMP）：`MangaDatabase`、实体、DAO 在 `commonMain`，85 个旧迁移在 `androidMain`；包名不变，仍是 `org.skepsun.kototoro.core.db` 等
+- `reader-core/` - 阅读器几何/场景语义（KMP，纯 Kotlin）
 - `docs/` - VitePress 文档站点
+
+KMP/iOS 方案与进度见 `docs/architecture/kmp-ios-plan-2026-10.md`。KMP 模块的可移植性检查是 `./gradlew :<module>:compileCommonMainKotlinMetadata`（会拒绝 JVM 专有 API，Windows 上即可运行）；其测试任务是 `jvmTest` 而不是 `test`。
 
 ### 代码组织（app/src/main/kotlin/org/skepsun/kototoro/）
 项目按功能模块组织，每个模块通常包含 `data`、`domain`、`ui` 三层：
 
 **核心模块**：
 - `core/` - 核心基础设施（数据库、网络、缓存、异常处理、模型）
-  - `core/db/` - Room 数据库、DAO、实体、迁移
+  - `core/db/` - 数据库已移到 `core-db/` 模块（包名不变）；这里只剩 `MangaDatabase(context)` 构建函数、`DatabasePrePopulateCallback` 等依赖 Android 的部分
   - `core/network/` - OkHttp 拦截器、代理、Cookie 管理、WebView 集成
   - `core/parser/` - 解析层：多生态解析器（Mihon、Aniyomi、IReader、Legado、TVBox、Kotatsu、Tsuki、JS 规则）与解析规则引擎
   - `core/model/` - 核心数据模型
@@ -212,8 +216,10 @@ npm run docs:build
 - 自动回退到完整 APK 下载
 
 **数据库**：
-- Room 数据库（`MangaDatabase`），DATABASE_VERSION = 84，schema 位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`
-- 迁移文件 `core/db/migrations/Migration1To2.kt` 到 `Migration83To84.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `MangaDatabase` 的迁移列表中）
+- Room 数据库（`MangaDatabase`）在 KMP 模块 `core-db/`，DATABASE_VERSION = 84（`core-db/src/commonMain/.../core/db/MangaDatabase.kt`）；导出的 schema 仍位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`（已提交，由 `core-db` 的 Room 插件导出，`app` 的 androidTest 以 assets 读取）
+- 迁移文件 `core-db/src/androidMain/kotlin/org/skepsun/kototoro/core/db/migrations/Migration1To2.kt` 到 `Migration83To84.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `getDatabaseMigrations` 列表中，位于 `core-db` 的 `MangaDatabaseMigrations.kt`）
+- Android 必须继续使用框架 SQLite 驱动：旧迁移实现的是 `migrate(SupportSQLiteDatabase)`，换成 `BundledSQLiteDriver` 会抛 `NotImplementedError`
+- DAO 的过滤条件使用数据类型 `ListFilterCriteria`（`core-db`）；应用层的 `ListFilterOption`（带资源 id 与图标）在 Repository 边界用 `toCriteria()` 转换
 - 用户状态（收藏/历史/统计/偏好/追踪）直接挂在 `manga` 行上；实体图谱与 work 表已在 v84 移除（`Migration83To84` → `ProjectionOwnershipMigrationResolver`）
 - 实体含 ReadingRecord/ReadingJumpPoint、RestoreCheckpoint、Space*（会话/导航/路由偏好/空间定义）等
 - 使用 KSP 生成 Kotlin 代码
@@ -297,10 +303,11 @@ RELEASE_KEY_PASSWORD=***
 ## 常见任务
 
 ### 添加新的数据库迁移
-1. 在 `core/db/migrations/` 创建新的 `MigrationXToY.kt`
-2. 在 `MangaDatabase` 的 `companion object` 中注册迁移
-3. 递增 `DATABASE_VERSION` 常量
-4. 更新 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/` 中的 schema JSON（可通过 Room KSP 自动生成）
+1. 在 `core-db/src/androidMain/kotlin/org/skepsun/kototoro/core/db/migrations/` 创建新的 `MigrationXToY.kt`
+2. 在 `core-db` 的 `MangaDatabaseMigrations.kt` 中的 `getDatabaseMigrations` 列表里注册迁移
+3. 递增 `core-db` 中 `MangaDatabase.kt` 的 `DATABASE_VERSION` 常量
+4. 更新 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/` 中的 schema JSON（构建 `core-db` 时由 Room KSP 导出，需提交）
+5. 实体、DAO 只能使用 commonMain 可用的 API（不要用 `System.currentTimeMillis()`、`java.*`、`SupportSQLiteQuery`、`BuildConfig`、资源 id 等）；用 `./gradlew :core-db:compileCommonMainKotlinMetadata` 检查。新迁移用 `app/src/androidTest/.../MangaDatabaseSnapshotChainTest` 验证（把新的快照版本加进它的 `snapshots` 列表）；该包里 `MangaDatabaseTest` 有 4 个既有失败，见 `docs/architecture/kmp-ios-plan-2026-10.md` §12
 
 ### 添加新的源类型
 1. 在对应模块（如 `mihon/`、`ireader/`）实现源接口

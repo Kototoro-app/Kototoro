@@ -58,7 +58,7 @@ dependencyResolutionManagement {
 	}
 }
 
-include ':app', ':parser-api', ':backdrop', ':macrobenchmark', ':reader-core'
+include ':app', ':parser-api', ':backdrop', ':macrobenchmark', ':reader-core', ':core-db'
 // T0.3 offline self-built NovelSourcery/Tsundoku fixture APKs (plan Phase 0 / T0.3). Each
 // module compiles against :app:exportTachiyomiAbi (host ABI jar) with compileOnly and packs
 // the real manifest morphologies the host's strict classifier/loader must accept or reject.
@@ -72,13 +72,6 @@ if (withTsundokuFixtures) {
     include ':fixtures:tsundoku-14-factory'
     include ':fixtures:tsundoku-16-suspend'
     include ':fixtures:tsundoku-ambiguous'
-}
-// KMP spikes (docs/architecture/kmp-ios-plan-2026-10.md §5 P0). Throwaway experiments that copy
-// code out of :app to measure what a shared module would need; gated behind `-PwithKmpSpikes`
-// (default OFF) so normal builds, Android Studio sync and CI never configure them.
-def withKmpSpikes = providers.gradleProperty('withKmpSpikes').map { it != 'false' }.getOrElse(false)
-if (withKmpSpikes) {
-    include ':spikes:room-kmp'
 }
 rootProject.name = "Kototoro"
 

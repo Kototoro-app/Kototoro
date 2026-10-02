@@ -9,9 +9,9 @@ import java.net.HttpURLConnection.HTTP_UNAVAILABLE
 
 public object CloudFlareHelper {
 
-    public const val PROTECTION_NOT_DETECTED: Int = 0
-    public const val PROTECTION_CAPTCHA: Int = 1
-    public const val PROTECTION_BLOCKED: Int = 2
+    public const val PROTECTION_NOT_DETECTED: Int = CloudFlareProtection.NOT_DETECTED
+    public const val PROTECTION_CAPTCHA: Int = CloudFlareProtection.CAPTCHA
+    public const val PROTECTION_BLOCKED: Int = CloudFlareProtection.BLOCKED
 
     private const val CF_CLEARANCE = "cf_clearance"
 

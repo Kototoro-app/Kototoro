@@ -24,6 +24,13 @@ kotlin {
 		}
 	}
 
+	// JVM target: lets shared modules (e.g. :core-db) run their tests on a plain JVM. It only exposes commonMain.
+	jvm {
+		compilerOptions {
+			jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+		}
+	}
+
 	// Apple targets are declared on every host but only link on macOS; compileCommonMainKotlinMetadata is
 	// the portability check that runs everywhere.
 	iosArm64()

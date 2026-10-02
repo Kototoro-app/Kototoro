@@ -548,7 +548,7 @@ private fun NovelMarkingCard(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(
-                        text = marking.note,
+                        text = marking.note.orEmpty(), // cross-module property: no smart cast
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         maxLines = 3,
@@ -753,7 +753,7 @@ internal fun NovelNoteDetailSheet(
             // Thought text
             if (!marking.note.isNullOrBlank()) {
                 Text(
-                    text = marking.note,
+                    text = marking.note.orEmpty(), // cross-module property: no smart cast
                     style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
                     color = MaterialTheme.colorScheme.onSurface,
                 )

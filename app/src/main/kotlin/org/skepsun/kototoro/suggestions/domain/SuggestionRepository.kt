@@ -10,6 +10,7 @@ import org.skepsun.kototoro.core.db.entity.toContentTagsList
 import org.skepsun.kototoro.core.model.toContentSources
 import org.skepsun.kototoro.core.util.ext.mapItems
 import org.skepsun.kototoro.list.domain.ListFilterOption
+import org.skepsun.kototoro.list.domain.toCriteria
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
@@ -32,7 +33,7 @@ class SuggestionRepository @Inject constructor(
         filterOptions: Set<ListFilterOption>,
         contentTypes: Collection<String>? = null,
     ): Flow<List<Content>> {
-        return db.getSuggestionDao().observeAll(limit, filterOptions, contentTypes).mapItems {
+        return db.getSuggestionDao().observeAll(limit, filterOptions.toCriteria(), contentTypes).mapItems {
             it.toContent()
         }
     }

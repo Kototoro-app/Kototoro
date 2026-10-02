@@ -7,16 +7,14 @@ plugins {
 	id 'com.google.devtools.ksp'
 	id 'kotlin-parcelize'
 	id 'com.google.dagger.hilt.android'
-	id 'androidx.room'
 	id 'org.jetbrains.kotlin.plugin.serialization'
 	id 'org.jetbrains.kotlin.plugin.compose'
 	// enable if needed
 	// id 'dev.reformator.stacktracedecoroutinator'
 }
 
-room {
-	schemaDirectory("$projectDir/schemas")
-}
+// The Room database now lives in :core-db, which also exports the schema JSON into this module's
+// schemas/ directory. The directory stays here: it is tracked and androidTest reads it as assets.
 
 def allAbiFilters = ['arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86']
 def requestedTaskNames = gradle.startParameter.taskNames.collect { it.toLowerCase(Locale.ROOT) }
@@ -56,9 +54,6 @@ android {
 		]
 		generatedDensities = []
 		testInstrumentationRunner 'org.skepsun.kototoro.HiltTestRunner'
-		ksp {
-			arg('room.generateKotlin', 'true')
-		}
 		androidResources {
 			// https://issuetracker.google.com/issues/408030127
 			generateLocaleConfig false
@@ -417,6 +412,8 @@ configurations.all {
 dependencies {
 	implementation libs.androidx.profileinstaller
 	implementation project(':parser-api')
+	// Shared Room database (MangaDatabase, entities, DAOs, legacy migrations); packages unchanged.
+	implementation project(':core-db')
 	// Reader semantics (scenes, geometry, planner contract) — pure JVM module extracted per
 	// improvement plan 2026-09 §8.2; app depends one-way on :reader-core (I1 compile boundary).
 	implementation project(':reader-core')
@@ -486,7 +483,6 @@ dependencies {
 	implementation libs.androidx.room.paging
 	implementation libs.androidx.paging.runtime
 	implementation libs.androidx.paging.compose
-	ksp libs.androidx.room.compiler
 
 	implementation libs.okhttp
 	implementation libs.okhttp.tls

@@ -1,0 +1,80 @@
+// Shared Room database (docs/architecture/kmp-ios-plan-2026-10.md, phase P1): MangaDatabase, its 36 entities
+// and DAOs. Packages are unchanged, so :app keeps importing them from the same place.
+//
+// commonMain  entities, DAOs, the database declaration and ListFilterCriteria (the data-only filter the DAOs
+//             build SQL from). Compiled for Android, JVM (tests) and iOS.
+// androidMain the 85 legacy migrations (SupportSQLiteDatabase) and getDatabaseMigrations(context). Android keeps
+//             the framework SQLite driver, which is what those migrations rely on.
+//
+// The exported schema JSON stays in app/schemas: it is tracked there and the app's migration tests read it.
+plugins {
+	id 'org.jetbrains.kotlin.multiplatform'
+	id 'com.android.kotlin.multiplatform.library'
+	id 'org.jetbrains.kotlin.plugin.serialization'
+	id 'com.google.devtools.ksp'
+	id 'androidx.room'
+}
+
+kotlin {
+	androidLibrary {
+		namespace = 'org.skepsun.kototoro.core.db.shared'
+		compileSdk = 37
+		minSdk = 26
+	}
+
+	jvm {
+		compilerOptions {
+			jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+		}
+	}
+	iosArm64()
+	iosSimulatorArm64()
+
+	compilerOptions {
+		freeCompilerArgs.addAll(
+			'-opt-in=kotlin.ExperimentalStdlibApi',
+			'-opt-in=kotlin.contracts.ExperimentalContracts',
+			'-Xannotation-default-target=first-only',
+		)
+	}
+
+	sourceSets {
+		getByName('commonMain') {
+			dependencies {
+				api project(':parser-api')
+				api libs.androidx.room.runtime
+				api "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
+				implementation "org.jetbrains.kotlinx:kotlinx-serialization-core:${libs.versions.serialization.get()}"
+			}
+		}
+		getByName('androidMain') {
+			dependencies {
+				// Migration16To17 reads the legacy SharedPreferences through PreferenceManager.
+				implementation libs.androidx.preference
+			}
+		}
+		getByName('jvmTest') {
+			dependencies {
+				implementation 'androidx.sqlite:sqlite-bundled:2.6.2'
+				implementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+				implementation libs.kotest.runner.junit5
+			}
+		}
+	}
+}
+
+// KSP: Room generates per target. The metadata (commonMain) configuration must NOT get the compiler.
+dependencies {
+	add('kspAndroid', libs.androidx.room.compiler)
+	add('kspJvm', libs.androidx.room.compiler)
+	add('kspIosArm64', libs.androidx.room.compiler)
+	add('kspIosSimulatorArm64', libs.androidx.room.compiler)
+}
+
+room {
+	schemaDirectory("${rootProject.projectDir}/app/schemas")
+}
+
+tasks.withType(Test).configureEach {
+	useJUnitPlatform()
+}

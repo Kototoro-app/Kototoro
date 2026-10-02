@@ -1031,8 +1031,8 @@ class ContentSourcesRepository @Inject constructor(
 
         db.withTransaction {
             assimilateNewSources()
-            for (name in nativeSourcesToEnable) dao.setEnabled(name, true)
-            for (name in nativeSourcesToDisable) dao.setEnabled(name, false)
+            for (name in nativeSourcesToEnable) dao.setEnabled(name, true, BuildConfig.VERSION_CODE)
+            for (name in nativeSourcesToDisable) dao.setEnabled(name, false, BuildConfig.VERSION_CODE)
         }
         settings.isAllSourcesEnabled = false
     }
@@ -1190,7 +1190,7 @@ class ContentSourcesRepository @Inject constructor(
         if (nativeSources.isNotEmpty()) {
             db.withTransaction {
                 for (name in nativeSources) {
-                    dao.setEnabled(name, isEnabled)
+                    dao.setEnabled(name, isEnabled, BuildConfig.VERSION_CODE)
                 }
             }
         }
@@ -1216,7 +1216,7 @@ class ContentSourcesRepository @Inject constructor(
             db.withTransaction {
                 assimilateNewSources()
                 for (name in nativeSources) {
-                    dao.setEnabled(name, true)
+                    dao.setEnabled(name, true, BuildConfig.VERSION_CODE)
                 }
             }
         }
@@ -1270,7 +1270,7 @@ class ContentSourcesRepository @Inject constructor(
         if (nativeSources.isNotEmpty()) {
             db.withTransaction {
                 for (name in nativeSources) {
-                    dao.setPinned(name, isPinned)
+                    dao.setPinned(name, isPinned, BuildConfig.VERSION_CODE)
                 }
             }
         }

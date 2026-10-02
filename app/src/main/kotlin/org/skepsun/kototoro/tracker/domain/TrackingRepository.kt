@@ -18,6 +18,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.ext.toInstantOrNull
 import org.skepsun.kototoro.details.domain.ProgressUpdateUseCase
 import org.skepsun.kototoro.list.domain.ListFilterOption
+import org.skepsun.kototoro.list.domain.toCriteria
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.ifZero
 import org.skepsun.kototoro.tracker.data.TrackEntity
@@ -88,7 +89,7 @@ class TrackingRepository @Inject constructor(
         filterOptions: Set<ListFilterOption>,
         contentTypes: Collection<String>? = null,
     ): Flow<List<ContentTracking>> {
-        return db.getTracksDao().observeUpdatedContent(limit, filterOptions, contentTypes)
+        return db.getTracksDao().observeUpdatedContent(limit, filterOptions.toCriteria(), contentTypes)
             .mapLatest { tracks ->
                 tracks.mapNotNull { it.toContentTracking() }
             }.distinctUntilChanged()

@@ -22,6 +22,7 @@ import org.skepsun.kototoro.core.prefs.TriStateOption
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.explore.data.SourcesSortOrder
+import org.skepsun.kototoro.explore.data.titleResId
 import org.skepsun.kototoro.settings.SettingsActivity
 import org.skepsun.kototoro.settings.compose.AdultContentFilterTarget
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
