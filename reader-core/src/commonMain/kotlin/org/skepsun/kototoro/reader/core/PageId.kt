@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.reader.core
 
+import kotlin.jvm.JvmInline
+
 /**
  * Type-safe identifier for a reader page within a reading session.
  *

@@ -131,11 +131,12 @@ class PagedReaderScene(
 
     private fun rebuildPageIndices() {
         pageIndexById.clear()
-        specs.forEachIndexed { index, spec -> pageIndexById.putIfAbsent(spec.pageId, index) }
+        // getOrPut instead of java.util.Map.putIfAbsent: the latter is not available in commonMain.
+        specs.forEachIndexed { index, spec -> pageIndexById.getOrPut(spec.pageId) { index } }
         slotIndexByPageId.clear()
         for (slotIndex in slots.indices) {
             for (placement in slots[slotIndex].placements) {
-                slotIndexByPageId.putIfAbsent(placement.pageId, slotIndex)
+                slotIndexByPageId.getOrPut(placement.pageId) { slotIndex }
             }
         }
     }

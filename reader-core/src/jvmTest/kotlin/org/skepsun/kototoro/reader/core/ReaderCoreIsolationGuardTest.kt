@@ -118,7 +118,7 @@ class ReaderCoreIsolationGuardTest {
         var dir: Path? = Path.of(System.getProperty("user.dir")).toAbsolutePath()
         var hops = 0
         while (dir != null && hops < 5) {
-            val candidate = dir.resolve("reader-core/src/test/resources/reader-core-isolation-fixtures/$name")
+            val candidate = dir.resolve("reader-core/src/jvmTest/resources/reader-core-isolation-fixtures/$name")
             if (Files.isRegularFile(candidate)) return candidate
             dir = dir.parent
             hops++
@@ -203,7 +203,7 @@ class ReaderCoreIsolationGuardTest {
         var dir: Path? = Path.of(System.getProperty("user.dir")).toAbsolutePath()
         var hops = 0
         while (dir != null && hops < 5) {
-            val candidate = dir.resolve("reader-core/src/main/kotlin/org/skepsun/kototoro/reader/core")
+            val candidate = dir.resolve("reader-core/src/commonMain/kotlin/org/skepsun/kototoro/reader/core")
             if (Files.isDirectory(candidate)) return candidate
             dir = dir.parent
             hops++

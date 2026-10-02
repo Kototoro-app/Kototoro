@@ -327,6 +327,11 @@ ImagePipeline 根据资源需求执行加载与预算管理，不接收用于决
 模块不添加 Android/Compose 编译依赖；保持 I1 护栏，防止以后通过新增依赖重新破坏边界。
 首轮不拆 `:reader-image` / `:reader-render-compose`，不顺带引入 KMP；JVM 模块化不等于 commonMain 兼容。
 
+> 更新（2026-10-02）：iOS 版已构成"真实多平台消费者"，KMP 在
+> [KMP / iOS 方案](./kmp-ios-plan-2026-10.md) 中立项，`:reader-core` 是首个转为 KMP 的模块
+> （spike S1，分支 `feat/kmp-s1-reader-core`）。上文"不顺带引入 KMP"仅描述当时首轮的范围；
+> 本节其余约束（不创建空壳接口或转发层、I1 边界不变）继续有效。
+
 验收：core 可独立测试，app Kotlin 编译通过，相关集成/手势测试通过，依赖图无回指 app。
 
 ### 8.3 后续模块化路线图（外部评审输入，2026-09-20 记录）
@@ -389,8 +394,9 @@ scene-aware OCR/SR。只有在独立需求明确且能简化实现或改善实�
 
 ```bash
 ./gradlew :app:compileDebugKotlin
-./gradlew :app:testDebugUnitTest :reader-core:test --no-daemon
-./gradlew :reader-core:test --no-daemon   # 模块独立测试（§8.2 验收：core 可独立测试）
+./gradlew :app:testDebugUnitTest :reader-core:jvmTest --no-daemon
+./gradlew :reader-core:jvmTest --no-daemon   # 模块独立测试（§8.2 验收：core 可独立测试；转 KMP 后任务名由 test 变为 jvmTest）
+./gradlew :reader-core:compileCommonMainKotlinMetadata   # KMP 可移植性检查：拒绝 JVM 专有 API
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
