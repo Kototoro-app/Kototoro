@@ -1,47 +1,61 @@
+// Kotlin Multiplatform module (docs/architecture/kmp-ios-plan-2026-10.md, phase P1).
+//
+// Two parallel API families live here:
+//  - org.skepsun.kototoro.parsers.*  the app's own model and parser API. The pure parts move to commonMain
+//    (iOS consumes them); the parts that need Android, OkHttp or Jsoup stay in androidMain.
+//  - org.koitharu.kotatsu.parsers.*  the binary ABI that external Kotatsu parser jars are compiled against.
+//    It must keep its exact class and method shapes, so it stays untouched in androidMain.
 plugins {
-	id 'com.android.library'
-	id 'kotlin-parcelize'
+	id 'org.jetbrains.kotlin.multiplatform'
+	id 'com.android.kotlin.multiplatform.library'
 }
 
-android {
-	namespace 'org.skepsun.kototoro.parsers.api'
-	compileSdk 37
+kotlin {
+	androidLibrary {
+		namespace = 'org.skepsun.kototoro.parsers.api'
+		compileSdk = 37
+		minSdk = 26
+		enableCoreLibraryDesugaring = true
 
-	defaultConfig {
-		minSdk 26
-	}
-
-	compileOptions {
-		coreLibraryDesugaringEnabled true
-		sourceCompatibility JavaVersion.VERSION_11
-		targetCompatibility JavaVersion.VERSION_11
-	}
-
-	// AGP 9 built-in Kotlin: kotlin-android plugin removed, use KGP compilerOptions block.
-	kotlin {
 		compilerOptions {
 			jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
-			freeCompilerArgs.addAll(
-				'-opt-in=kotlin.ExperimentalStdlibApi',
-				'-opt-in=org.skepsun.kototoro.parsers.InternalParsersApi',
-				'-opt-in=org.koitharu.kotatsu.parsers.InternalParsersApi',
-				'-opt-in=kotlin.contracts.ExperimentalContracts',
-				'-Xjspecify-annotations=strict',
-				'-Xannotation-default-target=first-only',
-			)
+			// Java-annotation nullability only exists on the JVM.
+			freeCompilerArgs.add('-Xjspecify-annotations=strict')
+		}
+	}
+
+	// Apple targets are declared on every host but only link on macOS; compileCommonMainKotlinMetadata is
+	// the portability check that runs everywhere.
+	iosArm64()
+	iosSimulatorArm64()
+
+	compilerOptions {
+		freeCompilerArgs.addAll(
+			'-opt-in=kotlin.ExperimentalStdlibApi',
+			'-opt-in=org.skepsun.kototoro.parsers.InternalParsersApi',
+			'-opt-in=org.koitharu.kotatsu.parsers.InternalParsersApi',
+			'-opt-in=kotlin.contracts.ExperimentalContracts',
+			'-Xannotation-default-target=first-only',
+		)
+	}
+
+	sourceSets {
+		getByName('androidMain') {
+			dependencies {
+				implementation libs.kotlinx.coroutines.android
+				implementation "androidx.annotation:annotation:1.9.1"
+				api libs.androidx.collection
+
+				// Exposed to :app, which relies on them transitively.
+				api "org.jsoup:jsoup:1.17.2"
+				api libs.okhttp
+				api libs.okio
+				api libs.rhino
+			}
 		}
 	}
 }
 
 dependencies {
 	coreLibraryDesugaring libs.desugar.jdk.libs
-	implementation libs.kotlin.stdlib
-	implementation libs.kotlinx.coroutines.android
-	implementation "androidx.annotation:annotation:1.9.1"
-	api libs.androidx.collection
-	
-	api "org.jsoup:jsoup:1.17.2"
-	api libs.okhttp
-	api libs.okio
-	api libs.rhino
 }
