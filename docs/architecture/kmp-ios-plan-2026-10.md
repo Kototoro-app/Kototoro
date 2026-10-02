@@ -3,8 +3,8 @@
 ## 文档信息
 
 - 创建日期：2026-10-02
-- 状态：规划草案；P0 中的 S1（KMP 工具链）与 S2（Room KMP）已在分支 `feat/kmp-s1-reader-core` 完成并通过，
-  记录见 §9；S0、S3 尚未开始
+- 状态：规划草案；P0 中的 S1（KMP 工具链）与 S2（Room KMP）已完成并通过（§9、§10）。P1 已完成三个模块的抽取：
+  `:reader-core`、`:parser-api`（叶子类型，§11）和 `:core-db`（§12）。S0（真机评估）、S3（许可证）尚未开始
 - 目标：评估并规划 Kototoro 的 iOS 版本——共享一个 KMP 内核，iOS 用原生外壳，源（Mihon JAR、
   Kotatsu 解析器、Legado 规则）由一个嵌入式 JVM 承载
 - 前提假设：az4521 的 TachiyomiAZ iOS 路线（OpenJDK Mobile Zero + Suwayomi AndroidCompat）在真机上
@@ -155,11 +155,11 @@ iosApp             SwiftUI + 共享 XCFramework
 2. `core-model`：不新建模块，直接把 `:parser-api` 原地转为 KMP（步骤与结果见 §11）。其中
    `org.koitharu.kotatsu.parsers.*` 是外部解析器 jar 的二进制 ABI，原样留在 androidMain。
    `ContentRepository` 里的 `LocalMangaSource`/`TestContentSource` 需要上提为抽象。
-3. `core-db`：schema 层闭包约 96 个文件、5000 行，但分散在约 15 个功能包，需要跨包搬迁（实体、DAO、
-   约 14 个投影类 `*Row`/`*WithContent`）。S2 的实测切断清单见 §9：14 个文件的 1～9 行机械改动，加 4 个
-   类型拆分（`ListFilterOption`、`SourcesSortOrder`、`ScrobblingStatus`、`CloudFlareHelper`）。其中
-   `ListFilterOption` 是唯一的设计层面改动：DAO 用它拼 SQL，但它带资源 id 与图标，需要拆成纯数据的过滤
-   条件。85 个迁移留在 `androidMain`，iOS 直接从 v84 schema 建库。
+3. `core-db`：**已完成**（§12）。schema 层闭包约 96 个文件、5000 行，分散在约 15 个功能包，已按原包名跨包搬进
+   `:core-db`（实体、DAO、约 14 个投影类 `*Row`/`*WithContent`）。S2 实测的切断清单（14 个文件的 1～9 行机械
+   改动 + 4 个类型拆分）已全部落地；唯一的设计层面改动是 `ListFilterOption`：DAO 用它拼 SQL，但它带资源 id
+   与图标，现在拆成数据类型 `ListFilterCriteria`，应用在 Repository 边界转换。85 个迁移留在 `androidMain`，
+   iOS 直接从 v84 schema 建库。
 4. `core-domain`、`core-backup`：备份格式与外部备份解码已是 protobuf 模型。
 5. `core-net`：把 OkHttp 依赖的 tracker/sync 客户端迁到 Ktor。
 
@@ -240,8 +240,11 @@ KMP 之后 `:reader-core:test` 不再存在，对应任务是 `:reader-core:jvmT
 
 ## 10. S2 执行记录（Room KMP 与 85 个迁移）
 
-日期：2026-10-02。同一分支，未提交。模块：`spikes/room-kmp`，由 `-PwithKmpSpikes` 门控（`settings.gradle`
-新增 4 行，默认关闭，普通构建、Android Studio 同步与 CI 都不会配置它）。
+日期：2026-10-02。模块：`spikes/room-kmp`，由 `-PwithKmpSpikes` 门控（`settings.gradle` 新增 4 行，默认关闭，
+普通构建、Android Studio 同步与 CI 都不会配置它）。
+
+> **后续：** 该 spike 已被真正的 `:core-db` 取代并从仓库中删除（§12），它的 JVM 冒烟测试和迁移链测试分别迁到了
+> `core-db/src/jvmTest` 与 `app/src/androidTest`。下面的记录保留作为依据。
 
 ### 方法
 
@@ -342,3 +345,75 @@ S2 通过（Android 与 JVM 目标）。D5 采用 Room KMP。iOS 目标需要在
 - 没有运行应用的单元测试与 instrumented 测试，只验证了编译与字节码 ABI。
 - iOS 目标仍只验证到元数据层。
 - 14 个文件里没有加入新的测试；它们大多是枚举与数据类，现有行为由使用方的测试间接覆盖。
+
+## 12. P1 执行记录：数据库抽成 `:core-db`
+
+日期：2026-10-02。分支：`feat/kmp-p1-parser-api-model`。按 §11 末尾的建议，采用 `ListFilterCriteria` 方案，
+schema 快照目录 `app/schemas` 留在 `app`（已提交，`app` 的 androidTest 以 assets 读取；`:core-db` 的 Room 插件
+指向它）。
+
+### 做了什么
+
+- 新建 KMP 模块 `:core-db`（androidLibrary + jvm + iosArm64 + iosSimulatorArm64）。用 `git mv`（保留历史）把
+  88 个 schema 文件从 `:app` 搬进 `commonMain`、85 个迁移搬进 `androidMain`，**包名全部不变**，所以 `:app` 里
+  绝大部分 `import` 不需要改。
+- 应用 S2 验证过的切断清单：`System.currentTimeMillis()` → `kotlin.time.Clock`（6 个文件）、`javaClass` →
+  `::class`、`SupportSQLiteQuery`/`SimpleSQLiteQuery` → `RoomRawQuery`（5 个文件）、`sqlEscapeString` → 本地
+  函数、`LinkedList` → `ArrayList`、`@SuppressWarnings` → `@Suppress`。
+- `MangaDatabase` 一分为三：声明与 `@ConstructedBy` 进 `commonMain`；`getDatabaseMigrations(context)` 进
+  `androidMain`；依赖应用资源与进程生命周期的 `MangaDatabase(context)` 构建函数和 `removeObserverAsync` 留在
+  `:app`（`MangaDatabaseFactory.kt`，同包，调用方不用改）。
+- 新增 `ListFilterCriteria`（`:core-db`，纯数据，保留原来的层级和 `groupKey`，不支持的选项仍然抛异常）。
+  `:app` 的 `ListFilterOption` 保持不变（71 个文件在用），在 Repository 边界用 `toCriteria()` 转换。
+- `CloudFlareHelper` 的三个持久化状态常量放进 `:parser-api` commonMain 的 `CloudFlareProtection`，原类引用它们，
+  编译出的常量值不变。`:parser-api` 另加了 `jvm()` 目标，供 `:core-db` 的 JVM 测试使用。
+- `:app` 的构建配置去掉 Room 插件、`ksp room-compiler` 和 `ksp { arg('room.generateKotlin') }`，加上
+  `implementation project(':core-db')`。
+- 删除已被取代的 S2 spike（`spikes/room-kmp` 与 `-PwithKmpSpikes` 开关）。
+
+### 对调用方的改动（行为语义不变）
+
+| 改动 | 原因 |
+|---|---|
+| `MangaSourcesDao.setPinned`、`setEnabled` 新增参数 `appVersionCode: Int`（5 个调用点传 `BuildConfig.VERSION_CODE`） | `BuildConfig` 属于 `:app`，模块里拿不到 |
+| `TracksDao.observeUpdatedContent`、`SuggestionDao.observeAll` 改收 `ListFilterCriteria`（2 个 Repository 加 `.toCriteria()`） | DAO 不再依赖带资源 id 的 UI 类型 |
+| `SourcesSortOrder.titleResId` 变成 `:app` 里的扩展属性（1 个调用点补 import） | 枚举搬走后不能带 `@StringRes` |
+| `ComposeNovelMarkingsSheet` 里 2 处 `marking.note` 的智能转换改成 `.orEmpty()` | Kotlin 不允许对跨模块的公开属性做智能转换 |
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| `:core-db` 的 commonMain 元数据编译、JVM 与 Android 的 Room KSP | 通过 |
+| 导出的 v84 schema 对比已提交的 `app/schemas/…/84.json` | **字节级一致**（用空的临时目录强制导出后 `cmp`）。普通构建不会重写它，因为 Room 发现内容相同 |
+| `:app:compileDebugKotlin`、`compileDebugUnitTestKotlin`、`compileDebugAndroidTestKotlin` | 通过，0 个错误 |
+| `:core-db:jvmTest`（新增：查询构建器 6 个、DAO 冒烟 3 个） | 9/9 通过 |
+| `:reader-core:jvmTest` | 150/150 通过 |
+| `:app:testDebugUnitTest`（全量） | 2823 个测试，1 个失败（见下，与本次无关） |
+| 模拟器（API 35）上 `core.db` 包的设备测试 | 24 个：19 通过、4 失败、1 跳过。4 个失败在抽取之前的基线提交上**以完全相同的原因失败**（见下） |
+| 其中的迁移相关测试 | 原有的 `Migration83To84Test`（2 个）、`SourceOriginsMigration77To78Test`（3 个，含 DAO 的增删改查）、新增的 `MangaDatabaseSnapshotChainTest`（按 23 个快照走 22 段 + 空迁移的负控制）全部通过 |
+
+### 顺带发现的既有问题（不是本次引入的）
+
+1. `MangaDatabaseTest` 有 4 个失败：`migrateAll`、`migrate65To66…`、`migrate74To75…` 因缺 `1.json`/`65.json`/
+   `74.json` 快照而抛 `FileNotFoundException`；`versions` 因迁移列表里的降级迁移 `Migration24To23` 破坏了
+   "起止版本连续"的断言（`expected:<25> but was:<23>`）。已在基线提交上重跑确认完全一致。
+2. `ListSortOptionTest.favorites exposes seven criteria…` 失败（`expected:<7> but was:<8>`）：测试与被测代码是
+   同一个提交（`f9953753d`，2026-09-14）加入的，当时已在 `devel`；本分支没有改动排序相关的代码和测试。这是由
+   "输入未变"推出的结论，没有在基线上实际运行。
+3. `RealDataMigrationTest` 因缺少真实数据库副本而被跳过。
+
+### 未覆盖
+
+- **iOS 目标：** KSP 代码生成、链接与运行仍需 macOS；iOS 的数据库构建器（`BundledSQLiteDriver`、文件路径）尚未编写。
+- **R8 / release 构建：** 没有跑 `assembleRelease`/`assembleNightly`，也没有在设备上运行混淆后的包。Room 的生成类现在
+  位于库模块里，应在发布前用 nightly 构建验证一次，确认 `MangaDatabase_Impl` 与新增的 `MangaDatabaseConstructor`
+  没有被混淆掉。
+- 只跑了 `core.db` 包的设备测试，没有跑完整的 instrumented 套件。
+- 没有测启动耗时与 APK 体积的变化。
+- `DatabasePrePopulateCallback` 仍在 `:app`，依赖应用资源。
+
+### 结论
+
+P1 的数据库部分完成：schema、DAO 与迁移已是 KMP 共享模块，Android 行为在已覆盖的测试范围内没有回归。
+P1 剩余：`core-domain` / `core-backup`、`core-net`；D6、D7 仍待决定。
