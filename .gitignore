@@ -43,6 +43,8 @@ node_modules/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 */build
+# spikes/<name>/build is two levels deep, so `*/build` above does not cover it.
+spikes/*/build
 .claude/worktrees
 .claude/settings.local.json
 .claude/scheduled_tasks.lock

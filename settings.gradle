@@ -73,6 +73,13 @@ if (withTsundokuFixtures) {
     include ':fixtures:tsundoku-16-suspend'
     include ':fixtures:tsundoku-ambiguous'
 }
+// KMP spikes (docs/architecture/kmp-ios-plan-2026-10.md §5 P0). Throwaway experiments that copy
+// code out of :app to measure what a shared module would need; gated behind `-PwithKmpSpikes`
+// (default OFF) so normal builds, Android Studio sync and CI never configure them.
+def withKmpSpikes = providers.gradleProperty('withKmpSpikes').map { it != 'false' }.getOrElse(false)
+if (withKmpSpikes) {
+    include ':spikes:room-kmp'
+}
 rootProject.name = "Kototoro"
 
 // 使用远程 DanmakuRenderEngine（本地工程 AGP 4.2.2 与当前 Gradle 不兼容）
