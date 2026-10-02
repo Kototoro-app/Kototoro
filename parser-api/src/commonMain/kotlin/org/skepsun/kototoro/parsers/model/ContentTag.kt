@@ -1,6 +1,6 @@
 package org.skepsun.kototoro.parsers.model
 
-import org.skepsun.kototoro.parsers.ContentParser
+import kotlin.jvm.JvmField
 
 public data class ContentTag(
 	/**

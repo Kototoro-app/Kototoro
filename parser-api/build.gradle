@@ -40,6 +40,12 @@ kotlin {
 	}
 
 	sourceSets {
+		getByName('commonMain') {
+			dependencies {
+				// KMP artifact of androidx.collection (the -ktx one used by androidMain is Android-only).
+				api "androidx.collection:collection:${libs.versions.collections.get()}"
+			}
+		}
 		getByName('androidMain') {
 			dependencies {
 				implementation libs.kotlinx.coroutines.android

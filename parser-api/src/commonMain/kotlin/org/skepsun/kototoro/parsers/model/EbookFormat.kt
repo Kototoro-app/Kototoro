@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.parsers.model
 
+import kotlin.jvm.JvmStatic
+
 /**
  * 电子书文件格式（下载型书源的可选下载载体）。
  *

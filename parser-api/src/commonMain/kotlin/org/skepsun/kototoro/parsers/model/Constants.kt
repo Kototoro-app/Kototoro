@@ -1,4 +1,4 @@
-@file:JvmName("Constants")
+@file:kotlin.jvm.JvmName("Constants")
 
 package org.skepsun.kototoro.parsers.model
 

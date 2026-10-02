@@ -132,6 +132,8 @@ iosApp             SwiftUI + 共享 XCFramework
 | D2 | 分发方式 | 仅侧载。含下载并执行字节码的嵌入式 JVM 难以通过 App Store 审核（请核对审核指南原文） |
 | D3 | 许可证 | iOS 外壳单独成 GPLv3 模块，可借用 az 的桥与 CI；共享内核保持现有许可。注意 Kotatsu 是 GPL-3.0，而根目录 `LICENSE` 是 Apache-2.0，请先确认现状 |
 | D4 | v1 范围 | 仅漫画（Mihon JAR + Kotatsu 解析器）；小说、动漫、翻译、视频后置 |
+| D6 | `Content` / `ContentChapter` / `ContentPage` 的二进制兼容垫片 | 这三个类带着给**旧版外部解析器 jar** 用的 JVM 垫片（手写的 `(…, mask, DefaultConstructorMarker)` 合成构造器、`copy$default`，注释写明"parsers compiled before sourceData"），无法进入 commonMain。要么保留垫片、三个类留在 androidMain（iOS 侧用协议 DTO），要么在外部解析器 jar 全部重编后放弃垫片。这是影响外部生态的决定，建议先保留，等你确认旧 jar 的存量再定 |
+| D7 | `java.util.Locale` 出现在公开 API | `ContentListFilter`、`SearchableField` 的公开类型是 `Locale`。建议 `expect class Locale` + Android 上 `actual typealias`（Android 二进制不变），iOS 侧另写实现；需要你确认该 API 形状可以改成 expect |
 | D5 | 共享数据库 | Room KMP（DAO 无需重写）。S2 已验证 Android 与 JVM 目标：v84 schema 与现有 `84.json` 完全一致，旧迁移链不需要改；iOS 目标待 macOS 验证 |
 
 ## 5. 阶段与门槛
@@ -150,8 +152,9 @@ iosApp             SwiftUI + 共享 XCFramework
 ## 6. 模块抽取顺序与守卫
 
 1. `reader-core`：已纯 Kotlin，仅依赖 `kotlin.math`，25 个测试文件，隔离守卫测试已禁止 `java.` 导入。
-2. `core-model`：`parser-api` 的模型层。去掉 `okhttp3.Response`、jsoup 等泄漏；`ContentRepository`
-   里的 `LocalMangaSource`/`TestContentSource` 需要上提为抽象。
+2. `core-model`：不新建模块，直接把 `:parser-api` 原地转为 KMP（步骤与结果见 §11）。其中
+   `org.koitharu.kotatsu.parsers.*` 是外部解析器 jar 的二进制 ABI，原样留在 androidMain。
+   `ContentRepository` 里的 `LocalMangaSource`/`TestContentSource` 需要上提为抽象。
 3. `core-db`：schema 层闭包约 96 个文件、5000 行，但分散在约 15 个功能包，需要跨包搬迁（实体、DAO、
    约 14 个投影类 `*Row`/`*WithContent`）。S2 的实测切断清单见 §9：14 个文件的 1～9 行机械改动，加 4 个
    类型拆分（`ListFilterOption`、`SourcesSortOrder`、`ScrobblingStatus`、`CloudFlareHelper`）。其中
@@ -293,3 +296,49 @@ S2 通过（Android 与 JVM 目标）。D5 采用 Room KMP。iOS 目标需要在
 - DAO 行为测试只覆盖 `MangaSourcesDao` 的 6 条路径，没有覆盖其余 DAO 与复杂的关系查询。
 - 没有测性能（框架驱动与 `BundledSQLiteDriver` 的差异）。
 - schema 一致性是对 v84 做的；v84 之前的版本只验证了迁移链能走通并通过 Room 的校验。
+
+## 11. P1 执行记录：`:parser-api` 转为 KMP
+
+日期：2026-10-02。分支：`feat/kmp-p1-parser-api-model`（基于 S1/S2 的三个提交）。
+
+### 做了什么
+
+1. **原地转换**（提交 `build(parser-api): convert to a Kotlin Multiplatform module`）：模块改用
+   `org.jetbrains.kotlin.multiplatform` + `com.android.kotlin.multiplatform.library`，目标为 androidLibrary、
+   iosArm64、iosSimulatorArm64；所有源码**原样**从 `src/main` 移到 `src/androidMain`，对使用方没有变化。
+   `kotlin-parcelize` 因没有任何 `@Parcelize` 用法而去掉；okhttp、okio、jsoup、rhino、`androidx.collection`
+   继续作为 androidMain 的 `api` 依赖暴露，因为 `:app` 在传递使用它们。
+2. **叶子类型进入 commonMain**：`ContentSource`、`ContentState`、`ContentType`、`ContentRating`、`SortOrder`、
+   `ContentTag`、`ContentTagGroup`、`Demographic`、`EbookFormat`、`NovelChapterContent`、`WordSet`、
+   `ContentListFilterCapabilities`、`Constants` 和 `InternalParsersApi`，共 14 个文件。改动只有：
+   为 `@JvmField`/`@JvmStatic`/`@JvmOverloads` 补 `import kotlin.jvm.*`（common 不会默认导入）、
+   `Constants.kt` 的文件级 `@file:JvmName` 写成全限定名、`ContentTag` 去掉一个只用于 KDoc 的 import。
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| `:parser-api:compileCommonMainKotlinMetadata`（common + iOS 元数据） | 通过 |
+| `:parser-api:assemble` | 通过 |
+| `:app:compileDebugKotlin` | 通过，0 个编译错误 |
+| **字节码 ABI 对比** | 在基线提交上另行构建一份 AAR，对全部 307 个类用 `javap -protected -s` 比较公开/受保护签名（含 JVM 描述符）：类清单与签名**完全一致**，0 个差异 |
+
+### 没有搬的，以及为什么
+
+| 文件 | 原因 | 对应决策 |
+|---|---|---|
+| `Content`、`ContentChapter`、`ContentPage` | 带旧版外部 jar 的二进制兼容垫片（合成构造器、`copy$default`，纯 JVM） | D6 |
+| `ContentListFilter`、`ContentListFilterOptions`、`search/*` | 公开 API 使用 `java.util.Locale`，`search/*` 还用了 `Class` 反射 | D7 |
+| `Favicon`、`Favicons` | 依赖 OkHttp 的 `HttpUrl` | 需把 URL 解析换成纯 Kotlin，或留在 Android |
+| `util/*` 里 `nullIfEmpty`、`formatSimple` 等 | 这些纯函数和 `java.net`、`DecimalFormat` 等 JVM 函数混在同一个文件里。拆分需要 `@file:JvmMultifileClass` 保持门面类名；我试过，可行，但在 D6 之前没有用到，所以回退了 | — |
+
+### 结论
+
+`:parser-api` 已经是 KMP 模块，且已有 14 个叶子类型可被 iOS 与后续共享模块使用，其中包括 `core-db` 切断清单里需要的
+`ContentSource`、`ContentState`、`ContentType`、`SortOrder`。再往前走需要先做 D6、D7 两个决定。
+
+### 未覆盖
+
+- 没有运行应用的单元测试与 instrumented 测试，只验证了编译与字节码 ABI。
+- iOS 目标仍只验证到元数据层。
+- 14 个文件里没有加入新的测试；它们大多是枚举与数据类，现有行为由使用方的测试间接覆盖。
