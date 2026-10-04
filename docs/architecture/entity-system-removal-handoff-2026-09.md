@@ -11,6 +11,10 @@
 用户目标：**彻底移除 Entity Graph / Work ownership，回归 projection-first / content-first**，
 并保证已有版本数据、备份、Google Drive 同步的合理迁移。
 
+`core/db/entity` 是 Room 的现行表映射目录，包含 MangaEntity、ChapterEntity、TagEntity 等，
+与被删除的 Entity Graph 业务体系不同。KMP 将这些映射移到 core-db/commonMain，仍供 Android 和
+Windows 使用；不应按目录名删除。旧备份的 entity/work 字段仅保留读取兼容，不重建旧表或所有权。
+
 冻结的决策（不要重新讨论）：
 
 | 决策 | 内容 |
