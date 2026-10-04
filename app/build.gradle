@@ -16,6 +16,10 @@ plugins {
 // The Room database now lives in :core-db, which also exports the schema JSON into this module's
 // schemas/ directory. The directory stays here: it is tracked and androidTest reads it as assets.
 
+composeCompiler {
+	stabilityConfigurationFiles.add(layout.projectDirectory.file('compose-stability.conf'))
+}
+
 def allAbiFilters = ['arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86']
 def requestedTaskNames = gradle.startParameter.taskNames.collect { it.toLowerCase(Locale.ROOT) }
 def debugOnlyAbiBuild = !requestedTaskNames.isEmpty() &&
@@ -414,6 +418,14 @@ dependencies {
 	implementation project(':parser-api')
 	// Shared Room database (MangaDatabase, entities, DAOs, legacy migrations); packages unchanged.
 	implementation project(':core-db')
+	// Shared backup formats and the Mihon/Aniyomi protobuf decoding; packages unchanged.
+	implementation project(':core-backup')
+	// Shared identity and library-state merge/import rules.
+	implementation project(':core-domain')
+	// Shared Google Drive HTTP protocol; Android supplies the Ktor OkHttp engine and authorization.
+	implementation project(':core-net')
+	// Portable source protocol; the Android adapter reuses the existing repository factory.
+	implementation project(':core-source')
 	// Reader semantics (scenes, geometry, planner contract) — pure JVM module extracted per
 	// improvement plan 2026-09 §8.2; app depends one-way on :reader-core (I1 compile boundary).
 	implementation project(':reader-core')
@@ -495,6 +507,7 @@ dependencies {
 	}
 	implementation libs.jsoup
 	implementation libs.ktor.http
+	implementation libs.ktor.client.okhttp
 	implementation libs.kotlinx.datetime
 	implementation libs.kotlinx.io.core
 	implementation libs.kotlinx.serialization.json

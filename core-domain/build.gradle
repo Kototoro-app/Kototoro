@@ -1,0 +1,49 @@
+// Shared library, progress, history recovery and migration rules. Platform I/O and DI stay in :app.
+plugins {
+	id 'org.jetbrains.kotlin.multiplatform'
+	id 'com.android.kotlin.multiplatform.library'
+	id 'org.jetbrains.kotlin.plugin.serialization'
+}
+
+kotlin {
+	androidLibrary {
+		namespace = 'org.skepsun.kototoro.core.domain'
+		compileSdk = 37
+		minSdk = 26
+	}
+	jvm {
+		compilerOptions {
+			jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+		}
+	}
+	iosArm64()
+	iosSimulatorArm64()
+
+	compilerOptions {
+		freeCompilerArgs.addAll(
+			'-opt-in=kotlin.ExperimentalStdlibApi',
+			'-Xannotation-default-target=first-only',
+		)
+	}
+
+	sourceSets {
+		getByName('commonMain') {
+			dependencies {
+				api project(':core-db')
+				api "org.jetbrains.kotlinx:kotlinx-serialization-core:${libs.versions.serialization.get()}"
+			}
+		}
+		getByName('jvmTest') {
+			dependencies {
+				implementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+				runtimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
+				implementation libs.kotlinx.coroutines.test
+				implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
+			}
+		}
+	}
+}
+
+tasks.withType(Test).configureEach {
+	useJUnitPlatform()
+}

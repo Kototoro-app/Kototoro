@@ -67,7 +67,7 @@ class FavouritesCardMapperTest {
         publicationState = publicationState,
         isNsfw = isNsfw,
         rating = -1f,
-        readingStatus = ScrobblingStatus.PLANNED,
+        readingStatus = ScrobblingStatus.PLANNED.name,
         newChapters = newChapters,
         lastChapterDate = 0L,
         progressPercent = progressPercent,

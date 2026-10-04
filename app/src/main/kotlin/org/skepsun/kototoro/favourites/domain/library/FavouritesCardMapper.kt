@@ -205,12 +205,11 @@ private fun joinSubtitles(base: String?, suffix: String?): String? =
 /** [ReadingProgress] from the work-history columns of the row (null when never read). */
 private fun FavouriteCardRow.toReadingProgress(mode: ProgressIndicatorMode): ReadingProgress? {
     val percent = progressPercent ?: return null
-    val fixedPercent = if (ReadingProgress.isCompleted(percent)) 1f else percent
-    return ReadingProgress(
-        percent = fixedPercent,
+    return ReadingProgress.fromHistory(
+        percent = percent,
         totalChapters = progressTotalChapters ?: 0,
         mode = mode,
-    ).takeIf { it.isValid() }
+    )
 }
 
 /**
@@ -223,8 +222,8 @@ private fun FavouriteCardRow.toStubContent(
     sourceResolver: (String) -> ContentSource,
 ): Content {
     val source = sourceResolver(sourceName)
-    val altTitlesSet = if (altTitle.isNullOrBlank()) emptySet() else setOf(altTitle)
-    val authorsSet = if (author.isNullOrBlank()) emptySet() else setOf(author)
+    val altTitlesSet = altTitle?.takeUnless { it.isBlank() }?.let { setOf(it) }.orEmpty()
+    val authorsSet = author?.takeUnless { it.isBlank() }?.let { setOf(it) }.orEmpty()
     val tagsSet = when {
         displayTags.isEmpty() -> emptySet()
         mode == ListMode.GRID || mode == ListMode.COMPACT_GRID -> {

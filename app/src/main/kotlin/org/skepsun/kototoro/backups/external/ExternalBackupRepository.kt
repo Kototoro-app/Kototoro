@@ -117,13 +117,16 @@ class ExternalBackupRepository @Inject constructor(
                         favorites++
                     }
                 }
-                if (resolved.historyTimestamp != null && !resolved.historyChapterUrl.isNullOrBlank()) {
-                    val chapterId = generateChapterId(resolved, resolved.historyChapterUrl)
+                // Locals: the record type lives in :core-backup, so its public properties cannot be smart-cast.
+                val historyTimestamp = resolved.historyTimestamp
+                val historyChapterUrl = resolved.historyChapterUrl
+                if (historyTimestamp != null && !historyChapterUrl.isNullOrBlank()) {
+                    val chapterId = generateChapterId(resolved, historyChapterUrl)
                     val percent = resolved.progressPercent?.coerceIn(PROGRESS_NONE, 1f) ?: PROGRESS_NONE
                     histories += HistoryEntity(
                         mangaId = entry.mangaId,
-                        createdAt = resolved.historyTimestamp,
-                        updatedAt = resolved.historyTimestamp,
+                        createdAt = historyTimestamp,
+                        updatedAt = historyTimestamp,
                         chapterId = chapterId,
                         page = 0,
                         scroll = 0f,

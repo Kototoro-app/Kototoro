@@ -14,6 +14,7 @@ import org.skepsun.kototoro.backups.data.model.BackupIndex
 import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
 import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
 import org.skepsun.kototoro.backups.domain.BackupSection
+import org.skepsun.kototoro.backups.domain.of
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import java.io.File

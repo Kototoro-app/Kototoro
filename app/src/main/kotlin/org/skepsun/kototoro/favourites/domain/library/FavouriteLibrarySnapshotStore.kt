@@ -141,8 +141,8 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
                 publicationState = base.displayState?.let(::parseContentState),
                 isNsfw = base.displayNsfw == true,
                 rating = base.displayRating ?: -1f,
-                readingStatus = base.readingStatus?.let(::parseReadingStatus)
-                    ?: resolveReadingStatus(base.historyPercent),
+                readingStatus = (base.readingStatus?.let(::parseReadingStatus)
+                    ?: resolveReadingStatus(base.historyPercent)).name,
                 newChapters = base.trackingNewChapters ?: 0,
                 lastChapterDate = base.trackingLastChapterDate ?: 0L,
                 progressPercent = base.historyPercent,
@@ -241,4 +241,3 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
         fun originFlag(origin: OriginGroup): Int = 1 shl origin.ordinal
     }
 }
-

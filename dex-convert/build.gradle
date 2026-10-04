@@ -1,0 +1,47 @@
+// Converts Android DEX (plugin jars and APKs) into JVM class-file jars, so the desktop hosts can load extensions
+// that repositories only publish for Android. Pure JVM; no Android SDK, no network.
+plugins {
+	id 'org.jetbrains.kotlin.jvm'
+	// AndroidTools (d8 / aapt2 fixture builders) is shared with the host modules' tests.
+	id 'java-test-fixtures'
+}
+
+kotlin {
+	compilerOptions {
+		jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+	}
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_11
+	targetCompatibility = JavaVersion.VERSION_11
+}
+
+dependencies {
+	// Apache-2.0 dex2jar fork (the converter Suwayomi and Keiyoushi's jar publishing build on).
+	implementation 'de.femtopedia.dex2jar:dex-translator:2.4.38'
+	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
+
+	testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+	// Smali text -> DEX, to write the exact instruction shapes R8 produces without needing R8 in the tests.
+	testImplementation 'de.femtopedia.dex2jar:d2j-smali:2.4.38'
+	testImplementation 'de.femtopedia.dex2jar:dex-writer:2.4.38'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
+}
+
+// Fixtures are made on the fly with the Android SDK's own d8 and aapt2 (nothing binary is committed); without an SDK
+// those tests are skipped.
+def androidSdk = {
+	def local = rootProject.file('local.properties')
+	def configured = local.isFile() ? new Properties().with { load(local.newReader()); getProperty('sdk.dir') } : null
+	configured ?: System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT')
+}.call()
+
+tasks.withType(Test).configureEach {
+	useJUnitPlatform()
+	if (androidSdk != null) systemProperty 'kototoro.android.sdk', androidSdk
+	// Optional real artifacts (not committed): a DEX-only plugin jar such as UMA's uma.jar.
+	providers.gradleProperty('dexPluginJar').orNull?.with { systemProperty 'kototoro.dex.real.plugin', it }
+	providers.gradleProperty('realApkDirectory').orNull?.with { systemProperty 'kototoro.dex.real.apks', it }
+}
+

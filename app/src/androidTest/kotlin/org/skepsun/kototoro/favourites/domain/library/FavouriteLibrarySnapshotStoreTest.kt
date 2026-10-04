@@ -122,7 +122,7 @@ class FavouriteLibrarySnapshotStoreTest {
         assertEquals(0.9f, after.rowsByEntityId.getValue(M3).progressPercent)
         assertEquals(12345L, after.rowsByEntityId.getValue(M3).lastReadAt)
         // reading status follows progress
-        assertEquals(ScrobblingStatus.READING, after.rowsByEntityId.getValue(M3).readingStatus)
+        assertEquals(ScrobblingStatus.READING.name, after.rowsByEntityId.getValue(M3).readingStatus)
         // the rest of the snapshot is untouched
         assertEquals(before.rowsByEntityId.keys, after.rowsByEntityId.keys)
         assertEquals(before.allEntityIds, after.allEntityIds)

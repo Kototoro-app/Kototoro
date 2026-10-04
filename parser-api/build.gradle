@@ -24,10 +24,13 @@ kotlin {
 		}
 	}
 
-	// JVM target: lets shared modules (e.g. :core-db) run their tests on a plain JVM. It only exposes commonMain.
+	// JVM target: lets shared modules (e.g. :core-db) run their tests on a plain JVM, and lets the Windows parser
+	// host load kototoro / kotatsu / Tsuki plugin jars against the very same ABI classes as Android (androidMain is
+	// plain JVM code apart from androidx.annotation / androidx.collection; see the jvmMain source set below).
 	jvm {
 		compilerOptions {
 			jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+			freeCompilerArgs.add('-Xjspecify-annotations=strict')
 		}
 	}
 
@@ -64,6 +67,21 @@ kotlin {
 				api libs.okhttp
 				api libs.okio
 				api libs.rhino
+			}
+		}
+		getByName('jvmMain') {
+			// One copy of the parser ABI: the JVM target compiles the same files. External plugin jars are bound
+			// to these exact class and method shapes, so there is deliberately no second hand-written variant.
+			kotlin.srcDir('src/androidMain/kotlin')
+			dependencies {
+				implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
+				implementation "androidx.annotation:annotation:1.9.1"
+				api "org.jsoup:jsoup:1.17.2"
+				api libs.okhttp
+				api libs.okio
+				api libs.rhino
+				// Android ships org.json in the framework; a plain JVM needs the standalone artifact.
+				api libs.json
 			}
 		}
 	}

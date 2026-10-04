@@ -1,0 +1,124 @@
+// JVM parser host: loads kototoro / kotatsu / Tsuki (UMA) plugin JARs against the shared :parser-api ABI and
+// exposes them through the portable :core-source protocol. Platform services (HTTP, cookies, bitmaps, JS) are
+// supplied by the embedding application; this module contains no AWT, Android or Compose code.
+import java.util.zip.ZipFile
+
+plugins {
+	id 'org.jetbrains.kotlin.jvm'
+}
+
+kotlin {
+	compilerOptions {
+		jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+		freeCompilerArgs.addAll(
+			'-opt-in=org.skepsun.kototoro.parsers.InternalParsersApi',
+			'-opt-in=org.koitharu.kotatsu.parsers.InternalParsersApi',
+			'-Xannotation-default-target=first-only',
+		)
+	}
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_11
+	targetCompatibility = JavaVersion.VERSION_11
+}
+
+// UMA plugins are compiled against Tsuki; the host must provide that API at runtime. Same sanitising as :app
+// (prepareTsukiRuntimeJar): Tsuki 1.0.5 accidentally bundles a second copy of CSSBackground that :parser-api owns.
+def tsukiRuntimeSource = configurations.create('tsukiRuntimeSource') {
+	canBeConsumed = false
+	canBeResolved = true
+	transitive = false
+}
+def tsukiSourceJar = tsukiRuntimeSource.elements.map { artifacts ->
+	if (artifacts.size() != 1) {
+		throw new GradleException("Expected one Tsuki runtime artifact, found ${artifacts.size()}")
+	}
+	artifacts.first().asFile
+}
+def tsukiSanitizedJarTask = tasks.register('prepareTsukiRuntimeJar', Jar) {
+	archiveBaseName.set('tsuki-runtime')
+	destinationDirectory.set(layout.buildDirectory.dir('generated/tsuki'))
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	preserveFileTimestamps = false
+	reproducibleFileOrder = true
+
+	from(zipTree(tsukiSourceJar)) {
+		exclude 'org/koitharu/kotatsu/core/parser/CSSBackground*.class'
+	}
+
+	doLast {
+		def outputJar = archiveFile.get().asFile
+		ZipFile zipFile = new ZipFile(outputJar)
+		try {
+			if (zipFile.entries().find { it.name.startsWith('org/koitharu/kotatsu/core/parser/CSSBackground') }) {
+				throw new GradleException('Sanitized Tsuki jar still contains CSSBackground')
+			}
+			if (zipFile.getEntry('tsuki/MangaParser.class') == null) {
+				throw new GradleException('Sanitized Tsuki jar is missing tsuki/MangaParser.class')
+			}
+		} finally {
+			zipFile.close()
+		}
+	}
+}
+def tsukiRuntimeJar = files(tsukiSanitizedJarTask.flatMap { it.archiveFile })
+
+// Self-built plugin fixtures: real bytecode compiled against the host ABI, packed the way plugin repositories
+// publish JVM jars. Each one defines the factory entry point its architecture is detected by.
+sourceSets {
+	fixtureKototoro
+	fixtureKotatsu
+	fixtureTsuki
+}
+def fixtureDirectory = layout.buildDirectory.dir('fixtures')
+def fixtureJars = ['Kototoro', 'Kotatsu', 'Tsuki'].collect { name ->
+	tasks.register("fixture${name}Jar", Jar) {
+		archiveFileName = "fixture-${name.toLowerCase()}.jar"
+		destinationDirectory = fixtureDirectory
+		from sourceSets["fixture${name}"].output
+		preserveFileTimestamps = false
+		reproducibleFileOrder = true
+	}
+}
+
+dependencies {
+	api project(':parser-api')
+	api project(':core-source')
+	api project(':source-host')
+	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
+	implementation tsukiRuntimeJar
+	add(tsukiRuntimeSource.name, libs.tsuki)
+
+	fixtureKototoroCompileOnly project(':parser-api')
+	fixtureKotatsuCompileOnly project(':parser-api')
+	fixtureTsukiCompileOnly project(':parser-api')
+	fixtureTsukiCompileOnly tsukiRuntimeJar
+
+	testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+	testImplementation libs.okhttp.mockwebserver
+	// Round trip: dex the fixtures like the Android release workflows do, then convert them back for the JVM host.
+	testImplementation project(':dex-convert')
+	testImplementation testFixtures(project(':dex-convert'))
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
+}
+
+def androidSdk = {
+	def local = rootProject.file('local.properties')
+	def configured = local.isFile() ? new Properties().with { load(local.newReader()); getProperty('sdk.dir') } : null
+	configured ?: System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT')
+}.call()
+
+tasks.withType(Test).configureEach {
+	useJUnitPlatform()
+	dependsOn fixtureJars
+	fixtureJars.each { inputs.file(it.flatMap { jar -> jar.archiveFile }) }
+	systemProperty 'kototoro.parserhost.fixtures', fixtureDirectory.get().asFile.absolutePath
+	if (androidSdk != null) systemProperty 'kototoro.android.sdk', androidSdk
+	// Optional real artifacts (not committed): a raw kototoro-parsers JVM jar, e.g. its Gradle `jar` output, and the
+	// DEX-only UMA release jar.
+	providers.gradleProperty('kototoroParsersJar').orNull?.with { systemProperty 'kototoro.parserhost.real.kototoro', it }
+	providers.gradleProperty('dexPluginJar').orNull?.with { systemProperty 'kototoro.parserhost.real.uma', it }
+	// Opt-in: tests that talk to real sites (-PparserHostOnline).
+	if (providers.gradleProperty('parserHostOnline').isPresent()) systemProperty 'kototoro.parserhost.online', 'true'
+}

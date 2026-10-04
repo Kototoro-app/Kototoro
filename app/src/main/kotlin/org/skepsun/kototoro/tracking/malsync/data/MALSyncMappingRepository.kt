@@ -1,15 +1,15 @@
 package org.skepsun.kototoro.tracking.malsync.data
 
 import androidx.collection.LruCache
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONObject
-import org.skepsun.kototoro.core.network.BaseHttpClient
-import org.skepsun.kototoro.parsers.util.await
-import org.skepsun.kototoro.parsers.util.parseJson
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.tracking.malsync.MALSyncKind
+import org.skepsun.kototoro.tracking.malsync.MALSyncMappingApi
+import org.skepsun.kototoro.tracking.malsync.MALSyncService
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,7 +21,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class MALSyncMappingRepository @Inject constructor(
-    @BaseHttpClient private val okHttpClient: OkHttpClient,
+    private val api: MALSyncMappingApi,
 ) {
 
     enum class Kind(val slug: String) { MANGA("manga"), ANIME("anime") }
@@ -38,7 +38,9 @@ class MALSyncMappingRepository @Inject constructor(
     private val perKeyMutexes = mutableMapOf<String, Mutex>()
 
     suspend fun resolve(service: ScrobblerService, remoteId: Long, kind: Kind): List<Mapping> {
-        val servicePath = servicePath(service) ?: return emptyList()
+        val source = service.toMALSyncService() ?: return emptyList()
+        val servicePath = source.apiPath ?: return emptyList()
+        currentCoroutineContext().ensureActive()
         val key = "$servicePath:${kind.slug}:$remoteId"
         cache.get(key)?.let { return it }
 
@@ -47,73 +49,47 @@ class MALSyncMappingRepository @Inject constructor(
         }
         return mutex.withLock {
             cache.get(key)?.let { return@withLock it }
-            val fetched = runCatching { fetch(servicePath, kind, remoteId, service) }
-                .getOrDefault(emptyList())
+            val fetched = try {
+                api.resolve(source, remoteId, kind.toMALSyncKind()).map {
+                    Mapping(it.service.toScrobblerService(), it.remoteId, it.title, it.url)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                emptyList()
+            }
+            currentCoroutineContext().ensureActive()
             cache.put(key, fetched)
             fetched
         }
     }
 
-    private suspend fun fetch(
-        servicePath: String,
-        kind: Kind,
-        remoteId: Long,
-        source: ScrobblerService,
-    ): List<Mapping> {
-        val url = "$BASE_URL/$servicePath/${kind.slug}/$remoteId"
-        val request = Request.Builder().url(url).get().build()
-        val response = okHttpClient.newCall(request).await()
-        if (!response.isSuccessful) {
-            response.close()
-            return emptyList()
-        }
-        val json = response.parseJson()
-        val sitesObj = json.optJSONObject("Sites") ?: return emptyList()
-        val results = mutableListOf<Mapping>()
-        val sourceKey = servicePath.lowercase()
-        sitesObj.keys().forEach { siteKey ->
-            val site = resolveServiceFromSiteKey(siteKey) ?: return@forEach
-            if (site == source) return@forEach
-            val entries = sitesObj.optJSONObject(siteKey) ?: return@forEach
-            entries.keys().forEach inner@{ idKey ->
-                val entry = entries.optJSONObject(idKey) ?: return@inner
-                val parsedId = entry.optString("identifier")
-                    .takeIf { it.isNotBlank() }
-                    ?.toLongOrNull()
-                    ?: idKey.toLongOrNull()
-                    ?: return@inner
-                results += Mapping(
-                    service = site,
-                    remoteId = parsedId,
-                    title = entry.optString("title").ifBlank { null },
-                    url = entry.optString("url").ifBlank { null },
-                )
-            }
-        }
-        return results.distinctBy { it.service to it.remoteId }
+    private fun ScrobblerService.toMALSyncService(): MALSyncService? = when (this) {
+        ScrobblerService.MAL -> MALSyncService.MAL
+        ScrobblerService.ANILIST -> MALSyncService.ANILIST
+        ScrobblerService.KITSU -> MALSyncService.KITSU
+        ScrobblerService.SHIKIMORI -> MALSyncService.SHIKIMORI
+        ScrobblerService.BANGUMI -> MALSyncService.BANGUMI
+        ScrobblerService.MANGAUPDATES -> MALSyncService.MANGAUPDATES
+        ScrobblerService.SIMKL -> null
     }
 
-    private fun servicePath(service: ScrobblerService): String? = when (service) {
-        ScrobblerService.MAL -> "mal"
-        ScrobblerService.ANILIST -> "anilist"
-        ScrobblerService.KITSU -> "kitsu"
-        ScrobblerService.SHIKIMORI -> "shikimori"
-        else -> null
+    private fun MALSyncService.toScrobblerService(): ScrobblerService = when (this) {
+        MALSyncService.MAL -> ScrobblerService.MAL
+        MALSyncService.ANILIST -> ScrobblerService.ANILIST
+        MALSyncService.KITSU -> ScrobblerService.KITSU
+        MALSyncService.SHIKIMORI -> ScrobblerService.SHIKIMORI
+        MALSyncService.BANGUMI -> ScrobblerService.BANGUMI
+        MALSyncService.MANGAUPDATES -> ScrobblerService.MANGAUPDATES
     }
 
-    private fun resolveServiceFromSiteKey(siteKey: String): ScrobblerService? =
-        when (siteKey.lowercase()) {
-            "mal" -> ScrobblerService.MAL
-            "anilist" -> ScrobblerService.ANILIST
-            "kitsu" -> ScrobblerService.KITSU
-            "shikimori" -> ScrobblerService.SHIKIMORI
-            "bangumi" -> ScrobblerService.BANGUMI
-            "mangaupdates" -> ScrobblerService.MANGAUPDATES
-            else -> null
-        }
+    private fun Kind.toMALSyncKind(): MALSyncKind = when (this) {
+        Kind.MANGA -> MALSyncKind.MANGA
+        Kind.ANIME -> MALSyncKind.ANIME
+    }
 
     private companion object {
-        const val BASE_URL = "https://api.malsync.moe"
         const val CACHE_SIZE = 64
     }
 }

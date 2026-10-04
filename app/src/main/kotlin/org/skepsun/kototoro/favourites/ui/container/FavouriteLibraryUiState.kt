@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.favourites.ui.container
 
 import androidx.compose.runtime.Immutable
+import org.skepsun.kototoro.core.model.GlobalTagBlacklist
+import org.skepsun.kototoro.core.model.TagBlacklist
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.favourites.domain.library.FavouriteCardRow
@@ -8,6 +10,7 @@ import org.skepsun.kototoro.favourites.domain.library.FavouriteLibrarySnapshot
 import org.skepsun.kototoro.favourites.domain.library.FavouriteMembership
 import org.skepsun.kototoro.favourites.domain.library.FavouriteQuickFilterMetadata
 import org.skepsun.kototoro.list.domain.ListFilterOption
+import org.skepsun.kototoro.list.domain.toCriteria
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.space.domain.SpaceContentPolicy
 import org.skepsun.kototoro.space.domain.SpaceId
@@ -78,8 +81,8 @@ internal fun buildFavouriteLibraryUiState(
             allowedContentTypes = spaceId?.let(spaceContentPolicy::allowedTypes)?.takeIf { it.isNotEmpty() },
             allowedSourceNames = spaceId?.let(spaceContentPolicy::allowedSourceNames),
             excludeNsfw = params.excludeNsfw,
-            filters = params.filters,
-            globalTagBlacklistTags = params.blacklist,
+            filters = params.filters.toCriteria(),
+            tagBlacklist = if (params.blacklist.isEmpty()) TagBlacklist.Empty else GlobalTagBlacklist(params.blacklist),
             ordersByCategory = params.ordersByCategory,
             defaultOrder = params.defaultOrder,
         ),

@@ -81,6 +81,9 @@ abstract class HistoryDao {
     @Query("SELECT * FROM history WHERE manga_id = :mangaId AND deleted_at = 0 LIMIT 1")
     abstract suspend fun find(mangaId: Long): HistoryEntity?
 
+    @Query("SELECT * FROM history WHERE manga_id = :mangaId LIMIT 1")
+    abstract suspend fun findIncludingDeleted(mangaId: Long): HistoryEntity?
+
     @Query("SELECT * FROM history WHERE manga_id IN (:mangaIds) AND deleted_at = 0")
     abstract suspend fun findAllByMangaIds(mangaIds: Collection<Long>): List<HistoryEntity>
 

@@ -1,0 +1,42 @@
+// Source contracts and JSON transport, independent of parser JVM ABI and platform DI.
+plugins {
+	id 'org.jetbrains.kotlin.multiplatform'
+	id 'com.android.kotlin.multiplatform.library'
+	id 'org.jetbrains.kotlin.plugin.serialization'
+}
+
+kotlin {
+	androidLibrary {
+		namespace = 'org.skepsun.kototoro.core.source'
+		compileSdk = 37
+		minSdk = 26
+	}
+	jvm {
+		compilerOptions {
+			jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+		}
+	}
+	iosArm64()
+	iosSimulatorArm64()
+
+	sourceSets {
+		getByName('commonMain') {
+			dependencies {
+				api "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
+				implementation "org.jetbrains.kotlinx:kotlinx-serialization-protobuf:${libs.versions.serialization.get()}"
+				implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
+			}
+		}
+		getByName('jvmTest') {
+			dependencies {
+				implementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+				runtimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
+				implementation libs.kotlinx.coroutines.test
+			}
+		}
+	}
+}
+
+tasks.withType(Test).configureEach {
+	useJUnitPlatform()
+}

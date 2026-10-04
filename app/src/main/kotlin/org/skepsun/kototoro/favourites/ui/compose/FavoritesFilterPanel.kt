@@ -44,6 +44,8 @@ import org.skepsun.kototoro.core.ui.compose.FilterPanelGroup
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.widgets.ChipModel
 import org.skepsun.kototoro.explore.ui.model.SourceTag
+import org.skepsun.kototoro.explore.ui.model.titleRes
+import org.skepsun.kototoro.explore.ui.model.iconRes
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.ui.compose.buildChipLabel
 import org.skepsun.kototoro.list.ui.compose.chipIcon

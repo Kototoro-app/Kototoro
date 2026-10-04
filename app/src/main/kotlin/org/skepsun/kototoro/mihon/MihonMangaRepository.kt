@@ -335,11 +335,8 @@ class MihonMangaRepository(
             // Fallback for sources that assume Page is always a chapter page (e.g. DM5 crashes on missing 'cid')
             return super.createCoverRequest(imageUrl)
         }
-        if (request.header("Referer") == null &&
-            (imageUrl.contains("hitomi.la") || imageUrl.contains("gold-usergeneratedcontent.net"))
-        ) {
-            return request.newBuilder().header("Referer", "https://hitomi.la/").build()
-        }
+        val referer = org.skepsun.kototoro.core.source.MihonModelRules.coverReferer(imageUrl, request.header("Referer"))
+        if (referer != null) return request.newBuilder().header("Referer", referer).build()
         return request
     }
 

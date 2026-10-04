@@ -12,10 +12,6 @@ object TitleNormalizer {
 
     fun normalize(title: String): String {
         val folded = Normalizer.normalize(title, Normalizer.Form.NFKC).lowercase(Locale.ROOT)
-        return buildString(folded.length) {
-            for (char in folded) {
-                if (char.isLetterOrDigit()) append(char)
-            }
-        }
+        return TitleMatchingRules.normalizeFoldedTitle(folded)
     }
 }

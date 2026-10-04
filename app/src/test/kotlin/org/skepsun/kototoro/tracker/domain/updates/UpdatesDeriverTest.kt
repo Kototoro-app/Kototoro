@@ -8,6 +8,7 @@ import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.list.domain.ListFilterOption
+import org.skepsun.kototoro.list.domain.toCriteria
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -110,7 +111,7 @@ class UpdatesDeriverTest {
         sourceTags: Set<SourceTag> = emptySet(),
     ) = UpdatesDeriver.Input(
         snapshot = snapshot(groups),
-        filters = filters,
+        filters = filters.toCriteria(),
         excludedNsfw = excludedNsfw,
         tagBlacklist = tagBlacklist,
         groupTab = groupTab,

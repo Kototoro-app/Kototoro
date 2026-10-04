@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
-import org.skepsun.kototoro.core.model.isAdultTagKeyword
+import org.skepsun.kototoro.core.source.MihonModelRules
 import org.skepsun.kototoro.parsers.model.ContentRating
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -17,7 +17,6 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.RATING_UNKNOWN
-import org.skepsun.kototoro.parsers.util.longHashCode
 
 /**
  * Extension functions for converting between Mihon and Kototoro data models.
@@ -107,23 +106,8 @@ fun SManga.toKotoContent(
                 null
             }
 
-            if (source.isNsfw) {
-                ContentRating.ADULT
-            } else if (explicitRating != null) {
-                explicitRating
-            } else {
-                val safeTags = setOf("safe", "all ages", "non-h", "sfw", "非h", "正常向", "全年龄", "全年龄向")
-                val isExplicitlySafe = safeGenres?.any { it.lowercase() in safeTags } == true
-                val isContentNsfw = (!isExplicitlySafe && source.isNsfw) || safeGenres?.any { it.isAdultTagKeyword() } == true
-
-                if (isExplicitlySafe) {
-                    ContentRating.SAFE
-                } else if (isContentNsfw) {
-                    ContentRating.ADULT
-                } else {
-                    null
-                }
-            }
+            MihonModelRules.contentRating(source.isNsfw, explicitRating?.name, safeGenres.orEmpty())
+                ?.let(ContentRating::valueOf)
         },
         coverUrl = absoluteThumbnailUrl,
         largeCoverUrl = safeBanner ?: absoluteThumbnailUrl,
@@ -165,42 +149,7 @@ fun Content.toMihonManga(): SManga {
         (mihonSource.catalogueSource as? HttpSource)?.baseUrl ?: ""
     } ?: ""
 
-    var cleanUrl = url
-
-    // Check if URL has duplicate protocol/baseUrl (e.g., "https://domain.comhttps//domain.com/path")
-    // Look for embedded "http" that's not at the start
-    val httpIndex = cleanUrl.indexOf("http", startIndex = 1)
-    if (httpIndex > 0) {
-        // Extract everything from the second "http" onwards
-        cleanUrl = cleanUrl.substring(httpIndex)
-        android.util.Log.d("MihonDataConverters", "Detected duplicate baseUrl, extracting: '$url' -> '$cleanUrl'")
-    }
-
-    // Fix malformed protocols (https// -> https://)
-    cleanUrl = cleanUrl.replace(Regex("^(https?)/+"), "$1://")
-
-    // If URL is absolute and starts with baseUrl, strip it to avoid duplicates in HttpSource
-    if (baseUrl.isNotBlank()) {
-        val baseHost = baseUrl.trimEnd('/')
-        if (cleanUrl.startsWith(baseHost)) {
-            val stripped = cleanUrl.substring(baseHost.length)
-            if (stripped.startsWith("/") || stripped.isEmpty()) {
-                cleanUrl = stripped
-                android.util.Log.d("MihonDataConverters", "Stripped baseUrl from absolute URL: '$url' -> '$cleanUrl'")
-            }
-        }
-    }
-
-    // If URL still doesn't look absolute, log warning
-    if (!cleanUrl.matches(Regex("^https?://.*")) && !cleanUrl.startsWith("/")) {
-        android.util.Log.d("MihonDataConverters", "URL may be invalid after cleanup: '$cleanUrl' (original: '$url')")
-    }
-
-    // NOTE: Do NOT add a leading slash to non-absolute URLs.
-    // Some extensions (e.g., zaimanhua) use pure IDs like "84652" which are then
-    // internally combined with their API path. Adding a slash would cause
-    // double-slash issues like "detail//84652" instead of "detail/84652".
-
+    val cleanUrl = MihonModelRules.mangaUrl(baseUrl, url)
     android.util.Log.d("MihonDataConverters", "toMihonManga: original='$url' cleaned='$cleanUrl'")
 
     return SManga.create().apply {
@@ -325,7 +274,7 @@ fun Page.toKotoPage(
 ): ContentPage {
     // Generate a unique page ID by combining chapter URL and page index
     // This prevents cache collisions between pages from different chapters
-    val pageId = "${chapterId ?: chapter.url}|page|$index".hashCode().toLong() and Long.MAX_VALUE
+    val pageId = MihonModelRules.pageId((chapterId ?: chapter.url).toString(), index)
 
     return ContentPage(
         id = pageId,
@@ -353,20 +302,14 @@ fun ContentPage.toMihonPage(): Page {
  * Generate a stable ID for a manga based on URL and source.
  */
 private fun generateContentId(url: String, sourceName: String, title: String): Long {
-    val identity = url.ifBlank { title.ifBlank { "unknown" } }
-    return "$sourceName|manga|$identity".longHashCode() and Long.MAX_VALUE
+    return MihonModelRules.contentId(url, sourceName, title)
 }
 
 /**
  * Generate a stable ID for a chapter based on URL and source.
  */
 private fun generateChapterId(url: String, sourceName: String, parentUrl: String? = null): Long {
-    val identity = if (parentUrl == null) {
-        "$sourceName|chapter|$url"
-    } else {
-        "$sourceName|chapter|$parentUrl|$url"
-    }
-    return identity.hashCode().toLong() and Long.MAX_VALUE
+    return MihonModelRules.chapterId(url, sourceName, parentUrl)
 }
 
 // ============ URL Helpers ============
@@ -396,14 +339,7 @@ fun HttpSource.getPublicChapterUrl(chapter: SChapter): String {
  * Resolve relative URL using baseUrl.
  */
 private fun resolveUrl(baseUrl: String, url: String?): String? {
-    if (url.isNullOrBlank()) return null
-    if (url.startsWith("http")) return url
-    if (url.startsWith("//")) return "https:$url"
-
-    if (baseUrl.isNotBlank()) {
-        return baseUrl.trimEnd('/') + "/" + url.trimStart('/')
-    }
-    return url
+    return MihonModelRules.resolveUrl(baseUrl, url)
 }
 
 /**
@@ -413,11 +349,5 @@ private fun resolveUrl(baseUrl: String, url: String?): String? {
  * Extract the first field value from such representations; discard fragments.
  */
 private fun String.cleanMihonGenre(): String {
-    // "ClassName(field=value, ...)" or "ClassName(field=value" (split) → first field value
-    val classPattern = Regex("""^\w+\((\w+)=([^,)]+)""")
-    val match = classPattern.find(this)
-    if (match != null) return match.groupValues[2]
-    // Fragment like "field=value)" without a class prefix → discard
-    if (this.matches(Regex("""^\w+=[^,)]+\)?$"""))) return ""
-    return this
+    return MihonModelRules.cleanGenre(this)
 }

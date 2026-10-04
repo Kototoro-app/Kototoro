@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="fixture.desktop.filter"
+    android:versionCode="17" android:versionName="1.6.17">
+    <application android:label="Filter desktop fixture">
+        <meta-data android:name="tachiyomix.name" android:value="Filter desktop fixture" />
+        <meta-data android:name="tachiyomix.extensionLib" android:value="1.6" />
+        <meta-data android:name="tachiyomi.extension.class" android:value="fixture.desktop.FilterSource" />
+        <meta-data android:name="tachiyomi.extension.nsfw" android:value="0" />
+    </application>
+</manifest>

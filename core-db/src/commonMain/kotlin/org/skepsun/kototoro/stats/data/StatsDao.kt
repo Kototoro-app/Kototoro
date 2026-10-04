@@ -15,6 +15,9 @@ import org.skepsun.kototoro.core.db.entity.MangaEntity
 @Dao
 abstract class StatsDao {
 
+    @Query("SELECT * FROM stats WHERE manga_id = :mangaId AND started_at = :startedAt")
+    abstract suspend fun find(mangaId: Long, startedAt: Long): StatsEntity?
+
     @Query("SELECT * FROM stats WHERE manga_id = :mangaId ORDER BY started_at")
     abstract suspend fun findAll(mangaId: Long): List<StatsEntity>
 

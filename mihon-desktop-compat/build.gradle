@@ -1,0 +1,259 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm'
+    id 'org.jetbrains.kotlin.plugin.serialization'
+    id 'java-library'
+}
+
+kotlin {
+    compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11 }
+}
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+// Supplied AndroidCompat APIs require Java 21+; the adapter's own bytecode remains Java 11.
+def compatibilityJavaVersion = providers.gradleProperty('mihonCompatibilityJavaVersion')
+    .map { it.toInteger() }.getOrElse(21)
+if (compatibilityJavaVersion < 21) throw new GradleException('Mihon compatibility APIs require Java 21 or newer')
+def compatibilityCompiler = javaToolchains.compilerFor {
+    languageVersion = JavaLanguageVersion.of(compatibilityJavaVersion)
+}
+def compatibilityLauncher = javaToolchains.launcherFor {
+    languageVersion = JavaLanguageVersion.of(compatibilityJavaVersion)
+}
+
+def compatibilityDirectory = providers.gradleProperty('mihonCompatibilityDirectory')
+def compatibilityRoot = compatibilityDirectory.map { new File(it) }.getOrNull()
+def pinFile = file('compatibility-pins.properties')
+def runtimePinFile = file('windows-runtime-pins.properties')
+def compatibilityFiles = compatibilityRoot == null ? files() : files({
+    // This order is intentional: AndroidCompat owns Android classes, not the original android-jar stubs.
+    def root = compatibilityRoot
+    def names = ['AndroidCompat-1.0.jar', 'server-1.0.jar', 'android-jar-1.0.0.jar']
+    def remaining = fileTree(root) {
+        include '*.jar'
+        exclude 'AndroidCompat-1.0.jar', 'server-1.0.jar', 'android-jar-*.jar'
+        exclude 'kotlin-stdlib*.jar', 'kotlinx-coroutines-core*.jar'
+        exclude 'kotlinx-serialization-core*.jar', 'kotlinx-serialization-json-*.jar'
+    }.files.sort { it.name }
+    names.collect { new File(root, it) } + remaining
+}())
+
+def artifactHash = { File artifact ->
+    def digest = java.security.MessageDigest.getInstance('SHA-256')
+    artifact.withInputStream { input ->
+        byte[] buffer = new byte[65536]
+        int count
+        while ((count = input.read(buffer)) != -1) digest.update(buffer, 0, count)
+    }
+    digest.digest().encodeHex().toString()
+}
+
+def verifyCompatibility = tasks.register('verifyMihonCompatibility') {
+    inputs.files(compatibilityFiles)
+    inputs.file(pinFile)
+    doLast {
+        if (compatibilityRoot == null) {
+            throw new GradleException('Supply -PmihonCompatibilityDirectory=<pinned API directory>')
+        }
+        def pins = new Properties()
+        pinFile.withInputStream { pins.load(it) }
+        pins.each { name, expected ->
+            def jar = new File(compatibilityRoot, name.toString())
+            if (!jar.isFile()) throw new GradleException("Missing compatibility API: ${name}")
+            def actual = artifactHash(jar)
+            if (actual != expected.toString()) throw new GradleException("Compatibility API identity mismatch: ${name}")
+        }
+    }
+}
+
+tasks.register('verifyWindowsRuntime') {
+    dependsOn verifyCompatibility
+    inputs.files(compatibilityFiles)
+    inputs.file(runtimePinFile)
+    doLast {
+        def pins = new Properties()
+        runtimePinFile.withInputStream { pins.load(it) }
+        def selected = compatibilityFiles.files.collectEntries { [(it.name): it] }
+        if (selected.size() != compatibilityFiles.files.size() || selected.keySet() != pins.keySet()) {
+            throw new GradleException('Windows runtime membership differs from windows-runtime-pins.properties')
+        }
+        pins.each { name, expected ->
+            if (artifactHash(selected[name]) != expected.toString()) {
+                throw new GradleException("Windows runtime identity mismatch: ${name}")
+            }
+        }
+    }
+}
+
+// Explicit developer runtime selection; it is not part of the adapter's API/runtimeElements distribution.
+configurations {
+    suppliedCompatibilityRuntime {
+        canBeResolved = false
+        canBeConsumed = true
+    }
+}
+
+dependencies {
+    api project(':source-host')
+    implementation project(':core-source')
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
+    // Extensions parse response bodies through OkioStreamsKt; use the same serialization version as Android.
+    implementation(libs.kotlinx.serialization.json.okio) {
+        // Keep the existing supplied/Gradle Okio selection and classpath order unchanged.
+        exclude group: 'com.squareup.okio'
+    }
+    compileOnly compatibilityFiles
+    suppliedCompatibilityRuntime compatibilityFiles
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+    testCompileOnly compatibilityFiles
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
+    testRuntimeOnly compatibilityFiles
+}
+
+sourceSets {
+    fixture {
+        java.srcDir 'src/fixture/java'
+    }
+    // An Aniyomi extension written against this module's own animesource ABI.
+    animeFixture {
+        java.srcDir 'src/fixture-anime/java'
+        compileClasspath += sourceSets.main.output
+    }
+}
+configurations.animeFixtureCompileOnly.extendsFrom configurations.compileOnly
+configurations.animeFixtureImplementation.extendsFrom configurations.implementation
+tasks.named('compileAnimeFixtureJava') {
+    javaCompiler = compatibilityCompiler
+    options.release = 11
+    options.encoding = 'UTF-8'
+}
+tasks.register('animeFixtureJar', Jar) {
+    dependsOn tasks.named('compileAnimeFixtureJava')
+    archiveFileName = 'anime-desktop-fixture.jar'
+    destinationDirectory = layout.buildDirectory.dir('fixtures')
+    from sourceSets.animeFixture.output
+    from('src/fixture-anime') { include 'AndroidManifest.xml' }
+}
+configurations.fixtureCompileOnly.extendsFrom configurations.compileOnly
+configurations.fixtureImplementation.extendsFrom configurations.implementation
+tasks.named('compileFixtureJava') {
+    dependsOn verifyCompatibility
+    javaCompiler = compatibilityCompiler
+    options.release = 11
+    options.encoding = 'UTF-8'
+}
+def fixtureJar = tasks.register('offlineFixtureJar', Jar) {
+    dependsOn tasks.named('compileFixtureJava')
+    archiveFileName = 'offline-desktop-fixture.jar'
+    destinationDirectory = layout.buildDirectory.dir('fixtures')
+    from sourceSets.fixture.output
+    from('src/fixture') { include 'AndroidManifest.xml' }
+}
+tasks.register('challengeFixtureJar', Jar) {
+    dependsOn tasks.named('compileFixtureJava')
+    archiveFileName = 'interactive-desktop-fixture.jar'
+    destinationDirectory = layout.buildDirectory.dir('fixtures')
+    from(sourceSets.fixture.output) { include 'fixture/desktop/InteractiveSource*.class' }
+    from('src/fixture-challenge') { include 'AndroidManifest.xml' }
+}
+tasks.register('readerFixtureJar', Jar) {
+    dependsOn tasks.named('compileFixtureJava')
+    archiveFileName = 'reader-desktop-fixture.jar'
+    destinationDirectory = layout.buildDirectory.dir('fixtures')
+    from(sourceSets.fixture.output) { include 'fixture/desktop/ReaderSource.class' }
+    from('src/fixture-reader') { include 'AndroidManifest.xml' }
+}
+tasks.register('filterFixtureJar', Jar) {
+    dependsOn tasks.named('compileFixtureJava')
+    archiveFileName = 'filter-desktop-fixture.jar'
+    destinationDirectory = layout.buildDirectory.dir('fixtures')
+    from(sourceSets.fixture.output) { include 'fixture/desktop/FilterSource*.class' }
+    from('src/fixture-filter') { include 'AndroidManifest.xml' }
+}
+
+tasks.register('coverFixtureJar', Jar) {
+    dependsOn tasks.named('compileFixtureJava')
+    archiveFileName = 'cover-desktop-fixture.jar'
+    destinationDirectory = layout.buildDirectory.dir('fixtures')
+    from(sourceSets.fixture.output) { include 'fixture/desktop/CoverSource*.class' }
+    from('src/fixture-cover') { include 'AndroidManifest.xml' }
+}
+
+def bridgeSource = file('src/bridge/csharp/KototoroWebViewBridge.cs')
+def bridgeExe = layout.buildDirectory.file('bridge/kototoro-webview-bridge.exe')
+def sdkExtracted = rootProject.layout.projectDirectory.dir('build/webview2-sdk/1.0.4258.31/extracted').asFile
+def compileWebViewBridge = tasks.register('compileWebViewBridge') {
+    inputs.file(bridgeSource)
+    inputs.dir(sdkExtracted)
+    outputs.file(bridgeExe)
+    doLast {
+        def isWindows = System.getProperty('os.name', '').toLowerCase().contains('windows')
+        if (!isWindows) return
+        def csc = new File(System.getenv('SystemRoot') ?: 'C:\\Windows', 'Microsoft.NET/Framework64/v4.0.30319/csc.exe')
+        if (!csc.isFile()) return
+
+        def wvCoreDll = new File(sdkExtracted, 'Microsoft.Web.WebView2.Core.dll')
+        if (!wvCoreDll.isFile()) return
+
+        def outExe = bridgeExe.get().asFile
+        def outDir = outExe.parentFile
+        outDir.mkdirs()
+
+        sdkExtracted.listFiles().each { file ->
+            if (file.name.endsWith('.dll')) {
+                def target = new File(outDir, file.name)
+                java.nio.file.Files.copy(file.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            }
+        }
+
+        def pb = new ProcessBuilder(
+            csc.absolutePath,
+            '/target:exe',
+            "/out:${outExe.absolutePath}",
+            '/platform:x64',
+            "/reference:${new File(outDir, 'Microsoft.Web.WebView2.Core.dll').absolutePath}",
+            '/reference:System.Windows.Forms.dll',
+            '/reference:System.Drawing.dll',
+            '/reference:System.Web.Extensions.dll',
+            '/reference:System.dll',
+            bridgeSource.absolutePath
+        )
+        pb.redirectErrorStream(true)
+        def proc = pb.start()
+        def output = proc.inputStream.text
+        int exitCode = proc.waitFor()
+        if (exitCode != 0) {
+            throw new GradleException("Failed to compile WebView2 bridge (exit $exitCode):\n$output")
+        }
+    }
+}
+
+tasks.named('compileKotlin') { dependsOn verifyCompatibility }
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    javaLauncher = compatibilityLauncher
+    systemProperty 'kototoro.compat.test.classpath', sourceSets.test.runtimeClasspath.asPath
+    systemProperty 'kototoro.compat.fixture.jar', fixtureJar.get().archiveFile.get().asFile
+    systemProperty 'kototoro.compat.bridge.exe', bridgeExe.get().asFile.absolutePath
+    inputs.file(fixtureJar.flatMap { it.archiveFile })
+    inputs.files(bridgeExe)
+    dependsOn verifyCompatibility
+    dependsOn fixtureJar
+    dependsOn compileWebViewBridge
+}
+
+def sourceHostConfig = providers.gradleProperty('sourceHostConfig').getOrNull()
+tasks.register('runSourceHost', JavaExec) {
+    group = 'application'
+    description = 'Run the local JSONL source host with supplied compatibility APIs and a pinned JAR config'
+    dependsOn tasks.named('classes'), verifyCompatibility
+    javaLauncher = compatibilityLauncher
+    mainClass = 'org.skepsun.kototoro.source.host.SourceHostCliKt'
+    classpath = sourceSets.main.runtimeClasspath + compatibilityFiles
+    standardInput = System.in
+    if (sourceHostConfig != null) args 'serve', sourceHostConfig
+    else doFirst { throw new GradleException('Supply -PsourceHostConfig=<config.json>') }
+}

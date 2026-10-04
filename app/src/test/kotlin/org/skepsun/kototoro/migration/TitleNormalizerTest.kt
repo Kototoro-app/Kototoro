@@ -27,6 +27,11 @@ class TitleNormalizerTest {
     }
 
     @Test
+    fun `compatibility and combining forms normalize before shared letter filtering`() {
+        assertEquals("ffi1café", TitleNormalizer.normalize("ﬃ① Cafe\u0301"))
+    }
+
+    @Test
     fun `data flags round trip through bits`() {
         val flags = setOf(MigrationDataFlag.PROGRESS, MigrationDataFlag.NOTES)
         assertEquals(flags + MigrationDataFlag.CATEGORIES, MigrationDataFlag.fromBits(MigrationDataFlag.toBits(flags)))

@@ -33,7 +33,10 @@ class MALInterceptor(
             request.header(HEADER_MAL_CLIENT_ID, clientId)
         }
         val response = chain.proceed(request.build())
-        if (!isAuthRequest && (response.code == HttpURLConnection.HTTP_UNAUTHORIZED || response.code == HttpURLConnection.HTTP_FORBIDDEN)) {
+        if (!isAuthRequest &&
+            (response.code == HttpURLConnection.HTTP_UNAUTHORIZED || response.code == HttpURLConnection.HTTP_FORBIDDEN)
+        ) {
+            response.close()
             throw ScrobblerAuthRequiredException(ScrobblerService.MAL)
         }
         if (response.mimeType == HTML) {
@@ -43,4 +46,3 @@ class MALInterceptor(
     }
 
 }
-

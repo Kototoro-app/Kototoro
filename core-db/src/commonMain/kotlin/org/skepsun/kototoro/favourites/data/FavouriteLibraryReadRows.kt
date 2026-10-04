@@ -3,9 +3,9 @@ package org.skepsun.kototoro.favourites.data
 import androidx.room.ColumnInfo
 
 /**
- * One active `(entityId, categoryId)` membership. Pinned/created/updated belong to the
- * membership, not the entity (`work_favourites` is keyed by the pair), so category
- * slices keep their own attributes without duplicating card fields.
+ * One active `(mangaId, categoryId)` membership from `favourites`. Pinned/created/updated
+ * belong to the membership, so category slices keep their own attributes without
+ * duplicating card fields. The query exposes manga_id as entity_id for the read model.
  */
 data class FavouriteMembershipRow(
     @ColumnInfo(name = "entity_id") val entityId: Long,
@@ -17,7 +17,7 @@ data class FavouriteMembershipRow(
 )
 
 /**
- * One entity↔tag relation of the favourites library: ids only. A heavily-tagged library has
+ * One manga↔tag relation of the favourites library: ids only. A heavily-tagged library has
  * over 100k of these, so the tag strings deliberately do not ride along — they come from
  * [FavouriteTagDictionaryRow] once per tag instead of once per relation.
  */
@@ -47,8 +47,7 @@ data class FavouriteDownloadedRow(
 )
 
 /**
- * Legacy per-manga override (title / cover) from the `preferences` table, used as the
- * fallback when the entity preferences carry no override.
+ * Per-manga override (title / cover) from the `preferences` table.
  */
 data class FavouriteLegacyOverrideRow(
     @ColumnInfo(name = "manga_id") val mangaId: Long,

@@ -7,6 +7,7 @@ import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.history.domain.buildHistorySnapshotFilterOptions
 import org.skepsun.kototoro.list.domain.ListFilterOption
+import org.skepsun.kototoro.list.domain.toCriteria
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.parsers.model.ContentType
 
@@ -110,7 +111,7 @@ class HistoryLibraryDeriverTest {
     ) = HistoryLibraryDeriver.Input(
         snapshot = HistorySnapshot(rows = rows),
         order = order,
-        filters = filters,
+        filters = filters.toCriteria(),
         excludedNsfw = excludedNsfw,
         tagBlacklist = tagBlacklist,
         groupTab = groupTab,

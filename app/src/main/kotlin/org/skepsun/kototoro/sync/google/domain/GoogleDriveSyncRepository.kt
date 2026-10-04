@@ -13,6 +13,7 @@ import org.skepsun.kototoro.ireader.IReaderExtensionManager
 import org.skepsun.kototoro.tsundoku.TsundokuExtensionManager
 import org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.serialization.SerialName
@@ -144,6 +145,8 @@ class GoogleDriveSyncRepository @Inject constructor(
             settings.lastSyncError = e.message
             Log.e(TAG, "sync failed: write blocked", e)
             GoogleDriveSyncResult.Error(e.message, retryable = false)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             settings.lastSyncError = e.message ?: e.javaClass.simpleName
             Log.e(TAG, "sync failed: ${settings.lastSyncError}", e)
@@ -161,7 +164,7 @@ class GoogleDriveSyncRepository @Inject constructor(
         return try {
             val token = auth.requireAccessToken()
             api.findCurrentSyncFiles(token).ifEmpty { api.findWorkV2SyncFiles(token) }.forEach { file ->
-                runCatching { api.delete(token, file.id) }
+                deleteRemoteFileBestEffort(token, file.id)
             }
             settings.lastSyncTimestamp = 0L
             settings.lastSyncError = null
@@ -169,6 +172,8 @@ class GoogleDriveSyncRepository @Inject constructor(
             GoogleDriveSyncResult.Success
         } catch (e: GoogleDriveSyncAuthorizationException) {
             GoogleDriveSyncResult.AuthorizationRequired(e)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             GoogleDriveSyncResult.Error(e.message)
         }
@@ -208,6 +213,8 @@ class GoogleDriveSyncRepository @Inject constructor(
             settings.lastSyncError = e.message
             Log.e(TAG, "legacy sync import failed: write blocked", e)
             GoogleDriveSyncResult.Error(e.message, retryable = false)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             settings.lastSyncError = e.message ?: e.javaClass.simpleName
             Log.e(TAG, "legacy sync import failed: ${settings.lastSyncError}", e)
@@ -298,7 +305,7 @@ class GoogleDriveSyncRepository @Inject constructor(
                 api.upload(token, payload, canonical?.id)
             }
             files.filter { it.id != fileId && it.id in decodedIds }.forEach { duplicate ->
-                runCatching { api.delete(token, duplicate.id) }
+                deleteRemoteFileBestEffort(token, duplicate.id)
             }
             return
         }
@@ -341,12 +348,22 @@ class GoogleDriveSyncRepository @Inject constructor(
             api.upload(token, payload, current?.id)
         }
         currentFiles.filter { it.id != fileId }.forEach { duplicate ->
-            runCatching { api.delete(token, duplicate.id) }
+            deleteRemoteFileBestEffort(token, duplicate.id)
         }
     }
 
     private suspend fun repairAfterSync() {
         database.pruneLocalSyncResidue()
+    }
+
+    private suspend fun deleteRemoteFileBestEffort(token: String, fileId: String) {
+        try {
+            api.delete(token, fileId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Preserve best-effort cleanup, while allowing the owning sync job to be cancelled.
+        }
     }
 
     private suspend fun <T> runSyncStep(name: String, block: suspend () -> T): T {
@@ -355,6 +372,8 @@ class GoogleDriveSyncRepository @Inject constructor(
             block().also {
                 Log.d(TAG, "sync step done: $name")
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "sync step failed: $name", e)
             throw e

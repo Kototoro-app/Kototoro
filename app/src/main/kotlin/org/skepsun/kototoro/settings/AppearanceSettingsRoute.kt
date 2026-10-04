@@ -74,6 +74,7 @@ import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
+import org.skepsun.kototoro.explore.ui.model.titleRes
 import org.skepsun.kototoro.parsers.util.toTitleCase
 import org.skepsun.kototoro.settings.compose.AppearanceSettingsOptions
 import org.skepsun.kototoro.settings.compose.AppearanceSettingsPage

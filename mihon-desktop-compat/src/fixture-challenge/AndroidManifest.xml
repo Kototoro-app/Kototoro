@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="fixture.desktop"
+    android:versionCode="16" android:versionName="1.6.16">
+    <application android:label="Interactive desktop fixture">
+        <meta-data android:name="tachiyomix.name" android:value="Interactive desktop fixture"/>
+        <meta-data android:name="tachiyomix.extensionLib" android:value="1.6"/>
+        <meta-data android:name="tachiyomi.extension.class" android:value=".InteractiveSource"/>
+        <meta-data android:name="tachiyomi.extension.nsfw" android:value="0"/>
+    </application>
+</manifest>

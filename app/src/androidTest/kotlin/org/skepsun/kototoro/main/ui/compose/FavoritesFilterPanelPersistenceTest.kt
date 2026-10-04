@@ -49,6 +49,7 @@ import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.widgets.ChipModel
 import org.skepsun.kototoro.explore.ui.model.SourceTag
+import org.skepsun.kototoro.explore.ui.model.titleRes
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository

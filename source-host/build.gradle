@@ -1,0 +1,32 @@
+// Desktop/JNI JVM source host. The embedding platform supplies its pinned Mihon/AndroidCompat runtime.
+plugins {
+	id 'org.jetbrains.kotlin.jvm'
+	id 'org.jetbrains.kotlin.plugin.serialization'
+	id 'application'
+}
+
+kotlin {
+	compilerOptions {
+		jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+	}
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_11
+	targetCompatibility = JavaVersion.VERSION_11
+}
+
+dependencies {
+	implementation project(':core-source')
+	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
+	testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
+}
+
+application {
+	mainClass = 'org.skepsun.kototoro.source.host.SourceHostCliKt'
+}
+
+tasks.withType(Test).configureEach {
+	useJUnitPlatform()
+}

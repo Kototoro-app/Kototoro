@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="fixture.desktop.anime"
+    android:versionCode="1" android:versionName="14.1">
+    <application android:label="Aniyomi: Anime desktop fixture">
+        <meta-data android:name="tachiyomi.animeextension.class" android:value="fixture.desktop.AnimeSource" />
+        <meta-data android:name="tachiyomi.animeextension.nsfw" android:value="0" />
+    </application>
+</manifest>

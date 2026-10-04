@@ -58,7 +58,17 @@ dependencyResolutionManagement {
 	}
 }
 
-include ':app', ':parser-api', ':backdrop', ':macrobenchmark', ':reader-core', ':core-db'
+include(
+    ':app', ':parser-api', ':backdrop', ':macrobenchmark', ':reader-core', ':core-db', ':core-backup',
+    ':core-domain', ':core-net', ':core-source', ':source-host', ':parser-host', ':dex-convert', ':desktop-runtime',
+    ':desktop-player',
+)
+// Optional desktop compatibility adapter compiles against caller-supplied pinned APIs; no external jars ship by default.
+def withDesktopApp = providers.gradleProperty('withDesktopApp').map { it != 'false' }.getOrElse(false)
+if (withDesktopApp || providers.gradleProperty('withMihonDesktopCompat').map { it != 'false' }.getOrElse(false)) {
+    include ':mihon-desktop-compat'
+}
+if (withDesktopApp) include ':desktop-app'
 // T0.3 offline self-built NovelSourcery/Tsundoku fixture APKs (plan Phase 0 / T0.3). Each
 // module compiles against :app:exportTachiyomiAbi (host ABI jar) with compileOnly and packs
 // the real manifest morphologies the host's strict classifier/loader must accept or reject.

@@ -27,6 +27,18 @@ class GlobalTagBlacklistTest : StringSpec({
 		(contentWithTags("异世界") in blacklist) shouldBe true
 	}
 
+	"shared list matcher preserves taxonomy aliases and raw selection" {
+		val blacklist: TagBlacklist = GlobalTagBlacklist(
+			setOf("setting.other-world", GlobalTagBlacklist.rawTagKey("Custom Trope")),
+		)
+
+		blacklist.containsTagTitle("Isekai") shouldBe true
+		blacklist.containsTagTitle("异世界") shouldBe true
+		blacklist.containsTagTitle("  CUSTOM TROPE  ") shouldBe true
+		blacklist.containsTagTitle("Custom Tropes") shouldBe false
+		TagBlacklist.Empty.containsTagTitle("Isekai") shouldBe false
+	}
+
 	"raw selection remains an exact fallback" {
 		val blacklist = GlobalTagBlacklist(setOf(GlobalTagBlacklist.rawTagKey("Custom Trope")))
 

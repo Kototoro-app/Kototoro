@@ -29,6 +29,8 @@ import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.explore.ui.model.SourceTag
+import org.skepsun.kototoro.explore.ui.model.titleRes
+import org.skepsun.kototoro.explore.ui.model.iconRes
 
 private val CompactSourceTagIconSize = 18.dp
 

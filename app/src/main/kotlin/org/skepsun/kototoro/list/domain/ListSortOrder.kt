@@ -2,67 +2,21 @@ package org.skepsun.kototoro.list.domain
 
 import androidx.annotation.StringRes
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.parsers.util.find
-import java.util.EnumSet
 
-enum class ListSortOrder(
-    @StringRes val titleResId: Int,
-) {
-
-    NEWEST(R.string.order_added),
-    OLDEST(R.string.order_oldest),
-    PROGRESS(R.string.progress),
-    UNREAD(R.string.unread),
-    ALPHABETIC(R.string.by_name),
-    ALPHABETIC_REVERSE(R.string.by_name_reverse),
-    RATING(R.string.by_rating),
-    RELEVANCE(R.string.by_relevance),
-    NEW_CHAPTERS(R.string.new_chapters),
-    LAST_READ(R.string.last_read),
-    LONG_AGO_READ(R.string.long_ago_read),
-    UPDATED(R.string.updated),
-    MANUAL(R.string.order_manual),
-    ;
-
-    fun isGroupingSupported() = this == LAST_READ || this == NEWEST || this == PROGRESS
-
-    companion object {
-
-        val HISTORY: Set<ListSortOrder> = EnumSet.of(
-            LAST_READ,
-            LONG_AGO_READ,
-            NEWEST,
-            OLDEST,
-            PROGRESS,
-            UNREAD,
-            ALPHABETIC,
-            ALPHABETIC_REVERSE,
-            NEW_CHAPTERS,
-            UPDATED,
-        )
-        val FAVORITES: Set<ListSortOrder> = EnumSet.of(
-            ALPHABETIC,
-            ALPHABETIC_REVERSE,
-            NEWEST,
-            OLDEST,
-            RATING,
-            NEW_CHAPTERS,
-            PROGRESS,
-            UNREAD,
-            LAST_READ,
-            LONG_AGO_READ,
-            UPDATED,
-            MANUAL,
-        )
-        val SUGGESTIONS: Set<ListSortOrder> = EnumSet.of(RELEVANCE)
-
-        fun favourites(categoryId: Long): List<ListSortOrder> =
-            if (categoryId == -1L) {
-                FAVORITES.filter { it != MANUAL }.sortedBy { it.ordinal }
-            } else {
-                FAVORITES.sortedBy { it.ordinal }
-            }
-
-        operator fun invoke(value: String, fallback: ListSortOrder) = entries.find(value) ?: fallback
+@get:StringRes
+val ListSortOrder.titleResId: Int
+    get() = when (this) {
+        ListSortOrder.NEWEST -> R.string.order_added
+        ListSortOrder.OLDEST -> R.string.order_oldest
+        ListSortOrder.PROGRESS -> R.string.progress
+        ListSortOrder.UNREAD -> R.string.unread
+        ListSortOrder.ALPHABETIC -> R.string.by_name
+        ListSortOrder.ALPHABETIC_REVERSE -> R.string.by_name_reverse
+        ListSortOrder.RATING -> R.string.by_rating
+        ListSortOrder.RELEVANCE -> R.string.by_relevance
+        ListSortOrder.NEW_CHAPTERS -> R.string.new_chapters
+        ListSortOrder.LAST_READ -> R.string.last_read
+        ListSortOrder.LONG_AGO_READ -> R.string.long_ago_read
+        ListSortOrder.UPDATED -> R.string.updated
+        ListSortOrder.MANUAL -> R.string.order_manual
     }
-}

@@ -1,0 +1,58 @@
+// Shared backup formats (docs/architecture/kmp-ios-plan-2026-10.md, phase P1): the Kototoro backup DTOs and the
+// Mihon / Aniyomi / Usagi formats, plus the protobuf decoding of Mihon and Aniyomi backups. This is what an iOS app
+// needs to restore an Android backup. Packages are unchanged.
+//
+// What stays in :app: everything that needs Android (Uri/Context access, the SQLite based Venera decoder, the
+// export services), the zip handling, and BackupRepository, which drives the database and the settings.
+plugins {
+	id 'org.jetbrains.kotlin.multiplatform'
+	id 'com.android.kotlin.multiplatform.library'
+	id 'org.jetbrains.kotlin.plugin.serialization'
+}
+
+kotlin {
+	androidLibrary {
+		namespace = 'org.skepsun.kototoro.core.backup'
+		compileSdk = 37
+		minSdk = 26
+	}
+
+	jvm {
+		compilerOptions {
+			jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+		}
+	}
+	iosArm64()
+	iosSimulatorArm64()
+
+	compilerOptions {
+		freeCompilerArgs.addAll(
+			'-opt-in=kotlin.ExperimentalStdlibApi',
+			'-opt-in=kotlinx.serialization.ExperimentalSerializationApi',
+			'-Xannotation-default-target=first-only',
+		)
+	}
+
+	sourceSets {
+		getByName('commonMain') {
+			dependencies {
+				api project(':core-db')
+				api project(':parser-api')
+				api "org.jetbrains.kotlinx:kotlinx-serialization-core:${libs.versions.serialization.get()}"
+				api "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
+				api "org.jetbrains.kotlinx:kotlinx-serialization-protobuf:${libs.versions.serialization.get()}"
+				api libs.okio
+			}
+		}
+		getByName('jvmTest') {
+			dependencies {
+				implementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+				implementation libs.kotest.runner.junit5
+			}
+		}
+	}
+}
+
+tasks.withType(Test).configureEach {
+	useJUnitPlatform()
+}

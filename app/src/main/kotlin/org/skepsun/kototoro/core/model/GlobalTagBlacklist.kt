@@ -3,7 +3,7 @@ package org.skepsun.kototoro.core.model
 import org.skepsun.kototoro.parsers.model.Content
 import java.util.Locale
 
-class GlobalTagBlacklist(tags: Collection<String>) {
+class GlobalTagBlacklist(tags: Collection<String>) : TagBlacklist {
 
     private val taxonomyIds = HashSet<String>(tags.size)
     private val normalizedRawTags = HashSet<String>(tags.size)
@@ -43,7 +43,7 @@ class GlobalTagBlacklist(tags: Collection<String>) {
      * [contains] without building a `Content`. The favourites snapshot uses this to
      * apply the blacklist to its pre-resolved display tags.
      */
-    fun containsTagTitle(title: String): Boolean {
+    override fun containsTagTitle(title: String): Boolean {
         val normalizedTitle = normalizeTag(title)
         return normalizedTitle in normalizedRawTags ||
             KototoroTaxonomy.resolve(title).any { it.id in taxonomyIds }

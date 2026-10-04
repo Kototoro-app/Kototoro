@@ -1,0 +1,43 @@
+// Video playback for the Windows desktop app: libmpv through JNA. libmpv itself is not shipped by this module; it is
+// found at run time (see MpvLocator), so distributions choose the build (and licence) they bundle.
+plugins {
+	id 'org.jetbrains.kotlin.jvm'
+	id 'java-library'
+}
+
+kotlin {
+	compilerOptions {
+		jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+	}
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_11
+	targetCompatibility = JavaVersion.VERSION_11
+}
+
+// Anime4K comes from the Android app's own shader assets (already mpv hook format), so both apps ship the same files.
+def anime4kResources = layout.buildDirectory.dir('generated/anime4k')
+def prepareAnime4K = tasks.register('prepareAnime4K', Copy) {
+	from(rootProject.file('app/src/main/assets/shaders')) {
+		include 'Anime4K_*.glsl'
+		include 'LICENSE'
+		rename 'LICENSE', 'Anime4K-LICENSE'
+	}
+	into anime4kResources.map { it.dir('shaders') }
+}
+sourceSets.main.resources.srcDir(anime4kResources)
+tasks.named('processResources').configure { dependsOn prepareAnime4K }
+dependencies {
+	api 'net.java.dev.jna:jna:5.17.0'
+	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
+	implementation libs.kotlinx.serialization.json
+	testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
+}
+
+tasks.withType(Test).configureEach {
+	useJUnitPlatform()
+	// Opt-in: a directory holding libmpv-2.dll; without it the playback tests are skipped.
+	providers.gradleProperty('libmpvDirectory').orNull?.with { systemProperty 'kototoro.libmpv.dir', it }
+}

@@ -1,0 +1,402 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm'
+    id 'org.jetbrains.kotlin.plugin.compose'
+    id 'org.jetbrains.kotlin.plugin.serialization'
+    id 'org.jetbrains.compose' version '1.12.0'
+}
+
+kotlin {
+    compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 }
+}
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+// Reuse Android's actual navigation artwork without an Android runtime or a second icon library.
+def desktopIcons = ['ic_bookmark', 'ic_explore_normal', 'ic_history', 'ic_download', 'ic_extension',
+    'ic_backup_restore', 'ic_web', 'ic_more_vert']
+def desktopIconResources = layout.buildDirectory.dir('generated/android-icons')
+def prepareDesktopIcons = tasks.register('prepareDesktopIcons') {
+    def vectors = desktopIcons.collect { rootProject.file("app/src/main/res/drawable/${it}.xml") }
+    inputs.files(vectors)
+    outputs.dir(desktopIconResources)
+    doLast {
+        def target = desktopIconResources.get().dir('icons').asFile
+        target.mkdirs()
+        vectors.each { vectorFile ->
+            def vector = new groovy.xml.XmlParser(false, false).parse(vectorFile)
+            def render
+            render = { node ->
+                if (node.name() == 'path') {
+                    def data = node.attribute('android:pathData')
+                    if (!(data ==~ /[a-zA-Z0-9.,+\-\s]+/)) throw new GradleException("Unsupported icon path: ${vectorFile.name}")
+                    return "<path fill=\"black\" d=\"${data}\"/>"
+                }
+                if (node.name() == 'group') {
+                    if (node.attributes().keySet().any { !(it in ['android:translateX', 'android:translateY']) }) {
+                        throw new GradleException("Unsupported icon transform: ${vectorFile.name}")
+                    }
+                    def x = Float.parseFloat(node.attribute('android:translateX') ?: '0')
+                    def y = Float.parseFloat(node.attribute('android:translateY') ?: '0')
+                    return "<g transform=\"translate(${x},${y})\">${node.children().collect(render).join('')}</g>"
+                }
+                throw new GradleException("Unsupported icon element: ${vectorFile.name}")
+            }
+            def width = Float.parseFloat(vector.attribute('android:viewportWidth'))
+            def height = Float.parseFloat(vector.attribute('android:viewportHeight'))
+            new File(target, vectorFile.name.replace('.xml', '.svg')).setText(
+                "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 ${width} ${height}\">" +
+                    vector.children().collect(render).join('') + '</svg>', 'UTF-8')
+        }
+    }
+}
+sourceSets.main.resources.srcDir(desktopIconResources)
+tasks.named('processResources').configure { dependsOn prepareDesktopIcons }
+
+dependencies {
+    implementation compose.desktop.currentOs
+    implementation compose.material
+    implementation project(':desktop-runtime')
+    implementation project(':desktop-player')
+    implementation project(':parser-host')
+    implementation project(':mihon-desktop-compat')
+    implementation project(':core-domain')
+    implementation project(':reader-core')
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+    testImplementation compose.uiTest
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
+}
+
+// The pinned compatibility runtime already supplies these libraries at the exact versions its extensions were validated
+// with (OkHttp 5.4.0, Okio, Jsoup 1.23, an org.json port). The parser host brings its own copies for standalone use;
+// keeping both would let the older ones shadow the pinned jars, so the app's runtime classpaths leave them out.
+configurations.configureEach { configuration ->
+    if (configuration.name in ['runtimeClasspath', 'testRuntimeClasspath']) {
+        configuration.exclude group: 'com.squareup.okhttp3'
+        configuration.exclude group: 'com.squareup.okio'
+        configuration.exclude group: 'org.jsoup'
+        configuration.exclude group: 'org.json', module: 'json'
+    }
+}
+
+// Share the adapter's verified ordering without bundling supplied APIs into runtimeClasspath/distributions.
+def compatibilityFiles = configurations.create('suppliedCompatibilityRuntime') {
+    canBeResolved = true
+    canBeConsumed = false
+}
+dependencies.add(compatibilityFiles.name,
+    dependencies.project(path: ':mihon-desktop-compat', configuration: 'suppliedCompatibilityRuntime'))
+def runtimeJavaVersion = providers.gradleProperty('mihonCompatibilityJavaVersion').map { it.toInteger() }.getOrElse(21)
+def desktopLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(runtimeJavaVersion) }
+def bundleWindowsRuntime = providers.gradleProperty('withWindowsDistribution').isPresent()
+// Optional: a directory holding libmpv-2.dll (run/tests); distributions bundle it either from here or from the pinned
+// release below. ncnnDirectory likewise supplies the two official ncnn-vulkan release zips.
+def libmpvDirectory = providers.gradleProperty('libmpvDirectory').getOrNull()
+def ncnnDirectory = providers.gradleProperty('ncnnDirectory').getOrNull()
+
+// Pinned third-party playback/upscaling artifacts for the Windows distribution (fetched once into the build cache).
+def bundledDownloads = [
+    libmpv: [repo: 'zhongfly/mpv-winbuild', tag: '2026-10-03-413ff0b1cd',
+        asset: 'mpv-dev-lgpl-x86_64-20261003-git-413ff0b1cd.7z',
+        sha256: '12a9966bad239672c97276f01a9e625504e0b1d1fdcff95256066eeb8ffb1f21'],
+    realcugan: [repo: 'nihui/realcugan-ncnn-vulkan', tag: '20220728', asset: 'realcugan-ncnn-vulkan-20220728-windows.zip',
+        sha256: 'c6e08d46c11704b1e3a1ada9ddd591cb5005f52f132136c8633ba25def400e01'],
+    realesrgan: [repo: 'xinntao/Real-ESRGAN', tag: 'v0.2.5.0', asset: 'realesrgan-ncnn-vulkan-20220424-windows.zip',
+        sha256: 'abc02804e17982a3be33675e4d471e91ea374e65b70167abc09e31acb412802d'],
+]
+def downloadCache = rootProject.layout.buildDirectory.dir('third-party-downloads').get().asFile
+def sha256Of = { File file ->
+    def digest = java.security.MessageDigest.getInstance('SHA-256')
+    file.withInputStream { input -> byte[] buffer = new byte[65536]; int n; while ((n = input.read(buffer)) != -1) digest.update(buffer, 0, n) }
+    digest.digest().encodeHex().toString()
+}
+/** The pinned asset: a supplied local copy, else the cache, else GitHub (asset API first, then the public link). */
+def pinnedArtifact = { String key, File supplied ->
+    def spec = bundledDownloads[key]
+    if (supplied != null && supplied.isFile()) {
+        if (sha256Of(supplied) != spec.sha256) throw new GradleException("${spec.asset}: SHA-256 mismatch")
+        return supplied
+    }
+    def target = new File(downloadCache, spec.asset)
+    if (target.isFile() && sha256Of(target) == spec.sha256) return target
+    downloadCache.mkdirs()
+    def failures = []
+    def candidates = []
+    try {
+        def release = new groovy.json.JsonSlurper().parse(new URL("https://api.github.com/repos/${spec.repo}/releases/tags/${spec.tag}"))
+        def asset = release.assets.find { it.name == spec.asset }
+        if (asset != null) candidates << [asset.url, 'application/octet-stream']
+    } catch (Exception error) { failures << "api: ${error.message}" }
+    candidates << ["https://github.com/${spec.repo}/releases/download/${spec.tag}/${spec.asset}", '*/*']
+    for (candidate in candidates) {
+        try {
+            def connection = new URL(candidate[0]).openConnection()
+            connection.setRequestProperty('Accept', candidate[1])
+            connection.connectTimeout = 20000; connection.readTimeout = 120000
+            def partial = new File(downloadCache, spec.asset + '.part')
+            connection.inputStream.withStream { input -> partial.withOutputStream { output -> output << input } }
+            if (sha256Of(partial) != spec.sha256) { partial.delete(); throw new GradleException('SHA-256 mismatch') }
+            java.nio.file.Files.move(partial.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            return target
+        } catch (Exception error) { failures << "${candidate[0]}: ${error.message}" }
+    }
+    throw new GradleException("Cannot fetch ${spec.asset}: ${failures.join('; ')}")
+}
+def bundledThirdParty = layout.buildDirectory.dir('bundled-third-party')
+def prepareBundledThirdParty = tasks.register('prepareBundledThirdParty') {
+    outputs.dir(bundledThirdParty)
+    inputs.property('pins', bundledDownloads.collect { k, v -> "$k=${v.sha256}" }.join(','))
+    doLast {
+        def root = bundledThirdParty.get().asFile
+        project.delete(root)
+        def mpv = new File(root, 'windows/mpv'); mpv.mkdirs()
+        def suppliedDll = libmpvDirectory != null ? new File(libmpvDirectory, 'libmpv-2.dll') : null
+        if (suppliedDll != null && suppliedDll.isFile()) {
+            project.copy { from suppliedDll; into mpv }
+        } else {
+            def archive = pinnedArtifact('libmpv', null)
+            def unpack = new File(temporaryDir, 'mpv'); project.delete(unpack); unpack.mkdirs()
+            // Windows' bundled bsdtar reads 7z archives.
+            def tar = new ProcessBuilder('tar', '-xf', archive.absolutePath, '-C', unpack.absolutePath, 'libmpv-2.dll')
+                .redirectErrorStream(true).start()
+            tar.inputStream.text
+            if (tar.waitFor() != 0 || !new File(unpack, 'libmpv-2.dll').isFile()) throw new GradleException('Cannot extract libmpv-2.dll')
+            project.copy { from new File(unpack, 'libmpv-2.dll'); into mpv }
+        }
+        ['realcugan', 'realesrgan'].each { key ->
+            def supplied = ncnnDirectory != null ? new File(ncnnDirectory, bundledDownloads[key].asset) : null
+            def archive = pinnedArtifact(key, supplied)
+            def target = new File(root, "windows/upscale/$key")
+            project.copy {
+                from(project.zipTree(archive)) {
+                    exclude '**/*.mp4', '**/*.jpg', '**/*.png', '**/*.webp', '**/vcomp140d.dll'
+                    // Strip the archive's top folder when it has one.
+                    eachFile { details ->
+                        def segments = details.relativePath.segments
+                        if (segments.length > 1 && segments[0].endsWith('-windows')) {
+                            details.relativePath = new RelativePath(!details.directory, segments.drop(1) as String[])
+                        }
+                    }
+                    includeEmptyDirs = false
+                }
+                into target
+            }
+        }
+        def notices = new File(root, 'common/THIRD_PARTY_PLAYBACK.md'); notices.parentFile.mkdirs()
+        notices.setText("""# Bundled playback and upscaling components
+
+| Component | Version | Licence | Source |
+|---|---|---|---|
+| libmpv (LGPL build, with FFmpeg, libplacebo) | ${bundledDownloads.libmpv.tag} | LGPL-2.1-or-later | https://github.com/mpv-player/mpv, build: https://github.com/${bundledDownloads.libmpv.repo} |
+| realcugan-ncnn-vulkan (ncnn, Real-CUGAN models) | ${bundledDownloads.realcugan.tag} | MIT (program), BSD-3-Clause (ncnn) | https://github.com/${bundledDownloads.realcugan.repo} |
+| realesrgan-ncnn-vulkan (ncnn, Real-ESRGAN models) | ${bundledDownloads.realesrgan.tag} | BSD-3-Clause | https://github.com/${bundledDownloads.realesrgan.repo} |
+| Anime4K GLSL shaders | as in the Android app | MIT | https://github.com/bloc97/Anime4K |
+| AMD FidelityFX FSR 1.0 for mpv | 1.0.2 | MIT | https://gist.github.com/agyild/82219c545228d70c5604f865ce0b0ce5 |
+
+libmpv is dynamically loaded from resources/mpv and may be replaced with another compatible build.
+""", 'UTF-8')
+    }
+}
+def windowsResources = layout.buildDirectory.dir('windows-resources')
+def bridgeDirectory = project(':mihon-desktop-compat').layout.buildDirectory.dir('bridge')
+def bridgeNames = ['kototoro-webview-bridge.exe', 'Microsoft.Web.WebView2.Core.dll',
+    'Microsoft.Web.WebView2.WinForms.dll', 'WebView2Loader.dll']
+def runtimeArtifacts = files(tasks.named('jar'), configurations.runtimeClasspath, compatibilityFiles)
+def runtimePins = project(':mihon-desktop-compat').layout.projectDirectory.file('windows-runtime-pins.properties')
+def runtimeLockHash = java.security.MessageDigest.getInstance('SHA-256').digest(runtimePins.asFile.bytes).encodeHex().toString()
+def runtimeJarDirectory = layout.buildDirectory.dir("windows-runtime/${runtimeLockHash}")
+def prepareWindowsRuntimeJars = tasks.register('prepareWindowsRuntimeJars', Copy) {
+    dependsOn ':mihon-desktop-compat:verifyWindowsRuntime'
+    inputs.file(runtimePins)
+    compatibilityFiles.files.eachWithIndex { artifact, index ->
+        from(artifact) { rename { String.format('%03d-%s', index, artifact.name) } }
+    }
+    into runtimeJarDirectory
+}
+def packagedRuntimeArtifacts = files(tasks.named('jar'), configurations.runtimeClasspath,
+    runtimeJarDirectory.map { fileTree(it) { include '*.jar' } }).builtBy(prepareWindowsRuntimeJars)
+
+def prepareWindowsResources = tasks.register('prepareWindowsResources', Copy) {
+    dependsOn ':mihon-desktop-compat:verifyWindowsRuntime', ':mihon-desktop-compat:compileWebViewBridge', tasks.named('jar')
+    inputs.files(runtimeArtifacts)
+    inputs.file(runtimePins)
+    from(bridgeDirectory) { include bridgeNames; into 'windows/browser' }
+    from('distribution/LOCAL_PREVIEW.md') { into 'common' }
+    from(rootProject.file('LICENSE')) { rename { 'PROJECT_LICENSE' }; into 'common' }
+    from(runtimePins) { into 'common' }
+    dependsOn prepareBundledThirdParty
+    from(bundledThirdParty)
+    into windowsResources
+    doFirst {
+        if (!System.getProperty('os.name').toLowerCase().contains('windows')) {
+            throw new GradleException('Windows distribution requires a Windows build host')
+        }
+        bridgeNames.each { name ->
+            if (!new File(bridgeDirectory.get().asFile, name).isFile()) {
+                throw new GradleException("Missing packaged browser artifact: ${name}")
+            }
+        }
+    }
+    doLast {
+        def artifacts = runtimeArtifacts.files + bridgeNames.collect { new File(bridgeDirectory.get().asFile, it) }
+        def lines = ['name\tbytes\tsha256'] + artifacts.sort { it.name }.collect { artifact ->
+            def digest = java.security.MessageDigest.getInstance('SHA-256')
+            artifact.withInputStream { input ->
+                byte[] buffer = new byte[65536]
+                int count
+                while ((count = input.read(buffer)) != -1) digest.update(buffer, 0, count)
+            }
+            "${artifact.name}\t${artifact.length()}\t${digest.digest().encodeHex()}"
+        }
+        new File(windowsResources.get().asFile, 'common/runtime-artifacts.tsv').setText(lines.join('\n') + '\n', 'UTF-8')
+    }
+}
+
+compose.desktop {
+    application {
+        mainClass = 'org.skepsun.kototoro.desktop.app.DesktopMainKt'
+        javaHome = desktopLauncher.get().metadata.installationPath.asFile.absolutePath
+        if (bundleWindowsRuntime) {
+            disableDefaultConfiguration()
+            mainJar.set(tasks.named('jar').flatMap { it.archiveFile })
+            fromFiles(packagedRuntimeArtifacts)
+            dependsOn(prepareWindowsResources.get())
+        }
+        nativeDistributions {
+            packageName = 'Kototoro'
+            packageVersion = '0.1.0'
+            description = 'Kototoro Windows local preview'
+            vendor = 'Kototoro'
+            includeAllModules = true
+            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi)
+            if (bundleWindowsRuntime) appResourcesRootDir.set(windowsResources)
+            windows {
+                perUserInstall = true
+                // A sibling directory avoids merging program uninstall rules with the user data directory.
+                installationPath = 'Kototoro-App'
+                dirChooser = false
+                menu = true
+                menuGroup = 'Kototoro'
+                shortcut = true
+                upgradeUuid = '78f89549-27ec-4c2c-8b87-297c43349a44'
+            }
+        }
+    }
+}
+
+tasks.withType(org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask).configureEach {
+    if (bundleWindowsRuntime) dependsOn prepareWindowsResources
+    doFirst {
+        if (!bundleWindowsRuntime) throw new GradleException('Supply -PwithWindowsDistribution to bundle the verified Windows runtime')
+    }
+}
+
+tasks.withType(org.jetbrains.compose.desktop.application.tasks.AbstractJLinkTask).configureEach { link ->
+    // Compose 1.12.0 defaults to stripping commands. Keep the bundled JVM usable for local support/probes.
+    if (bundleWindowsRuntime) link.'getStripNativeCommands$compose'().set(false)
+}
+
+tasks.matching { it.name == 'prepareAppResources' }.configureEach {
+    if (bundleWindowsRuntime) dependsOn prepareWindowsResources
+}
+
+def bridgePath = providers.gradleProperty('desktopBridgeExecutable').getOrNull()
+def desktopDataDirectory = providers.gradleProperty('desktopDataDirectory').getOrNull()
+def desktopImportJar = providers.gradleProperty('desktopImportJar').getOrNull()
+def developerClasspath = sourceSets.main.runtimeClasspath + compatibilityFiles
+def desktopArguments = []
+if (desktopDataDirectory != null) desktopArguments.addAll(['--data-dir', desktopDataDirectory])
+if (desktopImportJar != null) desktopArguments.addAll(['--import', desktopImportJar])
+tasks.withType(JavaExec).configureEach {
+    if (name == 'run') {
+        dependsOn ':mihon-desktop-compat:verifyMihonCompatibility'
+        // Compose sets run classpath/args late. Apply developer-only inputs after that configuration.
+        doFirst { launch ->
+            launch.classpath = developerClasspath
+            if (bridgePath != null) launch.systemProperty 'kototoro.compat.bridge.exe', bridgePath
+            if (libmpvDirectory != null) launch.systemProperty 'kototoro.libmpv.dir', libmpvDirectory
+            if (!desktopArguments.isEmpty()) launch.setArgs(desktopArguments)
+        }
+    }
+}
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    javaLauncher = desktopLauncher
+    systemProperty 'kototoro.desktop.test.classpath', (sourceSets.test.runtimeClasspath + compatibilityFiles).asPath
+    systemProperty 'kototoro.desktop.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/offline-desktop-fixture.jar').get().asFile
+    systemProperty 'kototoro.desktop.challenge.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/interactive-desktop-fixture.jar').get().asFile
+    systemProperty 'kototoro.desktop.reader.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/reader-desktop-fixture.jar').get().asFile
+    systemProperty 'kototoro.desktop.cover.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/cover-desktop-fixture.jar').get().asFile
+    systemProperty 'kototoro.desktop.filter.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/filter-desktop-fixture.jar').get().asFile
+    systemProperty 'kototoro.desktop.bridge.exe', project(':mihon-desktop-compat').layout.buildDirectory.file('bridge/kototoro-webview-bridge.exe').get().asFile
+    // kototoro / kotatsu / Tsuki plugin fixtures: real bytecode built by :parser-host against the shared ABI.
+    systemProperty 'kototoro.desktop.anime.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/anime-desktop-fixture.jar').get().asFile
+    systemProperty 'kototoro.desktop.parser.fixtures', project(':parser-host').layout.buildDirectory.dir('fixtures').get().asFile
+    // Opt-in: real extension APKs (novelfull.apk, ...) for the live smoke tests.
+    providers.gradleProperty('realApkDirectory').orNull?.with { systemProperty 'kototoro.dex.real.apks', it }
+    providers.gradleProperty('realNovelApk').orNull?.with { systemProperty 'kototoro.real.novel', it }
+    providers.gradleProperty('realAnimeApk').orNull?.with { systemProperty 'kototoro.real.anime', it }
+    providers.gradleProperty('realDirect').orNull?.with { systemProperty 'kototoro.real.direct', it }
+    providers.gradleProperty('mpvOptions').orNull?.with { systemProperty 'kototoro.real.mpvoptions', it }
+    providers.gradleProperty('ncnnDirectory').orNull?.with { systemProperty 'kototoro.ncnn.dir', it }
+    if (libmpvDirectory != null) systemProperty 'kototoro.libmpv.dir', libmpvDirectory
+    dependsOn ':parser-host:fixtureKototoroJar', ':parser-host:fixtureKotatsuJar', ':parser-host:fixtureTsukiJar'
+    inputs.file(project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/offline-desktop-fixture.jar'))
+    inputs.file(project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/interactive-desktop-fixture.jar'))
+    inputs.file(project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/reader-desktop-fixture.jar'))
+    inputs.file(project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/cover-desktop-fixture.jar'))
+    inputs.file(project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/filter-desktop-fixture.jar'))
+    inputs.files(project(':mihon-desktop-compat').layout.buildDirectory.file('bridge/kototoro-webview-bridge.exe'))
+    // Bridge is optional for app tests, but never read it while a combined compat run is rebuilding it.
+    mustRunAfter ':mihon-desktop-compat:compileWebViewBridge'
+    dependsOn ':mihon-desktop-compat:offlineFixtureJar', ':mihon-desktop-compat:verifyMihonCompatibility'
+    dependsOn ':mihon-desktop-compat:challengeFixtureJar'
+    dependsOn ':mihon-desktop-compat:readerFixtureJar'
+    dependsOn ':mihon-desktop-compat:coverFixtureJar'
+    dependsOn ':mihon-desktop-compat:filterFixtureJar'
+    dependsOn ':mihon-desktop-compat:animeFixtureJar'
+}
+
+tasks.named('test') { exclude '**/DesktopDistributionTest.class' }
+if (bundleWindowsRuntime) {
+    tasks.withType(org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask).matching {
+        it.name == 'packageMsi'
+    }.configureEach {
+        // Package the tested image directly: separate Skiko preprocessing creates different JAR names/bytes.
+        appImage.set(layout.buildDirectory.dir('compose/binaries/main/app/Kototoro'))
+        dependsOn 'windowsDistributionTest'
+    }
+    tasks.register('windowsMsiContentsCheck', Exec) {
+        dependsOn 'packageMsi', 'createDistributable'
+        inputs.file('inspect-windows-msi.ps1')
+        inputs.file(layout.buildDirectory.file('compose/binaries/main/msi/Kototoro-0.1.0.msi'))
+        inputs.dir(layout.buildDirectory.dir('compose/binaries/main/app/Kototoro'))
+        commandLine 'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+            '-File', file('inspect-windows-msi.ps1').absolutePath,
+            '-MsiPath', layout.buildDirectory.file('compose/binaries/main/msi/Kototoro-0.1.0.msi').get().asFile.absolutePath,
+            '-ImageDirectory', layout.buildDirectory.dir('compose/binaries/main/app/Kototoro').get().asFile.absolutePath,
+            '-WixDirectory', rootProject.layout.buildDirectory.dir('wix311').get().asFile.absolutePath,
+            '-OutputDirectory', layout.buildDirectory.dir('reports/windows-msi').get().asFile.absolutePath
+    }
+    tasks.register('windowsPortableZip', Zip) {
+        dependsOn 'windowsDistributionTest'
+        from(layout.buildDirectory.dir('compose/binaries/main/app/Kototoro')) { into 'Kototoro' }
+        destinationDirectory = layout.buildDirectory.dir('compose/binaries/main/portable')
+        archiveFileName = 'Kototoro-Windows-local-preview-0.1.0.zip'
+    }
+    tasks.register('windowsDistributionTest', Test) {
+        def distributionTempDirectory = layout.buildDirectory.dir('tmp/windowsDistributionTest').get().asFile
+        systemProperty 'java.io.tmpdir', distributionTempDirectory.absolutePath
+        doFirst { distributionTempDirectory.mkdirs() }
+        dependsOn tasks.named('createDistributable'), tasks.named('testClasses')
+        inputs.dir(layout.buildDirectory.dir('compose/binaries/main/app/Kototoro'))
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+        include '**/DesktopDistributionTest.class'
+        systemProperty 'kototoro.desktop.distribution', layout.buildDirectory.dir('compose/binaries/main/app/Kototoro').get().asFile
+        systemProperty 'kototoro.desktop.probe.classes', sourceSets.test.output.classesDirs.asPath
+    }
+}

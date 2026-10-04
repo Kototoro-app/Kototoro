@@ -42,6 +42,7 @@ import org.skepsun.kototoro.history.domain.HistoryListQuickFilter
 import org.skepsun.kototoro.history.domain.MarkAsReadUseCase
 import org.skepsun.kototoro.history.domain.model.ContentWithHistory
 import org.skepsun.kototoro.list.domain.ListFilterOption
+import org.skepsun.kototoro.list.domain.toCriteria
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.list.domain.ContentListMapper
 import org.skepsun.kototoro.list.domain.QuickFilterListener
@@ -265,7 +266,7 @@ class HistoryListViewModel @Inject constructor(
                 org.skepsun.kototoro.history.domain.library.HistoryLibraryDeriver.Input(
                     snapshot = snapshot,
                     order = params.order,
-                    filters = params.effectiveFilters,
+                    filters = params.effectiveFilters.toCriteria(),
                     excludedNsfw = settings.isHistoryExcludeNsfw || params.effectiveFilters != params.filters,
                     groupTab = params.groupTab,
                     sourceTags = params.sourceTags,

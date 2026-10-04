@@ -1,0 +1,42 @@
+// Shared HTTP protocols; clients and authorization are assembled by the consuming platform.
+plugins {
+	id 'org.jetbrains.kotlin.multiplatform'
+	id 'com.android.kotlin.multiplatform.library'
+	id 'org.jetbrains.kotlin.plugin.serialization'
+}
+
+kotlin {
+	androidLibrary {
+		namespace = 'org.skepsun.kototoro.core.net'
+		compileSdk = 37
+		minSdk = 26
+	}
+	jvm {
+		compilerOptions {
+			jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+		}
+	}
+	iosArm64()
+	iosSimulatorArm64()
+
+	sourceSets {
+		getByName('commonMain') {
+			dependencies {
+				api libs.ktor.client.core
+				implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
+			}
+		}
+		getByName('jvmTest') {
+			dependencies {
+				implementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+				runtimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
+				implementation libs.ktor.client.mock
+				implementation libs.kotlinx.coroutines.test
+			}
+		}
+	}
+}
+
+tasks.withType(Test).configureEach {
+	useJUnitPlatform()
+}

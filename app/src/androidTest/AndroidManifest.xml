@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <application>
+        <!-- ProviderTestRule uses the platform mocks, which are an optional library since API 28. -->
+        <uses-library android:name="android.test.mock" android:required="true" />
         <!-- The Hilt test application does not provide the production WorkManager configuration. -->
         <service
             android:name="androidx.work.impl.background.systemjob.SystemJobService"

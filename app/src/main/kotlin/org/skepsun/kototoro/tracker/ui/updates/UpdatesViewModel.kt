@@ -31,6 +31,7 @@ import org.skepsun.kototoro.core.util.ext.calculateDateGroup
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.list.domain.ListFilterOption
+import org.skepsun.kototoro.list.domain.toCriteria
 import org.skepsun.kototoro.list.domain.QuickFilterListener
 import org.skepsun.kototoro.list.ui.ContentListViewModel
 import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
@@ -123,7 +124,7 @@ class UpdatesViewModel @Inject constructor(
         org.skepsun.kototoro.tracker.domain.updates.UpdatesDeriver.derive(
             org.skepsun.kototoro.tracker.domain.updates.UpdatesDeriver.Input(
                 snapshot = values[0] as org.skepsun.kototoro.tracker.domain.updates.UpdatesSnapshot,
-                filters = values[1] as Set<ListFilterOption>,
+                filters = (values[1] as Set<ListFilterOption>).toCriteria(),
                 groupTab = values[2] as BrowseGroupTab,
                 sourceTags = values[3] as Set<SourceTag>,
                 excludedNsfw = values[4] as Boolean,

@@ -203,7 +203,7 @@ class ReaderCoreIsolationGuardTest {
         var dir: Path? = Path.of(System.getProperty("user.dir")).toAbsolutePath()
         var hops = 0
         while (dir != null && hops < 5) {
-            val candidate = dir.resolve("reader-core/src/commonMain/kotlin/org/skepsun/kototoro/reader/core")
+            val candidate = dir.resolve("reader-core/src/commonMain/kotlin/org/skepsun/kototoro/reader")
             if (Files.isDirectory(candidate)) return candidate
             dir = dir.parent
             hops++

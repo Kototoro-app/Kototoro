@@ -54,7 +54,7 @@ class FavouriteLibraryUiStateTest {
         publicationState = null,
         isNsfw = false,
         rating = -1f,
-        readingStatus = org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus.PLANNED,
+        readingStatus = org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus.PLANNED.name,
         newChapters = newChapters,
         lastChapterDate = 0L,
         progressPercent = null,
@@ -84,6 +84,43 @@ class FavouriteLibraryUiStateTest {
             ),
             quickFilterMetadata = FavouriteQuickFilterMetadata.Empty,
         )
+    }
+
+    @Test
+    fun `reading status UI option matches the persisted shared snapshot name`() {
+        val status = org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus.ON_HOLD
+        val snapshot = snapshotOf(row(1).copy(readingStatus = status.name), row(2))
+        val state = buildFavouriteLibraryUiState(
+            snapshot,
+            FavouriteLibraryParams(filters = setOf(ListFilterOption.ReadingStatus(status))),
+            spacePolicy,
+        )
+        assertEquals(listOf(1L), state.visibleIdsByCategory[-1L])
+        assertEquals(snapshot.rowsByEntityId, state.rowsByEntityId)
+    }
+
+    @Test
+    fun `taxonomy and raw blacklist selections pass through the platform matcher`() {
+        val snapshot = snapshotOf(
+            row(1).copy(displayTags = listOf(
+                org.skepsun.kototoro.favourites.domain.library.FavouriteCardTag(1, "异世界"),
+            )),
+            row(2).copy(displayTags = listOf(
+                org.skepsun.kototoro.favourites.domain.library.FavouriteCardTag(2, "Custom Trope"),
+            )),
+            row(3),
+        )
+        val state = buildFavouriteLibraryUiState(
+            snapshot,
+            FavouriteLibraryParams(blacklist = listOf(
+                "setting.other-world",
+                org.skepsun.kototoro.core.model.GlobalTagBlacklist.rawTagKey("custom trope"),
+            )),
+            spacePolicy,
+        )
+        assertEquals(listOf(3L), state.visibleIdsByCategory[-1L])
+        assertEquals(1, state.totalCount)
+        assertEquals(snapshot.rowsByEntityId, state.rowsByEntityId)
     }
 
     @Test

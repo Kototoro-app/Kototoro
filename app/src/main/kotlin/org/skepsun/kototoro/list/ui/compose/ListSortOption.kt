@@ -3,6 +3,7 @@ package org.skepsun.kototoro.list.ui.compose
 import androidx.annotation.StringRes
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.list.domain.ListSortOrder
+import org.skepsun.kototoro.list.domain.titleResId
 
 /** Presentation-only grouping; stored sort orders and their comparator semantics stay intact. */
 internal data class ListSortOption(

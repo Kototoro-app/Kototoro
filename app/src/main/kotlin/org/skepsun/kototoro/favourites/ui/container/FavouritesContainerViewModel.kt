@@ -380,8 +380,7 @@ class FavouritesContainerViewModel @Inject constructor(
             when {
                 row == null -> setOf(entityId)
                 row.localMangaIds.isNotEmpty() -> row.localMangaIds
-                row.displayMangaId != null -> setOf(row.displayMangaId)
-                else -> setOf(entityId)
+                else -> setOf(row.displayMangaId ?: entityId)
             }
         }
     }

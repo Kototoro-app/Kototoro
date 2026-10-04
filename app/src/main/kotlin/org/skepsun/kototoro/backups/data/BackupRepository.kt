@@ -33,6 +33,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.data.model.BackupIndex
+import org.skepsun.kototoro.backups.data.model.forKotatsuCompatibility
 import org.skepsun.kototoro.backups.data.model.BookmarkBackup
 import org.skepsun.kototoro.backups.data.model.CategoryBackup
 import org.skepsun.kototoro.backups.data.model.ContentBackup
@@ -51,6 +52,7 @@ import org.skepsun.kototoro.backups.data.model.WorkHistoryBackup
 import org.skepsun.kototoro.backups.data.model.WorkStatisticBackup
 import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
 import org.skepsun.kototoro.backups.domain.BackupSection
+import org.skepsun.kototoro.backups.domain.of
 import org.skepsun.kototoro.backups.domain.SourceOriginMaterializer
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.ExternalExtensionRepoEntity

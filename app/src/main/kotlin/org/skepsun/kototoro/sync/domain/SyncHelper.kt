@@ -17,7 +17,6 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.flow.toList
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -34,8 +33,6 @@ import org.skepsun.kototoro.core.db.TABLE_HISTORY
 import org.skepsun.kototoro.core.db.TABLE_MANGA
 import org.skepsun.kototoro.core.db.TABLE_MANGA_TAGS
 import org.skepsun.kototoro.core.db.TABLE_TAGS
-import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
-import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.network.BaseHttpClient
 import org.skepsun.kototoro.core.util.ext.buildContentValues
@@ -333,7 +330,7 @@ class SyncHelper @AssistedInject constructor(
         val deletedAt = System.currentTimeMillis() - defaultGcPeriod
         val selection = "deleted_at != 0 AND deleted_at < ?"
         val args = arrayOf(deletedAt.toString())
-        provider.delete(uri(authorityFavourites, TABLE_WORK_FAVOURITES), selection, args)
+        provider.delete(uri(authorityFavourites, TABLE_FAVOURITES), selection, args)
         provider.delete(uri(authorityFavourites, TABLE_FAVOURITE_CATEGORIES), selection, args)
     }
 
@@ -341,7 +338,7 @@ class SyncHelper @AssistedInject constructor(
         val deletedAt = System.currentTimeMillis() - defaultGcPeriod
         val selection = "deleted_at != 0 AND deleted_at < ?"
         val args = arrayOf(deletedAt.toString())
-        provider.delete(uri(authorityHistory, TABLE_WORK_HISTORY), selection, args)
+        provider.delete(uri(authorityHistory, TABLE_HISTORY), selection, args)
     }
 
     private fun ContentProviderClient.query(authority: String, table: String): Cursor {

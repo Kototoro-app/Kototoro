@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.list.domain.ListSortOrder
+import org.skepsun.kototoro.list.domain.titleResId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

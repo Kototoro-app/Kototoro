@@ -42,6 +42,7 @@ import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.favourites.domain.GlobalFavoritesState
 import org.skepsun.kototoro.list.domain.ListFilterOption
+import org.skepsun.kototoro.list.domain.toCriteria
 import org.skepsun.kototoro.list.domain.ContentListMapper
 import org.skepsun.kototoro.list.domain.QuickFilterListener
 import org.skepsun.kototoro.list.ui.model.EmptyState
@@ -370,7 +371,7 @@ class FeedViewModel @Inject constructor(
                 snapshot = snapshot,
                 showAllUpdates = showAll,
                 feedLimit = limit,
-                filters = filters,
+                filters = filters.toCriteria(),
                 excludedNsfw = skipNsfw,
                 tagBlacklist = tagBlacklist,
                 groupTab = scope.groupTab,

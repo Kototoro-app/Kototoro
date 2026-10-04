@@ -226,6 +226,9 @@ jsonpath = { module = "com.jayway.jsonpath:json-path", version.ref = "jsonpath" 
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commonsCompress" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 ktor-http = { module = "io.ktor:ktor-http", version.ref = "ktor" }
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
+ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 rhino = { module = "org.mozilla:rhino", version.ref = "rhino" }
 libarchive = { module = "me.zhanghai.android.libarchive:library", version.ref = "libarchive" }
 quickjsAndroid = { module = "com.github.seven332:quickjs-android", version.ref = "quickjsAndroid" }

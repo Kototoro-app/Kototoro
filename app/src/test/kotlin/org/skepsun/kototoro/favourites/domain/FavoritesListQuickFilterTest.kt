@@ -54,7 +54,7 @@ class FavoritesListQuickFilterTest {
         publicationState = null,
         isNsfw = false,
         rating = -1f,
-        readingStatus = ScrobblingStatus.PLANNED,
+        readingStatus = ScrobblingStatus.PLANNED.name,
         newChapters = 0,
         lastChapterDate = 0L,
         progressPercent = null,

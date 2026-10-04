@@ -27,6 +27,7 @@ import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.ui.util.ReversibleHandle
 import org.skepsun.kototoro.core.model.toContentSources
 import org.skepsun.kototoro.history.domain.model.ContentWithHistory
+import org.skepsun.kototoro.history.domain.recoverHistoryChapterId
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.parsers.model.Content
@@ -259,12 +260,11 @@ class HistoryRepository @Inject constructor(
 
     suspend fun getProgress(mangaId: Long, mode: ProgressIndicatorMode): ReadingProgress? {
         val entity = db.getHistoryDao().find(mangaId)?.takeIf { it.deletedAt == 0L } ?: return null
-        val fixedPercent = if (ReadingProgress.isCompleted(entity.percent)) 1f else entity.percent
-        return ReadingProgress(
-            percent = fixedPercent,
+        return ReadingProgress.fromHistory(
+            percent = entity.percent,
             totalChapters = entity.chaptersCount,
             mode = mode,
-        ).takeIf { it.isValid() }
+        )
     }
 
     suspend fun getProgress(mangaIds: Collection<Long>, mode: ProgressIndicatorMode): Map<Long, ReadingProgress> {
@@ -275,12 +275,11 @@ class HistoryRepository @Inject constructor(
         return buildMap {
             distinctMangaIds.forEach { mangaId ->
                 val history = historyByMangaId[mangaId] ?: return@forEach
-                val fixedPercent = if (ReadingProgress.isCompleted(history.percent)) 1f else history.percent
-                val progress = ReadingProgress(
-                    percent = fixedPercent,
+                val progress = ReadingProgress.fromHistory(
+                    percent = history.percent,
                     totalChapters = history.chaptersCount,
                     mode = mode,
-                ).takeIf { it.isValid() } ?: return@forEach
+                ) ?: return@forEach
                 put(mangaId, progress)
             }
         }
@@ -466,18 +465,13 @@ class HistoryRepository @Inject constructor(
     }
 
     private suspend fun HistoryEntity.recoverIfNeeded(manga: Content): HistoryEntity {
-        val chapters = manga.chapters
-        if (manga.isLocal || chapters.isNullOrEmpty() || chapters.findById(chapterId) != null) {
-            return this
-        }
-
-        if (parentChapterId != null && parentChapterId != chapterId) {
-            return this
-        }
-
-        val newChapterId = chapters.getOrNull(
-            (chapters.size * percent).toInt(),
-        )?.id ?: return this
+        val newChapterId = recoverHistoryChapterId(
+            isLocal = manga.isLocal,
+            chapterId = chapterId,
+            parentChapterId = parentChapterId,
+            percent = percent,
+            chapterIds = manga.chapters?.map { it.id },
+        ) ?: return this
         val newEntity = copy(chapterId = newChapterId)
         db.getHistoryDao().update(newEntity)
         return newEntity

@@ -21,14 +21,14 @@ abstract class SyncProvider : ContentProvider() {
     private val entryPoint by lazy {
         EntryPointAccessors.fromApplication(checkNotNull(context), SyncProviderEntryPoint::class.java)
     }
-    private val database by lazy { entryPoint.database }
+    protected open val database: MangaDatabase by lazy { entryPoint.database }
 
     private val supportedTables = setOf(
-        TABLE_WORK_FAVOURITES,
+        TABLE_FAVOURITES,
         TABLE_MANGA,
         TABLE_TAGS,
         TABLE_FAVOURITE_CATEGORIES,
-        TABLE_WORK_HISTORY,
+        TABLE_HISTORY,
         TABLE_MANGA_TAGS,
     )
 
@@ -105,9 +105,9 @@ abstract class SyncProvider : ContentProvider() {
             TABLE_TAGS -> listOf("tag_id")
             TABLE_MANGA_TAGS -> listOf("tag_id", "manga_id")
             TABLE_MANGA -> listOf("manga_id")
-            TABLE_WORK_FAVOURITES -> listOf("entity_id", "category_id")
+            TABLE_FAVOURITES -> listOf("manga_id", "category_id")
             TABLE_FAVOURITE_CATEGORIES -> listOf("category_id")
-            TABLE_WORK_HISTORY -> listOf("entity_id")
+            TABLE_HISTORY -> listOf("manga_id")
             else -> throw IllegalArgumentException("Update for $table is not supported")
         }
         val whereClause = keys.joinToString(" AND ") { "`$it` = ?" }

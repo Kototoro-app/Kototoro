@@ -4,10 +4,10 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentState
 
 /**
- * Data-only filter conditions understood by the SQL query builders in this module.
+ * Data-only filter conditions understood by the SQL query builders and shared list derivers.
  *
  * It mirrors the app's UI-flavoured `ListFilterOption` (which also carries resource ids, icons and display
- * names); the app maps its options to criteria at the repository boundary, so the database layer does not
+ * names); the app maps its options to criteria at the repository/derivation boundary, so shared code does not
  * depend on any UI type.
  */
 sealed interface ListFilterCriteria {
@@ -28,7 +28,8 @@ sealed interface ListFilterCriteria {
         override val groupKey: String get() = "_branch"
     }
 
-    data class Tag(val tagId: Long) : ListFilterCriteria {
+    /** SQL uses [tagId]; history snapshots preserve their legacy title + key matching. */
+    data class Tag(val tagId: Long, val title: String? = null, val key: String? = null) : ListFilterCriteria {
         override val groupKey: String get() = "_tag"
     }
 
