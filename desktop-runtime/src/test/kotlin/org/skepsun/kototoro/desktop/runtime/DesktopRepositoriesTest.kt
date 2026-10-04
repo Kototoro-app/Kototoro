@@ -110,6 +110,30 @@ class DesktopRepositoriesTest {
             }
         }
     }
+
+    @Test
+    fun `a legacy jar row without declared sources installs through the parser plugin pipeline`() = runBlocking<Unit> {
+        val legacy = """[{"name":"Kototoro Parsers","pkg":"org.skepsun.kototoro.parsers",
+          "version":"1.0.134","code":134,"apk":"plugin.jar","lang":"all","nsfw":0}]"""
+        serve(mapOf(
+            "/index.min.json" to legacy.toByteArray(),
+            "/apk/plugin.jar" to parserJar(),
+        )).use { server ->
+            withRepositories { repos ->
+                val catalog = repos.fetch(server.url + "/index.min.json")
+                val extension = catalog.extensions.single()
+                assertTrue(catalog.isParserPlugin(extension))
+                assertEquals(server.url + "/apk/plugin.jar", extension.resources.apkUrl)
+                assertThrows(IllegalArgumentException::class.java) {
+                    runBlocking { repos.download(catalog, extension) }
+                }
+                val managed = repos.downloadParserPlugin(catalog, extension)
+                assertEquals("org.skepsun.kototoro.parsers", managed.id)
+                assertEquals(DesktopExtensionKind.PARSER, DesktopExtensionFiles.kind(managed.path))
+            }
+        }
+    }
+
     @Test
     fun `root falls back to modern JSON and preserves quoted long ids`() = runBlocking<Unit> {
         val json = """{"name":"JSON仓库","badgeLabel":"FIX","signingKey":"key","contact":{"website":"https://fixture.invalid"},
@@ -220,6 +244,14 @@ class DesktopRepositoriesTest {
               <meta-data android:name="tachiyomi.extension.nsfw" android:value="0"/>
               </application></manifest>""".toByteArray()); jar.closeEntry()
             jar.putNextEntry(JarEntry("${pkg.replace('.', '/')}/Source.class"))
+            jar.write(byteArrayOf(0xca.toByte(), 0xfe.toByte(), 0xba.toByte(), 0xbe.toByte(), 0, 0, 0, 52))
+            jar.closeEntry()
+        }
+    }.toByteArray()
+
+    private fun parserJar(): ByteArray = ByteArrayOutputStream().also { output ->
+        JarOutputStream(output).use { jar ->
+            jar.putNextEntry(JarEntry("org/skepsun/kototoro/parsers/ContentParserFactoryKt.class"))
             jar.write(byteArrayOf(0xca.toByte(), 0xfe.toByte(), 0xba.toByte(), 0xbe.toByte(), 0, 0, 0, 52))
             jar.closeEntry()
         }

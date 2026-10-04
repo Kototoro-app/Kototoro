@@ -22,7 +22,14 @@ import java.nio.file.Path
 @Serializable
 data class DesktopRepository(val indexUrl: String, val name: String, val signingKey: String)
 
-data class DesktopRepositoryCatalog(val repository: DesktopRepository, val extensions: List<ExtensionStoreIndex.Extension>)
+data class DesktopRepositoryCatalog(
+    val repository: DesktopRepository,
+    val extensions: List<ExtensionStoreIndex.Extension>,
+    private val parserPluginPackages: Set<String> = emptySet(),
+) {
+    fun isParserPlugin(extension: ExtensionStoreIndex.Extension): Boolean =
+        extension.packageName in parserPluginPackages
+}
 data class DesktopManagedJar(val path: Path, val identity: MihonJarIdentity)
 
 /** Repository metadata and immutable app-owned artifacts; construction/execution remains in source-host. */
@@ -86,6 +93,9 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
             listActual to decodeExtensionStoreList(data, target.path.endsWith(".pb", ignoreCase = true)).extensions
         }
         require(rows.size <= 20_000 && rows.map { it.packageName }.distinct().size == rows.size) { "仓库扩展列表无效" }
+        val parserPluginPackages = if (legacy) rows.filter(::isLegacyParserPlugin).mapTo(linkedSetOf()) {
+            it.packageName
+        } else emptySet()
         val extensions = rows.map { row ->
             require(row.packageName.matches(Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+")) && row.versionCode > 0) {
                 "仓库扩展身份无效"
@@ -99,7 +109,7 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
         val updated = repositories.filterNot { it.indexUrl == repository.indexUrl } + repository
         persistRepositoryPreference(preferences, "repositories", SourcePreferenceValue.Text(SourceProtocolJson.encodeToString(updated)))
         repositories = updated
-        return DesktopRepositoryCatalog(repository, extensions)
+        return DesktopRepositoryCatalog(repository, extensions, parserPluginPackages)
     }
 
     /** The legacy array has no header: name it after where it lives (owner/repository on GitHub-style hosts). */
@@ -118,11 +128,25 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
 
     suspend fun download(catalog: DesktopRepositoryCatalog, extension: ExtensionStoreIndex.Extension): DesktopManagedJar {
         require(catalog.repository in repositories && extension in catalog.extensions) { "请先刷新仓库列表" }
+        require(!catalog.isParserPlugin(extension)) { "解析器插件必须使用解析器安装流程" }
         // Prefer the repository's own JVM jar; an APK-only entry is downloaded and converted locally.
         val address = extension.resources.jarUrl.ifBlank { extension.resources.apkUrl }
         require(address.isNotBlank()) { "此扩展没有可下载的安装包" }
         return http.read(repositoryUri(address), JAR_LIMIT) { _, input ->
             stage(input, extension)
+        }
+    }
+
+    suspend fun downloadParserPlugin(
+        catalog: DesktopRepositoryCatalog,
+        extension: ExtensionStoreIndex.Extension,
+    ): DesktopManagedParserPlugin {
+        require(catalog.repository in repositories && extension in catalog.extensions) { "请先刷新仓库列表" }
+        require(catalog.isParserPlugin(extension)) { "仓库项目不是解析器插件" }
+        val address = extension.resources.jarUrl.ifBlank { extension.resources.apkUrl }
+        require(address.isNotBlank()) { "此解析器插件没有可下载的安装包" }
+        return http.read(repositoryUri(address), JAR_LIMIT) { _, input ->
+            stageParserPlugin(input, extension.packageName)
         }
     }
 
@@ -137,29 +161,33 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
      */
     suspend fun importParserPlugin(path: Path): DesktopManagedParserPlugin = withContext(Dispatchers.IO) {
         Files.newInputStream(path).use { input ->
-            staged(input) { temporary ->
-                var conversion: DexConversionReport? = null
-                val converted = Files.createTempFile(artifacts, ".converted-", ".tmp")
-                try {
-                    val ready = try {
-                        parserInspector.inspect(temporary)
-                        temporary
-                    } catch (error: ParserPluginException) {
-                        if (error.failure != ParserPluginFailure.DEX_ONLY) throw error
-                        conversion = try { DexJarConverter.convert(temporary, converted) } catch (failure: DexConversionException) {
-                            throw IOException("无法把 Android DEX 插件转换为 JVM 类文件：${failure.failure}", failure)
-                        }
-                        converted
-                    }
-                    val metadata = parserInspector.inspect(ready)
-                    val target = publish(ready, metadata.sha256)
-                    parserInspector.verify(parserInspector.inspect(target), metadata.sha256)
-                    DesktopManagedParserPlugin(target, DesktopExtensionFiles.parserPluginId(path.fileName.toString()),
-                        metadata.sha256, conversion)
-                } finally { Files.deleteIfExists(converted) }
-            }
+            stageParserPlugin(input, DesktopExtensionFiles.parserPluginId(path.fileName.toString()))
         }
     }
+
+    private suspend fun stageParserPlugin(input: InputStream, id: String): DesktopManagedParserPlugin =
+        staged(input) { temporary ->
+            var conversion: DexConversionReport? = null
+            val converted = Files.createTempFile(artifacts, ".converted-", ".tmp")
+            try {
+                val ready = try {
+                    parserInspector.inspect(temporary)
+                    temporary
+                } catch (error: ParserPluginException) {
+                    if (error.failure != ParserPluginFailure.DEX_ONLY) throw error
+                    conversion = try {
+                        DexJarConverter.convert(temporary, converted)
+                    } catch (failure: DexConversionException) {
+                        throw IOException("无法把 Android DEX 插件转换为 JVM 类文件：${failure.failure}", failure)
+                    }
+                    converted
+                }
+                val metadata = parserInspector.inspect(ready)
+                val target = publish(ready, metadata.sha256)
+                parserInspector.verify(parserInspector.inspect(target), metadata.sha256)
+                DesktopManagedParserPlugin(target, id, metadata.sha256, conversion)
+            } finally { Files.deleteIfExists(converted) }
+        }
 
     /**
      * A Keiyoushi-style JAR, or an Android APK that is first converted to the same shape (class files and a text
@@ -241,6 +269,11 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
     override fun close() = http.close()
 
     companion object {
+        private fun isLegacyParserPlugin(extension: ExtensionStoreIndex.Extension): Boolean =
+            extension.sources.isEmpty() && extension.resources.jarUrl.isBlank() &&
+                runCatching { URI(extension.resources.apkUrl).path }.getOrNull()
+                    ?.endsWith(".jar", ignoreCase = true) == true
+
         private const val INDEX_LIMIT = 16L * 1024 * 1024
         private const val JAR_LIMIT = 64L * 1024 * 1024
     }

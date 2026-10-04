@@ -171,8 +171,14 @@ class DesktopSession private constructor(
         }
     }
 
-    internal suspend fun installExtension(catalog: DesktopRepositoryCatalog, extension: ExtensionStoreIndex.Extension) =
+    internal suspend fun installExtension(
+        catalog: DesktopRepositoryCatalog,
+        extension: ExtensionStoreIndex.Extension,
+    ): InstalledExtension = if (catalog.isParserPlugin(extension)) {
+        installParser(repositories.downloadParserPlugin(catalog, extension))
+    } else {
         installManaged(repositories.download(catalog, extension))
+    }
 
     private suspend fun installManaged(managed: DesktopManagedJar): InstalledExtension = withContext(Dispatchers.IO) {
         val context = currentCoroutineContext()
