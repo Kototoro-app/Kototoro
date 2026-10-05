@@ -18,11 +18,16 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: write
+    outputs:
+      built-sha: ${{ steps.checkout.outputs.commit }}
+      version-name: ${{ steps.version.outputs.version_name }}
     
     steps:
     - name: Checkout code
+      id: checkout
       uses: actions/checkout@v4
       with:
+        ref: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.tag || github.sha }}
         submodules: recursive
         fetch-depth: 0
     
@@ -75,7 +80,7 @@ jobs:
     
     - name: Build Release APK
       run: |
-        ./gradlew assembleRelease --no-daemon --stacktrace \
+        ./gradlew :app:assembleRelease --no-daemon --stacktrace \
           -PRELEASE_STORE_FILE=../release.keystore \
           -PRELEASE_STORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD || 'password' }}" \
           -PRELEASE_KEY_ALIAS="${{ secrets.KEY_ALIAS || 'release' }}" \
@@ -124,7 +129,7 @@ jobs:
         done
     
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ env.TAG_NAME }}
         files: |
@@ -134,3 +139,34 @@ jobs:
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  windows:
+    needs: build
+    permissions:
+      contents: read
+    uses: ./.github/workflows/windows-build.yml
+    with:
+      ref: ${{ needs.build.outputs.built-sha }}
+      channel: release
+      version-name: ${{ needs.build.outputs.version-name }}
+      compatibility-url: ${{ vars.WINDOWS_COMPATIBILITY_URL }}
+
+  publish-windows:
+    needs: [build, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.windows.outputs.artifact-name }}
+          path: release-windows
+      - name: Attach Windows packages to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG_NAME" >/dev/null
+          gh release upload "$TAG_NAME" release-windows/* --clobber

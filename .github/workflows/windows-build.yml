@@ -1,0 +1,147 @@
+name: Windows Package
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+      channel:
+        required: true
+        type: string
+      compatibility-url:
+        required: false
+        default: ''
+        type: string
+      version-name:
+        required: false
+        default: ''
+        type: string
+    outputs:
+      artifact-name:
+        value: ${{ jobs.build.outputs.artifact-name }}
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      artifact-name: kototoro-windows-${{ inputs.channel }}-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: recursive
+
+      - name: Set up compatibility bootstrap JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25.0.1'
+
+      - name: Set up packaging JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Prepare Android SDK platform
+        run: |
+          & "$env:ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" "platforms;android-37"
+          if ($LASTEXITCODE -ne 0) { throw 'Android SDK setup failed.' }
+
+      - name: Prepare pinned Windows build inputs
+        env:
+          COMPATIBILITY_URL: ${{ inputs.compatibility-url }}
+        run: |
+          if ($env:COMPATIBILITY_URL) {
+            & "./.github/scripts/prepare-windows-ci.ps1" -CompatibilityUrl "$env:COMPATIBILITY_URL"
+          } else {
+            & "./.github/scripts/prepare-windows-ci.ps1" -SourceJavaHome "$env:JAVA_HOME_25_X64"
+          }
+
+      - name: Ensure WebView2 Runtime
+        run: |
+          $runtimeRoots = @("${env:ProgramFiles(x86)}/Microsoft/EdgeWebView/Application", "$env:LOCALAPPDATA/Microsoft/EdgeWebView/Application")
+          $installed = @($runtimeRoots | Where-Object { Test-Path -LiteralPath "$_" } | ForEach-Object {
+            Get-ChildItem -LiteralPath "$_" -Filter 'msedgewebview2.exe' -Recurse
+          })
+          if ($installed.Count -eq 0) {
+            $installer = Join-Path "$env:RUNNER_TEMP" 'MicrosoftEdgeWebview2Setup.exe'
+            & curl.exe -fsSL --retry 3 --output "$installer" 'https://go.microsoft.com/fwlink/p/?LinkId=2124703'
+            if ($LASTEXITCODE -ne 0) { throw 'WebView2 Runtime download failed.' }
+            $process = Start-Process -FilePath "$installer" -ArgumentList '/silent', '/install' -Wait -PassThru -WindowStyle Hidden
+            if ($process.ExitCode -ne 0) { throw "WebView2 Runtime installation failed: $($process.ExitCode)" }
+          }
+
+      - name: Build and verify Windows package
+        id: package
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          VERSION_NAME: ${{ inputs.version-name }}
+        run: |
+          if ($env:CHANNEL -notin @('release', 'nightly')) { throw 'Unknown Windows channel.' }
+          $versionLines = & "./gradlew.bat" -q printVersionName --no-daemon --console=plain
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read application version.' }
+          $baseVersion = ($versionLines | Select-Object -Last 1).Trim()
+          if ($baseVersion -notmatch '^(\d+)\.(\d+)\.(\d+)(?:[.+-].*)?$') { throw 'Invalid Windows package version.' }
+          $packageVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3])"
+          $versionName = if ($env:VERSION_NAME) { $env:VERSION_NAME } else { $baseVersion }
+          if ($versionName -notmatch '^[A-Za-z0-9][A-Za-z0-9.+-]*$') { throw 'Invalid asset version.' }
+          $arguments = @('-PwithDesktopApp', '-PwithWindowsDistribution',
+            "-PmihonCompatibilityDirectory=$PWD/build/windows-ci-compatibility", '-PmihonCompatibilityJavaVersion=21',
+            "-PdesktopPackageVersion=$packageVersion", ":desktop-app:windowsPortableZip",
+            "-Dorg.gradle.java.installations.paths=$env:JAVA_HOME_21_X64,$env:JAVA_HOME",
+            '-Dorg.gradle.jvmargs=-Xmx3g', '-Pkotlin.daemon.jvmargs=-Xmx3g', '--max-workers=2',
+            '--no-configuration-cache', '--no-daemon', '--console=plain', '--stacktrace')
+          if ($env:CHANNEL -eq 'release') {
+            $wixBin = @("$env:WIX", "$env:WIX/bin") | Where-Object {
+              $_ -and (Test-Path -LiteralPath "$_/dark.exe")
+            } | Select-Object -First 1
+            if (!$wixBin) { throw 'WiX 3 build tools are missing.' }
+            $arguments += @("-PwindowsWixDirectory=$wixBin", ':desktop-app:windowsMsiContentsCheck')
+          }
+          & "./gradlew.bat" @arguments
+          if ($LASTEXITCODE -ne 0) { throw 'Windows packaging or distribution checks failed.' }
+          New-Item -ItemType Directory -Path 'release-windows' -Force | Out-Null
+          $assetStem = "Kototoro-$versionName-windows-x64-$env:CHANNEL"
+          Copy-Item -LiteralPath "desktop-app/build/compose/binaries/main/portable/Kototoro-Windows-local-preview-$packageVersion.zip" -Destination "release-windows/$assetStem.zip"
+          if ($env:CHANNEL -eq 'release') {
+            Copy-Item -LiteralPath "desktop-app/build/compose/binaries/main/msi/Kototoro-$packageVersion.msi" -Destination "release-windows/$assetStem.msi"
+          }
+          $checksums = Get-ChildItem -LiteralPath 'release-windows' -File | Sort-Object Name | ForEach-Object {
+            "$((Get-FileHash -LiteralPath "$($_.FullName)" -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)"
+          }
+          $checksums | Set-Content -LiteralPath "release-windows/$assetStem.sha256" -Encoding utf8
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: kototoro-windows-${{ inputs.channel }}-${{ github.run_id }}
+          path: release-windows/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload packaging diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-diagnostics-${{ inputs.channel }}-${{ github.run_id }}
+          path: |
+            desktop-app/build/reports/windows-distribution
+            desktop-app/build/reports/windows-msi
+            desktop-app/build/reports/tests/windowsDistributionTest
+          if-no-files-found: ignore

@@ -23,6 +23,10 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
+    outputs:
+      built-sha: ${{ steps.assets.outputs.built_sha }}
+      version-name: ${{ steps.assets.outputs.version_name }}
+      tag: ${{ steps.assets.outputs.tag }}
 
     steps:
       - name: Checkout ${{ env.BUILD_REF }}
@@ -125,3 +129,36 @@ jobs:
               --notes "$notes" \
               --prerelease
           fi
+
+  windows:
+    needs: build
+    permissions:
+      contents: read
+    uses: ./.github/workflows/windows-build.yml
+    with:
+      ref: ${{ needs.build.outputs.built-sha }}
+      channel: nightly
+      version-name: ${{ needs.build.outputs.version-name }}
+      compatibility-url: ${{ vars.WINDOWS_COMPATIBILITY_URL }}
+
+  publish-windows:
+    needs: [build, windows]
+    if: github.event_name != 'workflow_dispatch' || github.ref_name == 'devel'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.windows.outputs.artifact-name }}
+          path: release-windows
+      - name: Attach Windows package to Nightly Release
+        env:
+          GH_TOKEN: ${{ secrets.NIGHTLY_RELEASE_TOKEN }}
+          TAG_NAME: ${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          gh release view "$TAG_NAME" --repo "$NIGHTLY_REPOSITORY" >/dev/null
+          gh release upload "$TAG_NAME" release-windows/* --repo "$NIGHTLY_REPOSITORY" --clobber

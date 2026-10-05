@@ -155,6 +155,9 @@ dependencies.add(compatibilityFiles.name,
 def runtimeJavaVersion = providers.gradleProperty('mihonCompatibilityJavaVersion').map { it.toInteger() }.getOrElse(21)
 def desktopLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(runtimeJavaVersion) }
 def bundleWindowsRuntime = providers.gradleProperty('withWindowsDistribution').isPresent()
+def windowsPackageVersion = providers.gradleProperty('desktopPackageVersion').getOrElse('0.1.0')
+def windowsWixDirectory = providers.gradleProperty('windowsWixDirectory')
+    .getOrElse(rootProject.layout.buildDirectory.dir('wix311').get().asFile.absolutePath)
 // Optional: a directory holding libmpv-2.dll (run/tests); distributions bundle it either from here or from the pinned
 // release below. ncnnDirectory likewise supplies the two official ncnn-vulkan release zips.
 def libmpvDirectory = providers.gradleProperty('libmpvDirectory').getOrNull()
@@ -330,7 +333,7 @@ compose.desktop {
         }
         nativeDistributions {
             packageName = 'Kototoro'
-            packageVersion = '0.1.0'
+            packageVersion = windowsPackageVersion
             description = 'Kototoro Windows local preview'
             vendor = 'Kototoro'
             includeAllModules = true
@@ -438,20 +441,20 @@ if (bundleWindowsRuntime) {
     tasks.register('windowsMsiContentsCheck', Exec) {
         dependsOn 'packageMsi', 'createDistributable'
         inputs.file('inspect-windows-msi.ps1')
-        inputs.file(layout.buildDirectory.file('compose/binaries/main/msi/Kototoro-0.1.0.msi'))
+        inputs.file(layout.buildDirectory.file("compose/binaries/main/msi/Kototoro-${windowsPackageVersion}.msi"))
         inputs.dir(layout.buildDirectory.dir('compose/binaries/main/app/Kototoro'))
         commandLine 'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass',
             '-File', file('inspect-windows-msi.ps1').absolutePath,
-            '-MsiPath', layout.buildDirectory.file('compose/binaries/main/msi/Kototoro-0.1.0.msi').get().asFile.absolutePath,
+            '-MsiPath', layout.buildDirectory.file("compose/binaries/main/msi/Kototoro-${windowsPackageVersion}.msi").get().asFile.absolutePath,
             '-ImageDirectory', layout.buildDirectory.dir('compose/binaries/main/app/Kototoro').get().asFile.absolutePath,
-            '-WixDirectory', rootProject.layout.buildDirectory.dir('wix311').get().asFile.absolutePath,
+            '-WixDirectory', windowsWixDirectory,
             '-OutputDirectory', layout.buildDirectory.dir('reports/windows-msi').get().asFile.absolutePath
     }
     tasks.register('windowsPortableZip', Zip) {
         dependsOn 'windowsDistributionTest'
         from(layout.buildDirectory.dir('compose/binaries/main/app/Kototoro')) { into 'Kototoro' }
         destinationDirectory = layout.buildDirectory.dir('compose/binaries/main/portable')
-        archiveFileName = 'Kototoro-Windows-local-preview-0.1.0.zip'
+        archiveFileName = "Kototoro-Windows-local-preview-${windowsPackageVersion}.zip"
     }
     tasks.register('windowsDistributionTest', Test) {
         def distributionTempDirectory = layout.buildDirectory.dir('tmp/windowsDistributionTest').get().asFile

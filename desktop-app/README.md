@@ -257,6 +257,29 @@ JVM legal 目录保留；这些材料只证明输入身份，不替代 S3 组合
 与应用目录的 SHA 及安装/数据目录隔离。jpackage 的构建元数据替换为已校验的包名标记，其他应用
 文件要求完全一致。包装时使用 `--no-configuration-cache`；普通回归仍支持缓存。
 
+## GitHub Actions 打包
+
+`release.yml` 和 `nightly.yml` 复用 `windows-build.yml`，在 Android 构建/发布成功后对同一提交构建 Windows x64。
+Release 附加 MSI、便携 ZIP 和 SHA-256 文件；Nightly 附加 ZIP 和 SHA-256，手动运行其他分支时只保存 Actions artifact。
+Windows 构建或上传失败不会阻止已经独立完成的 Android APK 发布。
+
+默认不需要额外下载地址。`prepare-windows-ci.ps1` 使用 Suwayomi 提交
+`eb2dc0b19a9571b27c02bebc5c883e404b7bd7fb`，以及 TachiyomiAzIOS 提交
+`b86cead7dd1387b09c71e7f4b15c1e020463e422` 中固定 SHA-256 的补丁与 Gradle init script，
+通过 JDK 25.0.1 重建兼容运行时。构建时间固定为原始兼容产物的 `1790898154`，浅克隆保留原始 `r1`
+版本元数据；最终 29 个 JAR 必须全部匹配现有 `windows-runtime-pins.properties`，否则停止 Windows 打包。
+WebView2 SDK、播放器与超分组件继续使用各自固定版本和 SHA-256；分发包内置 JDK 21。
+
+仓库变量 `WINDOWS_COMPATIBILITY_URL` 可选：设置后改用 HTTPS ZIP，仍逐个核对相同的 29 个 JAR。
+本地可通过 `-CompatibilityArchive` 验证已有 ZIP，或运行源码准备：
+
+```powershell
+./.github/scripts/prepare-windows-ci.ps1 -SourceJavaHome "D:/Java/jdk-25"
+```
+
+CI 使用应用版本作为 MSI 的三段版本，可通过 `-PdesktopPackageVersion` 覆盖；本地默认仍为 `0.1.0`。
+`-PwindowsWixDirectory` 可指定 MSI 内容检查所用 WiX 3 的 `bin` 目录。
+
 ## 图书馆备份
 
 侧栏“备份与恢复”可导出收藏分类、收藏、阅读历史、书签、阅读统计、作品信息和来源排序，复用 core-backup 的
