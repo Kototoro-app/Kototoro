@@ -42,18 +42,24 @@ class AvifImageDecoder(
             // initial decode + memory for smooth playback and no main-thread CPU during
             // animation. Sample the frames to the requested size and a bounded working set.
             if (decoder.frameCount > 1) {
-                val animated = tryDecodeAllFrames(decoder, config)
-                if (animated != null) {
-                    return@runInterruptible DecodeResult(
+                when (val animated = tryDecodeAllFrames(decoder, config)) {
+                    is AnimatedDecode.Animated -> return@runInterruptible DecodeResult(
                         // shareable = false: the drawable owns native bitmaps that will
                         // be recycled via release(); it must not be served from Coil's
                         // memory cache to a second consumer after the first disposes it.
-                        image = animated.asImage(shareable = false),
-                        isSampled = animated.intrinsicWidth < decoder.width ||
-                            animated.intrinsicHeight < decoder.height,
+                        image = animated.drawable.asImage(shareable = false),
+                        isSampled = animated.drawable.intrinsicWidth < decoder.width ||
+                            animated.drawable.intrinsicHeight < decoder.height,
                     )
+
+                    is AnimatedDecode.FirstFrameOnly -> return@runInterruptible DecodeResult(
+                        image = animated.bitmap.asImage(),
+                        isSampled = animated.bitmap.width < decoder.width || animated.bitmap.height < decoder.height,
+                    )
+
+                    // Even one pixel per frame cannot fit — render only the first frame.
+                    null -> Unit
                 }
-                // Even one pixel per frame cannot fit — render only the first frame.
             }
             val bitmap = createBitmap(decoder.width, decoder.height, config)
             val result = decoder.nextFrame(bitmap)
@@ -91,10 +97,17 @@ class AvifImageDecoder(
         }
     }
 
+    private sealed interface AnimatedDecode {
+        class Animated(val drawable: AvifAnimatedDrawable) : AnimatedDecode
+
+        /** A later frame failed to decode; showing a still beats failing the whole page. */
+        class FirstFrameOnly(val bitmap: Bitmap) : AnimatedDecode
+    }
+
     private fun tryDecodeAllFrames(
         decoder: AvifDecoder,
         config: Bitmap.Config,
-    ): AvifAnimatedDrawable? {
+    ): AnimatedDecode? {
         val frameCount = decoder.frameCount
         val bytesPerPixel = if (config == Bitmap.Config.ARGB_8888) 4 else 2
         val (requestedWidth, requestedHeight) = DecodeUtils.computeDstSize(
@@ -127,6 +140,11 @@ class AvifImageDecoder(
                 frames.add(bitmap)
                 val result = decoder.nthFrame(i, bitmap)
                 if (result != 0) {
+                    if (i > 0) {
+                        val first = frames.first()
+                        frames.forEach { if (it !== first && !it.isRecycled) it.recycle() }
+                        return AnimatedDecode.FirstFrameOnly(first)
+                    }
                     throw ImageDecodeException(
                         uri = source.fileOrNull()?.toString(),
                         format = "avif",
@@ -139,7 +157,7 @@ class AvifImageDecoder(
             frames.forEach { if (!it.isRecycled) it.recycle() }
             throw e
         }
-        return AvifAnimatedDrawable(frames, durationsMs, repetitionCount)
+        return AnimatedDecode.Animated(AvifAnimatedDrawable(frames, durationsMs, repetitionCount))
     }
 
     private companion object {
@@ -170,16 +188,33 @@ class AvifImageDecoder(
             // instead of the platform decoder (which mis-renders AVIS on API 12).
             return try {
                 result.source.source().peek().use { peek ->
-                    if (!peek.request(12L)) return@use false
-                    val header = peek.readByteArray(minOf(32L, peek.buffer.size))
-                    header.size >= 12 &&
-                        header[4] == 'f'.code.toByte() && header[5] == 't'.code.toByte() &&
-                        header[6] == 'y'.code.toByte() && header[7] == 'p'.code.toByte() &&
-                        String(header, 8, 4).let { it == "avif" || it == "avis" }
+                    peek.request(FTYP_PROBE_BYTES)
+                    isAvifFileType(peek.readByteArray(minOf(FTYP_PROBE_BYTES, peek.buffer.size)))
                 }
             } catch (_: Exception) {
                 false
             }
         }
+    }
+}
+
+private const val FTYP_PROBE_BYTES = 64L
+
+/**
+ * Whether [header] starts with an ISO-BMFF `ftyp` box declaring AVIF.
+ *
+ * Many encoders write the generic `mif1`/`msf1` major brand and list `avif`/`avis` only among the
+ * compatible brands. Those files must still reach libavif: platform decoders before API 31 have no
+ * AVIF support and fail with "unimplemented".
+ */
+internal fun isAvifFileType(header: ByteArray): Boolean {
+    if (header.size < 12 || String(header, 4, 4, Charsets.US_ASCII) != "ftyp") return false
+    val boxSize = ((header[0].toInt() and 0xFF) shl 24) or ((header[1].toInt() and 0xFF) shl 16) or
+        ((header[2].toInt() and 0xFF) shl 8) or (header[3].toInt() and 0xFF)
+    val end = if (boxSize in 16..header.size) boxSize else header.size
+    // Major brand at 8, minor version at 12, compatible brands from 16 to the end of the box.
+    val brandOffsets = sequenceOf(8) + generateSequence(16) { it + 4 }.takeWhile { it + 4 <= end }
+    return brandOffsets.any { offset ->
+        String(header, offset, 4, Charsets.US_ASCII).let { it == "avif" || it == "avis" }
     }
 }
