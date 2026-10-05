@@ -147,7 +147,7 @@ class FavouritesCardMapperTest {
         assertEquals(4, model.counter)
         assertTrue(model.isPinned)
         assertTrue(model.isSaved)
-        assertTrue(model.isFavorite, "library membership must reach the configurable heart badge")
+        assertFalse(model.isFavorite, "the favourites page never shows the redundant heart badge")
         assertEquals(0.5f, model.progress?.percent)
         assertEquals("Alpha Alt", model.subtitle, "grid subtitle is the alt title, no source label")
         assertEquals("Alpha Work", model.title)
@@ -156,11 +156,10 @@ class FavouritesCardMapperTest {
     }
 
     @Test
-    fun `favorite badge follows the configured corners for library cards`() {
+    fun `favourites page cards never show the heart badge even when it is enabled`() {
         for (mode in listOf(ListMode.GRID, ListMode.COMPACT_GRID, ListMode.DETAILED_LIST)) {
             val model = buildFavouriteCardModel(request(mode = mode))
-            assertTrue(hasVisibleCardBadges(setOf("favorite"), model), "enabled heart badge in $mode")
-            assertFalse(hasVisibleCardBadges(emptySet(), model), "disabled heart badge in $mode")
+            assertFalse(hasVisibleCardBadges(setOf("favorite"), model), "heart badge in $mode")
         }
     }
 

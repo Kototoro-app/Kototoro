@@ -140,7 +140,8 @@ internal fun buildFavouriteCardModel(request: FavouriteCardModelRequest): Conten
             counter = counter,
             id = row.entityId,
             progress = progress,
-            isFavorite = true,
+            // Every card on this page is a favourite; the heart badge would carry no information.
+            isFavorite = false,
             isSaved = row.isDownloaded,
             isPinned = request.isPinned,
             metadataTrackingService = trackingService,
@@ -167,9 +168,9 @@ internal fun buildFavouriteCardModel(request: FavouriteCardModelRequest): Conten
             counter = counter,
             id = row.entityId,
             progress = progress,
-            isFavorite = true,
+            isFavorite = false,
             isSaved = row.isDownloaded,
-            tags = row.displayTags.map {
+            tags =row.displayTags.map {
                 ChipModel(
                     title = it.title,
                     tint = request.tagTint(it.title),

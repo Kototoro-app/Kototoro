@@ -106,7 +106,8 @@ internal fun buildHistoryCardModel(request: HistoryCardModelRequest): ContentLis
             counter = 0,
             id = row.uiId,
             progress = progress,
-            isFavorite = false,
+            // History mixes favourite and non-favourite works, so the heart badge is meaningful here.
+            isFavorite = row.isFavourite,
             isSaved = false,
             isPinned = row.isPinned,
             metadataTrackingService = trackingService,
@@ -133,9 +134,9 @@ internal fun buildHistoryCardModel(request: HistoryCardModelRequest): ContentLis
             counter = 0,
             id = row.uiId,
             progress = progress,
-            isFavorite = false,
+            isFavorite = row.isFavourite,
             isSaved = false,
-            tags = row.tags.map {
+            tags =row.tags.map {
                 ChipModel(
                     title = it.title,
                     tint = request.tagTint(it.title),

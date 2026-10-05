@@ -1,11 +1,13 @@
 package org.skepsun.kototoro.history.domain.library
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
+import org.skepsun.kototoro.list.ui.compose.hasVisibleCardBadges
 import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
 import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
@@ -25,6 +27,7 @@ class HistoryCardMapperTest {
         percent: Float = 0.42f,
         chaptersCount: Int = 120,
         isPinned: Boolean = false,
+        isFavourite: Boolean = false,
         title: String = "Alpha Work",
         altTitle: String? = "Alpha Alt",
         coverUrl: String? = "https://cover/1",
@@ -52,7 +55,7 @@ class HistoryCardMapperTest {
         chapterId = 5L,
         newChapters = 2,
         lastChapterDate = null,
-        isFavourite = false,
+        isFavourite = isFavourite,
         isPinned = isPinned,
         isDownloaded = false,
         categoryIds = emptySet(),
@@ -156,6 +159,20 @@ class HistoryCardMapperTest {
         assertEquals("Site title", model.override?.title)
         assertEquals("https://site/cover", model.override?.coverUrl)
         assertEquals(ScrobblerService.MAL, model.metadataTrackingService)
+    }
+
+    @Test
+    fun `favourite membership reaches the heart badge in card modes`() {
+        for (mode in listOf(ListMode.GRID, ListMode.COMPACT_GRID, ListMode.DETAILED_LIST)) {
+            assertTrue(
+                hasVisibleCardBadges(setOf("favorite"), buildHistoryCardModel(request(row(isFavourite = true), mode))),
+                "favourite row shows the heart in $mode",
+            )
+            assertFalse(
+                hasVisibleCardBadges(setOf("favorite"), buildHistoryCardModel(request(row(), mode))),
+                "non-favourite row has no heart in $mode",
+            )
+        }
     }
 
     @Test
