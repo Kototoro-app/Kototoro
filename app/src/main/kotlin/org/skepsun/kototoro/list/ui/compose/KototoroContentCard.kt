@@ -952,7 +952,8 @@ private fun ContentCardCornerBadges(
                         Icon(
                             painter = painterResource(id = R.drawable.ic_storage),
                             contentDescription = "Local/Saved",
-                            tint = if (isIosStyle) Color.White else MaterialTheme.colorScheme.onSurface,
+                            // Same theme accent as the heart and pin badges (#560).
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(metrics.iconSize),
                         )
                     }
