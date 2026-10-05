@@ -3,7 +3,8 @@ package org.skepsun.kototoro.details.ui.compose
 
 
 
-import org.skepsun.kototoro.core.ui.adaptive.tabletLayoutClass
+import org.skepsun.kototoro.core.ui.adaptive.rememberAndroidTabletLayoutClass
+import org.skepsun.kototoro.core.ui.adaptive.TabletDetailsPanes
 import org.skepsun.kototoro.core.ui.adaptive.TabletLayoutClass
 import android.os.Build
 import android.util.Log
@@ -103,7 +104,6 @@ import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
-import org.skepsun.kototoro.core.util.FoldableUtils
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
@@ -434,21 +434,8 @@ private fun DetailsScreenContent(
     val availableTabIds = remember(contentType, settings.isPagesTabEnabled) {
         resolveAvailableDetailsTabIds(contentType, settings)
     }
-    val tabletUiMode by settings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
-    val isWideAdaptiveLayout = remember(
-        context,
-        configuration.orientation,
-        configuration.screenWidthDp,
-        tabletUiMode,
-        isTvPresentation,
-    ) {
-        // Two columns only once each can breathe (expanded windows); a portrait tablet halved into
-        // ~400dp columns squeezed the chapter dock, so it keeps the single-column layout.
-        isTvPresentation || tabletLayoutClass(
-            widthDp = configuration.screenWidthDp,
-            tabletLayoutEnabled = FoldableUtils.shouldUseTabletLayout(context, settings, configuration),
-        ) == TabletLayoutClass.EXPANDED
-    }
+    // Android and Windows share the expanded-window decision; Android supplies its tablet-mode preference.
+    val isWideAdaptiveLayout = isTvPresentation || rememberAndroidTabletLayoutClass(settings) == TabletLayoutClass.EXPANDED
     val isModernDetailsDockEnabled by settings.observeAsState(AppSettings.KEY_MODERN_DETAILS_DOCK) {
         isModernDetailsDockEnabled
     }
@@ -1225,7 +1212,7 @@ private fun DetailsScreenContent(
                 Box(
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    Row(
+                    TabletDetailsPanes(
                         modifier = Modifier
                             .fillMaxSize()
                             .windowInsetsPadding(WindowInsets.displayCutout)
@@ -1233,129 +1220,125 @@ private fun DetailsScreenContent(
                                 horizontal = CompactTopBarHorizontalPadding,
                                 vertical = 8.dp,
                             ),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        Scaffold(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight(),
-                            containerColor = Color.Transparent,
-                            snackbarHost = { SnackbarHost(snackbarHostState) },
-                            topBar = {
-                                CompositionLocalProvider(
-                                    LocalLiquidGlassBackdrop provides detailsContentBackdrop,
-                                    LocalLiquidGlassLayerBackdrop provides detailsContentBackdrop,
+                        summary = { paneModifier ->
+                            Scaffold(
+                                modifier = paneModifier,
+                                containerColor = Color.Transparent,
+                                snackbarHost = { SnackbarHost(snackbarHostState) },
+                                topBar = {
+                                    CompositionLocalProvider(
+                                        LocalLiquidGlassBackdrop provides detailsContentBackdrop,
+                                        LocalLiquidGlassLayerBackdrop provides detailsContentBackdrop,
+                                    ) {
+                                        commonTopBar()
+                                    }
+                                },
+                            ) { paddingValues ->
+                                KototoroPullToRefreshBox(
+                                    isRefreshing = isLoading,
+                                    onRefresh = { viewModel.reload() },
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .then(
+                                            if (detailsContentBackdrop != null) {
+                                                Modifier.layerBackdrop(detailsContentBackdrop)
+                                            } else {
+                                                Modifier
+                                            },
+                                        ),
+                                    indicatorTopInset = paddingValues,
                                 ) {
-                                    commonTopBar()
-                                }
-                            },
-                        ) { paddingValues ->
-                            KototoroPullToRefreshBox(
-                                isRefreshing = isLoading,
-                                onRefresh = { viewModel.reload() },
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .then(
-                                        if (detailsContentBackdrop != null) {
-                                            Modifier.layerBackdrop(detailsContentBackdrop)
-                                        } else {
-                                            Modifier
+                                    DetailsScrollableContent(
+                                        modifier = Modifier.fillMaxSize(),
+                                        scrollState = landscapeLeftScrollState,
+                                        contentPadding = paddingValues,
+                                        outerHorizontalPadding = 0.dp,
+                                        headerTopSpacing = landscapeHeaderTopSpacing,
+                                        bottomSpacerHeight = 40.dp,
+                                        preferLightweightFirstFrame = false,
+                                        mangaDetails = mangaDetails,
+                                        localSize = localSize,
+                                        favouriteCategories = favouriteCategories,
+                                        historyInfo = historyInfo,
+                                        linkedTrackingItems = linkedTrackingItems,
+                                        readingStatus = readingStatus,
+                                        unifiedRating = unifiedRating,
+                                        canEditUnifiedRating = canEditUnifiedRating,
+                                        trackingSuggestion = trackingSuggestion,
+                                        metadataSourceOptions = metadataSourceOptions,
+                                        readingSourceOptions = readingSourceOptions,
+                                        relatedContent = relatedContent,
+                                        supplementalMetadataProperties = supplementalMetadataProperties,
+                                        supplementalSections = supplementalSections,
+                                        supplementalActions = supplementalActions,
+                                        resolvedContentType = contentType,
+                                        resolvedMetadataLanguage = resolvedMetadataLanguage,
+                                        resolvedReadingLanguage = resolvedReadingLanguage,
+                                        entityRelationSections = entityRelationSections,
+                                        translatedTitle = translatedTitle,
+                                        translatedDescription = translatedDescription,
+                                        isShowingTranslation = isShowingTranslation,
+                                        settings = settings,
+                                        collapseProgressProvider = remember { { 0f } },
+                                        coverVisualAlphaProvider = remember { { 1f } },
+                                        coverUrl = mangaDetails?.coverUrl?.takeIfUsableImageUri()
+                                            ?: content?.coverUrl?.takeIfUsableImageUri(),
+                                        fallbackCoverUrl = content?.coverUrl?.takeIfUsableImageUri(),
+                                        content = content,
+                                        isTemporaryReadOnly = isTemporaryReadOnly,
+                                        isWorkDetails = isWorkDetails,
+                                        sharedElementKey = sharedElementKey,
+                                        pendingTagSearch = { detailsScreenState.setPendingTagSearch(it) },
+                                        pendingAuthorSearch = { author, source ->
+                                            detailsScreenState.setPendingAuthorSearch(PendingAuthorSearch(author = author, source = source))
                                         },
-                                    ),
-                                indicatorTopInset = paddingValues,
-                            ) {
-                                DetailsScrollableContent(
-                                    modifier = Modifier.fillMaxSize(),
-                                    scrollState = landscapeLeftScrollState,
-                                    contentPadding = paddingValues,
-                                    outerHorizontalPadding = 0.dp,
-                                    headerTopSpacing = landscapeHeaderTopSpacing,
-                                    bottomSpacerHeight = 40.dp,
-                                    preferLightweightFirstFrame = false,
-                                    mangaDetails = mangaDetails,
-                                    localSize = localSize,
-                                    favouriteCategories = favouriteCategories,
-                                    historyInfo = historyInfo,
-                                    linkedTrackingItems = linkedTrackingItems,
-                                    readingStatus = readingStatus,
-                                    unifiedRating = unifiedRating,
-                                    canEditUnifiedRating = canEditUnifiedRating,
-                                    trackingSuggestion = trackingSuggestion,
-                                    metadataSourceOptions = metadataSourceOptions,
-                                    readingSourceOptions = readingSourceOptions,
-                                    relatedContent = relatedContent,
-                                    supplementalMetadataProperties = supplementalMetadataProperties,
-                                    supplementalSections = supplementalSections,
-                                    supplementalActions = supplementalActions,
-                                    resolvedContentType = contentType,
-                                    resolvedMetadataLanguage = resolvedMetadataLanguage,
-                                    resolvedReadingLanguage = resolvedReadingLanguage,
-                                    entityRelationSections = entityRelationSections,
-                                    translatedTitle = translatedTitle,
-                                    translatedDescription = translatedDescription,
-                                    isShowingTranslation = isShowingTranslation,
-                                    settings = settings,
-                                    collapseProgressProvider = remember { { 0f } },
-                                    coverVisualAlphaProvider = remember { { 1f } },
-                                    coverUrl = mangaDetails?.coverUrl?.takeIfUsableImageUri()
-                                        ?: content?.coverUrl?.takeIfUsableImageUri(),
-                                    fallbackCoverUrl = content?.coverUrl?.takeIfUsableImageUri(),
-                                    content = content,
-                                    isTemporaryReadOnly = isTemporaryReadOnly,
-                                    isWorkDetails = isWorkDetails,
-                                    sharedElementKey = sharedElementKey,
-                                    pendingTagSearch = { detailsScreenState.setPendingTagSearch(it) },
-                                    pendingAuthorSearch = { author, source ->
-                                        detailsScreenState.setPendingAuthorSearch(PendingAuthorSearch(author = author, source = source))
-                                    },
-                                    onInfoCardBoundsSync = syncInfoCardBounds,
-                                    onFavoriteClick = {
-                                        val current = content
-                                        if (current != null && favouriteCategories.isEmpty()) {
-                                            skipDuplicateSheet = false
-                                            pendingDuplicateCheck = true
-                                            duplicateViewModel.check(current)
-                                        } else {
-                                            detailsScreenState.setShowFavoriteDialog(true)
-                                        }
-                                    },
-                                    onSupplementalRelationClick = { item ->
-                                        when {
-                                            shouldOpenTrackingRelationSheet(item) -> {
-                                                detailsScreenState.setSelectedSupplementalRelationItem(item)
+                                        onInfoCardBoundsSync = syncInfoCardBounds,
+                                        onFavoriteClick = {
+                                            val current = content
+                                            if (current != null && favouriteCategories.isEmpty()) {
+                                                skipDuplicateSheet = false
+                                                pendingDuplicateCheck = true
+                                                duplicateViewModel.check(current)
+                                            } else {
+                                                detailsScreenState.setShowFavoriteDialog(true)
                                             }
-                                            !item.url.isNullOrBlank() -> {
-                                                handleActionClick(DetailsAction.OpenWebUrl(item.url))
+                                        },
+                                        onSupplementalRelationClick = { item ->
+                                            when {
+                                                shouldOpenTrackingRelationSheet(item) -> {
+                                                    detailsScreenState.setSelectedSupplementalRelationItem(item)
+                                                }
+                                                !item.url.isNullOrBlank() -> {
+                                                    handleActionClick(DetailsAction.OpenWebUrl(item.url))
+                                                }
                                             }
-                                        }
-                                    },
-                                    onOpenMetadataSourceSheet = {
-                                        if (!isTemporaryReadOnly) detailsScreenState.setShowMetadataSourceDialog(true)
-                                    },
-                                    onOpenReadingSourceSheet = {
-                                        if (isWorkActionEnabled) detailsScreenState.setShowReadingSourceDialog(true)
-                                    },
-                                    onUpdateLinkedTrackingStatus = { linked, status ->
-                                        viewModel.updateScrobbling(
-                                            scrobblerServiceId = linked.service.id,
-                                            rating = linked.rating ?: 0f,
-                                            status = status,
-                                        )
-                                    },
-                                    onUpdateReadingStatus = viewModel::updateUnifiedReadingStatus,
-                                    onUpdateUnifiedRating = viewModel::updateUnifiedRating,
-                                    onEntityClick = openEntityRelationItem,
-                                    onActionClick = handleActionClick,
-                                )
+                                        },
+                                        onOpenMetadataSourceSheet = {
+                                            if (!isTemporaryReadOnly) detailsScreenState.setShowMetadataSourceDialog(true)
+                                        },
+                                        onOpenReadingSourceSheet = {
+                                            if (isWorkActionEnabled) detailsScreenState.setShowReadingSourceDialog(true)
+                                        },
+                                        onUpdateLinkedTrackingStatus = { linked, status ->
+                                            viewModel.updateScrobbling(
+                                                scrobblerServiceId = linked.service.id,
+                                                rating = linked.rating ?: 0f,
+                                                status = status,
+                                            )
+                                        },
+                                        onUpdateReadingStatus = viewModel::updateUnifiedReadingStatus,
+                                        onUpdateUnifiedRating = viewModel::updateUnifiedRating,
+                                        onEntityClick = openEntityRelationItem,
+                                        onActionClick = handleActionClick,
+                                    )
+                                }
                             }
-                        }
-                        if (isWorkDetails) {
+                        },
+                        chapters = if (isWorkDetails) ({ paneModifier ->
                             val widePaneTopPadding = statusBarTopPadding +
                                 (interfaceStyleTokens.mainTopBarHeight - interfaceStyleTokens.topBarButtonSize) / 2
                             Surface(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .weight(1f)
+                                modifier = paneModifier
                                     .padding(
                                         top = widePaneTopPadding,
                                         bottom = navigationBarBottomPadding,
@@ -1422,8 +1405,8 @@ private fun DetailsScreenContent(
                                     )
                                 }
                             }
-                        }
-                    }
+                        }) else null,
+                    )
                 }
             } else {
             Box(

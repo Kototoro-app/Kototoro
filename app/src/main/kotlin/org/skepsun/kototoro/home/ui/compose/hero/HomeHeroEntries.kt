@@ -60,68 +60,28 @@ internal fun buildHomeHeroEntries(
     historyItems: List<org.skepsun.kototoro.home.ui.HomeRecentItem>,
     updateItems: List<org.skepsun.kototoro.home.ui.HomeUpdateItem>,
     recommendationItems: List<org.skepsun.kototoro.home.ui.HomeRecommendationItem>,
-): List<HomeHeroEntry> {
-    val entries = ArrayList<HomeHeroEntry>(HOME_HERO_TOTAL_LIMIT)
-
-    fun addEntry(entry: HomeHeroEntry) {
-        if (entries.size >= HOME_HERO_TOTAL_LIMIT) return
-        entries += entry
-    }
-
-    resumeContent?.let { content ->
-        addEntry(
-                HomeHeroEntry(
-                    kind = HomeHeroKind.RESUME,
-                    content = content,
-                    groupKey = resumeGroupKey ?: content.id,
-                    progressPercent = resumeProgressPercent,
-                ),
-            )
-        }
-
-    historyItems
-        .asSequence()
-        .filterNot { it.groupKey == resumeGroupKey }
-        .take(HOME_HERO_HISTORY_LIMIT)
-        .forEach { item ->
-            addEntry(
-                HomeHeroEntry(
-                    kind = HomeHeroKind.HISTORY,
-                    content = item.content,
-                    groupKey = item.groupKey,
-                ),
-            )
-        }
-
-    updateItems
-        .asSequence()
-        .filterNot { it.groupKey == resumeGroupKey }
-        .take(HOME_HERO_UPDATES_LIMIT)
-        .forEach { item ->
-            addEntry(
-                HomeHeroEntry(
-                    kind = HomeHeroKind.UPDATE,
-                    content = item.content,
-                    groupKey = item.groupKey,
-                    newChapters = item.newChapters,
-                ),
-            )
-        }
-
-    recommendationItems
-        .asSequence()
-        .filterNot { it.groupKey == resumeGroupKey }
-        .take(HOME_HERO_RECOMMENDATIONS_LIMIT)
-        .forEach { item ->
-            addEntry(
-                HomeHeroEntry(
-                    kind = HomeHeroKind.RECOMMENDATION,
-                    content = item.content,
-                    groupKey = item.groupKey,
-                ),
-            )
-        }
-
-    return entries
+): List<HomeHeroEntry> = org.skepsun.kototoro.core.ui.home.buildHomeHeroEntries(
+    // The ordering and limits are shared with the Windows host's hero.
+    resume = resumeContent,
+    resumeGroupKey = resumeGroupKey,
+    resumeProgressPercent = resumeProgressPercent,
+    resumeKeyOf = Content::id,
+    history = historyItems.map { org.skepsun.kototoro.core.ui.home.HomeHeroCandidate(it.content, it.groupKey) },
+    updates = updateItems.map { org.skepsun.kototoro.core.ui.home.HomeHeroCandidate(it.content, it.groupKey, it.newChapters) },
+    recommendations = recommendationItems.map { org.skepsun.kototoro.core.ui.home.HomeHeroCandidate(it.content, it.groupKey) },
+    limits = org.skepsun.kototoro.core.ui.home.HomeHeroLimits(
+        total = HOME_HERO_TOTAL_LIMIT,
+        history = HOME_HERO_HISTORY_LIMIT,
+        updates = HOME_HERO_UPDATES_LIMIT,
+        recommendations = HOME_HERO_RECOMMENDATIONS_LIMIT,
+    ),
+).map { entry ->
+    HomeHeroEntry(
+        kind = HomeHeroKind.valueOf(entry.kind.name),
+        content = entry.content,
+        groupKey = entry.groupKey,
+        progressPercent = entry.progressPercent,
+        newChapters = entry.newChapters,
+    )
 }
 

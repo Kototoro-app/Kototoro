@@ -4,28 +4,16 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.util.almostEquals
 
+/** Android's model-typed view of the shared [SuggestionTagBlacklist]. */
 class TagsBlacklist(
-    private val tags: Set<String>,
-    private val threshold: Float,
+    tags: Set<String>,
+    threshold: Float,
 ) {
+    private val shared = SuggestionTagBlacklist(tags) { a, b -> a.almostEquals(b, threshold) }
 
-    fun isNotEmpty() = tags.isNotEmpty()
+    fun isNotEmpty() = shared.isNotEmpty()
 
-    operator fun contains(manga: Content): Boolean {
-        if (tags.isEmpty()) {
-            return false
-        }
-        for (mangaTag in manga.tags) {
-            for (tagTitle in tags) {
-                if (mangaTag.title.almostEquals(tagTitle, threshold)) {
-                    return true
-                }
-            }
-        }
-        return false
-    }
+    operator fun contains(manga: Content): Boolean = shared.containsAny(manga.tags.map { it.title })
 
-    operator fun contains(tag: ContentTag): Boolean = tags.any {
-        it.almostEquals(tag.title, threshold)
-    }
+    operator fun contains(tag: ContentTag): Boolean = shared.containsTitle(tag.title)
 }

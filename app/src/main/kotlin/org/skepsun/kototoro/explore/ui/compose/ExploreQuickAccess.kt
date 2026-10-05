@@ -576,34 +576,29 @@ private fun SourceQuickAccessCard(
     )
 
     if (isGridCard) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(metrics.cardHeight)
-                .clip(cardShape)
-                .background(cardBackground)
-                .tvFocusable(shape = cardShape, borderWidth = 3.dp, addFocusTarget = false)
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onLongClick,
-                ),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(metrics.iconContainerSize)
-                    .clip(iconShape)
-                    .background(iconBackground),
-                contentAlignment = Alignment.Center,
-            ) {
+        org.skepsun.kototoro.core.ui.source.TabletSourceTile(
+            title = title,
+            cardHeight = metrics.cardHeight,
+            iconContainerSize = metrics.iconContainerSize,
+            iconSize = metrics.iconSize,
+            titleTextSize = metrics.titleTextSize,
+            onClick = onClick,
+            onLongClick = onLongClick,
+            selected = isSelected,
+            expressive = expressive,
+            cardShape = cardShape,
+            cardBackground = cardBackground,
+            focusModifier = Modifier.tvFocusable(shape = cardShape, borderWidth = 3.dp, addFocusTarget = false),
+            icon = { iconModifier ->
                 ContentSourceResolvedIcon(
                     source = actualSource,
-                    modifier = Modifier.size(metrics.iconSize),
+                    modifier = iconModifier,
                     styleResId = R.style.FaviconDrawable_SourceIcon,
                     throttleNetworkLoad = true,
                     contentDescription = title,
                 )
+            },
+            badges = {
                 SourceAvailabilityBadge(
                     availability = source.source.availability,
                     modifier = Modifier.align(Alignment.TopEnd),
@@ -627,24 +622,8 @@ private fun SourceQuickAccessCard(
                         )
                     }
                 }
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontSize = metrics.titleTextSize,
-                    lineHeight = (metrics.titleTextSize.value + 2f).sp,
-                ),
-                color = if (isSelected) {
-                    MaterialTheme.colorScheme.onSecondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
-        }
+            },
+        )
     } else {
         Row(
             modifier = Modifier

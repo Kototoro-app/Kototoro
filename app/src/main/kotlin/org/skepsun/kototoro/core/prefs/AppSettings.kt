@@ -2165,23 +2165,16 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     val isSuggestionsNotificationAvailable: Boolean
         get() = prefs.getBoolean(KEY_SUGGESTIONS_NOTIFICATIONS, false)
 
+    // Tag lists are parsed with the rule shared with the Windows settings (core-domain SuggestionRules).
     val suggestionsTagsBlacklist: Set<String>
-        get() {
-            val string = prefs.getString(KEY_SUGGESTIONS_EXCLUDE_TAGS, null)?.trimEnd(' ', ',')
-            if (string.isNullOrEmpty()) {
-                return emptySet()
-            }
-            return string.split(',').mapToSet { it.trim() }
-        }
+        get() = org.skepsun.kototoro.suggestions.domain.parseSuggestionTags(
+            prefs.getString(KEY_SUGGESTIONS_EXCLUDE_TAGS, null),
+        )
 
     val suggestionsTagsWhitelist: Set<String>
-        get() {
-            val string = prefs.getString(KEY_SUGGESTIONS_PREFERRED_TAGS, null)?.trimEnd(' ', ',')
-            if (string.isNullOrEmpty()) {
-                return emptySet()
-            }
-            return string.split(',').mapToSet { it.trim() }
-        }
+        get() = org.skepsun.kototoro.suggestions.domain.parseSuggestionTags(
+            prefs.getString(KEY_SUGGESTIONS_PREFERRED_TAGS, null),
+        )
 
     val suggestionsPreferredSources: Set<String>
         get() = prefs.getStringSet(KEY_SUGGESTIONS_PREFERRED_SOURCES, emptySet()).orEmpty()
@@ -3249,7 +3242,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_SSL_BYPASS = "ssl_bypass"
         const val KEY_CLOUDFLARE_STRATEGY = "cloudflare_strategy"
         const val KEY_READER_AUTOSCROLL_SPEED = "as_speed"
-        const val DEFAULT_READER_AUTOSCROLL_SPEED = 0.24f
+        const val DEFAULT_READER_AUTOSCROLL_SPEED = org.skepsun.kototoro.reader.core.ReaderAutoScroll.DEFAULT_SPEED
         const val KEY_READER_AUTOSCROLL_FAB = "as_fab"
         const val KEY_READER_AUTOSCROLL_PAUSE_ON_UI = "as_pause_ui"
         const val KEY_MIRROR_SWITCHING = "mirror_switching"

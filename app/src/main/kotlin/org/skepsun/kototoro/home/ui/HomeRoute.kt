@@ -107,11 +107,7 @@ internal fun HomeRoute(
             override fun onSourceTagSelected(tag: SourceTag?) {
                 val current = state.selectedSourceTags
                 viewModel.setSelectedSourceTags(
-                    when {
-                        tag == null -> emptySet()
-                        tag in current -> current - tag
-                        else -> current + tag
-                    },
+                    org.skepsun.kototoro.explore.ui.model.SourceTag.toggle(current, tag),
                 )
             }
         }

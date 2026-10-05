@@ -14,6 +14,7 @@ import okio.IOException
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.core.exceptions.CloudFlareBlockedException
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
+import org.skepsun.kototoro.core.network.cloudflare.solveClearanceAndRetry
 import org.skepsun.kototoro.core.network.webview.CloudflareSolveCoordinator
 import org.skepsun.kototoro.core.network.webview.WebViewClearanceSolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
@@ -162,25 +163,14 @@ class CloudFlareInterceptor(
 
     private fun resolveAndRetryWithWebView(chain: Interceptor.Chain, request: Request): Response? {
         val solver = clearanceSolver ?: return null
-        val coordinator = solveCoordinator
         return try {
-            // Host-level single flight: concurrent requests for the same host share one WebView
-            // solve; each request retries at most once after a successful solve.
-            val solved = runBlocking {
-                if (coordinator != null) {
-                    coordinator.solve(request.url.host) {
-                        solver.solve(request)
-                    }
+            // Mihon's default solver, shared with Windows: one off-screen solve per host, one retry per request.
+            chain.solveClearanceAndRetry(request, solver, solveCoordinator).also { retried ->
+                if (retried != null) {
+                    Log.i(TAG, "WebView clearance solved; retrying request: " + request.url)
                 } else {
-                    solver.solve(request)
+                    Log.w(TAG, "WebView clearance solve failed: " + request.url)
                 }
-            }
-            if (solved) {
-                Log.i(TAG, "WebView clearance solved; retrying request: " + request.url)
-                chain.proceed(request)
-            } else {
-                Log.w(TAG, "WebView clearance solve failed: " + request.url)
-                null
             }
         } catch (e: Exception) {
             Log.w(TAG, "WebView clearance solve error: " + request.url, e)

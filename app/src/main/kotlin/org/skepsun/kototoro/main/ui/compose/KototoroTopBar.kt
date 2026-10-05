@@ -96,6 +96,14 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.topbar.EnsureRailItemFullyVisible
+import org.skepsun.kototoro.core.ui.topbar.RailSurface
+import org.skepsun.kototoro.core.ui.topbar.TopBarFilterRail
+import org.skepsun.kototoro.core.ui.topbar.TopBarSearchPillContent
+import org.skepsun.kototoro.core.ui.topbar.TopBarTabsRail
+import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
+import org.skepsun.kototoro.core.ui.topbar.compactRailEdgeFade
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
@@ -116,40 +124,9 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlin.math.floor
 
-private val CompactTopTabsRailVisualHeight = 40.dp
-private val CompactTopFilterRailVisualHeight = 36.dp
-private val CompactRailEdgeFadeExtent = 16.dp
+/** Rails, title and search pill content are shared with the Windows host; this file adds glass and menus. */
+private val glassRailSurface: RailSurface = { modifier -> TopBarControlSurface(modifier = modifier) {} }
 
-/**
- * Softens the start/end edges of a scrolling compact rail so items that are cut
- * off by the capsule border dissolve instead of colliding with it. Each edge only
- * fades while the rail can still scroll that way, so a settled rail never dims a
- * partially visible item that will never move again.
- */
-private fun Modifier.compactRailEdgeFade(
-    fadeStart: Boolean,
-    fadeEnd: Boolean,
-    extent: Dp = CompactRailEdgeFadeExtent,
-): Modifier {
-    if (!fadeStart && !fadeEnd) return this
-    return this
-        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-        .drawWithContent {
-            drawContent()
-            val width = size.width
-            if (width <= 0f) return@drawWithContent
-            val fadeFraction = (extent.toPx() / width).coerceIn(0f, 0.5f)
-            drawRect(
-                brush = Brush.horizontalGradient(
-                    0f to if (fadeStart) Color.Transparent else Color.Black,
-                    fadeFraction to Color.Black,
-                    1f - fadeFraction to Color.Black,
-                    1f to if (fadeEnd) Color.Transparent else Color.Black,
-                ),
-                blendMode = BlendMode.DstIn,
-            )
-        }
-}
 data class KototoroTopBarMenuAction(
     val titleRes: Int,
     val iconRes: Int? = null,
@@ -350,32 +327,7 @@ fun KototoroTopBar(
                             modifier = Modifier.widthIn(max = 140.dp),
                         )
                     } else {
-                        Column(
-                            modifier = Modifier.widthIn(max = 160.dp),
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Text(
-                                text = topBarTitle,
-                                style = if (subtitleText.isNullOrBlank()) {
-                                    MaterialTheme.typography.titleLarge
-                                } else {
-                                    MaterialTheme.typography.titleMedium
-                                },
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            if (!subtitleText.isNullOrBlank()) {
-                                Text(
-                                    text = subtitleText,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
+                        TopBarTitleBlock(topBarTitle, subtitle = subtitleText, maxWidth = 160.dp)
                     }
                 }
                 Spacer(modifier = Modifier.weight(1f))
@@ -389,32 +341,7 @@ fun KototoroTopBar(
                             modifier = Modifier.widthIn(max = maxWidth),
                         )
                     } else {
-                        Column(
-                            modifier = Modifier.widthIn(max = maxWidth),
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Text(
-                                text = topBarTitle,
-                                style = if (subtitleText.isNullOrBlank()) {
-                                    MaterialTheme.typography.titleLarge
-                                } else {
-                                    MaterialTheme.typography.titleMedium
-                                },
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            if (!subtitleText.isNullOrBlank()) {
-                                Text(
-                                    text = subtitleText,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
+                        TopBarTitleBlock(topBarTitle, subtitle = subtitleText, maxWidth = maxWidth)
                     }
                 }
                 TopBarControlSurface(
@@ -422,35 +349,15 @@ fun KototoroTopBar(
                         .weight(1f)
                         .height(topBarControlHeight),
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .tvFocusable(shape = Capsule(), addFocusTarget = false)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                role = Role.Button,
-                                onClickLabel = stringResource(R.string.search),
-                                onClick = onSearchClick,
-                            )
-                            .padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(
-                            Icons.Filled.Search,
-                            contentDescription = stringResource(R.string.search),
-                            modifier = Modifier.size(topBarIconSize),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            text = query.ifBlank { stringResource(R.string.search_bar_placeholder) },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    TopBarSearchPillContent(
+                        query = query,
+                        placeholder = stringResource(R.string.search_bar_placeholder),
+                        searchIcon = rememberVectorPainter(Icons.Filled.Search),
+                        onClick = onSearchClick,
+                        modifier = Modifier.tvFocusable(shape = Capsule(), addFocusTarget = false),
+                        iconSize = topBarIconSize,
+                        searchLabel = stringResource(R.string.search),
+                    )
                 }
             }
             AnimatedVisibility(
@@ -919,105 +826,15 @@ internal fun TopBarControlSurface(
 fun CompactTopBarTabsRail(
     state: CompactTabsTopBarOverrideState,
     modifier: Modifier = Modifier,
-) {
-    val tokens = LocalInterfaceStyleTokens.current
-    val listState = rememberLazyListState()
-    val selectedIndex = state.items.indexOfFirst { it.id == state.selectedItemId }
-    val indicatorColor = MaterialTheme.colorScheme.primary
-
-    LaunchedEffect(state.selectedItemId, state.items) {
-        if (selectedIndex < 0) return@LaunchedEffect
-        if (listState.layoutInfo.visibleItemsInfo.none { it.index == selectedIndex }) {
-            listState.scrollToItem(selectedIndex)
-        }
-        val distance = snapshotFlow {
-            val layout = listState.layoutInfo
-            val item = layout.visibleItemsInfo.firstOrNull { it.index == selectedIndex }
-            if (item == null || layout.viewportSize.width == 0) null
-            else item.offset + item.size / 2f - layout.viewportSize.width / 2f
-        }.filterNotNull().first()
-        listState.animateScrollBy(distance)
-    }
-    Box(
-        modifier = modifier
-            .height(tokens.minimumTouchTarget)
-            .padding(horizontal = CompactTopBarHorizontalPadding),
-    ) {
-        TopBarControlSurface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(CompactTopTabsRailVisualHeight)
-                .align(Alignment.Center),
-        ) {}
-        LazyRow(
-            state = listState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(tokens.minimumTouchTarget)
-                .compactRailEdgeFade(
-                    fadeStart = listState.canScrollBackward,
-                    fadeEnd = listState.canScrollForward,
-                )
-                .padding(horizontal = 8.dp)
-                .drawWithContent {
-                    drawContent()
-                    val position = (state.pagePosition?.invoke() ?: selectedIndex.toFloat())
-                        .coerceIn(0f, (state.items.size - 1).coerceAtLeast(0).toFloat())
-                    val startIndex = floor(position).toInt()
-                    val endIndex = (startIndex + 1).coerceAtMost(state.items.lastIndex)
-                    val visible = listState.layoutInfo.visibleItemsInfo
-                    val startItem = visible.firstOrNull { it.index == startIndex }
-                    val endItem = visible.firstOrNull { it.index == endIndex }
-                    val first = startItem ?: endItem ?: return@drawWithContent
-                    val second = endItem ?: first
-                    val fraction = position - startIndex
-                    val center = (first.offset + first.size / 2f) * (1f - fraction) +
-                        (second.offset + second.size / 2f) * fraction
-                    val width = (first.size * (1f - fraction) + second.size * fraction) * 0.56f
-                    val y = size.height - 5.dp.toPx()
-                    drawLine(
-                        color = indicatorColor,
-                        start = Offset(center - width / 2f, y),
-                        end = Offset(center + width / 2f, y),
-                        strokeWidth = 3.dp.toPx(),
-                        cap = StrokeCap.Round,
-                    )
-                },
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            contentPadding = PaddingValues(horizontal = 1.dp),
-        ) {
-            items(items = state.items, key = { it.id }) { item ->
-                val selected = item.id == state.selectedItemId
-                Box(
-                    modifier = Modifier
-                        .height(tokens.minimumTouchTarget)
-                        .clickable { state.onItemSelected(item.id) }
-                        .padding(horizontal = 10.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = item.title,
-                        modifier = Modifier.widthIn(max = 128.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        fontWeight = if (selected) {
-                            androidx.compose.ui.text.font.FontWeight.SemiBold
-                        } else {
-                            androidx.compose.ui.text.font.FontWeight.Normal
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
+) = TopBarTabsRail(
+    items = state.items,
+    selectedItemId = state.selectedItemId,
+    onItemSelected = state.onItemSelected,
+    surface = glassRailSurface,
+    modifier = modifier,
+    horizontalPadding = CompactTopBarHorizontalPadding,
+    pagePosition = state.pagePosition,
+)
 
 @Composable
 private fun CompactCategoryTitle(
@@ -1105,7 +922,7 @@ private fun InlineCompactTopBarTabsRail(
     var restoreRequest by remember { mutableIntStateOf(0) }
     var previousSelectedItemId by remember { mutableStateOf<Long?>(null) }
     val selectedIndex = state.items.indexOfFirst { it.id == state.selectedItemId }
-    EnsureItemFullyVisible(listState = listState, targetIndex = selectedIndex)
+    EnsureRailItemFullyVisible(listState = listState, targetIndex = selectedIndex)
     val isScrollInProgress = listState.isScrollInProgress
     LaunchedEffect(isScrollInProgress) {
         if (isScrollInProgress) {
@@ -1205,124 +1022,26 @@ private fun InlineCompactTopBarTabsRail(
 fun CompactTopBarFilterRail(
     state: CompactFilterRailOverrideState,
     modifier: Modifier = Modifier,
-) {
-    val tokens = LocalInterfaceStyleTokens.current
-    val listState = rememberLazyListState()
-    val firstSelectedIndex = remember(state.items) {
-        state.items.indexOfFirst { it.isSelected }
-    }
-    EnsureItemFullyVisible(listState = listState, targetIndex = firstSelectedIndex)
-    LaunchedEffect(state.items, firstSelectedIndex) {
-        if (firstSelectedIndex == 0 && listState.firstVisibleItemIndex > 0) {
-            listState.animateScrollToItem(0)
+) = TopBarFilterRail(
+    items = state.items,
+    key = { it.id },
+    title = { it.title },
+    isSelected = { it.isSelected },
+    onClick = { it.onClick() },
+    surface = glassRailSurface,
+    modifier = modifier,
+    leading = { item, loadEnabled ->
+        item.source?.let { source ->
+            ContentSourceIcon(
+                source = source,
+                loadEnabled = loadEnabled,
+                throttleNetworkLoad = loadEnabled,
+                modifier = Modifier.size(16.dp),
+                contentDescription = null,
+            )
         }
-    }
-    val visibleItemRange = remember(listState.layoutInfo) {
-        val visibleItems = listState.layoutInfo.visibleItemsInfo
-        val minVisible = visibleItems.minOfOrNull { it.index } ?: 0
-        val maxVisible = visibleItems.maxOfOrNull { it.index } ?: -1
-        (minVisible - 2).coerceAtLeast(0)..(maxVisible + 2).coerceAtLeast(-1)
-    }
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(tokens.minimumTouchTarget),
-    ) {
-        TopBarControlSurface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(CompactTopFilterRailVisualHeight)
-                .align(Alignment.BottomCenter),
-        ) {}
-        LazyRow(
-            state = listState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(tokens.minimumTouchTarget),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            contentPadding = PaddingValues(horizontal = 12.dp),
-        ) {
-            items(
-                items = state.items,
-                key = { it.id },
-            ) { item ->
-                val itemIndex = remember(state.items, item.id) {
-                    state.items.indexOfFirst { it.id == item.id }
-                }
-                val shouldLoadIcon = itemIndex in visibleItemRange
-                Box(
-                    modifier = Modifier
-                        .height(tokens.minimumTouchTarget)
-                        .clickable { item.onClick() }
-                        .padding(horizontal = 12.dp),
-                    contentAlignment = Alignment.BottomCenter,
-                ) {
-                    Row(
-                        modifier = Modifier.height(CompactTopFilterRailVisualHeight),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        item.source?.let { source ->
-                            ContentSourceIcon(
-                                source = source,
-                                loadEnabled = shouldLoadIcon,
-                                throttleNetworkLoad = shouldLoadIcon,
-                                modifier = Modifier.size(16.dp),
-                                contentDescription = null,
-                            )
-                        }
-                        Text(
-                            text = item.title,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (item.isSelected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            fontWeight = if (item.isSelected) {
-                                androidx.compose.ui.text.font.FontWeight.SemiBold
-                            } else {
-                                androidx.compose.ui.text.font.FontWeight.Normal
-                            },
-                            maxLines = 1,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EnsureItemFullyVisible(
-    listState: LazyListState,
-    targetIndex: Int,
-) {
-    val density = LocalDensity.current
-    val extraPaddingPx = with(density) { 8.dp.toPx() }
-    LaunchedEffect(listState, targetIndex) {
-        if (targetIndex < 0) return@LaunchedEffect
-        repeat(2) {
-            val layoutInfo = listState.layoutInfo
-            val itemInfo = layoutInfo.visibleItemsInfo.firstOrNull { it.index == targetIndex }
-            if (itemInfo == null) {
-                listState.scrollToItem(targetIndex)
-            } else {
-                val viewportStart = layoutInfo.viewportStartOffset
-                val viewportEnd = layoutInfo.viewportEndOffset
-                val itemStart = itemInfo.offset
-                val itemEnd = itemInfo.offset + itemInfo.size
-                when {
-                    itemStart < viewportStart -> listState.animateScrollBy(itemStart - viewportStart - extraPaddingPx)
-                    itemEnd > viewportEnd -> listState.animateScrollBy(itemEnd - viewportEnd + extraPaddingPx)
-                    else -> return@LaunchedEffect
-                }
-                return@LaunchedEffect
-            }
-        }
-    }
-}
+    },
+)
 
 @Composable
 private fun DisplayOptionsSwitchRow(

@@ -4,6 +4,8 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.gestures.animateScrollBy
+import org.skepsun.kototoro.reader.ui.compose.readerTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -36,7 +38,8 @@ import kotlin.math.roundToInt
 /** Virtualized full-width items and viewport semantics share one VerticalReaderScene. */
 @Composable
 internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAppState, focus: FocusRequester,
-    closing: Boolean, modifier: Modifier) {
+    closing: Boolean, modifier: Modifier, onToggleControls: () -> Unit = {},
+    autoScroll: DesktopReaderAutoScroll = remember { DesktopReaderAutoScroll() }, onShowMenu: () -> Unit = {}) {
     BoxWithConstraints(modifier) {
         val density = LocalDensity.current
         val viewportHeight = maxHeight.coerceAtLeast(1.dp)
@@ -85,6 +88,20 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
             if ((if (forward) !list.canScrollForward else !list.canScrollBackward) && boundaryEvent(forward)) return
             list.scrollBy(delta)
         }
+        val fling = androidx.compose.foundation.gestures.ScrollableDefaults.flingBehavior()
+        // Android's auto scroll: the strip moves a dp per shared scroll delay; at the chapter end it hands over to the
+        // automatic chapter turn. Interactions pause it.
+        LaunchedEffect(autoScroll.active, state.readerSettings.autoScrollSpeed, chapterId, restored, closing) {
+            if (!autoScroll.active || !restored || closing) return@LaunchedEffect
+            val step = with(density) { 1.dp.toPx() }
+            val delayMs = org.skepsun.kototoro.reader.core.ReaderAutoScroll.scrollDelayMs(state.readerSettings.autoScrollSpeed)
+            while (true) {
+                kotlinx.coroutines.delay(delayMs)
+                if (autoScroll.isPaused || list.isScrollInProgress) continue
+                if (!list.canScrollForward) { boundaryEvent(true); continue }
+                list.scrollBy(step)
+            }
+        }
         val visibleFrame by remember(layout, list) { derivedStateOf {
             layout.frame(list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset)
         } }
@@ -98,6 +115,7 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
             restored = true
             focus.requestFocus()
         }
+        val prediction = remember { org.skepsun.kototoro.reader.core.ReaderPrediction() }
         LaunchedEffect(chapterId, state.readerNavigation, width) {
             snapshotFlow {
                 val info = list.layoutInfo
@@ -116,19 +134,32 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
             }.distinctUntilChanged().collect { viewport ->
                 if (viewport.stable && viewport.indices.isNotEmpty()) {
                     controller.continuousImages(chapterId, viewport.indices)
+                    // Android's continuous prediction (reader-core): pages within the lookahead load in the background.
+                    val geometry = currentLayout
+                    val frame = geometry.frame(list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset)
+                    controller.prefetchPages(chapterId, prediction.predict(geometry.scene, frame)
+                        .filter { it.priority != org.skepsun.kototoro.reader.core.PrefetchPriority.IMMEDIATE }
+                        .map { geometry.scene.indexOf(it.pageId) }.filter { it >= 0 && it !in viewport.indices })
                     if (viewport.loaded) controller.continuousProgress(chapterId, viewport.first, viewport.offset,
                         viewport.last, viewport.atEnd)
                 }
             }
         }
+        val tapHandlers = rememberTapGridHandlers(focus, autoScroll) { area, long ->
+            if (!closing && restored) performTapAction(
+                org.skepsun.kototoro.reader.ui.tapgrid.TapGridConfig.action(state.readerSettings.tapGrid, area, long),
+                { forward -> scope.launch { list.animateScrollBy(height * if (forward) .9f else -.9f) } },
+                controller, onToggleControls, onShowMenu)
+        }
         Column {
-            Box(Modifier.fillMaxWidth().height(viewportHeight).background(Color(0xFF202733)).clipToBounds()
+            Box(Modifier.fillMaxWidth().height(viewportHeight).background(LocalDesktopReaderPageStyle.current.background).clipToBounds()
                 .nestedScroll(boundaryConnection)
                 .pointerInput(list) {
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
                             if (event.type != PointerEventType.Scroll) continue
+                            autoScroll.interacted()
                             val change = event.changes.firstOrNull { !it.isConsumed } ?: continue
                             val delta = change.scrollDelta.y
                             if (delta == 0f) continue
@@ -159,6 +190,39 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
                     }
                 }.pointerInput(focus) {
                     awaitEachGesture { awaitFirstDown(requireUnconsumed = false); focus.requestFocus() }
+                }
+                // Android's reader actions on the webtoon reader: page actions scroll a screen.
+                .readerTapGestures(tapHandlers.interaction, tapHandlers.tap, tapHandlers.longTap,
+                    with(density) { 48.dp.toPx() }, tapHandlers.longTap)
+                // The list scrolls under touch already; a mouse drag scrolls it too, and a flick keeps it moving.
+                .pointerInput(list, restored, closing) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        if (down.type != androidx.compose.ui.input.pointer.PointerType.Mouse || !restored || closing) return@awaitEachGesture
+                        val velocity = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                        velocity.addPosition(down.uptimeMillis, down.position)
+                        var dragged = false
+                        var travelled = 0f
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) break
+                            val dy = change.position.y - change.previousPosition.y
+                            travelled += dy
+                            if (!dragged && kotlin.math.abs(travelled) < viewConfiguration.touchSlop) continue
+                            dragged = true
+                            velocity.addPosition(change.uptimeMillis, change.position)
+                            list.dispatchRawDelta(-dy)
+                            change.consume()
+                        }
+                        if (!dragged) return@awaitEachGesture
+                        val speed = -velocity.calculateVelocity().y
+                        val forward = travelled < 0f
+                        if ((if (forward) !list.canScrollForward else !list.canScrollBackward) && boundaryEvent(forward)) {
+                            return@awaitEachGesture
+                        }
+                        scope.launch { list.scroll { with(fling) { performFling(speed) } } }
+                    }
                 }) {
                 LazyColumn(state = list, userScrollEnabled = !closing && restored,
                     verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()
@@ -176,7 +240,7 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
                             val image = state.readerImages[page.id]
                             if (image?.tiled == true) DesktopTiledImage(image,
                                 visibleFrame.visibleNodes.firstOrNull { it.pageId.value == page.id }, modifier = item)
-                            else ReaderImage(image?.path, index, item)
+                            else ReaderImage(image, index, item)
                         }
                     }
                 }

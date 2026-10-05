@@ -79,8 +79,14 @@ import org.skepsun.kototoro.settings.work.PeriodicWorkScheduler
 import org.skepsun.kototoro.suggestions.domain.ContentSuggestion
 import org.skepsun.kototoro.suggestions.domain.SuggestionRepository
 import org.skepsun.kototoro.suggestions.domain.TagsBlacklist
+import org.skepsun.kototoro.suggestions.domain.SuggestionTagMatcher
+import org.skepsun.kototoro.suggestions.domain.cleanSuggestionList
 import org.skepsun.kototoro.suggestions.domain.collectSourceResults
-import org.skepsun.kototoro.suggestions.domain.selectBalancedByPreferredSource
+import org.skepsun.kototoro.suggestions.domain.pickSuggestionSortOrder
+import org.skepsun.kototoro.suggestions.domain.pickSuggestionTag
+import org.skepsun.kototoro.suggestions.domain.rankSuggestions
+import org.skepsun.kototoro.suggestions.domain.suggestionRelevance
+import org.skepsun.kototoro.suggestions.domain.suggestionSeedTags
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import kotlin.math.pow
@@ -187,33 +193,24 @@ class SuggestionsWorker @AssistedInject constructor(
         }
         val tagsBlacklist = TagsBlacklist(appSettings.suggestionsTagsBlacklist, TAG_EQ_THRESHOLD)
         val globalTagBlacklist = GlobalTagBlacklist(appSettings.globalTagBlacklist)
-        val whitelistTags = appSettings.suggestionsTagsWhitelist.toList()
-        val tags = (whitelistTags + seed.flatMap { it.tags.map { x -> x.title } }.takeMostFrequent(10)).distinct()
+        // Seed tags, scoring and ranking are shared with the Windows host (core-domain SuggestionRules).
+        val tags = suggestionSeedTags(
+            whitelist = appSettings.suggestionsTagsWhitelist.toList(),
+            seedTagTitles = seed.flatMap { it.tags.map { x -> x.title } },
+        )
 
         val rawResults = collectSourceResults(
             sources = sources.filterNot {
                 it.isNsfw() && (appSettings.isSuggestionsExcludeNsfw || appSettings.isNsfwContentDisabled)
             },
         ) { source -> getList(source, tags, tagsBlacklist) }
-        val suggestions = rawResults
-            .filterNot { it in globalTagBlacklist }
-            .map { manga ->
-                ContentSuggestion(
-                    manga = manga,
-                    relevance = computeRelevance(manga.tags, tags),
-                )
-            }.toList()
-            .sortedByDescending { it.relevance }
-            .distinctBy { it.manga.id }
-            .selectBalancedByPreferredSource(
-                limit = MAX_RESULTS,
-                perSourceLimit = MAX_RESULTS_PER_SOURCE,
-                preferredSources = appSettings.suggestionsPreferredSources - appSettings.suggestionsExcludedSources,
-            ) { it.manga.source.name }
-            .mapIndexed { index, suggestion ->
-                // Room 按 relevance 排序，因此将打散后的名次编码进持久化分数。
-                suggestion.copy(relevance = (MAX_RESULTS - index).toFloat() / MAX_RESULTS)
-            }
+        val suggestions = rankSuggestions(
+            items = rawResults.filterNot { it in globalTagBlacklist },
+            relevance = { manga -> suggestionRelevance(manga.tags.map { it.title }, tags, tagMatcher) },
+            id = { it.id },
+            source = { it.source.name },
+            preferredSources = appSettings.suggestionsPreferredSources - appSettings.suggestionsExcludedSources,
+        ).map { ContentSuggestion(manga = it.item, relevance = it.relevance) }
         suggestionRepository.replace(suggestions)
         if (appSettings.isSuggestionsNotificationAvailable
             && applicationContext.checkNotificationPermission(MANGA_CHANNEL_ID)
@@ -270,13 +267,9 @@ class SuggestionsWorker @AssistedInject constructor(
     ): List<Content> = runCatchingCancellable {
         val repository = mangaRepositoryFactory.create(source)
         val availableOrders = repository.sortOrders
-        val order = preferredSortOrders.firstOrNull { it in availableOrders }
-            ?: availableOrders.firstOrNull()
-            ?: SortOrder.UPDATED
+        val order = SortOrder.valueOf(pickSuggestionSortOrder(availableOrders.map { it.name }))
         val availableTags = repository.getFilterOptions().availableTags
-        val tag = tags.firstNotNullOfOrNull { title ->
-            availableTags.find { x -> x !in blacklist && x.title.almostEquals(title, TAG_EQ_THRESHOLD) }
-        }
+        val tag = pickSuggestionTag(tags, availableTags, { it.title }, { it in blacklist }, tagMatcher)
         val primaryFilter = ContentListFilter(tags = setOfNotNull(tag))
         val fallbackFilter = when (source.getContentType()) {
             ContentType.VIDEO, ContentType.HENTAI_VIDEO -> ContentListFilter.EMPTY
@@ -297,21 +290,18 @@ class SuggestionsWorker @AssistedInject constructor(
                 ).asArrayList()
             }
         }
-        list.removeAll { content ->
-            content.title.isBlank() || (content.url.isBlank() && content.publicUrl.isBlank())
-        }
-        if (appSettings.isSuggestionsExcludeNsfw) {
-            list.removeAll { it.isNsfw() }
-        }
-        if (blacklist.isNotEmpty()) {
-            list.removeAll { manga -> manga in blacklist }
-        }
         val globalTagBlacklist = GlobalTagBlacklist(appSettings.globalTagBlacklist)
-        if (!globalTagBlacklist.isEmpty) {
-            list.removeAll { manga -> manga in globalTagBlacklist }
-        }
-        list.shuffle()
-        list.take(MAX_SOURCE_RESULTS)
+        val excludeNsfw = appSettings.isSuggestionsExcludeNsfw
+        cleanSuggestionList(
+            items = list,
+            title = { it.title },
+            hasAddress = { it.url.isNotBlank() || it.publicUrl.isNotBlank() },
+            excluded = { manga ->
+                (excludeNsfw && manga.isNsfw()) ||
+                    (blacklist.isNotEmpty() && manga in blacklist) ||
+                    (!globalTagBlacklist.isEmpty && manga in globalTagBlacklist)
+            },
+        )
     }.onFailure { e ->
         if (e is CloudFlareException) {
             // 后台推荐抓取只记录 Cloudflare 状态，不自动拉起验证码处理界面。
@@ -414,24 +404,7 @@ class SuggestionsWorker @AssistedInject constructor(
         notificationManager.notify(TAG, id, builder.build())
     }
 
-    @FloatRange(from = 0.0, to = 1.0)
-    private fun computeRelevance(mangaTags: Set<ContentTag>, allTags: List<String>): Float {
-        val maxWeight = (allTags.size + allTags.size + 1 - mangaTags.size) * mangaTags.size / 2.0
-        val weight = mangaTags.sumOf { tag ->
-            val index = allTags.inexactIndexOf(tag.title, TAG_EQ_THRESHOLD)
-            if (index < 0) 0 else allTags.size - index
-        }
-        return (weight / maxWeight).pow(2.0).toFloat()
-    }
-
-    private fun Iterable<String>.inexactIndexOf(element: String, threshold: Float): Int {
-        forEachIndexed { i, t ->
-            if (t.almostEquals(element, threshold)) {
-                return i
-            }
-        }
-        return -1
-    }
+    private val tagMatcher: SuggestionTagMatcher = { a, b -> a.almostEquals(b, TAG_EQ_THRESHOLD) }
 
     @Reusable
     class Scheduler @Inject constructor(
@@ -440,7 +413,10 @@ class SuggestionsWorker @AssistedInject constructor(
     ) : PeriodicWorkScheduler {
 
         override suspend fun schedule() {
-            val request = PeriodicWorkRequestBuilder<SuggestionsWorker>(6, TimeUnit.HOURS)
+            val request = PeriodicWorkRequestBuilder<SuggestionsWorker>(
+                org.skepsun.kototoro.suggestions.domain.SUGGESTIONS_INTERVAL_HOURS.toLong(),
+                TimeUnit.HOURS,
+            )
                 .setConstraints(createConstraints())
                 .addTag(TAG)
                 .setBackoffCriteria(BackoffPolicy.LINEAR, 1, TimeUnit.HOURS)
@@ -492,19 +468,10 @@ class SuggestionsWorker @AssistedInject constructor(
         const val MANGA_CHANNEL_ID = "suggestions"
         const val GROUP_SUGGESTION = "org.skepsun.kototoro.SUGGESTIONS"
         const val WORKER_NOTIFICATION_ID = 36
-        const val MAX_RESULTS = 160
-        const val MAX_SOURCE_RESULTS = 20
-        const val MAX_RESULTS_PER_SOURCE = 12
-        const val TAG_EQ_THRESHOLD = 0.4f
+        const val TAG_EQ_THRESHOLD = org.skepsun.kototoro.suggestions.domain.SUGGESTION_TAG_THRESHOLD
         const val RATING_MIN = 0.5f
         const val SETTINGS_ACTION_CODE = 4
 
-        val preferredSortOrders = listOf(
-            SortOrder.UPDATED,
-            SortOrder.NEWEST,
-            SortOrder.POPULARITY,
-            SortOrder.RATING,
-        )
     }
 
     @AssistedFactory

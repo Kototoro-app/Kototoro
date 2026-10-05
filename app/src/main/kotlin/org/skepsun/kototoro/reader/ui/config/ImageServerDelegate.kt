@@ -9,16 +9,6 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.util.suspendlazy.getOrNull
 import org.skepsun.kototoro.parsers.util.suspendlazy.suspendLazy
 
-data class ImageServerOptions(
-    val selectedValue: String?,
-    val entries: List<ImageServerEntry>,
-)
-
-data class ImageServerEntry(
-    val value: String?,
-    val label: String?,
-)
-
 class ImageServerDelegate(
     private val mangaRepositoryFactory: ContentRepository.Factory,
     private val mangaSource: ContentSource?,

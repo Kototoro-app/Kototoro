@@ -66,7 +66,9 @@ public final class OfflineSource extends HttpSource implements ConfigurableSourc
             "https://fixture.invalid/image.png#opaque", null)));
     }
     @Override protected Request imageRequest(Page page) {
-        return new Request.Builder().url(page.getImageUrl()).header("X-Page-Index", Integer.toString(page.getIndex()))
+        // Like Mihon's default image request, start from the source's default headers.
+        return new Request.Builder().url(page.getImageUrl()).headers(getHeaders())
+            .header("X-Page-Index", Integer.toString(page.getIndex()))
             .header("Referer", page.getUrl()).build();
     }
     public void setupPreferenceScreen(PreferenceScreen screen) {

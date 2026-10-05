@@ -167,55 +167,19 @@ class CheckNewChaptersUseCase @Inject constructor(
         manga: Content,
         branch: String?,
     ): MangaUpdates.Success {
-        if (track.isEmpty()) {
-            // first check or manga was empty on last check
-            return MangaUpdates.Success(
-                manga = manga,
-                entityId = entityId,
-                anchorMangaId = track.anchorMangaId,
-                branch = branch,
-                newChapters = emptyList(),
-                isValid = false,
-            )
-        }
-        val chapters = requireNotNull(manga.getChapters(branch))
-        if (BuildConfig.DEBUG && chapters.findById(track.lastChapterId) == null) {
+        // The comparison rules are shared with the Windows tracker (core-domain TrackRules).
+        val chapters = if (track.isEmpty()) emptyList() else requireNotNull(manga.getChapters(branch))
+        if (BuildConfig.DEBUG && !track.isEmpty() && chapters.findById(track.lastChapterId) == null) {
             Log.e("Tracker", "Chapter ${track.lastChapterId} not found")
         }
-        val newChapters = chapters.takeLastWhile { x -> x.id != track.lastChapterId }
-        return when {
-            newChapters.isEmpty() -> {
-                MangaUpdates.Success(
-                    manga = manga,
-                    entityId = entityId,
-                    anchorMangaId = track.anchorMangaId,
-                    branch = branch,
-                    newChapters = emptyList(),
-                    isValid = chapters.lastOrNull()?.id == track.lastChapterId,
-                )
-            }
-
-            newChapters.size == chapters.size -> {
-                MangaUpdates.Success(
-                    manga = manga,
-                    entityId = entityId,
-                    anchorMangaId = track.anchorMangaId,
-                    branch = branch,
-                    newChapters = emptyList(),
-                    isValid = false,
-                )
-            }
-
-            else -> {
-                MangaUpdates.Success(
-                    manga = manga,
-                    entityId = entityId,
-                    anchorMangaId = track.anchorMangaId,
-                    branch = branch,
-                    newChapters = newChapters,
-                    isValid = true,
-                )
-            }
-        }
+        val comparison = compareTrackedChapters(chapters, { it.id }, track.lastChapterId)
+        return MangaUpdates.Success(
+            manga = manga,
+            entityId = entityId,
+            anchorMangaId = track.anchorMangaId,
+            branch = branch,
+            newChapters = comparison.newChapters,
+            isValid = comparison.isValid,
+        )
     }
 }

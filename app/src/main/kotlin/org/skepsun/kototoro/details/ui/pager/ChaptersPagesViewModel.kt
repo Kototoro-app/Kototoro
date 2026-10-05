@@ -24,6 +24,8 @@ import org.skepsun.kototoro.core.model.toChipModel
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsStateFlow
 import org.skepsun.kototoro.core.ui.BaseViewModel
+import org.skepsun.kototoro.core.ui.chapters.chapterBranchOptions
+import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.core.ui.util.ReversibleAction
 import org.skepsun.kototoro.core.util.LocaleStringComparator
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
@@ -232,16 +234,13 @@ abstract class ChaptersPagesViewModel(
         mangaDetails,
         selectedBranch,
     ) { details, branch ->
-        val branches = details?.chapters?.toList()?.sortedWithSafe(
-            compareBy(LocaleStringComparator()) { it.first },
-        ).orEmpty()
-        if (branches.size > 1) {
-            branches.map {
-                val option = ListFilterOption.Branch(titleText = it.first, chaptersCount = it.second.size)
-                option.toChipModel(isChecked = it.first == branch)
-            }
-        } else {
-            emptyList()
+        chapterBranchOptions(
+            chapters = details?.allChapters.orEmpty(),
+            branch = ContentChapter::branch,
+            comparator = LocaleStringComparator(),
+        ).map {
+            val option = ListFilterOption.Branch(titleText = it.name, chaptersCount = it.chaptersCount)
+            option.toChipModel(isChecked = it.name == branch)
         }
     }
 

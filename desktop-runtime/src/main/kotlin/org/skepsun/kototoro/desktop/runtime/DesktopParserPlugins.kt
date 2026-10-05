@@ -32,10 +32,20 @@ enum class DesktopExtensionKind {
     PARSER,
     /** Aniyomi: an APK declaring the `tachiyomi.animeextension` feature. */
     ANIYOMI,
+    /** Cloudstream: a `.cs3` archive, Android's `classes.dex` next to a `manifest.json` naming the plugin class. */
+    CLOUDSTREAM,
 }
+
+/** An app-owned copy of a Cloudstream plugin; [id] (the repository's internal name) is part of its source names. */
+data class DesktopManagedCloudstreamPlugin(val path: Path, val id: String, val sha256: String)
+
+/** Persisted install record of a Cloudstream plugin. */
+@Serializable
+data class DesktopCloudstreamRecord(val id: String, val path: String, val sha256: String)
 
 object DesktopExtensionFiles {
     fun kind(path: Path): DesktopExtensionKind {
+        if (isCloudstreamPlugin(path)) return DesktopExtensionKind.CLOUDSTREAM
         if (ApkExtensionConverter.isApk(path)) {
             val anime = runCatching { "tachiyomi.animeextension" in ApkManifestReader.read(path).features }.getOrDefault(false)
             return if (anime) DesktopExtensionKind.ANIYOMI else DesktopExtensionKind.MIHON
@@ -44,6 +54,20 @@ object DesktopExtensionFiles {
             if (jar.getJarEntry("AndroidManifest.xml") != null) DesktopExtensionKind.MIHON else DesktopExtensionKind.PARSER
         }
     }
+
+    /** A zip holding `classes.dex` and a `manifest.json` that names a `pluginClassName`. */
+    fun isCloudstreamPlugin(path: Path): Boolean = try {
+        java.util.zip.ZipFile(path.toFile()).use { zip ->
+            val manifest = zip.getEntry("manifest.json") ?: return false
+            zip.getEntry("classes.dex") != null &&
+                zip.getInputStream(manifest).use { String(it.readNBytes(64 * 1024), Charsets.UTF_8) }.contains("\"pluginClassName\"")
+        }
+    } catch (_: java.io.IOException) { false }
+
+    /** A Cloudstream plugin's id: the repository's `internalName`, or the file name without extension. */
+    fun cloudstreamPluginId(fileName: String): String =
+        fileName.substringBeforeLast('.').replace(Regex("[^A-Za-z0-9._-]"), "-").trim('-', '.', '_')
+            .ifEmpty { "cloudstream-plugin" }.take(128)
 
     /**
      * Plugin ids come from the file name, without version or packaging suffixes, so that

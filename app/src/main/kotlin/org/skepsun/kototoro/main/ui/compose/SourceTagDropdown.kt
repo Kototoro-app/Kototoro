@@ -71,7 +71,7 @@ fun SourceTagDropdown(
         MaterialTheme.colorScheme.onSurfaceVariant
     }
     val sortedEntries = remember(entries, selectedTags) {
-        entries.sortedBy { tag -> tag !in selectedTags }
+        SourceTag.menuOrder(entries, selectedTags)
     }
 
     Box(

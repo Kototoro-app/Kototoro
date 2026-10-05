@@ -41,6 +41,9 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import org.skepsun.kototoro.core.ui.chapters.ChapterSectionHeader
+import org.skepsun.kototoro.core.ui.chapters.chapterBranchChipLabel
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
@@ -166,16 +169,11 @@ fun ChaptersScreen(
                             modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false),
                             label = {
                                 Text(
-                                    buildString {
-                                        append(
-                                            chip.title?.toString()
-                                                ?: if (chip.titleResId != 0) stringResource(chip.titleResId) else "",
-                                        )
-                                        if (chip.counter > 0) {
-                                            append(" · ")
-                                            append(chip.counter)
-                                        }
-                                    },
+                                    chapterBranchChipLabel(
+                                        chip.title?.toString()
+                                            ?: if (chip.titleResId != 0) stringResource(chip.titleResId) else "",
+                                        chip.counter,
+                                    ),
                                 )
                             },
                         )
@@ -355,32 +353,15 @@ private fun ChapterHeaderUI(
     isExpanded: Boolean = true,
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .tvFocusable(
-                shape = RoundedCornerShape(8.dp),
-                enabled = isCollapsible,
-                addFocusTarget = false,
-            )
-            .clickable(enabled = isCollapsible, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = text.toString(),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.weight(1f),
-        )
-        if (isCollapsible) {
-            Icon(
-                imageVector = Icons.Default.ArrowDropDown,
-                contentDescription = if (!isExpanded) "Expand" else "Collapse",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.rotate(if (!isExpanded) -90f else 0f),
-            )
-        }
-    }
-}
+) = ChapterSectionHeader(
+    text = text.toString(),
+    modifier = modifier.tvFocusable(
+        shape = RoundedCornerShape(8.dp),
+        enabled = isCollapsible,
+        addFocusTarget = false,
+    ),
+    isCollapsible = isCollapsible,
+    isExpanded = isExpanded,
+    expandIcon = rememberVectorPainter(Icons.Default.ArrowDropDown),
+    onClick = onClick,
+)

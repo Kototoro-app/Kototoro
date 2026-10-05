@@ -66,17 +66,19 @@ private fun ExtensionCatalog(
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(extensions, key = { it.packageName }) { extension ->
                 val parserPlugin = requireNotNull(catalog).isParserPlugin(extension)
+                val cloudstreamPlugin = catalog.isCloudstreamPlugin(extension)
                 val installed = state.installedExtensions[extension.packageName]
                 val parserInstalled = state.installedEntries.any {
                     it.kind == DesktopInstalledKind.PARSER && it.id == extension.packageName
                 }
                 val anime = !parserPlugin && extension.packageName.contains(".animeextension.")
-                val compatible = parserPlugin || extension.extensionLib.matches(
+                val compatible = parserPlugin || cloudstreamPlugin || extension.extensionLib.matches(
                     // Mihon 1.4-1.6, Tsundoku 1.4/1.6 (checked again on install), Aniyomi generations 12-16.
                     if (anime) Regex("1[2-6](?:\\.\\d+)*") else Regex("1\\.[456](?:\\.\\d+)*"),
                 )
                 val hasPackage = extension.resources.jarUrl.isNotBlank() || extension.resources.apkUrl.isNotBlank()
                 val ecosystem = when {
+                    cloudstreamPlugin -> "Cloudstream"
                     parserPlugin -> "解析器插件"
                     anime -> "Aniyomi"
                     extension.packageName.contains(".novelextension.") -> "Tsundoku"
@@ -89,7 +91,7 @@ private fun ExtensionCatalog(
                     installed != null && installed > extension.versionCode -> "本地版本较新"
                     installed == extension.versionCode -> "已安装"
                     installed != null -> "更新"
-                    extension.resources.jarUrl.isBlank() && !parserPlugin -> "安装（转换 APK）"
+                    extension.resources.jarUrl.isBlank() && !parserPlugin && !cloudstreamPlugin -> "安装（转换 APK）"
                     else -> "安装"
                 }
                 Card(Modifier.fillMaxWidth()) {

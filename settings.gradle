@@ -61,12 +61,14 @@ dependencyResolutionManagement {
 include(
     ':app', ':parser-api', ':backdrop', ':macrobenchmark', ':reader-core', ':core-db', ':core-backup',
     ':core-domain', ':core-net', ':core-source', ':source-host', ':parser-host', ':dex-convert', ':desktop-runtime',
-    ':desktop-player',
+    ':desktop-player', ':core-ui', ':core-cloudflare', ':cloudstream-shared',
 )
 // Optional desktop compatibility adapter compiles against caller-supplied pinned APIs; no external jars ship by default.
 def withDesktopApp = providers.gradleProperty('withDesktopApp').map { it != 'false' }.getOrElse(false)
 if (withDesktopApp || providers.gradleProperty('withMihonDesktopCompat').map { it != 'false' }.getOrElse(false)) {
     include ':mihon-desktop-compat'
+    // Cloudstream plugins run in the same Android compatibility runtime.
+    include ':cloudstream-desktop'
 }
 if (withDesktopApp) include ':desktop-app'
 // T0.3 offline self-built NovelSourcery/Tsundoku fixture APKs (plan Phase 0 / T0.3). Each

@@ -40,20 +40,24 @@ internal object DesktopReaderCameraProbe {
                             controller.state.value.image != null
                     }
                     settled()
+                    // Neighbouring slots are composed off screen (clipped to empty bounds); count what the viewport shows.
                     waitUntil(timeoutMillis = 15_000) {
-                        onAllNodesWithTag("reader-page").fetchSemanticsNodes().size == count
+                        val viewport = onNodeWithTag("reader-viewport").fetchSemanticsNode().boundsInRoot
+                        onAllNodesWithTag("reader-page").fetchSemanticsNodes().count { node ->
+                            node.boundsInRoot.width > 0f && node.boundsInRoot.left < viewport.right &&
+                                node.boundsInRoot.right > viewport.left
+                        } == count && !controller.isPrefetching
                     }
                 }
                 fun fit(fit: ZoomMode) {
-                    onNodeWithTag("reader-fit").performClick()
-                    onNodeWithTag("reader-fit:${fit.name}").performClick()
+                    readerFit(fit)
                     waitUntil(timeoutMillis = 15_000) {
                         !controller.state.value.busy && controller.state.value.readerSettings.fitMode == fit
                     }
                     settled()
                     onNodeWithTag("reader-zoom").assertTextEquals("100%")
                 }
-                fun reset() { onNodeWithTag("reader-zoom-reset").performClick(); settled() }
+                fun reset() { onNodeWithTag("reader-zoom").performClick(); settled() }
                 fun shortcut(key: Key) {
                     onNodeWithTag("reader-viewport").performKeyInput {
                         keyDown(Key.CtrlLeft); pressKey(key); keyUp(Key.CtrlLeft)
@@ -90,13 +94,13 @@ internal object DesktopReaderCameraProbe {
                 onNodeWithTag("content:${content.id}").performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.DETAILS }
                 settled()
-                onNodeWithText("开始 / 继续阅读").performClick()
+                onNodeWithTag("preview-read").performClick()
                 if (mode == "reader-camera-read") {
                     ready(3, 2)
                     check(controller.state.value.readerSettings ==
                         DesktopReaderSettings(DesktopReaderMode.DOUBLE, true, ZoomMode.FIT_WIDTH))
                     onNodeWithTag("reader-zoom").assertTextEquals("100%")
-                    onNodeWithTag("reader-progress").assertTextEquals("4–5 / 5")
+                    assertReaderProgress("4–5 / 5")
                     val first = onNodeWithContentDescription("第 4 页").getUnclippedBoundsInRoot()
                     val second = onNodeWithContentDescription("第 5 页").getUnclippedBoundsInRoot()
                     check(first.left > second.left)
@@ -174,20 +178,20 @@ internal object DesktopReaderCameraProbe {
                     val native = onNodeWithContentDescription("第 1 页").getUnclippedBoundsInRoot()
                     check(abs(native.width.value - 400) < 2 && abs(native.height.value - 600) < 2)
                     fit(ZoomMode.FIT_HEIGHT)
-                    onNodeWithText("下一页").performClick(); ready(1, 1)
-                    onNodeWithText("下一页").performClick(); ready(2, 1)
+                    readerKey(Key.PageDown); ready(1, 1)
+                    readerKey(Key.PageDown); ready(2, 1)
                     onNodeWithTag("reader-zoom").assertTextEquals("100%")
                     val wideViewport = onNodeWithTag("reader-viewport").getUnclippedBoundsInRoot()
                     val wide = onNodeWithContentDescription("第 3 页").getUnclippedBoundsInRoot()
                     check(abs(wide.height.value - wideViewport.height.value) < 2 && wide.width > wideViewport.width)
                     val ltrNumeral = whiteCenter()
-                    onNodeWithTag("reader-direction").performClick()
+                    readerMode("right_to_left")
                     waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy && controller.state.value.readerSettings.rightToLeft }
                     settled()
                     check(whiteCenter().x < ltrNumeral.x - 100f) { "RTL fit-height reading edge did not move rendered pixels" }
                     snapshot("fit-height-rtl")
-                    onNodeWithText("下一页").performClick(); ready(3, 1)
-                    onNodeWithTag("reader-mode").performClick()
+                    readerKey(Key.PageDown); ready(3, 1)
+                    readerDoublePages()
                     waitUntil(timeoutMillis = 15_000) {
                         !controller.state.value.busy && controller.state.value.readerSettings.mode == DesktopReaderMode.DOUBLE
                     }

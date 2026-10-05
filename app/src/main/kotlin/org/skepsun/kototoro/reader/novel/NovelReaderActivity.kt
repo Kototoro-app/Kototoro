@@ -63,6 +63,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.util.ext.isPageEbookChapter
+import org.skepsun.kototoro.bookmarks.domain.novelBookmarkProgress
 import org.skepsun.kototoro.core.util.ext.isTextEbookChapter
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.BuildConfig
@@ -245,7 +246,6 @@ class NovelReaderActivity :
     private var currentChapterIndex: Int = 0
     private var chapterLoadJob: Job? = null
     private var preloadJob: Job? = null
-    private var bookmarkObservationJob: Job? = null
     private var isUiVisible: Boolean = false
     private var currentPageIndex: Int = 0
     private var desiredProgressRatio: Float? = null
@@ -725,8 +725,10 @@ class NovelReaderActivity :
                             onPagedPositionChanged = { chapterId, page, pageCount ->
                                 currentPageIndex = page
                                 updateReadingStatus(page, pageCount)
-                                observeCurrentPageBookmark(chapterId, page)
                                 onEInkPagedPositionChanged(chapterId, page)
+                            },
+                            onBookmarkPositionUnavailable = {
+                                showReaderMessage(R.string.novel_bookmark_position_unavailable)
                             },
                             renderContent = true,
                             onImageClick = { path ->
@@ -1588,9 +1590,13 @@ class NovelReaderActivity :
                     ?.takeIf { it.chapterId == selection.chapterId }
                     ?.page
                     ?: currentPageIndex
-                val existing = bookmarksRepository.observeBookmark(manga, chapter.id, page).first()
+                val existing = state.novelBookmarks.firstOrNull { bookmark ->
+                    state.bookmarkPositions[bookmark.pageId]?.let {
+                        it.chapterId == chapter.id && it.segmentIndex == page
+                    } == true
+                }
                 if (existing != null) {
-                    bookmarksRepository.removeBookmark(manga.id, chapter.id, page)
+                    bookmarksRepository.removeBookmark(existing)
                     contentRoot.performConfirmHapticFeedback()
                     showReaderMessage(R.string.novel_bookmark_removed)
                 } else {
@@ -1601,9 +1607,9 @@ class NovelReaderActivity :
                             chapterId = chapter.id,
                             page = page,
                             scroll = 0,
-                            imageUrl = selection.text,
+                            imageUrl = org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview(selection.text),
                             createdAt = java.time.Instant.now(),
-                            percent = getCurrentProgressRatio(),
+                            percent = currentNovelBookmarkPercent(chapter.id),
                         ),
                     )
                     contentRoot.performConfirmHapticFeedback()
@@ -1858,8 +1864,11 @@ class NovelReaderActivity :
         if (chapterIndex < 0) return
         composeReaderViewModel.dismissMarkings()
         composeReaderViewModel.dismissChapters()
+        composeReaderViewModel.requestBookmark(bookmark)
+        if (composeReaderViewModel.uiState.value.chapterId == bookmark.chapterId &&
+            !composeReaderViewModel.uiState.value.loading) return
         currentChapterIndex = chapterIndex
-        currentPageIndex = bookmark.page
+        currentPageIndex = 0
         loadChapter(chapterIndex)
     }
 
@@ -1897,39 +1906,25 @@ class NovelReaderActivity :
                 val targetChapterId = composeState.position?.chapterId ?: chapter.id
                 val targetChapter = chapters.find { it.id == targetChapterId } ?: chapter
                 val currentPage = composeState.position?.page ?: currentPageIndex
-                val percent = getCurrentProgressRatio()
+                val percent = currentNovelBookmarkPercent(targetChapter.id)
 
                 // 检查是否已存在书签
-                val existingBookmark = bookmarksRepository.observeBookmark(
-                    manga, targetChapter.id, currentPage
-                ).first()
+                val existingBookmark = composeState.novelBookmarks.firstOrNull { bookmark ->
+                    composeState.bookmarkPositions[bookmark.pageId]?.let {
+                        it.chapterId == targetChapter.id && it.segmentIndex == currentPage
+                    } == true
+                }
 
                 if (existingBookmark != null) {
                     // 删除书签
-                    bookmarksRepository.removeBookmark(manga.id, targetChapter.id, currentPage)
+                    bookmarksRepository.removeBookmark(existingBookmark)
                     contentRoot.performConfirmHapticFeedback()
                     showReaderMessage(getString(R.string.novel_bookmark_removed), 1500L)
                 } else {
                     // 添加书签 - 保存当前页面的文本预览
-                    val pageText = composeState.currentPageText.trim()
-                    val previewText = if (pageText.isNotBlank()) {
-                        org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview(pageText)
-                            .ifBlank { pageText.take(200).trim() }
-                    } else {
-                        val rawContent = composeState.continuousChapters
-                            .firstOrNull { it.chapterId == targetChapter.id }?.content
-                            ?: composeState.content
-                        val cleanContent = org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview(rawContent)
-                            .ifBlank { rawContent.take(200).trim() }
-                        if (readerSettings.readingMode == ReadingMode.SCROLL && currentPage > 0) {
-                            val paragraphs = cleanContent.split("\n").filter { it.isNotBlank() }
-                            paragraphs.getOrNull(currentPage)?.take(200)?.trim()
-                                ?: cleanContent.take(200).trim()
-                        } else {
-                            cleanContent.take(200).trim()
-                        }
-                    }
-
+                    val previewText = org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview(
+                        composeState.currentPageText,
+                    )
                     val bookmark = org.skepsun.kototoro.bookmarks.domain.Bookmark(
                         manga = manga,
                         pageId = System.currentTimeMillis(), // 使用时间戳作为 ID
@@ -1951,14 +1946,12 @@ class NovelReaderActivity :
         }
     }
 
-    private fun observeCurrentPageBookmark(chapterId: Long, page: Int) {
-        bookmarkObservationJob?.cancel()
-        bookmarkObservationJob = lifecycleScope.launch {
-            bookmarksRepository.observeBookmark(manga, chapterId, page)
-                .map { it != null }
-                .distinctUntilChanged()
-                .collect(composeReaderViewModel::publishCurrentPageBookmarked)
-        }
+    private fun currentNovelBookmarkPercent(chapterId: Long): Float {
+        val chapter = requireNotNull(chapters.firstOrNull { it.id == chapterId })
+        val branch = chapters.filter { it.branch == chapter.branch }
+        val position = requireNotNull(composeReaderViewModel.uiState.value.position)
+        require(position.chapterId == chapterId)
+        return novelBookmarkProgress(branch.indexOf(chapter), branch.size, position.page, position.pageCount)
     }
 
     private fun showVoiceSelectionDialog() {
@@ -2686,6 +2679,7 @@ class NovelReaderActivity :
                     throw e
                 } catch (e: Exception) {
                     android.util.Log.e("NovelReaderActivity", "Error collecting novel flow", e)
+                    composeReaderViewModel.cancelBookmarkRequest()
                     showLoading(false)
                     // Optionally show error to user
                 }
@@ -2857,7 +2851,8 @@ class NovelReaderActivity :
             settings = readerSettings,
             translation = chapterTranslations[chapterIndex],
         )
-        val hasPendingMarking = composeReaderViewModel.uiState.value.pendingMarkingTarget?.chapterId == chapter.id
+        val hasPendingMarking = composeReaderViewModel.uiState.value.pendingMarkingTarget?.chapterId == chapter.id ||
+            composeReaderViewModel.uiState.value.bookmarkRequest?.bookmark?.chapterId == chapter.id
         if (readerSettings.readingMode == ReadingMode.PAGED && !hasPendingMarking) {
             composeReaderViewModel.requestPage(
                 if (currentPageIndex < 0) Int.MAX_VALUE else currentPageIndex,
@@ -2882,7 +2877,8 @@ class NovelReaderActivity :
             settings = readerSettings,
             translation = chapterTranslations[chapterIndex],
         )
-        val hasPendingMarkingInChapter = composeReaderViewModel.uiState.value.pendingMarkingTarget?.chapterId == chapter.id
+        val hasPendingMarkingInChapter = composeReaderViewModel.uiState.value.pendingMarkingTarget?.chapterId == chapter.id ||
+            composeReaderViewModel.uiState.value.bookmarkRequest?.bookmark?.chapterId == chapter.id
         if (readerSettings.readingMode == ReadingMode.PAGED && !hasPendingMarkingInChapter) {
             composeReaderViewModel.requestPage(
                 if (currentPageIndex < 0) Int.MAX_VALUE else currentPageIndex,
@@ -3290,6 +3286,7 @@ class NovelReaderActivity :
     }
 
     private fun showError(message: String) {
+        composeReaderViewModel.cancelBookmarkRequest()
         showReaderMessage(message, 3000L)
     }
 
@@ -3430,6 +3427,7 @@ class NovelReaderActivity :
     private fun onChapterSelected(index: Int) {
         android.util.Log.d("NovelReaderActivity", "onChapterSelected: index=$index, currentChapterIndex=$currentChapterIndex, chapters.size=${chapters.size}")
         if (index != currentChapterIndex && index in chapters.indices) {
+            composeReaderViewModel.cancelBookmarkRequest()
             val previousState = currentReaderState()
             val selectedChapter = chapters[index]
             android.util.Log.d("NovelReaderActivity", "Loading selected chapter: index=$index, title='${selectedChapter.title}', url='${selectedChapter.url}'")
@@ -3997,6 +3995,7 @@ class NovelReaderActivity :
     }
 
     private fun onComposeVisibleChapterChanged(index: Int) {
+        if (composeReaderViewModel.uiState.value.bookmarkRequest != null) return
         if (index !in chapters.indices || index == currentChapterIndex) return
         currentChapterIndex = index
         updateNavigationButtons()
@@ -4004,6 +4003,7 @@ class NovelReaderActivity :
     }
 
     private fun onComposeVisibleProgress(chapterIndex: Int, blockIndex: Int, blockCount: Int) {
+        if (composeReaderViewModel.uiState.value.bookmarkRequest != null) return
         if (chapterIndex !in chapters.indices || blockCount <= 0) return
         val chapterProgress = ((blockIndex + 0.5f) / blockCount).coerceIn(0f, 1f)
         composeReaderViewModel.publishPosition(

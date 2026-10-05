@@ -21,6 +21,9 @@ data class DesktopNovel(
     val startBlock: Int,
     val firstVisible: Int = startBlock,
     val lastVisible: Int = startBlock,
+    /** Repeated jumps to the same block still request a scroll without replacing the chapter body. */
+    val navigation: Long = 0,
+    val bookmarkBlocks: Map<Long, Int> = emptyMap(),
 )
 
 enum class DesktopNovelTheme(val title: String, val background: Long, val text: Long, val muted: Long) {

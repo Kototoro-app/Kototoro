@@ -761,6 +761,7 @@
     <string name="novel_bookmark_removed">Bookmark removed</string>
     <string name="novel_bookmark_added">Bookmark added</string>
     <string name="novel_bookmark_failed">Bookmark operation failed: %s</string>
+    <string name="novel_bookmark_position_unavailable">The bookmarked text has changed or cannot be located</string>
     <string name="novel_loading_online_chapter">Loading chapter from network…</string>
     <string name="novel_chapter_not_downloaded">This chapter has not been downloaded yet</string>
     <string name="novel_loading_epub_chapter">Loading EPUB chapter…</string>

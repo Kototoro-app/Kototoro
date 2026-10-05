@@ -31,7 +31,10 @@ internal object DesktopCoverProbe {
                 }
                 fun cover(content: SourceContent) {
                     waitUntil(timeoutMillis = 15_000) {
-                        onAllNodesWithTag("cover:${content.id}", useUnmergedTree = true).fetchSemanticsNodes().size == 1
+                        val covers = onAllNodesWithTag("cover:${content.id}", useUnmergedTree = true).fetchSemanticsNodes()
+                        val details = controller.state.value.screen == DesktopScreen.DETAILS
+                        val preview = onAllNodesWithTag("tablet-preview-content").fetchSemanticsNodes().isNotEmpty()
+                        covers.size == if (details && preview) 3 else if (details) 2 else 1
                     }
                 }
                 fun snapshot(name: String) {
@@ -74,13 +77,13 @@ internal object DesktopCoverProbe {
                 settled()
                 cover(first)
                 if (mode == "cover-write") {
-                    onNodeWithText("加入收藏").performClick()
+                    onNodeWithTag("preview-favourite").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.isFavourite }
                     settled()
-                    onNodeWithText("开始 / 继续阅读").performClick()
+                    onNodeWithTag("preview-read").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.image != null }
                     settled()
-                    onNodeWithText("返回详情").performClick()
+                    onNodeWithTag("reader-back").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.DETAILS }
                     settled()
                 }

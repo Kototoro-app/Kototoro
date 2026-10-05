@@ -17,9 +17,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.desktop.runtime.DesktopUpscaleModel
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
 import org.skepsun.kototoro.reader.core.ZoomMode
+import org.skepsun.kototoro.reader.domain.TapGridArea
+import org.skepsun.kototoro.reader.ui.tapgrid.ReaderTapGridConfigGrid
+import org.skepsun.kototoro.reader.ui.tapgrid.TapAction
+import org.skepsun.kototoro.reader.ui.tapgrid.TapActions
+import org.skepsun.kototoro.reader.ui.tapgrid.TapGridConfig
 
-internal enum class DesktopReaderPanel(val title: String) { CHAPTERS("章节"), BOOKMARKS("书签"), OPTIONS("阅读设置") }
+internal enum class DesktopReaderPanel(val title: String) { CHAPTERS("章节"), BOOKMARKS("书签"), OPTIONS("阅读设置"), MORE("更多阅读设置") }
 
 /** Same-window panels keep the reader scene mounted and route every change through its original controller. */
 @Composable
@@ -83,25 +91,32 @@ internal fun DesktopReaderSidePanel(controller: DesktopController, state: Deskto
             } else Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 val settings = state.readerSettings
-                Text("阅读方式", fontWeight = FontWeight.SemiBold)
-                DesktopReaderMode.entries.forEach { mode ->
-                    RadioOption(modeTitle(mode), mode == settings.mode, enabled, "reader-option-mode:${mode.name}") {
-                        controller.readerSettings(settings.copy(mode = mode))
-                    }
+                // Android keeps these in its reader settings, opened from the options panel's settings button.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("到章节首尾时自动跨章", modifier = Modifier.weight(1f))
+                    Switch(settings.automaticChapter, { controller.readerSettings(settings.copy(automaticChapter = it)) },
+                        enabled = enabled, modifier = Modifier.testTag("reader-auto-chapter"))
                 }
+                OutlinedButton({ controller.reloadPage() }, enabled = enabled,
+                    modifier = Modifier.testTag("reader-reload")) { Text("重新加载当前页面") }
                 Divider()
-                Text("页面适配", fontWeight = FontWeight.SemiBold)
-                ZoomMode.entries.forEach { mode ->
-                    RadioOption(fitTitle(mode), mode == settings.fitMode,
-                        enabled && settings.mode != DesktopReaderMode.CONTINUOUS, "reader-option-fit:${mode.name}") {
-                        controller.readerSettings(settings.copy(fitMode = mode))
-                    }
+                var speed by remember(settings.autoScrollSpeed) { mutableFloatStateOf(settings.autoScrollSpeed) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("自动翻页 / 滚动速度", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Text("×${"%.1f".format(org.skepsun.kototoro.reader.core.ReaderAutoScroll.speedMultiplier(speed))}",
+                        color = MaterialTheme.colors.primary)
                 }
+                Slider(speed, { speed = it }, valueRange = 0f..1f, enabled = enabled,
+                    onValueChangeFinished = { controller.readerSettings(settings.copy(autoScrollSpeed = speed)) },
+                    modifier = Modifier.fillMaxWidth().testTag("reader-option-autoscroll-speed"))
+                Divider()
+                TapGridOptions(controller, settings, enabled)
                 Divider()
                 SuperResolutionOptions(controller, settings, enabled)
                 Divider()
                 Text("快捷键", fontWeight = FontWeight.SemiBold)
                 Text("← / → 翻页\nPageUp / PageDown 翻页或滚动\nHome / End 首末页\nB 添加或移除书签\n" +
+                    "鼠标拖动 翻页（放大时先平移）\n底部“自动翻页”按钮开始自动翻页 / 滚动，操作时暂停 2 秒\n点击左 / 右侧 翻页，点击中间 显示或收起工具栏（可在“阅读操作”中修改）\n长按或右键 执行长按操作（默认中间打开阅读设置）\n滚轮 翻页（放大时滚动）\n" +
                     "Ctrl + 滚轮 缩放\nH 收起或显示工具栏\nF11 全屏\nEsc 关闭面板或返回详情",
                     fontSize = 13.sp, color = MaterialTheme.colors.onSurface.copy(alpha = .7f))
             }
@@ -116,6 +131,89 @@ private fun RadioOption(title: String, selected: Boolean, enabled: Boolean, tag:
         RadioButton(selected, onClick = null, enabled = enabled)
         Text(title, modifier = Modifier.padding(start = 12.dp))
     }
+}
+
+/**
+ * Android's reader actions: the shared tap-grid configuration grid. A click edits an area's tap action, a long press or
+ * right click its long-tap action, chosen in the list below the grid.
+ */
+@Composable
+private fun TapGridOptions(controller: DesktopController, settings: DesktopReaderSettings, enabled: Boolean) {
+    var selector by remember { mutableStateOf<Pair<TapGridArea, Boolean>?>(null) }
+    fun update(next: Map<TapGridArea, TapActions>) = controller.readerSettings(settings.copy(tapGrid = next))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(AndroidStrings["reader_actions"], fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        TextButton({ selector = null; update(TapGridConfig.defaults) },
+            enabled = enabled && settings.tapGrid != TapGridConfig.defaults,
+            modifier = Modifier.testTag("reader-option-tap-reset")) { Text(AndroidStrings["reset"]) }
+        TextButton({ selector = null; update(TapGridConfig.disabled) },
+            enabled = enabled && settings.tapGrid != TapGridConfig.disabled,
+            modifier = Modifier.testTag("reader-option-tap-disable")) { Text(AndroidStrings["disable_all"]) }
+    }
+    Text("点击区域设置点按操作，长按或右键设置长按操作。", fontSize = 12.sp,
+        color = MaterialTheme.colors.onSurface.copy(alpha = .7f))
+    val onSurface = MaterialTheme.colors.onSurface
+    ReaderTapGridConfigGrid(settings.tapGrid, AndroidStrings["tap_action"], AndroidStrings["long_tap_action"],
+        { tapActionTitle(it) },
+        onTap = { area -> if (enabled) selector = area to false },
+        onLongTap = { area -> if (enabled) selector = area to true },
+        modifier = Modifier.fillMaxWidth().height(300.dp).testTag("reader-option-tap-grid"),
+        dividerColor = onSurface.copy(alpha = .3f),
+        textStyle = androidx.compose.ui.text.TextStyle(color = onSurface, fontSize = 11.sp, lineHeight = 14.sp),
+        cellModifier = { area ->
+            Modifier.testTag("reader-option-tap:${area.name}").pointerInput(area, enabled) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (enabled && event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                            selector = area to true
+                            event.changes.forEach { it.consume() }
+                        }
+                    }
+                }
+            }
+        })
+    val (area, long) = selector ?: return
+    val current = TapGridConfig.action(settings.tapGrid, area, long)
+    Text("${tapAreaTitle(area)} · ${AndroidStrings[if (long) "long_tap_action" else "tap_action"]}", fontWeight = FontWeight.SemiBold,
+        fontSize = 13.sp, modifier = Modifier.testTag("reader-option-tap-selector"))
+    (listOf(null) + TapAction.entries).forEach { action ->
+        RadioOption(tapActionTitle(action), action == current, enabled, "reader-option-tap-action:${action?.name ?: "NONE"}") {
+            update(TapGridConfig.with(settings.tapGrid, area, long, action))
+            selector = null
+        }
+    }
+}
+
+/** Android's names of the reader actions. */
+internal fun tapActionTitle(action: TapAction?): String = AndroidStrings[when (action) {
+    TapAction.PAGE_NEXT -> "next_page"
+    TapAction.PAGE_PREV -> "prev_page"
+    TapAction.CHAPTER_NEXT -> "next_chapter"
+    TapAction.CHAPTER_PREV -> "prev_chapter"
+    TapAction.TOGGLE_UI -> "toggle_ui"
+    TapAction.SHOW_MENU -> "show_menu"
+    null -> "none"
+}]
+
+private fun tapAreaTitle(area: TapGridArea): String = when (area) {
+    TapGridArea.TOP_LEFT -> "左上"
+    TapGridArea.TOP_CENTER -> "上方中间"
+    TapGridArea.TOP_RIGHT -> "右上"
+    TapGridArea.CENTER_LEFT -> "左侧中间"
+    TapGridArea.CENTER -> "中间"
+    TapGridArea.CENTER_RIGHT -> "右侧中间"
+    TapGridArea.BOTTOM_LEFT -> "左下"
+    TapGridArea.BOTTOM_CENTER -> "下方中间"
+    TapGridArea.BOTTOM_RIGHT -> "右下"
+}
+
+/** Android's names for its page-turn animations. */
+internal fun animationTitle(animation: org.skepsun.kototoro.core.prefs.ReaderAnimation): String = when (animation) {
+    org.skepsun.kototoro.core.prefs.ReaderAnimation.NONE -> "无"
+    org.skepsun.kototoro.core.prefs.ReaderAnimation.DEFAULT -> "滑动"
+    org.skepsun.kototoro.core.prefs.ReaderAnimation.ADVANCED -> "覆盖"
+    org.skepsun.kototoro.core.prefs.ReaderAnimation.SIMULATION -> "仿真翻页"
 }
 
 internal fun modeTitle(mode: DesktopReaderMode): String = when (mode) {

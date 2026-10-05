@@ -28,7 +28,10 @@ enum class SourceTag(
     /**
      * Whether this tag matches the given content and origin group.
      */
-    fun matches(contentGroup: ContentGroup, originGroup: OriginGroup): Boolean = when (this) {
+    fun matches(contentGroup: ContentGroup, originGroup: OriginGroup): Boolean = matchesOrigin(originGroup)
+
+    /** Every tag classifies by where a source comes from; hosts that only know the origin call this directly. */
+    fun matchesOrigin(originGroup: OriginGroup): Boolean = when (this) {
         BUILTIN -> originGroup == OriginGroup.NATIVE
         MIHON -> originGroup == OriginGroup.MIHON
         ANIYOMI -> originGroup == OriginGroup.ANIYOMI
@@ -69,6 +72,24 @@ enum class SourceTag(
             LNREADER,
             TSUNDOKU,
         )
+
+        /**
+         * The quick filter's selection step on every page: `null` ("all") clears, a selected tag is removed and
+         * any other tag is added. Several tags combine with OR, as the library derivers apply them.
+         */
+        fun toggle(current: Set<SourceTag>, tag: SourceTag?): Set<SourceTag> = when {
+            tag == null -> emptySet()
+            tag in current -> current - tag
+            else -> current + tag
+        }
+
+        /** The filter menu lists selected tags first and keeps [entries]' order otherwise. */
+        fun menuOrder(entries: List<SourceTag>, selected: Set<SourceTag>): List<SourceTag> =
+            entries.sortedBy { it !in selected }
+
+        /** OR over [selected]; an empty selection accepts everything and an unknown origin nothing else. */
+        fun accepts(selected: Set<SourceTag>, origin: OriginGroup?): Boolean =
+            selected.isEmpty() || (origin != null && selected.any { it.matchesOrigin(origin) })
 
         fun sanitizeQuickFilterSelection(tags: Set<SourceTag>): Set<SourceTag> =
             tags.filterTo(linkedSetOf()) { it in quickFilterEntries || it == PINNED }

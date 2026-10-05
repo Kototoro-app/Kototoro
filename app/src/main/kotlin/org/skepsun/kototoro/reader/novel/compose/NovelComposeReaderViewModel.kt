@@ -68,6 +68,8 @@ data class NovelComposeReaderUiState(
     val continuousChapters: List<NovelComposeChapterContent> = emptyList(),
     val novelMarkings: List<NovelMarkingEntity> = emptyList(),
     val novelBookmarks: List<Bookmark> = emptyList(),
+    val bookmarkRequest: NovelBookmarkRequest? = null,
+    val bookmarkPositions: Map<Long, NovelBookmarkResolvedPosition> = emptyMap(),
     val textSelection: NovelTextSelection? = null,
     val selectedMarking: NovelMarkingEntity? = null,
     val selectedMarkingAnchor: Offset? = null,
@@ -148,6 +150,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
     private var nextMessageId = 0L
     private var nextPageRequestId = 0L
     private var nextScrollRequestId = 0L
+    private var nextBookmarkRequestId = 0L
 
     fun publishChrome(
         enabled: Boolean = true,
@@ -236,6 +239,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
         )
         _uiState.value = _uiState.value.copy(
             pageRequest = request,
+            bookmarkRequest = null,
         )
         android.util.Log.d(
             NOVEL_PAGER_LOG_TAG,
@@ -290,10 +294,56 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
             currentPageEnd = charEnd.coerceAtLeast(charStart),
             isCurrentPageBookmarked = false,
         )
+        refreshCurrentPageBookmarked()
     }
 
     fun publishCurrentPageBookmarked(bookmarked: Boolean) {
         _uiState.value = _uiState.value.copy(isCurrentPageBookmarked = bookmarked)
+    }
+
+    fun requestBookmark(bookmark: Bookmark) {
+        _uiState.value = _uiState.value.copy(
+            bookmarkRequest = NovelBookmarkRequest(++nextBookmarkRequestId, bookmark),
+            pageRequest = null,
+            scrollRequest = null,
+            pendingMarkingTarget = null,
+        )
+    }
+
+    fun consumeBookmarkRequest(requestId: Long): Boolean {
+        if (_uiState.value.bookmarkRequest?.id != requestId) return false
+        _uiState.value = _uiState.value.copy(bookmarkRequest = null)
+        return true
+    }
+
+    fun cancelBookmarkRequest() {
+        _uiState.value = _uiState.value.copy(bookmarkRequest = null)
+    }
+
+    fun publishBookmarkPositions(positions: Map<Long, NovelBookmarkResolvedPosition>) {
+        if (_uiState.value.bookmarkPositions != positions) {
+            _uiState.value = _uiState.value.copy(bookmarkPositions = positions)
+        }
+        refreshCurrentPageBookmarked()
+    }
+
+    fun publishBookmarkText(chapterId: Long, text: String) {
+        if (_uiState.value.chapterId == chapterId && _uiState.value.currentPageText != text) {
+            _uiState.value = _uiState.value.copy(currentPageText = text)
+        }
+    }
+
+    fun refreshCurrentPageBookmarked() {
+        val state = _uiState.value
+        val position = state.position
+        val bookmarked = position != null && state.novelBookmarks.any {
+            state.bookmarkPositions[it.pageId]?.let { target ->
+                target.chapterId == position.chapterId && target.segmentIndex == position.page
+            } == true
+        }
+        if (state.isCurrentPageBookmarked != bookmarked) {
+            _uiState.value = state.copy(isCurrentPageBookmarked = bookmarked)
+        }
     }
 
     fun publishImageContext(imageContext: NovelComposeImageContext) {
@@ -318,6 +368,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
     }
 
     fun focusContinuousChapter(chapterIndex: Int) {
+        if (_uiState.value.bookmarkRequest != null) return
         val state = _uiState.value
         val chapter = state.continuousChapters.firstOrNull { it.chapterIndex == chapterIndex }
         val chapterTitle = chapter?.chapterTitle
@@ -356,10 +407,12 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 
     fun publishPosition(position: NovelReadingPosition) {
         _uiState.value = _uiState.value.copy(position = position)
+        refreshCurrentPageBookmarked()
     }
 
     fun publishScrollPosition(position: NovelComposeScrollPosition) {
         val state = _uiState.value
+        if (state.bookmarkRequest != null) return
         _uiState.value = state.copy(
             scrollPosition = position,
             continuousChapters = state.continuousChapters.map { chapter ->
@@ -559,6 +612,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 
     fun publishNovelBookmarks(bookmarks: List<Bookmark>) {
         _uiState.value = _uiState.value.copy(novelBookmarks = bookmarks)
+        refreshCurrentPageBookmarked()
     }
 
     private var activeSelectionOwnerId: String? = null

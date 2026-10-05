@@ -49,7 +49,8 @@ internal class FixtureParser(context: ContentLoaderContext, source: ContentSourc
     /** A novel source answers with a whole chapter body instead of image pages. */
     override suspend fun getChapterContent(chapter: ContentChapter): NovelChapterContent? =
         if (source.contentType == ContentType.NOVEL) NovelChapterContent(
-            html = "<p>Body of ${chapter.title}</p><img src=\"http://$domain/illustration/${chapter.id}.png\">",
+            html = "<p>Body of ${chapter.title}</p><img src=\"http://$domain/illustration/${chapter.id}.png\">" +
+                (1..40).joinToString("") { "<p>Paragraph $it of ${chapter.title}: a scrollable novel chapter.</p>" },
             images = listOf(NovelChapterContent.NovelImage("http://$domain/illustration/${chapter.id}.png", mapOf("X-Test" to "1"))),
         ) else null
     /** Proves the host runs every image request through the parser's interceptor. */

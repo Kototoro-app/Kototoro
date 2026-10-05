@@ -370,13 +370,13 @@ class TrackWorker @AssistedInject constructor(
 
         override suspend fun schedule() {
             val frequency = settings.trackerFrequencyFactor
-            if (frequency <= 0f) {
-                return unschedule()
-            }
+            // The interval rule is shared with the Windows scheduler (core-domain TrackRules).
+            val interval = org.skepsun.kototoro.tracker.domain.trackerCheckIntervalHours(
+                trackCount = dbProvider.get().getTracksDao().getTracksCount(),
+                batchSize = BATCH_SIZE,
+                frequency = frequency,
+            ) ?: return unschedule()
             val constraints = createConstraints()
-            val runCount = dbProvider.get().getTracksDao().getTracksCount()
-            val runsPerFullCheck = (runCount / BATCH_SIZE.toFloat()).toIntUp().coerceAtLeast(1)
-            val interval = (18 / runsPerFullCheck / frequency).roundToInt().coerceAtLeast(2)
             val request = PeriodicWorkRequestBuilder<TrackWorker>(interval.toLong(), TimeUnit.HOURS)
                 .setConstraints(constraints)
                 .addTag(TAG)

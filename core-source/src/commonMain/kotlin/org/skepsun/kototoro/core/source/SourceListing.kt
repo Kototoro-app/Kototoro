@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 /** The extension ecosystems a host can serve sources from; shown to users, never part of a source's identity. */
 @Serializable
-enum class SourceEcosystem { MIHON, KOTOTORO, KOTATSU, UMA, ANIYOMI, TSUNDOKU }
+enum class SourceEcosystem { MIHON, KOTOTORO, KOTATSU, UMA, ANIYOMI, TSUNDOKU, CLOUDSTREAM }
 
 /** One selectable source as a host presents it: identity plus presentation and provenance. */
 @Serializable

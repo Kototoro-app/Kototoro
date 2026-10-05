@@ -70,7 +70,9 @@ internal object DesktopChallengeProbe {
                 check(controller.state.value.error == null) { controller.state.value.error.orEmpty() }
                 check(controller.state.value.items.single().title == "source recovered")
                 check(challenges.pending.value == null)
-                check(requests.count { it.first == "success" } == 3)
+                // Source request, the hidden Mihon solve (no challenge on this page, so it hands over at once), the
+                // manual window and the retry. The hidden solve is skipped while the host cools down after a failure.
+                check(requests.count { it.first == "success" } == 4) { "${requests.map { it.first }}" }
                 check(requests.filter { it.first == "success" }.map { it.third }.distinct().size == 1)
 
                 onNodeWithTag("source-query").performTextReplacement("cancel")
@@ -105,7 +107,7 @@ internal object DesktopChallengeProbe {
                 waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy }
                 check(controller.state.value.error != null)
                 check(challenges.pending.value == null)
-                check(requests.count { it.first == "unchanged" } == 3)
+                check(requests.count { it.first == "unchanged" } in 3..4) { "${requests.map { it.first }}" }
 
                 controller.browse(query = "close")
                 waitUntil(timeoutMillis = 15_000) { challenges.pending.value != null }

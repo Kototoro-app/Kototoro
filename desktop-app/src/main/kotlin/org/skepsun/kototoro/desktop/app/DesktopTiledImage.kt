@@ -30,6 +30,7 @@ internal fun DesktopTiledImage(image: DesktopReaderImage, node: VisibleNode?, di
     modifier: Modifier) {
     val tiles = remember(image, node, displayScale) { node?.let { VisibleImageTiles.resolve(it,
         org.skepsun.kototoro.reader.core.IntSize(image.width, image.height), displayScale) }.orEmpty() }
+    val style = LocalDesktopReaderPageStyle.current
     Box(modifier) {
         val density = LocalDensity.current
         tiles.forEach { tile ->
@@ -56,7 +57,8 @@ internal fun DesktopTiledImage(image: DesktopReaderImage, node: VisibleNode?, di
                         val top = (region.top * y).roundToInt()
                         drawImage(pixels, dstOffset = IntOffset(left, top), dstSize = IntSize(
                             ((region.right * x).roundToInt() - left).coerceAtLeast(1),
-                            ((region.bottom * y).roundToInt() - top).coerceAtLeast(1)), filterQuality = FilterQuality.High)
+                            ((region.bottom * y).roundToInt() - top).coerceAtLeast(1)), filterQuality = FilterQuality.High,
+                            colorFilter = style.colorFilter)
                     }
                 } else if (failed) TextButton({ failed = false; retry++ }, modifier = Modifier.offset(y = with(density) {
                     ((node?.visibleRegion?.top ?: 0f) - (node?.sceneBounds?.top ?: 0f)).toDp()

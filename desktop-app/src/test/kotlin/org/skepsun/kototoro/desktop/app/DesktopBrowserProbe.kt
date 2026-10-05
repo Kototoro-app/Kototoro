@@ -61,7 +61,8 @@ internal object DesktopBrowserProbe {
                 waitUntil(timeoutMillis = 15_000) { !owner.state.value.busy }
                 onNodeWithTag("nav:更多").performClick()
                 waitUntil(timeoutMillis = 15_000) { !owner.state.value.busy }
-                onNodeWithText("浏览器调试", useUnmergedTree = true).performClick()
+                // The "more" page grew settings sections above the advanced tools.
+                onNodeWithText("浏览器调试", useUnmergedTree = true).performScrollTo().performClick()
                 waitUntil(timeoutMillis = 15_000) { owner.state.value.screen == DesktopScreen.BROWSER && !owner.state.value.busy }
                 fun click(tag: String, expected: String) {
                     onNodeWithTag(tag).performScrollTo().performClick()

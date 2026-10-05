@@ -32,6 +32,8 @@ internal object DesktopTilesProbe {
                     } }
                 }
                 fun bluePixels() {
+                    // Inspect tile seams without the shared title, gradients and progress dock over them.
+                    readerKey(androidx.compose.ui.input.key.Key.H)
                     waitUntil(timeoutMillis = 15_000) {
                         val viewport = onNodeWithTag("reader-viewport").fetchSemanticsNode().boundsInRoot
                         onRoot().captureToImage().asSkiaBitmap().use { pixels ->
@@ -41,6 +43,7 @@ internal object DesktopTilesProbe {
                             }
                         }
                     }
+                    readerKey(androidx.compose.ui.input.key.Key.H)
                 }
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.sources.size == 1 }
                 onNodeWithTag("source:MIHON_9007199254740995").performClick()
@@ -48,18 +51,21 @@ internal object DesktopTilesProbe {
                 val content = controller.state.value.items.single()
                 onNodeWithTag("content:${content.id}").performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.DETAILS && !controller.state.value.busy }
-                onNodeWithText("开始 / 继续阅读").performClick()
+                onNodeWithTag("preview-read").performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.image != null && !controller.state.value.busy }
                 runBlocking { controller.readerSettings(DesktopReaderSettings(fitMode = ZoomMode.FIT_WIDTH)).join() }
                 tiles()
-                check(controller.state.value.readerImages.values.single().height == 24000)
+                check(controller.state.value.readerImages.getValue(controller.state.value.pages[0].id).height == 24000)
                 snapshot("paged-top")
+                // Neighbouring pages prefetch in the background; count requests once that settled.
+                waitUntil(timeoutMillis = 15_000) { !controller.isPrefetching }
                 val requests = System.getProperty("fixture.reader.requests")
+                val loadedPaged = controller.state.value.readerImages.keys
                 val history = runBlocking { session.library.progress(content.id) }
                 // The immersive reader is wider. Reach the authored blue middle in source coordinates,
                 // rather than depending on the former sidebar's fixed viewport width.
                 val viewportWidth = onNodeWithTag("reader-viewport").fetchSemanticsNode().boundsInRoot.width
-                val sourceWidth = controller.state.value.readerImages.values.single().width
+                val sourceWidth = controller.state.value.readerImages.getValue(controller.state.value.pages[0].id).width
                 onNodeWithTag("reader-viewport").performMouseInput {
                     moveTo(center); scroll(viewportWidth * 12000f / sourceWidth / 48f)
                 }
@@ -71,7 +77,7 @@ internal object DesktopTilesProbe {
                 snapshot("paged-middle")
                 runBlocking { controller.readerSettings(DesktopReaderSettings(DesktopReaderMode.CONTINUOUS)).join() }
                 tiles()
-                val image = controller.state.value.readerImages.values.single()
+                val image = controller.state.value.readerImages.getValue(controller.state.value.pages[0].id)
                 val width = onNodeWithTag("reader-page:${controller.state.value.pages[0].id}")
                     .fetchSemanticsNode().boundsInRoot.width
                 val target = width * 12180f / image.width
@@ -80,7 +86,10 @@ internal object DesktopTilesProbe {
                 waitUntil(timeoutMillis = 15_000) { onAllNodes(hasTestTag("reader-tile:23:0")).fetchSemanticsNodes().isNotEmpty() }
                 waitForIdle()
                 check(controller.state.value.pageIndex == 0)
-                check(System.getProperty("fixture.reader.requests") == requests)
+                // Continuous mode prefetches its own lookahead; the tall page itself is never fetched again.
+                waitUntil(timeoutMillis = 15_000) { !controller.isPrefetching }
+                check(System.getProperty("fixture.reader.requests").toInt() - requests.toInt() ==
+                    (controller.state.value.readerImages.keys - loadedPaged).size) { "Cached page was fetched again" }
                 bluePixels()
                 snapshot("continuous-middle")
                 val viewport = onNodeWithTag("reader-viewport").fetchSemanticsNode().boundsInRoot

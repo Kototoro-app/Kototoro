@@ -12,6 +12,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,19 +27,19 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.source.*
+import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
+import org.skepsun.kototoro.list.domain.ReadingProgress
+import org.skepsun.kototoro.list.ui.compose.ContentCardBadgePill
+import org.skepsun.kototoro.list.ui.compose.ContentCardBadgeText
+import org.skepsun.kototoro.list.ui.compose.ContentCardBadgeTone
+import org.skepsun.kototoro.list.ui.compose.ContentCardBottomProgressBar
+import org.skepsun.kototoro.list.ui.compose.TabletPosterCover
+import org.skepsun.kototoro.list.ui.compose.contentCardBadgeMetricsFor
+import org.skepsun.kototoro.list.ui.compose.rememberCoverRimBorderBrush
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import javax.swing.JFileChooser
 import javax.swing.filechooser.FileNameExtensionFilter
-
-internal val Accent = Color(0xFF217A68)
-internal val Canvas = Color(0xFFF4F6F9)
-internal val Ink = Color(0xFF1B2635)
-internal val Muted = Color(0xFF687385)
-
-@Composable
-private fun DesktopTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colors = lightColors(primary = Accent, secondary = Accent, background = Canvas,
-        surface = Color.White, onSurface = Ink, onBackground = Ink), content = content)
-}
 
 @Composable
 fun DesktopStartup(error: String?) = DesktopTheme {
@@ -54,61 +56,78 @@ fun DesktopStartup(error: String?) = DesktopTheme {
 
 @Composable
 fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscreen: Boolean = false,
-    onToggleFullscreen: (() -> Unit)? = null) = DesktopTheme {
+    onToggleFullscreen: (() -> Unit)? = null) = DesktopTheme(controller.state.collectAsState().value.appearance,
+        controller.state.collectAsState().value.interfaceStyle) {
     val state by controller.state.collectAsState()
     val challenges = controller.session.browserChallenges
     val challenge = challenges?.pending?.collectAsState()?.value
     val browserScope = rememberCoroutineScope()
     val reading = state.screen == DesktopScreen.READER || state.screen == DesktopScreen.NOVEL ||
         state.screen == DesktopScreen.VIDEO
-    Row(Modifier.fillMaxSize().background(Canvas)) {
-        if (!reading) DesktopNavigationRail(controller, state, !state.busy && !closing)
-        Column(Modifier.weight(1f).fillMaxHeight().padding(if (reading) 0.dp else 24.dp),
-            verticalArrangement = Arrangement.spacedBy(if (reading) 0.dp else 14.dp)) {
-            if (!reading) Header(state)
-            challenge?.let { pending ->
-                var windowNotice by remember(pending.id) { mutableStateOf<String?>(null) }
-                Surface(color = Color(0xFFE4F2EE), shape = RoundedCornerShape(8.dp)) {
-                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("来源需要网页验证，请在浏览器窗口中完成操作。")
-                        Text(pending.url, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { challenges.complete(pending.id, true) }, enabled = !closing,
-                                modifier = Modifier.testTag("challenge-continue")) { Text("已完成，继续请求") }
-                            OutlinedButton(onClick = { challenges.complete(pending.id, false) }, enabled = !closing,
-                                modifier = Modifier.testTag("challenge-cancel")) { Text("取消验证") }
-                            OutlinedButton(onClick = {
-                                browserScope.launch {
-                                    try {
-                                        windowNotice = if (challenges.showWindow(pending.id)?.visible == true) {
-                                            "验证窗口已显示"
-                                        } else "验证已结束"
-                                    } catch (error: CancellationException) { throw error }
-                                    catch (_: Exception) { windowNotice = "无法显示验证窗口，请重试或取消验证" }
+    val listState = if (state.screen == DesktopScreen.DETAILS && state.detailsOrigin != null) {
+        state.copy(screen = requireNotNull(state.detailsOrigin))
+    } else state
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val backdrop = rememberLayerBackdrop()
+        // Record the canvas before controls draw, so a glass surface never samples itself.
+        Box(Modifier.matchParentSize().layerBackdrop(backdrop).background(Canvas).background(desktopCanvasBrush()))
+        CompositionLocalProvider(LocalDesktopWindowWidth provides maxWidth, LocalDesktopBackdrop provides backdrop) {
+            Row(Modifier.fillMaxSize()) {
+                if (!reading) DesktopNavigationRail(controller, listState, !state.busy && !closing)
+                Column(Modifier.weight(1f).fillMaxHeight().padding(if (reading) 0.dp else 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (reading) 0.dp else 14.dp)) {
+                    if (!reading && listState.screen !in setOf(DesktopScreen.LIBRARY, DesktopScreen.HISTORY,
+                            DesktopScreen.EXPLORE, DesktopScreen.HOME, DesktopScreen.FEED)) Header(listState)
+                    challenge?.let { pending ->
+                        var windowNotice by remember(pending.id) { mutableStateOf<String?>(null) }
+                        Surface(color = MaterialTheme.colors.surface, shape = RoundedCornerShape(20.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("来源需要网页验证，请在浏览器窗口中完成操作。")
+                                Text(pending.url, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(onClick = { challenges.complete(pending.id, true) }, enabled = !closing,
+                                        modifier = Modifier.testTag("challenge-continue")) { Text("已完成，继续请求") }
+                                    OutlinedButton(onClick = { challenges.complete(pending.id, false) }, enabled = !closing,
+                                        modifier = Modifier.testTag("challenge-cancel")) { Text("取消验证") }
+                                    OutlinedButton(onClick = {
+                                        browserScope.launch {
+                                            try {
+                                                windowNotice = if (challenges.showWindow(pending.id)?.visible == true) {
+                                                    "验证窗口已显示"
+                                                } else "验证已结束"
+                                            } catch (error: CancellationException) { throw error }
+                                            catch (_: Exception) { windowNotice = "无法显示验证窗口，请重试或取消验证" }
+                                        }
+                                    }, enabled = !closing, modifier = Modifier.testTag("challenge-show")) { Text("显示验证窗口") }
                                 }
-                            }, enabled = !closing, modifier = Modifier.testTag("challenge-show")) { Text("显示验证窗口") }
+                                windowNotice?.let { Text(it) }
+                            }
                         }
-                        windowNotice?.let { Text(it) }
                     }
-                }
-            }
-            if (state.busy || closing) LinearProgressIndicator(Modifier.fillMaxWidth())
-            state.error?.let { Notice(it, true) }
-            state.message?.let { Notice(it, false) }
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                when (state.screen) {
-                    DesktopScreen.EXPLORE -> Browse(controller, state)
-                    DesktopScreen.LIBRARY, DesktopScreen.HISTORY -> DesktopLibraryPanel(controller, state, !state.busy && !closing)
-                    DesktopScreen.DETAILS -> Details(controller, state)
-                    DesktopScreen.READER -> DesktopReader(controller, state, closing, fullscreen, onToggleFullscreen)
-                    DesktopScreen.NOVEL -> DesktopNovelReader(controller, state, closing, fullscreen, onToggleFullscreen)
-                    DesktopScreen.VIDEO -> DesktopVideoPlayer(controller, state, closing, fullscreen, onToggleFullscreen)
-                    DesktopScreen.PREFERENCES -> Preferences(controller, state)
-                    DesktopScreen.BROWSER -> BrowserPanel(controller.session)
-                    DesktopScreen.DOWNLOADS -> DesktopDownloadsPanel(controller, closing)
-                    DesktopScreen.BACKUPS -> DesktopBackupsPanel(controller, closing)
-                    DesktopScreen.EXTENSIONS -> DesktopExtensionsPanel(controller, closing)
-                    DesktopScreen.MORE -> DesktopMorePanel(controller, !state.busy && !closing)
+                    if (state.busy || closing) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    state.error?.let { Notice(it, true) }
+                    state.message?.let { Notice(it, false) }
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        when (listState.screen) {
+                            DesktopScreen.HOME -> DesktopHomePanel(controller, listState, !state.busy && !closing)
+                            DesktopScreen.FEED -> DesktopFeedPanel(controller, listState, !state.busy && !closing)
+                            DesktopScreen.EXPLORE -> Browse(controller, listState)
+                            DesktopScreen.LIBRARY, DesktopScreen.HISTORY -> DesktopLibraryPanel(controller, listState, !state.busy && !closing)
+                            DesktopScreen.DETAILS -> Details(controller, state)
+                            DesktopScreen.READER -> DesktopReader(controller, state, closing, fullscreen, onToggleFullscreen)
+                            DesktopScreen.NOVEL -> DesktopNovelReader(controller, state, closing, fullscreen, onToggleFullscreen)
+                            DesktopScreen.VIDEO -> DesktopVideoPlayer(controller, state, closing, fullscreen, onToggleFullscreen)
+                            DesktopScreen.PREFERENCES -> Preferences(controller, state)
+                            DesktopScreen.BROWSER -> BrowserPanel(controller.session)
+                            DesktopScreen.DOWNLOADS -> DesktopDownloadsPanel(controller, closing)
+                            DesktopScreen.BACKUPS -> DesktopBackupsPanel(controller, closing)
+                            DesktopScreen.EXTENSIONS -> DesktopExtensionsPanel(controller, closing)
+                            DesktopScreen.MORE -> DesktopMorePanel(controller, !state.busy && !closing)
+                        }
+                        if (state.screen == DesktopScreen.DETAILS && state.detailsOrigin != null) {
+                            DesktopDetailsOverlay(controller, state, !state.busy && !closing)
+                        }
+                    }
                 }
             }
         }
@@ -124,16 +143,18 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
         Text("我的来源", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Ink)
         Button(onClick = {
             val chooser = JFileChooser().apply {
-                fileFilter = FileNameExtensionFilter("扩展 JAR（Mihon / Kototoro / Kotatsu / UMA）", "jar")
+                fileFilter = FileNameExtensionFilter("扩展（Mihon / Kototoro / Kotatsu / UMA JAR、Aniyomi APK、Cloudstream .cs3）", "jar", "apk", "cs3")
             }
             if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) controller.importJar(chooser.selectedFile.toPath())
         }, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text("导入扩展 JAR") }
         Divider()
         Text("来源 · ${state.sources.size}", fontWeight = FontWeight.SemiBold)
-        OutlinedTextField(filter, { filter = it }, placeholder = { Text("查找来源") }, singleLine = true,
-            modifier = Modifier.fillMaxWidth())
+        DesktopSearchField(filter, { filter = it }, "查找来源", modifier = Modifier.fillMaxWidth())
         LazyColumn(Modifier.weight(1f).testTag("source-list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val sources = state.sources.filter { it.displayName.contains(filter, true) || it.source.locale.contains(filter, true) }
+            val sources = state.sources.filter {
+                (it.displayName.contains(filter, true) || it.source.locale.contains(filter, true)) &&
+                    state.exploreFilter.accepts(it)
+            }
             items(sources, key = { it.source.name }) { source ->
                 val selected = state.selectedSource?.source?.name == source.source.name
                 Surface(color = if (selected) Accent.copy(alpha = .10f) else Color.Transparent,
@@ -154,6 +175,8 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
 @Composable
 private fun Header(state: DesktopAppState) {
     val title = when (state.screen) {
+        DesktopScreen.HOME -> "主页"
+        DesktopScreen.FEED -> "订阅"
         DesktopScreen.EXPLORE -> state.selectedSource?.displayName ?: "浏览来源"
         DesktopScreen.LIBRARY -> "收藏"
         DesktopScreen.HISTORY -> "阅读历史"
@@ -166,12 +189,13 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.BROWSER -> "浏览器调试"
         DesktopScreen.MORE -> "更多"
     }
-    Text(title, fontSize = 27.sp, fontWeight = FontWeight.Bold, color = Ink)
+    Text(title, style = MaterialTheme.typography.h5, color = Ink,
+        modifier = Modifier.heightIn(min = 40.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
 @Composable
 private fun Notice(message: String, error: Boolean) {
-    Surface(color = if (error) Color(0xFFFFEAEA) else Color(0xFFE4F2EE), shape = RoundedCornerShape(8.dp)) {
+    Surface(color = MaterialTheme.colors.surface, shape = RoundedCornerShape(16.dp)) {
         Text(message, color = if (error) MaterialTheme.colors.error else Accent,
             modifier = Modifier.fillMaxWidth().padding(12.dp), maxLines = 4, overflow = TextOverflow.Ellipsis)
     }
@@ -179,6 +203,10 @@ private fun Notice(message: String, error: Boolean) {
 
 @Composable
 private fun Browse(controller: DesktopController, state: DesktopAppState) {
+    if (state.selectedSource == null) {
+        DesktopSourceGrid(controller, state, !state.busy)
+        return
+    }
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         DesktopSourcePane(controller, state, !state.busy)
         Box(Modifier.weight(1f).fillMaxHeight()) { SourceResults(controller, state) }
@@ -194,9 +222,18 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState)
     var query by remember(state.selectedSource.source.name, state.query) { mutableStateOf(state.query) }
     if (state.filterDialogOpen) DesktopFilters(controller, state, query)
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton({ controller.exitSource() }, enabled = !state.busy, modifier = Modifier.testTag("source-back")) {
+                // Android's forward arrow, mirrored.
+                Icon(painterResource("icons/ic_arrow_forward.svg"), contentDescription = "返回来源列表", tint = Ink,
+                    modifier = Modifier.size(22.dp).graphicsLayer(scaleX = -1f))
+            }
+            Text(state.selectedSource.displayName, style = MaterialTheme.typography.h5, color = Ink,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(query, { query = it }, placeholder = { Text("搜索作品") }, singleLine = true,
-                enabled = !state.busy, modifier = Modifier.weight(1f).testTag("source-query"))
+            DesktopSearchField(query, { query = it }, "搜索作品", enabled = !state.busy,
+                modifier = Modifier.weight(1f), tag = "source-query")
             Button({ controller.browse(0, query) }, enabled = !state.busy) { Text("搜索") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -245,21 +282,36 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState)
 
 @Composable
 internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers: DesktopCovers,
-    onOpen: (SourceContent) -> Unit) {
+    onOpen: (SourceContent) -> Unit, progressOf: (SourceContent) -> Float? = { null }) {
     if (contents.isEmpty()) { EmptyPanel("这里还没有作品", "选择来源浏览，或在作品详情中加入收藏。"); return }
-    LazyVerticalGrid(columns = GridCells.Adaptive(156.dp), verticalArrangement = Arrangement.spacedBy(20.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxSize()) {
+    val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
+    val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle, isDark = !MaterialTheme.colors.isLight)
+    LazyVerticalGrid(columns = GridCells.Adaptive(112.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize().testTag("content-grid")) {
         items(contents, key = { it.id }) { content ->
-            Card(Modifier.fillMaxWidth().testTag("content:${content.id}").clickable(enabled = enabled) { onOpen(content) },
-                shape = RoundedCornerShape(12.dp), backgroundColor = Color.Transparent, elevation = 0.dp) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DesktopCover(content, covers, Modifier.fillMaxWidth().aspectRatio(2f / 3f)
-                        .padding(bottom = 4.dp).clip(RoundedCornerShape(12.dp))
-                        .background(Accent.copy(alpha = .06f), RoundedCornerShape(8.dp)))
-                    Text(content.title, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(content.authors.joinToString(" · ").ifBlank { content.source.locale },
-                        fontSize = 12.sp, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+            BoxWithConstraints(Modifier.fillMaxWidth().testTag("content:${content.id}")
+                .clickable(enabled = enabled) { onOpen(content) }) {
+                val style = CompactPosterCardStyle(maxWidth, maxWidth * (136f / 96f), 12.dp)
+                val metrics = remember(maxWidth) { contentCardBadgeMetricsFor(maxWidth) }
+                val percent = progressOf(content)?.takeIf { ReadingProgress.isValid(it) }
+                // Android's compact grid lifts the bottom badges clear of the title on the scrim.
+                val bottomLift = (style.posterHeight.value * 0.28f).dp.coerceIn(32.dp, 44.dp)
+                TabletPosterCover(content.title, style, rimBorderBrush = rimBorderBrush,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(96f / 136f),
+                    cover = { DesktopCover(content, covers, Modifier.matchParentSize()) },
+                    overlays = {
+                        val locale = content.source.locale.substringBefore('-').substringBefore('_').uppercase()
+                        if (locale.isNotBlank()) ContentCardBadgePill(ContentCardBadgeTone.NEUTRAL, isIosStyle, metrics,
+                            Modifier.align(Alignment.BottomStart).padding(start = 5.dp, bottom = bottomLift + 5.dp)
+                                .testTag("content-language:${content.id}")) { colors ->
+                            ContentCardBadgeText(locale, colors.content, metrics)
+                        }
+                    },
+                    progress = {
+                        if (percent != null) ContentCardBottomProgressBar(percent, ReadingProgress.isCompleted(percent),
+                            Modifier.align(Alignment.BottomCenter).testTag("content-progress:${content.id}"))
+                    },
+                )
             }
         }
     }
@@ -275,7 +327,9 @@ private fun Preferences(controller: DesktopController, state: DesktopAppState) {
     val screen = state.preferences ?: return
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         OutlinedButton({ controller.browse() }, enabled = !state.busy) { Text("返回浏览") }
-        screen.nodes.forEach { node -> PreferenceNode(controller, node, !state.busy) }
+        // Kototoro's own rows (User-Agent) come first, as in Android's source settings.
+        screen.nodes.sortedBy { if (it.id.startsWith("host:")) 0 else 1 }
+            .forEach { node -> PreferenceNode(controller, node, !state.busy) }
     }
 }
 

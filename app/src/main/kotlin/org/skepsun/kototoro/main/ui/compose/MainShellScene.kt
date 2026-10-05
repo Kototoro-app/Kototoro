@@ -732,11 +732,7 @@ internal fun BrowseTopLevelRouteContent(
 
             override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
                 exploreViewModel.setSelectedSourceTags(
-                    when {
-                        tag == null -> emptySet()
-                        tag in selectedSourceTags -> selectedSourceTags - tag
-                        else -> selectedSourceTags + tag
-                    },
+                    org.skepsun.kototoro.explore.ui.model.SourceTag.toggle(selectedSourceTags, tag),
                 )
             }
         }
@@ -812,11 +808,7 @@ internal fun FeedTopLevelRouteContent(
 
             override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
                 viewModel.setSelectedSourceTags(
-                    when {
-                        tag == null -> emptySet()
-                        tag in selectedSourceTags -> selectedSourceTags - tag
-                        else -> selectedSourceTags + tag
-                    },
+                    org.skepsun.kototoro.explore.ui.model.SourceTag.toggle(selectedSourceTags, tag),
                 )
             }
         }
@@ -1259,11 +1251,7 @@ internal fun BookmarksTopLevelRouteContent(
 
             override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
                 viewModel.setSelectedSourceTags(
-                    when {
-                        tag == null -> emptySet()
-                        tag in selectedSourceTags -> selectedSourceTags - tag
-                        else -> selectedSourceTags + tag
-                    },
+                    org.skepsun.kototoro.explore.ui.model.SourceTag.toggle(selectedSourceTags, tag),
                 )
             }
         }
@@ -1599,11 +1587,7 @@ internal fun HistoryTopLevelRouteContent(
 
             override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
                 viewModel.setSelectedSourceTags(
-                    when {
-                        tag == null -> emptySet()
-                        tag in selectedSourceTags -> selectedSourceTags - tag
-                        else -> selectedSourceTags + tag
-                    },
+                    org.skepsun.kototoro.explore.ui.model.SourceTag.toggle(selectedSourceTags, tag),
                 )
             }
         }

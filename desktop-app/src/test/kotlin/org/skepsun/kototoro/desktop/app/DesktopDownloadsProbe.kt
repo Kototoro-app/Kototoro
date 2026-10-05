@@ -49,6 +49,8 @@ internal object DesktopDownloadsProbe {
                     val content = controller.state.value.items.single()
                     onNodeWithTag("content:${content.id}").performClick()
                     idle()
+                    onNodeWithTag("details-expand").performClick(); idle()
+                    onNodeWithTag("details-full").assertExists()
                     val chapter = controller.state.value.content!!.chapters!!.first { it.number == 1f }
                     System.setProperty("fixture.reader.failure.index", "14")
                     onNodeWithTag("download-chapter:${chapter.id}").performClick()
@@ -108,15 +110,18 @@ internal object DesktopDownloadsProbe {
                 waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy &&
                     controller.state.value.screen == DesktopScreen.READER && controller.state.value.image != null }
                 idle()
-                onNodeWithTag("reader-viewport").performTouchInput { click() }
+                onNodeWithTag("reader-viewport").requestFocus()
                 onNodeWithTag("reader-surface").performKeyInput { pressKey(Key.MoveEnd) }
                 waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy && controller.state.value.pageIndex == 4 }
                 idle()
-                onNodeWithTag("reader-progress").assertTextEquals("5 / 5")
+                assertReaderProgress("5 / 5")
                 val record = controller.downloads.state.value.single().record
                 check(runBlocking { session.library.progress(record.contentId) }?.page == 4)
-                check(System.getProperty("fixture.reader.requests", "0") == imageCalls)
-                check(System.getProperty("fixture.reader.page_lists", "0") == pageCalls)
+                // The downloaded chapter reads from its files; only the next (not downloaded) chapter, preloaded near the
+                // end, may ask the source: one page list and its first pages.
+                waitUntil(timeoutMillis = 15_000) { !controller.isPreloadingChapter }
+                check(System.getProperty("fixture.reader.page_lists", "0").toInt() - pageCalls.toInt() <= 1)
+                check(System.getProperty("fixture.reader.requests", "0").toInt() - imageCalls.toInt() <= 2)
                 snapshot("offline-last-page")
             }
         } finally {

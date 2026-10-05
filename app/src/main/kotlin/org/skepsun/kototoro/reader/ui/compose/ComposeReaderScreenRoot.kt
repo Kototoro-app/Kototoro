@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.reader.ui.compose
 
+import org.skepsun.kototoro.reader.domain.getBackgroundTint
+import org.skepsun.kototoro.core.prefs.isLight
 import android.util.Log
 import android.view.ViewConfiguration
 import androidx.compose.foundation.layout.BoxScope

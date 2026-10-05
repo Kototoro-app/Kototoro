@@ -6,32 +6,24 @@
 
 ## Provenance
 
-All Kotlin sources under `src/main/kotlin/com/kyant/backdrop/` were copied
-**verbatim** (byte-faithful, original CRLF line endings preserved) from the
-published sources jars of version 2.0.0:
+The module uses Kotlin Multiplatform with Android and JVM targets at the same upstream version, 2.0.0.
 
-- `io.github.kyant0:backdrop:2.0.0` → `backdrop-2.0.0-sources.jar`, `commonMain/` source set
-- `io.github.kyant0:backdrop-android:2.0.0` → `backdrop-android-2.0.0-sources.jar`, `androidMain/` source set
+- `src/main/kotlin` is configured as `commonMain`; its existing local patches are retained.
+- `src/androidMain/kotlin` contains the four original Android `actual` files.
+- `src/skikoMain/kotlin` contains the four original Skiko `actual` files; `jvmMain` depends on it.
+- The four formerly flattened common files again contain their published `expect` declarations.
 
-The `skikoMain` (desktop/skiko) source set was intentionally not taken.
-**File count: 30 `.kt` files** (26 verbatim `commonMain` files + 4 files where the
-`commonMain` `expect` declarations were flattened into their `androidMain` `actual`
-implementations, see below). No code was reformatted, renamed, or "improved";
-`internal`/`private` visibility is exactly as published.
+There are 38 Kotlin files: 30 common, four Android and four Skiko. All restored platform sources and
+common declarations come from the published 2.0.0 source jars, not the changing upstream branch:
 
-## expect/actual flattening
-
-A plain Android library module cannot contain `expect` declarations, so the four
-files that exist in both source sets were merged mechanically: the `expect`
-declarations were removed from the `commonMain` copy and the `androidMain`
-implementations were inserted with only the `actual` keyword stripped off.
-
-| File | Merging applied |
+| Source archive | SHA-256 |
 | --- | --- |
-| `Platform.kt` | commonMain held only the 2 `expect fun`s; file = androidMain content minus `actual ` |
-| `RuntimeShader.kt` | 2 `expect fun`s replaced by their androidMain bodies (plus android-only `asAndroidRuntimeShader` and `internal class AndroidRuntimeShader`); the `interface RuntimeShader` block kept verbatim from commonMain |
-| `internal/Paint.kt` | commonMain held only the 2 `internal expect fun`s; file = androidMain content minus `actual ` |
-| `internal/RenderEffect.kt` | androidMain content minus `actual `; the published commonMain default `renderEffect: RenderEffect? = null` of `ColorFilterEffect` was restored (actuals may not redeclare expect defaults, so its omission there is a Kotlin expect/actual artifact, not an upstream choice) |
+| `backdrop-2.0.0-sources.jar` | `8277e21a2dc270931a3dfb175805dac5303f541e20e01bf05d1a714e8f6c032a` |
+| `backdrop-android-2.0.0-sources.jar` | `23a987f64d7de69cc1f6751da96712030bc4bc488a5f48d8244935264b0ec5d6` |
+
+The initial Android-only import omitted `skikoMain` and flattened `expect/actual`. That restriction was
+removed for Windows UI sharing on 2026-10-04. Android keeps its SDK support checks; desktop uses Skia
+RuntimeEffect, shaders and render effects from the original Skiko implementation.
 
 ## Local modifications
 -------------------

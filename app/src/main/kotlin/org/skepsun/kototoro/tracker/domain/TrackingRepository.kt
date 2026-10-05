@@ -165,7 +165,7 @@ class TrackingRepository @Inject constructor(
         val entity = prev.mergeWith(updates, manga.id)
         db.getTracksDao().upsert(entity)
         if (updates is MangaUpdates.Success && updates.isNotEmpty()) {
-            val chapters = updates.newChapters.joinToString(separator = "\n") { it.name }
+            val chapters = trackLogChapters(updates.newChapters.map { it.name })
             val now = System.currentTimeMillis()
             val duplicate = db.getTrackLogsDao().findDuplicate(
                 mangaId = manga.id,
@@ -291,33 +291,17 @@ class TrackingRepository @Inject constructor(
     }
 
     private fun TrackEntity.mergeWith(updates: MangaUpdates, anchorMangaId: Long): TrackEntity {
+        // Row update rules are shared with the Windows tracker (core-domain TrackRules).
         return when (updates) {
-            is MangaUpdates.Failure -> TrackEntity(
-                mangaId = mangaId,
-                lastChapterId = lastChapterId,
-                newChapters = newChapters,
-                lastCheckTime = System.currentTimeMillis(),
-                lastChapterDate = lastChapterDate,
-                lastResult = TrackEntity.RESULT_FAILED,
-                lastError = updates.error?.toString(),
-            )
+            is MangaUpdates.Failure -> afterFailedCheck(updates.error?.toString(), System.currentTimeMillis())
 
-            is MangaUpdates.Success -> TrackEntity(
-                mangaId = anchorMangaId,
+            is MangaUpdates.Success -> afterSuccessfulCheck(
+                anchorMangaId = anchorMangaId,
                 lastChapterId = updates.manga.getChapters(updates.branch).lastOrNull()?.id ?: NO_ID,
-                newChapters = if (updates.isValid) {
-                    if (updates.newChapters.isNotEmpty()) {
-                        updates.newChapters.size
-                    } else {
-                        newChapters
-                    }
-                } else {
-                    0
-                },
-                lastCheckTime = System.currentTimeMillis(),
-                lastChapterDate = updates.lastChapterDate().ifZero { lastChapterDate },
-                lastResult = if (updates.isNotEmpty()) TrackEntity.RESULT_HAS_UPDATE else TrackEntity.RESULT_NO_UPDATE,
-                lastError = null,
+                newChapterCount = updates.newChapters.size,
+                isValid = updates.isValid,
+                lastChapterDate = updates.lastChapterDate(),
+                now = System.currentTimeMillis(),
             )
         }
     }

@@ -22,6 +22,7 @@ import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.network.CloudFlareInterceptor as KototoroCloudFlareInterceptor
 import org.skepsun.kototoro.core.network.browserTransportHeaders
 import org.skepsun.kototoro.core.network.cookies.sensitiveValueFingerprint
+import org.skepsun.kototoro.core.network.cloudflare.solveClearanceAndRetry
 import org.skepsun.kototoro.core.network.webview.CloudflareSolveCoordinator
 import org.skepsun.kototoro.core.network.webview.WebViewClearanceSolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
@@ -236,27 +237,15 @@ class KotoNetworkHelper(
                 if (solver == null) {
                     response.closeThrowing(error)
                 }
-                // Host-level single flight: concurrent requests for the same host share one WebView
-                // solve; each request retries at most once after a successful solve.
-                val solved = runCatching {
-                    runBlocking {
-                        val coordinator = solveCoordinator
-                        if (coordinator != null) {
-                            coordinator.solve(request.url.host) {
-                                solver.solve(request)
-                            }
-                        } else {
-                            solver.solve(request)
-                        }
-                    }
-                }.getOrDefault(false)
-                if (solved) {
-                    response.close()
+                // Mihon's default solver, shared with Windows: one off-screen solve per host, one retry per request.
+                response.close()
+                val retried = chain.solveClearanceAndRetry(request, solver, solveCoordinator)
+                if (retried != null) {
                     android.util.Log.i(
                         "MihonNetwork",
                         "WebView clearance solved (MIHON); retrying: " + request.url,
                     )
-                    chain.proceed(request)
+                    retried
                 } else {
                     android.util.Log.w(
                         "MihonNetwork",

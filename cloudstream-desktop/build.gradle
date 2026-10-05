@@ -1,0 +1,184 @@
+// Cloudstream on the Windows host: loads `.cs3` plugins (their `classes.dex` converted to class files) against the
+// official Cloudstream library and the Android compatibility runtime Mihon extensions use, and serves their providers
+// through the portable :core-source protocol with the catalog shared with Android (:cloudstream-shared).
+import java.util.zip.ZipFile
+
+plugins {
+	id 'org.jetbrains.kotlin.jvm'
+	id 'org.jetbrains.kotlin.plugin.serialization'
+}
+
+kotlin {
+	compilerOptions {
+		jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+		freeCompilerArgs.addAll('-opt-in=org.skepsun.kototoro.parsers.InternalParsersApi')
+	}
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_11
+	targetCompatibility = JavaVersion.VERSION_11
+}
+
+// Android classes (Context, SharedPreferences, Log, ...) come from the caller-supplied compatibility runtime, as for
+// :mihon-desktop-compat; plugins and the host shims below link against the same classes at runtime.
+def compatibilityRoot = providers.gradleProperty('mihonCompatibilityDirectory').map { new File(it) }.getOrNull()
+def compatibilityApi = compatibilityRoot == null ? files() :
+	files(new File(compatibilityRoot, 'AndroidCompat-1.0.jar'), new File(compatibilityRoot, 'android-jar-1.0.0.jar'))
+
+// The host shims plugins link against that only need APIs the compatibility runtime has: one source with Android.
+def sharedShims = [
+	'com/lagradost/api/ContextHelper.kt',
+	'com/lagradost/cloudstream3/AcraApplication.kt',
+	'com/lagradost/cloudstream3/CommonActivity.kt',
+	'com/lagradost/cloudstream3/plugins/Plugin.kt',
+	'com/lagradost/cloudstream3/actions/VideoClickAction.kt',
+	'com/lagradost/cloudstream3/actions/VideoClickActionHolder.kt',
+	'com/lagradost/cloudstream3/utils/TextUtil.kt',
+	'com/lagradost/cloudstream3/utils/DataStore.kt',
+]
+def sharedShimDirectory = layout.buildDirectory.dir('generated/cloudstream-shims')
+def copySharedShims = tasks.register('copySharedCloudstreamShims', Sync) {
+	from(rootProject.file('app/src/main/kotlin')) { sharedShims.each { include it } }
+	into sharedShimDirectory
+	// The runtime has no androidx.core / androidx.preference: `edit {}` comes from DesktopSharedPreferences.kt in the
+	// same package, and the default preferences are a named store.
+	filesMatching('**/utils/DataStore.kt') {
+		filter { String line ->
+			if (line == 'import androidx.core.content.edit' || line == 'import androidx.preference.PreferenceManager') return ''
+			line.replace('PreferenceManager.getDefaultSharedPreferences(this)',
+				'getSharedPreferences("cloudstream_default_preferences", Context.MODE_PRIVATE)')
+		}
+	}
+}
+sourceSets.main.kotlin.srcDir(copySharedShims)
+
+// The official library:jvmJar without the classes the host supplies (as :app's prepareCloudstreamRuntimeJar).
+def cloudstreamLibrary = rootProject.file('app/libs/cloudstream3-library-jvm-1.0.1.jar')
+def cloudstreamDesktopJar = tasks.register('prepareCloudstreamDesktopJar', Jar) {
+	archiveBaseName.set('cloudstream3-desktop')
+	destinationDirectory.set(layout.buildDirectory.dir('generated/cloudstream'))
+	preserveFileTimestamps = false
+	reproducibleFileOrder = true
+	from(zipTree(cloudstreamLibrary)) {
+		// A compatibility stub ships in :cloudstream-shared; the host has no NewPipe.
+		exclude 'com/lagradost/cloudstream3/extractors/Youtube*.class'
+		// The JVM context helper always answers null; the host's returns the compatibility Context.
+		exclude 'com/lagradost/api/ContextHelper_jvmKt.class'
+	}
+	doLast {
+		def zip = new ZipFile(archiveFile.get().asFile)
+		try {
+			if (zip.getEntry('com/lagradost/cloudstream3/plugins/BasePlugin.class') == null) {
+				throw new GradleException('Cloudstream desktop jar is missing BasePlugin')
+			}
+		} finally { zip.close() }
+	}
+}
+def cloudstreamRuntimeJar = files(cloudstreamDesktopJar.flatMap { it.archiveFile })
+
+// Real plugin bytecode built the way Cloudstream repositories publish it (d8 output in a `.cs3`), for tests.
+sourceSets { fixture }
+
+dependencies {
+	api project(':cloudstream-shared')
+	api project(':core-source')
+	api project(':source-host')
+	implementation project(':parser-host')
+	implementation project(':parser-api')
+	implementation project(':dex-convert')
+	api cloudstreamRuntimeJar
+	implementation libs.okhttp
+	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
+	implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
+	// What the official library and plugins expect at runtime (the versions :app pins).
+	implementation(libs.nicehttp) { exclude group: 'org.json', module: 'json' }
+	implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+	implementation 'com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2'
+	implementation libs.jsoup
+	implementation libs.rhino
+	implementation libs.gson
+	implementation libs.ktor.http
+	implementation libs.kotlinx.datetime
+	implementation libs.kotlinx.io.core
+	implementation libs.cryptography.core
+	implementation libs.cryptography.provider.optimal
+	implementation files(rootProject.file('app/libs/fuzzywuzzy-1.4.0.jar'))
+	compileOnly 'androidx.annotation:annotation-jvm:1.9.1'
+	compileOnly compatibilityApi
+
+	fixtureCompileOnly files(cloudstreamLibrary)
+	fixtureCompileOnly "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
+	fixtureCompileOnly compatibilityApi
+	fixtureCompileOnly sourceSets.main.output
+
+	testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+	testImplementation libs.okhttp.mockwebserver
+	testCompileOnly compatibilityApi
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
+	testRuntimeOnly project(path: ':mihon-desktop-compat', configuration: 'suppliedCompatibilityRuntime')
+	testImplementation project(':mihon-desktop-compat')
+}
+
+def androidSdk = {
+	def local = rootProject.file('local.properties')
+	def configured = local.isFile() ? new Properties().with { load(local.newReader()); getProperty('sdk.dir') } : null
+	configured ?: System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT')
+}.call()
+
+// AndroidCompat needs Java 21+ at runtime (the module's own bytecode stays Java 11).
+def compatibilityLauncher = javaToolchains.launcherFor {
+	languageVersion = JavaLanguageVersion.of(providers.gradleProperty('mihonCompatibilityJavaVersion').map { it.toInteger() }.getOrElse(21))
+}
+
+// The fixture plugin as repositories publish it: its classes dexed by the SDK's d8 into a `.cs3` next to a
+// manifest.json. Skipped without an Android SDK (tests that need it are then skipped too).
+def fixtureClassesJar = tasks.register('fixtureClassesJar', Jar) {
+	archiveFileName = 'cloudstream-fixture-classes.jar'
+	destinationDirectory = layout.buildDirectory.dir('fixtures/classes')
+	from sourceSets.fixture.output
+}
+def fixtureClassesFile = fixtureClassesJar.flatMap { it.archiveFile }
+def fixtureCs3File = layout.buildDirectory.file('fixtures/FixtureRepo.cs3')
+def fixtureDexClasspath = files(cloudstreamLibrary) + compatibilityApi + sourceSets.main.output + sourceSets.main.compileClasspath
+def fixtureCs3 = tasks.register('fixtureCs3') {
+	dependsOn fixtureClassesJar, tasks.named('classes')
+	inputs.file(fixtureClassesFile)
+	outputs.file(fixtureCs3File)
+	def sdkPath = androidSdk
+	onlyIf { sdkPath != null }
+	doLast {
+		def sdk = new File(sdkPath)
+		def buildTools = new File(sdk, 'build-tools').listFiles().findAll { new File(it, 'lib/d8.jar').isFile() }.sort().last()
+		def platform = new File(sdk, 'platforms').listFiles().findAll { new File(it, 'android.jar').isFile() }.sort().last()
+		def dexDirectory = new File(temporaryDir, 'dex')
+		dexDirectory.deleteDir(); dexDirectory.mkdirs()
+		def command = [new File(System.getProperty('java.home'), 'bin/java').absolutePath, '-cp', new File(buildTools, 'lib/d8.jar').absolutePath,
+			'com.android.tools.r8.D8', '--release', '--min-api', '26', '--lib', new File(platform, 'android.jar').absolutePath]
+		fixtureDexClasspath.files.findAll { it.name.endsWith('.jar') && it.isFile() }.each { command += ['--classpath', it.absolutePath] }
+		command += ['--output', dexDirectory.absolutePath, fixtureClassesFile.get().asFile.absolutePath]
+		def process = new ProcessBuilder(command).redirectErrorStream(true).start()
+		def log = process.inputStream.text
+		if (process.waitFor() != 0) throw new GradleException("d8 failed: $log")
+		def target = fixtureCs3File.get().asFile
+		target.parentFile.mkdirs()
+		new java.util.zip.ZipOutputStream(new FileOutputStream(target)).withCloseable { zip ->
+			zip.putNextEntry(new java.util.zip.ZipEntry('manifest.json'))
+			zip.write('{"requiresResources":false,"version":1,"pluginClassName":"fixture.cloudstream.FixturePlugin","name":"FixtureRepo"}'.bytes)
+			zip.closeEntry()
+			zip.putNextEntry(new java.util.zip.ZipEntry('classes.dex'))
+			zip.write(new File(dexDirectory, 'classes.dex').bytes)
+			zip.closeEntry()
+		}
+	}
+}
+
+tasks.withType(Test).configureEach {
+	useJUnitPlatform()
+	javaLauncher = compatibilityLauncher
+	dependsOn fixtureCs3
+	systemProperty 'kototoro.cloudstream.fixture.cs3', fixtureCs3File.get().asFile.absolutePath
+	// Optional real plugins (not committed): a directory of `.cs3` files, e.g. from the official repository.
+	providers.gradleProperty('cloudstreamPlugins').orNull?.with { systemProperty 'kototoro.cloudstream.real', it }
+	if (providers.gradleProperty('cloudstreamOnline').isPresent()) systemProperty 'kototoro.cloudstream.online', 'true'
+}

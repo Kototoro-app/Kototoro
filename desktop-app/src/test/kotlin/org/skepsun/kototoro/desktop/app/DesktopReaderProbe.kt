@@ -31,18 +31,30 @@ internal object DesktopReaderProbe {
                         controller.state.value.error.orEmpty()
                     }
                 }
+                fun visiblePages(): Int {
+                    val viewport = onNodeWithTag("reader-viewport").fetchSemanticsNode().boundsInRoot
+                    return onAllNodesWithTag("reader-page").fetchSemanticsNodes().count { node ->
+                        // Clipped off-screen slots report empty bounds.
+                        val bounds = node.boundsInRoot
+                        bounds.width > 0f && bounds.left >= viewport.left - 1 && bounds.right <= viewport.right + 1
+                    }
+                }
                 fun ready(index: Int, count: Int) {
                     waitUntil(timeoutMillis = 15_000) {
                         !controller.state.value.busy && (controller.state.value.error != null ||
                             (controller.state.value.pageIndex == index && controller.state.value.image != null))
                     }
                     settled()
-                    waitUntil(timeoutMillis = 15_000) {
-                        onAllNodesWithTag("reader-page").fetchSemanticsNodes().size == count
+                    // Neighbouring slots are composed off screen (prefetched and pre-decoded); count what the viewport shows.
+                    try { waitUntil(timeoutMillis = 15_000) { visiblePages() == count } } catch (error: Throwable) {
+                        println("VIEWPORT " + onNodeWithTag("reader-viewport").fetchSemanticsNode().boundsInRoot)
+                        onAllNodesWithTag("reader-page").fetchSemanticsNodes().forEach { println("PAGE " + it.boundsInRoot) }
+                        throw error
                     }
                 }
                 fun press(key: Key) {
-                    onNodeWithTag("reader-viewport").performTouchInput { click() }
+                    // A click in the viewport is a tap-grid action now (centre toggles the toolbar); just focus it.
+                    onNodeWithTag("reader-viewport").requestFocus()
                     onNodeWithTag("reader-surface").performKeyInput { pressKey(key) }
                     settled()
                 }
@@ -69,12 +81,15 @@ internal object DesktopReaderProbe {
                 val chapters = requireNotNull(controller.state.value.content?.chapters)
                 check(chapters.size == 2)
                 if (mode == "reader-read") System.setProperty("fixture.reader.offline", "true")
-                onNodeWithText("开始 / 继续阅读").performClick()
+                // Page 3 (index 14) fails from the start: the reader prefetches it in the background as soon as the chapter
+                // opens, and a failed prefetch must leave the turn to page 3 to report the error.
+                else System.setProperty("fixture.reader.failure.index", "14")
+                onNodeWithTag("preview-read").performClick()
                 if (mode == "reader-read") {
                     ready(3, 2)
                     check(System.getProperty("fixture.reader.requests", "0") == "0") { "Offline spread requested an image" }
                     check(controller.state.value.chapter?.id == chapters[0].id)
-                    onNodeWithTag("reader-progress").assertTextEquals("4–5 / 5")
+                    assertReaderProgress("4–5 / 5")
                     val progress = runBlocking { session.library.progress(content.id) }!!
                     check(progress.page == 3 && progress.percent == .5f)
                     val viewport = onNodeWithTag("reader-viewport").fetchSemanticsNode().boundsInRoot
@@ -92,7 +107,6 @@ internal object DesktopReaderProbe {
                     ready(1, 1)
                     val beforeFailure = controller.state.value.image
                     val progress = runBlocking { session.library.progress(content.id) }!!
-                    System.setProperty("fixture.reader.failure.index", "14")
                     onNodeWithTag("reader-surface").performKeyInput { pressKey(Key.DirectionRight) }
                     waitUntil(timeoutMillis = 15_000) {
                         controller.state.value.error != null && !controller.state.value.busy
@@ -107,18 +121,18 @@ internal object DesktopReaderProbe {
                     press(Key.MoveHome)
                     ready(0, 1)
                     check(System.getProperty("fixture.reader.requests") == count) { "Cached page was fetched again" }
-                    onNodeWithTag("reader-mode").performClick()
+                    readerDoublePages()
                     waitUntil(timeoutMillis = 15_000) {
                         !controller.state.value.busy &&
                             controller.state.value.readerSettings.mode == DesktopReaderMode.DOUBLE
                     }
                     ready(0, 2)
-                    onNodeWithTag("reader-progress").assertTextEquals("1–2 / 5")
+                    assertReaderProgress("1–2 / 5")
                     val first = onNodeWithContentDescription("第 1 页").fetchSemanticsNode().boundsInRoot
                     val second = onNodeWithContentDescription("第 2 页").fetchSemanticsNode().boundsInRoot
                     check(first.left < second.left)
                     snapshot("ltr")
-                    onNodeWithTag("reader-direction").performClick()
+                    readerMode("right_to_left")
                     waitUntil(timeoutMillis = 15_000) {
                         !controller.state.value.busy && controller.state.value.readerSettings.rightToLeft
                     }
@@ -132,7 +146,7 @@ internal object DesktopReaderProbe {
                     snapshot("wide")
                     press(Key.PageDown)
                     ready(3, 2)
-                    onNodeWithTag("reader-progress").assertTextEquals("4–5 / 5")
+                    assertReaderProgress("4–5 / 5")
                     check(runBlocking { session.library.progress(content.id) }?.percent == .5f)
                     onNodeWithTag("reader-surface").performKeyInput {
                         keyDown(Key.ShiftLeft); pressKey(Key.Spacebar); keyUp(Key.ShiftLeft)
@@ -157,14 +171,14 @@ internal object DesktopReaderProbe {
                     press(Key.Escape)
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.DETAILS }
                     check(controller.state.value.screen == DesktopScreen.DETAILS)
-                    onNodeWithText("开始 / 继续阅读").performClick()
+                    onNodeWithTag("preview-read").performClick()
                     ready(0, 2)
-                    onNodeWithText("下一章").performClick()
+                    onNodeWithTag("reader-next-chapter").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.chapter?.id == chapters[1].id }
                     ready(0, 2)
-                    onNodeWithText("下一章").assertIsNotEnabled()
+                    onNodeWithTag("reader-next-chapter").assertIsNotEnabled()
                     check(runBlocking { session.library.progress(content.id) }?.percent == 1f)
-                    onNodeWithText("上一章").performClick()
+                    onNodeWithTag("reader-previous-chapter").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.chapter?.id == chapters[0].id }
                     ready(0, 2)
                     press(Key.DirectionLeft)
@@ -172,7 +186,7 @@ internal object DesktopReaderProbe {
                     press(Key.MoveEnd)
                     ready(3, 2)
                     val beforeReload = System.getProperty("fixture.reader.requests").toInt()
-                    onNodeWithText("重新加载").performClick()
+                    readerReload()
                     waitUntil(timeoutMillis = 15_000) {
                         !controller.state.value.busy &&
                             System.getProperty("fixture.reader.requests").toInt() == beforeReload + 2

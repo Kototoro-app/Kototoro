@@ -1,34 +1,22 @@
 package org.skepsun.kototoro.core.ui.adaptive
 
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import org.skepsun.kototoro.core.prefs.observeAsState
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.util.FoldableUtils
 
-/** Window width classes for tablet layouts; compact keeps the phone layout. */
-enum class TabletLayoutClass { COMPACT, MEDIUM, EXPANDED }
-
-/** [tabletLayoutEnabled] is the "tablet UI mode" decision (see FoldableUtils.shouldUseTabletLayout). */
-fun tabletLayoutClass(widthDp: Int, tabletLayoutEnabled: Boolean): TabletLayoutClass = when {
-    !tabletLayoutEnabled || widthDp < 600 -> TabletLayoutClass.COMPACT
-    widthDp < 1000 -> TabletLayoutClass.MEDIUM
-    else -> TabletLayoutClass.EXPANDED
+/** Android policy stays here; width classes and overlay geometry are shared in :core-ui. */
+@Composable
+fun rememberAndroidTabletLayoutClass(settings: AppSettings): TabletLayoutClass {
+    val configuration = LocalConfiguration.current
+    val context = LocalContext.current
+    val tabletUiMode by settings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
+    return remember(context, configuration, tabletUiMode) {
+        tabletLayoutClass(configuration.screenWidthDp,
+            FoldableUtils.shouldUseTabletLayout(context, settings, configuration))
+    }
 }
-
-object TabletLayoutTokens {
-    val FilterDrawerWidth = 300.dp
-    val PreviewCardWidth = 380.dp
-    val PreviewCardMediumWidth = 360.dp
-    val OverlayMargin = 12.dp
-    val MinVisibleGridWidth = 240.dp
-}
-
-/** Preview card width: 380dp on expanded windows, otherwise at most half the window. */
-fun tabletPreviewCardWidth(windowWidth: Dp): Dp = if (windowWidth >= 1000.dp) {
-    TabletLayoutTokens.PreviewCardWidth
-} else {
-    minOf(TabletLayoutTokens.PreviewCardMediumWidth, windowWidth / 2)
-}
-
-/** Whether the filter drawer and the preview card can both be open and still leave some grid visible. */
-fun tabletOverlaysFitTogether(windowWidth: Dp): Boolean =
-    windowWidth - TabletLayoutTokens.FilterDrawerWidth - tabletPreviewCardWidth(windowWidth) -
-        TabletLayoutTokens.OverlayMargin * 3 >= TabletLayoutTokens.MinVisibleGridWidth

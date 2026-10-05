@@ -11,6 +11,7 @@ data class DesktopBookmark(
     val scroll: Int,
     val createdAt: Long,
     val percent: Float,
+    val preview: String = "",
 )
 
 data class DesktopLibraryEntry(

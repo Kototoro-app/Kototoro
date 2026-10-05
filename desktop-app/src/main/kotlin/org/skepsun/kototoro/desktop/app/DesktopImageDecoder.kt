@@ -44,6 +44,34 @@ internal object DesktopImageDecoder {
         }
     }
 
+    private val bounds = java.util.concurrent.ConcurrentHashMap<Path, java.util.Optional<org.skepsun.kototoro.reader.core.IntRect>>()
+
+    /**
+     * The page's content bounds without its plain white margins (Android's "crop pages"), from a downsampled decode
+     * scanned by the shared reader-core detector; null when there is nothing to crop. Cached per file.
+     */
+    suspend fun contentBounds(path: Path, width: Int, height: Int): org.skepsun.kototoro.reader.core.IntRect? {
+        bounds[path]?.let { return it.orElse(null) }
+        val found = permits.withPermit {
+            val sample = org.skepsun.kototoro.reader.core.ReaderEdgeDetection.sampleSize(width, height)
+            Image.makeFromEncoded(Files.readAllBytes(path)).use { image ->
+                val sampledWidth = (image.width / sample).coerceAtLeast(1)
+                val sampledHeight = (image.height / sample).coerceAtLeast(1)
+                Bitmap().use { bitmap ->
+                    check(bitmap.allocPixels(image.imageInfo.withWidthHeight(sampledWidth, sampledHeight)
+                        .withColorType(ColorType.N32).withColorAlphaType(ColorAlphaType.PREMUL)))
+                    requireNotNull(bitmap.peekPixels()).use { pixels -> check(image.scalePixels(pixels, SamplingMode.LINEAR, false)) }
+                    org.skepsun.kototoro.reader.core.ReaderEdgeDetection.contentBounds(image.width, image.height, sample,
+                        sampledWidth, sampledHeight) { out, x, y, w, h ->
+                        for (row in 0 until h) for (column in 0 until w) out[row * w + column] = bitmap.getColor(x + column, y + row)
+                    }
+                }
+            }
+        }
+        bounds[path] = java.util.Optional.ofNullable(found)
+        return found
+    }
+
     /** Caller owns the returned bitmap; Compose may adopt it without another full-size pixel copy. */
     suspend fun decode(path: Path): Bitmap = permits.withPermit {
         val context = currentCoroutineContext()

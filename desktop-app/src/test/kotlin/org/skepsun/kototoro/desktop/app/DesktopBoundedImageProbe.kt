@@ -45,8 +45,9 @@ internal object DesktopBoundedImageProbe {
                 fun ready() {
                     waitUntil(timeoutMillis = 15_000) {
                         !controller.state.value.busy && controller.state.value.image != null &&
-                            controller.state.value.readerLoading.isEmpty() &&
-                            onAllNodes(hasTestTag("reader-page")).fetchSemanticsNodes().isNotEmpty()
+                            controller.state.value.readerLoading.isEmpty() && !controller.isPrefetching &&
+                            // Neighbours are prefetched and composed too; the opened page itself must be decoded.
+                            onAllNodes(hasContentDescription("第 1 页")).fetchSemanticsNodes().isNotEmpty()
                     }
                     check(controller.state.value.error == null) { controller.state.value.error.orEmpty() }
                     val image = controller.state.value.readerImages[controller.state.value.pages[0].id]!!
@@ -76,11 +77,12 @@ internal object DesktopBoundedImageProbe {
                 val content = controller.state.value.items.single()
                 onNodeWithTag("content:${content.id}").performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.DETAILS && !controller.state.value.busy }
-                onNodeWithText("开始 / 继续阅读").performClick()
+                onNodeWithTag("preview-read").performClick()
                 ready()
                 pixels("opened")
                 if (mode == "reader-bounded-write") {
-                    val requests = System.getProperty("fixture.reader.requests")
+                    val requests = System.getProperty("fixture.reader.requests").toInt()
+                    val loadedBefore = controller.state.value.readerImages.keys
                     val history = runBlocking { session.library.progress(content.id) }
                     onNodeWithTag("reader-zoom-in").performClick()
                     pixels("zoomed")
@@ -89,15 +91,26 @@ internal object DesktopBoundedImageProbe {
                     ready()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.readerScrollReady }
                     pixels("continuous")
-                    check(System.getProperty("fixture.reader.requests") == requests)
+                    // Continuous mode prefetches its own lookahead; pages already loaded are never fetched again.
+                    waitUntil(timeoutMillis = 15_000) { !controller.isPrefetching }
+                    val fetched = System.getProperty("fixture.reader.requests").toInt() - requests
+                    check(fetched == (controller.state.value.readerImages.keys - loadedBefore).size) { "Cached page was fetched again" }
                     runBlocking { controller.readerSettings(DesktopReaderSettings(DesktopReaderMode.DOUBLE)).join() }
                     ready()
-                    check(onAllNodes(hasTestTag("reader-page")).fetchSemanticsNodes().size == 1)
+                    val viewport = onNodeWithTag("reader-viewport").fetchSemanticsNode().boundsInRoot
+                    check(onAllNodes(hasTestTag("reader-page")).fetchSemanticsNodes().count { node ->
+                        node.boundsInRoot.width > 0f && node.boundsInRoot.left >= viewport.left - 1 &&
+                            node.boundsInRoot.right <= viewport.right + 1
+                    } == 1)
                     pixels("wide-solo")
                 } else {
                     check(controller.state.value.readerSettings.mode == DesktopReaderMode.DOUBLE)
                     check(System.getProperty("fixture.reader.requests", "0") == "0")
-                    check(onAllNodes(hasTestTag("reader-page")).fetchSemanticsNodes().size == 1)
+                    val viewport = onNodeWithTag("reader-viewport").fetchSemanticsNode().boundsInRoot
+                    check(onAllNodes(hasTestTag("reader-page")).fetchSemanticsNodes().count { node ->
+                        node.boundsInRoot.width > 0f && node.boundsInRoot.left >= viewport.left - 1 &&
+                            node.boundsInRoot.right <= viewport.right + 1
+                    } == 1)
                 }
             }
         } finally {

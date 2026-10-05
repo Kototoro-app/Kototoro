@@ -200,6 +200,72 @@ class DesktopLibraryTest {
         }
     }
 
+    @Test
+    fun `novel bookmarks persist excerpts and branch positions without history and remove after reopening`() = runBlocking<Unit> {
+        val novelSource = source.copy(contentType = "NOVEL")
+        val novelChapters = chapters.map { it.copy(source = novelSource) }
+        val novel = content.copy(source = novelSource, chapters = novelChapters)
+        val excerpt = "正文段落".repeat(80)
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = library(runtime)
+            library.toggleNovelBookmark(novel, novelChapters[0], 2, 5, "  $excerpt  ")
+            library.toggleNovelBookmark(novel, novelChapters[2], 1, 4, "第二章文字")
+            val bookmarks = library.bookmarks(novel.id)
+            assertEquals(2, bookmarks.size)
+            assertEquals(2, bookmarks.map { it.pageId }.distinct().size)
+            assertEquals(excerpt.take(200), bookmarks[0].preview)
+            assertEquals(.3f, bookmarks[0].percent)
+            assertEquals(.75f, bookmarks[1].percent)
+            assertEquals(0, bookmarks[0].scroll)
+            assertNull(library.progress(novel.id))
+        }
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = library(runtime)
+            val bookmarks = library.bookmarks(novel.id)
+            assertEquals(excerpt.take(200), bookmarks[0].preview)
+            library.removeBookmark(novel, bookmarks[1])
+            library.toggleNovelBookmark(novel, novelChapters[0], 2, 5, "不同文字")
+            assertTrue(library.bookmarks(novel.id).isEmpty())
+            assertNull(library.progress(novel.id))
+        }
+    }
+
+    @Test
+    fun `invalid novel bookmark positions identities and chapters leave stored bookmarks intact`() = runBlocking<Unit> {
+        val novelSource = source.copy(contentType = "NOVEL")
+        val novelChapters = chapters.map { it.copy(source = novelSource) }
+        val novel = content.copy(source = novelSource, chapters = novelChapters)
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = library(runtime)
+            for (block in listOf(-1, 5)) assertThrows(IllegalArgumentException::class.java) {
+                runBlocking { library.toggleNovelBookmark(novel, novelChapters[0], block, 5, "文字") }
+            }
+            assertNull(runtime.database.getMangaDao().find(novel.id))
+            library.toggleNovelBookmark(novel, novelChapters[0], 2, 5, "文字")
+            val bookmark = library.bookmarks(novel.id).single()
+            val changed = novelChapters[0].copy(url = "/changed")
+            assertThrows(IllegalArgumentException::class.java) {
+                runBlocking { library.toggleNovelBookmark(novel.copy(chapters = listOf(changed)), changed, 0, 1, "变更") }
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                runBlocking { library.toggleNovelBookmark(novel.copy(source = novelSource.copy(name = "different")),
+                    novelChapters[0], 0, 1, "碰撞") }
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                runBlocking { library.removeBookmark(novel.copy(id = 1), bookmark) }
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                runBlocking { library.removeBookmark(novel, bookmark.copy(preview = "过期卡片")) }
+            }
+            assertEquals(bookmark, library.bookmarks(novel.id).single())
+            library.removeBookmark(novel, bookmark)
+            assertThrows(IllegalArgumentException::class.java) {
+                runBlocking { library.removeBookmark(novel, bookmark) }
+            }
+            assertNull(library.progress(novel.id))
+        }
+    }
+
     private fun library(runtime: DesktopRuntime) = DesktopLibrary(runtime.database) { if (it == source.name) source else null }
     private fun chapter(id: Long, branch: String) = SourceChapter(id, "章节 $id", 1f, 0, "/chapter/$id", "组",
         Long.MAX_VALUE, branch, source, "{\"native\":true}")

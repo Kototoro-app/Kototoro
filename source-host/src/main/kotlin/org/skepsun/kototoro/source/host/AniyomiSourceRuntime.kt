@@ -73,7 +73,8 @@ class AniyomiSourceRuntime @JvmOverloads constructor(
             pagingMode = SourcePagingMode.PAGE_INDEX,
             isDynamicFilteringSupported = true,
             isImageFetchingSupported = false,
-            isPreferencesSupported = preferenceContext != null && MihonNativePreferences.supports(lease, abi),
+            // Every HTTP source has at least Kototoro's own User-Agent setting.
+            isPreferencesSupported = preferenceContext != null && (MihonNativePreferences.supports(lease, abi) || isHttp(lease)),
             isCoverFetchingSupported = imageStore != null && isHttp(lease),
             isChapterContentSupported = false,
         )
@@ -91,17 +92,26 @@ class AniyomiSourceRuntime @JvmOverloads constructor(
     /** `ConfigurableAnimeSource.setupPreferenceScreen` through the same native-control bridge as Mihon sources. */
     override suspend fun getPreferences(sourceName: String): SourcePreferenceScreen = execute(sourceName) { lease, session ->
         val context = preferenceContext ?: throw SourceOperationUnsupportedException()
-        if (!MihonNativePreferences.supports(lease, abi)) throw SourceOperationUnsupportedException()
+        val configurable = MihonNativePreferences.supports(lease, abi)
+        if (!configurable && !isHttp(lease)) throw SourceOperationUnsupportedException()
         session.preferences = null
-        MihonNativePreferences(lease, context).also { session.preferences = it }.definition()
+        val native = if (configurable) MihonNativePreferences(lease, context).also { session.preferences = it } else null
+        HostUserAgent.screen(lease, context, isHttp(lease), native)
     }
 
     override suspend fun updatePreference(
         sourceName: String, revision: String, nodeId: String, value: SourcePreferenceValue,
     ): SourcePreferenceUpdate = execute(sourceName) { lease, session ->
-        if (preferenceContext == null || !MihonNativePreferences.supports(lease, abi)) throw SourceOperationUnsupportedException()
+        val context = preferenceContext ?: throw SourceOperationUnsupportedException()
+        if (nodeId == HostUserAgent.NODE_ID) {
+            if (!isHttp(lease)) throw SourceOperationUnsupportedException()
+            val status = HostUserAgent.update(lease, context, value)
+            return@execute SourcePreferenceUpdate(status, HostUserAgent.screen(lease, context, true, session.preferences))
+        }
+        if (!MihonNativePreferences.supports(lease, abi)) throw SourceOperationUnsupportedException()
         val preferences = session.preferences ?: throw SourceInvalidArgumentException()
-        preferences.update(revision, nodeId, value)
+        val result = preferences.update(revision, nodeId, value)
+        SourcePreferenceUpdate(result.status, HostUserAgent.screen(lease, context, isHttp(lease), preferences))
     }
 
     /** PAGE_INDEX: offset 0 asks the extension for page 1, as for Mihon. */
@@ -267,6 +277,8 @@ class AniyomiSourceRuntime @JvmOverloads constructor(
                 execution.mutex.withLock {
                     execution.pendingCall?.await()
                     currentCoroutineContext().ensureActive()
+                    // Kototoro's per-source User-Agent; a source it cannot apply to keeps its own headers.
+                    preferenceContext?.let { context -> if (isHttp(lease)) runCatching { HostUserAgent.apply(lease, context) } }
                     try {
                         block(lease, session).also { currentCoroutineContext().ensureActive() }
                     } catch (error: LinkageError) {

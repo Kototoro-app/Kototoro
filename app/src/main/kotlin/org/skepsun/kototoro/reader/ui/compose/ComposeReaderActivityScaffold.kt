@@ -125,6 +125,10 @@ import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.KototoroMotion
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderChapterTitleChip
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderChromeTopBar
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderFloatingControlButton
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderZoomControls
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
@@ -584,8 +588,9 @@ internal fun ComposeReaderActivityScaffold(
                     // 底部标题药丸跟右侧悬浮按钮共用同一组基准（同高、同底距），
                     // 否则它会和最近的那颗悬浮按钮错位（issue #509 的反馈）。
                     ReaderChapterTitleChip(
-                        state = state,
-                        onChapters = callbacks.actions.onPages,
+                        title = state.title,
+                        subtitle = state.subtitle,
+                        onClick = callbacks.actions.onPages,
                         height = ReaderFloatingControlHeight,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -618,7 +623,7 @@ internal fun ComposeReaderActivityScaffold(
                             },
                         ) {
                             floatingControls.forEach { control ->
-                                ReaderFloatingControlButton(
+                                ReaderControlFloatingButton(
                                     control = control,
                                     state = state.actions,
                                     callbacks = callbacks.actions,
@@ -719,18 +724,13 @@ internal fun ComposeReaderActivityScaffold(
         }
 
         if (state.zoomVisible) {
-            Column(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(12.dp),
-            ) {
-                IconButton(onClick = callbacks.onZoomIn, modifier = Modifier.size(48.dp)) {
-                    Icon(painterResource(R.drawable.ic_zoom_in), stringResource(R.string.zoom_in))
-                }
-                IconButton(onClick = callbacks.onZoomOut, modifier = Modifier.size(48.dp)) {
-                    Icon(painterResource(R.drawable.ic_zoom_out), stringResource(R.string.zoom_out))
-                }
-            }
+            ReaderZoomControls(
+                onZoomIn = callbacks.onZoomIn,
+                onZoomOut = callbacks.onZoomOut,
+                zoomInDescription = stringResource(R.string.zoom_in),
+                zoomOutDescription = stringResource(R.string.zoom_out),
+                modifier = Modifier.align(Alignment.CenterEnd),
+            )
         }
 
         if (state.loadingVisible) {
@@ -834,6 +834,8 @@ private fun ReaderProgressControl(
         onValueChangeFinished = callbacks.onSliderValueChangeFinished,
         onPreviousChapter = callbacks.onPreviousChapter,
         onNextChapter = callbacks.onNextChapter,
+        previousDescription = stringResource(R.string.prev_chapter),
+        nextDescription = stringResource(R.string.next_chapter),
         previousEnabled = state.previousEnabled,
         nextEnabled = state.nextEnabled,
         isIosStyle = isIosStyle,
@@ -1593,119 +1595,19 @@ private fun ReaderComposeTopBar(
     defaultFocusRequester: FocusRequester? = null,
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
-    val contentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 14.dp, vertical = 6.dp),
-    ) {
-        ReaderTopControlSurface(
-            shape = Capsule(),
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .size(48.dp),
-        ) {
-            IconButton(
-                onClick = onNavigateBack,
-                modifier = Modifier.tvFocusable(shape = Capsule(), addFocusTarget = false),
-            ) {
-                Icon(
-                    painter = painterResource(androidx.appcompat.R.drawable.abc_ic_ab_back_material),
-                    contentDescription = stringResource(androidx.appcompat.R.string.abc_action_bar_up_description),
-                    tint = contentColor,
-                )
-            }
-        }
-        if (!state.options.chapterTitleAtBottom) {
-            ReaderChapterTitleChip(
-                state = state,
-                onChapters = onChapters,
-                focusRequester = defaultFocusRequester.takeIf { isTvPresentation },
-                modifier = Modifier.align(Alignment.Center),
-            )
-        }
-        ReaderTopControlSurface(
-            shape = Capsule(),
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .size(48.dp),
-        ) {
-            IconButton(
-                onClick = onOptions,
-                modifier = if (isTvPresentation && state.options.chapterTitleAtBottom) {
-                    Modifier.then(
-                        defaultFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier,
-                    ).tvFocusable(shape = Capsule(), addFocusTarget = false)
-                } else {
-                    Modifier.tvFocusable(shape = Capsule(), addFocusTarget = false)
-                },
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = stringResource(R.string.options),
-                    tint = contentColor,
-                )
-            }
-        }
-    }
-}
-
-/**
- * The work title + current chapter, opening the chapter list on tap. Shown in the top bar,
- * or above the progress dock when [ComposeReaderOptionsState.chapterTitleAtBottom] is on —
- * one-handed readers reach the bottom of the screen, not the top (issue #509).
- */
-@Composable
-private fun ReaderChapterTitleChip(
-    state: ComposeReaderChromeState,
-    onChapters: () -> Unit,
-    focusRequester: FocusRequester? = null,
-    modifier: Modifier = Modifier,
-    height: Dp = 48.dp,
-) {
-    val contentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
-    val chapterControlShape = RoundedRectangle(24.dp)
-    ReaderTopControlSurface(
-        shape = chapterControlShape,
-        modifier = modifier
-            .widthIn(min = 148.dp, max = 176.dp)
-            .height(height),
-        contentModifier = Modifier
-            .clip(chapterControlShape)
-            .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
-            .tvFocusable(shape = chapterControlShape, borderWidth = 2.dp, addFocusTarget = false)
-            .clickable(onClick = onChapters),
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 18.dp),
-        ) {
-            Text(
-                text = state.title,
-                color = contentColor,
-                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 19.sp),
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            if (state.subtitle.isNotBlank()) {
-                Text(
-                    text = state.subtitle,
-                    color = contentColor.copy(alpha = 0.78f),
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-    }
+    // Shared with the Windows reader (core-ui `ReaderChromeTopBar`).
+    ReaderChromeTopBar(
+        title = state.title,
+        subtitle = state.subtitle,
+        chapterTitleAtBottom = state.options.chapterTitleAtBottom,
+        backDescription = stringResource(androidx.appcompat.R.string.abc_action_bar_up_description),
+        optionsDescription = stringResource(R.string.options),
+        onNavigateBack = onNavigateBack,
+        onChapters = onChapters,
+        onOptions = onOptions,
+        titleFocusRequester = defaultFocusRequester.takeIf { isTvPresentation && !state.options.chapterTitleAtBottom },
+        optionsFocusRequester = defaultFocusRequester.takeIf { isTvPresentation && state.options.chapterTitleAtBottom },
+    )
 }
 
 internal fun shouldShowReaderInfoBar(infoBarEnabled: Boolean, controlsVisible: Boolean): Boolean =
@@ -1731,7 +1633,7 @@ internal fun resolveReaderFloatingControls(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ReaderFloatingControlButton(
+private fun ReaderControlFloatingButton(
     control: ReaderControl,
     state: ReaderActionsUiState,
     callbacks: ReaderActionsCallbacks,
@@ -1791,73 +1693,13 @@ private fun ReaderFloatingControlButton(
         ReaderControl.TRANSLATE -> state.translateActive
         else -> false
     }
-    val shape = if (showLabel) RoundedRectangle(22.dp) else Capsule()
-    val modifier = if (showLabel) {
-        Modifier.fillMaxWidth().height(44.dp)
-    } else {
-        Modifier.size(44.dp)
-    }
-    val contentColor = if (active) MaterialTheme.colorScheme.primary else readerControlContentColor()
-    ReaderTopControlSurface(
-        shape = shape,
-        modifier = modifier,
-        contentModifier = Modifier
-            .clip(shape)
-            .combinedClickable(
-                role = Role.Button,
-                onClickLabel = contentDescription,
-                onLongClickLabel = if (onLongClick != null) contentDescription else null,
-                onClick = onClick,
-                onLongClick = onLongClick,
-            ),
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxSize().padding(horizontal = if (showLabel) 8.dp else 0.dp),
-        ) {
-            Icon(
-                painter = painterResource(icon),
-                contentDescription = contentDescription,
-                tint = contentColor,
-                modifier = Modifier.size(24.dp),
-            )
-            if (showLabel) {
-                Text(
-                    text = visibleLabel,
-                    color = contentColor,
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReaderTopControlSurface(
-    shape: Shape,
-    modifier: Modifier = Modifier,
-    contentModifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    GlassSurface(
-        modifier = modifier,
-        shape = shape,
-        style = GlassDefaults.topBarChromeStyle().copy(
-            containerAlpha = 0.84f,
-            shadowElevation = ReaderControlTokens.ChromeShadowElevation,
-        ),
-        // Reader top control surfaces are floating pill controls (capsules),
-        // not edge-to-edge bar panels.
-        componentRole = GlassComponentRole.PillControl,
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.fillMaxSize().then(contentModifier),
-        ) {
-            content()
-        }
-    }
+    ReaderFloatingControlButton(
+        icon = painterResource(icon),
+        contentDescription = contentDescription,
+        label = visibleLabel,
+        active = active,
+        showLabel = showLabel,
+        onClick = onClick,
+        onLongClick = onLongClick,
+    )
 }

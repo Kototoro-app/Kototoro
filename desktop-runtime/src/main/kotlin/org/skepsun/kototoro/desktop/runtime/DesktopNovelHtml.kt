@@ -19,6 +19,13 @@ sealed interface NovelBlock {
     data object Rule : NovelBlock
 }
 
+/** Text anchors retain the original segment indices, including image and rule slots. */
+fun NovelBlock.bookmarkText(): String = when (this) {
+    is NovelBlock.Paragraph -> text
+    is NovelBlock.Heading -> text
+    else -> ""
+}
+
 /**
  * Reduces chapter HTML to reader blocks. Scripts, frames and styles are dropped, so what a site (or a malicious
  * source) puts in the markup can only ever become text, headings and image URLs.

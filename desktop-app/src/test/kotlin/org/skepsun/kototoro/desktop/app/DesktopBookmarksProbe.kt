@@ -37,7 +37,7 @@ internal object DesktopBookmarksProbe {
                 val content = controller.state.value.items.single()
                 onNodeWithTag("content:${content.id}").performClick(); idle()
                 if (reading) System.setProperty("fixture.reader.offline", "true")
-                onNodeWithText("开始 / 继续阅读").performClick(); idle()
+                onNodeWithTag("preview-read").performClick(); idle()
                 if (!reading) {
                     runBlocking {
                         controller.readerSettings(controller.state.value.readerSettings.copy(
@@ -51,13 +51,14 @@ internal object DesktopBookmarksProbe {
                     onNodeWithTag("reader-surface").performKeyInput { pressKey(Key.B) }; idle()
                     val bookmark = controller.state.value.bookmarks.single()
                     check(bookmark.page == 3 && abs(bookmark.scroll - offset) < 2)
-                    onNodeWithText("下一章").performClick(); ready(0)
+                    onNodeWithTag("reader-next-chapter").performClick(); ready(0)
                     check(controller.state.value.chapter?.id != bookmark.chapterId)
                 } else {
                     ready(0)
                     val bookmark = controller.state.value.bookmarks.single()
                     check(bookmark.scroll > 20 && controller.state.value.chapter?.id != bookmark.chapterId)
-                    onNodeWithTag("reader-bookmarks").performClick(); idle()
+                    // Android: a long press on the bookmark button opens the bookmarks.
+                    onNodeWithTag("reader-bookmark-toggle").performTouchInput { longClick() }; idle()
                     onNodeWithTag("reader-bookmark:${bookmark.pageId}").performClick(); ready(3)
                     check(controller.state.value.chapter?.id == bookmark.chapterId)
                     check(abs(controller.state.value.readerScroll - bookmark.scroll) < 2)

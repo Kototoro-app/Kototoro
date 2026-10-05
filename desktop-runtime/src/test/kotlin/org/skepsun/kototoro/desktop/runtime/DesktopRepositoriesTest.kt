@@ -228,6 +228,62 @@ class DesktopRepositoriesTest {
         }
     }
 
+    @Test
+    fun `Cloudstream repository lists its plugins and installs an owned cs3`() = runBlocking<Unit> {
+        val plugins = """[
+            {"internalName":"FixtureProvider","name":"Fixture","url":"builds/FixtureProvider.cs3","version":3,"status":1,
+             "language":"zh","iconUrl":"https://fixture.invalid/icon.png"},
+            {"internalName":"Removed","name":"Removed","url":"builds/Removed.cs3","version":1,"status":0}
+        ]"""
+        serve(mapOf(
+            "/repo.json" to """{"name":"Fixture repository","manifestVersion":1,"pluginLists":["PLUGINS"]}""".toByteArray(),
+            "/lists/plugins.json" to plugins.toByteArray(),
+            "/lists/builds/FixtureProvider.cs3" to cs3(),
+        )).use { server ->
+            // The repository names its list by absolute URL; the fixture server's address is only known now.
+            val repo = """{"name":"Fixture repository","manifestVersion":1,"pluginLists":["${server.url}/lists/plugins.json"]}"""
+            server.server.removeContext("/repo.json")
+            server.server.createContext("/repo.json") { exchange ->
+                val bytes = repo.toByteArray()
+                exchange.sendResponseHeaders(200, bytes.size.toLong()); exchange.responseBody.use { it.write(bytes) }; exchange.close()
+            }
+            withRepositories { repos ->
+                val catalog = repos.fetch(server.url + "/repo.json")
+                assertEquals("Fixture repository", catalog.repository.name)
+                val entry = catalog.extensions.single()
+                assertTrue(catalog.isCloudstreamPlugin(entry))
+                assertEquals("FixtureProvider", entry.packageName)
+                assertEquals(3L, entry.versionCode)
+                assertEquals(server.url + "/lists/builds/FixtureProvider.cs3", entry.resources.apkUrl)
+                val managed = repos.downloadCloudstreamPlugin(entry.resources.apkUrl, entry.packageName)
+                assertEquals("FixtureProvider", managed.id)
+                assertTrue(managed.path.fileName.toString().endsWith(".cs3"))
+                assertEquals(DesktopExtensionKind.CLOUDSTREAM, DesktopExtensionFiles.kind(managed.path))
+                assertEquals(managed.copy(id = "local"), repos.importCloudstreamPlugin(managed.path, "local"))
+                assertEquals(server.url + "/repo.json", repos.saved().single().indexUrl)
+                // Uninstalled versions are cleaned like extension jars.
+                assertEquals(1, repos.cleanupArtifacts(emptySet()))
+            }
+        }
+    }
+
+    @Test
+    fun `GitHub raw plugin links are served through jsDelivr`() {
+        assertEquals("https://cdn.jsdelivr.net/gh/recloudstream/extensions@builds/plugins.json",
+            DesktopRepositories.cloudstreamMirror("https://raw.githubusercontent.com/recloudstream/extensions/builds/plugins.json"))
+        assertEquals("https://example.com/plugins.json", DesktopRepositories.cloudstreamMirror("https://example.com/plugins.json"))
+        assertEquals("FixtureProvider", DesktopExtensionFiles.cloudstreamPluginId("FixtureProvider.cs3"))
+    }
+
+    private fun cs3(): ByteArray = ByteArrayOutputStream().also { output ->
+        java.util.zip.ZipOutputStream(output).use { zip ->
+            zip.putNextEntry(java.util.zip.ZipEntry("manifest.json"))
+            zip.write("""{"pluginClassName":"fixture.Plugin","name":"FixtureProvider","version":3}""".toByteArray()); zip.closeEntry()
+            zip.putNextEntry(java.util.zip.ZipEntry("classes.dex"))
+            zip.write("dex\n035\u0000".toByteArray()); zip.closeEntry()
+        }
+    }.toByteArray()
+
     private suspend fun withRepositories(block: suspend (DesktopRepositories) -> Unit) {
         val root = directory.resolve("data")
         FileSourcePreferenceStore(root.resolve("prefs")).use { store -> DesktopRepositories(root, store.open("repos")).use { block(it) } }

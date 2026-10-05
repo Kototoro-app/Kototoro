@@ -54,35 +54,37 @@ internal object DesktopScrollProbe {
                 settled()
                 val expected = runBlocking { session.library.progress(content.id) }
                 if (mode == "reader-scroll-read") System.setProperty("fixture.reader.offline", "true")
-                onNodeWithText("开始 / 继续阅读").performClick()
+                // Pages 4 and 5 (indices 15, 16) fail from the start: the reader prefetches its lookahead in the background,
+                // and a failed prefetch must leave showing those pages to report the error.
+                else System.setProperty("fixture.reader.failure.index", "15,16")
+                onNodeWithTag("preview-read").performClick()
                 if (mode == "reader-scroll-read") {
                     ready(3)
                     check(controller.state.value.readerSettings.mode == DesktopReaderMode.CONTINUOUS)
                     check(expected != null && expected.page == 3 && expected.scroll > 0)
                     check(kotlin.math.abs(controller.state.value.readerScroll - expected.scroll) < 2)
                     check(System.getProperty("fixture.reader.requests", "0") == "0") { "Offline restart requested an image" }
-                    onNodeWithTag("reader-direction").assertIsNotEnabled()
                     onNodeWithTag("reader-scrollbar").assertExists()
-                    onNodeWithTag("reader-fit").assertDoesNotExist()
+                    onNodeWithTag("reader-zoom-in").assertDoesNotExist()
                     snapshot("restored")
                 } else {
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.image != null && !controller.state.value.busy }
-                    onNodeWithTag("reader-mode").performClick()
+                    readerDoublePages()
                     waitUntil(timeoutMillis = 15_000) {
                         !controller.state.value.busy && controller.state.value.readerSettings.mode == DesktopReaderMode.DOUBLE
                     }
-                    onNodeWithTag("reader-mode").performClick()
+                    readerMode("webtoon")
                     ready(0)
                     check(controller.state.value.readerSettings.mode == DesktopReaderMode.CONTINUOUS)
-                    check(controller.state.value.readerImages.size == 2) { "Whole chapter loaded before it was visible" }
-                    onNodeWithTag("reader-direction").assertIsNotEnabled()
+                    // The lookahead loads in the background; the failing pages stay for the visible load to report.
+                    waitUntil(timeoutMillis = 15_000) { !controller.isPrefetching }
+                    check(controller.state.value.pages.drop(3).none { it.id in controller.state.value.readerImages })
                     waitUntil(timeoutMillis = 15_000) {
                         runBlocking { session.library.progress(content.id) }?.let {
                             it.page == 0 && it.scroll == 0f && kotlin.math.abs(it.percent - .1f) < .001f
                         } == true
                     }
                     val before = runBlocking { session.library.progress(content.id) }
-                    System.setProperty("fixture.reader.failure.index", "15")
                     onNodeWithTag("reader-scroll-list").performScrollToIndex(2)
                     waitUntil(timeoutMillis = 15_000) {
                         controller.state.value.readerFailedPages.isNotEmpty() && controller.state.value.readerLoading.isEmpty()
@@ -94,7 +96,8 @@ internal object DesktopScrollProbe {
                     val failedPage = controller.state.value.pages[3].id
                     onNodeWithTag("reader-page-retry:$failedPage").assertExists()
                     snapshot("failure")
-                    System.clearProperty("fixture.reader.failure.index")
+                    // Page 4 recovers; page 5 keeps failing for the navigation check below.
+                    System.setProperty("fixture.reader.failure.index", "16")
                     onNodeWithTag("reader-page-retry:$failedPage").performClick()
                     ready(3)
                     val loadedCount = System.getProperty("fixture.reader.requests")
@@ -126,17 +129,16 @@ internal object DesktopScrollProbe {
                     check(failedNavigation.page == verifiedPage && kotlin.math.abs(failedNavigation.scroll - verifiedOffset) < 2)
                     snapshot("failed-navigation")
                     System.clearProperty("fixture.reader.failure.index")
-                    onNodeWithText("重新加载").performClick()
+                    readerReload()
                     ready(4)
-                    onNodeWithText("下一页").assertIsNotEnabled()
                     snapshot("end")
                     onNodeWithTag("reader-viewport").performKeyInput { pressKey(Key.MoveHome) }
                     ready(0)
-                    onNodeWithText("下一章").performClick()
+                    onNodeWithTag("reader-next-chapter").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.chapter?.number == 2f }
                     ready(0)
-                    onNodeWithText("下一章").assertIsNotEnabled()
-                    onNodeWithText("上一章").performClick()
+                    onNodeWithTag("reader-next-chapter").assertIsNotEnabled()
+                    onNodeWithTag("reader-previous-chapter").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.chapter?.number == 1f }
                     ready(0)
                     onNodeWithTag("reader-scroll-list").performScrollToIndex(3)
@@ -147,7 +149,7 @@ internal object DesktopScrollProbe {
                     snapshot("pixel-progress")
                     // Leave immediately after the final viewport update: the owner flushes pending debounced history.
                     val offset = controller.state.value.readerScroll
-                    onNodeWithText("返回详情").performClick()
+                    onNodeWithTag("reader-back").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.DETAILS && !controller.state.value.busy }
                     val stored = runBlocking { session.library.progress(content.id) }!!
                     check(stored.page == 3 && kotlin.math.abs(stored.scroll - offset) < 2)

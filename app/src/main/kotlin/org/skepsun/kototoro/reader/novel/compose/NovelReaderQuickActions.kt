@@ -14,8 +14,6 @@ internal fun novelQuickActions(translationEnabled: Boolean): List<ReaderQuickAct
     NovelQuickActionId.entries.map { id ->
         ReaderQuickAction(
             id = id.name,
-            iconResId = id.iconResId,
-            labelResId = id.labelResId,
             toggled = if (id == NovelQuickActionId.TRANSLATE) translationEnabled else null,
         )
     }

@@ -29,17 +29,17 @@ import org.skepsun.kototoro.parsers.model.Demographic
 import org.skepsun.kototoro.parsers.model.EbookFormat
 import java.util.Locale
 
-// Same projection as the Android `core/source/SourceModelMapping.kt`. That file lives in :app and depends on the
+// Public for the other JVM hosts of the parser model (Cloudstream). Same projection as the Android `core/source/SourceModelMapping.kt`. That file lives in :app and depends on the
 // Android-only parts of the parser API; both are intentionally kept in step until :app can consume this module.
 
-internal fun ContentSource.toSourceRef() = SourceRef(name, locale, contentType.name)
+fun ContentSource.toSourceRef() = SourceRef(name, locale, contentType.name)
 
-internal fun ContentTag.toSourceTag() = SourceTag(title, key, source.toSourceRef())
+fun ContentTag.toSourceTag() = SourceTag(title, key, source.toSourceRef())
 
-internal fun ContentTagGroup.toSourceTagGroup() =
+fun ContentTagGroup.toSourceTagGroup() =
     SourceTagGroup(title, tags.mapTo(linkedSetOf()) { it.toSourceTag() }, isExclusive)
 
-internal fun Content.toSourceContent() = SourceContent(
+fun Content.toSourceContent() = SourceContent(
     id = id,
     title = title,
     altTitles = altTitles,
@@ -58,7 +58,7 @@ internal fun Content.toSourceContent() = SourceContent(
     sourceData = sourceData,
 )
 
-internal fun ContentChapter.toSourceChapter() = SourceChapter(
+fun ContentChapter.toSourceChapter() = SourceChapter(
     id = id,
     title = title,
     number = number,
@@ -72,7 +72,7 @@ internal fun ContentChapter.toSourceChapter() = SourceChapter(
     ebookFormats = ebookFormats.map { it.name },
 )
 
-internal fun ContentPage.toSourcePage() = SourcePage(
+fun ContentPage.toSourcePage() = SourcePage(
     id = id,
     url = url,
     preview = preview,
@@ -83,9 +83,9 @@ internal fun ContentPage.toSourcePage() = SourcePage(
     playbackQuality = playbackQuality,
 )
 
-internal fun SourceTag.toParser(resolve: (String) -> ContentSource) = ContentTag(title, key, resolve(source.name))
+fun SourceTag.toParser(resolve: (String) -> ContentSource) = ContentTag(title, key, resolve(source.name))
 
-internal fun SourceContent.toParser(resolve: (String) -> ContentSource) = Content(
+fun SourceContent.toParser(resolve: (String) -> ContentSource) = Content(
     id = id,
     title = title,
     altTitles = altTitles,
@@ -104,7 +104,7 @@ internal fun SourceContent.toParser(resolve: (String) -> ContentSource) = Conten
     sourceData = sourceData,
 )
 
-internal fun SourceChapter.toParser(resolve: (String) -> ContentSource) = ContentChapter(
+fun SourceChapter.toParser(resolve: (String) -> ContentSource) = ContentChapter(
     id = id,
     title = title,
     number = number,
@@ -118,7 +118,7 @@ internal fun SourceChapter.toParser(resolve: (String) -> ContentSource) = Conten
     ebookFormats = ebookFormats.map { parserEnum<EbookFormat>(it) },
 )
 
-internal fun SourcePage.toParser(resolve: (String) -> ContentSource): ContentPage {
+fun SourcePage.toParser(resolve: (String) -> ContentSource): ContentPage {
     // The parser ABI has no native page-context field; never silently drop host-owned image state.
     if (requestContext != null) throw SourceOperationUnsupportedException()
     return ContentPage(
@@ -133,7 +133,7 @@ internal fun SourcePage.toParser(resolve: (String) -> ContentSource): ContentPag
     )
 }
 
-internal fun SourceFilter.toParser(resolve: (String) -> ContentSource): ContentListFilter {
+fun SourceFilter.toParser(resolve: (String) -> ContentSource): ContentListFilter {
     if (dynamicFilters.isNotEmpty()) throw SourceOperationUnsupportedException()
     return ContentListFilter(
         query = query,
@@ -152,7 +152,7 @@ internal fun SourceFilter.toParser(resolve: (String) -> ContentSource): ContentL
     )
 }
 
-internal fun ContentListFilterOptions.toSourceFilterOptions() = SourceFilterOptions(
+fun ContentListFilterOptions.toSourceFilterOptions() = SourceFilterOptions(
     availableTags = availableTags.mapTo(linkedSetOf()) { it.toSourceTag() },
     tagGroups = tagGroups.map { it.toSourceTagGroup() },
     availableStates = availableStates.mapTo(linkedSetOf()) { it.name },
@@ -163,7 +163,7 @@ internal fun ContentListFilterOptions.toSourceFilterOptions() = SourceFilterOpti
     effectiveTagGroups = effectiveTagGroups.map { it.toSourceTagGroup() },
 )
 
-internal fun ContentListFilterCapabilities.toSourceCapabilities() = SourceFilterCapabilities(
+fun ContentListFilterCapabilities.toSourceCapabilities() = SourceFilterCapabilities(
     isMultipleTagsSupported = isMultipleTagsSupported,
     isTagsExclusionSupported = isTagsExclusionSupported,
     isSearchSupported = isSearchSupported,
@@ -174,7 +174,7 @@ internal fun ContentListFilterCapabilities.toSourceCapabilities() = SourceFilter
     isAuthorSearchSupported = isAuthorSearchSupported,
 )
 
-internal inline fun <reified T : Enum<T>> parserEnum(name: String): T = try {
+inline fun <reified T : Enum<T>> parserEnum(name: String): T = try {
     enumValueOf<T>(name)
 } catch (_: IllegalArgumentException) {
     throw SourceInvalidArgumentException()

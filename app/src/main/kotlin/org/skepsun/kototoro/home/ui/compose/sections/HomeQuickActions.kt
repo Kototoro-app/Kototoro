@@ -1,55 +1,41 @@
 package org.skepsun.kototoro.home.ui.compose.sections
 
-import androidx.compose.ui.unit.Dp
-import org.skepsun.kototoro.home.ui.compose.balancedGridColumns
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
-import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
-import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
-import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+import org.skepsun.kototoro.core.ui.home.HomeQuickActionsGrid
 import org.skepsun.kototoro.core.ui.theme.ArtworkSurfaceRole
-import org.skepsun.kototoro.core.ui.theme.artworkAwareContainerColor
+import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+import org.skepsun.kototoro.core.ui.theme.artworkAwareContainerColor
+import org.skepsun.kototoro.core.ui.home.HomeQuickAction as SharedHomeQuickAction
 
 /** Target container opacity for the glass (iOS) tiles while the blurred artwork image background is active. */
 private const val QUICK_ACTION_ARTWORK_GLASS_ALPHA = 0.45f
 
+/**
+ * Android's quick access section: the shared grid ([HomeQuickActionsGrid]) with glass tiles for the iOS style,
+ * artwork-aware tile colours and TV focus handling.
+ */
 @Composable
 internal fun QuickActionsSection(
     actions: List<HomeQuickAction>,
@@ -58,58 +44,58 @@ internal fun QuickActionsSection(
     preferredTileWidth: Dp? = null,
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(if (isTvPresentation) Modifier.focusRestorer().focusGroup() else Modifier),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(
-            text = stringResource(R.string.quick_access),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val itemSpacing = if (isTvPresentation) 12.dp else 6.dp
-            val rowSpacing = if (isTvPresentation) 12.dp else 6.dp
-            val preferredItemWidth = preferredTileWidth ?: if (isTvPresentation) 112.dp else 68.dp
-            val maxColumns = ((maxWidth + itemSpacing) / (preferredItemWidth + itemSpacing))
-                .toInt()
-                .coerceAtLeast(2)
-            // Even rows: a lone last tile would otherwise stretch across the whole row.
-            val columns = balancedGridColumns(actions.size, maxColumns)
-            // Chunk into full-width Rows where every item uses weight(1f), so a
-            // row always fills the entire width — including partial last rows on
-            // uncommon screen widths that would otherwise leave a large gap on
-            // the right with a fixed-column FlowRow.
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(rowSpacing),
-            ) {
-                actions.mapIndexed { index, action -> index to action }
-                    .chunked(columns)
-                    .forEach { rowItems ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(itemSpacing),
-                        ) {
-                            rowItems.forEach { (index, action) ->
-                                QuickAccessButton(
-                                    action = action,
-                                    paletteIndex = index,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(if (isTvPresentation) 88.dp else 64.dp),
-                                )
-                            }
-                            // A short last row keeps the tile width instead of stretching its tiles.
-                            repeat(columns - rowItems.size) { Spacer(Modifier.weight(1f)) }
-                        }
-                    }
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
+    HomeQuickActionsGrid(
+        title = stringResource(R.string.quick_access),
+        actions = actions.map { SharedHomeQuickAction(it.label, painterResource(it.iconRes), it.onClick, it.enabled) },
+        modifier = modifier.then(if (isTvPresentation) Modifier.focusRestorer().focusGroup() else Modifier),
+        preferredTileWidth = preferredTileWidth ?: if (isTvPresentation) 112.dp else 68.dp,
+        tileHeight = if (isTvPresentation) 88.dp else 64.dp,
+        spacing = if (isTvPresentation) 12.dp else 6.dp,
+        expressive = expressive,
+        isIosStyle = isIosStyle,
+        large = isTvPresentation,
+        container = { tileModifier, shape, paletteIndex, content ->
+            if (isIosStyle) {
+                GlassSurface(
+                    modifier = tileModifier,
+                    shape = shape,
+                    style = GlassDefaults.subtleStyle().copy(
+                        containerAlpha = if (isArtworkBackground) {
+                            QUICK_ACTION_ARTWORK_GLASS_ALPHA
+                        } else {
+                            GlassDefaults.subtleStyle().containerAlpha
+                        },
+                    ),
+                ) { content() }
+            } else {
+                val color = when {
+                    !expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                    paletteIndex % 3 == 0 -> MaterialTheme.colorScheme.secondaryContainer
+                    paletteIndex % 3 == 1 -> MaterialTheme.colorScheme.tertiaryContainer
+                    else -> MaterialTheme.colorScheme.surfaceContainerHighest
+                }
+                Surface(
+                    modifier = tileModifier,
+                    shape = shape,
+                    color = if (isArtworkBackground) color.artworkAwareContainerColor(ArtworkSurfaceRole.Card) else color,
+                    tonalElevation = if (expressive) 0.dp else 1.dp,
+                ) { content() }
             }
-        }
-    }
+        },
+        tileModifier = { _, shape ->
+            if (isTvPresentation) {
+                var isFocused by remember { mutableStateOf(false) }
+                Modifier
+                    .onFocusChanged { isFocused = it.isFocused }
+                    .then(if (isFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape) else Modifier)
+            } else {
+                Modifier
+            }
+        },
+    )
 }
 
 internal data class HomeQuickAction(
@@ -118,120 +104,3 @@ internal data class HomeQuickAction(
     val onClick: () -> Unit,
     val enabled: Boolean = true,
 )
-
-@Composable
-private fun QuickAccessButton(
-    action: HomeQuickAction,
-    paletteIndex: Int,
-    modifier: Modifier = Modifier,
-) {
-    val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
-    val isTvPresentation = LocalUiPresentationConfig.current.isTv
-    var isFocused by remember { mutableStateOf(false) }
-    val containerColor = when {
-        !expressive -> MaterialTheme.colorScheme.surfaceContainerLow
-        paletteIndex % 3 == 0 -> MaterialTheme.colorScheme.secondaryContainer
-        paletteIndex % 3 == 1 -> MaterialTheme.colorScheme.tertiaryContainer
-        else -> MaterialTheme.colorScheme.surfaceContainerHighest
-    }
-    val effectiveContainerColor = if (isArtworkBackground) {
-        containerColor.artworkAwareContainerColor(ArtworkSurfaceRole.Card)
-    } else {
-        containerColor
-    }
-    val expressiveContentColor = when (paletteIndex % 3) {
-        0 -> MaterialTheme.colorScheme.onSecondaryContainer
-        1 -> MaterialTheme.colorScheme.onTertiaryContainer
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-    val textColor = when {
-        !action.enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-        isIosStyle || !expressive -> MaterialTheme.colorScheme.onSurface
-        else -> expressiveContentColor
-    }
-    val iconTint = when {
-        !action.enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-        isIosStyle -> MaterialTheme.colorScheme.primary
-        !expressive -> MaterialTheme.colorScheme.onSurfaceVariant
-        else -> expressiveContentColor
-    }
-    val shape = RoundedCornerShape(if (expressive) 20.dp else 16.dp)
-    val content: @Composable () -> Unit = {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .onFocusChanged { isFocused = it.isFocused }
-                .clickable(enabled = action.enabled, onClick = action.onClick)
-                .then(
-                    if (isTvPresentation && isFocused) {
-                        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape)
-                    } else {
-                        Modifier
-                    },
-                )
-                .padding(horizontal = 6.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            HomeQuickActionIcon(
-                iconRes = action.iconRes,
-                tint = iconTint,
-                modifier = Modifier.size(if (isTvPresentation) 28.dp else if (expressive) 20.dp else 18.dp),
-            )
-            Text(
-                text = action.label,
-                modifier = Modifier.fillMaxWidth(),
-                style = if (isTvPresentation) {
-                    MaterialTheme.typography.labelLarge
-                } else {
-                    MaterialTheme.typography.labelSmall
-                },
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                color = textColor,
-            )
-        }
-    }
-    if (isIosStyle) {
-        GlassSurface(
-            modifier = modifier,
-            shape = shape,
-            style = GlassDefaults.subtleStyle().copy(
-                containerAlpha = if (isArtworkBackground) {
-                    QUICK_ACTION_ARTWORK_GLASS_ALPHA
-                } else {
-                    GlassDefaults.subtleStyle().containerAlpha
-                },
-            ),
-        ) {
-            content()
-        }
-    } else {
-        Surface(
-            modifier = modifier,
-            shape = shape,
-            color = effectiveContainerColor,
-            tonalElevation = if (expressive) 0.dp else 1.dp,
-        ) {
-            content()
-        }
-    }
-}
-
-@Composable
-private fun HomeQuickActionIcon(
-    iconRes: Int,
-    tint: Color,
-    modifier: Modifier = Modifier,
-) {
-    Icon(
-        painter = painterResource(iconRes),
-        contentDescription = null,
-        modifier = modifier,
-        tint = tint,
-    )
-}

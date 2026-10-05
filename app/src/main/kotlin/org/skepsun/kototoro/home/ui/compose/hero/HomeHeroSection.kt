@@ -53,6 +53,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -419,12 +420,7 @@ private fun HomeHeroCard(
             // Slightly heavier at the bottom, where the in-card pager indicator
             // and the info text sit.
             Box(Modifier.fillMaxSize().drawBehind {
-                drawRect(
-                    Brush.verticalGradient(
-                        0f to Color.Black.copy(alpha = 0.20f),
-                        1f to Color.Black.copy(alpha = 0.56f),
-                    ),
-                )
+                drawRect(org.skepsun.kototoro.core.ui.home.HomeHeroArtworkScrim)
             })
         }
         val textColor = if (presentation.background == HomeHeroBackground.PLAIN) {
@@ -584,33 +580,17 @@ private fun HomeHeroText(
     textColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 6.dp)) {
-        HomeBadge(text = stringResource(entry.kind.labelRes), iconRes = entry.kind.iconRes)
-        Text(
-            text = content.title,
-            style = if (compact) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
-            color = textColor,
-            fontWeight = FontWeight.Bold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = rememberResolvedSourceTitle(content.source),
-            style = MaterialTheme.typography.bodyMedium,
-            color = textColor.copy(alpha = 0.86f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        entry.supportingText()?.let { supportingText ->
-            Text(
-                text = supportingText,
-                style = MaterialTheme.typography.labelLarge,
-                color = textColor.copy(alpha = 0.92f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+    // Shared with the Windows host's hero.
+    org.skepsun.kototoro.core.ui.home.HomeHeroText(
+        kindLabel = stringResource(entry.kind.labelRes),
+        kindIcon = painterResource(entry.kind.iconRes),
+        title = content.title,
+        sourceTitle = rememberResolvedSourceTitle(content.source),
+        supportingText = entry.supportingText(),
+        compact = compact,
+        textColor = textColor,
+        modifier = modifier,
+    )
 }
 
 @Composable

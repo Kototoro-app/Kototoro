@@ -2,17 +2,14 @@ package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
@@ -30,7 +28,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,8 +37,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.skia.Bitmap
 import org.skepsun.kototoro.desktop.runtime.NovelBlock
+import org.skepsun.kototoro.reader.novel.compose.NovelReaderChromeActions
+import org.skepsun.kototoro.reader.novel.compose.NovelReaderChromeLayout
 
-private enum class NovelPanel { CHAPTERS, SETTINGS }
+private enum class NovelPanel { CHAPTERS, SETTINGS, BOOKMARKS }
 
 /** Scrolling text reader for novel chapters: one block per paragraph, position kept as a block index. */
 @Composable
@@ -63,12 +62,14 @@ internal fun DesktopNovelReader(controller: DesktopController, state: DesktopApp
         controller.backToDetails()
     }
     // Position first, then reporting: the first emission must not overwrite a restored position with block 0.
-    LaunchedEffect(novel.chapter.id) {
+    LaunchedEffect(novel.chapter.id, novel.navigation) {
         list.scrollToItem(novel.startBlock)
         focus.requestFocus()
         snapshotFlow {
             val visible = list.layoutInfo.visibleItemsInfo.filter { it.index < novel.blocks.size }
-            (visible.firstOrNull()?.index ?: 0) to (visible.lastOrNull()?.index ?: 0)
+            // Items behind the fixed top padding are composed too; they are not the saved reading anchor.
+            list.firstVisibleItemIndex.coerceAtMost(novel.blocks.lastIndex.coerceAtLeast(0)) to
+                (visible.lastOrNull()?.index ?: 0)
         }.collect { (first, last) -> controller.novelProgress(novel.chapter.id, first, last.coerceAtLeast(first)) }
     }
     CompositionLocalProvider(LocalContentColor provides Color(colors.text)) {
@@ -81,6 +82,7 @@ internal fun DesktopNovelReader(controller: DesktopController, state: DesktopApp
                     event.key == Key.Escape && panel != null -> { panel = null; focus.requestFocus(); true }
                     event.key == Key.Escape -> { back(); true }
                     panel != null -> false
+                    event.key == Key.B -> { if (enabled) controller.toggleNovelBookmark(); true }
                     event.key == Key.H -> { controlsVisible = !controlsVisible; true }
                     event.key == Key.F11 && onToggleFullscreen != null -> { onToggleFullscreen(); true }
                     event.key == Key.PageDown || event.key == Key.Spacebar && !event.isShiftPressed -> {
@@ -94,72 +96,68 @@ internal fun DesktopNovelReader(controller: DesktopController, state: DesktopApp
                     else -> false
                 }
             }) {
-            Column(Modifier.fillMaxSize()) {
-                if (controlsVisible) Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton({ back() }) { Text("返回详情", color = Color(colors.text)) }
-                    Column(Modifier.weight(1f)) {
-                        Text(state.content?.title.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        Text(novel.chapter.title ?: "第 ${novel.chapter.number} 章", color = Color(colors.muted),
-                            maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
-                    }
-                    TextButton({ panel = if (panel == NovelPanel.CHAPTERS) null else NovelPanel.CHAPTERS },
-                        modifier = Modifier.testTag("novel-chapters")) { Text("章节", color = Color(colors.text)) }
-                    TextButton({ panel = if (panel == NovelPanel.SETTINGS) null else NovelPanel.SETTINGS },
-                        modifier = Modifier.testTag("novel-settings")) { Text("阅读设置", color = Color(colors.text)) }
-                    TextButton({ onToggleFullscreen?.invoke() }, enabled = onToggleFullscreen != null) {
-                        Text(if (fullscreen) "退出全屏" else "全屏", color = Color(colors.text))
-                    }
-                    TextButton({ controlsVisible = false; panel = null; focus.requestFocus() }) {
-                        Text("收起", color = Color(colors.text))
-                    }
-                }
-                SelectionContainer(Modifier.weight(1f).fillMaxWidth()) {
-                    LazyColumn(Modifier.fillMaxSize().testTag("novel-list"), state = list,
-                        contentPadding = PaddingValues(vertical = 24.dp)) {
-                        itemsIndexed(novel.blocks) { index, block ->
-                            Box(Modifier.fillMaxWidth().padding(horizontal = 28.dp), contentAlignment = Alignment.TopCenter) {
-                                Box(Modifier.widthIn(max = settings.width.dp).fillMaxWidth().testTag("novel-block:$index")) {
-                                    NovelBlockView(controller, block, settings)
-                                }
-                            }
-                        }
-                        item {
-                            Row(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalArrangement = Arrangement.Center) {
-                                OutlinedButton({ controller.changeNovelChapter(false) }, enabled = enabled && hasPrevious,
-                                    colors = themedOutline(colors), modifier = Modifier.testTag("novel-previous-chapter")) { Text("上一章") }
-                                Spacer(Modifier.width(16.dp))
-                                Button({ controller.changeNovelChapter(true) }, enabled = enabled && hasNext,
-                                    modifier = Modifier.testTag("novel-next-chapter")) { Text("下一章") }
+            SelectionContainer(Modifier.fillMaxSize().pointerInput(Unit) {
+                detectTapGestures(onTap = {
+                    controlsVisible = !controlsVisible
+                    focus.requestFocus()
+                })
+            }) {
+                LazyColumn(Modifier.fillMaxSize().testTag("novel-list"), state = list,
+                    contentPadding = PaddingValues(
+                        top = NovelReaderChromeLayout.TopHeight,
+                        bottom = NovelReaderChromeLayout.BottomHeight,
+                    )) {
+                    itemsIndexed(novel.blocks) { index, block ->
+                        Box(Modifier.fillMaxWidth().padding(horizontal = 28.dp), contentAlignment = Alignment.TopCenter) {
+                            Box(Modifier.widthIn(max = settings.width.dp).fillMaxWidth().testTag("novel-block:$index")) {
+                                NovelBlockView(controller, block, settings)
                             }
                         }
                     }
-                }
-                if (controlsVisible) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedButton({ controller.changeNovelChapter(false) }, enabled = enabled && hasPrevious,
-                        colors = themedOutline(colors)) { Text("上一章") }
-                    Spacer(Modifier.weight(1f))
-                    val percent = ((novel.lastVisible + 1) * 100) / novel.blocks.size
-                    Text("第 ${novel.firstVisible + 1}–${novel.lastVisible + 1} / ${novel.blocks.size} 段 · $percent%",
-                        color = Color(colors.muted), modifier = Modifier.testTag("novel-progress"))
-                    Spacer(Modifier.weight(1f))
-                    OutlinedButton({ controller.changeNovelChapter(true) }, enabled = enabled && hasNext,
-                        colors = themedOutline(colors)) { Text("下一章") }
+                    item {
+                        Row(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalArrangement = Arrangement.Center) {
+                            OutlinedButton({ controller.changeNovelChapter(false) }, enabled = enabled && hasPrevious,
+                                colors = themedOutline(colors), modifier = Modifier.testTag("novel-previous-chapter")) { Text("上一章") }
+                            Spacer(Modifier.width(16.dp))
+                            Button({ controller.changeNovelChapter(true) }, enabled = enabled && hasNext,
+                                modifier = Modifier.testTag("novel-next-chapter")) { Text("下一章") }
+                        }
+                    }
                 }
             }
-            if (!controlsVisible) TextButton({ controlsVisible = true; focus.requestFocus() },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp)) {
-                Text("${novel.firstVisible + 1} / ${novel.blocks.size} · 显示工具栏", color = Color(colors.muted))
-            }
+            DesktopNovelReaderChrome(
+                novel = novel,
+                theme = colors,
+                title = state.content?.title.orEmpty(),
+                controlsVisible = controlsVisible,
+                panelVisible = panel != null,
+                previousEnabled = enabled && hasPrevious,
+                nextEnabled = enabled && hasNext,
+                bookmarked = novel.firstVisible in novel.bookmarkBlocks.values,
+                onToggleBookmark = { if (enabled) controller.toggleNovelBookmark() },
+                onBookmarks = { panel = NovelPanel.BOOKMARKS },
+                actions = NovelReaderChromeActions(
+                    onBack = ::back,
+                    onChapters = { panel = NovelPanel.CHAPTERS },
+                    onOptions = { panel = NovelPanel.SETTINGS },
+                    onProgressSelected = { block ->
+                        if (enabled && block in novel.blocks.indices) {
+                            scope.launch { list.scrollToItem(block) }
+                            focus.requestFocus()
+                        }
+                    },
+                    onPreviousChapter = { if (enabled) controller.changeNovelChapter(false) },
+                    onNextChapter = { if (enabled) controller.changeNovelChapter(true) },
+                ),
+                onShowControls = { controlsVisible = true; focus.requestFocus() },
+            )
             panel?.let { selected ->
                 val close: () -> Unit = { panel = null; focus.requestFocus() }
-                if (selected == NovelPanel.CHAPTERS) {
-                    DesktopReaderSidePanel(controller, state, DesktopReaderPanel.CHAPTERS, enabled,
-                        Modifier.align(Alignment.CenterEnd).padding(top = 64.dp, bottom = 16.dp)) { close() }
-                } else NovelSettingsPanel(controller, settings,
-                    Modifier.align(Alignment.CenterEnd).padding(top = 64.dp, bottom = 16.dp), close)
+                when (selected) {
+                    NovelPanel.CHAPTERS -> DesktopNovelChaptersPanel(controller, state, enabled, close)
+                    NovelPanel.BOOKMARKS -> DesktopNovelBookmarksPanel(controller, state, enabled, close)
+                    NovelPanel.SETTINGS -> DesktopNovelOptionsPanel(controller, settings, fullscreen, onToggleFullscreen, close)
+                }
             }
         }
     }
@@ -206,59 +204,6 @@ private fun NovelInlineImage(controller: DesktopController, url: String, muted: 
         // Small pictures keep their own width instead of being stretched to the whole text column.
         else Image(image, null, contentScale = ContentScale.Fit, modifier = Modifier.widthIn(max = image.width.coerceAtLeast(1).dp)
             .fillMaxWidth().heightIn(max = 900.dp).testTag("novel-image"))
-    }
-}
-
-@Composable
-private fun NovelSettingsPanel(controller: DesktopController, settings: DesktopNovelSettings, modifier: Modifier,
-    onClose: () -> Unit) {
-    Surface(modifier.width(340.dp).fillMaxHeight().testTag("novel-settings-panel"), shape = RoundedCornerShape(16.dp),
-        elevation = 12.dp) {
-        Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("阅读设置", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                TextButton(onClose) { Text("关闭") }
-            }
-            Text("主题", fontWeight = FontWeight.SemiBold)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DesktopNovelTheme.entries.forEach { theme ->
-                    Surface(Modifier.size(56.dp, 40.dp).testTag("novel-theme:${theme.name}")
-                        .clickable { controller.novelSettings(settings.copy(theme = theme)) },
-                        color = Color(theme.background), shape = RoundedCornerShape(10.dp),
-                        border = androidx.compose.foundation.BorderStroke(
-                            if (theme == settings.theme) 2.dp else 1.dp,
-                            if (theme == settings.theme) Accent else Color(theme.muted).copy(alpha = .5f))) {
-                        Box(contentAlignment = Alignment.Center) { Text(theme.title, color = Color(theme.text), fontSize = 11.sp) }
-                    }
-                }
-            }
-            SettingSlider("字号 ${settings.fontSize}", settings.fontSize.toFloat(), DesktopNovelSettings.FONT_SIZES.let { it.first.toFloat()..it.last.toFloat() },
-                "novel-font-size") { controller.novelSettings(settings.copy(fontSize = it.toInt())) }
-            SettingSlider("行距 ${"%.2f".format(settings.lineSpacing)}", settings.lineSpacing, DesktopNovelSettings.LINE_SPACINGS,
-                "novel-line-spacing") { controller.novelSettings(settings.copy(lineSpacing = (it * 20).toInt() / 20f)) }
-            SettingSlider("版心宽度 ${settings.width}", settings.width.toFloat(), DesktopNovelSettings.WIDTHS.let { it.first.toFloat()..it.last.toFloat() },
-                "novel-width") { controller.novelSettings(settings.copy(width = (it.toInt() / 20) * 20)) }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("衬线字体", modifier = Modifier.weight(1f))
-                Switch(settings.serif, { controller.novelSettings(settings.copy(serif = it)) },
-                    modifier = Modifier.testTag("novel-serif"))
-            }
-            Divider()
-            Text("快捷键", fontWeight = FontWeight.SemiBold)
-            Text("PageUp / PageDown / 空格 翻页滚动\nHome / End 章首末\nH 收起或显示工具栏\nF11 全屏\nEsc 关闭面板或返回详情",
-                fontSize = 13.sp, color = MaterialTheme.colors.onSurface.copy(alpha = .7f))
-        }
-    }
-}
-
-@Composable
-private fun SettingSlider(title: String, value: Float, range: ClosedFloatingPointRange<Float>, tag: String,
-    onChange: (Float) -> Unit) {
-    var draft by remember(value) { mutableFloatStateOf(value) }
-    Column {
-        Text(title)
-        Slider(draft, { draft = it }, valueRange = range, onValueChangeFinished = { onChange(draft) },
-            modifier = Modifier.testTag(tag))
     }
 }
 

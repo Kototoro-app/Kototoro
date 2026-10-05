@@ -1,0 +1,35 @@
+// Cloudflare clearance solving shared by Android and the Windows host: host-level single flight, failure
+// cooldown, the off-screen solve rules and the solve-and-retry interceptor flow. Each platform supplies its own
+// browser engine (Android WebView, Windows WebView2) through ClearanceSolver. OkHttp and the parser API are
+// provided by the consuming platform, which pins their versions.
+plugins {
+	id 'org.jetbrains.kotlin.jvm'
+}
+
+kotlin {
+	compilerOptions {
+		jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+	}
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_11
+	targetCompatibility = JavaVersion.VERSION_11
+}
+
+dependencies {
+	api "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
+	compileOnly libs.okhttp
+	compileOnly project(':parser-api')
+	compileOnly 'javax.inject:javax.inject:1'
+	testImplementation libs.okhttp
+	testImplementation libs.okhttp.mockwebserver
+	testImplementation project(':parser-api')
+	testImplementation libs.kotlinx.coroutines.test
+	testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
+}
+
+tasks.withType(Test).configureEach {
+	useJUnitPlatform()
+}

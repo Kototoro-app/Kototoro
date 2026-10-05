@@ -3,12 +3,16 @@ package org.skepsun.kototoro.desktop.app
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.input.key.*
@@ -30,6 +34,7 @@ internal fun DesktopReader(controller: DesktopController, state: DesktopAppState
     val focus = remember { FocusRequester() }
     var controlsVisible by remember { mutableStateOf(true) }
     var panel by remember { mutableStateOf<DesktopReaderPanel?>(null) }
+    val autoScroll = remember { DesktopReaderAutoScroll() }
     val enabled = !state.busy && !closing
     fun back() {
         if (fullscreen) onToggleFullscreen?.invoke()
@@ -42,13 +47,11 @@ internal fun DesktopReader(controller: DesktopController, state: DesktopAppState
         DesktopReaderLayout(state.pages, state.chapter?.id ?: 0L, state.readerImages, settings, state.pageIndex,
             geometry = state.readerGeometry)
     }
-    val hasPreviousChapter = state.adjacentChapter(false) != null
-    val hasNextChapter = state.adjacentChapter(true) != null
-    val previousBoundary = if (continuous) state.readerScrollReady && state.pageIndex == 0 && state.readerScroll == 0f
-        else layout.turnIndex(false) == null
-    val nextBoundary = if (continuous) state.readerScrollReady && state.readerAtEnd else layout.turnIndex(true) == null
     LaunchedEffect(state.chapter?.id, settings.mode) { focus.requestFocus() }
-    Box(Modifier.fillMaxSize().background(Color(0xFF15191F)).testTag("reader-surface").onPreviewKeyEvent { event ->
+    val pageStyle = rememberReaderPageStyle(settings, state.appearance)
+    CompositionLocalProvider(LocalDesktopReaderPageStyle provides pageStyle) {
+    Box(Modifier.fillMaxSize().background(pageStyle.background).testTag("reader-surface").onPreviewKeyEvent { event ->
+        if (event.type == KeyEventType.KeyDown) autoScroll.interacted()
         if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) {
             false
         } else {
@@ -73,8 +76,11 @@ internal fun DesktopReader(controller: DesktopController, state: DesktopAppState
                 return@onPreviewKeyEvent true
             }
             val command: (() -> Unit)? = when (event.key) {
-                Key.DirectionRight -> { { controller.turnPage(!settings.rightToLeft) } }
-                Key.DirectionLeft -> { { controller.turnPage(settings.rightToLeft) } }
+                Key.DirectionRight -> { { controller.turnPage(settings.vertical || !settings.rightToLeft) } }
+                Key.DirectionLeft -> { { controller.turnPage(!settings.vertical && settings.rightToLeft) } }
+                // Vertical paging turns with the up / down arrows too.
+                Key.DirectionDown -> if (settings.vertical) { { controller.turnPage(true) } } else null
+                Key.DirectionUp -> if (settings.vertical) { { controller.turnPage(false) } } else null
                 Key.PageDown -> { { controller.turnPage(true) } }
                 Key.PageUp -> { { controller.turnPage(false) } }
                 Key.Spacebar -> { { controller.turnPage(!event.isShiftPressed) } }
@@ -90,127 +96,123 @@ internal fun DesktopReader(controller: DesktopController, state: DesktopAppState
         }
     }) {
         ReaderTheme {
-            Column(Modifier.fillMaxSize()) {
-                if (controlsVisible) Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    TextButton({ back() }, enabled = enabled) { Text("返回详情") }
-                    Column(Modifier.weight(1f)) {
-                        Text(state.content?.title.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        Text(state.chapter?.title ?: "阅读", color = MaterialTheme.colors.onSurface.copy(alpha = .65f),
-                            maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
-                    }
-                    TextButton({ panel = if (panel == DesktopReaderPanel.CHAPTERS) null
-                        else DesktopReaderPanel.CHAPTERS },
-                        modifier = Modifier.testTag("reader-chapters")) { Text("章节") }
-                    TextButton({ panel = if (panel == DesktopReaderPanel.BOOKMARKS) null
-                        else DesktopReaderPanel.BOOKMARKS },
-                        modifier = Modifier.testTag("reader-bookmarks")) { Text("书签") }
-                    TextButton({ panel = if (panel == DesktopReaderPanel.OPTIONS) null
-                        else DesktopReaderPanel.OPTIONS },
-                        modifier = Modifier.testTag("reader-options")) { Text("阅读设置") }
-                    TextButton({ onToggleFullscreen?.invoke() }, enabled = onToggleFullscreen != null,
-                        modifier = Modifier.testTag("reader-fullscreen")) { Text(if (fullscreen) "退出全屏" else "全屏") }
-                    TextButton({ controlsVisible = false; panel = null; focus.requestFocus() },
-                        modifier = Modifier.testTag("reader-hide-controls")) { Text("收起") }
-                }
-                if (continuous) DesktopScrollReader(controller, state, focus, closing,
-                    Modifier.weight(1f).fillMaxWidth())
-                else DesktopReaderCanvas(controller, state, focus, enabled,
-                    Modifier.weight(1f).fillMaxWidth(), controlsVisible)
-                if (controlsVisible) Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedButton({ controller.changeChapter(false) }, enabled = enabled && hasPreviousChapter) {
-                            Text("上一章")
-                        }
-                        OutlinedButton({ controller.turnPage(false) }, enabled = enabled &&
-                            ((if (continuous) state.pageIndex > 0 else layout.turnIndex(false) != null) ||
-                                (settings.automaticChapter && previousBoundary && hasPreviousChapter)),
-                            modifier = Modifier.testTag("reader-backward")) { Text("上一页") }
-                        Spacer(Modifier.weight(1f))
-                        val visible = if (continuous) (state.pageIndex..state.readerLastVisible).toList()
-                            else layout.indices
-                        val range = if (visible.size > 1) "${visible.first() + 1}–${visible.last() + 1}"
-                            else "${state.pageIndex + 1}"
-                        Text("$range / ${state.pages.size}", modifier = Modifier.testTag("reader-progress"))
-                        Spacer(Modifier.weight(1f))
-                        Button({ controller.turnPage(true) }, enabled = enabled &&
-                            ((if (continuous) !state.readerAtEnd && state.pageIndex < state.pages.lastIndex
-                                else layout.turnIndex(true) != null) ||
-                                    (settings.automaticChapter && nextBoundary && hasNextChapter)),
-                            modifier = Modifier.testTag("reader-forward")) { Text("下一页") }
-                        OutlinedButton({ controller.changeChapter(true) }, enabled = enabled && hasNextChapter) {
-                            Text("下一章")
-                        }
-                    }
-                    var targetPage by remember(state.chapter?.id, state.pageIndex) {
-                        mutableFloatStateOf(state.pageIndex.toFloat())
-                    }
-                    Slider(targetPage, { targetPage = it },
-                        valueRange = 0f..state.pages.lastIndex.coerceAtLeast(1).toFloat(),
-                        onValueChangeFinished = {
-                            val target = targetPage.toInt().coerceIn(0, state.pages.lastIndex.coerceAtLeast(0))
-                            if (enabled && target != state.pageIndex) controller.page(target)
-                            focus.requestFocus()
-                        }, enabled = enabled && state.pages.size > 1, modifier = Modifier.fillMaxWidth().height(28.dp)
-                            .testTag("reader-page-slider"))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedButton({ controller.readerSettings(settings.copy(mode =
-                            DesktopReaderMode.entries[(settings.mode.ordinal + 1) % DesktopReaderMode.entries.size])) },
-                            enabled = enabled, modifier = Modifier.testTag("reader-mode")) {
-                            Text(modeTitle(settings.mode))
-                        }
-                        OutlinedButton({ controller.readerSettings(settings.copy(
-                            rightToLeft = !settings.rightToLeft)) },
-                            enabled = enabled && !continuous, modifier = Modifier.testTag("reader-direction")) {
-                            Text(if (continuous) "从上到下" else if (settings.rightToLeft) "从右向左" else "从左向右")
-                        }
-                        OutlinedButton({ focus.requestFocus()
-                            controller.readerSettings(settings.copy(automaticChapter = !settings.automaticChapter)) },
-                            enabled = enabled, modifier = Modifier.testTag("reader-auto-chapter")) {
-                            Text(if (settings.automaticChapter) "自动跨章：开" else "自动跨章：关")
-                        }
-                        Spacer(Modifier.weight(1f))
-                        val bookmarked = state.bookmarks.any {
-                            it.chapterId == state.chapter?.id && it.page == state.pageIndex
-                        }
-                        TextButton({ controller.toggleBookmark() }, enabled = enabled &&
-                            (!continuous || state.readerScrollReady), modifier = Modifier.testTag("reader-bookmark-toggle")) {
-                            Text(if (bookmarked) "移除书签" else "添加书签")
-                        }
-                        TextButton({ controller.reloadPage() }, enabled = enabled) { Text("重新加载") }
-                    }
-                }
-            }
-            if (!controlsVisible) TextButton({ controlsVisible = true; focus.requestFocus() },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).testTag("reader-show-controls")) {
-                Text("${state.pageIndex + 1} / ${state.pages.size} · 显示工具栏")
-            }
-            panel?.let { selected ->
-                DesktopReaderSidePanel(controller, state, selected, enabled,
+            val onToggleControls: () -> Unit = { controlsVisible = !controlsVisible; panel = null; focus.requestFocus() }
+            // Android's "show menu" action opens the reader options with the controls.
+            val showMenu = { controlsVisible = true; panel = DesktopReaderPanel.OPTIONS }
+            if (continuous) DesktopScrollReader(controller, state, focus, closing, Modifier.fillMaxSize(),
+                onToggleControls = onToggleControls, autoScroll, showMenu)
+            else DesktopReaderCanvas(controller, state, focus, enabled, Modifier.fillMaxSize(), controlsVisible,
+                onToggleControls = onToggleControls, autoScroll, showMenu)
+            DesktopReaderChrome(controller, state, controlsVisible, enabled, continuous, layout, autoScroll,
+                onBack = ::back, onChapters = { panel = DesktopReaderPanel.CHAPTERS },
+                onOptions = { panel = DesktopReaderPanel.OPTIONS }, onBookmarks = { panel = DesktopReaderPanel.BOOKMARKS },
+                onInteraction = { focus.requestFocus() })
+            when (val selected = panel) {
+                null -> Unit
+                // Android's reader options panel, shared through core-ui.
+                DesktopReaderPanel.OPTIONS -> DesktopReaderOptionsPanel(controller, state, fullscreen,
+                    onToggleFullscreen, autoScroll, onDismiss = { panel = null; focus.requestFocus() },
+                    onOpenChapters = { panel = DesktopReaderPanel.CHAPTERS },
+                    onOpenSettings = { panel = DesktopReaderPanel.MORE })
+                else -> DesktopReaderSidePanel(controller, state, selected, enabled,
                     Modifier.align(Alignment.CenterEnd).padding(top = 64.dp, bottom = 16.dp)) {
                     panel = null; focus.requestFocus()
                 }
             }
         }
     }
+    }
+}
+
+/**
+ * Runs a reader action from the tap grid, as Android's `ReaderControlDelegate.processAction`: [page] moves a page
+ * (or a screen in the continuous reader) forward or back.
+ */
+internal fun performTapAction(action: org.skepsun.kototoro.reader.ui.tapgrid.TapAction?, page: (Boolean) -> Unit,
+    controller: DesktopController, onToggleControls: () -> Unit, onShowMenu: () -> Unit) {
+    when (action) {
+        org.skepsun.kototoro.reader.ui.tapgrid.TapAction.PAGE_NEXT -> page(true)
+        org.skepsun.kototoro.reader.ui.tapgrid.TapAction.PAGE_PREV -> page(false)
+        org.skepsun.kototoro.reader.ui.tapgrid.TapAction.CHAPTER_NEXT -> controller.changeChapter(true)
+        org.skepsun.kototoro.reader.ui.tapgrid.TapAction.CHAPTER_PREV -> controller.changeChapter(false)
+        org.skepsun.kototoro.reader.ui.tapgrid.TapAction.TOGGLE_UI -> onToggleControls()
+        org.skepsun.kototoro.reader.ui.tapgrid.TapAction.SHOW_MENU -> onShowMenu()
+        null -> Unit
+    }
+}
+
+/** Tap-grid callbacks that stay the same across recompositions, so a long press in progress is never restarted. */
+internal class DesktopTapGridHandlers(
+    val interaction: () -> Unit,
+    val tap: (org.skepsun.kototoro.reader.domain.TapGridArea) -> Unit,
+    val longTap: (org.skepsun.kototoro.reader.domain.TapGridArea, androidx.compose.ui.geometry.Offset,
+        androidx.compose.ui.unit.IntSize) -> Unit,
+)
+
+@Composable
+internal fun rememberTapGridHandlers(focus: FocusRequester, autoScroll: DesktopReaderAutoScroll,
+    onAction: (org.skepsun.kototoro.reader.domain.TapGridArea, Boolean) -> Unit): DesktopTapGridHandlers {
+    val current by rememberUpdatedState(onAction)
+    return remember(focus, autoScroll) {
+        DesktopTapGridHandlers({ focus.requestFocus(); autoScroll.interacted() }, { area -> current(area, false) },
+            { area, _, _ -> current(area, true) })
+    }
+}
+
+/** Auto scroll state shared by the readers: interactions pause it (Android's `ScrollTimer` pause). */
+internal class DesktopReaderAutoScroll {
+    var active by mutableStateOf(false)
+    @Volatile private var interactedAt = 0L
+
+    fun interacted() { interactedAt = System.currentTimeMillis() }
+
+    val isPaused: Boolean get() =
+        System.currentTimeMillis() < interactedAt + org.skepsun.kototoro.reader.core.ReaderAutoScroll.INTERACTION_PAUSE_MS
+}
+
+/** How pages are presented: the reader background and Android's colour correction. */
+internal data class DesktopReaderPageStyle(val background: Color, val colorFilter: ColorFilter?, val text: Color)
+
+internal val LocalDesktopReaderPageStyle = staticCompositionLocalOf {
+    DesktopReaderPageStyle(Color(0xFF15191F), null, Color.White)
+}
+
+/** Background colours of Android's reader backgrounds; the book effect tints light ones as Android's tint does. */
+@Composable
+internal fun rememberReaderPageStyle(settings: DesktopReaderSettings, appearance: DesktopAppearance): DesktopReaderPageStyle {
+    val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val appDark = when (appearance) { DesktopAppearance.LIGHT -> false; DesktopAppearance.DARK -> true; else -> systemDark }
+    return remember(settings.background, settings.colorFilter, appDark) {
+        val base = when (settings.background) {
+            DesktopReaderBackground.DEFAULT -> Color(0xFF15191F)
+            DesktopReaderBackground.AUTO -> if (appDark) Color(0xFF15191F) else Color(0xFFF4F2EE)
+            DesktopReaderBackground.LIGHT -> Color(0xFFF4F2EE)
+            DesktopReaderBackground.DARK -> Color(0xFF1F1F23)
+            DesktopReaderBackground.WHITE -> Color.White
+            DesktopReaderBackground.BLACK -> Color.Black
+        }
+        val light = base.luminance() > .5f
+        val background = if (settings.colorFilter.book && light) Color(base.red, base.green,
+            base.blue * org.skepsun.kototoro.reader.domain.ReaderColorMatrix.BOOK_BLUE_FACTOR) else base
+        DesktopReaderPageStyle(background,
+            settings.colorFilter.takeUnless { it.isEmpty }?.let { ColorFilter.colorMatrix(ColorMatrix(it.matrix())) },
+            if (light) Color(0xFF30333A) else Color.White)
+    }
 }
 
 @Composable
 private fun ReaderTheme(content: @Composable () -> Unit) {
-    val accent = Color(0xFF9CDCCD)
+    val accent = Color(0xFFA9C7FF)
     MaterialTheme(colors = darkColors(primary = accent, secondary = accent,
-        onPrimary = Color(0xFF133F35), onSecondary = Color(0xFF133F35),
+        onPrimary = Color(0xFF003062), onSecondary = Color(0xFF003062),
         background = Color(0xFF15191F), surface = Color(0xFF232933))) {
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colors.onSurface, content = content)
     }
 }
 
 @Composable
-internal fun ReaderImage(path: Path?, pageIndex: Int, modifier: Modifier) {
+internal fun ReaderImage(page: DesktopReaderImage?, pageIndex: Int, modifier: Modifier) {
+    val path = page?.path
     var failure by remember(path) { mutableStateOf<String?>(null) }
     val bitmap by produceState<ImageBitmap?>(null, path) {
         value = null
@@ -226,10 +228,27 @@ internal fun ReaderImage(path: Path?, pageIndex: Int, modifier: Modifier) {
         catch (_: Exception) { failure = "页面解码失败，请重新加载" }
         finally { unpublished?.close() }
     }
+    val style = LocalDesktopReaderPageStyle.current
     Box(modifier, contentAlignment = Alignment.Center) {
         val image = bitmap
-        if (image == null) Text(failure ?: "正在准备第 ${pageIndex + 1} 页…", color = Color.White)
-        else Image(image, "第 ${pageIndex + 1} 页", contentScale = ContentScale.FillBounds,
-            modifier = Modifier.fillMaxSize().testTag("reader-page"))
+        if (image == null) Text(failure ?: "正在准备第 ${pageIndex + 1} 页…", color = style.text)
+        else {
+            // A cropped page shows only its content bounds; the decode may be downscaled, so scale them to it.
+            val crop = page?.crop?.takeIf { page.width > 0 && page.height > 0 }
+            val painter = remember(image, crop) {
+                if (crop == null) androidx.compose.ui.graphics.painter.BitmapPainter(image) else {
+                    val sx = image.width.toFloat() / page.width
+                    val sy = image.height.toFloat() / page.height
+                    val left = (crop.left * sx).toInt().coerceIn(0, image.width - 1)
+                    val top = (crop.top * sy).toInt().coerceIn(0, image.height - 1)
+                    androidx.compose.ui.graphics.painter.BitmapPainter(image,
+                        androidx.compose.ui.unit.IntOffset(left, top),
+                        androidx.compose.ui.unit.IntSize((crop.width * sx).toInt().coerceIn(1, image.width - left),
+                            (crop.height * sy).toInt().coerceIn(1, image.height - top)))
+                }
+            }
+            Image(painter, "第 ${pageIndex + 1} 页", contentScale = ContentScale.FillBounds,
+                colorFilter = style.colorFilter, modifier = Modifier.fillMaxSize().testTag("reader-page"))
+        }
     }
 }

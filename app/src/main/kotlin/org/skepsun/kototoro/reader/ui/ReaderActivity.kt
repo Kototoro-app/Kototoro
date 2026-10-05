@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.reader.ui
 
+import org.skepsun.kototoro.core.prefs.isLight
 import android.app.assist.AssistContent
 import android.content.Intent
 import android.content.res.Configuration

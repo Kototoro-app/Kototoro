@@ -168,13 +168,18 @@ internal fun ComposeNovelNotesContent(
             }
         }
     }
-    val filteredBookmarks = remember(bookmarks, selectedTab, searchQuery) {
+    val filteredBookmarks = remember(bookmarks, chapters, selectedTab, searchQuery) {
         if (selectedTab != NovelMarkingsTab.ALL && selectedTab != NovelMarkingsTab.BOOKMARKS) {
             emptyList()
         } else if (searchQuery.isBlank()) {
             bookmarks
         } else {
-            bookmarks.filter { it.imageUrl.contains(searchQuery, ignoreCase = true) }
+            bookmarks.filter {
+                org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview(it.imageUrl)
+                    .contains(searchQuery, ignoreCase = true) ||
+                    (chapters.firstOrNull { chapter -> chapter.id == it.chapterId }?.title ?: it.chapterTitle)
+                        .orEmpty().contains(searchQuery, ignoreCase = true)
+            }
         }
     }
     val displayedMarkings = remember(filteredMarkings, sortByChapter) {
@@ -446,61 +451,15 @@ private fun NovelBookmarkCard(
     val previewText = remember(bookmark.imageUrl) {
         org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview(bookmark.imageUrl)
     }
-    Surface(
-        onClick = onOpen,
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.padding(start = 16.dp, top = 14.dp, end = 8.dp, bottom = 12.dp),
-        ) {
-            Row(verticalAlignment = Alignment.Top) {
-                Box(
-                    modifier = Modifier
-                        .width(4.dp)
-                        .height(42.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)),
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = previewText.ifBlank { positionText },
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_delete),
-                        contentDescription = stringResource(R.string.delete),
-                    )
-                }
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = chapterName?.takeIf { it.isNotBlank() } ?: positionText,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                    text = formatNovelDate(Date.from(bookmark.createdAt)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
+    NovelBookmarkCardContent(
+        preview = previewText,
+        positionText = positionText,
+        chapterName = chapterName,
+        dateText = formatNovelDate(Date.from(bookmark.createdAt)),
+        deleteDescription = stringResource(R.string.delete),
+        onOpen = onOpen,
+        onDelete = onDelete,
+    )
 }
 
 @Composable

@@ -67,7 +67,12 @@ class BookmarksRepository @Inject constructor(
     }
 
     suspend fun removeBookmark(bookmark: Bookmark) {
-        removeBookmark(bookmark.manga.id, bookmark.chapterId, bookmark.page)
+        db.withTransaction {
+            val dao = db.getBookmarksDao()
+            val stored = dao.find(bookmark.manga.id, bookmark.pageId)
+            check(stored == bookmark.toEntity()) { "Bookmark has changed or no longer exists" }
+            dao.delete(requireNotNull(stored))
+        }
     }
 
     suspend fun removeBookmarks(ids: Set<Long>): ReversibleHandle {

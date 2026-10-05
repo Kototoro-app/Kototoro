@@ -1,0 +1,30 @@
+// Cloudstream providers seen through Kototoro's content model, shared by Android and the Windows host: the catalog
+// engine (home sections, search, details with episodes, links with subtitles), its metadata codec, the plugin
+// compatibility check and the host shims plugins link against that need no Android API. The official Cloudstream
+// library (:app/libs, `library:jvmJar`), OkHttp and the parser API are supplied by each platform at runtime.
+plugins {
+	id 'org.jetbrains.kotlin.jvm'
+	id 'org.jetbrains.kotlin.plugin.serialization'
+}
+
+kotlin {
+	compilerOptions {
+		jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+		freeCompilerArgs.addAll('-opt-in=org.skepsun.kototoro.parsers.InternalParsersApi')
+	}
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_11
+	targetCompatibility = JavaVersion.VERSION_11
+}
+
+def cloudstreamLibrary = rootProject.file('app/libs/cloudstream3-library-jvm-1.0.1.jar')
+
+dependencies {
+	compileOnly files(cloudstreamLibrary)
+	compileOnly project(':parser-api')
+	compileOnly libs.okhttp
+	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
+	implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
+}

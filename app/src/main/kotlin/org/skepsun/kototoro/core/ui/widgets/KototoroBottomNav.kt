@@ -59,6 +59,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.StateFlow
+import org.skepsun.kototoro.core.ui.adaptive.TabletNavigationDestination
+import org.skepsun.kototoro.core.ui.adaptive.TabletNavigationRail
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.NavIndicatorStyle
@@ -260,90 +262,35 @@ fun KototoroBottomNav(
             contentColor = contentColorFor(NavigationRailDefaults.ContainerColor),
             tonalElevation = 3.dp,
         ) {
-            NavigationRail(
-                containerColor = Color.Transparent,
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(railWidth)
-                    .padding(
-                        start = railStartInset,
-                        end = railEndInset,
-                        top = statusBarTopPadding,
-                        bottom = railBottomInset,
-                    ),
-                windowInsets = WindowInsets(0),
-            ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    item {
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-                    if (railHeaderContent != null) {
-                        item {
-                            railHeaderContent()
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    }
-                    if (showContinueReadingButton) {
-                        item {
-                            ContinueReadingRailButton(
-                                onClick = onContinueReadingClick,
-                                iconRes = continueReadingIconRes,
-                                contentDescriptionRes = continueReadingContentDescriptionRes,
-                                coverModel = continueReadingCoverModel,
-                                modifier = Modifier.padding(vertical = 4.dp),
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    }
-                    items(
-                        items = activeItems,
-                        key = { it.id },
-                    ) { item ->
-                        val isSelected = navState.selectedItemId == item.id
-                        val badge = navState.badges[item.id]
-
-                        NavigationRailItem(
-                            selected = isSelected,
-                            onClick = {
-                                if (isSelected) {
-                                    onItemReselected(item.id)
-                                } else {
-                                    clickPulses[item.id] = (clickPulses[item.id] ?: 0) + 1
-                                    onItemSelected(item.id)
-                                }
-                            },
-                            icon = {
-                                PremiumNavigationIcon(
-                                    itemId = item.id,
-                                    isSelected = isSelected,
-                                    clickPulse = clickPulses[item.id] ?: 0,
-                                    badge = badge,
-                                    contentDescription = stringResource(item.title),
-                                    selectedTint = sampleAccent,
-                                )
-                            },
-                            label = { Text(stringResource(item.title)) },
-                            alwaysShowLabel = showSelectedLabels,
-                            colors = NavigationRailItemDefaults.colors(
-                                indicatorColor = Color.Transparent,
-                                selectedIconColor = sampleAccent ?: if (isIosStyle) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                },
-                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            ),
-                        )
-                    }
-                }
-            }
+            TabletNavigationRail(
+                destinations = activeItems.map { TabletNavigationDestination(it.id, stringResource(it.title)) },
+                selectedId = navState.selectedItemId,
+                onSelect = { id ->
+                    clickPulses[id] = (clickPulses[id] ?: 0) + 1
+                    onItemSelected(id)
+                },
+                onReselect = onItemReselected,
+                icon = { id, selected ->
+                    val item = activeItems.first { it.id == id }
+                    PremiumNavigationIcon(
+                        itemId = id, isSelected = selected, clickPulse = clickPulses[id] ?: 0,
+                        badge = navState.badges[id], contentDescription = stringResource(item.title),
+                        selectedTint = sampleAccent,
+                    )
+                },
+                modifier = Modifier.fillMaxHeight().width(railWidth),
+                contentPadding = PaddingValues(start = railStartInset, end = railEndInset,
+                    top = statusBarTopPadding, bottom = railBottomInset),
+                showLabels = showSelectedLabels,
+                selectedIconColor = sampleAccent ?: if (isIosStyle) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSecondaryContainer,
+                header = railHeaderContent,
+                resume = if (showContinueReadingButton) ({
+                    ContinueReadingRailButton(onClick = onContinueReadingClick, iconRes = continueReadingIconRes,
+                        contentDescriptionRes = continueReadingContentDescriptionRes, coverModel = continueReadingCoverModel,
+                        modifier = Modifier.padding(vertical = 4.dp))
+                }) else null,
+            )
         }
     } else if (isFloating) {
         BoxWithConstraints(

@@ -4,7 +4,6 @@ import android.util.Log
 import kotlinx.coroutines.asContextElement
 import kotlinx.coroutines.withContext
 import okhttp3.Interceptor
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
@@ -15,16 +14,15 @@ import java.util.concurrent.atomic.AtomicReference
 
 internal object CloudstreamRequestContext {
 
-    private val currentSource = ThreadLocal<CloudstreamSource?>()
     private val currentPolicy = ThreadLocal<CloudFlareHandlingPolicy?>()
-    @Volatile
-    var userAgent: String? = null
 
-    suspend fun <T> withSource(source: CloudstreamSource, block: suspend () -> T): T {
-        return withContext(currentSource.asContextElement(source)) {
-            block()
-        }
-    }
+    /** Shared with the Windows host: [CloudstreamRequestScope] owns the source context and default headers. */
+    var userAgent: String?
+        get() = CloudstreamRequestScope.userAgent
+        set(value) { CloudstreamRequestScope.userAgent = value }
+
+    suspend fun <T> withSource(source: CloudstreamSource, block: suspend () -> T): T =
+        CloudstreamRequestScope.withSource(source, block)
 
     suspend fun <T> withLoadLinksCompatibility(block: suspend () -> T): LoadLinksExecution<T> {
         val challenge = AtomicReference<CloudFlareProtectedException?>()
@@ -46,32 +44,14 @@ internal object CloudstreamRequestContext {
     )
 
     fun interceptor(): Interceptor = Interceptor { chain ->
-        val source = currentSource.get()
+        val source = CloudstreamRequestScope.current()
         val policy = currentPolicy.get()
         val originalRequest = chain.request()
         val request = if (source != null) {
-            val fallbackReferer = source.api.mainUrl.trimEnd('/') + "/"
-            val requestReferer = originalRequest.header(CommonHeaders.REFERER)
-                ?.takeIf { it.isNotBlank() }
-                ?: fallbackReferer
-            originalRequest.newBuilder()
+            CloudstreamRequestScope.withSourceHeaders(originalRequest, source)
                 .tag(ContentSource::class.java, source)
                 .tag(CloudFlareHandlingPolicy::class.java, policy ?: SOURCE_SOLVER_POLICY)
                 .header(CommonHeaders.MANGA_SOURCE, source.name)
-                .apply {
-                    val configuredUserAgent = userAgent
-                    if (originalRequest.header(CommonHeaders.USER_AGENT).isNullOrBlank() && !configuredUserAgent.isNullOrBlank()) {
-                        header(CommonHeaders.USER_AGENT, configuredUserAgent)
-                    }
-                    if (originalRequest.header(CommonHeaders.REFERER).isNullOrBlank()) {
-                        header(CommonHeaders.REFERER, requestReferer)
-                    }
-                    if (shouldInferOrigin(originalRequest) && originalRequest.header(ORIGIN).isNullOrBlank()) {
-                        requestReferer.toOrigin()?.let { origin ->
-                            header(ORIGIN, origin)
-                        }
-                    }
-                }
                 .build()
         } else {
             originalRequest
@@ -97,18 +77,6 @@ internal object CloudstreamRequestContext {
             }
         }
         response
-    }
-
-    private fun shouldInferOrigin(request: okhttp3.Request): Boolean {
-        return when (request.method.uppercase()) {
-            "GET", "HEAD" -> false
-            else -> true
-        }
-    }
-
-    private fun String.toOrigin(): String? {
-        val url = toHttpUrlOrNull() ?: return null
-        return "${url.scheme}://${url.host}"
     }
 
     private fun shouldLogLoadLinksBody(url: String): Boolean {

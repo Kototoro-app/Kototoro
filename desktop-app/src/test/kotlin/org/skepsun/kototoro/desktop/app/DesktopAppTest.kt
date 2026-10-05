@@ -12,6 +12,13 @@ class DesktopAppTest {
     @TempDir lateinit var directory: Path
 
     @Test
+    fun `Android styled light and dark themes render covers and persist across an offline restart`() {
+        val root = directory.resolve("中文 appearance restart")
+        probe("appearance-write", root)
+        probe("appearance-read", root)
+    }
+
+    @Test
     fun `Windows reader bookmarks restore another chapter page and pixel offset in a second offline process`() {
         val root = directory.resolve("中文 bookmark restart")
         probe("bookmarks-write", root)
@@ -34,21 +41,38 @@ class DesktopAppTest {
         probe("video", directory.resolve("中文 video"), 240)
     }
     @Test
-    fun `real Aniyomi APK installs converts and reaches playable streams over the live network`() {
+    fun `a Cloudstream plugin imports browses opens an episode for the player and survives a restart`() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+            Files.isRegularFile(Path.of(System.getProperty("kototoro.desktop.cloudstream.fixture"))),
+            "Android SDK with d8 is required to build the Cloudstream fixture plugin")
+        val root = directory.resolve("中文 cloudstream")
+        probe("cloudstream-write", root)
+        probe("cloudstream-read", root)
+    }
+    @Test
+    fun `real Aniyomi APK installs converts' and reaches playable streams over the live network`() {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("kototoro.dex.real.apks") != null, "no -PrealApkDirectory")
         probe("real-anime", directory.resolve("中文 real anime"), 240)
     }
     @Test
     fun `kototoro kotatsu and UMA plugins browse page read and favourite through the UI and survive a restart`() {
         val root = directory.resolve("中文 parser plugins")
-        probe("parsers-write", root)
+        probe("parsers-write", root, 90)
         probe("parsers-read", root)
+    }
+
+    @Test
+    fun `shared novel directory locates grouped chapters and keeps original indices in wide and narrow windows`() {
+        probe("novel-directory", directory.resolve("中文 novel directory wide"))
+        probe("novel-directory-narrow", directory.resolve("中文 novel directory narrow"))
     }
 
     @Test
     fun `tablet layout and immersive reader panels preserve progress in wide and narrow windows`() {
         probe("tablet", directory.resolve("中文 tablet wide"))
         probe("tablet-narrow", directory.resolve("中文 tablet narrow"))
+        probe("tablet-boundary", directory.resolve("中文 tablet expanded boundary"))
+        probe("tablet-boundary-compact", directory.resolve("中文 tablet medium boundary"))
     }
 
     @Test
@@ -119,6 +143,12 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `paged reader prefetches neighbours turns by drag tap and wheel with a persisted animation`() {
+        val root = directory.resolve("中文 reader gestures")
+        probe("reader-gestures-write", root)
+        probe("reader-gestures-read", root)
+    }
+    @Test
     fun `Windows reader camera handles mouse touch fit overflow and persisted settings without advancing progress`() {
         val root = directory.resolve("中文 reader camera")
         probe("reader-camera-write", root)
@@ -155,9 +185,10 @@ class DesktopAppTest {
     private fun probe(mode: String, root: Path, seconds: Long = 60) {
         val output = Files.createDirectories(Path.of("build/reports/desktop-smoke")).resolve("$mode.log")
         val process = ProcessBuilder(Path.of(System.getProperty("java.home"), "bin/java.exe").toString(),
+            "-Xms32m", "-Xmx768m",
             "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
             *System.getProperties().stringPropertyNames()
-                .filter { it == "kototoro.dex.real.apks" || it == "kototoro.libmpv.dir" || it == "kototoro.desktop.anime.fixture.jar" || it == "kototoro.ncnn.dir" ||
+                .filter { it == "kototoro.dex.real.apks" || it == "kototoro.desktop.cloudstream.fixture" || it == "kototoro.libmpv.dir" || it == "kototoro.desktop.anime.fixture.jar" || it == "kototoro.ncnn.dir" ||
                     it.startsWith("kototoro.real.") }
                 .map { "-D$it=${System.getProperty(it)}" }.toTypedArray(),
             "-cp", System.getProperty("kototoro.desktop.test.classpath"),
@@ -169,9 +200,13 @@ class DesktopAppTest {
             System.getProperty("kototoro.desktop.filter.fixture.jar"), System.getProperty("kototoro.desktop.parser.fixtures"))
             .redirectErrorStream(true).redirectOutput(output.toFile()).start()
         try {
-            assertTrue(process.waitFor(seconds, TimeUnit.SECONDS), "UI process did not finish: ${Files.readString(output)}")
-            assertEquals(0, process.exitValue(), Files.readString(output))
-            assertTrue(Files.readString(output).contains("DESKTOP_UI_OK=$mode"), Files.readString(output))
+            assertTrue(process.waitFor(seconds, TimeUnit.SECONDS), "UI process did not finish: ${outputText(output)}")
+            val log = outputText(output)
+            assertEquals(0, process.exitValue(), log)
+            assertTrue(log.contains("DESKTOP_UI_OK=$mode"), log)
         } finally { if (process.isAlive) process.destroyForcibly() }
     }
+
+    // HotSpot native allocation errors can use the Windows locale even with UTF-8 stdout configured.
+    private fun outputText(path: Path): String = String(Files.readAllBytes(path), Charsets.UTF_8)
 }

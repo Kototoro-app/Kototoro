@@ -6,10 +6,8 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 
 interface TopBarOverrideState
 
-data class CompactTopBarTabItem(
-    val id: Long,
-    val title: String,
-)
+/** Shared with the Windows host's category rail. */
+typealias CompactTopBarTabItem = org.skepsun.kototoro.core.ui.topbar.TopBarTabItem
 
 data class CompactTabsTopBarOverrideState(
     val items: List<CompactTopBarTabItem>,

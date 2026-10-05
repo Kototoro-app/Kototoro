@@ -98,6 +98,8 @@ configurations {
 dependencies {
     api project(':source-host')
     implementation project(':core-source')
+    // Mihon's default Cloudflare solver, shared with Android (a supertype of DesktopBrowserChallenges).
+    api project(':core-cloudflare')
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
     // Extensions parse response bodies through OkioStreamsKt; use the same serialization version as Android.

@@ -38,12 +38,15 @@ internal object DesktopUpscaleProbe {
                 onNodeWithTag("content:${controller.state.value.items.single().id}").performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.DETAILS }
                 settled()
-                onNodeWithText("开始 / 继续阅读").performClick()
+                onNodeWithTag("preview-read").performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.READER && controller.state.value.image != null }
                 settled()
                 val original = width()
 
+                // Super-resolution models are in the settings opened from Android's options panel.
                 onNodeWithTag("reader-options").performClick()
+                waitForIdle()
+                onNodeWithTag("reader-options-settings").performClick()
                 waitForIdle()
                 onNodeWithTag("reader-option-upscale:REALESR_ANIMEVIDEO_2X").performScrollTo().performClick()
                 settled()

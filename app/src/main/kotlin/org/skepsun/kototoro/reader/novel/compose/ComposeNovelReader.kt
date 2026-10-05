@@ -680,6 +680,7 @@ fun ComposeNovelReaderRoute(
     onVisibleChapterChanged: (Int) -> Unit = {},
     onVisibleProgress: (chapterIndex: Int, blockIndex: Int, blockCount: Int) -> Unit = { _, _, _ -> },
     onPagedPositionChanged: (chapterId: Long, page: Int, pageCount: Int) -> Unit = { _, _, _ -> },
+    onBookmarkPositionUnavailable: () -> Unit = {},
     renderContent: Boolean = true,
     onImageClick: ((String) -> Unit)? = null,
     onTap: ((x: Float, y: Float, viewport: IntSize) -> Unit)? = null,
@@ -720,6 +721,10 @@ fun ComposeNovelReaderRoute(
                     onRequestPreviousChapter = onRequestPreviousChapter,
                     onRequestNextChapter = onRequestNextChapter,
                     onPageRequestConsumed = viewModel::consumePageRequest,
+                    onBookmarkPositionsChanged = viewModel::publishBookmarkPositions,
+                    onBookmarkRequestConsumed = { id, matched ->
+                        if (viewModel.consumeBookmarkRequest(id) && !matched) onBookmarkPositionUnavailable()
+                    },
                     onMarkingJumpResolved = viewModel::onMarkingJumpResolved,
                     onPositionChanged = { chapterId, chapterIndex, page, pageCount, charStart, charEnd, text ->
                     viewModel.focusContinuousChapter(chapterIndex)
@@ -778,7 +783,30 @@ fun ComposeNovelReaderRoute(
                 initialFirstVisibleItemIndex = initialScrollIndex,
                 initialFirstVisibleItemScrollOffset = state.scrollPosition?.firstVisibleBlockOffsetPx ?: 0,
             )
-            LaunchedEffect(listState, state.chapterIndex) {
+            val bookmarkPositions = remember(windowBlocks, state.novelBookmarks, state.chapters) {
+                resolveNovelBookmarkPositions(windowBlocks.map {
+                    it.chapter.chapterId to ((it.block as? NovelComposeBlock.Text)?.original.orEmpty())
+                }, state.novelBookmarks, state.chapters)
+            }
+            LaunchedEffect(bookmarkPositions) { viewModel.publishBookmarkPositions(bookmarkPositions) }
+            LaunchedEffect(state.bookmarkRequest?.id, windowBlocks, state.loading) {
+                val request = state.bookmarkRequest ?: return@LaunchedEffect
+                if (state.loading || windowBlocks.none { it.chapter.chapterId == request.bookmark.chapterId }) {
+                    return@LaunchedEffect
+                }
+                val target = bookmarkPositions[request.bookmark.pageId]
+                if (target != null) listState.scrollToItem(target.windowIndex)
+                if (viewModel.consumeBookmarkRequest(request.id)) {
+                    windowBlocks.getOrNull(listState.firstVisibleItemIndex)?.let { visible ->
+                        viewModel.focusContinuousChapter(visible.chapter.chapterIndex)
+                        onVisibleChapterChanged(visible.chapter.chapterIndex)
+                        onVisibleProgress(visible.chapter.chapterIndex, visible.chapterBlockIndex, visible.chapterBlockCount)
+                    }
+                    if (target == null) onBookmarkPositionUnavailable()
+                }
+            }
+            LaunchedEffect(listState, state.chapterIndex, state.bookmarkRequest?.id) {
+                if (state.bookmarkRequest != null) return@LaunchedEffect
                 snapshotFlow {
                     if (listState.isScrollInProgress) {
                         null
@@ -788,7 +816,13 @@ fun ComposeNovelReaderRoute(
                             firstVisibleBlockOffsetPx = listState.firstVisibleItemScrollOffset,
                         )
                     }
-                }.filterNotNull().distinctUntilChanged().collect(viewModel::publishScrollPosition)
+                }.filterNotNull().distinctUntilChanged().collect { position ->
+                    viewModel.publishScrollPosition(position)
+                    windowBlocks.getOrNull(position.firstVisibleBlock)?.let { visible ->
+                        viewModel.publishBookmarkText(visible.chapter.chapterId,
+                            (visible.block as? NovelComposeBlock.Text)?.original.orEmpty())
+                    }
+                }
             }
             LaunchedEffect(state.scrollRequest?.id, listState) {
                 val request = state.scrollRequest ?: return@LaunchedEffect
@@ -1388,6 +1422,8 @@ private fun ComposeNovelPagedChapter(
     onRequestPreviousChapter: () -> Unit,
     onRequestNextChapter: () -> Unit,
     onPageRequestConsumed: (Long) -> Unit,
+    onBookmarkPositionsChanged: (Map<Long, NovelBookmarkResolvedPosition>) -> Unit,
+    onBookmarkRequestConsumed: (Long, Boolean) -> Unit,
     onMarkingJumpResolved: () -> Unit = {},
     onPositionChanged: (Long, Int, Int, Int, Int, Int, String) -> Unit,
     modifier: Modifier,
@@ -1549,6 +1585,12 @@ private fun ComposeNovelPagedChapter(
                 return@BoxWithConstraints
         }
         if (pages.isEmpty()) return@BoxWithConstraints
+        val bookmarkPositions = remember(pages, state.novelBookmarks, state.chapters) {
+            resolveNovelBookmarkPositions(pages.map {
+                it.chapterId to ((it as? NovelComposePage.Text)?.value?.text.orEmpty())
+            }, state.novelBookmarks, state.chapters)
+        }
+        LaunchedEffect(bookmarkPositions) { onBookmarkPositionsChanged(bookmarkPositions) }
         // 首次创建分页器（冷启动或从滚动模式切回）时，用当前章节的归一化进度定位，
         // 避免进度被重置回章节第一页。rememberPagerState 只读取一次 initialPage，
         // 后续由 settledPageKey / pageRequest 机制接管。
@@ -1585,6 +1627,7 @@ private fun ComposeNovelPagedChapter(
         var readyGeneration by remember { mutableStateOf<NovelPaginationRequest?>(null) }
         val displayedGeneration = displayedResult.request
         LaunchedEffect(displayedGeneration) {
+            if (state.bookmarkRequest != null) return@LaunchedEffect
             val pendingRequest = state.pageRequest
             if (pendingRequest != null && exactResult?.request === displayedGeneration) {
                 return@LaunchedEffect
@@ -1597,6 +1640,17 @@ private fun ComposeNovelPagedChapter(
                 }
             }
             readyGeneration = displayedGeneration
+        }
+        LaunchedEffect(state.bookmarkRequest?.id, exactResult, state.loading) {
+            val request = state.bookmarkRequest ?: return@LaunchedEffect
+            val result = exactResult ?: return@LaunchedEffect
+            if (state.loading || result.pages.none { it.chapterId == request.bookmark.chapterId }) {
+                return@LaunchedEffect
+            }
+            val target = bookmarkPositions[request.bookmark.pageId]
+            if (target != null) pagerState.scrollToPage(target.windowIndex)
+            readyGeneration = result.request
+            onBookmarkRequestConsumed(request.id, target != null)
         }
         LaunchedEffect(state.pendingMarkingTarget, displayedResult) {
             val target = state.pendingMarkingTarget ?: return@LaunchedEffect
@@ -1695,7 +1749,8 @@ private fun ComposeNovelPagedChapter(
             readyGeneration = result.request
             onPageRequestConsumed(request.id)
         }
-        LaunchedEffect(pagerState, displayedGeneration, readyGeneration) {
+        LaunchedEffect(pagerState, displayedGeneration, readyGeneration, state.bookmarkRequest?.id) {
+            if (state.bookmarkRequest != null) return@LaunchedEffect
             if (readyGeneration !== displayedGeneration) return@LaunchedEffect
             snapshotFlow { pagerState.settledPage }
                 .distinctUntilChanged()

@@ -11,6 +11,7 @@ internal object DesktopSourceLabels {
         SourceEcosystem.UMA -> "UMA"
         SourceEcosystem.ANIYOMI -> "Aniyomi"
         SourceEcosystem.TSUNDOKU -> "Tsundoku"
+        SourceEcosystem.CLOUDSTREAM -> "Cloudstream"
     }
 
     fun contentType(name: String) = when (name) {

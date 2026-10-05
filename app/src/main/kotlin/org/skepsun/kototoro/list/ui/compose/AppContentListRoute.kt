@@ -513,13 +513,7 @@ fun AppContentListRoute(
                 override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
                     val current = viewModel.currentSourceTags.value ?: emptySet()
                     viewModel.setSelectedSourceTags(
-                        if (tag == null) {
-                            emptySet()
-                        } else if (tag in current) {
-                            current - tag
-                        } else {
-                            current + tag
-                        }
+                        org.skepsun.kototoro.explore.ui.model.SourceTag.toggle(current, tag),
                     )
                 }
 

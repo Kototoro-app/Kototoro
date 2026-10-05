@@ -49,7 +49,8 @@ fun main(args: Array<String>) {
                 } catch (error: Exception) {
                     session.startupErrors += error.message ?: "扩展导入失败"
                 }
-                controller = DesktopController(session)
+                // Android's periodic tracker and suggestion jobs run while the window is open.
+                controller = DesktopController(session).also { it.startBackgroundWork() }
                 acquired = null
             } catch (error: CancellationException) {
                 throw error

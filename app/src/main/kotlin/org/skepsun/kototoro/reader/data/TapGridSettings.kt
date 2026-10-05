@@ -13,6 +13,7 @@ import org.skepsun.kototoro.core.util.ext.putAll
 import org.skepsun.kototoro.core.util.ext.putEnumValue
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.tapgrid.TapAction
+import org.skepsun.kototoro.reader.ui.tapgrid.TapGridConfig
 import javax.inject.Inject
 
 @Reusable
@@ -69,31 +70,18 @@ class TapGridSettings @Inject constructor(@ApplicationContext context: Context) 
         }
     }
 
-    private fun getPrefKey(area: TapGridArea, isLongTap: Boolean): String = if (isLongTap) {
-        area.name + SUFFIX_LONG
-    } else {
-        area.name
-    }
+    private fun getPrefKey(area: TapGridArea, isLongTap: Boolean): String = TapGridConfig.prefKey(area, isLongTap)
 
     private fun initDefaultActions(editor: SharedPreferences.Editor) {
-        editor.putEnumValue(getPrefKey(TapGridArea.TOP_LEFT, false), TapAction.PAGE_PREV)
-        editor.putEnumValue(getPrefKey(TapGridArea.TOP_CENTER, false), TapAction.PAGE_PREV)
-        editor.putEnumValue(getPrefKey(TapGridArea.CENTER_LEFT, false), TapAction.PAGE_PREV)
-        editor.putEnumValue(getPrefKey(TapGridArea.BOTTOM_LEFT, false), TapAction.PAGE_PREV)
-
-        editor.putEnumValue(getPrefKey(TapGridArea.CENTER, false), TapAction.TOGGLE_UI)
-        editor.putEnumValue(getPrefKey(TapGridArea.CENTER, true), TapAction.SHOW_MENU)
-
-        editor.putEnumValue(getPrefKey(TapGridArea.TOP_RIGHT, false), TapAction.PAGE_NEXT)
-        editor.putEnumValue(getPrefKey(TapGridArea.CENTER_RIGHT, false), TapAction.PAGE_NEXT)
-        editor.putEnumValue(getPrefKey(TapGridArea.BOTTOM_CENTER, false), TapAction.PAGE_NEXT)
-        editor.putEnumValue(getPrefKey(TapGridArea.BOTTOM_RIGHT, false), TapAction.PAGE_NEXT)
+        for ((area, actions) in TapGridConfig.defaults) {
+            actions.tapAction?.let { editor.putEnumValue(getPrefKey(area, false), it) }
+            actions.longTapAction?.let { editor.putEnumValue(getPrefKey(area, true), it) }
+        }
     }
 
     private companion object {
 
         private const val PREFS_NAME = "tap_grid"
-        private const val KEY_INIT = "_init"
-        private const val SUFFIX_LONG = "_long"
+        private const val KEY_INIT = TapGridConfig.KEY_INIT
     }
 }

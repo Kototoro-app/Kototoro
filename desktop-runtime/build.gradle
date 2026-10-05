@@ -19,6 +19,7 @@ java {
 
 dependencies {
 	api project(':core-db')
+	api project(':core-domain')
 	api project(':core-source')
 	api project(':core-backup')
 	api project(':source-host')

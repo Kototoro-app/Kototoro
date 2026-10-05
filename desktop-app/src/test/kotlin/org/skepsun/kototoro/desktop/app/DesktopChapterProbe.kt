@@ -32,12 +32,21 @@ internal object DesktopChapterProbe {
                     waitForIdle()
                 }
                 fun press(key: Key) {
-                    onNodeWithTag("reader-viewport").performTouchInput { click() }
+                    // A click in the viewport is a tap-grid action now (centre toggles the toolbar); just focus it.
+                    onNodeWithTag("reader-viewport").requestFocus()
                     onNodeWithTag("reader-surface").performKeyInput { pressKey(key) }
                 }
                 fun error() {
                     waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy && controller.state.value.error != null }
                     waitForIdle()
+                }
+                // Automatic chapter turns are a desktop setting in "更多阅读设置" (opened from the options panel).
+                fun autoChapter(expected: Boolean? = null) {
+                    onNodeWithTag("reader-options").performClick(); waitForIdle()
+                    onNodeWithTag("reader-options-settings").performClick(); waitForIdle()
+                    if (expected == null) onNodeWithTag("reader-auto-chapter").performScrollTo().performClick()
+                    else if (expected) onNodeWithTag("reader-auto-chapter").assertIsOn() else onNodeWithTag("reader-auto-chapter").assertIsOff()
+                    onNodeWithTag("reader-panel-close").performClick(); waitForIdle()
                 }
                 fun snapshot(name: String) {
                     val bitmap = onRoot().captureToImage()
@@ -53,19 +62,22 @@ internal object DesktopChapterProbe {
                 waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy && controller.state.value.screen == DesktopScreen.DETAILS }
                 check(controller.state.value.content?.chapters?.size == 3)
                 if (mode.endsWith("read")) System.setProperty("fixture.reader.offline", "true")
-                onNodeWithText("开始 / 继续阅读").performClick()
+                // Chapter 2's page list fails from the start: near chapter 1's end it is preloaded in the background,
+                // and a failed preload must leave the chapter turn to report the error.
+                else System.setProperty("fixture.reader.failure.chapter", "2")
+                onNodeWithTag("preview-read").performClick()
                 if (mode.endsWith("read")) {
                     ready(2, 0)
                     check(controller.state.value.readerSettings.automaticChapter)
                     check(controller.state.value.readerSettings.mode == DesktopReaderMode.CONTINUOUS)
                     check(System.getProperty("fixture.reader.requests", "0") == "0")
-                    onNodeWithTag("reader-auto-chapter").assertTextEquals("自动跨章：开")
-                    onNodeWithText("下一章").assertIsNotEnabled()
+                    autoChapter(expected = true)
+                    onNodeWithTag("reader-next-chapter").assertIsNotEnabled()
                     snapshot("restored")
                 } else {
                     ready(1, 0)
                     val initialHistory = runBlocking { session.library.progress(content.id) }
-                    onNodeWithTag("reader-auto-chapter").performClick()
+                    autoChapter()
                     waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy && controller.state.value.readerSettings.automaticChapter }
                     check(runBlocking { session.library.progress(content.id) } == initialHistory)
                     press(Key.DirectionRight)
@@ -74,29 +86,27 @@ internal object DesktopChapterProbe {
                     ready(1, 2)
                     press(Key.MoveEnd)
                     ready(1, 4)
-                    onNodeWithTag("reader-auto-chapter").performClick()
+                    autoChapter()
                     waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy && !controller.state.value.readerSettings.automaticChapter }
-                    onNodeWithTag("reader-forward").assertIsNotEnabled()
                     press(Key.DirectionRight)
                     ready(1, 4)
-                    onNodeWithTag("reader-auto-chapter").performClick()
+                    autoChapter()
                     waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy && controller.state.value.readerSettings.automaticChapter }
                     val previous = controller.state.value
                     val previousHistory = runBlocking { session.library.progress(content.id) }
-                    System.setProperty("fixture.reader.failure.chapter", "2")
-                    onNodeWithTag("reader-forward").performClick()
+                    press(Key.DirectionRight)
                     error()
                     check(controller.state.value.chapter == previous.chapter && controller.state.value.image == previous.image)
                     check(controller.state.value.pageIndex == 4 && runBlocking { session.library.progress(content.id) } == previousHistory)
                     System.clearProperty("fixture.reader.failure.chapter")
                     System.setProperty("fixture.reader.failure.index", "12")
-                    onNodeWithTag("reader-forward").performClick()
+                    press(Key.DirectionRight)
                     error()
                     check(controller.state.value.chapter == previous.chapter && controller.state.value.image == previous.image)
                     check(runBlocking { session.library.progress(content.id) } == previousHistory)
                     snapshot("failed-image")
                     System.clearProperty("fixture.reader.failure.index")
-                    onNodeWithTag("reader-forward").performClick()
+                    press(Key.DirectionRight)
                     ready(2, 0)
                     press(Key.PageUp)
                     ready(1, 4)
@@ -105,13 +115,15 @@ internal object DesktopChapterProbe {
                     runBlocking { controller.readerSettings(controller.state.value.readerSettings.copy(
                         mode = DesktopReaderMode.DOUBLE, rightToLeft = true)).join() }
                     ready(2, 0)
-                    onNodeWithTag("reader-forward").assertIsNotEnabled()
-                    onNodeWithText("下一章").assertIsNotEnabled()
+                    onNodeWithTag("reader-next-chapter").assertIsNotEnabled()
                     press(Key.DirectionRight)
                     ready(1, 3)
                     press(Key.DirectionLeft)
                     ready(2, 0)
-                    onNodeWithTag("reader-mode").performClick()
+                    // Android's options panel: the webtoon mode is the continuous reader.
+                    onNodeWithTag("reader-options").performClick(); waitForIdle()
+                    onNodeWithContentDescription(AndroidStrings["webtoon"]).performClick(); waitForIdle()
+                    press(Key.Escape)
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.readerSettings.mode == DesktopReaderMode.CONTINUOUS }
                     ready(2, 0)
                     check(controller.state.value.readerSettings.mode == DesktopReaderMode.CONTINUOUS)
@@ -125,6 +137,9 @@ internal object DesktopChapterProbe {
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.readerAtEnd }
                     val lastOffset = controller.state.value.readerScroll
                     System.setProperty("fixture.reader.failure.chapter", "2")
+                    // Chapter 2 was prepared while reading chapter 1's end; drop it so the turn asks the (failing) source.
+                    waitUntil(timeoutMillis = 15_000) { !controller.isPreloadingChapter }
+                    controller.forgetPreloadedChapter()
                     onNodeWithTag("reader-scroll-list").performMouseInput { moveTo(center); scroll(5f) }
                     error()
                     check(controller.state.value.chapter?.number == 1f && controller.state.value.pageIndex == 4)
@@ -136,10 +151,10 @@ internal object DesktopChapterProbe {
                     waitForIdle()
                     check(System.getProperty("fixture.reader.page_lists") == calls)
                     System.clearProperty("fixture.reader.failure.chapter")
-                    onNodeWithText("下一章").performClick()
+                    onNodeWithTag("reader-next-chapter").performClick()
                     ready(2, 0)
                     snapshot("continuous-final")
-                    onNodeWithText("返回详情").performClick()
+                    onNodeWithTag("reader-back").performClick()
                     waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy && controller.state.value.screen == DesktopScreen.DETAILS }
                 }
             }

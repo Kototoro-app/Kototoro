@@ -1,16 +1,10 @@
 package org.skepsun.kototoro.core.ui.glass
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.material3.LocalAbsoluteTonalElevation
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -18,40 +12,21 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpOffset
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
-import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.colorControls
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.highlight.HighlightStyle
-import com.kyant.backdrop.shadow.InnerShadow
-import com.kyant.backdrop.shadow.Shadow
-import androidx.compose.foundation.shape.CornerBasedShape
 import com.kyant.shapes.RoundedRectangle
-import com.kyant.shapes.RoundedRectangularShape
 import dagger.hilt.android.EntryPointAccessors
-import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
-import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
@@ -99,46 +74,6 @@ fun rememberGlassPrefs(settings: AppSettings): GlassPrefs {
     return prefs
 }
 
-@Immutable
-data class GlassStyle(
-    val containerAlpha: Float,
-    val borderAlpha: Float,
-    val tonalElevation: Dp,
-    val shadowElevation: Dp,
-    val minimumContainerAlpha: Float = 0f,
-)
-
-enum class GlassComponentRole {
-    Surface,
-    ContentOverlay,
-    TopBar,
-    BottomBar,
-    PillControl,
-    BottomPanel,
-    Menu,
-    Dialog,
-    Sheet,
-}
-
-/**
- * Chrome surface tint following the upstream catalog's LiquidBottomTabs:
- * a fixed high-luminance-contrast color (near-white in light, near-black in
- * dark) instead of a low-chroma Material surface container, so the chrome
- * always reads as a distinct surface over a busy backdrop.
- */
-internal val ChromeTintLight = Color(0xFFFAFAFA)
-internal val ChromeTintDark = Color(0xFF121212)
-
-internal fun chromeBackdropTint(isDark: Boolean): Color =
-    if (isDark) ChromeTintDark else ChromeTintLight
-
-internal fun GlassComponentRole.allowsAmoledBackdrop(): Boolean =
-    this == GlassComponentRole.ContentOverlay ||
-        this == GlassComponentRole.TopBar ||
-        this == GlassComponentRole.BottomBar ||
-        this == GlassComponentRole.PillControl ||
-        this == GlassComponentRole.BottomPanel
-
 object GlassDefaults {
     val shape: Shape = RoundedRectangle(28.dp)
     val navigationShadowElevation: Dp = 4.dp
@@ -183,112 +118,6 @@ object GlassDefaults {
         return colors.outlineVariant.copy(alpha = alpha)
     }
 }
-
-internal fun resolveGlassPressProgress(enabled: Boolean, progress: Float): Float =
-    if (enabled) progress.coerceIn(0f, 1f) else 0f
-
-internal fun shouldTrackGlassPress(
-    componentRole: GlassComponentRole,
-    pressFeedbackEnabled: Boolean,
-): Boolean = componentRole != GlassComponentRole.TopBar && pressFeedbackEnabled
-
-internal fun shouldApplyGlassLens(enabled: Boolean, heightDp: Float, amountDp: Float): Boolean =
-    enabled && heightDp > 0f && amountDp > 0f
-
-/**
- * Shadow elevation for the Material fallback surface.
- *
- * A translucent container colour cannot hide the surface's own shadow: the shadow is
- * drawn behind the shape, so it reads through the fill as a dark rim hugging the inside
- * of the outline and leaves a smaller, brighter plate in the middle. Over artwork every
- * glass role is deliberately translucent (chrome 0.65-0.92, cards/surfaces 0.40-0.74),
- * which turned each top-bar pill into a light island inside a darker capsule — an
- * artifact no amount of tint/alpha tuning removes, because it is drawn by the shadow
- * rather than by the tint. Flat surfaces (dialogs, and any translucent container) draw
- * no shadow at all; over artwork the hairline border already carries the edge.
- */
-internal fun resolveFallbackShadowElevation(
-    styleShadowElevation: Dp,
-    containerAlpha: Float,
-    flat: Boolean,
-): Dp = if (flat || containerAlpha < 1f) 0.dp else styleShadowElevation
-
-/**
- * Maps the [GlassTuningParam.HIGHLIGHT_STYLE] option value to the Kyant
- * [HighlightStyle]: 0 = Default, 1 = Ambient, 2 = Plain.
- */
-internal fun resolveGlassHighlightStyle(value: Int, angle: Float): HighlightStyle = when (value) {
-    1 -> HighlightStyle.Ambient()
-    2 -> HighlightStyle.Plain()
-    else -> HighlightStyle.Default(angle = angle, falloff = 2f)
-}
-
-internal data class GlassLensParameters(
-    val refractionHeight: Float,
-    val refractionAmount: Float,
-)
-
-/**
- * Backdrop's lens shader requires refractionHeight to stay within the
- * surface's minimum corner radius and refractionAmount within its shortest
- * side. Clamping here keeps strong presets (e.g. Control Center lens 24/24)
- * from painting internal arc artifacts on small capsules, pills and group
- * controls while leaving large bars and panels untouched.
- */
-internal fun resolveGlassLensParameters(
-    shape: Shape,
-    size: Size,
-    layoutDirection: LayoutDirection,
-    density: Density,
-    requestedHeight: Float,
-    requestedAmount: Float,
-): GlassLensParameters? {
-    if (
-        !requestedHeight.isFinite() ||
-        !requestedAmount.isFinite() ||
-        requestedHeight <= 0f ||
-        requestedAmount <= 0f ||
-        !size.width.isFinite() ||
-        !size.height.isFinite() ||
-        size.width <= 0f ||
-        size.height <= 0f
-    ) {
-        return null
-    }
-
-    val cornerRadii = shape.liquidLensCornerRadii(size, layoutDirection, density) ?: return null
-    val minCornerRadius = cornerRadii.minOrNull()?.takeIf { it.isFinite() && it > 0f } ?: return null
-    val shortestSide = size.minDimension
-    return GlassLensParameters(
-        refractionHeight = requestedHeight.coerceAtMost(minCornerRadius),
-        refractionAmount = requestedAmount.coerceAtMost(shortestSide),
-    )
-}
-
-private fun Shape.liquidLensCornerRadii(
-    size: Size,
-    layoutDirection: LayoutDirection,
-    density: Density,
-): List<Float>? =
-    when (this) {
-        is RoundedRectangularShape -> {
-            val corners = corners(size, layoutDirection, density)
-            listOf(corners.topLeft, corners.topRight, corners.bottomRight, corners.bottomLeft)
-        }
-
-        is CornerBasedShape -> {
-            val maxRadius = size.minDimension / 2f
-            val isLtr = layoutDirection == LayoutDirection.Ltr
-            listOf(
-                (if (isLtr) topStart else topEnd).toPx(size, density).coerceAtMost(maxRadius),
-                (if (isLtr) topEnd else topStart).toPx(size, density).coerceAtMost(maxRadius),
-                (if (isLtr) bottomEnd else bottomStart).toPx(size, density).coerceAtMost(maxRadius),
-                (if (isLtr) bottomStart else bottomEnd).toPx(size, density).coerceAtMost(maxRadius),
-            )
-        }
-
-        else -> null
-    }
 
 /**
  * Shared control surface.
@@ -440,240 +269,19 @@ fun LiquidGlassSurface(
         return
     }
 
-    val colors = MaterialTheme.colorScheme
-    val isDark = colors.isDarkTheme()
-    // Floating pill controls (search button, filter group, tab rails) are objects rather than
-    // bars: they share the chrome tint below but are bucketed separately so their edge and
-    // highlight treatment can evolve independently from real bars (bottom nav, reader
-    // toolbars, settings top bar).
-    val surfaceAlpha = tuning.value(tuningScope, GlassTuningParam.SURFACE_ALPHA)
-
-    val tint = when (componentRole) {
-        GlassComponentRole.TopBar,
-        GlassComponentRole.BottomBar,
-        GlassComponentRole.PillControl,
-        // Navigation chrome uses the official high-contrast container tint
-        // (near-white / near-black) instead of a low-chroma Material surface
-        // container; the higher alpha band keeps it readable over artwork.
-        -> chromeBackdropTint(isDark = isDark).copy(alpha = surfaceAlpha)
-        else -> colors.surfaceContainer.copy(alpha = surfaceAlpha)
-    }
-
-    // Persistent glass follows the upstream Control Center pattern: an always-on specular
-    // highlight, with a touch additionally boosting exposure. Navigation chrome (bars), top pill
-    // controls and large glass panels deliberately render without the persistent edge highlight:
-    // bars keep the bar treatment, pills and panels favor a uniform hairline over the uneven
-    // specular rim. Callers may opt out of the idle highlight (highlightOnIdle = false) so large
-    // static info panels render clean while idle and only brighten while pressed.
-    //
-    // The highlight angle is static. It used to track the accelerometer, but the low-pass filter
-    // never converged, so every sensor event wrote a new float and the whole window kept
-    // re-recording (~135 frames/s with the page untouched, measured). The tilt response is not
-    // visible in practice; see GlassStaticHighlightAngleDeg for where to revisit it.
-    val pressProgress = remember { Animatable(0f) }
-    val coroutineScope = rememberCoroutineScope()
-    // Pure observer: never consumes, so nested controls keep their own
-    // gestures; any touch landing on the glass boosts its exposure. Top bars
-    // (settings, reader top chrome) opt out of press tracking entirely, while
-    // navigation bars (bottom nav), pill controls, and interactive content glass
-    // track press so they react while touched.
-    val pressTracking = if (!shouldTrackGlassPress(componentRole, pressFeedbackEnabled)) {
-        Modifier
-    } else {
-        Modifier.pointerInput(Unit) {
-            awaitEachGesture {
-                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                coroutineScope.launch { pressProgress.animateTo(1f, tween(90)) }
-                try {
-                    do {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                    } while (event.changes.any { it.pressed })
-                } finally {
-                    coroutineScope.launch { pressProgress.animateTo(0f, tween(160)) }
-                }
-            }
-        }
-    }
-
-    CompositionLocalProvider(LocalContentColor provides colors.onSurface) {
-        Box(
-            modifier = modifier
-                .then(pressTracking)
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    exportedBackdrop = exportedBackdrop,
-                    shape = { shape },
-                    effects = {
-                        if (tuning.isOn(tuningScope, GlassTuningParam.VIBRANCY)) {
-                            vibrancy()
-                        }
-                        // Independent color grading on top of the glass: saturation /
-                        // brightness as a colorControls pass (SimpMusic / SPICaWeather
-                        // recipe). Skipped at neutral values so it never stacks with
-                        // vibrancy's own saturation lift.
-                        val saturation = tuning.value(tuningScope, GlassTuningParam.SATURATION)
-                        val brightness = tuning.value(tuningScope, GlassTuningParam.BRIGHTNESS)
-                        if (saturation != 1f || brightness != 0f) {
-                            colorControls(brightness = brightness, saturation = saturation)
-                        }
-                        blur(tuning.value(tuningScope, GlassTuningParam.BLUR_RADIUS_DP).dp.toPx())
-                        // lens() requires a CornerBasedShape or the kyant
-                        // RoundedRectangularShape; guard so callers passing a
-                        // plain RectangleShape (edge-to-edge top chrome) degrade
-                        // to blur instead of crashing during composition.
-                        if (shape is CornerBasedShape || shape is RoundedRectangularShape) {
-                            val press = resolveGlassPressProgress(pressFeedbackEnabled, pressProgress.value)
-                            val lensBoost = 1f +
-                                tuning.value(tuningScope, GlassTuningParam.PRESS_LENS_STRENGTH) * press
-                            val lensHeightDp = tuning.value(
-                                tuningScope,
-                                GlassTuningParam.LENS_HEIGHT_DP,
-                            ) * lensBoost
-                            val lensAmountDp = tuning.value(
-                                tuningScope,
-                                GlassTuningParam.LENS_AMOUNT_DP,
-                            ) * lensBoost
-                            if (shouldApplyGlassLens(lensEnabled, lensHeightDp, lensAmountDp)) {
-                                // Backdrop's lens SDF requires refractionHeight to stay within
-                                // the surface's minimum corner radius and refractionAmount within
-                                // its shortest side (KeiOS BackdropLensSafety mirrors this
-                                // documented library constraint). Unclamped values paint internal
-                                // arc artifacts and corner discontinuities on small surfaces —
-                                // compact tab rails, pills, group controls.
-                                val lensParams = resolveGlassLensParameters(
-                                    shape = shape,
-                                    size = size,
-                                    layoutDirection = layoutDirection,
-                                    density = this,
-                                    requestedHeight = lensHeightDp.dp.toPx(),
-                                    requestedAmount = lensAmountDp.dp.toPx(),
-                                )
-                                if (lensParams != null) {
-                                    lens(
-                                        refractionHeight = lensParams.refractionHeight,
-                                        refractionAmount = lensParams.refractionAmount,
-                                        depthEffect = tuning.isOn(tuningScope, GlassTuningParam.DEPTH_EFFECT),
-                                        chromaticAberration = tuning.isOn(
-                                            tuningScope,
-                                            GlassTuningParam.CHROMATIC_ABERRATION,
-                                        ) || (press > 0f && tuning.isOn(
-                                            tuningScope,
-                                            GlassTuningParam.PRESS_CHROMATIC_ABERRATION,
-                                        )),
-                                    )
-                                }
-                            }
-                        }
-                    },
-                    highlight = {
-                        val press = resolveGlassPressProgress(pressFeedbackEnabled, pressProgress.value)
-                        val pressRimOn = tuningScope in GlassTuning.pressableRoles &&
-                            press > 0f &&
-                            tuning.value(tuningScope, GlassTuningParam.PRESS_HIGHLIGHT_ALPHA) > 0f
-                        val idleRimOn = tuning.isOn(tuningScope, GlassTuningParam.RIM_ENABLED) && highlightOnIdle
-                        // 0 = Default specular (static angle, see GlassStaticHighlightAngleDeg),
-                        // 1 = Ambient (even edge glow — BiliTV / BiliPai look),
-                        // 2 = Plain (uniform tint without a shader).
-                        val edgeStyle = resolveGlassHighlightStyle(
-                            tuning.value(tuningScope, GlassTuningParam.HIGHLIGHT_STYLE).toInt(),
-                            angle = GlassStaticHighlightAngleDeg,
-                        )
-                        when {
-                            pressRimOn -> Highlight(
-                                style = edgeStyle,
-                                alpha = press * tuning.value(tuningScope, GlassTuningParam.PRESS_HIGHLIGHT_ALPHA),
-                            )
-                            idleRimOn -> {
-                                val rimAlpha = tuning.value(tuningScope, GlassTuningParam.RIM_ALPHA)
-                                Highlight(
-                                    style = edgeStyle,
-                                    alpha = rimAlpha + (1f - rimAlpha) * press,
-                                )
-                            }
-                            else -> null
-                        }
-                    },
-                    shadow = if (tuning.isOn(tuningScope, GlassTuningParam.SHADOW_ENABLED) &&
-                        style.shadowElevation > 0.dp
-                    ) {
-                        {
-                            Shadow(
-                                radius = tuning.value(tuningScope, GlassTuningParam.SHADOW_RADIUS_DP).dp,
-                                offset = DpOffset(
-                                    0.dp,
-                                    tuning.value(tuningScope, GlassTuningParam.SHADOW_OFFSET_DP).dp,
-                                ),
-                                color = Color.Black.copy(
-                                    alpha = tuning.value(tuningScope, GlassTuningParam.SHADOW_ALPHA),
-                                ),
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                    innerShadow = {
-                        val press = resolveGlassPressProgress(pressFeedbackEnabled, pressProgress.value)
-                        if (tuningScope in GlassTuning.pressableRoles && press > 0f &&
-                            tuning.value(tuningScope, GlassTuningParam.PRESS_INNER_SHADOW_ALPHA) > 0f
-                        ) {
-                            InnerShadow(
-                                radius = tuning.value(
-                                    tuningScope,
-                                    GlassTuningParam.PRESS_INNER_SHADOW_RADIUS_DP,
-                                ).dp * press,
-                                alpha = press * tuning.value(
-                                    tuningScope,
-                                    GlassTuningParam.PRESS_INNER_SHADOW_ALPHA,
-                                ),
-                            )
-                        } else {
-                            null
-                        }
-                    },
-                    layerBlock = {
-                        val press = resolveGlassPressProgress(pressFeedbackEnabled, pressProgress.value)
-                        if (tuningScope in GlassTuning.pressableRoles && press > 0f) {
-                            val scale = 1f +
-                                tuning.value(tuningScope, GlassTuningParam.PRESS_SCALE_PERCENT) / 100f * press
-                            scaleX = scale
-                            scaleY = scale
-                        }
-                    },
-                    onDrawSurface = {
-                        drawRect(tint)
-                    },
-                )
-                // Hairline is the edge cue for floating chrome — pill controls
-                // and the floating bottom bar. Full-width top bars (settings,
-                // reader) deliberately stay borderless by default: a hairline
-                // around an edge-to-edge panel reads as an unwanted frame at the
-                // screen edge rather than a crisp control edge. It is a static
-                // separator line (same family as the shadow), not the Liquid
-                // Glass specular highlight.
-                .then(
-                    if (tuning.isOn(tuningScope, GlassTuningParam.HAIRLINE_ENABLED)) {
-                        Modifier.border(
-                            width = 1.dp,
-                            color = if (isDark) {
-                                Color.White.copy(alpha = tuning.value(
-                                    tuningScope,
-                                    GlassTuningParam.HAIRLINE_ALPHA,
-                                ))
-                            } else {
-                                colors.outlineVariant.copy(alpha = tuning.value(
-                                    tuningScope,
-                                    GlassTuningParam.HAIRLINE_ALPHA,
-                                ))
-                            },
-                            shape = shape,
-                        )
-                    } else {
-                        Modifier
-                    },
-                ),
-            content = content,
-        )
-    }
+    SharedLiquidGlassSurface(
+        backdrop = backdrop,
+        tuning = tuning,
+        style = style,
+        shape = shape,
+        componentRole = componentRole,
+        modifier = modifier,
+        highlightOnIdle = highlightOnIdle,
+        lensEnabled = lensEnabled,
+        pressFeedbackEnabled = pressFeedbackEnabled,
+        exportedBackdrop = exportedBackdrop,
+        content = content,
+    )
 }
 
 internal fun GlassStyle.backdropSurfaceAlpha(

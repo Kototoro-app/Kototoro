@@ -1,23 +1,15 @@
 package org.skepsun.kototoro.reader.novel.compose
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -28,7 +20,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,14 +28,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.kyant.shapes.Capsule
-import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
-import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.reader.novel.NovelPageTurnAnimation
 import org.skepsun.kototoro.reader.novel.NovelReaderSettings
 import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
@@ -52,12 +39,14 @@ import org.skepsun.kototoro.reader.novel.NovelTranslationDisplayMode
 import org.skepsun.kototoro.reader.novel.ReadingMode
 import org.skepsun.kototoro.reader.novel.novelReaderPalette
 import org.skepsun.kototoro.reader.ui.compose.ReaderAnimationIcon
+import org.skepsun.kototoro.reader.ui.compose.ReaderOptionsDetailTabs
+import org.skepsun.kototoro.reader.ui.compose.ReaderOptionsPageList
+import org.skepsun.kototoro.reader.ui.compose.ReaderOptionsTab
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChoiceChips
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderOptionDivider
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderOptionGroup
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderOptionSection
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderOptionSwitchRow
-import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelTabBar
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelToggleChip
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderQuickActionGrid
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderSliderRow
@@ -71,12 +60,6 @@ import kotlin.math.roundToInt
 private const val DEFAULT_READER_BRIGHTNESS = 0.8f
 
 private typealias NovelSettingsUpdate = (NovelReaderSettings.() -> NovelReaderSettings) -> Unit
-
-private enum class NovelOptionsTab(val labelResId: Int) {
-    TYPOGRAPHY(R.string.novel_reader_tab_typography),
-    READING(R.string.novel_reader_tab_reading),
-    TRANSLATION_TOOLS(R.string.novel_reader_tab_translation_tools),
-}
 
 @Composable
 internal fun ComposeNovelReaderOptionsSheet(
@@ -137,95 +120,67 @@ private fun NovelQuickLayer(
     update: NovelSettingsUpdate,
     onQuickAction: (NovelQuickActionId) -> Unit,
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
-    ) {
-        ReaderSliderRow(
-            label = stringResource(R.string.brightness),
-            // While following the system the chip beside it already says so.
-            valueLabel = settings.screenBrightness?.let { "${(it * 100f).roundToInt()}%" }.orEmpty(),
-            value = settings.screenBrightness ?: DEFAULT_READER_BRIGHTNESS,
-            valueRange = NovelReaderSettings.SCREEN_BRIGHTNESS_RANGE,
-            // Dragging sets a brightness of the reader's own, which ends "follow system".
-            onValueChange = { value -> update { copy(screenBrightness = value) } },
-            leadingIcon = R.drawable.ic_lightbulb,
-            trailing = {
-                ReaderPanelToggleChip(
-                    label = stringResource(R.string.follow_system),
-                    checked = settings.screenBrightness == null,
-                    onCheckedChange = { followSystem ->
-                        update {
-                            copy(screenBrightness = if (followSystem) null else screenBrightness ?: DEFAULT_READER_BRIGHTNESS)
-                        }
-                    },
-                )
-            },
-            contentPadding = PaddingValues(0.dp),
-        )
-        NovelFontSizeStepper(settings, update, contentPadding = PaddingValues(0.dp))
-        NovelThemeSwatches(
-            selected = settings.themePreset,
-            onSelected = { preset -> update { copy(themePreset = preset) } },
-        )
-        ReaderQuickActionGrid(
-            actions = novelQuickActions(settings.isTranslationEnabled),
-            onClick = { onQuickAction(NovelQuickActionId.valueOf(it.id)) },
-        )
-    }
-}
-
-@Composable
-private fun NovelFontSizeStepper(
-    settings: NovelReaderSettings,
-    update: NovelSettingsUpdate,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-) {
-    ReaderStepperRow(
-        label = stringResource(R.string.novel_font_size),
-        valueLabel = "%.1fsp".format(settings.fontSizeSp),
-        value = settings.fontSizeSp,
-        valueRange = NovelReaderSettings.FONT_SIZE_RANGE,
-        step = 1f,
-        onValueChange = { value -> update { copy(fontSizeSp = value) } },
-        contentPadding = contentPadding,
+    NovelReaderQuickLayer(
+        fontSize = novelFontSizeOption(settings, update),
+        themes = novelThemeSwatches(),
+        selectedTheme = settings.themePreset.name,
+        onThemeSelected = { name -> update { copy(themePreset = NovelReaderThemePreset.valueOf(name)) } },
+        brightness = {
+            ReaderSliderRow(
+                label = stringResource(R.string.brightness),
+                // While following the system the chip beside it already says so.
+                valueLabel = settings.screenBrightness?.let { "${(it * 100f).roundToInt()}%" }.orEmpty(),
+                value = settings.screenBrightness ?: DEFAULT_READER_BRIGHTNESS,
+                valueRange = NovelReaderSettings.SCREEN_BRIGHTNESS_RANGE,
+                // Dragging sets a brightness of the reader's own, which ends "follow system".
+                onValueChange = { value -> update { copy(screenBrightness = value) } },
+                leadingIcon = painterResource(R.drawable.ic_lightbulb),
+                trailing = {
+                    ReaderPanelToggleChip(
+                        label = stringResource(R.string.follow_system),
+                        checked = settings.screenBrightness == null,
+                        onCheckedChange = { followSystem ->
+                            update {
+                                copy(screenBrightness = if (followSystem) null else screenBrightness ?: DEFAULT_READER_BRIGHTNESS)
+                            }
+                        },
+                    )
+                },
+                contentPadding = PaddingValues(0.dp),
+            )
+        },
+        actions = {
+            ReaderQuickActionGrid(
+                actions = novelQuickActions(settings.isTranslationEnabled),
+                onClick = { onQuickAction(NovelQuickActionId.valueOf(it.id)) },
+                icon = { painterResource(NovelQuickActionId.valueOf(it.id).iconResId) },
+                label = { stringResource(NovelQuickActionId.valueOf(it.id).labelResId) },
+            )
+        },
     )
 }
 
 @Composable
-private fun NovelThemeSwatches(
-    selected: NovelReaderThemePreset,
-    onSelected: (NovelReaderThemePreset) -> Unit,
-) {
-    val colors = currentReaderPanelColors()
+private fun novelFontSizeOption(settings: NovelReaderSettings, update: NovelSettingsUpdate) = NovelReaderValueOption(
+    label = stringResource(R.string.novel_font_size),
+    valueLabel = "%.1fsp".format(settings.fontSizeSp),
+    value = settings.fontSizeSp,
+    range = NovelReaderSettings.FONT_SIZE_RANGE,
+    step = 1f,
+    onValueChange = { value -> update { copy(fontSizeSp = value) } },
+)
+
+@Composable
+private fun novelThemeSwatches(): List<NovelReaderThemeSwatch> {
     val isDark = isSystemInDarkTheme()
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        NovelReaderThemePreset.entries.forEach { preset ->
-            val palette = novelReaderPalette(preset, isDark)
-            val isSelected = preset == selected
-            // Each swatch is drawn in its own theme, so it previews the page it would give.
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(40.dp)
-                    .clip(Capsule())
-                    .background(Color(palette.backgroundColor))
-                    .border(if (isSelected) 2.dp else 1.dp, if (isSelected) colors.accent else colors.divider, Capsule())
-                    .tvFocusable(shape = Capsule(), addFocusTarget = false)
-                    .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelected(preset) }),
-            ) {
-                Text(
-                    text = stringResource(preset.label),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color(palette.textColor),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+    return NovelReaderThemePreset.entries.map { preset ->
+        val palette = novelReaderPalette(preset, isDark)
+        NovelReaderThemeSwatch(
+            id = preset.name,
+            label = stringResource(preset.label),
+            background = Color(palette.backgroundColor),
+            text = Color(palette.textColor),
+        )
     }
 }
 
@@ -241,27 +196,16 @@ private fun NovelDetailTabs(
     onShowReplaceRules: () -> Unit,
     onReset: () -> Unit,
 ) {
-    val tabs = NovelOptionsTab.entries
-    val pagerState = rememberPagerState(pageCount = { tabs.size })
-    val scope = rememberCoroutineScope()
-    Column(modifier = Modifier.fillMaxSize()) {
-        ReaderPanelTabBar(
-            labels = tabs.map { stringResource(it.labelResId) },
-            selectedIndex = pagerState.currentPage,
-            onSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
-            modifier = dragModifier,
-        )
-        HorizontalPager(
-            state = pagerState,
-            overscrollEffect = null,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-        ) { page ->
-            when (tabs[page]) {
-                NovelOptionsTab.TYPOGRAPHY -> NovelTypographyPage(settings, update)
-                NovelOptionsTab.READING -> NovelReadingPage(settings, update)
-                NovelOptionsTab.TRANSLATION_TOOLS -> NovelTranslationToolsPage(
+    ReaderOptionsDetailTabs(
+        tabs = listOf(
+            ReaderOptionsTab(stringResource(R.string.novel_reader_tab_typography)) {
+                NovelTypographyPage(settings, update)
+            },
+            ReaderOptionsTab(stringResource(R.string.novel_reader_tab_reading)) {
+                NovelReadingPage(settings, update)
+            },
+            ReaderOptionsTab(stringResource(R.string.novel_reader_tab_translation_tools)) {
+                NovelTranslationToolsPage(
                     settings = settings,
                     update = update,
                     onToggleTranslation = onToggleTranslation,
@@ -271,64 +215,65 @@ private fun NovelDetailTabs(
                     onShowReplaceRules = onShowReplaceRules,
                     onReset = onReset,
                 )
-            }
-        }
-    }
+            },
+        ),
+        settingsDescription = "",
+        onOpenSettings = null,
+        dragModifier = dragModifier,
+    )
 }
 
 @Composable
 private fun NovelTypographyPage(
     settings: NovelReaderSettings,
     update: NovelSettingsUpdate,
-) = NovelOptionsPageList {
-    item {
-        ReaderOptionGroup {
-            NovelReaderFontOptionRow(
-                selected = settings.font,
-                onSelected = { update { copy(font = it) } },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            )
-            ReaderOptionDivider()
-            NovelFontSizeStepper(settings, update)
-            ReaderOptionDivider()
-            ReaderStepperRow(
-                label = stringResource(R.string.novel_line_spacing),
-                valueLabel = "%.1f".format(settings.lineSpacing),
-                value = settings.lineSpacing,
-                valueRange = NovelReaderSettings.LINE_SPACING_RANGE,
-                step = NovelReaderSettings.LINE_SPACING_STEP,
-                onValueChange = { value -> update { copy(lineSpacing = value) } },
-            )
-            ReaderOptionDivider()
-            ReaderStepperRow(
-                label = stringResource(R.string.novel_paragraph_spacing),
-                valueLabel = stringResource(R.string.novel_paragraph_spacing_value, settings.paragraphSpacingLines),
-                value = settings.paragraphSpacing,
-                valueRange = NovelReaderSettings.PARAGRAPH_SPACING_RANGE,
-                step = NovelReaderSettings.PARAGRAPH_SPACING_STEP,
-                onValueChange = { value -> update { copy(paragraphSpacing = value) } },
-            )
-            ReaderOptionDivider()
-            NovelMarginStepper(
-                label = stringResource(R.string.novel_margin_horizontal),
-                value = settings.marginHorizontal,
-                onValueChange = { value -> update { copy(marginHorizontal = value) } },
-            )
-            ReaderOptionDivider()
-            NovelMarginStepper(
-                label = stringResource(R.string.novel_margin_vertical),
-                value = settings.marginVertical,
-                onValueChange = { value -> update { copy(marginVertical = value) } },
-            )
-            ReaderOptionDivider()
-            ReaderOptionSwitchRow(
-                label = stringResource(R.string.novel_first_line_indent),
-                checked = settings.enableParagraphIndent,
-                onCheckedChange = { update { copy(enableParagraphIndent = it) } },
-            )
-        }
-    }
-}
+) = NovelTypographyOptionsPage(
+    fontSize = novelFontSizeOption(settings, update),
+    lineSpacing = NovelReaderValueOption(
+        label = stringResource(R.string.novel_line_spacing),
+        valueLabel = "%.1f".format(settings.lineSpacing),
+        value = settings.lineSpacing,
+        range = NovelReaderSettings.LINE_SPACING_RANGE,
+        step = NovelReaderSettings.LINE_SPACING_STEP,
+        onValueChange = { value -> update { copy(lineSpacing = value) } },
+    ),
+    fontOption = {
+        NovelReaderFontOptionRow(
+            selected = settings.font,
+            onSelected = { update { copy(font = it) } },
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        )
+    },
+    additionalOptions = {
+        ReaderOptionDivider()
+        ReaderStepperRow(
+            label = stringResource(R.string.novel_paragraph_spacing),
+            valueLabel = stringResource(R.string.novel_paragraph_spacing_value, settings.paragraphSpacingLines),
+            value = settings.paragraphSpacing,
+            valueRange = NovelReaderSettings.PARAGRAPH_SPACING_RANGE,
+            step = NovelReaderSettings.PARAGRAPH_SPACING_STEP,
+            onValueChange = { value -> update { copy(paragraphSpacing = value) } },
+        )
+        ReaderOptionDivider()
+        NovelMarginStepper(
+            label = stringResource(R.string.novel_margin_horizontal),
+            value = settings.marginHorizontal,
+            onValueChange = { value -> update { copy(marginHorizontal = value) } },
+        )
+        ReaderOptionDivider()
+        NovelMarginStepper(
+            label = stringResource(R.string.novel_margin_vertical),
+            value = settings.marginVertical,
+            onValueChange = { value -> update { copy(marginVertical = value) } },
+        )
+        ReaderOptionDivider()
+        ReaderOptionSwitchRow(
+            label = stringResource(R.string.novel_first_line_indent),
+            checked = settings.enableParagraphIndent,
+            onCheckedChange = { update { copy(enableParagraphIndent = it) } },
+        )
+    },
+)
 
 @Composable
 private fun NovelMarginStepper(label: String, value: Int, onValueChange: (Int) -> Unit) {
@@ -346,7 +291,7 @@ private fun NovelMarginStepper(label: String, value: Int, onValueChange: (Int) -
 private fun NovelReadingPage(
     settings: NovelReaderSettings,
     update: NovelSettingsUpdate,
-) = NovelOptionsPageList {
+) = ReaderOptionsPageList {
     item {
         ReaderOptionSection(stringResource(R.string.novel_reading_mode)) {
             ReaderChoiceChips(
@@ -386,7 +331,7 @@ private fun NovelTranslationToolsPage(
     onToggleReplaceRules: () -> Unit,
     onShowReplaceRules: () -> Unit,
     onReset: () -> Unit,
-) = NovelOptionsPageList {
+) = ReaderOptionsPageList {
     item {
         ReaderOptionGroup(title = stringResource(R.string.novel_reader_translation_section)) {
             ReaderOptionSwitchRow(
@@ -550,16 +495,6 @@ private fun NovelToolActionRow(
             )
         }
     }
-}
-
-@Composable
-private fun NovelOptionsPageList(content: LazyListScope.() -> Unit) {
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        modifier = Modifier.fillMaxSize(),
-        content = content,
-    )
 }
 
 @Composable

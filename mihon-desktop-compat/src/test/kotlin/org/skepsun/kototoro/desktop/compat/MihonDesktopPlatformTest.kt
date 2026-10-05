@@ -72,7 +72,9 @@ class MihonDesktopPlatformTest {
             }
             assertEquals(source, (responses[0].result as SourceResult.Sources).sources.single().name)
             assertTrue((responses[1].result as SourceResult.Descriptor).descriptor.isPreferencesSupported)
-            assertEquals("域名设置", (responses[2].result as SourceResult.Preferences).screen.nodes.single().title)
+            val preferenceNodes = (responses[2].result as SourceResult.Preferences).screen.nodes
+            assertEquals(listOf("域名设置", "User-Agent"), preferenceNodes.map { it.title })
+            assertEquals("host:user_agent", preferenceNodes.last().id)
             assertEquals("offline 1", (responses[3].result as SourceResult.ListContent).content.single().title)
             assertTrue(Files.isDirectory(root.resolve("compat/files")))
             assertTrue(Files.isDirectory(root.resolve("compat/cache")))

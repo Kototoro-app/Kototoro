@@ -11,25 +11,14 @@ import org.skepsun.kototoro.reader.novel.NovelReaderPalette
  * The novel chrome's Material scheme under MD3, where the chrome falls back to opaque surfaces
  * that would otherwise take the app's cool surface colours on a warm reading theme.
  */
-internal fun novelChromeColorScheme(base: ColorScheme, palette: NovelReaderPalette): ColorScheme {
-    val background = Color(palette.chromeBackgroundColor)
-    val text = Color(palette.chromeTextColor)
-    return base.copy(
-        surface = background,
-        surfaceBright = background,
-        surfaceDim = background,
-        surfaceContainerLowest = background,
-        surfaceContainerLow = background,
-        surfaceContainer = background,
-        surfaceContainerHigh = background,
-        surfaceContainerHighest = background,
-        surfaceVariant = background,
-        onSurface = text,
-        onSurfaceVariant = Color(palette.secondaryTextColor),
-        primary = text,
-        onPrimary = background,
-    )
-}
+internal fun novelChromeColorScheme(base: ColorScheme, palette: NovelReaderPalette): ColorScheme =
+    novelChromeColorScheme(base, palette.chromeColors())
+
+internal fun NovelReaderPalette.chromeColors() = NovelReaderChromeColors(
+    background = Color(chromeBackgroundColor),
+    content = Color(chromeTextColor),
+    secondary = Color(secondaryTextColor),
+)
 
 /** MD3 chrome follows the reading theme; iOS glass chrome keeps its own tint. */
 @Composable

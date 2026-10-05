@@ -6,6 +6,8 @@ import androidx.room.useReaderConnection
 import androidx.room.useWriterConnection
 import kotlinx.coroutines.flow.first
 import org.skepsun.kototoro.bookmarks.data.BookmarkEntity
+import org.skepsun.kototoro.bookmarks.domain.novelBookmarkProgress
+import org.skepsun.kototoro.bookmarks.domain.parseNovelBookmarkPreview
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.*
 import org.skepsun.kototoro.core.source.*
@@ -47,32 +49,66 @@ class DesktopLibrary(
     }
 
     suspend fun bookmarks(contentId: Long): List<DesktopBookmark> = database.getBookmarksDao().observe(contentId)
-        .first().map { DesktopBookmark(it.mangaId, it.pageId, it.chapterId, it.page, it.scroll, it.createdAt, it.percent) }
+        .first().map { it.desktopBookmark() }
 
     /** Toggle by reading position, as Android does, even if a source regenerates its page id. */
     suspend fun toggleBookmark(content: SourceContent, chapter: SourceChapter, page: SourcePage,
-        index: Int, pageCount: Int, scroll: Float = 0f) = database.useWriterConnection { connection ->
-        require(pageCount > 0 && index in 0 until pageCount)
+        index: Int, pageCount: Int, scroll: Float = 0f) {
         require(scroll.isFinite() && scroll >= 0f && scroll.toDouble() <= Int.MAX_VALUE.toDouble())
+        require(page.source.name == chapter.source.name)
+        toggleBookmarkPosition(content, chapter, index, pageCount, page.id, scroll.toInt(), page.preview ?: page.url)
+    }
+
+    /** Novel positions are engine block indexes; the schema's image field holds a plain text excerpt. */
+    suspend fun toggleNovelBookmark(content: SourceContent, chapter: SourceChapter, block: Int,
+        blockCount: Int, preview: String) {
+        require(content.source.contentType in setOf("NOVEL", "HENTAI_NOVEL"))
+        toggleBookmarkPosition(content, chapter, block, blockCount, null, 0, parseNovelBookmarkPreview(preview))
+    }
+
+    suspend fun removeBookmark(content: SourceContent, bookmark: DesktopBookmark) =
+        database.useWriterConnection { connection ->
+            require(content.id == bookmark.contentId)
+            connection.immediateTransaction {
+                requireSameIdentity(requireNotNull(database.getMangaDao().find(content.id)).manga, content)
+                val dao = database.getBookmarksDao()
+                val stored = dao.find(content.id, bookmark.pageId)
+                // A stale card must not delete a replacement bookmark at the same position.
+                require(stored?.desktopBookmark() == bookmark) { "Bookmark has changed or no longer exists" }
+                dao.delete(requireNotNull(stored))
+            }
+        }
+
+    private suspend fun toggleBookmarkPosition(content: SourceContent, chapter: SourceChapter, index: Int,
+        pageCount: Int, pageId: Long?, scroll: Int, preview: String) = database.useWriterConnection { connection ->
+        require(pageCount > 0 && index in 0 until pageCount)
         val branch = requireNotNull(content.chapters).filter { it.branch == chapter.branch }
         val chapterIndex = branch.indexOfFirst { it.id == chapter.id }
-        require(chapterIndex >= 0 && page.source.name == chapter.source.name)
+        require(chapterIndex >= 0 && branch[chapterIndex].url == chapter.url &&
+            branch[chapterIndex].source.name == chapter.source.name)
         connection.immediateTransaction {
             val existing = database.getMangaDao().find(content.id)?.manga
             if (existing == null) saveInTransaction(content) else requireSameIdentity(existing, content)
             require(database.getChaptersDao().findAll(content.id).any {
-                it.chapterId == chapter.id && it.branch == chapter.branch && it.url == chapter.url
+                it.chapterId == chapter.id && it.branch == chapter.branch && it.url == chapter.url &&
+                    it.source == chapter.source.name
             }) { "Refresh details before bookmarking a changed chapter" }
             val dao = database.getBookmarksDao()
             if (dao.observe(content.id, chapter.id, index).first() != null) {
                 dao.delete(content.id, chapter.id, index)
             } else {
-                dao.insert(BookmarkEntity(content.id, page.id, chapter.id, index, scroll.toInt(),
-                    page.preview ?: page.url, System.currentTimeMillis(),
-                    (chapterIndex + (index + 1f) / pageCount) / branch.size))
+                val now = System.currentTimeMillis()
+                var id = pageId ?: now
+                if (pageId == null) while (dao.find(content.id, id) != null) id++
+                dao.insert(BookmarkEntity(content.id, id, chapter.id, index, scroll,
+                    preview, now,
+                    novelBookmarkProgress(chapterIndex, branch.size, index, pageCount)))
             }
         }
     }
+
+    private fun BookmarkEntity.desktopBookmark() =
+        DesktopBookmark(mangaId, pageId, chapterId, page, scroll, createdAt, percent, imageUrl)
 
     suspend fun find(id: Long): SourceContent? = database.getMangaDao().find(id)?.let { content(it.manga, it.tags) }
 
@@ -85,6 +121,32 @@ class DesktopLibrary(
         connection.immediateTransaction { saveInTransaction(content) }
     }
 
+    /** The stored suggestions, most relevant first. */
+    suspend fun suggestions(limit: Int): List<SourceContent> = database.getSuggestionDao().getTopContent(limit)
+        .map { content(it.manga, it.tags) }
+
+    /**
+     * Replaces the suggestions table in one transaction, as Android's SuggestionRepository.replace does.
+     * A work whose id collides with a different stored work is skipped instead of failing the batch.
+     */
+    suspend fun replaceSuggestions(items: List<Pair<SourceContent, Float>>, createdAt: Long): Int =
+        database.useWriterConnection { connection ->
+            connection.immediateTransaction {
+                val dao = database.getSuggestionDao()
+                dao.deleteAll()
+                var stored = 0
+                for ((content, relevance) in items) {
+                    val existing = database.getMangaDao().find(content.id)?.manga
+                    if (existing != null && runCatching { requireSameIdentity(existing, content) }.isFailure) continue
+                    // List results carry no description or chapters; a stored work keeps its richer row.
+                    if (existing == null) saveInTransaction(content)
+                    dao.upsert(org.skepsun.kototoro.suggestions.data.SuggestionEntity(content.id, relevance, createdAt))
+                    stored++
+                }
+                stored
+            }
+        }
+
     suspend fun addFavourite(content: SourceContent) = database.useWriterConnection { connection ->
         connection.immediateTransaction {
             saveInTransaction(content)
@@ -93,7 +155,8 @@ class DesktopLibrary(
             val category = categories.findAll().firstOrNull { it.title == "收藏" }
             val categoryId = category?.categoryId?.toLong() ?: categories.insert(FavouriteCategoryEntity(
                 categoryId = 0, createdAt = now, sortKey = categories.getNextSortKey(),
-                title = "收藏", order = "NEWEST", track = false, isVisibleInLibrary = true, deletedAt = 0,
+                // Android creates categories with update tracking on; the subscriptions page relies on it.
+                title = "收藏", order = "NEWEST", track = true, isVisibleInLibrary = true, deletedAt = 0,
             ))
             val existing = database.getFavouritesDao().find(content.id, categoryId)
             database.getFavouritesDao().upsert(FavouriteEntity(

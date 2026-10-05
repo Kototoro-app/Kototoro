@@ -3967,3 +3967,968 @@ ZIP SHA-256：57DD7959A4F9FF476D968ACFBC9EFBCF0B2051ABD4B322D9E9559D8F4CBE3CA5�
   下载并缓存于根 `build/third-party-downloads`），放入 `resources/mpv`、`resources/upscale/<tool>`（去掉示例媒体），写 `THIRD_PARTY_PLAYBACK.md`
   许可与来源说明。运行时优先使用随包程序。`--check-runtime` 新增播放器（lavfi 测试流）与两种 ncnn 超分自检；`windowsDistributionTest` 断言均来自
   resources。安装包体积约增加 200 MB（libmpv 101 MB、ncnn 程序与模型 102 MB）。
+
+## 66. Windows 对齐 Android 截图风格与详情浮动预览
+
+日期：2026-10-04。用户要求继续推进 Windows，并明确优先让整体视觉向仓库中的 Android 手机版
+截图靠齐。实际查看 `metadata/en-US/images/phoneScreenshots/1-3.png`，同时对照 Android
+`InterfaceStyleTokens`、`TabletLayout`、设计令牌及主题实现；参考官方 Reply 的约束驱动自适应布局。
+
+- `DesktopTheme` 集中映射桌面颜色、排版和形状：柔和浅色画布、蓝色强调、主题派生顶部色调、
+  28/36sp 一级标题、胶囊搜索框及按钮。所有原 Accent/Canvas/Ink/Muted 使用当前主题角色，
+  深色不再继承硬编码浅色前景。没有增加依赖或改写 Android 主题。
+- 80dp 导航槽保留，以圆角浮动侧栏表达 Android 浮动导航；收藏图标直接使用 Android 的心形
+  vector，搜索图标仍走原构建转换。收藏/历史标题与搜索/筛选同排，书架保留 2:3 封面网格。
+- “更多 → 外观”提供跟随系统、浅色、深色。使用现有偏好 store 的 `desktop_appearance/theme`；
+  写入成功后才提交 UI 状态，未知值回退系统模式，没有新增设置数据库或 schema。
+- 阅读器保留独立深色画布，控制组使用圆角浮动表面，强调色改为蓝色；不更换 reader-core、
+  图片请求、阅读进度或相机控制路径。
+- 从浏览/收藏/历史打开详情时记录原列表页面。1000dp 及以上窗口显示 380dp 右侧预览，窄窗口
+  使用完整详情；完整详情按钮只改变呈现，不再抓取详情。两种呈现直接复用原详情/章节组件。
+  原列表保持 composition，关闭、Esc 或宽屏遮罩返回原页，保留搜索草稿、筛选及网格位置；
+  收藏/历史关闭时重新读取库快照以反映阅读与收藏变化。阅读后返回仍知道详情来自哪个列表。
+- 详情柔化背景复用封面缓存，封面解码由同一 Compose helper 提供；仅模糊图片，不模糊或复制
+  控件背景。失败与无封面时回退稳定主题画布，保留原封面重试行为。
+
+验证增加真实 Windows JVM/UI 的浅色→深色→离线重启→浅色探针，核对画布像素、封面实际加载、
+背景渲染、偏好持久化与零重复封面请求。宽/窄平板探针覆盖预览、完整详情、Esc/遮罩/关闭、
+收藏与历史来源、搜索草稿及 37 项书库滚动后的原位置恢复，并继续原阅读器/书签/进度检查。
+图片探针调整为明确验证预览与原列表同时存在的两个封面节点；未放宽封面请求计数或离线断言。
+截图位于 `desktop-app/build/reports/desktop-smoke/appearance-*.png` 与 `tablet*.png`，使用自有夹具。
+
+完整 `:desktop-app:test :desktop-runtime:test` 回归通过：127 项中 121 项执行成功、6 项可选外部
+环境测试跳过，0 失败，日志 `build/windows-android-style-regression.log`。宽/窄截图及浅/深色截图
+已实际查看；没有 Android 真机视觉对照。本轮复用原 Controller、详情组件、图标、偏好和封面缓存，
+没有新增依赖、schema 或并行业务路径，遵循 KISS/DRY/SRP。
+
+原默认 app image 被正在运行的旧窗口占用，常规打包失败；保留该窗口，使用 ignored build 中的
+init script 将 desktop-app 输出隔离至 `desktop-app/build/windows-android-style`。独立输出打包成功，
+分发门槛 1/1：移动中文目录后从随包 JVM 启动，schema/图片/备份/浏览器/播放器/超分自检及原生
+窗口关闭全部通过。日志 `build/windows-android-style-package-isolated.log`，耗时 1 分 29 秒。
+ZIP 520 个文件逐项核对大小与 SHA-256，与通过分发检查的 image 一致；便携包为
+`Kototoro-Windows-Android-style-20261004.zip`，292852084 字节，SHA-256：
+`A8AFD9DFF4C0B54E38A1E8B6A89AF8AFF893226A6AD73CAB5B05E4D40C7A0776`。
+包含既有扩展仓库修复与随包播放器/超分工具；未执行 MSI 安装、发布、签名或 Git 提交。
+
+仍待：Android Material3 Expressive 组件与主题偏好的直接共享、Backdrop 桌面渲染、完整动态背景
+与玻璃折射、更多书架信息/标签/分组及高级阅读选项。本轮不声称完成 Android 全量 UI 或 KMP 迁移。
+
+## 67. Android 平板 UI 直接共享（2026-10-04）
+
+按用户确认的方向，新增 `core-ui` Android/JVM Compose Multiplatform 模块，`app` 与 `desktop-app`
+共同消费从 Android 提取的 UI。共享代码不依赖应用、Context、Hilt、文件系统、平台 parser 或仓库；
+平台适配器提供显示值、图片 Painter/封面渲染与操作回调。没有增加 iOS Compose UI 目标。
+
+| 共享组件 | Android 保留的适配 | Windows 接入 |
+|---|---|---|
+| TabletNavigationRail | 原图标动画、徽标、重选、标题/继续阅读和系统 inset | 收藏/浏览/历史/更多动作及原 Android 图标 |
+| TabletPreviewContent | Coil、源请求上下文、本地化/HTML/日期、玻璃或 Material 表面 | SourceContent、现有封面缓存及 Controller 回调 |
+| TabletDetailsPanes | 原详情内容、章节面板、dock 与手机模式 | 原详情内层与章节列表，使用同一等宽双栏/16dp 间距 |
+| TabletLayoutRules | 平板模式偏好与设备配置 | 窗口根约束提供实际完整宽度，共用 600/1000dp 分类及预览宽度 |
+| 字体/形状/尺寸令牌 | 字体加载、风格偏好、颜色解析 | Material3 宿主，未迁移的 Material 2 屏幕映射同一语义角色 |
+
+共享预览保留原模糊封面头部、标签/评分/状态、阅读/详情/收藏、展开简介及主分支最新/最初章节。
+短窗口让头部与正文一起滚动，避免操作区不可达。原章节分支和升降序规则抽成泛型回调，避免两套策略；
+阅读操作仍走 Controller，继续进度语义不变。Windows 忙碌时禁用操作，已收藏时禁止重复收藏。
+共享 Kotlin 顶层文件采用独立 facade 名称，避免与保留 Android 适配器的同包文件产生重复 JVM 类。
+新增桌面 Material3 依赖是共享既有组件所需；未升级 Kotlin/Compose 插件或改动数据库 schema。
+组件负责呈现，平台负责数据/图片与执行操作，遵循 DRY/SRP，未复制仓库或新建业务状态机。
+
+验证结果：
+
+- `:core-ui:jvmTest :desktop-app:test` 成功：共 72 项，68 项通过、4 项可选环境测试跳过，0 失败。
+  日志 `build/shared-tablet-desktop-regression.log`，完整 XML 保存在
+  `desktop-app/build/reports/shared-tablet-full-regression/xml`。
+- 共享章节测试覆盖空列表、短主分支、多翻译、升降序、无编号日期和未知分支。
+  真实 Compose 预览在 380×640/380×300 验证封面头部高度、全部操作可滚动访问、章节回调及禁用状态；
+  既有来源、收藏、历史、下载、阅读与离线重启回归继续通过。
+- 完整窗口宽度修正后，平板/共享 UI 定向验证再次成功：920、999、1000、1260dp 窗口，预览/完整详情、
+  搜索草稿、筛选、37 项网格原位置及阅读器/书签恢复；日志 `build/shared-tablet-window-boundaries.log`。
+- Android `:app:compileDebugKotlin :app:checkDebugDuplicateClasses` 成功，5 分 45 秒；
+  日志 `build/shared-tablet-android-compile.log`。已查看 Windows 浅/深色预览及详情双栏截图。
+  初次探针按新预览更新封面数量检查，并限制测试子进程堆大小；请求数、离线和位置断言未放宽。
+- 深色截图发现 Material 2 表面内的 Material3 标题/图标默认前景对比不足。原 Android 的 Material
+  预览表面进一步提取为 `TabletPreviewSurface`，两端共用颜色/圆角/阴影与内容色。浅/深色与高/矮窗口
+  再次验证全部操作，并新增深色章节标题前景的像素断言；外观离线重启、四种窗口宽度、共享章节测试和
+  Android 编译/重复类一并再次通过。日志 `build/shared-tablet-final-surface-validation.log`，1 分 22 秒。
+- 隔离输出 `desktop-app/build/windows-shared-tablet` 打包成功，分发检查 1/1：移至中文目录，从随包 JVM
+  启动，schema/图片/备份/浏览器/播放器/超分自检及原生窗口关闭通过。
+  最终日志 `build/windows-shared-tablet-package-final.log`，耗时 1 分 8 秒。
+- ZIP 524 个文件逐项核对大小及 SHA-256，与通过检查的 image 一致。便携包
+  `Kototoro-Windows-Shared-Tablet-20261004.zip`，297814347 字节，SHA-256：
+  `07FE8457FD8A8C7FDC3E045D9111D249465BE36E8723BB07A4FFF88FB82F470B`。
+
+仍待提取书库卡片、源管理屏幕、详情内层及阅读器控制栏。颜色/主题偏好、Backdrop 和动态背景仍由
+平台适配；本轮不声称全部 Android UI 已共享。未执行 Git 提交、发布或安装。
+
+
+## 68. 最新平板参考与进一步共享 UI（2026-10-04）
+
+用户提供的订阅、浏览、历史、主页和收藏五张截图替代仓库的过时截图。主要视觉依据是窄侧栏、
+顶部通栏搜索、紧凑封面网格、封面内渐变标题和徽标，以及主页推荐/历史/更新与快捷入口分区。
+原图保存在 ignored 的 `build/latest-tablet-reference/`，不会进入 Git。颜色继续由主题解析。
+
+本轮继续从现有 Android 组件提取实现，Android 与 Windows 都消费 `core-ui`，而不是另写桌面外观：
+
+| 共享实现 | Android 适配 | Windows 适配 |
+|---|---|---|
+| TabletPosterCover、标题遮罩、书脊、封面边框顺序和尺寸规则 | Coil/快照缓存、共享转场坐标、选择态、四角徽标与进度插槽 | 既有封面缓存/详情动作、语言标签、紧凑网格 |
+| TabletSourceTile 与 SourceQuickAccessMetrics | 实际源图标、本地化、置顶/空源徽标、TV 焦点和长按 | 来源选择/搜索、首字图标回退、生态/语言/内容类型说明 |
+| SharedLiquidGlassSurface、调参模型、镜片限界和反馈规则 | Hilt/AppSettings、AMOLED/风格/窗口可用性及 Surface 回退 | 自有风格偏好、独立画布 Backdrop、搜索表面和 Material 回退 |
+| Backdrop 2.0.0 commonMain/androidMain/skikoMain | 原平台支持检查及 Android actual | 发布版本原有 Skiko actual、RuntimeEffect/RuntimeShader |
+
+Backdrop 的四处 expect/actual 已从相同 2.0.0 发布源码恢复，未升级上游版本；两处本地性能修补
+原位保留。恢复的源码逐字节核对，哈希与位置记录在 `backdrop/UPSTREAM.md`。桌面默认 Material 3，
+可在更多页切换 iOS 玻璃并持久化；只捕获控件绘制前的独立画布，避免玻璃采样自身。
+共享模块不读取 Context/Hilt/文件/仓库，不接管平台业务状态；遵循 DRY/SRP/KISS。
+
+仍待共享的是整页主页/订阅、主栏操作与完整筛选、详情内层、完整书库徽标/进度和阅读器控制；
+Windows 的实际源 favicon 和动态作品背景也仍由后续平台适配推进。没有声称全量 Android UI 已迁移，
+没有复制业务 ViewModel、修改 schema、提交或发布。
+
+验证已通过（`build/shared-components-fixed-regression.log`，6 分 18 秒）：
+
+- `:core-ui:jvmTest` 5/5；完整 `:desktop-app:test` 70 项中 66 项通过、4 项可选外部环境测试跳过。
+- Android `:app:compileDebugKotlin :app:checkDebugDuplicateClasses` 通过。
+- Android 既有 GlassTuningTest、GlassSurfacePolicyTest、SourceQuickAccessMetricsTest 共 34 项通过。
+- 共 109 项，105 项通过、4 项跳过，0 失败。桌面完整 XML 已保存在
+  `desktop-app/build/reports/shared-components-full-regression/xml`。
+- 新增测试验证共用源卡片点击/长按/禁用、两种主题标题在封面范围内，以及 Skiko 模糊对条纹背景
+  的像素变化。既有 UI 探针继续覆盖真实扩展、收藏、预览、阅读、离线封面与重启；风格切换及保存
+  也进入真实重启检查。首轮发现的来源类型说明缺失和 import 清理漏掉 getValue 已修复，未降低断言。
+- 实际查看了 `shared-components-light.png`、`parsers-write-sources.png` 和
+  `appearance-write-light-library.png`；均为自有夹具。没有宣称 Android 真机视觉对照或全源兼容验证。
+
+
+## 69. 共享卡片徽标与阅读进度（2026-10-04）
+
+继续 §68 的“完整书库徽标/进度”。Android `KototoroContentCard` 中与平台无关的绘制提取到
+`core-ui` 的 `SharedContentCardBadges.kt`（同包 `list.ui.compose`，独立 facade 名称）：
+
+| 共享实现 | Android 保留的适配 | Windows 接入 |
+|---|---|---|
+| `ContentCardBadgeMetrics`/`contentCardBadgeMetricsFor` | 原调用方不变（同 FQN 迁移） | 按网格单元宽度缩放 |
+| `ContentCardBadgePill` + `ContentCardBadgeTone`（中性/仅计数/仅 NSFW）+ `ContentCardBadgeText` | 徽标集合、tracker/来源图标、收藏/本地/置顶图标、NSFW 文案与内联颜色 | 语言徽标改用共享胶囊，与 Android 一样抬高到标题遮罩之上 |
+| `ContentCardBottomProgressBar(percent, completed)` | 原 `ReadingProgress` 重载委托，保留 `isValid` 语义 | 书库/历史使用 `DesktopLibraryEntry.progressPercent`，完成判定复用 `ReadingProgress.isCompleted` |
+| `ContentCardReadingProgressRing` | 原环形指示器委托，标签格式与 `ic_check` 由 Android 提供 | 暂未接入（桌面尚无进度样式偏好） |
+| `rememberCoverRimBorderBrush(isIosStyle, isDark)` | 默认 `isSystemInDarkTheme()`，行为不变 | 使用桌面自有明暗偏好，替换原手写渐变 |
+
+core-ui 仍不依赖 core-domain：共享组件只接收 percent/completed/label 等基础值。
+独立 NSFW 徽标保留 iOS 描边，角标中“仅 NSFW”胶囊无描边，与原实现一致。
+桌面未读/新章节计数尚无数据源（Android 来自追踪表），本轮未伪造计数，留待追踪接入。
+
+验证（日志 `build/card-badges-*.log`）：
+
+- `:core-ui:jvmTest :desktop-app:test` 76 项：72 项通过、4 项可选环境测试跳过、0 失败（4 分 10 秒）。
+- 新增 `Android card badges and progress bar ...` 像素测试：Material/iOS 两种风格下，半进度用主题主色、
+  未读部分为暗轨道、完成为 #34C759、0 进度不绘制，计数胶囊分别为主色 / #FF3B30。
+- Android `:app:compileDebugKotlin :app:checkDebugDuplicateClasses` 通过（4 分 29 秒）。
+- 实际查看了 `cover-read-history.png` 与 `appearance-write-dark-library.png`：历史卡片底部出现完成态
+  绿色进度条，语言徽标为共享胶囊。未重新打包，未提交。
+
+仍待共享：主栏顶栏/快速筛选 chip 行、主页与订阅整页、详情内层、阅读器控制栏。
+
+
+## 70. 详情章节分组：分支与卷（2026-10-04）
+
+用户反馈 Windows 详情页章节无法识别分组、直接平铺。原因：桌面 `ChapterList` 只把 `content.chapters`
+平铺并搜索，未使用 `SourceChapter` 已有的 `branch`/`volume`/`scanlator`；Android 的分组规则散落在
+`Content.getPreferredBranch`、`ChaptersPagesViewModel.quickFilter`、`ChaptersMapper.withVolumeHeaders`
+与 `ChaptersScreen` 的私有标题中，未共享。
+
+本轮提取到 `core-ui` 的 `core.ui.chapters`（泛型，不依赖平台章节模型）：
+
+| 共享实现 | Android 委托 | Windows 接入 |
+|---|---|---|
+| `resolvePreferredChapterBranch`：历史章节分支 → 唯一分支 → 语言匹配（最大）→ 最大分支 | `getPreferredBranch` 仅提供 `LocaleListCompat` 语言列表与日志 | 打开详情时按历史进度与 JVM 显示语言选择，存入 `DesktopAppState.chapterBranch` |
+| `chapterBranchOptions`（>1 分支才出现，比较器异常时保持原序）、`chaptersOfBranch`（失效分支回落最大分支） | 分支 chip 用 `LocaleStringComparator` | `Collator` 排序；无历史时“开始阅读”从选中分支第一章开始 |
+| `withVolumeSections`/`shouldShowVolumeHeaders`：卷号变化或新组名插入标题 | 非 EPUB 路径委托，文案仍用 `volume_`/`volume_unknown` | “第 N 卷”/“未知卷”与 Android 中文资源一致 |
+| `ChapterSectionHeader`、`ChapterBranchChips`、`chapterBranchChipLabel`（“分支 · 数量”） | TV 焦点作为外部 modifier；折叠图标经 `rememberVectorPainter` | 双栏与单栏详情都显示分支 chip 与卷标题 |
+
+桌面顺序与 Android 一致：选分支 → 正/倒序 → 搜索 → 在剩余结果上插入卷标题。阅读器内上一/下一章
+原本已按分支导航（`SourceChapterNavigation`），未改。EPUB 卷分组、合并重复章节、隐藏已读等 Android
+专属选项未迁移。
+
+验证（日志 `build/chapter-groups-*.log`）：
+
+- 新增 `ChapterGroupingTest` 4 项（首选分支优先级、选项/回落、比较器异常、卷与组名标题），以及桌面
+  `details chapters are grouped by branch and volume like Android`（真实 `desktopChapterList`、倒序、搜索保留
+  卷标题、失效分支回落、单分支不显示 chip、点击 chip 切换分支与标题）。
+- Android `:app:compileDebugKotlin` 通过（`checkDebugDuplicateClasses` 为 UP-TO-DATE），既有
+  `ChaptersMapperVolumeHeaderTest` 2/2。
+- `:core-ui:jvmTest :desktop-app:test` 81 项：77 通过、4 项可选环境测试跳过、0 失败（4 分 2 秒）。
+- 未用真实多分支来源做端到端检查，未打包、未提交。
+
+
+## 71. 共享顶栏标题、搜索胶囊与分类/筛选栏（2026-10-04）
+
+`KototoroTopBar` 与玻璃表面、菜单、偏好深度耦合，未整体迁移；平台无关部分提取到 `core-ui` 的
+`core.ui.topbar/TabletTopBar.kt`，胶囊背景经 `RailSurface` 插槽由宿主提供：
+
+| 共享实现 | Android 委托 | Windows 接入 |
+|---|---|---|
+| `TopBarTitleBlock`（标题/副标题） | 展开与紧凑两处标题 | 收藏/历史页标题 |
+| `TopBarSearchPillContent` | 展开搜索胶囊内容，TV 焦点作为外部 modifier | 未用（桌面保留可直接输入的搜索框） |
+| `TopBarTabsRail` + `TopBarTabItem`（居中滚动、下划线指示、pager 位置插值） | `CompactTopBarTabsRail` 委托；`CompactTopBarTabItem` 改为 typealias | 收藏分类从筛选抽屉单选改为顶部分类栏（全部 + 分类），与最新平板截图一致 |
+| `TopBarFilterRail<T>`（选中项可见、远处图标延迟加载标志） | `CompactTopBarFilterRail` 委托，来源图标仍由 Android 绘制 | 暂未接入（桌面快速筛选待迁移） |
+| `compactRailEdgeFade`、`EnsureRailItemFullyVisible` | 内联分类栏继续使用 | 随共享栏使用 |
+
+发现并修复一个自持重组循环：筛选栏以 `remember(listState.layoutInfo)` 计算可见区间，每次测量都会写入
+新的 `layoutInfo`（neverEqual），导致重组→测量→重组永不停止；桌面 UI 测试因此等不到空闲而挂起。
+改为 `derivedStateOf`，只在区间变化时重组。Android 筛选栏委托共享实现，同样获得修复（Android 侧未做
+gfxinfo 帧数对比）。新测试加 60 秒超时，避免再次挂起整个构建。
+
+验证（日志 `build/topbar-*.log`）：
+
+- 新增 `Android top bar rails select tabs and filters on desktop`：标题/副标题、两条栏的胶囊插槽、点击标签、
+  远处标签被滚动到可见、筛选项切换与图标插槽。
+- `DesktopTabletProbe` 改为关闭抽屉后点选顶部分类标签，再在抽屉中选来源，筛选计数仍为 2。
+- Android `:app:compileDebugKotlin` 通过；`:core-ui:jvmTest :desktop-app:test` 82 项：78 通过、4 项跳过、
+  0 失败（4 分 5 秒）。已查看 `tablet-library.png`：标题、搜索胶囊与带下划线的分类栏。未打包、未提交。
+
+
+## 72. 内容源类型 / 内容类型过滤与 Space 现状（2026-10-04）
+
+用户要求：所有页面都应有 Android 的内容源类型过滤；内容类型过滤取决于 Space 是否开启。核查结果：
+
+- Android 规则（`KototoroApp`）：源类型过滤 = 页面支持 && 设置开启；内容类型过滤 = 页面支持 && 设置开启 &&
+  `!spaceUiState.switcherEnabled`（开启 Space 切换器后由 Space 决定内容范围，类型筛选隐藏）。
+- `SourceTag` 枚举与匹配已在 `core-domain`，但 Windows 未使用；7 个 Android 页面各自重复同一段多选切换。
+- Space：Android `space/` 37 个文件 + 其余引用，全部在 `app`；仅实体/DAO（`core-db` 7 个文件）共享。
+  domain 接口/模型基本无平台依赖，data 实现依赖 Hilt/AppSettings，`SpaceSwitcher` 等 UI 依赖 Android。
+  Windows 未实现、未共享 Space。
+
+本轮实现：
+
+| 位置 | 内容 |
+|---|---|
+| `core-domain` `SourceTag` | `toggle`（空→清空、已选→移除、否则加入）、`menuOrder`（已选在前）、`accepts`（OR，未知来源不匹配）、`matchesOrigin`（`matches` 委托，行为不变） |
+| Android | 6 处页面切换与 `SourceTagDropdown` 排序改为委托（收藏页的 clear/set 变体保留） |
+| Windows | `DesktopSourceFilter`：Kototoro/Kotatsu/UMA→内置（与 Android 插件归 NATIVE 一致）、Mihon、Aniyomi、Tsundoku；内容类型复用 `BrowseGroupTab.matchesContentType`；无对应已装来源的选项禁用 |
+| Windows 页面 | 浏览来源网格与侧栏、收藏、历史各自持有过滤（与 Android 按页一致）；右侧胶囊放内容类型菜单与源类型菜单，单选时显示该源类型图标 |
+| 图标 | 桌面图标转换支持 `pivot/scale` 与 `evenOdd`，复用 Android `ic_source_*`、`ic_filter_menu`、`ic_check` |
+
+Windows 只列出本机生态可能满足的 4 种源类型（Legado/TVBox/IReader/Cloudstream/LNReader 在 Windows 永远为空）。
+因 Windows 尚无 Space，内容类型过滤始终显示；接入 Space 后按 Android 规则在切换器开启时隐藏。
+收藏/历史中来自未安装来源的作品无法判定源类型，启用源类型过滤时不显示。
+
+验证（日志 `build/source-filter-*.log`）：`SourceTagTest` 新增 3 项；新增 `DesktopSourceFilterTest` 3 项（生态映射、
+可用选项、OR 组合、书库按已装生态过滤、菜单交互与禁用项）；Android `:app:compileDebugKotlin` 通过；
+`:core-domain:jvmTest` 119、`:core-ui:jvmTest` 9、`:desktop-app:test` 76（4 跳过）全部通过（4 分 6 秒）。
+已查看 `parsers-write-sources.png`。未打包、未提交。
+
+Space 后续建议：先把 domain 模型/接口与 `SpaceContentPolicy` 移到 `core-domain`，基于 `core-db` 实现平台无关仓库，
+偏好经平台适配；再抽 `SpaceSwitcher` 去除 Android 依赖后共享。
+
+
+## 73. 主页与订阅页（2026-10-04）
+
+Windows 原先没有主页、订阅页，也没有新章节追踪。本轮按“数据规则下沉 + 展示组件共享”实现：
+
+**数据层（core-domain，Android 委托）**
+
+- `tracker/domain/TrackRules.kt`：`compareTrackedChapters`（空追踪/无新章/最后章节消失/有新章四种情况）、
+  `afterSuccessfulCheck`/`afterFailedCheck`（追踪行更新）、`trackedLastChapterDate`、`trackLogChapters`。
+  `CheckNewChaptersUseCase.compare` 与 `TrackingRepository.mergeWith`/日志拼接改为委托。
+- `tracker/domain/feed/FeedSnapshotAssembler`：Android `FeedSnapshotStore.buildSnapshot/observe` 整体下沉，
+  来源分组/来源归属由平台注入（Android 用 `SourceGroupManager`，Windows 用已装生态与内容类型）。
+- Windows `desktop-runtime/DesktopTracker`：在共享 `tracks`/`track_logs` 上实现 Android 默认范围（开启追踪的收藏分类），
+  分支选择同 Android（历史章节 → 上次最后章节 → 首选分支），拉取详情以追踪作品 id 保存（`copy(id = ownerId)`），
+  任何异常记为失败而不中断整批；`markRead` 清计数与未读日志。Windows 新建默认收藏分类改为 `track = true`
+  （与 Android 新建分类一致）；已有库在订阅页提示“全部开启”。
+
+**共享展示（core-ui，Android 委托）**
+
+| 组件 | Android 保留 |
+|---|---|
+| `core.ui.feed.FeedTimelineCard`（时间线、节点、日期标签、继续阅读按钮） | Coil 封面、共享元素、NSFW 徽标、快速滚动避让 |
+| `core.ui.feed.UpdatedContentCarousel<T>` + 轮播几何（焦点宽度、距离衰减、倾斜形状） | 入场动画（`itemWrapper`）、Coil、角标、共享元素 |
+| `core.ui.home.HomeSectionHeader`、`HomeQuickActionsGrid`（含配色规则）、`HomeListRailRow` | TV 焦点、iOS 玻璃/作品背景配色、封面角标/进度 |
+| `HomeHeroText`、`HomeBadge`、`HomeHeroArtworkScrim`、`HeroPagerIndicator`（移入 core-ui 同包） | 多种 hero 版式、全景背景、自动轮播 |
+| `buildHomeHeroEntries<C>`、`homeBalancedGridColumns`、`homeHeroCardWidth`、`homeCountLabel` | 原内部函数委托（测试不变） |
+
+**Windows 页面**：导航按 Android 顺序加入“主页”“订阅”，订阅图标显示有更新作品数。主页：hero（继续阅读/历史/更新）、
+历史栏、更新列表栏、右侧快捷入口（收藏/历史/订阅/下载/随机/拓展/备份/设置）；订阅页：检查更新、更新内容轮播、
+`FeedDeriver` 派生的时间线。两页都有内容源类型/内容类型过滤；从两页打开作品时以浮动预览显示并在关闭后刷新。
+
+未迁移：推荐（依赖 Android 推荐生成）、主页其他 hero 版式与全景背景、订阅页分类 chip 与“全部更新”页、阅读时自动调整
+计数（Android `CheckNewChaptersUseCase(manga, chapterId)`）、后台定时检查与通知。日期分组标签为 Windows 本地实现
+（Android 的 `DateTimeAgo` 依赖资源）。Windows 启动页仍为“浏览”。
+
+验证（日志 `build/home-feed-*.log`）：
+
+- 新增 `TrackRulesTest` 3 项、`HomeRulesTest` 3 项、`DesktopTrackerTest` 2 项（真实 SQLite：建立基线、发现新章节、
+  写日志、订阅快照、失败保留计数、标记已读、关闭/开启追踪、按阅读分支计数）。
+- 平板探针（四种窗口宽度）新增：订阅页检查更新、模拟上次只见第一章后发现新章节、轮播/时间线/导航徽标、
+  主页 hero/历史/更新/快捷入口、从更新打开作品后计数清零、快捷入口跳转。
+- Android `:app:compileDebugKotlin` 通过；相关 Android 单元测试 13 项通过。
+- `:core-domain:jvmTest` 122、`:core-ui:jvmTest` 12、`:desktop-runtime:test` 63（2 跳过）、`:desktop-app:test` 76（4 跳过），
+  0 失败（5 分 12 秒）。已查看 `tablet-home.png`、`tablet-feed.png`（夹具无封面图，显示首字母占位）。未打包、未提交。
+
+
+## 74. 推荐（2026-10-04）
+
+Android 推荐由 `SuggestionsWorker` 每 6 小时生成：最近 20 条历史 + 20 部收藏为种子，取白名单 + 最常见 10 个标签；
+每个来源按优先排序（UPDATED/NEWEST/POPULARITY/RATING）并用首个匹配标签筛选取列表，空则回退无筛选；清洗后每源最多
+20 条；按标签相关度排序、去重、优先来源与每源 12 条均衡，最多 160 条，名次编码进 relevance 存入共享 `suggestions` 表。
+
+**core-domain（`suggestions/domain`，Android 委托）**：`SourceBalancedSelector`、`SuggestionSourceCollector`
+（原样迁移，去掉 Android 扩展依赖）、`SuggestionRules`（`suggestionSeedTags`/`mostFrequent`、`suggestionRelevance`、
+`pickSuggestionSortOrder`、`pickSuggestionTag`、`cleanSuggestionList`、`rankSuggestions`、`SuggestionTagBlacklist`、
+`SuggestionLimits`）。core-domain 带 iOS 目标而 `almostEquals` 只在 JVM/Android，故模糊匹配以 `SuggestionTagMatcher`
+注入（两端都传 `almostEquals(…, 0.4)`）。Android `SuggestionsWorker` 的种子、选序、选标签、清洗、排名改为委托，
+`TagsBlacklist` 内部用共享实现；通知、调度、设置读取保留在 Android。
+
+行为差异：无标签作品的相关度由 Android 的 NaN（会被排到最前）改为 0；种子标签并列时按首次出现排序
+（Android 原 `ArrayMap` 按哈希序）。两者都在共享实现中，Android 一并采用。
+
+**Windows**：`desktop-runtime/DesktopSuggestions` 用已安装来源与共享规则生成；`DesktopLibrary.replaceSuggestions`
+单事务整体替换（同 Android `SuggestionRepository.replace`），已在库的作品只建立关联、不用列表数据覆盖详情，
+身份冲突跳过。主页新增“推荐”栏（空时“生成推荐”，标题旁刷新）与 hero 推荐页，并受页面过滤器约束。
+未做：定时后台生成与通知、推荐设置页（排除来源/标签黑白名单/排除 NSFW 目前用默认值）、推荐列表页。
+
+验证（日志 `build/suggest-*.log`）：新增 `SuggestionRulesTest` 5 项、`DesktopSuggestionsTest` 2 项（假来源运行时 + 真实
+SQLite：种子标签发给来源、无标签来源不筛选、失败来源跳过、空标题剔除、相关度排序、收藏详情不被覆盖、排除来源/NSFW、
+每源均衡）；平板探针四种宽度新增主页“生成推荐”。Android 编译与原有 `SourceBalancedSelectorTest`/
+`SuggestionSourceCollectorTest` 9 项通过；`:core-domain:compileCommonMainKotlinMetadata` 通过。
+`:core-domain:jvmTest` 127、`:core-ui:jvmTest` 12、`:desktop-runtime:test` 65（2 跳过）、`:desktop-app:test` 76（4 跳过），0 失败。
+未打包、未提交。
+
+
+## 75. 推荐/更新检查设置与后台定时运行（2026-10-04）
+
+**共享规则（core-domain，Android 委托）**
+
+- `trackerCheckIntervalHours(trackCount, batchSize, frequency)`：Android `TrackWorker.Scheduler` 原公式
+  （`18 / 批次数` 整除后除以频率、四舍五入、至少 2 小时；频率 ≤0 为手动），Android 调度改为调用。
+- `SUGGESTIONS_INTERVAL_HOURS = 6`（Android 推荐周期任务改用）、`parseSuggestionTags`（Android `AppSettings`
+  的排除/偏好标签解析改用）。
+
+**Windows**
+
+- `DesktopSuggestionSettings`/`DesktopTrackerSettings`：沿用 Android 键名与默认值（`suggestions` 默认关、
+  `suggestions_exclude_nsfw`、`suggestions_exclude_tags`/`_preferred_tags` 逗号文本、`_preferred_sources`/
+  `_excluded_sources` 集合、`tracker_enabled` 默认开、`tracker_freq` 默认 1），存于 `desktop_background` 偏好。
+- 更多页新增“推荐”（启用、排除成人内容、排除/偏好标签、按来源优先/排除）与“更新检查”（启用、Android 的
+  手动/低频/默认/高频 = -1/0.4/1/2）。
+- 后台：`dueBackgroundTasks` 判断到期（Windows 每次检查全部追踪，故完整检查周期 = 18 h / 频率；推荐每 6 h），
+  `startBackgroundWork` 在应用打开期间每 15 分钟评估一次（启动后 1 分钟首查），不进入 UI 动作队列；手动与后台
+  同一任务经同一互斥锁串行。上次运行时间持久化。只有正式入口启动后台，探针显式调用 `runDueBackgroundWork`。
+- 主页：推荐默认关闭（同 Android），空状态按钮为“开启推荐”（开启并立即生成）或“生成推荐”。
+
+未做：Wi-Fi 限定、通知（推荐/新章节）、应用未打开时的系统级计划任务、追踪范围“历史”选项与按分类开关追踪的界面。
+
+验证：`TrackRulesTest` 新增间隔公式（含 Android 整除细节）、`SuggestionRulesTest` 新增标签解析、
+`DesktopBackgroundSettingsTest`（键名/默认值往返）、`DesktopBackgroundWorkTest`（到期判断）；平板探针新增
+“开启推荐”持久化、频率选择持久化、手动运行后无任务到期、10 小时后两项任务到期并执行。`DesktopBrowserProbe`
+点击“浏览器调试”前补滚动（更多页变长）。Android 编译与推荐单元测试 9 项通过；`compileCommonMainKotlinMetadata` 通过；
+`:core-domain:jvmTest` 129、`:core-ui:jvmTest` 12、`:desktop-runtime:test` 66（2 跳过）、`:desktop-app:test` 77（4 跳过），0 失败。
+未打包、未提交。
+
+## 76. 共享 Mihon 默认 Cloudflare 求解器（2026-10-04）
+
+新增纯 JVM 模块 `:core-cloudflare`（OkHttp、parser-api 由使用方提供，compileOnly），Android 与 Windows 共用：
+
+- 从 Android 迁入（包名不变，Android 导入无改动）：`CloudflareHostCooldown`（单个 host 失败冷却 30 s，测试时钟
+  `nowMillis` 改为 public）、`CloudflareSolveCoordinator`（同一 host 只跑一次求解；最后一个等待方离开时取消求解）、
+  `CloudFlareDetection.kt`（`CF_STATE_JS`、`parseCloudFlarePageState` 等，`internal` 改为 public）。
+- `cloudflare/ClearanceSolving.kt`：Mihon 默认方案的规则——触发条件 `isMihonCloudflareChallenge`（Cloudflare 服务器返回
+  403/503，或带 `cf-mitigated: challenge`）、超时 `CLEARANCE_SOLVE_TIMEOUT_MS = 30 s`、`cf_clearance` 作为成功信号、
+  浏览器可接受请求头的过滤（`isBrowserRequestHeaderSafe`、`Headers.safeForBrowser`）、`ClearanceSolveTracker`
+  （根据事件判定：主框架 403/503 则等待 JS，其他错误或页面无挑战加载完成则失败；Windows 用页面状态轮询判定：
+  勾选式挑战持续超过 8 s 才判失败，因为 Turnstile 常常只是短暂出现，硬拦截立即失败）、`ClearanceSolver` 接口，
+  以及 `Interceptor.Chain.solveClearanceAndRetry`（经协调器求解后只重试一次；调用方取消时停止等待）。
+
+**Android（委托）**：`WebViewClearanceSolver` 实现 `ClearanceSolver`，改用共享的请求头过滤、超时、cookie 名和
+`ClearanceSolveTracker` 判定（删去私有副本）；`CloudFlareInterceptor` 与 `KotoNetworkHelper` 的 MIHON 分支中重复的
+“求解后重试”代码改用 `solveClearanceAndRetry`。Cloudstream 拦截器重试的是改写过的请求，保持原样（协调器仍是共享的）。
+
+**Windows**：`DesktopBrowserChallenges` 实现 `ClearanceSolver`，用 WebView2 隐藏窗口求解：把 SDK cookie 推入浏览器，
+删除旧的 `cf_clearance`，以安全请求头导航（允许 HTTP 错误页），每 500 ms 轮询新 `cf_clearance` 和 `CF_STATE_JS`，
+成功后把 cookie 拉回 SDK 存储。`DesktopChallengeInterceptor` 改用 Mihon 触发规则：先自动求解并重试一次；只有带
+`cf-mitigated: challenge` 的挑战在自动求解失败后才弹出原有的人工验证窗口；普通 Cloudflare 403/503 求解不了时原样
+返回响应（保留原响应体，不会误弹窗口）。
+
+验证：
+- 新增 `ClearanceSolvingTest`（触发条件、请求头、事件和轮询判定、MockWebServer 重试、失败冷却、取消），
+  `CloudflareSolveCoordinatorTest` 和 `CloudFlareDetectionTest` 随代码迁入，`:core-cloudflare:test` 17 项全部通过。
+- 桌面拦截器测试新增“明确挑战离屏解决后重试、不打扰用户”。
+- 新增真实 WebView2 探针 `DesktopClearanceSolveTest`：本地模拟托管挑战（403 + `Server: cloudflare` +
+  `#challenge-running`，页面脚本写入 `cf_clearance` 后重载），约 3 s 内在隐藏窗口自动通过，SDK 请求返回内容，
+  没有人工弹窗；持续的勾选式挑战约 8 s 后转为人工验证。
+- `DesktopChallengeProbe` 的请求计数改为包含一次隐藏求解。
+- 结果：Android `compileDebugKotlin` 通过，Android Cloudflare 相关单元测试 16 项通过；
+  `:mihon-desktop-compat:test` 34、`:core-domain:jvmTest` 129、`:core-ui:jvmTest` 12、`:desktop-runtime:test` 66（2 跳过）、
+  `:desktop-app:test` 77（4 跳过），全部 0 失败；`compileCommonMainKotlinMetadata` 通过。
+
+kototoro/kotatsu/UMA parser 插件复用平台的共享 HTTP 客户端，因此同样经过这条自动求解链路。
+
+未做：Windows 的 TRANSPORT/MANUAL 策略选项（目前固定为 MIHON 加人工兜底），以及用真实 Cloudflare 站点做实测。未打包、未提交。
+
+## 77. 浏览页返回来源列表；所有来源的 User-Agent 设置（2026-10-04）
+
+**浏览页返回**：进入某个来源后原先无法回到来源网格（导航栏“浏览”只会重新加载当前来源）。现在：
+- 来源结果页标题前新增返回按钮（`source-back`，复用 Android 的 `ic_arrow_forward` 并水平镜像）；
+- 停留在来源内时再次点击导航栏“浏览”，同样回到来源网格（与 Android 重复点击标签的行为一致）；
+- 两者都调用 `DesktopController.exitSource()`，它会清空所选来源、列表、查询、排序和筛选。
+
+**User-Agent**：parser 来源（kototoro/kotatsu/UMA）通过 `ConfigKey.UserAgent` 本来就有这一项。Mihon/Tsundoku/Aniyomi
+来源的扩展不提供 UA 设置，因此在 source-host 新增 `HostUserAgent`：
+- 存储与 Android 来源设置一致，写在该来源的 `source_<id>` 偏好中，键为 `user_agent`；
+- 生效方式：用来源自己的 `headersBuilder()` 重建默认请求头并替换 User-Agent，再替换 `HttpSource.headers` 的 lazy
+  委托字段（`lazyOf` 由扩展类加载器中的 Kotlin 运行时创建）。之后来源基于默认请求头构造的所有请求（包括图片）都
+  带上新 UA；留空则恢复来源默认值。
+- 每次调用来源前检查一次，值有变化才重新安装。若来源自己覆盖了 `headers`，该行置灰并提示无法覆盖。
+- 请求头值不合法（含控制字符）时直接拒绝，不写入存储。
+- `isPreferencesSupported` 改为“可配置的扩展 或 任意 HTTP 来源”，因此没有自有设置的 HTTP 来源也会显示“源设置”。
+- 协议层把 `host:user_agent` 这一行追加在扩展自有设置之后（保持扩展节点的位置不变），桌面界面渲染时把 `host:`
+  行排到最前。
+
+验证：
+- 真实 SDK fixture（`OfflineSource` 的 `imageRequest` 改为以 `getHeaders()` 为基础，与 Mihon 默认实现一致）：
+  `DesktopPlatformProbe` 覆盖 UA 行存在、非法值被拒绝、保存后页面请求头的 User-Agent 生效，第二个进程中设置仍保留
+  且仍生效。
+- `MihonDesktopPlatformTest` 的 CLI 断言更新为 `[域名设置, User-Agent]`；`DesktopAppProbe` 改为按 `host:` 前缀区分。
+- `DesktopTabletProbe` 新增返回按钮和重复点击“浏览”的检查。
+- 结果：`:source-host:test` 86、`:mihon-desktop-compat:test` 34、`:desktop-app:test` 77（4 跳过），全部 0 失败。
+
+未做：Android 侧 Mihon/Aniyomi 来源同样没有 UA 设置，可改用同一套键名实现；UA 预设下拉（Android 的
+`userAgentPresets`）也尚未共享。未打包、未提交。
+
+## 78. Windows 支持 Cloudstream（2026-10-04）
+
+官方 Cloudstream 的 `library` 模块有 JVM 目标（Android 端本来就用其 `library:jvmJar`），插件 `.cs3` 是 d8 产物
+（`classes.dex` + `manifest.json`）。Windows 端复用三样已有能力：dex 转换（`:dex-convert`）、Mihon 用的 Android
+兼容运行时（AndroidCompat 提供 Context/SharedPreferences/Log 等）、平台共享 HTTP 客户端（Cookie 与自动 CF 求解器）。
+
+**共享（新增纯 JVM 模块 `:cloudstream-shared`，Android 与 Windows 共用）**
+- 从 Android 迁入，包名不变：`CloudstreamSource`、元数据编解码 `CloudstreamMetadata`、`CloudstreamLinkSessionCache`、
+  `CloudstreamApiGateway`、插件兼容性检查，以及 YouTube 提取器存根。
+- 新增 `CloudstreamCatalog`：原 `CloudstreamContentRepository` 的完整逻辑，包括首页分区聚合与按分区筛选、搜索分页
+  终止、详情与剧集映射（电影/直播/种子/剧集/动漫按配音分支）、`loadLinks` 链接与字幕事件、链接会话缓存、
+  插件 fallback 后的挑战重试、推荐。
+- 新增 `CloudstreamPlatform` 接口（日志、按源请求上下文、loadLinks 挑战透传、挑战识别与解决、诊断），以及
+  `CloudstreamRequestScope`（源上下文 ThreadLocal，缺省 UA / Referer / POST Origin 头）。
+- Android 委托：`CloudstreamContentRepository` 只剩缓存、Android 日志、CF 异常与 WebView 解析（TRANSPORT）、相关内容
+  搜索兜底；`CloudstreamRequestContext` 的源上下文与缺省头改用共享作用域，只保留 CF 策略标签和调试日志。
+
+**Windows（新增 `:cloudstream-desktop`，随兼容层开启时编译）**
+- 宿主垫片（插件链接的 `com.lagradost.*` 宿主类）：
+  - 与 Android 同一份源码，构建时从 app 拷入，直接对 AndroidCompat 编译：`Plugin`、`AcraApplication`、
+    `CommonActivity`、`ContextHelper`、`VideoClickAction`/`Holder`、`TextUtil`（UiText）、`DataStore`。
+    `DataStore` 在拷贝时去掉 androidx 的两处调用，`edit {}` 由桌面同包函数提供。
+  - 只有 `CloudStreamApp` 是桌面版：成员与 Android 相同，去掉基于 Fragment 的浏览器方法，改用系统浏览器。
+- 运行库：官方 jvmJar 去掉宿主替换的 `Youtube*` 和 `ContextHelper_jvmKt`（与 Android 的处理一致），依赖版本沿用 app 锁定的
+  NiceHttp、jackson、jsoup、rhino、ktor-http、datetime、io、cryptography、fuzzywuzzy、gson。
+- `CloudstreamPluginRegistry`：
+  - 读取 manifest，做兼容性检查；把 dex 转成 jar（按哈希缓存），每个插件用独立 URLClassLoader，父加载器包含官方库、
+    垫片和兼容运行时。
+  - 调用 `Plugin.load(Context)`，Context 用兼容运行时的。从 `APIHolder` 收集该插件注册的 provider 并 `init`；卸载时
+    `beforeUnload`，移除 provider 映射和提取器。
+  - 全局环境：`CloudStreamApp.context`，`app.baseClient` 使用平台共享客户端并在最前面加上源请求头拦截器。
+- `CloudstreamSourceRuntime`：按页序号翻页，排序只有 RELEVANCE，首页分区作为互斥标签组，封面带 provider 的海报请求头；
+  通过公开后的 parser-host 模型映射接入 `:core-source` 协议。
+- 会话与界面：
+  - 新增 `SourceEcosystem.CLOUDSTREAM`（来源过滤：Cloudstream 标签 / 视频分组）。
+  - 导入 `.cs3`（文件选择器接受 jar/apk/cs3），按哈希受管存放，安装记录前缀 `cloudstream:`，启动时恢复；已安装列表、
+    卸载、产物清理都覆盖 `.cs3`。
+  - Cloudstream 仓库：`repo.json`（pluginLists）或 `plugins.json` 映射为扩展目录（下架状态的插件被过滤，按插件版本
+    检查更新）；raw.githubusercontent 链接自动改走 jsDelivr。
+  - 内容类型为 VIDEO，剧集直接进入现有 libmpv 播放器，线路带请求头和外挂字幕。
+
+验证：
+- `:cloudstream-desktop:test`：
+  - 自建插件经 Gradle 任务用 SDK d8 打成 `.cs3`，在真实兼容运行时与共享客户端里覆盖：首页两个分区聚合、按分区第 2 页
+    与终止、搜索、电影/剧集详情、剧集链接（m3u8、quality、自定义头、referer、UA）与字幕、卸载。
+  - 官方仓库的 3 个真实插件（InternetArchive、Dailymotion、Invidious，经 jsDelivr 下载）全部加载并注册 provider。
+  - 联网往返（`-PcloudstreamOnline`）因本机到这些站点都不通（archive.org、dailymotion 超时，代理未开）未能执行。
+- `DesktopRepositoriesTest` 新增 Cloudstream 仓库读取与安装、jsDelivr 改写两项。
+- `DesktopAppTest` 新增 Cloudstream UI 端到端（写入轮：导入→浏览页源网格→首页分区→搜索→详情→进入播放状态并带
+  请求头与字幕；读取轮：重启后恢复，再卸载）。
+- Android：`compileDebugKotlin` 通过，Cloudstream 相关单元测试 124 项通过。
+- 全量回归：
+  - `compileCommonMainKotlinMetadata` 通过；
+  - core-source 52、core-domain 129、core-ui 12、core-cloudflare 17、cloudstream-desktop 2、source-host 86、
+    parser-host 23（2 跳过）、dex-convert 14（2 跳过）、mihon-desktop-compat 34、desktop-runtime 68（2 跳过）、
+    desktop-app 78（4 跳过），全部 0 失败；
+  - `DesktopSourceFilterTest` 的期望改为包含 Cloudstream 来源标签。
+
+未做：
+- 插件设置页（`openSettings`，需要 Android UI）和 `requiresResources` 插件（没有 Resources）。
+- Windows 上依赖 WebView 的 `WebViewResolver`：仍是官方的 JVM 空实现，后续可接 WebView2。
+- 同步追踪（AccountManager/AniList 垫片）。
+- 真实站点联网验证。
+未打包、未提交。
+
+## 79. 阅读器：预加载、拖拽翻页、翻页动画（第一阶段，2026-10-05）
+
+原状：Windows 分页阅读器只渲染当前页组，翻页时同步加载下一页（期间界面忙碌），没有预加载、拖拽翻页和动画；鼠标滚轮
+只能平移。Android 的分页阅读器建立在 reader-core 之上：所有页组排成一条，用同一个滚动偏移驱动；`PagedDragState`
+负责平移与翻页的衔接，`PagedSnapResolver` 负责吸附，过渡效果由 `PagedTransitionResolver` 和场景过渡渲染器给出，
+预加载窗口由 `PagedSceneResourceWindowStrategy` 规划。Windows 本来就依赖 reader-core，这一轮改为走同一条路径。
+
+**共享（迁入 core-ui，包名不变，Android 导入不改）**：`ReaderAnimation`（无 / 滑动 / 覆盖 / 仿真）、`TapGridArea`、
+`ComposeReaderPageAnimation`（翻页变换、卷页几何、`composeReaderPageCurl`、卷页阴影）、`ComposeReaderTapGrid`
+（九宫格点击识别）、`ScenePageTransitionRenderer`（滑动 / 覆盖 / 卷页的单页组变换和覆盖模式固定页）。
+core-ui 的 commonMain 新增依赖 reader-core（Android 目标能正常消费）。
+
+**Windows 分页阅读器（`DesktopReaderCanvas` 重写）**
+- 当前页组和前后相邻页组排在一条上，由 `travel`（以页组为单位）平移。每个页组按 Android 的方式应用共享过渡：
+  卷页沿用 `composeReaderPageCurl`，覆盖模式用固定页偏移，加上 zIndex、透明度和翻开页阴影。每个页组单独裁剪，
+  这样宽页或原始尺寸溢出时不会画到当前页上（与 Android 的裁剪一致）。
+- 鼠标拖拽：用 `PagedDragState` 处理缩放平移与翻页的衔接（放大时先平移到边缘再翻页），松手时按 reader-core 的阈值
+  和速度吸附；未过阈值回弹；在章节首尾继续拖动会进入相邻章节（自动跨章开启时）；双指捏合仍是缩放。
+- 键盘、按钮、点击区和滚轮翻页都有动画：键盘和按钮在页组切换后从原位置滑入；点击区和滚轮先滑出再提交。
+  动画时长与 Android 相同（280 ms）。
+- 点击区按 Android 默认九宫格：左列和上中为上一页，右列和下中为下一页，中间切换工具栏；双击缩放保留。
+- 滚轮：页面溢出时平移，到边缘或页面完全可见时翻页；Ctrl+滚轮缩放。
+- 设置：新增“翻页动画”（无 / 滑动 / 覆盖 / 仿真翻页），默认与 Android 一样是滑动，持久化；快捷键说明同步更新。
+
+**预加载**
+- 分页模式：每次页组稳定后，按 `PagedSceneResourceWindowStrategy(lookahead 2, prepareAdjacentSlots)` 在后台加载前后
+  两个页组，近的优先。后台加载不经过动作锁，不会让翻页等待；新的窗口会取消旧的。相邻页组一直参与组合，所以离屏时
+  已经完成解码，翻页时不会闪占位图。
+- 连续滚动模式：使用 Android 连续模式的 `ReaderPrediction` 规划可见范围以外的前瞻页。
+- 后台加载失败的页面在本章内不再重复请求，真正显示该页时照常加载并报错。
+
+验证：
+- 新增 `DesktopReaderGestureProbe`：后台预取、拖拽翻页、短拖回弹、反向拖拽、预取页不重复请求、左右点击区、
+  中间切换工具栏、滚轮翻页，以及动画设置持久化（重启后仍是“覆盖”）。
+- 原有阅读器探针按新行为调整：
+  - 只统计视口内的页面节点（相邻页组离屏、裁剪后边界为空）；
+  - 用 `requestFocus` 代替点击视口中心（中心点击现在用来切换工具栏）；
+  - 失败注入改在打开章节前设置（夹具支持多个页序号）；
+  - 请求计数改为“增量等于新加载的页数”，保留“已缓存页面不重复请求”的原意；
+  - 等待 `isPrefetching` 结束后再计数。
+- 结果：
+  - Android `compileDebugKotlin` 通过，阅读器单元测试 694 项通过；
+  - 全量回归：reader-core 179、core-source 52、core-domain 129、core-ui 12、core-cloudflare 17、cloudstream-desktop 2（1 跳过，
+    本次没有提供真实插件目录）、source-host 86、parser-host 23（2 跳过）、dex-convert 14（2 跳过）、mihon-desktop-compat 34、
+    desktop-runtime 68（2 跳过）、desktop-app 79（4 跳过），全部 0 失败；`compileCommonMainKotlinMetadata` 通过。
+
+**未做（下一阶段候选）**
+- 竖向翻页、长条（webtoon）模式的拖拽惯性。
+- 自定义九宫格动作。
+- 音量键 / 自动翻页、阅读器背景色与亮度、页面裁边、图片滤镜。
+- 预加载下一章。
+- 翻译叠加层。
+- 小说阅读器的翻页动画。
+- 把 Android 的选项面板 UI 搬到 core-ui 共享。
+
+## 80. 阅读器第二阶段：色彩校正、背景、页码、竖向翻页、下一章预载、连续模式拖拽（2026-10-05）
+
+**共享**：新增 core-ui `ReaderColorMatrix`，是 Android `ReaderColorFilter` 的 4×5 颜色矩阵运算，与平台无关。按 Android
+`ColorMatrix` 的语义逐步重放：灰度用 `setSaturation(0)` 替换单位矩阵，之后的每一步都是 `postConcat`；反色沿用
+Android 的 R' = A − R + 1；护眼系数 0.92。Android 的 `ReaderColorFilter.toColorMatrix()` 和 `isEmpty` 改为委托它。
+`ReaderColorMatrixTest` 用像素结果验证亮度、以中灰为轴的对比度、反色先于亮度的顺序、灰度权重和护眼效果。
+
+**Windows**
+- 色彩校正：反色、灰度、亮度和对比度（−1..1，显示为 0–200%，与 Android 相同）、护眼，可一键重置。通过
+  `ColorFilter.colorMatrix(ReaderColorMatrix.of(...))` 作用于整页图像和分块图像，连续模式同样生效。
+- 阅读背景：沿用 Android 的六种（默认 / 浅色 / 深色 / 白色 / 黑色 / 跟随系统）；浅色背景开启护眼时同样被染成书页色。
+  页面样式（背景、滤镜、文字色）由一个 CompositionLocal 提供，分页、连续、分块图像统一读取。
+- 显示页码：分页视口底部居中显示“3 / 5”（双页显示“4–5 / 5”）。
+- 竖向翻页（Android 的竖向模式）：方向按钮在“从左向右 / 从右向左 / 从上到下翻页”之间切换；竖向时不组双页。
+  页带、拖拽（`PagedDragState` 按纵轴衔接平移与翻页）、吸附速度、过渡和卷页都切换到纵轴，↑/↓ 也可以翻页。
+- 下一章预载：分页模式到达最后两个页组、连续模式最后可见页进入末尾两页时，在后台取得下一章页面列表和前两页；
+  打开该章时直接使用缓存的页面列表（不再请求来源），图片命中缓存。预载失败的章节在本章阅读期间不会在后台重试
+  （回归测试发现，进度每次上报都会重试一次，会持续请求失败的来源），打开其他章节后才会重新尝试。
+- 连续模式：
+  - 鼠标拖拽滚动，松手按 Compose 默认惯性甩动，到章节首尾时触发自动跨章；
+  - Android 九宫格：中间切换工具栏，左右两侧各滚动 0.9 屏，带动画。
+- 设置全部持久化：`cf_brightness`、`cf_contrast`、`cf_invert`、`cf_grayscale`、`cf_book`、`background`、
+  `page_numbers`、`vertical`。只影响显示的设置不会重新加载页面。
+
+验证：
+- `DesktopReaderGestureProbe` 新增：
+  - 反色后黄色页面在屏幕上变成蓝色为主，白色背景的上下留白为纯白；
+  - 页码显示“3 / 5”；
+  - 竖向时向上拖拽和按 ↓ 都翻到下一页；
+  - 进入章节末尾后下一章被预载，自动跨章后缓存被消费；
+  - 连续模式下鼠标拖拽使滚动位置前进，点击中间切换工具栏。
+- 原有探针按预载行为调整：
+  - 跨章失败注入改在打开章节前设置；连续模式里第二次注入前用测试钩子丢弃已预载的章节；
+  - 离线阅读已下载章节时，允许预载下一章（未下载）发出一次页面列表请求和前两页请求；
+  - 不再点击视口中心来获得焦点。
+- Android：`compileDebugKotlin` 通过，阅读器单元测试 694 项通过。
+- 全量回归：reader-core 179、core-source 52、core-domain 129、core-ui 16（新增色彩矩阵 4 项）、core-cloudflare 17、
+  cloudstream-desktop 2（1 跳过）、source-host 86、parser-host 23（2 跳过）、dex-convert 14（2 跳过）、mihon-desktop-compat 34、
+  desktop-runtime 68（2 跳过）、desktop-app 79（4 跳过），全部 0 失败；`compileCommonMainKotlinMetadata` 通过。
+
+**仍未做**
+- 页面裁边（Android 按位图分析白边）。
+- 自定义九宫格动作和长按菜单。
+- 自动翻页。
+- 翻译叠加层。
+- 小说阅读器动画。
+- 共享 Android 的阅读器选项面板 UI（目前桌面面板是 Material2，Android 是带资源字符串的 Material3 组件）。
+
+## 81. 阅读器第三阶段：裁剪白边、自动翻页 / 自动滚动（2026-10-05）
+
+**共享（reader-core，Android 委托）**
+- `ReaderEdgeDetection`：原 Android `EdgeDetector` 的白边检测算法，与平台无关。保留原有判定：以 100 px 块从四边扫描到第一个
+  非白像素（容差 16）；任一边的空白超过页面三分之一就视为没有可裁的白边；大图按 1 / 0.75 / 0.5 / 0.25 缩小后扫描。
+  像素通过 `BlockReader` 读取：Android 用 `Bitmap.getPixels`，Windows 用 Skia 位图，各自的解码器不变。Android
+  `EdgeDetector` 只保留解码和缓存，`isColorTheSame` 也委托共享实现（`TrimTransformation` 不受影响）。
+- `ReaderAutoScroll`：原 `ScrollTimer` 的速度曲线（0.1 + 速度 × 10）、滚动间隔（32 ms / 倍率）、换页间隔
+  （10 s / 倍率）、交互后暂停 2 s、默认速度 0.24。Android 的 `ScrollTimer` 和 `AppSettings` 默认值改为引用它。
+- `ReaderEdgeDetectionTest`：用合成页面验证四边白边、2× 降采样结果一致、无白边或白边超过三分之一时不裁、
+  降采样档位，以及自动滚动的时间曲线。
+
+**Windows**
+- 裁剪白边：沿用 Android 分开设置翻页和连续滚动的做法。
+  - `DesktopImageDecoder.contentBounds` 降采样解码后调用共享检测，并按文件缓存结果。
+  - 会话的 `cropPages`（与超分同样的接法）决定是否给页面附上 `crop`；分页和连续场景都按裁剪后的尺寸排版，
+    页面图像用 `BitmapPainter` 只绘制内容区域，按解码缩放比例换算。
+  - 分块显示的超长页暂不裁剪。
+  - 切换开关会清空已加载页面并按新设置重新排版（本地缓存命中，不重新请求）。
+- 自动翻页 / 自动滚动：
+  - 底部新增“自动翻页 / 自动滚动”按钮。分页模式下，页面比视口大时每次滚动 1 dp，滚不动或页面完全可见时按共享
+    换页间隔翻页；连续模式每次滚动 1 dp，到章末交给自动跨章。
+  - 点击、滚轮和按键都会暂停 2 s（与 Android 一致）。
+  - 速度滑块显示倍率，例如 ×2.5。
+- 新设置持久化：`crop_paged`、`crop_continuous`、`as_speed`。
+
+验证：
+- `DesktopReaderGestureProbe` 新增：
+  - 每章第一页四周带白边（内容区为 40,60–360,540）；开启裁剪后检测结果正确，页面显示比例为 320:480，中心像素是内容色；
+  - 速度设为 1 时，自动翻页在约 1 s 内翻到下一页，停止后 2.5 s 内页码不再变化。
+- Android：`compileDebugKotlin` 通过，阅读器单元测试 694 项通过。
+- 全量回归：reader-core 183、core-source 52、core-domain 129、core-ui 16、core-cloudflare 17、cloudstream-desktop 2（1 跳过）、source-host 86、parser-host 23（2 跳过）、dex-convert 14（2 跳过）、mihon-desktop-compat 34、desktop-runtime 68（2 跳过）、desktop-app 79（4 跳过），全部 0 失败；`compileCommonMainKotlinMetadata` 通过。
+
+**仍未做**
+- 自定义九宫格动作和长按菜单。
+- 翻译叠加层。
+- 小说阅读器动画。
+- 共享阅读器选项面板 UI。
+- 超长分块页的裁剪。
+
+## 82. 阅读器第四阶段：自定义九宫格动作（阅读操作）与长按 / 右键（2026-10-05）
+
+**共享（core-ui，包名 `org.skepsun.kototoro.reader.ui.tapgrid` 不变，Android 导入不改）**
+- `TapAction`（下一页 / 上一页 / 下一章 / 上一章 / 显示隐藏 UI / 显示菜单，含配置网格的着色）迁入 core-ui，去掉 Android 字符串资源；
+  Android 用扩展属性 `TapAction.nameStringResId`（`TapActionNames.kt`）保留原写法。
+- `TapGridConfig`：Android `tap_grid` 的键名（`CENTER`、`CENTER_long`、`_init`）、默认布局（左列和上中为上一页，右列和下中为下一页，
+  中间点按切换工具栏、长按显示菜单）、“全部禁用”，以及按区域读写动作。`TapActions` 从 ViewModel 的嵌套类移到这里。
+  Android `TapGridSettings` 的键名和默认值改为引用它。
+- `ReaderTapGridConfigGrid`：Android “阅读操作”页的九宫格（按点按动作着色、标出点按 / 长按动作、分隔线），文案和文字样式由调用方传入；
+  Android `ReaderTapGridConfigScreen` 只保留顶栏、菜单和选择对话框。
+- `readerTapGestures` 新增可选的 `onSecondaryTap`：右键单击直接报告所在区域，不进入点按 / 长按判定。Android 不传，行为不变。
+
+**Windows**
+- `DesktopReaderSettings.tapGrid` 持久化为 `tap_grid.<Android 键名>`：值为动作名，空字符串表示“无”，缺省时用共享默认值。
+- 分页和连续阅读器都按配置执行动作（`performTapAction`，对应 Android `ReaderControlDelegate.processAction`）：翻页动作在分页模式下带动画翻页，
+  在连续模式下滚动 0.9 屏；“显示菜单”打开阅读设置面板。长按和右键执行长按动作，默认中间区域打开阅读设置。
+  点击回调由 `rememberTapGridHandlers` 固定下来，重组时不会重启手势检测，按住过程中的长按不会被打断。
+- 阅读设置新增“阅读操作”：使用共享网格，点击单元格设置点按动作，长按或右键设置长按动作，下方列出可选动作；支持“重置”和“全部禁用”。
+  快捷键说明同步更新。
+
+验证：
+- core-ui `TapGridConfigTest`：默认布局与 Android 一致、键名、单项修改不影响其他项、全部禁用。
+- `DesktopReaderGestureProbe` 新增：在面板里把左侧中间改为“下一页”，右键右下单元格把长按设为“下一章”；点击左侧中间后向前翻页；
+  在阅读区右键中间打开阅读设置且不翻页；重启后配置仍在，未修改的区域保持默认值。
+- Android：`compileDebugKotlin` 通过，阅读器单元测试 694 项通过。
+- 全量回归：reader-core 183、core-source 52、core-domain 129、core-ui 19（新增 3 项）、core-cloudflare 17、cloudstream-desktop 2（1 跳过）、
+  source-host 86、parser-host 23（2 跳过）、dex-convert 14（2 跳过）、mihon-desktop-compat 34、desktop-runtime 68（2 跳过）、
+  desktop-app 79（4 跳过），全部 0 失败；`compileCommonMainKotlinMetadata` 通过。
+
+**仍未做**
+- 翻译叠加层。
+- 小说阅读器动画。
+- 共享阅读器选项面板 UI（桌面面板仍是 Material2）。
+- 超长分块页的裁剪。
+- Android 双页模式中“长按左右页中央打开菜单”的特殊判定，以及按长按位置选中目标页（`setTargetPageBySide`），桌面暂未实现。
+
+## 83. 阅读器选项面板共享：Android 面板直接用于 Windows（2026-10-05）
+
+目标：Windows 阅读器设置不再单独实现一套 Material2 侧栏，而是直接使用 Android 的阅读器选项面板。
+
+**迁入 core-ui（包名不变，Android 导入基本不改）**
+- 面板组件（`reader.ui.compose.design`）：`ReaderPanelColors`（含 `mangaReaderPanelColors`、`forEInk`、`ProvideReaderPanelColors`）、
+  `ReaderOptionControls`（选项卡片、分节、分隔线、开关行、取值行）、`ReaderPanelComponents`（胶囊标签栏、选择芯片、图标选择条、
+  快捷操作宫格、开关芯片、步进行、滑块行）、`ReaderControlTokens`。为了不依赖平台资源，`ReaderQuickAction` 只保留 `id` 和 `toggled`，
+  图标和文字由宿主传入宫格；`ReaderSliderRow.leadingIcon` 改为 `Painter`。
+- 图标：新增 Gradle 任务 `:core-ui:generateReaderPanelIcons`，在构建时把 Android 的矢量图（`ic_arrow_forward`、`ic_settings`、阅读模式、
+  缩放、快捷操作等 20 个）生成为共享的 `ReaderPanelIcons` ImageVector，两端绘制同一套图标。
+- 面板宿主（`reader.ui.compose.panel`）：`ReaderPanelHost` / `ReaderOptionsPanelHost`。Android 的液态玻璃通过 `LocalReaderPanelGlass`
+  注入（`AndroidReaderPanelGlass` 由 `KototoroTheme` 提供），没有玻璃的宿主使用不透明面板。`rememberReaderPanelSurfaceMode` 留在 Android。
+- 可拖拽底部面板 `StableAnchoredSheetLayout`（`core.ui.compose`）。返回键改用 expect/actual 的 `PlatformBackHandler`：Android 端为
+  activity BackHandler（core-ui androidMain 新增 activity-compose 依赖），桌面端为空实现，由桌面自己处理 Esc。窗口版
+  `StableAnchoredBottomSheet` 留在 Android。新增 `openExpanded`：以四分之三高度打开且不设预览停靠点，与横屏平板“预览过高时没有中间档”
+  的行为一致，快捷层保持可见。
+- 漫画选项面板（`reader.ui.compose.ComposeReaderOptions.kt`）：`ComposeReaderOptionsState` / `Callbacks`，快捷层 `ReaderMangaQuickLayer`，
+  标签页 `ReaderOptionsDetailTabs`，“排版”页 `ReaderLayoutOptionsPage` 和“显示”页 `ReaderDisplayOptionsPage`，背景色块，
+  动画图标和背景图标。文案通过 `ReaderOptionsStrings` 传入；`ReaderOptionsFeatures` 声明宿主支持哪些项，不支持的行会隐藏。
+  Android 的 `ComposeReaderOptionsPanel` 只负责组装：传入字符串资源、翻译标签页和效果预览。
+- 色彩校正控件 `ReaderColorCorrectionControls`（`reader.ui.colorfilter`，文案由 `ReaderColorCorrectionLabels` 传入）。Android 的同名
+  4 参数版本改为委托共享实现；前后对比预览依赖 coil，仍留在 Android。
+- 模型类型：`ReaderMode`、`ReaderBackground`（仅枚举；Android 的 `resolve(context)` / `isLight(context)` 改为扩展函数）、`ReaderOcrMode`、
+  `UiPresentationMode`、`UiPresentationConfig` / `LocalUiPresentationConfig`、`tvFocusable`、`ReaderColorFilter`（Android 的
+  `toColorMatrix` / `toColorFilter` / `getBackgroundTint` 改为扩展函数）、`ImageServerOptions`。
+- 注意：Android 与 core-ui 中同包同名的 Kotlin 文件会编译成同一个 `XxxKt` 类，导致其中一个被遮蔽。因此 Android 的面板文件
+  改名为 `AndroidReaderPanelGlass.kt`。
+
+**Windows**
+- 构建时从 Android 的 `values` 和 `values-zh-rCN`（`strings*.xml`、`arrays.xml`）生成 `android-strings.properties`
+  （任务 `prepareDesktopStrings`，字符串数组会展开为对应的 `@string`），由 `AndroidStrings` 读取，面板文案与 Android 中文版逐字一致。
+- “阅读设置”按钮改为打开共享面板 `DesktopReaderOptionsPanel`。桌面设置与 Android 状态之间的映射：
+  - 阅读模式：默认 / 从右到左 / 从上到下 / 条漫，分别对应 SINGLE·DOUBLE + 方向，以及 CONTINUOUS；不提供横向连续模式。
+  - 横屏双页对应 DOUBLE；新增“首图作为封面”（`double_cover`，即 reader-core 的 `isCoverOffset`）。
+  - 动画、缩放、页码、裁切（按当前模式写入翻页或连续滚动的开关）、背景、色彩校正、超分开关，以及全屏（对应 F11）。
+  - 色彩校正的滑块每一步都会立即显示，停止 250 ms 后才保存，避免每一步都排队写盘。
+  - 快捷操作：章节与页面、添加书签、自动翻页。
+- 面板的齿轮按钮打开“更多阅读设置”侧栏，对应 Android 的阅读器设置页。侧栏只保留 Android 面板中没有的项：阅读操作（九宫格）、
+  自动翻页速度、超分模型与降噪、快捷键说明。旧侧栏中与共享面板重复的项已删除。阅读操作的文案也改用 Android 字符串。
+
+验证：
+- `DesktopReaderGestureProbe`：在共享面板中切换动画（使用 Android 文案“高级”）；从齿轮按钮进入阅读操作；右键中间打开面板；
+  在图标条中依次切换从右到左、双页、封面、条漫、默认；在“显示”页选择白色背景，反色后重置（验证保存防抖）；
+  快捷操作“添加书签”会关闭面板并切换书签。`DesktopTabletProbe` 和 `DesktopUpscaleProbe` 按新流程调整（Esc 关闭面板、齿轮进入超分设置）。
+- Android：阅读器及面板相关单元测试 738 项通过（包括已迁入 core-ui 的面板配色、组件、宿主和底部面板测试）。
+- 全量回归：reader-core 183、core-source 52、core-domain 129、core-ui 19、core-cloudflare 17、cloudstream-desktop 2（1 跳过）、source-host 86、parser-host 23（2 跳过）、dex-convert 14（2 跳过）、mihon-desktop-compat 34、desktop-runtime 68（2 跳过）、desktop-app 79（4 跳过），全部 0 失败；`compileCommonMainKotlinMetadata` 通过。
+
+**仍未做**
+- 漫画阅读器的顶部和底部控制栏（Android `ReaderControlShell`）尚未共享，桌面仍是自己的工具栏。
+- 小说阅读器的选项面板（`ComposeNovelReaderOptionsSheet`）尚未接入桌面。
+- 翻译标签页；“横向连续”模式；分割双页、折叠屏、渲染器、性能等桌面没有对应引擎的项。
+- “Layout”“Two pages”等少数字符串在 Android 中文资源里没有译文，两端都显示英文（应通过 Weblate 补译）。
+
+## 84. 阅读器控制栏共享：Android 与 Windows 共用浮动控件（2026-10-05）
+
+**共享（core-ui，原包名保持）**
+- `ReaderChrome.kt` 提取 Android 顶部返回/章节标题/选项、书签等浮动按钮、进度滑条与上一章/下一章、
+  进度底座和缩放按钮。图标复用原 Android vector；文案、状态和动作由宿主提供。
+- `ReaderChromeSurfaces` / `LocalReaderChromeSurfaces` 隔离平台表面：Android 的
+  `AndroidReaderChromeSurfaces` 通过主题注入原玻璃药丸与底座，共享组件提供 Material3 表面回退。
+- `ImmersiveEdgeGradient` 与透明色处理迁入共享模块，Android 原顶部/底部渐变与布局参数保持。
+- Android `ComposeReaderActivityScaffold` 委托共享组件，保留 TV 焦点、章节标题底置、资源字符串及浮动动作装配。
+
+**Windows**
+- `DesktopReaderChrome` 使用共享顶部栏、进度底座、书签/自动翻页按钮及边缘渐变；分页画布使用共享缩放控件，
+  保留倍率显示和重置视图。缩放控件文字色取自阅读背景，避免浅色应用主题在深色阅读画布上显示黑色按钮。
+  控制栏悬浮在全窗口视口上，显示/隐藏不再改变页面排版或阅读进度。
+- 中央点击或 H 切换控制栏，隐藏时显示章节与可见页码；标题打开章节，选项打开共享 Android 阅读设置。
+  点按书签按钮保存/移除当前书签，长按打开书签面板。全屏沿用 F11 和“排版”页的全屏开关。
+- 自动跨章与重新加载归入“更多阅读设置”；阅读操作、超分模型、自动翻页速度等桌面适配仍由原 Controller 处理。
+- 现有交互探针改为操作共享选项与浮动控件。`ReaderChromeTestKit` 统一焦点、快捷键、模式、适配方式、
+  刷新及隐藏状态页码检查；像素/分块接缝断言先隐藏覆盖层，继续验证原有颜色与完整采样列。
+- 全屏开关通过选项列表滚动操作；短窗口首次滚动会先展开面板，探针使用有次数上限的分步滚动，
+  并断言开关确实显示，避免对尚未进入组合的控件调用 `performScrollTo`。
+
+验证：
+- `:core-ui:jvmTest` 19 项通过；`:core-ui:compileCommonMainKotlinMetadata` 通过。
+- Android `:app:compileDebugKotlin` 通过；阅读器与阅读设置单元测试 694 项通过，
+  `ImmersiveEdgeGradientTest` / `StableAnchoredBottomSheetTest` 另 15 项通过。
+- Windows `:desktop-app:test` 首轮覆盖 79 项，72 项通过、4 项按运行条件跳过；3 项控制栏适配失败
+  （背景像素、分块接缝、窗口面板）修复后分别定向重跑通过。
+- 窗口探针覆盖 1260×850、920×620、1000×850、999×620：控制栏显隐不改变视口、全屏开关可滚动到达、
+  滑条保存进度、书签长按及跨章恢复、章节搜索不触发快捷键、返回详情退出全屏。
+- 缩放对比度修复后额外重跑相机探针，鼠标/触摸/适配/倍率限界及重启恢复均通过；
+  截图已检查共享控制栏、浅色主题的深色阅读画布和短窗口全屏选项。
+
+**仍未做**
+- 小说阅读器选项面板共享、翻译标签页、横向连续模式、超长分块页裁剪。
+- 双页长按按位置选择目标页与 Android 特殊中央菜单判定。
+
+## 85. 小说阅读选项 UI 共享（2026-10-05）
+
+**共享（core-ui）**
+- `NovelReaderOptionsUi` 提取 Android 小说字号步进控件、主题预览色卡、快捷层和排版卡片。
+  宿主提供文字、数值范围、主题颜色和修改回调，不把 Android Settings、Context 或 Windows 存储带进共享层。
+- 小说标签页复用已有 `ReaderOptionsDetailTabs`，不显示齿轮时也不预留按钮宽度；
+  排版、阅读与翻译工具页复用已有 `ReaderOptionsPageList`，保持原有间距和滚动行为。
+- Android 原字体选择、段距、页边距、首行缩进、亮度、翻译、替换规则和 TTS 继续使用原宿主逻辑。
+  字号范围与归一化保持原值；纸张主题、电子墨水颜色、TV 焦点和玻璃表面由原适配层提供。
+- 状态和事件边界参考 [Compose 官方状态提升指南](https://developer.android.com/develop/ui/compose/state-hoisting)，
+  只共享呈现组件，业务状态和持久化留在宿主；没有新增依赖或偏好格式。
+
+**Windows**
+- `DesktopNovelOptionsPanel` 替代旧 Material 2 侧栏，使用共享锚点面板、主题色卡、字号、排版卡片及标签布局。
+  宽窗口直接展开；短窗口保留可滚动内容，Esc 或遮罩关闭后把焦点交还正文。
+- 字号、行距、衬线字体和版心宽度沿用 `DesktopNovelSettings` 范围及原偏好键，主题仍兼容已有
+  `LIGHT` / `SEPIA` / `GREEN` / `DARK` 记录；阅读页全屏开关接入实际窗口回调。
+- 原按段落连续滚动、章节切换、进度报告、插图请求和第二进程恢复流程保持。
+  桌面没有显示尚未接入的亮度、分页动画、双页、翻译或 TTS 控件。
+
+验证：
+- `:core-ui:jvmTest` 19 项通过；共享模块 Android/JVM 编译和 `:app:compileDebugKotlin` 通过。
+- Android 小说相关 JUnit 测试 168 项通过，0 失败、0 跳过。首次默认引擎运行中，Kotest 未遵守
+  Gradle 的小说筛选范围而执行无关 EPUB 属性测试；停止该进程后，使用仅限本地的
+  `build/kmp-novel-validation.init.gradle` 限定 JUnit Jupiter，并重验最终代码。
+  正式测试配置未改动，本轮结果不包含 Kotest 属性测试或 Android 真机 UI 验证。
+- 桌面解析器探针从真实 fixture 插件打开小说，经共享 UI 修改主题、字号、行距、版心和字体，
+  检查全屏、Esc、F11 及跨章，再启动第二个 JVM 检查设置与章节恢复。
+- 探针第一进程为 1260×850，第二进程为 920×620；两种尺寸的排版面板截图已检查。
+  短窗口的后续扩展卸载检查先滚动已安装列表，避免依赖控件已进入组合。
+- 漫画平板回归通过，覆盖 1260×850、920×620、1000×850 和 999×620，验证共用标签栏、
+  全屏、书签及章节操作未回归。
+
+**仍未做**
+- 小说正文分页/双页引擎、章节面板和翻译/TTS 的桌面接入；本节完成的是阅读选项组件共享。
+- 漫画横向连续模式、超长分块页裁剪及双页长按按位置选择目标页。
+
+
+## 86. 小说上下栏共享与浮动布局对齐（2026-10-05）
+
+**共享边界**
+- `SharedNovelReaderChrome` 提取小说顶部返回、章节胶囊、选项按钮、底部进度底座、跨章按钮、
+  渐变、显隐动画、底置章节标题、隐藏阅读状态与浮动动作布局；基础按钮和滑条沿用共享 `ReaderChrome`。
+- `NovelReaderChromeState`、颜色、文案和事件由宿主传入；进度单位归属阅读引擎，Android 按页，
+  Windows 按正文块。共享呈现不依赖 Android Settings、Context、小说模型或桌面存储。
+- 控件颜色跟随小说阅读主题，底座和浮动按钮支持显式内容色；玻璃表面仍由 Android 主题注入。
+  底部控件可见性和电子墨水动画开关迁入共同策略，Android 原入口委托该策略。
+- Android 保留原书签、翻译、替换规则、标记、TTS 与 BackHandler 的装配；
+  `navigationBarsIgnoringVisibility` 由 Android 宿主传入，保留沉浸模式的原导航栏间距。
+
+**Windows 行为**
+- `DesktopNovelReaderChrome` 委托同一套上下栏，正文使用完整窗口视口，控件作为覆盖层呈现。
+  固定正文首尾留白不随显隐变化；点击正文空白或 H 切换控件，隐藏阅读状态可点击恢复。
+- 标题打开章节面板、选项打开共享小说阅读设置、滑条跳转段落、跨章按钮遵守章节边界。
+  全屏沿用 F11 和阅读设置中的真实窗口开关。
+- 进度报告使用 LazyList 的实际阅读锚点；顶部留白后方仍组合的正文块不会把目标段落的保存位置向前偏移。
+  沿用原 Controller、历史表、偏好键和章节加载，没有新增依赖或数据格式。
+- fixture 小说扩展增加长章节，检查非零段落的定位、保存及跨进程恢复；原插图仍经过来源客户端。
+
+**验证范围**
+- `:core-ui:jvmTest` 19 项通过，共享 UI 的 JVM/Android 编译通过。
+- `:app:compileDebugKotlin` 通过；小说相关 JUnit 168 项和底部可见性 2 项，共 170 项通过，
+  0 失败、0 跳过。沿用 §85 的本地 init script 限定 JUnit Jupiter，本轮不包含 Kotest 属性测试。
+- 桌面解析器与漫画平板两个定向测试通过。小说第一进程 1260×850 写入正文块索引 12，
+  通过跨章按钮切到第二章，再用滑条定位索引 16；第二进程 920×620 验证章节、正文块和深色排版偏好恢复。
+- 探针检查 H 与鼠标点击显隐、阅读状态点击恢复、正文视口/块坐标/插图请求稳定、标题打开章节、
+  Esc 返回、进度持久化、跨章边界及实际全屏回调；长章节插图仍从扩展客户端加载。
+- 漫画回归覆盖 1260×850、920×620、1000×850、999×620，检查共享底座与控件调整未回归。
+  浅色/深色上下栏、隐藏状态、段落跳转与窄窗口设置截图已检查，保存在忽略的
+  `desktop-app/build/reports/desktop-smoke`；相关差异的 `git diff --check` 通过。
+
+**仍未做**
+- Windows 小说分页/双页引擎、共享章节面板、小说书签与翻译/TTS 接入；本节对齐的是上下栏呈现和现有滚动引擎交互。
+- Android 真机控制栏视觉与系统栏回归、iOS 原生构建与真机验证。
+
+
+## 87. 小说章节目录共享（2026-10-05）
+
+**共享呈现与目录规则**
+
+- `NovelChapterDirectoryEntry` 是面向呈现的轻量输入；宿主解析标题、分卷、组名及搜索别名，
+  共享目录保留原章节索引，倒序和筛选不会改变选择事件的索引含义。
+- `NovelChapterDirectoryContent` 提取 Android 搜索框、清除与倒序按钮、分组标题、章节行、
+  已读淡化、当前章背景及强调条；定位当前章会清除筛选并滚动到对应行。
+  非空筛选从首项展示，空筛选定位当前章；目录数据或当前章变化后重新解析位置。
+- 列表继续使用 LazyColumn 和唯一 key，重复组名/卷名以及重复章节 ID 保留原索引以区分节点。
+  参考 [Compose 官方列表指南](https://developer.android.com/develop/ui/compose/lists) 的 key 和滚动状态说明。
+- `ReaderChapterPanelHeader`、副标题格式与定位按钮进入共同层。搜索框图标复用已有 Android vector
+  生成流程；没有新增依赖。Android 原目录入口和测试辅助函数委托共享实现，保留本地小说组名规则。
+- Android 正文搜索、笔记/标记、书签与 Pager 标签仍由原宿主装配；本节不迁移这些业务。
+
+**Windows 接入**
+
+- `DesktopNovelChaptersPanel` 替代小说原 Material 2 侧栏，复用共享 ReaderPanelHost、标题和章节目录。
+  面板颜色跟随阅读主题；目录内容保持 Android 的最大宽度、搜索、正倒序和当前章定位布局。
+- 章节选择回到原 Controller；选择当前章只关闭面板，保留滚动位置和已加载正文。
+  选择其他章沿用原加载/历史流程。忙碌时章节行禁用；Esc 或遮罩关闭后恢复正文焦点。
+- 目录打开期间正文仍挂载；搜索输入 H 不触发阅读区的显隐快捷键。
+
+**验证范围**
+
+- `:core-ui:jvmTest` 24 项通过，包括新增目录规则 5 项；共享代码 JVM/Android 编译通过。
+- `:app:compileDebugKotlin` 通过，小说相关 JUnit 168 项及章节标题测试 2 项，共 170 项通过，
+  0 失败、0 跳过。沿用 §85 的本地 init script 限定 JUnit Jupiter，本轮不包含 Kotest 属性测试。
+- 共享组件长目录探针使用 120 个章节，覆盖 1260×850 浅色和 520×620 深色布局，验证离开当前章后
+  定位、筛选清除、倒序后原索引选择、组名/译者搜索、禁用行不触发事件及空目录。
+- 真实 fixture 插件的小说探针在 1260×850 写入非零正文块，第二进程 920×620 恢复章节与设置，
+  检查目录打开期间输入 H、搜索/倒序/定位、当前章返回、Esc 关闭、正文视口和插图请求保持。
+- 漫画平板回归通过，覆盖 1260×850、920×620、1000×850、999×620；共享标题提取未回归。
+  桌面目录首轮断言误把占位文案与 EditableText 一起比较，改为检查 EditableText 后两项定向测试均通过。
+- 浅色/深色目录、当前章和窄窗口长列表截图已检查，保存在忽略的 `desktop-app/build/reports/desktop-smoke`；
+  相关差异的 `git diff --check` 通过，没有新增依赖、偏好键或存储格式。
+
+**仍未做**
+
+- Windows 小说书签/笔记、正文搜索与翻译/TTS 接入；小说分页/双页引擎。
+- 漫画章节目录呈现共享，以及 Android 真机/iOS 原生视觉和交互验收。
+
+## 88. 小说书签卡片共享与 Windows 保存/恢复（2026-10-05）
+
+**共同呈现**
+
+- 将 Android 小说书签卡片提取为 `NovelBookmarkCardContent`：正文摘要、强调条、章节、日期和删除按钮
+  使用同一 Material3 布局。Android 保留原摘要解析、日期格式和笔记/标记操作，由原宿主传入数据及回调。
+- 删除图标沿用 Android vector 的共享生成流程；Windows 面板复用 ReaderPanelHost、共享标题与搜索框。
+  宽屏内容居中，颜色跟随小说阅读主题，没有新增依赖或另一套图标。
+- Windows 小说浮动书签按钮复用 `ReaderFloatingControlButton` 与 `NovelReaderFloatingControls`，
+  点击或 B 添加/移除当前正文位置，长按打开书签列表；面板输入 B 不触发正文快捷键。
+
+**存储与定位**
+
+- `DesktopLibrary` 共用漫画/小说书签的位置切换事务及身份检查。小说摘要截取纯文本至 200 字符，
+  写入既有书签表的 image 字段；page 保存正文块索引，scroll 为 0，percent 按章节所属分支计算。
+  同一作品内生成记录 ID 时检查已有主键，保存书签本身不写阅读历史。
+- 单条删除先比对完整持久化记录，拒绝过期卡片、作品身份冲突和错误作品 ID；无效正文位置或变更章节
+  不写入书签。桌面 DTO 补充已有 image 字段的投影，Room schema 和备份格式保持兼容。
+- 小说打开时重新载入本作品书签。列表支持摘要/章节标题搜索、最近添加排序、单条删除和同章/跨章跳转。
+  同章跳转保留正文对象，通过 navigation 请求重新滚动，连续跳回同一目标也生效且不新增插图请求。
+  跨章先加载正文并校验位置，失效位置不强行夹到其他段落；阅读进度仍走原历史流程。
+
+**验证结果**
+
+- `:core-ui:jvmTest` 24 项通过；`:desktop-runtime:test --tests "*DesktopLibraryTest*"` 11 项通过，
+  包含新增小说书签重启/摘要/分支进度和无效位置/过期删除保护测试。
+- 桌面 fixture 小说使用 1260×850 写入两章书签，再在第二进程 920×620 恢复；验证空列表、搜索、编辑 B、
+  跨章和重复同章跳转、正文视口不变、单条删除、快捷键切换及持久化读取。浅色/深色书签截图已检查。
+- 原漫画书签的跨章节、页码/像素偏移和第二进程恢复探针通过。居中修正后定向小说探针再次通过。
+- `:app:compileDebugKotlin` 与 Android 小说/章节标题 JUnit 170 项通过，0 失败、0 跳过；
+  沿用 §85 的本地 init script 限定 Jupiter，不包含其他 Kotest 属性测试。
+- 验证日志及截图位于忽略的 build 目录；本节相关文件的 `git diff --check` 通过。
+
+**边界与后续**
+
+- Windows 的正文块索引与 Android 的分页索引不能保证逐项对应，共享 schema 不代表跨阅读引擎精确定位。
+  当前验证针对桌面创建的纯文本书签；Android 历史 HTML/data URL 摘要的桌面解析仍待统一。
+- Windows 小说笔记/标记、正文搜索、翻译/TTS 和分页/双页引擎继续推进；Android 真机及 iOS 验收仍待。
+
+## 89. 小说书签摘要、正文定位与当前位置状态统一（2026-10-05）
+
+**共享规则**
+
+- `core-domain/commonMain` 提供摘要清理、分支进度和 `NovelBookmarkTextIndex`。纯文本、HTML 和
+  HTML/plain base64 data URL 采用同一预览策略，去除无关标签、规范空白并保留最多 200 字符。
+  网络/文件图片地址、无效 data URL 返回空摘要；不会读取外部文件或发起网络请求。
+- Android 与 JVM 从同一个 `jvmSharedMain` 目录编译已有 Jsoup 的适配器，Android 原入口保留 LruCache。
+  不新增依赖、Room schema、偏好键或备份字段；common metadata 编译验证了定位规则的可移植性。
+  Base64 使用 [Kotlin 标准库共同 API](https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.io.encoding/-base64/)。
+- 章节索引一次拼接渲染后的文本，忽略换行、缩进和空白，书签返回摘要起点所属的页或正文块。
+  摘要跨页、跨段落仍可匹配；有文本而未命中时返回失败，不使用另一端保存的页码强行跳转。
+  重复摘要按分支进度选择较近位置；空摘要保留范围内的原数字位置作为旧格式兼容。
+
+**两端接入**
+
+- Windows 的展示和搜索解析历史 HTML/data URL 摘要，保留原 DTO 用于身份校验和删除。
+  同章/跨章跳转、当前书签按钮和 B 移除操作均使用解析后的正文位置，保存页码即使超出当前正文块数也可恢复。
+  同章继续保留正文对象；跨章匹配失败时保留原章节和导航位置。
+- Android 分页与连续滚动分别投影当前渲染页/块到共同索引；跳转等待目标章与精确分页结果就绪。
+  请求编号防止旧请求被误消费，等待期间阻止旧滚动位置回报覆盖目标，完成或失败后恢复正常回报。
+  相关副作用按请求与布局结果设置 key，参考 [Compose 官方副作用说明](https://developer.android.com/develop/ui/compose/side-effects)。
+- Android 当前位置按钮、选区切换和普通切换按正文映射识别已有记录，删除原持久化记录。
+  单条 Repository 删除在事务内比对完整记录，拒绝过期对象误删新记录。
+  连续滚动发布当前正文块的原文，修复摘要取到旧页面或章节开头的问题；图片块保留空摘要。
+- 新建 Android 小说书签采用与 Windows 一致的分支进度计算，修正此前只记录章内进度的行为。
+
+**验证与边界**
+
+- `:core-domain:compileCommonMainKotlinMetadata` 通过；共享定位 JUnit 9 项、桌面存储 11 项通过。
+  覆盖中文 HTML、base64 换行、跨页摘要、空白、失效文本、图片旧位置、重复文本和分支进度。
+- `:app:compileDebugKotlin` 通过，Android 小说/摘要/章节标题 JUnit 180 项通过，0 失败、0 跳过。
+  包含新增分页/滚动窗口映射、当前按钮状态以及请求跨章保留和旧请求消费保护测试；
+  沿用 §85 本地 init script 限定 Jupiter，不包含其他 Kotest 属性测试。
+- 桌面 fixture 增加旧 HTML/base64 书签：保存索引 700，经搜索跨章跳至当前正文块 12，
+  验证移除按钮与 B 删除原记录；修改摘要后拒绝跳转且保留原正文、章节、首块和导航编号。
+  失效跳转断言检查导航状态，不比较会随可见区测量更新的末块索引。
+- 小说解析器与漫画书签两个端到端测试通过，均覆盖第二进程恢复；桌面写入进程 1260×850、
+  读取进程 920×620。小说浅色/深色书签截图仍使用共享卡片，日志与截图保存在忽略的 build 目录。
+  本轮相关文件的 `git diff --check` 通过。
+- 摘要定位解决 §88 的文本书签兼容缺口，但不是原文字符偏移或像素锚点协议。
+  重复文本及旧 Android 章内 percent 可能产生近似选择；译文、替换规则或源正文改变后可能无法匹配。
+  图片/空摘要的旧数字位置仍无法保证跨引擎对应，没有升级或重写旧数据。
+- iOS 尚需原生 HTML 适配器与原生构建验证；Android 真机分页/滚动跳转和视觉验收仍待。
+  Windows 小说笔记/标记、正文搜索、翻译/TTS 及分页/双页引擎继续推进。

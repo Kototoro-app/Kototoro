@@ -11,11 +11,15 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.CookieJar
-import okhttp3.Headers
 import okhttp3.Request
+import org.skepsun.kototoro.core.network.cloudflare.CLEARANCE_COOKIE_NAMES
+import org.skepsun.kototoro.core.network.cloudflare.CLEARANCE_SOLVE_TIMEOUT_MS
+import org.skepsun.kototoro.core.network.cloudflare.ClearanceSolveDecision
+import org.skepsun.kototoro.core.network.cloudflare.ClearanceSolveTracker
+import org.skepsun.kototoro.core.network.cloudflare.ClearanceSolver
+import org.skepsun.kototoro.core.network.cloudflare.safeForBrowser
 import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
-import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -41,7 +45,7 @@ import kotlin.coroutines.resume
 class WebViewClearanceSolver @Inject constructor(
     @ApplicationContext private val context: Context,
     private val cookieJar: CookieJar,
-) {
+) : ClearanceSolver {
     private val executor = ContextCompat.getMainExecutor(context)
 
     /**
@@ -49,16 +53,16 @@ class WebViewClearanceSolver @Inject constructor(
      * 返回 true 当且仅当检测到新的 `cf_clearance`（与求解前不同）。
      * 求解前会移除旧的 `cf_clearance`，以便把“新 cookie 出现”当作成功信号。
      *
-     * 超时（[WAIT_TIMEOUT_MS]）或协程取消时返回 false 并销毁 WebView；
+     * 超时（[CLEARANCE_SOLVE_TIMEOUT_MS]）或协程取消时返回 false 并销毁 WebView；
      * WebView 的创建、停止与销毁始终发生在主线程。
      */
-    suspend fun solve(request: Request): Boolean {
+    override suspend fun solve(request: Request): Boolean {
         val url = request.url.toString()
         val oldClearance = CloudFlareHelper.getClearanceCookie(cookieJar, url)
         removeClearance(request)
-        val headers = parseHeaders(request.headers)
+        val headers = request.headers.safeForBrowser()
 
-        return withTimeoutOrNull(WAIT_TIMEOUT_MS) {
+        return withTimeoutOrNull(CLEARANCE_SOLVE_TIMEOUT_MS) {
             var session: SolveSession? = null
             try {
                 suspendCancellableCoroutine { continuation ->
@@ -78,7 +82,7 @@ class WebViewClearanceSolver @Inject constructor(
     private fun removeClearance(request: Request) {
         (cookieJar as? MutableCookieJar)?.removeCookies(
             request.url,
-            androidx.core.util.Predicate { it.name in CLOUDFLARE_COOKIE_NAMES },
+            androidx.core.util.Predicate { it.name in CLEARANCE_COOKIE_NAMES },
         )
     }
 
@@ -90,22 +94,6 @@ class WebViewClearanceSolver @Inject constructor(
             // 沿用请求的 UA，保证 WebView 与 OkHttp 指纹一致（Cloudflare 按 UA 绑定 cookie）。
             request.header("User-Agent")?.let { settings.userAgentString = it }
         }
-    }
-
-    /**
-     * 仅保留 WebView 接受的安全请求头，避免抛 net::ERR_INVALID_ARGUMENT。
-     * 移植自 komikku WebViewInterceptor.parseHeaders。
-     */
-    private fun parseHeaders(headers: Headers): Map<String, String> {
-        val result = LinkedHashMap<String, String>()
-        for (i in 0 until headers.size) {
-            val name = headers.name(i)
-            val value = headers.value(i)
-            if (isRequestHeaderSafe(name, value)) {
-                result.putIfAbsent(name, value)
-            }
-        }
-        return result
     }
 
     /**
@@ -122,8 +110,8 @@ class WebViewClearanceSolver @Inject constructor(
         @Volatile
         var webView: WebView? = null
 
-        @Volatile
-        var challengeFound = false
+        /** Mihon's solve rules, shared with the Windows solver. */
+        private val tracker = ClearanceSolveTracker(url)
 
         private val settled = AtomicBoolean(false)
         private val destroyed = AtomicBoolean(false)
@@ -153,14 +141,7 @@ class WebViewClearanceSolver @Inject constructor(
                 }
                 created.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, finishedUrl: String) {
-                        if (hasNewClearance()) {
-                            settle(true)
-                            return
-                        }
-                        if (finishedUrl == url && !challengeFound) {
-                            // 首个请求直接加载完成且没有出现挑战，放弃等待。
-                            settle(false)
-                        }
+                        decide(tracker.onPageFinished(finishedUrl, hasNewClearance()))
                     }
 
                     override fun onReceivedHttpError(
@@ -169,13 +150,8 @@ class WebViewClearanceSolver @Inject constructor(
                         errorResponse: WebResourceResponse?,
                     ) {
                         if (request?.isForMainFrame == true) {
-                            if (errorResponse?.statusCode in ERROR_CODES) {
-                                // 主框架返回 CF 挑战页，继续等待 JS 求解。
-                                challengeFound = true
-                            } else {
-                                // 非 Cloudflare 错误，放弃等待。
-                                settle(false)
-                            }
+                            // 403/503: the challenge page, wait for its JS; any other error cannot be solved here.
+                            decide(tracker.onMainFrameHttpError(errorResponse?.statusCode ?: 0))
                         }
                     }
                 }
@@ -205,6 +181,14 @@ class WebViewClearanceSolver @Inject constructor(
             }
         }
 
+        private fun decide(decision: ClearanceSolveDecision) {
+            when (decision) {
+                ClearanceSolveDecision.SOLVED -> settle(true)
+                ClearanceSolveDecision.FAILED -> settle(false)
+                ClearanceSolveDecision.WAIT -> Unit
+            }
+        }
+
         private fun settle(result: Boolean) {
             if (settled.compareAndSet(false, true)) {
                 onSettled(result)
@@ -214,22 +198,5 @@ class WebViewClearanceSolver @Inject constructor(
 
     private companion object {
         const val TAG = "WebViewClearanceSolver"
-        const val WAIT_TIMEOUT_MS = 30_000L
-        val ERROR_CODES = listOf(403, 503)
-        val CLOUDFLARE_COOKIE_NAMES = listOf("cf_clearance")
-
-        // 移植自 Chromium header_util.cc IsRequestHeaderSafe（komikku 同源）。
-        val UNSAFE_HEADER_NAMES = listOf(
-            "content-length", "host", "trailer", "te", "upgrade",
-            "cookie2", "keep-alive", "transfer-encoding", "set-cookie",
-        )
-
-        fun isRequestHeaderSafe(rawName: String, rawValue: String): Boolean {
-            val name = rawName.lowercase(Locale.ENGLISH)
-            val value = rawValue.lowercase(Locale.ENGLISH)
-            if (name in UNSAFE_HEADER_NAMES || name.startsWith("proxy-")) return false
-            if (name == "connection" && value == "upgrade") return false
-            return true
-        }
     }
 }

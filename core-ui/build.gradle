@@ -1,0 +1,86 @@
+// Android tablet presentation shared with the Windows host; platform services stay in the applications.
+plugins {
+    id 'org.jetbrains.kotlin.multiplatform'
+    id 'com.android.kotlin.multiplatform.library'
+    id 'org.jetbrains.kotlin.plugin.compose'
+    id 'org.jetbrains.kotlin.plugin.serialization'
+    id 'org.jetbrains.compose' version '1.12.0'
+}
+
+// Android's own vector drawables, generated into shared ImageVectors so both hosts draw the same reader-panel icons.
+def readerPanelIcons = ['ic_arrow_forward', 'ic_settings', 'ic_reader_ltr', 'ic_reader_rtl', 'ic_reader_vertical',
+    'ic_gesture_vertical', 'ic_move_horizontal', 'ic_fullscreen', 'ic_swap_vert', 'ic_size_large', 'ic_grid',
+    'ic_bookmark', 'ic_save', 'ic_crop', 'ic_timer', 'ic_screen_rotation', 'ic_download', 'ic_web', 'ic_translate',
+    'ic_tap', 'ic_prev', 'ic_next', 'ic_more_vert', 'ic_zoom_in', 'ic_zoom_out', 'ic_timer_run', 'ic_bookmark_added',
+    'ic_screen_rotation_lock', 'ic_current_chapter', 'ic_sort_desc', 'ic_search', 'ic_tts_close', 'ic_delete']
+def generatedIconSources = layout.buildDirectory.dir('generated/reader-panel-icons/kotlin')
+def generateReaderPanelIcons = tasks.register('generateReaderPanelIcons') {
+    def vectors = readerPanelIcons.collect { rootProject.file("app/src/main/res/drawable/${it}.xml") }
+    inputs.files(vectors)
+    outputs.dir(generatedIconSources)
+    doLast {
+        def lines = []
+        vectors.each { vectorFile ->
+            def vector = new groovy.xml.XmlParser(false, false).parse(vectorFile)
+            def dp = { String value -> Float.parseFloat(value.replace('dp', '')) }
+            def paths = vector.children().collect { node ->
+                if (node.name() != 'path') throw new GradleException("Unsupported icon element: ${vectorFile.name}")
+                def data = node.attribute('android:pathData')
+                if (!(data ==~ /[a-zA-Z0-9.,+\-\s]+/)) throw new GradleException("Unsupported icon path: ${vectorFile.name}")
+                "IconPath(\"${data}\", ${node.attribute('android:fillType') == 'evenOdd'})"
+            }
+            def name = vectorFile.name.replace('.xml', '').replaceFirst('^ic_', '').split('_')
+                .collect { it.capitalize() }.join('')
+            lines << "    val ${name}: ImageVector by lazy {\n" +
+                "        readerPanelIcon(\"${name}\", ${dp(vector.attribute('android:width'))}f, " +
+                "${dp(vector.attribute('android:height'))}f, ${vector.attribute('android:viewportWidth')}f, " +
+                "${vector.attribute('android:viewportHeight')}f, ${vector.attribute('android:autoMirrored') == 'true'}, " +
+                "listOf(${paths.join(', ')}))\n    }"
+        }
+        def target = generatedIconSources.get().file('org/skepsun/kototoro/reader/ui/compose/design/ReaderPanelIcons.kt').asFile
+        target.parentFile.mkdirs()
+        target.setText("""// Generated from app/src/main/res/drawable by :core-ui:generateReaderPanelIcons. Do not edit.
+package org.skepsun.kototoro.reader.ui.compose.design
+
+import androidx.compose.ui.graphics.vector.ImageVector
+
+/** Android's reader-panel drawables as shared vectors. */
+object ReaderPanelIcons {
+${lines.join('\n')}
+}
+""", 'UTF-8')
+    }
+}
+
+kotlin {
+    androidLibrary {
+        namespace = 'org.skepsun.kototoro.core.ui'
+        compileSdk = 37
+        minSdk = 26
+    }
+    jvm {
+        compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11 }
+    }
+    sourceSets {
+        commonMain.kotlin.srcDir(generateReaderPanelIcons.map { generatedIconSources.get() })
+        commonMain.dependencies {
+            api compose.runtime
+            api compose.foundation
+            api compose.material3
+            api project(':backdrop')
+            // Paged transition semantics (slot motion inputs) shared with the reader scenes.
+            api project(':reader-core')
+            implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
+        }
+        // System back for shared sheets (the Windows host handles Esc itself).
+        androidMain.dependencies {
+            implementation "androidx.activity:activity-compose:${libs.versions.activity.get()}"
+        }
+        jvmTest.dependencies {
+            implementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+            runtimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
+        }
+    }
+}
+
+tasks.withType(Test).configureEach { useJUnitPlatform() }

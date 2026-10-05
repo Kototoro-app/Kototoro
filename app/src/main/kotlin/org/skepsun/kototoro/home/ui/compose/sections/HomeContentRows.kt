@@ -139,14 +139,6 @@ internal fun HomeContentRowSection(
     val listMode = railStyle.listMode
     val posterStyle = railStyle.posterStyle
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
-    // Keep the section headers compact on touch devices while TV retains its larger target.
-    val headerControlSize = if (isTvPresentation) {
-        48.dp
-    } else {
-        32.dp
-    }
-    // Scale the settings icon with its touch target.
-    val headerIconSize = headerControlSize / 2f
     val rowState = rememberLazyListState()
     val scrollIntensity = rememberHorizontalRailScrollIntensity(rowState)
     val railPages = remember(items, listMode, railStyle.railRowsPerPage) {
@@ -164,68 +156,19 @@ internal fun HomeContentRowSection(
             .padding(top = if (addTopSpacing) 6.dp else 0.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides headerControlSize) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(
-                    onClick = onMoreClick,
-                    modifier = Modifier
-                        .weight(1f, fill = false)
-                        .tvFocusable(shape = CircleShape, addFocusTarget = false),
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = title,
-                            style = if (isTvPresentation) {
-                                MaterialTheme.typography.titleMedium
-                            } else {
-                                MaterialTheme.typography.titleSmall
-                            },
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = count.toHeroCountLabel(),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Icon(
-                            painter = painterResource(R.drawable.ic_arrow_forward),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(if (isTvPresentation) 20.dp else 16.dp),
-                        )
-                    }
-                }
-                if (onConfigureClick != null) {
-                    IconButton(
-                        onClick = onConfigureClick,
-                        modifier = Modifier
-                            .size(headerControlSize)
-                            .tvFocusable(shape = CircleShape, addFocusTarget = false),
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_settings),
-                            contentDescription = stringResource(R.string.list_options),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(headerIconSize),
-                        )
-                    }
-                }
-            }
-        }
+        // The header is shared with the Windows host; TV focus stays an Android modifier.
+        org.skepsun.kototoro.core.ui.home.HomeSectionHeader(
+            title = title,
+            count = count,
+            arrowIcon = painterResource(R.drawable.ic_arrow_forward),
+            onMoreClick = onMoreClick,
+            large = isTvPresentation,
+            titleModifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+            configureIcon = painterResource(R.drawable.ic_settings),
+            configureLabel = stringResource(R.string.list_options),
+            configureModifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+            onConfigureClick = onConfigureClick,
+        )
 
         val railAnimationFactor = rememberRailAnimationFactor()
         when (listMode) {
@@ -424,9 +367,28 @@ private fun HomeListRailRowItem(
         }
     }
 
-    Row(
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val coverShape = if (listMode == ListMode.DETAILED_LIST) ContentCoverShape else CompactContentCoverShape
+    val coverRadius = if (listMode == ListMode.DETAILED_LIST) ContentCoverCornerRadius else CompactContentCoverCornerRadius
+    val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle)
+    val hasProgressBar = cardUiPrefs.cardProgressStyle == CardProgressStyle.BOTTOM_BAR &&
+        (item.progress?.let { it.isValid() && it.percent > 0f } == true)
+    val bottomBadgeOffset = if (hasProgressBar) 2.dp else 0.dp
+    val badgePadding = 3.dp
+    val detailText = remember(content.altTitles, content.tags) {
+        content.altTitles.firstOrNull()?.takeIf { it.isNotBlank() }
+            ?: content.tags.take(3).joinToString(" · ") { it.title }.takeIf { it.isNotBlank() }
+    }
+
+    // The row layout and its text are shared with the Windows host; the cover content stays Android's.
+    org.skepsun.kototoro.core.ui.home.HomeListRailRow(
+        title = content.title,
+        sourceTitle = rememberResolvedSourceTitle(content.source),
+        coverWidth = coverSize.width,
+        coverShape = coverShape,
+        rimBorderBrush = rimBorderBrush,
+        onClick = { onClick(content, coverBounds.currentBounds(), sharedElementKey) },
         modifier = modifier
-            .fillMaxWidth()
             .onFocusChanged { isFocused = it.isFocused }
             .then(
                 if (isTvPresentation && isFocused) {
@@ -434,50 +396,25 @@ private fun HomeListRailRowItem(
                 } else {
                     Modifier
                 },
-            )
-            .clickable { onClick(content, coverBounds.currentBounds(), sharedElementKey) },
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-        val coverShape = if (listMode == ListMode.DETAILED_LIST) ContentCoverShape else CompactContentCoverShape
-        val coverRadius = if (listMode == ListMode.DETAILED_LIST) ContentCoverCornerRadius else CompactContentCoverCornerRadius
-        val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle)
-        val hasProgressBar = cardUiPrefs.cardProgressStyle == CardProgressStyle.BOTTOM_BAR &&
-            (item.progress?.let { it.isValid() && it.percent > 0f } == true)
-        val bottomBadgeOffset = if (hasProgressBar) 2.dp else 0.dp
-        val badgePadding = 3.dp
-
-        Box(
-            modifier = Modifier
-                .width(coverSize.width)
-                .height(coverSize.height)
-                .onGloballyPositioned { coordinates ->
-                    coverBounds.updateCoordinates(coordinates)
-                }
-                .then(
-                    if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedElement(
-                                rememberSharedContentState(key = sharedElementKey),
-                                animatedVisibilityScope = animatedVisibilityScope,
-                            )
-                        }
-                    } else Modifier
-                )
-                .shadow(
-                    elevation = 2.dp,
-                    shape = coverShape,
-                    clip = false,
-                )
-                .clip(coverShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(
-                    width = 0.5.dp,
-                    brush = rimBorderBrush,
-                    shape = coverShape,
-                ),
-        ) {
+            ),
+        detailed = listMode == ListMode.DETAILED_LIST,
+        supportingText = item.supportingText?.text,
+        detailText = detailText,
+        coverModifier = Modifier
+            .onGloballyPositioned { coordinates ->
+                coverBounds.updateCoordinates(coordinates)
+            }
+            .then(
+                if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedElement(
+                            rememberSharedContentState(key = sharedElementKey),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
+                    }
+                } else Modifier
+            ),
+        cover = {
             if (imageRequest != null) {
                 AsyncImage(
                     model = imageRequest,
@@ -574,70 +511,8 @@ private fun HomeListRailRowItem(
                     )
                 }
             }
-        }
-
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(if (listMode == ListMode.DETAILED_LIST) 4.dp else 2.dp),
-        ) {
-            Text(
-                text = content.title,
-                style = if (listMode == ListMode.DETAILED_LIST) {
-                    MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        lineHeight = 18.sp,
-                    )
-                } else {
-                    MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.5.sp,
-                        lineHeight = 18.sp,
-                    )
-                },
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = if (listMode == ListMode.DETAILED_LIST) 2 else 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            when {
-                item.supportingText != null -> {
-                    Text(
-                        text = item.supportingText.text,
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.Medium,
-                        ),
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = if (listMode == ListMode.DETAILED_LIST) 2 else 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-
-                listMode == ListMode.DETAILED_LIST -> {
-                    val detailText = remember(content.altTitles, content.tags) {
-                        content.altTitles.firstOrNull()?.takeIf { it.isNotBlank() }
-                            ?: content.tags.take(3).joinToString(" · ") { it.title }.takeIf { it.isNotBlank() }
-                    }
-                    detailText?.let { text ->
-                        Text(
-                            text = text,
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 11.5.sp,
-                            ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-            Text(
-                text = rememberResolvedSourceTitle(content.source),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+        },
+    )
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)

@@ -3,6 +3,9 @@ package org.skepsun.kototoro.details.ui
 import android.content.Context
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.bookmarks.domain.Bookmark
+import org.skepsun.kototoro.core.ui.chapters.ChapterSection
+import org.skepsun.kototoro.core.ui.chapters.shouldShowVolumeHeaders
+import org.skepsun.kototoro.core.ui.chapters.withVolumeSections
 import org.skepsun.kototoro.details.data.ContentDetails
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
 import org.skepsun.kototoro.details.ui.model.toListItem
@@ -147,7 +150,7 @@ private fun ContentChapter.isAfter(current: ContentChapter): Boolean {
 
 /** A lone "Unknown volume" header says nothing; only group when some chapter has a volume or group name. */
 internal fun shouldShowVolumeHeaders(chapters: List<ContentChapter>): Boolean =
-    chapters.any { it.volume > 0 || !it.scanlator.isNullOrBlank() }
+    shouldShowVolumeHeaders(chapters, ContentChapter::volume, ContentChapter::scanlator)
 
 fun List<ChapterListItem>.withVolumeHeaders(context: Context): MutableList<ListModel> {
     // 检查是否有EPUB章节（通过URL判断）
@@ -157,31 +160,21 @@ fun List<ChapterListItem>.withVolumeHeaders(context: Context): MutableList<ListM
         // EPUB章节：按父章节（卷）分组
         return withEpubVolumeGroups(context)
     } else {
-        // 普通章节：使用原有的volume分组逻辑
-        if (!shouldShowVolumeHeaders(map { it.chapter })) return toMutableList<ListModel>()
-        var prevVolume = -1 // Start with -1 to ensure first volume always gets a header
-        var prevCustomHeader: String? = null
-        val result = ArrayList<ListModel>((size * 1.4).toInt())
-        for (item in this) {
-            val chapter = item.chapter
-            val customHeader = chapter.scanlator?.takeIf { it.isNotBlank() }
-
-            // Show a header if the volume index changed OR if we have a new unique custom string header
-            if (chapter.volume != prevVolume || (customHeader != null && customHeader != prevCustomHeader)) {
-                val text = if (customHeader != null) {
-                    customHeader
-                } else if (chapter.volume <= 0) {
-                    context.getString(R.string.volume_unknown)
-                } else {
-                    context.getString(R.string.volume_, chapter.volume)
-                }
-                result.add(ListHeader(text))
-                prevVolume = chapter.volume
-                prevCustomHeader = customHeader
+        // 普通章节：共享的 volume 分组逻辑（与 Windows 端一致）
+        return withVolumeSections(this, { it.chapter.volume }, { it.chapter.scanlator }).mapTo(
+            ArrayList<ListModel>((size * 1.4).toInt()),
+        ) { section ->
+            when (section) {
+                is ChapterSection.Header -> ListHeader(
+                    section.customName ?: if (section.volume <= 0) {
+                        context.getString(R.string.volume_unknown)
+                    } else {
+                        context.getString(R.string.volume_, section.volume)
+                    },
+                )
+                is ChapterSection.Item -> section.chapter
             }
-            result.add(item)
         }
-        return result
     }
 }
 

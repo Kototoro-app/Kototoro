@@ -21,8 +21,6 @@ internal fun mangaQuickActions(translationAvailable: Boolean, translationActive:
         .map { id ->
             ReaderQuickAction(
                 id = id.name,
-                iconResId = id.iconResId,
-                labelResId = id.labelResId,
                 toggled = if (id == MangaQuickActionId.TRANSLATE) translationActive else null,
             )
         }

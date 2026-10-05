@@ -95,7 +95,21 @@ object DesktopPlatformProbe {
                             check(saved.status == SourcePreferenceUpdateStatus.ACCEPTED)
                             val manga = client.getList(source, 0, null, null).single()
                             val details = client.getDetails(manga, SourceDetailsFetchMode.FORCE_REFRESH)
-                            val pages = client.getPages(details.chapters!!.single(), null)
+                            val chapter = details.chapters!!.single()
+                            val defaultAgent = client.getPages(chapter, null).single().headers?.get("User-Agent")
+                            check(!defaultAgent.isNullOrBlank())
+                            // Kototoro's own User-Agent row exists for every HTTP source, after the extension's rows.
+                            val agent = saved.screen.nodes.single { it.id == "host:user_agent" }
+                            check(saved.screen.nodes.last() == agent && agent.enabled)
+                            val invalid = client.updatePreference(source, saved.screen.revision, agent.id,
+                                SourcePreferenceValue.Text("bad\u0001agent"))
+                            check(invalid.status == SourcePreferenceUpdateStatus.REJECTED)
+                            val custom = client.updatePreference(source, invalid.screen.revision, agent.id,
+                                SourcePreferenceValue.Text(" KototoroProbe/1.0 "))
+                            check(custom.status == SourcePreferenceUpdateStatus.ACCEPTED)
+                            check(custom.screen.nodes.last().value == SourcePreferenceValue.Text("KototoroProbe/1.0"))
+                            val pages = client.getPages(chapter, null)
+                            check(pages.single().headers?.get("User-Agent") == "KototoroProbe/1.0") { "${pages.single().headers}" }
                             check(pages.single().requestContext!!.index == 12)
                             val image = client.fetchImage(pages.single())
                             val expected = Base64.getDecoder().decode(
@@ -104,7 +118,15 @@ object DesktopPlatformProbe {
                             )
                             check(Files.readAllBytes(root.resolve("images").resolve(image.relativePath))
                                 .contentEquals(expected))
-                        } else check(settings.nodes[0].value == SourcePreferenceValue.Text("saved"))
+                        } else {
+                            check(settings.nodes[0].value == SourcePreferenceValue.Text("saved"))
+                            // The User-Agent persists in the source's own store and applies after a restart.
+                            check(settings.nodes.single { it.id == "host:user_agent" }.value ==
+                                SourcePreferenceValue.Text("KototoroProbe/1.0"))
+                            val manga = client.getList(source, 0, null, null).single()
+                            val chapter = client.getDetails(manga, SourceDetailsFetchMode.FORCE_REFRESH).chapters!!.single()
+                            check(client.getPages(chapter, null).single().headers?.get("User-Agent") == "KototoroProbe/1.0")
+                        }
                     }
                 }
                 val dispatcher = helper.client.dispatcher.executorService

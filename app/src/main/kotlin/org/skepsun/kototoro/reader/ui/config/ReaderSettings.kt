@@ -1,5 +1,8 @@
 package org.skepsun.kototoro.reader.ui.config
 
+import org.skepsun.kototoro.reader.domain.getBackgroundTint
+import org.skepsun.kototoro.core.prefs.resolve
+import org.skepsun.kototoro.core.prefs.isLight
 import android.graphics.Bitmap
 import android.view.View
 import androidx.collection.scatterSetOf

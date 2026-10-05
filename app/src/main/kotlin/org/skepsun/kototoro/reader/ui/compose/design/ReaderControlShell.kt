@@ -78,18 +78,6 @@ data class ReaderControlItem(
     val indicator: Boolean = false,
 )
 
-object ReaderControlTokens {
-    val TouchTarget = 48.dp
-    val BottomBarMinHeight = 56.dp
-    val GroupPadding = 12.dp
-    val ItemSpacing = 8.dp
-    val SheetHorizontalPadding = 16.dp
-    val SheetMaxWidth = 760.dp
-    val DockMaxWidth = 360.dp
-    val DockShape = RoundedRectangle(28.dp)
-    val ChromeShadowElevation = 6.dp
-}
-
 @Composable
 fun ReaderPrimaryControlBar(
     items: List<ReaderControlItem>,
@@ -240,12 +228,6 @@ fun ReaderControlDock(
 }
 
 @Composable
-internal fun readerControlContentColor(): Color {
-    val colors = MaterialTheme.colorScheme
-    return if (colors.isDarkTheme()) Color.White else colors.onSurface
-}
-
-@Composable
 private fun ReaderControlDockContent(content: @Composable () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -255,47 +237,6 @@ private fun ReaderControlDockContent(content: @Composable () -> Unit) {
             LocalContentColor provides readerControlContentColor(),
         ) {
             content()
-        }
-    }
-}
-
-@Composable
-fun ReaderProgressDock(
-    isIosStyle: Boolean,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    val dockModifier = modifier
-        .widthIn(max = ReaderControlTokens.DockMaxWidth)
-        .fillMaxWidth()
-    if (isIosStyle) {
-        GlassSurface(
-            modifier = dockModifier,
-            shape = RoundedRectangle(22.dp),
-            style = GlassDefaults.bottomBarChromeStyle().copy(
-                containerAlpha = 0.86f,
-                shadowElevation = ReaderControlTokens.ChromeShadowElevation,
-            ),
-            // Reader bottom docks are compact floating control clusters, not a
-            // passive nav bar — pill chrome (hairline + press gloss).
-            componentRole = GlassComponentRole.PillControl,
-        ) {
-            CompositionLocalProvider(LocalContentColor provides readerControlContentColor()) {
-                content()
-            }
-        }
-    } else {
-        Surface(
-            modifier = dockModifier,
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 2.dp,
-            shadowElevation = ReaderControlTokens.ChromeShadowElevation,
-        ) {
-            CompositionLocalProvider(LocalContentColor provides readerControlContentColor()) {
-                content()
-            }
         }
     }
 }
@@ -315,130 +256,6 @@ fun ReaderControlGroup(
             modifier = Modifier.padding(ReaderControlTokens.GroupPadding),
         ) {
             content()
-        }
-    }
-}
-
-@Composable
-@OptIn(ExperimentalMaterial3Api::class)
-fun ReaderProgressBar(
-    value: Float,
-    max: Float,
-    onValueChange: (Float) -> Unit,
-    onValueChangeFinished: () -> Unit,
-    onPreviousChapter: () -> Unit,
-    onNextChapter: () -> Unit,
-    previousEnabled: Boolean = true,
-    nextEnabled: Boolean = true,
-    isIosStyle: Boolean = true,
-    modifier: Modifier = Modifier,
-) {
-    var dragValue by remember { mutableStateOf<Float?>(null) }
-    var containerPosition by remember { mutableStateOf(IntOffset.Zero) }
-    var trackPosition by remember { mutableStateOf(IntOffset.Zero) }
-    var trackWidthPx by remember { mutableStateOf(0) }
-    val density = LocalDensity.current
-    val popupOffsetPx = with(density) { 48.dp.roundToPx() }
-    val popupHalfWidthPx = with(density) { 28.dp.roundToPx() }
-    val effectiveMax = max.coerceAtLeast(1f)
-    val displayedValue = (dragValue ?: value).coerceIn(0f, effectiveMax)
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .onGloballyPositioned { coordinates ->
-                val position = coordinates.positionInWindow()
-                containerPosition = IntOffset(position.x.roundToInt(), position.y.roundToInt())
-            },
-    ) {
-        if (dragValue != null) {
-            val fraction = displayedValue / effectiveMax
-            Popup(
-                alignment = Alignment.TopStart,
-                offset = IntOffset(
-                    trackPosition.x - containerPosition.x +
-                        (trackWidthPx * fraction).roundToInt() - popupHalfWidthPx,
-                    -popupOffsetPx,
-                ),
-                properties = PopupProperties(focusable = false),
-            ) {
-                Surface(
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.inverseSurface,
-                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-                ) {
-                    Text(
-                        text = "${displayedValue.toInt() + 1}/${max.toInt() + 1}",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(8.dp),
-                    )
-                }
-            }
-        }
-        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
-            BoxWithConstraints(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 1.dp),
-            ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = onPreviousChapter,
-                    enabled = previousEnabled,
-                    modifier = Modifier.size(40.dp),
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_prev),
-                        stringResource(R.string.prev_chapter),
-                        tint = LocalContentColor.current,
-                    )
-                }
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .onGloballyPositioned { coordinates ->
-                            val position = coordinates.positionInWindow()
-                            trackPosition = IntOffset(position.x.roundToInt(), position.y.roundToInt())
-                            trackWidthPx = coordinates.size.width
-                        },
-                ) {
-                    Slider(
-                        value = displayedValue,
-                        onValueChange = {
-                            dragValue = it
-                            onValueChange(it)
-                        },
-                        onValueChangeFinished = {
-                            dragValue = null
-                            onValueChangeFinished()
-                        },
-                        valueRange = 0f..effectiveMax,
-                        thumb = {
-                            Box(
-                                modifier = Modifier
-                                    .size(if (isIosStyle) 14.dp else 18.dp)
-                                    .background(MaterialTheme.colorScheme.primary, CircleShape),
-                            )
-                        },
-                        track = { sliderState ->
-                            SliderDefaults.Track(
-                                sliderState = sliderState,
-                                modifier = Modifier.height(if (isIosStyle) 4.dp else 10.dp),
-                                thumbTrackGapSize = 0.dp,
-                            )
-                        },
-                    )
-                }
-                IconButton(
-                    onClick = onNextChapter,
-                    enabled = nextEnabled,
-                    modifier = Modifier.size(40.dp),
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_next),
-                        stringResource(R.string.next_chapter),
-                        tint = LocalContentColor.current,
-                    )
-                }
-            }
-            }
         }
     }
 }

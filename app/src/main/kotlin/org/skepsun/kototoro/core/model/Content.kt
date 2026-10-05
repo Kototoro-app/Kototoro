@@ -12,6 +12,8 @@ import androidx.core.os.LocaleListCompat
 import androidx.core.text.buildSpannedString
 import androidx.core.text.strikeThrough
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.chapters.ChapterBranchLocale
+import org.skepsun.kototoro.core.ui.chapters.resolvePreferredChapterBranch
 import org.skepsun.kototoro.core.ui.model.ContentOverride
 import org.skepsun.kototoro.core.util.ext.iterator
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
@@ -95,53 +97,14 @@ fun Content.getPreferredBranch(history: ContentHistory?): String? {
         Log.d("ContentBranch", "getPreferredBranch: contentId=$id has no chapters")
         return null
     }
-    if (history != null) {
-        val currentChapter = ch.findById(history.chapterId)
-        if (currentChapter != null) {
-            Log.d(
-                "ContentBranch",
-                "getPreferredBranch: contentId=$id using history chapterId=${history.chapterId}, branch=${currentChapter.branch}",
-            )
-            return currentChapter.branch
+    // Shared with the Windows host: history branch, single branch, locale match, else the largest branch.
+    val locales = buildList {
+        for (locale in LocaleListCompat.getAdjustedDefault()) {
+            add(ChapterBranchLocale(locale.getDisplayLanguage(locale), locale.getDisplayName(locale)))
         }
     }
-    val groups = ch.groupBy { it.branch }
-    if (groups.size == 1) {
-        val onlyBranch = groups.keys.first()
-        Log.d(
-            "ContentBranch",
-            "getPreferredBranch: contentId=$id single branch=$onlyBranch, count=${groups[onlyBranch]?.size ?: 0}",
-        )
-        return onlyBranch
-    }
-    for (locale in LocaleListCompat.getAdjustedDefault()) {
-        val displayLanguage = locale.getDisplayLanguage(locale)
-        val displayName = locale.getDisplayName(locale)
-        val candidates = HashMap<String?, List<ContentChapter>>(3)
-        for (branch in groups.keys) {
-            if (branch != null && (
-                    branch.contains(displayLanguage, ignoreCase = true) ||
-                        branch.contains(displayName, ignoreCase = true)
-                    )
-            ) {
-                candidates[branch] = groups[branch] ?: continue
-            }
-        }
-        if (candidates.isNotEmpty()) {
-            val matched = candidates.maxBy { it.value.size }.key
-            Log.d(
-                "ContentBranch",
-                "getPreferredBranch: contentId=$id locale matched branch=$matched, groups=${groups.mapValues { it.value.size }}",
-            )
-            return matched
-        }
-    }
-    val fallback = groups.maxByOrNull { it.value.size }?.key
-    Log.d(
-        "ContentBranch",
-        "getPreferredBranch: contentId=$id fallback branch=$fallback, groups=${groups.mapValues { it.value.size }}",
-    )
-    return fallback
+    return resolvePreferredChapterBranch(ch, ContentChapter::branch, ContentChapter::id, history?.chapterId, locales)
+        .also { Log.d("ContentBranch", "getPreferredBranch: contentId=$id branch=$it") }
 }
 
 val Content.isLocal: Boolean

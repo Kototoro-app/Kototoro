@@ -2,12 +2,10 @@ package org.skepsun.kototoro.list.ui.compose
 
 import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -39,7 +37,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -56,8 +53,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -135,39 +130,6 @@ private fun rememberContentCardSourceMetadata(
     return remember(source, resolvedSource.name, resolvedSource.locale, resolvedSource.javaClass.name) {
         contentCardSourceMetadata(source, resolvedSource)
     }
-}
-
-@Immutable
-data class ContentCardBadgeMetrics(
-    val containerHorizontalPadding: androidx.compose.ui.unit.Dp = 7.dp,
-    val containerVerticalPadding: androidx.compose.ui.unit.Dp = 4.dp,
-    val itemSpacing: androidx.compose.ui.unit.Dp = 4.dp,
-    val iconSize: androidx.compose.ui.unit.Dp = 14.dp,
-    val textSize: androidx.compose.ui.unit.TextUnit = 11.sp,
-    val outerPadding: androidx.compose.ui.unit.Dp = 7.dp,
-    val badgeEdgePadding: androidx.compose.ui.unit.Dp = 0.dp,
-    val progressSize: androidx.compose.ui.unit.Dp = 26.dp,
-    val progressAnchorInset: androidx.compose.ui.unit.Dp = 8.dp,
-    val progressSpacing: androidx.compose.ui.unit.Dp = 4.dp,
-    val innerCornerRadius: androidx.compose.ui.unit.Dp = 10.dp,
-)
-
-fun contentCardBadgeMetricsFor(coverWidth: androidx.compose.ui.unit.Dp): ContentCardBadgeMetrics {
-    val scale = (coverWidth.value / 112f).coerceIn(0.66f, 1.15f)
-    val isSmallCard = coverWidth < 80.dp
-    return ContentCardBadgeMetrics(
-        containerHorizontalPadding = 7.dp * scale,
-        containerVerticalPadding = 4.dp * scale,
-        itemSpacing = 4.dp * scale,
-        iconSize = 14.dp * scale,
-        textSize = 11.sp * scale,
-        outerPadding = 7.dp * scale,
-        badgeEdgePadding = 0.dp,
-        progressSize = if (isSmallCard) 24.dp else 26.dp,
-        progressAnchorInset = 8.dp * scale,
-        progressSpacing = 4.dp * scale,
-        innerCornerRadius = 10.dp * scale,
-    )
 }
 
 @Immutable
@@ -323,9 +285,6 @@ fun KototoroContentCardGrid(
     }
     val coverBounds = rememberDeferredContentCoverBounds()
     val badgeMetrics = remember(posterStyle.itemWidth) { contentCardBadgeMetricsFor(posterStyle.itemWidth) }
-    val compactTitleHeight = remember(posterStyle.posterHeight) {
-        compactGridTitleOverlayHeight(posterStyle.posterHeight)
-    }
     val compactTitleTextClearance = remember(posterStyle.posterHeight) {
         (posterStyle.posterHeight.value * 0.28f).dp.coerceIn(32.dp, 44.dp)
     }
@@ -369,7 +328,19 @@ fun KototoroContentCardGrid(
             .padding(cellContentPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
+        val showBottomRightBadge = remember(resolvedUiPrefs.badgesBottomRight, renderModel.isNsfw) {
+            "nsfw" in resolvedUiPrefs.badgesBottomRight && renderModel.isNsfw
+        }
+        val hasProgressBar = resolvedUiPrefs.cardProgressStyle == CardProgressStyle.BOTTOM_BAR &&
+            (renderModel.progress?.let { it.isValid() && it.percent > 0f } == true)
+        val bottomBadgeOffset = if (!compactOverlay && hasProgressBar) 3.dp else 0.dp
+
+        TabletPosterCover(
+            title = renderModel.title,
+            style = posterStyle,
+            rimBorderBrush = rimBorderBrush,
+            compactOverlay = compactOverlay,
+            gridScale = gridScale,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(posterAspectRatio)
@@ -391,155 +362,127 @@ fun KototoroContentCardGrid(
                             )
                         }
                     } else Modifier,
+                ),
+            cover = {
+                ContentCardCoverImage(
+                    coverRequest = coverRequest,
+                    contentDescription = renderModel.title,
+                    sharedKey = sharedKey,
+                    retainSnapshot = shouldRetainContentCoverSnapshot(sharedTransitionEnabled),
                 )
-                .shadow(
-                    elevation = 2.dp,
-                    shape = cardShape,
-                    clip = false,
-                )
-                .clip(cardShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(
-                    width = 0.5.dp,
-                    brush = rimBorderBrush,
-                    shape = cardShape,
-                )
-        ) {
-            ContentCardCoverImage(
-                coverRequest = coverRequest,
-                contentDescription = renderModel.title,
-                sharedKey = sharedKey,
-                retainSnapshot = shouldRetainContentCoverSnapshot(sharedTransitionEnabled),
-            )
 
-            ContentCardBookSpine(
-                modifier = Modifier.align(Alignment.CenterStart),
-                width = 3.5.dp,
-            )
-
-            if (isSelected) {
-                Box(modifier = Modifier.matchParentSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)))
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_check),
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.align(Alignment.Center).size(32.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp)).padding(4.dp)
-                )
-            }
-
-            val badgeCornerPadding = 5.dp
-            // Top Left Badges
-            ContentCardCornerBadges(
-                badges = resolvedUiPrefs.badgesTopLeft,
-                item = renderModel,
-                sourceMetadata = sourceMetadata,
-                corner = Alignment.TopStart,
-                cardRadius = cardRadius,
-                metrics = badgeMetrics,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = badgeCornerPadding, top = badgeCornerPadding),
-            )
-
-            // Top Right Badges (includes counter if not handled by badges)
-            val effectiveTopRightBadges = remember(
-                resolvedUiPrefs.badgesTopRight,
-                renderModel.counter,
-                renderModel.scoreText,
-            ) {
-                buildSet {
-                    addAll(resolvedUiPrefs.badgesTopRight)
-                    if (renderModel.counter > 0) {
-                        add("counter")
-                    }
-                    if (!renderModel.scoreText.isNullOrBlank()) {
-                        add("score")
-                    }
+            },
+            overlays = {
+                if (isSelected) {
+                    Box(modifier = Modifier.matchParentSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)))
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_check),
+                        contentDescription = "Selected",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.align(Alignment.Center).size(32.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp)).padding(4.dp)
+                    )
                 }
-            }
-            ContentCardCornerBadges(
-                badges = effectiveTopRightBadges,
-                item = renderModel,
-                sourceMetadata = sourceMetadata,
-                corner = Alignment.TopEnd,
-                cardRadius = cardRadius,
-                metrics = badgeMetrics,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(end = badgeCornerPadding, top = badgeCornerPadding),
-            )
 
-            val showBottomRightBadge = remember(resolvedUiPrefs.badgesBottomRight, renderModel.isNsfw) {
-                "nsfw" in resolvedUiPrefs.badgesBottomRight && renderModel.isNsfw
-            }
-            val hasProgressBar = resolvedUiPrefs.cardProgressStyle == CardProgressStyle.BOTTOM_BAR &&
-                (renderModel.progress?.let { it.isValid() && it.percent > 0f } == true)
-            val bottomBadgeOffset = if (!compactOverlay && hasProgressBar) 3.dp else 0.dp
-
-            // Bottom Left Badges
-            ContentCardCornerBadges(
-                badges = resolvedUiPrefs.badgesBottomLeft,
-                item = renderModel,
-                sourceMetadata = sourceMetadata,
-                corner = Alignment.BottomStart,
-                cardRadius = cardRadius,
-                metrics = badgeMetrics,
-                attachedToTitleEdge = compactOverlay,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(
-                        start = badgeCornerPadding,
-                        bottom = bottomBadgeLift + badgeCornerPadding + bottomBadgeOffset,
-                    ),
-            )
-
-            if (showBottomRightBadge) {
+                val badgeCornerPadding = 5.dp
+                // Top Left Badges
                 ContentCardCornerBadges(
-                    badges = resolvedUiPrefs.badgesBottomRight,
+                    badges = resolvedUiPrefs.badgesTopLeft,
                     item = renderModel,
                     sourceMetadata = sourceMetadata,
-                    corner = Alignment.BottomEnd,
+                    corner = Alignment.TopStart,
+                    cardRadius = cardRadius,
+                    metrics = badgeMetrics,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = badgeCornerPadding, top = badgeCornerPadding),
+                )
+
+                // Top Right Badges (includes counter if not handled by badges)
+                val effectiveTopRightBadges = remember(
+                    resolvedUiPrefs.badgesTopRight,
+                    renderModel.counter,
+                    renderModel.scoreText,
+                ) {
+                    buildSet {
+                        addAll(resolvedUiPrefs.badgesTopRight)
+                        if (renderModel.counter > 0) {
+                            add("counter")
+                        }
+                        if (!renderModel.scoreText.isNullOrBlank()) {
+                            add("score")
+                        }
+                    }
+                }
+                ContentCardCornerBadges(
+                    badges = effectiveTopRightBadges,
+                    item = renderModel,
+                    sourceMetadata = sourceMetadata,
+                    corner = Alignment.TopEnd,
+                    cardRadius = cardRadius,
+                    metrics = badgeMetrics,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = badgeCornerPadding, top = badgeCornerPadding),
+                )
+
+                // Bottom Left Badges
+                ContentCardCornerBadges(
+                    badges = resolvedUiPrefs.badgesBottomLeft,
+                    item = renderModel,
+                    sourceMetadata = sourceMetadata,
+                    corner = Alignment.BottomStart,
                     cardRadius = cardRadius,
                     metrics = badgeMetrics,
                     attachedToTitleEdge = compactOverlay,
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
+                        .align(Alignment.BottomStart)
                         .padding(
-                            end = badgeCornerPadding,
+                            start = badgeCornerPadding,
                             bottom = bottomBadgeLift + badgeCornerPadding + bottomBadgeOffset,
                         ),
                 )
-            }
-            if (compactOverlay) {
-                CompactGridTitleOverlay(
-                    title = renderModel.title,
-                    height = compactTitleHeight,
-                    fontSize = resolveCompactGridTitleFontSize(gridScale),
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
-            }
 
-            when (resolvedUiPrefs.cardProgressStyle) {
-                CardProgressStyle.BOTTOM_BAR -> {
-                    if (renderModel.progress != null) {
-                        ContentCardBottomProgressBar(
+                if (showBottomRightBadge) {
+                    ContentCardCornerBadges(
+                        badges = resolvedUiPrefs.badgesBottomRight,
+                        item = renderModel,
+                        sourceMetadata = sourceMetadata,
+                        corner = Alignment.BottomEnd,
+                        cardRadius = cardRadius,
+                        metrics = badgeMetrics,
+                        attachedToTitleEdge = compactOverlay,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(
+                                end = badgeCornerPadding,
+                                bottom = bottomBadgeLift + badgeCornerPadding + bottomBadgeOffset,
+                            ),
+                    )
+                }
+            },
+            progress = {
+                when (resolvedUiPrefs.cardProgressStyle) {
+                    CardProgressStyle.BOTTOM_BAR -> {
+                        if (renderModel.progress != null) {
+                            ContentCardBottomProgressBar(
+                                progress = renderModel.progress,
+                                modifier = Modifier.align(Alignment.BottomCenter),
+                            )
+                        }
+                    }
+                    CardProgressStyle.CIRCULAR_BADGE -> {
+                        ContentCardCoverProgressIndicator(
                             progress = renderModel.progress,
-                            modifier = Modifier.align(Alignment.BottomCenter),
+                            hasBottomRightBadge = showBottomRightBadge,
+                            metrics = badgeMetrics,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .then(if (bottomBadgeLift > 0.dp) Modifier.padding(bottom = bottomBadgeLift) else Modifier),
                         )
                     }
                 }
-                CardProgressStyle.CIRCULAR_BADGE -> {
-                    ContentCardCoverProgressIndicator(
-                        progress = renderModel.progress,
-                        hasBottomRightBadge = showBottomRightBadge,
-                        metrics = badgeMetrics,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .then(if (bottomBadgeLift > 0.dp) Modifier.padding(bottom = bottomBadgeLift) else Modifier),
-                    )
-                }
-            }
-        }
+            },
+        )
 
         if (!compactOverlay) {
             Text(
@@ -593,165 +536,13 @@ fun KototoroContentCardGrid(
     }
 }
 
-private val CompactGridScrimStops = arrayOf(
-    0.0f to Color.Transparent,
-    0.20f to Color.Black.copy(alpha = 0.05f),
-    0.40f to Color.Black.copy(alpha = 0.16f),
-    0.60f to Color.Black.copy(alpha = 0.34f),
-    0.80f to Color.Black.copy(alpha = 0.54f),
-    1.0f to Color.Black.copy(alpha = 0.72f),
-)
-
-@Composable
-private fun CompactGridTitleOverlay(
-    title: String,
-    height: androidx.compose.ui.unit.Dp,
-    fontSize: TextUnit,
-    modifier: Modifier = Modifier,
-) {
-    val overlayBrush = remember {
-        Brush.verticalGradient(colorStops = CompactGridScrimStops)
-    }
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(height)
-            .background(overlayBrush)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        contentAlignment = Alignment.BottomStart,
-    ) {
-        Text(
-            modifier = Modifier.fillMaxWidth(),
-            text = title,
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontSize = fontSize,
-                lineHeight = (fontSize.value + 3.5f).sp,
-                fontWeight = FontWeight.SemiBold,
-                // Narrow rail covers cannot hold a long word on one line; hyphenate it
-                // instead of breaking it at an arbitrary letter ("Tide / r").
-                hyphens = androidx.compose.ui.text.style.Hyphens.Auto,
-                lineBreak = androidx.compose.ui.text.style.LineBreak.Paragraph,
-                shadow = Shadow(
-                    color = Color.Black.copy(alpha = 0.75f),
-                    offset = Offset(0f, 1.5f),
-                    blurRadius = 5f,
-                ),
-            ),
-            color = Color.White,
-            softWrap = true,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
 @Composable
 fun ContentCardBottomProgressBar(
     progress: ReadingProgress,
     modifier: Modifier = Modifier,
 ) {
-    if (!progress.isValid() || progress.percent <= 0f) return
-    val percent = progress.percent.coerceIn(0f, 1f)
-    val completed = progress.isCompleted()
-    val strokeColor = when {
-        completed -> Color(0xFF34C759)
-        else -> MaterialTheme.colorScheme.primary
-    }
-    val trackColor = Color.Black.copy(alpha = 0.45f)
-    val displayPercent = percent.coerceIn(0.04f, 1f)
-    val barHeight = 4.dp
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(barHeight)
-            .background(trackColor),
-    ) {
-        val fillShape = if (displayPercent < 0.98f) {
-            RoundedCornerShape(topEnd = 2.dp, bottomEnd = 2.dp)
-        } else {
-            androidx.compose.ui.graphics.RectangleShape
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(displayPercent)
-                .fillMaxHeight()
-                .background(strokeColor, fillShape),
-        )
-    }
-}
-
-/**
- * Subtle physical book spine & crease effect on the inner start edge of manga covers.
- * Simulates the lighting and hinge groove of a tankōbon / physical book spine.
- */
-private val BookSpineBrush = Brush.horizontalGradient(
-    0.00f to Color.White.copy(alpha = 0.14f),
-    0.28f to Color.Black.copy(alpha = 0.18f),
-    0.70f to Color.Black.copy(alpha = 0.06f),
-    1.00f to Color.Transparent,
-)
-
-@Composable
-fun ContentCardBookSpine(
-    modifier: Modifier = Modifier,
-    width: androidx.compose.ui.unit.Dp = 3.5.dp,
-) {
-    Box(
-        modifier = modifier
-            .fillMaxHeight()
-            .width(width)
-            .background(BookSpineBrush),
-    )
-}
-
-/**
- * Top rim-light bevel border brush for manga cover cards.
- * Replaces flat monochrome card borders with a subtle directional gradient:
- * a crisp specular rim highlight on the top edge fading to a delicate ambient tone at the bottom.
- */
-@Composable
-fun rememberCoverRimBorderBrush(isIosStyle: Boolean): Brush {
-    val isDark = isSystemInDarkTheme()
-    val outlineVariant = MaterialTheme.colorScheme.outlineVariant
-    return remember(isIosStyle, isDark, outlineVariant) {
-        val topColor = if (isIosStyle) {
-            if (isDark) Color.White.copy(alpha = 0.28f) else Color.Black.copy(alpha = 0.14f)
-        } else {
-            if (isDark) Color.White.copy(alpha = 0.22f) else outlineVariant.copy(alpha = 0.45f)
-        }
-        val midColor = if (isIosStyle) {
-            if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.07f)
-        } else {
-            if (isDark) Color.White.copy(alpha = 0.08f) else outlineVariant.copy(alpha = 0.22f)
-        }
-        val bottomColor = if (isIosStyle) {
-            if (isDark) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.04f)
-        } else {
-            if (isDark) Color.White.copy(alpha = 0.04f) else outlineVariant.copy(alpha = 0.10f)
-        }
-        Brush.verticalGradient(
-            0.0f to topColor,
-            0.4f to midColor,
-            1.0f to bottomColor,
-        )
-    }
-}
-
-/**
- * Title size of the compact grid, drawn over the cover: a notch under the below-cover title
- * so two lines fit the scrim (at the full size one line was all that fit on phones).
- */
-internal fun resolveCompactGridTitleFontSize(gridScale: Float): TextUnit =
-    (resolveGridTitleFontSize(gridScale).value - 1.5f).sp
-
-/** Scrim height of the compact grid title: room for two title lines on any cover size. */
-internal fun compactGridTitleOverlayHeight(posterHeight: androidx.compose.ui.unit.Dp): androidx.compose.ui.unit.Dp =
-    (posterHeight.value * 0.42f).dp.coerceIn(54.dp, 72.dp)
-
-internal fun resolveGridTitleFontSize(gridScale: Float): TextUnit {
-    val normalized = ((gridScale.coerceIn(0.5f, 1.5f) - 0.5f) / 1f).coerceIn(0f, 1f)
-    return (12f + 4f * normalized).sp
+    if (!progress.isValid()) return
+    ContentCardBottomProgressBar(progress.percent, progress.isCompleted(), modifier)
 }
 
 @Composable
@@ -760,16 +551,6 @@ fun ContentCardReadingProgressIndicator(
     modifier: Modifier = Modifier,
 ) {
     if (!progress.isValid()) return
-
-    val percent = progress.percent.coerceIn(0f, 1f)
-    val completed = progress.isCompleted()
-    val strokeColor = MaterialTheme.colorScheme.primary
-    val backgroundColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f)
-    val contentColor = if (completed) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
     val label = remember(progress) {
         when (progress.mode) {
             NONE -> ""
@@ -779,51 +560,13 @@ fun ContentCardReadingProgressIndicator(
             CHAPTERS_LEFT -> "-${progress.chaptersLeft}"
         }
     }
-
-    Box(
+    ContentCardReadingProgressRing(
+        percent = progress.percent,
+        completed = progress.isCompleted(),
+        label = label,
+        completedIcon = painterResource(id = R.drawable.ic_check),
         modifier = modifier,
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokeWidth = size.minDimension * 0.075f
-            val radius = size.minDimension / 2f
-            val arcDiameter = size.minDimension - strokeWidth
-
-            drawCircle(
-                color = backgroundColor,
-                radius = radius,
-            )
-            if (percent > 0f && !completed) drawArc(
-                color = strokeColor,
-                startAngle = -90f,
-                sweepAngle = 360f * percent,
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(strokeWidth / 2f, strokeWidth / 2f),
-                size = androidx.compose.ui.geometry.Size(arcDiameter, arcDiameter),
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
-            )
-        }
-
-        if (completed) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_check),
-                contentDescription = null,
-                tint = contentColor,
-                modifier = Modifier.fillMaxSize(0.55f),
-            )
-        } else {
-            Text(
-                text = label,
-                color = contentColor,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = if (label.length > 3) 9.sp else 10.sp,
-                    lineHeight = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                ),
-                maxLines = 1,
-            )
-        }
-    }
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
@@ -1165,7 +908,6 @@ private fun ContentCardCornerBadges(
     }
 
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val badgeShape = RoundedCornerShape(percent = 50)
     val hasCounterOnly = showCounter &&
         !showTracker &&
         !showFavorite &&
@@ -1175,42 +917,14 @@ private fun ContentCardCornerBadges(
         !showScore &&
         !showNsfw &&
         !showPin
-    val badgeBackgroundColor = when {
-        showOnlyNsfw && isIosStyle -> MaterialTheme.colorScheme.error.copy(alpha = 0.90f)
-        showOnlyNsfw -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f)
-        hasCounterOnly && isIosStyle -> Color(0xFFFF3B30).copy(alpha = 0.92f)
-        hasCounterOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
-        isIosStyle -> Color.Black.copy(alpha = 0.60f)
-        else -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.88f)
-    }
-    val badgeBorderModifier = if (isIosStyle && !hasCounterOnly && !showOnlyNsfw) {
-        Modifier.border(0.5.dp, Color.White.copy(alpha = 0.18f), badgeShape)
-    } else {
-        Modifier
+    val tone = when {
+        showOnlyNsfw -> ContentCardBadgeTone.NSFW
+        hasCounterOnly -> ContentCardBadgeTone.COUNTER
+        else -> ContentCardBadgeTone.NEUTRAL
     }
 
-    val badgeTextColor = when {
-        showOnlyNsfw && isIosStyle -> Color.White
-        showOnlyNsfw -> MaterialTheme.colorScheme.onErrorContainer
-        hasCounterOnly -> if (isIosStyle) Color.White else MaterialTheme.colorScheme.onPrimary
-        isIosStyle -> Color.White
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-
-    Row(
-        modifier = modifier
-            .background(
-                color = badgeBackgroundColor,
-                shape = badgeShape,
-            )
-            .then(badgeBorderModifier)
-            .padding(
-                horizontal = metrics.containerHorizontalPadding,
-                vertical = metrics.containerVerticalPadding,
-            ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(metrics.itemSpacing)
-    ) {
+    ContentCardBadgePill(tone, isIosStyle, metrics, modifier) { colors ->
+        val badgeTextColor = colors.content
         badges.forEach { badge ->
             when (badge) {
                 "tracker" -> {
@@ -1254,53 +968,25 @@ private fun ContentCardCornerBadges(
                 }
                 "language" -> {
                     if (!langText.isNullOrBlank()) {
-                        Text(
-                            text = langText,
-                            color = badgeTextColor,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = metrics.textSize,
-                                lineHeight = metrics.textSize,
-                            ),
-                            fontWeight = FontWeight.Bold,
-                        )
+                        ContentCardBadgeText(langText, badgeTextColor, metrics)
                     }
                 }
                 "counter" -> {
                     if (item.counter > 0) {
-                        Text(
-                            text = item.counter.toString(),
-                            color = badgeTextColor,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = metrics.textSize,
-                                lineHeight = metrics.textSize,
-                            ),
-                            fontWeight = FontWeight.Bold,
-                        )
+                        ContentCardBadgeText(item.counter.toString(), badgeTextColor, metrics)
                     }
                 }
                 "score" -> {
                     item.scoreText?.takeIf { it.isNotBlank() }?.let { scoreText ->
-                        Text(
-                            text = scoreText,
-                            color = badgeTextColor,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = metrics.textSize,
-                                lineHeight = metrics.textSize,
-                            ),
-                            fontWeight = FontWeight.Bold,
-                        )
+                        ContentCardBadgeText(scoreText, badgeTextColor, metrics)
                     }
                 }
                 "nsfw" -> {
                     if (item.isNsfw) {
-                        Text(
+                        ContentCardBadgeText(
                             text = stringResource(R.string.badge_nsfw),
                             color = if (isIosStyle) Color.White else if (showOnlyNsfw) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onError,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = metrics.textSize,
-                                lineHeight = metrics.textSize,
-                            ),
-                            fontWeight = FontWeight.Bold,
+                            metrics = metrics,
                         )
                     }
                 }
@@ -1694,33 +1380,12 @@ fun ContentCardCoverProgressIndicator(
 fun ContentCardNsfwBadge(
     metrics: ContentCardBadgeMetrics = ContentCardBadgeMetrics(),
     modifier: Modifier = Modifier,
-) {
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val shape = RoundedCornerShape(percent = 50)
-    Box(
-        modifier = modifier
-            .background(
-                color = if (isIosStyle) MaterialTheme.colorScheme.error.copy(alpha = 0.90f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f),
-                shape = shape,
-            )
-            .then(if (isIosStyle) Modifier.border(0.5.dp, Color.White.copy(alpha = 0.18f), shape) else Modifier)
-            .padding(
-                horizontal = metrics.containerHorizontalPadding,
-                vertical = metrics.containerVerticalPadding,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = stringResource(R.string.badge_nsfw),
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = metrics.textSize,
-                lineHeight = metrics.textSize,
-                fontWeight = FontWeight.Bold,
-            ),
-            color = if (isIosStyle) Color.White else MaterialTheme.colorScheme.onErrorContainer,
-        )
-    }
-}
+) = ContentCardNsfwBadge(
+    label = stringResource(R.string.badge_nsfw),
+    isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+    metrics = metrics,
+    modifier = modifier,
+)
 
 @Composable
 private fun BoxScope.ContentCardCoverImage(

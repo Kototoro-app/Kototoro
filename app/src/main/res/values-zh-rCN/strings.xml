@@ -1098,6 +1098,7 @@
     <string name="novel_bookmark_removed">已移除书签</string>
     <string name="novel_bookmark_added">已添加书签</string>
     <string name="novel_bookmark_failed">书签操作失败: %s</string>
+    <string name="novel_bookmark_position_unavailable">书签正文已变化或无法定位</string>
     <string name="novel_loading_online_chapter">正在从网络加载未下载的章节</string>
     <string name="novel_chapter_not_downloaded">该章节尚未下载，请先下载后再阅读</string>
     <string name="novel_loading_epub_chapter">正在加载EPUB章节…</string>

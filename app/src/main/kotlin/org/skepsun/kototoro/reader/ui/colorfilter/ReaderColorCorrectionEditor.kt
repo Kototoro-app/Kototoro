@@ -71,72 +71,27 @@ internal fun ReaderColorCorrectionControls(
     onReset: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    ReaderOptionGroup(modifier = modifier) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .padding(start = 12.dp, end = 4.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.color_correction),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = onReset, enabled = !isLoading) {
-                Text(stringResource(R.string.reset))
-            }
-        }
-        ReaderOptionDivider()
-        ReaderOptionSwitchRow(
-            label = stringResource(R.string.invert_colors),
-            checked = colorFilter?.isInverted == true,
-            enabled = !isLoading,
-            onCheckedChange = {
-                onColorFilterChange(colorFilter.update { copy(isInverted = it) })
-            },
-        )
-        ReaderOptionDivider()
-        ReaderOptionSwitchRow(
-            label = stringResource(R.string.grayscale),
-            checked = colorFilter?.isGrayscale == true,
-            enabled = !isLoading,
-            onCheckedChange = {
-                onColorFilterChange(colorFilter.update { copy(isGrayscale = it) })
-            },
-        )
-        ReaderOptionDivider()
-        ColorFilterSlider(
-            label = stringResource(R.string.brightness),
-            value = colorFilter?.brightness ?: 0f,
-            enabled = !isLoading,
-            onValueChange = {
-                onColorFilterChange(colorFilter.update { copy(brightness = it) })
-            },
-        )
-        ReaderOptionDivider()
-        ColorFilterSlider(
-            label = stringResource(R.string.contrast),
-            value = colorFilter?.contrast ?: 0f,
-            enabled = !isLoading,
-            onValueChange = {
-                onColorFilterChange(colorFilter.update { copy(contrast = it) })
-            },
-        )
-        ReaderOptionDivider()
-        ReaderOptionSwitchRow(
-            label = stringResource(R.string.book_effect),
-            checked = colorFilter?.isBookBackground == true,
-            enabled = !isLoading,
-            onCheckedChange = {
-                onColorFilterChange(colorFilter.update { copy(isBookBackground = it) })
-            },
-        )
-    }
+    ReaderColorCorrectionControls(
+        colorFilter = colorFilter,
+        isLoading = isLoading,
+        onColorFilterChange = onColorFilterChange,
+        onReset = onReset,
+        labels = rememberReaderColorCorrectionLabels(),
+        modifier = modifier,
+    )
 }
 
+/** Android's strings for the shared colour-correction controls. */
+@Composable
+internal fun rememberReaderColorCorrectionLabels() = ReaderColorCorrectionLabels(
+    title = stringResource(R.string.color_correction),
+    reset = stringResource(R.string.reset),
+    invert = stringResource(R.string.invert_colors),
+    grayscale = stringResource(R.string.grayscale),
+    brightness = stringResource(R.string.brightness),
+    contrast = stringResource(R.string.contrast),
+    bookEffect = stringResource(R.string.book_effect),
+)
 @Composable
 internal fun ReaderImageComparisonPreview(
     originalPreviewModel: Any?,
@@ -207,39 +162,3 @@ private fun ComparisonImage(
         }
     }
 }
-
-@Composable
-private fun ColorFilterSlider(
-    label: String,
-    value: Float,
-    enabled: Boolean,
-    onValueChange: (Float) -> Unit,
-) {
-    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = "${((value + 1f) * 100).toInt()}%",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        Slider(
-            value = value.coerceIn(-1f, 1f),
-            onValueChange = onValueChange,
-            valueRange = -1f..1f,
-            enabled = enabled,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
-}
-
-private inline fun ReaderColorFilter?.update(
-    transform: ReaderColorFilter.() -> ReaderColorFilter,
-): ReaderColorFilter? = (this ?: ReaderColorFilter.EMPTY).transform().takeUnless { it.isEmpty }

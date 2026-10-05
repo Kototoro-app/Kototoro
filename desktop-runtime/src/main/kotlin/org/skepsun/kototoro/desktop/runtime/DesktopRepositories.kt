@@ -26,9 +26,14 @@ data class DesktopRepositoryCatalog(
     val repository: DesktopRepository,
     val extensions: List<ExtensionStoreIndex.Extension>,
     private val parserPluginPackages: Set<String> = emptySet(),
+    private val cloudstreamPluginPackages: Set<String> = emptySet(),
 ) {
     fun isParserPlugin(extension: ExtensionStoreIndex.Extension): Boolean =
         extension.packageName in parserPluginPackages
+
+    /** A Cloudstream `.cs3` (its `apkUrl`); its package name is the plugin's internal name. */
+    fun isCloudstreamPlugin(extension: ExtensionStoreIndex.Extension): Boolean =
+        extension.packageName in cloudstreamPluginPackages
 }
 data class DesktopManagedJar(val path: Path, val identity: MihonJarIdentity)
 
@@ -55,6 +60,15 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
     suspend fun fetch(address: String): DesktopRepositoryCatalog = withContext(Dispatchers.IO) {
         val input = repositoryUri(address)
         val name = input.path.substringAfterLast('/').lowercase()
+        // Cloudstream repositories: a repo.json naming plugin lists, or a plugin list itself.
+        if (name == "repo.json" || name == "plugins.json") {
+            fetchCloudstream(address)?.let { return@withContext it }
+        } else if (input.host == "raw.githubusercontent.com" && name.endsWith(".json")) {
+            // Mihon indexes live on the same host; when the probe fails they are read as before.
+            try { fetchCloudstream(address)?.let { return@withContext it } }
+            catch (error: CancellationException) { throw error }
+            catch (_: Exception) { }
+        }
         val candidates = when {
             name.endsWith(".pb") || name.endsWith(".json") && name != "repo.json" -> listOf(input)
             else -> {
@@ -112,6 +126,63 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
         return DesktopRepositoryCatalog(repository, extensions, parserPluginPackages)
     }
 
+    /**
+     * A Cloudstream repository (`{"name", "pluginLists": [...]}`) or plugin list (`[{"internalName", "url", ...}]`)
+     * as an extension catalog: one entry per `.cs3`, versioned by the plugin version. Null for any other document.
+     */
+    private suspend fun fetchCloudstream(address: String): DesktopRepositoryCatalog? {
+        val (_, bytes) = try { bytes(repositoryUri(cloudstreamMirror(address))) } catch (error: RepositoryHttpException) {
+            if (error.status == 404) return null else throw error
+        }
+        val document = runCatching { kotlinx.serialization.json.Json.parseToJsonElement(bytes.decodeToString()) }.getOrNull()
+            ?: return null
+        val (name, lists) = when (document) {
+            is kotlinx.serialization.json.JsonObject -> {
+                val lists = (document["pluginLists"] as? kotlinx.serialization.json.JsonArray) ?: return null
+                (document.text("name") ?: "Cloudstream 仓库") to lists.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+            }
+            is kotlinx.serialization.json.JsonArray -> {
+                if ((document.firstOrNull() as? kotlinx.serialization.json.JsonObject)?.text("internalName") == null) return null
+                "Cloudstream 插件列表" to listOf(address)
+            }
+            else -> return null
+        }
+        val plugins = lists.flatMap { list ->
+            val (listActual, data) = bytes(repositoryUri(cloudstreamMirror(list)))
+            (kotlinx.serialization.json.Json.parseToJsonElement(data.decodeToString()) as? kotlinx.serialization.json.JsonArray)
+                .orEmpty().mapNotNull { it as? kotlinx.serialization.json.JsonObject }.mapNotNull { plugin ->
+                    val id = plugin.text("internalName") ?: return@mapNotNull null
+                    val url = plugin.text("url") ?: return@mapNotNull null
+                    // Status 0 marks a plugin its authors took down.
+                    if (plugin.text("status") == "0") return@mapNotNull null
+                    val version = plugin.text("version")?.toLongOrNull()?.coerceAtLeast(1) ?: 1
+                    ExtensionStoreIndex.Extension(
+                        name = plugin.text("name") ?: id,
+                        packageName = DesktopExtensionFiles.cloudstreamPluginId(id),
+                        resources = ExtensionStoreIndex.Resources(
+                            apkUrl = listActual.resolve(url).toString(),
+                            iconUrl = plugin.text("iconUrl").orEmpty(),
+                        ),
+                        extensionLib = "cloudstream",
+                        versionCode = version,
+                        versionName = "v$version",
+                        contentWarning = ExtensionStoreIndex.ContentWarning.UNSPECIFIED,
+                        sources = listOf(ExtensionStoreIndex.Source(0, plugin.text("name") ?: id,
+                            plugin.text("language").orEmpty())),
+                    )
+                }
+        }.distinctBy { it.packageName }
+        require(plugins.isNotEmpty()) { "Cloudstream 仓库没有可用插件" }
+        val repository = DesktopRepository(address, name, CLOUDSTREAM_SIGNING_KEY)
+        val updated = repositories.filterNot { it.indexUrl == repository.indexUrl } + repository
+        persistRepositoryPreference(preferences, "repositories", SourcePreferenceValue.Text(SourceProtocolJson.encodeToString(updated)))
+        repositories = updated
+        return DesktopRepositoryCatalog(repository, plugins, cloudstreamPluginPackages = plugins.mapTo(linkedSetOf()) { it.packageName })
+    }
+
+    private fun kotlinx.serialization.json.JsonObject.text(key: String): String? =
+        (this[key] as? kotlinx.serialization.json.JsonPrimitive)?.content?.takeIf { it.isNotBlank() && it != "null" }
+
     /** The legacy array has no header: name it after where it lives (owner/repository on GitHub-style hosts). */
     private fun legacyRepositoryName(uri: URI): String {
         val parts = uri.path.split('/').filter(String::isNotBlank).dropLast(1)
@@ -153,6 +224,24 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
     suspend fun import(path: Path): DesktopManagedJar = withContext(Dispatchers.IO) {
         Files.newInputStream(path).use { stage(it, null) }
     }
+
+    /** A Cloudstream `.cs3`, kept as published (its DEX is converted when loaded); [id] defaults to the file name. */
+    suspend fun importCloudstreamPlugin(path: Path, id: String = DesktopExtensionFiles.cloudstreamPluginId(path.fileName.toString())):
+        DesktopManagedCloudstreamPlugin = withContext(Dispatchers.IO) {
+        Files.newInputStream(path).use { stageCloudstreamPlugin(it, id) }
+    }
+
+    /** Downloads a Cloudstream plugin from its repository URL (GitHub raw links are served through jsDelivr). */
+    suspend fun downloadCloudstreamPlugin(url: String, id: String): DesktopManagedCloudstreamPlugin =
+        http.read(repositoryUri(cloudstreamMirror(url)), JAR_LIMIT) { _, input -> stageCloudstreamPlugin(input, id) }
+
+    private suspend fun stageCloudstreamPlugin(input: InputStream, id: String): DesktopManagedCloudstreamPlugin =
+        staged(input) { temporary ->
+            require(DesktopExtensionFiles.isCloudstreamPlugin(temporary)) { "不是有效的 Cloudstream 插件（.cs3）" }
+            val sha256 = java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(temporary))
+                .joinToString("") { "%02x".format(it) }
+            DesktopManagedCloudstreamPlugin(publish(temporary, sha256, "cs3"), id, sha256)
+        }
 
     /**
      * A kototoro / kotatsu / Tsuki plugin jar: no Android manifest, identified by its factory entry point. The jars
@@ -228,8 +317,8 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
     }
 
     /** Artifacts are immutable and named by their SHA-256, so the same bytes are stored once. */
-    private fun publish(temporary: Path, sha256: String): Path {
-        val target = artifacts.resolve("$sha256.jar")
+    private fun publish(temporary: Path, sha256: String, extension: String = "jar"): Path {
+        val target = artifacts.resolve("$sha256.$extension")
         if (!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) Files.move(temporary, target)
         require(Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) { "扩展文件不是普通文件" }
         return target
@@ -259,7 +348,8 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
         Files.list(artifacts).use { files ->
             for (file in files.toList()) {
                 val name = file.fileName.toString()
-                if (!name.endsWith(".jar") || name.startsWith(".") || file.toAbsolutePath().normalize() in keep) continue
+                if (!(name.endsWith(".jar") || name.endsWith(".cs3")) || name.startsWith(".") ||
+                    file.toAbsolutePath().normalize() in keep) continue
                 if (runCatching { Files.deleteIfExists(file) }.getOrDefault(false)) removed++
             }
         }
@@ -274,6 +364,18 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
                 runCatching { URI(extension.resources.apkUrl).path }.getOrNull()
                     ?.endsWith(".jar", ignoreCase = true) == true
 
+        /**
+         * Cloudstream repositories link `raw.githubusercontent.com`, which is often unreachable; jsDelivr serves the
+         * same files (`/gh/<owner>/<repo>@<branch>/<path>`). Other URLs are used as given.
+         */
+        fun cloudstreamMirror(url: String): String {
+            val match = Regex("^https://raw\\.githubusercontent\\.com/([^/]+)/([^/]+)/([^/]+)/(.+)$").find(url) ?: return url
+            val (owner, repo, branch, path) = match.destructured
+            return "https://cdn.jsdelivr.net/gh/$owner/$repo@$branch/$path"
+        }
+
+        /** Cloudstream repositories are unsigned; recorded so a later read of the same address is not taken for one. */
+        const val CLOUDSTREAM_SIGNING_KEY = "cloudstream"
         private const val INDEX_LIMIT = 16L * 1024 * 1024
         private const val JAR_LIMIT = 64L * 1024 * 1024
     }

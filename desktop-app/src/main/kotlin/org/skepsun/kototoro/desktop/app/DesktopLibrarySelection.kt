@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.source.SourceEcosystem
 import org.skepsun.kototoro.desktop.runtime.DesktopLibraryEntry
 import org.skepsun.kototoro.desktop.runtime.DesktopLibrarySnapshot
 
@@ -17,17 +18,22 @@ data class DesktopLibrarySelection(
     val sources: Set<String> = emptySet(),
     val reading: DesktopLibraryReading = DesktopLibraryReading.ALL,
     val order: DesktopLibraryOrder = DesktopLibraryOrder.RECENT,
+    /** Android's top bar source-type and content-type filters. */
+    val sourceFilter: DesktopSourceFilter = DesktopSourceFilter(),
 ) {
     val filterCount: Int get() = sources.size + (if (categoryId != null) 1 else 0) +
         (if (reading != DesktopLibraryReading.ALL) 1 else 0)
 
-    fun select(snapshot: DesktopLibrarySnapshot): List<DesktopLibraryEntry> {
+    /** [ecosystems] maps installed source names; works from uninstalled sources match no source-type tag. */
+    fun select(snapshot: DesktopLibrarySnapshot,
+        ecosystems: Map<String, SourceEcosystem> = emptyMap()): List<DesktopLibraryEntry> {
         val text = query.trim()
         val entries = snapshot.entries.filter { row ->
             val content = row.content
             val progress = row.progressPercent
             (categoryId == null || categoryId in row.categoryIds) &&
                 (sources.isEmpty() || content.source.name in sources) &&
+                sourceFilter.accepts(ecosystems[content.source.name], content.source.contentType) &&
                 (text.isEmpty() || content.title.contains(text, true) ||
                     content.altTitles.any { it.contains(text, true) } || content.authors.any { it.contains(text, true) }) &&
                 when (reading) {

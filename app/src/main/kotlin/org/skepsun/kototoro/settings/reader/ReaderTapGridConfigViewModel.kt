@@ -12,6 +12,7 @@ import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.reader.data.TapGridSettings
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.tapgrid.TapAction
+import org.skepsun.kototoro.reader.ui.tapgrid.TapActions
 import java.util.EnumMap
 import javax.inject.Inject
 
@@ -48,9 +49,4 @@ class ReaderTapGridConfigViewModel @Inject constructor(
         }
         return map
     }
-
-    data class TapActions(
-        val tapAction: TapAction?,
-        val longTapAction: TapAction?,
-    )
 }

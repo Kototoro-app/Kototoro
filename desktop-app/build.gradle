@@ -15,7 +15,11 @@ java {
 
 // Reuse Android's actual navigation artwork without an Android runtime or a second icon library.
 def desktopIcons = ['ic_bookmark', 'ic_explore_normal', 'ic_history', 'ic_download', 'ic_extension',
-    'ic_backup_restore', 'ic_web', 'ic_more_vert']
+    'ic_backup_restore', 'ic_web', 'ic_more_vert', 'ic_search', 'ic_heart_outline', 'ic_heart',
+    'ic_play', 'ic_star_small', 'ic_tts_close', 'ic_filter_menu', 'ic_check',
+    'ic_source_builtin', 'ic_source_mihon', 'ic_source_aniyomi', 'ic_source_tsundoku', 'ic_source_cloudstream',
+    'ic_home', 'ic_feed', 'ic_updated', 'ic_suggestion', 'ic_read', 'ic_arrow_forward', 'ic_settings', 'ic_dice',
+    'ic_storage']
 def desktopIconResources = layout.buildDirectory.dir('generated/android-icons')
 def prepareDesktopIcons = tasks.register('prepareDesktopIcons') {
     def vectors = desktopIcons.collect { rootProject.file("app/src/main/res/drawable/${it}.xml") }
@@ -31,15 +35,25 @@ def prepareDesktopIcons = tasks.register('prepareDesktopIcons') {
                 if (node.name() == 'path') {
                     def data = node.attribute('android:pathData')
                     if (!(data ==~ /[a-zA-Z0-9.,+\-\s]+/)) throw new GradleException("Unsupported icon path: ${vectorFile.name}")
-                    return "<path fill=\"black\" d=\"${data}\"/>"
+                    def rule = node.attribute('android:fillType') == 'evenOdd' ? ' fill-rule="evenodd"' : ''
+                    return "<path fill=\"black\"${rule} d=\"${data}\"/>"
                 }
                 if (node.name() == 'group') {
-                    if (node.attributes().keySet().any { !(it in ['android:translateX', 'android:translateY']) }) {
+                    def supported = ['android:translateX', 'android:translateY', 'android:pivotX', 'android:pivotY',
+                        'android:scaleX', 'android:scaleY']
+                    if (node.attributes().keySet().any { !(it in supported) }) {
                         throw new GradleException("Unsupported icon transform: ${vectorFile.name}")
                     }
-                    def x = Float.parseFloat(node.attribute('android:translateX') ?: '0')
-                    def y = Float.parseFloat(node.attribute('android:translateY') ?: '0')
-                    return "<g transform=\"translate(${x},${y})\">${node.children().collect(render).join('')}</g>"
+                    def number = { String name, String fallback -> Float.parseFloat(node.attribute(name) ?: fallback) }
+                    def x = number('android:translateX', '0')
+                    def y = number('android:translateY', '0')
+                    def px = number('android:pivotX', '0')
+                    def py = number('android:pivotY', '0')
+                    def sx = number('android:scaleX', '1')
+                    def sy = number('android:scaleY', '1')
+                    // Android applies scale about the pivot, then the translation.
+                    return "<g transform=\"translate(${x + px},${y + py}) scale(${sx},${sy}) translate(${-px},${-py})\">" +
+                        "${node.children().collect(render).join('')}</g>"
                 }
                 throw new GradleException("Unsupported icon element: ${vectorFile.name}")
             }
@@ -54,13 +68,62 @@ def prepareDesktopIcons = tasks.register('prepareDesktopIcons') {
 sourceSets.main.resources.srcDir(desktopIconResources)
 tasks.named('processResources').configure { dependsOn prepareDesktopIcons }
 
+// Android's own string resources (Simplified Chinese, falling back to the default locale) for the shared screens,
+// so both hosts show the same text. String arrays are resolved to their @string items.
+def desktopStringResources = layout.buildDirectory.dir('generated/android-strings')
+def prepareDesktopStrings = tasks.register('prepareDesktopStrings') {
+    def resources = rootProject.file('app/src/main/res')
+    def sources = files(fileTree(new File(resources, 'values')) { include 'strings*.xml', 'arrays.xml' },
+        fileTree(new File(resources, 'values-zh-rCN')) { include 'strings*.xml', 'arrays.xml' })
+    inputs.files(sources)
+    outputs.dir(desktopStringResources)
+    doLast {
+        def unescape = { String raw ->
+            def text = raw.trim()
+            if (text.length() >= 2 && text.startsWith('"') && text.endsWith('"')) text = text.substring(1, text.length() - 1)
+            def out = new StringBuilder()
+            for (int i = 0; i < text.length(); i++) {
+                def ch = text.charAt(i)
+                if (ch == ('\\' as char) && i + 1 < text.length()) {
+                    def next = text.charAt(++i)
+                    out.append(next == ('n' as char) ? '\n' : next == ('t' as char) ? '\t' : String.valueOf(next))
+                } else out.append(ch)
+            }
+            out.toString()
+        }
+        def strings = [:]
+        def arrays = [:]
+        ['values', 'values-zh-rCN'].each { folder ->
+            new File(resources, folder).listFiles().findAll { it.name ==~ /(strings.*|arrays)\.xml/ }.sort { it.name }.each { file ->
+                def root = new groovy.xml.XmlParser(false, false).parse(file)
+                root.children().each { node ->
+                    def name = node.attribute('name')
+                    if (node.name() == 'string') strings[name] = unescape(node.text())
+                    else if (node.name() == 'string-array') arrays[name] = node.children().collect { unescape(it.text()) }
+                }
+            }
+        }
+        def resolve = { String item -> item.startsWith('@string/') ? (strings[item.substring(8)] ?: item) : item }
+        def properties = new Properties()
+        strings.each { k, v -> properties.setProperty(k, v) }
+        arrays.each { k, v -> properties.setProperty('@array/' + k, v.collect(resolve).join('\u001F')) }
+        def target = desktopStringResources.get().file('android-strings.properties').asFile
+        target.parentFile.mkdirs()
+        target.withWriter('UTF-8') { properties.store(it, 'Generated from app/src/main/res by prepareDesktopStrings') }
+    }
+}
+sourceSets.main.resources.srcDir(desktopStringResources)
+tasks.named('processResources').configure { dependsOn prepareDesktopStrings }
+
 dependencies {
     implementation compose.desktop.currentOs
     implementation compose.material
+    implementation project(':core-ui')
     implementation project(':desktop-runtime')
     implementation project(':desktop-player')
     implementation project(':parser-host')
     implementation project(':mihon-desktop-compat')
+    implementation project(':cloudstream-desktop')
     implementation project(':core-domain')
     implementation project(':reader-core')
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
@@ -335,6 +398,9 @@ tasks.withType(Test).configureEach {
     // kototoro / kotatsu / Tsuki plugin fixtures: real bytecode built by :parser-host against the shared ABI.
     systemProperty 'kototoro.desktop.anime.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/anime-desktop-fixture.jar').get().asFile
     systemProperty 'kototoro.desktop.parser.fixtures', project(':parser-host').layout.buildDirectory.dir('fixtures').get().asFile
+    // Built by d8 when an Android SDK is configured; the Cloudstream UI test is skipped otherwise.
+    dependsOn ':cloudstream-desktop:fixtureCs3'
+    systemProperty 'kototoro.desktop.cloudstream.fixture', project(':cloudstream-desktop').layout.buildDirectory.file('fixtures/FixtureRepo.cs3').get().asFile
     // Opt-in: real extension APKs (novelfull.apk, ...) for the live smoke tests.
     providers.gradleProperty('realApkDirectory').orNull?.with { systemProperty 'kototoro.dex.real.apks', it }
     providers.gradleProperty('realNovelApk').orNull?.with { systemProperty 'kototoro.real.novel', it }

@@ -7,7 +7,7 @@ import org.skepsun.kototoro.reader.core.*
 internal class DesktopScrollLayout(pages: List<SourcePage>, images: Map<Long, DesktopReaderImage>,
     width: Int, height: Int, spacing: Int, geometry: Map<Long, IntSize> = emptyMap()) {
     val scene = VerticalReaderScene(width.coerceAtLeast(1), height.coerceAtLeast(1), pages.map { page ->
-        PageId(page.id) to (images[page.id]?.let { PageGeometryHint.Exact(it.width, it.height) }
+        PageId(page.id) to (images[page.id]?.let { PageGeometryHint.Exact(it.displayWidth, it.displayHeight) }
             ?: geometry[page.id]?.let { PageGeometryHint.Exact(it.width, it.height) }
             ?: PageGeometryHint.Estimated(.7f))
     }, spacing)

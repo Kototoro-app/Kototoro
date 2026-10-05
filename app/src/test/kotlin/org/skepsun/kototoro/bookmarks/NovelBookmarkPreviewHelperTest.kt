@@ -1,30 +1,10 @@
 package org.skepsun.kototoro.bookmarks
 
-import android.util.Base64
-import io.mockk.every
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview
 
 class NovelBookmarkPreviewHelperTest {
-
-    @BeforeEach
-    fun setUp() {
-        mockkStatic(Base64::class)
-        every { Base64.decode(any<String>(), any()) } answers {
-            val input = firstArg<String>()
-            java.util.Base64.getDecoder().decode(input)
-        }
-    }
-
-    @AfterEach
-    fun tearDown() {
-        unmockkStatic(Base64::class)
-    }
 
     @Test
     fun `extractNovelBookmarkPreview returns empty for null or blank input`() {

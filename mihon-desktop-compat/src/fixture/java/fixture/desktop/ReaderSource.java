@@ -37,7 +37,9 @@ public final class ReaderSource extends HttpSource {
             if (Boolean.getBoolean("fixture.reader.offline")) {
                 throw new java.io.IOException("Authored offline reader");
             }
-            if (Integer.toString(index).equals(System.getProperty("fixture.reader.failure.index"))) {
+            // One page index, or several separated by commas.
+            if (java.util.Arrays.asList(System.getProperty("fixture.reader.failure.index", "").split(","))
+                .contains(Integer.toString(index))) {
                 return new Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(503)
                     .message("authored image failure").body(ResponseBody.create("fixture", MediaType.get("text/plain"))).build();
             }

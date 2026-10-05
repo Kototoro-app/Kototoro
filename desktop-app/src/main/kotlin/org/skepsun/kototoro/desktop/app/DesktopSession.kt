@@ -9,7 +9,11 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.desktop.compat.MihonDesktopPlatform
+import org.skepsun.kototoro.cloudstream.desktop.CloudstreamPluginRegistry
+import org.skepsun.kototoro.cloudstream.desktop.CloudstreamSourceRuntime
+import org.skepsun.kototoro.desktop.runtime.DesktopCloudstreamRecord
 import org.skepsun.kototoro.desktop.runtime.DesktopExtensionFiles
+import org.skepsun.kototoro.desktop.runtime.DesktopManagedCloudstreamPlugin
 import org.skepsun.kototoro.desktop.runtime.DesktopExtensionKind
 import org.skepsun.kototoro.desktop.runtime.DesktopManagedJar
 import org.skepsun.kototoro.desktop.runtime.DesktopManagedParserPlugin
@@ -47,12 +51,17 @@ class DesktopSession private constructor(
     private val mihonRuntime = MihonSourceRuntime(registry, storage.images, platform.preferenceContext())
     private val aniyomiRuntime = AniyomiSourceRuntime(registry, storage.images, platform.preferenceContext())
     private val parserRuntime = ParserSourceRuntime(parsers, parserPlatform, storage.images)
+    /** Cloudstream plugins run in the same compatibility runtime and HTTP client (cookies, Cloudflare solver). */
+    internal val cloudstream = CloudstreamPluginRegistry(storage.paths.root.resolve("cache/cloudstream"),
+        platform.preferenceContext(), platform.sharedHttpClient())
+    private val cloudstreamRuntime = CloudstreamSourceRuntime(cloudstream, storage.images)
     val sources: SourceRuntime = SourceProtocolClient(
         SourceEndpoint(
             RoutedSourceRuntime(listOf(
                 RoutedSourceRuntime.Route(mihonRuntime::owns, mihonRuntime),
                 RoutedSourceRuntime.Route(aniyomiRuntime::owns, aniyomiRuntime),
                 RoutedSourceRuntime.Route(parsers::owns, parserRuntime),
+                RoutedSourceRuntime.Route(cloudstreamRuntime::owns, cloudstreamRuntime),
             )),
             sourceDiagnostics::record,
         ),
@@ -60,7 +69,30 @@ class DesktopSession private constructor(
     val library = DesktopLibrary(storage.database) { name ->
         registry.installed().flatMap { it.sources }.firstOrNull { it.source.name == name }?.source
             ?: parsers.sources().firstOrNull { it.source.name == name }?.source
+            ?: cloudstream.sources().firstOrNull { it.name == name }?.let(CloudstreamSourceRuntime::sourceRef)
     }
+    /** New-chapter tracking with Android's rules; details refresh through the normal source protocol. */
+    val tracker = org.skepsun.kototoro.desktop.runtime.DesktopTracker(
+        database = storage.database,
+        library = library,
+        fetchDetails = { content -> sources.getDetails(content, SourceDetailsFetchMode.FORCE_REFRESH) },
+        preferredBranch = { content ->
+            org.skepsun.kototoro.core.ui.chapters.resolvePreferredChapterBranch(content.chapters.orEmpty(),
+                SourceChapter::branch, SourceChapter::id, null, desktopChapterBranchLocales())
+        },
+    )
+
+    /** Suggestions with Android's worker rules, from the installed sources, stored in the shared table. */
+    val suggestions = org.skepsun.kototoro.desktop.runtime.DesktopSuggestions(library, sources)
+
+    /** Android's feed read model over the shared tracker tables, classified by the installed ecosystems. */
+    val feed = org.skepsun.kototoro.tracker.domain.feed.FeedSnapshotAssembler(
+        contentGroupOf = { name, nsfw -> desktopContentGroup(listingOf(name)?.source?.contentType, nsfw) },
+        originGroupOf = { name -> listingOf(name)?.ecosystem?.originGroup() ?: org.skepsun.kototoro.core.jsonsource.OriginGroup.EXTERNAL },
+    )
+
+    private fun listingOf(name: String): SourceListing? = sourceListings().firstOrNull { it.source.name == name }
+
     val startupErrors = mutableListOf<String>()
     val browserChallenges get() = platform.browserChallenges
     private val readerImages = DesktopReaderImages(storage.paths.images, storage.preferences.open("desktop_reader_images")) {
@@ -83,15 +115,25 @@ class DesktopSession private constructor(
         }
     })
     @Volatile internal var upscale = org.skepsun.kototoro.desktop.runtime.DesktopUpscaleSetting()
+    /** Android's "crop pages" for the open reading mode; the controller keeps it in step with the reader settings. */
+    @Volatile internal var cropPages = false
     private val mutableUpscaleError = MutableStateFlow<String?>(null)
     internal val upscaleError = mutableUpscaleError.asStateFlow()
 
     internal suspend fun readerImage(page: SourcePage, refresh: Boolean = false): DesktopReaderImage {
         if (!refresh) downloadStore.page(page)?.artifact?.let { artifact ->
-            return upscaled(readerImages.openArtifact(page, artifact)
-                ?: throw IOException("下载图片缺失或损坏，请在下载页校验 / 继续"))
+            return cropped(upscaled(readerImages.openArtifact(page, artifact)
+                ?: throw IOException("下载图片缺失或损坏，请在下载页校验 / 继续")))
         }
-        return upscaled(readerImages.load(page, readerRevision(page.source.name), refresh))
+        return cropped(upscaled(readerImages.load(page, readerRevision(page.source.name), refresh)))
+    }
+
+    /** Plain white margins removed, as Android crops pages; long tiled pages keep their full geometry. */
+    private suspend fun cropped(image: DesktopReaderImage): DesktopReaderImage {
+        if (!cropPages || image.tiled) return image
+        val bounds = try { withContext(Dispatchers.IO) { DesktopImageDecoder.contentBounds(image.path, image.width, image.height) } }
+            catch (error: kotlinx.coroutines.CancellationException) { throw error } catch (_: Exception) { null }
+        return image.copy(crop = bounds)
     }
 
     /**
@@ -124,7 +166,8 @@ class DesktopSession private constructor(
 
     internal fun readerRevision(sourceName: String): String = registry.installed().firstOrNull { installed ->
         installed.sources.any { it.source.name == sourceName }
-    }?.metadata?.sha256 ?: parsers.pluginFor(sourceName)?.metadata?.sha256 ?: throw SourceInvalidArgumentException()
+    }?.metadata?.sha256 ?: parsers.pluginFor(sourceName)?.metadata?.sha256 ?: cloudstream.pluginFor(sourceName)?.sha256
+        ?: throw SourceInvalidArgumentException()
 
     /** An illustration inside a novel chapter, fetched like a page: same client, cache index and challenge handling. */
     internal suspend fun novelImage(chapter: SourceChapter, image: SourceContentImage): DesktopReaderImage {
@@ -137,8 +180,8 @@ class DesktopSession private constructor(
     /** Every installed source of every ecosystem, as the UI lists them. */
     fun sourceListings(): List<SourceListing> =
         registry.installed().flatMap { extension -> extension.sources.map { mihonListing(it, extension.metadata.ecosystem) } } +
-            parsers.sources().map(::parserListing)
-
+            parsers.sources().map(::parserListing) +
+            cloudstream.sources().map(::cloudstreamListing)
     internal suspend fun chapterPages(contentId: Long, chapter: SourceChapter): List<SourcePage> =
         downloadStore.find(contentId, chapter)?.takeIf { it.isComplete }?.pages?.map { it.page }
             ?: sources.getPages(chapter, null)
@@ -168,6 +211,7 @@ class DesktopSession private constructor(
             // Mihon manga, Tsundoku novels and Aniyomi anime share the jar/APK pipeline; the manifest names the runtime.
             DesktopExtensionKind.MIHON, DesktopExtensionKind.ANIYOMI -> installManaged(repositories.import(path))
             DesktopExtensionKind.PARSER -> installParser(repositories.importParserPlugin(path))
+            DesktopExtensionKind.CLOUDSTREAM -> installCloudstream(repositories.importCloudstreamPlugin(path))
         }
     }
 
@@ -176,6 +220,8 @@ class DesktopSession private constructor(
         extension: ExtensionStoreIndex.Extension,
     ): InstalledExtension = if (catalog.isParserPlugin(extension)) {
         installParser(repositories.downloadParserPlugin(catalog, extension))
+    } else if (catalog.isCloudstreamPlugin(extension)) {
+        installCloudstream(repositories.downloadCloudstreamPlugin(extension.resources.apkUrl, extension.packageName))
     } else {
         installManaged(repositories.download(catalog, extension))
     }
@@ -206,6 +252,23 @@ class DesktopSession private constructor(
         InstalledExtension("${plugin.id}（${plugin.sources.size} 个来源）", plugin.sources.map(::parserListing))
     }
 
+    /** Loads the plugin, then records it; a plugin whose record cannot be written is unloaded again. */
+    internal suspend fun installCloudstream(managed: DesktopManagedCloudstreamPlugin): InstalledExtension =
+        withContext(Dispatchers.IO) {
+            currentCoroutineContext().ensureActive()
+            val plugin = cloudstream.load(managed.path, managed.id, managed.sha256)
+            try {
+                val record = DesktopCloudstreamRecord(managed.id, managed.path.toString(), managed.sha256)
+                persistRepositoryPreference(installed, CLOUDSTREAM_KEY_PREFIX + managed.id,
+                    SourcePreferenceValue.Text(SourceProtocolJson.encodeToString(record)))
+            } catch (error: Throwable) {
+                cloudstream.unload(managed.id)
+                throw error
+            }
+            InstalledExtension("${plugin.manifest.name ?: plugin.id}（${plugin.sources.size} 个来源）",
+                plugin.sources.map(::cloudstreamListing))
+        }
+
     /** Every installed extension and parser plugin, as the extension manager lists them. */
     fun installedEntries(): List<DesktopInstalledEntry> =
         registry.installed().map { extension ->
@@ -216,6 +279,9 @@ class DesktopSession private constructor(
             DesktopInstalledEntry(DesktopInstalledKind.PARSER, plugin.id, plugin.id,
                 plugin.sources.firstOrNull()?.let { parserListing(it).ecosystem } ?: SourceEcosystem.KOTOTORO,
                 plugin.metadata.sha256.take(8), null, plugin.sources.size)
+        } + cloudstream.installed().map { plugin ->
+            DesktopInstalledEntry(DesktopInstalledKind.CLOUDSTREAM, plugin.id, plugin.manifest.name ?: plugin.id,
+                SourceEcosystem.CLOUDSTREAM, "v${plugin.manifest.version}", plugin.manifest.version.toLong(), plugin.sources.size)
         }
 
     /**
@@ -223,10 +289,18 @@ class DesktopSession private constructor(
      * calls already running finish on the retiring loader. Unreferenced artifacts are deleted afterwards.
      */
     suspend fun uninstall(entry: DesktopInstalledEntry) = withContext(Dispatchers.IO) {
-        val key = if (entry.kind == DesktopInstalledKind.PARSER) PARSER_KEY_PREFIX + entry.id else entry.id
+        val key = when (entry.kind) {
+            DesktopInstalledKind.PARSER -> PARSER_KEY_PREFIX + entry.id
+            DesktopInstalledKind.CLOUDSTREAM -> CLOUDSTREAM_KEY_PREFIX + entry.id
+            DesktopInstalledKind.EXTENSION -> entry.id
+        }
         require(key in installed.snapshot()) { "扩展记录不存在" }
         if (!installed.edit(SourcePreferenceEdit(changes = mapOf(key to null)))) throw IOException("无法删除扩展记录")
-        val unloaded = if (entry.kind == DesktopInstalledKind.PARSER) parsers.unload(entry.id) else registry.unload(entry.id)
+        val unloaded = when (entry.kind) {
+            DesktopInstalledKind.PARSER -> parsers.unload(entry.id)
+            DesktopInstalledKind.CLOUDSTREAM -> cloudstream.unload(entry.id)
+            DesktopInstalledKind.EXTENSION -> registry.unload(entry.id)
+        }
         check(unloaded) { "扩展未加载" }
         cleanupArtifacts()
     }
@@ -237,7 +311,9 @@ class DesktopSession private constructor(
             val text = (value as? SourcePreferenceValue.Text)?.value ?: return@mapNotNull null
             runCatching {
                 if (key.startsWith(PARSER_KEY_PREFIX)) Path.of(SourceProtocolJson.decodeFromString<DesktopParserRecord>(text).path)
-                else Path.of(SourceProtocolJson.decodeFromString<SourceHostJar>(text).path)
+                else if (key.startsWith(CLOUDSTREAM_KEY_PREFIX)) {
+                    Path.of(SourceProtocolJson.decodeFromString<DesktopCloudstreamRecord>(text).path)
+                } else Path.of(SourceProtocolJson.decodeFromString<SourceHostJar>(text).path)
             }.getOrNull()
         }.toSet()
         return repositories.cleanupArtifacts(referenced)
@@ -248,7 +324,7 @@ class DesktopSession private constructor(
      * cannot be read are reported, not fatal.
      */
     suspend fun checkUpdates(): DesktopUpdateCheck {
-        val installedVersions = registry.installed().associate { it.metadata.packageName to it.metadata.versionCode }
+        val installedVersions = installedVersions()
         val updates = linkedMapOf<String, DesktopExtensionUpdate>()
         val failures = mutableListOf<String>()
         for (repository in repositories.saved()) {
@@ -268,6 +344,11 @@ class DesktopSession private constructor(
 
     internal suspend fun applyUpdate(update: DesktopExtensionUpdate) = installExtension(update.catalog, update.extension)
 
+    /** Installed versions by package name (Cloudstream: plugin id and manifest version), for repository listings. */
+    fun installedVersions(): Map<String, Long> =
+        registry.installed().associate { it.metadata.packageName to it.metadata.versionCode } +
+            cloudstream.installed().associate { it.id to it.manifest.version.toLong() }
+
     private fun restoreJars() {
         for ((key, value) in installed.snapshot()) {
             try {
@@ -275,6 +356,9 @@ class DesktopSession private constructor(
                 if (key.startsWith(PARSER_KEY_PREFIX)) {
                     val record = SourceProtocolJson.decodeFromString<DesktopParserRecord>(text)
                     parsers.load(Path.of(record.path), record.id, record.sha256)
+                } else if (key.startsWith(CLOUDSTREAM_KEY_PREFIX)) {
+                    val record = SourceProtocolJson.decodeFromString<DesktopCloudstreamRecord>(text)
+                    cloudstream.load(Path.of(record.path), record.id, record.sha256)
                 } else {
                     val jar = SourceProtocolJson.decodeFromString<SourceHostJar>(text)
                     registry.load(Path.of(jar.path), jar.identity)
@@ -287,7 +371,7 @@ class DesktopSession private constructor(
 
     override fun close() {
         var failure: Throwable? = null
-        for (owner in listOfNotNull(covers, browser, repositories, parsers, registry, platform, storage)) {
+        for (owner in listOfNotNull(covers, browser, repositories, parsers, cloudstream, registry, platform, storage)) {
             try { owner.close() } catch (error: Throwable) {
                 if (failure == null) failure = error else failure.addSuppressed(error)
             }
@@ -334,7 +418,7 @@ class DesktopSession private constructor(
     }
 }
 
-enum class DesktopInstalledKind { EXTENSION, PARSER }
+enum class DesktopInstalledKind { EXTENSION, PARSER, CLOUDSTREAM }
 
 /** One installed extension (Mihon / Tsundoku / Aniyomi) or parser plugin, for the extension manager. */
 data class DesktopInstalledEntry(
@@ -359,6 +443,10 @@ data class DesktopUpdateCheck(val updates: List<DesktopExtensionUpdate>, val fai
 class InstalledExtension(val label: String, val sources: List<SourceListing>)
 
 private const val PARSER_KEY_PREFIX = "parser:"
+private const val CLOUDSTREAM_KEY_PREFIX = "cloudstream:"
+
+private fun cloudstreamListing(source: org.skepsun.kototoro.cloudstream.model.CloudstreamSource) =
+    SourceListing(CloudstreamSourceRuntime.sourceRef(source), source.displayName, SourceEcosystem.CLOUDSTREAM, supportsLatest = false)
 
 private fun mihonListing(source: MihonSourceDescriptor, ecosystem: SourceEcosystem) =
     SourceListing(source.source, source.displayName, ecosystem, source.supportsLatest, source.sourceId)

@@ -20,39 +20,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 
+/** The shared home badge with an Android drawable. */
 @Composable
 internal fun HomeBadge(
     text: String,
     iconRes: Int,
     modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f)),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                painter = painterResource(iconRes),
-                contentDescription = null,
-                modifier = Modifier.size(12.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
+) = org.skepsun.kototoro.core.ui.home.HomeBadge(text, painterResource(iconRes), modifier)
 
 @Composable
 private fun HomeStatPill(
@@ -85,9 +59,5 @@ private fun HomeStatPill(
     }
 }
 
-internal fun Int.toHeroCountLabel(): String = when {
-    this >= 10_000 -> "${this / 1000}k+"
-    this >= 1_000 -> "${this / 1000}k"
-    else -> toString()
-}
+internal fun Int.toHeroCountLabel(): String = org.skepsun.kototoro.core.ui.home.homeCountLabel(this)
 

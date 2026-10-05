@@ -41,6 +41,9 @@ kotlin {
 				implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
 			}
 		}
+		// One Jsoup adapter for Android/JVM; common policy and text anchors remain portable.
+		getByName('androidMain').kotlin.srcDir('src/jvmSharedMain/kotlin')
+		getByName('jvmMain').kotlin.srcDir('src/jvmSharedMain/kotlin')
 	}
 }
 

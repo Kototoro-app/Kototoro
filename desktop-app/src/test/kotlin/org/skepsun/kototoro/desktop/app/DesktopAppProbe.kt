@@ -18,12 +18,20 @@ object DesktopAppProbe {
     @JvmStatic
     fun main(args: Array<String>) {
         try {
+            if (args[0].startsWith("appearance-")) {
+                DesktopAppearanceProbe.run(args)
+                return
+            }
             if (args[0].startsWith("bookmarks-")) {
                 DesktopBookmarksProbe.run(args)
                 return
             }
             if (args[0] == "upscale") {
                 DesktopUpscaleProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("cloudstream-")) {
+                DesktopCloudstreamProbe.run(args)
                 return
             }
             if (args[0] == "video") {
@@ -40,6 +48,10 @@ object DesktopAppProbe {
             }
             if (args[0].startsWith("parsers-")) {
                 DesktopParserProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("novel-directory")) {
+                DesktopNovelDirectoryProbe.run(args)
                 return
             }
             if (args[0].startsWith("tablet")) {
@@ -80,6 +92,10 @@ object DesktopAppProbe {
             }
             if (args[0].startsWith("reader-scroll-")) {
                 DesktopScrollProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("reader-gestures-")) {
+                DesktopReaderGestureProbe.run(args)
                 return
             }
             if (args[0].startsWith("reader-camera-")) {
@@ -146,19 +162,19 @@ object DesktopAppProbe {
                     settled()
                     onNodeWithText("Chapter").assertExists()
                     if (mode == "write") {
-                        onNodeWithText("加入收藏").performClick()
+                        onNodeWithTag("preview-favourite").performClick()
                         waitUntil(timeoutMillis = 15_000) { controller.state.value.isFavourite }
                         settled()
                     } else check(controller.state.value.isFavourite)
                     snapshot("details")
-                    onNodeWithText("开始 / 继续阅读").performClick()
+                    onNodeWithTag("preview-read").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.image != null }
                     settled()
                     waitUntil(timeoutMillis = 15_000) { onAllNodesWithTag("reader-page").fetchSemanticsNodes().size == 1 }
                     onNodeWithTag("reader-page").assertExists()
                     snapshot("reader")
                     check(runBlocking { session.library.progress(content.id) }?.chapterId == controller.state.value.chapter?.id)
-                    onNodeWithText("返回详情").performClick()
+                    onNodeWithTag("reader-back").performClick()
                     settled()
                     onNodeWithText("收藏", useUnmergedTree = true).performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.LIBRARY }
@@ -176,7 +192,10 @@ object DesktopAppProbe {
                     onNodeWithText("源设置").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.PREFERENCES }
                     settled()
-                    val node = requireNotNull(controller.state.value.preferences).nodes.single()
+                    val preferenceNodes = requireNotNull(controller.state.value.preferences).nodes
+                    // Kototoro's User-Agent row accompanies every HTTP source's own controls.
+                    check(preferenceNodes.any { it.id == "host:user_agent" }) { "$preferenceNodes" }
+                    val node = preferenceNodes.single { !it.id.startsWith("host:") }
                     if (mode == "write") {
                         onNodeWithTag("preference:${node.id}:rejected").performClick()
                         waitUntil(timeoutMillis = 15_000) { controller.state.value.message == "来源拒绝了这项设置" }
@@ -184,11 +203,11 @@ object DesktopAppProbe {
                         check(controller.state.value.message == "来源拒绝了这项设置")
                         onNodeWithTag("preference:${node.id}:saved").performClick()
                         waitUntil(timeoutMillis = 15_000) {
-                            controller.state.value.preferences?.nodes?.single()?.value == SourcePreferenceValue.Text("saved")
+                            controller.state.value.preferences?.nodes?.single { !it.id.startsWith("host:") }?.value == SourcePreferenceValue.Text("saved")
                         }
                         settled()
                     }
-                    check(controller.state.value.preferences?.nodes?.single()?.value == SourcePreferenceValue.Text("saved"))
+                    check(controller.state.value.preferences?.nodes?.single { !it.id.startsWith("host:") }?.value == SourcePreferenceValue.Text("saved"))
                     onNodeWithText("域名设置").assertExists()
                     snapshot("preferences")
                     if (mode == "write" && session.browser != null) {

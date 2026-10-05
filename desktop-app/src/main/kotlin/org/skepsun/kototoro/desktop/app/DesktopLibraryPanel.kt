@@ -12,18 +12,26 @@ import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.core.ui.topbar.TopBarTabItem
+import org.skepsun.kototoro.core.ui.topbar.TopBarTabsRail
+import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
+
+/** Category ids are database ids (positive); the "all" tab needs one that can never collide. */
+private const val AllCategoriesTab = Long.MIN_VALUE
 
 @Composable
 internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
     val history = state.screen == DesktopScreen.HISTORY
     val selection = if (history) state.historySelection else state.librarySelection
     var drawer by remember(history) { mutableStateOf(false) }
-    val entries = remember(state.library, selection) { selection.select(state.library) }
+    val ecosystems = remember(state.sources) { state.sources.associate { it.source.name to it.ecosystem } }
+    val entries = remember(state.library, selection, ecosystems) { selection.select(state.library, ecosystems) }
     fun update(value: DesktopLibrarySelection) = controller.librarySelection(value)
     Box(Modifier.fillMaxSize().onPreviewKeyEvent {
         if (drawer && it.type == KeyEventType.KeyDown && it.key == Key.Escape) {
@@ -33,19 +41,38 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
     }) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(selection.query, { update(selection.copy(query = it)) }, enabled = enabled,
-                    singleLine = true, placeholder = { Text("搜索标题或作者") },
-                    modifier = Modifier.weight(1f).testTag("library-query"))
+                TopBarTitleBlock(if (history) "历史" else "收藏")
+                DesktopSearchField(selection.query, { update(selection.copy(query = it)) }, "搜索标题或作者", enabled = enabled,
+                    modifier = Modifier.weight(1f), tag = "library-query")
+                DesktopSourceFilterControls(selection.sourceFilter, state.sources,
+                    { update(selection.copy(sourceFilter = it)) }, enabled, if (history) "history" else "library")
                 OutlinedButton({ drawer = !drawer }, modifier = Modifier.testTag("library-filters")) {
                     Text(if (selection.filterCount == 0) "筛选与排序" else "筛选 · ${selection.filterCount}")
                 }
                 TextButton({ controller.library(history) }, enabled = enabled) { Text("刷新") }
             }
+            // Android favourites show categories as the tabs rail under the top bar.
+            if (!history && state.library.categories.isNotEmpty()) {
+                val tabs = remember(state.library.categories) {
+                    listOf(TopBarTabItem(AllCategoriesTab, "全部")) +
+                        state.library.categories.map { TopBarTabItem(it.id, it.title) }
+                }
+                TopBarTabsRail(tabs, selection.categoryId ?: AllCategoriesTab,
+                    onItemSelected = { id -> if (enabled) update(selection.copy(categoryId = id.takeIf { it != AllCategoriesTab })) },
+                    surface = { modifier -> DesktopControlSurface(modifier, RoundedCornerShape(percent = 50)) {} },
+                    modifier = Modifier.fillMaxWidth().testTag("library-categories"),
+                    itemModifier = { tab ->
+                        Modifier.testTag("library-category:${if (tab.id == AllCategoriesTab) "all" else tab.id}")
+                    })
+            }
             Text("${entries.size} / ${state.library.entries.size} 部作品", color = Muted, fontSize = 12.sp,
                 modifier = Modifier.testTag("library-count"))
             Box(Modifier.weight(1f)) {
-                if (entries.isNotEmpty()) ContentGrid(entries.map { it.content }, enabled, controller.session.covers,
-                    controller::details)
+                if (entries.isNotEmpty()) {
+                    val progress = remember(entries) { entries.associate { it.content.id to it.progressPercent } }
+                    ContentGrid(entries.map { it.content }, enabled, controller.session.covers, controller::details,
+                        progressOf = { progress[it.id] })
+                }
                 else Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(if (state.library.entries.isEmpty()) "这里还没有作品" else "没有符合条件的作品",
@@ -57,7 +84,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
             }
         }
         if (drawer) {
-            Box(Modifier.fillMaxSize().background(Ink.copy(alpha = .08f)).clickable { drawer = false })
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .12f)).clickable { drawer = false })
             Surface(Modifier.align(Alignment.CenterEnd).width(310.dp).fillMaxHeight()
                 .testTag("library-filter-panel"), shape = RoundedCornerShape(20.dp), elevation = 12.dp) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -80,17 +107,6 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                             DesktopLibraryReading.entries.forEach { reading ->
                                 FilterRadio(reading.title, selection.reading == reading, enabled, "library-reading:${reading.name}") {
                                     update(selection.copy(reading = reading))
-                                }
-                            }
-                            if (state.library.categories.isNotEmpty()) {
-                                Divider()
-                                Text("收藏分类", fontWeight = FontWeight.SemiBold)
-                                FilterRadio("全部分类", selection.categoryId == null, enabled, "library-category:all") {
-                                    update(selection.copy(categoryId = null))
-                                }
-                                state.library.categories.forEach { category ->
-                                    FilterRadio(category.title, selection.categoryId == category.id, enabled,
-                                        "library-category:${category.id}") { update(selection.copy(categoryId = category.id)) }
                                 }
                             }
                             Divider()

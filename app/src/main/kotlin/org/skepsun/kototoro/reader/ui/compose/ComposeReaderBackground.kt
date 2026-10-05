@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.reader.ui.compose
 
+import org.skepsun.kototoro.reader.domain.toColorMatrix
+import org.skepsun.kototoro.core.prefs.resolve
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable

@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.reader.novel.compose
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,23 +11,18 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -63,11 +56,7 @@ import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
 import org.skepsun.kototoro.reader.novel.novelReaderPalette
 import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingEntity
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.text.style.TextAlign
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChapterPanelHeader
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelTabBar
 import org.skepsun.kototoro.reader.ui.compose.design.currentReaderPanelColors
@@ -144,18 +133,14 @@ internal fun ComposeNovelChaptersSheet(
                     ),
                 ),
                 actions = {
-                    IconButton(
+                    NovelChapterLocateButton(
+                        description = stringResource(R.string.novel_chapters_locate_current),
+                        enabled = chapters.isNotEmpty(),
                         onClick = {
                             coroutineScope.launch { pagerState.scrollToPage(NovelChaptersSheetTab.CHAPTERS.ordinal) }
                             locateRequest++
                         },
-                        enabled = chapters.isNotEmpty(),
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_current_chapter),
-                            contentDescription = stringResource(R.string.novel_chapters_locate_current),
-                        )
-                    }
+                    )
                 },
             )
             ReaderPanelTabBar(
@@ -235,131 +220,33 @@ internal fun ComposeNovelChaptersContent(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val colors = currentReaderPanelColors()
-    var reversed by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
-    val items = remember(chapters, reversed, query, context) {
-        buildChapterItems(chapters, reversed, query) { context.getString(R.string.volume_, it) }
-    }
-    val currentPosition = chapterListPositionForCurrent(items, currentIndex)
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentPosition.coerceAtLeast(0))
-    LaunchedEffect(locateRequest) {
-        if (locateRequest > 0) query = ""
-    }
-    LaunchedEffect(reversed, query, locateRequest) {
-        if (query.isBlank() && currentPosition >= 0 && items.isNotEmpty()) {
-            listState.scrollToItem(currentPosition)
-        }
-    }
-
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = modifier
-            .fillMaxWidth()
-            .imePadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = dragModifier.fillMaxWidth(),
-        ) {
-            NovelReaderSearchField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = stringResource(R.string.search_chapters),
-                clearContentDescription = stringResource(R.string.clear),
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = { reversed = !reversed }) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_sort_desc),
-                    contentDescription = stringResource(R.string.reverse_order),
-                    tint = if (reversed) colors.accent else colors.contentSecondary,
-                )
-            }
-        }
-        LazyColumn(
-            state = listState,
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-            contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp),
-            modifier = Modifier.fillMaxWidth().weight(1f),
-        ) {
-            items(items, key = NovelChapterListItem::key) { item ->
-                when (item) {
-                    is NovelChapterListItem.Header -> {
-                        Text(
-                            item.title,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colors.accent,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                        )
-                    }
-                    is NovelChapterListItem.Chapter -> {
-                        NovelChapterRow(
-                            number = item.originalIndex + 1,
-                            title = item.chapter.title ?: stringResource(R.string.unnamed_chapter),
-                            state = novelChapterRowState(item.originalIndex, currentIndex),
-                            onClick = { onChapterSelected(item.originalIndex) },
-                        )
-                    }
-                }
-            }
-        }
-    }
+    val directory = remember(chapters) { chapters.map(ContentChapter::directoryEntry) }
+    val volumeTitle: (Int) -> String = remember(context) { { context.getString(R.string.volume_, it) } }
+    NovelChapterDirectoryContent(
+        chapters = directory,
+        labels = NovelChapterDirectoryLabels(
+            search = stringResource(R.string.search_chapters),
+            clear = stringResource(R.string.clear),
+            reverse = stringResource(R.string.reverse_order),
+            unnamed = stringResource(R.string.unnamed_chapter),
+        ),
+        volumeTitle = volumeTitle,
+        currentIndex = currentIndex,
+        onChapterSelected = onChapterSelected,
+        locateRequest = locateRequest,
+        dragModifier = dragModifier,
+        modifier = modifier,
+    )
 }
 
-/** A light row: read chapters fade, the current one gets a tinted background and an accent bar. */
-@Composable
-private fun NovelChapterRow(
-    number: Int,
-    title: String,
-    state: NovelChapterRowState,
-    onClick: () -> Unit,
-) {
-    val colors = currentReaderPanelColors()
-    val current = state == NovelChapterRowState.CURRENT
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (current) colors.selectedContainer else Color.Transparent)
-            .clickable(onClick = onClick)
-            .heightIn(min = 48.dp)
-            .alpha(if (state == NovelChapterRowState.READ) 0.6f else 1f),
-    ) {
-        Box(
-            modifier = Modifier
-                .width(3.dp)
-                .height(24.dp)
-                .background(if (current) colors.accent else Color.Transparent, RoundedCornerShape(2.dp)),
-        )
-        Text(
-            text = number.toString(),
-            style = MaterialTheme.typography.labelMedium,
-            color = colors.contentSecondary,
-            textAlign = TextAlign.End,
-            modifier = Modifier
-                .width(40.dp)
-                .padding(end = 12.dp),
-        )
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
-            color = colors.content,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .weight(1f)
-                .padding(end = 16.dp),
-        )
-    }
-}
+private fun ContentChapter.directoryEntry() = NovelChapterDirectoryEntry(
+    id = id,
+    title = title,
+    volume = volume,
+    groupTitle = branch?.takeIf(String::isNotBlank)
+        ?: scanlator?.takeIf { it.isNotBlank() && source == LocalNovelSource }.orEmpty(),
+    searchAliases = listOfNotNull(branch, scanlator),
+)
 
 @Composable
 internal fun ComposeNovelChapterSearchContent(
@@ -564,70 +451,7 @@ internal fun NovelReaderSearchField(
     placeholder: String,
     modifier: Modifier = Modifier,
     clearContentDescription: String? = null,
-) {
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
-        border = BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f),
-        ),
-        modifier = modifier.heightIn(min = 46.dp),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 46.dp)
-                .padding(start = 12.dp, end = 4.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.onSurface,
-                ),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp),
-                decorationBox = { innerTextField ->
-                    Box(contentAlignment = Alignment.CenterStart) {
-                        if (value.isEmpty()) {
-                            Text(
-                                text = placeholder,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.76f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        innerTextField()
-                    }
-                },
-            )
-            if (value.isNotEmpty()) {
-                IconButton(
-                    onClick = { onValueChange("") },
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Clear,
-                        contentDescription = clearContentDescription,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-        }
-    }
-}
+) = SharedNovelReaderSearchField(value, onValueChange, placeholder, modifier, clearContentDescription)
 
 internal fun chapterListPositionForCurrent(
     items: List<NovelChapterListItem>,
@@ -641,36 +465,15 @@ internal fun buildChapterItems(
     reversed: Boolean,
     query: String,
     volumeTitle: (Int) -> String = { "Volume $it" },
-): List<NovelChapterListItem> {
-    val indexed = chapters.withIndex().let { if (reversed) it.reversed() else it }
-    val filtered = indexed.filter { (_, chapter) ->
-        query.isBlank() || listOf(chapter.title, chapter.branch, chapter.scanlator)
-            .any { it?.contains(query, ignoreCase = true) == true }
+): List<NovelChapterListItem> = buildNovelChapterDirectoryItems(
+    chapters.map(ContentChapter::directoryEntry), reversed, query, volumeTitle,
+).map { item ->
+    when (item) {
+        is NovelChapterDirectoryItem.Header -> NovelChapterListItem.Header(item.title, item.occurrence)
+        is NovelChapterDirectoryItem.Chapter -> NovelChapterListItem.Chapter(
+            chapters[item.originalIndex], item.originalIndex,
+        )
     }
-    val result = mutableListOf<NovelChapterListItem>()
-    var previousGroup: String? = null
-    var previousVolume: Int? = null
-    var headerOccurrence = 0
-    filtered.forEach { (index, chapter) ->
-        val group = chapter.branch?.takeIf(String::isNotBlank)
-            ?: chapter.scanlator?.takeIf { it.isNotBlank() && chapter.source == LocalNovelSource }
-            .orEmpty()
-        val groupChanged = group != previousGroup
-        if (groupChanged) {
-            if (group.isNotEmpty()) {
-                result += NovelChapterListItem.Header(group, headerOccurrence++)
-            }
-            previousVolume = null
-        }
-        val volume = chapter.volume.takeIf { it > 0 }
-        if (volume != null && volume != previousVolume) {
-            result += NovelChapterListItem.Header(volumeTitle(volume), headerOccurrence++)
-        }
-        result += NovelChapterListItem.Chapter(chapter, index)
-        previousGroup = group
-        previousVolume = volume
-    }
-    return result
 }
 
 internal fun searchNovelChapterContent(

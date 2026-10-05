@@ -6,7 +6,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
-import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -20,10 +19,8 @@ import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.googlefonts.Font
 import androidx.compose.ui.text.googlefonts.GoogleFont
-import androidx.compose.ui.unit.sp
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -33,8 +30,6 @@ import org.skepsun.kototoro.core.util.ext.getThemeColor
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.ui.compose.ContentSourceResolutionProvider
 
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
 
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
@@ -112,13 +107,7 @@ fun KototoroTheme(
         cornerRadius != -1 -> cornerRadius.dp
         else -> styleTokens.groupCornerRadius
     }
-    val shapes = Shapes(
-        extraSmall = RoundedCornerShape(styleTokens.controlCornerRadius.coerceAtMost(14.dp)),
-        small = RoundedCornerShape(styleTokens.controlCornerRadius),
-        medium = RoundedCornerShape(radius),
-        large = RoundedCornerShape(styleTokens.groupCornerRadius),
-        extraLarge = RoundedCornerShape(styleTokens.groupCornerRadius),
-    )
+    val shapes = kototoroShapes(styleTokens, radius)
     val activeFontPreset = if (effectiveInterfaceStyle == InterfaceStyle.IOS || expressiveComponents) {
         expressiveAppFontPreset
     } else {
@@ -156,6 +145,10 @@ fun KototoroTheme(
         LocalSurfaceStyle provides stylePolicy.surfaceStyle,
         LocalBackgroundStyle provides backgroundStyle,
         LocalAmoledTheme provides effectiveAmoledTheme,
+        org.skepsun.kototoro.reader.ui.compose.panel.LocalReaderPanelGlass provides
+            org.skepsun.kototoro.reader.ui.compose.panel.AndroidReaderPanelGlass,
+        org.skepsun.kototoro.reader.ui.compose.design.LocalReaderChromeSurfaces provides
+            org.skepsun.kototoro.reader.ui.compose.panel.AndroidReaderChromeSurfaces,
     ) {
         ContentSourceResolutionProvider {
             // Phase D: Material renders through the official MaterialExpressiveTheme when the
@@ -201,94 +194,6 @@ private suspend fun AppFontPreset.toFontFamily(
         AppFontPreset.INTER -> "Inter"
     }
     return FontFamily(Font(googleFont = GoogleFont(fontName), fontProvider = provider))
-}
-
-internal fun kototoroTypography(
-    isExpressiveStyle: Boolean,
-    defaultFontFamily: FontFamily?,
-): Typography {
-    val base = Typography()
-    val destinationTitleWeight = if (isExpressiveStyle) FontWeight.SemiBold else FontWeight.Bold
-    fun androidx.compose.ui.text.TextStyle.withDefaultFont(): androidx.compose.ui.text.TextStyle {
-        return if (defaultFontFamily == null) this else copy(fontFamily = defaultFontFamily)
-    }
-    return base.copy(
-        displayLarge = base.displayLarge.copy(fontWeight = destinationTitleWeight, letterSpacing = 0.sp).withDefaultFont(),
-        displayMedium = base.displayMedium.copy(fontWeight = destinationTitleWeight, letterSpacing = 0.sp).withDefaultFont(),
-        displaySmall = base.displaySmall.copy(fontWeight = destinationTitleWeight, letterSpacing = 0.sp).withDefaultFont(),
-        headlineLarge = base.headlineLarge.copy(
-            fontWeight = destinationTitleWeight,
-            fontSize = 32.sp,
-            lineHeight = 40.sp,
-            letterSpacing = 0.sp,
-        ).withDefaultFont(),
-        headlineMedium = base.headlineMedium.copy(
-            fontWeight = destinationTitleWeight,
-            fontSize = 28.sp,
-            lineHeight = 36.sp,
-            letterSpacing = 0.sp,
-        ).withDefaultFont(),
-        headlineSmall = base.headlineSmall.copy(
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 24.sp,
-            lineHeight = 32.sp,
-            letterSpacing = 0.sp,
-        ).withDefaultFont(),
-        titleLarge = base.titleLarge.copy(
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 22.sp,
-            lineHeight = 28.sp,
-            letterSpacing = 0.sp,
-        ).withDefaultFont(),
-        titleMedium = base.titleMedium.copy(
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 16.sp,
-            lineHeight = 24.sp,
-            letterSpacing = 0.sp,
-        ).withDefaultFont(),
-        titleSmall = base.titleSmall.copy(
-            fontWeight = FontWeight.Medium,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            letterSpacing = 0.sp,
-        ).withDefaultFont(),
-        bodyLarge = base.bodyLarge.copy(
-            fontWeight = FontWeight.Normal,
-            fontSize = 16.sp,
-            lineHeight = 24.sp,
-            letterSpacing = 0.sp,
-        ).withDefaultFont(),
-        bodyMedium = base.bodyMedium.copy(
-            fontWeight = FontWeight.Normal,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            letterSpacing = 0.sp,
-        ).withDefaultFont(),
-        bodySmall = base.bodySmall.copy(
-            fontWeight = FontWeight.Normal,
-            fontSize = 12.sp,
-            lineHeight = 16.sp,
-            letterSpacing = 0.sp,
-        ).withDefaultFont(),
-        labelLarge = base.labelLarge.copy(
-            fontWeight = FontWeight.Medium,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            letterSpacing = 0.sp,
-        ).withDefaultFont(),
-        labelMedium = base.labelMedium.copy(
-            fontWeight = FontWeight.Medium,
-            fontSize = 12.sp,
-            lineHeight = 16.sp,
-            letterSpacing = 0.sp,
-        ).withDefaultFont(),
-        labelSmall = base.labelSmall.copy(
-            fontWeight = FontWeight.Medium,
-            fontSize = 11.sp,
-            lineHeight = 16.sp,
-            letterSpacing = 0.sp,
-        ).withDefaultFont(),
-    )
 }
 
 private fun android.content.Context.resolveComposeColorScheme(
