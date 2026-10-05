@@ -255,12 +255,21 @@ class LocalMangaRepository @Inject constructor(
         val root = checkNotNull(UniFile.fromUri(App.getInstance(), subject.toUri())) {
             "Cannot resolve local content URI: ${subject.toUri()}"
         }
-        LocalContentUtil(subject.manga, root, App.getInstance().cacheDir).deleteChapters(ids)
-        val updated = LocalContentParser(root, App.getInstance().cacheDir).getContent(
-            withDetails = true,
-            forceRefresh = true,
-        )
-        localStorageChanges.emit(updated)
+        try {
+            LocalContentUtil(subject.manga, root, App.getInstance().cacheDir).deleteChapters(ids)
+        } finally {
+            // Refresh the cached library entry after a partial failure too, so the details page
+            // stops offering chapters whose files were already removed.
+            val updated = runCatchingCancellable {
+                LocalContentParser(root, App.getInstance().cacheDir).getContent(
+                    withDetails = true,
+                    forceRefresh = true,
+                )
+            }.onFailure {
+                it.printStackTraceDebug()
+            }.getOrNull()
+            localStorageChanges.emit(updated)
+        }
     }
 
     suspend fun getRemoteContent(localContent: Content): Content? {

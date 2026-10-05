@@ -13,8 +13,13 @@ class LocalContentUtil(
     suspend fun deleteChapters(ids: Set<Long>) {
         if (file.isDirectory) {
             LocalContentDirOutput(file, manga, cacheDir).use { output ->
-                output.deleteChapters(ids)
-                output.finish()
+                try {
+                    output.deleteChapters(ids)
+                } finally {
+                    // Persist the chapters that were removed even when another one failed,
+                    // otherwise the index keeps pointing at files that are already gone.
+                    output.finish()
+                }
             }
         } else {
             LocalContentZipOutput.filterChapters(file, manga, ids, cacheDir)

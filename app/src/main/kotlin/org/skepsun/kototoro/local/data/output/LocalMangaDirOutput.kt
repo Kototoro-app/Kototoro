@@ -117,33 +117,45 @@ class LocalContentDirOutput(
         ) {
             "No chapters found"
         }
-        val chaptersById = chapters.associateBy(ContentChapter::id)
-        val missingIds = ids - chaptersById.keys
-        check(missingIds.isEmpty()) { "${missingIds.size} of ${ids.size} chapters was not removed: not found" }
+        val knownIds = chapters.mapTo(HashSet(chapters.size), ContentChapter::id)
+        // A stale chapter list (cached library entry, earlier partial removal) may name chapters the
+        // index no longer has; skip those instead of refusing the whole batch.
+        val targetIds = ids.filterTo(LinkedHashSet(ids.size)) { it in knownIds }
+        check(targetIds.isNotEmpty() || ids.isEmpty()) { "${ids.size} chapters were not removed: not found" }
 
-        val selectedByFile = ids.groupBy { id -> index.getChapterFileName(id) }
+        var failure: Throwable? = null
+        val selectedByFile = targetIds.groupBy { id -> index.getChapterFileName(id) }
         for ((fileName, selectedIds) in selectedByFile) {
-            if (fileName != null) {
-                val hasRemainingReferences = chapters.any { chapter ->
-                    chapter.id !in ids && index.getChapterFileName(chapter.id) == fileName
-                }
-                if (!hasRemainingReferences) {
-                    if (fileName.isEmpty()) {
-                        rootFile.listFiles().orEmpty()
-                            .filter { child ->
-                                child.isFile &&
-                                    MimeTypes.getMimeTypeFromExtension(child.name.orEmpty())?.isImage == true
-                            }
-                            .forEach { image -> check(image.delete()) { "Failed to delete chapter image: $image" } }
-                    } else {
-                        val chapterFile = rootFile.resolveRelative(fileName)
-                        check(chapterFile?.exists() == true) { "Chapter file is missing: $fileName" }
-                        check(chapterFile.delete()) { "Failed to delete chapter file: $chapterFile" }
+            try {
+                if (fileName != null) {
+                    val hasRemainingReferences = chapters.any { chapter ->
+                        chapter.id !in targetIds && index.getChapterFileName(chapter.id) == fileName
+                    }
+                    if (!hasRemainingReferences) {
+                        deleteChapterFile(fileName)
                     }
                 }
+                selectedIds.forEach(index::removeChapter)
+            } catch (e: Exception) {
+                // Keep going: the caller flushes the index, so every chapter removed so far stays consistent.
+                failure = failure?.apply { addSuppressed(e) } ?: e
             }
-            selectedIds.forEach(index::removeChapter)
         }
+        failure?.let { throw it }
+    }
+
+    private fun deleteChapterFile(fileName: String) {
+        if (fileName.isEmpty()) {
+            rootFile.listFiles().orEmpty()
+                .filter { child ->
+                    child.isFile && MimeTypes.getMimeTypeFromExtension(child.name.orEmpty())?.isImage == true
+                }
+                .forEach { image -> check(image.delete()) { "Failed to delete chapter image: $image" } }
+            return
+        }
+        // Already gone (removed by hand or by an interrupted earlier attempt): nothing left to delete.
+        val chapterFile = rootFile.resolveRelative(fileName)?.takeIf { it.exists() } ?: return
+        check(chapterFile.delete()) { "Failed to delete chapter file: $chapterFile" }
     }
 
     private fun UniFile.resolveRelative(relativePath: String): UniFile? {

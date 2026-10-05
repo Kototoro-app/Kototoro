@@ -124,6 +124,24 @@ class LocalMangaDirOutputTest {
 		assertTrue(unrelated.isFile)
 	}
 
+	@Test
+	fun `bulk delete tolerates missing files and stale chapter ids`() = runTest {
+		val chapters = listOf(chapter(41L), chapter(42L), chapter(43L))
+		val manga = content(chapters)
+		val first = File(root, "41.cbz").apply { writeText("first") }
+		val third = File(root, "43.cbz").apply { writeText("third") }
+		// 42.cbz was already removed outside the app; 999 is no longer in the index at all.
+		writeIndex(manga, chapters.associateWith { "${it.id}.cbz" })
+
+		LocalContentUtil(manga, checkNotNull(UniFile.fromFile(root)), root)
+			.deleteChapters(chapters.mapTo(HashSet()) { it.id } + 999L)
+
+		assertFalse(first.exists())
+		assertFalse(third.exists())
+		val updated = readIndex()
+		chapters.forEach { assertNull(updated.getChapterFileName(it.id), "chapter ${it.id} still indexed") }
+	}
+
 	private fun writeIndex(manga: Content, chapters: Map<ContentChapter, String>) {
 		val index = ContentIndex(null).apply {
 			setContentInfo(manga.copy(chapters = null))
