@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
 import androidx.compose.ui.graphics.graphicsLayer
@@ -73,7 +74,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
         Box(Modifier.matchParentSize().layerBackdrop(backdrop).background(Canvas).background(desktopCanvasBrush()))
         CompositionLocalProvider(LocalDesktopWindowWidth provides maxWidth, LocalDesktopBackdrop provides backdrop) {
             Row(Modifier.fillMaxSize()) {
-                if (!reading) DesktopNavigationRail(controller, listState, !state.busy && !closing)
+                if (!reading) DesktopNavigationRail(controller, listState, !closing)
                 Column(Modifier.weight(1f).fillMaxHeight().padding(if (reading) 0.dp else 24.dp),
                     verticalArrangement = Arrangement.spacedBy(if (reading) 0.dp else 14.dp)) {
                     if (!reading && listState.screen !in setOf(DesktopScreen.LIBRARY, DesktopScreen.HISTORY,
@@ -109,10 +110,10 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                     state.message?.let { Notice(it, false) }
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         when (listState.screen) {
-                            DesktopScreen.HOME -> DesktopHomePanel(controller, listState, !state.busy && !closing)
-                            DesktopScreen.FEED -> DesktopFeedPanel(controller, listState, !state.busy && !closing)
-                            DesktopScreen.EXPLORE -> Browse(controller, listState)
-                            DesktopScreen.LIBRARY, DesktopScreen.HISTORY -> DesktopLibraryPanel(controller, listState, !state.busy && !closing)
+                            DesktopScreen.HOME -> DesktopHomePanel(controller, listState, !closing)
+                            DesktopScreen.FEED -> DesktopFeedPanel(controller, listState, !closing)
+                            DesktopScreen.EXPLORE -> Browse(controller, listState, !closing)
+                            DesktopScreen.LIBRARY, DesktopScreen.HISTORY -> DesktopLibraryPanel(controller, listState, !closing)
                             DesktopScreen.DETAILS -> Details(controller, state)
                             DesktopScreen.READER -> DesktopReader(controller, state, closing, fullscreen, onToggleFullscreen)
                             DesktopScreen.NOVEL -> DesktopNovelReader(controller, state, closing, fullscreen, onToggleFullscreen)
@@ -122,7 +123,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.DOWNLOADS -> DesktopDownloadsPanel(controller, closing)
                             DesktopScreen.BACKUPS -> DesktopBackupsPanel(controller, closing)
                             DesktopScreen.EXTENSIONS -> DesktopExtensionsPanel(controller, closing)
-                            DesktopScreen.MORE -> DesktopMorePanel(controller, !state.busy && !closing)
+                            DesktopScreen.MORE -> DesktopMorePanel(controller, !closing)
                         }
                         if (state.screen == DesktopScreen.DETAILS && state.detailsOrigin != null) {
                             DesktopDetailsOverlay(controller, state, !state.busy && !closing)
@@ -196,25 +197,30 @@ private fun Header(state: DesktopAppState) {
 @Composable
 private fun Notice(message: String, error: Boolean) {
     Surface(color = MaterialTheme.colors.surface, shape = RoundedCornerShape(16.dp)) {
-        Text(message, color = if (error) MaterialTheme.colors.error else Accent,
-            modifier = Modifier.fillMaxWidth().padding(12.dp), maxLines = 4, overflow = TextOverflow.Ellipsis)
+        // Errors are selectable so a source failure can be copied into a report.
+        SelectionContainer {
+            Text(message, color = if (error) MaterialTheme.colors.error else Accent,
+                modifier = Modifier.fillMaxWidth().padding(12.dp).testTag(if (error) "notice-error" else "notice-message"),
+                maxLines = if (error) 12 else 4, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
 @Composable
-private fun Browse(controller: DesktopController, state: DesktopAppState) {
+private fun Browse(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
+    // Browsing stays usable while a source loads: a newer request replaces the pending one.
     if (state.selectedSource == null) {
-        DesktopSourceGrid(controller, state, !state.busy)
+        DesktopSourceGrid(controller, state, enabled)
         return
     }
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-        DesktopSourcePane(controller, state, !state.busy)
-        Box(Modifier.weight(1f).fillMaxHeight()) { SourceResults(controller, state) }
+        DesktopSourcePane(controller, state, enabled)
+        Box(Modifier.weight(1f).fillMaxHeight()) { SourceResults(controller, state, enabled) }
     }
 }
 
 @Composable
-private fun SourceResults(controller: DesktopController, state: DesktopAppState) {
+private fun SourceResults(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
     if (state.selectedSource == null) {
         EmptyPanel("你的 Windows 阅读空间", "在“扩展与仓库”中安装来源，或导入本地 JAR，然后从左侧选择来源开始浏览。")
         return
@@ -223,7 +229,7 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState)
     if (state.filterDialogOpen) DesktopFilters(controller, state, query)
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton({ controller.exitSource() }, enabled = !state.busy, modifier = Modifier.testTag("source-back")) {
+            IconButton({ controller.exitSource() }, enabled = enabled, modifier = Modifier.testTag("source-back")) {
                 // Android's forward arrow, mirrored.
                 Icon(painterResource("icons/ic_arrow_forward.svg"), contentDescription = "返回来源列表", tint = Ink,
                     modifier = Modifier.size(22.dp).graphicsLayer(scaleX = -1f))
@@ -232,26 +238,26 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState)
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            DesktopSearchField(query, { query = it }, "搜索作品", enabled = !state.busy,
+            DesktopSearchField(query, { query = it }, "搜索作品", enabled = enabled,
                 modifier = Modifier.weight(1f), tag = "source-query")
-            Button({ controller.browse(0, query) }, enabled = !state.busy) { Text("搜索") }
+            Button({ controller.browse(0, query) }, enabled = enabled) { Text("搜索") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             val orders = state.descriptor?.sortOrders.orEmpty()
             if (state.descriptor == null || "POPULARITY" in orders) {
-                OutlinedButton({ query = ""; controller.browseUnfiltered() }, enabled = !state.busy) { Text("热门") }
+                OutlinedButton({ query = ""; controller.browseUnfiltered() }, enabled = enabled) { Text("热门") }
             }
             if ("UPDATED" in orders) {
-                OutlinedButton({ query = ""; controller.browseUnfiltered(latest = true) }, enabled = !state.busy) { Text("最新") }
+                OutlinedButton({ query = ""; controller.browseUnfiltered(latest = true) }, enabled = enabled) { Text("最新") }
             }
             // Sources with more than the two Mihon orders (all parser plugins) get the full list.
             if (orders.any { it != "POPULARITY" && it != "UPDATED" }) {
                 var expanded by remember(state.selectedSource.source.name) { mutableStateOf(false) }
                 Box {
-                    OutlinedButton({ expanded = true }, enabled = !state.busy, modifier = Modifier.testTag("source-sort")) {
+                    OutlinedButton({ expanded = true }, enabled = enabled, modifier = Modifier.testTag("source-sort")) {
                         Text("排序 · ${DesktopSourceLabels.sortOrder(state.browseOrder ?: state.descriptor?.defaultSortOrder.orEmpty())}")
                     }
-                    DropdownMenu(expanded && !state.busy, { expanded = false }) {
+                    DropdownMenu(expanded && enabled, { expanded = false }) {
                         orders.forEach { order ->
                             DropdownMenuItem({ expanded = false; controller.browseOrdered(order) },
                                 modifier = Modifier.testTag("source-sort:$order")) { Text(DesktopSourceLabels.sortOrder(order)) }
@@ -260,22 +266,22 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState)
                 }
             }
             if (state.descriptor?.isDynamicFilteringSupported == true) {
-                OutlinedButton({ controller.filters() }, enabled = !state.busy,
+                OutlinedButton({ controller.filters() }, enabled = enabled,
                     modifier = Modifier.testTag("source-filters")) {
                     Text(if (state.appliedFilters.isEmpty()) "筛选" else "筛选 · 已应用")
                 }
             }
             if (state.descriptor?.isPreferencesSupported == true) {
-                OutlinedButton({ controller.preferences() }, enabled = !state.busy) { Text("源设置") }
+                OutlinedButton({ controller.preferences() }, enabled = enabled) { Text("源设置") }
             }
         }
-        Box(Modifier.weight(1f)) { ContentGrid(state.items, !state.busy, controller.session.covers, controller::details) }
+        Box(Modifier.weight(1f)) { ContentGrid(state.items, enabled, controller.session.covers, controller::details) }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton({ controller.browse((state.offset - 1).coerceAtLeast(0)) },
-                enabled = !state.busy && state.offset > 0) { Text("上一批") }
+                enabled = enabled && state.offset > 0) { Text("上一批") }
             Text("第 ${state.offset + 1} 批", color = Muted)
             OutlinedButton({ controller.browse(state.offset + 1) },
-                enabled = !state.busy && state.items.isNotEmpty()) { Text("下一批") }
+                enabled = enabled && state.items.isNotEmpty()) { Text("下一批") }
         }
     }
 }

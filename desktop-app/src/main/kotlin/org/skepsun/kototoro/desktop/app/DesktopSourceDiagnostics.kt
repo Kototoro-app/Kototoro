@@ -10,9 +10,12 @@ import java.nio.file.StandardOpenOption.*
 import java.time.Instant
 import java.util.UUID
 
-/** Bounded local diagnostics. Request arguments, exception messages, headers and bodies are never recorded. */
+/**
+ * Bounded local diagnostics. The log file never records request arguments, exception messages, headers or bodies;
+ * the exception messages are kept in memory only, so the window can show what actually failed.
+ */
 internal class DesktopSourceDiagnostics(root: Path) {
-    private data class Entry(val description: String, val id: String, val text: String)
+    private data class Entry(val description: String, val id: String, val detail: String, val text: String)
     private val entries = linkedMapOf<String, Entry>()
     private val directory = root.resolve("logs")
     private val path = directory.resolve("source-errors.log")
@@ -43,7 +46,7 @@ internal class DesktopSourceDiagnostics(root: Path) {
                 }
             }
         }
-        entries[request.requestId] = Entry(description, id, text.take(4096))
+        entries[request.requestId] = Entry(description, id, detail(causes), text.take(4096))
         while (entries.size > 16) entries.remove(entries.keys.first())
         saved = runCatching {
             Files.createDirectories(directory)
@@ -54,8 +57,17 @@ internal class DesktopSourceDiagnostics(root: Path) {
         }.isSuccess
     }
 
+    /** The error as the user sees it: category, what the source reported, then where the stack traces are. */
     @Synchronized
     fun message(requestId: String?): String? = entries[requestId]?.let { entry ->
-        "${entry.description}（诊断 ${entry.id}）。" + if (saved) "日志：$path" else "诊断日志写入失败。"
+        "${entry.description}：${entry.detail}\n（诊断 ${entry.id}" + if (saved) "，日志：$path）" else "，诊断日志写入失败）"
+    }
+
+    /** Distinct messages along the cause chain, outermost first; wrappers without a message are skipped. */
+    private fun detail(causes: List<Throwable>): String {
+        val messages = causes.mapNotNull { failure ->
+            failure.message?.trim()?.takeIf { it.isNotEmpty() }?.let { "${failure.javaClass.simpleName}: ${it.take(300)}" }
+        }.distinctBy { it.substringAfter(": ") }.take(3)
+        return messages.ifEmpty { listOf(causes.last().javaClass.simpleName) }.joinToString("\n← ")
     }
 }

@@ -121,6 +121,31 @@ internal object DesktopFilterProbe {
                 received("latest:2")
                 onNodeWithText("热门").performClick()
                 received("popular:1")
+                // A slow source keeps the window usable: navigation is enabled and replaces the pending request.
+                System.setProperty("fixture.filters.slow", "true")
+                onNodeWithText("最新").performClick()
+                waitUntil(timeoutMillis = 15_000) {
+                    controller.state.value.busy && System.getProperty("fixture.filters.last") == "latest:1"
+                }
+                waitForIdle()
+                onNodeWithTag("nav:收藏").assertIsEnabled()
+                onNodeWithText("热门").assertIsEnabled()
+                val slowStarted = System.nanoTime()
+                onNodeWithTag("nav:收藏").performClick()
+                waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy }
+                check(System.nanoTime() - slowStarted < 4_000_000_000L) { "Navigation waited for the slow source" }
+                check(controller.state.value.screen == DesktopScreen.LIBRARY && controller.state.value.error == null) {
+                    "${controller.state.value.screen} ${controller.state.value.error}"
+                }
+                System.clearProperty("fixture.filters.slow")
+                onNodeWithTag("nav:浏览").performClick()
+                waitUntil(timeoutMillis = 15_000) {
+                    !controller.state.value.busy && controller.state.value.screen == DesktopScreen.EXPLORE
+                }
+                settled()
+                check(controller.state.value.browseOrder != "UPDATED") { "The cancelled request was committed" }
+                onNodeWithText("热门").performClick()
+                received("popular:1")
                 open()
                 edit()
                 onNodeWithTag("filter-reset").performClick()
@@ -139,6 +164,11 @@ internal object DesktopFilterProbe {
                     !controller.state.value.busy && controller.state.value.error != null
                 }
                 settled(allowError = true)
+                // The failure itself is shown, not only a pointer to the diagnostic log.
+                check(controller.state.value.error.orEmpty().contains("Fixture filter failure")) {
+                    controller.state.value.error.orEmpty()
+                }
+                onNodeWithTag("notice-error").assertTextContains("Fixture filter failure", substring = true)
                 val failed = controller.state.value
                 check(failed.filterDialogOpen && failed.items == before.items && failed.offset == before.offset &&
                     failed.appliedFilters == before.appliedFilters && failed.query == before.query)
@@ -171,6 +201,7 @@ internal object DesktopFilterProbe {
             }
         } finally {
             System.clearProperty("fixture.filters.fail")
+            System.clearProperty("fixture.filters.slow")
             runBlocking { controller.shutdown() }
         }
         runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == 84) } }

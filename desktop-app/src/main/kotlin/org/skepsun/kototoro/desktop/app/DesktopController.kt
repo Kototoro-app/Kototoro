@@ -266,7 +266,7 @@ class DesktopController(val session: DesktopSession) {
         publishInstallation(extension.label, "已导入", DesktopScreen.EXPLORE)
     }
 
-    fun showExtensions() = action {
+    fun showExtensions() = navigate {
         mutableState.update { it.copy(screen = DesktopScreen.EXTENSIONS, repositories = session.repositories.saved(),
             installedExtensions = installedVersions(), installedEntries = session.installedEntries()) }
     }
@@ -299,7 +299,7 @@ class DesktopController(val session: DesktopSession) {
             message = "$message $label") }
     }
 
-    fun selectSource(source: SourceListing) = action {
+    fun selectSource(source: SourceListing) = navigate {
         val descriptor = session.sources.describe(source.source.name)
         mutableState.update { it.copy(screen = DesktopScreen.EXPLORE, selectedSource = source,
             descriptor = descriptor, items = emptyList(), offset = 0, pageOffsets = listOf(0), query = "", content = null,
@@ -307,27 +307,27 @@ class DesktopController(val session: DesktopSession) {
         browseOnIo(0, "")
     }
 
-    fun browse(offset: Int = 0, query: String = state.value.query) = action { browseOnIo(offset, query) }
+    fun browse(offset: Int = 0, query: String = state.value.query) = navigate { browseOnIo(offset, query) }
 
-    fun explore() = action {
+    fun explore() = navigate {
         if (state.value.selectedSource == null) mutableState.update {
             it.copy(screen = DesktopScreen.EXPLORE, items = emptyList(), content = null)
         } else browseOnIo(state.value.offset, state.value.query)
     }
 
     /** Leaves the opened source and returns to the browse page's source grid (Android's back from a source). */
-    fun exitSource() = action {
+    fun exitSource() = navigate {
         mutableState.update { it.copy(screen = DesktopScreen.EXPLORE, selectedSource = null, descriptor = null,
             items = emptyList(), offset = 0, pageOffsets = listOf(0), query = "", content = null, browseOrder = null,
             dynamicFilters = null, appliedFilters = emptyList(), filterDialogOpen = false) }
     }
 
-    fun browseUnfiltered(latest: Boolean = false) = action {
+    fun browseUnfiltered(latest: Boolean = false) = navigate {
         browseOnIo(0, "", supportedOrder(if (latest) "UPDATED" else "POPULARITY"), emptyList())
     }
 
     /** Lists in the given sort order; [order] must be one of the source's declared orders. */
-    fun browseOrdered(order: String) = action {
+    fun browseOrdered(order: String) = navigate {
         require(order in state.value.descriptor?.sortOrders.orEmpty()) { "来源不支持此排序" }
         browseOnIo(0, state.value.query, order, state.value.appliedFilters)
     }
@@ -347,7 +347,7 @@ class DesktopController(val session: DesktopSession) {
 
     fun dismissFilters() { mutableState.update { it.copy(filterDialogOpen = false) } }
 
-    fun applyFilters(query: String, changes: List<SourceFilterChange>) = action {
+    fun applyFilters(query: String, changes: List<SourceFilterChange>) = navigate {
         val definition = requireNotNull(state.value.dynamicFilters)
         val validated = MihonFilterRules.changes(definition.nodes, emptySet(), emptySet(), changes,
             strict = true, applyLegacy = false)
@@ -374,7 +374,7 @@ class DesktopController(val session: DesktopSession) {
             query = query, browseOrder = order, appliedFilters = changes) }
     }
 
-    fun library(history: Boolean = false) = action {
+    fun library(history: Boolean = false) = navigate {
         val snapshot = session.library.snapshot(history)
         mutableState.update { it.copy(screen = if (history) DesktopScreen.HISTORY else DesktopScreen.LIBRARY,
             items = snapshot.entries.map { row -> row.content }, library = snapshot, content = null) }
@@ -388,7 +388,7 @@ class DesktopController(val session: DesktopSession) {
         }
     }
 
-    fun details(content: SourceContent) = action { detailsOnIo(content) }
+    fun details(content: SourceContent) = navigate { detailsOnIo(content) }
 
     private suspend fun detailsOnIo(content: SourceContent) {
         val previous = state.value
@@ -408,7 +408,7 @@ class DesktopController(val session: DesktopSession) {
     }
 
     /** Android's home: hero, history and updates rows over the shared history/tracker tables. */
-    fun home() = action {
+    fun home() = navigate {
         val history = session.library.snapshot(history = true)
         val feed = session.feed.observe(session.storage.database).first()
         val contents = feedContentsOnIo(feed)
@@ -495,7 +495,7 @@ class DesktopController(val session: DesktopSession) {
     }
 
     /** Android's subscriptions page: tracked works with new chapters and the update log timeline. */
-    fun subscriptions() = action { loadFeedOnIo(DesktopScreen.FEED) }
+    fun subscriptions() = navigate { loadFeedOnIo(DesktopScreen.FEED) }
 
     private suspend fun loadFeedOnIo(screen: DesktopScreen? = null) {
         val feed = session.feed.observe(session.storage.database).first()
@@ -533,7 +533,7 @@ class DesktopController(val session: DesktopSession) {
     }
 
     /** Opening an update marks it read (counter and unread logs), then shows the work. */
-    fun openTracked(mangaId: Long) = action {
+    fun openTracked(mangaId: Long) = navigate {
         session.tracker.markRead(mangaId)
         val content = requireNotNull(session.library.find(mangaId)) { "作品记录不存在" }
         detailsOnIo(content)
@@ -541,7 +541,7 @@ class DesktopController(val session: DesktopSession) {
     }
 
     /** Android's "continue reading" on a feed entry: mark it read and resume from history. */
-    fun continueTracked(mangaId: Long) = action {
+    fun continueTracked(mangaId: Long) = navigate {
         session.tracker.markRead(mangaId)
         val content = requireNotNull(session.library.find(mangaId)) { "作品记录不存在" }
         detailsOnIo(content)
@@ -553,7 +553,7 @@ class DesktopController(val session: DesktopSession) {
     }
 
     /** Android's "random" quick action: open a random favourite. */
-    fun randomFavourite() = action {
+    fun randomFavourite() = navigate {
         val favourite = session.library.favourites().randomOrNull() ?: error("收藏为空")
         detailsOnIo(favourite)
     }
@@ -579,7 +579,7 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { if (it.screen == DesktopScreen.DETAILS) it.copy(detailsExpanded = true) else it }
     }
 
-    internal fun dismissDetails() = action {
+    internal fun dismissDetails() = navigate {
         val origin = state.value.detailsOrigin ?: DesktopScreen.EXPLORE
         val library = if (origin == DesktopScreen.LIBRARY || origin == DesktopScreen.HISTORY) {
             session.library.snapshot(origin == DesktopScreen.HISTORY)
@@ -599,7 +599,7 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { it.copy(isFavourite = true, message = "已加入收藏") }
     }
 
-    fun read(chapter: SourceChapter? = null) = action {
+    fun read(chapter: SourceChapter? = null) = navigate {
         when (DesktopReaderKind.of(state.value.content)) {
             DesktopReaderKind.NOVEL -> readNovelOnIo(chapter)
             DesktopReaderKind.VIDEO -> watchOnIo(chapter)
@@ -819,9 +819,9 @@ class DesktopController(val session: DesktopSession) {
         downloads.enqueue(content.id, chapter, content.title)
     }
 
-    fun showDownloads() = action { mutableState.update { it.copy(screen = DesktopScreen.DOWNLOADS) } }
+    fun showDownloads() = navigate { mutableState.update { it.copy(screen = DesktopScreen.DOWNLOADS) } }
 
-    fun showBackups() = action { mutableState.update { it.copy(screen = DesktopScreen.BACKUPS) } }
+    fun showBackups() = navigate { mutableState.update { it.copy(screen = DesktopScreen.BACKUPS) } }
 
     internal fun exportLibraryBackup(path: Path) = action {
         backups.export(path)
@@ -1229,7 +1229,7 @@ class DesktopController(val session: DesktopSession) {
                 readerFailedPages = snapshot.readerFailedPages - layout.indices.map { index -> snapshot.pages[index].id }.toSet())
     }
 
-    fun preferences() = action {
+    fun preferences() = navigate {
         val source = requireNotNull(state.value.selectedSource) { "请先选择来源" }
         val screen = session.sources.getPreferences(source.source.name)
         mutableState.update { it.copy(screen = DesktopScreen.PREFERENCES, preferences = screen) }
@@ -1246,9 +1246,9 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { it.copy(preferences = result.screen, message = message) }
     }
 
-    fun browser() = action { mutableState.update { it.copy(screen = DesktopScreen.BROWSER) } }
+    fun browser() = navigate { mutableState.update { it.copy(screen = DesktopScreen.BROWSER) } }
 
-    fun more() = action { mutableState.update { it.copy(screen = DesktopScreen.MORE) } }
+    fun more() = navigate { mutableState.update { it.copy(screen = DesktopScreen.MORE) } }
 
     fun backToDetails() = action {
         closeCast(resume = false)
@@ -1257,6 +1257,17 @@ class DesktopController(val session: DesktopSession) {
 
     private fun sourceDescriptors() = session.sourceListings()
         .sortedWith(compareBy({ it.displayName.lowercase() }, { it.source.locale }))
+
+    private var navigation: Job? = null
+
+    /**
+     * An action that changes what the window shows. The newest one wins: a still loading (or queued) navigation is
+     * cancelled, so the user can leave a slow source or page instead of waiting for it.
+     */
+    private fun navigate(block: suspend () -> Unit): Job = synchronized(actionState) {
+        navigation?.cancel()
+        action(block).also { navigation = it }
+    }
 
     private fun action(block: suspend () -> Unit): Job {
         // Publish queued work before returning to the UI; IO dispatcher scheduling must not leave a false idle gap.

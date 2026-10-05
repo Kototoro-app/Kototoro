@@ -58,6 +58,10 @@ public final class FilterSource extends HttpSource {
     }
     @Override public Observable<MangasPage> fetchLatestUpdates(int page) {
         defaults(); System.setProperty("fixture.filters.last", "latest:" + page);
+        // A slow site: the window must stay usable and a newer navigation must replace this request.
+        if (Boolean.getBoolean("fixture.filters.slow")) {
+            return result("最新 " + page).delay(5, java.util.concurrent.TimeUnit.SECONDS);
+        }
         return result("最新 " + page);
     }
     @Override public Observable<MangasPage> fetchSearchManga(int page, String query, FilterList filters) {

@@ -12,14 +12,17 @@ class DesktopSourceDiagnosticsTest {
     @TempDir lateinit var directory: Path
 
     @Test
-    fun `failure lookup uses the exact request and logs bounded causes without request or exception secrets`() {
+    fun `failure lookup shows the error but logs bounded causes without request or exception secrets`() {
         val diagnostics = DesktopSourceDiagnostics(directory)
         val request = SourceRequest(1, "request-secret", SourceCall.ListContent("MIHON_1", 0,
             filter = SourceFilter(query = "query-secret")))
         val cause = IOException("Authorization cookie-secret https://private.test/token")
         diagnostics.record(request, IllegalStateException("response-body-secret", cause))
         val message = requireNotNull(diagnostics.message(request.requestId))
-        assertTrue(message.startsWith("来源网络请求失败（诊断 "))
+        // The window shows what failed; only the persisted log stays free of it.
+        assertTrue(message.startsWith("来源网络请求失败：IllegalStateException: response-body-secret\n" +
+            "← IOException: Authorization cookie-secret https://private.test/token\n（诊断 "), message)
+        assertFalse(message.contains("request-secret") || message.contains("query-secret"))
         assertNull(diagnostics.message("unrelated-request"))
         val log = Files.readString(directory.resolve("logs/source-errors.log"))
         assertTrue(log.contains("operation=ListContent"))
@@ -33,16 +36,25 @@ class DesktopSourceDiagnosticsTest {
     }
 
     @Test
-    fun `unwritable log location preserves existing data and still reports a safe runtime category`() {
+    fun `unwritable log location preserves existing data and still reports the runtime error`() {
         val blocked = directory.resolve("logs")
         Files.writeString(blocked, "preserved")
         val diagnostics = DesktopSourceDiagnostics(directory)
         diagnostics.record(SourceRequest(1, "abi", SourceCall.Sources),
             IllegalStateException("private value", NoClassDefFoundError("private class value")))
         val message = requireNotNull(diagnostics.message("abi"))
-        assertTrue(message.contains("来源运行时不兼容"))
+        assertTrue(message.startsWith("来源运行时不兼容：IllegalStateException: private value\n" +
+            "← NoClassDefFoundError: private class value"), message)
         assertTrue(message.contains("日志写入失败"))
-        assertFalse(message.contains("private"))
         assertEquals("preserved", Files.readString(blocked))
+    }
+
+    @Test
+    fun `wrappers without a message fall back to the innermost exception type`() {
+        val diagnostics = DesktopSourceDiagnostics(directory)
+        diagnostics.record(SourceRequest(1, "bare", SourceCall.Sources),
+            RuntimeException(null as String?, java.net.SocketTimeoutException()))
+        val message = requireNotNull(diagnostics.message("bare"))
+        assertTrue(message.startsWith("来源网络请求失败：SocketTimeoutException\n"), message)
     }
 }
