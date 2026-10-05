@@ -19,7 +19,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSizeIn
 import androidx.compose.foundation.layout.width
@@ -39,6 +42,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +59,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
@@ -265,6 +270,9 @@ private fun BoxScope.FastScrollbar(
     }
 
     val isActive = showScrollbar && (alwaysVisible || keepVisible || isDragging)
+    // The pointer handler outlives recompositions, so it reads these through updated state.
+    val currentIsActive by rememberUpdatedState(isActive)
+    val latestScrollFraction by rememberUpdatedState(scrollFraction)
     DisposableEffect(isActive) {
         localScrollbarActive.value = isActive
         onDispose {
@@ -311,17 +319,12 @@ private fun BoxScope.FastScrollbar(
             )
             .width(FastScrollTouchWidth)
             .then(
-                if (showScrollbar && (alwaysVisible || keepVisible)) {
-                    Modifier.systemGestureExclusion()
-                } else {
-                    Modifier
-                },
-            )
-            .then(
                 if (draggable) {
                     Modifier.fastScrollbarPointerInput(
                         rootView = rootView,
                         showScrollbar = { showScrollbar },
+                        handleVisible = { currentIsActive },
+                        handleFraction = { if (isDragging) dragFraction else latestScrollFraction() },
                         handleHeightPx = handleHeightPx,
                         onDragStart = {
                             isDragging = true
@@ -388,6 +391,18 @@ private fun BoxScope.FastScrollbar(
                 null
             }
             val visibleBubbleText = if (isDragging) bubbleText else timelineLabel
+
+            if (draggable && isActive) {
+                // Exclude only the handle from system gestures: excluding the whole track would swallow
+                // the edge back gesture along the full height of every scrolled list.
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset(0, barTopPx.roundToInt()) }
+                        .fillMaxWidth()
+                        .height(handleHeight)
+                        .systemGestureExclusion(),
+                )
+            }
 
             Canvas(modifier = Modifier.fillMaxSize()) {
                 if (alpha <= 0f || !showScrollbar || totalItems <= 0 || visibleItems <= 0 || totalItems <= visibleItems) {
@@ -479,6 +494,8 @@ private fun FastScrollBubble(
 private fun Modifier.fastScrollbarPointerInput(
     rootView: View,
     showScrollbar: () -> Boolean,
+    handleVisible: () -> Boolean,
+    handleFraction: () -> Float,
     handleHeightPx: Float,
     onDragStart: () -> Unit,
     onDragStop: () -> Unit,
@@ -488,6 +505,21 @@ private fun Modifier.fastScrollbarPointerInput(
         val down = awaitFirstDown(requireUnconsumed = false)
         if (!showScrollbar()) {
             return@awaitEachGesture
+        }
+        val slop = viewConfiguration.touchSlop
+        val handleTop = (size.height - handleHeightPx).coerceAtLeast(0f) * handleFraction().coerceIn(0f, 1f)
+        val onHandle = handleVisible() &&
+            down.position.y in (handleTop - slop)..(handleTop + handleHeightPx + slop)
+        if (!onHandle) {
+            // Away from the handle, only a deliberate vertical drag fast-scrolls. A touch that moves
+            // sideways first is the edge back gesture and must not make the list jump.
+            while (true) {
+                val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
+                if (!change.pressed) return@awaitEachGesture
+                val delta = change.position - down.position
+                if (abs(delta.x) > slop && abs(delta.x) >= abs(delta.y)) return@awaitEachGesture
+                if (abs(delta.y) > slop) break
+            }
         }
 
         rootView.parent?.requestDisallowInterceptTouchEvent(true)
