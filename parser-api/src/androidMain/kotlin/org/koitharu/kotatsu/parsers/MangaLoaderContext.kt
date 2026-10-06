@@ -54,6 +54,14 @@ public abstract class MangaLoaderContext {
 		throw UnsupportedOperationException("Browser is not available")
 	}
 
+	/**
+	 * Ask the host application to resolve Cloudflare verification for [url].
+	 * Hosts without a dedicated resolver fall back to the regular browser action.
+	 */
+	public open fun requestCloudflareVerification(parser: MangaParser, url: String): Nothing {
+		requestBrowserAction(parser, url)
+	}
+
 	public abstract fun getConfig(source: MangaSource): MangaSourceConfig
 
 	public open fun getDefaultUserAgent(): String = org.koitharu.kotatsu.parsers.network.UserAgents.CHROME_MOBILE

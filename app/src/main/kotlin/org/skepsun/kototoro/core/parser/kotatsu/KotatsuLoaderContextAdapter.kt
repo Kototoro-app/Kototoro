@@ -1,13 +1,16 @@
 package org.skepsun.kototoro.core.parser.kotatsu
 
 import okhttp3.CookieJar
+import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.koitharu.kotatsu.parsers.MangaLoaderContext as KTMangaLoaderContext
 import org.koitharu.kotatsu.parsers.bitmap.Bitmap as KTBitmap
 import org.koitharu.kotatsu.parsers.model.MangaSource as KTContentSource
+import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
 import org.skepsun.kototoro.parsers.ContentLoaderContext
+import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 import org.skepsun.kototoro.parsers.config.ContentSourceConfig
 import java.util.Locale
 
@@ -42,6 +45,15 @@ internal class KotatsuLoaderContextAdapter(
     override fun requestBrowserAction(parser: org.koitharu.kotatsu.parsers.MangaParser, url: String): Nothing {
         val source = KotatsuParserSource(parser.source)
         throw InteractiveActionRequiredException(source, url)
+    }
+
+    override fun requestCloudflareVerification(parser: org.koitharu.kotatsu.parsers.MangaParser, url: String): Nothing {
+        throw CloudFlareProtectedException(
+            url = CloudFlareHelper.getBrowserChallengeUrl(url),
+            source = KotatsuParserSource(parser.source),
+            headers = Headers.headersOf(),
+            originalUrl = url,
+        )
     }
 
     override fun getConfig(source: KTContentSource): org.koitharu.kotatsu.parsers.config.MangaSourceConfig =
