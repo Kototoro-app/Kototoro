@@ -5,13 +5,21 @@ import io.kotest.matchers.shouldBe
 import org.skepsun.kototoro.list.domain.ListSortOrder
 
 class ListSortOptionTest : FunSpec({
-    test("favorites exposes seven criteria while preserving every saved order") {
+    test("favorites exposes eight criteria while preserving every saved order") {
         val options = listSortOptions(ListSortOrder.FAVORITES.toList())
-        options.size shouldBe 7
+        options.size shouldBe 8
         ListSortOrder.FAVORITES.forEach { order ->
             val option = options.single { it.contains(order) }
             option.orderFor(option.descending == order) shouldBe order
         }
+    }
+
+    test("all favourites omits the manual criterion") {
+        val options = listSortOptions(ListSortOrder.favourites(-1L))
+        options.size shouldBe 7
+        options.none { it.contains(ListSortOrder.MANUAL) } shouldBe true
+        listSortOptions(ListSortOrder.favourites(1L)).single { it.contains(ListSortOrder.MANUAL) }
+            .orderFor(false) shouldBe ListSortOrder.MANUAL
     }
 
     test("changing criterion keeps direction when supported") {
