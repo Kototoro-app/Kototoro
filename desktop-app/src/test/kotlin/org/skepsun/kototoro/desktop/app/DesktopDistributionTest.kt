@@ -60,6 +60,13 @@ class DesktopDistributionTest {
         }
         assertTrue(Files.isRegularFile(app.resolve("resources/THIRD_PARTY_PLAYBACK.md")))
         awaitRelease(root)
+        // A failing check must end the native process instead of leaving the launcher hung.
+        val failedReport = directory.resolve("failed-check.properties")
+        val failedExit = execute(listOf(image.resolve("Kototoro.exe").toString(), "--data-dir", directory.resolve("中文 ไทย failed data").toString(),
+            "--import", directory.resolve("missing.jar").toString(), "--check-runtime", failedReport.toString()), "native-exe-failure",
+            expectSuccess = false)
+        assertNotEquals(0, failedExit)
+        assertEquals("failed", Properties().apply { Files.newBufferedReader(failedReport).use { load(it) } }.getProperty("status"))
         val bundledJava = image.resolve("runtime/bin/java.exe")
         assertTrue(Files.isRegularFile(bundledJava))
         val probes = System.getProperty("kototoro.desktop.probe.classes")
@@ -74,7 +81,7 @@ class DesktopDistributionTest {
             StandardCopyOption.REPLACE_EXISTING)
     }
 
-    private fun execute(arguments: List<String>, name: String) {
+    private fun execute(arguments: List<String>, name: String, expectSuccess: Boolean = true): Int {
         val log = Files.createDirectories(Path.of("build/reports/windows-distribution")).resolve("$name.log")
         val builder = ProcessBuilder(arguments).directory(directory.toFile()).redirectErrorStream(true).redirectOutput(log.toFile())
         val processTemporary = Files.createDirectories(directory.resolve("process-temp"))
@@ -87,7 +94,8 @@ class DesktopDistributionTest {
         val process = builder.start()
         try {
             assertTrue(process.waitFor(60, TimeUnit.SECONDS), "Packaged process timed out: ${Files.readString(log)}")
-            assertEquals(0, process.exitValue(), Files.readString(log))
+            if (expectSuccess) assertEquals(0, process.exitValue(), Files.readString(log))
+            return process.exitValue()
         } finally { if (process.isAlive) process.destroyForcibly() }
     }
 

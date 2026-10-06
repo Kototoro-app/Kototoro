@@ -14,8 +14,20 @@ import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.desktop.runtime.DesktopDataPaths
 import java.awt.Dimension
 import java.nio.file.Path
+import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
+    try {
+        runDesktop(args)
+    } catch (error: Throwable) {
+        // The jpackage launcher never exits when main ends with an exception ("Failed to launch JVM" and a hung
+        // process), so report the failure and leave through the JVM instead.
+        error.printStackTrace()
+        exitProcess(1)
+    }
+}
+
+private fun runDesktop(args: Array<String>) {
     val options = args.toList()
     require(options.size % 2 == 0 && options.chunked(2).all { it[0] in setOf("--data-dir", "--import", "--check-runtime") }) {
         "Usage: [--data-dir <directory>] [--import <extension.jar>] [--check-runtime <report>]"
