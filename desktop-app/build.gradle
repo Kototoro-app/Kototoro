@@ -225,11 +225,17 @@ def prepareBundledThirdParty = tasks.register('prepareBundledThirdParty') {
         } else {
             def archive = pinnedArtifact('libmpv', null)
             def unpack = new File(temporaryDir, 'mpv'); project.delete(unpack); unpack.mkdirs()
-            // Windows' bundled bsdtar reads 7z archives.
-            def tar = new ProcessBuilder('tar', '-xf', archive.absolutePath, '-C', unpack.absolutePath, 'libmpv-2.dll')
+            // Windows' bundled bsdtar reads 7z archives. Call it by path: CI runners put Git's GNU tar first on
+            // PATH, which neither reads 7z nor accepts drive-letter paths.
+            def systemRoot = System.getenv('SystemRoot')
+            def bsdtar = systemRoot != null ? new File(systemRoot, 'System32/tar.exe') : null
+            def tarCommand = bsdtar?.isFile() ? bsdtar.absolutePath : 'tar'
+            def tar = new ProcessBuilder(tarCommand, '-xf', archive.absolutePath, '-C', unpack.absolutePath, 'libmpv-2.dll')
                 .redirectErrorStream(true).start()
-            tar.inputStream.text
-            if (tar.waitFor() != 0 || !new File(unpack, 'libmpv-2.dll').isFile()) throw new GradleException('Cannot extract libmpv-2.dll')
+            def tarOutput = tar.inputStream.text
+            if (tar.waitFor() != 0 || !new File(unpack, 'libmpv-2.dll').isFile()) {
+                throw new GradleException("Cannot extract libmpv-2.dll with $tarCommand: ${tarOutput.trim()}")
+            }
             project.copy { from new File(unpack, 'libmpv-2.dll'); into mpv }
         }
         ['realcugan', 'realesrgan'].each { key ->
