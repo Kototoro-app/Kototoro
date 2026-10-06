@@ -225,16 +225,25 @@ def prepareBundledThirdParty = tasks.register('prepareBundledThirdParty') {
         } else {
             def archive = pinnedArtifact('libmpv', null)
             def unpack = new File(temporaryDir, 'mpv'); project.delete(unpack); unpack.mkdirs()
-            // Windows' bundled bsdtar reads 7z archives. Call it by path: CI runners put Git's GNU tar first on
-            // PATH, which neither reads 7z nor accepts drive-letter paths.
+            // Prefer 7-Zip (preinstalled on GitHub's Windows images), then Windows' bsdtar by path. Older bsdtar
+            // builds (windows-2022) lack LZMA, and Git's GNU tar, first on CI PATH, reads neither 7z nor "D:\" paths.
             def systemRoot = System.getenv('SystemRoot')
-            def bsdtar = systemRoot != null ? new File(systemRoot, 'System32/tar.exe') : null
-            def tarCommand = bsdtar?.isFile() ? bsdtar.absolutePath : 'tar'
-            def tar = new ProcessBuilder(tarCommand, '-xf', archive.absolutePath, '-C', unpack.absolutePath, 'libmpv-2.dll')
-                .redirectErrorStream(true).start()
-            def tarOutput = tar.inputStream.text
-            if (tar.waitFor() != 0 || !new File(unpack, 'libmpv-2.dll').isFile()) {
-                throw new GradleException("Cannot extract libmpv-2.dll with $tarCommand: ${tarOutput.trim()}")
+            def extractors = [
+                [new File(System.getenv('ProgramFiles') ?: 'C:/Program Files', '7-Zip/7z.exe'),
+                    ['x', '-y', "-o${unpack.absolutePath}", archive.absolutePath, 'libmpv-2.dll']],
+                [systemRoot != null ? new File(systemRoot, 'System32/tar.exe') : null,
+                    ['-xf', archive.absolutePath, '-C', unpack.absolutePath, 'libmpv-2.dll']],
+            ].findAll { it[0]?.isFile() }
+            def failures = []
+            for (extractor in extractors) {
+                def command = ([extractor[0].absolutePath] + extractor[1]).collect { it.toString() }
+                def process = new ProcessBuilder(command).redirectErrorStream(true).start()
+                def output = process.inputStream.text
+                if (process.waitFor() == 0 && new File(unpack, 'libmpv-2.dll').isFile()) break
+                failures << "${extractor[0].name}: ${output.trim()}"
+            }
+            if (!new File(unpack, 'libmpv-2.dll').isFile()) {
+                throw new GradleException("Cannot extract libmpv-2.dll (${failures.join('; ') ?: 'no 7z or bsdtar found'})")
             }
             project.copy { from new File(unpack, 'libmpv-2.dll'); into mpv }
         }
