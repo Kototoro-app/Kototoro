@@ -16,6 +16,7 @@ import org.skepsun.kototoro.core.parser.ContentLoaderContextImpl
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.ParserContentRepository
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
+import org.skepsun.kototoro.mihon.compat.SourceRequestContext
 
 import org.koitharu.kotatsu.parsers.model.MangaSource as KTMangaSource
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -51,7 +52,10 @@ class CommonHeadersInterceptor @Inject constructor(
         headersBuilder.removeAll("Connection")
         headersBuilder.removeAll("Content-Length")
 
-        repository?.getRequestHeaders()?.forEach { (name, value) ->
+        // Mihon/Aniyomi HttpSource requests already carry the headers the extension chose; some
+        // drop a default on purpose (Comix strips Origin from image requests), so never refill them.
+        val headersOwnedBySource = request.tag(SourceRequestContext::class.java) != null
+        repository?.takeUnless { headersOwnedBySource }?.getRequestHeaders()?.forEach { (name, value) ->
             if (headersBuilder[name] == null) {
                 headersBuilder[name] = value
             }
@@ -75,7 +79,7 @@ class CommonHeadersInterceptor @Inject constructor(
         }
 
         // Add Referer header upfront if not already set (like Kotatsu does)
-        if (headersBuilder[CommonHeaders.REFERER] == null && repository != null) {
+        if (headersBuilder[CommonHeaders.REFERER] == null && repository != null && !headersOwnedBySource) {
             val domain = when (repository) {
                 is ParserContentRepository -> repository.domain
                 is org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserRepository -> {
