@@ -12,8 +12,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.cache.MemoryContentCache
-import org.skepsun.kototoro.core.exceptions.CloudFlareException
-import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
 import org.skepsun.kototoro.core.parser.CachingContentRepository
 import org.skepsun.kototoro.core.parser.RelatedContentSearchFallback
 import org.skepsun.kototoro.mihon.compat.MihonRequestContext
@@ -388,12 +386,9 @@ class MihonMangaRepository(
         try {
             return block()
         } catch (e: RuntimeException) {
-            when (val cause = e.cause) {
-                is CloudFlareException -> throw cause
-                is InteractiveActionRequiredException -> throw cause
-                is java.io.IOException -> throw cause
-                else -> throw e
-            }
+            throw unwrapMihonFailure(e)
+        } catch (e: java.io.IOException) {
+            throw unwrapMihonFailure(e)
         }
     }
 

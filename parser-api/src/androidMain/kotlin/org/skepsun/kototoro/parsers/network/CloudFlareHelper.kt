@@ -44,7 +44,10 @@ public object CloudFlareHelper {
         val html = content.html()
         return when {
             content.selectFirst("h2[data-translate=\"blocked_why_headline\"]") != null -> PROTECTION_BLOCKED
-            content.selectFirst(".cf-error-details, #cf-error-details") != null -> PROTECTION_BLOCKED
+            // Cloudflare renders 1015 rate limits and 52x origin failures with the same error template;
+            // only a 403 is an actual block, the rest must surface as their HTTP status.
+            response.code == HTTP_FORBIDDEN &&
+                content.selectFirst(".cf-error-details, #cf-error-details") != null -> PROTECTION_BLOCKED
             content.title().contains("Just a moment", ignoreCase = true) -> PROTECTION_CAPTCHA
             content.getElementById("challenge-error-title") != null -> PROTECTION_CAPTCHA
             content.getElementById("challenge-error-text") != null -> PROTECTION_CAPTCHA

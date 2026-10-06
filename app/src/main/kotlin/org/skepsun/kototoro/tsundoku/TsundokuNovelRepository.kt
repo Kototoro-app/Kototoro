@@ -882,14 +882,7 @@ class TsundokuNovelRepository(
         block()
     } catch (e: Exception) {
         if (e is android.os.NetworkOnMainThreadException) throw e
-        if (
-            e is org.skepsun.kototoro.core.exceptions.CloudFlareException ||
-            e is org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
-        ) {
-            throw e
-        }
-        if (e is java.io.IOException) throw e
-        throw e
+        throw org.skepsun.kototoro.mihon.unwrapMihonFailure(e)
     }
 
     private suspend fun <T> withTsundokuSourceContext(block: suspend () -> T): T =

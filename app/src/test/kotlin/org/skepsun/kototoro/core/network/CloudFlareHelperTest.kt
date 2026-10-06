@@ -58,6 +58,30 @@ class CloudFlareHelperTest {
     }
 
     @Test
+    fun `forbidden cloudflare error page is treated as blocked`() {
+        assertEquals(
+            CloudFlareHelper.PROTECTION_BLOCKED,
+            CloudFlareHelper.checkResponseForProtection(response(code = 403, body = errorPage("1020"))),
+        )
+    }
+
+    @Test
+    fun `rate limit error page is not treated as blocked`() {
+        assertEquals(
+            CloudFlareHelper.PROTECTION_NOT_DETECTED,
+            CloudFlareHelper.checkResponseForProtection(response(code = 429, body = errorPage("1015"))),
+        )
+    }
+
+    @Test
+    fun `origin failure error page is not treated as blocked`() {
+        assertEquals(
+            CloudFlareHelper.PROTECTION_NOT_DETECTED,
+            CloudFlareHelper.checkResponseForProtection(response(code = 522, body = errorPage("522"))),
+        )
+    }
+
+    @Test
     fun `browser challenge keeps API path`() {
         assertEquals(
             "https://kissmanga.in/wp-admin/admin-ajax.php",
@@ -72,6 +96,18 @@ class CloudFlareHelperTest {
             CloudFlareHelper.getBrowserChallengeUrl("https://kissmanga.in/assets/site/favicon.png"),
         )
     }
+
+    private fun errorPage(errorCode: String): String = """
+        <!doctype html>
+        <html>
+            <head><title>Error $errorCode</title></head>
+            <body>
+                <div id="cf-error-details" class="cf-error-details-wrapper">
+                    <div class="cf-error-details"><h1>Error $errorCode</h1></div>
+                </div>
+            </body>
+        </html>
+    """.trimIndent()
 
     private fun response(code: Int, body: String): Response {
         return Response.Builder()
