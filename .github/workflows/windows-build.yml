@@ -59,7 +59,7 @@ jobs:
 
       - name: Prepare Android SDK platform
         run: |
-          & "$env:ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" "platforms;android-37"
+          & "$env:ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" "platforms;android-37.0"
           if ($LASTEXITCODE -ne 0) { throw 'Android SDK setup failed.' }
 
       - name: Prepare pinned Windows build inputs
