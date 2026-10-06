@@ -446,6 +446,33 @@ tasks.withType(Test).configureEach {
 
 tasks.named('test') { exclude '**/DesktopDistributionTest.class' }
 if (bundleWindowsRuntime) {
+    // The jpackage launcher resolves its runtime, and the bundled ncnn tools open their images, through ANSI APIs.
+    // Give every shipped executable the UTF-8 code page so paths outside the system code page (install directory,
+    // data directory, TEMP) still work. Every package (tested image, ZIP, MSI) is built from this image.
+    def utf8LauncherScript = file('windows-utf8-launcher.ps1')
+    def windowsImage = layout.buildDirectory.dir('compose/binaries/main/app/Kototoro').get().asFile
+    tasks.matching { it.name == 'createDistributable' }.configureEach {
+        inputs.file(utf8LauncherScript)
+        doLast {
+            // The bundled java/javaw commands (kept for support and probes) locate the runtime the same way.
+            def executables = ['Kototoro.exe', 'runtime/bin/java.exe', 'runtime/bin/javaw.exe'].collect { new File(windowsImage, it) }
+            def upscale = new File(windowsImage, 'app/resources/upscale')
+            if (upscale.isDirectory()) {
+                upscale.eachFileRecurse(groovy.io.FileType.FILES) { if (it.name.endsWith('.exe')) executables << it }
+            }
+            if (executables.size() != 5 || !executables.every { it.isFile() }) {
+                throw new GradleException("Expected the launcher, java/javaw and two ncnn tools, found ${executables*.name}")
+            }
+            executables.each { executable ->
+                def process = new ProcessBuilder('powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                    '-File', utf8LauncherScript.absolutePath, '-LauncherPath', executable.absolutePath)
+                    .redirectErrorStream(true).start()
+                def output = process.inputStream.text
+                if (process.waitFor() != 0) throw new GradleException("Cannot set the UTF-8 code page of ${executable.name}: ${output.trim()}")
+                logger.lifecycle(output.trim())
+            }
+        }
+    }
     tasks.withType(org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask).matching {
         it.name == 'packageMsi'
     }.configureEach {

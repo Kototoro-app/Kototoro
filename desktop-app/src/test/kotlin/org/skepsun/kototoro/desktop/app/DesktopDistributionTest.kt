@@ -17,7 +17,8 @@ class DesktopDistributionTest {
     @Test
     fun `moved Windows image initializes without developer runtime and closes actual native windows`() {
         val original = Path.of(System.getProperty("kototoro.desktop.distribution"))
-        val image = directory.resolve("中文 Windows portable image")
+        // CJK and Thai never share one ANSI code page, so the launcher must cope with paths outside it on any machine.
+        val image = directory.resolve("中文 ไทย Windows portable image")
         Files.walk(original).use { paths -> paths.forEach { source ->
             val target = image.resolve(original.relativize(source))
             if (Files.isDirectory(source)) Files.createDirectories(target) else Files.copy(source, target)
@@ -37,7 +38,7 @@ class DesktopDistributionTest {
         assertFalse(cfg.any { it.contains("kt-compat36") || it.contains("gradle-home") ||
             it.contains("--import") || it.contains("--data-dir") })
         val fixture = Path.of(System.getProperty("kototoro.desktop.fixture.jar"))
-        val root = directory.resolve("中文 native EXE data")
+        val root = directory.resolve("中文 ไทย native EXE data")
         val report = directory.resolve("check.properties")
         execute(listOf(image.resolve("Kototoro.exe").toString(), "--data-dir", root.toString(), "--import", fixture.toString(),
             "--check-runtime", report.toString()), "native-exe")
