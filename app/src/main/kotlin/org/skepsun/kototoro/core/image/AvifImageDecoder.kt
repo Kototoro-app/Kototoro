@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.core.image
 
 import android.graphics.Bitmap
+import android.os.Build
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
 import coil3.ImageLoader
@@ -17,15 +18,27 @@ import coil3.util.component2
 import kotlinx.coroutines.runInterruptible
 import org.aomedia.avif.android.AvifDecoder
 import org.skepsun.kototoro.core.util.ext.readByteBuffer
+import java.lang.ref.Reference
 
 class AvifImageDecoder(
     private val source: ImageSource,
     private val options: Options,
+    private val animationPool: AvifAnimationPool? = null,
 ) : Decoder {
 
+    private val poolKey: AvifAnimationPool.Key? by lazy { animationPool?.let { animationPoolKey() } }
+
     override suspend fun decode(): DecodeResult = runInterruptible {
+        poolKey?.let { key -> animationPool?.take(key) }?.let { parked ->
+            return@runInterruptible DecodeResult(
+                image = parked.drawable.asImage(shareable = false),
+                isSampled = parked.isSampled,
+            )
+        }
         val bytes = source.source().readByteBuffer()
-        val decoder = AvifDecoder.create(bytes) ?: throw ImageDecodeException(
+        // create(ByteBuffer) decodes on a single thread; an animated page decodes every frame before
+        // it is shown, so the AV1 decoder's own threads directly shorten the wait.
+        val decoder = AvifDecoder.create(bytes, DECODER_THREADS) ?: throw ImageDecodeException(
             uri = source.fileOrNull()?.toString(),
             format = "avif",
             message = "Requested to decode byte buffer which cannot be handled by AvifDecoder",
@@ -47,9 +60,9 @@ class AvifImageDecoder(
                         // shareable = false: the drawable owns native bitmaps that will
                         // be recycled via release(); it must not be served from Coil's
                         // memory cache to a second consumer after the first disposes it.
+                        // Reuse goes through animationPool, which hands it to one consumer at a time.
                         image = animated.drawable.asImage(shareable = false),
-                        isSampled = animated.drawable.intrinsicWidth < decoder.width ||
-                            animated.drawable.intrinsicHeight < decoder.height,
+                        isSampled = animated.isSampled,
                     )
 
                     is AnimatedDecode.FirstFrameOnly -> return@runInterruptible DecodeResult(
@@ -94,11 +107,16 @@ class AvifImageDecoder(
             }
         } finally {
             decoder.release()
+            // libavif reads the encoded data straight from this direct buffer without keeping a
+            // Java reference to it. Without the fence the buffer becomes unreachable right after
+            // create(), and a GC during the long all-frames decode frees memory the native decoder
+            // is still reading, failing intermittently with "Decoding of color planes failed".
+            keepReachable(bytes)
         }
     }
 
     private sealed interface AnimatedDecode {
-        class Animated(val drawable: AvifAnimatedDrawable) : AnimatedDecode
+        class Animated(val drawable: AvifAnimatedDrawable, val isSampled: Boolean) : AnimatedDecode
 
         /** A later frame failed to decode; showing a still beats failing the whole page. */
         class FirstFrameOnly(val bitmap: Bitmap) : AnimatedDecode
@@ -157,29 +175,60 @@ class AvifImageDecoder(
             frames.forEach { if (!it.isRecycled) it.recycle() }
             throw e
         }
-        return AnimatedDecode.Animated(AvifAnimatedDrawable(frames, durationsMs, repetitionCount))
+        val isSampled = frameWidth < decoder.width || frameHeight < decoder.height
+        val pool = animationPool
+        val key = poolKey
+        val onRelease: ((AvifAnimatedDrawable) -> Boolean)? = if (pool != null && key != null) {
+            { drawable -> pool.park(key, drawable, isSampled) }
+        } else {
+            null
+        }
+        return AnimatedDecode.Animated(
+            AvifAnimatedDrawable(frames, durationsMs, repetitionCount, onRelease),
+            isSampled,
+        )
+    }
+
+    /**
+     * Identifies a decode that would produce the same frames: the same file contents and the same
+     * inputs to the frame size. Only file-backed sources qualify; a stream has no stable identity.
+     */
+    private fun animationPoolKey(): AvifAnimationPool.Key? {
+        val path = source.fileOrNull() ?: return null
+        val metadata = runCatching { source.fileSystem.metadataOrNull(path) }.getOrNull()
+        return AvifAnimationPool.Key(
+            path = path.toString(),
+            length = metadata?.size,
+            lastModifiedMillis = metadata?.lastModifiedAtMillis,
+            request = "${options.size}|${options.scale}|${options.maxBitmapSize}",
+        )
     }
 
     private companion object {
         private const val DEFAULT_FRAME_DURATION_SEC = 0.042
         private const val ANIMATED_MEMORY_BUDGET_BYTES = 64L * 1024 * 1024
+
+        // Capped: the reader decodes neighbouring pages in parallel, and dav1d gains little beyond this.
+        private val DECODER_THREADS = Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
     }
 
-    class Factory : Decoder.Factory {
+    class Factory(
+        private val animationPool: AvifAnimationPool? = null,
+    ) : Decoder.Factory {
 
         override fun create(
             result: SourceFetchResult,
             options: Options,
             imageLoader: ImageLoader
         ): Decoder? = if (isApplicable(result)) {
-            AvifImageDecoder(result.source, options)
+            AvifImageDecoder(result.source, options, animationPool)
         } else {
             null
         }
 
-        override fun equals(other: Any?) = other is Factory
+        override fun equals(other: Any?) = other is Factory && other.animationPool === animationPool
 
-        override fun hashCode() = javaClass.hashCode()
+        override fun hashCode() = System.identityHashCode(animationPool)
 
         private fun isApplicable(result: SourceFetchResult): Boolean {
             if (result.mimeType == "image/avif") return true
@@ -199,6 +248,15 @@ class AvifImageDecoder(
 }
 
 private const val FTYP_PROBE_BYTES = 64L
+
+private fun keepReachable(ref: Any) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        Reference.reachabilityFence(ref)
+    } else {
+        // A monitor operation is a use the runtime cannot elide, so the object stays reachable until here.
+        synchronized(ref) {}
+    }
+}
 
 /**
  * Whether [header] starts with an ISO-BMFF `ftyp` box declaring AVIF.

@@ -36,6 +36,7 @@ import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.backups.domain.BackupObserver
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.exceptions.resolve.CaptchaHandler
+import org.skepsun.kototoro.core.image.AvifAnimationPool
 import org.skepsun.kototoro.core.image.AvifImageDecoder
 import org.skepsun.kototoro.core.image.JxlImageDecoder
 import org.skepsun.kototoro.core.image.CbzFetcher
@@ -202,6 +203,9 @@ interface AppModule {
             // P2 每场景超时：Coil 图片调用（封面/图标，非 Mihon 路径）整次调用上限 20s
             // （全局客户端 callTimeout 为 300s，弱网/VPN 黑洞时会长时间占住图片并发槽位）。
             val imageNetworkClient = buildImageNetworkClient(okHttpClientLazy.value)
+            val avifAnimationPool = AvifAnimationPool().also {
+                context.applicationContext.registerComponentCallbacks(it)
+            }
             return ImageLoader.Builder(context)
                 .interceptorCoroutineContext(Dispatchers.Default)
                 .fetcherCoroutineContext(Dispatchers.IO.limitedParallelism(8))
@@ -228,7 +232,7 @@ interface AppModule {
                     }
                     add(SvgDecoder.Factory())
                     add(CbzFetcher.Factory())
-                    add(AvifImageDecoder.Factory())
+                    add(AvifImageDecoder.Factory(avifAnimationPool))
                     add(JxlImageDecoder.Factory())
                     add(faviconFetcherFactory)
                     add(ContentPageKeyer())

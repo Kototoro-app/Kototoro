@@ -25,6 +25,11 @@ class AvifAnimatedDrawable(
     private val frameDurationsMs: LongArray,
     // libavif semantics: >0 = finite loop count, anything else = loop forever.
     repetitionCount: Int,
+    /**
+     * Offered the drawable when its consumer releases it; returning true takes over the frames
+     * (see [AvifAnimationPool]) instead of recycling them.
+     */
+    private val onRelease: ((AvifAnimatedDrawable) -> Boolean)? = null,
 ) : Drawable(), Animatable, Runnable {
 
     init {
@@ -64,6 +69,9 @@ class AvifAnimatedDrawable(
 
     @Deprecated("Deprecated in Java")
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+
+    /** Native memory held by the decoded frames. */
+    val byteCount: Long = frames.sumOf { it.allocationByteCount.toLong() }
 
     override fun getIntrinsicWidth(): Int = intrinsicW
     override fun getIntrinsicHeight(): Int = intrinsicH
@@ -121,13 +129,37 @@ class AvifAnimatedDrawable(
         handler.postAtTime(this, SystemClock.uptimeMillis() + delay)
     }
 
-    @Synchronized
+    /** Ends this consumer's ownership: the frames are handed to [onRelease] or recycled. */
     fun release() {
-        if (disposed) return
+        synchronized(this) {
+            if (disposed) return
+            disposed = true
+            stop()
+        }
+        callback = null
+        // Outside the lock: the pool takes its own lock, and the pool locks drawables when it evicts.
+        if (onRelease?.invoke(this) != true) recycleFrames()
+    }
+
+    /** Frees the frames for good. */
+    @Synchronized
+    internal fun recycleFrames() {
         disposed = true
         stop()
         frames.forEach { if (!it.isRecycled) it.recycle() }
     }
+
+    /** Makes a released drawable usable again for its next consumer, from the first frame. */
+    @Synchronized
+    internal fun revive() {
+        if (frames.any { it.isRecycled }) return
+        disposed = false
+        currentFrame = 0
+        loopsDone = 0
+    }
+
+    @Synchronized
+    internal fun isUsable(): Boolean = !disposed && frames.none { it.isRecycled }
 
     companion object {
         // Clamp below this to avoid busy-looping on malformed duration metadata.
