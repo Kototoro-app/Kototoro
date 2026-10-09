@@ -59,6 +59,8 @@ import org.skepsun.kototoro.space.ui.SpaceBrowseScope
 import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
 import org.skepsun.kototoro.parsers.util.levenshteinDistance
+import org.skepsun.kototoro.search.domain.LibrarySearchQueries
+import org.skepsun.kototoro.search.domain.LibrarySearchScope
 
 @HiltViewModel
 class FavouritesContainerViewModel @Inject constructor(
@@ -82,6 +84,7 @@ class FavouritesContainerViewModel @Inject constructor(
     private val contentResolver: org.skepsun.kototoro.favourites.domain.library.FavouriteContentResolver,
     private val quickFilterFactory: FavoritesListQuickFilter.Factory,
     private val markAsReadUseCase: org.skepsun.kototoro.history.domain.MarkAsReadUseCase,
+    private val librarySearchQueries: LibrarySearchQueries,
     private val trackingRepository: org.skepsun.kototoro.tracker.domain.TrackingRepository,
     private val trackWorkerScheduler: org.skepsun.kototoro.tracker.work.TrackWorker.Scheduler,
 ) : BaseViewModel(), SpaceBindableViewModel {
@@ -170,6 +173,7 @@ class FavouritesContainerViewModel @Inject constructor(
         settings.observeAsFlow(AppSettings.KEY_GLOBAL_TAG_BLACKLIST) { globalTagBlacklist },
         allFavoritesSortOrder,
         favouritesRepository.observeCategories(),
+        libraryQuery,
     ) { values: Array<*> ->
         @Suppress("UNCHECKED_CAST")
         val categories = (values[8] as List<org.skepsun.kototoro.core.model.FavouriteCategory>)
@@ -183,10 +187,16 @@ class FavouritesContainerViewModel @Inject constructor(
             blacklist = values[6] as Collection<String>,
             defaultOrder = values[7] as ListSortOrder,
             ordersByCategory = categories.associate { it.id to it.order },
+            query = values[9] as String,
         )
     }.distinctUntilChanged()
 
     private val searchMatchingIds = MutableStateFlow<Set<Long>?>(null)
+
+    /** Text typed in the overlay's "Favourites" tab; filters every category page in memory. */
+    val libraryQuery: StateFlow<String> = librarySearchQueries.query(LibrarySearchScope.FAVOURITES)
+
+    fun clearLibraryQuery() = librarySearchQueries.clear(LibrarySearchScope.FAVOURITES)
 
     fun setSearchMatchingIds(ids: Set<Long>?) {
         searchMatchingIds.value = ids
@@ -399,6 +409,7 @@ class FavouritesContainerViewModel @Inject constructor(
     }
 
     fun resetFilters() {
+        clearLibraryQuery()
         globalFavoritesState.resetFilters(clearGroupTab = spaceBinding.spaceId.value == null)
     }
 

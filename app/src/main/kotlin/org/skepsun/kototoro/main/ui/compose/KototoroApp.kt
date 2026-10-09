@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -72,6 +73,8 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import org.skepsun.kototoro.search.domain.LibrarySearchScope
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.BuildConfig
@@ -351,6 +354,12 @@ private suspend fun restoreChromeAfterDetailsDelay(
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
+private fun TopLevelNavKey.librarySearchScope(): LibrarySearchScope? = when (this) {
+    HistoryNavKey -> LibrarySearchScope.HISTORY
+    FavoritesNavKey -> LibrarySearchScope.FAVOURITES
+    else -> null
+}
+
 internal fun Modifier.renderChromeInSharedTransitionOverlay(
     sharedTransitionScope: SharedTransitionScope?,
     zIndexInOverlay: Float,
@@ -524,6 +533,15 @@ fun KototoroApp(
     )
     val activeNavigationState = spaceNavigationStates[navigationSpaceId]
     val mainNavState = activeNavigationState.mainNavState
+    val librarySearchQueries = mainAppState.librarySearchQueries
+    val selectedLibrarySearchScope = mainNavState.selectedTopLevel.librarySearchScope()
+    // A page filter belongs to the page it was typed on: leaving that page drops it, so it never
+    // reappears unexpectedly when the page is opened again later.
+    LaunchedEffect(selectedLibrarySearchScope, librarySearchQueries) {
+        LibrarySearchScope.entries
+            .filter { it != selectedLibrarySearchScope }
+            .forEach(librarySearchQueries::clear)
+    }
     val chromeScrollStates = remember { mutableMapOf<SpaceId, SpaceChromeScrollState>() }
     val scrollToTopEventsBySpace = remember { mutableMapOf<SpaceId, MutableSharedFlow<Unit>>() }
     val chromeScrollState = chromeScrollStates.getOrPut(navigationSpaceId, ::SpaceChromeScrollState)
@@ -1508,6 +1526,9 @@ fun KototoroApp(
                     }
                 }
                 if (isSearchOverlayMounted) {
+                    val activeLibraryQuery by remember(selectedLibrarySearchScope, librarySearchQueries) {
+                        selectedLibrarySearchScope?.let(librarySearchQueries::query) ?: MutableStateFlow("")
+                    }.collectAsState()
                     KototoroSearchOverlay(
                         visible = isSearchOverlayVisible,
                         query = query,
@@ -1570,6 +1591,20 @@ fun KototoroApp(
                         },
                         onSourceSuggestionClick = {
                             onSourceSuggestionClick(it)
+                            chromeState.setSearchOverlayVisible(false)
+                        },
+                        onSourceToggle = mainAppState.onSearchSourceToggle,
+                        libraryScope = selectedLibrarySearchScope.takeIf { !isSearchRoute && !isImmersiveRoute },
+                        libraryQuery = activeLibraryQuery,
+                        // Read on every mount: the overlay keeps its own tab state once open.
+                        initialLibraryTab = selectedLibrarySearchScope
+                            ?.let(librarySearchQueries::prefersScopedTab) == true,
+                        onLibraryTabSelected = { selected ->
+                            selectedLibrarySearchScope?.let { librarySearchQueries.setPrefersScopedTab(it, selected) }
+                        },
+                        onActiveLibraryScopeChange = mainAppState.onSearchLibraryScopeChange,
+                        onApplyLibrarySearch = { libraryQuery ->
+                            selectedLibrarySearchScope?.let { mainAppState.onApplyLibrarySearch(it, libraryQuery) }
                             chromeState.setSearchOverlayVisible(false)
                         },
                         onAuthorSuggestionClick = {

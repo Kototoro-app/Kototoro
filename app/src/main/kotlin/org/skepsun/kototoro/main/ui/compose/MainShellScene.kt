@@ -1455,6 +1455,7 @@ internal fun HistoryTopLevelRouteContent(
     val listMode by viewModel.listMode.collectAsStateWithLifecycle()
     val isStatsEnabled by viewModel.isStatsEnabled.collectAsStateWithLifecycle()
     val statsSummary by viewModel.statsSummary.collectAsStateWithLifecycle()
+    val libraryQuery by viewModel.libraryQuery.collectAsStateWithLifecycle()
     val gridScale by viewModel.gridScale.collectAsStateWithLifecycle()
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
@@ -1666,6 +1667,8 @@ internal fun HistoryTopLevelRouteContent(
             showQuickFilterInline = true,
             showInlineSelectionTopBar = false,
             statsSummary = statsSummary,
+            libraryQuery = libraryQuery,
+            onClearLibraryQuery = viewModel::clearLibraryQuery,
         )
 
         if (showClearDialog) {

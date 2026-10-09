@@ -78,6 +78,8 @@ import org.skepsun.kototoro.space.ui.scopedToSpace
 import org.skepsun.kototoro.stats.data.StatsRepository
 import org.skepsun.kototoro.stats.domain.StatsDashboard
 import org.skepsun.kototoro.stats.domain.StatsPeriod
+import org.skepsun.kototoro.search.domain.LibrarySearchQueries
+import org.skepsun.kototoro.search.domain.LibrarySearchScope
 
 private const val PAGE_SIZE = 32
 
@@ -114,6 +116,7 @@ private data class HistoryUiParams(
     val sourceTags: Set<SourceTag>,
     val preset: org.skepsun.kototoro.explore.data.SourcePreset?,
     val spaceId: SpaceId?,
+    val query: String,
 )
 
 @HiltViewModel
@@ -133,6 +136,7 @@ class HistoryListViewModel @Inject constructor(
     private val historyLibrarySnapshotStore: org.skepsun.kototoro.history.domain.library.HistoryLibrarySnapshotStore,
     private val historyCardMapper: org.skepsun.kototoro.history.domain.library.HistoryCardMapper,
     private val spaceContentPolicy: org.skepsun.kototoro.space.domain.SpaceContentPolicy,
+    private val librarySearchQueries: LibrarySearchQueries,
     spaceBrowseScope: SpaceBrowseScope,
 ) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener, SpaceBindableViewModel {
     private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
@@ -203,6 +207,11 @@ class HistoryListViewModel @Inject constructor(
         .distinctUntilChanged()
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
+    /** Text typed in the overlay's "History" tab; narrows the derived rows in memory. */
+    val libraryQuery: StateFlow<String> = librarySearchQueries.query(LibrarySearchScope.HISTORY)
+
+    fun clearLibraryQuery() = librarySearchQueries.clear(LibrarySearchScope.HISTORY)
+
     private val uiParams = combine(
         sortOrder,
         quickFilter.appliedOptions,
@@ -218,6 +227,7 @@ class HistoryListViewModel @Inject constructor(
             },
         settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },
         activeSpaceScope,
+        libraryQuery,
     ) { values: Array<Any?> ->
         val order = values[0] as ListSortOrder
         val filters = values[1] as Set<ListFilterOption>
@@ -240,6 +250,7 @@ class HistoryListViewModel @Inject constructor(
             sourceTags = sourceTags,
             preset = preset,
             spaceId = spaceId,
+            query = values[10] as String,
         )
     }.distinctUntilChanged()
 
@@ -272,6 +283,7 @@ class HistoryListViewModel @Inject constructor(
                     sourceTags = params.sourceTags,
                     presetSources = params.preset?.sources?.toSet(),
                     space = space,
+                    query = params.query,
                 ),
             )
         }.mapLatest { derived ->
@@ -324,6 +336,7 @@ class HistoryListViewModel @Inject constructor(
     }
 
     override fun clearFilter() {
+        clearLibraryQuery()
         quickFilter.clearFilter()
     }
 
@@ -384,7 +397,7 @@ class HistoryListViewModel @Inject constructor(
     ): List<ListModel> {
         if (rows.isEmpty()) {
             return if (params.filters.isEmpty() && params.groupTab == BrowseGroupTab.All &&
-                params.sourceTags.isEmpty()
+                params.sourceTags.isEmpty() && params.query.isEmpty()
             ) {
                 listOf(quickFilter.filterItem(params.filters), getEmptyState(hasFilters = false))
                     .filterNotNull()

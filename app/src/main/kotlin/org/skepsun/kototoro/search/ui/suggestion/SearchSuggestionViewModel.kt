@@ -40,6 +40,9 @@ import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.util.mapToSet
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.search.domain.ContentSearchRepository
+import org.skepsun.kototoro.search.domain.LibrarySearchScope
+import org.skepsun.kototoro.history.data.HistoryRepository
+import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
 import org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS
 import org.skepsun.kototoro.search.domain.SearchContentKind
@@ -64,6 +67,7 @@ private const val MAX_SOURCES_ITEMS = 6
 private const val MAX_SOURCES_TIPS_ITEMS = 2
 private const val MAX_TRACKING_WORK_ITEMS = 3
 private const val MAX_TRACKING_ENTITY_ITEMS = 6
+private const val MAX_LIBRARY_ITEMS = 24
 
 @HiltViewModel
 class SearchSuggestionViewModel @Inject constructor(
@@ -75,9 +79,14 @@ class SearchSuggestionViewModel @Inject constructor(
     private val globalFavoritesState: GlobalFavoritesState,
     private val trackingSiteDiscoveryService: TrackingSiteDiscoveryService,
     private val preferredTrackingSiteProvider: PreferredTrackingSiteProvider,
+    private val historyRepository: HistoryRepository,
+    private val favouritesRepository: FavouritesRepository,
 ) : BaseViewModel() {
 
     private val query = MutableStateFlow("")
+
+    /** Non-null while the overlay's page tab narrows suggestions to one library page. */
+    private val libraryScope = MutableStateFlow<LibrarySearchScope?>(null)
     private val invalidationTrigger = MutableStateFlow(0)
     private val sourceTypes = MutableStateFlow(
         sourceTypesFromTags(globalFavoritesState.selectedSourceTags.value),
@@ -137,10 +146,23 @@ class SearchSuggestionViewModel @Inject constructor(
         )
     }
 
-    val suggestionState: Flow<SearchSuggestionState> = combine(suggestionParams, invalidationTrigger) { params, _ ->
-        params
-    }.flatMapLatest { params ->
+    val suggestionState: Flow<SearchSuggestionState> = combine(
+        suggestionParams,
+        invalidationTrigger,
+        libraryScope,
+    ) { params, _, scope ->
+        params to scope
+    }.flatMapLatest { (params, scope) ->
+        if (scope != null) {
+            return@flatMapLatest librarySuggestions(params.searchQuery, scope, params.types)
+        }
         val filteredSources = params.enabledSources.filterByTypes(
+            sourceTypes = params.activeSourceTypes,
+            contentKinds = params.activeContentKinds,
+            identifier = sourceTypeIdentifier,
+        )
+        val sourceScope = SourceScope(
+            presetNames = params.enabledSources.presetNames,
             sourceTypes = params.activeSourceTypes,
             contentKinds = params.activeContentKinds,
             identifier = sourceTypeIdentifier,
@@ -154,6 +176,7 @@ class SearchSuggestionViewModel @Inject constructor(
                         buildLocalSuggestions(
                             searchQuery = params.searchQuery,
                             enabledSources = filteredSources,
+                            sourceScope = sourceScope,
                             types = params.types,
                         )
                     },
@@ -198,6 +221,10 @@ class SearchSuggestionViewModel @Inject constructor(
 
     fun getContentKinds(): Set<SearchContentKind> = contentKinds.value
 
+    fun setLibraryScope(scope: LibrarySearchScope?) {
+        libraryScope.value = scope
+    }
+
     fun saveQuery(query: String) {
         if (!settings.isIncognitoModeEnabled) {
             repository.saveSearchQuery(query)
@@ -228,6 +255,7 @@ class SearchSuggestionViewModel @Inject constructor(
     private suspend fun buildLocalSuggestions(
         searchQuery: String,
         enabledSources: EnabledSourcesSnapshot,
+        sourceScope: SourceScope,
         types: Set<SearchSuggestionType>,
     ): List<SearchSuggestionItem> = coroutineScope {
         listOfNotNull(
@@ -257,7 +285,7 @@ class SearchSuggestionViewModel @Inject constructor(
                 null
             },
             if (SearchSuggestionType.RECENT_SOURCES in types) {
-                async { getRecentSources(searchQuery, enabledSources) }
+                async { getRecentSources(searchQuery, enabledSources, sourceScope) }
             } else {
                 null
             },
@@ -361,6 +389,36 @@ class SearchSuggestionViewModel @Inject constructor(
             withTimeoutOrNull(REMOTE_SUGGESTIONS_TIMEOUT) { block() } ?: throw SocketTimeoutException()
         }
 
+    private fun librarySuggestions(
+        searchQuery: String,
+        scope: LibrarySearchScope,
+        types: Set<SearchSuggestionType>,
+    ): Flow<SearchSuggestionState> = flow {
+        emit(SearchSuggestionState(query = searchQuery, isLoading = true, libraryScope = scope))
+        if (searchQuery.isNotEmpty()) delay(DEBOUNCE_TIMEOUT)
+        val items = coroutineScope {
+            val matches = async { getLibraryMatches(searchQuery, scope) }
+            val recent = async {
+                if (SearchSuggestionType.QUERIES_RECENT in types) getRecentQueries(searchQuery) else emptyList()
+            }
+            matches.await() + recent.await()
+        }
+        emit(SearchSuggestionState(query = searchQuery, items = items, libraryScope = scope))
+    }
+
+    private suspend fun getLibraryMatches(
+        searchQuery: String,
+        scope: LibrarySearchScope,
+    ): List<SearchSuggestionItem> = runCatchingCancellable {
+        when (scope) {
+            LibrarySearchScope.HISTORY -> historyRepository.searchLibrary(searchQuery, MAX_LIBRARY_ITEMS)
+            LibrarySearchScope.FAVOURITES -> favouritesRepository.searchLibrary(searchQuery, MAX_LIBRARY_ITEMS)
+        }.map { SearchSuggestionItem.LibraryMatch(scope, it) }
+    }.getOrElse { e ->
+        e.printStackTraceDebug()
+        listOf(SearchSuggestionItem.Text(0, e))
+    }
+
     private suspend fun getAuthors(searchQuery: String): List<SearchSuggestionItem> = runCatchingCancellable {
         repository.getAuthorsSuggestion(searchQuery, MAX_AUTHORS_ITEMS)
             .map { SearchSuggestionItem.Author(it) }
@@ -422,11 +480,13 @@ class SearchSuggestionViewModel @Inject constructor(
     private suspend fun getRecentSources(
         searchQuery: String,
         enabledSources: EnabledSourcesSnapshot,
+        sourceScope: SourceScope,
     ): List<SearchSuggestionItem> = if (searchQuery.isEmpty()) {
         runCatchingCancellable {
+            // Disabled sources stay listed so the quick toggle can turn them back on.
             repository.getSourcesSuggestion(MAX_SOURCES_TIPS_ITEMS)
-                .filter { it.name in enabledSources.names }
-                .map { SearchSuggestionItem.SourceTip(it) }
+                .filter { sourceScope.contains(it) }
+                .map { SearchSuggestionItem.SourceTip(it, it.name in enabledSources.names) }
         }.getOrElse { e ->
             e.printStackTraceDebug()
             listOf(SearchSuggestionItem.Text(0, e))
@@ -446,7 +506,21 @@ class SearchSuggestionViewModel @Inject constructor(
 private data class EnabledSourcesSnapshot(
     val sources: List<ContentSource>,
     val names: Set<String>,
+    val presetNames: Set<String>? = null,
 )
+
+private class SourceScope(
+    private val presetNames: Set<String>?,
+    private val sourceTypes: Set<SourceType>,
+    private val contentKinds: Set<SearchContentKind>,
+    private val identifier: SourceTypeIdentifier,
+) {
+
+    fun contains(source: ContentSource): Boolean =
+        (presetNames == null || source.name in presetNames) &&
+            identifier.getSourceType(source.name) in sourceTypes &&
+            contentKinds.any { kind -> kind.matches(source) }
+}
 
 private data class SuggestionParams(
     val searchQuery: String,
@@ -476,6 +550,7 @@ private fun EnabledSourcesSnapshot.filterByTypes(
     return EnabledSourcesSnapshot(
         sources = filtered,
         names = filtered.mapToSet { it.name },
+        presetNames = presetNames,
     )
 }
 
@@ -489,6 +564,7 @@ private fun EnabledSourcesSnapshot.filterByPreset(
     return EnabledSourcesSnapshot(
         sources = filtered,
         names = filtered.mapToSet { it.name },
+        presetNames = preset.sources,
     )
 }
 

@@ -47,6 +47,24 @@ class SharedListDerivationTest {
     }
 
     @Test
+    fun `history page search narrows rows by title and tags and counts as a filter`() {
+        val snapshot = HistorySnapshot(listOf(
+            historyRow(1, title = "Frieren"),
+            historyRow(2, title = "Dungeon Meshi", tags = listOf(HistoryCardTag("Fantasy", "fantasy"))),
+            historyRow(3, title = "Blue Period"),
+        ))
+
+        val byTitle = HistoryLibraryDeriver.derive(HistoryLibraryDeriver.Input(snapshot = snapshot, query = "frie"))
+        val byTag = HistoryLibraryDeriver.derive(HistoryLibraryDeriver.Input(snapshot = snapshot, query = "fantasy"))
+        val blank = HistoryLibraryDeriver.derive(HistoryLibraryDeriver.Input(snapshot = snapshot, query = " "))
+
+        assertEquals(listOf(1L), byTitle.visibleRows.map { it.entityId })
+        assertTrue(byTitle.hasActiveFilters)
+        assertEquals(listOf(2L), byTag.visibleRows.map { it.entityId })
+        assertEquals(3, blank.visibleRows.size)
+    }
+
+    @Test
     fun `history completion retains its threshold and entity id tie breaker`() {
         val result = HistoryLibraryDeriver.derive(HistoryLibraryDeriver.Input(
             snapshot = HistorySnapshot(listOf(

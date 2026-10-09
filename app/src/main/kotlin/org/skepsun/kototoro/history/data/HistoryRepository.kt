@@ -40,6 +40,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.tryScrobble
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.AdvancedSearchParams
 import org.skepsun.kototoro.search.domain.LocalContentSearchQuery
+import org.skepsun.kototoro.search.domain.matchLibraryText
 import org.skepsun.kototoro.space.domain.SpaceContentPolicy
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.tracker.domain.CheckNewChaptersUseCase
@@ -82,6 +83,10 @@ class HistoryRepository @Inject constructor(
         if (limit <= 0 || !searchQuery.hasCriteria) return emptyList()
         return searchQuery.search(getAllRecentContents(), limit)
     }
+
+    /** History entries matching the history page filter for [query], most recent first. */
+    suspend fun searchLibrary(query: String, limit: Int): List<Content> =
+        getAllRecentContents().matchLibraryText(query, limit)
 
     suspend fun getLastOrNull(
         spaceId: SpaceId? = null,

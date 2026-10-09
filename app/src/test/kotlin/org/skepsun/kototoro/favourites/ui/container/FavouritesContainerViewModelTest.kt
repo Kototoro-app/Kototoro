@@ -138,6 +138,7 @@ class FavouritesContainerViewModelTest {
             contentResolver = mockk<FavouriteContentResolver>(relaxed = true),
             quickFilterFactory = mockk<FavoritesListQuickFilter.Factory>(relaxed = true),
             markAsReadUseCase = mockk<MarkAsReadUseCase>(relaxed = true),
+            librarySearchQueries = org.skepsun.kototoro.search.domain.LibrarySearchQueries(),
             trackingRepository = mockk<TrackingRepository>(relaxed = true),
             trackWorkerScheduler = scheduler,
         )

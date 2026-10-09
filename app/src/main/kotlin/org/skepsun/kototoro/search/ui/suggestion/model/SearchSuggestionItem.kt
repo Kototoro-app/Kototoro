@@ -9,6 +9,7 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.search.domain.LibrarySearchScope
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 
 sealed interface SearchSuggestionItem : ListModel {
@@ -46,6 +47,17 @@ sealed interface SearchSuggestionItem : ListModel {
 
         override fun getChangePayload(previousState: ListModel): Any {
             return ListModelDiffCallback.PAYLOAD_NESTED_LIST_CHANGED
+        }
+    }
+
+    /** One work from the library page the overlay is narrowed to. */
+    data class LibraryMatch(
+        val scope: LibrarySearchScope,
+        val content: Content,
+    ) : SearchSuggestionItem {
+
+        override fun areItemsTheSame(other: ListModel): Boolean {
+            return other is LibraryMatch && other.content.id == content.id
         }
     }
 
@@ -102,6 +114,7 @@ sealed interface SearchSuggestionItem : ListModel {
 
     data class SourceTip(
         val source: ContentSource,
+        val isEnabled: Boolean = true,
     ) : SearchSuggestionItem {
 
         val isNsfw: Boolean

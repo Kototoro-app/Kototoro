@@ -40,6 +40,7 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.search.domain.AdvancedSearchParams
 import org.skepsun.kototoro.search.domain.LocalContentSearchQuery
+import org.skepsun.kototoro.search.domain.matchLibraryText
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.tracker.domain.SourceTrackerEvent
@@ -76,6 +77,10 @@ class FavouritesRepository @Inject constructor(
             .associate { it.manga.id to it.toContent() }
         return mangaIds.mapNotNull { contentsById[it] }
     }
+
+    /** Favourites matching the favourites page filter for [query], newest membership order kept. */
+    suspend fun searchLibrary(query: String, limit: Int): List<Content> =
+        getAllContent().matchLibraryText(query, limit)
 
     suspend fun getLastContent(limit: Int): List<Content> {
         if (limit <= 0) return emptyList()

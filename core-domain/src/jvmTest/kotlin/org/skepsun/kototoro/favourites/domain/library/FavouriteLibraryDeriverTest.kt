@@ -110,6 +110,24 @@ class FavouriteLibraryDeriverTest {
     // --------------------------------------------------------------- grouping
 
     @Test
+    fun `page search hides non matching works in every slice`() {
+        val snapshot = snapshot(
+            listOf(
+                row(1, title = "Frieren"),
+                row(2, title = "Mushishi", overrideTitle = "My Frieren copy"),
+                row(3, title = "Blue Period", displayTags = listOf(FavouriteCardTag(actionTagId, "Art"))),
+            ),
+        )
+
+        val byTitle = deriveFavouriteLibraryState(snapshot, FavouriteLibraryDerivationInput(query = "FRIEREN"))
+        val byTag = deriveFavouriteLibraryState(snapshot, FavouriteLibraryDerivationInput(query = "art"))
+
+        assertEquals(setOf(1L, 2L), byTitle.allVisibleIds.toSet())
+        assertEquals(setOf(1L, 2L), byTitle.visibleIdsByCategory.getValue(10L).toSet())
+        assertEquals(listOf(3L), byTag.allVisibleIds)
+    }
+
+    @Test
     fun `all slice dedups and category slices use their own memberships`() {
         // entity 1 in two categories; the All slice must contain it once
         val snap = snapshot(

@@ -45,6 +45,7 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.QuickFilter
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import androidx.paging.compose.LazyPagingItems
+import org.skepsun.kototoro.search.ui.compose.LibrarySearchBanner
 
 @Composable
 fun HistoryScreen(
@@ -71,6 +72,8 @@ fun HistoryScreen(
     showInlineSelectionTopBar: Boolean = true,
     viewModel: ContentListViewModel? = null,
     statsSummary: org.skepsun.kototoro.stats.domain.StatsDashboard? = null,
+    libraryQuery: String = "",
+    onClearLibraryQuery: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val hapticFeedback = LocalHapticFeedback.current
@@ -163,6 +166,8 @@ fun HistoryScreen(
                 onStatsClick = onStatsClick,
                 onQuickFilterOptionClick = onQuickFilterOptionClick,
                 statsSummary = statsSummary,
+                libraryQuery = libraryQuery,
+                onClearLibraryQuery = onClearLibraryQuery,
             )
         },
     )
@@ -175,20 +180,32 @@ private fun HistoryHeader(
     onStatsClick: () -> Unit,
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
     statsSummary: org.skepsun.kototoro.stats.domain.StatsDashboard?,
+    libraryQuery: String,
+    onClearLibraryQuery: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
     ) {
-        if (isStatsEnabled && statsSummary != null && statsSummary.hasAnyActivity()) {
+        if (libraryQuery.isNotEmpty()) {
+            LibrarySearchBanner(
+                query = libraryQuery,
+                onClear = onClearLibraryQuery,
+                modifier = Modifier.padding(horizontal = AppLayoutTokens.screenHorizontalPadding),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        // While searching, the stats card only pushes the matches down.
+        val showStats = isStatsEnabled && libraryQuery.isEmpty()
+        if (showStats && statsSummary != null && statsSummary.hasAnyActivity()) {
             HistoryStatsSummaryCard(
                 dashboard = statsSummary,
                 onClick = onStatsClick,
                 modifier = Modifier.padding(horizontal = AppLayoutTokens.screenHorizontalPadding),
             )
             Spacer(modifier = Modifier.height(10.dp))
-        } else if (isStatsEnabled) {
+        } else if (showStats) {
             HistoryStatsPlaceholderCard(onClick = onStatsClick)
             Spacer(modifier = Modifier.height(6.dp))
         }

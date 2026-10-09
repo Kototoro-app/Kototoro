@@ -58,6 +58,7 @@ data class FavouriteLibraryParams(
     val blacklist: Collection<String> = emptyList(),
     val ordersByCategory: Map<Long, ListSortOrder> = emptyMap(),
     val defaultOrder: ListSortOrder = ListSortOrder.NEWEST,
+    val query: String = "",
 )
 
 /**
@@ -85,6 +86,7 @@ internal fun buildFavouriteLibraryUiState(
             tagBlacklist = if (params.blacklist.isEmpty()) TagBlacklist.Empty else GlobalTagBlacklist(params.blacklist),
             ordersByCategory = params.ordersByCategory,
             defaultOrder = params.defaultOrder,
+            query = params.query,
         ),
     )
     return FavouriteLibraryUiState(

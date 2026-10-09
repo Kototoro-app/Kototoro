@@ -13,6 +13,8 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.search.domain.AdvancedSearchParams
+import org.skepsun.kototoro.search.domain.LibrarySearchQueries
+import org.skepsun.kototoro.search.domain.LibrarySearchScope
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.SearchKind
@@ -41,6 +43,10 @@ data class MainAppState(
     val query: String = "",
     val searchSuggestionState: SearchSuggestionState = SearchSuggestionState(),
     val onRetrySearchSuggestions: () -> Unit = {},
+    val onSearchSourceToggle: (ContentSource, Boolean) -> Unit = { _, _ -> },
+    val librarySearchQueries: LibrarySearchQueries = LibrarySearchQueries(),
+    val onSearchLibraryScopeChange: (LibrarySearchScope?) -> Unit = {},
+    val onApplyLibrarySearch: (LibrarySearchScope, String) -> Unit = { _, _ -> },
     val onQueryChanged: (String) -> Unit = {},
     val onSearch: (String) -> Unit = {},
     val initialSearchKind: SearchKind = SearchKind.SIMPLE,

@@ -6,6 +6,7 @@ import org.skepsun.kototoro.core.db.ListFilterCriteria
 import org.skepsun.kototoro.core.model.TagBlacklist
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
+import org.skepsun.kototoro.list.domain.LibraryTextQuery
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.parsers.model.ContentType
 
@@ -24,6 +25,8 @@ data class FavouriteLibraryDerivationInput(
     val tagBlacklist: TagBlacklist = TagBlacklist.Empty,
     val ordersByCategory: Map<Long, ListSortOrder> = emptyMap(),
     val defaultOrder: ListSortOrder = ListSortOrder.NEWEST,
+    /** Free text typed in the page-scoped search (see [LibraryTextQuery]). */
+    val query: String = "",
 )
 
 /**
@@ -110,7 +113,7 @@ internal class FavouriteOrderingContext private constructor(
 
 /**
  * Stage 1 — visibility: space / preset / group tab / source tags / NSFW exclusion /
- * global tag blacklist.
+ * global tag blacklist / page search text.
  */
 internal fun applyVisibility(
     snapshot: FavouriteLibrarySnapshot,
@@ -125,6 +128,7 @@ internal fun applyVisibility(
         tag.originFlagOrNull()
     }
 
+    val textQuery = LibraryTextQuery(input.query)
     val visible = HashSet<Long>(snapshot.rowsByEntityId.size)
     outer@ for (entityId in snapshot.allEntityIds) {
         val row = snapshot.rowsByEntityId.getValue(entityId)
@@ -162,6 +166,13 @@ internal fun applyVisibility(
             continue@outer
         }
         if (blacklist !== TagBlacklist.Empty && row.matchesTagBlacklist(blacklist)) {
+            continue@outer
+        }
+        if (!textQuery.isEmpty && !textQuery.matches(
+                sequenceOf(row.overrideTitle, row.title, row.altTitle, row.author) +
+                    row.displayTags.asSequence().map { it.title },
+            )
+        ) {
             continue@outer
         }
         visible.add(entityId)

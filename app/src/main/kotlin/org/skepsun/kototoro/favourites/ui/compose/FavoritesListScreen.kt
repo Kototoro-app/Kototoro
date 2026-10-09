@@ -32,6 +32,7 @@ import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.search.ui.compose.LibrarySearchBanner
 
 @Composable
 fun KototoroFavoritesListScreen(
@@ -48,6 +49,8 @@ fun KototoroFavoritesListScreen(
     onSortOrderSelected: (ListSortOrder) -> Unit = {},
     onTopBarOverrideChanged: (TopBarOverrideState?) -> Unit = {},
     onFilterRailOverrideChanged: (CompactFilterRailOverrideState?) -> Unit = {},
+    libraryQuery: String = "",
+    onClearLibraryQuery: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // The state holder is the favourites container, handed in as a per-category slice:
@@ -85,6 +88,13 @@ fun KototoroFavoritesListScreen(
         // which put them between the shelf and the grid.
         listHeader = {
             Column(modifier = Modifier.fillMaxWidth()) {
+                if (libraryQuery.isNotEmpty()) {
+                    LibrarySearchBanner(
+                        query = libraryQuery,
+                        onClear = onClearLibraryQuery,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                }
                 if (quickFilter != null) {
                     QuickFilterSection(
                         quickFilter = quickFilter!!,

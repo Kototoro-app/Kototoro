@@ -8,6 +8,7 @@ import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.core.db.ListFilterCriteria
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.list.domain.LibraryTextQuery
 import org.skepsun.kototoro.list.domain.isReadingCompleted
 
 /**
@@ -32,6 +33,7 @@ object HistoryLibraryDeriver {
      * @param space the space scope: allowed types / classified types / allowed
      * source names, `null` when not bound to a space (then [groupTab] pushes
      * its type filter down here instead of into SQL)
+     * @param query free text typed in the page-scoped search (see [LibraryTextQuery])
      */
     data class Input(
         val snapshot: HistorySnapshot,
@@ -43,6 +45,7 @@ object HistoryLibraryDeriver {
         val sourceTags: Set<SourceTag> = emptySet(),
         val presetSources: Set<String>? = null,
         val space: SpaceScope? = null,
+        val query: String = "",
     )
 
     data class SpaceScope(
@@ -57,8 +60,9 @@ object HistoryLibraryDeriver {
     )
 
     fun derive(input: Input): Derived {
+        val textQuery = LibraryTextQuery(input.query)
         val visible = input.snapshot.rows.asSequence()
-            .filter { row -> row.isVisible(input) }
+            .filter { row -> row.isVisible(input) && row.matchesText(textQuery) }
             .sortedWith(orderComparator(input.order))
             .toList()
         return Derived(
@@ -68,11 +72,17 @@ object HistoryLibraryDeriver {
                 input.sourceTags.isNotEmpty() ||
                 input.excludedNsfw ||
                 input.presetSources != null ||
-                input.space != null,
+                input.space != null ||
+                !textQuery.isEmpty,
         )
     }
 
     // ---------------------------------------------------------------- visibility
+
+    private fun HistoryCardEntry.matchesText(query: LibraryTextQuery): Boolean =
+        query.isEmpty || query.matches(
+            sequenceOf(overrideTitle, title, altTitle, author) + tags.asSequence().map { it.title },
+        )
 
     private fun HistoryCardEntry.isVisible(input: Input): Boolean {
         if (!matchesSpace(input.space)) return false

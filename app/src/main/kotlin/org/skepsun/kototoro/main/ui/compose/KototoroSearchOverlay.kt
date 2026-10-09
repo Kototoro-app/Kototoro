@@ -45,8 +45,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledIconButton
@@ -56,7 +54,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.Tab
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -64,6 +65,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,6 +75,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -119,8 +123,10 @@ import org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS
 import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
 import org.skepsun.kototoro.search.domain.AdvancedSearchParams
 import org.skepsun.kototoro.search.domain.SearchContentKind
+import org.skepsun.kototoro.search.domain.LibrarySearchScope
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.ui.compose.SearchAdvancedFields
+import org.skepsun.kototoro.search.ui.compose.SearchCompactChip
 import org.skepsun.kototoro.search.ui.compose.SearchFeedbackCard
 import org.skepsun.kototoro.search.ui.compose.SearchToolsRow
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
@@ -144,7 +150,6 @@ private data class SearchOverlayStyle(
     val rowCornerRadius: Dp,
     val rowContainerColor: Color,
     val rowVerticalPadding: Dp,
-    val chipHeight: Dp,
     val chipCornerRadius: Dp,
     val cardCornerRadius: Dp,
     val cardInnerCornerRadius: Dp,
@@ -167,7 +172,6 @@ private fun rememberSearchOverlayStyle(): SearchOverlayStyle {
             rowCornerRadius = 18.dp,
             rowContainerColor = colorScheme.surfaceContainerLow.copy(alpha = if (isArtworkBackground) 1f else colorScheme.surfaceContainerLow.alpha),
             rowVerticalPadding = 10.dp,
-            chipHeight = 28.dp,
             chipCornerRadius = 14.dp,
             cardCornerRadius = 16.dp,
             cardInnerCornerRadius = 12.dp,
@@ -184,7 +188,6 @@ private fun rememberSearchOverlayStyle(): SearchOverlayStyle {
             rowCornerRadius = 14.dp,
             rowContainerColor = colorScheme.surfaceContainerLow.copy(alpha = if (isArtworkBackground) 1f else colorScheme.surfaceContainerLow.alpha),
             rowVerticalPadding = 8.dp,
-            chipHeight = 32.dp,
             chipCornerRadius = 8.dp,
             cardCornerRadius = 14.dp,
             cardInnerCornerRadius = 8.dp,
@@ -223,6 +226,7 @@ fun KototoroSearchOverlay(
     onTrackingEntitySuggestionClick: (TrackingEntity) -> Unit,
     onTagSuggestionClick: (ContentTag) -> Unit,
     onSourceSuggestionClick: (ContentSource) -> Unit,
+    onSourceToggle: (ContentSource, Boolean) -> Unit,
     onAuthorSuggestionClick: (String) -> Unit,
     onDeleteQuery: (String) -> Unit,
     onLanguagePresetSelected: (Long) -> Unit,
@@ -230,6 +234,12 @@ fun KototoroSearchOverlay(
     onOpenGlobalTagBlacklist: () -> Unit,
     onVoiceInput: () -> Unit,
     onExitFinished: () -> Unit = {},
+    libraryScope: LibrarySearchScope? = null,
+    libraryQuery: String = "",
+    initialLibraryTab: Boolean = false,
+    onLibraryTabSelected: (Boolean) -> Unit = {},
+    onActiveLibraryScopeChange: (LibrarySearchScope?) -> Unit = {},
+    onApplyLibrarySearch: (String) -> Unit = {},
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
@@ -246,7 +256,22 @@ fun KototoroSearchOverlay(
     var advancedTitle by remember { mutableStateOf("") }
     var advancedTags by remember { mutableStateOf("") }
     var advancedAuthor by remember { mutableStateOf("") }
+    var libraryTabSelected by remember { mutableStateOf(libraryScope != null && initialLibraryTab) }
+    val activeLibraryScope = libraryScope?.takeIf { libraryTabSelected }
+    val libraryTitle = libraryScope?.let { stringResource(it.titleResId) }.orEmpty()
     val style = rememberSearchOverlayStyle()
+
+    LaunchedEffect(Unit) {
+        // Reopening a filtered page edits its filter rather than starting from the global query.
+        if (activeLibraryScope != null && libraryQuery.isNotEmpty()) {
+            onQueryChanged(libraryQuery)
+        }
+    }
+
+    DisposableEffect(activeLibraryScope) {
+        onActiveLibraryScopeChange(activeLibraryScope)
+        onDispose { onActiveLibraryScopeChange(null) }
+    }
 
     LaunchedEffect(visible, isTvPresentation) {
         animatedVisible = visible
@@ -272,6 +297,11 @@ fun KototoroSearchOverlay(
     }
 
     fun submitSearch(searchQuery: String, searchKind: SearchKind? = null) {
+        if (activeLibraryScope != null) {
+            keyboardController?.hide()
+            onApplyLibrarySearch(searchQuery.trim())
+            return
+        }
         val kind = searchKind ?: if (showAdvanced) SearchKind.ADVANCED else initialSearchKind.takeUnless {
             it == SearchKind.ADVANCED
         } ?: SearchKind.SIMPLE
@@ -419,7 +449,11 @@ fun KototoroSearchOverlay(
                             .focusRequester(focusRequester),
                         placeholder = {
                             Text(
-                                text = stringResource(R.string.search_content),
+                                text = if (activeLibraryScope != null) {
+                                    stringResource(R.string.library_search_placeholder, libraryTitle)
+                                } else {
+                                    stringResource(R.string.search_content)
+                                },
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -461,8 +495,13 @@ fun KototoroSearchOverlay(
                             keyboardController?.hide()
                             submitSearch(query)
                         },
-                        enabled = query.isNotBlank() || (showAdvanced &&
-                            (advancedTitle.isNotBlank() || advancedTags.isNotBlank() || advancedAuthor.isNotBlank())),
+                        enabled = query.isNotBlank() || if (activeLibraryScope != null) {
+                            // An empty submit on the page tab clears the page filter.
+                            libraryQuery.isNotEmpty()
+                        } else {
+                            showAdvanced &&
+                                (advancedTitle.isNotBlank() || advancedTags.isNotBlank() || advancedAuthor.isNotBlank())
+                        },
                         modifier = Modifier
                             .size(48.dp)
                             .tvFocusable(shape = CircleShape, addFocusTarget = false),
@@ -474,19 +513,37 @@ fun KototoroSearchOverlay(
                         )
                     }
                 }
-                SearchToolsRow(
-                    advancedExpanded = showAdvanced,
-                    onAdvancedClick = { showAdvanced = !showAdvanced },
-                    hasActiveFilters = selectedSourceTypes.size < ALL_SOURCE_TYPES.size ||
-                        selectedContentKinds.size < ALL_SEARCH_CONTENT_KINDS.size || pinnedOnly || hideEmpty ||
-                        activeLanguagePresetId > 0L,
-                    onFiltersClick = {
-                        keyboardController?.hide()
-                        showFilterSheet = true
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                )
-                if (showAdvanced) {
+                if (libraryScope != null) {
+                    SearchScopeTabs(
+                        libraryTitle = libraryTitle,
+                        libraryTabSelected = libraryTabSelected,
+                        onTabSelected = { selectLibrary ->
+                            if (selectLibrary != libraryTabSelected) {
+                                libraryTabSelected = selectLibrary
+                                onLibraryTabSelected(selectLibrary)
+                                if (selectLibrary && query.isBlank() && libraryQuery.isNotEmpty()) {
+                                    onQueryChanged(libraryQuery)
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    )
+                }
+                if (activeLibraryScope == null) {
+                    SearchToolsRow(
+                        advancedExpanded = showAdvanced,
+                        onAdvancedClick = { showAdvanced = !showAdvanced },
+                        hasActiveFilters = selectedSourceTypes.size < ALL_SOURCE_TYPES.size ||
+                            selectedContentKinds.size < ALL_SEARCH_CONTENT_KINDS.size || pinnedOnly || hideEmpty ||
+                            activeLanguagePresetId > 0L,
+                        onFiltersClick = {
+                            keyboardController?.hide()
+                            showFilterSheet = true
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    )
+                }
+                if (showAdvanced && activeLibraryScope == null) {
                     SearchAdvancedFields(
                         title = advancedTitle,
                         onTitleChange = { advancedTitle = it },
@@ -504,8 +561,11 @@ fun KototoroSearchOverlay(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f),
             )
             SuggestionList(
-                state = suggestionState.takeIf { it.query == query.trim() }
-                    ?: SearchSuggestionState(query = query.trim(), isLoading = true),
+                state = suggestionState.takeIf { it.query == query.trim() && it.libraryScope == activeLibraryScope }
+                    ?: SearchSuggestionState(query = query.trim(), isLoading = true, libraryScope = activeLibraryScope),
+                libraryTitle = libraryTitle,
+                activeLibraryQuery = libraryQuery,
+                onApplyLibrarySearch = { submitSearch(it) },
                 onRetrySuggestions = onRetrySuggestions,
                 bottomPadding = navigationBarPadding.calculateBottomPadding(),
                 modifier = Modifier.graphicsLayer { alpha = suggestionsAlpha },
@@ -532,6 +592,7 @@ fun KototoroSearchOverlay(
                     onTagSuggestionClick(tag)
                 },
                 onSourceSuggestionClick = onSourceSuggestionClick,
+                onSourceToggle = onSourceToggle,
                 onDeleteQuery = onDeleteQuery,
                 style = style,
             )
@@ -630,6 +691,9 @@ private fun SearchInputField(
 @Composable
 private fun SuggestionList(
     state: SearchSuggestionState,
+    libraryTitle: String,
+    activeLibraryQuery: String,
+    onApplyLibrarySearch: (String) -> Unit,
     onRetrySuggestions: () -> Unit,
     bottomPadding: Dp,
     modifier: Modifier = Modifier,
@@ -643,6 +707,7 @@ private fun SuggestionList(
     onTrackingEntitySuggestionClick: (TrackingEntity) -> Unit,
     onTagSuggestionClick: (ContentTag) -> Unit,
     onSourceSuggestionClick: (ContentSource) -> Unit,
+    onSourceToggle: (ContentSource, Boolean) -> Unit,
     onDeleteQuery: (String) -> Unit,
 ) {
     val hapticFeedback = LocalHapticFeedback.current
@@ -665,6 +730,30 @@ private fun SuggestionList(
         ),
         verticalArrangement = Arrangement.spacedBy(style.listVerticalSpacing),
     ) {
+        if (state.libraryScope != null) {
+            val actionQuery = state.query
+            if (actionQuery.isNotEmpty() || activeLibraryQuery.isNotEmpty()) {
+                item(key = "library_action", contentType = "library_action") {
+                    SearchSuggestionRow(
+                        text = if (actionQuery.isNotEmpty()) {
+                            stringResource(R.string.library_search_apply, libraryTitle, actionQuery)
+                        } else {
+                            stringResource(R.string.library_search_show_all, libraryTitle)
+                        },
+                        onClick = { onApplyLibrarySearch(actionQuery) },
+                        style = style,
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_filter_menu),
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        },
+                    )
+                }
+            }
+        }
         if (state.isLoading) {
             item(key = "loading") {
                 SuggestionLoadingRow(stringResource(R.string.search_loading_suggestions))
@@ -677,7 +766,9 @@ private fun SuggestionList(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = stringResource(section.titleResId),
+                        text = section.titleArgResId?.let { arg ->
+                            stringResource(section.titleResId, stringResource(arg))
+                        } ?: stringResource(section.titleResId),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f),
@@ -696,6 +787,7 @@ private fun SuggestionList(
                 key = { index, item ->
                     "${section.key}_" +
                     when (item) {
+                        is SearchSuggestionItem.LibraryMatch -> "lib_${item.content.id}"
                         is SearchSuggestionItem.RecentQuery -> "rq_${item.query}"
                         is SearchSuggestionItem.Hint -> "hint_${item.query}"
                         is SearchSuggestionItem.Author -> "author_${item.name}"
@@ -710,6 +802,7 @@ private fun SuggestionList(
                 },
                 contentType = { _, item ->
                     when (item) {
+                        is SearchSuggestionItem.LibraryMatch -> "library_match"
                         is SearchSuggestionItem.RecentQuery -> "recent_query"
                         is SearchSuggestionItem.Hint -> "hint"
                         is SearchSuggestionItem.Author -> "author"
@@ -724,6 +817,14 @@ private fun SuggestionList(
                 },
             ) { _, item ->
                 when (item) {
+                    is SearchSuggestionItem.LibraryMatch -> {
+                        LibraryMatchRow(
+                            content = item.content,
+                            onClick = { onContentSuggestionClick(item.content) },
+                            style = style,
+                        )
+                    }
+
                     is SearchSuggestionItem.RecentQuery -> {
                         val dismissState = rememberSwipeToDismissBoxState()
                         SwipeToDismissBox(
@@ -806,22 +907,18 @@ private fun SuggestionList(
                     is SearchSuggestionItem.Tags -> {
                         LazyRow(
                             modifier = Modifier
-                                .padding(vertical = 4.dp)
+                                .fillMaxWidth()
                                 .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             items(item.tags, contentType = { "tag_chip" }) { chip ->
                                 val tag = chip.data as? ContentTag
-                                AssistChip(
+                                SearchCompactChip(
+                                    text = chip.title?.toString().orEmpty(),
                                     onClick = { tag?.let(onTagSuggestionClick) },
-                                    label = { Text(chip.title?.toString().orEmpty(), maxLines = 1) },
-                                    modifier = Modifier
-                                        .height(style.chipHeight)
-                                        .tvFocusable(shape = RoundedCornerShape(style.chipCornerRadius), addFocusTarget = false),
                                     shape = RoundedCornerShape(style.chipCornerRadius),
-                                    colors = AssistChipDefaults.assistChipColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                    ),
                                 )
                             }
                         }
@@ -830,7 +927,9 @@ private fun SuggestionList(
                     is SearchSuggestionItem.Source -> {
                         SourceSuggestionRow(
                             source = item.source,
+                            isEnabled = item.isEnabled,
                             onClick = { onSourceSuggestionClick(item.source) },
+                            onToggle = { onSourceToggle(item.source, it) },
                             style = style,
                         )
                     }
@@ -838,7 +937,9 @@ private fun SuggestionList(
                     is SearchSuggestionItem.SourceTip -> {
                         SourceSuggestionRow(
                             source = item.source,
+                            isEnabled = item.isEnabled,
                             onClick = { onSourceSuggestionClick(item.source) },
+                            onToggle = { onSourceToggle(item.source, it) },
                             style = style,
                         )
                     }
@@ -939,9 +1040,13 @@ private fun SuggestionList(
         } else if (!state.isLoading && !state.isRemoteLoading && sections.isEmpty()) {
             item(key = "empty_suggestions") {
                 SearchFeedbackCard(
-                    message = stringResource(
-                        if (state.query.isBlank()) R.string.search_hint else R.string.search_no_suggestions,
-                    ),
+                    message = when {
+                        state.libraryScope != null && state.query.isNotBlank() ->
+                            stringResource(R.string.library_search_no_matches, libraryTitle)
+                        state.libraryScope != null -> stringResource(R.string.library_search_placeholder, libraryTitle)
+                        state.query.isBlank() -> stringResource(R.string.search_hint)
+                        else -> stringResource(R.string.search_no_suggestions)
+                    },
                 )
             }
         }
@@ -1031,25 +1136,28 @@ private fun SearchSuggestionRow(
 @Composable
 private fun SourceSuggestionRow(
     source: ContentSource,
+    isEnabled: Boolean,
     onClick: () -> Unit,
+    onToggle: (Boolean) -> Unit,
     style: SearchOverlayStyle,
 ) {
     val sourceTitle = rememberResolvedSourceTitle(source)
+    val hapticFeedback = LocalHapticFeedback.current
+    val contentAlpha = if (isEnabled) 1f else 0.6f
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(style.rowCornerRadius))
             .clickable(onClick = onClick)
             .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius), addFocusTarget = false)
-            .background(
-                color = style.rowContainerColor,
-                shape = RoundedCornerShape(style.rowCornerRadius),
-            )
-            .padding(horizontal = 14.dp, vertical = style.rowVerticalPadding),
+            .background(style.rowContainerColor)
+            .padding(start = 14.dp, top = 6.dp, end = 8.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
                 .size(28.dp)
+                .graphicsLayer { alpha = contentAlpha }
                 .clip(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center,
@@ -1062,18 +1170,132 @@ private fun SourceSuggestionRow(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(start = 12.dp),
+                .padding(horizontal = 12.dp)
+                .graphicsLayer { alpha = contentAlpha },
             verticalArrangement = Arrangement.Center,
         ) {
-                Text(
-                    text = sourceTitle,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
             Text(
-                text = stringResource(source.contentType.titleResId),
+                text = sourceTitle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = if (isEnabled) {
+                    stringResource(source.contentType.titleResId)
+                } else {
+                    stringResource(source.contentType.titleResId) + " · " + stringResource(R.string.disabled)
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(
+            checked = isEnabled,
+            onCheckedChange = { checked ->
+                hapticFeedback.performSelectionHapticFeedback()
+                onToggle(checked)
+            },
+            modifier = Modifier
+                .semantics { contentDescription = sourceTitle }
+                .tvFocusable(shape = CircleShape, addFocusTarget = false),
+        )
+    }
+}
+
+/** "Search" versus the page the overlay was opened from (History / Favourites). */
+@Composable
+private fun SearchScopeTabs(
+    libraryTitle: String,
+    libraryTabSelected: Boolean,
+    onTabSelected: (library: Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val hapticFeedback = LocalHapticFeedback.current
+    SecondaryTabRow(
+        selectedTabIndex = if (libraryTabSelected) 1 else 0,
+        modifier = modifier,
+        containerColor = Color.Transparent,
+        divider = {},
+    ) {
+        listOf(stringResource(R.string.search) to false, libraryTitle to true).forEach { (title, isLibrary) ->
+            Tab(
+                selected = libraryTabSelected == isLibrary,
+                onClick = {
+                    hapticFeedback.performSelectionHapticFeedback()
+                    onTabSelected(isLibrary)
+                },
+                modifier = Modifier
+                    .height(40.dp)
+                    .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
+                text = {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                selectedContentColor = MaterialTheme.colorScheme.primary,
+                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LibraryMatchRow(
+    content: Content,
+    onClick: () -> Unit,
+    style: SearchOverlayStyle,
+) {
+    val context = LocalContext.current
+    val sourceTitle = rememberResolvedSourceTitle(content.source)
+    val imageRequest = remember(content.id, content.coverUrl) {
+        ImageRequest.Builder(context)
+            .data(content.coverUrl)
+            .crossfade(true)
+            .apply { mangaExtra(content) }
+            .build()
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(style.rowCornerRadius))
+            .clickable(onClick = onClick)
+            .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius), addFocusTarget = false)
+            .background(style.rowContainerColor)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AsyncImage(
+            model = imageRequest,
+            contentDescription = null,
+            modifier = Modifier
+                .width(36.dp)
+                .aspectRatio(0.7f)
+                .clip(RoundedCornerShape(style.cardInnerCornerRadius))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentScale = ContentScale.Crop,
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = content.title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = sourceTitle,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.labelSmall,

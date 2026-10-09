@@ -145,6 +145,9 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
     @Inject
     lateinit var contentDataRepository: ContentDataRepository
 
+    @Inject
+    lateinit var librarySearchQueries: org.skepsun.kototoro.search.domain.LibrarySearchQueries
+
     private val spaceViewModel by viewModels<SpaceViewModel>()
     private val spaceNavigationSessionViewModel by viewModels<SpaceNavigationSessionViewModel>()
     private val spaceResumeViewModel by viewModels<SpaceResumeViewModel>()
@@ -253,6 +256,15 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
                     backgroundArtwork = backgroundArtwork,
                     searchSuggestionState = suggestionState,
                     onRetrySearchSuggestions = searchSuggestionViewModel::retrySuggestions,
+                    onSearchSourceToggle = searchSuggestionViewModel::onSourceToggle,
+                    librarySearchQueries = librarySearchQueries,
+                    onSearchLibraryScopeChange = searchSuggestionViewModel::setLibraryScope,
+                    onApplyLibrarySearch = { scope, query ->
+                        librarySearchQueries.set(scope, query)
+                        if (query.isNotBlank()) {
+                            searchSuggestionViewModel.saveQuery(query.trim())
+                        }
+                    },
                     onQueryChanged = topBarController::updateSearchQuery,
                     onSearch = { query -> submitSearch(query) },
                     initialSearchKind = SearchKind.SIMPLE,

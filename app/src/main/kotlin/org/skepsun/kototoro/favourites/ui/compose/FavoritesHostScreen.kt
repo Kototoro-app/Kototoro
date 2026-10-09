@@ -107,6 +107,7 @@ fun KototoroFavoritesHostRoute(
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by globalState.selectedSourceTags.collectAsStateWithLifecycle()
     val allFavoritesSortOrder by viewModel.allFavoritesSortOrder.collectAsStateWithLifecycle()
+    val libraryQuery by viewModel.libraryQuery.collectAsStateWithLifecycle()
 
     // The top-bar filter popup is opened from the shared shell chrome, outside this route,
     // so the active category's list host (already created by the pager page) is handed over
@@ -373,6 +374,8 @@ fun KototoroFavoritesHostRoute(
                             }
                         },
                         onFilterRailOverrideChanged = {},
+                        libraryQuery = libraryQuery,
+                        onClearLibraryQuery = viewModel::clearLibraryQuery,
                     )
                 }
             }

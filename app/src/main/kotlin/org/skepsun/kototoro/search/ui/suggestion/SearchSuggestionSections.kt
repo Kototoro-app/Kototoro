@@ -11,6 +11,8 @@ data class SearchSuggestionSection(
     @StringRes val titleResId: Int,
     val items: List<SearchSuggestionItem>,
     val service: ScrobblerService? = null,
+    /** Formats [titleResId] when set, e.g. the page name in "Matches in History". */
+    @StringRes val titleArgResId: Int? = null,
 )
 
 fun List<SearchSuggestionItem>.toSuggestionSections(): List<SearchSuggestionSection> = buildList {
@@ -18,6 +20,17 @@ fun List<SearchSuggestionItem>.toSuggestionSections(): List<SearchSuggestionSect
         val items = this@toSuggestionSections.filter(matches)
         if (items.isNotEmpty()) add(SearchSuggestionSection(key, title, items))
     }
+    this@toSuggestionSections.filterIsInstance<SearchSuggestionItem.LibraryMatch>().takeIf { it.isNotEmpty() }
+        ?.let { matches ->
+            add(
+                SearchSuggestionSection(
+                    key = "library",
+                    titleResId = R.string.library_search_matches,
+                    items = matches,
+                    titleArgResId = matches.first().scope.titleResId,
+                ),
+            )
+        }
     section("local", R.string.search_local_suggestions) {
         it is SearchSuggestionItem.LocalEntityList || it is SearchSuggestionItem.ContentList
     }

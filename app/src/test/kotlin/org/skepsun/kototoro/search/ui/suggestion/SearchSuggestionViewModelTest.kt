@@ -35,6 +35,11 @@ import org.skepsun.kototoro.core.prefs.SearchSuggestionType
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository
 import org.skepsun.kototoro.favourites.domain.GlobalFavoritesState
+import org.skepsun.kototoro.history.data.HistoryRepository
+import org.skepsun.kototoro.search.domain.LibrarySearchScope
+import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.search.domain.ContentSearchRepository
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
@@ -61,6 +66,7 @@ class SearchSuggestionViewModelTest {
         override fun setPreferredSite(service: ScrobblerService) = Unit
     }
     private val favourites = mockk<GlobalFavoritesState>()
+    private val history = mockk<HistoryRepository>()
 
     @BeforeEach
     fun setUp() {
@@ -194,6 +200,64 @@ class SearchSuggestionViewModelTest {
     }
 
     @Test
+    fun `recent sources keep disabled entries so they can be switched back on`() = runBlocking {
+        val enabled = TestSource("ENABLED_SOURCE")
+        val disabled = TestSource("DISABLED_SOURCE")
+        every { settings.searchSuggestionTypes } returns setOf(SearchSuggestionType.RECENT_SOURCES)
+        every { sources.observeEnabledSources() } returns MutableStateFlow(
+            listOf(ContentSourceInfo(enabled, isEnabled = true, isPinned = false)),
+        )
+        coEvery { repository.getSourcesSuggestion(any<Int>()) } returns listOf(disabled, enabled)
+        val model = model(SourceTypeIdentifier())
+
+        val suggestions = withTimeout(10_000) { model.suggestion.first() }
+
+        assertEquals(
+            listOf(
+                SearchSuggestionItem.SourceTip(disabled, isEnabled = false),
+                SearchSuggestionItem.SourceTip(enabled, isEnabled = true),
+            ),
+            suggestions,
+        )
+    }
+
+    @Test
+    fun `history tab narrows suggestions to history matches and recent queries`() = runBlocking {
+        val match = Content(
+            id = 7L,
+            title = "Frieren",
+            altTitles = emptySet(),
+            url = "/frieren",
+            publicUrl = "https://example.com/frieren",
+            rating = -1f,
+            contentRating = null,
+            coverUrl = null,
+            tags = emptySet(),
+            state = null,
+            authors = emptySet(),
+            source = TestSource("HISTORY_SOURCE"),
+        )
+        coEvery { history.searchLibrary("frie", any()) } returns listOf(match)
+        coEvery { repository.getQuerySuggestion(any(), any()) } returns listOf("frieren")
+        val model = model()
+        model.setLibraryScope(LibrarySearchScope.HISTORY)
+        model.onQueryChanged("frie")
+
+        val state = withTimeout(10_000) { model.suggestionState.first { !it.isLoading } }
+
+        assertEquals(LibrarySearchScope.HISTORY, state.libraryScope)
+        assertEquals(
+            listOf(
+                SearchSuggestionItem.LibraryMatch(LibrarySearchScope.HISTORY, match),
+                SearchSuggestionItem.RecentQuery("frieren"),
+            ),
+            state.items,
+        )
+        coVerify(exactly = 0) { repository.getContentSuggestion(any(), any(), any()) }
+        coVerify(exactly = 0) { tracking.search(any()) }
+    }
+
+    @Test
     fun `confirmed queries are recorded outside incognito mode`() {
         every { repository.saveSearchQuery(any()) } returns Unit
 
@@ -211,14 +275,23 @@ class SearchSuggestionViewModelTest {
         verify(exactly = 0) { repository.saveSearchQuery(any()) }
     }
 
-    private fun model() = SearchSuggestionViewModel(
+    private data class TestSource(override val name: String) : ContentSource {
+        override val locale = ""
+        override val contentType = ContentType.MANGA
+    }
+
+    private fun model(
+        sourceTypeIdentifier: SourceTypeIdentifier = mockk<SourceTypeIdentifier>(),
+    ) = SearchSuggestionViewModel(
         repository = repository,
         settings = settings,
         sourcesRepository = sources,
         sourcePresetsRepository = mockk<SourcePresetsRepository>(),
-        sourceTypeIdentifier = mockk<SourceTypeIdentifier>(),
+        sourceTypeIdentifier = sourceTypeIdentifier,
         globalFavoritesState = favourites,
         trackingSiteDiscoveryService = tracking,
         preferredTrackingSiteProvider = preferredSite,
+        historyRepository = history,
+        favouritesRepository = mockk(),
     ).also { store.put("suggestions", it) }
 }

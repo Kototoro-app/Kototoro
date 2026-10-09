@@ -4030,6 +4030,12 @@
     <string name="search_loaded_results">Loaded %1$d results</string>
     <string name="search_displayed_results">%1$d shown</string>
     <string name="search_source_type_count">%1$d source types</string>
+    <string name="library_search_placeholder">Search in %1$s</string>
+    <string name="library_search_apply">Filter %1$s by “%2$s”</string>
+    <string name="library_search_show_all">Show all of %1$s</string>
+    <string name="library_search_matches">Matches in %1$s</string>
+    <string name="library_search_no_matches">Nothing in %1$s matches. Try fewer words or search content sources.</string>
+    <string name="library_search_active">Showing matches for “%1$s”</string>
     <string name="avif_animation_memory_limit">AVIF memory limit per animation</string>
     <string name="avif_animation_memory_limit_summary">Limits the displayed and preloaded frames of each animation. Spare budget preloads more frames to smooth playback. Multiple pages, encoded input and decoder working memory use additional RAM. Reopen the page after changing these settings.</string>
     <string name="avif_animation_memory_auto">Automatic (%1$d MiB recommended)</string>

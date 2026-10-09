@@ -5,29 +5,34 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -50,38 +55,75 @@ fun SearchToolsRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FilterChip(
+        SearchCompactChip(
+            text = stringResource(R.string.advanced_search),
             selected = advancedExpanded,
             onClick = onAdvancedClick,
-            label = { Text(stringResource(R.string.advanced_search)) },
             leadingIcon = {
                 Icon(
                     imageVector = if (advancedExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(16.dp),
                 )
             },
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.heightIn(min = 48.dp)
-                .tvFocusable(shape = RoundedCornerShape(14.dp), addFocusTarget = false),
         )
-        FilterChip(
+        SearchCompactChip(
+            text = stringResource(R.string.filter),
             selected = hasActiveFilters,
             onClick = onFiltersClick,
-            label = { Text(stringResource(R.string.filter)) },
             leadingIcon = {
                 Icon(
                     painter = painterResource(R.drawable.ic_filter_menu),
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(16.dp),
                 )
             },
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.heightIn(min = 48.dp)
-                .tvFocusable(shape = RoundedCornerShape(14.dp), addFocusTarget = false),
         )
     }
 }
+
+/**
+ * A low-profile chip for search tools and suggestions: 30dp visual height with a 40dp touch target,
+ * so rows of chips stay light without becoming hard to hit.
+ */
+@Composable
+fun SearchCompactChip(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    shape: Shape = RoundedCornerShape(SearchCompactChipHeight / 2),
+    leadingIcon: (@Composable () -> Unit)? = null,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
+        Surface(
+            onClick = onClick,
+            modifier = modifier.tvFocusable(shape = shape, addFocusTarget = false),
+            shape = shape,
+            color = if (selected) colorScheme.secondaryContainer else colorScheme.surfaceContainerHigh,
+            contentColor = if (selected) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
+        ) {
+            Row(
+                modifier = Modifier
+                    .height(SearchCompactChipHeight)
+                    .padding(start = if (leadingIcon != null) 8.dp else 12.dp, end = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                leadingIcon?.invoke()
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+private val SearchCompactChipHeight = 30.dp
 
 @Composable
 fun SearchAdvancedFields(
@@ -184,6 +226,50 @@ fun SearchFeedbackCard(
                 ) {
                     Text(stringResource(R.string.retry))
                 }
+            }
+        }
+    }
+}
+
+/** Shown above a library list while the overlay's page tab is filtering it. */
+@Composable
+fun LibrarySearchBanner(
+    query: String,
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 14.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Search,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = stringResource(R.string.library_search_active, query),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            IconButton(
+                onClick = onClear,
+                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Clear,
+                    contentDescription = stringResource(R.string.clear),
+                    modifier = Modifier.size(20.dp),
+                )
             }
         }
     }
