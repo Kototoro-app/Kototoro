@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -42,6 +43,15 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 
+/**
+ * @param filterSummary names of the active filters, trailing the filter chip so the row says what is
+ * narrowed without a second chip row; tapping one opens the same filter sheet.
+ * @param scopeLabel when set, a leading chip that toggles between searching every content source and
+ * only the page the search was opened from ("In Favourites"). It is a scope, not a destination, so it
+ * lives with the other search options instead of being a tab pair of its own.
+ * @param scopeSelected whether the search is currently limited to that page. The source-search options
+ * (advanced search, filters) do not apply to a page, so only the scope chip remains then.
+ */
 @Composable
 fun SearchToolsRow(
     advancedExpanded: Boolean,
@@ -49,36 +59,63 @@ fun SearchToolsRow(
     hasActiveFilters: Boolean,
     onFiltersClick: () -> Unit,
     modifier: Modifier = Modifier,
+    filterSummary: List<String> = emptyList(),
+    scopeLabel: String? = null,
+    scopeSelected: Boolean = false,
+    onScopeClick: () -> Unit = {},
 ) {
     Row(
         modifier = modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SearchCompactChip(
-            text = stringResource(R.string.advanced_search),
-            selected = advancedExpanded,
-            onClick = onAdvancedClick,
-            leadingIcon = {
-                Icon(
-                    imageVector = if (advancedExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                )
-            },
-        )
-        SearchCompactChip(
-            text = stringResource(R.string.filter),
-            selected = hasActiveFilters,
-            onClick = onFiltersClick,
-            leadingIcon = {
-                Icon(
-                    painter = painterResource(R.drawable.ic_filter_menu),
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                )
-            },
-        )
+        if (scopeLabel != null) {
+            SearchCompactChip(
+                text = scopeLabel,
+                selected = scopeSelected,
+                onClick = onScopeClick,
+                leadingIcon = if (scopeSelected) {
+                    {
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                } else {
+                    null
+                },
+            )
+        }
+        if (scopeLabel == null || !scopeSelected) {
+            SearchCompactChip(
+                text = stringResource(R.string.advanced_search),
+                selected = advancedExpanded,
+                onClick = onAdvancedClick,
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (advancedExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                },
+            )
+            SearchCompactChip(
+                text = stringResource(R.string.filter),
+                selected = hasActiveFilters,
+                onClick = onFiltersClick,
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_filter_menu),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                },
+            )
+            filterSummary.forEach { label ->
+                SearchCompactChip(text = label, onClick = onFiltersClick)
+            }
+        }
     }
 }
 

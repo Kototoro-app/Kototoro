@@ -237,7 +237,7 @@ class SearchSuggestionViewModelTest {
             authors = emptySet(),
             source = TestSource("HISTORY_SOURCE"),
         )
-        coEvery { history.searchLibrary("frie", any()) } returns listOf(match)
+        coEvery { history.getAllForLibrarySearch() } returns listOf(match)
         coEvery { repository.getQuerySuggestion(any(), any()) } returns listOf("frieren")
         val model = model()
         model.setLibraryScope(LibrarySearchScope.HISTORY)
@@ -255,6 +255,44 @@ class SearchSuggestionViewModelTest {
         )
         coVerify(exactly = 0) { repository.getContentSuggestion(any(), any(), any()) }
         coVerify(exactly = 0) { tracking.search(any()) }
+    }
+
+    @Test
+    fun `page matches list each work once and read the page a single time while typing`() = runBlocking {
+        coEvery { history.getAllForLibrarySearch() } returns listOf(
+            libraryContent(1L, "Another Frieren Fan Book"),
+            libraryContent(2L, "Frieren", url = ""),
+            libraryContent(3L, "Frieren", url = "/frieren"),
+            libraryContent(4L, "Unrelated"),
+        )
+        val model = model()
+        model.setLibraryScope(LibrarySearchScope.HISTORY)
+
+        model.onQueryChanged("fri")
+        val first = withTimeout(10_000) { model.suggestionState.first { !it.isLoading } }
+        model.onQueryChanged("frie")
+        val second = withTimeout(10_000) { model.suggestionState.first { !it.isLoading && it.query == "frie" } }
+
+        val expected = listOf(3L, 1L)
+        assertEquals(expected, first.items.filterIsInstance<SearchSuggestionItem.LibraryMatch>().map { it.content.id })
+        assertEquals(expected, second.items.filterIsInstance<SearchSuggestionItem.LibraryMatch>().map { it.content.id })
+        coVerify(exactly = 1) { history.getAllForLibrarySearch() }
+    }
+
+    @Test
+    fun `retrying suggestions reads the page again`() = runBlocking {
+        coEvery { history.getAllForLibrarySearch() } returns listOf(libraryContent(1L, "Frieren"))
+        val model = model()
+        model.setLibraryScope(LibrarySearchScope.HISTORY)
+        model.onQueryChanged("frie")
+
+        withTimeout(10_000) { model.suggestionState.first { !it.isLoading } }
+        coVerify(exactly = 1) { history.getAllForLibrarySearch() }
+
+        model.retrySuggestions()
+        withTimeout(10_000) { model.suggestionState.first { !it.isLoading } }
+
+        coVerify(exactly = 2) { history.getAllForLibrarySearch() }
     }
 
     @Test
@@ -293,6 +331,21 @@ class SearchSuggestionViewModelTest {
         override val locale = ""
         override val contentType = ContentType.MANGA
     }
+
+    private fun libraryContent(id: Long, title: String, url: String = "/work/$id") = Content(
+        id = id,
+        title = title,
+        altTitles = emptySet(),
+        url = url,
+        publicUrl = "https://example.com/work/$id",
+        rating = -1f,
+        contentRating = null,
+        coverUrl = null,
+        tags = emptySet(),
+        state = null,
+        authors = emptySet(),
+        source = TestSource("HISTORY_SOURCE"),
+    )
 
     private fun model(
         sourceTypeIdentifier: SourceTypeIdentifier = mockk<SourceTypeIdentifier>(),

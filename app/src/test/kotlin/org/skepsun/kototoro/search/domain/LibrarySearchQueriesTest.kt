@@ -30,17 +30,27 @@ class LibrarySearchQueriesTest {
     }
 
     @Test
-    fun `an active filter or the last choice opens the page tab`() {
+    fun `the overlay opens limited to the page unless the scope was turned off there`() {
         val queries = LibrarySearchQueries()
-        assertFalse(queries.prefersScopedTab(LibrarySearchScope.HISTORY))
+        assertTrue(queries.prefersPageScope(LibrarySearchScope.HISTORY))
+        assertTrue(queries.prefersPageScope(LibrarySearchScope.FAVOURITES))
 
-        queries.setPrefersScopedTab(LibrarySearchScope.HISTORY, true)
-        assertTrue(queries.prefersScopedTab(LibrarySearchScope.HISTORY))
-        assertFalse(queries.prefersScopedTab(LibrarySearchScope.FAVOURITES))
+        queries.setPrefersPageScope(LibrarySearchScope.HISTORY, false)
+        assertFalse(queries.prefersPageScope(LibrarySearchScope.HISTORY))
+        assertTrue(queries.prefersPageScope(LibrarySearchScope.FAVOURITES))
 
-        queries.setPrefersScopedTab(LibrarySearchScope.FAVOURITES, false)
+        queries.setPrefersPageScope(LibrarySearchScope.HISTORY, true)
+        assertTrue(queries.prefersPageScope(LibrarySearchScope.HISTORY))
+    }
+
+    @Test
+    fun `an active page filter reopens in its own scope even after the scope was turned off`() {
+        val queries = LibrarySearchQueries()
+        queries.setPrefersPageScope(LibrarySearchScope.FAVOURITES, false)
+        assertFalse(queries.prefersPageScope(LibrarySearchScope.FAVOURITES))
+
         queries.set(LibrarySearchScope.FAVOURITES, "oda")
-        assertTrue(queries.prefersScopedTab(LibrarySearchScope.FAVOURITES))
+        assertTrue(queries.prefersPageScope(LibrarySearchScope.FAVOURITES))
     }
 
     @Test
@@ -56,6 +66,19 @@ class LibrarySearchQueriesTest {
         assertEquals(listOf(1L), contents.matchLibraryText("芙莉莲", 10).map { it.id })
         assertEquals(listOf(3L, 2L), contents.matchLibraryText("e", 2).map { it.id })
         assertEquals(emptyList<Content>(), contents.matchLibraryText(" ", 10))
+    }
+
+    @Test
+    fun `library suggestions list a work once with title matches before tag matches`() {
+        val contents = listOf(
+            content(1, "Blue Period", tags = setOf("Art")),
+            content(2, "Art Of Waiting"),
+            content(3, "Art Of Waiting"),
+        )
+
+        assertEquals(listOf(2L, 1L), contents.matchLibrarySuggestions("art", 10).map { it.id })
+        assertEquals(listOf(2L), contents.matchLibrarySuggestions("art", 1).map { it.id })
+        assertEquals(emptyList<Content>(), contents.matchLibrarySuggestions(" ", 10))
     }
 
     private fun content(

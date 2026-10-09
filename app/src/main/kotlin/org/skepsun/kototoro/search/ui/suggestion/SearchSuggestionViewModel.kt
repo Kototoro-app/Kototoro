@@ -2,6 +2,7 @@ package org.skepsun.kototoro.search.ui.suggestion
 
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -36,13 +37,14 @@ import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository
 import org.skepsun.kototoro.favourites.domain.GlobalFavoritesState
 import org.skepsun.kototoro.tracking.discovery.domain.EntityType
+import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.util.mapToSet
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.search.domain.ContentSearchRepository
 import org.skepsun.kototoro.search.domain.LibrarySearchScope
-import org.skepsun.kototoro.search.domain.matchLibraryText
+import org.skepsun.kototoro.search.domain.matchLibrarySuggestions
 import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.suggestions.domain.SuggestionRepository
 import org.skepsun.kototoro.parsers.model.ContentListFilter
@@ -73,6 +75,9 @@ private const val MAX_SOURCES_TIPS_ITEMS = 2
 private const val MAX_TRACKING_WORK_ITEMS = 3
 private const val MAX_TRACKING_ENTITY_ITEMS = 6
 private const val MAX_LIBRARY_ITEMS = 24
+
+/** How long a loaded page stays valid for suggestions; the page itself always filters live data. */
+private const val LIBRARY_SNAPSHOT_TTL_MILLIS = 60_000L
 
 @HiltViewModel
 class SearchSuggestionViewModel @Inject constructor(
@@ -207,6 +212,7 @@ class SearchSuggestionViewModel @Inject constructor(
     }
 
     fun retrySuggestions() {
+        synchronized(this) { librarySnapshot = null }
         invalidationTrigger.value++
     }
 
@@ -230,7 +236,51 @@ class SearchSuggestionViewModel @Inject constructor(
 
     fun setLibraryScope(scope: LibrarySearchScope?) {
         libraryScope.value = scope
+        // Start reading the page now: by the time the first word is typed it is usually ready.
+        if (scope != null && scope.matchesInMemory) libraryContents(scope)
     }
+
+    /**
+     * One loaded page, so each keystroke filters it in memory instead of reading the whole history
+     * again. Reading thousands of history rows with their tags took seconds on a large library.
+     */
+    private class LibrarySnapshot(
+        val scope: LibrarySearchScope,
+        val loadedAtMillis: Long,
+        val contents: Deferred<List<Content>>,
+    )
+
+    private var librarySnapshot: LibrarySnapshot? = null
+
+    private fun libraryContents(scope: LibrarySearchScope): Deferred<List<Content>> = synchronized(this) {
+        val now = System.currentTimeMillis()
+        val current = librarySnapshot
+        if (current != null && current.scope == scope && !current.contents.isCancelled &&
+            now - current.loadedAtMillis < LIBRARY_SNAPSHOT_TTL_MILLIS
+        ) {
+            return@synchronized current.contents
+        }
+        // Failed loads count as cancelled, so the next keystroke tries again.
+        val contents = viewModelScope.async(Dispatchers.Default) { loadLibrary(scope) }
+        librarySnapshot = LibrarySnapshot(scope, now, contents)
+        contents
+    }
+
+    private suspend fun loadLibrary(scope: LibrarySearchScope): List<Content> = when (scope) {
+        LibrarySearchScope.HISTORY -> historyRepository.getAllForLibrarySearch()
+        LibrarySearchScope.FAVOURITES -> favouritesRepository.getAllContent()
+        LibrarySearchScope.SUGGESTIONS -> suggestionRepository.observeAll().first()
+        LibrarySearchScope.LOCAL,
+        LibrarySearchScope.UPDATES,
+        LibrarySearchScope.FEED,
+        LibrarySearchScope.BOOKMARKS -> emptyList()
+    }
+
+    /** Pages whose suggestions are matched against a loaded list (the others query their own source). */
+    private val LibrarySearchScope.matchesInMemory: Boolean
+        get() = this == LibrarySearchScope.HISTORY ||
+            this == LibrarySearchScope.FAVOURITES ||
+            this == LibrarySearchScope.SUGGESTIONS
 
     fun saveQuery(query: String) {
         if (!settings.isIncognitoModeEnabled) {
@@ -418,14 +468,15 @@ class SearchSuggestionViewModel @Inject constructor(
         scope: LibrarySearchScope,
     ): List<SearchSuggestionItem> = runCatchingCancellable {
         when (scope) {
-            LibrarySearchScope.HISTORY -> historyRepository.searchLibrary(searchQuery, MAX_LIBRARY_ITEMS)
-            LibrarySearchScope.FAVOURITES -> favouritesRepository.searchLibrary(searchQuery, MAX_LIBRARY_ITEMS)
+            LibrarySearchScope.HISTORY,
+            LibrarySearchScope.FAVOURITES,
+            LibrarySearchScope.SUGGESTIONS -> if (searchQuery.isEmpty()) emptyList() else {
+                libraryContents(scope).await().matchLibrarySuggestions(searchQuery, MAX_LIBRARY_ITEMS)
+            }
             // The local page filters through the repository's own query, so preview the same way.
             LibrarySearchScope.LOCAL -> if (searchQuery.isEmpty()) emptyList() else {
                 localMangaRepository.getAll(filter = ContentListFilter(query = searchQuery)).take(MAX_LIBRARY_ITEMS)
             }
-            LibrarySearchScope.SUGGESTIONS ->
-                suggestionRepository.observeAll().first().matchLibraryText(searchQuery, MAX_LIBRARY_ITEMS)
             LibrarySearchScope.UPDATES,
             LibrarySearchScope.FEED,
             LibrarySearchScope.BOOKMARKS -> emptyList()

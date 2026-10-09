@@ -55,9 +55,7 @@ import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.Tab
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -236,12 +234,13 @@ fun KototoroSearchOverlay(
     onExitFinished: () -> Unit = {},
     libraryScope: LibrarySearchScope? = null,
     libraryQuery: String = "",
-    initialLibraryTab: Boolean = false,
-    onLibraryTabSelected: (Boolean) -> Unit = {},
+    initialLibraryScope: Boolean = false,
+    onLibraryScopeSelected: (Boolean) -> Unit = {},
     onActiveLibraryScopeChange: (LibrarySearchScope?) -> Unit = {},
     onApplyLibrarySearch: (String) -> Unit = {},
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
+    val hapticFeedback = LocalHapticFeedback.current
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val navigationBarPadding = WindowInsets.navigationBars.asPaddingValues()
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -256,8 +255,8 @@ fun KototoroSearchOverlay(
     var advancedTitle by remember { mutableStateOf("") }
     var advancedTags by remember { mutableStateOf("") }
     var advancedAuthor by remember { mutableStateOf("") }
-    var libraryTabSelected by remember { mutableStateOf(libraryScope != null && initialLibraryTab) }
-    val activeLibraryScope = libraryScope?.takeIf { libraryTabSelected }
+    var libraryScopeSelected by remember { mutableStateOf(libraryScope != null && initialLibraryScope) }
+    val activeLibraryScope = libraryScope?.takeIf { libraryScopeSelected }
     val libraryTitle = libraryScope?.let { stringResource(it.titleResId) }.orEmpty()
     val style = rememberSearchOverlayStyle()
 
@@ -296,8 +295,17 @@ fun KototoroSearchOverlay(
         onContentKindsChange(selectedContentKinds)
     }
 
-    fun submitSearch(searchQuery: String, searchKind: SearchKind? = null) {
-        if (activeLibraryScope != null) {
+    fun setLibraryScopeSelected(selected: Boolean) {
+        if (selected == libraryScopeSelected) return
+        libraryScopeSelected = selected
+        onLibraryScopeSelected(selected)
+        if (selected && query.isBlank() && libraryQuery.isNotEmpty()) {
+            onQueryChanged(libraryQuery)
+        }
+    }
+
+    fun submitSearch(searchQuery: String, searchKind: SearchKind? = null, ignoreLibraryScope: Boolean = false) {
+        if (activeLibraryScope != null && !ignoreLibraryScope) {
             keyboardController?.hide()
             onApplyLibrarySearch(searchQuery.trim())
             return
@@ -513,36 +521,24 @@ fun KototoroSearchOverlay(
                         )
                     }
                 }
-                if (libraryScope != null) {
-                    SearchScopeTabs(
-                        libraryTitle = libraryTitle,
-                        libraryTabSelected = libraryTabSelected,
-                        onTabSelected = { selectLibrary ->
-                            if (selectLibrary != libraryTabSelected) {
-                                libraryTabSelected = selectLibrary
-                                onLibraryTabSelected(selectLibrary)
-                                if (selectLibrary && query.isBlank() && libraryQuery.isNotEmpty()) {
-                                    onQueryChanged(libraryQuery)
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    )
-                }
-                if (activeLibraryScope == null) {
-                    SearchToolsRow(
-                        advancedExpanded = showAdvanced,
-                        onAdvancedClick = { showAdvanced = !showAdvanced },
-                        hasActiveFilters = selectedSourceTypes.size < ALL_SOURCE_TYPES.size ||
-                            selectedContentKinds.size < ALL_SEARCH_CONTENT_KINDS.size || pinnedOnly || hideEmpty ||
-                            activeLanguagePresetId > 0L,
-                        onFiltersClick = {
-                            keyboardController?.hide()
-                            showFilterSheet = true
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    )
-                }
+                SearchToolsRow(
+                    advancedExpanded = showAdvanced,
+                    onAdvancedClick = { showAdvanced = !showAdvanced },
+                    hasActiveFilters = selectedSourceTypes.size < ALL_SOURCE_TYPES.size ||
+                        selectedContentKinds.size < ALL_SEARCH_CONTENT_KINDS.size || pinnedOnly || hideEmpty ||
+                        activeLanguagePresetId > 0L,
+                    onFiltersClick = {
+                        keyboardController?.hide()
+                        showFilterSheet = true
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    scopeLabel = libraryScope?.let { stringResource(R.string.library_search_scope_chip, libraryTitle) },
+                    scopeSelected = activeLibraryScope != null,
+                    onScopeClick = {
+                        hapticFeedback.performSelectionHapticFeedback()
+                        setLibraryScopeSelected(!libraryScopeSelected)
+                    },
+                )
                 if (showAdvanced && activeLibraryScope == null) {
                     SearchAdvancedFields(
                         title = advancedTitle,
@@ -566,6 +562,11 @@ fun KototoroSearchOverlay(
                 libraryTitle = libraryTitle,
                 activeLibraryQuery = libraryQuery,
                 onApplyLibrarySearch = { submitSearch(it) },
+                onSearchAllSources = {
+                    // The way out of the page scope for this query: remember the choice like the chip does.
+                    setLibraryScopeSelected(false)
+                    submitSearch(it, ignoreLibraryScope = true)
+                },
                 onRetrySuggestions = onRetrySuggestions,
                 bottomPadding = navigationBarPadding.calculateBottomPadding(),
                 modifier = Modifier.graphicsLayer { alpha = suggestionsAlpha },
@@ -694,6 +695,7 @@ private fun SuggestionList(
     libraryTitle: String,
     activeLibraryQuery: String,
     onApplyLibrarySearch: (String) -> Unit,
+    onSearchAllSources: (String) -> Unit,
     onRetrySuggestions: () -> Unit,
     bottomPadding: Dp,
     modifier: Modifier = Modifier,
@@ -746,6 +748,22 @@ private fun SuggestionList(
                         leadingIcon = {
                             Icon(
                                 painter = painterResource(R.drawable.ic_filter_menu),
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        },
+                    )
+                }
+            }
+            if (actionQuery.isNotEmpty()) {
+                item(key = "library_search_all_sources", contentType = "library_action") {
+                    SearchSuggestionRow(
+                        text = stringResource(R.string.library_search_all_sources, actionQuery),
+                        onClick = { onSearchAllSources(actionQuery) },
+                        style = style,
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Search,
                                 contentDescription = null,
                                 modifier = Modifier.size(20.dp),
                             )
@@ -1207,46 +1225,6 @@ private fun SourceSuggestionRow(
                 .semantics { contentDescription = sourceTitle }
                 .tvFocusable(shape = CircleShape, addFocusTarget = false),
         )
-    }
-}
-
-/** "Search" versus the page the overlay was opened from (History / Favourites). */
-@Composable
-private fun SearchScopeTabs(
-    libraryTitle: String,
-    libraryTabSelected: Boolean,
-    onTabSelected: (library: Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val hapticFeedback = LocalHapticFeedback.current
-    SecondaryTabRow(
-        selectedTabIndex = if (libraryTabSelected) 1 else 0,
-        modifier = modifier,
-        containerColor = Color.Transparent,
-        divider = {},
-    ) {
-        listOf(stringResource(R.string.search) to false, libraryTitle to true).forEach { (title, isLibrary) ->
-            Tab(
-                selected = libraryTabSelected == isLibrary,
-                onClick = {
-                    hapticFeedback.performSelectionHapticFeedback()
-                    onTabSelected(isLibrary)
-                },
-                modifier = Modifier
-                    .height(40.dp)
-                    .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
-                text = {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.labelLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                selectedContentColor = MaterialTheme.colorScheme.primary,
-                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 }
 

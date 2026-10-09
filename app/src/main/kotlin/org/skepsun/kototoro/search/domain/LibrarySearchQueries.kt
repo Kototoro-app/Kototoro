@@ -50,11 +50,15 @@ class LibrarySearchQueries @Inject constructor() {
 
     fun clear(scope: LibrarySearchScope) = set(scope, "")
 
-    /** Whether the overlay should open on the page tab, remembered for the session per page. */
-    fun prefersScopedTab(scope: LibrarySearchScope): Boolean =
-        query(scope).value.isNotEmpty() || preferScoped[scope] == true
+    /**
+     * Whether the overlay should open limited to the page. Searching from a library page usually means
+     * finding something in it, so that is the default; turning the scope off is remembered for the
+     * session per page, and an active page filter always reopens in its own scope.
+     */
+    fun prefersPageScope(scope: LibrarySearchScope): Boolean =
+        query(scope).value.isNotEmpty() || preferScoped[scope] != false
 
-    fun setPrefersScopedTab(scope: LibrarySearchScope, value: Boolean) {
+    fun setPrefersPageScope(scope: LibrarySearchScope, value: Boolean) {
         preferScoped[scope] = value
     }
 }
@@ -79,3 +83,11 @@ internal fun Iterable<Content>.matchLibraryText(query: String, limit: Int): List
         .take(limit)
         .toList()
 }
+
+/**
+ * [matchLibraryText] shaped for a suggestion list: one entry per work and best title matches first
+ * (see [toLocalSuggestions]), the library's own order breaking ties. The page itself still lists every
+ * row it holds; a short suggestion list has no use for the same work three times.
+ */
+internal fun Iterable<Content>.matchLibrarySuggestions(query: String, limit: Int): List<Content> =
+    matchLibraryText(query, Int.MAX_VALUE).toLocalSuggestions(query, limit)

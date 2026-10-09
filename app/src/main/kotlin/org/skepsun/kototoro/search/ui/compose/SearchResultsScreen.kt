@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -30,7 +31,6 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
@@ -60,6 +60,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -296,7 +298,9 @@ fun SearchResultsRoute(
         )
     }
 
+    val resultsPaneTitle = stringResource(R.string.search_results)
     Scaffold(
+        modifier = Modifier.semantics { paneTitle = resultsPaneTitle },
         contentWindowInsets = WindowInsets.navigationBars,
         topBar = {
             if (selectedItemsIds.isEmpty() || isPickMode) {
@@ -481,19 +485,29 @@ private fun SearchResultsProgress(
                         stringResource(R.string.search_loaded_results, sections.sumOf { it.list.distinctBy { it.id }.size }),
                     style = MaterialTheme.typography.titleSmall,
                 )
-                if (state.totalSources > 0) {
-                    Text(
-                        text = stringResource(R.string.search_sources_progress, state.completedSources, state.totalSources),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (state.failedSources > 0) {
-                    Text(
-                        text = stringResource(R.string.search_sources_failed, state.failedSources),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
+                // One line for both counters: a failure appearing mid-search must not grow the card and
+                // shove every result section down while the user is reading.
+                if (state.totalSources > 0 || state.failedSources > 0) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (state.totalSources > 0) {
+                            Text(
+                                text = stringResource(
+                                    R.string.search_sources_progress,
+                                    state.completedSources,
+                                    state.totalSources,
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (state.failedSources > 0) {
+                            Text(
+                                text = stringResource(R.string.search_sources_failed, state.failedSources),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
                 }
             }
             if (state.failedSources > 0) {
@@ -538,67 +552,53 @@ private fun SearchResultsTopBar(
     onAdvancedAuthorChange: (String) -> Unit,
     searchFocusRequester: FocusRequester? = null,
 ) {
+    // Keep the whole input row above the space switcher's dock handle (it sits 72dp below the status
+    // bar at the screen edge): a taller header put the search button underneath it.
     Surface {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(vertical = 8.dp)
                 .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 IconButton(
                     onClick = onBackClick,
-                    modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
+                    modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = stringResource(R.string.back),
                     )
                 }
-                Column(
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(
-                        text = stringResource(R.string.search_results),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Text(
-                        text = stringResource(R.string.search_results_scope),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                modifier = Modifier
-                    .weight(1f)
-                    .then(searchFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
-                singleLine = true,
-                placeholder = { Text(stringResource(R.string.search_content)) },
-                shape = RoundedCornerShape(18.dp),
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.Search,
-                        contentDescription = null,
-                    )
-                },
-                trailingIcon = {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(searchFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
+                    singleLine = true,
+                    placeholder = { Text(stringResource(R.string.search_content)) },
+                    shape = RoundedCornerShape(18.dp),
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Filled.Search,
+                            contentDescription = null,
+                        )
+                    },
+                    trailingIcon = {
                         if (query.isNotEmpty()) {
                             IconButton(
                                 onClick = { onQueryChange("") },
-                                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
+                                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.Clear,
@@ -606,16 +606,17 @@ private fun SearchResultsTopBar(
                                 )
                             }
                         }
-                },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearchClick() }),
-            )
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { onSearchClick() }),
+                )
                 FilledIconButton(
                     onClick = onSearchClick,
                     enabled = query.isNotBlank() || (isAdvancedExpanded &&
                         (advancedTitle.isNotBlank() || advancedTags.isNotBlank() || advancedAuthor.isNotBlank())),
-                    modifier = Modifier.size(48.dp)
-                        .tvFocusable(shape = RoundedCornerShape(24.dp), addFocusTarget = false),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .tvFocusable(shape = CircleShape, addFocusTarget = false),
                 ) {
                     Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.search))
                 }
@@ -628,16 +629,16 @@ private fun SearchResultsTopBar(
                     selectedContentKinds.size < ALL_SEARCH_CONTENT_KINDS.size || pinnedOnly || hideEmpty ||
                     languagePresetTitle != null,
                 onFiltersClick = onOptionsClick,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            SearchResultsFilterSummary(
-                sourceTypes = selectedSourceTypes,
-                contentKinds = selectedContentKinds,
-                pinnedOnly = pinnedOnly,
-                hideEmpty = hideEmpty,
-                languagePresetTitle = languagePresetTitle,
-                onClick = onOptionsClick,
+                filterSummary = searchFilterSummaryLabels(
+                    sourceTypes = selectedSourceTypes,
+                    contentKinds = selectedContentKinds,
+                    pinnedOnly = pinnedOnly,
+                    hideEmpty = hideEmpty,
+                    languagePresetTitle = languagePresetTitle,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
             )
 
             if (isAdvancedExpanded) {
@@ -649,6 +650,7 @@ private fun SearchResultsTopBar(
                     author = advancedAuthor,
                     onAuthorChange = onAdvancedAuthorChange,
                     onSearch = onSearchClick,
+                    modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
@@ -656,39 +658,27 @@ private fun SearchResultsTopBar(
     }
 }
 
+/** What the active filters narrow the search to, for the tools row; empty when nothing is narrowed. */
 @Composable
-private fun SearchResultsFilterSummary(
+private fun searchFilterSummaryLabels(
     sourceTypes: Set<SourceType>,
     contentKinds: Set<SearchContentKind>,
     pinnedOnly: Boolean,
     hideEmpty: Boolean,
     languagePresetTitle: String?,
-    onClick: () -> Unit,
-) {
-    val labels = buildList {
-        if (contentKinds.size < ALL_SEARCH_CONTENT_KINDS.size) {
-            add(SEARCH_CONTENT_KIND_OPTIONS.filter { it.kind in contentKinds }
-                .map { stringResource(it.titleRes) }.joinToString(" · "))
-        }
-        if (sourceTypes.size < ALL_SOURCE_TYPES.size) {
-            val single = SOURCE_TYPE_OPTIONS.singleOrNull { it.type in sourceTypes }
-            add(if (single != null) stringResource(single.titleRes) else
-                stringResource(R.string.search_source_type_count, sourceTypes.size))
-        }
-        languagePresetTitle?.let { add(it) }
-        if (pinnedOnly) add(stringResource(R.string.pinned_sources_only))
-        if (hideEmpty) add(stringResource(R.string.hide_empty_sources))
+): List<String> = buildList {
+    if (contentKinds.size < ALL_SEARCH_CONTENT_KINDS.size) {
+        add(SEARCH_CONTENT_KIND_OPTIONS.filter { it.kind in contentKinds }
+            .map { stringResource(it.titleRes) }.joinToString(" · "))
     }
-    if (labels.isEmpty()) return
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        items(labels) { label ->
-            AssistChip(
-                onClick = onClick,
-                label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false),
-            )
-        }
+    if (sourceTypes.size < ALL_SOURCE_TYPES.size) {
+        val single = SOURCE_TYPE_OPTIONS.singleOrNull { it.type in sourceTypes }
+        add(if (single != null) stringResource(single.titleRes) else
+            stringResource(R.string.search_source_type_count, sourceTypes.size))
     }
+    languagePresetTitle?.let { add(it) }
+    if (pinnedOnly) add(stringResource(R.string.pinned_sources_only))
+    if (hideEmpty) add(stringResource(R.string.hide_empty_sources))
 }
 
 @Composable

@@ -1488,7 +1488,11 @@ fun KototoroApp(
                     resumeItems = spaceResumeUiState.items,
                     onResume = onSpaceResume,
                     position = sidekickPosition,
+                    // The search overlay is modal and its input row sits where the handle docks (the
+                    // handle outranks it with zIndex 20), so it would cover and steal taps from the
+                    // search button; there is nothing to switch spaces for while typing anyway.
                     visible = spaceUiState.switcherEnabled &&
+                        !isSearchOverlayMounted &&
                         (!isSidekickOnRight || !isScrollbarActive.value) &&
                         (shouldShowChrome || isImmersiveRoute || isSearchRoute) &&
                         (!isDetailsRoute ||
@@ -1601,11 +1605,11 @@ fun KototoroApp(
                         onSourceToggle = mainAppState.onSearchSourceToggle,
                         libraryScope = selectedLibrarySearchScope.takeIf { !isSearchRoute && !isImmersiveRoute },
                         libraryQuery = activeLibraryQuery,
-                        // Read on every mount: the overlay keeps its own tab state once open.
-                        initialLibraryTab = selectedLibrarySearchScope
-                            ?.let(librarySearchQueries::prefersScopedTab) == true,
-                        onLibraryTabSelected = { selected ->
-                            selectedLibrarySearchScope?.let { librarySearchQueries.setPrefersScopedTab(it, selected) }
+                        // Read on every mount: the overlay keeps its own scope state once open.
+                        initialLibraryScope = selectedLibrarySearchScope
+                            ?.let(librarySearchQueries::prefersPageScope) == true,
+                        onLibraryScopeSelected = { selected ->
+                            selectedLibrarySearchScope?.let { librarySearchQueries.setPrefersPageScope(it, selected) }
                         },
                         onActiveLibraryScopeChange = mainAppState.onSearchLibraryScopeChange,
                         onApplyLibrarySearch = { libraryQuery ->

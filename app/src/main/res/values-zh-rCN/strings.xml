@@ -3845,7 +3845,6 @@ SHA-256 指纹:
     <string name="search_loading_remote_suggestions">正在查找作品、人物和角色…</string>
     <string name="search_remote_suggestions_failed">在线建议暂时无法加载，仍可确认搜索内容源。</string>
     <string name="search_no_suggestions">暂无建议，确认搜索可查询内容源。</string>
-    <string name="search_results_scope">内容源、收藏与历史</string>
     <string name="search_refreshing_results">正在更新结果…</string>
     <string name="search_loaded_results">已加载 %1$d 项结果</string>
     <string name="search_displayed_results">展示 %1$d 项</string>
@@ -3854,8 +3853,10 @@ SHA-256 指纹:
     <string name="library_search_apply">在%1$s中筛选“%2$s”</string>
     <string name="library_search_show_all">显示全部%1$s</string>
     <string name="library_search_matches">%1$s中的匹配</string>
-    <string name="library_search_no_matches">%1$s中没有匹配项。可以减少关键词，或切换到“搜索”查找图源。</string>
+    <string name="library_search_no_matches">%1$s中没有匹配项。可以减少关键词，或改为在图源中搜索。</string>
     <string name="library_search_active">正在显示“%1$s”的匹配结果</string>
+    <string name="library_search_scope_chip">仅%1$s</string>
+    <string name="library_search_all_sources">在图源中搜索“%1$s”</string>
     <string name="avif_animation_memory_limit">每张 AVIF 动图的内存上限</string>
     <string name="avif_animation_memory_limit_summary">限制每张动图当前帧及预读帧的内存，预算充足时预读更多帧以改善流畅度。多个页面、压缩文件及解码器工作内存会额外占用 RAM。修改后请重新打开页面。</string>
     <string name="avif_animation_memory_auto">自动（推荐 %1$d MiB）</string>
