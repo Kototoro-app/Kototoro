@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onStart
-import org.json.JSONArray
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.extensions.DEFAULT_JAR_PRIORITY_ORDER_VALUE
 import org.skepsun.kototoro.core.github.AppUpdateSource
@@ -50,10 +49,11 @@ import org.skepsun.kototoro.parsers.util.nullIfEmpty
 import org.skepsun.kototoro.core.util.ext.connectivityManager
 import org.skepsun.kototoro.core.util.ext.getEnumValue
 import org.skepsun.kototoro.core.util.ext.getSafeFloat
+import org.skepsun.kototoro.core.util.ext.getSafeInt
 import org.skepsun.kototoro.core.util.ext.observeChanges
+import org.skepsun.kototoro.core.util.ext.putAll
 import org.skepsun.kototoro.core.util.ext.putEnumValue
 import org.skepsun.kototoro.core.util.ext.takeIfReadable
-import org.skepsun.kototoro.core.util.ext.toStringSet
 import org.skepsun.kototoro.core.util.ext.toUriOrNull
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -68,16 +68,6 @@ import javax.inject.Singleton
 private const val PAGE_THUMBNAIL_ASPECT_RATIO_DEFAULT = 0.7f
 private const val PAGE_THUMBNAIL_ASPECT_RATIO_MIN = 0.35f
 private const val PAGE_THUMBNAIL_ASPECT_RATIO_MAX = 1f
-
-private fun SharedPreferences.getSafeInt(key: String, defValue: Int): Int {
-    return try {
-        getInt(key, defValue)
-    } catch (_: ClassCastException) {
-        getLong(key, defValue.toLong()).toInt().also {
-            edit { putInt(key, it) }
-        }
-    }
-}
 
 private fun SharedPreferences.getSafeLong(key: String, defValue: Long): Long {
     return try {
@@ -2763,24 +2753,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         }
         registerOnSharedPreferenceChangeListener(listener)
         awaitClose { unregisterOnSharedPreferenceChangeListener(listener) }
-    }
-
-    private fun SharedPreferences.Editor.putAll(values: Map<String, *>) {
-        values.forEach { (key, value) ->
-            when (value) {
-                is Boolean -> putBoolean(key, value)
-                is Int -> putLong(key, value.toLong()) // JSON can't distinguish Int/Long; store as Long for safety
-                is Long -> putLong(key, value)
-                is Float -> putFloat(key, value)
-                is Double -> putFloat(key, value.toFloat())
-                is String -> putString(key, value)
-                is JSONArray -> putStringSet(key, value.toStringSet())
-                is Set<*> -> {
-                    @Suppress("UNCHECKED_CAST")
-                    putStringSet(key, value as? Set<String>)
-                }
-            }
-        }
     }
 
     /**

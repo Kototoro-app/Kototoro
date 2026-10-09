@@ -88,6 +88,7 @@ import org.skepsun.kototoro.local.epub.buildEpubChapterUrl
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
+import org.skepsun.kototoro.core.util.ext.getSafeInt
 import org.skepsun.kototoro.core.util.ext.isAnimationsEnabled
 import org.skepsun.kototoro.core.util.ext.isNightMode
 import org.skepsun.kototoro.core.util.ext.performConfirmHapticFeedback
@@ -407,8 +408,14 @@ class NovelReaderActivity :
             .launchIn(lifecycleScope)
 
         val markingPrefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
-        activeMarkingColor = markingPrefs.getInt("novel_active_marking_color", NovelMarkingColor.YELLOW.id)
-        activeMarkingStyle = markingPrefs.getInt("novel_active_marking_style", NovelMarkingStyle.UNDERLINE.id)
+        // 设置备份恢复可能把整数值存成 Long（历史 putAll 策略），直接 getInt() 会抛
+        // ClassCastException（#573）。用 getSafeInt 恢复并规范化为 Int，再经 fromId 校验。
+        activeMarkingColor = NovelMarkingColor.fromId(
+            markingPrefs.getSafeInt("novel_active_marking_color", NovelMarkingColor.YELLOW.id),
+        ).id
+        activeMarkingStyle = NovelMarkingStyle.fromId(
+            markingPrefs.getSafeInt("novel_active_marking_style", NovelMarkingStyle.UNDERLINE.id),
+        ).id
         composeReaderViewModel.publishActiveMarkingStyle(activeMarkingColor, activeMarkingStyle)
 
         // 只恢复UI状态，不恢复章节和页码（由loadChapters处理）

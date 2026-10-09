@@ -13,6 +13,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.util.ext.getSafeInt
 
 @Composable
 fun PeriodicalBackupSettingsScreen(
@@ -83,7 +84,7 @@ fun PeriodicalBackupSettingsScreen(
                 item { SettingsSliderPreference(
                     title = stringResource(R.string.max_backups_count),
                     iconRes = R.drawable.ic_timeline,
-                    value = settings.prefs.getInt(AppSettings.KEY_BACKUP_PERIODICAL_COUNT, 10),
+                    value = settings.prefs.getSafeInt(AppSettings.KEY_BACKUP_PERIODICAL_COUNT, 10),
                     valueRange = 1..32,
                     step = 1,
                     valueText = { it.toString() },
