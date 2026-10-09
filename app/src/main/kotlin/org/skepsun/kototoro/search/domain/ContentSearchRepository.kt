@@ -32,7 +32,6 @@ import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
-import org.skepsun.kototoro.parsers.util.levenshteinDistance
 import org.skepsun.kototoro.parsers.util.mapToSet
 import org.skepsun.kototoro.search.ui.ContentSuggestionsProvider
 import javax.inject.Inject
@@ -53,19 +52,23 @@ class ContentSearchRepository @Inject constructor(
     private val dataRepository: ContentDataRepository,
 ) {
 
-    suspend fun getContentSuggestion(query: String, limit: Int, source: ContentSource?): List<LocalEntitySuggestion> = when {
-        query.isEmpty() -> db.getSuggestionDao().getTopContent(limit)
-        source != null -> db.getMangaDao().searchByTitle("%$query%", source.name, limit)
-        else -> db.getMangaDao().searchByTitle("%$query%", limit)
-    }.let {
-        if (settings.isNsfwContentDisabled) it.filterNot { x -> x.manga.isNsfw } else it
-    }.map {
-        it.toContent()
-    }.let { contents ->
-        GlobalTagBlacklist(settings.globalTagBlacklist).filter(contents)
-    }.sortedBy { x ->
-        x.title.levenshteinDistance(query)
-    }.aggregateByEntity(limit)
+    suspend fun getContentSuggestion(query: String, limit: Int, source: ContentSource?): List<LocalEntitySuggestion> {
+        val fetchLimit = limit * LOCAL_SUGGESTION_OVERFETCH
+        return when {
+            query.isEmpty() -> db.getSuggestionDao().getTopContent(fetchLimit)
+            source != null -> db.getMangaDao().searchByTitle("%$query%", "$query%", source.name, fetchLimit)
+            else -> db.getMangaDao().searchByTitle("%$query%", "$query%", fetchLimit)
+        }.let {
+            if (settings.isNsfwContentDisabled) it.filterNot { x -> x.manga.isNsfw } else it
+        }.map {
+            it.toContent()
+        }.let { contents ->
+            GlobalTagBlacklist(settings.globalTagBlacklist).filter(contents)
+        }.toLocalSuggestions(query, limit).map { content ->
+            // Stored works are independent rows with no cross-source identity to resolve.
+            LocalEntitySuggestion(entityId = null, representative = content)
+        }
+    }
 
     suspend fun getQuerySuggestion(
         query: String,
@@ -91,25 +94,6 @@ class ContentSearchRepository @Inject constructor(
             }
             result
         }.orEmpty()
-    }
-
-    /**
-     * 聚合：每条已持久化的 content 独立成立，跨来源不再存在实体身份（entity identity），
-     * 因此不解析 entityId、不跨条目合并，仅按 limit 截断。
-     */
-    private suspend fun List<Content>.aggregateByEntity(limit: Int): List<LocalEntitySuggestion> {
-        if (isEmpty()) {
-            return emptyList()
-        }
-        return asSequence()
-            .map { content ->
-                LocalEntitySuggestion(
-                    entityId = null,
-                    representative = content,
-                )
-            }
-            .take(limit)
-            .toList()
     }
 
     fun observeRecentQueries(limit: Int): Flow<List<String>> = callbackFlow {

@@ -127,6 +127,12 @@ abstract class MangaDao {
     @Query("SELECT author FROM manga WHERE manga.source = :source AND author IS NOT NULL AND author != '' GROUP BY author ORDER BY COUNT(author) DESC LIMIT :limit")
     abstract suspend fun findAuthorsBySource(source: String, limit: Int): List<String>
 
+    /**
+     * Stored works whose title or alternative titles match [query] (a LIKE pattern), best matches first:
+     * titles matching [prefix] (the same text as a "starts with" pattern), then other title matches,
+     * then alternative-title-only matches, shorter titles before longer ones. The order has to be in
+     * SQL because [limit] cuts the rows before any caller can rank them.
+     */
     @Transaction
     @Query(
         """
@@ -138,10 +144,11 @@ abstract class MangaDao {
 				OR EXISTS(SELECT 1 FROM stats WHERE stats.manga_id = manga.manga_id)
 				OR EXISTS(SELECT 1 FROM preferences WHERE preferences.manga_id = manga.manga_id)
 			)
+		ORDER BY CASE WHEN title LIKE :prefix THEN 0 WHEN title LIKE :query THEN 1 ELSE 2 END, LENGTH(title)
 		LIMIT :limit
         """,
     )
-    abstract suspend fun searchByTitle(query: String, limit: Int): List<MangaWithTags>
+    abstract suspend fun searchByTitle(query: String, prefix: String, limit: Int): List<MangaWithTags>
 
     @Transaction
     @Query(
@@ -155,10 +162,11 @@ abstract class MangaDao {
 				OR EXISTS(SELECT 1 FROM stats WHERE stats.manga_id = manga.manga_id)
 				OR EXISTS(SELECT 1 FROM preferences WHERE preferences.manga_id = manga.manga_id)
 			)
+		ORDER BY CASE WHEN title LIKE :prefix THEN 0 WHEN title LIKE :query THEN 1 ELSE 2 END, LENGTH(title)
 		LIMIT :limit
         """,
     )
-    abstract suspend fun searchByTitle(query: String, source: String, limit: Int): List<MangaWithTags>
+    abstract suspend fun searchByTitle(query: String, prefix: String, source: String, limit: Int): List<MangaWithTags>
 
     @Upsert
     protected abstract suspend fun upsertEntity(manga: MangaEntity)
