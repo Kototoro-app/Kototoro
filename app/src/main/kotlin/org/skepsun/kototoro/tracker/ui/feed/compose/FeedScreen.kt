@@ -93,6 +93,7 @@ fun FeedScreen(
     onFeedItemContinueReading: (FeedItem) -> Unit = {},
     showCategoryFilterInline: Boolean = true,
     host: RetainedPagingSnapshotHost? = null,
+    header: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // The paging chain is gone (Phase F4): pagingItems is null and the static
@@ -223,7 +224,9 @@ fun FeedScreen(
             ),
             modifier = Modifier.fillMaxSize()
         ) {
-
+            if (header != null) {
+                item(key = "feed_header", contentType = "feed_header") { header() }
+            }
             itemsIndexed(
                 items = displayedItems,
                 key = { _, item -> feedItemKey(item) },

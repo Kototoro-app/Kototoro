@@ -258,6 +258,20 @@ class SearchSuggestionViewModelTest {
     }
 
     @Test
+    fun `pages without previews only offer recent queries`() = runBlocking {
+        coEvery { repository.getQuerySuggestion(any(), any()) } returns listOf("isekai")
+        val model = model()
+        model.setLibraryScope(LibrarySearchScope.UPDATES)
+        model.onQueryChanged("ise")
+
+        val state = withTimeout(10_000) { model.suggestionState.first { !it.isLoading } }
+
+        assertEquals(LibrarySearchScope.UPDATES, state.libraryScope)
+        assertEquals(listOf(SearchSuggestionItem.RecentQuery("isekai")), state.items)
+        coVerify(exactly = 0) { repository.getContentSuggestion(any(), any(), any()) }
+    }
+
+    @Test
     fun `confirmed queries are recorded outside incognito mode`() {
         every { repository.saveSearchQuery(any()) } returns Unit
 
@@ -293,5 +307,7 @@ class SearchSuggestionViewModelTest {
         preferredTrackingSiteProvider = preferredSite,
         historyRepository = history,
         favouritesRepository = mockk(),
+        localMangaRepository = mockk(),
+        suggestionRepository = mockk(),
     ).also { store.put("suggestions", it) }
 }

@@ -772,6 +772,7 @@ internal fun FeedTopLevelRouteContent(
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
 ) {
     val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.tracker.ui.feed.FeedViewModel>("feed")
+    val feedLibraryQuery by viewModel.libraryQuery.collectAsStateWithLifecycle()
     val leadingItems by viewModel.leadingContent.collectAsStateWithLifecycle()
     // The feed renders statically from the snapshot-derived content (Phase F4).
     val fallbackItems by viewModel.content.collectAsStateWithLifecycle()
@@ -967,6 +968,17 @@ internal fun FeedTopLevelRouteContent(
             selectedItemIds = selectedFeedItemIds,
             showCategoryFilterInline = true,
             host = viewModel,
+            header = if (feedLibraryQuery.isNotEmpty()) {
+                {
+                    org.skepsun.kototoro.search.ui.compose.LibrarySearchBanner(
+                        query = feedLibraryQuery,
+                        onClear = viewModel::clearLibraryQuery,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                }
+            } else {
+                null
+            },
         )
     }
 }
@@ -981,6 +993,7 @@ internal fun LocalTopLevelRouteContent(
     navigateToDetailsWithContent: (Content, String?) -> Unit,
 ) {
     val viewModel = hiltViewModel<org.skepsun.kototoro.local.ui.LocalListViewModel>()
+    val localLibraryQuery by viewModel.libraryQuery.collectAsStateWithLifecycle()
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
     var pendingRemoveSelection by remember { mutableStateOf<Set<Long>?>(null) }
 
@@ -1078,9 +1091,18 @@ internal fun LocalTopLevelRouteContent(
             },
             onEmptyActionClick = { appRouter.showImportDialog() },
             listHeader = {
-                org.skepsun.kototoro.local.ui.compose.LocalDownloadsCardRoute(
-                    onOpenDownloads = appRouter::openDownloads,
-                )
+                Column {
+                    if (localLibraryQuery.isNotEmpty()) {
+                        org.skepsun.kototoro.search.ui.compose.LibrarySearchBanner(
+                            query = localLibraryQuery,
+                            onClear = viewModel::clearLibraryQuery,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        )
+                    }
+                    org.skepsun.kototoro.local.ui.compose.LocalDownloadsCardRoute(
+                        onOpenDownloads = appRouter::openDownloads,
+                    )
+                }
             },
         )
 
@@ -1122,6 +1144,7 @@ internal fun SuggestionsTopLevelRouteContent(
     navigateToDetailsWithContent: (Content, String?) -> Unit,
 ) {
     val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.suggestions.ui.SuggestionsViewModel>("suggestions")
+    val suggestionsLibraryQuery by viewModel.libraryQuery.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var suggestionsContextualTopBarOverride by remember { mutableStateOf<TopBarOverrideState?>(null) }
     var suggestionsFilterRailOverride by remember { mutableStateOf<CompactFilterRailOverrideState?>(null) }
@@ -1150,16 +1173,25 @@ internal fun SuggestionsTopLevelRouteContent(
             contentPadding = contentPadding,
             appRouter = appRouter,
             listHeader = {
-                org.skepsun.kototoro.suggestions.ui.compose.SuggestionsHeaderCard(
-                    onRefresh = {
-                        viewModel.updateSuggestions()
-                        android.widget.Toast.makeText(
-                            context,
-                            org.skepsun.kototoro.R.string.suggestions_updating,
-                            android.widget.Toast.LENGTH_SHORT,
-                        ).show()
-                    },
-                )
+                Column {
+                    if (suggestionsLibraryQuery.isNotEmpty()) {
+                        org.skepsun.kototoro.search.ui.compose.LibrarySearchBanner(
+                            query = suggestionsLibraryQuery,
+                            onClear = viewModel::clearLibraryQuery,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        )
+                    }
+                    org.skepsun.kototoro.suggestions.ui.compose.SuggestionsHeaderCard(
+                        onRefresh = {
+                            viewModel.updateSuggestions()
+                            android.widget.Toast.makeText(
+                                context,
+                                org.skepsun.kototoro.R.string.suggestions_updating,
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        },
+                    )
+                }
             },
             onTopBarOverrideChanged = { suggestionsContextualTopBarOverride = it },
             showRemoveOption = false,
@@ -1279,6 +1311,7 @@ internal fun UpdatedTopLevelRouteContent(
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
 ) {
     val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.tracker.ui.updates.UpdatesViewModel>("updated")
+    val updatesLibraryQuery by viewModel.libraryQuery.collectAsStateWithLifecycle()
     val headerQuickFilter by viewModel.headerQuickFilter.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // The updates page renders statically from the snapshot-derived content
@@ -1371,16 +1404,25 @@ internal fun UpdatedTopLevelRouteContent(
             contentPadding = contentPadding,
             appRouter = appRouter,
             listHeader = {
-                org.skepsun.kototoro.tracker.ui.updates.compose.UpdatesHeaderCard(
-                    totalWorks = totalWorks,
-                    totalNewChapters = totalNewChapters,
-                    onMarkAllRead = {
-                        viewModel.remove(derivedGroups.mapTo(linkedSetOf()) { it.uiId })
-                    },
-                    onRefresh = {
-                        viewModel.onRefresh()
-                    },
-                )
+                Column {
+                    if (updatesLibraryQuery.isNotEmpty()) {
+                        org.skepsun.kototoro.search.ui.compose.LibrarySearchBanner(
+                            query = updatesLibraryQuery,
+                            onClear = viewModel::clearLibraryQuery,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        )
+                    }
+                    org.skepsun.kototoro.tracker.ui.updates.compose.UpdatesHeaderCard(
+                        totalWorks = totalWorks,
+                        totalNewChapters = totalNewChapters,
+                        onMarkAllRead = {
+                            viewModel.remove(derivedGroups.mapTo(linkedSetOf()) { it.uiId })
+                        },
+                        onRefresh = {
+                            viewModel.onRefresh()
+                        },
+                    )
+                }
             },
             showRemoveOption = true,
             showScrollbar = true,

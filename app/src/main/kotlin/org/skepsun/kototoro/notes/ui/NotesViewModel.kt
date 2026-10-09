@@ -1,5 +1,8 @@
 package org.skepsun.kototoro.notes.ui
 
+import org.skepsun.kototoro.list.domain.LibraryTextQuery
+import org.skepsun.kototoro.search.domain.LibrarySearchScope
+import org.skepsun.kototoro.search.domain.LibrarySearchQueries
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -48,7 +51,7 @@ data class NotesUiState(
         get() = if (searchQuery.isBlank()) {
             summaries
         } else {
-            summaries.filter { it.title.contains(searchQuery, ignoreCase = true) }
+            LibraryTextQuery(searchQuery).let { query -> summaries.filter { query.matches(sequenceOf(it.title)) } }
         }
 
     val filteredBookNotes: List<BookNoteItem>
@@ -102,6 +105,7 @@ class NotesViewModel @Inject constructor(
     private val database: MangaDatabase,
     private val spaceContentPolicy: SpaceContentPolicy,
     private val settings: AppSettings,
+    private val librarySearchQueries: LibrarySearchQueries,
     spaceBrowseScope: SpaceBrowseScope,
 ) : ViewModel(), SpaceBindableViewModel {
 
@@ -109,7 +113,19 @@ class NotesViewModel @Inject constructor(
 
     override fun bindSpace(spaceId: SpaceId?) = spaceBinding.bindSpace(spaceId)
 
-    private val searchQuery = MutableStateFlow("")
+    private val searchQuery = MutableStateFlow(librarySearchQueries.query(LibrarySearchScope.BOOKMARKS).value)
+
+    init {
+        // The overlay's "Bookmarks" tab drives the same book search as the inline field.
+        viewModelScope.launch {
+            librarySearchQueries.query(LibrarySearchScope.BOOKMARKS).collect { query ->
+                if (query != searchQuery.value.trim()) {
+                    searchQuery.value = query
+                }
+            }
+        }
+    }
+
     private val selectedMangaId = MutableStateFlow<Long?>(null)
     private val selectedFilter = MutableStateFlow(NoteType.ALL)
     private val bookSearchQuery = MutableStateFlow("")
@@ -196,6 +212,7 @@ class NotesViewModel @Inject constructor(
 
     fun setSearchQuery(query: String) {
         searchQuery.value = query
+        librarySearchQueries.set(LibrarySearchScope.BOOKMARKS, query)
     }
 
     fun selectBook(mangaId: Long) {

@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.local.ui
 
+import org.skepsun.kototoro.search.domain.LibrarySearchScope
+import org.skepsun.kototoro.search.domain.LibrarySearchQueries
 import android.content.SharedPreferences
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
@@ -65,6 +67,7 @@ class LocalListViewModel @Inject constructor(
     detailsLoadUseCase: DetailsLoadUseCase,
     private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
     private val localContentIndex: LocalContentIndex,
+    private val librarySearchQueries: LibrarySearchQueries,
 ) : RemoteListViewModel(
     savedStateHandle = savedStateHandle,
     mangaRepositoryFactory = mangaRepositoryFactory,
@@ -84,7 +87,23 @@ class LocalListViewModel @Inject constructor(
 
     override val currentGroupTab: StateFlow<BrowseGroupTab> = globalFavoritesState.selectedGroupTab
 
+    /** Text typed in the overlay's "Local" tab; applied as the local repository's own query. */
+    val libraryQuery: StateFlow<String> = librarySearchQueries.query(LibrarySearchScope.LOCAL)
+
+    fun clearLibraryQuery() = librarySearchQueries.clear(LibrarySearchScope.LOCAL)
+
     init {
+        launchJob(Dispatchers.Default) {
+            // Only touch the filter query once the page tab has set one, so a query that came
+            // from elsewhere is not wiped by the initial empty value.
+            var applied: String? = null
+            libraryQuery.collect { query ->
+                if (query.isNotEmpty() || applied != null) {
+                    filterCoordinator.setQuery(query.ifEmpty { null })
+                    applied = query.ifEmpty { null }
+                }
+            }
+        }
         launchJob(Dispatchers.Default) {
             localContentIndex.observeChanges()
                 .collect {
@@ -134,7 +153,10 @@ class LocalListViewModel @Inject constructor(
         }
     }
 
-    override fun clearFilter() = filterCoordinator.reset()
+    override fun clearFilter() {
+        clearLibraryQuery()
+        filterCoordinator.reset()
+    }
 
     /**
      * 将 BrowseGroupTab（内容类型胶囊）映射到 filterCoordinator 的 ContentType 过滤。

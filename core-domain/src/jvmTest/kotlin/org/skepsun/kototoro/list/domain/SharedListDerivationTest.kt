@@ -116,6 +116,30 @@ class SharedListDerivationTest {
     }
 
     @Test
+    fun `updates and feed page search match text before limiting`() {
+        val updates = UpdatesDeriver.derive(UpdatesDeriver.Input(
+            snapshot = UpdatesSnapshot(listOf(
+                updateGroup(1),
+                updateGroup(2, tags = listOf(UpdateCardTag(7, "Isekai"))),
+            )),
+            query = "isekai",
+        ))
+        val feed = FeedDeriver.derive(FeedDeriver.Input(
+            snapshot = FeedSnapshot(listOf(
+                feedRow(1, title = "Frieren", createdAt = 100),
+                feedRow(2, title = "Blue Period", createdAt = 900),
+            ), emptyMap()),
+            query = "frieren",
+            feedLimit = 1,
+        ))
+
+        assertEquals(listOf(2L), updates.visibleGroups.map { it.uiId })
+        assertTrue(updates.hasActiveFilters)
+        assertEquals(listOf(1L), feed.visibleRows.map { it.logId })
+        assertTrue(feed.hasActiveFilters)
+    }
+
+    @Test
     fun `feed joins category lookup keys before sorting and limiting`() {
         val result = FeedDeriver.derive(FeedDeriver.Input(
             snapshot = FeedSnapshot(listOf(

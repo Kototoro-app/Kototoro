@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -41,6 +42,10 @@ import org.skepsun.kototoro.parsers.util.mapToSet
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.search.domain.ContentSearchRepository
 import org.skepsun.kototoro.search.domain.LibrarySearchScope
+import org.skepsun.kototoro.search.domain.matchLibraryText
+import org.skepsun.kototoro.local.data.LocalMangaRepository
+import org.skepsun.kototoro.suggestions.domain.SuggestionRepository
+import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
@@ -81,6 +86,8 @@ class SearchSuggestionViewModel @Inject constructor(
     private val preferredTrackingSiteProvider: PreferredTrackingSiteProvider,
     private val historyRepository: HistoryRepository,
     private val favouritesRepository: FavouritesRepository,
+    private val localMangaRepository: LocalMangaRepository,
+    private val suggestionRepository: SuggestionRepository,
 ) : BaseViewModel() {
 
     private val query = MutableStateFlow("")
@@ -413,6 +420,15 @@ class SearchSuggestionViewModel @Inject constructor(
         when (scope) {
             LibrarySearchScope.HISTORY -> historyRepository.searchLibrary(searchQuery, MAX_LIBRARY_ITEMS)
             LibrarySearchScope.FAVOURITES -> favouritesRepository.searchLibrary(searchQuery, MAX_LIBRARY_ITEMS)
+            // The local page filters through the repository's own query, so preview the same way.
+            LibrarySearchScope.LOCAL -> if (searchQuery.isEmpty()) emptyList() else {
+                localMangaRepository.getAll(filter = ContentListFilter(query = searchQuery)).take(MAX_LIBRARY_ITEMS)
+            }
+            LibrarySearchScope.SUGGESTIONS ->
+                suggestionRepository.observeAll().first().matchLibraryText(searchQuery, MAX_LIBRARY_ITEMS)
+            LibrarySearchScope.UPDATES,
+            LibrarySearchScope.FEED,
+            LibrarySearchScope.BOOKMARKS -> emptyList()
         }.map { SearchSuggestionItem.LibraryMatch(scope, it) }
     }.getOrElse { e ->
         e.printStackTraceDebug()

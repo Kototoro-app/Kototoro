@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.tracker.domain.feed
 
+import org.skepsun.kototoro.list.domain.LibraryTextQuery
 import org.skepsun.kototoro.core.jsonsource.ContentGroup
 import org.skepsun.kototoro.core.jsonsource.OriginGroup
 import org.skepsun.kototoro.core.model.TagBlacklist
@@ -36,6 +37,8 @@ object FeedDeriver {
         val groupTab: BrowseGroupTab = BrowseGroupTab.All,
         val sourceTags: Set<SourceTag> = emptySet(),
         val presetSourceNames: Set<String>? = null,
+        /** Free text typed in the page-scoped search (see [LibraryTextQuery]). */
+        val query: String = "",
         /** selected favourite category id, `null` = all. */
         val selectedCategoryId: Long? = null,
         /**
@@ -58,8 +61,9 @@ object FeedDeriver {
         } else {
             input.snapshot.rows
         }
+        val textQuery = LibraryTextQuery(input.query)
         val visible = rows.asSequence()
-            .filter { row -> row.isVisible(input) }
+            .filter { row -> row.isVisible(input) && row.matchesText(textQuery) }
             .sortedWith(FEED_ORDER)
             .take(input.feedLimit.coerceAtLeast(0))
             .toList()
@@ -70,9 +74,15 @@ object FeedDeriver {
                 input.groupTab != BrowseGroupTab.All ||
                 input.sourceTags.isNotEmpty() ||
                 input.presetSourceNames != null ||
-                input.excludedNsfw,
+                input.excludedNsfw ||
+                !textQuery.isEmpty,
         )
     }
+
+    private fun FeedCardRow.matchesText(query: LibraryTextQuery): Boolean =
+        query.isEmpty || query.matches(
+            sequenceOf(overrideTitle, title, altTitle, author) + tagTitles.asSequence() + chapters.asSequence(),
+        )
 
     /**
      * The `showAllUpdates` source: pending-update tracks merged with (and

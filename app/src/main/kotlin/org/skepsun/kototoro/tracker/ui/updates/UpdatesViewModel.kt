@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.tracker.ui.updates
 
+import org.skepsun.kototoro.search.domain.LibrarySearchScope
+import org.skepsun.kototoro.search.domain.LibrarySearchQueries
 import android.content.Context
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -66,6 +68,7 @@ class UpdatesViewModel @Inject constructor(
     private val updatesCardMapper: org.skepsun.kototoro.tracker.domain.updates.UpdatesCardMapper,
     @LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
     private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
+    private val librarySearchQueries: LibrarySearchQueries,
     spaceBrowseScope: SpaceBrowseScope,
 ) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener by quickFilter,
     SpaceBindableViewModel {
@@ -111,6 +114,11 @@ class UpdatesViewModel @Inject constructor(
      * removal/entity-navigation index, so the whole list is re-derived (never
      * re-queried) whenever a filter, the group tab or a tag changes.
      */
+    /** Text typed in the overlay's "Updated" tab; narrows the derived groups in memory. */
+    val libraryQuery: StateFlow<String> = librarySearchQueries.query(LibrarySearchScope.UPDATES)
+
+    fun clearLibraryQuery() = librarySearchQueries.clear(LibrarySearchScope.UPDATES)
+
     val derivedGroups: StateFlow<List<org.skepsun.kototoro.tracker.domain.updates.UpdateGroupRow>> = combine(
         updatesSnapshot,
         quickFilter.appliedOptions,
@@ -120,6 +128,7 @@ class UpdatesViewModel @Inject constructor(
         settings.observeAsFlow(AppSettings.KEY_GLOBAL_TAG_BLACKLIST) {
             GlobalTagBlacklist(settings.globalTagBlacklist)
         },
+        libraryQuery,
     ) { values: Array<Any?> ->
         org.skepsun.kototoro.tracker.domain.updates.UpdatesDeriver.derive(
             org.skepsun.kototoro.tracker.domain.updates.UpdatesDeriver.Input(
@@ -129,6 +138,7 @@ class UpdatesViewModel @Inject constructor(
                 sourceTags = values[3] as Set<SourceTag>,
                 excludedNsfw = values[4] as Boolean,
                 tagBlacklist = values[5] as GlobalTagBlacklist,
+                query = values[6] as String,
             ),
         )
     }.mapLatest { derived ->

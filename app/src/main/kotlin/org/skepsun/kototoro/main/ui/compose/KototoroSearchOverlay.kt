@@ -1037,7 +1037,11 @@ private fun SuggestionList(
                     onRetry = onRetrySuggestions,
                 )
             }
-        } else if (!state.isLoading && !state.isRemoteLoading && sections.isEmpty()) {
+        } else if (
+            !state.isLoading && !state.isRemoteLoading && sections.isEmpty() &&
+            // Pages without previews already show the filter action for typed text.
+            !(state.libraryScope?.previewsMatches == false && state.query.isNotBlank())
+        ) {
             item(key = "empty_suggestions") {
                 SearchFeedbackCard(
                     message = when {

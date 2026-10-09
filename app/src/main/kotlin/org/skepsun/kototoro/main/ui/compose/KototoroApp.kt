@@ -357,6 +357,11 @@ private suspend fun restoreChromeAfterDetailsDelay(
 private fun TopLevelNavKey.librarySearchScope(): LibrarySearchScope? = when (this) {
     HistoryNavKey -> LibrarySearchScope.HISTORY
     FavoritesNavKey -> LibrarySearchScope.FAVOURITES
+    LocalNavKey -> LibrarySearchScope.LOCAL
+    SuggestionsNavKey -> LibrarySearchScope.SUGGESTIONS
+    UpdatedNavKey -> LibrarySearchScope.UPDATES
+    FeedNavKey -> LibrarySearchScope.FEED
+    BookmarksNavKey -> LibrarySearchScope.BOOKMARKS
     else -> null
 }
 

@@ -1,5 +1,8 @@
 package org.skepsun.kototoro.suggestions.ui
 
+import org.skepsun.kototoro.search.domain.LibrarySearchQueries
+import org.skepsun.kototoro.search.domain.LibrarySearchScope
+import org.skepsun.kototoro.search.domain.matchLibraryText
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +67,7 @@ class SuggestionsViewModel @Inject constructor(
     private val dataRepository: ContentDataRepository,
     @LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
     private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
+    private val librarySearchQueries: LibrarySearchQueries,
     spaceBrowseScope: SpaceBrowseScope,
 ) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener by quickFilter,
     SpaceBindableViewModel {
@@ -101,6 +105,11 @@ class SuggestionsViewModel @Inject constructor(
 
     private val loadParams = quickFilter.appliedOptions.combineWithSettings()
 
+    /** Text typed in the overlay's "Suggestions" tab; narrows the loaded suggestions in memory. */
+    val libraryQuery: StateFlow<String> = librarySearchQueries.query(LibrarySearchScope.SUGGESTIONS)
+
+    fun clearLibraryQuery() = librarySearchQueries.clear(LibrarySearchScope.SUGGESTIONS)
+
     override val content = combine(
         loadParams.flatMapLatest { filterOptions ->
             repository.observeAll(200, filterOptions)
@@ -115,8 +124,10 @@ class SuggestionsViewModel @Inject constructor(
                 if (id == -1L) kotlinx.coroutines.flow.flowOf(null)
                 else sourcePresetsRepository.observe(id)
             },
+        libraryQuery,
     ) { values: Array<Any?> ->
         val list = values[0] as List<Content>
+        val libraryQuery = values[7] as String
         val filters = values[1] as Set<ListFilterOption>
         val mode = values[2] as ListMode
         val groupTab = values[3] as BrowseGroupTab
@@ -143,12 +154,13 @@ class SuggestionsViewModel @Inject constructor(
         val hideAdult = settings.isSuggestionsExcludeNsfw
         val adultFilteredList = if (hideAdult) filteredList.filterNot { it.isNsfw() } else filteredList
         val visibleList = GlobalTagBlacklist(settings.globalTagBlacklist).filter(adultFilteredList)
+            .let { if (libraryQuery.isEmpty()) it else it.matchLibraryText(libraryQuery, Int.MAX_VALUE) }
 
         val resultList = ArrayList<ListModel>()
 
         if (visibleList.isEmpty()) {
             groupedSuggestionIds = emptyMap()
-            if (filters.isEmpty() && groupTab == BrowseGroupTab.All && sourceTags.isEmpty()) {
+            if (filters.isEmpty() && groupTab == BrowseGroupTab.All && sourceTags.isEmpty() && libraryQuery.isEmpty()) {
                 resultList.add(
                     EmptyState(
                         icon = R.drawable.ic_empty_common,

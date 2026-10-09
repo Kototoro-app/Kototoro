@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.tracker.domain.updates
 
+import org.skepsun.kototoro.list.domain.LibraryTextQuery
 import org.skepsun.kototoro.core.jsonsource.ContentGroup
 import org.skepsun.kototoro.core.jsonsource.OriginGroup
 import org.skepsun.kototoro.core.model.TagBlacklist
@@ -30,6 +31,8 @@ object UpdatesDeriver {
         val tagBlacklist: TagBlacklist = TagBlacklist.Empty,
         val groupTab: BrowseGroupTab = BrowseGroupTab.All,
         val sourceTags: Set<SourceTag> = emptySet(),
+        /** Free text typed in the page-scoped search (see [LibraryTextQuery]). */
+        val query: String = "",
     )
 
     data class Derived(
@@ -38,8 +41,9 @@ object UpdatesDeriver {
     )
 
     fun derive(input: Input): Derived {
+        val textQuery = LibraryTextQuery(input.query)
         val visible = input.snapshot.groups.asSequence()
-            .filter { group -> group.isVisible(input) }
+            .filter { group -> group.isVisible(input) && group.matchesText(textQuery) }
             .sortedWith(UPDATES_ORDER)
             .toList()
         return Derived(
@@ -47,9 +51,15 @@ object UpdatesDeriver {
             hasActiveFilters = input.filters.isNotEmpty() ||
                 input.groupTab != BrowseGroupTab.All ||
                 input.sourceTags.isNotEmpty() ||
-                input.excludedNsfw,
+                input.excludedNsfw ||
+                !textQuery.isEmpty,
         )
     }
+
+    private fun UpdateGroupRow.matchesText(query: LibraryTextQuery): Boolean =
+        query.isEmpty || query.matches(
+            sequenceOf(overrideTitle, title, altTitle, author) + tags.asSequence().map { it.title },
+        )
 
     private fun UpdateGroupRow.isVisible(input: Input): Boolean {
         if (input.groupTab != BrowseGroupTab.All && !matchesGroupTab(input.groupTab)) {

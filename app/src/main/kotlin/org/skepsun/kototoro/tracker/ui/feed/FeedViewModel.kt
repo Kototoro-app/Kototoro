@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.tracker.ui.feed
 
+import org.skepsun.kototoro.search.domain.LibrarySearchScope
+import org.skepsun.kototoro.search.domain.LibrarySearchQueries
 import android.content.Context
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -121,6 +123,7 @@ class FeedViewModel @Inject constructor(
     private val feedSnapshotStore: org.skepsun.kototoro.tracker.domain.feed.FeedSnapshotStore,
     private val feedCardMapper: org.skepsun.kototoro.tracker.domain.feed.FeedCardMapper,
     private val updatesSnapshotStore: org.skepsun.kototoro.tracker.domain.updates.UpdatesSnapshotStore,
+    private val librarySearchQueries: LibrarySearchQueries,
     spaceBrowseScope: SpaceBrowseScope,
 ) : BaseViewModel(), QuickFilterListener by quickFilter, SpaceBindableViewModel,
     RetainedPagingSnapshotHost {
@@ -315,6 +318,11 @@ class FeedViewModel @Inject constructor(
      * replaced by this single re-derivation; changing the limit, showAll, scope or
      * filters never re-queries the database.
      */
+    /** Text typed in the overlay's "Feed" tab; narrows the derived rows in memory. */
+    val libraryQuery: StateFlow<String> = librarySearchQueries.query(LibrarySearchScope.FEED)
+
+    fun clearLibraryQuery() = librarySearchQueries.clear(LibrarySearchScope.FEED)
+
     val content: StateFlow<List<ListModel>> = combine(
         feedSnapshotStore.observe(),
         showAllUpdates,
@@ -324,6 +332,7 @@ class FeedViewModel @Inject constructor(
         excludedNsfw,
         tagBlacklistFlow,
         mangaListMapper.observeDisplayChanges().onStart { emit(Unit) },
+        libraryQuery,
     ) { values: Array<Any?> ->
         buildFeedContent(
             snapshot = values[0] as org.skepsun.kototoro.tracker.domain.feed.FeedSnapshot,
@@ -333,6 +342,7 @@ class FeedViewModel @Inject constructor(
             scope = values[4] as FeedScopeParams,
             skipNsfw = values[5] as Boolean,
             tagBlacklist = values[6] as GlobalTagBlacklist,
+            query = values[8] as String,
         )
     }.stateIn(
         viewModelScope + Dispatchers.Default,
@@ -365,6 +375,7 @@ class FeedViewModel @Inject constructor(
         scope: FeedScopeParams,
         skipNsfw: Boolean,
         tagBlacklist: GlobalTagBlacklist,
+        query: String,
     ): List<ListModel> {
         val derived = org.skepsun.kototoro.tracker.domain.feed.FeedDeriver.derive(
             org.skepsun.kototoro.tracker.domain.feed.FeedDeriver.Input(
@@ -379,6 +390,7 @@ class FeedViewModel @Inject constructor(
                 presetSourceNames = scope.preset?.sources,
                 selectedCategoryId = scope.categoryId.takeIf { it != NO_ID },
                 mangaCategoryIdsByFeedKey = scope.mangaCategoryIds,
+                query = query,
             ),
         )
         val feedItems = feedCardMapper.map(
@@ -387,6 +399,16 @@ class FeedViewModel @Inject constructor(
                 brokenTitle = appContext.getString(R.string.untitled_content),
             ),
         )
+        if (feedItems.isEmpty() && query.isNotEmpty()) {
+            return listOf(
+                EmptyState(
+                    icon = R.drawable.ic_empty_feed,
+                    textPrimary = R.string.nothing_found,
+                    textSecondary = R.string.text_empty_holder_secondary_filtered,
+                    actionStringRes = 0,
+                ),
+            )
+        }
         if (feedItems.isEmpty()) {
             return listOf(
                 EmptyState(

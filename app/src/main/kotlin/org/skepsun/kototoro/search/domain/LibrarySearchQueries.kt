@@ -11,10 +11,20 @@ import java.util.EnumMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** A library page the search overlay can narrow to instead of searching every source. */
-enum class LibrarySearchScope(@StringRes val titleResId: Int) {
+/**
+ * A library page the search overlay can narrow to instead of searching every source.
+ *
+ * @param previewsMatches whether the overlay can list the page's matching works while typing; pages
+ * whose rows are not plain works (update groups, feed logs, notes) only offer the filter action.
+ */
+enum class LibrarySearchScope(@StringRes val titleResId: Int, val previewsMatches: Boolean = true) {
     HISTORY(R.string.history),
     FAVOURITES(R.string.favourites),
+    LOCAL(R.string.local_storage),
+    SUGGESTIONS(R.string.suggestions),
+    UPDATES(R.string.updated, previewsMatches = false),
+    FEED(R.string.feed, previewsMatches = false),
+    BOOKMARKS(R.string.bookmarks, previewsMatches = false),
 }
 
 /**
