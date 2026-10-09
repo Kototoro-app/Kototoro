@@ -46,8 +46,9 @@ class AppSettingsBackupRestoreCompatTest {
 
 	@Test
 	fun `feed limit restored as long is read and normalized as int`() {
+		// A backup restored the value as a long, so getInt rejects it; getSafeInt then recovers the raw value.
 		every { preferences.getInt(AppSettings.KEY_FEED_LIMIT, 200) } throws ClassCastException()
-		every { preferences.getLong(AppSettings.KEY_FEED_LIMIT, 200L) } returns 75L
+		every { preferences.all } returns mutableMapOf<String, Any?>(AppSettings.KEY_FEED_LIMIT to 75L)
 
 		AppSettings(context).feedLimit shouldBe 75
 
