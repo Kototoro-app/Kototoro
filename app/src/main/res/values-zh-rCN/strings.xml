@@ -3837,4 +3837,17 @@ SHA-256 指纹:
     <string name="migration_clear_visible">清除结果</string>
     <string name="migration_visible_count">显示 %1$d / %2$d 个来源</string>
     <string name="migration_sources_fast_scroll">快速滚动来源</string>
+    <string name="search_sources_progress">已搜索来源：%1$d/%2$d</string>
+    <string name="search_sources_failed">失败来源：%1$d</string>
+    <string name="search_retry_failed_sources">重试失败来源</string>
+    <string name="search_local_suggestions">本地内容</string>
+    <string name="search_loading_suggestions">正在加载搜索建议…</string>
+    <string name="search_loading_remote_suggestions">正在查找作品、人物和角色…</string>
+    <string name="search_remote_suggestions_failed">在线建议暂时无法加载，仍可确认搜索内容源。</string>
+    <string name="search_no_suggestions">暂无建议，确认搜索可查询内容源。</string>
+    <string name="search_results_scope">内容源、收藏与历史</string>
+    <string name="search_refreshing_results">正在更新结果…</string>
+    <string name="search_loaded_results">已加载 %1$d 项结果</string>
+    <string name="search_displayed_results">展示 %1$d 项</string>
+    <string name="search_source_type_count">%1$d 种来源类型</string>
 </resources>

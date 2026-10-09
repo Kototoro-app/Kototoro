@@ -35,10 +35,11 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.util.findById
-import org.skepsun.kototoro.parsers.util.levenshteinDistance
 import org.skepsun.kototoro.scrobbling.common.domain.Scrobbler
 import org.skepsun.kototoro.scrobbling.common.domain.tryScrobble
 import org.skepsun.kototoro.search.domain.SearchKind
+import org.skepsun.kototoro.search.domain.AdvancedSearchParams
+import org.skepsun.kototoro.search.domain.LocalContentSearchQuery
 import org.skepsun.kototoro.space.domain.SpaceContentPolicy
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.tracker.domain.CheckNewChaptersUseCase
@@ -71,30 +72,15 @@ class HistoryRepository @Inject constructor(
         return findRecentContents(offset, limit)
     }
 
-    suspend fun search(query: String, kind: SearchKind, limit: Int): List<Content> {
-        if (limit <= 0) {
-            return emptyList()
-        }
-        val normalizedQuery = query.trim()
-        if (normalizedQuery.isEmpty()) {
-            return emptyList()
-        }
-        val comparator = compareBy<Content> { it.title.levenshteinDistance(normalizedQuery) }
-            .thenBy { it.title }
-        return getAllRecentContents()
-            .asSequence()
-            .filter { content -> content.matchesHistorySearch(normalizedQuery, kind) }
-            .let { sequence ->
-                when (kind) {
-                    SearchKind.SIMPLE,
-                    SearchKind.TITLE,
-                    SearchKind.ADVANCED -> sequence.sortedWith(comparator)
-                    SearchKind.AUTHOR,
-                    SearchKind.TAG -> sequence
-                }
-            }
-            .take(limit)
-            .toList()
+    suspend fun search(
+        query: String,
+        kind: SearchKind,
+        limit: Int,
+        advanced: AdvancedSearchParams? = null,
+    ): List<Content> {
+        val searchQuery = LocalContentSearchQuery(query, kind, advanced)
+        if (limit <= 0 || !searchQuery.hasCriteria) return emptyList()
+        return searchQuery.search(getAllRecentContents(), limit)
     }
 
     suspend fun getLastOrNull(
@@ -489,22 +475,6 @@ class HistoryRepository @Inject constructor(
     )
 
     private fun HistoryWithContent.toContent() = manga.toContent(tags.toContentTags(), null)
-
-    private fun Content.matchesHistorySearch(query: String, kind: SearchKind): Boolean {
-        val normalizedQuery = query.lowercase()
-        fun String?.containsQuery() = this?.lowercase()?.contains(normalizedQuery) == true
-        fun Iterable<String>.anyContainsQuery() = any { it.lowercase().contains(normalizedQuery) }
-        return when (kind) {
-            SearchKind.SIMPLE,
-            SearchKind.TITLE,
-            SearchKind.ADVANCED -> {
-                title.containsQuery() ||
-                    altTitles.anyContainsQuery()
-            }
-            SearchKind.AUTHOR -> authors.anyContainsQuery()
-            SearchKind.TAG -> tags.any { it.title.containsQuery() }
-        }
-    }
 
     private suspend fun emitRead(mangaId: Long, percent: Float) {
         val content = db.getMangaDao().find(mangaId)?.toContent() ?: return

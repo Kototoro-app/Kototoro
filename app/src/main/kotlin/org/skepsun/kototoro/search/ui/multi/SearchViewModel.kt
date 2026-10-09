@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.search.ui.multi
 
 import android.util.Log
-import androidx.collection.ArraySet
 import androidx.collection.LongSet
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -10,22 +9,19 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.dropWhile
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.jsonsource.SourceTypeIdentifier
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.UnknownContentSource
@@ -34,9 +30,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsStateFlow
 import org.skepsun.kototoro.core.ui.BaseViewModel
-import org.skepsun.kototoro.core.util.ext.append
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
-import org.skepsun.kototoro.core.util.ext.toLocale
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository
@@ -44,20 +38,15 @@ import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.favourites.domain.GlobalFavoritesState
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.list.domain.ContentListMapper
-import org.skepsun.kototoro.list.ui.model.ButtonFooter
-import org.skepsun.kototoro.list.ui.model.EmptyState
 import org.skepsun.kototoro.list.ui.model.ListModel
-import org.skepsun.kototoro.list.ui.model.LoadingFooter
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
-import org.skepsun.kototoro.parsers.util.levenshteinDistance
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS
-import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
 import org.skepsun.kototoro.search.domain.AdvancedSearchParams
-import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.SearchKind
+import org.skepsun.kototoro.search.domain.SearchFilters
 import org.skepsun.kototoro.search.domain.SearchV2Helper
 import org.skepsun.kototoro.search.domain.matches
 import org.skepsun.kototoro.search.domain.searchContentKindsFromNames
@@ -117,17 +106,17 @@ class SearchViewModel @AssistedInject constructor(
         )
     } else null
 
-    private var includeDisabledSources = MutableStateFlow(false)
-    private var pinnedOnly = MutableStateFlow(initialPinnedOnly)
-    private var hideEmpty = MutableStateFlow(initialHideEmpty)
-    private var sourceTypes = MutableStateFlow(
-        sourceTypesFromNames(sourceTypeNames)
-            ?: sourceTypesFromTags(globalFavoritesState.selectedSourceTags.value),
+    private val _filters = MutableStateFlow(
+        SearchFilters(
+            sourceTypes = sourceTypesFromNames(sourceTypeNames)
+                ?: sourceTypesFromTags(globalFavoritesState.selectedSourceTags.value),
+            contentKinds = searchContentKindsFromNames(contentKindNames) ?: ALL_SEARCH_CONTENT_KINDS,
+            pinnedOnly = initialPinnedOnly,
+            hideEmpty = initialHideEmpty,
+            languagePresetId = appSettings.activeSourcePresetId,
+        ).normalized(),
     )
-    private var contentKinds = MutableStateFlow(
-        searchContentKindsFromNames(contentKindNames)
-            ?: ALL_SEARCH_CONTENT_KINDS,
-    )
+    val filters = _filters.asStateFlow()
     val languagePresets: StateFlow<List<SourcePreset>> = sourcePresetsRepository.observeAll()
         .stateIn(viewModelScope + Dispatchers.IO, SharingStarted.Eagerly, emptyList())
     val activeLanguagePresetId: StateFlow<Long> = appSettings.observeAsStateFlow(
@@ -140,38 +129,18 @@ class SearchViewModel @AssistedInject constructor(
         key = AppSettings.KEY_GLOBAL_TAG_BLACKLIST,
         valueProducer = { appSettings.globalTagBlacklist },
     )
-    private val results = MutableStateFlow<List<SearchResultsListModel>>(emptyList())
+    private val _searchState = MutableStateFlow(SearchResultsState())
+    val searchState = _searchState.asStateFlow()
 
     private var searchJob: Job? = null
+    @Volatile
+    private var searchGeneration = 0L
 
     val list: StateFlow<List<ListModel>> = combine(
-        results,
-        isLoading.dropWhile { !it },
-        includeDisabledSources,
-        hideEmpty,
-    ) { list, loading, includeDisabled, hideEmptyVal ->
-        val filteredList = if (hideEmptyVal) {
-            list.filter { it.list.isNotEmpty() }
-        } else {
-            list
-        }
-        when {
-            filteredList.isEmpty() -> listOf(
-                when {
-                    loading -> LoadingState
-                    else -> EmptyState(
-                        icon = R.drawable.ic_empty_common,
-                        textPrimary = R.string.nothing_found,
-                        textSecondary = R.string.text_search_holder_secondary,
-                        actionStringRes = 0,
-                    )
-                },
-            )
-
-            loading -> filteredList + LoadingFooter()
-            includeDisabled -> filteredList
-            else -> filteredList + ButtonFooter(R.string.search_disabled_sources)
-        }
+        searchState,
+        filters,
+    ) { state, filters ->
+        state.asListModels(filters.hideEmpty)
     }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, listOf(LoadingState))
 
     init {
@@ -179,7 +148,7 @@ class SearchViewModel @AssistedInject constructor(
     }
 
     fun getItems(ids: LongSet): Set<Content> {
-        val snapshot = results.value
+        val snapshot = searchState.value.sections
         val result = LinkedHashSet<Content>(ids.size)
         snapshot.forEach { x ->
             for (item in x.list) {
@@ -192,7 +161,7 @@ class SearchViewModel @AssistedInject constructor(
     }
 
     fun getItems(ids: Set<Long>): Set<Content> {
-        val snapshot = results.value
+        val snapshot = searchState.value.sections
         val result = LinkedHashSet<Content>(ids.size)
         snapshot.forEach { x ->
             for (item in x.list) {
@@ -205,9 +174,6 @@ class SearchViewModel @AssistedInject constructor(
     }
 
     fun retry() {
-        searchJob?.cancel()
-        results.value = emptyList()
-        includeDisabledSources.value = false
         doSearch()
     }
 
@@ -224,113 +190,149 @@ class SearchViewModel @AssistedInject constructor(
         _favouriteMatches.value = null
     }
 
-    fun setPinnedOnly(value: Boolean) {
-        if (pinnedOnly.value != value) {
-            pinnedOnly.value = value
-            retry()
+    fun applyFilters(filters: SearchFilters) {
+        val normalized = filters.normalized()
+        val previous = _filters.value
+        val currentPresetId = appSettings.activeSourcePresetId.takeIf { it > 0L } ?: -1L
+        val scopeChanged = !previous.hasSameSearchScope(normalized) ||
+            currentPresetId != normalized.languagePresetId
+        _filters.value = normalized
+        if (currentPresetId != normalized.languagePresetId) {
+            appSettings.activeSourcePresetId = normalized.languagePresetId
         }
-    }
-
-    fun setHideEmpty(value: Boolean) {
-        hideEmpty.value = value
-    }
-
-    val isPinnedOnlySelected: Boolean
-        get() = pinnedOnly.value
-
-    val isHideEmptySelected: Boolean
-        get() = hideEmpty.value
-
-    fun isSourceTypeEnabled(type: SourceType): Boolean {
-        return type in sourceTypes.value
-    }
-
-    fun setSourceTypeEnabled(type: SourceType, enabled: Boolean) {
-        val updated = sourceTypes.value.toMutableSet().apply {
-            if (enabled) add(type) else remove(type)
-        }
-        setSourceTypes(updated)
-    }
-
-    fun setSourceTypes(types: Set<SourceType>) {
-        val resolved = if (types.isEmpty()) ALL_SOURCE_TYPES else types
-        if (resolved != sourceTypes.value) {
-            sourceTypes.value = resolved
-            retry()
-        }
-    }
-
-    fun getSourceTypes(): Set<SourceType> {
-        return sourceTypes.value
-    }
-
-    fun setContentKinds(kinds: Set<SearchContentKind>) {
-        val resolved = if (kinds.isEmpty()) ALL_SEARCH_CONTENT_KINDS else kinds
-        if (resolved != contentKinds.value) {
-            contentKinds.value = resolved
-            retry()
-        }
-    }
-
-    fun getContentKinds(): Set<SearchContentKind> {
-        return contentKinds.value
-    }
-
-    fun setActiveLanguagePreset(presetId: Long) {
-        if (appSettings.activeSourcePresetId != presetId) {
-            appSettings.activeSourcePresetId = presetId
-            retry()
-        }
+        if (scopeChanged) doSearch()
     }
 
     fun continueSearch() {
-        if (includeDisabledSources.value) {
-            return
-        }
+        if (searchState.value.isSearching || !searchState.value.canSearchDisabledSources) return
+        val filters = currentFilters()
+        val generation = ++searchGeneration
         val prevJob = searchJob
+        _searchState.update { it.copy(isSearching = true, canSearchDisabledSources = false) }
         searchJob = launchLoadingJob(Dispatchers.Default) {
-            includeDisabledSources.value = true
-            prevJob?.join()
-            val sources = if (pinnedOnly.value) {
-                emptyList()
-            } else {
-                sourcesRepository.getDisabledSources()
-                    .sortedByDescending { it.priority() }
+            try {
+                prevJob?.join()
+                val sources = resolveSources(filters, includeDisabled = true)
+                updateSearchState(generation) { it.copy(totalSources = it.totalSources + sources.size) }
+                searchSources(sources, generation)
+            } finally {
+                updateSearchState(generation) { it.finished() }
             }
-            val filteredSources = filterSourcesByType(filterSourcesByActivePreset(sources))
-            val semaphore = Semaphore(MAX_PARALLELISM)
-            filteredSources.map { source ->
-                launch {
-                    semaphore.withPermit {
-                        appendResult(searchSource(source))
-                    }
-                }
-            }.joinAll()
         }
     }
 
     private fun doSearch() {
+        val filters = currentFilters()
+        val generation = ++searchGeneration
         val prevJob = searchJob
+        prevJob?.cancel()
+        _searchState.update {
+            it.copy(
+                isSearching = true,
+                isRefreshing = true,
+                completedSources = 0,
+                totalSources = 0,
+                canSearchDisabledSources = !filters.pinnedOnly,
+                retryingSectionKeys = emptySet(),
+            )
+        }
         searchJob = launchLoadingJob(Dispatchers.Default) {
-            prevJob?.cancelAndJoin()
-            appendResult(searchHistory())
-            appendResult(searchFavorites())
-            appendResult(searchLocal())
-            val sources = if (pinnedOnly.value) {
-                sourcesRepository.getPinnedSources().toList()
-            } else {
-                sourcesRepository.getEnabledSources()
+            try {
+                prevJob?.join()
+                appendResult(searchHistory(filters), generation)
+                appendResult(searchFavorites(filters), generation)
+                appendResult(searchLocal(filters), generation)
+                val sources = resolveSources(filters, includeDisabled = false)
+                updateSearchState(generation) { it.copy(totalSources = sources.size) }
+                searchSources(sources, generation)
+            } finally {
+                updateSearchState(generation) { it.finished() }
             }
-            val filteredSources = filterSourcesByType(filterSourcesByActivePreset(sources))
+        }
+    }
+
+    fun retrySource(section: SearchResultsListModel) {
+        retrySections(listOf(section))
+    }
+
+    fun retryFailedSources() {
+        retrySections(searchState.value.sections.filter { it.error != null })
+    }
+
+    private fun retrySections(sections: List<SearchResultsListModel>) {
+        if (searchState.value.isSearching || sections.isEmpty()) return
+        val filters = currentFilters()
+        val generation = ++searchGeneration
+        val prevJob = searchJob
+        _searchState.update {
+            it.copy(
+                isSearching = true,
+                completedSources = 0,
+                totalSources = sections.size,
+                retryingSectionKeys = sections.mapTo(mutableSetOf()) { section -> section.sectionKey },
+            )
+        }
+        searchJob = launchLoadingJob(Dispatchers.Default) {
+            try {
+                prevJob?.join()
+                val semaphore = Semaphore(MAX_PARALLELISM)
+                sections.map { section ->
+                    launch {
+                        semaphore.withPermit {
+                            val result = when {
+                                section.titleResId == R.string.history -> searchHistory(filters)
+                                section.titleResId == R.string.favourites -> searchFavorites(filters)
+                                section.source == LocalMangaSource -> searchLocal(filters)
+                                else -> searchSource(section.source)
+                            }
+                            updateSearchState(generation) {
+                                it.withResult(result, section).copy(
+                                    completedSources = it.completedSources + 1,
+                                    retryingSectionKeys = it.retryingSectionKeys - section.sectionKey,
+                                )
+                            }
+                        }
+                    }
+                }.joinAll()
+            } finally {
+                updateSearchState(generation) { it.finished() }
+            }
+        }
+    }
+
+    private suspend fun searchSources(sources: List<ContentSource>, generation: Long) =
+        kotlinx.coroutines.coroutineScope {
             val semaphore = Semaphore(MAX_PARALLELISM)
-            filteredSources.map { source ->
+            sources.map { source ->
                 launch {
                     semaphore.withPermit {
-                        appendResult(searchSource(source))
+                        appendResult(searchSource(source), generation)
+                        updateSearchState(generation) { it.copy(completedSources = it.completedSources + 1) }
                     }
                 }
             }.joinAll()
         }
+
+    private fun currentFilters(): SearchFilters =
+        filters.value.copy(languagePresetId = appSettings.activeSourcePresetId).normalized()
+
+    private suspend fun resolveSources(filters: SearchFilters, includeDisabled: Boolean): List<ContentSource> {
+        val sources = when {
+            includeDisabled && filters.pinnedOnly -> emptyList()
+            includeDisabled -> sourcesRepository.getDisabledSources().sortedByDescending { it.priority() }
+            filters.pinnedOnly -> sourcesRepository.getPinnedSources().toList()
+            else -> sourcesRepository.getEnabledSources()
+        }
+        val preset = if (filters.languagePresetId > 0L) {
+            sourcePresetsRepository.getById(filters.languagePresetId)
+        } else {
+            null
+        }
+        return filterSourcesByType(sources, filters).filter { preset == null || it.name in preset.sources }
+    }
+
+    private inline fun updateSearchState(generation: Long, transform: (SearchResultsState) -> SearchResultsState) {
+        _searchState.update { if (generation == searchGeneration) transform(it) else it }
     }
 
     // impl
@@ -371,11 +373,11 @@ class SearchViewModel @AssistedInject constructor(
         },
     )
 
-    private suspend fun searchHistory(): SearchResultsListModel? = runCatchingCancellable {
-        historyRepository.search(query, kind, Int.MAX_VALUE)
+    private suspend fun searchHistory(filters: SearchFilters): SearchResultsListModel? = runCatchingCancellable {
+        historyRepository.search(query, kind, Int.MAX_VALUE, advancedQuery)
     }.fold(
         onSuccess = { result ->
-            val filtered = filterContentBySourceType(result).applyAdvancedFilter()
+            val filtered = filterContentBySourceType(result, filters)
             if (filtered.isNotEmpty()) {
                 SearchResultsListModel(
                     titleResId = R.string.history,
@@ -401,11 +403,11 @@ class SearchViewModel @AssistedInject constructor(
         },
     )
 
-    private suspend fun searchFavorites(): SearchResultsListModel? = runCatchingCancellable {
-        favouritesRepository.search(query, kind, Int.MAX_VALUE)
+    private suspend fun searchFavorites(filters: SearchFilters): SearchResultsListModel? = runCatchingCancellable {
+        favouritesRepository.search(query, kind, Int.MAX_VALUE, advancedQuery)
     }.fold(
         onSuccess = { result ->
-            val filtered = filterContentBySourceType(result).applyAdvancedFilter()
+            val filtered = filterContentBySourceType(result, filters)
             if (filtered.isNotEmpty()) {
                 SearchResultsListModel(
                     titleResId = R.string.favourites,
@@ -435,8 +437,8 @@ class SearchViewModel @AssistedInject constructor(
         },
     )
 
-    private suspend fun searchLocal(): SearchResultsListModel? = runCatchingCancellable {
-        if (isSourceTypeAllowed(LocalMangaSource)) {
+    private suspend fun searchLocal(filters: SearchFilters): SearchResultsListModel? = runCatchingCancellable {
+        if (isSourceTypeAllowed(LocalMangaSource, filters)) {
             searchHelperFactory.create(LocalMangaSource).invoke(query, kind, advancedQuery)
         } else {
             null
@@ -472,82 +474,24 @@ class SearchViewModel @AssistedInject constructor(
         },
     )
 
-    private fun appendResult(item: SearchResultsListModel?) {
-        if (item != null) {
-            results.append(item)
-        }
+    private fun appendResult(item: SearchResultsListModel?, generation: Long) {
+        updateSearchState(generation) { it.withResult(item) }
     }
 
-    private fun filterSourcesByType(sources: Collection<ContentSource>): List<ContentSource> {
-        val allowedSourceTypes = sourceTypes.value
-        val allowedContentKinds = contentKinds.value
-        return sources.filter { source ->
-            sourceTypeIdentifier.getSourceType(source.name) in allowedSourceTypes &&
-                allowedContentKinds.any { it.matches(source) }
-        }
+    private fun filterSourcesByType(sources: Collection<ContentSource>, filters: SearchFilters): List<ContentSource> {
+        return sources.filter { isSourceTypeAllowed(it, filters) }
     }
 
-    private fun filterSourcesByActivePreset(sources: Collection<ContentSource>): List<ContentSource> {
-        val activePreset = languagePresets.value.firstOrNull { it.id == activeLanguagePresetId.value }
-            ?: return sources.toList()
-        if (activePreset.sources.isEmpty()) {
-            return emptyList()
-        }
-        return sources.filter { it.name in activePreset.sources }
-    }
-
-    private fun filterContentBySourceType(manga: List<Content>): List<Content> {
-        val allowedSourceTypes = sourceTypes.value
-        val allowedContentKinds = contentKinds.value
+    private fun filterContentBySourceType(manga: List<Content>, filters: SearchFilters): List<Content> {
         return manga.filter { item ->
-            sourceTypeIdentifier.getSourceType(item.source.name) in allowedSourceTypes &&
-                allowedContentKinds.any { it.matches(item) }
+            sourceTypeIdentifier.getSourceType(item.source.name) in filters.sourceTypes &&
+                filters.contentKinds.any { it.matches(item) }
         }
     }
 
-    private fun isSourceTypeAllowed(source: ContentSource): Boolean {
-        return sourceTypeIdentifier.getSourceType(source.name) in sourceTypes.value &&
-            contentKinds.value.any { it.matches(source) }
-    }
-
-
-    private fun List<Content>.applyAdvancedFilter(): List<Content> {
-        val advanced = advancedQuery ?: return this
-        if (kind != SearchKind.ADVANCED) return this
-        return filter { m ->
-            var titleMatch: Boolean? = null
-            var authorMatch: Boolean? = null
-            var tagsMatch: Boolean? = null
-            if (advanced.title.isNotEmpty()) {
-                val threshold = 0.2f
-                val titleDist = minOf(
-                    m.title.levenshteinDistance(advanced.title),
-                    m.altTitle?.levenshteinDistance(advanced.title) ?: Int.MAX_VALUE,
-                )
-                val titleLen = maxOf(
-                    maxOf(m.title.length, advanced.title.length),
-                    m.altTitle?.let { maxOf(it.length, advanced.title.length) } ?: 0,
-                )
-                titleMatch = titleLen > 0 && titleDist.toFloat() / titleLen <= threshold
-            }
-            if (advanced.author.isNotEmpty()) {
-                authorMatch = m.authors.isEmpty() ||
-                    m.authors.any { it.contains(advanced.author, ignoreCase = true) }
-            }
-            if (advanced.tags.isNotEmpty()) {
-                val parts = advanced.tags.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                val includeTags = parts.filter { it[0] != '-' }
-                val excludeTags = parts.filter { it[0] == '-' }.map { it.substring(1) }
-                val hasAllIncluded = includeTags.all { q ->
-                    m.tags.any { tag -> tag.title.equals(q, ignoreCase = true) }
-                }
-                val hasAnyExcluded = excludeTags.any { q ->
-                    m.tags.any { tag -> tag.title.equals(q, ignoreCase = true) }
-                }
-                tagsMatch = hasAllIncluded && !hasAnyExcluded
-            }
-            titleMatch != false && authorMatch != false && tagsMatch != false
-        }
+    private fun isSourceTypeAllowed(source: ContentSource, filters: SearchFilters): Boolean {
+        return sourceTypeIdentifier.getSourceType(source.name) in filters.sourceTypes &&
+            filters.contentKinds.any { it.matches(source) }
     }
 
     private fun ContentSource.priority(): Int {

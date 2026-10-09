@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +26,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -47,7 +53,31 @@ import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
 import org.skepsun.kototoro.search.domain.SEARCH_CONTENT_KIND_OPTIONS
 import org.skepsun.kototoro.search.domain.SOURCE_TYPE_OPTIONS
 import org.skepsun.kototoro.search.domain.SearchContentKind
+import org.skepsun.kototoro.search.domain.SearchFilters
+import org.skepsun.kototoro.search.domain.searchContentKindsFromNames
+import org.skepsun.kototoro.search.domain.sourceTypesFromNames
 import org.skepsun.kototoro.settings.sources.blacklist.GlobalTagBlacklistStatus
+
+private val SearchFiltersSaver = listSaver<SearchFilters, Any>(
+    save = {
+        listOf(
+            it.sourceTypes.joinToString(",") { type -> type.name },
+            it.contentKinds.joinToString(",") { kind -> kind.name },
+            it.pinnedOnly,
+            it.hideEmpty,
+            it.languagePresetId,
+        )
+    },
+    restore = {
+        SearchFilters(
+            sourceTypes = sourceTypesFromNames((it[0] as String).split(',')) ?: ALL_SOURCE_TYPES,
+            contentKinds = searchContentKindsFromNames((it[1] as String).split(',')) ?: ALL_SEARCH_CONTENT_KINDS,
+            pinnedOnly = it[2] as Boolean,
+            hideEmpty = it[3] as Boolean,
+            languagePresetId = it[4] as Long,
+        )
+    },
+)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -59,15 +89,16 @@ fun SearchFilterSheet(
     languagePresets: List<SourcePreset> = emptyList(),
     activeLanguagePresetId: Long? = null,
     blacklistedTagCount: Int = 0,
-    onSourceTypeToggle: (SourceType) -> Unit,
-    onContentKindToggle: (SearchContentKind) -> Unit,
-    onPinnedOnlyChange: (Boolean) -> Unit,
-    onHideEmptyChange: (Boolean) -> Unit,
-    onLanguagePresetSelected: (Long) -> Unit = {},
+    onApply: (SearchFilters) -> Unit,
     onManageLanguagePresets: (() -> Unit)? = null,
     onOpenGlobalTagBlacklist: () -> Unit = {},
     onDismissRequest: () -> Unit,
 ) {
+    var draft by rememberSaveable(stateSaver = SearchFiltersSaver) {
+        mutableStateOf(
+            SearchFilters(sourceTypes, contentKinds, pinnedOnly, hideEmpty, activeLanguagePresetId ?: -1L).normalized(),
+        )
+    }
     StableAnchoredBottomSheet(
         onDismissRequest = onDismissRequest,
         shape = RectangleShape,
@@ -117,8 +148,8 @@ fun SearchFilterSheet(
                         item {
                             LanguagePresetSection(
                                 presets = languagePresets,
-                                activePresetId = activeLanguagePresetId ?: -1L,
-                                onPresetSelected = onLanguagePresetSelected,
+                                activePresetId = draft.languagePresetId,
+                                onPresetSelected = { draft = draft.copy(languagePresetId = it) },
                                 onManagePresets = onManageLanguagePresets,
                             )
                         }
@@ -131,8 +162,12 @@ fun SearchFilterSheet(
                             ) {
                                 SOURCE_TYPE_OPTIONS.forEach { option ->
                                     CompactSearchFilterChip(
-                                        selected = option.type in sourceTypes,
-                                        onClick = { onSourceTypeToggle(option.type) },
+                                        selected = option.type in draft.sourceTypes,
+                                        onClick = {
+                                            draft = draft.copy(
+                                                sourceTypes = draft.sourceTypes.toggleOrAll(option.type, ALL_SOURCE_TYPES),
+                                            )
+                                        },
                                         label = stringResource(option.titleRes),
                                     )
                                 }
@@ -147,8 +182,14 @@ fun SearchFilterSheet(
                             ) {
                                 SEARCH_CONTENT_KIND_OPTIONS.forEach { option ->
                                     CompactSearchFilterChip(
-                                        selected = option.kind in contentKinds,
-                                        onClick = { onContentKindToggle(option.kind) },
+                                        selected = option.kind in draft.contentKinds,
+                                        onClick = {
+                                            draft = draft.copy(
+                                                contentKinds = draft.contentKinds.toggleOrAll(
+                                                    option.kind, ALL_SEARCH_CONTENT_KINDS,
+                                                ),
+                                            )
+                                        },
                                         label = stringResource(option.titleRes),
                                     )
                                 }
@@ -159,18 +200,36 @@ fun SearchFilterSheet(
                         FilterPanelGroup {
                             SearchOptionSwitchRow(
                                 title = stringResource(R.string.pinned_sources_only),
-                                checked = pinnedOnly,
-                                onCheckedChange = onPinnedOnlyChange,
+                                checked = draft.pinnedOnly,
+                                onCheckedChange = { draft = draft.copy(pinnedOnly = it) },
                             )
                             HorizontalDivider(
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
                             )
                             SearchOptionSwitchRow(
                                 title = stringResource(R.string.hide_empty_sources),
-                                checked = hideEmpty,
-                                onCheckedChange = onHideEmptyChange,
+                                checked = draft.hideEmpty,
+                                onCheckedChange = { draft = draft.copy(hideEmpty = it) },
                             )
                         }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = { draft = SearchFilters() }, modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.reset_filter))
+                    }
+                    TextButton(onClick = onDismissRequest) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
+                    Button(onClick = {
+                        onApply(draft.normalized())
+                        onDismissRequest()
+                    }) {
+                        Text(stringResource(R.string.apply))
                     }
                 }
             }
@@ -234,7 +293,7 @@ private fun CompactSearchFilterChip(
     label: String,
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
-    val minimumHeight = if (isTvPresentation) 48.dp else 28.dp
+    val minimumHeight = 48.dp
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides minimumHeight) {
         FilterChip(
             selected = selected,

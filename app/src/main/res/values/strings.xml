@@ -4017,4 +4017,17 @@
     <string name="migration_clear_visible">Clear shown</string>
     <string name="migration_visible_count">Showing %1$d of %2$d sources</string>
     <string name="migration_sources_fast_scroll">Fast scroll sources</string>
+    <string name="search_sources_progress">Sources searched: %1$d/%2$d</string>
+    <string name="search_sources_failed">Failed sources: %1$d</string>
+    <string name="search_retry_failed_sources">Retry failed sources</string>
+    <string name="search_local_suggestions">Local content</string>
+    <string name="search_loading_suggestions">Loading suggestions…</string>
+    <string name="search_loading_remote_suggestions">Looking up works, people and characters…</string>
+    <string name="search_remote_suggestions_failed">Online suggestions are unavailable. You can still search content sources.</string>
+    <string name="search_no_suggestions">No suggestions. Confirm your search to look through content sources.</string>
+    <string name="search_results_scope">Content sources, favorites and history</string>
+    <string name="search_refreshing_results">Updating results…</string>
+    <string name="search_loaded_results">Loaded %1$d results</string>
+    <string name="search_displayed_results">%1$d shown</string>
+    <string name="search_source_type_count">%1$d source types</string>
 </resources>

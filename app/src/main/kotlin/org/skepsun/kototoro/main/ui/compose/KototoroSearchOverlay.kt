@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,6 +47,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -56,6 +59,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
@@ -105,6 +109,7 @@ import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.mangaExtra
+import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -115,8 +120,13 @@ import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
 import org.skepsun.kototoro.search.domain.AdvancedSearchParams
 import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.SearchKind
+import org.skepsun.kototoro.search.ui.compose.SearchAdvancedFields
+import org.skepsun.kototoro.search.ui.compose.SearchFeedbackCard
+import org.skepsun.kototoro.search.ui.compose.SearchToolsRow
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
 import org.skepsun.kototoro.search.ui.suggestion.model.TrackingEntity
+import org.skepsun.kototoro.search.ui.suggestion.SearchSuggestionState
+import org.skepsun.kototoro.search.ui.suggestion.toSuggestionSections
 
 private const val SearchOverlayAnimationDurationMillis = 260
 private val SearchOverlayCollapsedHeight = 56.dp
@@ -169,14 +179,14 @@ private fun rememberSearchOverlayStyle(): SearchOverlayStyle {
             inputCornerRadius = 12.dp,
             inputContainerColor = colorScheme.surfaceVariant.copy(alpha = if (isArtworkBackground) 1f else 0.72f),
             panelContainerColor = colorScheme.surface.copy(alpha = if (isArtworkBackground) 1f else colorScheme.surface.alpha),
-            listHorizontalPadding = 8.dp,
-            listVerticalSpacing = 0.dp,
-            rowCornerRadius = 0.dp,
-            rowContainerColor = if (isArtworkBackground) colorScheme.surfaceContainerLow.copy(alpha = 1f) else Color.Transparent,
-            rowVerticalPadding = 12.dp,
+            listHorizontalPadding = 12.dp,
+            listVerticalSpacing = 4.dp,
+            rowCornerRadius = 14.dp,
+            rowContainerColor = colorScheme.surfaceContainerLow.copy(alpha = if (isArtworkBackground) 1f else colorScheme.surfaceContainerLow.alpha),
+            rowVerticalPadding = 8.dp,
             chipHeight = 32.dp,
             chipCornerRadius = 8.dp,
-            cardCornerRadius = 8.dp,
+            cardCornerRadius = 14.dp,
             cardInnerCornerRadius = 8.dp,
         )
     }
@@ -186,7 +196,8 @@ private fun rememberSearchOverlayStyle(): SearchOverlayStyle {
 fun KototoroSearchOverlay(
     visible: Boolean,
     query: String,
-    suggestions: List<SearchSuggestionItem>,
+    suggestionState: SearchSuggestionState,
+    onRetrySuggestions: () -> Unit,
     initialSearchKind: SearchKind,
     initialSourceTypes: Set<SourceType>,
     initialContentKinds: Set<SearchContentKind>,
@@ -260,15 +271,17 @@ fun KototoroSearchOverlay(
         onContentKindsChange(selectedContentKinds)
     }
 
-    fun submitSearch(searchQuery: String) {
-        val kind = if (showAdvanced) SearchKind.ADVANCED else SearchKind.SIMPLE
+    fun submitSearch(searchQuery: String, searchKind: SearchKind? = null) {
+        val kind = searchKind ?: if (showAdvanced) SearchKind.ADVANCED else initialSearchKind.takeUnless {
+            it == SearchKind.ADVANCED
+        } ?: SearchKind.SIMPLE
         val advancedQuery = AdvancedSearchParams(
             query = searchQuery.trim(),
             title = advancedTitle.trim(),
             tags = advancedTags.trim(),
             author = advancedAuthor.trim(),
         ).takeIf {
-            showAdvanced && (it.title.isNotBlank() || it.tags.isNotBlank() || it.author.isNotBlank())
+            kind == SearchKind.ADVANCED && (it.title.isNotBlank() || it.tags.isNotBlank() || it.author.isNotBlank())
         }
         onSearchWithOptions(
             searchQuery,
@@ -443,121 +456,47 @@ fun KototoroSearchOverlay(
                             },
                         ),
                     )
-                    if (isTvPresentation) {
-                        FilledIconButton(
-                            onClick = {
-                                keyboardController?.hide()
-                                submitSearch(query)
-                            },
-                            modifier = Modifier
-                                .size(48.dp)
-                                .tvFocusable(shape = CircleShape, addFocusTarget = false),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Search,
-                                contentDescription = stringResource(R.string.search),
-                                modifier = Modifier.size(24.dp),
-                            )
-                        }
-                    }
-                    TopBarControlSurface(allowBackdrop = false) {
-                        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides CompactTopBarPillHeight) {
-                            Row(
-                                modifier = Modifier
-                                    .height(CompactTopBarPillHeight)
-                                    .padding(horizontal = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                IconButton(
-                                    onClick = { showAdvanced = !showAdvanced },
-                                    modifier = Modifier
-                                        .size(CompactTopBarPillHeight)
-                                        .tvFocusable(shape = RoundedCornerShape(style.inputCornerRadius), addFocusTarget = false),
-                                ) {
-                                    Icon(
-                                        imageVector = if (showAdvanced)
-                                            Icons.Filled.KeyboardArrowUp
-                                        else
-                                            Icons.Filled.KeyboardArrowDown,
-                                        contentDescription = stringResource(
-                                            if (showAdvanced) R.string.collapse else R.string.expand
-                                        ),
-                                        modifier = Modifier.size(CompactTopBarIconSize),
-                                        tint = if (showAdvanced) MaterialTheme.colorScheme.primary
-                                               else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                IconButton(
-                                    onClick = { showFilterSheet = true },
-                                    modifier = Modifier
-                                        .size(CompactTopBarPillHeight)
-                                        .tvFocusable(shape = RoundedCornerShape(style.inputCornerRadius), addFocusTarget = false),
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_filter_menu),
-                                        contentDescription = stringResource(R.string.display_options),
-                                        modifier = Modifier.size(CompactTopBarIconSize),
-                                        tint = if (selectedSourceTypes.size < ALL_SOURCE_TYPES.size ||
-                                                  selectedContentKinds.size < ALL_SEARCH_CONTENT_KINDS.size ||
-                                                  pinnedOnly || hideEmpty)
-                                            MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
+                    FilledIconButton(
+                        onClick = {
+                            keyboardController?.hide()
+                            submitSearch(query)
+                        },
+                        enabled = query.isNotBlank() || (showAdvanced &&
+                            (advancedTitle.isNotBlank() || advancedTags.isNotBlank() || advancedAuthor.isNotBlank())),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .tvFocusable(shape = CircleShape, addFocusTarget = false),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Search,
+                            contentDescription = stringResource(R.string.search),
+                            modifier = Modifier.size(24.dp),
+                        )
                     }
                 }
+                SearchToolsRow(
+                    advancedExpanded = showAdvanced,
+                    onAdvancedClick = { showAdvanced = !showAdvanced },
+                    hasActiveFilters = selectedSourceTypes.size < ALL_SOURCE_TYPES.size ||
+                        selectedContentKinds.size < ALL_SEARCH_CONTENT_KINDS.size || pinnedOnly || hideEmpty ||
+                        activeLanguagePresetId > 0L,
+                    onFiltersClick = {
+                        keyboardController?.hide()
+                        showFilterSheet = true
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                )
                 if (showAdvanced) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 2.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        TextField(
-                            value = advancedTitle,
-                            onValueChange = { advancedTitle = it },
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                            singleLine = true,
-                            placeholder = {
-                                Text(
-                                    text = stringResource(R.string.name),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            },
-                            textStyle = MaterialTheme.typography.bodyMedium,
-                        )
-                        TextField(
-                            value = advancedTags,
-                            onValueChange = { advancedTags = it },
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                            singleLine = true,
-                            placeholder = {
-                                Text(
-                                    text = stringResource(R.string.genres),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            },
-                            textStyle = MaterialTheme.typography.bodyMedium,
-                        )
-                        TextField(
-                            value = advancedAuthor,
-                            onValueChange = { advancedAuthor = it },
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                            singleLine = true,
-                            placeholder = {
-                                Text(
-                                    text = stringResource(R.string.author),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            },
-                            textStyle = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
+                    SearchAdvancedFields(
+                        title = advancedTitle,
+                        onTitleChange = { advancedTitle = it },
+                        tags = advancedTags,
+                        onTagsChange = { advancedTags = it },
+                        author = advancedAuthor,
+                        onAuthorChange = { advancedAuthor = it },
+                        onSearch = { submitSearch(query) },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
                 }
             }
             HorizontalDivider(
@@ -565,7 +504,9 @@ fun KototoroSearchOverlay(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f),
             )
             SuggestionList(
-                suggestions = suggestions,
+                state = suggestionState.takeIf { it.query == query.trim() }
+                    ?: SearchSuggestionState(query = query.trim(), isLoading = true),
+                onRetrySuggestions = onRetrySuggestions,
                 bottomPadding = navigationBarPadding.calculateBottomPadding(),
                 modifier = Modifier.graphicsLayer { alpha = suggestionsAlpha },
                 onRecentQueryClick = { recentQuery ->
@@ -581,7 +522,7 @@ fun KototoroSearchOverlay(
                 },
                 onAuthorSuggestionClick = { author ->
                     onQueryChanged(author)
-                    submitSearch(author)
+                    submitSearch(author, SearchKind.AUTHOR)
                 },
                 onContentSuggestionClick = onContentSuggestionClick,
                 onLocalEntitySuggestionClick = onLocalEntitySuggestionClick,
@@ -606,15 +547,13 @@ fun KototoroSearchOverlay(
             languagePresets = languagePresets,
             activeLanguagePresetId = activeLanguagePresetId,
             blacklistedTagCount = blacklistedTagCount,
-            onSourceTypeToggle = { type ->
-                selectedSourceTypes = selectedSourceTypes.toggleOrAll(type, ALL_SOURCE_TYPES)
+            onApply = { filters ->
+                selectedSourceTypes = filters.sourceTypes
+                selectedContentKinds = filters.contentKinds
+                pinnedOnly = filters.pinnedOnly
+                hideEmpty = filters.hideEmpty
+                onLanguagePresetSelected(filters.languagePresetId)
             },
-            onContentKindToggle = { kind ->
-                selectedContentKinds = selectedContentKinds.toggleOrAll(kind, ALL_SEARCH_CONTENT_KINDS)
-            },
-            onPinnedOnlyChange = { pinnedOnly = it },
-            onHideEmptyChange = { hideEmpty = it },
-            onLanguagePresetSelected = onLanguagePresetSelected,
             onManageLanguagePresets = onManageLanguagePresets,
             onOpenGlobalTagBlacklist = onOpenGlobalTagBlacklist,
             onDismissRequest = { showFilterSheet = false },
@@ -690,7 +629,8 @@ private fun SearchInputField(
 
 @Composable
 private fun SuggestionList(
-    suggestions: List<SearchSuggestionItem>,
+    state: SearchSuggestionState,
+    onRetrySuggestions: () -> Unit,
     bottomPadding: Dp,
     modifier: Modifier = Modifier,
     style: SearchOverlayStyle,
@@ -706,8 +646,14 @@ private fun SuggestionList(
     onDeleteQuery: (String) -> Unit,
 ) {
     val hapticFeedback = LocalHapticFeedback.current
+    val listState = rememberLazyListState()
+    val sections = remember(state.items) { state.items.toSuggestionSections() }
+    LaunchedEffect(state.query) {
+        listState.scrollToItem(0)
+    }
 
     LazyColumn(
+        state = listState,
         modifier = modifier
             .fillMaxWidth()
             .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
@@ -719,237 +665,292 @@ private fun SuggestionList(
         ),
         verticalArrangement = Arrangement.spacedBy(style.listVerticalSpacing),
     ) {
-        items(
-            items = suggestions,
-            key = { item ->
-                when (item) {
-                    is SearchSuggestionItem.RecentQuery -> "rq_${item.query}"
-                    is SearchSuggestionItem.Hint -> "hint_${item.query}"
-                    is SearchSuggestionItem.Author -> "author_${item.name}"
-                    is SearchSuggestionItem.Source -> "src_${item.source.name}"
-                    is SearchSuggestionItem.SourceTip -> "srctip_${item.source.name}"
-                    is SearchSuggestionItem.Tags -> "tags"
-                    is SearchSuggestionItem.ContentList -> "content"
-                    is SearchSuggestionItem.LocalEntityList -> "local_entity"
-                    is SearchSuggestionItem.TrackingEntityList -> "tracking_${item.service.name}"
-                    is SearchSuggestionItem.Text -> "text_${item.textResId}"
-                }
-            },
-            contentType = { item ->
-                when (item) {
-                    is SearchSuggestionItem.RecentQuery -> "recent_query"
-                    is SearchSuggestionItem.Hint -> "hint"
-                    is SearchSuggestionItem.Author -> "author"
-                    is SearchSuggestionItem.Source -> "source"
-                    is SearchSuggestionItem.SourceTip -> "source_tip"
-                    is SearchSuggestionItem.Tags -> "tags"
-                    is SearchSuggestionItem.ContentList -> "content_list"
-                    is SearchSuggestionItem.LocalEntityList -> "local_entity_list"
-                    is SearchSuggestionItem.TrackingEntityList -> "tracking_entity_list"
-                    is SearchSuggestionItem.Text -> "text"
-                }
-            },
-        ) { item ->
-            when (item) {
-                is SearchSuggestionItem.RecentQuery -> {
-                    val dismissState = rememberSwipeToDismissBoxState()
-                    SwipeToDismissBox(
-                        state = dismissState,
-                        modifier = Modifier.fillMaxWidth(),
-                        backgroundContent = {
-                            if (dismissState.dismissDirection != SwipeToDismissBoxValue.Settled) {
-                                RecentQueryDismissBackground(
-                                    dismissDirection = dismissState.dismissDirection,
-                                    style = style,
-                                )
-                            }
-                        },
-                        enableDismissFromStartToEnd = true,
-                        enableDismissFromEndToStart = true,
-                        onDismiss = {
-                            hapticFeedback.performSelectionHapticFeedback()
-                            onDeleteQuery(item.query)
-                        },
-                    ) {
-                        SearchSuggestionRow(
-                            text = item.query,
-                            onClick = { onRecentQueryClick(item.query) },
-                            style = style,
-                            containerColor = style.panelContainerColor,
-                            leadingIcon = {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_history),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            },
-                            trailingContent = {
-                                IconButton(
-                                    onClick = { onRecentQueryCompleteClick(item.query) },
-                                    modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
-                                ) {
-                                    Icon(
-                                        painter = painterResource(
-                                            androidx.appcompat.R.drawable.abc_ic_commit_search_api_mtrl_alpha,
-                                        ),
-                                        contentDescription = stringResource(R.string.search),
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                            },
-                        )
-                    }
-                }
-
-                is SearchSuggestionItem.Hint -> {
-                    SearchSuggestionRow(
-                        text = item.query,
-                        onClick = { onHintClick(item.query) },
-                        style = style,
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        },
+        if (state.isLoading) {
+            item(key = "loading") {
+                SuggestionLoadingRow(stringResource(R.string.search_loading_suggestions))
+            }
+        }
+        sections.forEach { section ->
+            item(key = "heading_${section.key}", contentType = "suggestion_heading") {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(section.titleResId),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
                     )
-                }
-
-                is SearchSuggestionItem.Author -> {
-                    SearchSuggestionRow(
-                        text = item.name,
-                        onClick = { onAuthorSuggestionClick(item.name) },
-                        style = style,
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.Person,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        },
-                    )
-                }
-
-                is SearchSuggestionItem.Tags -> {
-                    LazyRow(
-                        modifier = Modifier
-                            .padding(vertical = 4.dp)
-                            .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        items(item.tags, contentType = { "tag_chip" }) { chip ->
-                            val tag = chip.data as? ContentTag
-                            AssistChip(
-                                onClick = { tag?.let(onTagSuggestionClick) },
-                                label = { Text(chip.title?.toString().orEmpty(), maxLines = 1) },
-                                modifier = Modifier
-                                    .height(style.chipHeight)
-                                    .tvFocusable(shape = RoundedCornerShape(style.chipCornerRadius), addFocusTarget = false),
-                                shape = RoundedCornerShape(style.chipCornerRadius),
-                                colors = AssistChipDefaults.assistChipColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                ),
-                            )
-                        }
-                    }
-                }
-
-                is SearchSuggestionItem.Source -> {
-                    SourceSuggestionRow(
-                        source = item.source,
-                        onClick = { onSourceSuggestionClick(item.source) },
-                        style = style,
-                    )
-                }
-
-                is SearchSuggestionItem.SourceTip -> {
-                    SourceSuggestionRow(
-                        source = item.source,
-                        onClick = { onSourceSuggestionClick(item.source) },
-                        style = style,
-                    )
-                }
-
-                is SearchSuggestionItem.ContentList -> {
-                    LazyRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                            .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(
-                            items = item.items,
-                            key = { content -> content.id },
-                            contentType = { "content_card" },
-                        ) { content ->
-                            ContentSuggestionCard(
-                                content = content,
-                                onClick = { onContentSuggestionClick(content) },
-                                style = style,
-                            )
-                        }
-                    }
-                }
-
-                is SearchSuggestionItem.LocalEntityList -> {
-                    LazyRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                            .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(
-                            items = item.items,
-                            key = { suggestion -> suggestion.entityId ?: suggestion.representative.id },
-                            contentType = { "local_entity_card" },
-                        ) { suggestion ->
-                            LocalEntitySuggestionCard(
-                                suggestion = suggestion,
-                                onClick = { onLocalEntitySuggestionClick(suggestion) },
-                                style = style,
-                            )
-                        }
-                    }
-                }
-
-                is SearchSuggestionItem.TrackingEntityList -> {
-                    LazyRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                            .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(
-                            items = item.items,
-                            key = { entity -> "${entity.entityType.name}_${entity.remoteId}" },
-                            contentType = { "tracking_entity_card" },
-                        ) { entity ->
-                            TrackingEntitySuggestionCard(
-                                entity = entity,
-                                onClick = { onTrackingEntitySuggestionClick(entity) },
-                                style = style,
-                            )
-                        }
-                    }
-                }
-
-                is SearchSuggestionItem.Text -> {
-                    if (item.textResId != 0) {
+                    section.service?.let { service ->
                         Text(
-                            text = stringResource(item.textResId),
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = stringResource(service.titleResId),
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
             }
+            itemsIndexed(
+                items = section.items,
+                key = { index, item ->
+                    "${section.key}_" +
+                    when (item) {
+                        is SearchSuggestionItem.RecentQuery -> "rq_${item.query}"
+                        is SearchSuggestionItem.Hint -> "hint_${item.query}"
+                        is SearchSuggestionItem.Author -> "author_${item.name}"
+                        is SearchSuggestionItem.Source -> "src_${item.source.name}"
+                        is SearchSuggestionItem.SourceTip -> "srctip_${item.source.name}"
+                        is SearchSuggestionItem.Tags -> "tags"
+                        is SearchSuggestionItem.ContentList -> "content"
+                        is SearchSuggestionItem.LocalEntityList -> "local_entity"
+                        is SearchSuggestionItem.TrackingEntityList -> "tracking_${item.service.name}"
+                        is SearchSuggestionItem.Text -> "text_${item.textResId}_$index"
+                    }
+                },
+                contentType = { _, item ->
+                    when (item) {
+                        is SearchSuggestionItem.RecentQuery -> "recent_query"
+                        is SearchSuggestionItem.Hint -> "hint"
+                        is SearchSuggestionItem.Author -> "author"
+                        is SearchSuggestionItem.Source -> "source"
+                        is SearchSuggestionItem.SourceTip -> "source_tip"
+                        is SearchSuggestionItem.Tags -> "tags"
+                        is SearchSuggestionItem.ContentList -> "content_list"
+                        is SearchSuggestionItem.LocalEntityList -> "local_entity_list"
+                        is SearchSuggestionItem.TrackingEntityList -> "tracking_entity_list"
+                        is SearchSuggestionItem.Text -> "text"
+                    }
+                },
+            ) { _, item ->
+                when (item) {
+                    is SearchSuggestionItem.RecentQuery -> {
+                        val dismissState = rememberSwipeToDismissBoxState()
+                        SwipeToDismissBox(
+                            state = dismissState,
+                            modifier = Modifier.fillMaxWidth(),
+                            backgroundContent = {
+                                if (dismissState.dismissDirection != SwipeToDismissBoxValue.Settled) {
+                                    RecentQueryDismissBackground(
+                                        dismissDirection = dismissState.dismissDirection,
+                                        style = style,
+                                    )
+                                }
+                            },
+                            enableDismissFromStartToEnd = true,
+                            enableDismissFromEndToStart = true,
+                            onDismiss = {
+                                hapticFeedback.performSelectionHapticFeedback()
+                                onDeleteQuery(item.query)
+                            },
+                        ) {
+                            SearchSuggestionRow(
+                                text = item.query,
+                                onClick = { onRecentQueryClick(item.query) },
+                                style = style,
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_history),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                },
+                                trailingContent = {
+                                    IconButton(
+                                        onClick = { onRecentQueryCompleteClick(item.query) },
+                                        modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(
+                                                androidx.appcompat.R.drawable.abc_ic_commit_search_api_mtrl_alpha,
+                                            ),
+                                            contentDescription = stringResource(R.string.search),
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    }
+                                },
+                            )
+                        }
+                    }
+
+                    is SearchSuggestionItem.Hint -> {
+                        SearchSuggestionRow(
+                            text = item.query,
+                            onClick = { onHintClick(item.query) },
+                            style = style,
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Search,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            },
+                        )
+                    }
+
+                    is SearchSuggestionItem.Author -> {
+                        SearchSuggestionRow(
+                            text = item.name,
+                            onClick = { onAuthorSuggestionClick(item.name) },
+                            style = style,
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            },
+                        )
+                    }
+
+                    is SearchSuggestionItem.Tags -> {
+                        LazyRow(
+                            modifier = Modifier
+                                .padding(vertical = 4.dp)
+                                .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            items(item.tags, contentType = { "tag_chip" }) { chip ->
+                                val tag = chip.data as? ContentTag
+                                AssistChip(
+                                    onClick = { tag?.let(onTagSuggestionClick) },
+                                    label = { Text(chip.title?.toString().orEmpty(), maxLines = 1) },
+                                    modifier = Modifier
+                                        .height(style.chipHeight)
+                                        .tvFocusable(shape = RoundedCornerShape(style.chipCornerRadius), addFocusTarget = false),
+                                    shape = RoundedCornerShape(style.chipCornerRadius),
+                                    colors = AssistChipDefaults.assistChipColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+
+                    is SearchSuggestionItem.Source -> {
+                        SourceSuggestionRow(
+                            source = item.source,
+                            onClick = { onSourceSuggestionClick(item.source) },
+                            style = style,
+                        )
+                    }
+
+                    is SearchSuggestionItem.SourceTip -> {
+                        SourceSuggestionRow(
+                            source = item.source,
+                            onClick = { onSourceSuggestionClick(item.source) },
+                            style = style,
+                        )
+                    }
+
+                    is SearchSuggestionItem.ContentList -> {
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            items(
+                                items = item.items,
+                                key = { content -> content.id },
+                                contentType = { "content_card" },
+                            ) { content ->
+                                ContentSuggestionCard(
+                                    content = content,
+                                    onClick = { onContentSuggestionClick(content) },
+                                    style = style,
+                                )
+                            }
+                        }
+                    }
+
+                    is SearchSuggestionItem.LocalEntityList -> {
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            items(
+                                items = item.items,
+                                key = { suggestion -> suggestion.entityId ?: suggestion.representative.id },
+                                contentType = { "local_entity_card" },
+                            ) { suggestion ->
+                                LocalEntitySuggestionCard(
+                                    suggestion = suggestion,
+                                    onClick = { onLocalEntitySuggestionClick(suggestion) },
+                                    style = style,
+                                )
+                            }
+                        }
+                    }
+
+                    is SearchSuggestionItem.TrackingEntityList -> {
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            items(
+                                items = item.items,
+                                key = { entity -> "${entity.entityType.name}_${entity.remoteId}" },
+                                contentType = { "tracking_entity_card" },
+                            ) { entity ->
+                                TrackingEntitySuggestionCard(
+                                    entity = entity,
+                                    onClick = { onTrackingEntitySuggestionClick(entity) },
+                                    style = style,
+                                )
+                            }
+                        }
+                    }
+
+                    is SearchSuggestionItem.Text -> {
+                        if (item.textResId != 0 || item.error != null) {
+                            val context = LocalContext.current
+                            Text(
+                                text = if (item.textResId != 0) stringResource(item.textResId)
+                                    else item.error?.getDisplayMessage(context.resources).orEmpty(),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        if (state.isRemoteLoading) {
+            item(key = "remote_loading") {
+                SuggestionLoadingRow(stringResource(R.string.search_loading_remote_suggestions))
+            }
+        }
+        if (state.remoteError != null) {
+            item(key = "remote_error") {
+                SearchFeedbackCard(
+                    message = stringResource(R.string.search_remote_suggestions_failed),
+                    onRetry = onRetrySuggestions,
+                )
+            }
+        } else if (!state.isLoading && !state.isRemoteLoading && sections.isEmpty()) {
+            item(key = "empty_suggestions") {
+                SearchFeedbackCard(
+                    message = stringResource(
+                        if (state.query.isBlank()) R.string.search_hint else R.string.search_no_suggestions,
+                    ),
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun SuggestionLoadingRow(text: String) {
+    SearchFeedbackCard(message = text, loading = true)
 }
 
 @Composable
@@ -1068,7 +1069,7 @@ private fun SourceSuggestionRow(
                     text = sourceTitle,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             Text(

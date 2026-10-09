@@ -64,6 +64,7 @@ import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.sourceTypesFromTags
 import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
 import org.skepsun.kototoro.search.ui.suggestion.SearchSuggestionViewModel
+import org.skepsun.kototoro.search.ui.suggestion.SearchSuggestionState
 import org.skepsun.kototoro.space.ui.SpaceViewModel
 import org.skepsun.kototoro.space.ui.SpaceNavigationSessionUiState
 import org.skepsun.kototoro.space.ui.SpaceNavigationSessionViewModel
@@ -208,7 +209,9 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
         }
 
         setComposeContent {
-            val suggestions by searchSuggestionViewModel.suggestion.collectAsStateWithLifecycle(initialValue = emptyList())
+            val suggestionState by searchSuggestionViewModel.suggestionState.collectAsStateWithLifecycle(
+                initialValue = SearchSuggestionState(),
+            )
             val appUpdate by viewModel.appUpdate.collectAsStateWithLifecycle(initialValue = null)
             val isIncognitoModeEnabled by viewModel.isIncognitoModeEnabled.collectAsStateWithLifecycle()
             val isResumeEnabled by viewModel.isResumeEnabled.collectAsStateWithLifecycle()
@@ -248,7 +251,8 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
                     pageSaveHelper = pageSaveHelper,
                     lastReadContent = lastReadContent,
                     backgroundArtwork = backgroundArtwork,
-                    suggestions = suggestions,
+                    searchSuggestionState = suggestionState,
+                    onRetrySearchSuggestions = searchSuggestionViewModel::retrySuggestions,
                     onQueryChanged = topBarController::updateSearchQuery,
                     onSearch = { query -> submitSearch(query) },
                     initialSearchKind = SearchKind.SIMPLE,

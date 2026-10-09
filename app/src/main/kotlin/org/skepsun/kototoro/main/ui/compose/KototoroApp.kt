@@ -100,7 +100,6 @@ import org.skepsun.kototoro.space.ui.SpaceSidekick
 import org.skepsun.kototoro.space.ui.SpaceSwitcherRailButton
 import org.skepsun.kototoro.space.ui.SpaceUiState
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
-import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
 import org.skepsun.kototoro.core.prefs.FavoritesTabsPosition
 import org.skepsun.kototoro.core.prefs.TopBarStyle
 import org.skepsun.kototoro.core.prefs.observeAsState
@@ -378,7 +377,7 @@ fun KototoroApp(
     val lastReadContent = mainAppState.lastReadContent
     val backgroundArtwork = mainAppState.backgroundArtwork
     val query = mainAppState.query
-    val suggestions = mainAppState.suggestions
+    val searchSuggestionState = mainAppState.searchSuggestionState
     val onQueryChanged = mainAppState.onQueryChanged
     val onSearch = mainAppState.onSearch
     val initialSearchKind = mainAppState.initialSearchKind
@@ -1431,7 +1430,15 @@ fun KototoroApp(
                                             }
                                         },
                                         onOpenSearch = { request ->
-                                            topLevelNavigator.openSearch(request)
+                                            onSearchWithOptions(
+                                                request.query,
+                                                request.kind,
+                                                request.sourceTypes,
+                                                request.contentKinds,
+                                                request.advancedQuery,
+                                                request.pinnedOnly,
+                                                request.hideEmpty,
+                                            )
                                         },
                                         mainShellChrome = {
                                             if (renderedSpaceId == navigationSpaceId) {
@@ -1504,7 +1511,8 @@ fun KototoroApp(
                     KototoroSearchOverlay(
                         visible = isSearchOverlayVisible,
                         query = query,
-                        suggestions = suggestions,
+                        suggestionState = searchSuggestionState,
+                        onRetrySuggestions = mainAppState.onRetrySearchSuggestions,
                         initialSearchKind = initialSearchKind,
                         initialSourceTypes = initialSearchSourceTypes,
                         initialContentKinds = initialSearchContentKinds,

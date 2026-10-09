@@ -38,7 +38,8 @@ import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
-import org.skepsun.kototoro.parsers.util.levenshteinDistance
+import org.skepsun.kototoro.search.domain.AdvancedSearchParams
+import org.skepsun.kototoro.search.domain.LocalContentSearchQuery
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.tracker.domain.SourceTrackerEvent
@@ -86,46 +87,15 @@ class FavouritesRepository @Inject constructor(
         return mangaIds.mapNotNull { contentsById[it] }
     }
 
-    suspend fun search(query: String, kind: SearchKind, limit: Int): List<Content> {
-        if (limit <= 0) {
-            return emptyList()
-        }
-        val normalizedQuery = query.trim()
-        if (normalizedQuery.isEmpty()) {
-            return emptyList()
-        }
-        val comparator = compareBy<Content> { it.title.levenshteinDistance(normalizedQuery) }
-            .thenBy { it.title }
-        return getAllContent()
-            .asSequence()
-            .filter { content -> content.matchesFavouriteSearch(normalizedQuery, kind) }
-            .let { sequence ->
-                when (kind) {
-                    SearchKind.SIMPLE,
-                    SearchKind.TITLE,
-                    SearchKind.ADVANCED -> sequence.sortedWith(comparator)
-                    SearchKind.AUTHOR,
-                    SearchKind.TAG -> sequence
-                }
-            }
-            .take(limit)
-            .toList()
-    }
-
-    private fun Content.matchesFavouriteSearch(query: String, kind: SearchKind): Boolean {
-        val normalizedQuery = query.lowercase()
-        fun String?.containsQuery() = this?.lowercase()?.contains(normalizedQuery) == true
-        fun Iterable<String>.anyContainsQuery() = any { it.lowercase().contains(normalizedQuery) }
-        return when (kind) {
-            SearchKind.SIMPLE,
-            SearchKind.TITLE,
-            SearchKind.ADVANCED -> {
-                title.containsQuery() ||
-                    altTitles.anyContainsQuery()
-            }
-            SearchKind.AUTHOR -> authors.anyContainsQuery()
-            SearchKind.TAG -> tags.any { it.title.containsQuery() }
-        }
+    suspend fun search(
+        query: String,
+        kind: SearchKind,
+        limit: Int,
+        advanced: AdvancedSearchParams? = null,
+    ): List<Content> {
+        val searchQuery = LocalContentSearchQuery(query, kind, advanced)
+        if (limit <= 0 || !searchQuery.hasCriteria) return emptyList()
+        return searchQuery.search(getAllContent(), limit)
     }
 
     fun observeAll(order: ListSortOrder, filterOptions: Set<ListFilterOption>, limit: Int): Flow<List<Content>> {

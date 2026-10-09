@@ -5,15 +5,21 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.plus
+import kotlinx.coroutines.withTimeoutOrNull
+import java.net.SocketTimeoutException
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.SearchSuggestionType
@@ -48,6 +54,7 @@ import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryServi
 import javax.inject.Inject
 
 private const val DEBOUNCE_TIMEOUT = 300L
+private const val REMOTE_SUGGESTIONS_TIMEOUT = 10_000L
 private const val MAX_MANGA_ITEMS = 12
 private const val MAX_QUERY_ITEMS = 16
 private const val MAX_HINTS_ITEMS = 3
@@ -105,7 +112,7 @@ class SearchSuggestionViewModel @Inject constructor(
 
     private val suggestionParams = combine(
         combine(
-            query.debounce(DEBOUNCE_TIMEOUT),
+            query,
             enabledSourcesSnapshot,
             settings.observeAsFlow(AppSettings.KEY_SEARCH_SUGGESTION_TYPES) { searchSuggestionTypes },
             preferredTrackingSiteProvider.preferredSite,
@@ -130,26 +137,47 @@ class SearchSuggestionViewModel @Inject constructor(
         )
     }
 
-    val suggestion: Flow<List<SearchSuggestionItem>> = combine(suggestionParams, invalidationTrigger) { params, _ ->
+    val suggestionState: Flow<SearchSuggestionState> = combine(suggestionParams, invalidationTrigger) { params, _ ->
         params
-    }.mapLatest { params ->
+    }.flatMapLatest { params ->
         val filteredSources = params.enabledSources.filterByTypes(
             sourceTypes = params.activeSourceTypes,
             contentKinds = params.activeContentKinds,
             identifier = sourceTypeIdentifier,
         )
-        buildSearchSuggestion(
-            searchQuery = params.searchQuery,
-            enabledSources = filteredSources,
-            types = params.types,
-            preferredTrackingSite = params.preferredTrackingSite,
-        )
+        flow {
+            emit(SearchSuggestionState(query = params.searchQuery, isLoading = true))
+            if (params.searchQuery.isNotEmpty()) delay(DEBOUNCE_TIMEOUT)
+            emitAll(
+                progressiveSearchSuggestions(
+                    local = {
+                        buildLocalSuggestions(
+                            searchQuery = params.searchQuery,
+                            enabledSources = filteredSources,
+                            types = params.types,
+                        )
+                    },
+                    remote = if (params.searchQuery.isEmpty()) null else {
+                        { getTrackingEntities(params.searchQuery, params.preferredTrackingSite) }
+                    },
+                ).map { it.copy(query = params.searchQuery) },
+            )
+        }
     }.distinctUntilChanged()
         .withErrorHandling()
         .flowOn(Dispatchers.Default)
 
+    val suggestion: Flow<List<SearchSuggestionItem>> = suggestionState
+        .filter { !it.isLoading }
+        .map { it.items }
+        .distinctUntilChanged()
+
     fun onQueryChanged(newQuery: String) {
-        query.value = newQuery
+        query.value = newQuery.trim()
+    }
+
+    fun retrySuggestions() {
+        invalidationTrigger.value++
     }
 
     fun setSourceTypes(types: Set<SourceType>) {
@@ -197,11 +225,10 @@ class SearchSuggestionViewModel @Inject constructor(
         }
     }
 
-    private suspend fun buildSearchSuggestion(
+    private suspend fun buildLocalSuggestions(
         searchQuery: String,
         enabledSources: EnabledSourcesSnapshot,
         types: Set<SearchSuggestionType>,
-        preferredTrackingSite: ScrobblerService,
     ): List<SearchSuggestionItem> = coroutineScope {
         listOfNotNull(
             if (SearchSuggestionType.GENRES in types) {
@@ -241,7 +268,6 @@ class SearchSuggestionViewModel @Inject constructor(
             } else {
                 null
             },
-            async { getTrackingEntities(searchQuery, preferredTrackingSite) },
         ).flatMap { it.await() }
     }
 
@@ -256,7 +282,7 @@ class SearchSuggestionViewModel @Inject constructor(
         return runCatchingCancellable {
             coroutineScope {
                 val worksDeferred = async {
-                    runCatchingCancellable {
+                    trackingRequest {
                         trackingSiteDiscoveryService.search(
                             TrackingSiteCatalog(
                                 service = service,
@@ -276,27 +302,30 @@ class SearchSuggestionViewModel @Inject constructor(
                                 )
                             }
                             .toList()
-                    }.getOrElse { emptyList() }
+                    }
                 }
                 val personsDeferred = async {
-                    runCatchingCancellable {
+                    trackingRequest {
                         trackingSiteDiscoveryService.searchEntities(
                             service = service,
                             entityType = EntityType.PERSON,
                             query = trimmedQuery,
                         ).take(MAX_TRACKING_ENTITY_ITEMS / 2)
-                    }.getOrElse { emptyList() }
+                    }
                 }
                 val charactersDeferred = async {
-                    runCatchingCancellable {
+                    trackingRequest {
                         trackingSiteDiscoveryService.searchEntities(
                             service = service,
                             entityType = EntityType.CHARACTER,
                             query = trimmedQuery,
                         ).take(MAX_TRACKING_ENTITY_ITEMS / 2)
-                    }.getOrElse { emptyList() }
+                    }
                 }
-                val entities = (personsDeferred.await() + charactersDeferred.await())
+                val works = worksDeferred.await()
+                val persons = personsDeferred.await()
+                val characters = charactersDeferred.await()
+                val entities = (persons.getOrDefault(emptyList()) + characters.getOrDefault(emptyList()))
                     .asSequence()
                     .distinctBy { "${it.entityType.name}:${it.remoteId}" }
                     .take(MAX_TRACKING_ENTITY_ITEMS)
@@ -312,8 +341,10 @@ class SearchSuggestionViewModel @Inject constructor(
                         )
                     }
                     .toList()
-                val items = worksDeferred.await() + entities
+                val items = works.getOrDefault(emptyList()) + entities
                 if (items.isEmpty()) {
+                    listOfNotNull(works.exceptionOrNull(), persons.exceptionOrNull(), characters.exceptionOrNull())
+                        .firstOrNull()?.let { throw it }
                     emptyList()
                 } else {
                     listOf(SearchSuggestionItem.TrackingEntityList(service, items))
@@ -321,9 +352,14 @@ class SearchSuggestionViewModel @Inject constructor(
             }
         }.getOrElse { e ->
             e.printStackTraceDebug()
-            emptyList()
+            throw e
         }
     }
+
+    private suspend fun <T> trackingRequest(block: suspend () -> List<T>): Result<List<T>> =
+        runCatchingCancellable {
+            withTimeoutOrNull(REMOTE_SUGGESTIONS_TIMEOUT) { block() } ?: throw SocketTimeoutException()
+        }
 
     private suspend fun getAuthors(searchQuery: String): List<SearchSuggestionItem> = runCatchingCancellable {
         repository.getAuthorsSuggestion(searchQuery, MAX_AUTHORS_ITEMS)

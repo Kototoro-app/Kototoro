@@ -1,13 +1,9 @@
 package org.skepsun.kototoro.search.ui.compose
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,16 +33,17 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -61,8 +58,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
@@ -102,15 +97,16 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS
 import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
-import org.skepsun.kototoro.search.domain.AdvancedSearchParams
 import org.skepsun.kototoro.search.domain.SEARCH_CONTENT_KIND_OPTIONS
 import org.skepsun.kototoro.search.domain.SOURCE_TYPE_OPTIONS
+import org.skepsun.kototoro.search.domain.AdvancedSearchParams
 import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.main.ui.compose.SearchFilterSheet
-import org.skepsun.kototoro.main.ui.compose.toggleOrAll
 import org.skepsun.kototoro.search.ui.multi.SearchResultsListModel
 import org.skepsun.kototoro.search.ui.multi.SearchViewModel
+import org.skepsun.kototoro.search.ui.multi.SearchResultsState
+import org.skepsun.kototoro.search.ui.multi.sectionKey
 
 private data class SearchPreparedItems(
     val sections: List<SearchResultsListModel>,
@@ -119,7 +115,7 @@ private data class SearchPreparedItems(
 
 private val SearchFixedCardWidth = 108.dp
 private val SearchFixedCardHeight = SearchFixedCardWidth / 0.7f
-private val SearchFixedCardCornerRadius = 8.dp
+private val SearchFixedCardCornerRadius = 14.dp
 
 private fun fixedSearchPosterCardStyle(): CompactPosterCardStyle {
     return CompactPosterCardStyle(
@@ -150,17 +146,6 @@ private fun prepareSearchItems(items: List<ListModel>): SearchPreparedItems {
     )
 }
 
-@Composable
-private fun rememberSearchGridSpanCount(cardWidth: Dp): Int {
-    val configuration = LocalConfiguration.current
-    return remember(configuration.screenWidthDp, cardWidth) {
-        val availableWidth = configuration.screenWidthDp.dp - 32.dp
-        (availableWidth / (cardWidth + 12.dp))
-            .toInt()
-            .coerceAtLeast(2)
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchResultsRoute(
@@ -187,6 +172,8 @@ fun SearchResultsRoute(
     isPickMode: Boolean,
 ) {
     val listModels by viewModel.list.collectAsStateWithLifecycle()
+    val searchState by viewModel.searchState.collectAsStateWithLifecycle()
+    val filters by viewModel.filters.collectAsStateWithLifecycle()
     val languagePresets by viewModel.languagePresets.collectAsStateWithLifecycle()
     val activeLanguagePresetId by viewModel.activeLanguagePresetId.collectAsStateWithLifecycle()
     val globalTagBlacklist by viewModel.globalTagBlacklist.collectAsStateWithLifecycle()
@@ -243,7 +230,6 @@ fun SearchResultsRoute(
     }
     val cardUiPrefs = screenPrefs.cardUiPrefs
     val posterStyle = remember { fixedSearchPosterCardStyle() }
-    val gridSpanCount = rememberSearchGridSpanCount(posterStyle.itemWidth)
 
     var query by rememberSaveable { mutableStateOf(viewModel.query) }
     var advancedTitle by rememberSaveable { mutableStateOf(viewModel.advancedQuery?.title.orEmpty()) }
@@ -258,10 +244,10 @@ fun SearchResultsRoute(
         )
     }
     var showOptionsSheet by remember { mutableStateOf(false) }
-    var selectedSourceTypes by remember { mutableStateOf(viewModel.getSourceTypes()) }
-    var selectedContentKinds by remember { mutableStateOf(viewModel.getContentKinds()) }
-    var pinnedOnly by remember { mutableStateOf(viewModel.isPinnedOnlySelected) }
-    var hideEmpty by remember { mutableStateOf(viewModel.isHideEmptySelected) }
+    val selectedSourceTypes = filters.sourceTypes
+    val selectedContentKinds = filters.contentKinds
+    val pinnedOnly = filters.pinnedOnly
+    val hideEmpty = filters.hideEmpty
     var selectedItemsIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val searchFocusRequester = remember { FocusRequester() }
@@ -275,6 +261,7 @@ fun SearchResultsRoute(
         }
     }
     val hapticFeedback = LocalHapticFeedback.current
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
 
     val preparedItems = remember(listModels) { prepareSearchItems(listModels) }
     val sections = preparedItems.sections
@@ -290,14 +277,17 @@ fun SearchResultsRoute(
             tags = advancedTags.trim(),
             author = advancedAuthor.trim(),
         ).takeIf {
-            it.title.isNotBlank() || it.tags.isNotBlank() || it.author.isNotBlank()
+            isAdvancedExpanded && (it.title.isNotBlank() || it.tags.isNotBlank() || it.author.isNotBlank())
         }
         if (query.isBlank() && advancedQuery == null) {
             return
         }
+        keyboardController?.hide()
         onSubmitSearch(
             query.trim(),
-            if (advancedQuery != null) SearchKind.ADVANCED else viewModel.kind,
+            if (advancedQuery != null) SearchKind.ADVANCED else viewModel.kind.takeUnless {
+                it == SearchKind.ADVANCED
+            } ?: SearchKind.SIMPLE,
             selectedSourceTypes,
             selectedContentKinds,
             advancedQuery,
@@ -315,11 +305,15 @@ fun SearchResultsRoute(
                     onQueryChange = { query = it },
                     onBackClick = onBackClick,
                     onSearchClick = ::submitSearch,
-                    onOptionsClick = { showOptionsSheet = true },
+                    onOptionsClick = {
+                        keyboardController?.hide()
+                        showOptionsSheet = true
+                    },
                     selectedSourceTypes = selectedSourceTypes,
                     selectedContentKinds = selectedContentKinds,
                     pinnedOnly = pinnedOnly,
                     hideEmpty = hideEmpty,
+                    languagePresetTitle = languagePresets.firstOrNull { it.id == filters.languagePresetId }?.title,
                     isAdvancedExpanded = isAdvancedExpanded,
                     onAdvancedExpandedChange = { isAdvancedExpanded = it },
                     advancedTitle = advancedTitle,
@@ -328,8 +322,6 @@ fun SearchResultsRoute(
                     onAdvancedTagsChange = { advancedTags = it },
                     advancedAuthor = advancedAuthor,
                     onAdvancedAuthorChange = { advancedAuthor = it },
-                    onSourceTypesClick = { showOptionsSheet = true },
-                    onContentKindsClick = { showOptionsSheet = true },
                     searchFocusRequester = searchFocusRequester.takeIf {
                         isTvPresentation && selectedItemsIds.isEmpty() && !isPickMode
                     },
@@ -379,24 +371,33 @@ fun SearchResultsRoute(
                 .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
             contentPadding = PaddingValues(
                 start = 0.dp,
-                top = paddingValues.calculateTopPadding(),
+                top = paddingValues.calculateTopPadding() + 12.dp,
                 end = 0.dp,
                 bottom = paddingValues.calculateBottomPadding() + 12.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (searchState.isSearching || sections.isNotEmpty() || searchState.totalSources > 0 ||
+                searchState.failedSources > 0
+            ) {
+                item(key = "search_progress", contentType = "search_progress") {
+                    SearchResultsProgress(searchState, sections, viewModel::retryFailedSources)
+                }
+            }
             itemsIndexed(
                 items = sections,
-                key = { index, section -> "${section.source.name}_${section.titleResId}_$index" },
+                key = { _, section -> section.sectionKey },
                 contentType = { _, _ -> "search_section" },
             ) { _, section ->
                 SearchResultsSection(
                     section = section,
-                    gridSpanCount = gridSpanCount,
                     posterStyle = posterStyle,
                     cardUiPrefs = cardUiPrefs,
                     selectedItemsIds = selectedItemsIds,
                     selectionEnabled = selectedItemsIds.isNotEmpty() && !isPickMode,
+                    isSearching = searchState.isSearching,
+                    isRetrying = section.sectionKey in searchState.retryingSectionKeys,
+                    onRetryClick = { viewModel.retrySource(section) },
                     onSectionClick = {
                         if (section.titleResId == R.string.favourites) {
                             viewModel.showFavouriteCategories(section.list.map { it.id })
@@ -434,6 +435,7 @@ fun SearchResultsRoute(
                 SearchSupplementaryItem(
                     item = item,
                     onContinueSearch = viewModel::continueSearch,
+                    onAdjustFilters = { showOptionsSheet = true },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
@@ -449,27 +451,68 @@ fun SearchResultsRoute(
             languagePresets = languagePresets,
             activeLanguagePresetId = activeLanguagePresetId,
             blacklistedTagCount = globalTagBlacklist.size,
-            onSourceTypeToggle = { type ->
-                selectedSourceTypes = selectedSourceTypes.toggleOrAll(type, ALL_SOURCE_TYPES)
-                viewModel.setSourceTypes(selectedSourceTypes)
-            },
-            onContentKindToggle = { kind ->
-                selectedContentKinds = selectedContentKinds.toggleOrAll(kind, ALL_SEARCH_CONTENT_KINDS)
-                viewModel.setContentKinds(selectedContentKinds)
-            },
-            onPinnedOnlyChange = {
-                pinnedOnly = it
-                viewModel.setPinnedOnly(it)
-            },
-            onHideEmptyChange = {
-                hideEmpty = it
-                viewModel.setHideEmpty(it)
-            },
-            onLanguagePresetSelected = viewModel::setActiveLanguagePreset,
+            onApply = viewModel::applyFilters,
             onManageLanguagePresets = onManageLanguagePresets,
             onOpenGlobalTagBlacklist = onOpenGlobalTagBlacklist,
             onDismissRequest = { showOptionsSheet = false },
         )
+    }
+}
+
+@Composable
+private fun SearchResultsProgress(
+    state: SearchResultsState,
+    sections: List<SearchResultsListModel>,
+    onRetryFailed: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (state.isRefreshing) stringResource(R.string.search_refreshing_results) else
+                        stringResource(R.string.search_loaded_results, sections.sumOf { it.list.distinctBy { it.id }.size }),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                if (state.totalSources > 0) {
+                    Text(
+                        text = stringResource(R.string.search_sources_progress, state.completedSources, state.totalSources),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (state.failedSources > 0) {
+                    Text(
+                        text = stringResource(R.string.search_sources_failed, state.failedSources),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+            if (state.failedSources > 0) {
+                TextButton(onClick = onRetryFailed, enabled = !state.isSearching) {
+                    Text(stringResource(R.string.search_retry_failed_sources))
+                }
+            }
+        }
+        if (state.isSearching) {
+            if (state.totalSources > 0) {
+                LinearProgressIndicator(
+                    progress = { state.completedSources.toFloat() / state.totalSources },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+        }
+        }
     }
 }
 
@@ -484,6 +527,7 @@ private fun SearchResultsTopBar(
     selectedContentKinds: Set<SearchContentKind>,
     pinnedOnly: Boolean,
     hideEmpty: Boolean,
+    languagePresetTitle: String?,
     isAdvancedExpanded: Boolean,
     onAdvancedExpandedChange: (Boolean) -> Unit,
     advancedTitle: String,
@@ -492,16 +536,14 @@ private fun SearchResultsTopBar(
     onAdvancedTagsChange: (String) -> Unit,
     advancedAuthor: String,
     onAdvancedAuthorChange: (String) -> Unit,
-    onSourceTypesClick: () -> Unit,
-    onContentKindsClick: () -> Unit,
     searchFocusRequester: FocusRequester? = null,
 ) {
-    Surface(shadowElevation = 4.dp) {
+    Surface {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
                 .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -518,21 +560,34 @@ private fun SearchResultsTopBar(
                         contentDescription = stringResource(R.string.back),
                     )
                 }
-                Text(
-                    text = stringResource(R.string.search_results),
-                    style = MaterialTheme.typography.titleLarge,
+                Column(
                     modifier = Modifier.weight(1f),
-                )
+                ) {
+                    Text(
+                        text = stringResource(R.string.search_results),
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    Text(
+                        text = stringResource(R.string.search_results_scope),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
             OutlinedTextField(
                 value = query,
                 onValueChange = onQueryChange,
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .weight(1f)
                     .then(searchFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
                 singleLine = true,
-                label = { Text(stringResource(R.string.search)) },
+                placeholder = { Text(stringResource(R.string.search_content)) },
+                shape = RoundedCornerShape(18.dp),
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Filled.Search,
@@ -540,7 +595,6 @@ private fun SearchResultsTopBar(
                     )
                 },
                 trailingIcon = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
                         if (query.isNotEmpty()) {
                             IconButton(
                                 onClick = { onQueryChange("") },
@@ -552,88 +606,87 @@ private fun SearchResultsTopBar(
                                 )
                             }
                         }
-                        IconButton(
-                            onClick = onSearchClick,
-                            modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Search,
-                                contentDescription = stringResource(R.string.search),
-                            )
-                        }
-                        IconButton(
-                            onClick = { onAdvancedExpandedChange(!isAdvancedExpanded) },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
-                        ) {
-                            Icon(
-                                imageVector = if (isAdvancedExpanded)
-                                    Icons.Filled.KeyboardArrowUp
-                                else
-                                    Icons.Filled.KeyboardArrowDown,
-                                contentDescription = stringResource(
-                                    if (isAdvancedExpanded) R.string.collapse else R.string.expand
-                                ),
-                                modifier = Modifier.size(20.dp),
-                                tint = if (isAdvancedExpanded) MaterialTheme.colorScheme.primary
-                                       else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        IconButton(
-                            onClick = onOptionsClick,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_filter_menu),
-                                contentDescription = stringResource(R.string.display_options),
-                                modifier = Modifier.size(20.dp),
-                                tint = if (selectedSourceTypes.size < ALL_SOURCE_TYPES.size ||
-                                          selectedContentKinds.size < ALL_SEARCH_CONTENT_KINDS.size ||
-                                          pinnedOnly || hideEmpty)
-                                    MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
                 },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSearchClick() }),
             )
-
-            if (isAdvancedExpanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = advancedTitle,
-                        onValueChange = onAdvancedTitleChange,
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text(stringResource(R.string.title)) },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { onSearchClick() }),
-                    )
-                    OutlinedTextField(
-                        value = advancedTags,
-                        onValueChange = onAdvancedTagsChange,
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text(stringResource(R.string.tags)) },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { onSearchClick() }),
-                    )
-                    OutlinedTextField(
-                        value = advancedAuthor,
-                        onValueChange = onAdvancedAuthorChange,
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text(stringResource(R.string.author)) },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { onSearchClick() }),
-                    )
+                FilledIconButton(
+                    onClick = onSearchClick,
+                    enabled = query.isNotBlank() || (isAdvancedExpanded &&
+                        (advancedTitle.isNotBlank() || advancedTags.isNotBlank() || advancedAuthor.isNotBlank())),
+                    modifier = Modifier.size(48.dp)
+                        .tvFocusable(shape = RoundedCornerShape(24.dp), addFocusTarget = false),
+                ) {
+                    Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.search))
                 }
             }
+
+            SearchToolsRow(
+                advancedExpanded = isAdvancedExpanded,
+                onAdvancedClick = { onAdvancedExpandedChange(!isAdvancedExpanded) },
+                hasActiveFilters = selectedSourceTypes.size < ALL_SOURCE_TYPES.size ||
+                    selectedContentKinds.size < ALL_SEARCH_CONTENT_KINDS.size || pinnedOnly || hideEmpty ||
+                    languagePresetTitle != null,
+                onFiltersClick = onOptionsClick,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            SearchResultsFilterSummary(
+                sourceTypes = selectedSourceTypes,
+                contentKinds = selectedContentKinds,
+                pinnedOnly = pinnedOnly,
+                hideEmpty = hideEmpty,
+                languagePresetTitle = languagePresetTitle,
+                onClick = onOptionsClick,
+            )
+
+            if (isAdvancedExpanded) {
+                SearchAdvancedFields(
+                    title = advancedTitle,
+                    onTitleChange = onAdvancedTitleChange,
+                    tags = advancedTags,
+                    onTagsChange = onAdvancedTagsChange,
+                    author = advancedAuthor,
+                    onAuthorChange = onAdvancedAuthorChange,
+                    onSearch = onSearchClick,
+                )
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        }
+    }
+}
+
+@Composable
+private fun SearchResultsFilterSummary(
+    sourceTypes: Set<SourceType>,
+    contentKinds: Set<SearchContentKind>,
+    pinnedOnly: Boolean,
+    hideEmpty: Boolean,
+    languagePresetTitle: String?,
+    onClick: () -> Unit,
+) {
+    val labels = buildList {
+        if (contentKinds.size < ALL_SEARCH_CONTENT_KINDS.size) {
+            add(SEARCH_CONTENT_KIND_OPTIONS.filter { it.kind in contentKinds }
+                .map { stringResource(it.titleRes) }.joinToString(" · "))
+        }
+        if (sourceTypes.size < ALL_SOURCE_TYPES.size) {
+            val single = SOURCE_TYPE_OPTIONS.singleOrNull { it.type in sourceTypes }
+            add(if (single != null) stringResource(single.titleRes) else
+                stringResource(R.string.search_source_type_count, sourceTypes.size))
+        }
+        languagePresetTitle?.let { add(it) }
+        if (pinnedOnly) add(stringResource(R.string.pinned_sources_only))
+        if (hideEmpty) add(stringResource(R.string.hide_empty_sources))
+    }
+    if (labels.isEmpty()) return
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        items(labels) { label ->
+            AssistChip(
+                onClick = onClick,
+                label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false),
+            )
         }
     }
 }
@@ -641,11 +694,13 @@ private fun SearchResultsTopBar(
 @Composable
 private fun SearchResultsSection(
     section: SearchResultsListModel,
-    gridSpanCount: Int,
     posterStyle: CompactPosterCardStyle,
     cardUiPrefs: org.skepsun.kototoro.list.ui.compose.ContentCardUiPrefs,
     selectedItemsIds: Set<Long>,
     selectionEnabled: Boolean,
+    isSearching: Boolean,
+    isRetrying: Boolean,
+    onRetryClick: () -> Unit,
     onSectionClick: () -> Unit,
     onItemClick: (ContentListModel) -> Unit,
     onItemLongClick: (ContentListModel) -> Unit,
@@ -653,6 +708,7 @@ private fun SearchResultsSection(
     val context = LocalContext.current
     val rowState = rememberLazyListState()
     val scrollIntensity = rememberHorizontalRailScrollIntensity(rowState)
+    val uniqueItems = remember(section.list) { section.list.distinctBy { it.id } }
 
     Column(
         modifier = Modifier
@@ -673,6 +729,14 @@ private fun SearchResultsSection(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (uniqueItems.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.search_displayed_results, uniqueItems.size),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                )
+            }
             if (section.titleResId == R.string.favourites) {
                 IconButton(onClick = onSectionClick) {
                     Icon(
@@ -702,9 +766,9 @@ private fun SearchResultsSection(
                 ),
             ) {
                 itemsIndexed(
-                    items = section.list,
-                    key = { index, item ->
-                        "${section.source.name}_${section.titleResId}_${index}_${item.id}"
+                    items = uniqueItems,
+                    key = { _, item ->
+                        "${section.sectionKey}_${item.id}"
                     },
                     contentType = { _, _ -> "search_result_card" },
                 ) { index, item ->
@@ -733,15 +797,36 @@ private fun SearchResultsSection(
                     }
                 }
             }
+        } else if (section.error == null) {
+            Text(
+                text = stringResource(R.string.nothing_found),
+                modifier = Modifier.padding(horizontal = 16.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         section.error?.let { error ->
-            Text(
-                text = error.getDisplayMessage(context.resources),
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = error.getDisplayMessage(context.resources),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (isRetrying) {
+                    CircularProgressIndicator(modifier = Modifier.padding(12.dp).size(24.dp))
+                } else {
+                    TextButton(onClick = onRetryClick, enabled = !isSearching) {
+                        Text(stringResource(R.string.retry))
+                    }
+                }
+            }
         }
     }
 }
@@ -750,6 +835,7 @@ private fun SearchResultsSection(
 private fun SearchSupplementaryItem(
     item: ListModel,
     onContinueSearch: () -> Unit,
+    onAdjustFilters: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (item) {
@@ -802,6 +888,9 @@ private fun SearchSupplementaryItem(
                         ) {
                             Text(stringResource(item.actionStringRes))
                         }
+                    }
+                    TextButton(onClick = onAdjustFilters) {
+                        Text(stringResource(R.string.filter))
                     }
                 }
             }

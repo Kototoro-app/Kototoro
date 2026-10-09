@@ -622,14 +622,17 @@ fun ReadingSourceSheet(
             hideEmpty = scopeFilterUiState.hideEmpty,
             languagePresets = languagePresets,
             activeLanguagePresetId = activeLanguagePresetId,
-            onSourceTypeToggle = onSourceTypeToggle,
-            onContentKindToggle = onContentKindToggle,
-            onPinnedOnlyChange = onPinnedOnlyChange,
-            onHideEmptyChange = onHideEmptyChange,
-            onLanguagePresetSelected = onLanguagePresetSelected,
+            onApply = { filters ->
+                (filters.sourceTypes - scopeFilterUiState.sourceTypes).forEach(onSourceTypeToggle)
+                (scopeFilterUiState.sourceTypes - filters.sourceTypes).forEach(onSourceTypeToggle)
+                (filters.contentKinds - scopeFilterUiState.contentKinds).forEach(onContentKindToggle)
+                (scopeFilterUiState.contentKinds - filters.contentKinds).forEach(onContentKindToggle)
+                onPinnedOnlyChange(filters.pinnedOnly)
+                onHideEmptyChange(filters.hideEmpty)
+                onLanguagePresetSelected(filters.languagePresetId)
+            },
             onManageLanguagePresets = onManageLanguagePresets,
             onDismissRequest = { showFilterSheet = false },
         )
     }
 }
-

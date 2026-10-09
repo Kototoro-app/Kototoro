@@ -17,7 +17,7 @@ import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
-import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
+import org.skepsun.kototoro.search.ui.suggestion.SearchSuggestionState
 import org.skepsun.kototoro.search.ui.suggestion.model.TrackingEntity
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
@@ -39,7 +39,8 @@ data class MainAppState(
     val lastReadContent: Content? = null,
     val backgroundArtwork: BackgroundArtwork = BackgroundArtwork(),
     val query: String = "",
-    val suggestions: List<SearchSuggestionItem> = emptyList(),
+    val searchSuggestionState: SearchSuggestionState = SearchSuggestionState(),
+    val onRetrySearchSuggestions: () -> Unit = {},
     val onQueryChanged: (String) -> Unit = {},
     val onSearch: (String) -> Unit = {},
     val initialSearchKind: SearchKind = SearchKind.SIMPLE,

@@ -87,7 +87,7 @@ class ContentSearchRepository @Inject constructor(
                 val index = cursor.getColumnIndexOrThrow(SearchManager.SUGGEST_COLUMN_QUERY)
                 do {
                     result += cursor.getString(index)
-                } while (currentCoroutineContext().isActive && cursor.moveToNext())
+                } while (result.size < count && currentCoroutineContext().isActive && cursor.moveToNext())
             }
             result
         }.orEmpty()
@@ -156,7 +156,7 @@ class ContentSearchRepository @Inject constructor(
         if (titles.isEmpty()) {
             return emptyList()
         }
-        return titles.shuffled().take(limit)
+        return titles.take(limit)
     }
 
     suspend fun getAuthorsSuggestion(
