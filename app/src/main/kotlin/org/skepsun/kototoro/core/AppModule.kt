@@ -203,7 +203,10 @@ interface AppModule {
             // P2 每场景超时：Coil 图片调用（封面/图标，非 Mihon 路径）整次调用上限 20s
             // （全局客户端 callTimeout 为 300s，弱网/VPN 黑洞时会长时间占住图片并发槽位）。
             val imageNetworkClient = buildImageNetworkClient(okHttpClientLazy.value)
-            val avifAnimationPool = AvifAnimationPool().also {
+            val avifAnimationPool = AvifAnimationPool(budgetProvider = {
+                // Retain one animation at the default budget, leaving room for visible pages and AV1 decoding.
+                minOf(settings.avifAnimationPolicy.memoryBudgetBytes, Runtime.getRuntime().maxMemory() / 4)
+            }).also {
                 context.applicationContext.registerComponentCallbacks(it)
             }
             return ImageLoader.Builder(context)
@@ -232,7 +235,7 @@ interface AppModule {
                     }
                     add(SvgDecoder.Factory())
                     add(CbzFetcher.Factory())
-                    add(AvifImageDecoder.Factory(avifAnimationPool))
+                    add(AvifImageDecoder.Factory(avifAnimationPool) { settings.avifAnimationPolicy })
                     add(JxlImageDecoder.Factory())
                     add(faviconFetcherFactory)
                     add(ContentPageKeyer())

@@ -1,7 +1,5 @@
 package org.skepsun.kototoro.core.image
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import coil3.ImageLoader
@@ -9,7 +7,6 @@ import coil3.asDrawable
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import kotlinx.coroutines.runBlocking
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -30,7 +27,7 @@ class AvifAnimationPoolDecodeTest {
         instrumentation.runOnMainSync { first.release() }
 
         val second = decode(32)
-        assertSame("Showing the page again must not decode every frame again", first, second)
+        assertSame("Showing the page again must reuse the paused decoder", first, second)
         assertPlays(second)
 
         instrumentation.runOnMainSync { second.release() }
@@ -82,26 +79,12 @@ class AvifAnimationPoolDecodeTest {
                 (result as SuccessResult).image.asDrawable(context.resources) as AvifAnimatedDrawable
             }
         } finally {
+            pool.clear()
             loader.shutdown()
         }
     }
 
     private fun releaseOnMain(drawable: AvifAnimatedDrawable) = instrumentation.runOnMainSync { drawable.release() }
 
-    private fun assertPlays(drawable: AvifAnimatedDrawable) = instrumentation.runOnMainSync {
-        val size = drawable.intrinsicWidth
-        val target = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        try {
-            drawable.setBounds(0, 0, size, size)
-            drawable.draw(Canvas(target))
-            val first = target.getPixel(size / 2, size / 2)
-            drawable.start()
-            drawable.run()
-            drawable.draw(Canvas(target))
-            assertNotEquals("A reused AVIF must still advance frames", first, target.getPixel(size / 2, size / 2))
-        } finally {
-            drawable.stop()
-            target.recycle()
-        }
-    }
+    private fun assertPlays(drawable: AvifAnimatedDrawable) = assertAvifChanges(drawable)
 }

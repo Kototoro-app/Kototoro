@@ -4030,4 +4030,11 @@
     <string name="search_loaded_results">Loaded %1$d results</string>
     <string name="search_displayed_results">%1$d shown</string>
     <string name="search_source_type_count">%1$d source types</string>
+    <string name="avif_animation_memory_limit">AVIF memory limit per animation</string>
+    <string name="avif_animation_memory_limit_summary">Limits the displayed and preloaded frames of each animation. Spare budget preloads more frames to smooth playback. Multiple pages, encoded input and decoder working memory use additional RAM. Reopen the page after changing these settings.</string>
+    <string name="avif_animation_memory_auto">Automatic (%1$d MiB recommended)</string>
+    <string name="avif_animation_downsampling">Allow reducing AVIF animation resolution</string>
+    <string name="avif_animation_downsampling_summary">Reduces resolution to keep animations playing within the budget. Disabled by default to preserve original resolution; animations whose two playback buffers exceed the budget show only the first frame. Increase the budget if even one frame cannot fit.</string>
+    <string name="avif_animation_recommended">Use recommended AVIF settings</string>
+    <string name="avif_animation_recommended_summary">Use an automatic %1$d MiB budget based on this device’s RAM and app memory limit, and preserve original resolution.</string>
 </resources>

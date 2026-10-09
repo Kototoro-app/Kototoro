@@ -9,12 +9,14 @@ internal fun resolveAvifAnimatedDecodeSize(
     frameCount: Int,
     bytesPerPixel: Int,
     memoryBudgetBytes: Long,
+    allowDownsampling: Boolean = true,
 ): Pair<Int, Int>? {
     require(width > 0 && height > 0 && frameCount > 0 && bytesPerPixel > 0)
     val maxPixelsPerFrame = memoryBudgetBytes / bytesPerPixel / frameCount
     if (maxPixelsPerFrame < 1) return null
     val pixels = width.toLong() * height
     if (pixels <= maxPixelsPerFrame) return width to height
+    if (!allowDownsampling) return null
 
     val scale = sqrt(maxPixelsPerFrame.toDouble() / pixels)
     val sampledWidth = (width * scale).toInt().coerceAtLeast(1)

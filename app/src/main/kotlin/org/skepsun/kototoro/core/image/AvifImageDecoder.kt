@@ -15,63 +15,83 @@ import coil3.request.Options
 import coil3.request.maxBitmapSize
 import coil3.util.component1
 import coil3.util.component2
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runInterruptible
+import okio.FileSystem
+import okio.buffer
 import org.aomedia.avif.android.AvifDecoder
-import org.skepsun.kototoro.core.util.ext.readByteBuffer
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.lang.ref.Reference
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 
 class AvifImageDecoder(
     private val source: ImageSource,
     private val options: Options,
     private val animationPool: AvifAnimationPool? = null,
+    private val animationPolicy: AvifAnimationPolicy = AvifAnimationPolicy(
+        minOf(64L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 8),
+    ),
 ) : Decoder {
 
     private val poolKey: AvifAnimationPool.Key? by lazy { animationPool?.let { animationPoolKey() } }
 
-    override suspend fun decode(): DecodeResult = runInterruptible {
+    override suspend fun decode(): DecodeResult {
+        var animation: AvifAnimatedDrawable? = null
+        try {
+            val result = runInterruptible { decodeBlocking { animation = it } }
+            currentCoroutineContext().ensureActive()
+            return result
+        } catch (e: Throwable) {
+            // A cancelled Coil request has no consumer to release a newly created or taken drawable.
+            animation?.recycleFrames()
+            throw e
+        }
+    }
+
+    private fun decodeBlocking(onAnimationOwned: (AvifAnimatedDrawable) -> Unit): DecodeResult {
         poolKey?.let { key -> animationPool?.take(key) }?.let { parked ->
-            return@runInterruptible DecodeResult(
+            onAnimationOwned(parked.drawable)
+            return DecodeResult(
                 image = parked.drawable.asImage(shareable = false),
                 isSampled = parked.isSampled,
             )
         }
-        val bytes = source.source().readByteBuffer()
-        // create(ByteBuffer) decodes on a single thread; an animated page decodes every frame before
-        // it is shown, so the AV1 decoder's own threads directly shorten the wait.
+        val bytes = readEncodedInput()
+        // Two codec threads, with at most two playback decodes in flight across animations.
         val decoder = AvifDecoder.create(bytes, DECODER_THREADS) ?: throw ImageDecodeException(
             uri = source.fileOrNull()?.toString(),
             format = "avif",
             message = "Requested to decode byte buffer which cannot be handled by AvifDecoder",
         )
+        var ownsDecoder = true
         try {
+            checkImageLimits(decoder)
             val config = if (decoder.depth == 8 || decoder.alphaPresent) {
                 Bitmap.Config.ARGB_8888
             } else {
                 Bitmap.Config.RGB_565
             }
-            // Animated AVIF (AVIS): decode every frame up front so playback is just a
-            // bitmap swap. Per-frame JIT decoding of AV1 is too slow on typical devices
-            // to hold the nominal frame rate — decoding all frames once trades a longer
-            // initial decode + memory for smooth playback and no main-thread CPU during
-            // animation. Sample the frames to the requested size and a bounded working set.
+            // Decode only the first frame here; the drawable owns the decoder for later frames.
             if (decoder.frameCount > 1) {
-                when (val animated = tryDecodeAllFrames(decoder, config)) {
-                    is AnimatedDecode.Animated -> return@runInterruptible DecodeResult(
-                        // shareable = false: the drawable owns native bitmaps that will
-                        // be recycled via release(); it must not be served from Coil's
-                        // memory cache to a second consumer after the first disposes it.
-                        // Reuse goes through animationPool, which hands it to one consumer at a time.
-                        image = animated.drawable.asImage(shareable = false),
-                        isSampled = animated.isSampled,
-                    )
+                when (val animated = createFrameStream(decoder, bytes, config)) {
+                    is AnimatedDecode.Animated -> {
+                        onAnimationOwned(animated.drawable)
+                        ownsDecoder = false
+                        return DecodeResult(
+                            // Native resources have one consumer; reuse goes through animationPool.
+                            image = animated.drawable.asImage(shareable = false),
+                            isSampled = animated.isSampled,
+                        )
+                    }
 
-                    is AnimatedDecode.FirstFrameOnly -> return@runInterruptible DecodeResult(
-                        image = animated.bitmap.asImage(),
+                    is AnimatedDecode.FirstFrameOnly -> return DecodeResult(
+                        image = animated.bitmap.asImage(shareable = false),
                         isSampled = animated.bitmap.width < decoder.width || animated.bitmap.height < decoder.height,
                     )
-
-                    // Even one pixel per frame cannot fit — render only the first frame.
-                    null -> Unit
                 }
             }
             val bitmap = createBitmap(decoder.width, decoder.height, config)
@@ -95,98 +115,185 @@ class AvifImageDecoder(
             if (dstWidth < bitmap.width || dstHeight < bitmap.height) {
                 val scaled = bitmap.scale(dstWidth, dstHeight)
                 bitmap.recycle()
-                DecodeResult(
+                return DecodeResult(
                     image = scaled.asImage(),
                     isSampled = true,
                 )
             } else {
-                DecodeResult(
+                return DecodeResult(
                     image = bitmap.asImage(),
                     isSampled = false,
                 )
             }
         } finally {
-            decoder.release()
-            // libavif reads the encoded data straight from this direct buffer without keeping a
-            // Java reference to it. Without the fence the buffer becomes unreachable right after
-            // create(), and a GC during the long all-frames decode frees memory the native decoder
-            // is still reading, failing intermittently with "Decoding of color planes failed".
-            keepReachable(bytes)
+            if (ownsDecoder) decoder.release()
+            // A streaming drawable takes over this buffer along with the native decoder.
+            keepAvifInputReachable(bytes)
         }
     }
 
     private sealed interface AnimatedDecode {
         class Animated(val drawable: AvifAnimatedDrawable, val isSampled: Boolean) : AnimatedDecode
 
-        /** A later frame failed to decode; showing a still beats failing the whole page. */
+        /** Only one original-resolution frame fits the budget. */
         class FirstFrameOnly(val bitmap: Bitmap) : AnimatedDecode
     }
 
-    private fun tryDecodeAllFrames(
+    private fun createFrameStream(
         decoder: AvifDecoder,
+        bytes: ByteBuffer,
         config: Bitmap.Config,
-    ): AnimatedDecode? {
-        val frameCount = decoder.frameCount
+    ): AnimatedDecode {
         val bytesPerPixel = if (config == Bitmap.Config.ARGB_8888) 4 else 2
-        val (requestedWidth, requestedHeight) = DecodeUtils.computeDstSize(
-            srcWidth = decoder.width,
-            srcHeight = decoder.height,
-            targetSize = options.size,
-            scale = options.scale,
-            maxSize = options.maxBitmapSize,
-        )
+        val (requestedWidth, requestedHeight) = if (!animationPolicy.allowDownsampling) {
+            decoder.width to decoder.height
+        } else {
+            val (width, height) = DecodeUtils.computeDstSize(
+                srcWidth = decoder.width,
+                srcHeight = decoder.height,
+                targetSize = options.size,
+                scale = options.scale,
+                maxSize = options.maxBitmapSize,
+            )
+            width to height
+        }
         val (frameWidth, frameHeight) = resolveAvifAnimatedDecodeSize(
             width = requestedWidth.coerceAtMost(decoder.width),
             height = requestedHeight.coerceAtMost(decoder.height),
-            frameCount = frameCount,
+            frameCount = 2, // One displayed bitmap and one bitmap for the next frame.
             bytesPerPixel = bytesPerPixel,
-            memoryBudgetBytes = minOf(ANIMATED_MEMORY_BUDGET_BYTES, Runtime.getRuntime().maxMemory() / 8),
-        ) ?: return null
+            memoryBudgetBytes = animationPolicy.memoryBudgetBytes,
+            allowDownsampling = animationPolicy.allowDownsampling,
+        ) ?: return decodeFirstFrameWithinBudget(decoder, config, bytesPerPixel)
 
         val rawDurations = decoder.frameDurations
-        val durationsMs = LongArray(frameCount) { idx ->
-            val secs = rawDurations?.getOrNull(idx) ?: DEFAULT_FRAME_DURATION_SEC
-            (secs * 1000.0).toLong()
+        val durationsMs = LongArray(decoder.frameCount) { index ->
+            val seconds = rawDurations?.getOrNull(index)?.takeIf { it.isFinite() && it > 0 }
+                ?: DEFAULT_FRAME_DURATION_SEC
+            (seconds * 1000.0).toLong()
         }
-        val repetitionCount = decoder.repetitionCount
-        val frames = ArrayList<Bitmap>(frameCount)
+        val frameBytes = frameWidth.toLong() * frameHeight * bytesPerPixel
+        // Extra budget absorbs decode spikes without retaining the animation's complete frame set.
+        val bufferCount = minOf(
+            decoder.frameCount,
+            (animationPolicy.memoryBudgetBytes / frameBytes).coerceIn(2L, MAX_PLAYBACK_BUFFERS.toLong()).toInt(),
+        )
+        val buffers = ArrayList<Bitmap>(bufferCount)
         try {
-            for (i in 0 until frameCount) {
-                if (Thread.currentThread().isInterrupted) throw InterruptedException("AVIF decoding cancelled")
-                // libavif scales directly into the destination bitmap, avoiding full-size RGB frames.
-                val bitmap = createBitmap(frameWidth, frameHeight, config)
-                frames.add(bitmap)
-                val result = decoder.nthFrame(i, bitmap)
-                if (result != 0) {
-                    if (i > 0) {
-                        val first = frames.first()
-                        frames.forEach { if (it !== first && !it.isRecycled) it.recycle() }
-                        return AnimatedDecode.FirstFrameOnly(first)
-                    }
-                    throw ImageDecodeException(
-                        uri = source.fileOrNull()?.toString(),
-                        format = "avif",
-                        message = AvifDecoder.resultToString(result),
-                    )
-                }
-                if (Thread.currentThread().isInterrupted) throw InterruptedException("AVIF decoding cancelled")
+            repeat(bufferCount) { buffers.add(createBitmap(frameWidth, frameHeight, config)) }
+            val result = decoder.nthFrame(0, buffers.first())
+            if (result != 0) throw ImageDecodeException(
+                uri = source.fileOrNull()?.toString(),
+                format = "avif",
+                message = AvifDecoder.resultToString(result),
+            )
+            if (Thread.currentThread().isInterrupted) throw InterruptedException("AVIF decoding cancelled")
+            val isSampled = frameWidth < decoder.width || frameHeight < decoder.height
+            val pool = animationPool
+            val key = poolKey
+            val onRelease: ((AvifAnimatedDrawable) -> Boolean)? = if (pool != null && key != null) {
+                { drawable -> pool.park(key, drawable, isSampled) }
+            } else {
+                null
             }
+            return AnimatedDecode.Animated(
+                AvifAnimatedDrawable(
+                    AvifFrameStream(decoder, bytes, buffers),
+                    durationsMs,
+                    decoder.repetitionCount,
+                    onRelease,
+                ),
+                isSampled,
+            )
         } catch (e: Throwable) {
-            frames.forEach { if (!it.isRecycled) it.recycle() }
+            buffers.forEach { if (!it.isRecycled) it.recycle() }
             throw e
         }
-        val isSampled = frameWidth < decoder.width || frameHeight < decoder.height
-        val pool = animationPool
-        val key = poolKey
-        val onRelease: ((AvifAnimatedDrawable) -> Boolean)? = if (pool != null && key != null) {
-            { drawable -> pool.park(key, drawable, isSampled) }
-        } else {
-            null
+    }
+
+    /** File-backed input avoids a whole-file Java byte array alongside the native input. */
+    private fun readEncodedInput(): ByteBuffer {
+        val path = source.file()
+        if (source.fileSystem === FileSystem.SYSTEM) return mapEncodedInput(File(path.toString()))
+        // CBZ pages use Okio's ZIP filesystem: its entry path cannot be opened by java.io.File.
+        val temporary = File.createTempFile("avif-input-", ".tmp", options.context.cacheDir)
+        try {
+            source.fileSystem.source(path).buffer().use { input ->
+                FileOutputStream(temporary).use { output ->
+                    val chunk = ByteArray(64 * 1024)
+                    var length = 0L
+                    while (true) {
+                        if (Thread.currentThread().isInterrupted) throw InterruptedException("AVIF decoding cancelled")
+                        val count = input.read(chunk)
+                        if (count == -1) break
+                        length += count
+                        checkInputLength(length)
+                        output.write(chunk, 0, count)
+                    }
+                }
+            }
+            return mapEncodedInput(temporary)
+        } finally {
+            // Android keeps the mapped bytes valid after unlinking the temporary file.
+            temporary.delete()
         }
-        return AnimatedDecode.Animated(
-            AvifAnimatedDrawable(frames, durationsMs, repetitionCount, onRelease),
-            isSampled,
+    }
+
+    private fun mapEncodedInput(file: File): ByteBuffer = FileInputStream(file).channel.use { channel ->
+        val length = channel.size()
+        checkInputLength(length)
+        channel.map(FileChannel.MapMode.READ_ONLY, 0, length)
+    }
+
+    private fun checkInputLength(length: Long) {
+        if (length <= 0 || length > MAX_INPUT_BYTES) throw ImageDecodeException(
+            uri = source.fileOrNull()?.toString(),
+            format = "avif",
+            message = "AVIF input exceeds the supported size",
         )
+    }
+
+    private fun checkImageLimits(decoder: AvifDecoder) {
+        val pixels = decoder.width.toLong() * decoder.height
+        if (decoder.width !in 1..MAX_IMAGE_DIMENSION || decoder.height !in 1..MAX_IMAGE_DIMENSION ||
+            pixels > MAX_IMAGE_PIXELS || pixels * decoder.frameCount > MAX_ANIMATION_PIXELS
+        ) throw ImageDecodeException(
+            uri = source.fileOrNull()?.toString(),
+            format = "avif",
+            message = "AVIF image exceeds the supported dimensions or animation size",
+        )
+    }
+
+    private fun decodeFirstFrameWithinBudget(
+        decoder: AvifDecoder,
+        config: Bitmap.Config,
+        bytesPerPixel: Int,
+    ): AnimatedDecode.FirstFrameOnly {
+        val (width, height) = resolveAvifAnimatedDecodeSize(
+            decoder.width,
+            decoder.height,
+            1,
+            bytesPerPixel,
+            animationPolicy.memoryBudgetBytes,
+            animationPolicy.allowDownsampling,
+        ) ?: throw ImageDecodeException(
+            uri = source.fileOrNull()?.toString(),
+            format = "avif",
+            message = "An AVIF frame exceeds the animation memory limit",
+        )
+        val bitmap = createBitmap(width, height, config)
+        try {
+            val result = decoder.nthFrame(0, bitmap)
+            if (result != 0) throw ImageDecodeException(
+                uri = source.fileOrNull()?.toString(),
+                format = "avif",
+                message = AvifDecoder.resultToString(result),
+            )
+            return AnimatedDecode.FirstFrameOnly(bitmap)
+        } catch (e: Throwable) {
+            bitmap.recycle()
+            throw e
+        }
     }
 
     /**
@@ -194,41 +301,50 @@ class AvifImageDecoder(
      * inputs to the frame size. Only file-backed sources qualify; a stream has no stable identity.
      */
     private fun animationPoolKey(): AvifAnimationPool.Key? {
+        // Paths inside different archives are not globally unique.
+        if (source.fileSystem !== FileSystem.SYSTEM) return null
         val path = source.fileOrNull() ?: return null
         val metadata = runCatching { source.fileSystem.metadataOrNull(path) }.getOrNull()
         return AvifAnimationPool.Key(
             path = path.toString(),
             length = metadata?.size,
             lastModifiedMillis = metadata?.lastModifiedAtMillis,
-            request = "${options.size}|${options.scale}|${options.maxBitmapSize}",
+            request = "${options.size}|${options.scale}|${options.maxBitmapSize}|$animationPolicy",
         )
     }
 
     private companion object {
         private const val DEFAULT_FRAME_DURATION_SEC = 0.042
-        private const val ANIMATED_MEMORY_BUDGET_BYTES = 64L * 1024 * 1024
+        private const val MAX_INPUT_BYTES = 512L * 1024 * 1024
+        private const val MAX_IMAGE_DIMENSION = 32_768
+        private const val MAX_IMAGE_PIXELS = 1L shl 28
+        private const val MAX_ANIMATION_PIXELS = 1L shl 34
 
         // Capped: the reader decodes neighbouring pages in parallel, and dav1d gains little beyond this.
-        private val DECODER_THREADS = Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
+        private val DECODER_THREADS = Runtime.getRuntime().availableProcessors().coerceIn(1, 2)
     }
 
     class Factory(
         private val animationPool: AvifAnimationPool? = null,
+        private val policyProvider: (() -> AvifAnimationPolicy)? = null,
     ) : Decoder.Factory {
 
         override fun create(
             result: SourceFetchResult,
             options: Options,
-            imageLoader: ImageLoader
+            imageLoader: ImageLoader,
         ): Decoder? = if (isApplicable(result)) {
-            AvifImageDecoder(result.source, options, animationPool)
+            policyProvider?.invoke()?.let { policy ->
+                AvifImageDecoder(result.source, options, animationPool, policy)
+            } ?: AvifImageDecoder(result.source, options, animationPool)
         } else {
             null
         }
 
-        override fun equals(other: Any?) = other is Factory && other.animationPool === animationPool
+        override fun equals(other: Any?) = other is Factory && other.animationPool === animationPool &&
+            other.policyProvider === policyProvider
 
-        override fun hashCode() = System.identityHashCode(animationPool)
+        override fun hashCode() = 31 * System.identityHashCode(animationPool) + System.identityHashCode(policyProvider)
 
         private fun isApplicable(result: SourceFetchResult): Boolean {
             if (result.mimeType == "image/avif") return true
@@ -248,8 +364,9 @@ class AvifImageDecoder(
 }
 
 private const val FTYP_PROBE_BYTES = 64L
+private const val MAX_PLAYBACK_BUFFERS = 8
 
-private fun keepReachable(ref: Any) {
+internal fun keepAvifInputReachable(ref: Any) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
         Reference.reachabilityFence(ref)
     } else {

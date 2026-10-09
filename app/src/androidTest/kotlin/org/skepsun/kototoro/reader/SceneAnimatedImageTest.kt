@@ -21,13 +21,16 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.skepsun.kototoro.core.image.AvifAnimatedDrawable
+import org.skepsun.kototoro.core.image.AvifAnimationPolicy
 import org.skepsun.kototoro.core.image.AvifImageDecoder
 import org.skepsun.kototoro.core.image.BitmapDecoderCompat
+import org.skepsun.kototoro.core.image.assertAvifChanges
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.reader.core.FloatRect
 import org.skepsun.kototoro.reader.core.PageId
@@ -44,10 +47,37 @@ import org.skepsun.kototoro.reader.ui.compose.ComposeReaderImageState
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderPageSplit
 import java.io.File
+import java.lang.ref.WeakReference
 
 /** Exercises production Coil/libavif decoding, scene acquisition and Draw-phase playback. */
 @RunWith(AndroidJUnit4::class)
 class SceneAnimatedImageTest {
+
+    @Test
+    fun sceneKeepsAnimationCallbacksUntilTheDrawableIsUnregistered() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val bridge = AnimatedDrawBridge()
+        val drawable = syntheticAnimation()
+        val id = PageId(123L)
+        var callback: WeakReference<Drawable.Callback>? = null
+        try {
+            instrumentation.runOnMainSync {
+                bridge.register(id, drawable)
+                callback = WeakReference(requireNotNull(drawable.callback))
+            }
+            repeat(3) { System.gc() }
+            instrumentation.runOnMainSync {
+                assertNotNull("A visible animation must still be able to invalidate Compose after GC", callback?.get())
+                bridge.unregister(id)
+                assertNull(drawable.callback)
+            }
+        } finally {
+            instrumentation.runOnMainSync {
+                bridge.stopAll()
+                drawable.release()
+            }
+        }
+    }
 
     @Test
     fun scenePreservesAvifAnimationWithoutCropping() = verifySceneAnimation(isCropEnabled = false)
@@ -199,7 +229,7 @@ class SceneAnimatedImageTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val fixture = avifFixture()
-        val loader = imageLoader()
+        val loader = imageLoader(allowDownsampling = true)
         var drawable: AvifAnimatedDrawable? = null
         try {
             val result = loader.execute(ImageRequest.Builder(context).data(fixture).size(8, 8).build())
@@ -258,12 +288,13 @@ class SceneAnimatedImageTest {
         }
     }
 
-    private fun imageLoader(): ImageLoader = ImageLoader.Builder(InstrumentationRegistry.getInstrumentation().targetContext)
+    private fun imageLoader(allowDownsampling: Boolean = false): ImageLoader =
+        ImageLoader.Builder(InstrumentationRegistry.getInstrumentation().targetContext)
         .memoryCache(null)
         .diskCache(null)
         .components {
             add(AnimatedImageDecoder.Factory())
-            add(AvifImageDecoder.Factory())
+            add(AvifImageDecoder.Factory(policyProvider = { AvifAnimationPolicy(64L * 1024 * 1024, allowDownsampling) }))
         }
         .build()
 
@@ -286,18 +317,6 @@ class SceneAnimatedImageTest {
     )
 
     private fun assertChangingFrames(drawable: Drawable) {
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            val target = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888)
-            try {
-                drawable.setBounds(0, 0, 32, 32)
-                drawable.draw(Canvas(target))
-                val first = target.getPixel(16, 16)
-                (drawable as AvifAnimatedDrawable).let { it.start(); it.run() }
-                drawable.draw(Canvas(target))
-                assertNotEquals("Advancing an AVIF frame must change its pixels", first, target.getPixel(16, 16))
-            } finally {
-                target.recycle()
-            }
-        }
+        assertAvifChanges(drawable as AvifAnimatedDrawable)
     }
 }

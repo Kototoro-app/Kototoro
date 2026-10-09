@@ -2,6 +2,7 @@ package org.skepsun.kototoro.core.prefs
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.app.ActivityManager
 import android.content.pm.ActivityInfo
 import android.net.ConnectivityManager
 import android.net.Uri
@@ -23,6 +24,8 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onStart
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.image.AvifAnimationDeviceProfile
+import org.skepsun.kototoro.core.image.AvifAnimationPolicy
 import org.skepsun.kototoro.core.extensions.DEFAULT_JAR_PRIORITY_ORDER_VALUE
 import org.skepsun.kototoro.core.github.AppUpdateSource
 import org.skepsun.kototoro.core.model.SourceNsfwOverrides
@@ -47,6 +50,7 @@ import org.skepsun.kototoro.parsers.util.mapNotNullToSet
 import org.skepsun.kototoro.parsers.util.mapToSet
 import org.skepsun.kototoro.parsers.util.nullIfEmpty
 import org.skepsun.kototoro.core.util.ext.connectivityManager
+import org.skepsun.kototoro.core.util.ext.activityManager
 import org.skepsun.kototoro.core.util.ext.getEnumValue
 import org.skepsun.kototoro.core.util.ext.getSafeFloat
 import org.skepsun.kototoro.core.util.ext.getSafeInt
@@ -1024,6 +1028,42 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     var isReaderPreloadReductionEnabled: Boolean
         get() = prefs.getBoolean(KEY_READER_REDUCE_PRELOAD, false)
         set(value) = prefs.edit { putBoolean(KEY_READER_REDUCE_PRELOAD, value) }
+
+    val avifAnimationDeviceProfile: AvifAnimationDeviceProfile by lazy {
+        val manager = context.activityManager
+        val memoryInfo = ActivityManager.MemoryInfo().also { manager?.getMemoryInfo(it) }
+        val heapLimit = Runtime.getRuntime().maxMemory()
+        AvifAnimationDeviceProfile(
+            totalMemoryBytes = memoryInfo.totalMem.takeIf { it > 0 } ?: heapLimit,
+            heapLimitBytes = heapLimit,
+            isLowRam = manager?.isLowRamDevice == true,
+        )
+    }
+
+    /** Zero keeps the budget device-adaptive, including after a settings restore. */
+    var avifAnimationMemoryLimitMb: Int
+        get() = prefs.getSafeInt(KEY_AVIF_ANIMATION_MEMORY_LIMIT, 0).let {
+            if (it <= 0) 0 else it.coerceIn(16, avifAnimationDeviceProfile.maxMemoryLimitMb)
+        }
+        set(value) = prefs.edit {
+            val limit = if (value <= 0) 0 else value.coerceIn(16, avifAnimationDeviceProfile.maxMemoryLimitMb)
+            putInt(KEY_AVIF_ANIMATION_MEMORY_LIMIT, limit)
+        }
+
+    var isAvifAnimationDownsamplingAllowed: Boolean
+        get() = prefs.getBoolean(KEY_AVIF_ANIMATION_DOWNSAMPLING, false)
+        set(value) = prefs.edit { putBoolean(KEY_AVIF_ANIMATION_DOWNSAMPLING, value) }
+
+    val avifAnimationPolicy: AvifAnimationPolicy
+        get() = avifAnimationDeviceProfile.resolvePolicy(
+            avifAnimationMemoryLimitMb,
+            isAvifAnimationDownsamplingAllowed,
+        )
+
+    fun resetAvifAnimationPolicy() = prefs.edit {
+        remove(KEY_AVIF_ANIMATION_MEMORY_LIMIT)
+        remove(KEY_AVIF_ANIMATION_DOWNSAMPLING)
+    }
 
     var isExperimentalSceneReaderEnabled: Boolean
         get() = prefs.getBoolean(KEY_READER_EXPERIMENTAL_SCENE_ENGINE, false)
@@ -3169,6 +3209,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_READER_TAP_ACTIONS = "reader_tap_actions"
         const val KEY_READER_OPTIMIZE = "reader_optimize"
         const val KEY_READER_REDUCE_PRELOAD = "reader_reduce_offscreen_quality"
+        const val KEY_AVIF_ANIMATION_MEMORY_LIMIT = "avif_animation_memory_limit_mb"
+        const val KEY_AVIF_ANIMATION_DOWNSAMPLING = "avif_animation_downsampling"
         const val KEY_READER_EXPERIMENTAL_SCENE_ENGINE = "reader_experimental_scene_engine"
         const val KEY_READER_EXPERIMENTAL_PAGED_SCENE_ENGINE = "reader_experimental_paged_scene_engine"
         const val KEY_LOCAL_LIST_ORDER = "local_order"

@@ -1022,6 +1022,47 @@ private fun ReaderMangaSettingsPage(
         initiallyExpanded = false,
     ) {
         item {
+            val memoryLimit = settings.observeAsState(AppSettings.KEY_AVIF_ANIMATION_MEMORY_LIMIT) {
+                avifAnimationMemoryLimitMb
+            }.value
+            val profile = settings.avifAnimationDeviceProfile
+            val budgets = (listOf(16, 32, 64, 96, 128, 192, 256, 384, 512) + memoryLimit)
+                .filter { it in 16..profile.maxMemoryLimitMb }.distinct().sorted()
+            SettingsChoicePreference(
+                title = stringResource(R.string.avif_animation_memory_limit),
+                summary = stringResource(R.string.avif_animation_memory_limit_summary),
+                value = memoryLimit,
+                options = listOf(
+                    SettingsChoiceOption(0, stringResource(
+                        R.string.avif_animation_memory_auto,
+                        profile.recommendedMemoryLimitMb,
+                    )),
+                ) + budgets.map { SettingsChoiceOption(it, "$it MiB") },
+                onValueChange = { settings.avifAnimationMemoryLimitMb = it },
+            )
+        }
+        item {
+            SettingsSwitchPreference(
+                title = stringResource(R.string.avif_animation_downsampling),
+                summary = stringResource(R.string.avif_animation_downsampling_summary),
+                checked = settings.observeAsState(AppSettings.KEY_AVIF_ANIMATION_DOWNSAMPLING) {
+                    isAvifAnimationDownsamplingAllowed
+                }.value,
+                onCheckedChange = { settings.isAvifAnimationDownsamplingAllowed = it },
+            )
+        }
+        item {
+            SettingsActionPreference(
+                title = stringResource(R.string.avif_animation_recommended),
+                summary = stringResource(
+                    R.string.avif_animation_recommended_summary,
+                    settings.avifAnimationDeviceProfile.recommendedMemoryLimitMb,
+                ),
+                showChevron = false,
+                onClick = settings::resetAvifAnimationPolicy,
+            )
+        }
+        item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_optimize),
                 summary = stringResource(R.string.reader_optimize_summary),

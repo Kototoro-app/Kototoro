@@ -19,3 +19,21 @@ red.save(
     quality=100,
 )
 ```
+
+`twelve-frame.avif` contains twelve 32×32 frames at 100 ms each, with alternating red/blue backgrounds
+and a green square moving one pixel per frame. It exercises timed native playback, loop boundaries,
+input lifetime after Coil closes the source, and a budget that fits only two RGB buffers.
+
+```python
+from PIL import Image, ImageDraw
+
+frames = []
+for index in range(12):
+    frame = Image.new("RGB", (32, 32), (220, 30, 30) if index % 2 == 0 else (30, 30, 220))
+    ImageDraw.Draw(frame).rectangle((index, 8, index + 8, 24), fill=(30, 220, 30))
+    frames.append(frame)
+frames[0].save(
+    "twelve-frame.avif", format="AVIF", save_all=True, append_images=frames[1:],
+    duration=100, loop=0, quality=80, speed=8,
+)
+```

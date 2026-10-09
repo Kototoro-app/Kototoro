@@ -10,6 +10,19 @@ import kotlin.math.abs
 class AvifAnimatedDecodeSizeTest {
 
     @Test
+    fun `disabled reduction never returns a smaller animation`() {
+        assertNull(resolveAvifAnimatedDecodeSize(1080, 1920, 60, 4, 64L * 1024 * 1024, false))
+        assertEquals(32 to 32, resolveAvifAnimatedDecodeSize(32, 32, 2, 4, 8192, false))
+    }
+
+    @Test
+    fun `raising the budget improves resolution instead of keeping the old ceiling`() {
+        val low = requireNotNull(resolveAvifAnimatedDecodeSize(1080, 1920, 60, 4, 64L * 1024 * 1024))
+        val high = requireNotNull(resolveAvifAnimatedDecodeSize(1080, 1920, 60, 4, 256L * 1024 * 1024))
+        assertTrue(high.first > low.first && high.second > low.second)
+    }
+
+    @Test
     fun `small animation retains its requested dimensions`() {
         assertEquals(32 to 32, resolveAvifAnimatedDecodeSize(32, 32, 2, 4, 8192))
     }

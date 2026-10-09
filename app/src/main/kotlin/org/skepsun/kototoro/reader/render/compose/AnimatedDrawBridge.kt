@@ -27,7 +27,7 @@ import org.skepsun.kototoro.reader.core.PageId
  */
 class AnimatedDrawBridge(
     var autoUpdateVisiblePages: Boolean = true,
-) {
+) : Drawable.Callback {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var drawNode: DrawModifierNode? = null
     private val registeredDrawables = HashMap<PageId, Drawable>()
@@ -50,19 +50,8 @@ class AnimatedDrawBridge(
         if (existing === drawable) return
         existing?.let(::detachDrawable)
 
-        drawable.callback = object : Drawable.Callback {
-            override fun invalidateDrawable(who: Drawable) {
-                drawNode?.invalidateDraw()
-            }
-
-            override fun scheduleDrawable(who: Drawable, what: Runnable, `when`: Long) {
-                mainHandler.postAtTime(what, who, `when`)
-            }
-
-            override fun unscheduleDrawable(who: Drawable, what: Runnable) {
-                mainHandler.removeCallbacks(what, who)
-            }
-        }
+        // Drawable keeps only a weak reference; the scene owns this bridge for the registration lifetime.
+        drawable.callback = this
         registeredDrawables[pageId] = drawable
         if (drawable is Animatable) {
             if (playbackEnabled && pageId in visiblePageIds) {
@@ -71,6 +60,18 @@ class AnimatedDrawBridge(
                 drawable.stop()
             }
         }
+    }
+
+    override fun invalidateDrawable(who: Drawable) {
+        drawNode?.invalidateDraw()
+    }
+
+    override fun scheduleDrawable(who: Drawable, what: Runnable, `when`: Long) {
+        mainHandler.postAtTime(what, who, `when`)
+    }
+
+    override fun unscheduleDrawable(who: Drawable, what: Runnable) {
+        mainHandler.removeCallbacks(what, who)
     }
 
     fun updateVisiblePages(visiblePageIds: Set<PageId>) {

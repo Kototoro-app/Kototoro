@@ -4,17 +4,17 @@ import android.content.ComponentCallbacks2
 import android.content.res.Configuration
 
 /**
- * Keeps decoded AVIF animations after their consumer releases them, so showing the same page again
- * does not decode every frame again.
+ * Keeps paused AVIF decoders and their bounded frame queues after their consumer releases them.
  *
  * The frames are owned by one consumer at a time ([AvifAnimatedDrawable] is not shareable, which is
  * also why Coil's memory cache cannot keep it). Without this, every reader that drops an off-screen
- * page — paged, webtoon and scene alike — reloaded an animated page for seconds when the reader
- * turned back to it. A released drawable is parked here, stopped; the next decode of the same file
- * at the same requested size takes it back. [budgetBytes] bounds the parked frames, oldest first.
+ * page — paged, webtoon and scene alike — had to open the decoder again on return. A released drawable
+ * is parked here, stopped; the next decode of the same file at the same requested size takes it back.
+ * [budgetBytes] bounds encoded input plus RGB buffers, oldest first. Codec working memory is additional.
  */
 class AvifAnimationPool(
     private val budgetBytes: Long = DEFAULT_BUDGET_BYTES,
+    private val budgetProvider: (() -> Long)? = null,
 ) : ComponentCallbacks2 {
 
     /** Everything the decoded frames depend on: the file's identity and the decode request. */
@@ -34,8 +34,9 @@ class AvifAnimationPool(
 
     @Synchronized
     fun take(key: Key): Taken? {
+        trimToBudget(currentBudget())
         val entry = parked.remove(key) ?: return null
-        parkedBytes -= entry.drawable.byteCount
+        parkedBytes -= entry.drawable.retainedByteCount
         entry.drawable.revive()
         if (!entry.drawable.isUsable()) {
             entry.drawable.recycleFrames()
@@ -47,22 +48,29 @@ class AvifAnimationPool(
     /** Returns false when [drawable] is not kept, in which case the caller frees it. */
     @Synchronized
     fun park(key: Key, drawable: AvifAnimatedDrawable, isSampled: Boolean): Boolean {
-        if (drawable.byteCount > budgetBytes) return false
+        val limit = currentBudget()
+        trimToBudget(limit)
+        if (drawable.retainedByteCount > limit) return false
         parked.remove(key)?.let { previous ->
-            parkedBytes -= previous.drawable.byteCount
+            parkedBytes -= previous.drawable.retainedByteCount
             if (previous.drawable !== drawable) previous.drawable.recycleFrames()
         }
         parked[key] = Entry(drawable, isSampled)
-        parkedBytes += drawable.byteCount
+        parkedBytes += drawable.retainedByteCount
+        trimToBudget(limit)
+        return true
+    }
+
+    private fun currentBudget() = (budgetProvider?.invoke() ?: budgetBytes).coerceAtLeast(0)
+
+    private fun trimToBudget(limit: Long) {
         val iterator = parked.values.iterator()
-        while (parkedBytes > budgetBytes && iterator.hasNext()) {
+        while (parkedBytes > limit && iterator.hasNext()) {
             val eldest = iterator.next()
-            if (eldest.drawable === drawable) break
             iterator.remove()
-            parkedBytes -= eldest.drawable.byteCount
+            parkedBytes -= eldest.drawable.retainedByteCount
             eldest.drawable.recycleFrames()
         }
-        return true
     }
 
     @Synchronized
@@ -91,7 +99,7 @@ class AvifAnimationPool(
     override fun onLowMemory() = clear()
 
     companion object {
-        /** Two animations at the decoder's per-animation budget. */
+        /** Standalone pool default; the app supplies a device-dependent budget. */
         const val DEFAULT_BUDGET_BYTES = 128L * 1024 * 1024
     }
 }

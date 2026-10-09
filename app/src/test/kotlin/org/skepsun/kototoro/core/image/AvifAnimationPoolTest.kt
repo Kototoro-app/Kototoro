@@ -13,6 +13,28 @@ import org.junit.jupiter.api.Test
 class AvifAnimationPoolTest {
 
     @Test
+    fun `encoded input is included in the parked budget`() {
+        val pool = AvifAnimationPool(budgetBytes = 100)
+        val drawable = animation(bytes = 80)
+        every { drawable.retainedByteCount } returns 120
+        assertFalse(pool.park(key("a"), drawable, isSampled = false))
+        assertNull(pool.take(key("a")))
+    }
+
+    @Test
+    fun `lowering the live budget evicts cached frames before reuse`() {
+        var limit = 100L
+        val pool = AvifAnimationPool(budgetProvider = { limit })
+        val drawable = animation(bytes = 80)
+        assertTrue(pool.park(key("a"), drawable, isSampled = true))
+        limit = 40
+
+        assertNull(pool.take(key("a")))
+        verify { drawable.recycleFrames() }
+        assertFalse(pool.park(key("b"), animation(bytes = 80), isSampled = false))
+    }
+
+    @Test
     fun `a parked animation is handed back once for the same decode`() {
         val pool = AvifAnimationPool(budgetBytes = 100)
         val drawable = animation(bytes = 40)
@@ -87,6 +109,7 @@ class AvifAnimationPoolTest {
 
     private fun animation(bytes: Long) = mockk<AvifAnimatedDrawable>(relaxed = true).also {
         every { it.byteCount } returns bytes
+        every { it.retainedByteCount } returns bytes
         every { it.isUsable() } returns true
     }
 

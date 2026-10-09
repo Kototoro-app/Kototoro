@@ -6,6 +6,7 @@ import android.content.SharedPreferences
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -16,6 +17,22 @@ import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingStyle
 /** Pins the actual SETTINGS restore entry point that previously shadowed the shared putAll helper. */
 @RunWith(AndroidJUnit4::class)
 class PreferencesRestoreTest {
+
+    @Test
+    fun avifDefaultsAndResetPreserveOriginalResolution() {
+        val context = IsolatedPreferencesContext(InstrumentationRegistry.getInstrumentation().targetContext)
+        val settings = AppSettings(context)
+        settings.resetAvifAnimationPolicy()
+        assertEquals(0, settings.avifAnimationMemoryLimitMb)
+        assertFalse(settings.isAvifAnimationDownsamplingAllowed)
+        assertFalse(settings.avifAnimationPolicy.allowDownsampling)
+
+        settings.avifAnimationMemoryLimitMb = 16
+        settings.isAvifAnimationDownsamplingAllowed = true
+        settings.resetAvifAnimationPolicy()
+        assertEquals(0, settings.avifAnimationMemoryLimitMb)
+        assertFalse(settings.isAvifAnimationDownsamplingAllowed)
+    }
 
     @Test
     fun settingsRestoreKeepsNovelMarkingValuesReadableAsInts() {
