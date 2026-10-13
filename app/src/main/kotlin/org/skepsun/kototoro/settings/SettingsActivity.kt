@@ -136,6 +136,7 @@ import org.skepsun.kototoro.settings.sources.SourceSettingsRoute
 import org.skepsun.kototoro.settings.sources.SourcesSettingsRoute
 import org.skepsun.kototoro.settings.sources.SourcesSettingsViewModel
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
+import org.skepsun.kototoro.settings.sources.groups.SourceGroupsDialog
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesActivity
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesDeepLink
 import org.skepsun.kototoro.settings.sources.unified.UNIFIED_SOURCES_TAB_COUNT
@@ -437,6 +438,11 @@ class SettingsActivity :
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        savedInstanceState?.let { state ->
+            pendingUnifiedSourcesFileImportKind = state.getString(STATE_PENDING_UNIFIED_IMPORT_KIND)
+                ?.let { name -> runCatching { UnifiedSourceKind.valueOf(name) }.getOrNull() }
+            pendingUnifiedSourcesFileImportEnabled = state.getBoolean(STATE_PENDING_UNIFIED_IMPORT_ENABLED, true)
+        }
         setLegacyTopBarVisible(false)
         addMenuProvider(
             SettingsSearchMenuProvider(viewModel) {
@@ -522,6 +528,8 @@ class SettingsActivity :
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
+        pendingUnifiedSourcesFileImportKind?.let { outState.putString(STATE_PENDING_UNIFIED_IMPORT_KIND, it.name) }
+        outState.putBoolean(STATE_PENDING_UNIFIED_IMPORT_ENABLED, pendingUnifiedSourcesFileImportEnabled)
             when (val destination = composeDestination) {
                 SettingsDestination.Root -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_ROOT)
@@ -1428,12 +1436,16 @@ class SettingsActivity :
                 val coroutineScope = rememberCoroutineScope()
                 var sourceOrder by remember { mutableStateOf<List<org.skepsun.kototoro.core.ui.compose.ReorderItem>?>(null) }
                 var loadingOrder by remember { mutableStateOf(false) }
+                var showSourceGroups by rememberSaveable { mutableStateOf(false) }
                 sourceOrder?.let { items ->
                     org.skepsun.kototoro.core.ui.compose.ReorderDialog(
                         items = items,
                         onDismissRequest = { sourceOrder = null },
                         onSave = unifiedSourcesViewModel::saveSourceOrder,
                     )
+                }
+                if (showSourceGroups) {
+                    SourceGroupsDialog(onDismissRequest = { showSourceGroups = false })
                 }
                 var tabReselectTrigger by remember { mutableStateOf<Pair<Int, Long>?>(null) }
                 val closeSearch = {
@@ -1448,19 +1460,19 @@ class SettingsActivity :
                         readyState = readyState,
                         onSearchClick = { updateUnifiedSourcesSearchActive(true) },
                         onFilterClick = openFilter,
-                        onReorderClick = if (loadingOrder || readyState == null || readyState.filters.query.isNotBlank()) null else {
-                            {
-                                loadingOrder = true
-                                coroutineScope.launch {
-                                    try {
-                                        sourceOrder = unifiedSourcesViewModel.loadSourceOrder()
-                                    } catch (e: kotlinx.coroutines.CancellationException) {
-                                        throw e
-                                    } catch (e: Exception) {
-                                        // ignore
-                                    } finally {
-                                        loadingOrder = false
-                                    }
+                        onGroupsClick = { showSourceGroups = true },
+                        reorderEnabled = !(loadingOrder || readyState == null || readyState.filters.query.isNotBlank()),
+                        onReorderClick = {
+                            loadingOrder = true
+                            coroutineScope.launch {
+                                try {
+                                    sourceOrder = unifiedSourcesViewModel.loadSourceOrder()
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    Toast.makeText(this@SettingsActivity, e.localizedMessage, Toast.LENGTH_SHORT).show()
+                                } finally {
+                                    loadingOrder = false
                                 }
                             }
                         },
@@ -2177,6 +2189,8 @@ class SettingsActivity :
         private const val STATE_SOURCE_SETTINGS_SOURCE = "source_settings_source"
         private const val STATE_UNIFIED_SOURCES_KIND = "unified_sources_kind"
         private const val STATE_UNIFIED_SOURCES_URL = "unified_sources_url"
+        private const val STATE_PENDING_UNIFIED_IMPORT_KIND = "pending_unified_import_kind"
+        private const val STATE_PENDING_UNIFIED_IMPORT_ENABLED = "pending_unified_import_enabled"
         private const val COMPOSE_DESTINATION_ROOT = "root"
         private const val COMPOSE_DESTINATION_APPEARANCE_SETTINGS = "appearance_settings"
         private const val COMPOSE_DESTINATION_APPEARANCE_LIST_SETTINGS = "appearance_list_settings"

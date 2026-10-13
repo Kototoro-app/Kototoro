@@ -174,7 +174,7 @@ internal fun UnifiedRepositoryUrlDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
-    var value by remember(kind, initialUrl) { mutableStateOf(initialUrl) }
+    var value by rememberSaveable(kind, initialUrl) { mutableStateOf(initialUrl) }
     val hint = when (kind) {
         UnifiedSourceKind.LEGADO -> "https://example.com/legado.json"
         UnifiedSourceKind.TVBOX -> "http://z.qiqiv.cn/123.txt"
@@ -213,7 +213,7 @@ internal fun UnifiedInlineRepositoryDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
-    var value by remember(kind) { mutableStateOf("") }
+    var value by rememberSaveable(kind) { mutableStateOf("") }
     SettingsAlertDialog(
         title = stringResource(R.string.paste_repository_with_kind, stringResource(kind.dialogLabelResId())),
         onDismissRequest = onDismiss,

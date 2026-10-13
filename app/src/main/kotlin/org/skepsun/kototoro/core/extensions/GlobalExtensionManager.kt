@@ -54,6 +54,11 @@ object GlobalExtensionManager {
     private val _contentSources = MutableStateFlow<List<PluginContentSource>>(emptyList())
     val contentSources: StateFlow<List<PluginContentSource>> = _contentSources.asStateFlow()
 
+    private val _shadowedSources = MutableStateFlow<Map<String, Map<String, String>>>(emptyMap())
+
+    /** jarName -> (sourceName -> winning jarName) for sources hidden by deduplication. */
+    val shadowedSources: StateFlow<Map<String, Map<String, String>>> = _shadowedSources.asStateFlow()
+
     private val _installedJarNames = MutableStateFlow<List<String>>(emptyList())
     val installedJarNames: StateFlow<List<String>> = _installedJarNames.asStateFlow()
 
@@ -129,6 +134,12 @@ object GlobalExtensionManager {
 
         _mangaSources.value = selectedSources.mapNotNull { it.mangaSource }
         _contentSources.value = selectedSources.mapNotNull { it.contentSource }
+        _shadowedSources.value = findShadowedJarSources(
+            sources = candidates,
+            priorityOrder = priorityOrder,
+            sourceName = JarSourceCandidate::sourceName,
+            jarName = JarSourceCandidate::jarName,
+        )
     }
 
     private fun publishRegistryUpdate() {

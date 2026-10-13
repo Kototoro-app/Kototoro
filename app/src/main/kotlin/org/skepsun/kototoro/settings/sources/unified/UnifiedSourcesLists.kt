@@ -2,8 +2,11 @@ package org.skepsun.kototoro.settings.sources.unified
 
 
 import android.graphics.drawable.Drawable
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -87,6 +90,7 @@ import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabl
 import org.skepsun.kototoro.ireader.model.IReaderMangaSource
 import org.skepsun.kototoro.mihon.model.MihonMangaSource
 import org.skepsun.kototoro.settings.compose.SettingsContentHorizontalPadding
+import org.skepsun.kototoro.settings.sources.test.SourceTestDialog
 
 private object PackageIconMemoryCache {
     private val cache = ConcurrentHashMap<String, Drawable>()
@@ -179,7 +183,8 @@ internal fun UnifiedSourceList(
             }
         }
     }
-    var expandedPackageIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var expandedPackageIdList by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    val expandedPackageIds = remember(expandedPackageIdList) { expandedPackageIdList.toSet() }
     val collapsedPackageIds = remember(collapsiblePackageIds, expandedPackageIds) {
         collapsiblePackageIds - expandedPackageIds
     }
@@ -189,6 +194,7 @@ internal fun UnifiedSourceList(
     // Keep the first action chip aligned with the global content margin; the actions
     // row itself is still horizontally scrollable towards the screen edge.
     val actionsStartPadding = (SettingsContentHorizontalPadding - horizontalPadding).coerceAtLeast(0.dp)
+    var showSourceTest by rememberSaveable { mutableStateOf(false) }
     Box(modifier = modifier) {
         LazyColumn(
             state = listState,
@@ -203,7 +209,7 @@ internal fun UnifiedSourceList(
             item(key = "source_actions") {
                 LazyRow(
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .fillMaxWidth().keepHorizontalSwipes()
                         .padding(bottom = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(start = actionsStartPadding),
@@ -238,7 +244,7 @@ internal fun UnifiedSourceList(
                     }
                     item(key = "expand_all_groups") {
                         CompactActionChip(
-                            onClick = { expandedPackageIds = collapsiblePackageIds },
+                            onClick = { expandedPackageIdList = collapsiblePackageIds.toList() },
                             enabled = collapsiblePackageIds.isNotEmpty(),
                             leadingIcon = {
                                 Icon(
@@ -250,9 +256,17 @@ internal fun UnifiedSourceList(
                             label = { Text(stringResource(R.string.unified_sources_expand_all)) },
                         )
                     }
+                    item(key = "test_all_sources") {
+                        CompactActionChip(
+                            onClick = { showSourceTest = true },
+                            enabled = sources.any { it.isEnabled },
+                            leadingIcon = { Icon(painterResource(R.drawable.ic_play), null, Modifier.size(16.dp)) },
+                            label = { Text(stringResource(R.string.source_test_all)) },
+                        )
+                    }
                     item(key = "collapse_all_groups") {
                         CompactActionChip(
-                            onClick = { expandedPackageIds = emptySet() },
+                            onClick = { expandedPackageIdList = emptyList() },
                             enabled = collapsiblePackageIds.isNotEmpty(),
                             leadingIcon = {
                                 Icon(
@@ -308,7 +322,7 @@ internal fun UnifiedSourceList(
                                     }
                                     onSourceSelectionChange(updated)
                                 } else {
-                                    expandedPackageIds = togglePackageExpanded(expandedPackageIds, row.packageId)
+                                    expandedPackageIdList = togglePackageExpanded(expandedPackageIds, row.packageId).toList()
                                 }
                             },
                             onLongClick = {
@@ -318,7 +332,7 @@ internal fun UnifiedSourceList(
                                 onSourceSelectionChange(selectedSourceIds + memberIds)
                             },
                             onToggleCollapse = {
-                                expandedPackageIds = togglePackageExpanded(expandedPackageIds, row.packageId)
+                                expandedPackageIdList = togglePackageExpanded(expandedPackageIds, row.packageId).toList()
                             },
                         )
                         if (expressive) {
@@ -344,6 +358,9 @@ internal fun UnifiedSourceList(
             alwaysVisible = true,
             contentPadding = PaddingValues(vertical = 4.dp),
         )
+        if (showSourceTest) {
+            SourceTestDialog(sources = sources.filter { it.isEnabled }.map { it.source }, onDismiss = { showSourceTest = false })
+        }
     }
 }
 
@@ -583,7 +600,7 @@ private fun UnifiedSourcePackageHeader(
         // so it does not double as a group toggle.
         IconButton(
             onClick = onToggleCollapse,
-            modifier = Modifier.size(34.dp),
+            modifier = Modifier.size(40.dp),
         ) {
             Icon(
                 painter = painterResource(R.drawable.ic_expand_more),
@@ -642,11 +659,13 @@ private fun UnifiedSourceRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (isSelectionMode) {
-            Checkbox(
-                checked = isSelected,
-                onCheckedChange = { onSelectionToggle() },
-                modifier = Modifier.size(32.dp),
-            )
+            Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onSelectionToggle() },
+                    modifier = Modifier.size(32.dp),
+                )
+            }
         } else {
             Box(
                 modifier = Modifier
@@ -676,6 +695,14 @@ private fun UnifiedSourceRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (item.lock != null) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_lock),
+                        contentDescription = stringResource(R.string.source_lock_locked),
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
                 if (item.isPinned) {
                     Icon(
                         painter = painterResource(R.drawable.ic_pin_small),
@@ -701,6 +728,10 @@ private fun UnifiedSourceRow(
                     ContentSourceAvailability.EMPTY -> CompactTag(
                         text = stringResource(R.string.source_test_unavailable),
                         tone = CompactTagTone.TestedUnavailable,
+                    )
+                    ContentSourceAvailability.CLOUDFLARE -> CompactTag(
+                        text = stringResource(R.string.source_test_cloudflare),
+                        tone = CompactTagTone.TestedCloudflare,
                     )
                     ContentSourceAvailability.UNKNOWN -> Unit
                 }
@@ -753,6 +784,7 @@ private fun UnifiedSourceRow(
         }
         Switch(
             checked = localEnabled,
+            enabled = item.lock == null,
             onCheckedChange = { newValue ->
                 localEnabled = newValue
                 onSourceEnabledChange(item.id, newValue)
@@ -1093,14 +1125,19 @@ internal fun UnifiedPackageList(
                                 onClick = onUpdateAllPackages,
                                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                             ) {
-                                if (updateAllInProgress) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(14.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier.size(14.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    if (updateAllInProgress) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(14.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                        )
+                                    }
                                 }
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = stringResource(
                                         if (updateAllInProgress) {
@@ -1119,7 +1156,7 @@ internal fun UnifiedPackageList(
             item(key = "package_actions") {
                 LazyRow(
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .fillMaxWidth().keepHorizontalSwipes()
                         .padding(bottom = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -1413,17 +1450,24 @@ private fun UnifiedPackageRow(
                     }
                 }
             }
-                if (item.installProgressPercent != null) {
-                    Text(
-                        text = stringResource(R.string.package_download_progress, item.installProgressPercent),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                LinearProgressIndicator(
-                    progress = { item.installProgressPercent / 100f },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+                val installProgress = item.installProgressPercent
+                AnimatedVisibility(
+                    visible = installProgress != null,
+                    enter = expandVertically(),
+                    exit = shrinkVertically(),
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = stringResource(R.string.package_download_progress, installProgress ?: 0),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        LinearProgressIndicator(
+                            progress = { (installProgress ?: 0) / 100f },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1481,8 +1525,9 @@ private fun UnifiedPackageRow(
                     }
                         UnifiedSourcePackageState.INSTALLING -> {
                             CompactActionChip(
-                                onClick = onCancelInstall,
-                                label = { Text(stringResource(android.R.string.cancel)) },
+                                onClick = onPrimaryAction,
+                                enabled = false,
+                                label = { Text(item.primaryActionLabel().ifBlank { stringResource(R.string.loading_) }) },
                             )
                         }
                     UnifiedSourcePackageState.INSTALLED -> Unit
@@ -1491,6 +1536,12 @@ private fun UnifiedPackageRow(
                         CompactActionChip(
                             onClick = onUninstall,
                             label = { Text(stringResource(R.string.remove)) },
+                        )
+                    }
+                    if (item.state == UnifiedSourcePackageState.INSTALLING) {
+                        CompactActionChip(
+                            onClick = onCancelInstall,
+                            label = { Text(stringResource(android.R.string.cancel)) },
                         )
                     }
             }

@@ -71,7 +71,7 @@ class ExtensionRepositoriesViewModel @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                onMessage.call("Update failed: ${e.message}")
+                onMessage.call(appContext.getString(R.string.extension_repo_update_failed, e.message))
             }
         }
     }

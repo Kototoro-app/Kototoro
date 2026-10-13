@@ -77,6 +77,7 @@ private fun label(section: BackupSection?): String = when (section) {
     BackupSection.SCROBBLING -> "追踪服务"
     BackupSection.TRACKS, BackupSection.TRACK_LOGS -> "更新追踪"
     BackupSection.EXTENSION_REPOS -> "扩展仓库"
+    BackupSection.EXTENSION_GROUPS -> "扩展分组"
     BackupSection.SOURCE_ORIGINS -> "来源记录"
     BackupSection.SAVED_FILTERS -> "筛选预设"
     BackupSection.ENTITY_GRAPH_ENTITIES, BackupSection.ENTITY_GRAPH_BINDINGS,

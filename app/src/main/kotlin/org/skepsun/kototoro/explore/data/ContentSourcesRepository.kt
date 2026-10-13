@@ -1001,6 +1001,24 @@ class ContentSourcesRepository @Inject constructor(
         result
     }.onStart { assimilateNewSources() }
 
+    private val lockStore: org.skepsun.kototoro.settings.sources.lock.SourceLockStore?
+        get() = runCatching { org.skepsun.kototoro.settings.sources.lock.SourceLockStore.get(context) }.getOrNull()
+
+    fun lockState(name: String): Boolean? = lockStore?.get(name)
+
+    fun observeLocks(): Flow<Map<String, Boolean>> = lockStore?.locks ?: kotlinx.coroutines.flow.flowOf(emptyMap())
+
+    fun observeLock(source: ContentSource): Flow<Boolean?> = observeLocks().map { it[source.name] }.distinctUntilChanged()
+
+    /** Locks the source at [lockedEnabled] (and applies that state), or unlocks it when null. */
+    suspend fun setSourceLock(source: ContentSource, lockedEnabled: Boolean?) {
+        val store = lockStore ?: return
+        store.set(source.name, lockedEnabled)
+        if (lockedEnabled != null) {
+            setSourcesEnabledImpl(listOf(source), lockedEnabled, force = true)
+        }
+    }
+
     suspend fun setSourcesEnabled(sources: Collection<ContentSource>, isEnabled: Boolean): ReversibleHandle {
         setSourcesEnabledImpl(sources, isEnabled)
         return ReversibleHandle {
@@ -1011,6 +1029,7 @@ class ContentSourcesRepository @Inject constructor(
     suspend fun setSourcesEnabledExclusive(sources: Set<ContentSource>) {
         val allSources = queryAllSources(includeDisabledSources = true)
         val enabledNames = sources.map { it.name }.toSet()
+        val locks = lockStore?.locks?.value.orEmpty()
 
         val jsonSourcesToEnable = mutableListOf<String>()
         val jsonSourcesToDisable = mutableListOf<String>()
@@ -1018,7 +1037,7 @@ class ContentSourcesRepository @Inject constructor(
         val nativeSourcesToDisable = mutableListOf<String>()
 
         for (s in allSources) {
-            val isEnabled = s.name in enabledNames
+            val isEnabled = locks[s.name] ?: (s.name in enabledNames)
             if (s.name.startsWith("JSON_")) {
                 if (isEnabled) jsonSourcesToEnable.add(s.name) else jsonSourcesToDisable.add(s.name)
             } else {
@@ -1168,7 +1187,14 @@ class ContentSourcesRepository @Inject constructor(
         }
     }
 
-    private suspend fun setSourcesEnabledImpl(sources: Collection<ContentSource>, isEnabled: Boolean) {
+    private suspend fun setSourcesEnabledImpl(
+        requested: Collection<ContentSource>,
+        isEnabled: Boolean,
+        force: Boolean = false,
+    ) {
+        val locks = if (force) emptyMap() else lockStore?.locks?.value.orEmpty()
+        val sources = if (locks.isEmpty()) requested else requested.filter { it.name !in locks }
+        if (sources.isEmpty()) return
         if (!isEnabled && settings.isAllSourcesEnabled) {
             materializeAllEnabledState()
         }

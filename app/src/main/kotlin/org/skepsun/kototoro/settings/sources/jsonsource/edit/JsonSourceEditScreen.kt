@@ -44,12 +44,12 @@ fun JsonSourceEditScreen(
                 title = { Text(context.getString(if (isEdit) R.string.edit_source else R.string.add_source)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = context.getString(R.string.back))
                     }
                 },
                 actions = {
                     IconButton(onClick = onSave) {
-                        Icon(Icons.Default.Check, contentDescription = null)
+                        Icon(Icons.Default.Check, contentDescription = context.getString(R.string.save))
                     }
                 },
             )

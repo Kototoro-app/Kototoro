@@ -69,6 +69,8 @@ class SourceSettingsViewModel @Inject constructor(
     val isEnabled = mangaSourcesRepository.observeIsEnabled(source)
         .map<Boolean, Boolean?> { it }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val lock = mangaSourcesRepository.observeLock(source)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     private val _jsAccountMeta = MutableStateFlow<JsContentRepository.JsAccountMeta?>(null)
     val jsAccountMeta: StateFlow<JsContentRepository.JsAccountMeta?> = _jsAccountMeta.asStateFlow()
     private val _jsLoginState = MutableEventFlow<Boolean>()
@@ -259,6 +261,14 @@ class SourceSettingsViewModel @Inject constructor(
     fun setEnabled(value: Boolean) {
         launchJob(Dispatchers.Default) {
             mangaSourcesRepository.setSourcesEnabled(setOf(source), value)
+        }
+    }
+
+    /** Locks the source at its current enabled state, or unlocks it when it is already locked. */
+    fun toggleLock() {
+        launchJob(Dispatchers.Default) {
+            val current = mangaSourcesRepository.lockState(source.name)
+            mangaSourcesRepository.setSourceLock(source, if (current == null) isEnabled.value ?: true else null)
         }
     }
 

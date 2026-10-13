@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_groups_export_lost">The export target was lost. Please try exporting again.</string>
+    <string name="extension_repo_update_failed">Update failed: %1$s</string>
+</resources>

@@ -4,4 +4,5 @@ enum class ContentSourceAvailability {
     UNKNOWN,
     AVAILABLE,
     EMPTY,
+    CLOUDFLARE,
 }

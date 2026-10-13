@@ -137,6 +137,8 @@ data class UnifiedSourceItem(
     val isNsfw: Boolean,
     val isBroken: Boolean,
     val testAvailability: ContentSourceAvailability = ContentSourceAvailability.UNKNOWN,
+    /** Locked enabled state, null when the source is not locked. */
+    val lock: Boolean? = null,
 )
 
 internal fun UnifiedSourcePackageItem.matchesRepositoryFilter(repositoryId: String?): Boolean =

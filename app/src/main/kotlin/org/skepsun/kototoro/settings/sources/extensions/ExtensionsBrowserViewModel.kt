@@ -214,8 +214,9 @@ class ExtensionsBrowserViewModel @Inject constructor(
         if (item.extension.type == ExternalExtensionType.JAR) {
             val pluginDir = java.io.File(appContext.filesDir, "plugins")
             val jarFile = java.io.File(pluginDir, "${item.pkgName}.jar")
-            if (jarFile.exists()) {
-                jarFile.delete()
+            if (jarFile.exists() && !jarFile.delete()) {
+                errorEvent.call(java.io.IOException(appContext.getString(R.string.extension_file_delete_failed, jarFile.name)))
+                return
             }
             appContext.getSharedPreferences("jar_plugin_versions", android.content.Context.MODE_PRIVATE)
                 .edit()
@@ -224,6 +225,7 @@ class ExtensionsBrowserViewModel @Inject constructor(
                 .remove("${item.pkgName}:repoName")
                 .apply()
             org.skepsun.kototoro.core.extensions.GlobalExtensionManager.initialize(appContext)
+            refresh()
             return
         }
 
@@ -232,8 +234,9 @@ class ExtensionsBrowserViewModel @Inject constructor(
             val archiveName = prefs.getString("${item.pkgName}:archive", null) ?: "${item.pkgName}.cs3"
             val pluginDir = java.io.File(java.io.File(appContext.filesDir, "cloudstream"), "plugins")
             val pluginFile = java.io.File(pluginDir, archiveName)
-            if (pluginFile.exists()) {
-                pluginFile.delete()
+            if (pluginFile.exists() && !pluginFile.delete()) {
+                errorEvent.call(java.io.IOException(appContext.getString(R.string.extension_file_delete_failed, pluginFile.name)))
+                return
             }
             prefs.edit()
                 .remove(item.pkgName)

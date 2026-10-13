@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="sync_settings_enabled_title">Sync app settings</string>
+    <string name="sync_settings_enabled_summary">Reader, player and appearance settings. Passwords, tokens and device paths are never synced.</string>
+</resources>

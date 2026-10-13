@@ -42,6 +42,10 @@ import org.skepsun.kototoro.backups.data.model.FavouriteBackup
 import org.skepsun.kototoro.backups.data.model.HistoryBackup
 import org.skepsun.kototoro.backups.data.model.ScrobblingBackup
 import org.skepsun.kototoro.backups.data.model.SourceBackup
+import org.skepsun.kototoro.settings.sources.groups.SOURCE_GROUP_MAX_BYTES
+import org.skepsun.kototoro.settings.sources.groups.SourceGroup
+import org.skepsun.kototoro.settings.sources.groups.SourceGroupJson
+import org.skepsun.kototoro.settings.sources.groups.isValid
 import org.skepsun.kototoro.backups.data.model.SourceOriginBackup
 import org.skepsun.kototoro.backups.data.model.StatisticBackup
 import org.skepsun.kototoro.backups.data.model.TagBackup
@@ -371,8 +375,13 @@ class BackupRepository @Inject constructor(
 
                 BackupSection.SOURCES -> output.writeJsonArray(
                     section = BackupSection.SOURCES,
-                    data = database.getSourcesDao().dumpEnabled()
-                        .filter { format != ExportFormat.KOTATSU || it.source in kotatsuSourceNames }
+                    data = (
+                        if (format == ExportFormat.KOTATSU) {
+                            database.getSourcesDao().dumpEnabled()
+                        } else {
+                            database.getSourcesDao().findAll().asFlow()
+                        }
+                    ).filter { format != ExportFormat.KOTATSU || it.source in kotatsuSourceNames }
                         .map { SourceBackup(it) },
                     serializer = serializer(),
                 )
@@ -395,6 +404,12 @@ class BackupRepository @Inject constructor(
                         serializer = serializer(),
                     )
                 }
+
+                BackupSection.EXTENSION_GROUPS -> output.writeJsonArray(
+                    section = BackupSection.EXTENSION_GROUPS,
+                    data = readStoredSourceGroups().asFlow(),
+                    serializer = serializer(),
+                )
 
                 BackupSection.SCROBBLING -> output.writeJsonArray(
                     section = BackupSection.SCROBBLING,
@@ -637,6 +652,11 @@ class BackupRepository @Inject constructor(
                     BackupSection.EXTENSION_REPOS -> sectionInput.readJsonArray<ExtensionRepoBackup>(serializer()).restoreToDb("EXTENSION_REPOS") {
                         getExternalExtensionRepoDao().upsert(it.toEntity())
                     }
+
+                    BackupSection.EXTENSION_GROUPS -> sectionInput.readJsonArray<SourceGroup>(serializer())
+                        .restoreWithoutTransaction("EXTENSION_GROUPS") {
+                            storeSourceGroup(it)
+                        }
 
                     BackupSection.SCROBBLING -> sectionInput.readJsonArray<ScrobblingBackup>(serializer()).restoreToDb("SCROBBLING") {
                         getScrobblingDao().upsert(it.toEntity())
@@ -979,6 +999,9 @@ class BackupRepository @Inject constructor(
             if (BackupSection.SOURCE_ORIGINS in actOn) {
                 database.getSourceOriginsDao().deleteAll()
             }
+            if (BackupSection.EXTENSION_GROUPS in actOn) {
+                sourceGroupsDir().listFiles().orEmpty().forEach { it.delete() }
+            }
         }
     }
 
@@ -1135,6 +1158,27 @@ class BackupRepository @Inject constructor(
         flushBatch()
         Log.d(TAG, "restoreToDb: label=$label complete count=$processed totalMs=${SystemClock.elapsedRealtime() - startedAt}")
         return result
+    }
+
+    private fun sourceGroupsDir() = java.io.File(appContext.filesDir, "source_groups")
+
+    private fun readStoredSourceGroups(): List<SourceGroup> = sourceGroupsDir()
+        .listFiles { f -> f.isFile && f.extension == "json" }.orEmpty()
+        .filter { it.length() in 1..SOURCE_GROUP_MAX_BYTES }
+        .mapNotNull { file ->
+            runCatching { SourceGroupJson.decode(file.readText()) }.getOrNull()
+                ?.takeIf { it.isValid() && file.nameWithoutExtension == it.id }
+        }
+
+    /** Restores a group file; an existing group with the same id is kept (merge, never overwrite). */
+    private fun storeSourceGroup(group: SourceGroup) {
+        if (!group.isValid()) return
+        val dir = sourceGroupsDir().also { it.mkdirs() }
+        val target = java.io.File(dir, "${group.id}.json")
+        if (target.exists()) return
+        val temp = java.io.File(dir, "${group.id}.json.tmp")
+        temp.writeText(SourceGroupJson.encode(group))
+        check(temp.renameTo(target)) { "Cannot store source group ${group.id}" }
     }
 
     private suspend fun <T> Sequence<T>.restoreWithoutTransaction(

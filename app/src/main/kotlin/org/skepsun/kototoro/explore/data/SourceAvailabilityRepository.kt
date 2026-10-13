@@ -15,7 +15,7 @@ class SourceAvailabilityRepository @Inject constructor(
 ) {
 
     fun observeAvailability(): Flow<Map<String, ContentSourceAvailability>> {
-        return settings.observe(KEY_AVAILABLE_SOURCES, KEY_EMPTY_SOURCES)
+        return settings.observe(KEY_AVAILABLE_SOURCES, KEY_EMPTY_SOURCES, KEY_CLOUDFLARE_SOURCES)
             .map { buildAvailabilityMap() }
     }
 
@@ -23,6 +23,7 @@ class SourceAvailabilityRepository @Inject constructor(
         val name = source.name
         return when {
             name in getSet(KEY_EMPTY_SOURCES) -> ContentSourceAvailability.EMPTY
+            name in getSet(KEY_CLOUDFLARE_SOURCES) -> ContentSourceAvailability.CLOUDFLARE
             name in getSet(KEY_AVAILABLE_SOURCES) -> ContentSourceAvailability.AVAILABLE
             else -> ContentSourceAvailability.UNKNOWN
         }
@@ -47,24 +48,30 @@ class SourceAvailabilityRepository @Inject constructor(
     private fun setAvailability(sourceName: String, availability: ContentSourceAvailability) {
         val available = getSet(KEY_AVAILABLE_SOURCES).toMutableSet()
         val empty = getSet(KEY_EMPTY_SOURCES).toMutableSet()
+        val cloudflare = getSet(KEY_CLOUDFLARE_SOURCES).toMutableSet()
         available.remove(sourceName)
         empty.remove(sourceName)
+        cloudflare.remove(sourceName)
         when (availability) {
             ContentSourceAvailability.AVAILABLE -> available += sourceName
             ContentSourceAvailability.EMPTY -> empty += sourceName
+            ContentSourceAvailability.CLOUDFLARE -> cloudflare += sourceName
             ContentSourceAvailability.UNKNOWN -> Unit
         }
         settings.prefs.edit {
             putStringSet(KEY_AVAILABLE_SOURCES, available)
             putStringSet(KEY_EMPTY_SOURCES, empty)
+            putStringSet(KEY_CLOUDFLARE_SOURCES, cloudflare)
         }
     }
 
     private fun buildAvailabilityMap(): Map<String, ContentSourceAvailability> {
         val empty = getSet(KEY_EMPTY_SOURCES)
         val available = getSet(KEY_AVAILABLE_SOURCES)
-        return buildMap(empty.size + available.size) {
+        val cloudflare = getSet(KEY_CLOUDFLARE_SOURCES)
+        return buildMap(empty.size + available.size + cloudflare.size) {
             available.forEach { put(it, ContentSourceAvailability.AVAILABLE) }
+            cloudflare.forEach { put(it, ContentSourceAvailability.CLOUDFLARE) }
             empty.forEach { put(it, ContentSourceAvailability.EMPTY) }
         }
     }
@@ -76,5 +83,6 @@ class SourceAvailabilityRepository @Inject constructor(
     private companion object {
         const val KEY_AVAILABLE_SOURCES = "available_sources"
         const val KEY_EMPTY_SOURCES = "empty_sources"
+        const val KEY_CLOUDFLARE_SOURCES = "cloudflare_sources"
     }
 }

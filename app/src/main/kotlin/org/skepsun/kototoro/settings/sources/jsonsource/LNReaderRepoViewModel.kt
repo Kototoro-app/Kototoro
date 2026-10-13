@@ -20,6 +20,7 @@ import org.skepsun.kototoro.core.network.jsonsource.JsonSourceHttpClient
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.ui.BaseViewModel
+import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.settings.sources.extensions.normalizeExtensionLanguageCode
 import javax.inject.Inject
 
@@ -128,11 +129,8 @@ class LNReaderRepoViewModel @Inject constructor(
             items.add(PluginDisplayItem.LangHeader(lang, langPlugins.size, isCollapsed))
             if (!isCollapsed) {
                 for (plugin in langPlugins.sortedBy { it.name }) {
-                    val isInstalled = installed.any { id ->
-                        // Match by hash-based ID pattern
-                        id.contains(plugin.site.hashCode().toUInt().toString(16).uppercase()) ||
-                            id.contains(plugin.id.hashCode().toUInt().toString(16).uppercase())
-                    }
+                    val sourceIds = lnReaderSourceIdsOf(plugin)
+                    val isInstalled = installed.any { id -> id in sourceIds }
                     items.add(PluginDisplayItem.Plugin(plugin, isInstalled))
                 }
             }
@@ -164,16 +162,21 @@ class LNReaderRepoViewModel @Inject constructor(
     }
 
     fun installPlugin(plugin: LNReaderPluginInfo) {
+        // Ignore a second request for a plugin that is already being installed (e.g. double tap).
+        if (plugin.id in _installingPluginIds.value) return
+        _installingPluginIds.value = _installingPluginIds.value + plugin.id
         viewModelScope.launch(Dispatchers.IO) {
-            _installingPluginIds.value = _installingPluginIds.value + plugin.id
-            repository.installPlugin(plugin)
-                .onSuccess {
-                    android.util.Log.d("LNReaderRepoVM", "Installed ${plugin.name}")
-                }
-                .onFailure { e ->
-                    android.util.Log.e("LNReaderRepoVM", "Failed to install ${plugin.name}", e)
-                }
-            _installingPluginIds.value = _installingPluginIds.value - plugin.id
+            try {
+                repository.installPlugin(plugin)
+                    .onSuccess {
+                        android.util.Log.d("LNReaderRepoVM", "Installed ${plugin.name}")
+                    }
+                    .onFailure { e ->
+                        android.util.Log.e("LNReaderRepoVM", "Failed to install ${plugin.name}", e)
+                    }
+            } finally {
+                _installingPluginIds.value = _installingPluginIds.value - plugin.id
+            }
         }
     }
 
@@ -181,10 +184,8 @@ class LNReaderRepoViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _installingPluginIds.value = _installingPluginIds.value + plugin.id
 
-            val idsToRemove = installedSourceIds.value.filter { id ->
-                id.contains(plugin.site.hashCode().toUInt().toString(16).uppercase()) ||
-                id.contains(plugin.id.hashCode().toUInt().toString(16).uppercase())
-            }
+            val sourceIds = lnReaderSourceIdsOf(plugin)
+            val idsToRemove = installedSourceIds.value.filter { id -> id in sourceIds }
 
             idsToRemove.forEach { id ->
                 try {
@@ -192,11 +193,22 @@ class LNReaderRepoViewModel @Inject constructor(
                     android.util.Log.d("LNReaderRepoVM", "Deleted source $id for ${plugin.name}")
                 } catch (e: Exception) {
                     android.util.Log.e("LNReaderRepoVM", "Failed to delete source $id", e)
+                    errorEvent.call(e)
                 }
             }
 
             _installingPluginIds.value = _installingPluginIds.value - plugin.id
         }
+    }
+
+    /**
+     * Source ids that JsonSourceManager generates for an LNReader plugin: the type prefix plus the
+     * uppercase hex hash of the site (or the plugin id when the site is blank). Exact matches only.
+     */
+    private fun lnReaderSourceIdsOf(plugin: LNReaderPluginInfo): Set<String> {
+        return setOf(plugin.site, plugin.id)
+            .filter { it.isNotBlank() }
+            .mapTo(HashSet()) { key -> LNREADER_SOURCE_ID_PREFIX + key.hashCode().toUInt().toString(16).uppercase() }
     }
 
     fun setSearchQuery(query: String) {
@@ -223,6 +235,8 @@ class LNReaderRepoViewModel @Inject constructor(
 
     private companion object {
         private const val TAG = "LNReaderRepoVM"
+        // Must match JsonSourceManager's LNREADER_PREFIX.
+        private const val LNREADER_SOURCE_ID_PREFIX = "JSON_LNREADER_"
     }
 }
 

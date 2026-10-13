@@ -4,6 +4,7 @@ import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.newCachelessCallWithProgress
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.network.awaitSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -80,8 +81,9 @@ class ExtensionInstallService @Inject constructor(
         for (archiveUrl in candidates) {
             val call = downloadClient(archiveUrl)
                 .newCachelessCallWithProgress(GET(archiveUrl), ExtensionInstallProgressListener(extension.pkgName))
-            check(activeCalls.putIfAbsent(extension.pkgName, call) == null) {
-                "Extension install download already in progress for ${extension.pkgName}"
+            if (activeCalls.putIfAbsent(extension.pkgName, call) != null) {
+                // A download for this package is already running (e.g. double tap): ignore this request.
+                return ExtensionInstallResult.Completed
             }
             updateDownloadState(extension.pkgName, bytesRead = 0L, contentLength = -1L)
             try {
@@ -101,6 +103,10 @@ class ExtensionInstallService @Inject constructor(
                 }
                 // Mirror miss (blocked host / 404 through a proxy): fall through to the next candidate.
                 android.util.Log.w("KototoroInit", "install download via $archiveUrl failed: ${e.message}")
+                lastError = e
+            } catch (e: HttpException) {
+                // awaitSuccess() reports non-2xx responses as HttpException: treat them like a mirror miss too.
+                android.util.Log.w("KototoroInit", "install download via $archiveUrl failed: HTTP ${e.code}")
                 lastError = e
             } finally {
                 activeCalls.remove(extension.pkgName)

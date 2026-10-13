@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.core.extensions.GlobalExtensionManager
 import org.skepsun.kototoro.core.extensions.jarBaseName
@@ -28,6 +29,7 @@ import org.skepsun.kototoro.core.extensions.resolveJarPriorityOrder
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.BaseViewModel
+import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import javax.inject.Inject
 
@@ -129,10 +131,12 @@ class SourcesSettingsViewModel @Inject constructor(
 
     fun deletePlugin(file: File) {
         viewModelScope.launch(Dispatchers.IO) {
-            if (file.delete()) {
-                GlobalExtensionManager.initialize(context)
-                loadPlugins()
+            if (file.exists() && !file.delete()) {
+                errorEvent.call(IOException(context.getString(R.string.extension_file_delete_failed, file.name)))
+                return@launch
             }
+            GlobalExtensionManager.initialize(context)
+            loadPlugins()
         }
     }
 

@@ -53,6 +53,8 @@ data class SourceSettingsSwitchRowUiState(
     val summary: String? = null,
     @DrawableRes val iconRes: Int? = null,
     val enabled: Boolean = true,
+    val locked: Boolean = false,
+    val onLockClick: (() -> Unit)? = null,
     val onCheckedChange: (Boolean) -> Unit,
 ) : SourceSettingsRowUiState
 
@@ -156,6 +158,8 @@ fun SourceSettingsScreen(
                                                 iconRes = row.iconRes ?: R.drawable.ic_toggle,
                                                 enabled = row.enabled,
                                                 onCheckedChange = row.onCheckedChange,
+                                                locked = row.locked,
+                                                onLockClick = row.onLockClick,
                                             )
                                         }
 

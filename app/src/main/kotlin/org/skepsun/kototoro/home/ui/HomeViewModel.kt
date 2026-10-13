@@ -643,6 +643,7 @@ class HomeViewModel @Inject constructor(
                         org.skepsun.kototoro.backups.domain.BackupSection.WORK_FAVOURITES,
                         org.skepsun.kototoro.backups.domain.BackupSection.WORK_STATS,
                         org.skepsun.kototoro.backups.domain.BackupSection.EXTENSION_REPOS,
+                        org.skepsun.kototoro.backups.domain.BackupSection.EXTENSION_GROUPS,
                         org.skepsun.kototoro.backups.domain.BackupSection.SETTINGS,
                         org.skepsun.kototoro.backups.domain.BackupSection.SETTINGS_READER_GRID,
                         org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_ENTITIES,

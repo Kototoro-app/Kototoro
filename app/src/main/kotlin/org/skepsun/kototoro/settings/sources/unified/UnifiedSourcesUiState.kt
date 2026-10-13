@@ -60,6 +60,7 @@ enum class UnifiedTestAvailabilityFilter {
     UNTESTED,
     AVAILABLE,
     UNAVAILABLE,
+    CLOUDFLARE,
 }
 
 enum class UnifiedNsfwFilter {

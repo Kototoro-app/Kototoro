@@ -16,6 +16,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -217,6 +222,7 @@ internal enum class CompactTagTone {
     Warning,
     TestedAvailable,
     TestedUnavailable,
+    TestedCloudflare,
 }
 
 @Composable
@@ -236,6 +242,8 @@ internal fun CompactTag(
             MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
         CompactTagTone.TestedUnavailable ->
             MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+        CompactTagTone.TestedCloudflare ->
+            MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     }
     Surface(
         modifier = modifier,
@@ -365,6 +373,7 @@ internal fun UnifiedTestAvailabilityFilter.displayLabel(): String {
         UnifiedTestAvailabilityFilter.UNTESTED -> stringResource(R.string.source_untested)
         UnifiedTestAvailabilityFilter.AVAILABLE -> stringResource(R.string.available)
         UnifiedTestAvailabilityFilter.UNAVAILABLE -> stringResource(R.string.unavailable)
+        UnifiedTestAvailabilityFilter.CLOUDFLARE -> stringResource(R.string.source_test_cloudflare)
     }
 }
 
@@ -394,3 +403,13 @@ private val topBarContentTypes = linkedSetOf(
 private fun Set<ContentType>.primaryContentType(): ContentType? {
     return singleOrNull { it in topBarContentTypes }
 }
+
+private val SwallowHorizontalScroll = object : NestedScrollConnection {
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset =
+        Offset(available.x, 0f)
+
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
+        Velocity(available.x, 0f)
+}
+
+internal fun Modifier.keepHorizontalSwipes(): Modifier = nestedScroll(SwallowHorizontalScroll)

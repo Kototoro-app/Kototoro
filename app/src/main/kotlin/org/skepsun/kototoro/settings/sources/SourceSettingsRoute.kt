@@ -166,15 +166,19 @@ fun SourceSettingsRoute(
         viewModel.onResume()
     }
 
-    controller.sourcePrefs.observeChanges().map { Any() }.collectAsStateWithLifecycle(initialValue = Any()).value
-    controller.legadoSourcePrefs.observeChanges().map { Any() }.collectAsStateWithLifecycle(initialValue = Any()).value
-    controller.legadoBookPrefs.observeChanges().map { Any() }.collectAsStateWithLifecycle(initialValue = Any()).value
+    val sourcePrefChanges = remember(controller) { controller.sourcePrefs.observeChanges().map { Any() } }
+    val legadoSourcePrefChanges = remember(controller) { controller.legadoSourcePrefs.observeChanges().map { Any() } }
+    val legadoBookPrefChanges = remember(controller) { controller.legadoBookPrefs.observeChanges().map { Any() } }
+    sourcePrefChanges.collectAsStateWithLifecycle(initialValue = Any()).value
+    legadoSourcePrefChanges.collectAsStateWithLifecycle(initialValue = Any()).value
+    legadoBookPrefChanges.collectAsStateWithLifecycle(initialValue = Any()).value
 
     val configKeys = configKeysFlow.asStateFlow().collectAsStateWithLifecycle().value
     val jsSettingsSchema = jsSettingsSchemaFlow.asStateFlow().collectAsStateWithLifecycle().value
     val externalPreferenceScreen = externalPreferenceScreenFlow.asStateFlow().collectAsStateWithLifecycle().value
     val isRepositorySettingsLoading = repositorySettingsLoadingFlow.collectAsStateWithLifecycle().value
     val isEnabled = viewModel.isEnabled.collectAsStateWithLifecycle().value
+    val lock = viewModel.lock.collectAsStateWithLifecycle().value
     val browserUrl = viewModel.browserUrl.collectAsStateWithLifecycle().value
     val username = viewModel.username.collectAsStateWithLifecycle().value
     val isAuthorized = viewModel.isAuthorized.collectAsStateWithLifecycle().value
@@ -187,6 +191,7 @@ fun SourceSettingsRoute(
             externalPreferenceScreen = externalPreferenceScreen,
             isRepositorySettingsLoading = isRepositorySettingsLoading,
             isEnabled = isEnabled,
+            lock = lock,
             browserUrl = browserUrl,
             username = username,
             isAuthorized = isAuthorized,
@@ -225,6 +230,7 @@ private class SourceSettingsRouteController(
         externalPreferenceScreen: PreferenceScreen?,
         isRepositorySettingsLoading: Boolean,
         isEnabled: Boolean?,
+        lock: Boolean?,
         browserUrl: String?,
         username: String?,
         isAuthorized: Boolean?,
@@ -235,7 +241,7 @@ private class SourceSettingsRouteController(
         val contentType = viewModel.source.getContentType()
         val isValidSource = repository !is EmptyContentRepository
 
-        buildGeneralRows(contentType, isValidSource, isEnabled).takeIf { it.isNotEmpty() }?.let { rows ->
+        buildGeneralRows(contentType, isValidSource, isEnabled, lock).takeIf { it.isNotEmpty() }?.let { rows ->
             sections += SourceSettingsSectionUiState(
                 id = "general",
                 title = context.getString(R.string.reader_translation_section_general),
@@ -436,6 +442,7 @@ private class SourceSettingsRouteController(
         contentType: ContentType,
         isValidSource: Boolean,
         isEnabled: Boolean?,
+        lock: Boolean?,
     ): List<SourceSettingsRowUiState> {
         val rows = mutableListOf<SourceSettingsRowUiState>()
         if (isValidSource && !settings.isAllSourcesEnabled) {
@@ -443,8 +450,10 @@ private class SourceSettingsRouteController(
                 id = "enable",
                 title = context.getString(contentType.getEnableSourceTitleResId()),
                 checked = isEnabled ?: true,
-                enabled = isEnabled != null,
+                enabled = isEnabled != null && lock == null,
                 onCheckedChange = viewModel::setEnabled,
+                locked = lock != null,
+                onLockClick = viewModel::toggleLock,
             )
         }
         if (isValidSource) {

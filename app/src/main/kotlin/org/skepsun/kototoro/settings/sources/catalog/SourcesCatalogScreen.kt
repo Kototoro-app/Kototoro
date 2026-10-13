@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Search
@@ -36,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,9 +71,9 @@ fun SourcesCatalogRoute(
     val locales by viewModel.locales.collectAsStateWithLifecycle()
     val contentTypes by viewModel.contentTypes.collectAsStateWithLifecycle()
     val hasNewSources by viewModel.hasNewSources.collectAsStateWithLifecycle()
-    var searchVisible by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
-    var localeMenuVisible by remember { mutableStateOf(false) }
+    var searchVisible by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var localeMenuVisible by rememberSaveable { mutableStateOf(false) }
 
     SourcesCatalogScreen(
         items = items,
@@ -138,7 +141,14 @@ fun SourcesCatalogScreen(
                             )
                         } else Text(stringResource(R.string.remote_sources))
                     },
-                    navigationIcon = { IconButton(onClick = onBack) { Text("‹") } },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back),
+                            )
+                        }
+                    },
                     actions = {
                         IconButton(onClick = if (searchVisible) onSearchClose else onSearchClick) {
                             Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search))
@@ -187,7 +197,9 @@ fun SourcesCatalogScreen(
                         FilterChip(type in filter.types, { onContentTypeChange(type, type !in filter.types) }, label = { Text(stringResource(type.titleResId)) })
                     }
                 }
-                if (items.any { it === LoadingState }) LinearProgressIndicator(Modifier.fillMaxWidth())
+                Box(Modifier.fillMaxWidth().height(4.dp)) {
+                    if (items.any { it === LoadingState }) LinearProgressIndicator(Modifier.fillMaxWidth())
+                }
             }
         },
     ) { padding ->

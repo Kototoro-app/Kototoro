@@ -507,19 +507,14 @@ private fun Modifier.fastScrollbarPointerInput(
             return@awaitEachGesture
         }
         val slop = viewConfiguration.touchSlop
-        val handleTop = (size.height - handleHeightPx).coerceAtLeast(0f) * handleFraction().coerceIn(0f, 1f)
-        val onHandle = handleVisible() &&
-            down.position.y in (handleTop - slop)..(handleTop + handleHeightPx + slop)
-        if (!onHandle) {
-            // Away from the handle, only a deliberate vertical drag fast-scrolls. A touch that moves
-            // sideways first is the edge back gesture and must not make the list jump.
-            while (true) {
-                val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
-                if (!change.pressed) return@awaitEachGesture
-                val delta = change.position - down.position
-                if (abs(delta.x) > slop && abs(delta.x) >= abs(delta.y)) return@awaitEachGesture
-                if (abs(delta.y) > slop) break
-            }
+        // Both the handle and the track only start a drag on a deliberate vertical move. A touch that
+        // moves sideways first is the edge back gesture (pager) and must not be consumed here.
+        while (true) {
+            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
+            if (!change.pressed) return@awaitEachGesture
+            val delta = change.position - down.position
+            if (abs(delta.x) > slop && abs(delta.x) >= abs(delta.y)) return@awaitEachGesture
+            if (abs(delta.y) > slop) break
         }
 
         rootView.parent?.requestDisallowInterceptTouchEvent(true)

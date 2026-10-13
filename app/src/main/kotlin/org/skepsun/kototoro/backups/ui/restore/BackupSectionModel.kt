@@ -25,6 +25,7 @@ data class BackupSectionModel(
                 BackupSection.SOURCES -> R.string.remote_sources
                 BackupSection.SOURCE_ORIGINS -> R.string.source_origins
                 BackupSection.EXTENSION_REPOS -> R.string.manage_extension_repositories
+                BackupSection.EXTENSION_GROUPS -> R.string.source_groups_title
                 BackupSection.SCROBBLING -> R.string.tracking
                 BackupSection.TRACKS -> R.string.feed
                 BackupSection.TRACK_LOGS -> R.string.updates

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="sync_remote_delete_incomplete">Could not delete %1$d remote file(s). Local sync state was kept; try again.</string>
+    <string name="sync_enable_required">Turn on Google Drive sync first.</string>
+    <string name="extension_file_delete_failed">Could not delete %1$s.</string>
+</resources>

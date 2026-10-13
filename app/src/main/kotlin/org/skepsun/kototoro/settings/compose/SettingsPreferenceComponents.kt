@@ -59,6 +59,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -355,6 +356,8 @@ fun SettingsSwitchPreference(
     styleHint: String? = null,
     @DrawableRes iconRes: Int? = null,
     enabled: Boolean = true,
+    locked: Boolean = false,
+    onLockClick: (() -> Unit)? = null,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
@@ -395,6 +398,15 @@ fun SettingsSwitchPreference(
                     text = styleHint,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+        if (onLockClick != null) {
+            IconButton(onClick = onLockClick) {
+                Icon(
+                    painter = painterResource(if (locked) R.drawable.ic_lock else R.drawable.ic_lock_open),
+                    contentDescription = stringResource(if (locked) R.string.source_lock_locked else R.string.source_lock_unlocked),
+                    tint = if (locked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

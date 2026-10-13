@@ -191,6 +191,7 @@ class WebDavAutoRestoreRunner @Inject constructor(
             BackupSection.BOOKMARKS,
             BackupSection.STATS,
             BackupSection.EXTENSION_REPOS,
+            BackupSection.EXTENSION_GROUPS,
             BackupSection.TRACKS,
             BackupSection.TRACK_LOGS,
         )

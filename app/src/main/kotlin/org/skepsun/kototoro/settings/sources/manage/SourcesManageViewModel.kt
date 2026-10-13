@@ -2,6 +2,7 @@ package org.skepsun.kototoro.settings.sources.manage
 
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import org.skepsun.kototoro.R
@@ -76,11 +77,27 @@ class SourcesManageViewModel @Inject constructor(
         _isUpdatingJars.value = true
         launchJob(Dispatchers.IO) {
             try {
+                val failed = mutableListOf<String>()
+                var lastError: Throwable? = null
                 updates.forEach { extension ->
-                    installService.install(extension)
+                    try {
+                        installService.install(extension)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // Continue with the remaining plugins; report the failures once below.
+                        failed += extension.name
+                        lastError = e
+                    }
                 }
-            } catch (e: Exception) {
-                // Ignore errors per plugin, allow continuation
+                if (failed.isNotEmpty()) {
+                    errorEvent.call(
+                        IllegalStateException(
+                            appContext.getString(R.string.extension_update_failed, failed.joinToString()),
+                            lastError,
+                        ),
+                    )
+                }
             } finally {
                 _jarUpdatesAvailable.value = emptyList()
                 _isUpdatingJars.value = false

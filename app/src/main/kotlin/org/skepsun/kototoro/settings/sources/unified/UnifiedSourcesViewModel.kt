@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
@@ -90,6 +92,44 @@ private const val TAG = "UnifiedSourcesVM"
 private const val REFRESH_PACKAGES_TIMEOUT_MS = 30_000L
 private const val SOURCE_TEST_TIMEOUT_MS = 45_000L
 private const val SOURCE_TEST_MAX_PARALLELISM = 3
+/** Coalesces bursts of catalog inputs into one rebuild (install progress ticks, DB churn). */
+private const val CATALOG_RECOMPOSE_COALESCE_MS = 150L
+/** Minimum gap between silent (non-user) catalog seeds; re-entering the screen reuses the snapshot. */
+private const val SILENT_CATALOG_SEED_TTL_MS = 5 * 60_000L
+
+/**
+ * Process-wide snapshot of the last successful silent catalog seed. A new ViewModel instance
+ * (screen re-entry) restores it instead of hitting the network again within the TTL.
+ */
+private object UnifiedCatalogSeedCache {
+    @Volatile
+    private var snapshot: Snapshot? = null
+
+    class Snapshot(
+        val fetchedAtMs: Long,
+        val externalExtensions: List<RepoAvailableExtension>,
+        val lnReaderPlugins: List<LnReaderAvailablePlugin>,
+        val jsonPackages: List<UnifiedSourcePackageItem>,
+    )
+
+    fun freshOrNull(nowMs: Long = System.currentTimeMillis()): Snapshot? {
+        val current = snapshot ?: return null
+        return current.takeIf { nowMs - it.fetchedAtMs < SILENT_CATALOG_SEED_TTL_MS }
+    }
+
+    fun store(
+        externalExtensions: List<RepoAvailableExtension>,
+        lnReaderPlugins: List<LnReaderAvailablePlugin>,
+        jsonPackages: List<UnifiedSourcePackageItem>,
+    ) {
+        snapshot = Snapshot(
+            fetchedAtMs = System.currentTimeMillis(),
+            externalExtensions = externalExtensions,
+            lnReaderPlugins = lnReaderPlugins,
+            jsonPackages = jsonPackages,
+        )
+    }
+}
 
 internal fun shouldRecommendMissingExtensionSource(
     sourceId: Long,
@@ -220,12 +260,24 @@ class UnifiedSourcesViewModel @Inject constructor(
         // repository and the dropdown stayed hidden. Seed the available catalogs silently
         // once per ViewModel; a later manual refresh simply replaces the same state.
         if (availableExternalExtensions.value.isEmpty()) {
-            viewModelScope.launch(Dispatchers.IO) {
-                runCatching {
-                    withTimeoutOrNull(REFRESH_PACKAGES_TIMEOUT_MS) {
-                        refreshAvailableExternalPackages()
-                        refreshAvailableLnReaderPackages()
-                        refreshAvailableJsonPackages()
+            val cachedSeed = UnifiedCatalogSeedCache.freshOrNull()
+            if (cachedSeed != null) {
+                availableExternalExtensions.value = cachedSeed.externalExtensions
+                availableLnReaderPlugins.value = cachedSeed.lnReaderPlugins
+                availableJsonPackages.value = cachedSeed.jsonPackages
+            } else {
+                viewModelScope.launch(Dispatchers.IO) {
+                    runCatching {
+                        withTimeoutOrNull(REFRESH_PACKAGES_TIMEOUT_MS) {
+                            refreshAvailableExternalPackages()
+                            refreshAvailableLnReaderPackages()
+                            refreshAvailableJsonPackages()
+                            UnifiedCatalogSeedCache.store(
+                                externalExtensions = availableExternalExtensions.value,
+                                lnReaderPlugins = availableLnReaderPlugins.value,
+                                jsonPackages = availableJsonPackages.value,
+                            )
+                        }
                     }
                 }
             }
@@ -259,12 +311,17 @@ class UnifiedSourcesViewModel @Inject constructor(
                 .withAvailableLnReaderPackages(lnReaderSnapshot.plugins, lnReaderSnapshot.installingPackageIds)
                 .withAvailableJsonPackages(lnReaderSnapshot.jsonPackages)
         },
-        database.getSourceOriginsDao().observeAll(),
-        database.getMangaDao().observeExtensionSourcesReferencedByUserState(),
+        database.getSourceOriginsDao().observeAll().distinctUntilChanged(),
+        database.getMangaDao().observeExtensionSourcesReferencedByUserState().distinctUntilChanged(),
         availableExternalExtensions,
     ) { catalog, sourceOrigins, referencedSourceKeys, availableExtensions ->
         catalog.toFullCatalogData(sourceOrigins, referencedSourceKeys, availableExtensions)
-    }.flowOn(Dispatchers.Default).catch { e ->
+    }
+        // Bursts (install progress ticks, DB writes from reading history) collapse into one rebuild,
+        // and an identical rebuild is not re-emitted downstream.
+        .debounce(CATALOG_RECOMPOSE_COALESCE_MS)
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default).catch { e ->
         Log.e(TAG, "Error in fullCatalogState flow", e)
         emit(FullCatalogData())
     }
@@ -318,7 +375,7 @@ class UnifiedSourcesViewModel @Inject constructor(
     ) { state, enabledOverrides ->
         pruneAgreedEnabledOverrides(state, enabledOverrides)
         state.withEnabledOverrides(enabledOverrides)
-    }.stateIn(
+    }.distinctUntilChanged().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = UnifiedSourcesUiState.Loading,
@@ -949,21 +1006,32 @@ class UnifiedSourcesViewModel @Inject constructor(
         // Optimistic, instant feedback: the switch stops depending on the full catalog
         // rebuild. The authoritative DB write happens in the background and overrides are
         // retired as soon as the rebuild reports the same value.
+        val changedIds = sourceItems.mapTo(HashSet()) { it.id }
+        val previousOverrides = _enabledOverrides.value.filterKeys { it in changedIds }
         _enabledOverrides.update { overrides ->
             overrides + sourceItems.associate { it.id to enabled }
         }
         viewModelScope.launch(Dispatchers.Default) {
-            if (!enabled && settings.isAllSourcesEnabled) {
-                // Materialize the sources that stay enabled WITHOUT resurrecting the one
-                // being disabled, then drop the global flag.
-                val rest = ready.allSources.filter { it.id !in sourceIds }
-                if (rest.isNotEmpty()) {
-                    contentSourcesRepository.setSourcesEnabled(rest.map { it.source }, true)
-                }
-                settings.isAllSourcesEnabled = false
-            }
+            val clearsAllEnabledFlag = !enabled && settings.isAllSourcesEnabled
             runCatching {
+                if (clearsAllEnabledFlag) {
+                    // Materialize the sources that stay enabled WITHOUT resurrecting the one
+                    // being disabled, then drop the global flag.
+                    val rest = ready.allSources.filter { it.id !in sourceIds }
+                    if (rest.isNotEmpty()) {
+                        contentSourcesRepository.setSourcesEnabled(rest.map { it.source }, true)
+                    }
+                    settings.isAllSourcesEnabled = false
+                }
                 contentSourcesRepository.setSourcesEnabled(sourceItems.map { it.source }, enabled)
+            }.onFailure { e ->
+                if (e is CancellationException) throw e
+                // Roll back the optimistic override and restore the global flag, then report the error.
+                _enabledOverrides.update { overrides -> (overrides - changedIds) + previousOverrides }
+                if (clearsAllEnabledFlag) {
+                    settings.isAllSourcesEnabled = true
+                }
+                emitMessage(e.getDisplayMessage(appContext.resources))
             }
             // Overrides are retired by [pruneAgreedEnabledOverrides] once the authoritative
             // rebuild agrees with them; never remove them here based on the merged state.
@@ -1619,10 +1687,24 @@ class UnifiedSourcesViewModel @Inject constructor(
 
     private suspend fun refreshAvailableJsonPackages() {
         val legadoPackages = settings.legadoRepoUrls.mapNotNull { repoUrl ->
-            runCatching { fetchAvailableLegadoPackage(repoUrl) }.getOrNull()
+            try {
+                fetchAvailableLegadoPackage(repoUrl)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to load Legado repository $repoUrl", e)
+                null
+            }
         }
         val tvBoxPackages = settings.tvBoxRepoUrls.mapNotNull { repoUrl ->
-            runCatching { fetchAvailableTvBoxPackage(repoUrl) }.getOrNull()
+            try {
+                fetchAvailableTvBoxPackage(repoUrl)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to load TVBox repository $repoUrl", e)
+                null
+            }
         }
         availableJsonPackages.value = (legadoPackages + tvBoxPackages).sortedBy { it.name.lowercase() }
     }
@@ -2036,13 +2118,15 @@ class UnifiedSourcesViewModel @Inject constructor(
         // Only actually configured repos count: the repository list always contains the
         // recommended presets (isConfigured=false) under the very same URL, so comparing
         // against all items would filter out every suggestion.
-        val configuredUrls = repositories.filterTo(HashSet()) { it.isConfigured }.mapTo(HashSet()) { it.url }
+        // Normalized once up front instead of re-normalizing every configured URL per suggestion.
+        val configuredNormalizedUrls = repositories
+            .asSequence()
+            .filter { it.isConfigured }
+            .mapTo(HashSet()) { normalizeRepositoryUrlForAction(it.url) }
         val suggestedRepositoriesForMissing = suggestedKinds
             .flatMap(UnifiedRecommendedRepositories::byKind)
             .filter { suggestion ->
-                configuredUrls.none { configured ->
-                    normalizeRepositoryUrlForAction(configured) == normalizeRepositoryUrlForAction(suggestion.url)
-                }
+                normalizeRepositoryUrlForAction(suggestion.url) !in configuredNormalizedUrls
             }
             .distinctBy { it.url }
         return MissingRecommendations(
@@ -2156,6 +2240,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                     UnifiedTestAvailabilityFilter.UNTESTED -> it.testAvailability == ContentSourceAvailability.UNKNOWN
                     UnifiedTestAvailabilityFilter.AVAILABLE -> it.testAvailability == ContentSourceAvailability.AVAILABLE
                     UnifiedTestAvailabilityFilter.UNAVAILABLE -> it.testAvailability == ContentSourceAvailability.EMPTY
+                    UnifiedTestAvailabilityFilter.CLOUDFLARE -> it.testAvailability == ContentSourceAvailability.CLOUDFLARE
                 }
             }
             .filter {
@@ -2511,17 +2596,36 @@ internal fun UnifiedSourcesUiState.Ready.withEnabledOverrides(
     if (overrides.isEmpty()) {
         return this
     }
+    val mergedAll = allSources.withEnabledOverrides(overrides)
+    val mergedVisible = sources.withEnabledOverrides(overrides)
+    // Keep the same instance when no override changes anything, so downstream collectors and
+    // Compose see an identical state instead of a fresh copy on every merge.
+    if (mergedAll === allSources && mergedVisible === sources) {
+        return this
+    }
     return copy(
-        allSources = allSources.withEnabledOverrides(overrides),
-        sources = sources.withEnabledOverrides(overrides),
+        allSources = mergedAll,
+        sources = mergedVisible,
     )
 }
 
 internal fun List<UnifiedSourceItem>.withEnabledOverrides(
     overrides: Map<String, Boolean>,
-): List<UnifiedSourceItem> = map { item ->
-    val value = overrides[item.id] ?: return@map item
-    if (item.isEnabled == value) item else item.copy(isEnabled = value)
+): List<UnifiedSourceItem> {
+    if (overrides.isEmpty()) {
+        return this
+    }
+    var changed = false
+    val merged = map { item ->
+        val value = overrides[item.id]
+        if (value == null || item.isEnabled == value) {
+            item
+        } else {
+            changed = true
+            item.copy(isEnabled = value)
+        }
+    }
+    return if (changed) merged else this
 }
 
 /**

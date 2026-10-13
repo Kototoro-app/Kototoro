@@ -15,12 +15,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.settings.sources.groups.SourceGroupsDialog
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.settings.compose.SettingsSectionScaffold
@@ -106,20 +108,24 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
         initialAddRepositoryUrl: String? = null,
         modifier: Modifier = Modifier,
     ) {
-        var searchActive by remember { mutableStateOf(false) }
-        var activePanel by remember { mutableStateOf<UnifiedToolbarFilterPanel?>(null) }
+        var searchActive by rememberSaveable { mutableStateOf(false) }
+        var activePanel by rememberSaveable { mutableStateOf<UnifiedToolbarFilterPanel?>(null) }
         val state by viewModel.uiState.collectAsStateWithLifecycle()
         val readyState = state as? UnifiedSourcesUiState.Ready
         val pagerState = rememberPagerState(pageCount = { UNIFIED_SOURCES_TAB_COUNT })
         val coroutineScope = rememberCoroutineScope()
         var sourceOrder by remember { mutableStateOf<List<org.skepsun.kototoro.core.ui.compose.ReorderItem>?>(null) }
         var loadingOrder by remember { mutableStateOf(false) }
+        var showSourceGroups by rememberSaveable { mutableStateOf(false) }
         sourceOrder?.let { items ->
             org.skepsun.kototoro.core.ui.compose.ReorderDialog(
                 items = items,
                 onDismissRequest = { sourceOrder = null },
                 onSave = viewModel::saveSourceOrder,
             )
+        }
+        if (showSourceGroups) {
+            SourceGroupsDialog(onDismissRequest = { showSourceGroups = false })
         }
         var tabReselectTrigger by remember { mutableStateOf<Pair<Int, Long>?>(null) }
         val closeSearch = {
@@ -169,19 +175,19 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
                     readyState = readyState,
                     onSearchClick = { searchActive = true },
                     onFilterClick = openFilter,
-                    onReorderClick = if (loadingOrder || readyState == null || readyState.filters.query.isNotBlank()) null else {
-                        {
-                            loadingOrder = true
-                            coroutineScope.launch {
-                                try {
-                                    sourceOrder = viewModel.loadSourceOrder()
-                                } catch (e: kotlinx.coroutines.CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    Toast.makeText(this@UnifiedSourcesActivity, e.localizedMessage, Toast.LENGTH_SHORT).show()
-                                } finally {
-                                    loadingOrder = false
-                                }
+                    onGroupsClick = { showSourceGroups = true },
+                    reorderEnabled = !(loadingOrder || readyState == null || readyState.filters.query.isNotBlank()),
+                    onReorderClick = {
+                        loadingOrder = true
+                        coroutineScope.launch {
+                            try {
+                                sourceOrder = viewModel.loadSourceOrder()
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Toast.makeText(this@UnifiedSourcesActivity, e.localizedMessage, Toast.LENGTH_SHORT).show()
+                            } finally {
+                                loadingOrder = false
                             }
                         }
                     },

@@ -47,5 +47,29 @@ internal fun <T> selectPreferredJarSources(
         .map { candidates -> candidates.minWith(comparator) }
 }
 
+/**
+ * Returns, for every JAR whose source lost deduplication, a map of `sourceName -> winningJarName`.
+ * Keys are the losing JAR names. Sources that win are not included.
+ */
+internal fun <T> findShadowedJarSources(
+    sources: List<T>,
+    priorityOrder: String,
+    sourceName: (T) -> String,
+    jarName: (T) -> String,
+): Map<String, Map<String, String>> {
+    val comparator = compareBy(jarPriorityComparator(priorityOrder), jarName)
+    val result = mutableMapOf<String, MutableMap<String, String>>()
+    sources.groupBy(sourceName).forEach { (name, candidates) ->
+        val winnerJar = jarName(candidates.minWith(comparator))
+        candidates.forEach { candidate ->
+            val candidateJar = jarName(candidate)
+            if (candidateJar != winnerJar) {
+                result.getOrPut(candidateJar) { mutableMapOf() }[name] = winnerJar
+            }
+        }
+    }
+    return result
+}
+
 internal fun String.jarBaseName(): String =
     if (endsWith(".jar", ignoreCase = true)) dropLast(4) else this

@@ -14,6 +14,7 @@ enum class BackupSection(
     SOURCES("sources"),
     SOURCE_ORIGINS("source_origins"),
     EXTENSION_REPOS("extension_repos"),
+    EXTENSION_GROUPS("extension_groups"),
     SCROBBLING("scrobbling"),
     STATS("statistics"),
     SAVED_FILTERS("saved_filters"),
