@@ -31,17 +31,59 @@ class ReaderInfoBarMeasureTest {
     }
 
     @Test
-    fun `both layouts handle progress and system status being absent`() {
+    fun `split progress is measured once when content alone limits its width`() {
+        val progress = Child(140)
+
+        measure(ReaderInfoBarLayout.SPLIT, null, progress)
+
+        assertEquals(88, progress.measurements.single().maxWidth)
+    }
+
+    @Test
+    fun `progress keeps its intrinsic width when it fits in either layout`() {
         for (layout in ReaderInfoBarLayout.entries) {
-            for (hasProgress in listOf(false, true)) {
-                for (hasSystem in listOf(false, true)) {
-                    val progress = if (hasProgress) Child(30) else null
-                    val system = if (hasSystem) Child(40) else null
-                    val reading = Child(80)
-                    measure(layout, null, progress, system, reading)
-                    assertEquals(1, reading.measurements.size)
-                    progress?.let { assertEquals(1, it.measurements.size) }
-                    system?.let { assertEquals(1, it.measurements.size) }
+            val progress = Child(30)
+
+            measure(layout, null, progress)
+
+            assertEquals(30, progress.measurements.single().maxWidth)
+        }
+    }
+
+    @Test
+    fun `centered cutout compresses reading while preserving progress and system widths`() {
+        val reading = Child(300)
+        val progress = Child(30)
+        val system = Child(40)
+
+        measure(ReaderInfoBarLayout.CENTERED, ReaderInfoBarCutout(100, 150), progress, system, reading)
+
+        assertEquals(84, reading.measurements.single().maxWidth)
+        assertEquals(30, progress.measurements.single().maxWidth)
+        assertEquals(1, system.measurements.size)
+    }
+
+    @Test
+    fun `both layouts measure each present child once with or without cutouts`() {
+        val cutouts = listOf(
+            null,
+            ReaderInfoBarCutout(100, 150),
+            ReaderInfoBarCutout(0, 70),
+            ReaderInfoBarCutout(170, 240),
+            ReaderInfoBarCutout(80, 232),
+        )
+        for (layout in ReaderInfoBarLayout.entries) {
+            for (cutout in cutouts) {
+                for (hasProgress in listOf(false, true)) {
+                    for (hasSystem in listOf(false, true)) {
+                        val progress = if (hasProgress) Child(140) else null
+                        val system = if (hasSystem) Child(40) else null
+                        val reading = Child(80)
+                        measure(layout, cutout, progress, system, reading)
+                        assertEquals(1, reading.measurements.size)
+                        progress?.let { assertEquals(1, it.measurements.size) }
+                        system?.let { assertEquals(1, it.measurements.size) }
+                    }
                 }
             }
         }
@@ -59,8 +101,10 @@ class ReaderInfoBarMeasureTest {
         }
         val policy = readerInfoBarMeasurePolicy(layout, 8, 8, 0, 8, 4, cutout, progress != null, system != null)
         with(policy) {
-            scope.measure(listOfNotNull(reading.measurable, progress?.measurable, system?.measurable),
-                Constraints(maxWidth = 240, maxHeight = 30))
+            scope.measure(
+                listOfNotNull(reading.measurable, progress?.measurable, system?.measurable),
+                Constraints(maxWidth = 240, maxHeight = 30),
+            )
         }
     }
 

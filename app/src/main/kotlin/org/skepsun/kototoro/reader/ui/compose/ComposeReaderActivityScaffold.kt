@@ -1139,6 +1139,7 @@ internal fun readerInfoBarMeasurePolicy(
         null
     }
     val systemWidth = systemPlaceable?.width ?: 0
+    // Resolve the final cutout-constrained width before measuring progress; Compose only allows one measurement.
     val progressWidth = progressMeasurable?.maxIntrinsicWidth(contentHeightLimit)
         ?.coerceIn(0, childConstraints.maxWidth) ?: 0
     val trailingWidth = if (layout == ReaderInfoBarLayout.CENTERED && progressWidth > 0) {
