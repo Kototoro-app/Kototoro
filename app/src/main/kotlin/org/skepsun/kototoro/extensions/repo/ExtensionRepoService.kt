@@ -768,7 +768,7 @@ class ExtensionRepoService @Inject constructor(
         val resolved = baseUrl.toHttpUrlOrNull()
             ?.resolve(url)
             ?.toString()
-        return applyMirror(resolved ?: "${baseUrl.trimEnd('/')}/${url.removePrefix("/")}")
+        return applyMirror(resolved ?: ExtensionRepoUrls.resolveResource(baseUrl, url))
     }
 
     private suspend fun fetchLatestGitHubRelease(repo: GitHubRepository): GitHubReleaseDto {

@@ -380,7 +380,7 @@ class IosProductTest {
                 assertEquals("index.min.json", headerCatalog.externalList)
                 val fullCatalog = repositories.external(headerCatalog, bytes, false, "https://fixture.invalid/repo/index.min.json")
                 assertEquals(1, fullCatalog.extensions.size)
-                assertEquals("https://fixture.invalid/repo/index.min.json", fullCatalog.resourceBaseUrl)
+                assertEquals("https://fixture.invalid/repo/", fullCatalog.resourceBaseUrl)
             } finally { library.close() }
         }
     }

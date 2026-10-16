@@ -81,12 +81,7 @@ final class RepositoriesModel: ObservableObject {
     }
 
     private static func resourceURL(_ path: String, catalog: IosRepositoryCatalog) -> URL? {
-        guard !path.isEmpty else { return nil }
-        if let direct = URL(string: path), direct.scheme != nil { return direct }
-        var baseStr = catalog.resourceBaseUrl
-        if !baseStr.hasSuffix("/") { baseStr += "/" }
-        guard let base = URL(string: baseStr),
-              let url = URL(string: path, relativeTo: base)?.absoluteURL,
+        guard !path.isEmpty, let url = URL(string: catalog.resolve(path: path)),
               ["http", "https"].contains(url.scheme ?? "") else { return nil }
         return url
     }
@@ -177,7 +172,10 @@ final class RepositoriesModel: ObservableObject {
         status = "正在下载 \(extensionItem.title)…"
         // URLSession downloads to disk; do not buffer large APKs on the UI thread.
         let (temp, response) = try await URLSession.shared.download(from: url)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw URLError(.badServerResponse) }
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode
+            throw InstallDownloadError(url: url, statusCode: code)
+        }
         let size = try temp.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
         guard size > 0 && size <= 128 * 1024 * 1024 else { throw URLError(.dataLengthExceedsMaximum) }
         let incoming = try NativeSourceTransport.dataDirectory.appendingPathComponent("incoming", isDirectory: true)
@@ -422,3 +420,12 @@ private struct RepositoryHTTPError: LocalizedError {
     var errorDescription: String? { "仓库返回 HTTP \(status)" }
 }
 
+
+/// A non-2xx download keeps the URL and status visible instead of the opaque NSURLErrorDomain -1011.
+struct InstallDownloadError: LocalizedError {
+    let url: URL
+    let statusCode: Int?
+    var errorDescription: String? {
+        "下载失败（HTTP \(statusCode.map(String.init) ?? "?")）：\(url.absoluteString)"
+    }
+}
