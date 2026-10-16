@@ -84,14 +84,19 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if url.path == "/recover-page-2":
             PAGE_TWO_MODE = "ok"
             return self.reply({"ok": True})
-        if url.path.rstrip("/") == "/api.php/provide/vod":
+        if url.path.rstrip("/") in ("/api.php/provide/vod", "/related/api.php/provide/vod"):
             query = urllib.parse.parse_qs(url.query)
             ids = query.get("ids", query.get("id", []))
             words = query.get("wd", [])
             category = query.get("t", [])
             items = [vod(i, n, t, tn, bool(ids)) for i, n, t, tn in CATALOG
-                     if (not ids or str(i) in ids) and (not words or words[0] in n) and
+                     if (not ids or str(i) in ids) and
+                     (not words or url.path.startswith("/related/") or words[0] in n) and
                      (not category or str(t) == category[0])]
+            if url.path.startswith("/related/"):
+                # A shared series remark also matches the runtime's local search filter.
+                for item in items:
+                    item["vod_remarks"] = "测试动画系列推荐"
             page = int(query.get("pg", ["1"])[0])
             if page == 2 and PAGE_TWO_MODE == "fail":
                 self.send_response(503)

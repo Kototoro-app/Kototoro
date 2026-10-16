@@ -64,6 +64,7 @@ struct DetailsPanorama: View {
     @State private var drifting = false
     @State private var lastCoverBottom: CGFloat?
     private static let fadeEnd = 0.96
+    private static let horizontalTravel: CGFloat = 14
 
     var body: some View {
         GeometryReader { geometry in
@@ -75,13 +76,17 @@ struct DetailsPanorama: View {
             let stretch = max(-scrollOffset, 0)
             let follows = layout == .top && scrollLinked
             let motion = animated && !reduceMotion
+            let blurRadius = CGFloat(values.blur / 100 * 18)
+            // Reserve the full travel plus the blur kernel before clipping, including at the smallest zoom.
+            let blurPadding = ceil(blurRadius * 3) + 1
             let fadeDistance: CGFloat = 200.0
             let scrollAlpha = max(0.0, min(1.0, 1.0 - (max(scrollOffset, 0) / fadeDistance)))
             CoverImage(runtime: runtime, content: content, plain: true)
-                .frame(width: geometry.size.width, height: base + stretch)
-                .scaleEffect(motion ? (drifting ? 1.16 : 1.1) : 1, anchor: .center) // the pan never shows an edge
-                .offset(x: motion ? (drifting ? 14 : -14) : 0)
-                .blur(radius: values.blur / 100 * 18, opaque: false)
+                .frame(width: geometry.size.width + 2 * (Self.horizontalTravel + blurPadding),
+                       height: base + stretch + 2 * blurPadding)
+                .scaleEffect(motion ? (drifting ? 1.06 : 1) : 1, anchor: .center)
+                .offset(x: motion ? (drifting ? Self.horizontalTravel : -Self.horizontalTravel) : 0)
+                .blur(radius: blurRadius, opaque: false)
                 .frame(width: geometry.size.width, height: base + stretch)
                 .clipped()
                 .opacity((values.opacity / 100) * scrollAlpha)

@@ -5,6 +5,51 @@ final class VideoSourceTests: XCTestCase {
     private let api = "http://127.0.0.1:8765/api.php/provide/vod/"
 
     @MainActor
+    func testRelatedRecommendationsAlignAndOpenDetails() throws {
+        try requireFixture()
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-space.enabled", "YES", "-space.kind", "VIDEO"]
+        app.launch()
+        app.mainTab("浏览").tap()
+        func searchForSite() {
+            let field = app.pageSearchField()
+            field.tap(); field.typeText("相关推荐裁剪验证")
+        }
+        searchForSite()
+        let source = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                      "source.JSON_TVBOX_", "相关推荐裁剪验证")).firstMatch
+        if !source.waitForExistence(timeout: 5) {
+            app.terminate(); app.launch()
+            importVideoSite(app, url: "http://127.0.0.1:8765/related/api.php/provide/vod/", title: "相关推荐裁剪验证")
+            searchForSite()
+        }
+        XCTAssertTrue(source.waitForExistence(timeout: 30), app.debugDescription)
+        source.tap()
+        let work = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                    "source.content.", "测试动画")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 30), app.debugDescription)
+        work.tap()
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 30), app.debugDescription)
+        let title = app.staticTexts["相关推荐"]
+        for _ in 0..<4 where !title.exists || !title.isHittable {
+            app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        }
+        XCTAssertTrue(title.isHittable, app.debugDescription)
+        let recommendation = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "测试电影")).firstMatch
+        for _ in 0..<4 where !recommendation.isHittable || recommendation.frame.maxY > app.frame.maxY - 110 {
+            app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        }
+        XCTAssertEqual(title.frame.minX, 16, accuracy: 1)
+        XCTAssertEqual(recommendation.frame.minX, title.frame.minX, accuracy: 1)
+        attach(app, "相关推荐标题与首张卡片")
+        XCTAssertTrue(recommendation.isHittable, app.debugDescription)
+        recommendation.tap()
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["details.title"].label, "测试电影")
+    }
+
+    @MainActor
     func testAppleCmsSourceImportsBrowsesAndPlaysNatively() throws {
         try requireFixture()
         let app = XCUIApplication()

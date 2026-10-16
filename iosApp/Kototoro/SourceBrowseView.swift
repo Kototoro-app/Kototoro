@@ -438,15 +438,17 @@ struct SourceBrowseView: View {
 struct CoverImage: View {
     let runtime: IosSources
     let content: IosSourceContent
-    /// Decorative use (panorama): no placeholder fill or icon while loading or when there is no cover.
+    /// Transparent use (panorama or preview): no placeholder fill or icon while loading or when there is no cover.
     var plain = false
+    var contentMode: ContentMode = .fill
     @State private var image: UIImage?
     @State private var failed = false
 
-    init(runtime: IosSources, content: IosSourceContent, plain: Bool = false) {
+    init(runtime: IosSources, content: IosSourceContent, plain: Bool = false, contentMode: ContentMode = .fill) {
         self.runtime = runtime
         self.content = content
         self.plain = plain
+        self.contentMode = contentMode
         // Scrolling back re-creates lazy cells; start from the decoded cover instead of loading again.
         _image = State(initialValue: CoverCache.shared.image(for: content))
     }
@@ -456,7 +458,7 @@ struct CoverImage: View {
             .overlay {
                 if let image {
                     // Original colours: bars and accessories would otherwise draw the cover as a template tint.
-                    Image(uiImage: image).renderingMode(.original).resizable().scaledToFill()
+                    Image(uiImage: image).renderingMode(.original).resizable().aspectRatio(contentMode: contentMode)
                 } else if !plain && (failed || !content.hasCover) {
                     placeholder
                 }

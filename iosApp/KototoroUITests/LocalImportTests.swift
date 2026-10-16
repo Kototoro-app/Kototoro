@@ -475,12 +475,104 @@ final class LocalImportTests: XCTestCase {
         attach("本地漫画阅读")
     }
 
+    /// A uniform cover should stay uniform at both viewport edges throughout the blur and drift animation.
+    @MainActor
+    func testPanoramaAnimationKeepsBothEdgesCovered() throws {
+        app.terminate()
+        app.launchArguments += ["-details.panorama", "YES", "-details.panorama.preset", "soft",
+                                "-details.panorama.layout", "fullScreen", "-details.panorama.animated", "YES",
+                                "-details.panorama.scrollLinked", "NO"]
+        app.launch()
+        importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
+        let cover = app.descendants(matching: .any)["details.cover"]
+        expectation(for: NSPredicate(format: "value == %@", "已加载"), evaluatedWith: cover)
+        waitForExpectations(timeout: 30)
+        for phase in 0..<3 {
+            if phase > 0 { Thread.sleep(forTimeInterval: 11) }
+            let screenshot = app.screenshot()
+            let image = try XCTUnwrap(screenshot.image.cgImage)
+            let y = Int(130 * CGFloat(image.height) / app.frame.height)
+            func pixel(_ x: Int) throws -> [UInt8] {
+                let sample = try XCTUnwrap(image.cropping(to: CGRect(x: x, y: y, width: 1, height: 1)))
+                var rgba = [UInt8](repeating: 0, count: 4)
+                let rendered = rgba.withUnsafeMutableBytes { bytes -> Bool in
+                    guard let context = CGContext(data: bytes.baseAddress, width: 1, height: 1,
+                                                  bitsPerComponent: 8, bytesPerRow: 4,
+                                                  space: CGColorSpaceCreateDeviceRGB(),
+                                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                                                    | CGBitmapInfo.byteOrder32Big.rawValue) else { return false }
+                    context.draw(sample, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+                    return true
+                }
+                XCTAssertTrue(rendered)
+                return rgba
+            }
+            let left = try pixel(0), right = try pixel(image.width - 1)
+            for channel in 0..<3 {
+                XCTAssertLessThanOrEqual(abs(Int(left[channel]) - Int(right[channel])), 8,
+                                         "Panorama exposes the background at phase \(phase): \(left) / \(right)")
+            }
+            attach("全景动画边缘 \(phase)")
+        }
+    }
+
+    /// Fixture cover dimensions differ from the preview viewport; visible pixels must retain the entire aspect.
+    @MainActor
+    func testCoverPreviewShowsTheWholePortraitAndLandscapeImage() throws {
+        for (fixture, ratio) in [("fixture_reader_zoom", 1.5), ("fixture_reader_horizontal", 1.0 / 3.0)] {
+            if fixture != "fixture_reader_zoom" { app.terminate(); app.launch() }
+            importFile(source: "LOCAL", file: fixture, reuse: true)
+            let cover = app.descendants(matching: .any)["details.cover"]
+            XCTAssertTrue(cover.waitForExistence(timeout: 30), app.debugDescription)
+            cover.tap()
+            XCTAssertTrue(app.navigationBars["封面"].waitForExistence(timeout: 5), app.debugDescription)
+            let preview = app.descendants(matching: .any)["details.coverPreview.image"]
+            expectation(for: NSPredicate(format: "value == %@", "已加载"), evaluatedWith: preview)
+            waitForExpectations(timeout: 30)
+            attach("完整封面 \(fixture)")
+            XCTAssertEqual(coverPreviewPixelRatio(), ratio, accuracy: 0.03, "The preview cropped \(fixture)")
+            app.navigationBars["封面"].buttons["完成"].tap()
+        }
+    }
+
+    /// The fixtures contain saturated red/green/blue; black letterboxing and navigation chrome are excluded.
+    private func coverPreviewPixelRatio() -> Double {
+        guard let image = app.screenshot().image.cgImage else { return 0 }
+        let width = 240
+        let height = image.height * width / image.width
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = pixels.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(data: bytes.baseAddress, width: width, height: height,
+                                          bitsPerComponent: 8, bytesPerRow: width * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                                            | CGBitmapInfo.byteOrder32Big.rawValue) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return 0 }
+        func isCover(_ x: Int, _ y: Int) -> Bool {
+            let i = (y * width + x) * 4
+            let rgb = [Int(pixels[i]), Int(pixels[i + 1]), Int(pixels[i + 2])]
+            return rgb.max()! > 120 && rgb.min()! < 100 && rgb.max()! - rgb.min()! > 80
+        }
+        // The presenting details panorama can remain visible above the sheet; measure only the central image.
+        guard isCover(width / 2, height / 2) else { return 0 }
+        var left = width / 2, right = width / 2, top = height / 2, bottom = height / 2
+        while left > 0 && isCover(left - 1, height / 2) { left -= 1 }
+        while right + 1 < width && isCover(right + 1, height / 2) { right += 1 }
+        while top > 0 && isCover(width / 2, top - 1) { top -= 1 }
+        while bottom + 1 < height && isCover(width / 2, bottom + 1) { bottom += 1 }
+        return Double(bottom - top + 1) / Double(right - left + 1)
+    }
+
     @MainActor
     func testMetadataIsVisibleAndSearchStartsWithTheWorkTitle() throws {
         importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
         let title = app.staticTexts["details.title"]
         XCTAssertTrue(title.waitForExistence(timeout: 30))
         let original = title.label
+        attach("详情页统一边距")
         let metadata = app.buttons["details.metadata"]
         XCTAssertTrue(metadata.isHittable, "Metadata should be discoverable without opening More")
         metadata.tap()

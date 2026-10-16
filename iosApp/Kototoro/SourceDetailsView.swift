@@ -321,7 +321,8 @@ struct SourceDetailsView: View {
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
+        .contentMargins(.horizontal, 16, for: .scrollContent)
         .listSectionSpacing(.compact)
         .scrollContentBackground(.hidden)
         .toolbar(.hidden, for: .tabBar)
@@ -536,7 +537,7 @@ struct SourceDetailsView: View {
             }
             .padding(.vertical, 6)
             .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
         }
         .listRowSeparator(.hidden)
     }
@@ -874,7 +875,6 @@ struct SourceDetailsView: View {
                     Text("相关推荐")
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.primary)
-                        .padding(.horizontal, 16)
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(alignment: .top, spacing: 12) {
@@ -903,7 +903,6 @@ struct SourceDetailsView: View {
                                 .buttonStyle(.plain)
                             }
                         }
-                        .padding(.horizontal, 16)
                         .padding(.vertical, 4)
                     }
                 }
@@ -928,13 +927,13 @@ struct SourceDetailsView: View {
                     }
                 } label: {
                     Image(systemName: model.isVideo ? "play.rectangle.on.rectangle" : "list.bullet")
-                        .font(.system(size: 15, weight: selectedTab == .chapters ? .bold : .medium))
+                        .font(.system(size: 15, weight: .medium))
                         .frame(width: 38, height: 38)
-                        .background(selectedTab == .chapters ? Color.primary.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .foregroundStyle(selectedTab == .chapters ? Color.primary : Color.secondary)
+                        .foregroundStyle(selectedTab == .chapters ? Color.accentColor : Color.secondary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(model.isVideo ? "剧集" : "章节")
+                .accessibilityAddTraits(selectedTab == .chapters ? .isSelected : [])
             }
 
             // 缩略图 (Thumbnails / Grid) - Manga only
@@ -947,13 +946,13 @@ struct SourceDetailsView: View {
                     }
                 } label: {
                     Image(systemName: "square.grid.2x2")
-                        .font(.system(size: 14, weight: selectedTab == .thumbnails ? .bold : .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .frame(width: 38, height: 38)
-                        .background(selectedTab == .thumbnails ? Color.primary.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .foregroundStyle(selectedTab == .thumbnails ? Color.primary : Color.secondary)
+                        .foregroundStyle(selectedTab == .thumbnails ? Color.accentColor : Color.secondary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("缩略图")
+                .accessibilityAddTraits(selectedTab == .thumbnails ? .isSelected : [])
             }
 
             // 书签 (Bookmarks) - Manga & Novel
@@ -965,14 +964,14 @@ struct SourceDetailsView: View {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isDockCompact = false }
                     }
                 } label: {
-                    Image(systemName: selectedTab == .bookmarks ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 14, weight: selectedTab == .bookmarks ? .bold : .medium))
+                    Image(systemName: "bookmark")
+                        .font(.system(size: 14, weight: .medium))
                         .frame(width: 38, height: 38)
-                        .background(selectedTab == .bookmarks ? Color.primary.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .foregroundStyle(selectedTab == .bookmarks ? Color.primary : Color.secondary)
+                        .foregroundStyle(selectedTab == .bookmarks ? Color.accentColor : Color.secondary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("书签")
+                .accessibilityAddTraits(selectedTab == .bookmarks ? .isSelected : [])
             }
         }
         .padding(.horizontal, 6)
@@ -1576,11 +1575,12 @@ struct CoverPreviewSheet: View {
 
     var body: some View {
         NavigationStack {
-            GeometryReader { _ in
+            GeometryReader { geometry in
                 ZStack {
                     Color.black.ignoresSafeArea()
-                    CoverImage(runtime: runtime, content: content)
-                        .aspectRatio(contentMode: .fit)
+                    CoverImage(runtime: runtime, content: content, plain: true, contentMode: .fit)
+                        .accessibilityIdentifier("details.coverPreview.image")
+                        .frame(width: geometry.size.width, height: geometry.size.height)
                         .scaleEffect(scale)
                         .gesture(
                             MagnificationGesture()
