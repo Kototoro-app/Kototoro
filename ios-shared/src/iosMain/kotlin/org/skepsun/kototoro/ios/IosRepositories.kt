@@ -117,8 +117,12 @@ class IosRepositories(private val library: IosLibrary) {
             previous.signingKeyFingerprint == catalog.url.hashCode().toString(16) ||
             type == ExternalExtensionType.JAR
         )
+        // Legacy arrays have no signing key; Swift stores SHA-256(URL) until repo.json supplies one.
+        val isUrlIdentityUpgrade = previous != null && catalog.signingKey.isNotBlank() &&
+            previous.signingKeyFingerprint.equals(sha256Hex(normalizedUrl), ignoreCase = true)
         val matchesPrevious = previous == null ||
             isLegacyPseudoFingerprint ||
+            isUrlIdentityUpgrade ||
             previous.signingKeyFingerprint.equals(fingerprint, ignoreCase = true) ||
             (catalog.signingKey.isNotBlank() && previous.signingKeyFingerprint.equals(catalog.signingKey.trim(), ignoreCase = true)) ||
             (catalog.signingKey.isNotBlank() && previous.signingKeyFingerprint.equals(sha256Hex(catalog.signingKey.trim()), ignoreCase = true))

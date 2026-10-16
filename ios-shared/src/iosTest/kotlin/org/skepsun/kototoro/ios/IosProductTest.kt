@@ -386,6 +386,47 @@ class IosProductTest {
     }
 
     @Test
+    fun legacyRepositoryRefreshCanUpgradeUrlIdentityToSigningFingerprint() = runBlocking {
+        withDatabase { path ->
+            val library = IosLibrary(path)
+            try {
+                val repositories = IosRepositories(library)
+                val baseUrl = "https://raw.githubusercontent.com/yuzono/anime-repo/repo"
+                val indexUrl = "$baseUrl/index.min.json"
+                val bytes = """
+                    [{"name":"Aniyomi: Anime1","pkg":"test.anime1","version":"14.4",
+                      "code":4,"apk":"anime1.apk","sources":[]}]
+                """.trimIndent().encodeToByteArray()
+                val legacy = repositories.decode(bytes, false, indexUrl, "ANIYOMI")
+                // Swift hashes the normalized URL when a legacy array has no signing metadata.
+                val urlFingerprint = IosRepositories.sha256Hex(legacy.url)
+                repositories.save(legacy, urlFingerprint)
+                repositories.save(legacy, urlFingerprint)
+
+                val signingKey = "cbec121aa82ebb02aaa73806992e0368a97d47b5451ed6524816d03084c45905"
+                val header = """{"meta":{"name":"Yūzōnō","signingKeyFingerprint":"$signingKey"}}"""
+                val catalog = repositories.external(
+                    repositories.decode(header.encodeToByteArray(), false, "$baseUrl/repo.json", "ANIYOMI"),
+                    bytes, false, indexUrl,
+                )
+                // Refresh probes repo.json after the original index URL was normalized for storage.
+                repositories.save(catalog, signingKey)
+                repositories.save(catalog, signingKey)
+                assertEquals(signingKey, repositories.saved().single().fingerprint)
+                assertEquals(baseUrl, repositories.saved().single().url)
+
+                val changed = repositories.decode(
+                    header.replace(signingKey, "d".repeat(64)).encodeToByteArray(),
+                    false, "$baseUrl/repo.json", "ANIYOMI",
+                )
+                assertFailsWith<IllegalArgumentException> { repositories.save(changed, "d".repeat(64)) }
+                assertFailsWith<IllegalArgumentException> { repositories.save(legacy, urlFingerprint) }
+                assertEquals(signingKey, repositories.saved().single().fingerprint)
+            } finally { library.close() }
+        }
+    }
+
+    @Test
     fun pagingPropagatesTransientFailureAndResumesNextPage() = runBlocking {
         var failSecondPage = true
         val secondContent = content.copy(id = 42L, title = "第二页漫画", url = "/manga-2")
