@@ -76,6 +76,9 @@
 		FA0000000000000000000007 /* SourceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000007 /* SourceSettingsView.swift */; };
 		FA0000000000000000000008 /* SourceWebBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000008 /* SourceWebBrowser.swift */; };
 		FA0000000000000000000099 /* UITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000099 /* UITestSupport.swift */; };
+		AD0000000000000000000001 /* DetailsDockPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000004 /* DetailsDockPane.swift */; };
+		AD0000000000000000000002 /* DetailsDockPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000004 /* DetailsDockPane.swift */; };
+		AD0000000000000000000003 /* DetailsDockPaneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000005 /* DetailsDockPaneTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -153,6 +156,8 @@
 		FB0000000000000000000007 /* SourceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceSettingsView.swift; sourceTree = "<group>"; };
 		FB0000000000000000000008 /* SourceWebBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceWebBrowser.swift; sourceTree = "<group>"; };
 		FB0000000000000000000099 /* UITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestSupport.swift; sourceTree = "<group>"; };
+		AD0000000000000000000004 /* DetailsDockPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailsDockPane.swift; sourceTree = "<group>"; };
+		AD0000000000000000000005 /* DetailsDockPaneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailsDockPaneTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -222,6 +227,7 @@
 				F80000000000000000000023 /* ExtensionWebKit.swift */,
 				B00000000000000000000013 /* SourcesView.swift */,
 				C00000000000000000000011 /* SourceDetailsView.swift */,
+				AD0000000000000000000004 /* DetailsDockPane.swift */,
 				AB0000000000000000000002 /* SourceChangeView.swift */,
 				C00000000000000000000012 /* SourceReaderView.swift */,
 				C00000000000000000000013 /* SourceImageFile.swift */,
@@ -241,6 +247,7 @@
 				F50000000000000000000004 /* RepositoryManagementTests.swift */,
 				F80000000000000000000004 /* BackupFlowTests.swift */,
 				F80000000000000000000021 /* LocalImportTests.swift */,
+				AD0000000000000000000005 /* DetailsDockPaneTests.swift */,
 				F50000000000000000000003 /* ExtensionPresentationTests.swift */,
 				F30000000000000000000003 /* ReaderDownloadQueueTests.swift */,
 				FB0000000000000000000002 /* ImageLoadPolicyTests.swift */,
@@ -437,6 +444,7 @@
 				F80000000000000000000022 /* ExtensionWebKit.swift in Sources */,
 				B00000000000000000000003 /* SourcesView.swift in Sources */,
 				C00000000000000000000001 /* SourceDetailsView.swift in Sources */,
+				AD0000000000000000000001 /* DetailsDockPane.swift in Sources */,
 				AB0000000000000000000001 /* SourceChangeView.swift in Sources */,
 				C00000000000000000000002 /* SourceReaderView.swift in Sources */,
 				C00000000000000000000003 /* SourceImageFile.swift in Sources */,
@@ -456,6 +464,8 @@
 				F40000000000000000000005 /* RepositoryManagementTests.swift in Sources */,
 				F80000000000000000000003 /* BackupFlowTests.swift in Sources */,
 				F80000000000000000000020 /* LocalImportTests.swift in Sources */,
+				AD0000000000000000000002 /* DetailsDockPane.swift in Sources */,
+				AD0000000000000000000003 /* DetailsDockPaneTests.swift in Sources */,
 				F40000000000000000000003 /* ExtensionPresentation.swift in Sources */,
 				F40000000000000000000004 /* ExtensionPresentationTests.swift in Sources */,
 				F20000000000000000000003 /* ReaderDownloadQueueTests.swift in Sources */,

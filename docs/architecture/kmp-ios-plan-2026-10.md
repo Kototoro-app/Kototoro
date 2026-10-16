@@ -6227,3 +6227,24 @@ UI（真实扩展预览）新增 `SourceRuntimeTests.testReopenedLongChapterList
 
 init script 是本地忽略的编译辅助文件，不随应用发布。以上检查没有执行测试、网络来源请求或本地文件删除。
 SwiftUI 仅经代码阅读，尚未经过 Swift/Xcode 编译、framework 链接或设备 UI 验证；没有提交或推送。
+
+## 126. iOS 详情页拖拽面板修复与仓库资源地址共享（2026-10-16）
+
+**详情页 dock/面板**（`DetailsDockPane`）：
+- 阅读按钮与 dock 的拖拽设为优先手势，向下拖拽后松手不再触发阅读；最大展开时 dock 仍保留在面板上方，可直接下拖回半屏或收起。
+- 底部安全区在 `ignoresSafeArea` 之前读取（之后读到的恒为 0，dock 曾只距底边 6pt）。
+- 面板使用固定布局高度，仅随手指位移；列表内容不再随拖动重排抖动，底部留白由锚点决定。
+- 章节行（`.plain` 按钮）补 `contentShape(Rectangle())`：此前行中间空白处点击不触发选择/打开。
+- UI 测试：`DetailsDockPaneTests`（几何）与 `LocalImportTests` 的拖拽面板、章节多选用例。收起判定以手柄移出屏幕为准。
+
+**仓库资源地址**：带 `repo.json` 元数据的仓库（如 LittleSurvival/copymanga-copy20）经第二段列表读取后，
+资源基础地址曾被设为列表文件本身，APK 变成 `…/index.min.json/apk/…` 而 404（表现为 NSURLErrorDomain -1011）。
+- `core-source` 新增 `ExtensionRepoUrls`（`repositoryBase`/`resourceBase`/`resolveResource`），对齐 Android：资源相对仓库目录，
+  与列表文件位置无关。iOS 的 Kotlin 目录与 Swift 解析改用它（`IosRepositoryCatalog.resolve`），已保存的旧目录也被纠正；
+  Android 仅替换行为一致的回退拼接，`baseUrlFromIndexUrl`/`normalizeIndexUrl` 的 HttpUrl、Cloudstream、protobuf 分支未动。
+- 下载失败现在显示 HTTP 状态码与完整地址（`InstallDownloadError`）。
+
+**验证**：`:core-source:jvmTest`、`:ios-shared:iosSimulatorArm64Test`、`:app:compileDebugKotlin` 通过；真实 copy20 仓库的
+`testCopyMangaInitializesAndPersistsInstallation`、`testExternalRepositoryLinkImportsAndInstallsMarkerlessApk` 通过。
+
+**未做**：真机验证 dock 高度与拖动手感；曾尝试把章节/缩略图/书签平铺进详情页并只保留右侧阅读按钮，因首屏章节被挤到底部而回退，未保留。

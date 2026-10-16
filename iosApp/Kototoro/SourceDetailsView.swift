@@ -250,7 +250,16 @@ struct SourceDetailsView: View {
     @State private var metadataContent: IosSourceContent?
     @State private var metadataRequest: UUID?
     private var shownContent: IosSourceContent { metadataContent ?? model.details ?? model.content }
-    @State private var showingChaptersSheet = false
+    @State private var paneAnchor = DetailsPaneAnchor.collapsed
+    private var showingChaptersSheet: Bool {
+        get { paneAnchor != .collapsed }
+        nonmutating set {
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.9)) {
+                paneAnchor = newValue ? (paneAnchor == .expanded ? .expanded : .hovered) : .collapsed
+                if newValue { isDockCompact = false }
+            }
+        }
+    }
     @State private var selectingChapters = false
     @State private var selectedChapterIDs = Set<String>()
     @State private var showingChapterDownloads = false
@@ -272,7 +281,6 @@ struct SourceDetailsView: View {
     @AppStorage(PanoramaKeys.layout) private var panoramaLayout = PanoramaLayout.top
     @State private var scrollOffset: CGFloat = 0
     @State private var isDockCompact = false
-    @State private var dockDragOffset: CGFloat = 0
     /// Opened from "continue reading": go straight on with the chapter being read, once.
     private let autoResume: Bool
     @State private var resumed = false
@@ -338,8 +346,23 @@ struct SourceDetailsView: View {
                 Task { await refreshBookmarks() }
             }
         }
+        .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top }) { oldOffset, newOffset in
+            updateDockOnScroll(from: oldOffset, to: newOffset)
+        }
         .overlay(alignment: .bottom) {
-            floatingActionBar
+            DetailsDockPane(anchor: $paneAnchor, onDragBegan: { isDockCompact = false }) {
+                if let details = model.details ?? (model.content.chapterCount > 0 ? model.content : nil) {
+                    chaptersSheet(details)
+                } else {
+                    ContentUnavailableView("暂无章节", systemImage: "list.bullet")
+                }
+            } dock: {
+                floatingActionBar
+            }
+        }
+        .onChange(of: paneAnchor) { _, anchor in
+            if anchor == .collapsed { finishChapterSelection() }
+            else { isDockCompact = false }
         }
         .overlay(alignment: .top) {
             if let toast = toastMessage {
@@ -363,34 +386,6 @@ struct SourceDetailsView: View {
                 backdrop(coverBottom: bounds.map { geometry[$0].maxY + scrollOffset })
             }
             .ignoresSafeArea()
-        }
-        .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top }) { oldOffset, newOffset in
-            scrollOffset = newOffset
-            let delta = newOffset - oldOffset
-            guard abs(delta) > 0.5 else { return }
-
-            if newOffset <= 10 {
-                if isDockCompact {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        isDockCompact = false
-                    }
-                }
-                return
-            }
-
-            if delta > 0.5 {
-                if !isDockCompact {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        isDockCompact = true
-                    }
-                }
-            } else if delta < -0.5 {
-                if isDockCompact {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        isDockCompact = false
-                    }
-                }
-            }
         }
         // Over the panorama the bar stays clear; the title appears once the header has scrolled away.
         .navigationTitle(panorama && scrollOffset < 170 ? "" : shownContent.title)
@@ -452,11 +447,6 @@ struct SourceDetailsView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingChaptersSheet, onDismiss: { finishChapterSelection() }) {
-            if let details = model.details ?? (model.content.chapterCount > 0 ? model.content : nil) {
-                chaptersSheet(details)
-            }
-        }
         .sheet(isPresented: $editingCategories, onDismiss: { Task { await refreshRecords() } }) {
             FavouriteCategoriesView(content: model.details ?? model.content)
         }
@@ -484,6 +474,14 @@ struct SourceDetailsView: View {
             VideoPlayerView(runtime: model.runtime, content: request.content, chapter: request.chapter)
                 .id(request.id)
         }
+    }
+
+    private func updateDockOnScroll(from oldOffset: CGFloat, to newOffset: CGFloat) {
+        scrollOffset = newOffset
+        guard !showingChaptersSheet, abs(newOffset - oldOffset) > 0.5 else { return }
+        let compact = newOffset > 10 && newOffset > oldOffset
+        guard compact != isDockCompact else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isDockCompact = compact }
     }
 
     private func removeFavourite() {
@@ -933,6 +931,7 @@ struct SourceDetailsView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(model.isVideo ? "剧集" : "章节")
+                .accessibilityIdentifier("details.dock.chapters")
                 .accessibilityAddTraits(selectedTab == .chapters ? .isSelected : [])
             }
 
@@ -952,6 +951,7 @@ struct SourceDetailsView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("缩略图")
+                .accessibilityIdentifier("details.dock.thumbnails")
                 .accessibilityAddTraits(selectedTab == .thumbnails ? .isSelected : [])
             }
 
@@ -971,6 +971,7 @@ struct SourceDetailsView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("书签")
+                .accessibilityIdentifier("details.dock.bookmarks")
                 .accessibilityAddTraits(selectedTab == .bookmarks ? .isSelected : [])
             }
         }
@@ -989,6 +990,7 @@ struct SourceDetailsView: View {
 
             HStack(spacing: 0) {
                 Button {
+                    showingChaptersSheet = false
                     if model.isVideo {
                         playing = PlaybackRequest(content: details, chapter: target)
                     } else {
@@ -1010,6 +1012,7 @@ struct SourceDetailsView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("details.dock.read")
 
                 Divider()
                     .frame(height: 20)
@@ -1078,51 +1081,17 @@ struct SourceDetailsView: View {
             Spacer(minLength: 8)
             dockPrimaryActionCapsule
         }
-        .offset(y: min(0, dockDragOffset))
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 8)
-                .onChanged { value in
-                    if value.translation.height < 0 {
-                        dockDragOffset = max(-28, value.translation.height * 0.45)
-                    }
-                }
-                .onEnded { value in
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                        dockDragOffset = 0
-                    }
-                    if value.translation.height < -15 || value.predictedEndTranslation.height < -30 {
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                        if isDockCompact {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                isDockCompact = false
-                            }
-                        }
-                        showingChaptersSheet = true
-                    }
-                }
-        )
         .shadow(color: .black.opacity(0.12), radius: 12, y: 5)
         .padding(.horizontal, 16)
-        .padding(.bottom, 6)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isDockCompact)
     }
 
     private func openChapter(_ chapter: IosSourceChapter, from details: IosSourceContent) {
-        if showingChaptersSheet {
-            showingChaptersSheet = false
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                if model.isVideo {
-                    playing = PlaybackRequest(content: details, chapter: chapter)
-                } else {
-                    reading = PlaybackRequest(content: details, chapter: chapter)
-                }
-            }
+        showingChaptersSheet = false
+        if model.isVideo {
+            playing = PlaybackRequest(content: details, chapter: chapter)
         } else {
-            if model.isVideo {
-                playing = PlaybackRequest(content: details, chapter: chapter)
-            } else {
-                reading = PlaybackRequest(content: details, chapter: chapter)
-            }
+            reading = PlaybackRequest(content: details, chapter: chapter)
         }
     }
 
@@ -1138,7 +1107,27 @@ struct SourceDetailsView: View {
     }
 
     private func chaptersSheet(_ details: IosSourceContent) -> some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            HStack {
+                if model.isVideo {
+                    Text(sheetTitle).font(.headline)
+                    Spacer()
+                } else {
+                    Picker("视图", selection: $selectedTab) {
+                        Text("章节").tag(DetailsTab.chapters)
+                        if !model.isNovel { Text("缩略图").tag(DetailsTab.thumbnails) }
+                        Text("书签").tag(DetailsTab.bookmarks)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 260)
+                    Spacer(minLength: 12)
+                }
+                Button("完成") { showingChaptersSheet = false }
+                    .font(.body.weight(.semibold))
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
+
             Group {
                 if model.isVideo {
                     List {
@@ -1162,9 +1151,7 @@ struct SourceDetailsView: View {
                                 resume: resume,
                                 onSelectPage: { chapter, pageIndex in
                                     showingChaptersSheet = false
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                                        reading = PlaybackRequest(content: details, chapter: chapter, initialPage: pageIndex)
-                                    }
+                                    reading = PlaybackRequest(content: details, chapter: chapter, initialPage: pageIndex)
                                 }
                             )
                             .tag(DetailsTab.thumbnails)
@@ -1179,8 +1166,6 @@ struct SourceDetailsView: View {
                     .tabViewStyle(.page(indexDisplayMode: .never))
                 }
             }
-            .navigationTitle(sheetTitle)
-            .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) {
                 if selectingChapters && selectedTab == .chapters {
                     Button {
@@ -1198,35 +1183,12 @@ struct SourceDetailsView: View {
             }
             .onChange(of: chapterQuery) { _, _ in selectedChapterIDs.removeAll() }
             .onChange(of: model.selectedBranch) { _, _ in selectedChapterIDs.removeAll() }
-            .toolbar {
-                if !model.isVideo {
-                    ToolbarItem(placement: .principal) {
-                        Picker("视图", selection: $selectedTab) {
-                            Text("章节").tag(DetailsTab.chapters)
-                            if !model.isNovel {
-                                Text("缩略图").tag(DetailsTab.thumbnails)
-                            }
-                            Text("书签").tag(DetailsTab.bookmarks)
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(maxWidth: 240)
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") {
-                        showingChaptersSheet = false
-                    }
-                    .font(.body.weight(.semibold))
-                }
-            }
         }
         .sheet(isPresented: $showingChapterDownloads) { ReaderDownloadsSheet() }
         .alert("无法下载", isPresented: Binding(get: { chapterDownloadError != nil },
                                             set: { if !$0 { chapterDownloadError = nil } })) {
             Button("好") { chapterDownloadError = nil }
         } message: { Text(chapterDownloadError ?? "") }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
     }
 
     private func finishChapterSelection() {
@@ -1478,6 +1440,8 @@ struct SourceDetailsView: View {
                                 .foregroundStyle(.tint)
                         }
                     }
+                    // Plain buttons only hit their drawn content; make the whole row tappable.
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .listRowBackground(isCurrent ? Color.accentColor.opacity(0.12) : nil)
@@ -1996,3 +1960,4 @@ struct ChapterThumbnailsView: View {
         }
     }
 }
+
