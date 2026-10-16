@@ -1,6 +1,24 @@
 import XCTest
 
 final class SourceRuntimeTests: XCTestCase {
+    /// Also runs with the empty device Release profile: local sources appear after the extension catalog settles.
+    @MainActor
+    func testPackagedExtensionRuntimeStartsWithoutLinkageErrors() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments += ["-space.enabled", "YES", "-space.kind", "MANGA"]
+        app.launch()
+        app.mainTab("浏览").tap()
+        XCTAssertTrue(app.staticTexts["sources.extensionRuntime"].waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertTrue(app.buttons["source.LOCAL"].waitForExistence(timeout: 90), app.debugDescription)
+        XCTAssertFalse(app.staticTexts["sources.extensionError"].exists, app.debugDescription)
+        XCTAssertFalse(app.staticTexts["sources.error"].exists, app.debugDescription)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Packaged extension runtime startup"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
     func testFixtureRuntimeExplainsAndBlocksRealExtensionInstallation() throws {
         continueAfterFailure = false
         let app = XCUIApplication()

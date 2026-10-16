@@ -302,6 +302,34 @@ final class ExtensionEcosystemTests: XCTestCase {
         }
     }
 
+    /// Exercise the real parser through the embedded JVM, including its wrapper and the packaged host JAR.
+    @MainActor
+    func testPicacgSettingsExposeCredentialLogin() throws {
+        app.terminate()
+        app.launchArguments += ["-sources.showAdult", "YES", "-space.kind", ""]
+        app.launch()
+        app.mainTab("浏览").tap()
+        let field = searchField()
+        field.tap()
+        field.typeText("PICACG")
+        let source = app.buttons["source.PICACG"]
+        XCTAssertTrue(source.waitForExistence(timeout: 90), app.debugDescription)
+        source.tap()
+        let settings = app.buttons["browse.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 30), app.debugDescription)
+        settings.tap()
+        let username = app.buttons["sourceSettings.node.auth:username"]
+        for _ in 0..<4 where !username.waitForExistence(timeout: 3) {
+            app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        }
+        XCTAssertTrue(username.exists, app.debugDescription)
+        XCTAssertTrue(app.buttons["sourceSettings.node.auth:password"].exists, app.debugDescription)
+        XCTAssertTrue(app.buttons["sourceSettings.node.auth:login"].exists, app.debugDescription)
+        attach("PICACG credential settings")
+        app.buttons["sourceSettings.node.auth:password"].tap()
+        XCTAssertTrue(app.secureTextFields["sourceSettings.text"].waitForExistence(timeout: 5), app.debugDescription)
+    }
+
     /// Each source's settings open from its browse toolbar: the extension's own rows plus the host's User-Agent row
     /// with presets, and the site in the in-app browser.
     @MainActor

@@ -197,6 +197,14 @@ xcodebuild -project "iosApp/Kototoro.xcodeproj" -scheme Kototoro \
 测试覆盖源枚举、真实 Java fixture 调用、应用终止/重启、详情/章节、图片解码、前后翻页、换章与返回导航。
 仍不是生态兼容性验收。
 不同预览使用各自的 DerivedData 目录。普通构建若复用含 JVM 产物的目录会明确拒绝，避免残留的第三方产物进入默认包。
+含 parser-host 的预览及真机 Release 在 Xcode 嵌入 JVM 资源前运行 `:mihon-ios-compat:stageIosHost`，将当前源码的
+iOS 适配器、shims、宿主及项目依赖一起覆盖到应用包内，避免构造方法等 ABI 不匹配；第三方库保持原有版本。
+编译使用 `build/mihon-ios-api` 中已校验的 API，可通过 `KOTOTORO_IOS_COMPATIBILITY_DIRECTORY` 指定目录。
+修改解析器设置等宿主代码后，直接重新构建应用即可生效。
+构建后可运行 `python3 iosApp/Scripts/probe-jvm-preview.py --runtime <Kototoro.app/jvm> --startup-only`，
+使用最终包内的同一组 JAR 检查宿主启动与来源枚举，覆盖无预装扩展的 Release 配置。
+真实哔咔登录控件回归：`-only-testing:KototoroUITests/ExtensionEcosystemTests/testPicacgSettingsExposeCredentialLogin`，
+检查用户名、密码、登录按钮与安全密码输入框，不提交真实账号或发起登录。
 fixture 预览只包含自有测试 ABI，扩展管理会禁用真实扩展安装并说明原因。
 运行 fixture 测试后，继续真实扩展开发前务必重新安装并启动下节的 `RealApiPreview` 应用；
 否则 CopyManga、MH1234 等真实扩展会缺少 Mihon 接口而初始化失败。
