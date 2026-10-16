@@ -21,6 +21,9 @@ abstract class StatsDao {
     @Query("SELECT * FROM stats WHERE manga_id = :mangaId ORDER BY started_at")
     abstract suspend fun findAll(mangaId: Long): List<StatsEntity>
 
+    @Query("SELECT * FROM stats WHERE duration > 0 AND started_at < :until AND started_at + duration > :from ORDER BY started_at")
+    abstract suspend fun findOverlapping(from: Long, until: Long): List<StatsEntity>
+
     @Query("SELECT IFNULL(SUM(pages), 0) FROM stats WHERE manga_id = :mangaId")
     abstract suspend fun getReadPagesCount(mangaId: Long): Int
 

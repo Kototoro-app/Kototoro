@@ -6,6 +6,90 @@ import UIKit
 final class LocalImportTests: XCTestCase {
     private var app: XCUIApplication!
 
+    @MainActor
+    func testReadingStatisticsPersistAndAppearInHistoryAndTheCenteredTimeline() throws {
+        importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
+        let read = app.buttons["details.dock.read"]
+        XCTAssertTrue(read.waitForExistence(timeout: 20), app.debugDescription)
+        read.tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30), app.debugDescription)
+        Thread.sleep(forTimeInterval: 6)
+        if !app.buttons["reader.back"].isHittable {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).tap()
+        }
+        app.buttons["reader.back"].tap()
+        openWorkStatistics()
+        attach("单作品阅读统计")
+        app.navigationBars.buttons["完成"].tap()
+
+        app.terminate()
+        app.launch()
+        app.mainTab("记录").tap()
+        app.segmentedControls.buttons["历史"].tap()
+        let duration = app.staticTexts["stats.duration"]
+        XCTAssertTrue(duration.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertNotEqual(duration.label, "0 分钟")
+        attach("历史页紧凑阅读概览")
+        app.buttons["stats.expand"].tap()
+        XCTAssertTrue(app.staticTexts["阅读时段"].waitForExistence(timeout: 5))
+        app.buttons["stats.expand"].tap()
+        app.segmentedControls.buttons["时间轴"].tap()
+        XCTAssertTrue(app.staticTexts["阅读历史"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["发现更新"].exists)
+        let event = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+            "timeline.read-", "fixture_comic")).firstMatch
+        XCTAssertTrue(event.waitForExistence(timeout: 10), app.debugDescription)
+        attach("日期居中双列时间轴")
+        event.tap()
+        XCTAssertTrue(app.staticTexts["阅读时长"].waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.buttons["打开作品"].exists)
+    }
+
+    @MainActor
+    func testNovelReadingCollectsStatistics() throws {
+        importFile(source: "LOCAL_NOVEL", file: "fixture_novel", reuse: true)
+        let read = app.buttons["details.dock.read"]
+        XCTAssertTrue(read.waitForExistence(timeout: 20), app.debugDescription)
+        read.tap()
+        XCTAssertTrue(app.staticTexts["novel.firstParagraph"].waitForExistence(timeout: 30))
+        Thread.sleep(forTimeInterval: 6)
+        app.buttons["novel.back"].tap()
+        openWorkStatistics()
+        attach("小说阅读统计")
+    }
+
+    @MainActor
+    func testVideoPlaybackCollectsStatistics() throws {
+        importFile(source: "LOCAL_VIDEO", file: "fixture_video", reuse: true)
+        let read = app.buttons["details.dock.read"]
+        XCTAssertTrue(read.waitForExistence(timeout: 20), app.debugDescription)
+        read.tap()
+        let playing = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in self.playedSeconds >= 6 }, object: nil)
+        wait(for: [playing], timeout: 30)
+        showVideoControls()
+        app.sliders["player.scrubber"].adjust(toNormalizedSliderPosition: 0.05)
+        let play = app.buttons["player.playPause"]
+        if play.label == "播放" { play.tap() }
+        // A resumed position can already be beyond six seconds; only elapsed playback is reading time.
+        Thread.sleep(forTimeInterval: 7)
+        showVideoControls()
+        app.buttons["player.close"].tap()
+        openWorkStatistics()
+        attach("视频播放统计")
+    }
+
+    @MainActor
+    private func openWorkStatistics() {
+        let button = app.buttons["details.readingStats"]
+        XCTAssertTrue(button.waitForExistence(timeout: 15), app.debugDescription)
+        for _ in 0..<5 where !button.isHittable { app.collectionViews.firstMatch.swipeUp() }
+        XCTAssertTrue(button.isHittable, app.debugDescription)
+        button.tap()
+        let duration = app.staticTexts["stats.duration"]
+        XCTAssertTrue(duration.waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertNotEqual(duration.label, "0 分钟")
+    }
+
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()

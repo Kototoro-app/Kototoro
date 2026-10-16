@@ -286,6 +286,7 @@ class BackupRepository @Inject constructor(
         val anchorIds = LinkedHashSet<Long>()
         anchorIds += database.getHistoryDao().findAllEntriesIncludingDeleted().map { it.mangaId }
         anchorIds += database.getFavouritesDao().findAllEntriesIncludingDeleted().map { it.mangaId }
+        database.dumpReadingStatistics().collect { anchorIds += it.mangaId }
         if (anchorIds.isEmpty()) {
             return@flow
         }
@@ -473,12 +474,11 @@ class BackupRepository @Inject constructor(
 
                 BackupSection.STATS -> output.writeJsonArray(
                     section = BackupSection.STATS,
-                    data = database.getStatsDao().dumpEnabled()
+                    data = database.dumpReadingStatistics()
                         .filter { stat ->
                             format != ExportFormat.KOTATSU ||
                                 database.getMangaDao().find(stat.mangaId)?.manga?.source in kotatsuSourceNames
-                        }
-                        .map { StatisticBackup(it) },
+                        },
                     serializer = serializer(),
                 )
 
@@ -709,7 +709,7 @@ class BackupRepository @Inject constructor(
                     }
 
                     BackupSection.STATS -> sectionInput.readJsonArray<StatisticBackup>(serializer()).restoreToDb("STATS") {
-                        getStatsDao().upsert(it.toEntity())
+                        restoreReadingStatistic(it)
                     }
 
                     // Legacy WORK_* rows land on their anchor manga. CONTENTS is restored first,
@@ -1030,6 +1030,7 @@ class BackupRepository @Inject constructor(
             }
             if (BackupSection.STATS in actOn || BackupSection.WORK_STATS in actOn) {
                 database.getStatsDao().clear()
+                database.getReadingRecordDao().clearAllSessions()
             }
             if (BackupSection.EXTENSION_REPOS in actOn) {
                 database.getExternalExtensionRepoDao().deleteAll()

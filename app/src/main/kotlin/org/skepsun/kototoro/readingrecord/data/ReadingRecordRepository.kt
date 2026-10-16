@@ -3,14 +3,15 @@ package org.skepsun.kototoro.readingrecord.data
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.mapLatest
+import kotlinx.datetime.TimeZone
+import org.skepsun.kototoro.stats.domain.ReadingStatsPeriod
+import org.skepsun.kototoro.stats.domain.ReadingStatsWindow
+import org.skepsun.kototoro.stats.domain.StatsContentKind
+import org.skepsun.kototoro.stats.domain.deriveReadingStatistics
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.reader.ui.ReaderState
 import javax.inject.Inject
@@ -37,37 +38,27 @@ class ReadingRecordRepository @Inject constructor(
     fun observeSnapshot(mangaId: Long): Flow<ReadingRecordSnapshot> {
         val anchorIds = listOf(mangaId)
         val dao = db.getReadingRecordDao()
-        val summaryFlow = combine(
-            dao.observeTotalDuration(anchorIds),
-            dao.observeReadingDays(anchorIds),
-            dao.observeLastReadAt(anchorIds),
-        ) { totalDuration, readingDays, lastReadAt ->
-            ReadingRecordSummary(
-                totalDuration = totalDuration,
-                readingDays = readingDays,
-                lastReadAt = lastReadAt,
-            )
-        }
-        return combine(
-            summaryFlow,
+        val readings = combine(
             dao.observeSessions(anchorIds),
+            db.getStatsDao().observeRowCount(mangaId),
+        ) { sessions, _ -> sessions to db.getStatsDao().findAll(mangaId) }
+        return combine(
+            readings,
             dao.observeChapterAggregates(anchorIds),
             dao.observeJumpPoints(anchorIds, DEFAULT_JUMP_LIMIT),
-            ) { summary, sessions, chapters, jumpPoints ->
-                val effectiveSummary = summary.copy(
-                    totalDuration = summary.totalDuration.takeIf { it > 0L }
-                        ?: sessions.sumOf { (it.endAt - it.startAt).coerceAtLeast(0L) },
-                    readingDays = summary.readingDays.takeIf { it > 0 }
-                        ?: sessions.map { it.startAt / MILLIS_PER_DAY }.distinct().size,
-                    lastReadAt = summary.lastReadAt ?: sessions.maxOfOrNull { it.endAt },
-                )
-                ReadingRecordSnapshot(
-                    summary = effectiveSummary,
-                    sessions = sessions,
-                    chapters = chapters,
-                    jumpPoints = jumpPoints,
-                )
-            }
+        ) { (sessions, legacy), chapters, jumpPoints ->
+            val stored = db.getMangaDao().find(mangaId)?.manga
+            val value = deriveReadingStatistics(sessions, legacy,
+                mapOf(mangaId to StatsContentKind.fromType(stored?.contentType)),
+                ReadingStatsWindow(ReadingStatsPeriod.ALL, System.currentTimeMillis(), TimeZone.currentSystemDefault()))
+            ReadingRecordSnapshot(
+                summary = ReadingRecordSummary(value.totalDuration, value.activeDays,
+                    value.works.singleOrNull()?.lastActivityAt),
+                sessions = sessions,
+                chapters = chapters,
+                jumpPoints = jumpPoints,
+            )
+        }
     }
 
     suspend fun recordSession(
@@ -163,6 +154,5 @@ class ReadingRecordRepository @Inject constructor(
     private companion object {
         const val DEFAULT_JUMP_LIMIT = 20
         const val MIN_SESSION_DURATION_MS = 5_000L
-        const val MILLIS_PER_DAY = 86_400_000L
     }
 }

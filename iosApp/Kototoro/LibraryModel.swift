@@ -15,6 +15,7 @@ final class LibraryModel: ObservableObject {
     @Published private(set) var updates: [IosUpdate] = []
     @Published private(set) var isCheckingUpdates = false
     @Published private(set) var updateSummary: String?
+    @Published private(set) var recordsRevision = 0
 
     func load() async {
         isLoading = true
@@ -94,6 +95,7 @@ final class LibraryModel: ObservableObject {
         history = try await library.history()
         updates = try await library.updates()
         categories = try await library.categories()
+        recordsRevision += 1
     }
 
     func setFavourite(_ content: IosSourceContent, favourite: Bool) async throws {

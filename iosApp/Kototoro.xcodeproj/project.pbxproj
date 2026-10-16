@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AE0000000000000000000002 /* ReadingStatisticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0000000000000000000012 /* ReadingStatisticsView.swift */; };
+		AE0000000000000000000001 /* ReadingActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0000000000000000000011 /* ReadingActivity.swift */; };
         AC0000000000000000000001 /* TrackingSitesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0000000000000000000002 /* TrackingSitesView.swift */; };
 		AB0000000000000000000001 /* SourceChangeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000002 /* SourceChangeView.swift */; };
 		FE0000000000000000000001 /* ReaderStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000001 /* ReaderStorage.swift */; };
@@ -92,6 +94,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		AE0000000000000000000012 /* ReadingStatisticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingStatisticsView.swift; sourceTree = "<group>"; };
+		AE0000000000000000000011 /* ReadingActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingActivity.swift; sourceTree = "<group>"; };
         AC0000000000000000000002 /* TrackingSitesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingSitesView.swift; sourceTree = "<group>"; };
 		AB0000000000000000000002 /* SourceChangeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceChangeView.swift; sourceTree = "<group>"; };
 		FF0000000000000000000001 /* ReaderStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderStorage.swift; sourceTree = "<group>"; };
@@ -220,6 +224,8 @@
 				F10000000000000000000003 /* ReaderDownloads.swift */,
 				F10000000000000000000002 /* ReaderSettings.swift */,
 				F10000000000000000000001 /* LibraryRecordsView.swift */,
+				AE0000000000000000000012 /* ReadingStatisticsView.swift */,
+				AE0000000000000000000011 /* ReadingActivity.swift */,
 				A00000000000000000000011 /* KototoroApp.swift */,
 				A00000000000000000000012 /* ContentView.swift */,
 				A00000000000000000000013 /* LibraryModel.swift */,
@@ -435,6 +441,8 @@
 				F00000000000000000000003 /* ReaderDownloads.swift in Sources */,
 				F00000000000000000000002 /* ReaderSettings.swift in Sources */,
 				F00000000000000000000001 /* LibraryRecordsView.swift in Sources */,
+				AE0000000000000000000002 /* ReadingStatisticsView.swift in Sources */,
+				AE0000000000000000000001 /* ReadingActivity.swift in Sources */,
 				A00000000000000000000001 /* KototoroApp.swift in Sources */,
 				A00000000000000000000002 /* ContentView.swift in Sources */,
 				A00000000000000000000003 /* LibraryModel.swift in Sources */,

@@ -8,6 +8,12 @@ import SwiftUI
 /// and Picture in Picture support. Advances to the next episode of the same line at the end.
 @MainActor
 final class VideoPlayerModel: ObservableObject {
+    private lazy var activity = ReadingActivityRecorder(content: content)
+
+    func finishReadingActivity() async {
+        activity.setActive(false)
+        await activity.flush()
+    }
     @Published private(set) var chapter: IosSourceChapter
     @Published private(set) var player: AVPlayer?
     @Published private(set) var error: String?
@@ -122,6 +128,8 @@ final class VideoPlayerModel: ObservableObject {
     }
 
     func stop(keepStreams: Bool = false) {
+        activity.setActive(false)
+        Task { await activity.flush() }
         if !keepStreams {
             streams = []
             streamIndex = 0
@@ -256,6 +264,8 @@ final class VideoPlayerModel: ObservableObject {
         guard position.isFinite, position > 0, let library else { return }
         let duration = player?.currentItem?.duration.seconds ?? 0
         let progress = duration.isFinite && duration > 0 ? min(999, Int(position / duration * 1000)) : 0
+        activity.update(library: library, chapter: chapter, index: progress, count: 1000, scroll: Float(position))
+        await activity.flush()
         do { try await library.recordPosition(content: content, chapter: chapter, index: Int32(progress),
                                               count: 1000, scroll: Float(position)) }
         catch { self.error = error.localizedDescription }
@@ -292,6 +302,8 @@ final class VideoPlayerModel: ObservableObject {
             .sink { [weak self] status in
                 self?.isPlaying = status != .paused
                 self?.isBuffering = status == .waitingToPlayAtSpecifiedRate
+                self?.activity.setActive(status == .playing)
+                Task { await self?.persist() }
             }
             .store(in: &observers)
         item.publisher(for: \.status)
@@ -377,7 +389,9 @@ struct VideoPlayerView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
-        .onDisappear { Task { await model.persist(); model.stop(); await library.refresh() } }
+        .onDisappear {
+            Task { await model.persist(); await model.finishReadingActivity(); model.stop(); await library.refresh() }
+        }
     }
 
     // MARK: Controls

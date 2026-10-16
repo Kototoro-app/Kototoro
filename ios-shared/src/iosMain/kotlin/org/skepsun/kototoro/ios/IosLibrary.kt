@@ -38,8 +38,9 @@ data class IosSourceSetting(
 class IosLibrary {
     internal val database: MangaDatabase
     private val sourceRefs = AtomicReference<Map<String, SourceRef>>(emptyMap())
-    private val records by lazy { SourceLibrary(database) { sourceRefs.load()[it] } }
+    internal val records by lazy { SourceLibrary(database) { sourceRefs.load()[it] } }
     val tracking by lazy { IosTracking(this) }
+    val statistics by lazy { IosStatistics(this) }
 
     fun updateSources(sources: List<IosSource>) {
         sourceRefs.store(sources.associate { it.name to SourceRef(it.name, it.locale, it.contentType) })

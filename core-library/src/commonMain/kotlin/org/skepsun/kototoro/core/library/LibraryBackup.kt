@@ -9,6 +9,8 @@ import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.json.Json
 import org.skepsun.kototoro.backups.data.model.*
+import org.skepsun.kototoro.backups.data.dumpReadingStatistics
+import org.skepsun.kototoro.backups.data.restoreReadingStatistic
 import org.skepsun.kototoro.backups.domain.BackupSection
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
@@ -54,9 +56,9 @@ class LibraryBackup(private val database: MangaDatabase) {
                 ids += manga.manga.id
                 BookmarkBackup(manga, bookmarks)
             }, BookmarkBackup.serializer())
-            write(output, BackupSection.STATS, database.getStatsDao().dump().map {
+            write(output, BackupSection.STATS, database.dumpReadingStatistics().map {
                 ids += it.mangaId
-                StatisticBackup(it)
+                it
             }, StatisticBackup.serializer())
             write(output, BackupSection.SOURCE_ORIGINS,
                 database.getSourceOriginsDao().findAll().asFlow().map(SourceOriginBackup::fromEntity),
@@ -177,7 +179,10 @@ class LibraryBackup(private val database: MangaDatabase) {
                     pages = maxOf(remote.pages, local?.pages ?: 0)))
                 restored++
             }
-            archive.rows(BackupSection.STATS, StatisticBackup.serializer()) { statistic(it.toEntity()) }
+            archive.rows(BackupSection.STATS, StatisticBackup.serializer()) {
+                database.restoreReadingStatistic(it)
+                restored++
+            }
             archive.rows(BackupSection.WORK_STATS, WorkStatisticBackup.serializer()) {
                 // Removed work ownership is read only as a legacy projection anchor.
                 if (it.anchorMangaId in anchors) statistic(it.toStatsEntity())

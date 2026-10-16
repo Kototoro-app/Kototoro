@@ -10,6 +10,17 @@ struct ReaderWindowSlot: Identifiable {
 
 @MainActor
 final class SourceReaderModel: ObservableObject {
+    private lazy var activity = ReadingActivityRecorder(content: content)
+
+    func setReadingActive(_ value: Bool) {
+        activity.setActive(value)
+        if !value { Task { await activity.flush() } }
+    }
+
+    func finishReadingActivity() async {
+        activity.setActive(false)
+        await activity.flush()
+    }
     @Published private(set) var chapter: IosSourceChapter
     @Published private(set) var pages: [IosSourcePage] = []
     @Published private(set) var index = 0
@@ -785,13 +796,21 @@ final class SourceReaderModel: ObservableObject {
     }
 
     func persist() async {
-        guard pages.indices.contains(index), images[windowIndex] != nil, let library else { return }
+        guard let library else { return }
+        guard pages.indices.contains(index), images[windowIndex] != nil else {
+            activity.pause()
+            await activity.flush()
+            return
+        }
         let lastVisible = slots.first { $0.placements.contains { Int($0.index) == windowIndex } }?
             .placements.compactMap { placement -> Int? in
                 guard window.indices.contains(Int(placement.index)) else { return nil }
                 let key = window[Int(placement.index)]
                 return key.chapterId == chapter.id ? Int(key.index) : nil
             }.max() ?? index
+        activity.update(library: library, chapter: chapter, index: index, count: pages.count,
+                        lastVisible: max(index, lastVisible), scroll: offset)
+        await activity.flush()
         do { try await library.recordPosition(content: content, chapter: chapter, index: Int32(index),
                                               count: Int32(pages.count), lastVisible: Int32(max(index, lastVisible)), scroll: offset) }
         catch { if !Task.isCancelled { self.error = error.localizedDescription } }
@@ -922,12 +941,13 @@ struct SourceReaderView: View {
         .background(EdgeSwipeBack())
         .toolbar(.hidden, for: .navigationBar, .tabBar)
         .statusBarHidden(!controls)
-        .onAppear { isReaderVisible = true; updateIdleTimer() }
+        .onAppear { isReaderVisible = true; model.setReadingActive(scenePhase == .active); updateIdleTimer() }
         .onChange(of: settings.value.keepScreenOn) { _, _ in updateIdleTimer() }
         .onChange(of: scenePhase) { previous, phase in
+            model.setReadingActive(phase == .active && isReaderVisible)
             updateIdleTimer()
             if phase == .active {
-                Task { await model.load(); await model.loadImage(at: model.windowIndex) }
+                Task { await model.load(); await model.loadImage(at: model.windowIndex); await model.persist() }
             } else if previous == .active {
                 model.autoScroll = false
                 model.stopPreloading()
@@ -1007,10 +1027,16 @@ struct SourceReaderView: View {
         }
         .onDisappear {
             isReaderVisible = false
+            model.setReadingActive(false)
             updateIdleTimer()
             model.autoScroll = false
             model.stopPreloading()
-            Task { await model.persist(); await library.refresh(); await ReaderTileBaseCache.shared.clear() }
+            Task {
+                await model.persist()
+                await model.finishReadingActivity()
+                await library.refresh()
+                await ReaderTileBaseCache.shared.clear()
+            }
         }
         .readerPresence(directories: model.storageDirectories)
         .sheet(isPresented: $showingDownloads) { ReaderDownloadsSheet() }

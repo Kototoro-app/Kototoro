@@ -105,7 +105,6 @@ class DesktopBookmarkStatsBackupTest {
             "bookmarks" to bookmarks(0, bookmark(-9)),
             "bookmarks" to bookmarks(0, bookmark(0, page = -1)),
             "bookmarks" to bookmarks(0, bookmark(0, scroll = -1)),
-            "bookmarks" to bookmarks(0, bookmark(0, percent = "1.1")),
             "statistics" to statistic(0, -1),
             "statistics" to statistic(0, pages = -1),
             "statistics" to statistic(-9),
@@ -119,13 +118,27 @@ class DesktopBookmarkStatsBackupTest {
                 if (section == "statistics") entries += "bookmarks" to bookmarks(0)
                 val file = zip(*entries.toTypedArray())
                 backups.preview(file).use { preview ->
-                    assertThrows(IllegalArgumentException::class.java) { runBlocking { backups.restore(preview) } }
+                    assertThrows(IllegalArgumentException::class.java,
+                        { runBlocking { backups.restore(preview) } }, "$section: $rows")
                 }
                 assertTrue(runtime.database.getFavouriteCategoriesDao().findAll().isEmpty())
                 assertNull(runtime.database.getMangaDao().find(0))
                 assertTrue(runtime.database.getBookmarksDao().observe(0).first().isEmpty())
                 assertTrue(runtime.database.getStatsDao().findAll(0).isEmpty())
             }
+        }
+    }
+
+    @Test
+    fun `legacy bookmark percentages normalize to unknown without changing their reading position`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory.resolve("db")).use { runtime ->
+            val backups = DesktopLibraryBackup(runtime.database)
+            val file = zip("index" to index, "bookmarks" to bookmarks(0, bookmark(0, percent = "18844.0")))
+            backups.preview(file).use { backups.restore(it) }
+            val row = runtime.database.getBookmarksDao().find(0, Long.MAX_VALUE)!!
+            assertEquals(-1f, row.percent)
+            assertEquals(2, row.page)
+            assertEquals(5, row.scroll)
         }
     }
 

@@ -247,6 +247,8 @@ struct SourceDetailsView: View {
     @State private var editingCategories = false
     @State private var changingSource = false
     @State private var managingTracking = false
+    @State private var showingReadingStats = false
+    @StateObject private var readingStats = ReadingStatsModel()
     @State private var metadataContent: IosSourceContent?
     @State private var metadataRequest: UUID?
     private var shownContent: IosSourceContent { metadataContent ?? model.details ?? model.content }
@@ -301,6 +303,26 @@ struct SourceDetailsView: View {
     var body: some View {
         List {
             header
+            Section {
+                Button { showingReadingStats = true } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "chart.bar.xaxis").foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("阅读统计").font(.subheadline.weight(.medium))
+                            if let work = readingStats.snapshot?.works.first, work.hasTimedStats {
+                                Text("\(ReadingStatsFormat.duration(work.duration)) · \(work.activeDays) 天 · \(work.sessions) 次")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            } else {
+                                Text("查看阅读时长与活动记录").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                    }.padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("details.readingStats")
+            }
             if let recordError { Text(recordError).foregroundStyle(.red) }
             if model.isLoading && model.details == nil {
                 ProgressView("正在读取详情…").frame(maxWidth: .infinity).listRowBackground(Color.clear)
@@ -407,6 +429,12 @@ struct SourceDetailsView: View {
             resumeIfAsked()
         }
         .onAppear { model.orderByNumber = chapterOrder == "number" }
+        .task(id: library.recordsRevision) {
+            await readingStats.load(library.library, range: .all, kind: "ALL", contentId: model.content.id)
+        }
+        .sheet(isPresented: $showingReadingStats) {
+            ContentReadingStatsSheet(content: shownContent, runtime: model.runtime)
+        }
         .onChange(of: chapterOrder) { _, order in withAnimation { model.orderByNumber = order == "number" } }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {

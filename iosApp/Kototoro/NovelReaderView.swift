@@ -34,6 +34,17 @@ struct NovelReadingTarget: Equatable {
 
 @MainActor
 final class NovelReaderModel: ObservableObject {
+    private lazy var activity = ReadingActivityRecorder(content: content)
+
+    func setReadingActive(_ value: Bool) {
+        activity.setActive(value)
+        if !value { Task { await activity.flush() } }
+    }
+
+    func finishReadingActivity() async {
+        activity.setActive(false)
+        await activity.flush()
+    }
     @Published private(set) var chapter: IosSourceChapter
     @Published private(set) var blocks: [NovelBlock] = []
     /// The converted chapter; maps blocks to the chapter progress Android also reads and writes.
@@ -82,6 +93,8 @@ final class NovelReaderModel: ObservableObject {
     }
 
     func load() async {
+        activity.pause()
+        await activity.flush()
         let request = UUID()
         self.request = request
         let selected = chapter
@@ -202,6 +215,9 @@ final class NovelReaderModel: ObservableObject {
 
     func persist() async {
         guard !blocks.isEmpty, let library else { return }
+        activity.update(library: library, chapter: chapter, index: visibleIndex, count: blocks.count,
+                        scroll: pagedScroll ?? document?.scroll(index: Int32(visibleIndex)) ?? 0)
+        await activity.flush()
         do { try await library.recordPosition(content: content, chapter: chapter, index: Int32(visibleIndex),
                                               count: Int32(blocks.count),
                                               scroll: pagedScroll ?? document?.scroll(index: Int32(visibleIndex)) ?? 0) }
@@ -273,6 +289,7 @@ struct NovelReaderView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var model: NovelReaderModel
     @AppStorage(NovelStyle.Key.mode) private var mode = NovelStyle.Default.mode
     @AppStorage(NovelStyle.Key.theme) private var theme = NovelStyle.Default.theme
@@ -344,7 +361,15 @@ struct NovelReaderView: View {
             model.library = library.library
             await model.load()
         }
-        .onDisappear { Task { await model.persist(); await library.refresh() } }
+        .onAppear { model.setReadingActive(scenePhase == .active) }
+        .onChange(of: scenePhase) { _, phase in
+            model.setReadingActive(phase == .active)
+            Task { await model.persist() }
+        }
+        .onDisappear {
+            model.setReadingActive(false)
+            Task { await model.persist(); await model.finishReadingActivity(); await library.refresh() }
+        }
         .onChange(of: model.chapter.id) { _, _ in showingMore = false; scrubPosition = nil; isScrubbing = false }
         .readerPresence(directories: [
             ReaderStorageMetadata.directoryID(contentID: model.content.id, chapterID: model.chapter.id)

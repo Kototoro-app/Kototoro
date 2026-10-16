@@ -125,6 +125,10 @@ class SourceLibrary(
 
     suspend fun find(id: Long): SourceContent? = database.getMangaDao().find(id)?.let { content(it.manga, it.tags) }
 
+    suspend fun findMany(ids: Collection<Long>): List<SourceContent> = ids.distinct().chunked(200).flatMap { chunk ->
+        database.getMangaDao().findWithTagsByIds(chunk).map { content(it.manga, it.tags, withChapters = false) }
+    }
+
     suspend fun isFavourite(id: Long): Boolean {
         val categories = database.getFavouritesDao().findCategories(id)
         return database.getFavouriteCategoriesDao().findByIds(categories).isNotEmpty()
@@ -363,9 +367,9 @@ class SourceLibrary(
         }
     }
 
-    private suspend fun content(entity: MangaEntity, tags: List<TagEntity>): SourceContent {
+    private suspend fun content(entity: MangaEntity, tags: List<TagEntity>, withChapters: Boolean = true): SourceContent {
         val source = sourceLookup(entity.source) ?: SourceRef(entity.source, "", entity.contentType ?: "MANGA")
-        val chapters = database.getChaptersDao().findAll(entity.id).map { chapter ->
+        val chapters = (if (withChapters) database.getChaptersDao().findAll(entity.id) else emptyList()).map { chapter ->
             SourceChapter(chapter.chapterId, chapter.title.takeIf { it.isNotBlank() }, chapter.number, chapter.volume,
                 chapter.url, chapter.scanlator, chapter.uploadDate, chapter.branch,
                 sourceLookup(chapter.source) ?: source, chapter.sourceData)

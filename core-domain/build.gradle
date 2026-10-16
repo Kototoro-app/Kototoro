@@ -30,6 +30,7 @@ kotlin {
 		getByName('commonMain') {
 			dependencies {
 				api project(':core-db')
+				api libs.kotlinx.datetime
 				api "org.jetbrains.kotlinx:kotlinx-serialization-core:${libs.versions.serialization.get()}"
 			}
 		}
