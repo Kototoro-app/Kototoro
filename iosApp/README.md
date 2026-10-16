@@ -38,6 +38,13 @@ xcodebuild -project "iosApp/Kototoro.xcodeproj" -scheme "Kototoro" \
 来源列表长按作品可收藏或进入多选（顶栏换为全选／收藏操作栏）；列表与详情页的收藏都弹出可多选的分类框，
 批量时显示部分选中，只写入改动的分类，取消不写入。作品库在作品区左右滑动切换分组，横滑不会打开作品。
 回归：`-only-testing:KototoroUITests/ProductFlowTests/testBrowseAndDetailsShareMultiCategoryFavouritesAndBulkSelection`（需 CMS fixture）。
+详情章节面板半展开时拖动面板，完全展开时先滚动列表；列表回到顶部后，同一次下拉的剩余位移接力收起面板。
+面板顶部只保留拖拽手柄；章节／缩略图／书签由 dock 切换，再次点击 dock 当前项收起面板。
+下拉不刷新章节，使用章节操作栏的“刷新章节”按钮；详情主列表仍保留下拉刷新。
+章节／缩略图／书签通过固定视口横向分页，避免面板拖动时分页控制器重算安全区导致列表跳动。
+回归：`DetailsDockPaneTests`、`LocalImportTests/testExpandedChapterListPullCollapsesPanelWithoutRefreshingOrReading`
+和 `LocalImportTests/testLongChapterListHandsOffOnlyAfterReachingTop`，需先暂存 picker 夹具；
+`LocalImportTests/testDetailsPanelPagesSwipeWithoutMovingPanelOrOpeningReader` 覆盖半屏横向切页与点击阅读。
 默认构建不包含第三方 JVM/兼容 JAR；下面的开发预览支持扩展仓库、安装、搜索与分页、漫画／小说阅读。
 数据库位于应用沙盒 `Library/Application Support/Kototoro/library.db`，不在缓存或临时目录。
 不使用破坏性 schema 回退；导入旧版本 SQLite 文件的迁移不属于当前切片。

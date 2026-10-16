@@ -349,6 +349,8 @@ struct SourceDetailsView: View {
         .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top }) { oldOffset, newOffset in
             updateDockOnScroll(from: oldOffset, to: newOffset)
         }
+        // Keep the refresh action inside the main list, outside the chapter panel's environment.
+        .refreshable { await refreshDetails() }
         .overlay(alignment: .bottom) {
             DetailsDockPane(anchor: $paneAnchor, onDragBegan: { isDockCompact = false }) {
                 if let details = model.details ?? (model.content.chapterCount > 0 ? model.content : nil) {
@@ -404,7 +406,6 @@ struct SourceDetailsView: View {
             await sources.refreshSettings()
             resumeIfAsked()
         }
-        .refreshable { await model.refresh(); await refreshRecords(); await sources.refreshSettings() }
         .onAppear { model.orderByNumber = chapterOrder == "number" }
         .onChange(of: chapterOrder) { _, order in withAnimation { model.orderByNumber = order == "number" } }
         .toolbar {
@@ -493,6 +494,12 @@ struct SourceDetailsView: View {
                 isFavourite = false
             } catch { recordError = error.localizedDescription }
         }
+    }
+
+    private func refreshDetails() async {
+        await model.refresh()
+        await refreshRecords()
+        await sources.refreshSettings()
     }
 
     private func refreshRecords() async {
@@ -918,11 +925,7 @@ struct SourceDetailsView: View {
             // 章节 (Chapters)
             if !isDockCompact || selectedTab == .chapters {
                 Button {
-                    selectedTab = .chapters
-                    showingChaptersSheet = true
-                    if isDockCompact {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isDockCompact = false }
-                    }
+                    toggleDockTab(.chapters)
                 } label: {
                     Image(systemName: model.isVideo ? "play.rectangle.on.rectangle" : "list.bullet")
                         .font(.system(size: 15, weight: .medium))
@@ -938,11 +941,7 @@ struct SourceDetailsView: View {
             // 缩略图 (Thumbnails / Grid) - Manga only
             if !model.isNovel && !model.isVideo && (!isDockCompact || selectedTab == .thumbnails) {
                 Button {
-                    selectedTab = .thumbnails
-                    showingChaptersSheet = true
-                    if isDockCompact {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isDockCompact = false }
-                    }
+                    toggleDockTab(.thumbnails)
                 } label: {
                     Image(systemName: "square.grid.2x2")
                         .font(.system(size: 14, weight: .medium))
@@ -958,11 +957,7 @@ struct SourceDetailsView: View {
             // 书签 (Bookmarks) - Manga & Novel
             if !model.isVideo && (!isDockCompact || selectedTab == .bookmarks) {
                 Button {
-                    selectedTab = .bookmarks
-                    showingChaptersSheet = true
-                    if isDockCompact {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isDockCompact = false }
-                    }
+                    toggleDockTab(.bookmarks)
                 } label: {
                     Image(systemName: "bookmark")
                         .font(.system(size: 14, weight: .medium))
@@ -979,6 +974,15 @@ struct SourceDetailsView: View {
         .frame(height: 50)
         .background(.regularMaterial, in: .capsule)
         .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
+    }
+
+    private func toggleDockTab(_ tab: DetailsTab) {
+        let closing = showingChaptersSheet && selectedTab == tab
+        selectedTab = tab
+        showingChaptersSheet = !closing
+        if isDockCompact {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isDockCompact = false }
+        }
     }
 
     @ViewBuilder
@@ -1095,75 +1099,74 @@ struct SourceDetailsView: View {
         }
     }
 
-    private var sheetTitle: String {
-        if model.isVideo {
-            return "剧集列表"
+    private var chapterRefreshButton: some View {
+        Button(model.isVideo ? "刷新剧集" : "刷新章节", systemImage: "arrow.clockwise") {
+            Task { await refreshDetails() }
         }
-        switch selectedTab {
-        case .chapters: return "章节（\(model.chapters.count)）"
-        case .thumbnails: return "章节网格"
-        case .bookmarks: return "书签（\(bookmarks.count)）"
-        }
+        .labelStyle(.iconOnly)
+        .disabled(model.isLoading)
+        .accessibilityIdentifier("details.chapters.refresh")
     }
 
     private func chaptersSheet(_ details: IosSourceContent) -> some View {
         VStack(spacing: 0) {
-            HStack {
-                if model.isVideo {
-                    Text(sheetTitle).font(.headline)
-                    Spacer()
-                } else {
-                    Picker("视图", selection: $selectedTab) {
-                        Text("章节").tag(DetailsTab.chapters)
-                        if !model.isNovel { Text("缩略图").tag(DetailsTab.thumbnails) }
-                        Text("书签").tag(DetailsTab.bookmarks)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 260)
-                    Spacer(minLength: 12)
-                }
-                Button("完成") { showingChaptersSheet = false }
-                    .font(.body.weight(.semibold))
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
-
             Group {
                 if model.isVideo {
                     List {
                         episodes(details)
                     }
                     .listStyle(.insetGrouped)
+                    .scrollDisabled(paneAnchor != .expanded)
                 } else {
-                    TabView(selection: $selectedTab) {
-                        List {
-                            chapters(details)
-                        }
-                        .listStyle(.insetGrouped)
-                        .tag(DetailsTab.chapters)
-
-                        if !model.isNovel {
-                            ChapterThumbnailsView(
-                                runtime: model.runtime,
-                                details: details,
-                                chapters: model.chapterList(query: chapterQuery, newestFirst: newestFirst),
-                                initialChapter: resumeChapter() ?? model.chapters.first,
-                                resume: resume,
-                                onSelectPage: { chapter, pageIndex in
-                                    showingChaptersSheet = false
-                                    reading = PlaybackRequest(content: details, chapter: chapter, initialPage: pageIndex)
+                    // A scrolling page stack keeps the lists at the top while the panel changes height.
+                    // UIPageViewController-backed TabView recenters its pages as its safe area changes.
+                    GeometryReader { page in
+                        ScrollView(.horizontal) {
+                            HStack(spacing: 0) {
+                                List {
+                                    chapters(details)
                                 }
-                            )
-                            .tag(DetailsTab.thumbnails)
-                        }
+                                .listStyle(.insetGrouped)
+                                .scrollDisabled(paneAnchor != .expanded)
+                                .accessibilityIdentifier("details.chapters.list")
+                                .frame(width: page.size.width, height: page.size.height)
+                                .id(DetailsTab.chapters)
 
-                        List {
-                            bookmarksList(details)
+                                if !model.isNovel {
+                                    ChapterThumbnailsView(
+                                        runtime: model.runtime,
+                                        details: details,
+                                        chapters: model.chapterList(query: chapterQuery, newestFirst: newestFirst),
+                                        initialChapter: resumeChapter() ?? model.chapters.first,
+                                        resume: resume,
+                                        onSelectPage: { chapter, pageIndex in
+                                            showingChaptersSheet = false
+                                            reading = PlaybackRequest(content: details, chapter: chapter,
+                                                                      initialPage: pageIndex)
+                                        }
+                                    )
+                                    .scrollDisabled(paneAnchor != .expanded)
+                                    .frame(width: page.size.width, height: page.size.height)
+                                    .id(DetailsTab.thumbnails)
+                                }
+
+                                List {
+                                    bookmarksList(details)
+                                }
+                                .listStyle(.insetGrouped)
+                                .scrollDisabled(paneAnchor != .expanded)
+                                .frame(width: page.size.width, height: page.size.height)
+                                .id(DetailsTab.bookmarks)
+                            }
+                            .scrollTargetLayout()
                         }
-                        .listStyle(.insetGrouped)
-                        .tag(DetailsTab.bookmarks)
+                        .scrollIndicators(.hidden)
+                        .scrollTargetBehavior(.paging)
+                        .scrollPosition(id: Binding<DetailsTab?>(
+                            get: { selectedTab },
+                            set: { if let tab = $0 { selectedTab = tab } }
+                        ))
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -1357,7 +1360,11 @@ struct SourceDetailsView: View {
             }
             }
         } header: {
-            Text("剧集")
+            HStack {
+                Text("剧集")
+                Spacer()
+                chapterRefreshButton
+            }
         }
     }
 
@@ -1393,6 +1400,7 @@ struct SourceDetailsView: View {
                     Spacer()
                     Button("下载队列", systemImage: "arrow.down.circle") { showingChapterDownloads = true }
                         .accessibilityIdentifier("details.chapters.downloads")
+                    chapterRefreshButton
                 }
             }
             .buttonStyle(.borderless)

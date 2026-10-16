@@ -44,4 +44,55 @@ final class DetailsDockPaneTests: XCTestCase {
         XCTAssertEqual(geometry.reveal(from: .expanded, translation: -100), geometry.maximumReveal)
         XCTAssertEqual(geometry.reveal(from: .collapsed, translation: 100), 0)
     }
+
+    func testExpandedListConsumesScrollDistanceBeforeMovingPanel() {
+        var drag = DetailsPaneContentDrag(anchor: .expanded, scrollOffset: 200)
+        drag.update(translation: 120)
+        XCTAssertFalse(drag.ownsPanel)
+        XCTAssertEqual(drag.translation, 0)
+        drag.update(translation: 200)
+        XCTAssertFalse(drag.ownsPanel)
+        drag.update(translation: 260)
+        XCTAssertTrue(drag.ownsPanel)
+        XCTAssertEqual(drag.translation, 60)
+    }
+
+    func testShortListAndTopBounceCanHandOffImmediately() {
+        for offset: CGFloat in [0, -30] {
+            var drag = DetailsPaneContentDrag(anchor: .expanded, scrollOffset: offset)
+            drag.update(translation: 80)
+            XCTAssertTrue(drag.ownsPanel)
+            XCTAssertEqual(drag.translation, 80)
+        }
+    }
+
+    func testExpandedListScrollsUpWithoutMovingPanel() {
+        var drag = DetailsPaneContentDrag(anchor: .expanded, scrollOffset: 0)
+        drag.update(translation: -200)
+        XCTAssertFalse(drag.ownsPanel)
+        XCTAssertEqual(drag.translation, 0)
+        drag.update(translation: 50)
+        XCTAssertTrue(drag.ownsPanel)
+        XCTAssertEqual(drag.translation, 50)
+    }
+
+    func testReversingHandoffRetractsPanelWithoutReturningOwnershipToList() {
+        var drag = DetailsPaneContentDrag(anchor: .expanded, scrollOffset: 100)
+        drag.update(translation: 250)
+        XCTAssertEqual(drag.translation, 150)
+        drag.update(translation: 120)
+        XCTAssertEqual(drag.translation, 20)
+        drag.update(translation: -50)
+        XCTAssertEqual(drag.translation, 0)
+        XCTAssertTrue(drag.ownsPanel)
+    }
+
+    func testHoveredPanelOwnsBothDirectionsWithoutConsumingListOffset() {
+        var drag = DetailsPaneContentDrag(anchor: .hovered, scrollOffset: 200)
+        for distance: CGFloat in [-120, 80] {
+            drag.update(translation: distance)
+            XCTAssertTrue(drag.ownsPanel)
+            XCTAssertEqual(drag.translation, distance)
+        }
+    }
 }

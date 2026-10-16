@@ -4,6 +4,7 @@
   * fixture_comic.cbz / fixture_novel.txt — a two-page comic and a GB18030 novel, for LocalImportTests.
   * fixture_reader_long.cbz / fixture_reader_error.cbz — long-page restore and neighbour-failure regressions.
   * fixture_reader_chapters.cbz / fixture_reader_download.cbz — automatic chapter turns and offline repair.
+  * fixture_reader_directory.cbz — scroll-to-panel handoff through a long chapter directory.
   * fixture_reader_horizontal.cbz — horizontal reading direction, zoom and anchored restore.
   * fixture_reader_pull_long.cbz — explicit previous-chapter last-page restore.
   * fixture_reader_window.cbz — bounded paging windows across three chapters.
@@ -102,6 +103,9 @@ for storage in storages:
     with zipfile.ZipFile(os.path.join(storage, "fixture_reader_chapters.cbz"), "w") as archive:
         archive.writestr("01/001.png", png(300, 200, (200, 60, 60)))
         archive.writestr("02/001.png", png(300, 200, (60, 60, 200)))
+    with zipfile.ZipFile(os.path.join(storage, "fixture_reader_directory.cbz"), "w") as archive:
+        for chapter in range(1, 61):
+            archive.writestr(f"{chapter:02d}/001.png", png(300, 200, (60, 120, 180)))
     with zipfile.ZipFile(os.path.join(storage, "fixture_reader_download.cbz"), "w") as archive:
         archive.writestr("001.png", png(300, 420, (200, 60, 60)))
         archive.writestr("002.png", png(300, 420, (60, 60, 200)))

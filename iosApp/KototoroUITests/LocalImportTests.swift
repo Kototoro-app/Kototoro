@@ -24,6 +24,15 @@ final class LocalImportTests: XCTestCase {
     }
 
     @MainActor
+    private func waitForPanelToHover(_ handle: XCUIElement, expandedY: CGFloat) {
+        // Native pan callbacks can finish before SwiftUI's spring settles in the accessibility tree.
+        let hovered = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            handle.exists && handle.label == "展开面板" && handle.frame.minY > expandedY + 150
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [hovered], timeout: 5), .completed, "列表到顶后下拉必须回到半展开")
+    }
+
+    @MainActor
     func testDetailsDockContinuouslyRevealsPanelAndStaysAboveIt() throws {
         importFile(source: "LOCAL", file: "fixture_reader_chapters", reuse: true)
         let chapters = app.buttons["details.dock.chapters"]
@@ -49,7 +58,7 @@ final class LocalImportTests: XCTestCase {
 
         app.buttons["details.dock.bookmarks"].tap()
         XCTAssertTrue(app.buttons["details.dock.bookmarks"].isSelected)
-        XCTAssertTrue(app.segmentedControls.buttons["书签"].isSelected)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "书签 (")).firstMatch.isHittable)
         XCTAssertTrue(chapters.isHittable)
         app.buttons["details.dock.thumbnails"].tap()
         XCTAssertTrue(handle.exists)
@@ -61,7 +70,8 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(handle.waitForExistence(timeout: 5))
         XCTAssertTrue(chapters.isHittable, "最大展开时 dock 仍应显示并可拖拽")
         XCTAssertLessThan(chapters.frame.maxY, handle.frame.minY)
-        XCTAssertTrue(app.buttons["完成"].isHittable)
+        XCTAssertFalse(app.buttons["完成"].exists, "dock 已提供收起入口，面板不应重复显示完成按钮")
+        XCTAssertFalse(app.segmentedControls.buttons["章节"].exists, "面板不应重复显示 dock 的标签切换器")
         attach("最大展开时仍保留 dock")
 
         let maximizedHandleY = handle.frame.minY
@@ -79,12 +89,126 @@ final class LocalImportTests: XCTestCase {
         XCTAssertEqual(chapters.frame.midY, closedY, accuracy: 2)
         chapters.tap()
         XCTAssertTrue(handle.waitForExistence(timeout: 5) && !panelIsClosed(handle), "收起后点击仍可打开")
-        app.buttons["完成"].tap()
+        chapters.tap()
         XCTAssertTrue(panelIsClosed(handle))
         read.tap()
         XCTAssertTrue(app.scrollViews["reader.canvas"].waitForExistence(timeout: 15), "普通点击仍应打开阅读器")
         app.buttons["reader.back"].tap()
         XCTAssertTrue(read.waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testDraggingChapterPanelDoesNotOpenReader() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_chapters", reuse: true)
+        app.buttons["details.dock.chapters"].tap()
+        let handle = app.buttons["details.panel.handle"]
+        XCTAssertTrue(handle.waitForExistence(timeout: 5))
+        let chapter = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter.")).firstMatch
+        XCTAssertTrue(chapter.waitForExistence(timeout: 5))
+        let hoveredY = handle.frame.minY
+
+        // The row travels with the finger, so releasing a panel drag must cancel its button action.
+        for distance: CGFloat in [-60, 60, -250] {
+            let start = chapter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: distance)),
+                        withVelocity: .slow, thenHoldForDuration: 0.2)
+            XCTAssertFalse(app.scrollViews["reader.canvas"].waitForExistence(timeout: 1),
+                           "拖拽章节面板松手不能打开阅读器（位移 \(distance)）")
+            XCTAssertTrue(handle.isHittable, "拖拽后必须停留在详情章节面板")
+        }
+        XCTAssertLessThan(handle.frame.minY, hoveredY - 150, "从章节行上拖仍应展开面板")
+        attach("章节面板拖拽不触发阅读")
+        chapter.tap()
+        XCTAssertTrue(app.scrollViews["reader.canvas"].waitForExistence(timeout: 15), "普通点击章节仍应打开阅读器")
+        app.buttons["reader.back"].tap()
+    }
+
+    @MainActor
+    func testExpandedChapterListPullCollapsesPanelWithoutRefreshingOrReading() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_chapters", reuse: true)
+        app.buttons["details.dock.chapters"].tap()
+        let handle = app.buttons["details.panel.handle"]
+        XCTAssertTrue(handle.waitForExistence(timeout: 5))
+        handle.tap()
+        let chapter = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter.")).firstMatch
+        XCTAssertTrue(chapter.waitForExistence(timeout: 5))
+        let expandedY = handle.frame.minY
+        let start = chapter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 260)),
+                    withVelocity: .slow, thenHoldForDuration: 0.2)
+        waitForPanelToHover(handle, expandedY: expandedY)
+        XCTAssertFalse(app.scrollViews["reader.canvas"].exists, "下拉不能触发章节阅读")
+        attach("全展开章节列表到顶下拉收起")
+        chapter.tap()
+        XCTAssertTrue(app.scrollViews["reader.canvas"].waitForExistence(timeout: 15))
+        app.buttons["reader.back"].tap()
+    }
+
+    @MainActor
+    func testDetailsPanelPagesSwipeWithoutMovingPanelOrOpeningReader() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_chapters", reuse: true)
+        app.buttons["details.dock.chapters"].tap()
+        let handle = app.buttons["details.panel.handle"]
+        XCTAssertTrue(handle.waitForExistence(timeout: 5))
+        let panelY = handle.frame.minY
+        for (title, identifier) in [("缩略图", "details.dock.thumbnails"), ("书签", "details.dock.bookmarks")] {
+            let start = app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: app.frame.width * 0.8, dy: handle.frame.maxY + 170))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: -260, dy: 0)),
+                        withVelocity: .slow, thenHoldForDuration: 0.2)
+            let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"),
+                                                     object: app.buttons[identifier])
+            XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 5), .completed, "左右滑动必须切换到\(title)")
+            XCTAssertEqual(handle.frame.minY, panelY, accuracy: 2, "横向切页不能移动章节面板")
+            XCTAssertFalse(app.scrollViews["reader.canvas"].exists, "横向切页不能触发章节阅读")
+        }
+        XCTAssertTrue(app.buttons["details.dock.bookmarks"].isSelected)
+        attach("半展开章节面板横向分页")
+        app.buttons["details.dock.chapters"].tap()
+        let chapter = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter.")).firstMatch
+        XCTAssertTrue(chapter.waitForExistence(timeout: 5))
+        chapter.tap()
+        XCTAssertTrue(app.scrollViews["reader.canvas"].waitForExistence(timeout: 15))
+        app.buttons["reader.back"].tap()
+    }
+
+    @MainActor
+    func testLongChapterListHandsOffOnlyAfterReachingTop() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_directory", reuse: true)
+        app.buttons["details.dock.chapters"].tap()
+        let handle = app.buttons["details.panel.handle"]
+        XCTAssertTrue(handle.waitForExistence(timeout: 5))
+        handle.tap()
+        let list = app.descendants(matching: .any)["details.chapters.list"].firstMatch
+        XCTAssertTrue(list.waitForExistence(timeout: 5))
+
+        func drag(_ distance: CGFloat) {
+            // Start near the relevant edge so the full gesture stays on screen, including a 480-point pull.
+            let y = distance > 0 ? list.frame.minY + 28 : min(list.frame.maxY, app.frame.maxY - 60) - 20
+            XCTAssertGreaterThanOrEqual(y + distance, app.frame.minY)
+            XCTAssertLessThanOrEqual(y + distance, app.frame.maxY)
+            let start = app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: list.frame.midX, dy: y))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: distance)),
+                        withVelocity: .slow, thenHoldForDuration: 0.2)
+        }
+        let firstChapter = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter."))
+            .firstMatch
+        let firstID = firstChapter.identifier
+        let expandedY = handle.frame.minY
+        drag(-280)
+        XCTAssertEqual(handle.frame.minY, expandedY, accuracy: 2, "上滑应滚动章节，不能移动面板")
+        XCTAssertFalse(app.buttons[firstID].isHittable, "长列表必须实际滚动")
+        drag(100)
+        XCTAssertEqual(handle.frame.minY, expandedY, accuracy: 2, "列表未到顶时下拉仍应滚动章节")
+        drag(480)
+        waitForPanelToHover(handle, expandedY: expandedY)
+        XCTAssertFalse(app.scrollViews["reader.canvas"].exists)
+        XCTAssertTrue(app.buttons["details.chapters.refresh"].isHittable, "刷新应保留明确入口")
+        attach("长章节列表滚动到顶接力收起")
+        app.buttons["details.chapters.refresh"].tap()
+        XCTAssertTrue(handle.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["details.dock.chapters"].isHittable)
     }
 
     @MainActor
