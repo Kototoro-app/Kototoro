@@ -15,14 +15,23 @@ final class LibraryModel: ObservableObject {
         didSet {
             favouriteIndex = LibraryCollectionIndex(entries: favourites, mediaKind: { $0.content.mediaKind },
                                                      categoryIDs: { $0.categoryIds.map(\.int32Value) })
+            favouriteKeys = Set(favourites.map { ContentMarks.key($0.content) })
         }
     }
     /// Rebuilt only when favourites are replaced, not when a view, progress indicator or toolbar updates.
     private(set) var favouriteIndex = LibraryCollectionIndex<IosLibraryEntry>(
         mediaKind: { $0.content.mediaKind }, categoryIDs: { $0.categoryIds.map(\.int32Value) }
     )
+    private(set) var favouriteKeys: Set<String> = []
     @Published private(set) var history: [IosLibraryEntry] = []
-    @Published private(set) var updates: [IosUpdate] = []
+    @Published private(set) var updates: [IosUpdate] = [] {
+        didSet {
+            var counts: [String: Int] = [:]
+            for update in updates { counts[ContentMarks.key(update.content)] = Int(update.newChapters) }
+            updateChapterCounts = counts
+        }
+    }
+    private(set) var updateChapterCounts: [String: Int] = [:]
     @Published private(set) var isCheckingUpdates = false
     @Published private(set) var updateSummary: String?
     @Published private(set) var recordsRevision = 0
@@ -30,7 +39,12 @@ final class LibraryModel: ObservableObject {
 
     func refreshMissingSources(installed: [String]) async {
         guard let library else { return }
-        do { missingSources = try await library.recovery.missing(installedSources: installed) }
+        do {
+            let result = try await library.recovery.missing(installedSources: installed)
+            if missingSources != result {
+                missingSources = result
+            }
+        }
         catch { self.error = error.localizedDescription }
     }
 

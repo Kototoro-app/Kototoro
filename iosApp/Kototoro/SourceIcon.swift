@@ -77,15 +77,16 @@ final class SourceIconStore {
         let failedAt = UserDefaults.standard.double(forKey: failedKey)
         if failedAt > 0, Date().timeIntervalSince1970 - failedAt < Self.retryInterval { return nil }
         if let running = inFlight[name] { return await running.value }
-        let task = Task<UIImage?, Never> { [weak self] in
+        let targetFile = file(name)
+        let task = Task.detached(priority: .utility) { () -> UIImage? in
             try? await withReaderStorage { () async throws -> UIImage? in
-                // Favicons are image requests like covers and share their bounded concurrency.
-                guard await RequestGate.covers.enter() else { return nil }
-                defer { Task { await RequestGate.covers.leave() } }
+                // Favicons are background icon requests with their own dedicated gate, completely isolated from covers.
+                guard await RequestGate.icons.enter() else { return nil }
+                defer { Task { await RequestGate.icons.leave() } }
                 guard let homepage = try? await runtime.homepage(sourceName: name),
                       let base = URL(string: homepage), base.host() != nil else { return nil }
                 let image = await Self.fetch(base)
-                if let image, let data = image.pngData(), let file = self?.file(name) {
+                if let image, let data = image.pngData(), let file = targetFile {
                     try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
                     try? data.write(to: file, options: .atomic)
                 }
@@ -110,7 +111,7 @@ final class SourceIconStore {
         root.scheme = base.scheme ?? "https"; root.host = base.host(); root.port = base.port
         guard let origin = root.url else { return nil }
         for path in ["apple-touch-icon.png", "favicon.ico"] {
-            var request = URLRequest(url: origin.appendingPathComponent(path), timeoutInterval: 10)
+            var request = URLRequest(url: origin.appendingPathComponent(path), timeoutInterval: 5)
             request.setValue("image/*", forHTTPHeaderField: "Accept")
             guard let (data, response) = try? await URLSession.shared.data(for: request),
                   let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),

@@ -41,8 +41,14 @@ struct LibraryView: View {
     @State private var deleting: IosCategory?
     @State private var categoryContent: CategoryContent?
     @State private var managingCategories = false
+    @State private var migrating = false
     /// Where the next category's works come in from: the trailing edge when moving forward.
     @State private var swipeEdge: Edge = .trailing
+    private final class ItemCache {
+        var key: String = ""
+        var items: [ContentItem] = []
+    }
+    @State private var itemCache = ItemCache()
 
     private var visibleCategories: [IosCategory] {
         // Keep an emptied selection reachable until the user leaves it; space changes return to All.
@@ -52,7 +58,8 @@ struct LibraryView: View {
     }
     private var availableKinds: Set<String> { library.favouriteIndex.availableKinds }
     private var selectedKind: String? {
-        ContentSpace.filter(enabled: spacesEnabled, space: space, page: pageKind, available: availableKinds)
+        if spacesEnabled { return space.isEmpty ? nil : space }
+        return ContentKindPicker.effective(pageKind, available: availableKinds)
     }
     private var collection: LibraryCollectionIndex<IosLibraryEntry>.Slice {
         library.favouriteIndex.slice(mediaKind: selectedKind)
@@ -91,15 +98,14 @@ struct LibraryView: View {
             .gesture(HorizontalSwipeGesture(onEnded: swipe))
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("作品库")
-            .spaceSubtitle(spacesEnabled ? ContentSpace.subtitle(space) : "")
+            .navigationBarTitleDisplayMode(.inline)
             // The system search field under the title; the search tab stays the app-wide search.
             .pageSearch(text: $query, prompt: "搜索作品库")
             .refreshable { await library.refresh() }
-            .task { await library.refresh() }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    NavigationLink {
-                        LibraryMigrationView(favourites: items.map(\.content))
+                    Button {
+                        migrating = true
                     } label: { Label("批量换源", systemImage: "arrow.triangle.swap") }
                         .accessibilityIdentifier("library.migrate")
                     if spacesEnabled { SpaceMenu() }
@@ -115,11 +121,16 @@ struct LibraryView: View {
                     }
                 }
             }
+            .navigationDestination(isPresented: $migrating) {
+                LibraryMigrationView(favourites: kindFavourites.map(\.content))
+            }
             .sheet(item: $editor) { CategoryEditorSheet(editor: $0) }
             .sheet(item: $categoryContent) { FavouriteCategoriesView(content: $0.content) }
             .sheet(isPresented: $managingCategories) { CategoryManagementSheet() }
-            .onChange(of: visibleCategories.map(\.id)) { _, ids in
-                if let selectedCategory, !ids.contains(selectedCategory) { self.selectedCategory = nil }
+            .onChange(of: library.categories) { _, _ in
+                if let selectedCategory, !visibleCategories.contains(where: { $0.id == selectedCategory }) {
+                    self.selectedCategory = nil
+                }
             }
             .onChange(of: selectedKind) { _, _ in selectedCategory = nil }
             .confirmationDialog("删除分类？", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
@@ -227,18 +238,30 @@ struct LibraryView: View {
     // MARK: Works
 
     private var items: [ContentItem] {
+        let key = "\(library.recordsRevision)|\(selectedKind ?? "")|\(selectedCategory ?? -1)|\(sort.rawValue)|\(query)"
+        if itemCache.key == key {
+            return itemCache.items
+        }
         let text = query.trimmingCharacters(in: .whitespaces)
-        let entries = kindFavourites.filter { entry in
-            (selectedCategory == nil || entry.categoryIds.contains { $0.int32Value == selectedCategory }) &&
-                (text.isEmpty || entry.content.title.localizedCaseInsensitiveContains(text) ||
-                 entry.content.authors.contains { $0.localizedCaseInsensitiveContains(text) })
+        let baseEntries = selectedCategory.flatMap { collection.byCategory[$0] } ?? kindFavourites
+        let entries: [IosLibraryEntry]
+        if text.isEmpty {
+            entries = baseEntries
+        } else {
+            entries = baseEntries.filter { entry in
+                entry.content.title.localizedCaseInsensitiveContains(text) ||
+                entry.content.authors.contains { $0.localizedCaseInsensitiveContains(text) }
+            }
         }
         let sorted: [IosLibraryEntry] = switch sort {
         case .updated: entries.sorted { $0.updatedAt > $1.updatedAt }
         case .title: entries.sorted { $0.content.title.localizedStandardCompare($1.content.title) == .orderedAscending }
         case .progress: entries.sorted { ($0.hasProgress ? $0.progress : -1) > ($1.hasProgress ? $1.progress : -1) }
         }
-        return sorted.map { ContentItem(content: $0.content, progress: $0.hasProgress ? $0.progress : nil) }
+        let computed = sorted.map { ContentItem(content: $0.content, progress: $0.hasProgress ? $0.progress : nil) }
+        itemCache.key = key
+        itemCache.items = computed
+        return computed
     }
 
     @ViewBuilder

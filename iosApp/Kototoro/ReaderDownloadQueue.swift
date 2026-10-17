@@ -53,7 +53,12 @@ final class ReaderDownloadQueue: ObservableObject {
     typealias Progress = @MainActor (Int, Int) throws -> Void
     typealias Operation = @MainActor (ReaderDownloadRequest, @escaping Progress) async throws -> Void
 
-    @Published private(set) var entries: [ReaderDownloadEntry] = []
+    @Published private(set) var entries: [ReaderDownloadEntry] = [] {
+        didSet {
+            completedContentKeys = Set(entries.compactMap { $0.state == .completed ? "\($0.request.source)|\($0.request.contentID)" : nil })
+        }
+    }
+    private(set) var completedContentKeys: Set<String> = []
     @Published private(set) var error: String?
     @Published private(set) var storageFailure: String?
     private let file: URL

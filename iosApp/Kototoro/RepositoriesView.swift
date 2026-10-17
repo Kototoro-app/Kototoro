@@ -212,10 +212,7 @@ struct RepositoriesView: View {
         })
     }
     private var languages: [String] {
-        var codes = Set(model.rows.flatMap(\.languages)).union(selectedLanguages)
-        codes.remove("multi")
-        codes.remove("")
-        if model.rows.contains(where: \.isMultilingual) { codes.insert("all") }
+        let codes = Set(model.availableLanguages).union(selectedLanguages)
         let preferred = ["zh", "en", "ja", "ko", "all"]
         return preferred.filter(codes.contains) + codes.subtracting(preferred).sorted {
             ExtensionLanguage.title($0).localizedStandardCompare(ExtensionLanguage.title($1)) == .orderedAscending
@@ -228,8 +225,34 @@ struct RepositoriesView: View {
         setLanguages([])
     }
 
+    private struct PartitionedRows {
+        var updates: [ExtensionSummary] = []
+        var installed: [ExtensionSummary] = []
+        var availableGroups: [String: [ExtensionSummary]] = [:]
+        var availableLanguages: [String] = []
+
+        init(_ rows: [ExtensionSummary]) {
+            for row in rows {
+                if row.state == .update {
+                    updates.append(row)
+                } else if row.installed != nil {
+                    installed.append(row)
+                } else {
+                    let lang = row.isMultilingual ? "all" : (row.languages.first ?? "")
+                    availableGroups[lang, default: []].append(row)
+                }
+            }
+            availableLanguages = availableGroups.keys.sorted { ExtensionLanguage.title($0) < ExtensionLanguage.title($1) }
+        }
+    }
+
     @ViewBuilder private var extensionSections: some View {
         let rows = visibleRows
+        let partitioned = PartitionedRows(rows)
+        let updates = partitioned.updates
+        let installed = partitioned.installed
+        let availableGroups = partitioned.availableGroups
+        let availableLanguages = partitioned.availableLanguages
         if model.isRefreshing {
             Section { ProgressView("正在检查仓库…").accessibilityIdentifier("repository.refreshing") }
         }
@@ -253,7 +276,6 @@ struct RepositoriesView: View {
                 }.listRowBackground(Color.clear)
             }
         }
-        let updates = rows.filter { $0.state == .update }
         if !updates.isEmpty && !bannerDismissed && model.batchProgress == nil {
             Section {
                 HStack(spacing: 12) {
@@ -335,15 +357,13 @@ struct RepositoriesView: View {
                 }
             }
         }
-        let installed = rows.filter { $0.installed != nil && $0.state != .update }
         if !installed.isEmpty {
             Section("已安装 · \(installed.count)") { ForEach(installed) { extensionRow($0) } }
         }
-        let available = rows.filter { $0.installed == nil }
-        let groups = Dictionary(grouping: available) { row in row.isMultilingual ? "all" : (row.languages.first ?? "") }
-        ForEach(groups.keys.sorted { ExtensionLanguage.title($0) < ExtensionLanguage.title($1) }, id: \.self) { language in
-            Section("\(ExtensionLanguage.title(language)) · \(groups[language]?.count ?? 0) 个可安装") {
-                ForEach(groups[language] ?? []) { extensionRow($0) }
+        ForEach(availableLanguages, id: \.self) { language in
+            let group = availableGroups[language] ?? []
+            Section("\(ExtensionLanguage.title(language)) · \(group.count) 个可安装") {
+                ForEach(group) { extensionRow($0) }
             }
         }
     }

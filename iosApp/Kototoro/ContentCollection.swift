@@ -49,6 +49,7 @@ enum ContentGridSize {
 /// One work in a list, with what the screen knows about it beyond the source's own fields.
 struct ContentItem: Identifiable {
     let content: IosSourceContent
+    let identity: String
     var progress: Float?
     /// Short emphasis on the cover, such as the number of new chapters.
     var badge: String?
@@ -57,8 +58,27 @@ struct ContentItem: Identifiable {
     /// Filled by [ContentCollection] from the library and downloads.
     var marks = ContentMarks()
     var id: String { content.id }
-    /// Rendering identity follows the same source/id pair as favourites and selection state.
-    var identity: String { ContentMarks.key(content) }
+
+    init(
+        content: IosSourceContent,
+        progress: Float? = nil,
+        badge: String? = nil,
+        subtitle: String? = nil,
+        marks: ContentMarks = ContentMarks()
+    ) {
+        self.content = content
+        self.identity = ContentMarks.key(content)
+        self.progress = progress
+        self.badge = badge
+        self.subtitle = subtitle
+        self.marks = marks
+    }
+
+    func withMarks(_ marks: ContentMarks) -> ContentItem {
+        var copy = self
+        copy.marks = marks
+        return copy
+    }
 }
 
 /// Android's card badges (`ContentCardRenderModel`), the ones that help when choosing what to read: new chapters,
@@ -70,7 +90,11 @@ struct ContentMarks {
     var adult = false
 
     /// Works are matched by source and id, as the shared records key them.
-    static func key(_ content: IosSourceContent) -> String { "\(content.sourceName)|\(content.id)" }
+    static func key(_ content: IosSourceContent) -> String { content.contentKey }
+}
+
+extension IosSourceContent {
+    var contentKey: String { "\(sourceName)|\(id)" }
 }
 
 private extension ContentItem {
@@ -187,12 +211,36 @@ struct ContentCollection<Destination: View, Actions: View>: View {
         return [GridItem(.adaptive(minimum: mode.targetWidth(scale: gridSize / 100)), spacing: spacing, alignment: .top)]
     }
 
+    private struct MarksLookup {
+        let favourites: Set<String>
+        let updates: [String: Int]
+        let downloaded: Set<String>
+
+        func marks(for content: IosSourceContent, key: String? = nil) -> ContentMarks {
+            let itemKey = key ?? ContentMarks.key(content)
+            return ContentMarks(
+                newChapters: updates[itemKey] ?? 0,
+                favourite: favourites.contains(itemKey),
+                downloaded: downloaded.contains(itemKey),
+                adult: content.contentType.hasPrefix("HENTAI_") || content.contentRating == "ADULT"
+            )
+        }
+    }
+
+    private var lookup: MarksLookup {
+        let favourites = marksFavourites ? library.favouriteKeys : []
+        let updates = library.updateChapterCounts
+        let downloaded = downloads.completedContentKeys
+        return MarksLookup(favourites: favourites, updates: updates, downloaded: downloaded)
+    }
+
     var body: some View {
-        let items = marked(self.items)
+        let lookup = self.lookup
         if mode.isGrid {
             let compact = mode.hasTitleOverlay
             LazyVGrid(columns: gridColumns, spacing: compact ? 8 : 16) {
-                ForEach(items, id: \.identity) { item in
+                ForEach(items, id: \.identity) { rawItem in
+                    let item = rawItem.withMarks(lookup.marks(for: rawItem.content, key: rawItem.identity))
                     link(item) {
                         if compact { CompactCard(runtime: runtime, item: item, movie: mode.isMovie) }
                         else { GridCard(runtime: runtime, item: item, movie: mode.isMovie) }
@@ -202,7 +250,9 @@ struct ContentCollection<Destination: View, Actions: View>: View {
             .padding(.horizontal, compact ? 12 : 16)
         } else {
             LazyVStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.identity) { index, item in
+                ForEach(items.indices, id: \.self) { index in
+                    let rawItem = items[index]
+                    let item = rawItem.withMarks(lookup.marks(for: rawItem.content, key: rawItem.identity))
                     link(item) {
                         ContentRow(runtime: runtime, item: item, detailed: mode == .detailed)
                             .padding(.horizontal, 16).padding(.vertical, mode == .detailed ? 12 : 9)
@@ -214,33 +264,6 @@ struct ContentCollection<Destination: View, Actions: View>: View {
             }
             .background(.background.secondary, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .padding(.horizontal, 16)
-        }
-    }
-
-    private func marked(_ items: [ContentItem]) -> [ContentItem] {
-        let favourites = marksFavourites ? Set(library.favourites.map { ContentMarks.key($0.content) }) : []
-        var updates: [String: Int] = [:]
-        if !library.updates.isEmpty {
-            for update in library.updates { updates[ContentMarks.key(update.content)] = Int(update.newChapters) }
-        }
-        let downloaded: Set<String>
-        if downloads.entries.isEmpty {
-            downloaded = []
-        } else {
-            downloaded = Set(downloads.entries.compactMap { entry -> String? in
-                entry.state == .completed ? "\(entry.request.source)|\(entry.request.contentID)" : nil
-            })
-        }
-        return items.map { item in
-            var item = item
-            let key = ContentMarks.key(item.content)
-            item.marks = ContentMarks(
-                newChapters: updates[key] ?? 0,
-                favourite: favourites.contains(key),
-                downloaded: downloaded.contains(key),
-                adult: item.content.contentType.hasPrefix("HENTAI_") || item.content.contentRating == "ADULT"
-            )
-            return item
         }
     }
 

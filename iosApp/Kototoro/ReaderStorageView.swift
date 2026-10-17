@@ -21,7 +21,9 @@ final class ReaderStorageModel: ObservableObject {
     private static let backingStore: Result<ReaderStorageStore, Error> = Result {
         let data = try NativeSourceTransport.dataDirectory
         return ReaderStorageStore(downloads: data.appendingPathComponent("downloads"), caches: [
-            ReaderCacheLocation(id: "images", title: "页面与封面", directory: data.appendingPathComponent("images")),
+            ReaderCacheLocation(id: "images", title: "页面与大图", directory: data.appendingPathComponent("images")),
+            ReaderCacheLocation(id: "covers", title: "封面缓存",
+                                directory: URL.cachesDirectory.appendingPathComponent("covers")),
             ReaderCacheLocation(id: "source-icons", title: "来源图标",
                                 directory: URL.cachesDirectory.appendingPathComponent("source-icons")),
             ReaderCacheLocation(id: "extension-icons", title: "扩展图标",

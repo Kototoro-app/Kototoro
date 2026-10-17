@@ -24,12 +24,13 @@ struct ContentView: View {
     }
 
     var body: some View {
+        let latest = resumeLatest
         TabView(selection: $selectedTab) {
             Tab("作品库", systemImage: "books.vertical", value: MainTab.library) {
                 LibraryView(library: library, sources: sources)
             }
             Tab("浏览", systemImage: "safari", value: MainTab.browse) {
-                SourcesView(library: library, model: sources)
+                SourcesView(model: sources)
             }
             Tab("记录", systemImage: "clock.arrow.circlepath", value: MainTab.records) {
                 LibraryRecordsView()
@@ -98,14 +99,13 @@ struct ContentView: View {
         .modifier(MainTabPlacement())
         .tabBarMinimizeBehavior(.onScrollDown)
         .continueReadingAccessory(
-            enabled: !ReaderPresence.shared.shouldSuppressAccessory &&
-                ContentSpace.latest(in: library.history, enabled: spacesEnabled, space: space) != nil
+            enabled: !ReaderPresence.shared.shouldSuppressAccessory && latest != nil
         )
         .continueReadingPresentation(opened: $resumed)
         .environment(\.openContinueReading) { resumed = $0 }
-        .task(id: "\(resumeLatest?.content.sourceName ?? "")|\(resumeLatest?.content.id ?? "")|\(sources.runtime != nil)") {
+        .task(id: "\(latest?.content.sourceName ?? "")|\(latest?.content.id ?? "")|\(sources.runtime != nil)") {
             ContinueReadingCover.shared.image = nil
-            guard let latest = resumeLatest, let runtime = sources.runtime else { return }
+            guard let latest, let runtime = sources.runtime else { return }
             ContinueReadingCover.shared.image = try? await CoverImage.image(runtime: runtime, content: latest.content)
         }
         .environment(\.openGlobalSearch) { selectedTab = .search }
@@ -114,7 +114,7 @@ struct ContentView: View {
         .environmentObject(downloads)
         .environmentObject(storage)
         .environmentObject(repositories)
-        .task(id: "\(library.recordsRevision)|\(sources.isLoading)|\(sources.sources.map(\.name).joined(separator: ","))") {
+        .task(id: "\(library.recordsRevision)|\(sources.isLoading)|\(sources.catalogRevision)") {
             guard sources.runtime != nil, !sources.isLoading else { return }
             await library.refreshMissingSources(installed: sources.sources.map(\.name))
         }

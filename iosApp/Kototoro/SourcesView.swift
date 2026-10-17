@@ -6,6 +6,7 @@ import SwiftUI
 @MainActor
 final class SourcesModel: ObservableObject {
     @Published private(set) var sources: [IosSource] = []
+    @Published private(set) var catalogRevision = 0
     @Published private(set) var extensionError: String?
     @Published private(set) var error: String?
     @Published private(set) var isLoading = false
@@ -61,22 +62,34 @@ final class SourcesModel: ObservableObject {
 
     /// Ties retain manual order; sections keep pinned sources first independently of the selected sort.
     func ordered(_ list: [IosSource], by sort: SourceSort) -> [IosSource] {
-        let manual = ordered(list)
-        guard sort != .manual else { return manual }
-        return manual.enumerated().sorted { lhs, rhs in
+        guard !list.isEmpty else { return [] }
+        if sort == .manual { return ordered(list) }
+        return list.enumerated().sorted { lhs, rhs in
             switch sort {
-            case .manual: return lhs.offset < rhs.offset
+            case .manual:
+                let left = settings[lhs.element.name]?.sortKey ?? Int32.max
+                let right = settings[rhs.element.name]?.sortKey ?? Int32.max
+                return left != right ? left < right : lhs.offset < rhs.offset
             case .title:
                 let comparison = lhs.element.title.localizedStandardCompare(rhs.element.title)
-                return comparison == .orderedSame ? lhs.offset < rhs.offset : comparison == .orderedAscending
+                if comparison != .orderedSame { return comparison == .orderedAscending }
+                let left = settings[lhs.element.name]?.sortKey ?? Int32.max
+                let right = settings[rhs.element.name]?.sortKey ?? Int32.max
+                return left != right ? left < right : lhs.offset < rhs.offset
             case .lastUsed:
                 let left = settings[lhs.element.name]?.lastUsedAt ?? 0
                 let right = settings[rhs.element.name]?.lastUsedAt ?? 0
-                return left == right ? lhs.offset < rhs.offset : left > right
+                if left != right { return left > right }
+                let leftKey = settings[lhs.element.name]?.sortKey ?? Int32.max
+                let rightKey = settings[rhs.element.name]?.sortKey ?? Int32.max
+                return leftKey != rightKey ? leftKey < rightKey : lhs.offset < rhs.offset
             case .popularity:
                 let left = settings[lhs.element.name]?.storedContentCount ?? 0
                 let right = settings[rhs.element.name]?.storedContentCount ?? 0
-                return left == right ? lhs.offset < rhs.offset : left > right
+                if left != right { return left > right }
+                let leftKey = settings[lhs.element.name]?.sortKey ?? Int32.max
+                let rightKey = settings[rhs.element.name]?.sortKey ?? Int32.max
+                return leftKey != rightKey ? leftKey < rightKey : lhs.offset < rhs.offset
             }
         }.map(\.element)
     }
@@ -206,6 +219,7 @@ final class SourcesModel: ObservableObject {
             }
             settings = Dictionary(rows.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
             sources = catalog.sources
+            catalogRevision += 1
             library?.updateSources(sources: catalog.sources)
             extensionError = catalog.extensionError
         } catch {
@@ -217,7 +231,7 @@ final class SourcesModel: ObservableObject {
     func importSource(url: String, title: String) async throws -> String {
         guard let videoSources, let runtime else { throw CancellationError() }
         let summary = try await videoSources.importFrom(url: url.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                       title: title)
+                                                        title: title)
         try await runtime.sourcesChanged()
         await load()
         var text = "已导入 \(summary.imported) 个站点"
@@ -231,6 +245,7 @@ final class SourcesModel: ObservableObject {
             try await videoSources.delete(id: source.name)
             try await runtime.sourcesChanged()
             sources.removeAll { $0.name == source.name }
+            catalogRevision += 1
         } catch {
             self.error = error.localizedDescription
         }
@@ -266,7 +281,7 @@ enum SourceSort: String, CaseIterable, Identifiable {
 }
 
 struct SourcesView: View {
-    @ObservedObject var library: LibraryModel
+    @EnvironmentObject private var library: LibraryModel
     @ObservedObject var model: SourcesModel
     @State private var query = ""
     @AppStorage("sources.showAdult") private var showAdult = false
@@ -284,56 +299,85 @@ struct SourcesView: View {
     @State private var migration: LibraryMigrationRequest?
     @Environment(\.openGlobalSearch) private var openGlobalSearch
 
+    init(library: LibraryModel? = nil, model: SourcesModel) {
+        self.model = model
+    }
+
+    private struct DisplaySources {
+        let sections: [(id: String, title: String, sources: [IosSource])]
+        let newSourceCount: Int
+    }
+
     /// Content types among the enabled sources, independent of the search text so the switch stays put.
     private var availableKinds: Set<String> {
-        Set(model.sources.filter { model.isEnabled($0) && (showAdult || !$0.isAdult) }.map(\.mediaKind))
+        var kinds = Set<String>()
+        for source in model.sources {
+            if model.isEnabled(source) && (showAdult || !source.isAdult) {
+                kinds.insert(source.mediaKind)
+            }
+        }
+        return kinds
     }
 
     /// The content space, or this page's own switch while spaces are off.
     private var kind: String? {
-        ContentSpace.filter(enabled: spacesEnabled, space: space, page: pageKind, available: availableKinds)
+        if spacesEnabled { return space.isEmpty ? nil : space }
+        return ContentKindPicker.effective(pageKind, available: availableKinds)
     }
 
-    /// Enabled sources after search, the content type and the display menu's filters, in the chosen order.
-    private var filteredSources: [IosSource] {
-        let ecosystems = SourceFilterOption.decode(hiddenEcosystems)
-        let selected = kind
-        return SourcesModel.ecosystems.filter { !ecosystems.contains($0.id) }.flatMap { ecosystem in
-            model.sources(ecosystem.id, query: query, showAdult: showAdult).filter { selected == nil || $0.mediaKind == selected }
+    private var displaySources: DisplaySources {
+        let hidden = SourceFilterOption.decode(hiddenEcosystems)
+        let selectedKind = kind
+        let text = query.trimmingCharacters(in: .whitespaces)
+
+        let filtered = model.sources.filter { source in
+            guard model.isEnabled(source) else { return false }
+            if !showAdult && source.isAdult { return false }
+            if let selectedKind, source.mediaKind != selectedKind { return false }
+            let eco = SourceFilterOption.ecosystemKey(source)
+            if hidden.contains(eco) { return false }
+            if !text.isEmpty {
+                let matchesTitle = source.title.localizedCaseInsensitiveContains(text)
+                let matchesName = source.name.localizedCaseInsensitiveContains(text)
+                if !matchesTitle && !matchesName { return false }
+            }
+            return true
         }
-    }
 
-    private var newSourceCount: Int { filteredSources.filter(model.isNewSource).count }
-
-    private var visibleSources: [IosSource] {
-        model.ordered(filteredSources.filter { !newOnly || model.isNewSource($0) }, by: sort)
-    }
-
-    /// Pinned sources first in their own section, then the rest grouped as chosen.
-    private var sections: [(id: String, title: String, sources: [IosSource])] {
-        let visible = visibleSources
-        let pinned = visible.filter(model.isPinned)
-        let rest = visible.filter { !model.isPinned($0) }
+        let newCount = filtered.reduce(0) { model.isNewSource($1) ? $0 + 1 : $0 }
+        let visible = model.ordered(filtered.filter { !newOnly || model.isNewSource($0) }, by: sort)
+        var pinned: [IosSource] = []
+        var rest: [IosSource] = []
+        pinned.reserveCapacity(min(visible.count, 8))
+        rest.reserveCapacity(visible.count)
+        for source in visible {
+            if model.isPinned(source) { pinned.append(source) }
+            else { rest.append(source) }
+        }
         var result: [(id: String, title: String, sources: [IosSource])] = []
         if !pinned.isEmpty { result.append(("pinned", "置顶", pinned)) }
         switch effectiveGrouping {
         case .ecosystem:
+            let grouped = Dictionary(grouping: rest, by: { SourceFilterOption.ecosystemKey($0) })
             for ecosystem in SourcesModel.ecosystems {
-                let members = rest.filter { SourceFilterOption.ecosystemKey($0) == ecosystem.id }
-                if !members.isEmpty { result.append((ecosystem.id, ecosystem.title, members)) }
+                if let members = grouped[ecosystem.id], !members.isEmpty {
+                    result.append((ecosystem.id, ecosystem.title, members))
+                }
             }
         case .content:
+            let grouped = Dictionary(grouping: rest, by: \.mediaKind)
             for kind in SourceFilterOption.kinds {
-                let members = rest.filter { $0.mediaKind == kind.id }
-                if !members.isEmpty { result.append((kind.id, kind.title, members)) }
+                if let members = grouped[kind.id], !members.isEmpty {
+                    result.append((kind.id, kind.title, members))
+                }
             }
         case .none:
             if !rest.isEmpty { result.append(("all", pinned.isEmpty ? "全部来源" : "其他来源", rest)) }
         }
-        return result
+        return DisplaySources(sections: result, newSourceCount: newCount)
     }
 
-    private var disabledCount: Int { model.sources.filter { !model.isEnabled($0) }.count }
+    private var disabledCount: Int { model.sources.reduce(0) { !model.isEnabled($1) ? $0 + 1 : $0 } }
     private var isKindSelected: Bool { kind != nil }
 
     /// Grouping by content type only means something while every kind is shown; a single kind groups by source
@@ -347,15 +391,16 @@ struct SourcesView: View {
     }
 
     var body: some View {
+        let display = displaySources
         NavigationStack {
             Group {
-                if layout == .grid { grid } else { list }
+                if layout == .grid { grid(display) } else { list(display) }
             }
             .overlay {
                 if model.isLoading && model.sources.isEmpty { ProgressView("正在读取源…") }
             }
             .navigationTitle("浏览")
-            .spaceSubtitle(spacesEnabled ? ContentSpace.subtitle(space) : "")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: SourceRoute.self) { route in
                 if let runtime = model.runtime {
                     SourceBrowseView(runtime: runtime, source: route.source)
@@ -378,11 +423,6 @@ struct SourcesView: View {
             .sheet(item: $migration) { request in
                 NavigationStack { BatchMigrationView(contents: request.contents) }
             }
-            .task(id: library.library == nil) {
-                guard let database = library.library else { return }
-                model.attach(database)
-                await model.load()
-            }
         }
     }
 
@@ -396,7 +436,7 @@ struct SourcesView: View {
 
     // MARK: Layouts
 
-    private var list: some View {
+    private func list(_ display: DisplaySources) -> some View {
         List {
             if !spacesEnabled && ContentKindPicker.isShown(availableKinds) {
                 Section { ContentKindPicker(selection: $pageKind, available: availableKinds) }
@@ -405,8 +445,8 @@ struct SourcesView: View {
             }
             statusSections
             if query.isEmpty && !newOnly { Section { trackingDiscovery } }
-            if newSourceCount > 0 { Section { newSourcesNotice } }
-            ForEach(sections, id: \.id) { section in
+            if display.newSourceCount > 0 { Section { newSourcesNotice(count: display.newSourceCount) } }
+            ForEach(display.sections, id: \.id) { section in
                 Section("\(section.title) · \(section.sources.count)") {
                     ForEach(section.sources, id: \.name) { source in
                         sourceLink(source)
@@ -428,12 +468,12 @@ struct SourcesView: View {
                     }
                 }
             }
-            emptyState
+            emptyState(hasSections: !display.sections.isEmpty)
             if disabledCount > 0 { Section { disabledFooter } }
         }
     }
 
-    private var grid: some View {
+    private func grid(_ display: DisplaySources) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 if !spacesEnabled && ContentKindPicker.isShown(availableKinds) {
@@ -449,12 +489,12 @@ struct SourcesView: View {
                     }
                     runtimeLabel.padding(.horizontal, 20)
                 }
-                if newSourceCount > 0 { newSourcesNotice.padding(.horizontal, 20) }
+                if display.newSourceCount > 0 { newSourcesNotice(count: display.newSourceCount).padding(.horizontal, 20) }
                 if query.isEmpty && !newOnly {
                     trackingDiscovery.padding(14).background(.thinMaterial, in: .rect(cornerRadius: 16))
                         .padding(.horizontal, 16)
                 }
-                ForEach(sections, id: \.id) { section in
+                ForEach(display.sections, id: \.id) { section in
                     VStack(alignment: .leading, spacing: 8) {
                         Text("\(section.title) · \(section.sources.count)")
                             .font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
@@ -470,7 +510,7 @@ struct SourcesView: View {
                         .padding(.horizontal, 16)
                     }
                 }
-                emptyState.padding(.top, 40)
+                emptyState(hasSections: !display.sections.isEmpty).padding(.top, 40)
                 if disabledCount > 0 { disabledFooter.padding(.horizontal, 20) }
             }
             .padding(.vertical, 8)
@@ -544,19 +584,19 @@ struct SourcesView: View {
             .accessibilityIdentifier("sources.extensionRuntime")
     }
 
-    private var newSourcesNotice: some View {
+    private func newSourcesNotice(count: Int) -> some View {
         Button {
             newOnly.toggle()
         } label: {
-            Label(newOnly ? "正在显示本版本新增的 \(newSourceCount) 个来源 · 显示全部"
-                          : "本版本新增 \(newSourceCount) 个来源 · 查看", systemImage: "sparkles")
+            Label(newOnly ? "正在显示本版本新增的 \(count) 个来源 · 显示全部"
+                          : "本版本新增 \(count) 个来源 · 查看", systemImage: "sparkles")
                 .font(.footnote)
         }
         .accessibilityIdentifier("sources.newNotice")
     }
 
     @ViewBuilder
-    private var emptyState: some View {
+    private func emptyState(hasSections: Bool) -> some View {
         if model.sources.isEmpty && !model.isLoading && model.error == nil {
             ContentUnavailableView {
                 Label("还没有来源", systemImage: "safari")
@@ -570,7 +610,7 @@ struct SourcesView: View {
                 .accessibilityIdentifier("sources.addVideo.inline")
             }
             .listRowBackground(Color.clear)
-        } else if !model.sources.isEmpty && sections.isEmpty {
+        } else if !model.sources.isEmpty && !hasSections {
             if newOnly || query.trimmingCharacters(in: .whitespaces).isEmpty {
                 ContentUnavailableView {
                     Label("没有符合条件的来源", systemImage: "line.3.horizontal.decrease")

@@ -15,12 +15,19 @@ struct LibraryMigrationView: View {
     @State private var mode = 0
     @State private var selected: Set<String> = []
     @State private var query = ""
+    @State private var cachedSourceGroups: [String: [IosSourceContent]]?
 
-    private var allWorks: [IosSourceContent] {
+    private var sourceGroups: [String: [IosSourceContent]] {
+        if let cached = cachedSourceGroups { return cached }
         var seen = Set<String>()
-        return (library.favourites + library.history).map(\.content).filter {
+        let works = (library.favourites + library.history).map(\.content).filter {
             !$0.isLocal && seen.insert(ContentMarks.key($0)).inserted
         }
+        return Dictionary(grouping: works, by: \.sourceName)
+    }
+
+    private var allWorks: [IosSourceContent] {
+        sourceGroups.values.flatMap { $0 }
     }
     private var selectable: [IosSourceContent] {
         favourites.filter { !$0.isLocal }
@@ -31,6 +38,10 @@ struct LibraryMigrationView: View {
     }
     private func title(_ key: String) -> String {
         sources.sources.first { $0.name == key }?.title ?? library.missingSources.first { $0.key == key }?.title ?? key
+    }
+
+    private var selectedContents: [IosSourceContent] {
+        selectable.filter { selected.contains(ContentMarks.key($0)) }
     }
 
     var body: some View {
@@ -47,10 +58,20 @@ struct LibraryMigrationView: View {
             if mode == 0 {
                 Section {
                     let visibleKeys = Set(visible.map(ContentMarks.key))
-                    Button(!visibleKeys.isEmpty && visibleKeys.isSubset(of: selected)
-                           ? "取消选择当前结果" : "全选当前结果（\(visible.count)）") {
-                        selected = BatchSelection.toggling(visible: visibleKeys, in: selected)
-                    }.disabled(visible.isEmpty).accessibilityIdentifier("migration.selectVisible")
+                    HStack {
+                        Button(!visibleKeys.isEmpty && visibleKeys.isSubset(of: selected)
+                               ? "取消选择当前结果" : "全选当前结果（\(visible.count)）") {
+                            selected = BatchSelection.toggling(visible: visibleKeys, in: selected)
+                        }.disabled(visible.isEmpty).accessibilityIdentifier("migration.selectVisible")
+                        if !selected.isEmpty {
+                            Spacer()
+                            Button("清空已选") {
+                                selected.removeAll()
+                            }
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        }
+                    }
                     Text("已选 \(selected.count) 部；当前搜索结果 \(visible.count) 部。其他搜索下的选择会保留。")
                         .font(.caption).foregroundStyle(.secondary)
                     ForEach(visible, id: \.id) { content in
@@ -71,15 +92,13 @@ struct LibraryMigrationView: View {
                             .accessibilityAddTraits(selected.contains(ContentMarks.key(content)) ? .isSelected : [])
                     }
                 }
-                Section {
-                    if visible.isEmpty && !selectable.isEmpty { ContentUnavailableView.search(text: query) }
-                    NavigationLink {
-                        BatchMigrationView(contents: selectable.filter { selected.contains(ContentMarks.key($0)) })
-                    } label: { Text("下一步：为 \(selected.count) 部作品选择新来源") }
-                        .disabled(selected.isEmpty).accessibilityIdentifier("migration.next")
+                if visible.isEmpty && !selectable.isEmpty {
+                    Section {
+                        ContentUnavailableView.search(text: query)
+                    }
                 }
             } else {
-                let groups = Dictionary(grouping: allWorks, by: \.sourceName)
+                let groups = sourceGroups
                 Section("原来源（含缺失来源）") {
                     ForEach(groups.keys.sorted().filter { query.isEmpty || title($0).localizedCaseInsensitiveContains(query) },
                             id: \.self) { key in
@@ -96,7 +115,7 @@ struct LibraryMigrationView: View {
                     }
                 }
             }
-            if (mode == 0 ? selectable.isEmpty : allWorks.isEmpty) {
+            if (mode == 0 ? selectable.isEmpty : sourceGroups.isEmpty) {
                 ContentUnavailableView("没有可迁移的作品", systemImage: "arrow.triangle.swap",
                                        description: Text("本地导入作品无需换源。"))
             }
@@ -104,6 +123,57 @@ struct LibraryMigrationView: View {
         .searchable(text: $query, prompt: mode == 0 ? "搜索收藏" : "搜索原来源")
         .navigationTitle("批量换源")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if mode == 0 && !selectable.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        BatchMigrationView(contents: selectedContents)
+                    } label: {
+                        Text(selected.isEmpty ? "下一步" : "下一步(\(selected.count))")
+                            .fontWeight(.semibold)
+                    }
+                    .disabled(selected.isEmpty)
+                    .accessibilityIdentifier("migration.next.top")
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if mode == 0 && !selectable.isEmpty {
+                nextBar
+            }
+        }
+        .onAppear { cachedSourceGroups = sourceGroups }
+        .onChange(of: library.recordsRevision) { _, _ in cachedSourceGroups = sourceGroups }
+    }
+
+    private var nextBar: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("已选 \(selected.count) 部作品")
+                    .font(.subheadline.weight(.medium))
+                Text(selected.isEmpty ? "请在上方勾选要换源的作品" : "已准备就绪")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            NavigationLink {
+                BatchMigrationView(contents: selectedContents)
+            } label: {
+                HStack(spacing: 4) {
+                    Text(selected.isEmpty ? "下一步" : "下一步（\(selected.count)）")
+                        .fontWeight(.semibold)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(selected.isEmpty)
+            .accessibilityIdentifier("migration.next")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(.bar)
     }
 }
 

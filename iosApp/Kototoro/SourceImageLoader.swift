@@ -53,18 +53,20 @@ struct ReaderImageArtifact: Equatable, Sendable {
                     // One read and hash for both the size and the decode.
                     let data = try SourceImageFile.validatedData(directory: directory, relativePath: relativePath,
                                                                  sha256: sha256, byteSize: byteSize)
-                    let dims = try SourceImageFile.dimensions(data: data)
+                    let source = try SourceImageFile.createSource(data: data)
+                    let dims = try SourceImageFile.dimensions(source: source)
                     let reader = IosReader()
                     let resolved = reader.decodeSize(width: Int32(dims.width), height: Int32(dims.height))
                     let maxPixelSize = Int(max(resolved.width, resolved.height))
-                    var image = try SourceImageFile.decode(data: data, maxPixelSize: maxPixelSize)
+                    var image = try SourceImageFile.decode(source: source, maxPixelSize: maxPixelSize)
                     let tiled = reader.isTiled(width: Int32(dims.width), height: Int32(dims.height))
                     if cropMargins && !tiled, let cgImage = image.cgImage, cgImage.width >= 100, cgImage.height >= 100 {
                         let sample = Int(reader.edgeSampleSize(width: Int32(cgImage.width), height: Int32(cgImage.height)))
                         if let sampled = SourceImageFile.samplePixels(image, sampleSize: sample) {
-                            let kotlinPixels = KotlinIntArray(size: Int32(sampled.pixels.count))
-                            for (index, pixel) in sampled.pixels.enumerated() {
-                                kotlinPixels.set(index: Int32(index), value: pixel)
+                            let count = sampled.pixels.count
+                            let kotlinPixels = KotlinIntArray(size: Int32(count))
+                            for i in 0..<count {
+                                kotlinPixels.set(index: Int32(i), value: sampled.pixels[i])
                             }
                             if let bounds = reader.contentBounds(
                                 width: Int32(cgImage.width),
@@ -209,7 +211,7 @@ extension IosSourceImage {
         let hash = sha256
         let length = byteSize
         let path = relativePath
-        return try await Task.detached(priority: .utility) {
+        return try await Task.detached(priority: .userInitiated) {
             try SourceImageFile.decode(directory: directory, relativePath: path, sha256: hash,
                                        byteSize: length, maxPixelSize: maxPixelSize)
         }.value

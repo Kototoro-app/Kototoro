@@ -34,6 +34,7 @@ final class RepositoriesModel: ObservableObject {
     @Published private(set) var updatesCount: Int = 0
     @Published private(set) var batchProgress: BatchUpdateProgress?
     @Published private(set) var batchResults: [BatchInstallResult] = []
+    @Published private(set) var availableLanguages: [String] = []
     private(set) var repositoryRows: [String: [ExtensionSummary]] = [:]
     private var store: IosRepositories?
     private weak var sources: SourcesModel?
@@ -66,6 +67,14 @@ final class RepositoriesModel: ObservableObject {
         rows = ExtensionIndex.summaries(installed: installed, available: entries,
                                         activeID: activeID, metadata: displayMetadata)
         updatesCount = rows.filter { $0.state == .update }.count
+        var langCodes = Set(rows.flatMap(\.languages))
+        langCodes.remove("multi")
+        langCodes.remove("")
+        if rows.contains(where: \.isMultilingual) { langCodes.insert("all") }
+        let preferred = ["zh", "en", "ja", "ko", "all"]
+        availableLanguages = preferred.filter(langCodes.contains) + langCodes.subtracting(preferred).sorted {
+            ExtensionLanguage.title($0).localizedStandardCompare(ExtensionLanguage.title($1)) == .orderedAscending
+        }
         let next = Dictionary(uniqueKeysWithValues: rows.filter { $0.installed != nil }.map { row in
             (row.id, ExtensionDisplayMetadata(title: row.title, languages: row.languages,
                                                sourceNames: row.sourceNames, iconURL: row.iconURL))
@@ -113,8 +122,39 @@ final class RepositoriesModel: ObservableObject {
             saved = try await store?.saved() ?? []
             if NativeSourceTransport.isAvailable { try await manage(["managementVersion": 1, "operation": "list"]) }
         } catch { report(error) }
-        // Publish installed entries first; one unavailable repository must not hide the other catalogs.
-        for repository in saved { await refresh(repository) }
+        // Fetch repository catalogs concurrently in parallel rather than sequentially
+        await withTaskGroup(of: (IosRepository, Result<IosRepositoryCatalog, Error>).self) { group in
+            for repository in saved {
+                group.addTask {
+                    do {
+                        let link = try RepositoryLink.parse(repository.url, defaultKind: repository.kind)
+                        let fetched = try await self.fetch(link)
+                        return (repository, .success(fetched))
+                    } catch {
+                        return (repository, .failure(error))
+                    }
+                }
+            }
+            for await (repository, result) in group {
+                let key = Self.key(repository)
+                switch result {
+                case .success(let fetched):
+                    do {
+                        guard let store = self.store else { break }
+                        try await store.save(catalog: fetched, fingerprint: self.fingerprint(fetched))
+                        self.catalogs[key] = fetched
+                        self.repositoryErrors[key] = nil
+                    } catch {
+                        self.repositoryErrors[key] = error.localizedDescription
+                    }
+                case .failure(let error):
+                    if !Self.isCancellation(error) {
+                        self.repositoryErrors[key] = error.localizedDescription
+                    }
+                }
+            }
+        }
+        if let updatedSaved = try? await store?.saved() { saved = updatedSaved }
     }
     /// [title] names an Apple CMS site; TVBox configurations carry their own site names.
     func importLink(_ text: String, kind: String, title: String = "") async {

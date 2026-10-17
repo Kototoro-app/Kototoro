@@ -9,6 +9,8 @@ import os
 actor RequestGate {
     /// Android's Coil loader: `fetcherCoroutineContext(Dispatchers.IO.limitedParallelism(8))`.
     static let covers = RequestGate(limit: 8)
+    /// Dedicated gate for source and extension icons, isolated from covers so background favicons never stall content covers.
+    static let icons = RequestGate(limit: 4)
     /// Android's Coil loader: `decoderCoroutineContext(Dispatchers.IO.limitedParallelism(3))`.
     static let coverDecoding = RequestGate(limit: 3)
     /// Shared by reader overviews and tiled bases: network concurrency does not bound native decode memory.

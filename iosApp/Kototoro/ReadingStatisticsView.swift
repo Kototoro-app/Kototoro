@@ -138,7 +138,7 @@ struct ReadingStatsOverview: View {
         }
         .chartXAxis(.hidden)
         .chartYAxis(.hidden)
-        .chartYScale(domain: 0...max(1.0 / 60, Double(snapshot.dailyActivity.map(\.duration).max() ?? 0) / 60_000))
+        .chartYScale(domain: 0...max(1.0 / 60, Double(snapshot.dailyActivity.max(by: { $0.duration < $1.duration })?.duration ?? 0) / 60_000))
         .chartOverlay { proxy in
             GeometryReader { geometry in
                 Rectangle().fill(.clear).contentShape(Rectangle())

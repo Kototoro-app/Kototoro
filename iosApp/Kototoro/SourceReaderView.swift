@@ -404,7 +404,7 @@ final class SourceReaderModel: ObservableObject {
     /// left-to-right), so every page already shown keeps its scroll coordinates.
     private func appendsInPlace(_ updated: [IosReaderPage]) -> Bool {
         preferences.mode >= 3 && !preferences.readsRightToLeft && !window.isEmpty && updated.count > window.count
-            && Array(updated.prefix(window.count)) == window
+            && updated.starts(with: window)
     }
 
     /// The next chapter joins the end of a continuous strip without moving it, even while the reader is scrolling:
@@ -1904,7 +1904,8 @@ private struct ReaderSpread: View {
             onCamera: { if camera != $0 { camera = $0 } }
         ) {
             ZStack(alignment: .topLeading) {
-                ForEach(Array(slot.placements.enumerated()), id: \.offset) { _, placement in
+                ForEach(slot.placements.indices, id: \.self) { offset in
+                    let placement = slot.placements[offset]
                     ReaderPageTile(
                         model: model,
                         settings: settings,
@@ -1927,12 +1928,18 @@ private struct ReaderSpread: View {
     /// The pages' union inside the viewport (placements already include the fit's centering); an empty slot, still
     /// waiting for its pages, covers the viewport so it still takes taps.
     private var contentBounds: CGRect {
-        guard !slot.placements.isEmpty else { return CGRect(origin: .zero, size: size) }
-        let left = slot.placements.map { CGFloat($0.x) }.min() ?? 0
-        let top = slot.placements.map { CGFloat($0.y) }.min() ?? 0
-        let right = slot.placements.map { CGFloat($0.x + $0.width) }.max() ?? size.width
-        let bottom = slot.placements.map { CGFloat($0.y + $0.height) }.max() ?? size.height
-        return CGRect(x: left, y: top, width: max(1, right - left), height: max(1, bottom - top))
+        guard let first = slot.placements.first else { return CGRect(origin: .zero, size: size) }
+        var minX = CGFloat(first.x)
+        var minY = CGFloat(first.y)
+        var maxX = CGFloat(first.x + first.width)
+        var maxY = CGFloat(first.y + first.height)
+        for placement in slot.placements.dropFirst() {
+            minX = min(minX, CGFloat(placement.x))
+            minY = min(minY, CGFloat(placement.y))
+            maxX = max(maxX, CGFloat(placement.x + placement.width))
+            maxY = max(maxY, CGFloat(placement.y + placement.height))
+        }
+        return CGRect(x: minX, y: minY, width: max(1, maxX - minX), height: max(1, maxY - minY))
     }
 }
 

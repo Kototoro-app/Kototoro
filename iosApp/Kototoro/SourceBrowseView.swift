@@ -10,6 +10,8 @@ import UniformTypeIdentifiers
 @MainActor
 final class SourceBrowseModel: ObservableObject {
     @Published private(set) var items: [IosSourceContent] = []
+    @Published private(set) var contentItems: [ContentItem] = []
+    @Published private(set) var itemsRevision = 0
     @Published private(set) var categories: [IosSourceTag] = []
     @Published private(set) var selectedCategory: IosSourceTag?
     @Published private(set) var isLoading = false
@@ -54,9 +56,8 @@ final class SourceBrowseModel: ObservableObject {
 
     func start() async {
         guard items.isEmpty, !isLoading else { return }
-        async let tags: Void = loadCategories()
         await loadMore()
-        await tags
+        Task { await loadCategories() }
     }
 
     func select(_ category: IosSourceTag?) async {
@@ -119,6 +120,8 @@ final class SourceBrowseModel: ObservableObject {
         generation = UUID()
         let request = generation
         items = []
+        contentItems = []
+        itemsRevision += 1
         page = 0
         loadedCount = 0
         hasMore = true
@@ -134,12 +137,9 @@ final class SourceBrowseModel: ObservableObject {
     }
 
     func retry() async {
+        await loadMore()
         if categories.isEmpty {
-            async let tags: Void = loadCategories()
-            await loadMore()
-            await tags
-        } else {
-            await loadMore()
+            Task { await loadCategories() }
         }
     }
 
@@ -156,6 +156,8 @@ final class SourceBrowseModel: ObservableObject {
             var known = Set(items.map(ContentMarks.key))
             let fresh = result.filter { known.insert(ContentMarks.key($0)).inserted }
             items.append(contentsOf: fresh)
+            contentItems.append(contentsOf: fresh.map { ContentItem(content: $0) })
+            itemsRevision += 1
             loadedCount += Int32(result.count)
             page += 1
             hasMore = !fresh.isEmpty
@@ -216,7 +218,7 @@ struct SourceBrowseView: View {
     var body: some View {
         ScrollView {
             categoryBar.disabled(selecting)
-            ContentCollection(runtime: model.runtime, items: model.items.map { ContentItem(content: $0) }, mode: mode,
+            ContentCollection(runtime: model.runtime, items: model.contentItems, mode: mode,
                               identifierPrefix: "source.content.",
                               onItemAppear: { item in
                                   if item.id == model.items.last?.id, model.error == nil { Task { await model.loadMore() } }
@@ -278,7 +280,10 @@ struct SourceBrowseView: View {
             if value.isEmpty { Task { await model.clearSearch() } }
         }
         .refreshable { await model.reload() }
-        .onChange(of: model.items.map(ContentMarks.key)) { _, keys in selectedKeys.formIntersection(keys) }
+        .onChange(of: model.itemsRevision) { _, _ in
+            let keys = Set(model.items.map(ContentMarks.key))
+            selectedKeys.formIntersection(keys)
+        }
         .task {
             await sources.recordUsage(sourceName: model.source.name)
             await model.start()
@@ -473,6 +478,10 @@ struct CoverImage: View {
             .accessibilityValue(current == nil ? (failed ? "失败" : "加载中") : "已加载")
             .task(id: CoverCache.identity(content)) {
                 if currentImage != nil { return }
+                if let cached = CoverCache.shared.image(for: content) {
+                    self.image = cached
+                    return
+                }
                 failed = false
                 let fetches = runtime.fetchesCovers(content: content)
                 guard fetches ? content.hasCover : content.coverUrl.flatMap(URL.init(string:)) != nil else {
@@ -504,23 +513,28 @@ struct CoverImage: View {
 
     @MainActor
     private static func load(runtime: IosSources, content: IosSourceContent) async throws -> UIImage {
+        if let cached = CoverCache.shared.image(for: content) { return cached }
         let key = CoverCache.identity(content)
         let task: Task<UIImage, Error>
         if let entry = loading[key] {
             task = entry.task
             loading[key]?.waiters += 1
         } else {
-            task = Task<UIImage, Error> {
+            task = Task.detached(priority: .userInitiated) {
                 try await withReaderStorage {
+                    // Check local disk thumbnail before acquiring concurrency gates or calling network/Kotlin
+                    if let diskImage = CoverCache.shared.imageFromDisk(for: content) {
+                        return diskImage
+                    }
                     // Android's cover loader: at most eight downloads and three decodes at a time across the app.
                     // Extension covers use the source's own client in the JVM, outside its per-source call order.
                     if runtime.fetchesCovers(content: content) {
-                        let artifact = try await gated(RequestGate.covers) { try await runtime.cover(content: content) }
-                        return try await gated(RequestGate.coverDecoding) { try await artifact.thumbnailImage(maxPixelSize: 600) }
+                        let artifact = try await gated(RequestGate.covers, priority: 1) { try await runtime.cover(content: content) }
+                        return try await gated(RequestGate.coverDecoding, priority: 1) { try await artifact.thumbnailImage(maxPixelSize: 600) }
                     }
                     guard let url = content.coverUrl.flatMap(URL.init(string:)) else { throw URLError(.badURL) }
-                    let data = try await gated(RequestGate.covers) { try await CoverCache.loadData(url) }
-                    return try await gated(RequestGate.coverDecoding) { try await CoverCache.decode(data) }
+                    let data = try await gated(RequestGate.covers, priority: 1) { try await CoverCache.loadData(url) }
+                    return try await gated(RequestGate.coverDecoding, priority: 1) { try await CoverCache.decode(data) }
                 }
             }
             loading[key] = (task, 1)
@@ -569,12 +583,14 @@ func gated<T>(_ gate: RequestGate, priority: Int = 0, ticket: Int? = nil,
     return try await body()
 }
 
-/// Decoded, downsampled covers shared by grids, lists and details. NSCache evicts under memory pressure.
+/// Decoded, downsampled covers shared by grids, lists and details.
+/// Features a two-tier cache: fast in-memory NSCache (L1) and persistent JPEG disk cache (L2).
 final class CoverCache: @unchecked Sendable {
     static let shared = CoverCache()
     private let cache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
-        cache.totalCostLimit = 128 * 1024 * 1024
+        cache.totalCostLimit = 256 * 1024 * 1024
+        cache.countLimit = 500
         NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil
         ) { [weak cache] _ in
@@ -591,11 +607,31 @@ final class CoverCache: @unchecked Sendable {
         return dir
     }()
 
+    private static func hexDigest(data: Data) -> String {
+        let digest = SHA256.hash(data: data)
+        let hexDigits: [UInt8] = Array("0123456789abcdef".utf8)
+        return String(unsafeUninitializedCapacity: 64) { buffer in
+            var offset = 0
+            for byte in digest {
+                buffer[offset] = hexDigits[Int(byte >> 4)]
+                buffer[offset + 1] = hexDigits[Int(byte & 0x0F)]
+                offset += 2
+            }
+            return 64
+        }
+    }
+
     private static func diskFile(for url: URL) -> URL? {
         guard let dir = diskCacheDirectory else { return nil }
-        let hash = SHA256.hash(data: Data(url.absoluteString.utf8))
-            .map { String(format: "%02x", $0) }.joined()
+        let hash = hexDigest(data: Data(url.absoluteString.utf8))
         return dir.appendingPathComponent("\(hash).img")
+    }
+
+    private static func thumbnailFile(for content: IosSourceContent) -> URL? {
+        guard let dir = diskCacheDirectory else { return nil }
+        let id = identity(content)
+        let hash = hexDigest(data: Data(id.utf8))
+        return dir.appendingPathComponent("thumb_\(hash).jpg")
     }
 
     static func cachedData(for url: URL) -> Data? {
@@ -612,7 +648,29 @@ final class CoverCache: @unchecked Sendable {
         "\(content.sourceName)|\(content.id)|\(content.usesTrackingCover)|\(content.coverUrl ?? "")"
     }
     private func key(_ content: IosSourceContent) -> NSString { Self.identity(content) as NSString }
-    func image(for content: IosSourceContent) -> UIImage? { cache.object(forKey: key(content)) }
+
+    func imageFromDisk(for content: IosSourceContent) -> UIImage? {
+        guard let file = Self.thumbnailFile(for: content),
+              FileManager.default.fileExists(atPath: file.path),
+              let data = try? Data(contentsOf: file, options: .mappedIfSafe),
+              let image = UIImage(data: data) else {
+            return nil
+        }
+        return image
+    }
+
+    func image(for content: IosSourceContent) -> UIImage? {
+        if let memoryImage = cache.object(forKey: key(content)) {
+            return memoryImage
+        }
+        if let diskImage = imageFromDisk(for: content) {
+            let cost = diskImage.cgImage.map { $0.bytesPerRow * $0.height } ?? Int(diskImage.size.width * diskImage.size.height * 4)
+            cache.setObject(diskImage, forKey: key(content), cost: cost)
+            return diskImage
+        }
+        return nil
+    }
+
     func clear() {
         cache.removeAllObjects()
         if let dir = Self.diskCacheDirectory {
@@ -620,15 +678,23 @@ final class CoverCache: @unchecked Sendable {
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
     }
+
     func store(_ image: UIImage, for content: IosSourceContent) {
-        let cost = Int(image.size.width * image.size.height * image.scale * image.scale * 4)
+        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? Int(image.size.width * image.size.height * 4)
         cache.setObject(image, forKey: key(content), cost: cost)
+        guard let file = Self.thumbnailFile(for: content) else { return }
+        Task.detached(priority: .utility) {
+            guard !FileManager.default.fileExists(atPath: file.path) else { return }
+            if let jpeg = image.jpegData(compressionQuality: 0.85) {
+                try? jpeg.write(to: file, options: .atomic)
+            }
+        }
     }
 
     /// Plain-URL covers (native CMS sources) with persistent disk cache; decoding is bounded and off the main actor.
     static func loadData(_ url: URL) async throws -> Data {
         if let data = cachedData(for: url) { return data }
-        let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 30)
+        let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 20)
         let (data, response) = try await URLSession.shared.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw URLError(.badServerResponse)
@@ -638,7 +704,7 @@ final class CoverCache: @unchecked Sendable {
     }
 
     static func decode(_ data: Data) async throws -> UIImage {
-        try await Task.detached(priority: .utility) {
+        try await Task.detached(priority: .userInitiated) {
             guard let source = CGImageSourceCreateWithData(data as CFData, nil),
                   let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                     kCGImageSourceCreateThumbnailFromImageAlways: true,

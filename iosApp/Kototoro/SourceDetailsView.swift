@@ -28,15 +28,42 @@ enum DetailsCache {
 @MainActor
 final class SourceDetailsModel: ObservableObject {
     @Published private(set) var details: IosSourceContent? {
-        didSet { chapters = details?.chapters ?? [] }
+        didSet {
+            chapters = details?.chapters ?? []
+            rebuildChapterMetadata()
+            rebuildVisibleChapters()
+        }
     }
     /// Bridged once per details: every `IosSourceContent.chapters` read maps the whole list again.
     private(set) var chapters: [IosSourceChapter] = []
+    private(set) var chapterIndices: [String: Int] = [:]
+    private(set) var branches: [String?] = []
+    private(set) var lines: [String?] = []
+
+    private func rebuildChapterMetadata() {
+        var indices: [String: Int] = [:]
+        var seenBranches = Set<String?>()
+        var branchList: [String?] = []
+        var seenLines = Set<String?>()
+        var lineList: [String?] = []
+
+        for (idx, ch) in chapters.enumerated() {
+            indices[ch.id] = idx
+            if seenBranches.insert(ch.branch).inserted { branchList.append(ch.branch) }
+            if seenLines.insert(ch.line).inserted { lineList.append(ch.line) }
+        }
+        chapterIndices = indices
+        branches = branchList
+        lines = lineList
+    }
     @Published private(set) var error: String?
     /// The last failure was a browser challenge (Cloudflare): the error offers the in-app browser.
     @Published private(set) var challenge: IosChallenge?
     @Published private(set) var isLoading = false
-    @Published var selectedLine: String?
+    @Published var selectedLine: String? {
+        didSet { rebuildVisibleChapters() }
+    }
+    @Published private(set) var visibleChapters: [IosSourceChapter] = []
     @Published private(set) var related: [IosSourceContent] = []
     let runtime: IosSources
     @Published private(set) var content: IosSourceContent
@@ -104,15 +131,11 @@ final class SourceDetailsModel: ObservableObject {
 
     @Published var selectedBranch: String?
 
-    /// Translation branches in source order (manga/novels); a single unnamed branch is one nil entry.
-    var branches: [String?] {
-        var seen = Set<String?>()
-        return chapters.map(\.branch).filter { seen.insert($0).inserted }
-    }
-
     /// List chapters by the numbers the extension declared instead of the source's own order (the default, as Mihon
     /// lists them): some extensions misparse numbers from titles, which would scramble a number-sorted list.
-    @Published var orderByNumber = false
+    @Published var orderByNumber = false {
+        didSet { rebuildVisibleChapters() }
+    }
 
     /// Stable: chapters with equal numbers keep the source order.
     private func ordered(_ list: [IosSourceChapter]) -> [IosSourceChapter] {
@@ -170,16 +193,13 @@ final class SourceDetailsModel: ObservableObject {
     var isVideo: Bool { content.mediaKind == "VIDEO" }
     var isNovel: Bool { content.mediaKind == "NOVEL" }
 
-    /// Episode groups in source order, from parser/Aniyomi branches or CMS lines.
-    var lines: [String?] {
-        var seen = Set<String?>()
-        return chapters.map(\.line).filter { seen.insert($0).inserted }
-    }
-
-    var visibleChapters: [IosSourceChapter] {
-        guard isVideo, lines.count > 1 else { return ordered(chapters) }
+    func rebuildVisibleChapters() {
+        guard isVideo, lines.count > 1 else {
+            visibleChapters = ordered(chapters)
+            return
+        }
         let line = lines.contains(selectedLine) ? selectedLine : lines.first ?? nil
-        return ordered(chapters.filter { $0.line == line })
+        visibleChapters = ordered(chapters.filter { $0.line == line })
     }
 
     /// Shows this session's details, the record the screen was opened with (library, history) or the details saved
@@ -200,6 +220,7 @@ final class SourceDetailsModel: ObservableObject {
         details = result
         if !lines.contains(selectedLine) { selectedLine = lines.first ?? nil }
         if !branches.contains(selectedBranch) { selectedBranch = branches.first ?? nil }
+        rebuildVisibleChapters()
     }
 
     func load() async {
@@ -248,7 +269,6 @@ struct SourceDetailsView: View {
     @State private var changingSource = false
     @State private var managingTracking = false
     @State private var showingReadingStats = false
-    @StateObject private var readingStats = ReadingStatsModel()
     @State private var metadataContent: IosSourceContent?
     @State private var metadataRequest: UUID?
     private var shownContent: IosSourceContent { metadataContent ?? model.details ?? model.content }
@@ -303,26 +323,6 @@ struct SourceDetailsView: View {
     var body: some View {
         List {
             header
-            Section {
-                Button { showingReadingStats = true } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "chart.bar.xaxis").foregroundStyle(.secondary)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("阅读统计").font(.subheadline.weight(.medium))
-                            if let work = readingStats.snapshot?.works.first, work.hasTimedStats {
-                                Text("\(ReadingStatsFormat.duration(work.duration)) · \(work.activeDays) 天 · \(work.sessions) 次")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            } else {
-                                Text("查看阅读时长与活动记录").font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-                    }.padding(.vertical, 4)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("details.readingStats")
-            }
             if let recordError { Text(recordError).foregroundStyle(.red) }
             if model.isLoading && model.details == nil {
                 ProgressView("正在读取详情…").frame(maxWidth: .infinity).listRowBackground(Color.clear)
@@ -429,19 +429,23 @@ struct SourceDetailsView: View {
             resumeIfAsked()
         }
         .onAppear { model.orderByNumber = chapterOrder == "number" }
-        .task(id: library.recordsRevision) {
-            await readingStats.load(library.library, range: .all, kind: "ALL", contentId: model.content.id)
-        }
         .sheet(isPresented: $showingReadingStats) {
             ContentReadingStatsSheet(content: shownContent, runtime: model.runtime)
         }
         .onChange(of: chapterOrder) { _, order in withAnimation { model.orderByNumber = order == "number" } }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    showingReadingStats = true
+                } label: {
+                    Label("阅读统计", systemImage: "chart.bar.xaxis")
+                }
+                .accessibilityIdentifier("details.readingStats")
                 if let url = URL(string: model.content.publicUrl), url.scheme?.hasPrefix("http") == true {
                     ShareLink(item: url) { Label("分享", systemImage: "square.and.arrow.up") }
                 }
                 Menu("更多", systemImage: "ellipsis") {
+                    Button("阅读统计", systemImage: "chart.bar.xaxis") { showingReadingStats = true }
                     Button("追踪与资料", systemImage: "link") { managingTracking = true }
                         .disabled(library.library == nil)
                         .accessibilityIdentifier("details.tracking")
@@ -784,7 +788,7 @@ struct SourceDetailsView: View {
                     if totalChapters > 0 {
                         let progressText: String = {
                             if let resume = resume, resume.progress > 0 {
-                                let readCount = model.chapters.firstIndex(where: { $0.id == resume.chapterId }).map { $0 + 1 } ?? 0
+                                let readCount = (model.chapterIndices[resume.chapterId] ?? -1) + 1
                                 return "\(readCount)/\(totalChapters)"
                             } else {
                                 return model.isVideo ? "\(totalChapters) 集" : "\(totalChapters) 章"
@@ -833,13 +837,15 @@ struct SourceDetailsView: View {
 
     @ViewBuilder
     private func summaryCard(_ shown: IosSourceContent) -> some View {
-        if let summary = shown.summary.map(Self.plainText), !summary.isEmpty || !shown.tags.isEmpty {
+        let summary = shown.summary.map(Self.plainText) ?? ""
+        let hasSummary = !summary.isEmpty
+        if hasSummary || !shown.tags.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 Text("简介")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(.primary)
 
-                if let summary = shown.summary.map(Self.plainText), !summary.isEmpty {
+                if hasSummary {
                     Text(summary)
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -1163,21 +1169,27 @@ struct SourceDetailsView: View {
                                 .id(DetailsTab.chapters)
 
                                 if !model.isNovel {
-                                    ChapterThumbnailsView(
-                                        runtime: model.runtime,
-                                        details: details,
-                                        chapters: model.chapterList(query: chapterQuery, newestFirst: newestFirst),
-                                        initialChapter: resumeChapter() ?? model.chapters.first,
-                                        resume: resume,
-                                        onSelectPage: { chapter, pageIndex in
-                                            showingChaptersSheet = false
-                                            reading = PlaybackRequest(content: details, chapter: chapter,
-                                                                      initialPage: pageIndex)
-                                        }
-                                    )
-                                    .scrollDisabled(paneAnchor != .expanded)
-                                    .frame(width: page.size.width, height: page.size.height)
-                                    .id(DetailsTab.thumbnails)
+                                    if selectedTab == .thumbnails {
+                                        ChapterThumbnailsView(
+                                            runtime: model.runtime,
+                                            details: details,
+                                            chapters: model.chapterList(query: chapterQuery, newestFirst: newestFirst),
+                                            initialChapter: resumeChapter() ?? model.chapters.first,
+                                            resume: resume,
+                                            onSelectPage: { chapter, pageIndex in
+                                                showingChaptersSheet = false
+                                                reading = PlaybackRequest(content: details, chapter: chapter,
+                                                                          initialPage: pageIndex)
+                                            }
+                                        )
+                                        .scrollDisabled(paneAnchor != .expanded)
+                                        .frame(width: page.size.width, height: page.size.height)
+                                        .id(DetailsTab.thumbnails)
+                                    } else {
+                                        Color.clear
+                                            .frame(width: page.size.width, height: page.size.height)
+                                            .id(DetailsTab.thumbnails)
+                                    }
                                 }
 
                                 List {
@@ -1412,7 +1424,17 @@ struct SourceDetailsView: View {
         let branches = model.branches
         let visible = model.chapterList(query: chapterQuery, newestFirst: newestFirst)
         let current = resumeChapter()
-        let currentIndex = current.flatMap { chapter in model.chapters.firstIndex { $0.id == chapter.id } }
+        let currentIndex = current.flatMap { model.chapterIndices[$0.id] }
+        let downloadStatuses: [String: String] = {
+            guard !downloads.entries.isEmpty else { return [:] }
+            var dict: [String: String] = [:]
+            for entry in downloads.entries {
+                if entry.request.source == details.sourceName && entry.request.contentID == details.id {
+                    dict[entry.request.chapterID] = entry.status
+                }
+            }
+            return dict
+        }()
         Section {
             HStack {
                 if selectingChapters {
@@ -1449,7 +1471,7 @@ struct SourceDetailsView: View {
             }
             if visible.isEmpty { Text("暂无章节").foregroundStyle(.secondary).accessibilityIdentifier("details.empty") }
             ForEach(visible, id: \.id) { chapter in
-                let index = model.chapters.firstIndex { $0.id == chapter.id }
+                let index = model.chapterIndices[chapter.id]
                 let isCurrent = chapter.id == current?.id
                 let isRead = !isCurrent && index != nil && currentIndex != nil && index! < currentIndex!
                 Button {
@@ -1468,8 +1490,8 @@ struct SourceDetailsView: View {
                             if let subtitle = Self.chapterSubtitle(chapter) {
                                 Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
-                            if let entry = downloads.entry(content: details, chapter: chapter) {
-                                Text(entry.status).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            if let status = downloadStatuses[chapter.id] {
+                                Text(status).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
                         Spacer(minLength: 0)
@@ -1534,8 +1556,8 @@ struct SourceDetailsView: View {
         chapters.prefix(50).contains { episodeTitle($0).count > 7 }
     }
 
-    static func rows(_ chapters: [IosSourceChapter]) -> [[IosSourceChapter]] {
-        stride(from: 0, to: chapters.count, by: rowSize).map { Array(chapters[$0..<min($0 + rowSize, chapters.count)]) }
+    static func rows(_ chapters: [IosSourceChapter]) -> [ArraySlice<IosSourceChapter>] {
+        stride(from: 0, to: chapters.count, by: rowSize).map { chapters[$0..<min($0 + rowSize, chapters.count)] }
     }
 
     /// Episode titles repeat the line name ("线路A - 第1集"); the picker already shows it.
@@ -1546,7 +1568,10 @@ struct SourceDetailsView: View {
 
     /// CMS descriptions are often HTML fragments.
     static func plainText(_ html: String) -> String {
-        html.replacingOccurrences(of: "<br\\s*/?>", with: "\n", options: .regularExpression)
+        guard html.contains("<") || html.contains("&") else {
+            return html.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return html.replacingOccurrences(of: "<br\\s*/?>", with: "\n", options: .regularExpression)
             .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
             .replacingOccurrences(of: "&nbsp;", with: " ")
             .replacingOccurrences(of: "&amp;", with: "&")
@@ -1836,7 +1861,8 @@ struct ChapterThumbnailsView: View {
                         ],
                         spacing: 10
                     ) {
-                        ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
+                        ForEach(pages.indices, id: \.self) { index in
+                            let page = pages[index]
                             if let chapter = selectedChapter {
                                 let isCurrent = currentReadingPage != nil
                                     ? (chapter.id == initialChapter?.id && index == currentReadingPage)

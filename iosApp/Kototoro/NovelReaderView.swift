@@ -75,6 +75,7 @@ final class NovelReaderModel: ObservableObject {
     private var pagedScroll: Float?
     private var openAtEnd = false
     private var pageCache: (indent: Bool, spacing: Int, bookStyles: Bool, revision: Int, pages: IosNovelPages)?
+    private var lineStyleCache: [Int: (runs: [NovelRun], layout: NovelLineLayout?)] = [:]
 
     init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter) {
         self.runtime = runtime
@@ -117,6 +118,7 @@ final class NovelReaderModel: ObservableObject {
             } else { nil }
             guard self.request == request else { return }
             self.document = document
+            lineStyleCache.removeAll(keepingCapacity: true)
             blocks = document.map(NovelBlock.blocks(from:)) ?? []
             var scroll: Float = 0
             if let library, let position = try await library.position(content: content), position.chapterId == selected.id {
@@ -143,6 +145,7 @@ final class NovelReaderModel: ObservableObject {
     func move(to target: IosSourceChapter, atEnd: Bool = false) async {
         await persist()
         chapter = target
+        lineStyleCache.removeAll()
         blocks = []
         document = nil
         openAtEnd = atEnd
@@ -189,14 +192,18 @@ final class NovelReaderModel: ObservableObject {
 
     /// The book's styles of line [index] for the scrolling reader.
     func lineStyle(_ index: Int) -> (runs: [NovelRun], layout: NovelLineLayout?) {
+        if let cached = lineStyleCache[index] { return cached }
         guard let document else { return ([], nil) }
-        return (document.lineStyles(index: Int32(index)).map(NovelRun.init),
-                document.lineParagraph(index: Int32(index)).map(NovelLineLayout.init))
+        let value = (document.lineStyles(index: Int32(index)).map(NovelRun.init),
+                     document.lineParagraph(index: Int32(index)).map(NovelLineLayout.init))
+        lineStyleCache[index] = value
+        return value
     }
 
     /// The paged reader turned to a page starting in [block]; [scroll] is the history value of the page start.
     func showPage(block: Int, scroll: Float) {
         guard !isLoading, blocks.indices.contains(block) else { return }
+        guard visibleIndex != block || pagedScroll != scroll else { return }
         visibleIndex = block
         pagedScroll = scroll
         saveTask?.cancel()
@@ -206,7 +213,7 @@ final class NovelReaderModel: ObservableObject {
     func visible(_ index: Int, isVisible: Bool) {
         guard blocks.indices.contains(index) else { return }
         if isVisible { visibleIndices.insert(index) } else { visibleIndices.remove(index) }
-        guard !isLoading, let first = visibleIndices.min() else { return }
+        guard !isLoading, let first = visibleIndices.min(), visibleIndex != first else { return }
         visibleIndex = first
         pagedScroll = nil
         saveTask?.cancel()
@@ -580,7 +587,8 @@ struct NovelReaderView: View {
                     if !model.isLoading && model.error == nil && model.blocks.isEmpty {
                         ContentUnavailableView("本章没有正文", systemImage: "text.page.slash")
                     }
-                    ForEach(Array(model.blocks.enumerated()), id: \.offset) { index, block in
+                    ForEach(model.blocks.indices, id: \.self) { index in
+                        let block = model.blocks[index]
                         Group {
                         switch block {
                         case .text(let text):
@@ -944,6 +952,7 @@ struct NovelStyle: Equatable {
     func styledLine(_ text: String, runs: [NovelRun], shift: Int) -> AttributedString {
         var result = AttributedString(text)
         result.font = Font(uiFont)
+        guard !runs.isEmpty else { return result }
         let length = (text as NSString).length
         for run in runs where run.ruby == nil {
             let start = min(max(0, run.range.location + shift), length)

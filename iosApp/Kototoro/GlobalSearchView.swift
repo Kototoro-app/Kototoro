@@ -24,11 +24,13 @@ final class GlobalSearchModel: ObservableObject {
     @Published private(set) var submitted = ""
     private var task: Task<Void, Never>?
     private static let parallelism = 6
+    private var rowIndex: [String: Int] = [:]
 
     func search(_ query: String, sources: [IosSource], runtime: IosSources) {
         task?.cancel()
         submitted = query
         rows = sources.map { Row(source: $0, status: .loading) }
+        rowIndex = Dictionary(uniqueKeysWithValues: sources.enumerated().map { ($0.element.name, $0.offset) })
         completed = 0
         isSearching = !sources.isEmpty
         task = Task { await run(query, sources: sources, runtime: runtime) }
@@ -49,6 +51,7 @@ final class GlobalSearchModel: ObservableObject {
         task = nil
         submitted = ""
         rows = []
+        rowIndex = [:]
         completed = 0
         isSearching = false
     }
@@ -69,19 +72,41 @@ final class GlobalSearchModel: ObservableObject {
                     }
                 }
             }
-            for _ in 0..<Self.parallelism { startNext() }
+            for _ in 0..<min(Self.parallelism, sources.count) {
+                startNext()
+            }
+            var buffer: [(String, Status)] = []
+            var lastFlush = Date()
             for await (name, status) in group {
                 guard !Task.isCancelled else { break }
-                update(name, status)
-                completed += 1
+                buffer.append((name, status))
+                let now = Date()
+                if buffer.count >= 4 || now.timeIntervalSince(lastFlush) >= 0.15 {
+                    applyBatch(buffer)
+                    buffer.removeAll(keepingCapacity: true)
+                    lastFlush = now
+                }
                 startNext()
+            }
+            if !buffer.isEmpty {
+                applyBatch(buffer)
+                buffer.removeAll()
             }
         }
         if !Task.isCancelled { isSearching = false }
     }
 
+    private func applyBatch(_ batch: [(String, Status)]) {
+        for (name, status) in batch {
+            if let index = rowIndex[name] {
+                rows[index].status = status
+            }
+        }
+        completed += batch.count
+    }
+
     private func update(_ name: String, _ status: Status) {
-        guard let index = rows.firstIndex(where: { $0.id == name }) else { return }
+        guard let index = rowIndex[name] else { return }
         rows[index].status = status
     }
 }
@@ -91,6 +116,8 @@ struct GlobalSearchView: View {
     @EnvironmentObject private var sources: SourcesModel
     @StateObject private var model = GlobalSearchModel()
     @Binding var query: String
+    @State private var libraryMatches: [IosSourceContent] = []
+    @State private var historyMatches: [IosSourceContent] = []
     @AppStorage("search.recent") private var storedRecent = ""
     @AppStorage("search.kinds") private var hiddenKinds = ""
     @AppStorage("search.pinnedOnly") private var pinnedOnly = false
@@ -108,6 +135,7 @@ struct GlobalSearchView: View {
             }
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("搜索")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { filterMenu }
             }
@@ -115,7 +143,11 @@ struct GlobalSearchView: View {
         .searchable(text: $query, prompt: "搜索全部来源中的作品")
         .onSubmit(of: .search) { submit(query) }
         .onChange(of: query) { _, value in
-            if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { model.cancel() }
+            if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                model.cancel()
+                libraryMatches = []
+                historyMatches = []
+            }
         }
     }
 
@@ -135,6 +167,12 @@ struct GlobalSearchView: View {
         guard !value.isEmpty, let runtime = sources.runtime else { return }
         query = value
         storedRecent = ([value] + recent.filter { $0 != value }).prefix(12).joined(separator: "\n")
+        libraryMatches = library.favourites.map(\.content).filter {
+            $0.title.localizedCaseInsensitiveContains(value) || $0.altTitles.contains { $0.localizedCaseInsensitiveContains(value) }
+        }
+        historyMatches = library.history.map(\.content).filter {
+            $0.title.localizedCaseInsensitiveContains(value) || $0.altTitles.contains { $0.localizedCaseInsensitiveContains(value) }
+        }
         model.search(value, sources: targets, runtime: runtime)
     }
 
@@ -169,7 +207,6 @@ struct GlobalSearchView: View {
 
     @ViewBuilder
     private var results: some View {
-        let text = model.submitted
         HStack(spacing: 8) {
             if model.isSearching { ProgressView().controlSize(.small) }
             Text(model.isSearching ? "正在搜索 \(model.completed)/\(model.rows.count) 个来源"
@@ -185,8 +222,8 @@ struct GlobalSearchView: View {
         }
         .padding(.horizontal, 20)
         if let runtime = sources.runtime {
-            localSection("作品库", identifier: "search.library", entries: library.favourites, text: text, runtime: runtime)
-            localSection("历史", identifier: "search.history", entries: library.history, text: text, runtime: runtime)
+            localSection("作品库", identifier: "search.library", matches: libraryMatches, runtime: runtime)
+            localSection("历史", identifier: "search.history", matches: historyMatches, runtime: runtime)
             ForEach(model.rows) { row in
                 switch row.status {
                 case .loading:
@@ -214,11 +251,8 @@ struct GlobalSearchView: View {
     }
 
     @ViewBuilder
-    private func localSection(_ title: String, identifier: String, entries: [IosLibraryEntry], text: String,
+    private func localSection(_ title: String, identifier: String, matches: [IosSourceContent],
                               runtime: IosSources) -> some View {
-        let matches = entries.map(\.content).filter {
-            $0.title.localizedCaseInsensitiveContains(text) || $0.altTitles.contains { $0.localizedCaseInsensitiveContains(text) }
-        }
         if !matches.isEmpty {
             HStack(spacing: 8) {
                 Image(systemName: identifier == "search.library" ? "books.vertical" : "clock")
@@ -253,8 +287,7 @@ struct GlobalSearchView: View {
     private func carousel(_ items: [IosSourceContent], runtime: IosSources) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(alignment: .top, spacing: 12) {
-                ForEach(items.map { ContentItem(content: $0) }, id: \.identity) { entry in
-                    let item = entry.content
+                ForEach(items, id: \.contentKey) { item in
                     NavigationLink {
                         SourceDetailsView(runtime: runtime, content: item)
                     } label: {
@@ -263,11 +296,13 @@ struct GlobalSearchView: View {
                                 .overlay { CoverImage(runtime: runtime, content: item) }
                                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                             Text(item.title).font(.caption.weight(.medium)).lineLimit(2, reservesSpace: true)
-                                .frame(width: 100, alignment: .leading)
+                                .fontDesign(.default)
+                                .foregroundStyle(.primary)
                         }
+                        .frame(width: 100)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityIdentifier("search.result.\(item.id)")
+                    .accessibilityIdentifier("search.result.\(item.sourceName).\(item.id)")
                 }
             }
             .padding(.horizontal, 20)

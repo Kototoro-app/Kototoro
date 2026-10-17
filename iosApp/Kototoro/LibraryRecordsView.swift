@@ -1,22 +1,37 @@
 import KototoroShared
 import SwiftUI
 
+private struct DateThresholds {
+    let startOfTodayMs: Int64
+    let startOfYesterdayMs: Int64
+    let startOfThisWeekMs: Int64
+
+    static func current() -> DateThresholds {
+        let calendar = Calendar.current
+        let now = Date()
+        let startOfToday = calendar.startOfDay(for: now)
+        let startOfYesterday = calendar.date(byAdding: .day, value: -1, to: startOfToday) ?? startOfToday
+        let startOfThisWeek = calendar.date(byAdding: .day, value: -7, to: now) ?? startOfToday
+        return DateThresholds(
+            startOfTodayMs: Int64(startOfToday.timeIntervalSince1970 * 1000),
+            startOfYesterdayMs: Int64(startOfYesterday.timeIntervalSince1970 * 1000),
+            startOfThisWeekMs: Int64(startOfThisWeek.timeIntervalSince1970 * 1000)
+        )
+    }
+
+    func group(for timestampMs: Int64) -> DateGroup {
+        if timestampMs >= startOfTodayMs { return .today }
+        if timestampMs >= startOfYesterdayMs { return .yesterday }
+        if timestampMs >= startOfThisWeekMs { return .thisWeek }
+        return .earlier
+    }
+}
+
 private enum DateGroup: String, CaseIterable, Comparable {
     case today = "今天"
     case yesterday = "昨天"
     case thisWeek = "本周"
     case earlier = "更早"
-
-    static func group(for timestampMs: Int64) -> DateGroup {
-        let date = Date(timeIntervalSince1970: Double(timestampMs) / 1000.0)
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) { return .today }
-        if calendar.isDateInYesterday(date) { return .yesterday }
-        if let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()), date > weekAgo {
-            return .thisWeek
-        }
-        return .earlier
-    }
 
     private var sortOrder: Int {
         switch self {
@@ -46,25 +61,48 @@ struct LibraryRecordsView: View {
     @StateObject private var stats = ReadingStatsModel()
     @AppStorage("records.statsRange") private var range = ReadingStatsRange.month
     @State private var selectedDay: String?
+    @State private var lastStatsRequest: String?
+
+    private var filterKind: String? {
+        if spacesEnabled { return space.isEmpty ? nil : space }
+        return ContentKindPicker.effective(pageKind, available: availableKinds)
+    }
 
     private var effectiveKind: String {
-        ContentSpace.filter(enabled: spacesEnabled, space: space, page: pageKind, available: availableKinds) ?? "ALL"
+        filterKind ?? "ALL"
     }
 
     private var statsRequest: String {
         "\(library.recordsRevision)|\(range.rawValue)|\(effectiveKind)|\(query)"
     }
 
+    private final class KindsCache {
+        var revision: Int = -1
+        var snapshot: AnyObject?
+        var kinds: Set<String> = []
+    }
+    @State private var kindsCache = KindsCache()
+
     private var availableKinds: Set<String> {
-        Set(library.history.map(\.content.mediaKind) + library.updates.map(\.content.mediaKind) +
-            (stats.snapshot?.works.map(\.content.mediaKind) ?? []) +
-            (stats.snapshot?.timeline.map(\.content.mediaKind) ?? []))
+        if kindsCache.revision == library.recordsRevision && kindsCache.snapshot === stats.snapshot {
+            return kindsCache.kinds
+        }
+        var kinds = Set<String>()
+        for entry in library.history { kinds.insert(entry.content.mediaKind) }
+        for update in library.updates { kinds.insert(update.content.mediaKind) }
+        if let snapshot = stats.snapshot {
+            for work in snapshot.works { kinds.insert(work.content.mediaKind) }
+            for event in snapshot.timeline { kinds.insert(event.content.mediaKind) }
+        }
+        kindsCache.revision = library.recordsRevision
+        kindsCache.snapshot = stats.snapshot
+        kindsCache.kinds = kinds
+        return kinds
     }
 
     /// The content space (or this page's switch) and the in-place search over titles and authors.
     private func matches(_ content: IosSourceContent) -> Bool {
-        let kind = ContentSpace.filter(enabled: spacesEnabled, space: space, page: pageKind, available: availableKinds)
-        if let kind, content.mediaKind != kind { return false }
+        if let filterKind, content.mediaKind != filterKind { return false }
         let text = query.trimmingCharacters(in: .whitespaces)
         return text.isEmpty || content.title.localizedCaseInsensitiveContains(text) ||
             content.authors.contains { $0.localizedCaseInsensitiveContains(text) }
@@ -74,14 +112,6 @@ struct LibraryRecordsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    Picker("记录", selection: $selection) {
-                        Text("历史").tag(0)
-                        Text("更新").tag(1)
-                        Text("时间轴").tag(2)
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-
                     if selection == 0 { MissingSourcesNotice(historyOnly: true).padding(.horizontal) }
 
                     if !spacesEnabled && ContentKindPicker.isShown(availableKinds) {
@@ -119,13 +149,23 @@ struct LibraryRecordsView: View {
                         }
                     }
                 }
+                .padding(.top, 8)
                 .padding(.bottom, 24)
             }
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle(selection == 0 ? "历史" : (selection == 1 ? "更新" : "时间轴"))
-            .spaceSubtitle(spacesEnabled ? ContentSpace.subtitle(space) : "")
+            .navigationBarTitleDisplayMode(.inline)
             .pageSearch(text: $query, prompt: selection == 0 ? "搜索历史" : (selection == 1 ? "搜索更新" : "搜索时间轴"))
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Picker("记录", selection: $selection) {
+                        Text("历史").tag(0)
+                        Text("更新").tag(1)
+                        Text("时间轴").tag(2)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 240)
+                }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if spacesEnabled { SpaceMenu() }
                     if selection != 2 {
@@ -140,18 +180,32 @@ struct LibraryRecordsView: View {
             }
             .refreshable {
                 if selection >= 1, let runtime = sources.runtime { await library.checkUpdates(runtime) }
-                else { await library.refresh() }
+                else {
+                    await library.refresh()
+                    await stats.load(library.library, range: range, kind: effectiveKind, query: query)
+                    lastStatsRequest = statsRequest
+                }
             }
-            .task { await library.refresh() }
             .task(id: statsRequest) {
+                guard selection != 1 else { return }
+                guard lastStatsRequest != statsRequest else { return }
                 if !query.isEmpty {
                     do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
                 }
                 await stats.load(library.library, range: range, kind: effectiveKind, query: query)
+                lastStatsRequest = statsRequest
             }
             .onChange(of: range) { _, _ in selectedDay = nil }
             .onChange(of: effectiveKind) { _, _ in selectedDay = nil }
-            .onChange(of: selection) { _, _ in selectedDay = nil }
+            .onChange(of: selection) { _, newSelection in
+                selectedDay = nil
+                if newSelection != 1, lastStatsRequest != statsRequest {
+                    Task {
+                        await stats.load(library.library, range: range, kind: effectiveKind, query: query)
+                        lastStatsRequest = statsRequest
+                    }
+                }
+            }
         }
     }
 
@@ -169,7 +223,8 @@ struct LibraryRecordsView: View {
                         .padding(.top, 24)
                 }
             } else {
-                let grouped = Dictionary(grouping: matched) { DateGroup.group(for: $0.updatedAt) }
+                let thresholds = DateThresholds.current()
+                let grouped = Dictionary(grouping: matched) { thresholds.group(for: $0.updatedAt) }
                 ForEach(DateGroup.allCases, id: \.self) { group in
                     if let entries = grouped[group], !entries.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
@@ -228,14 +283,15 @@ struct LibraryRecordsView: View {
         if library.updates.isEmpty {
             ContentUnavailableView("暂无新章节", systemImage: "arrow.triangle.2.circlepath",
                                    description: Text("检查收藏作品，获取最新章节。"))
-                .padding(.top, 60)
+            .padding(.top, 60)
         } else {
             let matched = library.updates.filter { matches($0.content) }
             if matched.isEmpty {
                 filteredEmpty("更新")
             } else {
+                let thresholds = DateThresholds.current()
                 let grouped = Dictionary(grouping: matched) { update in
-                    DateGroup.group(for: update.checkedAt)
+                    thresholds.group(for: update.checkedAt)
                 }
                 ForEach(DateGroup.allCases, id: \.self) { group in
                     if let updatesList = grouped[group], !updatesList.isEmpty {
@@ -284,6 +340,12 @@ private struct RecordsTimeline: View {
         let event: IosTimelineEvent
         var id: String { event.id }
     }
+    private struct TimelineDayGroup {
+        let date: String
+        let all: [IosTimelineEvent]
+        let history: [IosTimelineEvent]
+        let updates: [IosTimelineEvent]
+    }
 
     var body: some View {
         if events.isEmpty {
@@ -293,6 +355,16 @@ private struct RecordsTimeline: View {
         } else {
             let grouped = Dictionary(grouping: events) { ReadingStatsFormat.day(ReadingStatsFormat.date($0.timestamp)) }
             let dates = grouped.keys.sorted(by: >)
+            let dayGroups: [TimelineDayGroup] = dates.compactMap { date in
+                guard let dayEvents = grouped[date] else { return nil }
+                var history: [IosTimelineEvent] = []
+                var updates: [IosTimelineEvent] = []
+                for event in dayEvents {
+                    if event.isUpdate { updates.append(event) }
+                    else { history.append(event) }
+                }
+                return TimelineDayGroup(date: date, all: dayEvents, history: history, updates: updates)
+            }
             LazyVStack(spacing: 20) {
                 HStack {
                     Text("阅读历史").frame(maxWidth: .infinity)
@@ -302,23 +374,21 @@ private struct RecordsTimeline: View {
                 .font(.caption).foregroundStyle(.secondary)
                 .padding(.vertical, 4)
                 .background(Color(uiColor: .systemGroupedBackground))
-                ForEach(dates, id: \.self) { date in
-                    if let dayEvents = grouped[date] {
-                        VStack(spacing: 12) {
-                            Text(dayTitle(date, events: dayEvents))
-                                .font(.caption.weight(.medium)).padding(.horizontal, 10).padding(.vertical, 4)
-                                .background(Color(uiColor: .systemGroupedBackground), in: Capsule())
-                            if dynamicTypeSize.isAccessibilitySize {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    ForEach(dayEvents, id: \.id) { event in
-                                        eventRow(event, alignment: .leading, showsKind: true)
-                                    }
-                                }.background(Color(uiColor: .systemGroupedBackground))
-                            } else {
-                                HStack(alignment: .top, spacing: 24) {
-                                    lane(dayEvents.filter { !$0.isUpdate }, alignment: .trailing)
-                                    lane(dayEvents.filter(\.isUpdate), alignment: .leading)
+                ForEach(dayGroups, id: \.date) { group in
+                    VStack(spacing: 12) {
+                        Text(dayTitle(group.date, events: group.all))
+                            .font(.caption.weight(.medium)).padding(.horizontal, 10).padding(.vertical, 4)
+                            .background(Color(uiColor: .systemGroupedBackground), in: Capsule())
+                        if dynamicTypeSize.isAccessibilitySize {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(group.all, id: \.id) { event in
+                                    eventRow(event, alignment: .leading, showsKind: true)
                                 }
+                            }.background(Color(uiColor: .systemGroupedBackground))
+                        } else {
+                            HStack(alignment: .top, spacing: 24) {
+                                lane(group.history, alignment: .trailing)
+                                lane(group.updates, alignment: .leading)
                             }
                         }
                     }
