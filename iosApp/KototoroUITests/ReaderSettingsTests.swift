@@ -78,4 +78,15 @@ final class ReaderSettingsTests: XCTestCase {
         XCTAssertEqual(before.continuousForwardSign, 1)
         XCTAssertEqual(after.continuousForwardSign, -1)
     }
+
+    func testLandscapeDoublePagePreservesReadingDirection() {
+        let landscape = CGSize(width: 844, height: 390)
+        var preferences = ReaderPreferences()
+        preferences.doublePage = true
+        preferences.mode = 1 // Right to left
+        let layout = preferences.layout(for: landscape, wideWindow: false)
+        XCTAssertTrue(layout.doublePage)
+        XCTAssertTrue(layout.readsRightToLeft)
+        XCTAssertEqual(layout.mode, 1)
+    }
 }

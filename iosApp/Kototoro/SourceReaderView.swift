@@ -587,10 +587,11 @@ final class SourceReaderModel: ObservableObject {
     }
 
     func slotIdentity(_ slot: IosReaderSlot) -> String {
-        slot.placements.compactMap { placement -> String? in
+        let identity = slot.placements.compactMap { placement -> String? in
             guard window.indices.contains(Int(placement.index)) else { return nil }
             return "\(pageIdentity(window[Int(placement.index)])):\(placement.segment)"
         }.joined(separator: "/")
+        return identity.isEmpty ? "slot-\(slot.index)" : identity
     }
 
     /// A slot the paged scroll view settled on under the reader's finger.
@@ -1120,14 +1121,13 @@ struct SourceReaderView: View {
         // Continuous strips can pan across their reading axis after zooming.
         ScrollViewReader { proxy in
         ScrollView(continuous ? [.vertical, .horizontal] : vertical ? .vertical : .horizontal) {
-            Group {
-                if vertical {
-                    LazyVStack(spacing: 0) { slots(size: size, continuous: continuous) }
-                } else {
-                    LazyHStack(spacing: 0) { slots(size: size, continuous: continuous) }
-                }
+            if vertical {
+                LazyVStack(spacing: 0) { slots(size: size, continuous: continuous) }
+                    .scrollTargetLayout(isEnabled: !continuous)
+            } else {
+                LazyHStack(spacing: 0) { slots(size: size, continuous: continuous) }
+                    .scrollTargetLayout(isEnabled: !continuous)
             }
-            .scrollTargetLayout()
         }
         .scrollIndicators(.hidden)
         .accessibilityIdentifier("reader.canvas")
@@ -1147,13 +1147,13 @@ struct SourceReaderView: View {
                   settings.value.mode == mode else { return }
             let point = continuous ? viewport.rawOffset : viewport.offset
             if !continuous { scroll.pagedOffset = point }
-            if !continuous, model.pagedWindowNeedsRestore, !model.isUserPaging {
+            if !continuous, model.pagedWindowNeedsRestore, !model.isUserPaging, !model.slots.isEmpty {
                 let extent = vertical ? size.height : size.width
                 let physical = settings.value.readsRightToLeft ? model.slots.count - 1 - model.slotIndex : model.slotIndex
                 let target = CGFloat(physical) * extent
                 if abs((vertical ? point.y : point.x) - target) < 2 {
                     model.pagedWindowNeedsRestore = false
-                } else if viewport.limit >= CGFloat(max(0, model.slots.count - 1)) * extent - 2 {
+                } else {
                     scrollToReadingSlot(proxy)
                 }
                 return
@@ -1218,6 +1218,14 @@ struct SourceReaderView: View {
             let animation = abs(current - previous) == 1 ? pageAnimation : nil
             withAnimation(animation) { scrollToReadingSlot(proxy) }
         }
+        .onChange(of: size) { _, _ in
+            guard !continuous, !model.isUserPaging else { return }
+            scrollToReadingSlot(proxy)
+            Task { @MainActor in
+                await Task.yield()
+                if !model.isUserPaging { scrollToReadingSlot(proxy) }
+            }
+        }
         // Created at the reading slot through the position binding; as Android's pager applies its initial page once
         // the pages are laid out, it is also moved there once after the first layout, in case the binding was not
         // applied. Recreated when the reading mode or page-turn style changes, it keeps the page being read.
@@ -1261,6 +1269,7 @@ struct SourceReaderView: View {
                 let mode = settings.value.mode
                 ReaderSpread(model: model, settings: settings, slot: slot, size: size) { tap(at: $0, size: size) }
                     .modifier(ReaderPageTransition(animation: animation, vertical: mode == 2, reduceMotion: reduceMotion))
+                    .id(item.id)
             }
         }
     }
@@ -1732,7 +1741,7 @@ private struct ReaderPageTransition: ViewModifier {
 private struct ReaderPaging: ViewModifier {
     let paged: Bool
     func body(content: Content) -> some View {
-        if paged { content.scrollTargetBehavior(.paging) } else { content }
+        if paged { content.scrollTargetBehavior(.viewAligned) } else { content }
     }
 }
 
