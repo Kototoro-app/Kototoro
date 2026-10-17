@@ -22,6 +22,26 @@ abstract class MangaDao {
         val source: String,
     )
 
+    data class LibrarySourceReferenceRow(val id: Long, val source: String, val favourite: Boolean)
+
+    /** Same active categories and recent-history window as library snapshots, without details or chapters. */
+    @Query(
+        """
+        SELECT DISTINCT m.manga_id AS id, m.source AS source, 1 AS favourite
+        FROM manga m
+        INNER JOIN favourites f ON f.manga_id = m.manga_id
+        INNER JOIN favourite_categories fc ON fc.category_id = f.category_id
+        WHERE f.deleted_at = 0 AND fc.deleted_at = 0
+        UNION ALL
+        SELECT m.manga_id AS id, m.source AS source, 0 AS favourite
+        FROM manga m
+        INNER JOIN (
+            SELECT manga_id FROM history WHERE deleted_at = 0 ORDER BY updated_at DESC LIMIT :historyLimit
+        ) h ON h.manga_id = m.manga_id
+        """,
+    )
+    abstract suspend fun findLibrarySourceReferences(historyLimit: Int): List<LibrarySourceReferenceRow>
+
     @Transaction
     @Query("SELECT * FROM manga WHERE manga_id = :id")
     abstract suspend fun find(id: Long): MangaWithTags?

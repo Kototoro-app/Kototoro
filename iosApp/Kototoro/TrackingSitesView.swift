@@ -6,8 +6,10 @@ struct TrackingSitesView: View {
     @EnvironmentObject private var library: LibraryModel
     @Environment(\.dismiss) private var dismiss
     var content: IosSourceContent? = nil
+    var initialMediaKind = "MANGA"
     var onChange: () -> Void = {}
     @AppStorage("tracking.preferredSite") private var service = 5
+    @AppStorage("tracking.bangumi.apiBase") private var bangumiApiBase = "https://api.bgm.tv"
     @State private var mediaKind = "MANGA"
     @State private var query = ""
     @FocusState private var queryFocused: Bool
@@ -23,86 +25,131 @@ struct TrackingSitesView: View {
     @State private var page: Int32 = 0
     @State private var hasMore = false
     @State private var request: UUID?
+    @State private var section = "discover"
+    @State private var popular = true
+    @State private var videoType = "anime"
 
-    private var searchIdentity: String { "\(service)|\(mediaKind)|\(submittedQuery)" }
+    private var searchIdentity: String { "\(service)|\(mediaKind)|\(submittedQuery)|\(popular)|\(section)|\(videoType)|\(bangumiApiBase)" }
+    private var availableSites: [IosTrackingSite] {
+        library.library?.tracking.sites.filter { $0.supports(mediaKind: mediaKind) } ?? []
+    }
 
     var body: some View {
         List {
             if content != nil { currentMetadata }
-            Section {
-                HStack(spacing: 8) {
-                    if let tracking = library.library?.tracking {
-                        ForEach(tracking.sites, id: \.id) { site in
-                            Button { service = Int(site.id) } label: {
-                                Text(site.title).font(.subheadline.weight(.medium))
-                                    .padding(.horizontal, 14).padding(.vertical, 8)
-                                    .background(service == Int(site.id) ? Color.accentColor.opacity(0.15) : Color(.secondarySystemFill), in: .capsule)
-                                    .foregroundStyle(service == Int(site.id) ? Color.accentColor : .primary)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("tracking.site.\(site.id)")
-                            .accessibilityAddTraits(service == Int(site.id) ? .isSelected : [])
+            if content == nil {
+                Section {
+                    Picker("追踪网站", selection: $section) {
+                        Text("发现作品").tag("discover")
+                        Text("我的账号").tag("accounts")
+                    }.pickerStyle(.segmented).accessibilityIdentifier("tracking.section")
+                } footer: { Text(section == "discover" ? "浏览资料无需登录，找到作品后可关联到本地作品。" : "连接账号后，在作品详情开启追踪与进度同步。") }
+            }
+            if section == "accounts", content == nil {
+                TrackingAccountRows(model: library.trackingAccounts, sites: library.library?.tracking.sites ?? [])
+            } else {
+                Section {
+                    if content == nil {
+                        Picker("作品类型", selection: $mediaKind) {
+                            Text("漫画").tag("MANGA")
+                            Text("小说").tag("NOVEL")
+                            Text("动画 / 影视").tag("VIDEO")
                         }
+                        .accessibilityIdentifier("tracking.mediaKind")
+                    }
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 8) {
+                            ForEach(availableSites, id: \.id) { site in
+                                Button { service = Int(site.id) } label: {
+                                    Text(site.title).font(.subheadline.weight(.medium))
+                                        .padding(.horizontal, 14).padding(.vertical, 8)
+                                        .background(service == Int(site.id) ? Color.accentColor.opacity(0.15) : Color(.secondarySystemFill), in: .capsule)
+                                        .foregroundStyle(service == Int(site.id) ? Color.accentColor : .primary)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("tracking.site.\(site.id)")
+                                .accessibilityAddTraits(service == Int(site.id) ? .isSelected : [])
+                            }
+                        }.padding(.vertical, 3)
+                    }
+                    .scrollIndicators(.hidden)
+                    if service == 7 {
+                        Picker("影视类型", selection: $videoType) {
+                            Text("动画").tag("anime")
+                            Text("剧集").tag("tv")
+                            Text("电影").tag("movies")
+                        }.pickerStyle(.segmented).accessibilityIdentifier("tracking.videoType")
+                    }
+                    HStack {
+                        TextField("搜索作品名称", text: $query)
+                            .focused($queryFocused)
+                            .submitLabel(.search)
+                            .onSubmit { submit() }
+                            .accessibilityIdentifier("tracking.query")
+                        Button("搜索") { submit() }
+                            .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .accessibilityIdentifier("tracking.search")
+                    }
+                    if submittedQuery.isEmpty && service != 7 {
+                        Picker("榜单", selection: $popular) {
+                            Text("热门作品").tag(true)
+                            Text("高分作品").tag(false)
+                        }.pickerStyle(.segmented).accessibilityIdentifier("tracking.ranking")
+                    } else if !submittedQuery.isEmpty {
+                        Button("清除搜索，浏览榜单", systemImage: "xmark.circle") {
+                            query = ""; submittedQuery = ""
+                        }.font(.caption)
+                    }
+                } header: { Text(content == nil ? "检索追踪网站" : "换一份作品资料") }
+                if service == 5 {
+                    Section {
+                        NavigationLink { TrackingConnectionView() } label: {
+                            Label("Bangumi 连接设置", systemImage: "network")
+                        }.accessibilityIdentifier("tracking.connection")
+                    }
+                }
+                if let error {
+                    Section {
+                        Text(error).foregroundStyle(.red).accessibilityIdentifier("tracking.error")
+                        Button("重试") { Task { await search(reset: results.isEmpty) } }
+                    }
+                }
+                Section {
+                    ForEach(results, id: \.key) { item in
+                        HStack(spacing: 10) {
+                            Button { preview = item } label: { TrackingItemRow(item: item) }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("tracking.result.\(item.remoteId)")
+                            if let content, item.mediaKind == content.mediaKind {
+                                Button {
+                                    Task { await use(item) }
+                                } label: {
+                                    if usingKey == item.key { ProgressView() }
+                                    else { Text(selectedKey == item.key ? "使用中" : "使用").font(.subheadline.weight(.semibold)) }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(mutating || selectedKey == item.key)
+                                .accessibilityIdentifier("tracking.use.\(item.remoteId)")
+                            }
+                        }
+                    }
+                    if loading { ProgressView(submittedQuery.isEmpty ? "正在读取榜单…" : "正在检索…").frame(maxWidth: .infinity) }
+                    else if !submittedQuery.isEmpty && results.isEmpty && error == nil {
+                        ContentUnavailableView.search(text: submittedQuery)
+                    } else if hasMore {
+                        Button("加载更多") { Task { await search(reset: false) } }
+                            .accessibilityIdentifier("tracking.more")
                     }
                 }
                 if content == nil {
-                    Picker("作品类型", selection: $mediaKind) {
-                        Text("漫画").tag("MANGA")
-                        Text("小说").tag("NOVEL")
-                        Text("动画 / 影视").tag("VIDEO")
+                    Section {
+                        Text("点开作品可查看介绍，再关联到作品库中的作品，使用网站资料或开启进度追踪。")
                     }
-                    .accessibilityIdentifier("tracking.mediaKind")
+                    .font(.footnote).foregroundStyle(.secondary)
                 }
-                HStack {
-                    TextField("搜索作品名称", text: $query)
-                        .focused($queryFocused)
-                        .submitLabel(.search)
-                        .onSubmit { submit() }
-                        .accessibilityIdentifier("tracking.query")
-                    Button("搜索") { submit() }
-                        .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .accessibilityIdentifier("tracking.search")
-                }
-            } header: { Text(content == nil ? "检索追踪网站" : "换一份作品资料") }
-            if let error {
-                Section { Text(error).foregroundStyle(.red).accessibilityIdentifier("tracking.error") }
-            }
-            Section {
-                ForEach(results, id: \.key) { item in
-                    HStack(spacing: 10) {
-                        Button { preview = item } label: { TrackingItemRow(item: item) }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("tracking.result.\(item.remoteId)")
-                        if content != nil {
-                            Button {
-                                Task { await use(item) }
-                            } label: {
-                                if usingKey == item.key { ProgressView() }
-                                else { Text(selectedKey == item.key ? "使用中" : "使用").font(.subheadline.weight(.semibold)) }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(mutating || selectedKey == item.key)
-                            .accessibilityIdentifier("tracking.use.\(item.remoteId)")
-                        }
-                    }
-                }
-                if loading { ProgressView("正在检索…").frame(maxWidth: .infinity) }
-                else if !submittedQuery.isEmpty && results.isEmpty && error == nil {
-                    ContentUnavailableView.search(text: submittedQuery)
-                } else if hasMore {
-                    Button("加载更多") { Task { await search(reset: false) } }
-                        .accessibilityIdentifier("tracking.more")
-                }
-            }
-            if content == nil {
-                Section {
-                    Text("点击作品详情中的“资料”，可直接使用这里的封面与介绍。")
-                    Text("当前提供公开资料检索与本地绑定，账号授权和网站阅读进度同步尚未接入。")
-                }
-                .font(.footnote).foregroundStyle(.secondary)
             }
         }
-        .navigationTitle(content == nil ? "追踪网站" : "作品资料")
+        .navigationTitle(content == nil ? "追踪网站" : "追踪与资料")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if content != nil {
@@ -110,19 +157,25 @@ struct TrackingSitesView: View {
             }
         }
         .interactiveDismissDisabled(mutating)
+        .refreshable { await search(reset: true); await loadBindings() }
         .task {
             guard let tracking = library.library?.tracking else { return }
-            if !tracking.sites.contains(where: { Int($0.id) == service }) { service = 5 }
-            mediaKind = content?.mediaKind ?? "MANGA"
-            if let content { query = content.title; submit() }
+            mediaKind = content?.mediaKind ?? initialMediaKind
+            ensureSite()
             await loadBindings()
+            if let content {
+                query = bindings.first(where: { $0.key == selectedKey })?.title ?? content.title
+                submit()
+            }
+            await library.trackingAccounts.prepare(tracking)
         }
+        .onChange(of: mediaKind) { _, _ in ensureSite() }
         .task(id: searchIdentity) { await search(reset: true) }
         .sheet(isPresented: Binding(get: { preview != nil }, set: { if !$0 { preview = nil } })) {
             if let item = preview, let tracking = library.library?.tracking {
-                TrackingItemPreview(item: item, mediaKind: mediaKind, tracking: tracking, content: content) {
-                    Task { await loadBindings(); await library.refresh(); onChange() }
-                }
+                TrackingItemPreview(item: item, mediaKind: mediaKind, tracking: tracking, content: content,
+                    onBound: { Task { await loadBindings(); await library.refresh(); onChange() } },
+                    onTracked: { Task { await loadBindings(); await library.refresh() } })
             }
         }
     }
@@ -151,7 +204,29 @@ struct TrackingSitesView: View {
                 }
             }
             .disabled(mutating)
-        } footer: { Text("更换封面与作品介绍，章节和进度保持原样。") }
+            if let content, let tracking = library.library?.tracking {
+                ForEach(bindings, id: \.key) { item in
+                    NavigationLink {
+                        TrackingProgressView(content: content, item: item, tracking: tracking, model: library.trackingAccounts) {
+                            Task { await loadBindings(); await library.refresh() }
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(item.siteTitle, systemImage: "chart.line.uptrend.xyaxis")
+                            Text(item.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                    .accessibilityIdentifier("tracking.manage.\(item.service)")
+                }
+                TrackingSyncBanner(content: content, tracking: tracking, model: library.trackingAccounts)
+            }
+        } footer: { Text("资料决定封面与介绍；点开已关联网站管理账号追踪。") }
+    }
+
+    private func ensureSite() {
+        if !availableSites.contains(where: { Int($0.id) == service }), let first = availableSites.first {
+            service = Int(first.id)
+        }
     }
 
     private func submit() {
@@ -163,7 +238,7 @@ struct TrackingSitesView: View {
     }
 
     @MainActor private func search(reset: Bool) async {
-        guard let tracking = library.library?.tracking, !submittedQuery.isEmpty, reset || !loading else { return }
+        guard section == "discover", let tracking = library.library?.tracking, reset || !loading else { return }
         let token = UUID()
         let identity = searchIdentity
         request = token
@@ -172,13 +247,19 @@ struct TrackingSitesView: View {
         let next = page + 1
         defer { if request == token { loading = false } }
         do {
-            let items = try await tracking.search(service: Int32(service), query: submittedQuery,
-                                                  mediaKind: mediaKind, page: next)
+            let items: [IosTrackingItem]
+            if service == 7 {
+                items = try await tracking.videos(query: submittedQuery, remoteType: videoType, page: next)
+            } else if submittedQuery.isEmpty {
+                items = try await tracking.browse(service: Int32(service), mediaKind: mediaKind, popular: popular, page: next)
+            } else {
+                items = try await tracking.search(service: Int32(service), query: submittedQuery, mediaKind: mediaKind, page: next)
+            }
             guard !Task.isCancelled, request == token, identity == searchIdentity else { return }
             var keys = Set(results.map(\.key))
             results += items.filter { keys.insert($0.key).inserted }
             page = next
-            hasMore = items.count >= (service == 5 ? 10 : 20)
+            hasMore = items.count >= Int(availableSites.first(where: { Int($0.id) == service })?.pageSize ?? 20)
         } catch {
             if !Task.isCancelled, request == token, identity == searchIdentity {
                 self.error = error.localizedDescription
@@ -232,23 +313,36 @@ private struct TrackingItemRow: View {
                 Text(item.title).font(.headline)
                 if let alternate = item.alternateTitles.first { Text(alternate).font(.caption).foregroundStyle(.secondary) }
                 Text("\(item.siteTitle) · #\(item.remoteId)").font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    if let year = item.year { Text(String(year.intValue)) }
+                    if let score = item.score { Label(String(format: "%.1f", score.floatValue / item.scoreMax * 10), systemImage: "star.fill") }
+                    if item.mediaKind == "NOVEL" { Text("小说") }
+                }.font(.caption).foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-private struct TrackingItemPreview: View {
+struct TrackingItemPreview: View {
     let item: IosTrackingItem
     let mediaKind: String
     let tracking: IosTracking
     let content: IosSourceContent?
     let onBound: () -> Void
+    var onTracked: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
     @State private var details: IosTrackingItem?
     @State private var error: String?
     @State private var loading = true
     @State private var saving = false
+    @EnvironmentObject private var library: LibraryModel
+    @State private var choosingWork = false
+    @State private var chosenWork: IosSourceContent?
+    @State private var supplement: IosTrackingSupplement?
+    @State private var supplementError: String?
+    @State private var relatedPreview: IosTrackingItem?
+    private var target: IosSourceContent? { content ?? chosenWork }
 
     var body: some View {
         NavigationStack {
@@ -267,7 +361,10 @@ private struct TrackingItemPreview: View {
                     if !details.tags.isEmpty { Text(details.tags.joined(separator: " · ")).font(.subheadline) }
                     if let summary = details.summary { Text(summary).textSelection(.enabled) }
                     if let url = URL(string: details.url) { Link("在网站查看", destination: url) }
-                    if let content {
+                    if let content = target, content.mediaKind == details.mediaKind {
+                        Section("关联到本地作品") {
+                            Text(content.title).font(.subheadline).foregroundStyle(.secondary)
+                        }
                         Button(saving ? "正在绑定…" : "绑定并使用此作品的信息") {
                             Task {
                                 saving = true; error = nil
@@ -280,6 +377,29 @@ private struct TrackingItemPreview: View {
                         }
                         .disabled(saving)
                         .accessibilityIdentifier("tracking.bind")
+                        NavigationLink {
+                            TrackingProgressView(content: content, item: details, tracking: tracking, model: library.trackingAccounts, onSaved: onTracked)
+                        } label: { Label("管理追踪进度", systemImage: "chart.line.uptrend.xyaxis") }
+                            .disabled(saving)
+                            .accessibilityIdentifier("tracking.track")
+                    } else if target == nil {
+                        Button("关联作品库中的作品", systemImage: "link.badge.plus") { choosingWork = true }
+                            .accessibilityIdentifier("tracking.chooseLocalWork")
+                    } else {
+                        Text("作品类型不同，请选择相同类型的条目。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let supplement {
+                        people(supplement.characters, title: "角色与声优")
+                        people(supplement.staff, title: "创作者与制作人员")
+                        related(supplement.related, title: "关联作品")
+                        related(supplement.recommendations, title: "你可能也喜欢")
+                    }
+                    if let supplementError {
+                        Section {
+                            Text(supplementError).font(.caption).foregroundStyle(.secondary)
+                            Button("重试补充资料") { Task { await loadSupplement() } }
+                        }
                     }
                 }
             }
@@ -288,7 +408,69 @@ private struct TrackingItemPreview: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() }.disabled(saving) } }
             .interactiveDismissDisabled(saving)
             .task { await load() }
+            .task { await loadSupplement() }
+            .sheet(isPresented: Binding(get: { relatedPreview != nil }, set: { if !$0 { relatedPreview = nil } })) {
+                if let relatedPreview {
+                    TrackingItemPreview(item: relatedPreview, mediaKind: relatedPreview.mediaKind, tracking: tracking,
+                                        content: nil, onBound: onBound, onTracked: onTracked)
+                }
+            }
+            .sheet(isPresented: $choosingWork) {
+                NavigationStack {
+                    TrackingLocalWorkPicker(mediaKind: (details ?? item).mediaKind) {
+                        chosenWork = $0; choosingWork = false
+                    }
+                }
+            }
         }
+    }
+
+    @ViewBuilder private func people(_ values: [IosTrackingPerson], title: String) -> some View {
+        if !values.isEmpty {
+            Section(title) {
+                ForEach(Array(values.enumerated()), id: \.offset) { _, person in
+                    HStack(spacing: 12) {
+                        AsyncImage(url: person.image.flatMap(URL.init(string:))) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: { Circle().fill(.quaternary).overlay { Image(systemName: "person") } }
+                            .frame(width: 42, height: 42).clipShape(.circle)
+                        VStack(alignment: .leading, spacing: 3) {
+                            if let url = person.url.flatMap(URL.init(string:)) { Link(person.name, destination: url) }
+                            else { Text(person.name) }
+                            if let role = person.role { Text(role).font(.caption).foregroundStyle(.secondary) }
+                            ForEach(Array(person.voiceActors.enumerated()), id: \.offset) { _, actor in
+                                if let url = actor.url.flatMap(URL.init(string:)) {
+                                    Link("声优 · \(actor.name)", destination: url).font(.caption)
+                                } else { Text("声优 · \(actor.name)").font(.caption).foregroundStyle(.secondary) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func related(_ values: [IosTrackingRelated], title: String) -> some View {
+        if !values.isEmpty {
+            Section(title) {
+                ForEach(Array(values.enumerated()), id: \.offset) { _, entry in
+                    Button { relatedPreview = entry.item } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            TrackingItemRow(item: entry.item)
+                            if !entry.relation.isEmpty { Text(entry.relation).font(.caption).foregroundStyle(.secondary) }
+                        }
+                    }.buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    @MainActor private func loadSupplement() async {
+        supplementError = nil
+        do {
+            let value = try await tracking.supplement(item: item)
+            if !Task.isCancelled { supplement = value }
+        } catch { if !Task.isCancelled { supplementError = "补充资料暂时无法读取，作品信息和关联功能仍可使用。" } }
     }
 
     @MainActor private func load() async {
@@ -298,5 +480,118 @@ private struct TrackingItemPreview: View {
             let result = try await tracking.details(item: item, mediaKind: mediaKind)
             if !Task.isCancelled { details = result }
         } catch { if !Task.isCancelled { self.error = error.localizedDescription } }
+    }
+}
+
+private struct TrackingAccountRows: View {
+    @ObservedObject var model: TrackingAccountsModel
+    let sites: [IosTrackingSite]
+    var body: some View {
+        Section {
+            ForEach(sites, id: \.id) { site in
+                NavigationLink {
+                    TrackingAccountView(site: site, model: model)
+                } label: {
+                    HStack(spacing: 12) {
+                        Text(String(site.title.prefix(1))).font(.title3.bold())
+                            .frame(width: 40, height: 40).background(.tint.opacity(0.12), in: .rect(cornerRadius: 12))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(site.title).font(.headline)
+                            Text(model.accounts[site.id] ?? "连接账号以同步进度")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if model.accounts[site.id] != nil { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
+                    }
+                }
+                .accessibilityIdentifier("tracking.account.\(site.id)")
+            }
+        } footer: { Text("浏览公开作品资料无需登录。连接账号后，在作品详情中明确选择要追踪的条目。") }
+    }
+}
+
+struct TrackingConnectionView: View {
+    @AppStorage("tracking.bangumi.apiBase") private var base = "https://api.bgm.tv"
+    @State private var mode = "official"
+    @State private var custom = ""
+    @State private var message: String?
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("公开资料接口", selection: $mode) {
+                    Text("Bangumi 官方").tag("official")
+                    Text("备用 · bangumi.pro").tag("mirror")
+                    Text("自定义").tag("custom")
+                }.accessibilityIdentifier("tracking.bangumi.endpoint")
+                if mode == "custom" {
+                    TextField("https://api.example.com", text: $custom)
+                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .accessibilityIdentifier("tracking.bangumi.customEndpoint")
+                    Button("使用此接口") { saveCustom() }
+                }
+                if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
+            } footer: {
+                Text("只切换作品检索、榜单和公开资料。备用接口由第三方提供；账号授权和进度同步始终使用 Bangumi 官方接口。")
+            }
+        }
+        .navigationTitle("Bangumi 连接").navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            custom = base
+            mode = base == "https://api.bgm.tv" ? "official" : base == "https://api.bangumi.pro" ? "mirror" : "custom"
+        }
+        .onChange(of: mode) { _, value in
+            message = nil
+            if value == "official" { base = "https://api.bgm.tv" }
+            if value == "mirror" { base = "https://api.bangumi.pro" }
+        }
+    }
+
+    private func saveCustom() {
+        let value = custom.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URLComponents(string: value), url.scheme?.lowercased() == "https",
+              url.host?.isEmpty == false, url.user == nil, url.password == nil,
+              url.query == nil, url.fragment == nil else {
+            message = "请输入完整的 HTTPS 接口地址。"
+            return
+        }
+        base = value.hasSuffix("/") ? String(value.dropLast()) : value
+        message = "已保存，返回后会重新读取作品资料。"
+    }
+}
+
+private struct TrackingLocalWorkPicker: View {
+    let mediaKind: String
+    let onSelect: (IosSourceContent) -> Void
+    @EnvironmentObject private var library: LibraryModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+
+    private var works: [IosSourceContent] {
+        var seen = Set<String>()
+        return (library.favourites + library.history).map(\.content).filter {
+            $0.mediaKind == mediaKind && seen.insert($0.id).inserted &&
+                (query.isEmpty || $0.title.localizedCaseInsensitiveContains(query))
+        }
+    }
+
+    var body: some View {
+        List {
+            if works.isEmpty {
+                ContentUnavailableView("还没有可关联的作品", systemImage: "books.vertical",
+                                       description: Text("先从内容源打开或收藏作品，再选择对应的网站条目。"))
+            }
+            ForEach(works, id: \.id) { work in
+                Button { onSelect(work) } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(work.title).foregroundStyle(.primary)
+                        Text(work.sourceName).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .searchable(text: $query, prompt: "搜索收藏和最近阅读")
+        .navigationTitle("选择本地作品").navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }
     }
 }

@@ -18,6 +18,10 @@ class IosExtension internal constructor(internal val value: ExtensionStoreIndex.
     val languages: List<String> get() = value.sources.map { it.language }.distinct()
     val isAdult: Boolean get() = value.contentWarning == ExtensionStoreIndex.ContentWarning.NSFW
     val sourceNames: List<String> get() = value.sources.map { it.name }
+    /** Keep 64-bit identities as strings across the Swift bridge. Legacy name-only indexes provide no match. */
+    fun sourceKeys(kind: String): List<String> = if (kind in setOf("MIHON", "ANIYOMI", "TSUNDOKU")) {
+        value.sources.filter { it.id != 0L }.map { "${kind}_${it.id}" }
+    } else emptyList()
     val iconUrl: String get() = value.resources.iconUrl
 }
 class IosRepositoryCatalog internal constructor(

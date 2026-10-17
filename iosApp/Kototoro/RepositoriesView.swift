@@ -39,6 +39,13 @@ struct RepositoriesView: View {
 
     var body: some View {
         List {
+            if !library.missingSources.isEmpty {
+                Section {
+                    NavigationLink { MissingSourcesView() } label: {
+                        Label("补齐缺失来源（\(library.missingSources.count)）", systemImage: "shippingbox.and.arrow.backward")
+                    }.accessibilityIdentifier("repository.recovery")
+                }
+            }
             if NativeSourceTransport.isFixtureRuntime {
                 Section {
                     Label(NativeSourceTransport.fixtureInstallationMessage, systemImage: "info.circle")
@@ -595,7 +602,7 @@ private struct ExtensionRow: View {
     }
 }
 
-private struct RepositoryStatusView: View {
+struct RepositoryStatusView: View {
     @ObservedObject var model: RepositoriesModel
 
     /// Host install failures arrive as "…SourceJarException: Source JAR failure: NAME"; explain the known ones.

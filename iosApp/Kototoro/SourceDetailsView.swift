@@ -442,7 +442,7 @@ struct SourceDetailsView: View {
                     ShareLink(item: url) { Label("分享", systemImage: "square.and.arrow.up") }
                 }
                 Menu("更多", systemImage: "ellipsis") {
-                    Button("作品资料", systemImage: "link") { managingTracking = true }
+                    Button("追踪与资料", systemImage: "link") { managingTracking = true }
                         .disabled(library.library == nil)
                         .accessibilityIdentifier("details.tracking")
                     Button("换源", systemImage: "arrow.triangle.swap") { changingSource = true }
@@ -567,6 +567,8 @@ struct SourceDetailsView: View {
                 coverRow(shown)
                 infoCard(shown)
                 summaryCard(shown)
+                TrackingSyncBanner(content: model.details ?? model.content, tracking: library.library?.tracking,
+                                   model: library.trackingAccounts)
             }
             .padding(.vertical, 6)
             .listRowBackground(Color.clear)
@@ -630,7 +632,7 @@ struct SourceDetailsView: View {
                 Button { managingTracking = true } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "text.book.closed").font(.caption2)
-                        Text("资料 · \(shown.metadataSiteTitle ?? "内容源")").font(.caption.weight(.medium))
+                        Text(shown.metadataSiteTitle.map { "追踪 · \($0)" } ?? "追踪与资料").font(.caption.weight(.medium))
                         Image(systemName: "chevron.right").font(.system(size: 8, weight: .bold))
                     }
                     .padding(.horizontal, 9).padding(.vertical, 4)

@@ -3,7 +3,7 @@ import Combine
 import SwiftUI
 
 struct ReaderPreferences: Codable, Equatable {
-    var mode = 0
+    var mode = 1
     var fit = 0
     var doublePage = false
     var cover = true
@@ -29,7 +29,7 @@ struct ReaderPreferences: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        mode = try container.decodeIfPresent(Int.self, forKey: .mode) ?? 0
+        mode = try container.decodeIfPresent(Int.self, forKey: .mode) ?? 1
         fit = try container.decodeIfPresent(Int.self, forKey: .fit) ?? 0
         doublePage = try container.decodeIfPresent(Bool.self, forKey: .doublePage) ?? false
         cover = try container.decodeIfPresent(Bool.self, forKey: .cover) ?? true
@@ -61,6 +61,13 @@ struct ReaderPreferences: Codable, Equatable {
 
     var readsRightToLeft: Bool { mode == 1 || mode == 4 && horizontalReversed }
     var continuousForwardSign: CGFloat { mode == 4 && horizontalReversed ? -1 : 1 }
+
+    /// A regular-width window covers expanded displays, including iPhone Duo; compact portrait stays single-page.
+    func layout(for size: CGSize, wideWindow: Bool) -> Self {
+        var result = self
+        result.doublePage = doublePage && mode < 3 && (wideWindow || size.width > size.height)
+        return result
+    }
 }
 
 /// Work-specific settings override a user-controlled global default.

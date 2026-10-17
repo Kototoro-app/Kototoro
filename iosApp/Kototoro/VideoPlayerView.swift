@@ -390,7 +390,13 @@ struct VideoPlayerView: View {
                 .presentationDragIndicator(.visible)
         }
         .onDisappear {
-            Task { await model.persist(); await model.finishReadingActivity(); model.stop(); await library.refresh() }
+            Task {
+                await model.persist()
+                await model.finishReadingActivity()
+                model.stop()
+                await library.refresh()
+                await library.trackingAccounts.syncAfterReading(model.content, tracking: library.library?.tracking)
+            }
         }
     }
 

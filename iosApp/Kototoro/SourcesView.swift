@@ -202,6 +202,7 @@ final class SourcesModel: ObservableObject {
                     defaults.set(Int(appVersion), forKey: "sources.catalogVersion")
                 }
                 rows = try await library.sourceSettings()
+                try await library.recovery.remember(sources: catalog.sources)
             }
             settings = Dictionary(rows.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
             sources = catalog.sources
@@ -280,6 +281,7 @@ struct SourcesView: View {
     @AppStorage("sources.sort") private var sort = SourceSort.manual
     @AppStorage("sources.newOnly") private var newOnly = false
     @State private var reordering = false
+    @State private var migration: LibraryMigrationRequest?
     @Environment(\.openGlobalSearch) private var openGlobalSearch
 
     /// Content types among the enabled sources, independent of the search text so the switch stays put.
@@ -373,6 +375,9 @@ struct SourcesView: View {
             .refreshable { await model.load() }
             .onAppear(perform: migrateHiddenKinds)
             .sheet(isPresented: $reordering) { SourceOrderSheet() }
+            .sheet(item: $migration) { request in
+                NavigationStack { BatchMigrationView(contents: request.contents) }
+            }
             .task(id: library.library == nil) {
                 guard let database = library.library else { return }
                 model.attach(database)
@@ -399,11 +404,13 @@ struct SourcesView: View {
                     .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
             }
             statusSections
+            if query.isEmpty && !newOnly { Section { trackingDiscovery } }
             if newSourceCount > 0 { Section { newSourcesNotice } }
             ForEach(sections, id: \.id) { section in
                 Section("\(section.title) · \(section.sources.count)") {
                     ForEach(section.sources, id: \.name) { source in
                         sourceLink(source)
+                            .contextMenu { sourceActions(source) }
                             .swipeActions(edge: .leading) {
                                 let pinned = model.isPinned(source)
                                 Button(pinned ? "取消置顶" : "置顶", systemImage: pinned ? "pin.slash" : "pin") {
@@ -428,7 +435,7 @@ struct SourcesView: View {
 
     private var grid: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 18) {
                 if !spacesEnabled && ContentKindPicker.isShown(availableKinds) {
                     ContentKindPicker(selection: $pageKind, available: availableKinds).padding(.horizontal, 16)
                 }
@@ -443,6 +450,10 @@ struct SourcesView: View {
                     runtimeLabel.padding(.horizontal, 20)
                 }
                 if newSourceCount > 0 { newSourcesNotice.padding(.horizontal, 20) }
+                if query.isEmpty && !newOnly {
+                    trackingDiscovery.padding(14).background(.thinMaterial, in: .rect(cornerRadius: 16))
+                        .padding(.horizontal, 16)
+                }
                 ForEach(sections, id: \.id) { section in
                     VStack(alignment: .leading, spacing: 8) {
                         Text("\(section.title) · \(section.sources.count)")
@@ -469,6 +480,12 @@ struct SourcesView: View {
 
     @ViewBuilder
     private func sourceActions(_ source: IosSource) -> some View {
+        if source.ecosystem != "LOCAL" {
+            Button("迁移此来源的收藏与历史", systemImage: "arrow.triangle.swap") {
+                migration = LibraryMigrationRequest(contents: (library.favourites + library.history)
+                    .map(\.content).filter { $0.sourceName == source.name })
+            }
+        }
         let pinned = model.isPinned(source)
         Button(pinned ? "取消置顶" : "置顶", systemImage: pinned ? "pin.slash" : "pin") {
             Task { await model.setPinned(source, !pinned) }
@@ -481,6 +498,23 @@ struct SourcesView: View {
     }
 
     // MARK: Parts
+
+    private var trackingDiscovery: some View {
+        NavigationLink {
+            TrackingSitesView(initialMediaKind: kind ?? "MANGA")
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "globe.asia.australia.fill").font(.title2).foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("网站发现").font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                    Text("浏览榜单、查找作品与追踪进度").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+            }
+        }
+        .accessibilityIdentifier("sources.tracking")
+    }
 
     @ViewBuilder
     private var statusSections: some View {

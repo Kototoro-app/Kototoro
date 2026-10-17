@@ -17,6 +17,120 @@ import kotlin.test.assertTrue
 import kotlin.test.assertNull
 
 class IosLibraryTest {
+    @Test
+    fun recoveryCountsFavouritesAndHistoryAndRechecksInstalledIdentities() = runBlocking {
+        val directory = NSTemporaryDirectory() + NSUUID().UUIDString
+        val files = NSFileManager.defaultManager
+        check(files.createDirectoryAtPath(directory, true, null, null))
+        val old = migrationWork(501, "MIHON_9007199254740993", listOf(1f))
+        val historyOnly = migrationWork(502, "MIHON_9007199254740993", listOf(1f))
+        val other = migrationWork(503, "ANIYOMI_9007199254740993", listOf(1f))
+        try {
+            val library = IosLibrary("$directory/library.db")
+            try {
+                library.recovery.remember(listOf(IosSource(old.sourceName, "可读的原来源", "zh", "NOVEL", "extension",
+                    group = "fixture.original")))
+                library.setFavourite(old, true)
+                library.recordPosition(old, old.chapters.single(), 0, 1, 0f)
+                library.recordPosition(historyOnly, historyOnly.chapters.single(), 0, 1, 0f)
+                library.setFavourite(other, true)
+                val missing = library.recovery.missing(listOf(other.sourceName)).single()
+                assertEquals(old.sourceName, missing.key)
+                assertEquals(2, missing.works)
+                assertEquals(1, missing.favourites)
+                assertEquals(2, missing.history)
+                assertEquals("可读的原来源", missing.title)
+                assertEquals("MIHON:fixture.original", missing.packageKey)
+                assertEquals(listOf("MIHON:bundle"), library.recovery.recommended(listOf(missing),
+                    listOf(IosRecoveryPackage("MIHON:bundle", listOf(old.sourceName)),
+                        IosRecoveryPackage("ANIYOMI:wrong", listOf(other.sourceName)))))
+                assertTrue(library.recovery.missing(listOf(old.sourceName, other.sourceName)).isEmpty())
+            } finally { library.close() }
+            val reopened = IosLibrary("$directory/library.db")
+            try {
+                val missing = reopened.recovery.missing(emptyList())
+                assertEquals(2, missing.size)
+                assertEquals("可读的原来源", missing.first { it.key == old.sourceName }.title)
+            }
+            finally { reopened.close() }
+        } finally { files.removeItemAtPath(directory, null) }
+    }
+
+    @Test
+    fun batchFailuresDoNotUndoSuccessfulWorksAndRetryDoesNotRepeatTheirMigration() = runBlocking {
+        val directory = NSTemporaryDirectory() + NSUUID().UUIDString
+        val files = NSFileManager.defaultManager
+        check(files.createDirectoryAtPath(directory, true, null, null))
+        val first = migrationWork(601, "OLD", listOf(1f))
+        val second = migrationWork(602, "OLD", listOf(1f))
+        val target = migrationWork(603, "NEW", listOf(1f))
+        val invalid = migrationWork(604, "NEW", emptyList())
+        val repaired = migrationWork(604, "NEW", listOf(1f))
+        try {
+            val library = IosLibrary("$directory/library.db")
+            try {
+                library.setFavourite(first, true)
+                library.setFavourite(second, true)
+                library.changeSource(first, target, false)
+                assertFailsWith<IllegalArgumentException> { library.changeSource(second, invalid, false) }
+                assertEquals(setOf(target.id, second.id), library.favourites().map { it.content.id }.toSet())
+                library.changeSource(second, repaired, false)
+            } finally { library.close() }
+            val reopened = IosLibrary("$directory/library.db")
+            try { assertEquals(setOf(target.id, repaired.id), reopened.favourites().map { it.content.id }.toSet()) }
+            finally { reopened.close() }
+        } finally { files.removeItemAtPath(directory, null) }
+    }
+
+    @Test
+    fun catalogKeysKeepLongIdsAndEcosystemsAndNeverGuessByDisplayNames() {
+        val item = IosExtension(org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex.Extension(sources = listOf(
+            org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex.Source(9007199254740993L, "同名源", "zh"),
+            org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex.Source(0L, "只有名称", "zh"),
+        )))
+        assertEquals(listOf("MIHON_9007199254740993"), item.sourceKeys("MIHON"))
+        assertEquals(listOf("ANIYOMI_9007199254740993"), item.sourceKeys("ANIYOMI"))
+        assertTrue(item.sourceKeys("JAR").isEmpty())
+    }
+
+    @Test
+    fun pluginProviderAndReadableNameSurviveUninstallationAndDatabaseReopen() = runBlocking {
+        val directory = NSTemporaryDirectory() + NSUUID().UUIDString
+        val files = NSFileManager.defaultManager
+        check(files.createDirectoryAtPath(directory, true, null, null))
+        val content = migrationWork(701, "PARSER_FIXTURE", listOf(1f))
+        try {
+            val library = IosLibrary("$directory/library.db")
+            try {
+                library.recovery.remember(listOf(IosSource(content.sourceName, "小说插件来源", "zh", "NOVEL",
+                    "extension", group = "org.fixture.parsers")))
+                library.setFavourite(content, true)
+                assertTrue(library.recovery.missing(listOf(content.sourceName)).isEmpty())
+            } finally { library.close() }
+            val reopened = IosLibrary("$directory/library.db")
+            try {
+                val missing = reopened.recovery.missing(emptyList()).single()
+                assertEquals("小说插件来源", missing.title)
+                assertEquals("JAR:org.fixture.parsers", missing.packageKey)
+                // Unsupported ecosystem metadata must never be guessed as a parser plugin by its source key.
+                val dao = reopened.database.getSourceOriginsDao()
+                dao.upsert(requireNotNull(dao.getByKey(content.sourceName)).copy(kind = "IREADER"))
+                assertEquals("IREADER:org.fixture.parsers", reopened.recovery.missing(emptyList()).single().packageKey)
+            } finally { reopened.close() }
+        } finally { files.removeItemAtPath(directory, null) }
+    }
+
+    @Test
+    fun matchingRequiresOneExactCandidateAndNeverChoosesAnAmbiguousOrWrongKindWork() {
+        val original = migrationWork(801, "OLD", listOf(1f))
+        val exact = migrationWork(802, "NEW", listOf(1f))
+        val another = migrationWork(803, "OTHER", listOf(1f))
+        val video = migrationWork(804, "VIDEO", listOf(1f), "VIDEO")
+        assertEquals(exact.id, IosMigrationMatching.uniqueExactMatch(original, listOf(exact, exact, video))?.id)
+        assertNull(IosMigrationMatching.uniqueExactMatch(original, listOf(exact, another)))
+        assertNull(IosMigrationMatching.uniqueExactMatch(original, listOf(video, original)))
+    }
+
     private fun migrationWork(id: Long, name: String, numbers: List<Float>, type: String = "NOVEL"): IosSourceContent {
         val source = SourceRef(name, "zh", type)
         return IosSourceContent(SourceContent(id, "换源测试", emptySet(), "/$id", "https://fixture.invalid/$id",

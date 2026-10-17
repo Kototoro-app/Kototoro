@@ -19,6 +19,16 @@ abstract class ChaptersDao {
     @Query("SELECT * FROM chapters WHERE chapter_id IN (:chapterIds)")
     abstract suspend fun findByIds(chapterIds: Collection<Long>): List<ChapterEntity>
 
+    /** Chapter IDs are local to a work; caption lookups must not hydrate matching IDs from other works. */
+    @Query(
+        """
+        SELECT c.* FROM chapters c
+        INNER JOIN history h ON h.manga_id = c.manga_id AND h.chapter_id = c.chapter_id
+        WHERE h.deleted_at = 0 AND c.manga_id IN (:mangaIds)
+        """,
+    )
+    abstract suspend fun findReadingByMangaIds(mangaIds: Collection<Long>): List<ChapterEntity>
+
     @Query("DELETE FROM chapters WHERE manga_id = :mangaId")
     abstract suspend fun deleteAll(mangaId: Long)
 

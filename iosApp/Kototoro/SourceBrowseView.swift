@@ -1,4 +1,5 @@
 import Combine
+import CryptoKit
 import AVFoundation
 import KototoroShared
 import SwiftUI
@@ -227,7 +228,7 @@ struct SourceBrowseView: View {
                               }) { item in
                 SourceDetailsView(runtime: model.runtime, content: item.content)
             } actions: { item in
-                let favourited = library.favourites.contains { ContentMarks.key($0.content) == ContentMarks.key(item.content) }
+                let favourited = item.marks.favourite
                 Button(favourited ? "整理收藏" : "收藏", systemImage: favourited ? "heart.fill" : "heart") {
                     favouriteRequest = FavouriteCategoryRequest(contents: [item.content])
                 }
@@ -453,22 +454,26 @@ struct CoverImage: View {
         _image = State(initialValue: CoverCache.shared.image(for: content))
     }
 
+    private var currentImage: UIImage? {
+        image ?? CoverCache.shared.image(for: content)
+    }
+
     var body: some View {
+        let current = currentImage
         Rectangle().fill(plain ? AnyShapeStyle(.clear) : AnyShapeStyle(.quaternary))
             .overlay {
-                if let image {
+                if let current {
                     // Original colours: bars and accessories would otherwise draw the cover as a template tint.
-                    Image(uiImage: image).renderingMode(.original).resizable().aspectRatio(contentMode: contentMode)
+                    Image(uiImage: current).renderingMode(.original).resizable().aspectRatio(contentMode: contentMode)
                 } else if !plain && (failed || !content.hasCover) {
                     placeholder
                 }
             }
             .clipped()
-            .accessibilityValue(image == nil ? (failed ? "失败" : "加载中") : "已加载")
+            .accessibilityValue(current == nil ? (failed ? "失败" : "加载中") : "已加载")
             .task(id: CoverCache.identity(content)) {
-                image = CoverCache.shared.image(for: content)
+                if currentImage != nil { return }
                 failed = false
-                guard image == nil else { return }
                 let fetches = runtime.fetchesCovers(content: content)
                 guard fetches ? content.hasCover : content.coverUrl.flatMap(URL.init(string:)) != nil else {
                     failed = true; return
@@ -511,10 +516,10 @@ struct CoverImage: View {
                     // Extension covers use the source's own client in the JVM, outside its per-source call order.
                     if runtime.fetchesCovers(content: content) {
                         let artifact = try await gated(RequestGate.covers) { try await runtime.cover(content: content) }
-                        return try await gated(RequestGate.coverDecoding) { try await artifact.decodedImage() }
+                        return try await gated(RequestGate.coverDecoding) { try await artifact.thumbnailImage(maxPixelSize: 600) }
                     }
                     guard let url = content.coverUrl.flatMap(URL.init(string:)) else { throw URLError(.badURL) }
-                    let data = try await gated(RequestGate.covers) { try await CoverCache.download(url) }
+                    let data = try await gated(RequestGate.covers) { try await CoverCache.loadData(url) }
                     return try await gated(RequestGate.coverDecoding) { try await CoverCache.decode(data) }
                 }
             }
@@ -543,7 +548,7 @@ struct CoverImage: View {
 
     private func store(_ decoded: UIImage) {
         CoverCache.shared.store(decoded, for: content)
-        withAnimation(.easeOut(duration: 0.2)) { image = decoded }
+        image = decoded
     }
 
     private var placeholder: some View {
@@ -569,26 +574,66 @@ final class CoverCache: @unchecked Sendable {
     static let shared = CoverCache()
     private let cache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
-        cache.totalCostLimit = 64 * 1024 * 1024
+        cache.totalCostLimit = 128 * 1024 * 1024
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil
+        ) { [weak cache] _ in
+            cache?.removeAllObjects()
+        }
         return cache
     }()
+
+    private static let diskCacheDirectory: URL? = {
+        let urls = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
+        guard let base = urls.first else { return nil }
+        let dir = base.appendingPathComponent("covers", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    private static func diskFile(for url: URL) -> URL? {
+        guard let dir = diskCacheDirectory else { return nil }
+        let hash = SHA256.hash(data: Data(url.absoluteString.utf8))
+            .map { String(format: "%02x", $0) }.joined()
+        return dir.appendingPathComponent("\(hash).img")
+    }
+
+    static func cachedData(for url: URL) -> Data? {
+        guard let file = diskFile(for: url), FileManager.default.fileExists(atPath: file.path) else { return nil }
+        return try? Data(contentsOf: file, options: .mappedIfSafe)
+    }
+
+    static func saveToDisk(_ data: Data, for url: URL) {
+        guard let file = diskFile(for: url) else { return }
+        try? data.write(to: file, options: .atomic)
+    }
 
     static func identity(_ content: IosSourceContent) -> String {
         "\(content.sourceName)|\(content.id)|\(content.usesTrackingCover)|\(content.coverUrl ?? "")"
     }
     private func key(_ content: IosSourceContent) -> NSString { Self.identity(content) as NSString }
     func image(for content: IosSourceContent) -> UIImage? { cache.object(forKey: key(content)) }
-    func clear() { cache.removeAllObjects() }
+    func clear() {
+        cache.removeAllObjects()
+        if let dir = Self.diskCacheDirectory {
+            try? FileManager.default.removeItem(at: dir)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+    }
     func store(_ image: UIImage, for content: IosSourceContent) {
         let cost = Int(image.size.width * image.size.height * image.scale * image.scale * 4)
         cache.setObject(image, forKey: key(content), cost: cost)
     }
 
-    /// Plain-URL covers (native CMS sources); decoding is bounded and off the main actor.
-    static func download(_ url: URL) async throws -> Data {
-        let request = URLRequest(url: url)
+    /// Plain-URL covers (native CMS sources) with persistent disk cache; decoding is bounded and off the main actor.
+    static func loadData(_ url: URL) async throws -> Data {
+        if let data = cachedData(for: url) { return data }
+        let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 30)
         let (data, response) = try await URLSession.shared.data(for: request)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { throw URLError(.badServerResponse) }
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        saveToDisk(data, for: url)
         return data
     }
 

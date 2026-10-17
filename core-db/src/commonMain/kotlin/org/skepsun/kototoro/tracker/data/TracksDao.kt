@@ -24,6 +24,9 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
     @Query("SELECT manga_id FROM tracks")
     abstract suspend fun findAllIds(): LongArray
 
+    @Query("SELECT * FROM tracks WHERE chapters_new > 0 ORDER BY last_check_time DESC")
+    abstract suspend fun findUpdated(): List<TrackEntity>
+
     @Query("SELECT * FROM tracks WHERE manga_id = :mangaId LIMIT 1")
     abstract suspend fun find(mangaId: Long): TrackEntity?
 

@@ -59,6 +59,7 @@ struct CatalogExtension {
     let repositoryID: String
     let repositoryTitle: String
     let iconURL: URL?
+    var sourceKeys: [String] = []
     var id: String { InstalledExtension.identity(ecosystem: ecosystem, package: packageName) }
 }
 

@@ -4,18 +4,35 @@ import KototoroShared
 
 @MainActor
 final class LibraryModel: ObservableObject {
+    let trackingAccounts = TrackingAccountsModel()
     @Published private(set) var categories: [IosCategory] = []
     @Published private(set) var isLoading = true
     @Published private(set) var error: String?
     @Published private(set) var schemaVersion: Int32?
     /// Shared with the browse tab once the database is open; nil until then.
     @Published private(set) var library: IosLibrary?
-    @Published private(set) var favourites: [IosLibraryEntry] = []
+    @Published private(set) var favourites: [IosLibraryEntry] = [] {
+        didSet {
+            favouriteIndex = LibraryCollectionIndex(entries: favourites, mediaKind: { $0.content.mediaKind },
+                                                     categoryIDs: { $0.categoryIds.map(\.int32Value) })
+        }
+    }
+    /// Rebuilt only when favourites are replaced, not when a view, progress indicator or toolbar updates.
+    private(set) var favouriteIndex = LibraryCollectionIndex<IosLibraryEntry>(
+        mediaKind: { $0.content.mediaKind }, categoryIDs: { $0.categoryIds.map(\.int32Value) }
+    )
     @Published private(set) var history: [IosLibraryEntry] = []
     @Published private(set) var updates: [IosUpdate] = []
     @Published private(set) var isCheckingUpdates = false
     @Published private(set) var updateSummary: String?
     @Published private(set) var recordsRevision = 0
+    @Published private(set) var missingSources: [IosMissingSource] = []
+
+    func refreshMissingSources(installed: [String]) async {
+        guard let library else { return }
+        do { missingSources = try await library.recovery.missing(installedSources: installed) }
+        catch { self.error = error.localizedDescription }
+    }
 
     func load() async {
         isLoading = true

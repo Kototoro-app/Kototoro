@@ -872,6 +872,7 @@ struct SourceReaderView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Namespace private var chrome
     @State private var panel: ReaderPanel?
     @State private var controls = true
@@ -931,9 +932,17 @@ struct SourceReaderView: View {
                 if controls { chromeView(height: geometry.size.height) }
             }
             .clipped()
-            .onChange(of: geometry.size, initial: true) { _, size in model.configure(size: size, preferences: settings.value) }
+            .onChange(of: geometry.size, initial: true) { _, size in
+                model.configure(size: size, preferences: settings.value.layout(for: size,
+                    wideWindow: horizontalSizeClass == .regular))
+            }
             .onChange(of: settings.value) { _, value in
-                model.configure(size: geometry.size, preferences: value)
+                model.configure(size: geometry.size, preferences: value.layout(for: geometry.size,
+                    wideWindow: horizontalSizeClass == .regular))
+            }
+            .onChange(of: horizontalSizeClass) { _, sizeClass in
+                model.configure(size: geometry.size, preferences: settings.value.layout(for: geometry.size,
+                    wideWindow: sizeClass == .regular))
             }
         }
         // Outside the clipped canvas, so the page background also fills the status bar and home indicator areas.
@@ -1036,6 +1045,7 @@ struct SourceReaderView: View {
                 await model.finishReadingActivity()
                 await library.refresh()
                 await ReaderTileBaseCache.shared.clear()
+                await library.trackingAccounts.syncAfterReading(model.content, tracking: library.library?.tracking)
             }
         }
         .readerPresence(directories: model.storageDirectories)

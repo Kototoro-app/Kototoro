@@ -368,7 +368,12 @@ struct NovelReaderView: View {
         }
         .onDisappear {
             model.setReadingActive(false)
-            Task { await model.persist(); await model.finishReadingActivity(); await library.refresh() }
+            Task {
+                await model.persist()
+                await model.finishReadingActivity()
+                await library.refresh()
+                await library.trackingAccounts.syncAfterReading(model.content, tracking: library.library?.tracking)
+            }
         }
         .onChange(of: model.chapter.id) { _, _ in showingMore = false; scrubPosition = nil; isScrubbing = false }
         .readerPresence(directories: [

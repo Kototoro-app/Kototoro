@@ -1,7 +1,46 @@
 import Foundation
+import SwiftUI
 import XCTest
 
 final class ReaderSettingsTests: XCTestCase {
+    func testDefaultPagedReaderIsRightToLeftAndSavedChoicesAreRetained() throws {
+        XCTAssertEqual(ReaderPreferences().mode, 1)
+        XCTAssertTrue(ReaderPreferences().readsRightToLeft)
+        XCTAssertFalse(ReaderPreferences().doublePage)
+        let missing = try JSONDecoder().decode(ReaderPreferences.self, from: Data("{}".utf8))
+        XCTAssertEqual(missing.mode, 1)
+        XCTAssertFalse(missing.doublePage)
+        let saved = try JSONDecoder().decode(ReaderPreferences.self,
+            from: Data("{\"mode\":0,\"doublePage\":false}".utf8))
+        XCTAssertEqual(saved.mode, 0)
+        XCTAssertFalse(saved.doublePage)
+        let enabled = try JSONDecoder().decode(ReaderPreferences.self,
+            from: Data("{\"mode\":1,\"doublePage\":true}".utf8))
+        XCTAssertTrue(enabled.doublePage)
+        XCTAssertTrue(enabled.layout(for: CGSize(width: 844, height: 390), wideWindow: false).doublePage)
+        XCTAssertFalse(enabled.layout(for: CGSize(width: 390, height: 844), wideWindow: false).doublePage)
+    }
+
+    func testAutomaticSpreadsFollowAvailableWindowAndKeepSavedPreference() {
+        let portrait = CGSize(width: 390, height: 844)
+        let landscape = CGSize(width: 844, height: 390)
+        let expanded = CGSize(width: 744, height: 1000)
+        var preferences = ReaderPreferences()
+        preferences.doublePage = true
+        XCTAssertFalse(preferences.layout(for: portrait, wideWindow: false).doublePage)
+        XCTAssertTrue(preferences.layout(for: landscape, wideWindow: false).doublePage)
+        XCTAssertTrue(preferences.layout(for: expanded, wideWindow: true).doublePage)
+        XCTAssertFalse(preferences.layout(for: expanded, wideWindow: false).doublePage)
+        XCTAssertTrue(preferences.doublePage, "Portrait must not overwrite the saved automatic-spread preference")
+        for mode in [3, 4] {
+            preferences.mode = mode
+            XCTAssertFalse(preferences.layout(for: landscape, wideWindow: true).doublePage)
+        }
+        preferences.mode = 1
+        preferences.doublePage = false
+        XCTAssertFalse(preferences.layout(for: landscape, wideWindow: true).doublePage)
+    }
+
     func testNewHorizontalReaderDefaultsToLeftToRight() {
         var preferences = ReaderPreferences()
         preferences.mode = 4

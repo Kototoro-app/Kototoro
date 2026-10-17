@@ -35,6 +35,10 @@ xcodebuild -project "iosApp/Kototoro.xcodeproj" -scheme "Kototoro" \
 ```
 
 默认应用支持 CMS 浏览／详情／播放、收藏分类、历史、播放进度恢复与手动更新检测。
+“浏览 → 网站发现”与“设置 → 追踪网站”现提供 Bangumi、AniList、MyAnimeList、Kitsu、Shikimori、
+MangaUpdates、SIMKL 的目录和账号入口。作品详情的“追踪与资料”可更换展示资料、关联网站记录、编辑状态／评分／进度；
+账号页可单独启用阅读后自动同步，凭据保存在 Keychain。真实账号写入回读与完整站点能力仍需验收，
+具体范围见[追踪网站增量记录](../docs/architecture/ios-tracking-support-2026-10.md)。
 来源列表长按作品可收藏或进入多选（顶栏换为全选／收藏操作栏）；列表与详情页的收藏都弹出可多选的分类框，
 批量时显示部分选中，只写入改动的分类，取消不写入。作品库在作品区左右滑动切换分组，横滑不会打开作品。
 回归：`-only-testing:KototoroUITests/ProductFlowTests/testBrowseAndDetailsShareMultiCategoryFavouritesAndBulkSelection`（需 CMS fixture）。
@@ -338,11 +342,13 @@ xcodebuild -project "iosApp/Kototoro.xcodeproj" -scheme Kototoro \
 
 ## 作品资料与追踪网站
 
-详情页标题下方的“资料 · 内容源 / 网站名”是常驻入口。点击后按当前作品名自动检索，
-可切换 Bangumi、AniList、Kitsu；结果右侧的“使用”直接应用资料，点击结果本身可先预览。
+详情页标题下方的“追踪与资料 / 追踪 · 网站名”是常驻入口。点击后按当前作品名自动检索，
+可按作品类型切换七个网站；结果右侧的“使用”直接应用资料，点击结果本身可先预览。
 应用后返回详情，标题、高清封面、简介、作者、标签和评分按网站资料展示，缺失字段保留源信息。
 “恢复源信息”一键恢复显示；已关联资料保留在菜单中，可再次切换或解除关联。
-设置 → 追踪网站提供独立的公开作品检索，默认网站会保留。
+浏览 → 网站发现与设置 → 追踪网站提供独立的公开作品检索，默认网站会保留。
+“我的账号”可连接网站、查看远端列表；作品关联后可编辑状态、评分、进度与支持的备注。
+自动同步默认关闭，在账号页开启后，仅同步明确开始追踪的作品。
 
 绑定沿用 Android 的 `tracking_site_items` / `tracking_site_links` 与 `preferences.metadata_source_*`，
 没有新增 schema。作品身份、源请求的 opaque 数据、章节、收藏和阅读进度仍归内容源；
@@ -351,8 +357,9 @@ xcodebuild -project "iosApp/Kototoro.xcodeproj" -scheme Kototoro \
 
 共享部分：`:core-net` 承载公开网站协议与解析，Android 的 Bangumi 搜索/详情也消费同一协议，
 保留原客户端与镜像设置；`:core-domain` 提供 Android/iOS 共用的手动关联规则；
-`:core-library` 提供事务性绑定、选择与展示投影。SwiftUI 负责轻量选择和交互。
-本阶段不提供其他四个网站的在线检索、追踪账号授权或远程阅读进度同步。
+`:core-library` 提供事务性绑定、选择与展示投影。账号协议与章节编号算法也由共享层承载，
+SwiftUI 负责选择、授权、进度编辑与同步反馈。具体能力及尚未验收范围见
+[追踪网站增量记录](../docs/architecture/ios-tracking-support-2026-10.md)。
 
 回归：`:core-net:jvmTest` 验证请求、分页、类型、解析与失败/取消；
 `:ios-shared:iosSimulatorArm64Test` 中的 `IosTrackingTest` 验证资料覆盖、数据库重开、

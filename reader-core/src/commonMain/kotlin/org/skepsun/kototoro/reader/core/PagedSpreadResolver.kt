@@ -171,7 +171,7 @@ object PagedSpreadResolver {
             return listOf(PagedPagePlacement(spec.pageId, boundsInSlot, sceneBounds))
         }
 
-        // Two pages in double-page spread with center fold alignment (zero gap)
+        // Fit each page to half the viewport, then center the complete spread, including unequal page widths.
         val firstSpec = group[0]
         val secondSpec = group[1]
 
@@ -185,15 +185,13 @@ object PagedSpreadResolver {
             Quad(firstSpec, fittedFirst, secondSpec, fittedSecond)
         }
 
-        val leftPageLeftInSlot = if (isRtl) halfWidth - leftFitted.width
-            else (halfWidth - leftFitted.width).coerceAtLeast(0f) / 2f
+        val spreadWidth = leftFitted.width + config.pageSpacingPx + rightFitted.width
+        val leftPageLeftInSlot = (viewportWidth - spreadWidth) / 2f
         val leftPageTopInSlot = (viewportHeight - leftFitted.height).coerceAtLeast(0f) / 2f
         val leftBoundsInSlot = FloatRect.fromLtwh(leftPageLeftInSlot, leftPageTopInSlot, leftFitted.width, leftFitted.height)
         val leftSceneBounds = leftBoundsInSlot.translate(slotBounds.left, slotBounds.top)
 
-        val rightSlotLeft = halfWidth + config.pageSpacingPx.toFloat()
-        val rightPageLeftInSlot = rightSlotLeft +
-            if (isRtl) 0f else (halfWidth - rightFitted.width).coerceAtLeast(0f) / 2f
+        val rightPageLeftInSlot = leftPageLeftInSlot + leftFitted.width + config.pageSpacingPx
         val rightPageTopInSlot = (viewportHeight - rightFitted.height).coerceAtLeast(0f) / 2f
         val rightBoundsInSlot = FloatRect.fromLtwh(rightPageLeftInSlot, rightPageTopInSlot, rightFitted.width, rightFitted.height)
         val rightSceneBounds = rightBoundsInSlot.translate(slotBounds.left, slotBounds.top)

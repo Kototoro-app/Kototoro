@@ -36,15 +36,20 @@ class SourceTracking(private val database: MangaDatabase) {
             database.getTrackingSiteDao().findItem(it.service, it.remoteId)
         }
 
-    suspend fun bind(content: SourceContent, item: TrackingSiteItemEntity) =
+    suspend fun bind(content: SourceContent, item: TrackingSiteItemEntity, useMetadata: Boolean = true) =
         database.useWriterConnection { connection ->
             connection.immediateTransaction {
                 requireStoredIdentity(content)
                 require(item.service > 0 && item.remoteId > 0 && item.title.isNotBlank())
+                requireTrackingCatalogIdentity(database.getTrackingSiteDao().findItem(item.service, item.remoteId), item)
                 database.getTrackingSiteDao().upsertItem(item)
                 database.getTrackingSiteDao().confirmManualTrackingLink(item.service, item.remoteId, content.id,
                     content.source.name, item.updatedAt)
-                selectInTransaction(content.id, item)
+                if (useMetadata) selectInTransaction(content.id, item) else {
+                    val prefs = database.getPreferencesDao().find(content.id)
+                    if (prefs?.metadataSourceKind == "tracking" && prefs.metadataSourceService == item.service &&
+                        prefs.metadataSourceRemoteId != item.remoteId) selectInTransaction(content.id, null)
+                }
             }
         }
 
@@ -100,6 +105,24 @@ class SourceTracking(private val database: MangaDatabase) {
         )
         dao.upsert(prefs.copy(metadataSourceKind = if (item == null) "base" else "tracking",
             metadataSourceService = item?.service, metadataSourceRemoteId = item?.remoteId))
+    }
+}
+
+/** The existing cache key is (service, ID); some providers allocate IDs separately for anime and manga. */
+fun requireTrackingCatalogIdentity(cached: TrackingSiteItemEntity?, incoming: TrackingSiteItemEntity) {
+    fun kind(item: TrackingSiteItemEntity?): String? {
+        if (item?.service !in listOf(1, 3, 4)) return null
+        val path = item?.siteUrl.orEmpty()
+        return when {
+            Regex("/animes?/").containsMatchIn(path) -> "anime"
+            Regex("/mangas?/").containsMatchIn(path) -> "manga"
+            else -> null
+        }
+    }
+    val previous = kind(cached)
+    val next = kind(incoming)
+    require(previous == null || next == null || previous == next) {
+        "此网站的动画与漫画使用了相同编号，当前无法同时关联这两个条目；已有资料已保留"
     }
 }
 

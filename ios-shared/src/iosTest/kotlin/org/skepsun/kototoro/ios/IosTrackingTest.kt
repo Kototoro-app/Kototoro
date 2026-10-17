@@ -17,6 +17,63 @@ import kotlin.test.*
 
 class IosTrackingTest {
     @Test
+    fun duplicateAnimeAndMangaRemoteIdsCannotOverwriteTheExistingMetadataCache() = withDatabase { path ->
+        val library = IosLibrary(path)
+        try {
+            val manga = sourceWork()
+            val anime = IosSourceContent(manga.value.copy(id = 2, url = "/anime", source = SourceRef("VIDEO_SOURCE", "zh", "VIDEO")))
+            library.saveDetails(manga)
+            library.saveDetails(anime)
+            val store = SourceTracking(library.database)
+            store.bind(manga.value, metadata(3, 1, "漫画资料").copy(url = "https://myanimelist.net/manga/1").toEntity())
+            assertFailsWith<IllegalArgumentException> {
+                store.bind(anime.value, metadata(3, 1, "动画资料").copy(url = "https://myanimelist.net/anime/1", mediaKind = "VIDEO").toEntity())
+            }
+            assertEquals("漫画资料", library.tracking.decorate(manga).title)
+            assertTrue(store.bindings(anime.value.id).isEmpty())
+        } finally { library.close() }
+    }
+
+    @Test
+    fun accountAssociationDoesNotReplaceMetadataAndReplacingItsSelectedTargetRestoresTheSource() = withDatabase { path ->
+        val library = IosLibrary(path)
+        try {
+            val work = sourceWork()
+            library.saveDetails(work)
+            val store = SourceTracking(library.database)
+            store.bind(work.value, metadata(5, 901, "账号关联").toEntity(), useMetadata = false)
+            assertNull(store.selected(work.value.id))
+            assertEquals(work.title, library.tracking.decorate(work).title)
+            store.select(work.value, 5, 901)
+            store.bind(work.value, metadata(5, 902, "替换账号关联").toEntity(), useMetadata = false)
+            assertNull(store.selected(work.value.id), "A replaced link cannot leave an unbound metadata authority")
+            store.bind(work.value, metadata(2, 903, "保留其他网站资料").toEntity())
+            store.bind(work.value, metadata(5, 904, "只更新账号关联").toEntity(), useMetadata = false)
+            assertEquals(903L, store.selected(work.value.id)?.remoteId)
+        } finally { library.close() }
+    }
+
+    @Test
+    fun stoppingTrackingPreservesMetadataSourceAndReadingPosition() = withDatabase { path ->
+        val library = IosLibrary(path)
+        try {
+            val work = sourceWork()
+            library.saveDetails(work)
+            library.recordPosition(work, work.chapters.single(), 2, 10, 50f)
+            SourceTracking(library.database).bind(work.value, metadata(5, 905, "保留网站资料").toEntity())
+            val dao = library.database.getScrobblingDao()
+            dao.upsert(org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity(5, 905, work.value.id,
+                905, "3", 1, null, 0f))
+            assertTrue(library.tracking.accounts.isTracked(work, library.tracking.bindings(work).single()))
+            library.tracking.accounts.stopTracking(work, 5)
+            assertNull(dao.findByLocalManga(5, work.value.id))
+            assertEquals("保留网站资料", library.tracking.decorate(work).title)
+            assertEquals(2, library.position(work)?.index)
+            assertEquals(1, library.tracking.accounts.localProgress(work))
+        } finally { library.close() }
+    }
+
+    @Test
     fun searchResultBindingFetchesFullDetailsAndNetworkFailurePreservesPreviousBinding() = withDatabase { path ->
         val library = IosLibrary(path)
         try {

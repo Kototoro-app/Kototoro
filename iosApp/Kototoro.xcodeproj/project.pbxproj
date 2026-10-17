@@ -7,6 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B21000000000000000000001 /* LibraryCollectionIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = B21000000000000000000011 /* LibraryCollectionIndex.swift */; };
+		B21000000000000000000002 /* LibraryCollectionIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = B21000000000000000000011 /* LibraryCollectionIndex.swift */; };
+		B21000000000000000000003 /* LibraryCollectionIndexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B21000000000000000000012 /* LibraryCollectionIndexTests.swift */; };
+        AD7100000000000000000003 /* TrackingSitesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7100000000000000000004 /* TrackingSitesTests.swift */; };
+        AD7100000000000000000001 /* TrackingAccounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7100000000000000000002 /* TrackingAccounts.swift */; };
+		B10000000000000000000005 /* BatchSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* BatchSelectionTests.swift */; };
+		B10000000000000000000003 /* BatchSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* BatchSelection.swift */; };
+		B10000000000000000000002 /* BatchSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* BatchSelection.swift */; };
+		AF0000000000000000000002 /* MissingSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0000000000000000000012 /* MissingSourcesView.swift */; };
+		AF0000000000000000000001 /* LibraryMigrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0000000000000000000011 /* LibraryMigrationView.swift */; };
 		AE0000000000000000000002 /* ReadingStatisticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0000000000000000000012 /* ReadingStatisticsView.swift */; };
 		AE0000000000000000000001 /* ReadingActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0000000000000000000011 /* ReadingActivity.swift */; };
         AC0000000000000000000001 /* TrackingSitesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0000000000000000000002 /* TrackingSitesView.swift */; };
@@ -94,6 +104,14 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B21000000000000000000011 /* LibraryCollectionIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryCollectionIndex.swift; sourceTree = "<group>"; };
+		B21000000000000000000012 /* LibraryCollectionIndexTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryCollectionIndexTests.swift; sourceTree = "<group>"; };
+        AD7100000000000000000004 /* TrackingSitesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingSitesTests.swift; sourceTree = "<group>"; };
+        AD7100000000000000000002 /* TrackingAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingAccounts.swift; sourceTree = "<group>"; };
+		B10000000000000000000004 /* BatchSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchSelectionTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000001 /* BatchSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchSelection.swift; sourceTree = "<group>"; };
+		AF0000000000000000000012 /* MissingSourcesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissingSourcesView.swift; sourceTree = "<group>"; };
+		AF0000000000000000000011 /* LibraryMigrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMigrationView.swift; sourceTree = "<group>"; };
 		AE0000000000000000000012 /* ReadingStatisticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingStatisticsView.swift; sourceTree = "<group>"; };
 		AE0000000000000000000011 /* ReadingActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingActivity.swift; sourceTree = "<group>"; };
         AC0000000000000000000002 /* TrackingSitesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingSitesView.swift; sourceTree = "<group>"; };
@@ -216,6 +234,7 @@
 				FB0000000000000000000008 /* SourceWebBrowser.swift */,
 				FB0000000000000000000007 /* SourceSettingsView.swift */,
                 AC0000000000000000000002 /* TrackingSitesView.swift */,
+                AD7100000000000000000002 /* TrackingAccounts.swift */,
 				FB0000000000000000000004 /* ReaderPageTurn.swift */,
 				F30000000000000000000002 /* ReaderDownloadsView.swift */,
 				F10000000000000000000007 /* RepositoryLink.swift */,
@@ -235,6 +254,10 @@
 				C00000000000000000000011 /* SourceDetailsView.swift */,
 				AD0000000000000000000004 /* DetailsDockPane.swift */,
 				AB0000000000000000000002 /* SourceChangeView.swift */,
+				AF0000000000000000000012 /* MissingSourcesView.swift */,
+				B10000000000000000000001 /* BatchSelection.swift */,
+				B21000000000000000000011 /* LibraryCollectionIndex.swift */,
+				AF0000000000000000000011 /* LibraryMigrationView.swift */,
 				C00000000000000000000012 /* SourceReaderView.swift */,
 				C00000000000000000000013 /* SourceImageFile.swift */,
 				C00000000000000000000014 /* SourceImageLoader.swift */,
@@ -253,7 +276,10 @@
 				F50000000000000000000004 /* RepositoryManagementTests.swift */,
 				F80000000000000000000004 /* BackupFlowTests.swift */,
 				F80000000000000000000021 /* LocalImportTests.swift */,
+                AD7100000000000000000004 /* TrackingSitesTests.swift */,
 				AD0000000000000000000005 /* DetailsDockPaneTests.swift */,
+				B10000000000000000000004 /* BatchSelectionTests.swift */,
+				B21000000000000000000012 /* LibraryCollectionIndexTests.swift */,
 				F50000000000000000000003 /* ExtensionPresentationTests.swift */,
 				F30000000000000000000003 /* ReaderDownloadQueueTests.swift */,
 				FB0000000000000000000002 /* ImageLoadPolicyTests.swift */,
@@ -425,6 +451,7 @@
 				FA0000000000000000000008 /* SourceWebBrowser.swift in Sources */,
 				FA0000000000000000000007 /* SourceSettingsView.swift in Sources */,
                 AC0000000000000000000001 /* TrackingSitesView.swift in Sources */,
+                AD7100000000000000000001 /* TrackingAccounts.swift in Sources */,
 				FA0000000000000000000005 /* ReaderPageTurn.swift in Sources */,
 				F20000000000000000000002 /* ReaderDownloadsView.swift in Sources */,
 				F80000000000000000000001 /* BackupView.swift in Sources */,
@@ -454,6 +481,10 @@
 				C00000000000000000000001 /* SourceDetailsView.swift in Sources */,
 				AD0000000000000000000001 /* DetailsDockPane.swift in Sources */,
 				AB0000000000000000000001 /* SourceChangeView.swift in Sources */,
+				AF0000000000000000000002 /* MissingSourcesView.swift in Sources */,
+				B10000000000000000000002 /* BatchSelection.swift in Sources */,
+				B21000000000000000000001 /* LibraryCollectionIndex.swift in Sources */,
+				AF0000000000000000000001 /* LibraryMigrationView.swift in Sources */,
 				C00000000000000000000002 /* SourceReaderView.swift in Sources */,
 				C00000000000000000000003 /* SourceImageFile.swift in Sources */,
 				C00000000000000000000004 /* SourceImageLoader.swift in Sources */,
@@ -472,9 +503,14 @@
 				F40000000000000000000005 /* RepositoryManagementTests.swift in Sources */,
 				F80000000000000000000003 /* BackupFlowTests.swift in Sources */,
 				F80000000000000000000020 /* LocalImportTests.swift in Sources */,
+                AD7100000000000000000003 /* TrackingSitesTests.swift in Sources */,
 				AD0000000000000000000002 /* DetailsDockPane.swift in Sources */,
 				AD0000000000000000000003 /* DetailsDockPaneTests.swift in Sources */,
 				F40000000000000000000003 /* ExtensionPresentation.swift in Sources */,
+				B10000000000000000000003 /* BatchSelection.swift in Sources */,
+				B21000000000000000000002 /* LibraryCollectionIndex.swift in Sources */,
+				B21000000000000000000003 /* LibraryCollectionIndexTests.swift in Sources */,
+				B10000000000000000000005 /* BatchSelectionTests.swift in Sources */,
 				F40000000000000000000004 /* ExtensionPresentationTests.swift in Sources */,
 				F20000000000000000000003 /* ReaderDownloadQueueTests.swift in Sources */,
 				F20000000000000000000004 /* ReaderDownloadQueue.swift in Sources */,

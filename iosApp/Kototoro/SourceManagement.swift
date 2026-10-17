@@ -284,6 +284,8 @@ struct SpaceEmptyView: View {
 struct SourceToggleRow: View {
     let source: IosSource
     @EnvironmentObject private var sources: SourcesModel
+    @EnvironmentObject private var library: LibraryModel
+    @State private var migration: LibraryMigrationRequest?
 
     var body: some View {
         Toggle(isOn: Binding(get: { sources.isEnabled(source) },
@@ -299,6 +301,17 @@ struct SourceToggleRow: View {
             }
         }
         .accessibilityIdentifier("source.toggle.\(source.name)")
+        .contextMenu {
+            if source.ecosystem != "LOCAL" {
+                Button("迁移此来源的收藏与历史", systemImage: "arrow.triangle.swap") {
+                    migration = LibraryMigrationRequest(contents: (library.favourites + library.history)
+                        .map(\.content).filter { $0.sourceName == source.name })
+                }
+            }
+        }
+        .sheet(item: $migration) { request in
+            NavigationStack { BatchMigrationView(contents: request.contents) }
+        }
     }
 }
 

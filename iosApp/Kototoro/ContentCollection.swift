@@ -181,15 +181,17 @@ struct ContentCollection<Destination: View, Actions: View>: View {
     @EnvironmentObject private var library: LibraryModel
     @EnvironmentObject private var downloads: ReaderDownloadQueue
 
+    private var gridColumns: [GridItem] {
+        let compact = mode.hasTitleOverlay
+        let spacing: CGFloat = compact ? 8 : 14
+        return [GridItem(.adaptive(minimum: mode.targetWidth(scale: gridSize / 100)), spacing: spacing, alignment: .top)]
+    }
+
     var body: some View {
         let items = marked(self.items)
         if mode.isGrid {
             let compact = mode.hasTitleOverlay
-            let spacing: CGFloat = compact ? 8 : 14
-            // Adaptive columns: floor((width + spacing) / (target + spacing)), the same count Android computes.
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: mode.targetWidth(scale: gridSize / 100)), spacing: spacing,
-                                         alignment: .top)],
-                      spacing: compact ? 8 : 16) {
+            LazyVGrid(columns: gridColumns, spacing: compact ? 8 : 16) {
                 ForEach(items, id: \.identity) { item in
                     link(item) {
                         if compact { CompactCard(runtime: runtime, item: item, movie: mode.isMovie) }
@@ -218,9 +220,17 @@ struct ContentCollection<Destination: View, Actions: View>: View {
     private func marked(_ items: [ContentItem]) -> [ContentItem] {
         let favourites = marksFavourites ? Set(library.favourites.map { ContentMarks.key($0.content) }) : []
         var updates: [String: Int] = [:]
-        for update in library.updates { updates[ContentMarks.key(update.content)] = Int(update.newChapters) }
-        let downloaded = Set(downloads.entries.filter { $0.state == .completed }
-            .map { "\($0.request.source)|\($0.request.contentID)" })
+        if !library.updates.isEmpty {
+            for update in library.updates { updates[ContentMarks.key(update.content)] = Int(update.newChapters) }
+        }
+        let downloaded: Set<String>
+        if downloads.entries.isEmpty {
+            downloaded = []
+        } else {
+            downloaded = Set(downloads.entries.compactMap { entry -> String? in
+                entry.state == .completed ? "\(entry.request.source)|\(entry.request.contentID)" : nil
+            })
+        }
         return items.map { item in
             var item = item
             let key = ContentMarks.key(item.content)
@@ -301,7 +311,6 @@ private struct CompactCard: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
                     .padding(.horizontal, 7).padding(.top, 18)
                     .padding(.bottom, item.progress == nil ? 7 : 11)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -352,6 +361,20 @@ private struct ContentRow: View {
     }
 }
 
+private struct CardProgressBar: View {
+    let progress: Float
+    var body: some View {
+        GeometryReader { geometry in
+            Capsule().fill(.white.opacity(0.35))
+                .overlay(alignment: .leading) {
+                    Capsule().fill(Color.accentColor)
+                        .frame(width: max(0, geometry.size.width * CGFloat(min(max(progress, 0), 1))))
+                }
+        }
+        .frame(height: 3)
+    }
+}
+
 /// Cover in a fixed frame (2:3 poster or 16:9 movie, cropped to fill), drawn like Android's poster: a hairline rim, a
 /// soft shadow and a book spine on posters, with the reading progress along the bottom and the card badges.
 private struct CoverFrame: View {
@@ -379,15 +402,9 @@ private struct CoverFrame: View {
             }
             .overlay(alignment: .bottom) {
                 if showsProgress, let progress = item.progress, !item.isFinished {
-                    GeometryReader { geometry in
-                        Capsule().fill(.white.opacity(0.35))
-                            .overlay(alignment: .leading) {
-                                Capsule().fill(Color.accentColor).frame(width: geometry.size.width * CGFloat(min(max(progress, 0), 1)))
-                            }
-                    }
-                    .frame(height: 3)
-                    .padding(.horizontal, 6).padding(.bottom, 5)
-                    .accessibilityLabel("已读 \(Int(progress * 100))%")
+                    CardProgressBar(progress: progress)
+                        .padding(.horizontal, 6).padding(.bottom, 5)
+                        .accessibilityLabel("已读 \(Int(progress * 100))%")
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -422,7 +439,10 @@ private struct CoverFrame: View {
             }
             .clipShape(shape)
             .overlay { shape.strokeBorder(.primary.opacity(0.12), lineWidth: 0.5) }
-            .shadow(color: .black.opacity(0.16), radius: 3, y: 1.5)
+            .background {
+                shape.fill(Color(uiColor: .secondarySystemBackground))
+                    .shadow(color: .black.opacity(0.12), radius: 2.5, y: 1)
+            }
     }
 }
 
@@ -437,7 +457,6 @@ private struct MarkIcon: View {
             .frame(width: 18, height: 18)
             .background(tint.gradient, in: .circle)
             .overlay { Circle().strokeBorder(.white.opacity(0.7), lineWidth: 1) }
-            .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
     }
 }
 
@@ -450,7 +469,6 @@ private struct BadgeView: View {
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(Color.red.gradient, in: .capsule)
             .overlay { Capsule().strokeBorder(.white.opacity(0.7), lineWidth: 1) }
-            .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
     }
 }
 

@@ -44,25 +44,35 @@ struct LibraryView: View {
     /// Where the next category's works come in from: the trailing edge when moving forward.
     @State private var swipeEdge: Edge = .trailing
 
-    private var visibleCategories: [IosCategory] { library.categories.filter(\.isVisibleInLibrary) }
-    private var availableKinds: Set<String> { Set(library.favourites.map(\.content.mediaKind)) }
+    private var visibleCategories: [IosCategory] {
+        // Keep an emptied selection reachable until the user leaves it; space changes return to All.
+        library.categories.filter {
+            $0.isVisibleInLibrary && (selectedKind == nil || count($0.id) > 0 || $0.id == selectedCategory)
+        }
+    }
+    private var availableKinds: Set<String> { library.favouriteIndex.availableKinds }
+    private var selectedKind: String? {
+        ContentSpace.filter(enabled: spacesEnabled, space: space, page: pageKind, available: availableKinds)
+    }
+    private var collection: LibraryCollectionIndex<IosLibraryEntry>.Slice {
+        library.favouriteIndex.slice(mediaKind: selectedKind)
+    }
 
     /// Favourites of the content space (or this page's switch); categories count and list only these.
     private var kindFavourites: [IosLibraryEntry] {
-        guard let selected = ContentSpace.filter(enabled: spacesEnabled, space: space, page: pageKind,
-                                                 available: availableKinds) else { return library.favourites }
-        return library.favourites.filter { $0.content.mediaKind == selected }
+        collection.entries
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 14) {
                     // The categories are the first row of the page and scroll away with the works, as Mail and Music
                     // place theirs. A top `safeAreaBar` also moves the top inset, and the navigation bar's large title
                     // and search drawer then expand and collapse against it at the end of a fling: the page shook and
                     // the search field never came out.
                     if library.schemaVersion != nil { categoryBar }
+                    MissingSourcesNotice().padding(.horizontal)
                     if !spacesEnabled && ContentKindPicker.isShown(availableKinds) {
                         ContentKindPicker(selection: $pageKind, available: availableKinds).padding(.horizontal)
                     }
@@ -88,6 +98,10 @@ struct LibraryView: View {
             .task { await library.refresh() }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    NavigationLink {
+                        LibraryMigrationView(favourites: items.map(\.content))
+                    } label: { Label("批量换源", systemImage: "arrow.triangle.swap") }
+                        .accessibilityIdentifier("library.migrate")
                     if spacesEnabled { SpaceMenu() }
                     ContentListModeMenu(mode: $mode) {
                         VStack(alignment: .leading, spacing: 6) {
@@ -107,6 +121,7 @@ struct LibraryView: View {
             .onChange(of: visibleCategories.map(\.id)) { _, ids in
                 if let selectedCategory, !ids.contains(selectedCategory) { self.selectedCategory = nil }
             }
+            .onChange(of: selectedKind) { _, _ in selectedCategory = nil }
             .confirmationDialog("删除分类？", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
                                 titleVisibility: .visible, presenting: deleting) { category in
                 Button("删除“\(category.title)”", role: .destructive) {
@@ -206,7 +221,7 @@ struct LibraryView: View {
     }
 
     private func count(_ category: Int32) -> Int {
-        kindFavourites.filter { $0.categoryIds.contains { $0.int32Value == category } }.count
+        collection.categoryCounts[category] ?? 0
     }
 
     // MARK: Works

@@ -27,27 +27,31 @@ class SourceLibrary(
     private val database: MangaDatabase,
     private val sourceLookup: (String) -> SourceRef?,
 ) {
-    suspend fun favourites(): List<SourceContent> = database.getFavouritesDao()
+    suspend fun favourites(withChapters: Boolean = true): List<SourceContent> = database.getFavouritesDao()
         .findAllWithActiveCategory(0, Int.MAX_VALUE).distinctBy { it.manga.id }
-        .map { content(it.manga, it.tags) }
+        .map { content(it.manga, it.tags, withChapters) }
 
-    suspend fun history(): List<SourceContent> = database.getHistoryDao().findRecent(200)
-        .map { content(it.manga, it.tags) }
+    suspend fun history(withChapters: Boolean = true): List<SourceContent> = database.getHistoryDao().findRecent(200)
+        .map { content(it.manga, it.tags, withChapters) }
 
     suspend fun progress(id: Long): HistoryEntity? = database.getHistoryDao().find(id)
 
-    suspend fun snapshot(history: Boolean = false): SourceLibrarySnapshot = database.useReaderConnection { connection ->
+    /** Collection pages can defer full chapter lists; last-read captions and progress stay in the snapshot. */
+    suspend fun snapshot(
+        history: Boolean = false,
+        withChapters: Boolean = true,
+    ): SourceLibrarySnapshot = database.useReaderConnection { connection ->
         connection.deferredTransaction {
             val categories = database.getFavouriteCategoriesDao().findAll()
             val categoryIds = categories.map { it.categoryId.toLong() }.toSet()
             val memberships = database.getFavouritesDao().findAllActiveEntries()
                 .filter { membership -> membership.categoryId in categoryIds }
                 .groupBy { it.mangaId }
-            val items = if (history) history() else favourites()
+            val items = if (history) history(withChapters) else favourites(withChapters)
             val progress = database.getHistoryDao().findAllByMangaIds(items.map { it.id }).associateBy { it.mangaId }
             // One lookup of just the chapters being read; works can hold thousands of chapters each.
             val chapters = if (history) {
-                database.getChaptersDao().findByIds(progress.values.map { it.chapterId })
+                database.getChaptersDao().findReadingByMangaIds(progress.keys)
                     .associateBy { it.mangaId to it.chapterId }
             } else emptyMap()
             SourceLibrarySnapshot(items.map { item ->

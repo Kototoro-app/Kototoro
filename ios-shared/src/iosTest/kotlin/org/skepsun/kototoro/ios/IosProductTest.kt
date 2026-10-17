@@ -36,7 +36,8 @@ class IosProductTest {
                 // Source metadata comes from the installed catalog, as on the desktop/Android hosts.
                 second.updateSources(listOf(IosSource(source.name, "漫画源", source.locale, source.contentType, "extension")))
                 val saved = second.favourites().single().content
-                assertEquals(content, saved.value)
+                assertEquals(content.copy(chapters = null), saved.value)
+                assertEquals(content, second.storedDetails(saved)?.value)
                 assertEquals(IosReadingPosition(chapter.id.toString(), 2, 12f, 0.75f), second.position(saved))
                 assertEquals(2, second.bookmarks(saved).single().index)
                 assertEquals(content.id.toString(), second.history().single().content.id)

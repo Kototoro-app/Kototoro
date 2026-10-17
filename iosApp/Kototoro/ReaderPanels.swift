@@ -273,7 +273,7 @@ struct ReaderMorePanel: View {
                     } else if section == 1 {
                         Picker("阅读模式", selection: $settings.value.mode) {
                             // Android's reader mode names: STANDARD, REVERSED, VERTICAL, WEBTOON, CONTINUOUS_HORIZONTAL.
-                            Text("默认（从左到右）").tag(0); Text("从右到左").tag(1); Text("从上到下").tag(2)
+                            Text("从左到右").tag(0); Text("从右到左").tag(1); Text("从上到下").tag(2)
                             Text("条漫").tag(3); Text("横向条漫（连续）").tag(4)
                         }
                         if settings.value.mode == 4 {
@@ -283,10 +283,10 @@ struct ReaderMorePanel: View {
                         Picker("缩放基准", selection: $settings.value.fit) {
                             Text("适应页面").tag(0); Text("适应宽度").tag(1); Text("适应高度").tag(2); Text("保持起始位置").tag(3)
                         }
-                        Toggle("双页", isOn: $settings.value.doublePage).disabled(settings.value.mode >= 3)
+                        Toggle("自动双页（横屏或宽窗口）", isOn: $settings.value.doublePage).disabled(settings.value.mode >= 3)
                         Toggle("封面单独显示", isOn: $settings.value.cover).disabled(!settings.value.doublePage)
                         Toggle("宽页左右拆分", isOn: $settings.value.splitWidePages)
-                            .disabled(settings.value.mode >= 3 || settings.value.doublePage)
+                            .disabled(settings.value.mode >= 3)
                         Toggle("自动裁切白边", isOn: $settings.value.cropMargins)
                         Picker("翻页效果", selection: Binding(get: { settings.value.animation }, set: { settings.value.animation = $0 })) {
                             // Stored values stay stable: Android's ADVANCED (cover) and SIMULATION (curl) follow the

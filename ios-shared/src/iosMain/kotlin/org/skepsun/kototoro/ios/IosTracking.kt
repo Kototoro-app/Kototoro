@@ -2,12 +2,17 @@ package org.skepsun.kototoro.ios
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.darwin.Darwin
+import io.ktor.client.engine.ProxyBuilder
+import io.ktor.http.Url
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.request.header
 import io.ktor.client.plugins.defaultRequest
 import kotlinx.coroutines.CancellationException
+import kotlin.native.Platform
+import platform.Foundation.NSProcessInfo
+import platform.Foundation.NSUserDefaults
 import org.skepsun.kototoro.core.db.entity.TrackingSiteItemEntity
 import org.skepsun.kototoro.core.library.SourceTracking
 import org.skepsun.kototoro.core.library.encodeTrackingStrings
@@ -15,8 +20,17 @@ import org.skepsun.kototoro.core.library.decodeTrackingStrings
 import org.skepsun.kototoro.tracking.discovery.PublicTrackingApi
 import org.skepsun.kototoro.tracking.discovery.PublicTrackingSite
 import org.skepsun.kototoro.tracking.discovery.TrackingMetadata
+import org.skepsun.kototoro.tracking.discovery.TrackingPerson
+import org.skepsun.kototoro.tracking.discovery.TrackingRelated
+import org.skepsun.kototoro.tracking.discovery.TrackingSupplement
 
-data class IosTrackingSite(val id: Int, val title: String)
+class IosTrackingSite internal constructor(private val value: PublicTrackingSite) {
+    val id: Int get() = value.id
+    val title: String get() = value.title
+    val pageSize: Int get() = value.pageSize
+    val supportsNotes: Boolean get() = id !in listOf(6, 7)
+    fun supports(mediaKind: String): Boolean = value.supports(mediaKind)
+}
 
 class IosTrackingItem internal constructor(
     internal val value: TrackingMetadata,
@@ -36,6 +50,30 @@ class IosTrackingItem internal constructor(
     val score: Float? get() = value.score
     val scoreMax: Float get() = value.scoreMax
     val url: String get() = value.url
+    val mediaKind: String get() = value.mediaKind
+    val totalChapters: Int? get() = value.totalChapters
+    val remoteType: String? get() = value.remoteType
+}
+
+class IosTrackingPerson internal constructor(value: TrackingPerson) {
+    val id = value.id
+    val name = value.name
+    val image = value.image
+    val url = value.url
+    val role = value.role
+    val voiceActors = value.voiceActors.map(::IosTrackingPerson)
+}
+
+class IosTrackingRelated internal constructor(value: TrackingRelated) {
+    val item = IosTrackingItem(value.item)
+    val relation = value.relation
+}
+
+class IosTrackingSupplement internal constructor(value: TrackingSupplement) {
+    val characters = value.characters.map(::IosTrackingPerson)
+    val staff = value.staff.map(::IosTrackingPerson)
+    val related = value.related.map(::IosTrackingRelated)
+    val recommendations = value.recommendations.map(::IosTrackingRelated)
 }
 
 internal fun trackingSiteTitle(service: Int): String =
@@ -57,7 +95,14 @@ class IosTracking internal constructor(
 ) {
     private val store = SourceTracking(library.database)
     val sites: List<IosTrackingSite> = listOf(PublicTrackingSite.BANGUMI, PublicTrackingSite.ANILIST,
-        PublicTrackingSite.KITSU).map { IosTrackingSite(it.id, it.title) }
+        PublicTrackingSite.MAL, PublicTrackingSite.KITSU, PublicTrackingSite.SHIKIMORI,
+        PublicTrackingSite.MANGAUPDATES, PublicTrackingSite.SIMKL).map(::IosTrackingSite)
+    val accounts by lazy { IosTrackingAccounts(library, client) }
+
+    @Throws(Exception::class)
+    suspend fun browse(service: Int, mediaKind: String, popular: Boolean, page: Int): List<IosTrackingItem> = request {
+        api.browse(site(service), mediaKind, popular, page).map(::IosTrackingItem)
+    }
 
     @Throws(Exception::class)
     suspend fun search(service: Int, query: String, mediaKind: String, page: Int): List<IosTrackingItem> = request {
@@ -66,7 +111,17 @@ class IosTracking internal constructor(
 
     @Throws(Exception::class)
     suspend fun details(item: IosTrackingItem, mediaKind: String): IosTrackingItem = request {
-        IosTrackingItem(fetchDetails(site(item.service), item.value.remoteId, mediaKind), detailed = true)
+        IosTrackingItem(resolveDetails(item, mediaKind), detailed = true)
+    }
+
+    @Throws(Exception::class)
+    suspend fun videos(query: String, remoteType: String, page: Int): List<IosTrackingItem> = request {
+        api.videos(query, remoteType, page).map(::IosTrackingItem)
+    }
+
+    @Throws(Exception::class)
+    suspend fun supplement(item: IosTrackingItem): IosTrackingSupplement = request {
+        IosTrackingSupplement(api.supplement(site(item.service), item.value.remoteId, item.mediaKind))
     }
 
     @Throws(Exception::class)
@@ -85,7 +140,7 @@ class IosTracking internal constructor(
     suspend fun bind(content: IosSourceContent, item: IosTrackingItem) {
         // Search results must resolve before changing display authority; previews already hold complete details.
         val details = if (item.detailed) item.value else {
-            request { fetchDetails(site(item.service), item.value.remoteId, content.mediaKind) }
+            request { resolveDetails(item, content.mediaKind) }
         }
         require(details.mediaKind == content.mediaKind) { "作品类型不匹配，请选择相同类型的作品资料" }
         library.saveDetails(content)
@@ -97,12 +152,19 @@ class IosTracking internal constructor(
         store.select(content.value, item?.service, item?.value?.remoteId)
 
     @Throws(Exception::class)
-    suspend fun unbind(content: IosSourceContent, service: Int) = store.unbind(content.value, service)
+    suspend fun unbind(content: IosSourceContent, service: Int) {
+        store.unbind(content.value, service)
+        accounts.stopTracking(content, service)
+    }
 
     internal suspend fun selected(ids: List<Long>): Map<Long, TrackingSiteItemEntity> = store.selected(ids)
 
     private fun site(id: Int) = PublicTrackingSite.entries.firstOrNull { it.id == id }
         ?: error("此追踪网站尚不支持在线检索")
+
+    private suspend fun resolveDetails(item: IosTrackingItem, kind: String): TrackingMetadata =
+        if (item.service == 7 && item.remoteType != null) api.details(site(7), item.value.remoteId, kind, item.remoteType!!)
+        else fetchDetails(site(item.service), item.value.remoteId, kind)
 
     private suspend fun <T> request(block: suspend () -> T): T = try {
         block()
@@ -116,14 +178,36 @@ class IosTracking internal constructor(
         throw IllegalStateException("暂时无法读取作品资料，请检查网络或切换网站", error)
     }
 
-    private companion object {
-        val api by lazy {
-            PublicTrackingApi(HttpClient(Darwin) {
+    internal companion object {
+        @OptIn(kotlin.experimental.ExperimentalNativeApi::class)
+        val client by lazy {
+            HttpClient(Darwin) {
+                // Test-only loopback routing; release builds always use the device's network configuration.
+                if (Platform.isDebugBinary) {
+                    val address = NSProcessInfo.processInfo.environment["KOTOTORO_TRACKING_TEST_PROXY"] as? String
+                    if (!address.isNullOrBlank()) {
+                        val proxyUrl = Url(address)
+                        require(proxyUrl.host in listOf("127.0.0.1", "localhost", "::1"))
+                        engine {
+                            proxy = ProxyBuilder.http(proxyUrl)
+                            // Ktor 3.5 only populates the HTTP keys; HTTPS requests also need CONNECT routing.
+                            configureSession {
+                                connectionProxyDictionary = connectionProxyDictionary.orEmpty() + mapOf<Any?, Any?>(
+                                    "HTTPSEnable" to 1,
+                                    "HTTPSProxy" to proxyUrl.host,
+                                    "HTTPSPort" to proxyUrl.port,
+                                )
+                            }
+                        }
+                    }
+                }
                 expectSuccess = true
                 install(HttpTimeout) { connectTimeoutMillis = 15_000; requestTimeoutMillis = 30_000 }
                 defaultRequest { header("User-Agent", "Kototoro-iOS/1.0") }
-            })
+            }
         }
+        val api: PublicTrackingApi get() = PublicTrackingApi(client, trackingClients.mapValues { it.value.clientId },
+            NSUserDefaults.standardUserDefaults.stringForKey("tracking.bangumi.apiBase") ?: "https://api.bgm.tv")
     }
 }
 
@@ -156,4 +240,5 @@ internal fun TrackingMetadata.toEntity(): TrackingSiteItemEntity {
 
 private fun TrackingSiteItemEntity.toMetadata(kind: String) = TrackingMetadata(service, remoteId, title,
     decodeTrackingStrings(altTitles), coverUrl, summary, rating, scoreMax ?: 10f, decodeTrackingStrings(tags),
-    decodeTrackingStrings(authors), year, totalEpisodes, siteUrl.orEmpty(), kind)
+    decodeTrackingStrings(authors), year, totalEpisodes, siteUrl.orEmpty(), kind,
+    if (service == 7) when { siteUrl?.contains("/movies/") == true -> "movies"; siteUrl?.contains("/tv/") == true -> "tv"; else -> "anime" } else null)

@@ -4,6 +4,35 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.serialization'
 }
 
+// Reuse the application's registered OAuth clients without copying credentials into Swift or a second resource file.
+def trackingConfigDirectory = layout.buildDirectory.dir('generated/tracking/kotlin')
+def generateTrackingConfig = tasks.register('generateTrackingClientConfig') {
+    def constants = rootProject.layout.projectDirectory.file('app/src/main/res/values/constants.xml')
+    inputs.file(constants)
+    outputs.dir(trackingConfigDirectory)
+    doLast {
+        def document = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(constants.asFile)
+        def strings = document.getElementsByTagName('string')
+        def values = [:]
+        for (int i = 0; i < strings.length; i++) {
+            def item = strings.item(i)
+            values[item.getAttribute('name')] = item.textContent
+        }
+        def quote = { value -> groovy.json.JsonOutput.toJson(value ?: '').replace('$', '\\$') }
+        def entries = [1: 'shikimori', 2: 'anilist', 3: 'mal', 4: 'kitsu', 5: 'bangumi', 7: 'simkl'].collect { id, name ->
+            "    ${id} to TrackingClientConfig(${quote(values[name + '_clientId'])}, ${quote(values[name + '_clientSecret'])}),"
+        }.join('\n')
+        def output = trackingConfigDirectory.get().file('org/skepsun/kototoro/ios/TrackingClients.kt').asFile
+        output.parentFile.mkdirs()
+        output.text = """package org.skepsun.kototoro.ios
+import org.skepsun.kototoro.tracking.discovery.TrackingClientConfig
+internal val trackingClients = mapOf(
+${entries}
+)
+"""
+    }
+}
+
 // Accept an existing simulator UUID so native tests can use the same device as the SwiftUI app.
 tasks.withType(org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeSimulatorTest).configureEach {
     def simulator = providers.gradleProperty('iosSimulatorDevice')
@@ -21,6 +50,7 @@ kotlin {
         }
     }
     sourceSets {
+        iosMain.kotlin.srcDir(trackingConfigDirectory)
         commonMain.dependencies {
             implementation project(':core-db')
             implementation project(':core-domain')
@@ -42,4 +72,8 @@ kotlin {
             implementation kotlin('test')
         }
     }
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask).configureEach {
+    dependsOn(generateTrackingConfig)
 }

@@ -94,6 +94,8 @@ struct ContentView: View {
         // The global search belongs to its own tab: `.searchable` on the TabView is inherited by every tab's
         // navigation bar and showed a second search field under the library and browse titles.
         .tabViewSearchActivation(.searchTabSelection)
+        .tabViewStyle(.sidebarAdaptable)
+        .modifier(MainTabPlacement())
         .tabBarMinimizeBehavior(.onScrollDown)
         .continueReadingAccessory(
             enabled: !ReaderPresence.shared.shouldSuppressAccessory &&
@@ -112,6 +114,10 @@ struct ContentView: View {
         .environmentObject(downloads)
         .environmentObject(storage)
         .environmentObject(repositories)
+        .task(id: "\(library.recordsRevision)|\(sources.isLoading)|\(sources.sources.map(\.name).joined(separator: ","))") {
+            guard sources.runtime != nil, !sources.isLoading else { return }
+            await library.refreshMissingSources(installed: sources.sources.map(\.name))
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { downloads.setForeground(false) }
             else if phase == .active {
@@ -120,6 +126,8 @@ struct ContentView: View {
             }
         }
         .onOpenURL { url in
+            // ASWebAuthenticationSession owns these callbacks; they must never open the repository importer.
+            guard !TrackingAccountsModel.isAuthorizationCallback(url) else { return }
             // Files shared to the app ("用 Kototoro 打开") become local works; links add repositories.
             guard url.isFileURL else { incomingLink = IncomingRepositoryLink(address: url.absoluteString); return }
             guard let runtime = sources.runtime else { return }
@@ -156,6 +164,17 @@ struct ContentView: View {
             await library.refresh()
             await storage.trimAutomatically()
             await repositories.checkForUpdates(force: false)
+        }
+    }
+}
+
+private struct MainTabPlacement: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 27.0, *) {
+            content.defaultTabBarPlacement(.sidebar)
+        } else {
+            content.defaultAdaptableTabBarPlacement(.sidebar)
         }
     }
 }

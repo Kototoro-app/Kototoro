@@ -6,6 +6,12 @@ import KototoroShared
 
 private struct ManagementResult: Decodable { let managementVersion: Int; let installed: [InstalledExtension] }
 
+struct BatchInstallResult: Identifiable {
+    let id: String
+    let title: String
+    let error: String?
+}
+
 struct BatchUpdateProgress: Equatable {
     let completed: Int
     let total: Int
@@ -27,6 +33,7 @@ final class RepositoriesModel: ObservableObject {
     @Published private(set) var rows: [ExtensionSummary] = []
     @Published private(set) var updatesCount: Int = 0
     @Published private(set) var batchProgress: BatchUpdateProgress?
+    @Published private(set) var batchResults: [BatchInstallResult] = []
     private(set) var repositoryRows: [String: [ExtensionSummary]] = [:]
     private var store: IosRepositories?
     private weak var sources: SourcesModel?
@@ -47,7 +54,8 @@ final class RepositoriesModel: ObservableObject {
                                  version: item.version, versionCode: item.versionCode, languages: item.languages,
                                  sourceNames: item.sourceNames, isAdult: item.isAdult,
                                  repositoryID: key, repositoryTitle: catalog.title,
-                                 iconURL: Self.resourceURL(item.iconUrl, catalog: catalog))
+                                 iconURL: Self.resourceURL(item.iconUrl, catalog: catalog),
+                                 sourceKeys: item.sourceKeys(kind: catalog.kind))
             }
             entries += available
             byRepository[key] = ExtensionIndex.summaries(installed: installed, available: available,
@@ -220,58 +228,63 @@ final class RepositoriesModel: ObservableObject {
     }
 
     func updateAll() async {
-        guard !busy && batchProgress == nil else { return }
-        let updates = rows.filter { $0.state == .update && $0.permitsInstallation }
-        guard !updates.isEmpty else { return }
+        await installBatch(rows.filter { $0.state == .update && $0.permitsInstallation }, operation: "更新")
+    }
+
+    /// One serialized pipeline owns installation, status, cancellation and per-package retry evidence.
+    func installMissing(_ requested: [ExtensionSummary]) async {
+        await installBatch(requested, operation: "安装")
+    }
+
+    private func installBatch(_ requested: [ExtensionSummary], operation: String) async {
+        guard !busy && !isRefreshing && batchProgress == nil else { return }
+        var seen = Set<String>()
+        let pending = requested.filter { $0.permitsInstallation && seen.insert($0.id).inserted }
+        guard !pending.isEmpty else { return }
         guard !NativeSourceTransport.isFixtureRuntime else {
             error = NativeSourceTransport.fixtureInstallationMessage
+            return
+        }
+        guard NativeSourceTransport.isAvailable else {
+            error = "当前构建未包含扩展运行时，无法安装扩展"
             return
         }
         busy = true
         error = nil
         batchCancelled = false
-        var completed = 0
-        var failed = 0
-        var anySucceeded = false
-        batchProgress = BatchUpdateProgress(completed: 0, total: updates.count, currentTitle: updates.first?.title ?? "", failedCount: 0)
-
+        batchResults = []
+        defer { busy = false; activeID = nil; batchProgress = nil }
         await Self.keepingAwake {
-            for (index, row) in updates.enumerated() {
-                if batchCancelled { break }
-                guard let candidate = row.available,
-                      let catalog = catalogs[candidate.repositoryID],
-                      let item = catalog.extensions.first(where: { $0.id == row.packageName }) else {
-                    failed += 1
-                    continue
-                }
-                batchProgress = BatchUpdateProgress(completed: completed, total: updates.count, currentTitle: row.title, failedCount: failed)
-                activeID = InstalledExtension.identity(ecosystem: catalog.kind, package: item.id)
+            for row in pending {
+                if batchCancelled || Task.isCancelled { break }
+                batchProgress = BatchUpdateProgress(completed: batchResults.count, total: pending.count,
+                    currentTitle: row.title, failedCount: batchResults.filter { $0.error != nil }.count)
+                activeID = row.id
                 do {
+                    guard let candidate = row.available, let catalog = catalogs[candidate.repositoryID],
+                          let item = catalog.extensions.first(where: { $0.id == row.packageName }) else {
+                        throw URLError(.resourceUnavailable)
+                    }
                     try await performInstall(item, catalog: catalog)
-                    completed += 1
-                    anySucceeded = true
+                    batchResults.append(BatchInstallResult(id: row.id, title: row.title, error: nil))
                 } catch {
-                    failed += 1
+                    batchResults.append(BatchInstallResult(id: row.id, title: row.title,
+                                                          error: error.localizedDescription))
                 }
             }
         }
-        activeID = nil
-        if anySucceeded {
-            try? await sources?.runtime?.sourcesChanged()
-            await sources?.load()
+        // Re-enumerate even after a partial failure; an installed package alone does not prove source availability.
+        do {
+            try await manage(["managementVersion": 1, "operation": "list"])
+            try await sources?.runtime?.sourcesChanged()
         }
-        busy = false
-        batchProgress = nil
-
-        if batchCancelled {
-            status = "已取消全部更新（已完成 \(completed) 个）"
-        } else if failed > 0 {
-            status = "更新完成：\(completed) 个成功，\(failed) 个失败"
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
-        } else {
-            status = "\(completed) 个扩展已全部更新完成"
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-        }
+        catch { report(error) }
+        await sources?.load()
+        let succeeded = batchResults.filter { $0.error == nil }.count
+        let failed = batchResults.count - succeeded
+        status = "\(batchCancelled || Task.isCancelled ? "已停止" : operation + "完成")：\(succeeded) 个成功，\(failed) 个失败，" +
+            "\(pending.count - batchResults.count) 个未处理"
+        UINotificationFeedbackGenerator().notificationOccurred(failed > 0 ? .warning : .success)
     }
 
     func checkForUpdates(force: Bool = false) async -> Int {

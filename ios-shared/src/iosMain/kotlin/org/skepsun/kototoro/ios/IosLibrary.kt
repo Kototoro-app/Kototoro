@@ -41,6 +41,7 @@ class IosLibrary {
     internal val records by lazy { SourceLibrary(database) { sourceRefs.load()[it] } }
     val tracking by lazy { IosTracking(this) }
     val statistics by lazy { IosStatistics(this) }
+    val recovery by lazy { IosLibraryRecovery(this) }
 
     fun updateSources(sources: List<IosSource>) {
         sourceRefs.store(sources.associate { it.name to SourceRef(it.name, it.locale, it.contentType) })
@@ -55,6 +56,10 @@ class IosLibrary {
             .setDriver(BundledSQLiteDriver())
             .setQueryCoroutineContext(Dispatchers.IO)
             .build()
+    }
+
+    internal constructor(database: MangaDatabase) {
+        this.database = database
     }
 
     val schemaVersion: Int get() = DATABASE_VERSION
@@ -214,14 +219,14 @@ class IosLibrary {
 
     @Throws(Exception::class)
     suspend fun favourites(): List<IosLibraryEntry> {
-        val entries = records.snapshot().entries
+        val entries = records.snapshot(withChapters = false).entries
         val metadata = tracking.selected(entries.map { it.content.id })
         return entries.map { IosLibraryEntry(it, metadata[it.content.id]) }
     }
 
     @Throws(Exception::class)
     suspend fun history(): List<IosLibraryEntry> {
-        val entries = records.snapshot(history = true).entries
+        val entries = records.snapshot(history = true, withChapters = false).entries
         val metadata = tracking.selected(entries.map { it.content.id })
         return entries.map { IosLibraryEntry(it, metadata[it.content.id]) }
     }
@@ -271,7 +276,8 @@ class IosLibrary {
     @Throws(Exception::class)
     suspend fun position(content: IosSourceContent): IosReadingPosition? {
         val history = records.progress(content.value.id) ?: return null
-        val ids = content.value.chapters.orEmpty().map { it.id }
+        val chapters = content.value.chapters ?: storedDetails(content)?.value?.chapters ?: return null
+        val ids = chapters.map { it.id }
         val recovered = recoverHistoryChapterId(false, history.chapterId, history.parentChapterId, history.percent, ids)
         val chapterId = recovered ?: history.chapterId
         if (chapterId !in ids) return null
@@ -303,11 +309,15 @@ class IosLibrary {
     suspend fun removeBookmark(content: IosSourceContent, bookmark: IosBookmark) = records.removeBookmark(content.value, bookmark.value)
 
     @Throws(Exception::class)
-    suspend fun updates(): List<IosUpdate> = database.getTracksDao().findAllIds().toList().mapNotNull { id ->
-        val track = database.getTracksDao().find(id) ?: return@mapNotNull null
-        if (track.newChapters <= 0) return@mapNotNull null
-        records.find(id)?.let { IosUpdate(IosSourceContent(it), track.newChapters, track.lastCheckTime) }
-    }.sortedByDescending { it.checkedAt }
+    suspend fun updates(): List<IosUpdate> = database.useReaderConnection { connection ->
+        connection.deferredTransaction {
+            val tracks = database.getTracksDao().findUpdated()
+            val works = records.findMany(tracks.map { it.mangaId }).associateBy { it.id }
+            tracks.mapNotNull { track ->
+                works[track.mangaId]?.let { IosUpdate(IosSourceContent(it), track.newChapters, track.lastCheckTime) }
+            }
+        }
+    }
 
     @Throws(Exception::class)
     suspend fun checkUpdates(sources: IosSources): IosUpdateReport {

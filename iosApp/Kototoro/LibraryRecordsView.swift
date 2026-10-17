@@ -82,6 +82,8 @@ struct LibraryRecordsView: View {
                     .pickerStyle(.segmented)
                     .padding(.horizontal)
 
+                    if selection == 0 { MissingSourcesNotice(historyOnly: true).padding(.horizontal) }
+
                     if !spacesEnabled && ContentKindPicker.isShown(availableKinds) {
                         ContentKindPicker(selection: $pageKind, available: availableKinds).padding(.horizontal)
                     }

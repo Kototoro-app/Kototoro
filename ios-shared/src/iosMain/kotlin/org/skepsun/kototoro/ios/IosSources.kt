@@ -335,6 +335,7 @@ class IosSourceContent internal constructor(
     val sourceName: String get() = value.source.name
     val contentType: String get() = value.source.contentType
     val mediaKind: String get() = mediaKindOf(value.source.contentType)
+    val isLocal: Boolean get() = LocalSourceRuntime.owns(sourceName)
     val title: String get() = display.title
     val url: String get() = value.url
     val publicUrl: String get() = value.publicUrl
