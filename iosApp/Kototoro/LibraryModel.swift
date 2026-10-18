@@ -5,6 +5,7 @@ import KototoroShared
 @MainActor
 final class LibraryModel: ObservableObject {
     let trackingAccounts = TrackingAccountsModel()
+    let googleDrive = GoogleDriveSyncModel()
     @Published private(set) var categories: [IosCategory] = []
     @Published private(set) var isLoading = true
     @Published private(set) var error: String?
@@ -93,6 +94,16 @@ final class LibraryModel: ObservableObject {
 
     func removeCategory(_ id: Int32) async -> Bool {
         await editCategories { try await $0.removeCategory(id: id) }
+    }
+
+    /// Deletes the category and unfavourites its works everywhere, including their other categories.
+    func removeCategoryWithWorks(_ id: Int32) async -> Bool {
+        await editCategories { try await $0.removeCategoryWithWorks(id: id) }
+    }
+
+    func removeFavourites(_ contents: [IosSourceContent]) async -> Bool {
+        guard !contents.isEmpty else { return true }
+        return await editCategories { try await $0.removeFavourites(contents: contents) }
     }
 
     func saveCategoryLayout(_ ordered: [IosCategory], visible: Set<Int32>) async -> Bool {

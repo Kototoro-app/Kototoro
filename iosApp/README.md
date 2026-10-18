@@ -39,6 +39,9 @@ xcodebuild -project "iosApp/Kototoro.xcodeproj" -scheme "Kototoro" \
 MangaUpdates、SIMKL 的目录和账号入口。作品详情的“追踪与资料”可更换展示资料、关联网站记录、编辑状态／评分／进度；
 账号页可单独启用阅读后自动同步，凭据保存在 Keychain。真实账号写入回读与完整站点能力仍需验收，
 具体范围见[追踪网站增量记录](../docs/architecture/ios-tracking-support-2026-10.md)。
+“设置 → Google Drive 同步”支持与 Android 共用的收藏、分类、进度、统计和更新记录协议；
+启用前需在 Android 同一 Google Cloud 项目中配置 iOS OAuth 客户端。
+配置、同步边界与真实账号验收步骤见 [Google Drive 同步](../docs/architecture/ios-google-drive-sync.md)。
 来源列表长按作品可收藏或进入多选（顶栏换为全选／收藏操作栏）；列表与详情页的收藏都弹出可多选的分类框，
 批量时显示部分选中，只写入改动的分类，取消不写入。作品库在作品区左右滑动切换分组，横滑不会打开作品。
 回归：`-only-testing:KototoroUITests/ProductFlowTests/testBrowseAndDetailsShareMultiCategoryFavouritesAndBulkSelection`（需 CMS fixture）。

@@ -18,6 +18,33 @@ import org.skepsun.kototoro.sync.google.data.model.SyncWorkState
 
 class GoogleDriveSyncMergerTest {
 
+    @Test
+    fun `same millisecond history and favourite deletion wins in either merge order`() {
+        val active = GoogleDriveSyncSnapshot(
+            history = listOf(SyncHistory(1, 10, 100)),
+            favourites = listOf(SyncFavourite(1, 4, updatedAt = 100)),
+        )
+        val deleted = GoogleDriveSyncSnapshot(
+            history = listOf(SyncHistory(1, 10, 100, deletedAt = 100)),
+            favourites = listOf(SyncFavourite(1, 4, updatedAt = 100, deletedAt = 100)),
+        )
+        for ((local, remote) in listOf(active to deleted, deleted to active)) {
+            val result = GoogleDriveSyncMerger.mergeSnapshots(local, remote)
+            assertEquals(100L, result.history.single().deletedAt)
+            assertEquals(100L, result.favourites.single().deletedAt)
+        }
+    }
+
+    @Test
+    fun `category deletion survives stale snapshots in either merge order`() {
+        val active = SyncFavouriteCategory(4, 10, 0, "Shelf", "NEWEST", true, true)
+        val deleted = SyncFavouriteCategory(4, 10, 0, "Shelf", "NEWEST", true, true, deletedAt = 100)
+        val first = GoogleDriveSyncSnapshot(categories = listOf(active))
+        val second = GoogleDriveSyncSnapshot(categories = listOf(deleted))
+        assertEquals(100L, GoogleDriveSyncMerger.mergeSnapshots(first, second).categories.single().deletedAt)
+        assertEquals(100L, GoogleDriveSyncMerger.mergeSnapshots(second, first).categories.single().deletedAt)
+    }
+
 	@Test
 	fun `compact writes the content v3 protocol marker for legacy work snapshots`() {
 		val snapshot = GoogleDriveSyncSnapshot(

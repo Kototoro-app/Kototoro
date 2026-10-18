@@ -62,6 +62,9 @@ struct ContentView: View {
                             .accessibilityIdentifier("settings.downloads")
                         NavigationLink { BackupView() } label: { Label("备份与恢复", systemImage: "externaldrive") }
                             .accessibilityIdentifier("settings.backup")
+                        NavigationLink { GoogleDriveSyncView(model: library.googleDrive) } label: {
+                            Label("Google Drive 同步", systemImage: "arrow.triangle.2.circlepath.icloud")
+                        }.accessibilityIdentifier("settings.googleDrive")
                         NavigationLink { TrackingSitesView() } label: { Label("追踪网站", systemImage: "link") }
                             .accessibilityIdentifier("settings.tracking")
                     }
@@ -114,6 +117,9 @@ struct ContentView: View {
         .environmentObject(downloads)
         .environmentObject(storage)
         .environmentObject(repositories)
+        .task(id: library.library != nil) {
+            await library.googleDrive.sync(library, automatic: true)
+        }
         .task(id: "\(library.recordsRevision)|\(sources.isLoading)|\(sources.catalogRevision)") {
             guard sources.runtime != nil, !sources.isLoading else { return }
             await library.refreshMissingSources(installed: sources.sources.map(\.name))
@@ -123,11 +129,13 @@ struct ContentView: View {
             else if phase == .active {
                 downloads.setForeground(true)
                 Task { await repositories.checkForUpdates(force: false) }
+                Task { await library.googleDrive.sync(library, automatic: true) }
             }
         }
         .onOpenURL { url in
             // ASWebAuthenticationSession owns these callbacks; they must never open the repository importer.
             guard !TrackingAccountsModel.isAuthorizationCallback(url) else { return }
+            guard url.scheme != GoogleDriveOAuth.configured?.scheme else { return }
             // Files shared to the app ("用 Kototoro 打开") become local works; links add repositories.
             guard url.isFileURL else { incomingLink = IncomingRepositoryLink(address: url.absoluteString); return }
             guard let runtime = sources.runtime else { return }

@@ -51,6 +51,7 @@ final class LibraryPersistenceTests: XCTestCase {
         let firstCell = app.cells.containing(.switch, identifier: "category.visibility.\(firstId)").firstMatch
         let secondCell = app.cells.containing(.switch, identifier: "category.visibility.\(secondId)").firstMatch
         XCTAssertTrue(firstCell.exists && secondCell.exists, app.debugDescription)
+        app.buttons["category.reorder"].tap()
         secondCell.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).press(
             forDuration: 0.5, thenDragTo: firstCell.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.1)),
             withVelocity: .slow, thenHoldForDuration: 0.3)

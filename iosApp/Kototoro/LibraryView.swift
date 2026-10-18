@@ -42,6 +42,12 @@ struct LibraryView: View {
     @State private var categoryContent: CategoryContent?
     @State private var managingCategories = false
     @State private var migrating = false
+    /// Batch selection: keys of the works chosen, kept across searches and categories until done.
+    @State private var selecting = false
+    @State private var selected: Set<String> = []
+    @State private var migrationSubset: [IosSourceContent]?
+    @State private var confirmingUnfavourite = false
+    @State private var deletingWithWorks: IosCategory?
     /// Where the next category's works come in from: the trailing edge when moving forward.
     @State private var swipeEdge: Edge = .trailing
     private final class ItemCache {
@@ -96,6 +102,7 @@ struct LibraryView: View {
             }
             // Swiping sideways over the works moves to the previous / next category, like the chips do.
             .gesture(HorizontalSwipeGesture(onEnded: swipe))
+            .safeAreaInset(edge: .bottom) { if selecting { selectionBar } }
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("作品库")
             .navigationBarTitleDisplayMode(.inline)
@@ -104,10 +111,20 @@ struct LibraryView: View {
             .refreshable { await library.refresh() }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        migrating = true
-                    } label: { Label("批量换源", systemImage: "arrow.triangle.swap") }
-                        .accessibilityIdentifier("library.migrate")
+                    if selecting {
+                        Button("完成") { endSelection() }.accessibilityIdentifier("library.selectDone")
+                    } else {
+                        Button {
+                            selecting = true
+                        } label: { Label("选择", systemImage: "checkmark.circle") }
+                            .disabled(items.isEmpty)
+                            .accessibilityIdentifier("library.select")
+                        Button {
+                            migrationSubset = nil
+                            migrating = true
+                        } label: { Label("批量换源", systemImage: "arrow.triangle.swap") }
+                            .accessibilityIdentifier("library.migrate")
+                    }
                     if spacesEnabled { SpaceMenu() }
                     ContentListModeMenu(mode: $mode) {
                         VStack(alignment: .leading, spacing: 6) {
@@ -122,7 +139,7 @@ struct LibraryView: View {
                 }
             }
             .navigationDestination(isPresented: $migrating) {
-                LibraryMigrationView(favourites: kindFavourites.map(\.content))
+                LibraryMigrationView(favourites: migrationSubset ?? kindFavourites.map(\.content))
             }
             .sheet(item: $editor) { CategoryEditorSheet(editor: $0) }
             .sheet(item: $categoryContent) { FavouriteCategoriesView(content: $0.content) }
@@ -135,15 +152,94 @@ struct LibraryView: View {
             .onChange(of: selectedKind) { _, _ in selectedCategory = nil }
             .confirmationDialog("删除分类？", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
                                 titleVisibility: .visible, presenting: deleting) { category in
-                Button("删除“\(category.title)”", role: .destructive) {
+                Button("仅删除分类", role: .destructive) {
                     Task {
                         if await library.removeCategory(category.id), selectedCategory == category.id { selectedCategory = nil }
                     }
                 }
-            } message: { _ in
-                Text("分类中的作品会从这个分类移除；只在此分类中的作品将取消收藏。")
+                Button("删除分类并取消收藏其中作品", role: .destructive) { deletingWithWorks = category }
+            } message: { category in
+                let shared = sharedWorkCount(category.id)
+                Text("仅删除分类：作品从这个分类移除，只在此分类中的作品将取消收藏。"
+                     + (shared > 0 ? "其中 \(shared) 部还在其他分类，会保留。" : ""))
+            }
+            .confirmationDialog("取消收藏分类中的全部作品？",
+                                isPresented: Binding(get: { deletingWithWorks != nil }, set: { if !$0 { deletingWithWorks = nil } }),
+                                titleVisibility: .visible, presenting: deletingWithWorks) { category in
+                Button("删除“\(category.title)”及 \(count(category.id)) 部作品", role: .destructive) {
+                    Task {
+                        if await library.removeCategoryWithWorks(category.id), selectedCategory == category.id { selectedCategory = nil }
+                    }
+                }
+            } message: { category in
+                let shared = sharedWorkCount(category.id)
+                Text("这些作品会从所有分类取消收藏" + (shared > 0 ? "，包括其中 \(shared) 部也在其他分类的作品" : "")
+                     + "。阅读历史不受影响；删除会同步到 Google Drive。")
+            }
+            .confirmationDialog("取消收藏所选作品？", isPresented: $confirmingUnfavourite, titleVisibility: .visible) {
+                Button("取消收藏 \(selected.count) 部作品", role: .destructive) {
+                    let contents = selectedContents
+                    Task { if await library.removeFavourites(contents) { endSelection() } }
+                }
+            } message: {
+                Text("作品会从所有分类移除，阅读历史不受影响；删除会同步到 Google Drive。")
             }
         }
+    }
+
+    // MARK: Batch selection
+
+    private var selectedContents: [IosSourceContent] {
+        kindFavourites.map(\.content).filter { selected.contains(ContentMarks.key($0)) }
+    }
+
+    private func endSelection() {
+        selecting = false
+        selected.removeAll()
+    }
+
+    /// Works in the category that also belong to another one, which a works-deleting removal takes out of those too.
+    private func sharedWorkCount(_ category: Int32) -> Int {
+        (collection.byCategory[category] ?? []).filter { $0.categoryIds.contains { $0.int32Value != category } }.count
+    }
+
+    private var selectionBar: some View {
+        let visibleKeys = Set(items.map { ContentMarks.key($0.content) })
+        let allSelected = !visibleKeys.isEmpty && visibleKeys.isSubset(of: selected)
+        return VStack(spacing: 8) {
+            Text("已选 \(selected.count) 部").font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    Button(allSelected ? "取消全选" : "全选\(selectedCategory == nil ? "" : "本分类")（\(visibleKeys.count)）") {
+                        selected = BatchSelection.toggling(visible: visibleKeys, in: selected)
+                    }
+                    .accessibilityIdentifier("library.selectAll")
+                    Button("换源", systemImage: "arrow.triangle.swap") {
+                        migrationSubset = selectedContents
+                        migrating = true
+                    }
+                    .disabled(selected.isEmpty)
+                    .accessibilityIdentifier("library.selection.migrate")
+                    if let category = selectedCategory {
+                        Button("移出分类", systemImage: "folder.badge.minus") {
+                            let contents = selectedContents
+                            Task {
+                                try? await library.updateCategories(contents, changes: [category: false])
+                                endSelection()
+                            }
+                        }
+                        .disabled(selected.isEmpty)
+                        .accessibilityIdentifier("library.selection.removeFromCategory")
+                    }
+                    Button("取消收藏", systemImage: "heart.slash", role: .destructive) { confirmingUnfavourite = true }
+                        .disabled(selected.isEmpty)
+                        .accessibilityIdentifier("library.selection.unfavourite")
+                }
+                .buttonStyle(.glass)
+                .font(.subheadline)
+            }
+        }
+        .padding(.horizontal).padding(.vertical, 8)
     }
 
     // MARK: Categories
@@ -295,7 +391,11 @@ struct LibraryView: View {
                 }
             } else {
                 ContentCollection(runtime: runtime, items: shown, mode: mode, identifierPrefix: "favourite.",
-                                  marksFavourites: false) { item in
+                                  marksFavourites: false, selectedKeys: selecting ? selected : nil,
+                                  onSelect: { item in
+                                      let key = ContentMarks.key(item.content)
+                                      if !selected.insert(key).inserted { selected.remove(key) }
+                                  }) { item in
                     SourceDetailsView(runtime: runtime, content: item.content)
                 } actions: { item in
                     Button("整理分类", systemImage: "folder") { categoryContent = CategoryContent(content: item.content) }
@@ -317,12 +417,34 @@ private struct CategoryManagementSheet: View {
     @State private var ordered: [IosCategory] = []
     @State private var visible: Set<Int32> = []
     @State private var saving = false
+    @State private var reordering = false
+    @State private var deleting: IosCategory?
+    @State private var deletingWithWorks: IosCategory?
+
+    /// Active favourites of a category in every space; deleting acts on all of them.
+    private func works(in category: Int32) -> [IosLibraryEntry] {
+        library.favourites.filter { $0.categoryIds.contains { $0.int32Value == category } }
+    }
+    private func sharedCount(_ category: Int32) -> Int {
+        works(in: category).filter { $0.categoryIds.contains { $0.int32Value != category } }.count
+    }
+    private func forget(_ category: Int32) {
+        ordered.removeAll { $0.id == category }
+        visible.remove(category)
+    }
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
                     ForEach(ordered, id: \.id) { category in
+                        HStack(spacing: 12) {
+                        Button { deleting = category } label: {
+                            Image(systemName: "minus.circle.fill").foregroundStyle(.red).imageScale(.large)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("删除分类 \(category.title)")
+                        .accessibilityIdentifier("category.delete.\(category.id)")
                         Toggle(isOn: Binding(get: { visible.contains(category.id) }, set: { shown in
                             if shown { visible.insert(category.id) } else { visible.remove(category.id) }
                         })) {
@@ -332,15 +454,27 @@ private struct CategoryManagementSheet: View {
                             }
                         }
                         .accessibilityIdentifier("category.visibility.\(category.id)")
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button("删除", systemImage: "trash", role: .destructive) { deleting = category }
+                        }
                     }
                     .onMove { ordered.move(fromOffsets: $0, toOffset: $1) }
+                } header: {
+                    HStack {
+                        Text("分类")
+                        Spacer()
+                        Button(reordering ? "完成排序" : "调整顺序") { withAnimation { reordering.toggle() } }
+                            .font(.subheadline).textCase(nil)
+                            .accessibilityIdentifier("category.reorder")
+                    }
                 } footer: {
-                    Text("拖动右侧手柄调整分类顺序。隐藏的分类仍可在整理分类中使用，作品仍出现在“全部”中。")
+                    Text("点左侧红色按钮或左滑分类可删除；点“调整顺序”后拖动右侧手柄排序。隐藏的分类仍可在整理分类中使用，作品仍出现在“全部”中。")
                 }
                 if ordered.isEmpty { Text("还没有分类，请先添加分类。").foregroundStyle(.secondary) }
                 if let error = library.error { Text(error).foregroundStyle(.red) }
             }
-            .environment(\.editMode, .constant(.active))
+            .environment(\.editMode, .constant(reordering ? .active : .inactive))
             .disabled(saving)
             .navigationTitle("管理分类")
             .navigationBarTitleDisplayMode(.inline)
@@ -367,6 +501,29 @@ private struct CategoryManagementSheet: View {
                 visible = Set(ordered.filter(\.isVisibleInLibrary).map(\.id))
             }
             .interactiveDismissDisabled(saving)
+            .confirmationDialog("删除分类？", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                                titleVisibility: .visible, presenting: deleting) { category in
+                Button("仅删除分类", role: .destructive) {
+                    Task { if await library.removeCategory(category.id) { forget(category.id) } }
+                }
+                Button("删除分类并取消收藏其中作品", role: .destructive) { deletingWithWorks = category }
+            } message: { category in
+                let shared = sharedCount(category.id)
+                Text("仅删除分类：作品从这个分类移除，只在此分类中的作品将取消收藏。"
+                     + (shared > 0 ? "其中 \(shared) 部还在其他分类，会保留。" : "")
+                     + "删除会立即生效，不受“取消”影响。")
+            }
+            .confirmationDialog("取消收藏分类中的全部作品？",
+                                isPresented: Binding(get: { deletingWithWorks != nil }, set: { if !$0 { deletingWithWorks = nil } }),
+                                titleVisibility: .visible, presenting: deletingWithWorks) { category in
+                Button("删除“\(category.title)”及 \(works(in: category.id).count) 部作品", role: .destructive) {
+                    Task { if await library.removeCategoryWithWorks(category.id) { forget(category.id) } }
+                }
+            } message: { category in
+                let shared = sharedCount(category.id)
+                Text("这些作品会从所有分类取消收藏" + (shared > 0 ? "，包括其中 \(shared) 部也在其他分类的作品" : "")
+                     + "。阅读历史不受影响；删除会同步到 Google Drive。")
+            }
         }
     }
 }

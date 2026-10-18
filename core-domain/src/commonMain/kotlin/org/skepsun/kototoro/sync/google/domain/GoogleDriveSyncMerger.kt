@@ -96,7 +96,7 @@ object GoogleDriveSyncMerger {
             .groupBy { it.id }
             .values
             .map { items ->
-                items.maxByOrNull { it.createdAt } ?: items.first()
+                items.maxWithOrNull(compareBy({ it.deletedAt }, { it.createdAt })) ?: items.first()
             }
             .sortedBy { it.id }
 
@@ -106,7 +106,7 @@ object GoogleDriveSyncMerger {
             .groupBy { it.mangaId }
             .values
             .map { items ->
-                items.maxByOrNull { it.updatedAt } ?: items.first()
+                items.maxWithOrNull(compareBy({ it.updatedAt }, { it.deletedAt })) ?: items.first()
             }
             .sortedByDescending { it.updatedAt }
 
@@ -116,7 +116,7 @@ object GoogleDriveSyncMerger {
             .groupBy { it.mangaId to it.categoryId }
             .values
             .map { items ->
-                items.maxByOrNull { it.updatedAt } ?: items.first()
+                items.maxWithOrNull(compareBy({ it.updatedAt }, { it.deletedAt })) ?: items.first()
             }
             .sortedByDescending { it.updatedAt }
 

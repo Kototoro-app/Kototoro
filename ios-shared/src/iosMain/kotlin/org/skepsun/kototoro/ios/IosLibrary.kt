@@ -42,6 +42,7 @@ class IosLibrary {
     val tracking by lazy { IosTracking(this) }
     val statistics by lazy { IosStatistics(this) }
     val recovery by lazy { IosLibraryRecovery(this) }
+    val googleDriveSync by lazy { IosGoogleDriveSync(this) }
 
     fun updateSources(sources: List<IosSource>) {
         sourceRefs.store(sources.associate { it.name to SourceRef(it.name, it.locale, it.contentType) })
@@ -128,6 +129,23 @@ class IosLibrary {
         database.useWriterConnection { connection ->
             connection.immediateTransaction {
                 database.getFavouritesDao().deleteAll(id.toLong())
+                database.getFavouriteCategoriesDao().delete(id.toLong())
+                database.getChaptersDao().gc()
+            }
+        }
+    }
+
+    /**
+     * Removes the category and unfavourites every work in it, including from their other categories. All rows are
+     * tombstoned with fresh timestamps, so the deletion reaches Google Drive and other devices.
+     */
+    @Throws(Exception::class)
+    suspend fun removeCategoryWithWorks(id: Int) {
+        database.useWriterConnection { connection ->
+            connection.immediateTransaction {
+                val favourites = database.getFavouritesDao()
+                favourites.findActiveMangaIds(id.toLong()).forEach { favourites.delete(it) }
+                favourites.deleteAll(id.toLong())
                 database.getFavouriteCategoriesDao().delete(id.toLong())
                 database.getChaptersDao().gc()
             }
@@ -237,6 +255,16 @@ class IosLibrary {
     @Throws(Exception::class)
     suspend fun setFavourite(content: IosSourceContent, favourite: Boolean) {
         if (favourite) records.addFavourite(content.value) else records.removeFavourite(content.value.id)
+    }
+
+    /** Unfavourites the works from every category in one transaction. */
+    @Throws(Exception::class)
+    suspend fun removeFavourites(contents: List<IosSourceContent>) {
+        database.useWriterConnection { connection ->
+            connection.immediateTransaction {
+                contents.forEach { database.getFavouritesDao().delete(it.value.id) }
+            }
+        }
     }
 
     @Throws(Exception::class)

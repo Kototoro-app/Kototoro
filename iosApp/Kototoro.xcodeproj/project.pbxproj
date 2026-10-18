@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BE0000000000000000000001 /* GoogleDriveAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0000000000000000000011 /* GoogleDriveAuth.swift */; };
+		BE0000000000000000000002 /* GoogleDriveSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0000000000000000000012 /* GoogleDriveSync.swift */; };
+		BE0000000000000000000003 /* GoogleDriveSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0000000000000000000013 /* GoogleDriveSyncTests.swift */; };
+		BE0000000000000000000004 /* GoogleDriveAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0000000000000000000011 /* GoogleDriveAuth.swift */; };
 		BD0000000000000000000001 /* BookmarkImageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0000000000000000000005 /* BookmarkImageStore.swift */; };
 		BD0000000000000000000002 /* BookmarkImageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0000000000000000000005 /* BookmarkImageStore.swift */; };
 		BD0000000000000000000003 /* BookmarkPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0000000000000000000006 /* BookmarkPreview.swift */; };
@@ -109,6 +113,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		BE0000000000000000000011 /* GoogleDriveAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveAuth.swift; sourceTree = "<group>"; };
+		BE0000000000000000000012 /* GoogleDriveSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveSync.swift; sourceTree = "<group>"; };
+		BE0000000000000000000013 /* GoogleDriveSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveSyncTests.swift; sourceTree = "<group>"; };
 		BD0000000000000000000005 /* BookmarkImageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkImageStore.swift; sourceTree = "<group>"; };
 		BD0000000000000000000006 /* BookmarkPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkPreview.swift; sourceTree = "<group>"; };
 		BD0000000000000000000007 /* BookmarkImageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkImageStoreTests.swift; sourceTree = "<group>"; };
@@ -223,6 +230,8 @@
 		A00000000000000000000021 /* Kototoro */ = {
 			isa = PBXGroup;
 			children = (
+				BE0000000000000000000011 /* GoogleDriveAuth.swift */,
+				BE0000000000000000000012 /* GoogleDriveSync.swift */,
 				BD0000000000000000000005 /* BookmarkImageStore.swift */,
 				BD0000000000000000000006 /* BookmarkPreview.swift */,
 				FF0000000000000000000001 /* ReaderStorage.swift */,
@@ -284,6 +293,7 @@
 		A00000000000000000000022 /* KototoroUITests */ = {
 			isa = PBXGroup;
 			children = (
+				BE0000000000000000000013 /* GoogleDriveSyncTests.swift */,
 				BD0000000000000000000007 /* BookmarkImageStoreTests.swift */,
 				FF0000000000000000000003 /* ReaderStorageTests.swift */,
 				F50000000000000000000004 /* RepositoryManagementTests.swift */,
@@ -453,6 +463,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BE0000000000000000000001 /* GoogleDriveAuth.swift in Sources */,
+				BE0000000000000000000002 /* GoogleDriveSync.swift in Sources */,
 				BD0000000000000000000001 /* BookmarkImageStore.swift in Sources */,
 				BD0000000000000000000003 /* BookmarkPreview.swift in Sources */,
 				FE0000000000000000000001 /* ReaderStorage.swift in Sources */,
@@ -514,6 +526,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BE0000000000000000000003 /* GoogleDriveSyncTests.swift in Sources */,
+				BE0000000000000000000004 /* GoogleDriveAuth.swift in Sources */,
 				BD0000000000000000000002 /* BookmarkImageStore.swift in Sources */,
 				BD0000000000000000000004 /* BookmarkImageStoreTests.swift in Sources */,
 				FE0000000000000000000002 /* ReaderStorage.swift in Sources */,
@@ -617,6 +631,8 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				KOTOTORO_GOOGLE_CLIENT_ID = "937269114137-hokgnkluseamu8r7o618c0kj7pcsakrj.apps.googleusercontent.com";
+				KOTOTORO_GOOGLE_REVERSED_CLIENT_ID = "com.googleusercontent.apps.937269114137-hokgnkluseamu8r7o618c0kj7pcsakrj";
 				KOTOTORO_JVM = 0;
 				MARKETING_VERSION = 0.1.0;
 				ONLY_ACTIVE_ARCH = YES;
@@ -670,6 +686,8 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				KOTOTORO_GOOGLE_CLIENT_ID = "937269114137-hokgnkluseamu8r7o618c0kj7pcsakrj.apps.googleusercontent.com";
+				KOTOTORO_GOOGLE_REVERSED_CLIENT_ID = "com.googleusercontent.apps.937269114137-hokgnkluseamu8r7o618c0kj7pcsakrj";
 				KOTOTORO_JVM = 0;
 				MARKETING_VERSION = 0.1.0;
 				ONLY_ACTIVE_ARCH = NO;

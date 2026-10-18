@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>GIDClientID</key>
+	<string>$(KOTOTORO_GOOGLE_CLIENT_ID)</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDocumentTypes</key>
@@ -47,6 +49,14 @@
 	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>org.skepsun.kototoro.google-drive</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(KOTOTORO_GOOGLE_REVERSED_CLIENT_ID)</string>
+			</array>
+		</dict>
 		<dict>
 			<key>CFBundleURLName</key>
 			<string>org.skepsun.kototoro.repository</string>
