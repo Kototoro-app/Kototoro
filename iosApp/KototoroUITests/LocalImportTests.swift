@@ -9,7 +9,7 @@ final class LocalImportTests: XCTestCase {
     @MainActor
     func testReadingStatisticsPersistAndAppearInHistoryAndTheCenteredTimeline() throws {
         importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
-        let read = app.buttons["details.dock.read"]
+        let read = app.detailsReadButton()
         XCTAssertTrue(read.waitForExistence(timeout: 20), app.debugDescription)
         read.tap()
         XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30), app.debugDescription)
@@ -39,16 +39,48 @@ final class LocalImportTests: XCTestCase {
         let event = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
             "timeline.read-", "fixture_comic")).firstMatch
         XCTAssertTrue(event.waitForExistence(timeout: 10), app.debugDescription)
+        let coverLoaded = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            self.fixturePagePixelFraction(event) > 0.025
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [coverLoaded], timeout: 10), .completed,
+                       "The timeline must display the fixture's red cover, not just the event text")
         attach("日期居中双列时间轴")
         event.tap()
         XCTAssertTrue(app.staticTexts["阅读时长"].waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertTrue(app.buttons["打开作品"].exists)
     }
 
+    /// The comic fixture has a red cover/page 1 and a blue page 2; inspect pixels rather than placeholder presence.
+    @MainActor
+    private func fixturePagePixelFraction(_ event: XCUIElement, blue: Bool = false) -> Double {
+        guard let image = event.screenshot().image.cgImage else { return 0 }
+        let width = 120
+        let height = max(1, image.height * width / image.width)
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = pixels.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(data: bytes.baseAddress, width: width, height: height,
+                                          bitsPerComponent: 8, bytesPerRow: width * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                                            | CGBitmapInfo.byteOrder32Big.rawValue) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return 0 }
+        var coverPixels = 0
+        for index in stride(from: 0, to: pixels.count, by: 4) {
+            let red = Int(pixels[index]), green = Int(pixels[index + 1])
+            let dominant = blue ? Int(pixels[index + 2]) : red
+            let other = blue ? red : Int(pixels[index + 2])
+            if dominant > 120 && green < 110 && other < 110 && dominant - green > 60 { coverPixels += 1 }
+        }
+        return Double(coverPixels) / Double(width * height)
+    }
+
     @MainActor
     func testNovelReadingCollectsStatistics() throws {
         importFile(source: "LOCAL_NOVEL", file: "fixture_novel", reuse: true)
-        let read = app.buttons["details.dock.read"]
+        let read = app.detailsReadButton()
         XCTAssertTrue(read.waitForExistence(timeout: 20), app.debugDescription)
         read.tap()
         XCTAssertTrue(app.staticTexts["novel.firstParagraph"].waitForExistence(timeout: 30))
@@ -61,7 +93,7 @@ final class LocalImportTests: XCTestCase {
     @MainActor
     func testVideoPlaybackCollectsStatistics() throws {
         importFile(source: "LOCAL_VIDEO", file: "fixture_video", reuse: true)
-        let read = app.buttons["details.dock.read"]
+        let read = app.detailsReadButton()
         XCTAssertTrue(read.waitForExistence(timeout: 20), app.debugDescription)
         read.tap()
         let playing = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in self.playedSeconds >= 6 }, object: nil)
@@ -102,228 +134,242 @@ final class LocalImportTests: XCTestCase {
         app.launch()
     }
 
-    /// A collapsed panel stays in the accessibility tree but is moved below the screen.
     @MainActor
-    private func panelIsClosed(_ handle: XCUIElement) -> Bool {
-        let deadline = Date().addingTimeInterval(5)
-        while Date() < deadline {
-            if !handle.exists || handle.frame.minY >= app.frame.maxY - 2 { return true }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-        }
-        return false
-    }
-
-    @MainActor
-    private func waitForPanelToHover(_ handle: XCUIElement, expandedY: CGFloat) {
-        // Native pan callbacks can finish before SwiftUI's spring settles in the accessibility tree.
-        let hovered = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            handle.exists && handle.label == "展开面板" && handle.frame.minY > expandedY + 150
-        }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [hovered], timeout: 5), .completed, "列表到顶后下拉必须回到半展开")
-    }
-
-    @MainActor
-    func testDetailsDockContinuouslyRevealsPanelAndStaysAboveIt() throws {
-        importFile(source: "LOCAL", file: "fixture_reader_chapters", reuse: true)
-        let chapters = app.buttons["details.dock.chapters"]
-        XCTAssertTrue(chapters.waitForExistence(timeout: 15), app.debugDescription)
-        let read = app.buttons["details.dock.read"]
-        XCTAssertTrue(read.waitForExistence(timeout: 15))
-        let readingButton = read.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        readingButton.press(forDuration: 0.05,
-                            thenDragTo: readingButton.withOffset(CGVector(dx: 0, dy: 28)),
-                            withVelocity: .slow, thenHoldForDuration: 0.5)
-        XCTAssertTrue(read.isHittable, "阅读按钮向下拖拽松手后必须停留在详情页")
-        XCTAssertFalse(app.scrollViews["reader.canvas"].exists)
-        let closedY = chapters.frame.midY
-        let start = read.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -300)),
-                    withVelocity: .slow, thenHoldForDuration: 0.5)
-        let handle = app.buttons["details.panel.handle"]
-        XCTAssertTrue(handle.waitForExistence(timeout: 5))
-        XCTAssertTrue(chapters.isHittable)
-        XCTAssertLessThan(chapters.frame.midY, closedY - 200)
-        XCTAssertLessThan(chapters.frame.maxY, handle.frame.minY)
-        attach("拖拽半展开：dock 位于面板上方")
-
-        app.buttons["details.dock.bookmarks"].tap()
-        XCTAssertTrue(app.buttons["details.dock.bookmarks"].isSelected)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "书签 (")).firstMatch.isHittable)
-        XCTAssertTrue(chapters.isHittable)
-        app.buttons["details.dock.thumbnails"].tap()
-        XCTAssertTrue(handle.exists)
-        chapters.tap()
-
-        let lifted = chapters.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        lifted.press(forDuration: 0.05, thenDragTo: lifted.withOffset(CGVector(dx: 0, dy: -250)),
-                     withVelocity: .slow, thenHoldForDuration: 0.5)
-        XCTAssertTrue(handle.waitForExistence(timeout: 5))
-        XCTAssertTrue(chapters.isHittable, "最大展开时 dock 仍应显示并可拖拽")
-        XCTAssertLessThan(chapters.frame.maxY, handle.frame.minY)
-        XCTAssertFalse(app.buttons["完成"].exists, "dock 已提供收起入口，面板不应重复显示完成按钮")
-        XCTAssertFalse(app.segmentedControls.buttons["章节"].exists, "面板不应重复显示 dock 的标签切换器")
-        attach("最大展开时仍保留 dock")
-
-        let maximizedHandleY = handle.frame.minY
-        let top = read.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        top.press(forDuration: 0.05, thenDragTo: top.withOffset(CGVector(dx: 0, dy: 250)),
-                  withVelocity: .slow, thenHoldForDuration: 0.5)
-        XCTAssertTrue(chapters.isHittable)
-        XCTAssertLessThan(chapters.frame.maxY, handle.frame.minY)
-        XCTAssertGreaterThan(handle.frame.minY, maximizedHandleY + 150, "最大展开时从 dock 下拖应回到半屏")
-        let hovered = read.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        hovered.press(forDuration: 0.05, thenDragTo: hovered.withOffset(CGVector(dx: 0, dy: 350)),
-                      withVelocity: .slow, thenHoldForDuration: 0.5)
-        XCTAssertTrue(panelIsClosed(handle), "面板应收起")
-        XCTAssertFalse(app.scrollViews["reader.canvas"].exists, "半展开状态下拖阅读按钮也不能触发阅读")
-        XCTAssertEqual(chapters.frame.midY, closedY, accuracy: 2)
-        chapters.tap()
-        XCTAssertTrue(handle.waitForExistence(timeout: 5) && !panelIsClosed(handle), "收起后点击仍可打开")
-        chapters.tap()
-        XCTAssertTrue(panelIsClosed(handle))
-        read.tap()
-        XCTAssertTrue(app.scrollViews["reader.canvas"].waitForExistence(timeout: 15), "普通点击仍应打开阅读器")
-        app.buttons["reader.back"].tap()
-        XCTAssertTrue(read.waitForExistence(timeout: 10))
-    }
-
-    @MainActor
-    func testDraggingChapterPanelDoesNotOpenReader() throws {
-        importFile(source: "LOCAL", file: "fixture_reader_chapters", reuse: true)
-        app.buttons["details.dock.chapters"].tap()
-        let handle = app.buttons["details.panel.handle"]
-        XCTAssertTrue(handle.waitForExistence(timeout: 5))
-        let chapter = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter.")).firstMatch
-        XCTAssertTrue(chapter.waitForExistence(timeout: 5))
-        let hoveredY = handle.frame.minY
-
-        // The row travels with the finger, so releasing a panel drag must cancel its button action.
-        for distance: CGFloat in [-60, 60, -250] {
-            let start = chapter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: distance)),
-                        withVelocity: .slow, thenHoldForDuration: 0.2)
-            XCTAssertFalse(app.scrollViews["reader.canvas"].waitForExistence(timeout: 1),
-                           "拖拽章节面板松手不能打开阅读器（位移 \(distance)）")
-            XCTAssertTrue(handle.isHittable, "拖拽后必须停留在详情章节面板")
-        }
-        XCTAssertLessThan(handle.frame.minY, hoveredY - 150, "从章节行上拖仍应展开面板")
-        attach("章节面板拖拽不触发阅读")
-        chapter.tap()
-        XCTAssertTrue(app.scrollViews["reader.canvas"].waitForExistence(timeout: 15), "普通点击章节仍应打开阅读器")
-        app.buttons["reader.back"].tap()
-    }
-
-    @MainActor
-    func testExpandedChapterListPullCollapsesPanelWithoutRefreshingOrReading() throws {
-        importFile(source: "LOCAL", file: "fixture_reader_chapters", reuse: true)
-        app.buttons["details.dock.chapters"].tap()
-        let handle = app.buttons["details.panel.handle"]
-        XCTAssertTrue(handle.waitForExistence(timeout: 5))
-        handle.tap()
-        let chapter = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter.")).firstMatch
-        XCTAssertTrue(chapter.waitForExistence(timeout: 5))
-        let expandedY = handle.frame.minY
-        let start = chapter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 260)),
-                    withVelocity: .slow, thenHoldForDuration: 0.2)
-        waitForPanelToHover(handle, expandedY: expandedY)
-        XCTAssertFalse(app.scrollViews["reader.canvas"].exists, "下拉不能触发章节阅读")
-        attach("全展开章节列表到顶下拉收起")
-        chapter.tap()
-        XCTAssertTrue(app.scrollViews["reader.canvas"].waitForExistence(timeout: 15))
-        app.buttons["reader.back"].tap()
-    }
-
-    @MainActor
-    func testDetailsPanelPagesSwipeWithoutMovingPanelOrOpeningReader() throws {
-        importFile(source: "LOCAL", file: "fixture_reader_chapters", reuse: true)
-        app.buttons["details.dock.chapters"].tap()
-        let handle = app.buttons["details.panel.handle"]
-        XCTAssertTrue(handle.waitForExistence(timeout: 5))
-        let panelY = handle.frame.minY
-        for (title, identifier) in [("缩略图", "details.dock.thumbnails"), ("书签", "details.dock.bookmarks")] {
-            let start = app.coordinate(withNormalizedOffset: .zero)
-                .withOffset(CGVector(dx: app.frame.width * 0.8, dy: handle.frame.maxY + 170))
-            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: -260, dy: 0)),
-                        withVelocity: .slow, thenHoldForDuration: 0.2)
-            let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"),
-                                                     object: app.buttons[identifier])
-            XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 5), .completed, "左右滑动必须切换到\(title)")
-            XCTAssertEqual(handle.frame.minY, panelY, accuracy: 2, "横向切页不能移动章节面板")
-            XCTAssertFalse(app.scrollViews["reader.canvas"].exists, "横向切页不能触发章节阅读")
-        }
-        XCTAssertTrue(app.buttons["details.dock.bookmarks"].isSelected)
-        attach("半展开章节面板横向分页")
-        app.buttons["details.dock.chapters"].tap()
-        let chapter = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter.")).firstMatch
-        XCTAssertTrue(chapter.waitForExistence(timeout: 5))
-        chapter.tap()
-        XCTAssertTrue(app.scrollViews["reader.canvas"].waitForExistence(timeout: 15))
-        app.buttons["reader.back"].tap()
-    }
-
-    @MainActor
-    func testLongChapterListHandsOffOnlyAfterReachingTop() throws {
-        importFile(source: "LOCAL", file: "fixture_reader_directory", reuse: true)
-        app.buttons["details.dock.chapters"].tap()
-        let handle = app.buttons["details.panel.handle"]
-        XCTAssertTrue(handle.waitForExistence(timeout: 5))
-        handle.tap()
+    func testDetailsShowsChapterPreviewAndPushesTheFullDirectory() throws {
+        importFile(source: "LOCAL", file: "fixture_details_layout", reuse: true)
+        let headerRead = app.buttons["details.header.read"]
+        XCTAssertTrue(headerRead.waitForExistence(timeout: 20))
+        XCTAssertTrue(headerRead.isHittable)
+        XCTAssertFalse(app.buttons["details.read"].isHittable)
+        XCTAssertFalse(app.buttons["details.readOptions"].exists)
+        XCTAssertFalse(app.staticTexts["佚名"].exists)
+        XCTAssertFalse(app.staticTexts["状态未知"].exists)
+        let chapter = revealChapter(in: app, timeout: 30)
+        XCTAssertTrue(chapter.isHittable, app.debugDescription)
+        XCTAssertLessThanOrEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter.")).count, 5)
+        XCTAssertFalse(app.buttons["details.panel.handle"].exists)
+        XCTAssertFalse(app.buttons["details.dock.thumbnails"].exists)
+        attach("详情页内章节预览")
+        app.buttons["details.summary.toggle"].tap()
+        let scroll = app.collectionViews.firstMatch
+        for _ in 0..<6 where headerRead.isHittable { scroll.swipeUp(velocity: .slow) }
+        let toolbarRead = app.buttons["details.read"]
+        XCTAssertTrue(toolbarRead.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(toolbarRead.isHittable)
+        XCTAssertFalse(headerRead.isHittable)
+        attach("头部移出后的系统阅读工具栏")
+        app.openDetailsChapters()
+        XCTAssertTrue(app.navigationBars["全部章节"].waitForExistence(timeout: 10))
         let list = app.descendants(matching: .any)["details.chapters.list"].firstMatch
         XCTAssertTrue(list.waitForExistence(timeout: 5))
-
-        func drag(_ distance: CGFloat) {
-            // Start near the relevant edge so the full gesture stays on screen, including a 480-point pull.
-            let y = distance > 0 ? list.frame.minY + 28 : min(list.frame.maxY, app.frame.maxY - 60) - 20
-            XCTAssertGreaterThanOrEqual(y + distance, app.frame.minY)
-            XCTAssertLessThanOrEqual(y + distance, app.frame.maxY)
-            let start = app.coordinate(withNormalizedOffset: .zero)
-                .withOffset(CGVector(dx: list.frame.midX, dy: y))
-            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: distance)),
-                        withVelocity: .slow, thenHoldForDuration: 0.2)
-        }
-        let firstChapter = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter."))
-            .firstMatch
-        let firstID = firstChapter.identifier
-        let expandedY = handle.frame.minY
-        drag(-280)
-        XCTAssertEqual(handle.frame.minY, expandedY, accuracy: 2, "上滑应滚动章节，不能移动面板")
-        XCTAssertFalse(app.buttons[firstID].isHittable, "长列表必须实际滚动")
-        drag(100)
-        XCTAssertEqual(handle.frame.minY, expandedY, accuracy: 2, "列表未到顶时下拉仍应滚动章节")
-        drag(480)
-        waitForPanelToHover(handle, expandedY: expandedY)
+        list.swipeUp()
+        XCTAssertTrue(app.navigationBars["全部章节"].exists)
         XCTAssertFalse(app.scrollViews["reader.canvas"].exists)
-        XCTAssertTrue(app.buttons["details.chapters.refresh"].isHittable, "刷新应保留明确入口")
-        attach("长章节列表滚动到顶接力收起")
-        app.buttons["details.chapters.refresh"].tap()
-        XCTAssertTrue(handle.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["details.dock.chapters"].isHittable)
+        attach("完整章节页与原生导航")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        for _ in 0..<8 where !headerRead.isHittable { scroll.swipeDown(velocity: .slow) }
+        XCTAssertTrue(headerRead.isHittable)
+        let toolbarHidden = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            !toolbarRead.isHittable
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [toolbarHidden], timeout: 5), .completed)
+        attach("返回头部后隐藏重复阅读入口")
+    }
+
+    @MainActor
+    func testChapterPagePreviewOpensAnExactPageAndReturnsToTheDirectory() throws {
+        importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
+        app.openDetailsChapters()
+        XCTAssertTrue(app.navigationBars["全部章节"].waitForExistence(timeout: 10))
+        let preview = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "details.chapter.preview.")).firstMatch
+        XCTAssertTrue(preview.waitForExistence(timeout: 10), app.debugDescription)
+        preview.tap()
+        XCTAssertTrue(app.navigationBars["页面预览"].waitForExistence(timeout: 10))
+        let page = app.buttons["details.pages.page.1"]
+        XCTAssertTrue(page.waitForExistence(timeout: 15), app.debugDescription)
+        attach("章节内页面预览")
+        page.tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 20))
+        XCTAssertEqual(app.staticTexts["reader.currentPage"].value as? String, "2")
+        app.buttons["reader.back"].tap()
+        XCTAssertTrue(app.navigationBars["页面预览"].waitForExistence(timeout: 10))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.navigationBars["全部章节"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testFullChapterDirectorySearchAndScrollingDoNotOpenReader() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_directory", reuse: true)
+        app.openDetailsChapters()
+        XCTAssertTrue(app.navigationBars["全部章节"].waitForExistence(timeout: 10))
+        let list = app.descendants(matching: .any)["details.chapters.list"].firstMatch
+        XCTAssertTrue(list.waitForExistence(timeout: 5))
+        let first = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter.")).firstMatch
+        let firstID = first.identifier
+        list.swipeUp()
+        XCTAssertFalse(app.buttons[firstID].isHittable)
+        list.swipeDown()
+        list.swipeDown()
+        XCTAssertTrue(app.navigationBars["全部章节"].exists)
+        XCTAssertFalse(app.scrollViews["reader.canvas"].exists)
+        let field = app.pageSearchField()
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("not-a-chapter")
+        XCTAssertTrue(app.staticTexts["没有匹配的章节"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter.")).count, 0)
+        attach("系统章节搜索空结果")
+    }
+
+    @MainActor
+    func testDetailsBookmarkRestoresPageInsteadOfTheLatestReadingPosition() throws {
+        importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
+        app.detailsReadButton().tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 20))
+        selectReaderMode("默认（从左到右）")
+        app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0)
+        waitForPage("1")
+        let bookmark = app.buttons["reader.bookmark"]
+        if bookmark.value as? String == "已添加" { bookmark.tap() }
+        bookmark.tap()
+        let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "已添加"), object: bookmark)
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 10), .completed)
+        app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 1)
+        waitForPage("2")
+        app.buttons["reader.back"].tap()
+        XCTAssertTrue(app.buttons["details.readOptions"].waitForExistence(timeout: 10))
+        attach("详情页继续阅读按钮")
+        let all = app.buttons["details.bookmarks.all"]
+        for _ in 0..<5 where !all.isHittable { app.collectionViews.firstMatch.swipeUp() }
+        XCTAssertTrue(all.waitForExistence(timeout: 10), app.debugDescription)
+        all.tap()
+        XCTAssertTrue(app.navigationBars["书签"].waitForExistence(timeout: 10))
+        let savedPage = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                         "details.bookmark.", "第 1 页")).firstMatch
+        XCTAssertTrue(savedPage.waitForExistence(timeout: 10))
+        savedPage.tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 20))
+        waitForPage("1")
+        app.buttons["reader.back"].tap()
+        XCTAssertTrue(app.navigationBars["书签"].waitForExistence(timeout: 10))
+        attach("书签精确恢复页面")
+    }
+
+    @MainActor
+    func testMangaBookmarkShowsItsPagePreviewAfterRestart() throws {
+        importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
+        app.detailsReadButton().tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 20))
+        selectReaderMode("默认（从左到右）")
+        app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 1)
+        waitForPage("2")
+        let bookmark = app.buttons["reader.bookmark"]
+        if bookmark.value as? String == "已添加" { bookmark.tap() }
+        bookmark.tap()
+        let added = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "已添加"), object: bookmark)
+        XCTAssertEqual(XCTWaiter.wait(for: [added], timeout: 15), .completed)
+        app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0)
+        waitForPage("1")
+        app.buttons["reader.back"].tap()
+        app.terminate(); app.launch()
+        importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
+        let preview = app.scrollViews["details.bookmarks.preview"]
+        for _ in 0..<5 where !preview.isHittable { app.collectionViews.firstMatch.swipeUp() }
+        XCTAssertTrue(preview.isHittable, app.debugDescription)
+        app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        preview.swipeLeft()
+        let saved = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                     "details.bookmark.", "第 2 页")).firstMatch
+        XCTAssertTrue(saved.waitForExistence(timeout: 10))
+        let inlineImage = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            self.fixturePagePixelFraction(saved, blue: true) > 0.025
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [inlineImage], timeout: 15), .completed,
+                       "The bookmark must show blue page 2, not the red work cover or current page")
+        attach("漫画书签页面预览卡片")
+        app.buttons["details.bookmarks.all"].tap()
+        XCTAssertTrue(app.navigationBars["书签"].waitForExistence(timeout: 10))
+        let listedImage = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            self.fixturePagePixelFraction(saved, blue: true) > 0.025
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [listedImage], timeout: 15), .completed)
+        attach("漫画全部书签页面缩略图")
+        saved.tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 20))
+        waitForPage("2")
+    }
+
+    @MainActor
+    func testDetailsNovelBookmarkRestoresTheSavedParagraph() throws {
+        openNovelControls(mode: "SCROLL")
+        app.sliders["novel.progress"].adjust(toNormalizedSliderPosition: 0.3)
+        let savedPercent = Int((app.sliders["novel.progress"].value as? String ?? "")
+            .replacingOccurrences(of: "%", with: "")) ?? -1
+        XCTAssertGreaterThan(savedPercent, 0)
+        app.buttons["novel.more"].tap()
+        app.segmentedControls.buttons["快捷"].tap()
+        let bookmark = app.buttons["novel.bookmark"]
+        if bookmark.label == "取消书签" { bookmark.tap() }
+        bookmark.tap()
+        XCTAssertTrue(app.buttons["novel.bookmark"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["novel.bookmark"].label, "取消书签")
+        app.buttons["novel.panel.close"].tap()
+        app.sliders["novel.progress"].adjust(toNormalizedSliderPosition: 0.8)
+        app.buttons["novel.back"].tap()
+        let all = app.buttons["details.bookmarks.all"]
+        for _ in 0..<6 where !all.isHittable { app.collectionViews.firstMatch.swipeUp() }
+        XCTAssertTrue(all.waitForExistence(timeout: 10), app.debugDescription)
+        all.tap()
+        XCTAssertTrue(app.navigationBars["书签"].waitForExistence(timeout: 10), app.debugDescription)
+        let saved = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "details.bookmark.")).firstMatch
+        XCTAssertTrue(saved.waitForExistence(timeout: 10))
+        let excerpt = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "bookmark.excerpt.")).firstMatch
+        XCTAssertTrue(excerpt.waitForExistence(timeout: 10))
+        XCTAssertTrue(excerpt.label.contains("晨光落在书页上"), excerpt.label)
+        attach("小说书签内容预览")
+        saved.tap()
+        let restored = app.sliders["novel.progress"]
+        XCTAssertTrue(restored.waitForExistence(timeout: 20))
+        let atBookmark = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let percent = Int((restored.value as? String ?? "").replacingOccurrences(of: "%", with: "")) ?? -1
+            return abs(percent - savedPercent) <= 3
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [atBookmark], timeout: 10), .completed,
+                       "Restored progress: \(restored.value ?? "nil")")
+        attach("详情小说书签恢复段落")
     }
 
     @MainActor
     func testDetailsChapterSelectionDownloadsWithoutOpeningReader() throws {
         importFile(source: "LOCAL", file: "fixture_reader_chapters", reuse: true)
-        app.buttons["details.dock.chapters"].tap()
+        app.openDetailsChapters()
         let select = app.buttons["details.chapters.select"]
-        XCTAssertTrue(select.waitForExistence(timeout: 5), "章节面板必须提供多选入口")
+        XCTAssertTrue(select.waitForExistence(timeout: 5), "完整章节页必须提供多选入口")
         select.tap()
-        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter."))
-        XCTAssertEqual(rows.count, 2)
+        let rows = app.cells.containing(NSPredicate(format: "identifier BEGINSWITH %@", "chapter."))
+        XCTAssertEqual(rows.count, 2, app.debugDescription)
         rows.element(boundBy: 0).tap()
         rows.element(boundBy: 1).tap()
         XCTAssertTrue(app.buttons["details.chapters.downloadSelected"].label.contains("2"))
         XCTAssertFalse(app.images["reader.image"].exists)
-        app.buttons["details.chapters.selectAll"].tap()
+        let selectAll = app.buttons["details.chapters.selectAll"]
+        XCTAssertFalse(app.buttons["continueReading"].exists, "全局继续阅读条不能覆盖目录工具栏")
+        XCTAssertTrue(selectAll.isHittable, app.debugDescription)
+        selectAll.tap()
         XCTAssertFalse(app.buttons["details.chapters.downloadSelected"].isEnabled)
         app.buttons["details.chapters.selectAll"].tap()
         rows.element(boundBy: 1).tap()
         XCTAssertTrue(app.buttons["details.chapters.downloadSelected"].label.contains("1"))
         app.buttons["details.chapters.downloadSelected"].tap()
         XCTAssertTrue(select.waitForExistence(timeout: 5))
+        app.buttons["details.chapters.options"].tap()
         app.buttons["details.chapters.downloads"].tap()
-        let first = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "fixture_reader_chapters")).firstMatch
-        XCTAssertTrue(first.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["downloads.close"].waitForExistence(timeout: 10), app.debugDescription)
+        let first = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "download.entry.", "fixture_reader_chapters"
+        )).firstMatch
+        for _ in 0..<8 where !first.exists { app.collectionViews.firstMatch.swipeUp() }
+        XCTAssertTrue(first.waitForExistence(timeout: 10), app.debugDescription)
         attach("详情章节选择及下载队列")
     }
 
@@ -386,7 +432,7 @@ final class LocalImportTests: XCTestCase {
         entry.tap()
         waitForReaderChapter("02")
         app.buttons["reader.back"].tap()
-        XCTAssertTrue(app.buttons["details.resume"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 15))
         app.terminate()
     }
 
@@ -394,8 +440,8 @@ final class LocalImportTests: XCTestCase {
     @MainActor
     func testPagedCrossChapterHistoryReopensWithTheMatchingImage() throws {
         importFile(source: "LOCAL", file: "fixture_reader_chapters", reuse: true)
-        XCTAssertTrue(app.buttons["details.resume"].waitForExistence(timeout: 15))
-        app.buttons["details.resume"].tap()
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 15))
+        app.detailsReadButton().tap()
         waitForReaderChapter("02")
         XCTAssertEqual(app.staticTexts["reader.currentPage"].value as? String, "1")
         attach("跨章重启续读的实际图片和章内页码")
@@ -928,13 +974,11 @@ final class LocalImportTests: XCTestCase {
 
     @MainActor
     private func assertMetadataChapterIsAvailable() {
-        let chapters = app.buttons["章节"].firstMatch
-        XCTAssertTrue(chapters.waitForExistence(timeout: 10))
-        chapters.tap()
-        let chapter = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter.")).firstMatch
-        XCTAssertTrue(chapter.waitForExistence(timeout: 10), app.debugDescription)
-        app.buttons["details.dock.chapters"].tap()
-        XCTAssertTrue(chapter.waitForNonExistence(timeout: 10))
+        app.openDetailsChapters()
+        XCTAssertTrue(app.navigationBars["全部章节"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter.")).firstMatch.exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 10))
     }
 
     @MainActor
@@ -948,7 +992,7 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["本章已下载，可离线阅读"].waitForExistence(timeout: 30), app.debugDescription)
         app.buttons["reader.panel.close"].tap()
         app.buttons["reader.back"].tap()
-        XCTAssertTrue(app.buttons["details.resume"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 10))
         app.terminate()
     }
 
@@ -990,7 +1034,7 @@ final class LocalImportTests: XCTestCase {
         attach("清理缓存后离线章节保留")
         app.terminate(); app.launch()
         importFile(source: "LOCAL", file: "fixture_storage_comic", reuse: true)
-        app.buttons["details.resume"].tap()
+        app.detailsReadButton().tap()
         XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30))
         app.buttons["reader.more"].tap()
         XCTAssertTrue(app.staticTexts["本章已下载，可离线阅读"].waitForExistence(timeout: 10))
@@ -1008,8 +1052,8 @@ final class LocalImportTests: XCTestCase {
         attach("删除离线章节后存储列表更新")
         app.terminate(); app.launch()
         importFile(source: "LOCAL", file: "fixture_storage_comic", reuse: true)
-        XCTAssertTrue(app.buttons["details.resume"].waitForExistence(timeout: 20))
-        app.buttons["details.resume"].tap()
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 20))
+        app.detailsReadButton().tap()
         XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30))
         app.buttons["reader.more"].tap()
         XCTAssertFalse(app.staticTexts["本章已下载，可离线阅读"].exists)
@@ -1168,7 +1212,7 @@ final class LocalImportTests: XCTestCase {
         Thread.sleep(forTimeInterval: 1)
         app.terminate(); app.launch()
         importFile(source: "LOCAL", file: "fixture_reader_long", reuse: true)
-        let resume = app.buttons["details.resume"]
+        let resume = app.detailsReadButton()
         XCTAssertTrue(resume.waitForExistence(timeout: 30), app.debugDescription)
         resume.tap()
         XCTAssertTrue(canvas.waitForExistence(timeout: 30), app.debugDescription)
@@ -1368,7 +1412,7 @@ final class LocalImportTests: XCTestCase {
         app.buttons["reader.more"].tap()
         app.segmentedControls.buttons["布局"].tap()
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "阅读模式")).firstMatch.tap()
-        app.buttons[mode].tap()
+        app.buttons[mode == "默认（从左到右）" ? "从左到右" : mode].tap()
         app.buttons["reader.panel.close"].tap()
     }
 
@@ -1546,11 +1590,11 @@ final class LocalImportTests: XCTestCase {
         attach("本地视频实际播放进度")
         showVideoControls()
         app.buttons["player.close"].tap()
-        XCTAssertTrue(app.buttons["details.resume"].waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 15), app.debugDescription)
         app.terminate(); app.launch()
         // Import again through the picker, proving that duplicate imports keep the original work/history identity.
         importFile(source: "LOCAL_VIDEO", file: "fixture_video")
-        let resume = app.buttons["details.resume"]
+        let resume = app.detailsReadButton()
         XCTAssertTrue(resume.waitForExistence(timeout: 15), app.debugDescription)
         resume.tap()
         let restored = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
@@ -1613,7 +1657,7 @@ final class LocalImportTests: XCTestCase {
         let fileLabel = NSRegularExpression.escapedPattern(for: file)
             + #"(?:\.[^ ,，、\n]+)?(?:[ ,，、\n][\s\S]*)?"#
         let item = app.descendants(matching: .any).matching(NSPredicate(
-            format: "identifier BEGINSWITH %@ AND label MATCHES %@", "source.content.", fileLabel)).firstMatch
+            format: "identifier BEGINSWITH %@ AND label MATCHES %@", "source.content.", "(?:已下载、)?" + fileLabel)).firstMatch
         // Reader regressions may reuse their immutable fixtures; import tests still exercise the picker every run.
         if reuse && item.waitForExistence(timeout: 3) { item.tap(); return }
         let add = app.buttons["browse.importLocal"]

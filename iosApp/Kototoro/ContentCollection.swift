@@ -374,7 +374,6 @@ private struct ContentRow: View {
                 ContentStatusLine(item: item).padding(.top, 1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if let badge = item.badge { BadgeView(text: badge) }
         }
     }
 
@@ -505,7 +504,7 @@ private struct ContentStatusLine: View {
             item.marks.favourite ? "已收藏" : nil,
             item.marks.downloaded ? "已下载" : nil,
         ].compactMap { $0 }
-        // An explicit badge (the updates list) already shows the count beside the row.
+        // An explicit badge (the updates list) already shows the count on the cover.
         let newChapters = item.badge == nil ? item.marks.newChapters : 0
         if newChapters > 0 || !parts.isEmpty || item.marks.adult {
             HStack(spacing: 6) {

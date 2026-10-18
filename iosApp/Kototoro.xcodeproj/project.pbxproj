@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BD0000000000000000000001 /* BookmarkImageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0000000000000000000005 /* BookmarkImageStore.swift */; };
+		BD0000000000000000000002 /* BookmarkImageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0000000000000000000005 /* BookmarkImageStore.swift */; };
+		BD0000000000000000000003 /* BookmarkPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0000000000000000000006 /* BookmarkPreview.swift */; };
+		BD0000000000000000000004 /* BookmarkImageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0000000000000000000007 /* BookmarkImageStoreTests.swift */; };
+		AD0000000000000000000006 /* DetailsChaptersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000007 /* DetailsChaptersView.swift */; };
 		B21000000000000000000001 /* LibraryCollectionIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = B21000000000000000000011 /* LibraryCollectionIndex.swift */; };
 		B21000000000000000000002 /* LibraryCollectionIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = B21000000000000000000011 /* LibraryCollectionIndex.swift */; };
 		B21000000000000000000003 /* LibraryCollectionIndexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B21000000000000000000012 /* LibraryCollectionIndexTests.swift */; };
@@ -88,9 +93,9 @@
 		FA0000000000000000000007 /* SourceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000007 /* SourceSettingsView.swift */; };
 		FA0000000000000000000008 /* SourceWebBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000008 /* SourceWebBrowser.swift */; };
 		FA0000000000000000000099 /* UITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000099 /* UITestSupport.swift */; };
-		AD0000000000000000000001 /* DetailsDockPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000004 /* DetailsDockPane.swift */; };
-		AD0000000000000000000002 /* DetailsDockPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000004 /* DetailsDockPane.swift */; };
-		AD0000000000000000000003 /* DetailsDockPaneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000005 /* DetailsDockPaneTests.swift */; };
+		AD0000000000000000000001 /* DetailsChapterPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000004 /* DetailsChapterPreview.swift */; };
+		AD0000000000000000000002 /* DetailsChapterPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000004 /* DetailsChapterPreview.swift */; };
+		AD0000000000000000000003 /* DetailsChapterPreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000005 /* DetailsChapterPreviewTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -104,6 +109,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		BD0000000000000000000005 /* BookmarkImageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkImageStore.swift; sourceTree = "<group>"; };
+		BD0000000000000000000006 /* BookmarkPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkPreview.swift; sourceTree = "<group>"; };
+		BD0000000000000000000007 /* BookmarkImageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkImageStoreTests.swift; sourceTree = "<group>"; };
+		AD0000000000000000000007 /* DetailsChaptersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailsChaptersView.swift; sourceTree = "<group>"; };
 		B21000000000000000000011 /* LibraryCollectionIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryCollectionIndex.swift; sourceTree = "<group>"; };
 		B21000000000000000000012 /* LibraryCollectionIndexTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryCollectionIndexTests.swift; sourceTree = "<group>"; };
         AD7100000000000000000004 /* TrackingSitesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingSitesTests.swift; sourceTree = "<group>"; };
@@ -178,8 +187,8 @@
 		FB0000000000000000000007 /* SourceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceSettingsView.swift; sourceTree = "<group>"; };
 		FB0000000000000000000008 /* SourceWebBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceWebBrowser.swift; sourceTree = "<group>"; };
 		FB0000000000000000000099 /* UITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestSupport.swift; sourceTree = "<group>"; };
-		AD0000000000000000000004 /* DetailsDockPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailsDockPane.swift; sourceTree = "<group>"; };
-		AD0000000000000000000005 /* DetailsDockPaneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailsDockPaneTests.swift; sourceTree = "<group>"; };
+		AD0000000000000000000004 /* DetailsChapterPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailsChapterPreview.swift; sourceTree = "<group>"; };
+		AD0000000000000000000005 /* DetailsChapterPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailsChapterPreviewTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -214,6 +223,8 @@
 		A00000000000000000000021 /* Kototoro */ = {
 			isa = PBXGroup;
 			children = (
+				BD0000000000000000000005 /* BookmarkImageStore.swift */,
+				BD0000000000000000000006 /* BookmarkPreview.swift */,
 				FF0000000000000000000001 /* ReaderStorage.swift */,
 				FF0000000000000000000002 /* ReaderStorageView.swift */,
 				F70000000000000000000001 /* Assets.xcassets */,
@@ -252,7 +263,8 @@
 				F80000000000000000000023 /* ExtensionWebKit.swift */,
 				B00000000000000000000013 /* SourcesView.swift */,
 				C00000000000000000000011 /* SourceDetailsView.swift */,
-				AD0000000000000000000004 /* DetailsDockPane.swift */,
+				AD0000000000000000000004 /* DetailsChapterPreview.swift */,
+				AD0000000000000000000007 /* DetailsChaptersView.swift */,
 				AB0000000000000000000002 /* SourceChangeView.swift */,
 				AF0000000000000000000012 /* MissingSourcesView.swift */,
 				B10000000000000000000001 /* BatchSelection.swift */,
@@ -272,12 +284,13 @@
 		A00000000000000000000022 /* KototoroUITests */ = {
 			isa = PBXGroup;
 			children = (
+				BD0000000000000000000007 /* BookmarkImageStoreTests.swift */,
 				FF0000000000000000000003 /* ReaderStorageTests.swift */,
 				F50000000000000000000004 /* RepositoryManagementTests.swift */,
 				F80000000000000000000004 /* BackupFlowTests.swift */,
 				F80000000000000000000021 /* LocalImportTests.swift */,
                 AD7100000000000000000004 /* TrackingSitesTests.swift */,
-				AD0000000000000000000005 /* DetailsDockPaneTests.swift */,
+				AD0000000000000000000005 /* DetailsChapterPreviewTests.swift */,
 				B10000000000000000000004 /* BatchSelectionTests.swift */,
 				B21000000000000000000012 /* LibraryCollectionIndexTests.swift */,
 				F50000000000000000000003 /* ExtensionPresentationTests.swift */,
@@ -440,6 +453,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BD0000000000000000000001 /* BookmarkImageStore.swift in Sources */,
+				BD0000000000000000000003 /* BookmarkPreview.swift in Sources */,
 				FE0000000000000000000001 /* ReaderStorage.swift in Sources */,
 				FE0000000000000000000003 /* ReaderStorageView.swift in Sources */,
 				F40000000000000000000001 /* RepositoriesModel.swift in Sources */,
@@ -479,7 +494,8 @@
 				F80000000000000000000022 /* ExtensionWebKit.swift in Sources */,
 				B00000000000000000000003 /* SourcesView.swift in Sources */,
 				C00000000000000000000001 /* SourceDetailsView.swift in Sources */,
-				AD0000000000000000000001 /* DetailsDockPane.swift in Sources */,
+				AD0000000000000000000001 /* DetailsChapterPreview.swift in Sources */,
+				AD0000000000000000000006 /* DetailsChaptersView.swift in Sources */,
 				AB0000000000000000000001 /* SourceChangeView.swift in Sources */,
 				AF0000000000000000000002 /* MissingSourcesView.swift in Sources */,
 				B10000000000000000000002 /* BatchSelection.swift in Sources */,
@@ -498,14 +514,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BD0000000000000000000002 /* BookmarkImageStore.swift in Sources */,
+				BD0000000000000000000004 /* BookmarkImageStoreTests.swift in Sources */,
 				FE0000000000000000000002 /* ReaderStorage.swift in Sources */,
 				FE0000000000000000000004 /* ReaderStorageTests.swift in Sources */,
 				F40000000000000000000005 /* RepositoryManagementTests.swift in Sources */,
 				F80000000000000000000003 /* BackupFlowTests.swift in Sources */,
 				F80000000000000000000020 /* LocalImportTests.swift in Sources */,
                 AD7100000000000000000003 /* TrackingSitesTests.swift in Sources */,
-				AD0000000000000000000002 /* DetailsDockPane.swift in Sources */,
-				AD0000000000000000000003 /* DetailsDockPaneTests.swift in Sources */,
+				AD0000000000000000000002 /* DetailsChapterPreview.swift in Sources */,
+				AD0000000000000000000003 /* DetailsChapterPreviewTests.swift in Sources */,
 				F40000000000000000000003 /* ExtensionPresentation.swift in Sources */,
 				B10000000000000000000003 /* BatchSelection.swift in Sources */,
 				B21000000000000000000002 /* LibraryCollectionIndex.swift in Sources */,

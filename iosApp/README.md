@@ -42,13 +42,26 @@ MangaUpdates、SIMKL 的目录和账号入口。作品详情的“追踪与资�
 来源列表长按作品可收藏或进入多选（顶栏换为全选／收藏操作栏）；列表与详情页的收藏都弹出可多选的分类框，
 批量时显示部分选中，只写入改动的分类，取消不写入。作品库在作品区左右滑动切换分组，横滑不会打开作品。
 回归：`-only-testing:KototoroUITests/ProductFlowTests/testBrowseAndDetailsShareMultiCategoryFavouritesAndBulkSelection`（需 CMS fixture）。
-详情章节面板半展开时拖动面板，完全展开时先滚动列表；列表回到顶部后，同一次下拉的剩余位移接力收起面板。
-面板顶部只保留拖拽手柄；章节／缩略图／书签由 dock 切换，再次点击 dock 当前项收起面板。
-下拉不刷新章节，使用章节操作栏的“刷新章节”按钮；详情主列表仍保留下拉刷新。
-章节／缩略图／书签通过固定视口横向分页，避免面板拖动时分页控制器重算安全区导致列表跳动。
-回归：`DetailsDockPaneTests`、`LocalImportTests/testExpandedChapterListPullCollapsesPanelWithoutRefreshingOrReading`
-和 `LocalImportTests/testLongChapterListHandsOffOnlyAfterReachingTop`，需先暂存 picker 夹具；
-`LocalImportTests/testDetailsPanelPagesSwipeWithoutMovingPanelOrOpeningReader` 覆盖半屏横向切页与点击阅读。
+详情页头部显示开始／继续阅读按钮；头部阅读区滚出可视范围后，系统底部工具栏才显示章节与阅读入口，
+滚回头部即隐藏。显隐使用 SwiftUI 的 `onScrollVisibilityChange`，不依赖固定滚动距离。
+有续读章节时才显示“从第一章／集开始”的菜单；资料卡隐藏缺失作者与状态的占位，保留有效资料、章节数及进度。
+资料、简介、章节预览和书签卡片使用系统 `regularMaterial`，正文不叠加 Liquid Glass。
+阅读、复制及收藏等操作使用原生玻璃按钮，同组控件置于 `GlassEffectContainer`；
+内容卡片在降低透明度时切换为不透明系统背景，边界随增强对比度设置调整。
+章节直接展示在详情正文中：漫画／小说显示当前章附近最多 5 条，视频显示最多 8 集；完整目录推入独立页面。
+完整章节页使用系统搜索和列表多选，排序／分支／线路／刷新／下载队列集中在菜单，多选下载使用底部工具栏。
+漫画章节行提供明确的页面预览按钮与长按入口，推入单章页面网格；返回保留目录状态。
+书签有内容时显示横向预览，全部书签使用独立页面；漫画恢复保存的页码与页内位置，小说按文本定位保存的段落。
+漫画书签保存独立的页面缩略图，重启与清理阅读缓存后仍可预览；旧书签通过原来源页上下文或离线文件补建图片，
+不直接请求保存的图片 URL。小说书签显示正文摘录，沿用共享文本规范解析 Android 备份中的 HTML／Base64 内容。
+详情预览、全部书签和阅读器内书签复用同一展示组件；移除漫画书签时清理对应快照，不改变共享数据库结构。
+详情主列表保留下拉刷新，目录列表的拖动只负责滚动；已移除自定义 dock 与章节面板手势联动。
+回归：`DetailsChapterPreviewTests` 与 `LocalImportTests` 的 `testDetailsShowsChapterPreviewAndPushesTheFullDirectory`、
+`testChapterPagePreviewOpensAnExactPageAndReturnsToTheDirectory`、`testFullChapterDirectorySearchAndScrollingDoNotOpenReader`、
+`testDetailsChapterSelectionDownloadsWithoutOpeningReader`、`testDetailsBookmarkRestoresPageInsteadOfTheLatestReadingPosition`、
+`testDetailsNovelBookmarkRestoresTheSavedParagraph`；
+UI 回归需先暂存 picker 夹具。
+`fixture_details_layout.cbz` 的长简介用于验证阅读入口随滚动切换、返回目录后的恢复，以及未知资料不占位。
 默认构建不包含第三方 JVM/兼容 JAR；下面的开发预览支持扩展仓库、安装、搜索与分页、漫画／小说阅读。
 数据库位于应用沙盒 `Library/Application Support/Kototoro/library.db`，不在缓存或临时目录。
 不使用破坏性 schema 回退；导入旧版本 SQLite 文件的迁移不属于当前切片。

@@ -72,6 +72,24 @@ enum ReaderDownloads {
         try await loadedPage(runtime: runtime, content: content, chapter: chapter, page: page,
                              index: index, cropMargins: cropMargins).image
     }
+
+    /// Thumbnails use the same page context and offline files without decoding a full reader bitmap.
+    static func thumbnailImage(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter,
+                               page: IosSourcePage, index: Int) async throws -> UIImage {
+        try await withReaderStorage {
+            let dir = try directory(content: content, chapter: chapter)
+            if let manifest = try? await ReaderDownloadStore.shared.read(in: dir), manifest.images.indices.contains(index) {
+                let record = manifest.images[index]
+                do {
+                    return try await ReaderImageArtifact.thumbnailImage(directory: dir, relativePath: record.path,
+                                                                        sha256: record.hash, byteSize: record.bytes)
+                } catch {
+                    try Task.checkCancellation()
+                }
+            }
+            return try await runtime.image(page: page).thumbnailImage()
+        }
+    }
     @MainActor
     static func download(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter,
                          progress: ReaderDownloadQueue.Progress = { _, _ in }) async throws {

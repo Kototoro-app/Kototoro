@@ -74,13 +74,18 @@ final class NovelReaderModel: ObservableObject {
     /// The paged reader's position within a line; the scrolling reader saves line starts.
     private var pagedScroll: Float?
     private var openAtEnd = false
+    private var initialBookmark: IosBookmark?
+    private var initialIndex: Int?
     private var pageCache: (indent: Bool, spacing: Int, bookStyles: Bool, revision: Int, pages: IosNovelPages)?
     private var lineStyleCache: [Int: (runs: [NovelRun], layout: NovelLineLayout?)] = [:]
 
-    init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter) {
+    init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter,
+         initialBookmark: IosBookmark? = nil, initialIndex: Int? = nil) {
         self.runtime = runtime
         self.content = content
         self.chapter = chapter
+        self.initialBookmark = initialBookmark
+        self.initialIndex = initialIndex
     }
 
     var previous: IosSourceChapter? { content.adjacentChapter(chapter: chapter, forward: false) }
@@ -121,7 +126,14 @@ final class NovelReaderModel: ObservableObject {
             lineStyleCache.removeAll(keepingCapacity: true)
             blocks = document.map(NovelBlock.blocks(from:)) ?? []
             var scroll: Float = 0
-            if let library, let position = try await library.position(content: content), position.chapterId == selected.id {
+            if let bookmark = initialBookmark, bookmark.chapterId == selected.id {
+                resumeIndex = min(max(0, Int(document?.bookmarkIndex(bookmark: bookmark, content: content)
+                    ?? bookmark.index)), max(0, blocks.count - 1))
+                self.initialBookmark = nil
+            } else if let initialIndex {
+                resumeIndex = min(max(0, initialIndex), max(0, blocks.count - 1))
+                self.initialIndex = nil
+            } else if let library, let position = try await library.position(content: content), position.chapterId == selected.id {
                 // The stored chapter progress also places positions saved by Android; the line index is the fallback.
                 resumeIndex = Int(document?.index(scroll: position.scroll, index: position.index) ?? 0)
                 scroll = position.scroll
@@ -241,7 +253,7 @@ final class NovelReaderModel: ObservableObject {
         let preview: String
         switch blocks[visibleIndex] {
         case .text(let value): preview = value
-        case .image(let url): preview = url.lastPathComponent.isEmpty ? chapter.title : url.lastPathComponent
+        case .image: preview = ""
         }
         do {
             try await library.toggleNovelBookmark(content: content, chapter: chapter,
@@ -318,9 +330,12 @@ struct NovelReaderView: View {
     @State private var moreTab = 0
     @State private var scrubPosition: Double?
     @State private var isScrubbing = false
+    @State private var scrollParagraph: Int?
 
-    init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter) {
-        _model = StateObject(wrappedValue: NovelReaderModel(runtime: runtime, content: content, chapter: chapter))
+    init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter,
+         initialBookmark: IosBookmark? = nil, initialIndex: Int? = nil) {
+        _model = StateObject(wrappedValue: NovelReaderModel(runtime: runtime, content: content, chapter: chapter,
+                                                          initialBookmark: initialBookmark, initialIndex: initialIndex))
     }
 
     private var style: NovelStyle {
@@ -560,59 +575,58 @@ struct NovelReaderView: View {
     }
 
     private func scrollReader(_ style: NovelStyle) -> some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: style.paragraphGap) {
-                    Text(model.chapter.title)
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(style.colors.text)
-                        .padding(.bottom, model.isOffline ? 0 : 8)
-                        .id("top")
-                    if model.isOffline {
-                        Label("已下载 · 离线阅读", systemImage: "arrow.down.circle.fill")
-                            .font(.caption).foregroundStyle(style.colors.secondaryText)
-                            .padding(.bottom, 8)
-                            .accessibilityIdentifier("novel.offline")
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: style.paragraphGap) {
+                Text(model.chapter.title)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(style.colors.text)
+                    .padding(.bottom, model.isOffline ? 0 : 8)
+                    .id(-1)
+                if model.isOffline {
+                    Label("已下载 · 离线阅读", systemImage: "arrow.down.circle.fill")
+                        .font(.caption).foregroundStyle(style.colors.secondaryText)
+                        .padding(.bottom, 8)
+                        .accessibilityIdentifier("novel.offline")
+                }
+                if model.isLoading { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
+                if let error = model.error {
+                    Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+                        .accessibilityIdentifier("novel.error")
+                    if let challenge = model.challenge {
+                        ChallengeVerifyButton(challenge: challenge, runtime: model.runtime,
+                                              sourceName: model.content.sourceName) { await model.load() }
                     }
-                    if model.isLoading { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
-                    if let error = model.error {
-                        Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
-                            .accessibilityIdentifier("novel.error")
-                        if let challenge = model.challenge {
-                            ChallengeVerifyButton(challenge: challenge, runtime: model.runtime,
-                                                  sourceName: model.content.sourceName) { await model.load() }
-                        }
-                        Button("重试") { Task { await model.load() } }.buttonStyle(.glass)
+                    Button("重试") { Task { await model.load() } }.buttonStyle(.glass)
+                }
+                if !model.isLoading && model.error == nil && model.blocks.isEmpty {
+                    ContentUnavailableView("本章没有正文", systemImage: "text.page.slash")
+                }
+                ForEach(model.blocks.indices, id: \.self) { index in
+                    let block = model.blocks[index]
+                    Group {
+                    switch block {
+                    case .text(let text):
+                        scrollLine(text, index: index, style: style)
+                            .accessibilityIdentifier(index == 0 ? "novel.firstParagraph" : "novel.paragraph")
+                    case .image(let url):
+                        HeaderImage(url: model.localImages[url.absoluteString] ?? url,
+                                    headers: model.text?.headers(imageUrl: url.absoluteString) ?? [:])
+                            .frame(maxWidth: .infinity)
                     }
-                    if !model.isLoading && model.error == nil && model.blocks.isEmpty {
-                        ContentUnavailableView("本章没有正文", systemImage: "text.page.slash")
                     }
-                    ForEach(model.blocks.indices, id: \.self) { index in
-                        let block = model.blocks[index]
-                        Group {
-                        switch block {
-                        case .text(let text):
-                            scrollLine(text, index: index, style: style)
-                                .accessibilityIdentifier(index == 0 ? "novel.firstParagraph" : "novel.paragraph")
-                        case .image(let url):
-                            HeaderImage(url: model.localImages[url.absoluteString] ?? url,
-                                        headers: model.text?.headers(imageUrl: url.absoluteString) ?? [:])
-                                .frame(maxWidth: .infinity)
-                        }
-                        }
-                        .id(index)
-                        .onScrollVisibilityChange(threshold: 0.5) { visible in
-                            model.visible(index, isVisible: visible)
-                        }
+                    .id(index)
+                    .onScrollVisibilityChange(threshold: 0.5) { visible in
+                        model.visible(index, isVisible: visible)
                     }
                 }
-                .padding(.horizontal, style.marginHorizontal)
-                .padding(.vertical, style.marginVertical)
             }
-            .onChange(of: model.target) { _, target in
-                if target.block == 0 && !target.atEnd { proxy.scrollTo("top", anchor: .top) }
-                else { proxy.scrollTo(target.block, anchor: .top) }
-            }
+            .padding(.horizontal, style.marginHorizontal)
+            .padding(.vertical, style.marginVertical)
+            .scrollTargetLayout()
+        }
+        .scrollPosition(id: $scrollParagraph, anchor: .top)
+        .onChange(of: model.target, initial: true) { _, target in
+            scrollParagraph = target.block == 0 && !target.atEnd ? -1 : target.block
         }
     }
 
@@ -706,12 +720,8 @@ struct NovelReaderView: View {
                                     await model.jump(to: model.index(of: bookmark))
                                 }
                             } label: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(model.content.chapters.first { $0.id == bookmark.chapterId }?.title ?? "章节")
-                                        .font(.subheadline.weight(.medium))
-                                    Text("第 \(bookmark.index + 1) 段 · \(bookmark.preview)")
-                                        .font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                                }
+                                BookmarkPreviewLabel(runtime: model.runtime, content: model.content, bookmark: bookmark,
+                                                     chapter: model.content.chapters.first { $0.id == bookmark.chapterId })
                             }
                             .swipeActions {
                                 Button("删除", role: .destructive) { Task { await model.removeBookmark(bookmark) } }

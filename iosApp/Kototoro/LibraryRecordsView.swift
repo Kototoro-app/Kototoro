@@ -434,16 +434,25 @@ private struct RecordsTimeline: View {
 
     private func eventRow(_ event: IosTimelineEvent, alignment: HorizontalAlignment, showsKind: Bool) -> some View {
         Button { selected = SelectedEvent(event: event) } label: {
-            VStack(alignment: alignment, spacing: 4) {
-                Text(event.content.title).font(.subheadline.weight(.medium)).lineLimit(2)
-                    .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
-                if showsKind { Text(event.isUpdate ? "发现更新" : "阅读").font(.caption).foregroundStyle(.secondary) }
-                Text(event.isUpdate ? "新增 \(event.count) 章节" : event.detail)
-                    .font(.caption).foregroundStyle(event.isUpdate ? Color.orange : .secondary).lineLimit(1)
-                HStack(spacing: 4) {
-                    Text(ReadingStatsFormat.date(event.timestamp), format: .dateTime.hour().minute())
-                    if event.duration > 0 { Text("· " + ReadingStatsFormat.duration(event.duration)) }
-                }.font(.caption2).foregroundStyle(.secondary)
+            let cover = CoverImage(runtime: runtime, content: event.content)
+                .frame(width: 32, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .accessibilityHidden(true)
+            HStack(alignment: .top, spacing: 8) {
+                if alignment == .leading { cover }
+                VStack(alignment: alignment, spacing: 4) {
+                    Text(event.content.title).font(.subheadline.weight(.medium)).lineLimit(2)
+                        .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
+                    if showsKind { Text(event.isUpdate ? "发现更新" : "阅读").font(.caption).foregroundStyle(.secondary) }
+                    Text(event.isUpdate ? "新增 \(event.count) 章节" : event.detail)
+                        .font(.caption).foregroundStyle(event.isUpdate ? Color.orange : .secondary).lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text(ReadingStatsFormat.date(event.timestamp), format: .dateTime.hour().minute())
+                        if event.duration > 0 { Text("· " + ReadingStatsFormat.duration(event.duration)) }
+                    }.font(.caption2).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
+                if alignment == .trailing { cover }
             }
             .frame(maxWidth: .infinity, minHeight: 56, alignment: alignment == .leading ? .leading : .trailing)
             .padding(.vertical, 3).contentShape(Rectangle())

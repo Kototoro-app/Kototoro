@@ -2,6 +2,8 @@ package org.skepsun.kototoro.ios
 
 import org.skepsun.kototoro.core.library.SourceBookmark
 import org.skepsun.kototoro.core.library.SourceLibraryEntry
+import org.skepsun.kototoro.bookmarks.domain.normalizeNovelBookmarkPreview
+import org.skepsun.kototoro.reader.novel.novelHtmlToText
 
 class IosLibraryEntry internal constructor(
     value: SourceLibraryEntry,
@@ -24,6 +26,9 @@ class IosBookmark internal constructor(internal val value: SourceBookmark) {
     val index: Int get() = value.page
     val scroll: Int get() = value.scroll
     val preview: String get() = value.preview
+    val createdAt: Long get() = value.createdAt
+    val percent: Float get() = value.percent
+    val textPreview: String = normalizeNovelBookmarkPreview(value.preview) { novelHtmlToText(it, keepImages = false) }
 }
 
 data class IosUpdate(val content: IosSourceContent, val newChapters: Int, val checkedAt: Long)

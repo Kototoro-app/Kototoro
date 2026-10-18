@@ -126,7 +126,20 @@ private struct ReaderPresenceModifier: ViewModifier {
     }
 }
 
+private struct DetailsPresenceModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .onAppear { ReaderPresence.shared.detailAppear() }
+            .onDisappear { ReaderPresence.shared.detailDisappear() }
+    }
+}
+
 extension View {
+    /// Details and their pushed directories replace the tab container's global resume controls.
+    func detailsPresence() -> some View {
+        modifier(DetailsPresenceModifier())
+    }
+
     /// Marks a full-screen reading surface (manga, novel or video) while it is on screen.
     func readerPresence(directories: Set<String> = []) -> some View {
         modifier(ReaderPresenceModifier(directories: directories))

@@ -49,6 +49,7 @@ final class SourceReaderModel: ObservableObject {
     @Published private(set) var pageFailures: [Int: PageFailure] = [:]
     @Published private(set) var isLoadingPages = false
     @Published private(set) var bookmarks: [IosBookmark] = []
+    private var changingBookmark = false
     @Published private(set) var slots: [IosReaderSlot] = [] {
         didSet { identifiedSlots = slots.map { ReaderWindowSlot(id: slotIdentity($0), slot: $0) } }
     }
@@ -135,10 +136,13 @@ final class SourceReaderModel: ObservableObject {
     var isBookmarked: Bool { bookmarks.contains { $0.chapterId == chapter.id && Int($0.index) == index } }
 
     private var initialPage: Int?
+    private var initialBookmark: IosBookmark?
 
-    init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter, initialPage: Int? = nil) {
+    init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter, initialPage: Int? = nil,
+         initialBookmark: IosBookmark? = nil) {
         self.runtime = runtime; self.content = content; self.chapter = chapter
         self.initialPage = initialPage
+        self.initialBookmark = initialBookmark
         chapterByID = Dictionary(content.chapters.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
@@ -209,6 +213,10 @@ final class SourceReaderModel: ObservableObject {
             savedPosition = saved
             if startAtEnd {
                 index = max(0, pages.count - 1); offset = 0
+            } else if let bookmark = initialBookmark, bookmark.chapterId == selected.id {
+                index = min(max(0, Int(bookmark.index)), max(0, pages.count - 1))
+                offset = Float(bookmark.scroll)
+                self.initialBookmark = nil
             } else if let page = initialPage {
                 index = min(max(0, page), max(0, pages.count - 1))
                 offset = 0
@@ -823,16 +831,41 @@ final class SourceReaderModel: ObservableObject {
     }
 
     func toggleBookmark() async {
-        guard let library, let page = selectedPage else { return }
+        guard !changingBookmark, let library, let page = selectedPage else { return }
+        changingBookmark = true
+        defer { changingBookmark = false }
+        let markedChapter = chapter, markedIndex = index, pageCount = pages.count, markedScroll = offset
+        let artifact = artifacts[windowIndex]
+        let previous = bookmarks.first { $0.chapterId == markedChapter.id && Int($0.index) == markedIndex }
         do {
-            _ = try await library.toggleBookmark(content: content, chapter: chapter, page: page,
-                                                  index: Int32(index), count: Int32(pages.count), scroll: offset)
-            await refreshBookmarks()
+            try await library.toggleBookmark(content: content, chapter: markedChapter, page: page,
+                                              index: Int32(markedIndex), count: Int32(pageCount), scroll: markedScroll)
+            let updated = try await library.bookmarks(content: content)
+            if let previous {
+                try? await BookmarkImages.remove(content: content, bookmark: previous)
+            } else if let saved = updated.first(where: {
+                $0.chapterId == markedChapter.id && Int($0.index) == markedIndex
+            }) {
+                // Snapshot failure never discards the bookmark; its preview can rebuild through the source later.
+                if let image = try? await artifact?.thumbnailImage() {
+                    try? await BookmarkImages.save(image, content: content, bookmark: saved)
+                } else if let image = try? await ReaderDownloads.thumbnailImage(
+                    runtime: runtime, content: content, chapter: markedChapter, page: page, index: markedIndex
+                ) {
+                    try? await BookmarkImages.save(image, content: content, bookmark: saved)
+                }
+            }
+            bookmarks = updated
         } catch { self.error = error.localizedDescription }
     }
 
     func removeBookmark(_ bookmark: IosBookmark) async {
-        do { try await library?.removeBookmark(content: content, bookmark: bookmark); await refreshBookmarks() }
+        do {
+            guard let library else { return }
+            try await library.removeBookmark(content: content, bookmark: bookmark)
+            try? await BookmarkImages.remove(content: content, bookmark: bookmark)
+            await refreshBookmarks()
+        }
         catch { self.error = error.localizedDescription }
     }
 
@@ -904,8 +937,10 @@ struct SourceReaderView: View {
         return downloadEntry?.status
     }
 
-    init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter, initialPage: Int? = nil) {
-        _model = StateObject(wrappedValue: SourceReaderModel(runtime: runtime, content: content, chapter: chapter, initialPage: initialPage))
+    init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter, initialPage: Int? = nil,
+         initialBookmark: IosBookmark? = nil) {
+        _model = StateObject(wrappedValue: SourceReaderModel(runtime: runtime, content: content, chapter: chapter,
+                                                           initialPage: initialPage, initialBookmark: initialBookmark))
         _settings = StateObject(wrappedValue: ReaderSettings(contentID: content.id))
     }
 

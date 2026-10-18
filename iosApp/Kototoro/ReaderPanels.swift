@@ -156,11 +156,10 @@ struct ReaderChapterPanel: View {
                             }, id: \.id) { bookmark in
                                 HStack {
                                     Button { onBookmark(bookmark) } label: {
-                                        VStack(alignment: .leading) {
-                                            Text(model.content.chapters.first { $0.id == bookmark.chapterId }?.title ?? "章节")
-                                            Text("第 \(bookmark.index + 1) 页").font(.caption).foregroundStyle(.secondary)
-                                        }
+                                        BookmarkPreviewLabel(runtime: model.runtime, content: model.content, bookmark: bookmark,
+                                                             chapter: model.content.chapters.first { $0.id == bookmark.chapterId })
                                     }
+                                    .buttonStyle(.plain)
                                     Spacer()
                                     Button("删除", systemImage: "trash") { Task { await model.removeBookmark(bookmark) } }
                                         .labelStyle(.iconOnly)

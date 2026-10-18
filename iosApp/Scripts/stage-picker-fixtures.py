@@ -5,6 +5,7 @@
   * fixture_reader_long.cbz / fixture_reader_error.cbz — long-page restore and neighbour-failure regressions.
   * fixture_reader_chapters.cbz / fixture_reader_download.cbz — automatic chapter turns and offline repair.
   * fixture_reader_directory.cbz — scroll-to-panel handoff through a long chapter directory.
+  * fixture_details_layout.cbz — long synopsis and chapters for native reading-toolbar visibility.
   * fixture_reader_horizontal.cbz — horizontal reading direction, zoom and anchored restore.
   * fixture_reader_pull_long.cbz — explicit previous-chapter last-page restore.
   * fixture_reader_window.cbz — bounded paging windows across three chapters.
@@ -17,6 +18,7 @@ Usage: stage-picker-fixtures.py <simulator id> (ffmpeg is required for the local
 """
 import glob
 import gzip
+import json
 import os
 import pathlib
 import shutil
@@ -104,6 +106,16 @@ for storage in storages:
         archive.writestr("01/001.png", png(300, 200, (200, 60, 60)))
         archive.writestr("02/001.png", png(300, 200, (60, 60, 200)))
     with zipfile.ZipFile(os.path.join(storage, "fixture_reader_directory.cbz"), "w") as archive:
+        for chapter in range(1, 61):
+            archive.writestr(f"{chapter:02d}/001.png", png(300, 200, (60, 120, 180)))
+    with zipfile.ZipFile(os.path.join(storage, "fixture_details_layout.cbz"), "w") as archive:
+        archive.writestr("index.json", json.dumps({
+            "title": "fixture_details_layout",
+            "description": "\n".join(
+                f"第{line}段，山间的来信记下了旅途中的相遇，故事随着书页缓缓展开。"
+                for line in range(1, 31)
+            ),
+        }, ensure_ascii=False))
         for chapter in range(1, 61):
             archive.writestr(f"{chapter:02d}/001.png", png(300, 200, (60, 120, 180)))
     with zipfile.ZipFile(os.path.join(storage, "fixture_reader_download.cbz"), "w") as archive:

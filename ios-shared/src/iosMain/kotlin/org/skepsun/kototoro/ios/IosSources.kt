@@ -144,7 +144,7 @@ class IosNovelDocument internal constructor(internal val styled: NovelStyledText
             0f
         }
         val segments = lines.map { (it as? NovelDocumentBlock.Text)?.original.orEmpty() }
-        val located = resolveNovelBookmarkPosition(segments, bookmark.preview, bookmark.index, progress) ?: bookmark.index
+        val located = resolveNovelBookmarkPosition(segments, bookmark.textPreview, bookmark.index, progress) ?: bookmark.index
         return located.coerceIn(0, (lines.size - 1).coerceAtLeast(0))
     }
 

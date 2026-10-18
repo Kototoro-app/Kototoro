@@ -7,6 +7,19 @@ import platform.Foundation.*
 import kotlin.test.*
 
 class IosProductTest {
+    @Test
+    fun bookmarkTextPreviewUsesTheSharedPlainTextPolicy() {
+        fun bookmark(preview: String) = IosBookmark(org.skepsun.kototoro.core.library.SourceBookmark(
+            1, 2, 3, 4, 0, 5, 0.5f, preview,
+        ))
+        assertEquals("晨光 正文", bookmark("<p>晨光</p><p>正文</p>").textPreview)
+        assertEquals("hello", bookmark("data:text/plain;base64,aGVsbG8=").textPreview)
+        assertEquals("", bookmark("https://example.invalid/page.jpg").textPreview)
+        assertEquals("", bookmark("file:///private/page.jpg").textPreview)
+        assertEquals(5L, bookmark("摘录").createdAt)
+        assertEquals(0.5f, bookmark("摘录").percent)
+    }
+
     private val source = SourceRef("MIHON_9007199254740993", "zh", "MANGA")
     private val chapter = SourceChapter(Long.MAX_VALUE, "第一话", 1f, 1, "/chapter/1", null, 1, "中文", source,
         sourceData = """{"chapterToken":"opaque"}""")

@@ -11,6 +11,27 @@ struct ReaderImageArtifact: Equatable, Sendable {
     let encodedHeight: Int
     let tiled: Bool
 
+    func thumbnailImage() async throws -> UIImage {
+        try await Self.thumbnailImage(directory: directory, relativePath: relativePath,
+                                      sha256: sha256, byteSize: byteSize)
+    }
+
+    static func thumbnailImage(directory: URL, relativePath: String, sha256: String,
+                               byteSize: Int64, maxPixelSize: Int = 600) async throws -> UIImage {
+        let decode = Task.detached(priority: .userInitiated) {
+            try await withReaderStorage {
+                try await gated(RequestGate.readerDecoding) {
+                    try Task.checkCancellation()
+                    return try SourceImageFile.decode(directory: directory, relativePath: relativePath,
+                                                      sha256: sha256, byteSize: byteSize, maxPixelSize: maxPixelSize)
+                }
+            }
+        }
+        let image = try await withTaskCancellationHandler { try await decode.value } onCancel: { decode.cancel() }
+        try Task.checkCancellation()
+        return image
+    }
+
     func decodeTile(_ tile: IosReaderTile) async throws -> UIImage {
         try Task.checkCancellation()
         let dir = directory; let path = relativePath; let hash = sha256; let length = byteSize
@@ -208,13 +229,9 @@ extension IosSourceImage {
     /// Does not allocate full reader page bitmaps or run edge detection.
     func thumbnailImage(maxPixelSize: Int = 600) async throws -> UIImage {
         let directory = try NativeSourceTransport.dataDirectory.appendingPathComponent("images", isDirectory: true)
-        let hash = sha256
-        let length = byteSize
-        let path = relativePath
-        return try await Task.detached(priority: .userInitiated) {
-            try SourceImageFile.decode(directory: directory, relativePath: path, sha256: hash,
-                                       byteSize: length, maxPixelSize: maxPixelSize)
-        }.value
+        return try await ReaderImageArtifact.thumbnailImage(directory: directory, relativePath: relativePath,
+                                                            sha256: sha256, byteSize: byteSize,
+                                                            maxPixelSize: maxPixelSize)
     }
 
     func loadedPage(cropMargins: Bool = false) async throws -> ReaderLoadedPage {

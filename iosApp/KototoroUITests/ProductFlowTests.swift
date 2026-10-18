@@ -550,7 +550,7 @@ final class ProductFlowTests: XCTestCase {
             .firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 30)); card.tap()
         XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 30))
-        let resume = app.buttons["details.resume"]
+        let resume = app.detailsReadButton()
         XCTAssertTrue(resume.waitForExistence(timeout: 30), app.debugDescription)
         resume.tap()
         XCTAssertTrue(position.waitForExistence(timeout: 30))
@@ -587,7 +587,7 @@ final class ProductFlowTests: XCTestCase {
         }, object: nil)
         wait(for: [advanced], timeout: 30)
         playerControl(app, "player.close").tap()
-        let resume = app.buttons["details.resume"]
+        let resume = app.detailsReadButton()
         XCTAssertTrue(resume.waitForExistence(timeout: 30), app.debugDescription)
         resume.tap()
         XCTAssertTrue(position.waitForExistence(timeout: 30))

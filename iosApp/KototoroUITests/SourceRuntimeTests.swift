@@ -216,7 +216,7 @@ final class SourceRuntimeTests: XCTestCase {
         assertPosition(app, page: 2, total: 2)
         app.buttons["reader.back"].tap()
         XCTAssertTrue(chapterButton(in: app).waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["details.resume"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 10))
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(item(app, "popular 1").waitForExistence(timeout: 5))
         let screenshot = XCTAttachment(screenshot: app.screenshot())
@@ -226,7 +226,7 @@ final class SourceRuntimeTests: XCTestCase {
         app.tabBars.buttons["浏览"].tap()
         XCTAssertTrue(source.waitForExistence(timeout: 90)); source.tap()
         XCTAssertTrue(item(app, "popular 1").waitForExistence(timeout: 30)); item(app, "popular 1").tap()
-        XCTAssertTrue(app.buttons["details.resume"].waitForExistence(timeout: 30)); app.buttons["details.resume"].tap()
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 30)); app.detailsReadButton().tap()
         XCTAssertTrue(app.images["reader.image"].waitForExistence(timeout: 30), app.debugDescription)
         assertPosition(app, page: 2, total: 2)
         XCTAssertFalse(app.buttons["reader.nextChapter"].isEnabled)
@@ -499,15 +499,15 @@ func revealChapter(in app: XCUIApplication, timeout: TimeInterval = 60) -> XCUIE
     let error = app.staticTexts["details.error"]
     let deadline = Date().addingTimeInterval(timeout)
     while !chapter.exists && !error.exists && Date() < deadline {
-        if app.buttons["details.start"].exists || app.buttons["details.resume"].exists {
+        if app.buttons["details.header.read"].exists || app.buttons["details.read"].exists {
             app.collectionViews.firstMatch.swipeUp(velocity: .slow)
         } else {
             _ = chapter.waitForExistence(timeout: 1)
         }
     }
     // The tab bar and its continue-reading accessory float over the list's end: keep the row clear of them.
-    let overlays = [app.buttons["continueReading"], app.tabBars.firstMatch]
-    for _ in 0..<3 where chapter.exists {
+    let overlays = [app.buttons["details.read"], app.buttons["continueReading"], app.tabBars.firstMatch]
+    for _ in 0..<4 where chapter.exists {
         let covered = overlays.contains { $0.exists && $0.frame.minY < chapter.frame.maxY + 8 && $0.frame.height > 0 }
         guard covered else { break }
         app.collectionViews.firstMatch.swipeUp(velocity: .slow)
