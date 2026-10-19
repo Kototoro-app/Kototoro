@@ -331,6 +331,7 @@ object GitHubMirrorCatalog {
         GitHubMirrorStrategy.HOST_REPLACE -> {
             val host = entry.host ?: return url
             val rawHost = entry.rawHost ?: host
+            val url = rawFileUrl(url)
             when {
                 url.startsWith("https://raw.githubusercontent.com/") ->
                     url.replace("raw.githubusercontent.com", rawHost)
@@ -342,10 +343,23 @@ object GitHubMirrorCatalog {
 
         GitHubMirrorStrategy.PREFIX -> {
             val host = entry.host ?: return url
-            prefix(url, "https://$host/")
+            prefix(rawFileUrl(url), "https://$host/")
         }
 
         GitHubMirrorStrategy.JSDELIVR -> jsDelivr(url, entry.host ?: "cdn.jsdmirror.com")
+    }
+
+    /**
+     * `github.com/owner/repo/raw/<ref>/<path>` as the raw.githubusercontent.com URL GitHub redirects it to. Mirrors
+     * proxy that form reliably, while some forward the github.com one to jsDelivr with `/raw/` left in the path,
+     * which 404s (Keiyoushi's and other Mihon repositories publish their index this way).
+     */
+    fun rawFileUrl(url: String): String {
+        val githubPrefix = "https://github.com/"
+        if (!url.startsWith(githubPrefix)) return url
+        val segments = url.removePrefix(githubPrefix).split('/')
+        if (segments.size < 5 || segments[2] != "raw" || segments[0].isBlank() || segments[1].isBlank()) return url
+        return "https://raw.githubusercontent.com/" + (listOf(segments[0], segments[1]) + segments.drop(3)).joinToString("/")
     }
 
     private fun prefix(url: String, prefix: String): String = when {
