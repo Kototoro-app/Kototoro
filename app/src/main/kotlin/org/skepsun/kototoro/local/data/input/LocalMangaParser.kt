@@ -17,6 +17,7 @@ import okio.Path.Companion.toOkioPath
 import okio.Path.Companion.toPath
 import okio.openZip
 import org.jetbrains.annotations.Blocking
+import java.util.zip.ZipInputStream
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.core.model.LocalVideoSource
@@ -32,6 +33,7 @@ import org.skepsun.kototoro.core.util.ext.isRegularFile
 import org.skepsun.kototoro.core.util.ext.isZipUri
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.toFileNameSafe
+import org.skepsun.kototoro.core.util.ext.isNetworkUri
 import org.skepsun.kototoro.core.util.ext.toZipUri
 import org.skepsun.kototoro.core.util.ext.toListSorted
 import org.skepsun.kototoro.core.util.ext.toUnderlyingZipUri
@@ -212,7 +214,13 @@ class LocalContentParser {
                             .toList()
                     }
 
+                    val localCoverUrl = coverEntry?.let { buildChildUriString(it, resolve = true) }
+                        ?: mangaInfo.coverUrl.takeIfLocalUrl()
+                        ?: fileSystem.findFirstImageUrl(rootPath, recursive = true)
+
                     mangaInfo.copy(
+                    coverUrl = localCoverUrl ?: mangaInfo.coverUrl,
+                    largeCoverUrl = if (localCoverUrl != null) null else mangaInfo.largeCoverUrl,
                     chapters = if (withDetails) {
                         mangaInfo.chapters?.mapNotNull { c ->
                             if (c.url.contains("#chapter/")) {
@@ -551,10 +559,13 @@ class LocalContentParser {
             null
         }
         val coverUrl = index.getCoverEntry()?.let(file::findFile)?.uri?.toString()
+            ?: info.coverUrl.takeIfLocalUrl()
+            ?: runInterruptible(Dispatchers.IO) { file.findFirstPageUrl() }
         val manga = info.copy(
             url = file.uri.toString(),
             publicUrl = file.uri.toString(),
             coverUrl = coverUrl ?: info.coverUrl,
+            largeCoverUrl = if (coverUrl != null) null else info.largeCoverUrl,
             chapters = chapters,
         )
         return LocalContent(manga, rootFile, file.uri)
@@ -688,6 +699,27 @@ class LocalContentParser {
         )
     }
 
+    /**
+     * The first page of a folder that has no usable cover: a loose image, else the first image
+     * inside the first chapter archive. The archive is streamed only up to that entry.
+     */
+    @Blocking
+    private fun UniFile.findFirstPageUrl(): String? = runCatchingCancellable {
+        val entries = walkRelative()
+        entries.firstOrNull { (_, child) -> child.name?.isImageName() == true }
+            ?.let { return@runCatchingCancellable it.second.uri.toString() }
+        val archive = entries.firstOrNull { (_, child) -> hasZipExtension(child.name.orEmpty()) }?.second
+            ?: return@runCatchingCancellable null
+        val entryName = archive.openInputStream().use { input ->
+            ZipInputStream(input.buffered()).use { zip ->
+                generateSequence { zip.nextEntry }
+                    .firstOrNull { !it.isDirectory && it.name.substringAfterLast('/').isImageName() }
+                    ?.name
+            }
+        } ?: return@runCatchingCancellable null
+        archive.uri.toZipUri(entryName).toString()
+    }.onFailure { it.printStackTraceDebug() }.getOrNull()
+
     private fun UniFile.walkRelative(): List<Pair<String, UniFile>> {
         val result = ArrayList<Pair<String, UniFile>>()
         fun visit(directory: UniFile, prefix: String) {
@@ -778,17 +810,18 @@ class LocalContentParser {
                 if (file.isImage()) {
                     return@runCatchingCancellable buildChildUriString(file, resolve = true)
                 }
-                if (recursive && file.isZip()) {
-                    openZip(file).use { zipFs ->
-                        zipFs.findFirstImageUrl(Path.DIRECTORY_SEPARATOR.toPath())?.let { subUrl ->
-                            val fragment = java.net.URI(subUrl).fragment.orEmpty()
-                            val baseUrl = buildChildUriString(file, resolve = true)
-                            return@runCatchingCancellable if (fragment.isBlank()) {
-                                baseUrl
-                            } else {
-                                "$baseUrl#$fragment"
-                            }
-                        }
+                // Archives nested in an archive cannot be addressed by a single zip URI.
+                if (recursive && file.isZip() && this == FileSystem.SYSTEM) {
+                    // Address the page inside the chapter archive, which is what CbzFetcher decodes.
+                    val entry = openZip(file).use { zipFs ->
+                        zipFs.listRecursively(Path.DIRECTORY_SEPARATOR.toPath())
+                            .filter { zipFs.isRegularFile(it) && it.isImage() }
+                            .minWithOrNull(compareBy(AlphanumComparator()) { it.toString() })
+                    }
+                    if (entry != null) {
+                        return@runCatchingCancellable buildChildUriString(file, resolve = true).toUri()
+                            .toZipUri(entry.toString().removePrefix(Path.DIRECTORY_SEPARATOR))
+                            .toString()
                     }
                 }
             } else if (recursive && isDirectory(file)) {
@@ -942,8 +975,19 @@ class LocalContentParser {
 
         private fun Uri.fileFromPath(): File = File(requireNotNull(path) { "Uri path is null: $this" })
 
+        /** A cover URL that needs neither the network nor the source: a file, zip or content URI. */
+        private fun String?.takeIfLocalUrl(): String? = this?.takeIf { it.isNotBlank() && !it.toUri().isNetworkUri() }
+
         private fun File.buildChildUriString(path: Path, resolve: Boolean): String {
-            val relative = path.toString().removePrefix(Path.DIRECTORY_SEPARATOR)
+            // Directory listings yield absolute paths; archive file systems are rooted at "/".
+            val ownPath = if (isZipArchive) null else toOkioPath()
+            val relative = if (ownPath != null && path.isAbsolute && path.segments.take(ownPath.segments.size) == ownPath.segments &&
+                path.root == ownPath.root
+            ) {
+                path.relativeTo(ownPath).toString()
+            } else {
+                path.toString().removePrefix(Path.DIRECTORY_SEPARATOR)
+            }
             return if (isZipArchive) {
                 toZipUri(relative).toString()
             } else if (!resolve) {
