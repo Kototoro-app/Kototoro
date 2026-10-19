@@ -25,6 +25,8 @@ java {
 def compatibilityRoot = providers.gradleProperty('mihonCompatibilityDirectory').map { new File(it) }.getOrNull()
 def compatibilityApi = compatibilityRoot == null ? files() :
 	files(new File(compatibilityRoot, 'AndroidCompat-1.0.jar'), new File(compatibilityRoot, 'android-jar-1.0.0.jar'))
+// Without the directory the shims fail with unresolved `android.*`; check (and pin) it first, as that module does.
+tasks.named('compileKotlin') { dependsOn ':mihon-desktop-compat:verifyMihonCompatibility' }
 
 // The host shims plugins link against that only need APIs the compatibility runtime has: one source with Android.
 def sharedShims = [

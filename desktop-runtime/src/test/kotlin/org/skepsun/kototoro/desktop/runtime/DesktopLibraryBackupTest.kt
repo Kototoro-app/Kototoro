@@ -96,7 +96,9 @@ class DesktopLibraryBackupTest {
             DesktopLibraryBackup(runtime.database).export(file)
         }
         ZipFile(file.toFile()).use { zip ->
-            assertEquals(setOf("index", "categories", "favourites", "history", "sources", "projections", "bookmarks", "statistics"),
+            // The shared LibraryBackup writer also exports source origins, extension repositories and tracking.
+            assertEquals(setOf("index", "categories", "favourites", "history", "sources", "projections", "bookmarks", "statistics",
+                "source_origins", "extension_repos", "tracks", "track_logs"),
                 zip.entries().asSequence().map { it.name }.toSet())
             val history = zip.getInputStream(zip.getEntry("history")).bufferedReader().use { it.readText() }
             assertTrue(history.contains("\"manga_id\":9223372036854775807"))
