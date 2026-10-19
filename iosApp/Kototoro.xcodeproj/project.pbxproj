@@ -93,6 +93,7 @@
 		FA0000000000000000000002 /* ImageLoadPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000001 /* ImageLoadPolicy.swift */; };
 		FA0000000000000000000003 /* ImageLoadPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000002 /* ImageLoadPolicyTests.swift */; };
 		FA0000000000000000000005 /* ReaderPageTurn.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000004 /* ReaderPageTurn.swift */; };
+		FA00000000000000000000F7 /* ReaderStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB00000000000000000000F7 /* ReaderStrip.swift */; };
 		FA0000000000000000000006 /* ContinueReading.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000005 /* ContinueReading.swift */; };
 		FA0000000000000000000007 /* SourceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000007 /* SourceSettingsView.swift */; };
 		FA0000000000000000000008 /* SourceWebBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000008 /* SourceWebBrowser.swift */; };
@@ -190,6 +191,7 @@
 		FB0000000000000000000001 /* ImageLoadPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageLoadPolicy.swift; sourceTree = "<group>"; };
 		FB0000000000000000000002 /* ImageLoadPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageLoadPolicyTests.swift; sourceTree = "<group>"; };
 		FB0000000000000000000004 /* ReaderPageTurn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPageTurn.swift; sourceTree = "<group>"; };
+		FB00000000000000000000F7 /* ReaderStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderStrip.swift; sourceTree = "<group>"; };
 		FB0000000000000000000005 /* ContinueReading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinueReading.swift; sourceTree = "<group>"; };
 		FB0000000000000000000007 /* SourceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceSettingsView.swift; sourceTree = "<group>"; };
 		FB0000000000000000000008 /* SourceWebBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceWebBrowser.swift; sourceTree = "<group>"; };
@@ -256,6 +258,7 @@
                 AC0000000000000000000002 /* TrackingSitesView.swift */,
                 AD7100000000000000000002 /* TrackingAccounts.swift */,
 				FB0000000000000000000004 /* ReaderPageTurn.swift */,
+				FB00000000000000000000F7 /* ReaderStrip.swift */,
 				F30000000000000000000002 /* ReaderDownloadsView.swift */,
 				F10000000000000000000007 /* RepositoryLink.swift */,
 				F10000000000000000000005 /* RepositoriesView.swift */,
@@ -480,6 +483,7 @@
                 AC0000000000000000000001 /* TrackingSitesView.swift in Sources */,
                 AD7100000000000000000001 /* TrackingAccounts.swift in Sources */,
 				FA0000000000000000000005 /* ReaderPageTurn.swift in Sources */,
+				FA00000000000000000000F7 /* ReaderStrip.swift in Sources */,
 				F20000000000000000000002 /* ReaderDownloadsView.swift in Sources */,
 				F80000000000000000000001 /* BackupView.swift in Sources */,
 				F80000000000000000000005 /* SourceIcon.swift in Sources */,

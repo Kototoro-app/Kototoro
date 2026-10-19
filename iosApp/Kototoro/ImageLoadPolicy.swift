@@ -1,4 +1,5 @@
 import Foundation
+import KototoroShared
 import Network
 import SwiftUI
 import os
@@ -44,6 +45,8 @@ actor RequestGate {
         let ticket = ticket ?? Self.makeTicket()
         let granted = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
+                // A cancellation that arrived before this waiter was queued found nothing to drop.
+                if Task.isCancelled { continuation.resume(returning: false); return }
                 waiters.append(Waiter(ticket: ticket, priority: priority, continuation: continuation))
             }
         } onCancel: {
@@ -86,6 +89,20 @@ actor RequestGate {
     private func drop(_ ticket: Int) {
         guard let index = waiters.firstIndex(where: { $0.ticket == ticket }) else { return }
         waiters.remove(at: index).continuation.resume(returning: false)
+    }
+}
+
+extension IosSources {
+    /// A page image whose download stops when the calling task is cancelled. Kotlin/Native's async export does not
+    /// forward Swift task cancellation, so the plain `image(page:)` keeps downloading (and holding its reader-thread
+    /// slot) after the reader has moved on; enough of those stalled and every page waited forever.
+    func cancellableImage(page: IosSourcePage) async throws -> IosSourceImage {
+        let cancellation = IosCancellation()
+        return try await withTaskCancellationHandler {
+            try await image(page: page, cancellation: cancellation)
+        } onCancel: {
+            cancellation.cancel()
+        }
     }
 }
 

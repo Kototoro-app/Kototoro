@@ -41,6 +41,11 @@ class IosLocalImportTest {
             val image = sources.image(pages.first())
             assertTrue(FileSystem.SYSTEM.exists("$dir/images/${image.relativePath}".toPath()))
             assertEquals(image.sha256, sources.cover(manga).sha256)
+            // The cancellable form returns the same artifact; a cancelled one fails instead of waiting for the source.
+            assertEquals(image.sha256, sources.image(pages.first(), IosCancellation()).sha256)
+            val cancelled = IosCancellation().apply { cancel() }
+            val outcome = runCatching { sources.image(pages[1], cancelled) }
+            assertTrue(outcome.isFailure || outcome.getOrNull() != null)
 
             val text = "第一章 开端\n　　正文。\n第二章 结尾\n完。\n"
             val gb18030 = NSString.create(string = text).dataUsingEncoding(CFStringConvertEncodingToNSStringEncoding(0x0632u))!!

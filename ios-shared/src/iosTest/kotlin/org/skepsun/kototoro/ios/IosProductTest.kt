@@ -181,6 +181,57 @@ class IosProductTest {
     }
 
     @Test
+    fun continuousWindowPrependsAndTrimsChaptersWithoutMovingTheReadPage() {
+        val previous = (0..2).map { IosReaderPage("previous", it) }
+        val current = (0..3).map { IosReaderPage("current", it) }
+        val next = (0..1).map { IosReaderPage("next", it) }
+        for ((mode, reversed) in listOf(3 to false, 4 to false, 4 to true)) {
+            val reader = IosReader()
+            val initial = reader.chapterWindow(emptyList(), current, emptyList(), Int.MAX_VALUE)
+            reader.setPages(initial)
+            reader.configure(initial.size, 600, 800, mode, false, false, 0, false, reversed)
+            repeat(initial.size) { reader.setImageSize(it, 600, 800) }
+            fun point(origin: Float) = if (mode == 3) 0f to origin else origin to 0f
+            val (x, y) = point(reader.scrollOrigin(2, 120f))
+            val measured = reader.slots()[2].placements.single()
+            // The previous chapter joins before the page being read: the strip moves by exactly its extent.
+            val prepended = reader.chapterWindow(previous, current, emptyList(), Int.MAX_VALUE)
+            val moved = assertNotNull(reader.setPages(prepended, x, y))
+            assertEquals(IosReaderProgress(5, 120f), reader.progress(moved.x, moved.y))
+            assertEquals(reader.scrollOrigin(5, 120f), if (mode == 3) moved.y else moved.x)
+            // Measured sizes follow the page, and a window that drops the previous chapter moves the strip back.
+            reader.slots()[5].placements.single().let {
+                assertEquals(measured.width to measured.height, it.width to it.height)
+            }
+            val trimmed = reader.chapterWindow(emptyList(), current, next, Int.MAX_VALUE)
+            val back = assertNotNull(reader.setPages(trimmed, moved.x, moved.y))
+            assertEquals(IosReaderProgress(2, 120f), reader.progress(back.x, back.y))
+        }
+    }
+
+    @Test
+    fun continuousResourceWindowCoversTheScreenFirstAndOnlyReplansOnChange() {
+        val reader = IosReader()
+        val pages = (0..19).map { IosReaderPage("chapter", it) }
+        reader.setPages(pages)
+        reader.configure(pages.size, 600, 800, 3, false, false, 0)
+        repeat(pages.size) { reader.setImageSize(it, 600, 800) }
+        val origin = reader.scrollOrigin(5, 400f)
+        val window = assertNotNull(reader.resourceWindow(0f, origin, 0f, 0f, false, false))
+        assertEquals(listOf(5, 6), window.filter { it.priority == 0 }.map { it.index })
+        assertTrue(window.all { it.priority > 0 || it.decode })
+        assertTrue(window.any { it.index < 5 } && window.any { it.index > 8 })
+        assertEquals(window.map { it.index }.toSet().size, window.size)
+        assertNull(reader.resourceWindow(0f, origin + 10f, 0f, 0f, false, false))
+        assertNotNull(reader.resourceWindow(0f, origin + 10f, 0f, 0f, false, true))
+        // A fling forward reaches further ahead than the idle window.
+        val fling = assertNotNull(reader.resourceWindow(0f, origin, 0f, 6000f, false, true))
+        assertTrue(fling.maxOf { it.index } > window.maxOf { it.index })
+        reader.configure(pages.size, 600, 800, 0, false, false, 0)
+        assertNull(reader.resourceWindow(0f, 0f, 0f, 0f, false, true))
+    }
+
+    @Test
     fun continuousWindowAppendsTheNextChapterWithoutMovingTheStripAndReportsItsShortTail() {
         val first = (0..1).map { IosReaderPage("first", it) }
         val second = listOf(IosReaderPage("second", 0))

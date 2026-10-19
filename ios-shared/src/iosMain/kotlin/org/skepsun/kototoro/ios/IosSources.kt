@@ -1,6 +1,11 @@
 package org.skepsun.kototoro.ios
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -386,6 +391,18 @@ data class IosSourceImage(val relativePath: String, val sha256: String, val byte
  * Apple CMS sites run natively through the shared [MacCmsSourceRuntime]; every other source goes through the optional
  * embedded-JVM transport. Both sit behind one routed runtime, so screens do not care where a source executes.
  */
+/** A cancellation Swift hands to a Kotlin call and triggers from its task's cancellation handler. */
+class IosCancellation {
+    internal val signal = CompletableDeferred<Unit>()
+
+    fun cancel() {
+        signal.complete(Unit)
+    }
+}
+
+/** Longer than any single image download a source completes, short enough that a stalled one frees its slot. */
+private const val IMAGE_TIMEOUT_MILLIS = 90_000L
+
 class IosSources(
     transport: IosSourceTransport?,
     private val videoSources: IosVideoSources?,
@@ -675,6 +692,27 @@ class IosSources(
             "Image identity mismatch"
         }
         return IosSourceImage(artifact.relativePath, artifact.sha256, artifact.byteSize)
+    }
+
+    /**
+     * [image] that Swift can cancel and that cannot hang: Kotlin/Native's async export does not forward Swift task
+     * cancellation, so a reader page scrolled away would otherwise keep its download (and its reader-thread slot)
+     * until the source answered. A source that never answers fails after [IMAGE_TIMEOUT_MILLIS] like any error.
+     */
+    @Throws(Exception::class)
+    suspend fun image(page: IosSourcePage, cancellation: IosCancellation): IosSourceImage = coroutineScope {
+        val work = async {
+            withTimeoutOrNull(IMAGE_TIMEOUT_MILLIS) { image(page) } ?: throw IllegalStateException("页面加载超时")
+        }
+        val watcher = launch {
+            cancellation.signal.await()
+            work.cancel()
+        }
+        try {
+            work.await()
+        } finally {
+            watcher.cancel()
+        }
     }
 
     @Throws(Exception::class)

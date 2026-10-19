@@ -353,3 +353,21 @@ Apple 提供 `XCTMemoryMetric` 测峰值/增长，以及动画/滚动 signpost �
 SSIV 对应关系：base 为页面在像素预算（4 MP）内的整图解码，超过预算的大图按当前相机的 sample size 解码可见区域 tile（`VisibleImageTiles`）。本轮补上 SSIV 的过渡策略：新相机的 tile 解码完成前保留旧 tile（粗采样在下），不再回落到模糊 base。
 
 回归：`LocalImportTests/testPagedDragsAcrossLongChaptersKeepTheChapterLocalPage`（新夹具 `fixture_reader_paged`，3 章 × 8 页逐页拖动跨章）、`testPagedDoubleTapZoomsAtTheTapAndPansBeforeTurning`、`testContinuousDoubleTapZoomsAtTheTap`（新夹具 `fixture_reader_zoom`，红/绿/蓝三等分，用屏幕像素判断缩放锚点）。修复前第一个用例稳定复现“进入第 2 章第 7 页”。拖到一半被替换的问题由机制修复，XCUITest 无法在按住手指时截图，未单独自动化。
+
+## 2026-10-19 条漫重构：共享场景单一坐标、全屏与资源窗口
+
+用户反馈的三个问题：条漫上下各有一条黑边；读久了全部页面一直转圈；往回翻时可能直接跳到上一章。
+
+| 问题 | 根因 | 处理 |
+| --- | --- | --- |
+| 上下黑边 | 画布所在的 `GeometryReader` 受安全区约束，只有背景忽略了安全区；滚动视图另外再加安全区 inset，代码里只能靠 `rawRange` 折算 | 阅读层整体 `.ignoresSafeArea()`；条漫的 `UIScrollView` 设 `contentInsetAdjustmentBehavior = .never`（同 Aidoku），宿主 `safeAreaRegions = []`。只有控件层留在安全区内，显示/隐藏控件不再让页面移动或重排 |
+| 跳到上一章 | 页面坐标有两套：SwiftUI `LazyVStack` 按估算高度排未建出的行，`VerticalReaderScene` 另算一套。前插上一章后重建场景，`PageId` 用的是窗口位置；条漫视图 `.id(slot.index)` 整体后移，再经 `Task.yield` 用 `ScrollPosition` 点坐标恢复，落到上一章，`continuousPosition` 随即切章并级联重建。另外章内前 10 页就会预载并前插上一章 | 条漫改用 UIKit `ReaderStrip`（`UIScrollView`），内容大小与每页 frame 直接取自 scene，坐标只此一套。`IosReader` 在连续模式下用章节内稳定 ID，窗口变化走 `updatePages(viewport)` 锚点补偿（Android `snapBy(deltaY)` 的做法），在同一主线程轮次直接写 `contentOffset`（不打断惯性）。上一章只在离条漫起点 3 屏以内时预载（类似 Aidoku 到顶才前插） |
+| 读久后全部转圈 | ① Kotlin/Native 的 async 导出不传递 Swift 取消，已滑走的下载一直占着阅读线程闸门（默认 3 个），来源一旦挂住就永久占满；② `loadImage` 遇到“正在加载”直接返回而不等待，这次加载被邻页调度或窗口重建取消后，没人再加载这一页 | `IosSources.image(page, IosCancellation)` 把 Swift 取消转发给协程，并有 90 秒超时。`RequestGate` 修复“排队前已取消”的竞态。页面加载按页身份归模型所有，后来的调用方等待同一任务；窗口重建只重映射按位置存的状态，不再取消全部加载。资源窗口改用共享 `ReaderPrediction`（参数同 Android 条漫默认值），停稳时强制重新规划，把未显示也未在加载的页重新启动 |
+
+验证：`IosProductTest` 新增前插/裁章保持阅读页（纵向、横向、RTL）以及资源窗口覆盖与重规划两项；`IosLocalImportTest` 覆盖可取消图片接口。
+
+补充两条与 Android 语义不同、需要 iOS 侧单独处理的规则：
+
+- **末端保留的阅读页**：iOS 在条漫末端会把短于屏幕的末页保留为阅读页，即使它不是首个可见页（Android 的阅读页始终是首个可见页）。上方长页的真实尺寸到达时，scene 的锚点修正会固定首个可见页，把短章推出屏幕，随即误切回上一章（`testPreviousChapterButtonOpensTheChapterStart` 能复现）。现在阅读页处于保留状态时，改为固定阅读页本身的屏幕位置。
+- **恢复等阅读页图片**：阅读页图片到达前，估算高度会把长页保存的页内偏移截断在条漫末端，因此恢复要等阅读页图片到达才算完成（`testDisplayPreferenceAndBackgroundPreserveTheLongPagePosition`）。
+- 程序移动条漫（锚点修正、被末端截断）后清空移动方向基准，不把几何变化当成用户往回滚动。

@@ -27,7 +27,14 @@ final class SourceReaderModel: ObservableObject {
     @Published private(set) var windowIndex = 0
     @Published private(set) var windowRevision = 0
     @Published private(set) var sceneRevision = 0
-    private var window: [IosReaderPage] = []
+    private var window: [IosReaderPage] = [] {
+        didSet {
+            windowPositions = Dictionary(window.enumerated().map { (pageIdentity($0.element), $0.offset) },
+                                         uniquingKeysWith: { first, _ in first })
+        }
+    }
+    /// Window positions by page identity, for the resource window's lookups.
+    private var windowPositions: [String: Int] = [:]
     var storageDirectories: Set<String> {
         Set((window.map(\.chapterId) + [chapter.id]).map {
             ReaderStorageMetadata.directoryID(contentID: content.id, chapterID: $0)
@@ -72,14 +79,31 @@ final class SourceReaderModel: ObservableObject {
     let engine = IosReader()
     var library: IosLibrary?
     private var request: UUID?
-    private var loading: Set<Int> = []
-    /// One download per page of this chapter, shared by the page on screen and the prefetcher (Android's
-    /// `PageLoader` tasks). Finished downloads stay: the artifact on disk is decoded again when the page returns.
-    private var fetches: [Int: PageFetch] = [:]
+    /// One load (download and decode) per page, keyed by the page's identity and owned by the model, not by the view
+    /// that asked: a page view that goes away or a window that is rebuilt never strands a load half-way, and a second
+    /// caller waits for the running one. Loads stop only when their page leaves the resource window (see
+    /// [updateResources]) or the scene changes.
+    private var pageLoads: [String: (serial: Int, task: Task<Void, Never>)] = [:]
+    private var loadSerial = 0
+    /// One download per page, shared by the page on screen and the prefetcher (Android's `PageLoader` tasks), keyed
+    /// by page identity. Finished downloads stay: the artifact on disk is decoded again when the page returns.
+    private var fetches: [String: PageFetch] = [:]
     /// Android's reader threads: pages downloading at the same time, the page on screen before prefetches.
     private let pageGate = RequestGate(limit: ReaderLoading.threads)
-    /// Pages next to the screen being loaded and decoded before the lazy stack shows them (see [neighborPages]).
-    private var neighborLoads: [Int: Task<Void, Never>] = [:]
+    /// The pages to keep decoded and the pages to download ahead, by identity, from the last planned window: the
+    /// shared webtoon prediction in continuous modes, the pager's neighbours and prefetch window in paged ones.
+    private var decodeWindow: Set<String> = []
+    private var downloadWindow: [String] = []
+    /// The planned window was dropped (loads cancelled): the next plan starts from scratch even if the strip did not
+    /// move, or nothing but the reading page would load again.
+    private var needsReplan = true
+    /// The UIKit strip showing a continuous mode (see `ReaderStrip`). Window and size changes are applied to it in the
+    /// same main-thread turn, like Android's `scrollState.snapBy(compensation.deltaY)`.
+    weak var strip: ReaderStripHost?
+    /// The strip has reported where it is since the scene was last laid out: anchored corrections may use it.
+    private var stripPositionValid = false
+    private var stripVelocity = CGPoint.zero
+    private var stripDragging = false
     /// The next chapter's page list and first downloads, started near this chapter's end (see [preloadNextChapter]).
     /// The page list of a preloaded chapter being opened, used by [load] instead of asking the source again.
     private var preloadedPages: Task<[IosSourcePage], Error>?
@@ -115,8 +139,7 @@ final class SourceReaderModel: ObservableObject {
     /// The continuous scroll origin of the position being read now.
     var currentOrigin: CGFloat { CGFloat(engine.scrollOrigin(index: Int32(windowIndex), offset: offset)) }
     private var awaitingRestore = false
-    /// The continuous viewport's first visible page and its offset: window rebuilds keep the strip where the reader
-    /// left it, which can differ from the reading page at the strip's end.
+    /// The continuous viewport's first visible page and its offset, compared by identity to tell a move back.
     private var viewAnchor: (page: IosReaderPage, offset: Float)?
     /// The paged scroll view is moving under the reader's finger (dragged or settling from a drag). Like Android's
     /// pager reports (target page while scrolling, settled page after) and Aidoku's finished page-turn gestures, only
@@ -165,13 +188,16 @@ final class SourceReaderModel: ObservableObject {
             } else {
                 slotIndex = Int(slots.first { $0.placements.contains { Int($0.index) == windowIndex } }?.index ?? 0)
             }
+            // A new layout puts every page elsewhere: the reading position, not the old offset, is restored.
+            stripPositionValid = false
             if loaded && preferences.mode >= 3 { requestScroll(to: currentOrigin) }
             if preferences.mode < 3 { pagedWindowNeedsRestore = true }
         }
         if cropChanged {
-            cancelNeighborLoads()
+            cancelLoads()
             request = UUID()
-            images = [:]; artifacts = [:]; loading = []; pageFailures = [:]; pageRevision += 1
+            images = [:]; artifacts = [:]; pageFailures = [:]; pageRevision += 1
+            updateResources(force: true)
         }
         if loaded && modeChanged { Task { @MainActor [weak self] in self?.publishWindow() } }
     }
@@ -228,26 +254,43 @@ final class SourceReaderModel: ObservableObject {
             startAtEnd = false; ignoresSavedPosition = false
             publishWindow()
             configure(size: viewport, preferences: preferences)
-            restoreOrigin = currentOrigin
-            awaitingRestore = preferences.mode >= 3
             loaded = true; pageRevision += 1
-            preloadAdjacentChapters()
+            stripPositionValid = false
+            if preferences.mode >= 3 { requestScroll(to: currentOrigin) }
+            updateResources(force: true)
             await refreshBookmarks()
         } catch { if !Task.isCancelled && request == token { fail(error) } }
     }
 
+    /// Shows the page at window position [target]: joins the page's running load or starts one, and waits for it.
+    /// The load belongs to the model, so a caller that is cancelled (a page view scrolled away) leaves it running for
+    /// the next one. The reading page's arrival also plans what comes after it.
     func loadImage(at target: Int) async {
-        guard loaded, windowPages.indices.contains(target), images[target] == nil, !loading.contains(target) else {
-            if target == windowIndex { prefetch(); if images[target] != nil { loadNeighbors() } }
-            return
+        guard loaded, window.indices.contains(target) else { return }
+        if images[target] == nil {
+            await startLoad(window[target]).value
         }
-        let token = request
-        let page = windowPages[target]
-        let key = window[target]
-        guard let owner = chapterByID[key.chapterId] else { return }
+        if target == windowIndex { updateResources() }
+    }
+
+    @discardableResult
+    private func startLoad(_ key: IosReaderPage) -> Task<Void, Never> {
+        let id = pageIdentity(key)
+        if let running = pageLoads[id] { return running.task }
+        loadSerial += 1
+        let serial = loadSerial, token = request
+        let task = Task { [weak self] in
+            await self?.performLoad(key, token: token)
+            if self?.pageLoads[id]?.serial == serial { self?.pageLoads[id] = nil }
+        }
+        pageLoads[id] = (serial, task)
+        return task
+    }
+
+    private func performLoad(_ key: IosReaderPage, token: UUID?) async {
+        guard let position = window.firstIndex(of: key), let owner = chapterByID[key.chapterId] else { return }
+        let page = windowPages[position]
         let cropMargins = preferences.cropMargins
-        loading.insert(target)
-        defer { if request == token { loading.remove(target) } }
         do {
             let loadedPage: ReaderLoadedPage
             if ReaderDownloads.isDownloaded(content: content, chapter: owner) {
@@ -256,13 +299,19 @@ final class SourceReaderModel: ObservableObject {
                     page: page, index: Int(key.index), cropMargins: cropMargins
                 )
             } else {
-                loadedPage = try await pageArtifact(at: target).loadedPage(cropMargins: cropMargins)
+                loadedPage = try await pageArtifact(key: key, page: page).loadedPage(cropMargins: cropMargins)
             }
             try Task.checkCancellation()
-            guard request == token else { return }
+            // The window may have been rebuilt meanwhile: the page goes where it is now, if it is still shown.
+            guard request == token, let target = window.firstIndex(of: key) else { return }
             images[target] = loadedPage.image
             artifacts[target] = loadedPage.artifact
             pageFailures[target] = nil
+            // A reading page held ahead of the first visible one (a short page at the strip's end) is what the reader
+            // is on: it, not the first visible page the scene anchors to, stays where it is on screen.
+            let held = preferences.mode >= 3 && stripPositionValid && !awaitingRestore
+                && windowIndex != Int(engine.progress(x: Float(viewportOffset.x), y: Float(viewportOffset.y)).index)
+            let heldStart = held ? readingPageStart() : nil
             let compensated = engine.setImageSize(
                 index: Int32(target),
                 width: Int32(loadedPage.artifact.encodedWidth),
@@ -271,30 +320,32 @@ final class SourceReaderModel: ObservableObject {
             )
             slots = engine.slots()
             if preferences.mode >= 3 {
-                if awaitingRestore {
+                if awaitingRestore || !stripPositionValid {
                     // Keep the semantic target while its estimated size becomes exact, including long-page bookmarks.
                     requestScroll(to: currentOrigin)
+                } else if let heldStart, let start = readingPageStart() {
+                    var point = viewportOffset
+                    if preferences.mode == 3 { point.y += start - heldStart } else { point.x += start - heldStart }
+                    moveStrip(to: IosReaderViewport(x: Float(point.x), y: Float(point.y)))
                 } else if let compensated {
-                    let origin = CGFloat(preferences.mode == 3 ? compensated.y : compensated.x)
-                    let previous = preferences.mode == 3 ? viewportOffset.y : viewportOffset.x
-                    if abs(origin - previous) > 0.01 { requestScroll(to: origin) }
+                    // The scene's anchored correction (Android's `snapBy(compensation.deltaY)`), applied with the new
+                    // layout in the same turn so the page being read does not move.
+                    moveStrip(to: compensated)
+                } else {
+                    strip?.layoutStrip(offset: nil, animated: false)
                 }
             }
             if !slots.contains(where: { Int($0.index) == slotIndex && $0.placements.contains { Int($0.index) == windowIndex } }) {
                 slotIndex = Int(slots.first { $0.placements.contains { Int($0.index) == windowIndex } }?.index ?? 0)
             }
-            // Decoded images stay bounded. Immutable on-disk artifacts survive eviction.
-            let keep = Set((max(0, windowIndex - 2)...min(max(0, windowPages.count - 1), windowIndex + 3))).union(neighborPages())
-            images = images.filter { keep.contains($0.key) }
-            artifacts = artifacts.filter { keep.contains($0.key) }
+            evictImages()
             if slots.first(where: { $0.placements.contains { Int($0.index) == windowIndex } })?
                 .placements.contains(where: { Int($0.index) == target }) == true {
-                prefetch()
-                loadNeighbors()
+                updateResources()
                 await persist()
             }
         } catch {
-            if !Task.isCancelled && request == token {
+            if !Task.isCancelled && request == token, let target = window.firstIndex(of: key) {
                 pageFailures[target] = PageFailure(message: SourceErrorText.describe(error),
                                                    challenge: SourceErrorText.challenge(error))
             }
@@ -302,9 +353,10 @@ final class SourceReaderModel: ObservableObject {
     }
 
     /// The page's downloaded artifact. A prefetch already under way is joined and moved ahead of other prefetches;
-    /// a download only the screen wanted is cancelled once no page view waits for it, as Android releases it.
-    private func pageArtifact(at target: Int) async throws -> IosSourceImage {
-        let fetch = fetches[target].flatMap { $0.failed ? nil : $0 } ?? startFetch(at: target, isPrefetch: false)
+    /// a download only the screen wanted is cancelled once no page load waits for it, as Android releases it.
+    private func pageArtifact(key: IosReaderPage, page: IosSourcePage) async throws -> IosSourceImage {
+        let id = pageIdentity(key)
+        let fetch = fetches[id].flatMap { $0.failed ? nil : $0 } ?? startFetch(key, page: page, isPrefetch: false)
         fetch.consumers += 1
         await pageGate.promote(fetch.ticket, to: ReaderLoading.visiblePriority)
         var released = false
@@ -314,7 +366,7 @@ final class SourceReaderModel: ObservableObject {
             fetch.consumers -= 1
             if fetch.consumers == 0, !fetch.isPrefetch, !fetch.finished {
                 fetch.task.cancel()
-                if self?.fetches[target] === fetch { self?.fetches[target] = nil }
+                if self?.fetches[id] === fetch { self?.fetches[id] = nil }
             }
         }
         defer { release() }
@@ -326,22 +378,22 @@ final class SourceReaderModel: ObservableObject {
     }
 
     @discardableResult
-    private func startFetch(at target: Int, isPrefetch: Bool) -> PageFetch {
-        let key = window[target]
+    private func startFetch(_ key: IosReaderPage, page: IosSourcePage, isPrefetch: Bool) -> PageFetch {
         let prepared = chapterPreloads[key.chapterId]?.fetches[Int(key.index)]
-        let fetch = prepared.flatMap { $0.failed ? nil : $0 } ?? makeFetch(page: windowPages[target], isPrefetch: isPrefetch)
-        fetches[target] = fetch
+        let fetch = prepared.flatMap { $0.failed ? nil : $0 } ?? makeFetch(page: page, isPrefetch: isPrefetch)
+        fetches[pageIdentity(key)] = fetch
         return fetch
     }
 
-    /// A download of [page], not yet tied to a page of the open chapter (a preloaded next chapter's page).
+    /// A download of [page], not yet tied to a page of the open chapter (a preloaded next chapter's page). Cancelling
+    /// it reaches the source call itself (see `IosSources.cancellableImage`), so its reader-thread slot frees at once.
     private func makeFetch(page: IosSourcePage, isPrefetch: Bool) -> PageFetch {
         let runtime = runtime, gate = pageGate
         let ticket = RequestGate.makeTicket()
         let priority = isPrefetch ? ReaderLoading.prefetchPriority : ReaderLoading.visiblePriority
         let task = Task {
             try await withReaderStorage {
-                try await gated(gate, priority: priority, ticket: ticket) { try await runtime.image(page: page) }
+                try await gated(gate, priority: priority, ticket: ticket) { try await runtime.cancellableImage(page: page) }
             }
         }
         let fetch = PageFetch(task: task, ticket: ticket, isPrefetch: isPrefetch)
@@ -349,8 +401,8 @@ final class SourceReaderModel: ObservableObject {
             let succeeded = (try? await task.value) != nil
             if succeeded { fetch.finished = true; return }
             fetch.failed = true
-            guard let self, let target = self.fetches.first(where: { $0.value === fetch })?.key else { return }
-            self.fetches[target] = nil
+            guard let self, let id = self.fetches.first(where: { $0.value === fetch })?.key else { return }
+            self.fetches[id] = nil
         }
         return fetch
     }
@@ -359,72 +411,75 @@ final class SourceReaderModel: ObservableObject {
 
     /// Android's ChapterPages and this host consume the same reading-order window policy: paged modes show the
     /// neighbors' two boundary pages, continuous strips their complete chapters (Android's webtoon shows every loaded
-    /// chapter). Metadata is bounded to three chapters; decoded images remain bounded to the visible neighborhood.
+    /// chapter). Metadata is bounded to three chapters; decoded images remain bounded to the resource window.
+    ///
+    /// A continuous strip is updated in place, like Android's webtoon window expansion: the scene keeps every page's
+    /// identity, so the page under the viewport keeps its place on screen while chapters join or leave before it.
     private func publishWindow() {
         func keys(_ chapter: IosSourceChapter?) -> [IosReaderPage] {
             guard let chapter, let pages = chapterPages[chapter.id] else { return [] }
             return pages.indices.map { IosReaderPage(chapterId: chapter.id, index: Int32($0)) }
         }
+        let continuous = preferences.mode >= 3
         let updated = engine.chapterWindow(previous: keys(previousChapter), current: keys(chapter),
                                            next: keys(nextChapter),
-                                           adjacentPageCount: preferences.mode < 3 ? 2 : Int32.max)
-        if loaded && !isLoadingPages && appendsInPlace(updated) { appendWindow(updated); return }
-        if loaded && (isUserPaging || isLoadingPages || isPageZoomed) { pendingWindow = true; return }
+                                           adjacentPageCount: continuous ? Int32.max : 2)
+        if loaded && (isLoadingPages || isPageZoomed || (!continuous && isUserPaging)) { pendingWindow = true; return }
         pendingWindow = false
         guard updated != window else { return }
-        let old = Dictionary(uniqueKeysWithValues: window.enumerated().map { (pageIdentity($0.element), $0.offset) })
-        let oldImages = images, oldArtifacts = artifacts, oldFailures = pageFailures, oldFetches = fetches
-        let segment = slots.first { Int($0.index) == slotIndex }?.placements.first { Int($0.index) == windowIndex }?.segment
-        // Where the strip is shown now, unless a restore to another position is still on its way.
-        let anchor = awaitingRestore ? nil : viewAnchor
-        cancelNeighborLoads()
-        for fetch in fetches.values where !fetch.finished { fetch.task.cancel() }
-        if loaded { request = UUID() }
-        loading = []
-        images = [:]; artifacts = [:]; pageFailures = [:]; fetches = [:]
-        for (position, key) in updated.enumerated() {
-            guard let before = old[pageIdentity(key)] else { continue }
-            images[position] = oldImages[before]; artifacts[position] = oldArtifacts[before]
-            pageFailures[position] = oldFailures[before]
-            if let fetch = oldFetches[before], fetch.finished { fetches[position] = fetch }
+        let previous = window
+        let positions = Dictionary(updated.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: { first, _ in first })
+        func remap<Value>(_ values: [Int: Value]) -> [Int: Value] {
+            var result: [Int: Value] = [:]
+            for (index, value) in values where previous.indices.contains(index) {
+                if let position = positions[previous[index]] { result[position] = value }
+            }
+            return result
         }
+        // Loads and downloads are keyed by page identity and keep running; only position-keyed state moves.
+        images = remap(images); artifacts = remap(artifacts); pageFailures = remap(pageFailures)
+        let segment = slots.first { Int($0.index) == slotIndex }?.placements.first { Int($0.index) == windowIndex }?.segment
         window = updated
         windowPages = updated.compactMap { chapterPages[$0.chapterId]?[Int($0.index)] }
         windowIndex = updated.firstIndex { $0.chapterId == chapter.id && Int($0.index) == index } ?? 0
-        engine.setPages(pages: updated)
-        slots = []
-        configure(size: viewport, preferences: preferences)
-        slotIndex = Int(slots.first { $0.placements.contains {
-            Int($0.index) == windowIndex && (segment == nil || $0.segment == segment)
-        }}?.index ?? 0)
-        if preferences.mode >= 3 {
-            let anchored = anchor.flatMap { anchor in
-                updated.firstIndex(of: anchor.page).map { CGFloat(engine.scrollOrigin(index: Int32($0), offset: anchor.offset)) }
-            }
-            requestScroll(to: anchored ?? currentOrigin)
+        if continuous && loaded && !previous.isEmpty && stripPositionValid && !awaitingRestore {
+            let moved = engine.setPages(pages: updated, viewportX: Float(viewportOffset.x),
+                                        viewportY: Float(viewportOffset.y))
+            slots = engine.slots()
+            slotIndex = Int(slots.first { $0.anchor == Int32(windowIndex) }?.index ?? 0)
+            windowRevision += 1
+            if let moved { moveStrip(to: moved) } else { requestScroll(to: currentOrigin) }
+        } else {
+            engine.setPages(pages: updated)
+            slots = []
+            configure(size: viewport, preferences: preferences)
+            slotIndex = Int(slots.first { $0.placements.contains {
+                Int($0.index) == windowIndex && (segment == nil || $0.segment == segment)
+            }}?.index ?? 0)
+            windowRevision += 1
+            if continuous { requestScroll(to: currentOrigin) }
         }
-        windowRevision += 1; pageRevision += 1
         retainAdjacentChapters()
-        if loaded { loadNeighbors() }
+        if loaded { updateResources(force: true) }
     }
 
-    /// The window only grows after its end and the strip grows forward from a fixed physical start (top-to-bottom or
-    /// left-to-right), so every page already shown keeps its scroll coordinates.
-    private func appendsInPlace(_ updated: [IosReaderPage]) -> Bool {
-        preferences.mode >= 3 && !preferences.readsRightToLeft && !window.isEmpty && updated.count > window.count
-            && updated.starts(with: window)
+    /// Moves the strip to a viewport the scene compensated (scene coordinates are the strip's own offsets).
+    /// The reading page's physical start along the strip's axis (scene coordinates).
+    private func readingPageStart() -> CGFloat? {
+        guard slots.indices.contains(windowIndex), let placement = slots[windowIndex].placements.first else { return nil }
+        return CGFloat(preferences.mode == 3 ? placement.y : placement.x)
     }
 
-    /// The next chapter joins the end of a continuous strip without moving it, even while the reader is scrolling:
-    /// indices, decoded pages and downloads under way all stay valid, so nothing is cancelled or scrolled again.
-    private func appendWindow(_ updated: [IosReaderPage]) {
-        pendingWindow = false
-        window = updated
-        windowPages = updated.compactMap { chapterPages[$0.chapterId]?[Int($0.index)] }
-        engine.setPages(pages: updated)
-        slots = engine.slots()
-        retainAdjacentChapters()
-        loadNeighbors()
+    /// The strip's end can clamp it (a short chapter after a long one), which changes the first visible page without the
+    /// reader moving: the motion anchor restarts from where the strip lands, so that is not read as a move back.
+    private func moveStrip(to viewport: IosReaderViewport) {
+        let limit = continuousScrollRange.upperBound
+        var point = CGPoint(x: CGFloat(viewport.x), y: CGFloat(viewport.y))
+        if preferences.mode == 3 { point.y = min(max(0, point.y), limit) } else { point.x = min(max(0, point.x), limit) }
+        viewportOffset = point
+        restoreOrigin = preferences.mode == 3 ? point.y : point.x
+        viewAnchor = nil
+        strip?.layoutStrip(offset: point, animated: false)
     }
 
     private func retainAdjacentChapters() {
@@ -435,11 +490,25 @@ final class SourceReaderModel: ObservableObject {
         }
     }
 
+    /// The strip's distance from its start along the reading direction, in screens.
+    private var screensFromStripStart: CGFloat {
+        let extent = max(1, preferences.mode == 3 ? viewport.height : viewport.width)
+        let primary = preferences.mode == 3 ? viewportOffset.y : viewportOffset.x
+        let fromStart = preferences.continuousForwardSign > 0 ? primary : CGFloat(engine.scrollLimit()) - primary
+        return max(0, fromStart) / extent
+    }
+
+    /// Paged modes load both neighbours near the chapter's edges. A continuous strip loads the next chapter ten pages
+    /// before its end (Android's webtoon) but the previous one only once the reader is within three screens of the
+    /// strip's start, as Aidoku prepends only at the top: a chapter opened in the middle does not grow backwards.
     private func preloadAdjacentChapters() {
         guard loaded else { return }
-        let distance = preferences.mode >= 3 ? 10 : 2
-        let targets = [index <= distance ? previousChapter : nil,
-                       index >= pages.count - 1 - distance ? nextChapter : nil].compactMap { $0 }
+        let continuous = preferences.mode >= 3
+        let nearStart = continuous
+            ? stripPositionValid && !awaitingRestore && (screensFromStripStart < 3 || index <= 1)
+            : index <= 2
+        let nearEnd = index >= pages.count - 1 - (continuous ? 10 : 2)
+        let targets = [nearStart ? previousChapter : nil, nearEnd ? nextChapter : nil].compactMap { $0 }
         for target in targets where chapterPages[target.id] == nil && chapterPreloads[target.id] == nil {
             let runtime = runtime, content = content
             let preload = ChapterPreload(chapterId: target.id, pages: Task {
@@ -481,106 +550,126 @@ final class SourceReaderModel: ObservableObject {
         }
         if index != Int(key.index) { index = Int(key.index) }
         preloadAdjacentChapters()
-        if pendingWindow && !isUserPaging {
+        // A strip takes the new window at once (its anchor keeps the screen still); a pager waits for the drag.
+        if pendingWindow && (preferences.mode >= 3 || !isUserPaging) {
             Task { @MainActor [weak self] in self?.publishWindow() }
         }
     }
 
-    /// Android's reader offers the ten pages after the visible ones and keeps the nearest `prefetch limit` of them
-    /// queued; pages that dropped out of that window are no longer wanted. Downloaded chapters need nothing.
-    private func prefetch() {
-        guard loaded, !windowPages.isEmpty else { return }
-        let upper = slots.first { $0.placements.contains { Int($0.index) == windowIndex } }?
-            .placements.map { Int($0.index) }.max() ?? windowIndex
+    /// Plans the pages to decode and to download ahead, then starts what is missing and stops what is no longer
+    /// wanted. Continuous strips use the shared webtoon prediction (`IosReader.resourceWindow`, Android's
+    /// `ReaderPrediction`), which only replans when the visible pages, the scene or the motion class change, unless
+    /// [force]d; paged modes keep Android's pager neighbours and its ten-page prefetch window.
+    private func updateResources(force: Bool = false) {
+        guard loaded, !window.isEmpty else { return }
         preloadAdjacentChapters()
-        let window = Set((upper + 1)..<min(windowPages.count, upper + 1 + ReaderLoading.prefetchWindow))
-        for (target, fetch) in fetches where fetch.isPrefetch && !fetch.finished && fetch.consumers == 0 && !window.contains(target) {
-            fetch.task.cancel()
-            fetches[target] = nil
+        if preferences.mode >= 3 {
+            guard let planned = engine.resourceWindow(
+                x: Float(viewportOffset.x), y: Float(viewportOffset.y),
+                velocityX: Float(stripVelocity.x), velocityY: Float(stripVelocity.y),
+                dragging: stripDragging, force: force || needsReplan
+            ) else { return }
+            let requests = planned.filter { window.indices.contains(Int($0.index)) }
+                .sorted { $0.priority < $1.priority }
+            decodeWindow = Set(requests.filter(\.decode).map { pageIdentity(window[Int($0.index)]) })
+            downloadWindow = requests.filter { !$0.decode }.map { pageIdentity(window[Int($0.index)]) }
+            // Visible and near pages load at once, nearest priority first.
+            for request in requests where request.decode { startWanted(Int(request.index)) }
+        } else {
+            let neighbors = neighborPages()
+            decodeWindow = Set(neighbors.map { pageIdentity(window[$0]) })
+            let upper = slots.first { $0.placements.contains { Int($0.index) == windowIndex } }?
+                .placements.map { Int($0.index) }.max() ?? windowIndex
+            let ahead = (upper + 1)..<min(window.count, upper + 1 + ReaderLoading.prefetchWindow)
+            downloadWindow = ahead.map { pageIdentity(window[$0]) }
+            for target in neighbors.sorted() { startWanted(target) }
         }
-        guard ReaderLoading.isPrefetchApplicable else { return }
-        let chapterIDs = Set(window.map { self.window[$0].chapterId })
-        let downloaded = Set(chapterIDs.compactMap { chapterByID[$0] }.filter {
-            ReaderDownloads.isDownloaded(content: content, chapter: $0)
-        }.map(\.id))
-        let wanted = window.sorted().filter {
-            fetches[$0] == nil && images[$0] == nil && !downloaded.contains(self.window[$0].chapterId)
-        }.prefix(ReaderLoading.prefetchLimit)
-        for target in wanted { startFetch(at: target, isPrefetch: true) }
+        needsReplan = false
+        for (id, load) in pageLoads where !decodeWindow.contains(id) {
+            load.task.cancel(); pageLoads[id] = nil
+        }
+        prefetch()
+        evictImages()
     }
 
-    /// Android's pager composes one slot on each side of the screen (`beyondViewportPageCount = 1`) and the webtoon
-    /// strip keeps two screens ahead (`WEBTOON_AHEAD_CACHE_FRACTION`); those pages load at visible priority and are
-    /// decoded before they scroll in, where a lazy stack would only start them once the page view appears.
+    /// Plans again from scratch, starting every wanted page that is neither shown nor loading.
+    func refreshResources() { updateResources(force: true) }
+
+    private func startWanted(_ target: Int) {
+        guard window.indices.contains(target), images[target] == nil, pageFailures[target] == nil else { return }
+        startLoad(window[target])
+    }
+
+    /// Downloads the planned lookahead that is not decoded, nearest first and at most the prefetch limit at a time
+    /// (Android's `PageLoader` queue); prefetches that dropped out of the window are cancelled. Downloaded chapters
+    /// and saving modes need nothing.
+    private func prefetch() {
+        let wanted = Set(downloadWindow)
+        for (id, fetch) in fetches where fetch.isPrefetch && !fetch.finished && fetch.consumers == 0
+            && !wanted.contains(id) && !decodeWindow.contains(id) {
+            fetch.task.cancel()
+            fetches[id] = nil
+        }
+        guard ReaderLoading.isPrefetchApplicable else { return }
+        var started = 0
+        for id in downloadWindow where started < ReaderLoading.prefetchLimit {
+            guard fetches[id] == nil, let position = windowPositions[id], images[position] == nil,
+                  let owner = chapterByID[window[position].chapterId],
+                  !ReaderDownloads.isDownloaded(content: content, chapter: owner) else { continue }
+            startFetch(window[position], page: windowPages[position], isPrefetch: true)
+            started += 1
+        }
+    }
+
+    /// Decoded images stay bounded to the planned decode window and the pages on screen; immutable on-disk artifacts
+    /// survive eviction and are decoded again when their page returns.
+    private func evictImages() {
+        var keep = Set(decodeWindow.compactMap { windowPositions[$0] })
+        if preferences.mode >= 3 {
+            let x = Float(viewportOffset.x), y = Float(viewportOffset.y)
+            let first = Int(engine.progress(x: x, y: y).index), last = Int(engine.lastVisible(x: x, y: y))
+            if first <= last { keep.formUnion(first...last) }
+        } else {
+            keep.formUnion(max(0, windowIndex - 2)...min(max(0, window.count - 1), windowIndex + 3))
+        }
+        keep.insert(windowIndex)
+        // Unchanged dictionaries are not assigned again: every assignment re-renders every page view.
+        if images.keys.contains(where: { !keep.contains($0) }) { images = images.filter { keep.contains($0.key) } }
+        if artifacts.keys.contains(where: { !keep.contains($0) }) {
+            artifacts = artifacts.filter { keep.contains($0.key) }
+        }
+    }
+
+    /// Android's pager composes one slot on each side of the screen (`beyondViewportPageCount = 1`); Aidoku keeps two
+    /// pages ahead decoded (`Reader.pagesToPreload`). Those pages load at visible priority before they turn in.
     private func neighborPages() -> Set<Int> {
         guard let current = slots.firstIndex(where: { $0.placements.contains { Int($0.index) == windowIndex } }) else {
             return []
         }
         var result = Set<Int>()
-        func add(_ position: Int) {
-            guard slots.indices.contains(position) else { return }
+        for position in [current - 1, current, current + 1, current + 2] where slots.indices.contains(position) {
             for placement in slots[position].placements { result.insert(Int(placement.index)) }
-        }
-        // The slot on screen too: a page view that found its page already loading waits for this load.
-        add(current - 1); add(current)
-        if preferences.mode >= 3 {
-            let extent = preferences.mode == 3 ? viewport.height : viewport.width
-            var covered: CGFloat = 0
-            var position = current
-            // The screen itself plus two more.
-            while slots.indices.contains(position), covered < extent * 3 {
-                add(position)
-                if let placement = slots[position].placements.first {
-                    covered += max(1, CGFloat(preferences.mode == 3 ? placement.height : placement.width))
-                } else {
-                    covered += 1
-                }
-                position += 1
-            }
-        } else {
-            // Android composes one slot ahead; Aidoku keeps two pages ahead decoded (`Reader.pagesToPreload`).
-            add(current + 1); add(current + 2)
         }
         return result
     }
 
-    private func loadNeighbors() {
-        guard loaded else { return }
-        let wanted = neighborPages()
-        for (target, task) in neighborLoads where !wanted.contains(target) {
-            task.cancel()
-            neighborLoads[target] = nil
-        }
-        let token = request
-        for target in wanted.sorted() where neighborLoads[target] == nil && images[target] == nil
-            && !loading.contains(target) {
-            neighborLoads[target] = Task { [weak self] in
-                await self?.loadImage(at: target)
-                guard !Task.isCancelled, let self, self.request == token else { return }
-                self.neighborLoads[target] = nil
-            }
-        }
-    }
-
     /// Leaving the reader: nothing ahead of the screen is wanted any more.
     func stopPreloading() {
-        cancelNeighborLoads()
+        cancelLoads()
         for preload in chapterPreloads.values { preload.cancel() }; chapterPreloads = [:]
-        for fetch in fetches.values where !fetch.finished { fetch.task.cancel() }
         fetches = fetches.filter { $0.value.finished }
-        request = UUID(); loading = []
+        request = UUID()
         isLoadingPages = false
     }
 
-    private func cancelNeighborLoads() {
-        for task in neighborLoads.values { task.cancel() }
-        neighborLoads = [:]
-    }
-
-    private func cancelFetches() {
-        cancelNeighborLoads()
+    /// Stops every page load and unfinished download (a new scene, a crop change or leaving the reader).
+    private func cancelLoads() {
+        for load in pageLoads.values { load.task.cancel() }
+        pageLoads = [:]
         for fetch in fetches.values where !fetch.finished { fetch.task.cancel() }
-        fetches = [:]
+        fetches = fetches.filter { $0.value.finished }
+        decodeWindow = []; downloadWindow = []
+        needsReplan = true
     }
 
     func displayImage(for target: Int, segment: Int) -> UIImage? {
@@ -616,25 +705,35 @@ final class SourceReaderModel: ObservableObject {
         Task { await persist() }
     }
 
-    /// The continuous scroll view's reachable offsets along the reading axis, once it has reported them.
-    private(set) var scrollRange: ClosedRange<CGFloat>?
-    var continuousScrollRange: ClosedRange<CGFloat> { scrollRange ?? 0...CGFloat(engine.scrollLimit()) }
+    /// The strip's reachable offsets along the reading axis: it shows the scene with no insets, so they are the
+    /// scene's own.
+    var continuousScrollRange: ClosedRange<CGFloat> { 0...CGFloat(engine.scrollLimit()) }
 
-    func continuousPosition(x: CGFloat, y: CGFloat, range: ClosedRange<CGFloat>) {
+    /// The vertical webtoon scrolls down; the horizontal strip (mode 4) sideways.
+    var stripIsVertical: Bool { preferences.mode != 4 }
+
+    /// Where the strip shows now (its native offset is the scene's), for taps, auto-scroll and zoom.
+    var stripOffset: CGPoint { strip?.offset ?? viewportOffset }
+
+    /// The strip moved to ([x], [y]) (scene coordinates), at [velocity] px/s, with a finger on it when [dragging].
+    func continuousPosition(x: CGFloat, y: CGFloat, velocity: CGPoint = .zero, dragging: Bool = false) {
         guard loaded, !windowPages.isEmpty else { return }
-        scrollRange = range
-        let limit = CGFloat(engine.scrollLimit())
+        stripVelocity = velocity; stripDragging = dragging
+        let range = continuousScrollRange
+        let limit = range.upperBound
         let raw = preferences.mode == 3 ? y : x
         let primary = min(max(0, raw), limit)
         viewportOffset = CGPoint(x: preferences.mode == 3 ? x : primary,
                                  y: preferences.mode == 3 ? primary : y)
         if awaitingRestore {
-            let current = raw
-            // A target past what the scroll view can reach rests at its edge.
+            // A target past what the strip can reach rests at its edge.
             let target = min(max(restoreOrigin, range.lowerBound), range.upperBound)
-            guard images[windowIndex] != nil, abs(current - target) < 2 else { return }
+            // Until the reading page's real size is known, its estimated height can clamp the target short of a long
+            // page's saved offset: the restore holds the reading page and offset, not where the strip landed.
+            guard images[windowIndex] != nil, abs(raw - target) < 2 else { return }
             awaitingRestore = false
         }
+        stripPositionValid = true
         let progress = engine.progress(x: Float(viewportOffset.x), y: Float(viewportOffset.y))
         let first = min(max(0, Int(progress.index)), max(0, windowPages.count - 1))
         let last = Int(engine.lastVisible(x: Float(viewportOffset.x), y: Float(viewportOffset.y)))
@@ -663,6 +762,7 @@ final class SourceReaderModel: ObservableObject {
         offset = nextOffset
         let nextSlot = Int(slots.first { $0.anchor == Int32(windowIndex) }?.index ?? 0)
         if slotIndex != nextSlot { slotIndex = nextSlot }
+        updateResources()
     }
 
     func setStripZoom(_ value: CGFloat) {
@@ -672,15 +772,33 @@ final class SourceReaderModel: ObservableObject {
         stripZoom = zoom
         engine.setZoom(zoom: Float(zoom))
         slots = engine.slots()
+        updateResources(force: true)
     }
 
     func userScrolled() { awaitingRestore = false; autoScroll = false }
 
+    /// Restores the strip to [origin] along the reading axis. The strip moves there at once when it is shown, or
+    /// when it is next laid out (`ReaderStrip` reads [restoreOrigin]); until it reports that position, the reading page
+    /// and offset stay the target, so late image sizes re-resolve it.
     private func requestScroll(to origin: CGFloat) {
         restoreOrigin = origin
-        let current = preferences.mode == 3 ? viewportOffset.y : viewportOffset.x
-        awaitingRestore = images[windowIndex] == nil || abs(current - origin) >= 2
+        awaitingRestore = true
+        viewAnchor = nil
         scrollRevision += 1
+        strip?.layoutStrip(origin: origin, animated: false)
+    }
+
+    /// Scrolls the strip along the reading axis (taps, keys, auto-scroll), keeping its cross-axis pan.
+    func scrollStrip(to origin: CGFloat, animated: Bool) {
+        strip?.layoutStrip(origin: origin, animated: animated)
+    }
+
+    /// The strip was created (a mode switch or a new chapter scene) and laid out: it starts at the reading position.
+    func stripAttached() {
+        guard loaded, preferences.mode >= 3 else { return }
+        stripPositionValid = false
+        // The reading page and its offset are the position: during a restore they are its target.
+        requestScroll(to: currentOrigin)
     }
 
     var readingPositionDescription: String {
@@ -765,11 +883,13 @@ final class SourceReaderModel: ObservableObject {
         // Explicit jumps start a new scene; normal boundary paging promotes the existing window instead.
         for preload in chapterPreloads.values where preload !== adopted { preload.cancel() }
         chapterPreloads = adopted.map { [target.id: $0] } ?? [:]
-        cancelFetches()
+        cancelLoads()
+        fetches = [:]
         preloadedPages = Task { prepared }
-        pages = []; window = []; windowPages = []; slots = []; images = [:]; artifacts = [:]; loading = []; pageFailures = [:]
+        pages = []; window = []; windowPages = []; slots = []; images = [:]; artifacts = [:]; pageFailures = [:]
         chapterPages = [target.id: prepared]
         index = 0; windowIndex = 0; slotIndex = 0; offset = 0; viewportOffset = .zero; viewAnchor = nil; engine.reset()
+        stripPositionValid = false
         await load()
     }
 
@@ -881,10 +1001,13 @@ final class SourceReaderModel: ObservableObject {
     }
 
     func retryPage(at target: Int) async {
-        guard windowPages.indices.contains(target), !loading.contains(target) else { return }
+        guard window.indices.contains(target) else { return }
+        let id = pageIdentity(window[target])
         pageFailures[target] = nil
-        fetches[target]?.task.cancel()
-        fetches[target] = nil
+        if pageLoads[id] == nil, let fetch = fetches[id] {
+            fetch.task.cancel()
+            fetches[id] = nil
+        }
         await loadImage(at: target)
     }
 }
@@ -914,12 +1037,8 @@ struct SourceReaderView: View {
     @State private var exporting = false
     @State private var cropping = false
     @State private var croppedImage: UIImage?
-    @State private var continuousPosition = ScrollPosition(idType: Int.self)
-    /// The continuous strip's native offset, read by taps, auto-scroll and zoom. Not view state: it changes every
-    /// frame of a scroll, and re-rendering the reader for it made every page resolve its tiles per frame.
+    /// The paged scroll view's offset. Not view state: it changes every frame of a scroll.
     @State private var scroll = ReaderScrollTracker()
-    /// Where the strip's tiles are resolved for: follows the scroll in steps and when it settles.
-    @State private var tileViewport = CGPoint.zero
     @State private var downloadStatus: String?
     @State private var showingDownloads = false
     @State private var isReaderVisible = false
@@ -945,12 +1064,34 @@ struct SourceReaderView: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
+        ZStack {
+            // The pages fill the whole screen, under the status bar and the home indicator, as Aidoku's reader does
+            // (`contentInsetAdjustmentBehavior = .never`); only the controls keep to the safe area. Showing or hiding
+            // the controls (and the status bar with them) therefore never resizes or moves the pages.
+            GeometryReader { geometry in
                 readingSurface(size: geometry.size)
-                    // Paged slots take their own taps (`ReaderPageZoom`), where a double tap must win over a single.
+                    // Paged slots (`ReaderPageZoom`) and the strip (`ReaderStrip`) take their own taps, where a double
+                    // tap must win over a single.
                     .gesture(SpatialTapGesture(coordinateSpace: .local).onEnded { tap(at: $0.location, size: geometry.size) },
-                             including: settings.value.mode >= 3 || model.slots.isEmpty ? .all : .subviews)
+                             including: settings.value.mode < 3 && model.slots.isEmpty ? .all : .subviews)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
+                    .onChange(of: geometry.size, initial: true) { _, size in
+                        model.configure(size: size, preferences: settings.value.layout(for: size,
+                            wideWindow: horizontalSizeClass == .regular))
+                    }
+                    .onChange(of: settings.value) { _, value in
+                        model.configure(size: geometry.size, preferences: value.layout(for: geometry.size,
+                            wideWindow: horizontalSizeClass == .regular))
+                    }
+                    .onChange(of: horizontalSizeClass) { _, sizeClass in
+                        model.configure(size: geometry.size, preferences: settings.value.layout(for: geometry.size,
+                            wideWindow: sizeClass == .regular))
+                    }
+            }
+            .ignoresSafeArea()
+            GeometryReader { geometry in
+            ZStack {
                 if model.isLoadingPages { ProgressView("正在读取漫画页…").tint(.gray) }
                 if let error = model.error {
                     VStack {
@@ -967,21 +1108,9 @@ struct SourceReaderView: View {
                 }
                 if controls { chromeView(height: geometry.size.height) }
             }
-            .clipped()
-            .onChange(of: geometry.size, initial: true) { _, size in
-                model.configure(size: size, preferences: settings.value.layout(for: size,
-                    wideWindow: horizontalSizeClass == .regular))
-            }
-            .onChange(of: settings.value) { _, value in
-                model.configure(size: geometry.size, preferences: value.layout(for: geometry.size,
-                    wideWindow: horizontalSizeClass == .regular))
-            }
-            .onChange(of: horizontalSizeClass) { _, sizeClass in
-                model.configure(size: geometry.size, preferences: settings.value.layout(for: geometry.size,
-                    wideWindow: sizeClass == .regular))
+            .frame(width: geometry.size.width, height: geometry.size.height)
             }
         }
-        // Outside the clipped canvas, so the page background also fills the status bar and home indicator areas.
         .background(settings.background.ignoresSafeArea())
         .background(EdgeSwipeBack())
         .toolbar(.hidden, for: .navigationBar, .tabBar)
@@ -1009,20 +1138,10 @@ struct SourceReaderView: View {
             // A reader shown again keeps its model: it continues where it is rather than where this model began.
             let shownAgain = model.loaded
             model.library = library.library; await model.load()
-            if settings.value.mode >= 3 {
-                await Task.yield()
-                scrollContinuous(to: shownAgain ? model.currentOrigin : model.restoreOrigin)
-            }
+            if shownAgain && settings.value.mode >= 3 { model.stripAttached() }
         }
         .task(id: "\(model.windowRevision)-\(model.windowIndex)") {
             await model.loadImage(at: model.windowIndex); await model.persist()
-        }
-        .onChange(of: model.scrollRevision) { _, revision in
-            let origin = model.restoreOrigin
-            Task { @MainActor in
-                await Task.yield()
-                if model.scrollRevision == revision { scrollContinuous(to: origin) }
-            }
         }
         .task(id: model.autoScroll) {
             var elapsed = 0
@@ -1041,7 +1160,7 @@ struct SourceReaderView: View {
                     guard !Task.isCancelled, model.autoScroll else { break }
                     // A window rebuilt during the sleep moves the strip: wait for its restore, not the old offset.
                     guard model.isReadyForAutoScroll else { continue }
-                    let current = settings.value.mode == 3 ? scroll.offset.y : scroll.offset.x
+                    let current = settings.value.mode == 3 ? model.stripOffset.y : model.stripOffset.x
                     let direction = settings.value.continuousForwardSign
                     let next = current + direction * CGFloat(model.engine.autoScrollDistance(speed: Float(settings.value.autoSpeed), elapsedMillis: 16))
                     let range = model.continuousScrollRange
@@ -1049,7 +1168,7 @@ struct SourceReaderView: View {
                         // Land on the edge first: the strip's end reads its last visible page (and its chapter).
                         let edge = direction > 0 ? range.upperBound : range.lowerBound
                         if abs(current - edge) > 0.5 && !landedOnEdge {
-                            landedOnEdge = true; scrollContinuous(to: edge); continue
+                            landedOnEdge = true; model.scrollStrip(to: edge, animated: false); continue
                         }
                         // The next chapter joins the strip once its pages arrive; the scroll then simply continues.
                         if model.isLoadingNextChapter { continue }
@@ -1057,7 +1176,7 @@ struct SourceReaderView: View {
                         model.autoScroll = false; await model.persist(); break
                     }
                     landedOnEdge = false
-                    scrollContinuous(to: next)
+                    model.scrollStrip(to: next, animated: false)
                     elapsed += 16
                     if elapsed >= 5000 { elapsed = 0; await model.persist() }
                     continue
@@ -1140,49 +1259,52 @@ struct SourceReaderView: View {
 
     @ViewBuilder
     private func scrollingSurface(size: CGSize) -> some View {
-        // Android creates its pager with the reading page as `initialPage` once the pages are known (Aidoku sets its
-        // page view controller to the reading page). A paged scroll view built before that would start on the first
-        // slot and have to be moved there afterwards, which a lazy stack that has not laid out yet drops.
-        if settings.value.mode >= 3 || model.loaded { scrollView(size: size) }
+        if settings.value.mode >= 3 {
+            // Continuous strips are a UIKit scroll view laid out from the shared scene, as Android's webtoon draws the
+            // scene itself: one coordinate system, window changes and size corrections applied in the same turn.
+            ReaderStrip(model: model, settings: settings) { tap(at: $0, size: size) }
+                .id("\(settings.value.mode)-\(model.sceneRevision)")
+        } else if model.loaded {
+            // Android creates its pager with the reading page as `initialPage` once the pages are known (Aidoku sets
+            // its page view controller to the reading page). A paged scroll view built before that would start on the
+            // first slot and have to be moved there afterwards, which a lazy stack that has not laid out yet drops.
+            scrollView(size: size)
+        }
     }
 
     @ViewBuilder
     private func scrollView(size: CGSize) -> some View {
-        let vertical = settings.value.mode == 2 || settings.value.mode == 3
-        let continuous = settings.value.mode >= 3
+        let vertical = settings.value.mode == 2
         let windowRevision = model.windowRevision
         let sceneRevision = model.sceneRevision
         let mode = settings.value.mode
-        // Continuous strips can pan across their reading axis after zooming.
         ScrollViewReader { proxy in
-        ScrollView(continuous ? [.vertical, .horizontal] : vertical ? .vertical : .horizontal) {
+        ScrollView(vertical ? .vertical : .horizontal) {
             if vertical {
-                LazyVStack(spacing: 0) { slots(size: size, continuous: continuous) }
-                    .scrollTargetLayout(isEnabled: !continuous)
+                LazyVStack(spacing: 0) { slots(size: size) }.scrollTargetLayout()
             } else {
-                LazyHStack(spacing: 0) { slots(size: size, continuous: continuous) }
-                    .scrollTargetLayout(isEnabled: !continuous)
+                LazyHStack(spacing: 0) { slots(size: size) }.scrollTargetLayout()
             }
         }
         .scrollIndicators(.hidden)
         .accessibilityIdentifier("reader.canvas")
         .accessibilityValue(model.readingPositionDescription)
         .scrollBounceBehavior(.always, axes: vertical ? .vertical : .horizontal)
-        .modifier(ReaderPaging(paged: !continuous))
+        .scrollTargetBehavior(.viewAligned)
         // Paged scroll views are only moved through the proxy and only report the slot they settled on: a position
         // binding is a second writer that moves the pages under the finger and re-applies stale targets after the
         // window is rebuilt around a new chapter.
-        .modifier(ReaderScrollPosition(continuous: continuous, position: $continuousPosition))
         // All modes use physical scroll coordinates; RTL reverses slot order rather than the scroll coordinate system.
         .environment(\.layoutDirection, .leftToRight)
         .id("\(mode)-\(model.sceneRevision)")
-        .onScrollGeometryChange(for: ReaderScrollViewport.self) { ReaderScrollViewport($0, vertical: vertical) }
-        action: { _, viewport in
+        .onScrollGeometryChange(for: CGPoint.self) {
+            CGPoint(x: $0.contentOffset.x + $0.contentInsets.leading, y: $0.contentOffset.y + $0.contentInsets.top)
+        }
+        action: { _, point in
             guard model.windowRevision == windowRevision, model.sceneRevision == sceneRevision,
                   settings.value.mode == mode else { return }
-            let point = continuous ? viewport.rawOffset : viewport.offset
-            if !continuous { scroll.pagedOffset = point }
-            if !continuous, model.pagedWindowNeedsRestore, !model.isUserPaging, !model.slots.isEmpty {
+            scroll.pagedOffset = point
+            if model.pagedWindowNeedsRestore, !model.isUserPaging, !model.slots.isEmpty {
                 let extent = vertical ? size.height : size.width
                 let physical = settings.value.readsRightToLeft ? model.slots.count - 1 - model.slotIndex : model.slotIndex
                 let target = CGFloat(physical) * extent
@@ -1191,14 +1313,6 @@ struct SourceReaderView: View {
                 } else {
                     scrollToReadingSlot(proxy)
                 }
-                return
-            }
-            if continuous {
-                scroll.offset = point
-                if abs(point.x - tileViewport.x) > size.width / 4 || abs(point.y - tileViewport.y) > size.height / 4 {
-                    tileViewport = point
-                }
-                model.continuousPosition(x: point.x, y: point.y, range: viewport.rawRange)
             }
         }
         .onScrollPhaseChange { previous, phase, context in
@@ -1214,9 +1328,9 @@ struct SourceReaderView: View {
             switch phase {
             case .tracking: break
             case .interacting, .decelerating: model.isUserPaging = true
-            case .idle where !continuous:
+            case .idle:
                 settlePaging(context.geometry, vertical: vertical, size: size, proxy: proxy)
-            case .idle, .animating:
+            case .animating:
                 // The settling report can arrive in the same update as the phase change.
                 Task { @MainActor in
                     await Task.yield()
@@ -1226,46 +1340,34 @@ struct SourceReaderView: View {
                 }
             @unknown default: break
             }
-            if phase == .idle && continuous && tileViewport != scroll.offset { tileViewport = scroll.offset }
             if phase == .idle && !model.autoScroll { Task { await model.persist() } }
         }
-        .modifier(ReaderStripZoom(enabled: continuous, zoom: model.stripZoom, size: size) { zoom, location in
-            zoomStrip(to: zoom, at: location, size: size)
-        })
-        .onChange(of: model.loaded) { _, loaded in
-            if continuous && loaded { scrollContinuous(to: model.restoreOrigin) }
-        }
         .onChange(of: model.windowRevision) { _, _ in
-            if continuous { scrollContinuous(to: model.restoreOrigin) }
-            else {
-                // The rebuilt window keeps the old pixel offset, which now shows another page: move to the reading
-                // slot before anything reads the offset (the restore in the geometry action repeats it if needed).
+            // The rebuilt window keeps the old pixel offset, which now shows another page: move to the reading slot
+            // before anything reads the offset (the restore in the geometry action repeats it if needed).
+            if !model.isUserPaging { scrollToReadingSlot(proxy) }
+            Task { @MainActor in
+                await Task.yield()
                 if !model.isUserPaging { scrollToReadingSlot(proxy) }
-                Task { @MainActor in
-                    await Task.yield()
-                    if !model.isUserPaging { scrollToReadingSlot(proxy) }
-                }
             }
         }
         .onChange(of: model.slotIndex) { previous, current in
-            guard !continuous, !model.isUserPaging else { return }
+            guard !model.isUserPaging else { return }
             // Taps, keys and auto-scroll turn one page with the page animation; the slider and restores jump.
             let animation = abs(current - previous) == 1 ? pageAnimation : nil
             withAnimation(animation) { scrollToReadingSlot(proxy) }
         }
         .onChange(of: size) { _, _ in
-            guard !continuous, !model.isUserPaging else { return }
+            guard !model.isUserPaging else { return }
             scrollToReadingSlot(proxy)
             Task { @MainActor in
                 await Task.yield()
                 if !model.isUserPaging { scrollToReadingSlot(proxy) }
             }
         }
-        // Created at the reading slot through the position binding; as Android's pager applies its initial page once
-        // the pages are laid out, it is also moved there once after the first layout, in case the binding was not
-        // applied. Recreated when the reading mode or page-turn style changes, it keeps the page being read.
+        // As Android's pager applies its initial page once the pages are laid out, it is moved there once after the
+        // first layout. Recreated when the reading mode or page-turn style changes, it keeps the page being read.
         .onAppear {
-            guard !continuous else { return }
             Task { @MainActor in
                 await Task.yield()
                 if !model.isUserPaging { scrollToReadingSlot(proxy) }
@@ -1274,38 +1376,23 @@ struct SourceReaderView: View {
         }
     }
 
-    @ViewBuilder private func slots(size: CGSize, continuous: Bool) -> some View {
+    @ViewBuilder private func slots(size: CGSize) -> some View {
         if settings.value.readsRightToLeft {
-            slotViews(model.identifiedSlots.reversed(), size: size, continuous: continuous)
+            slotViews(model.identifiedSlots.reversed(), size: size)
         } else {
-            slotViews(model.identifiedSlots, size: size, continuous: continuous)
+            slotViews(model.identifiedSlots, size: size)
         }
     }
 
     @ViewBuilder private func slotViews<Slots: RandomAccessCollection>(
-        _ ordered: Slots, size: CGSize, continuous: Bool
+        _ ordered: Slots, size: CGSize
     ) -> some View where Slots.Element == ReaderWindowSlot {
         ForEach(ordered) { item in
-            let slot = item.slot
-            if continuous, let placement = slot.placements.first {
-                ReaderPageTile(
-                    model: model,
-                    settings: settings,
-                    index: Int(placement.index),
-                    segment: Int(placement.segment),
-                    displaySize: CGSize(width: CGFloat(placement.width), height: CGFloat(placement.height)),
-                    viewportOffset: tileViewport,
-                    zoomScale: 1
-                )
-                    .frame(width: CGFloat(placement.width), height: CGFloat(placement.height))
-                    .id(Int(slot.index))
-            } else {
-                let animation = settings.value.animation
-                let mode = settings.value.mode
-                ReaderSpread(model: model, settings: settings, slot: slot, size: size) { tap(at: $0, size: size) }
-                    .modifier(ReaderPageTransition(animation: animation, vertical: mode == 2, reduceMotion: reduceMotion))
-                    .id(item.id)
-            }
+            let animation = settings.value.animation
+            let mode = settings.value.mode
+            ReaderSpread(model: model, settings: settings, slot: item.slot, size: size) { tap(at: $0, size: size) }
+                .modifier(ReaderPageTransition(animation: animation, vertical: mode == 2, reduceMotion: reduceMotion))
+                .id(item.id)
         }
     }
 
@@ -1540,14 +1627,11 @@ struct SourceReaderView: View {
         model.userScrolled()
         if settings.value.mode >= 3 {
             let vertical = settings.value.mode == 3
-            let current = vertical ? scroll.offset.y : scroll.offset.x
+            let current = vertical ? model.stripOffset.y : model.stripOffset.x
             let direction = settings.value.continuousForwardSign
             let step = (vertical ? size.height : size.width) * 0.85 * (forward ? 1 : -1) * direction
-            // The scroll view's own range: safe-area insets shift its edges from the scene's 0...scrollLimit.
-            // Restores rest a top-to-bottom or left-to-right strip's start at 0, inside the inset it can also show.
             let range = model.continuousScrollRange
-            let lower = direction > 0 ? max(range.lowerBound, min(0, range.upperBound)) : range.lowerBound
-            let upper = range.upperBound
+            let lower = range.lowerBound, upper = range.upperBound
             if forward && (direction > 0 ? current >= upper - 1 : current <= lower + 1), let next = model.nextChapter {
                 if !model.isLoadingNextChapter { Task { await model.moveChapter(next) } }
                 return
@@ -1556,7 +1640,7 @@ struct SourceReaderView: View {
                let previous = model.previousChapter {
                 Task { await model.moveChapter(previous, atEnd: true) }; return
             }
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) { scrollContinuous(to: min(max(lower, current + step), upper)) }
+            model.scrollStrip(to: min(max(lower, current + step), upper), animated: !reduceMotion)
             return
         }
         let target = model.slotIndex + (forward ? 1 : -1)
@@ -1564,33 +1648,6 @@ struct SourceReaderView: View {
             withAnimation(pageAnimation) { model.movePage(forward: forward) }
         } else if let chapter = forward ? model.nextChapter : model.previousChapter {
             Task { await model.moveChapter(chapter, atEnd: !forward) }
-        }
-    }
-    private func scrollContinuous(to origin: CGFloat) {
-        // Keep the cross-axis pan while moving along the chapter.
-        if settings.value.mode == 3 { continuousPosition.scrollTo(point: CGPoint(x: scroll.offset.x, y: origin)) }
-        else { continuousPosition.scrollTo(point: CGPoint(x: origin, y: scroll.offset.y)) }
-    }
-
-    /// Lays the strip out at [zoom] and scrolls so the content under [location] (a point in the viewport) stays put.
-    private func zoomStrip(to zoom: CGFloat, at location: CGPoint, size: CGSize) {
-        model.userScrolled()
-        let previous = model.stripZoom
-        model.setStripZoom(zoom)
-        let ratio = model.stripZoom / previous
-        guard ratio != 1 else { return }
-        let x = (scroll.offset.x + location.x) * ratio - location.x
-        let y = (scroll.offset.y + location.y) * ratio - location.y
-        let vertical = settings.value.mode == 3
-        let limit = CGFloat(model.engine.scrollLimit())
-        let target = CGPoint(x: min(max(0, x), vertical ? size.width * (model.stripZoom - 1) : limit),
-                             y: min(max(0, y), vertical ? limit : size.height * (model.stripZoom - 1)))
-        scroll.offset = target
-        tileViewport = target
-        Task { @MainActor in
-            // After the wider layout is in place, or the scroll view clamps to the old content size.
-            await Task.yield()
-            continuousPosition.scrollTo(point: target)
         }
     }
     private var chromeAnimation: Animation? { reduceMotion ? nil : .spring }
@@ -1627,33 +1684,8 @@ struct SourceReaderView: View {
 enum ReaderPanel: Equatable { case chapters, thumbnails, more }
 
 private final class ReaderScrollTracker {
-    var offset = CGPoint.zero
-    /// The paged scroll view's physical offset, insets included.
+    /// The paged scroll view's physical offset.
     var pagedOffset = CGPoint.zero
-}
-
-/// Paged geometry uses physical bounds; continuous point scrolling keeps the native offset used by restoration.
-private struct ReaderScrollViewport: Equatable {
-    let rawOffset: CGPoint
-    let offset: CGPoint
-    let limit: CGFloat
-    /// The native offsets the reading axis can rest at; safe-area insets shift them from the scene's own range.
-    let rawRange: ClosedRange<CGFloat>
-
-    init(_ geometry: ScrollGeometry, vertical: Bool) {
-        let insets = geometry.contentInsets
-        rawOffset = geometry.contentOffset
-        offset = CGPoint(x: geometry.contentOffset.x + insets.leading, y: geometry.contentOffset.y + insets.top)
-        let content = vertical ? geometry.contentSize.height + insets.top + insets.bottom
-            : geometry.contentSize.width + insets.leading + insets.trailing
-        let viewport = vertical ? geometry.containerSize.height : geometry.containerSize.width
-        limit = max(0, content - viewport)
-        // Native offsets start at minus the leading inset and span the content beyond the inset-free container.
-        let start = vertical ? -insets.top : -insets.leading
-        let span = vertical ? geometry.contentSize.height - geometry.containerSize.height
-            : geometry.contentSize.width - geometry.containerSize.width
-        rawRange = start...(start + max(0, span))
-    }
 }
 
 /// A short position write owns its background-time lease, including the system's expiration path.
@@ -1716,46 +1748,6 @@ struct EdgeSwipeBack: UIViewControllerRepresentable {
     }
 }
 
-/// The system `.paging` behavior maps to native scroll-view paging: one page per swipe with the platform's
-/// release animation. Wrapping it in a custom behavior loses that and lets fast flicks project past pages.
-/// Pinch and double-tap zoom for the vertical strip. The pinch previews as a transform about its centre; on release
-/// the strip is laid out again at the new zoom (see `SourceReaderModel.setStripZoom`).
-private struct ReaderStripZoom: ViewModifier {
-    let enabled: Bool
-    let zoom: CGFloat
-    let size: CGSize
-    let commit: (CGFloat, CGPoint) -> Void
-    @State private var pinch: CGFloat = 1
-    @State private var anchor = UnitPoint.center
-
-    func body(content: Content) -> some View {
-        if enabled {
-            content
-                .scaleEffect(pinch, anchor: anchor)
-                .simultaneousGesture(
-                    MagnifyGesture()
-                        .onChanged { value in
-                            anchor = value.startAnchor
-                            let minimum = CGFloat(IosReader.companion.MINIMUM_ZOOM) / zoom
-                            let maximum = CGFloat(IosReader.companion.MAXIMUM_ZOOM) / zoom
-                            pinch = min(max(value.magnification, minimum), maximum)
-                        }
-                        .onEnded { value in
-                            let target = zoom * pinch
-                            pinch = 1
-                            commit(target, value.startLocation)
-                        }
-                )
-                .onTapGesture(count: 2) { location in commit(zoom > 1 ? 1 : 2, location) }
-                .accessibilityAction(named: zoom > 1 ? "还原缩放" : "放大") {
-                    commit(zoom > 1 ? 1 : 2, CGPoint(x: size.width / 2, y: size.height / 2))
-                }
-        } else {
-            content
-        }
-    }
-}
-
 private struct ReaderPageTransition: ViewModifier {
     let animation: Int
     let vertical: Bool
@@ -1773,22 +1765,7 @@ private struct ReaderPageTransition: ViewModifier {
     }
 }
 
-private struct ReaderPaging: ViewModifier {
-    let paged: Bool
-    func body(content: Content) -> some View {
-        if paged { content.scrollTargetBehavior(.viewAligned) } else { content }
-    }
-}
-
-private struct ReaderScrollPosition: ViewModifier {
-    let continuous: Bool
-    @Binding var position: ScrollPosition
-    func body(content: Content) -> some View {
-        if continuous { content.scrollPosition($position) } else { content }
-    }
-}
-
-private struct ReaderPageTile: View {
+struct ReaderPageTile: View {
     @ObservedObject var model: SourceReaderModel
     @ObservedObject var settings: ReaderSettings
     @Environment(\.displayScale) private var displayScale
