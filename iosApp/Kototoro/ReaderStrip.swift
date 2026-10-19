@@ -395,18 +395,23 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
     /// Lays the strip out at [zoom] and scrolls so the content under [location] (a point on screen) stays put.
     private func commitZoom(_ zoom: CGFloat, at location: CGPoint) {
         model.userScrolled()
+        let current = scrollView.contentOffset
+        // The content under the finger, as the scene reads it before the strip is laid out again…
+        let anchor = model.stripAnchor(at: current, location: location)
         let previous = model.stripZoom
         model.setStripZoom(zoom)
         let ratio = model.stripZoom / previous
         guard ratio != 1 else { return }
-        let current = scrollView.contentOffset
-        let x = (current.x + location.x) * ratio - location.x
-        let y = (current.y + location.y) * ratio - location.y
-        let limit = CGFloat(model.engine.scrollLimit())
-        let size = view.bounds.size
-        let target = vertical
-            ? CGPoint(x: min(max(0, x), size.width * (model.stripZoom - 1)), y: min(max(0, y), limit))
-            : CGPoint(x: min(max(0, x), limit), y: min(max(0, y), size.height * (model.stripZoom - 1)))
+        // …and where the scene puts it afterwards. Scaling the offset by the zoom ratio is not the same move: a page
+        // whose real size is still unknown keeps its one-screen estimate, so the offsets around a zoomed page do not
+        // follow the zoom, and a jump or a restore leaves the pages above it unmeasured (`PageGeometryHint.Estimated`).
+        // The scene is the only thing that knows where a page's content went, so it is asked for the reading axis; the
+        // cross axis is the strip's own width or height, which does scale with the zoom.
+        let origin = model.stripOrigin(of: anchor)
+        let along = min(max(0, origin - (vertical ? location.y : location.x)), CGFloat(model.engine.scrollLimit()))
+        let cross = (vertical ? current.x + location.x : current.y + location.y) * ratio
+            - (vertical ? location.x : location.y)
+        let target = vertical ? CGPoint(x: cross, y: along) : CGPoint(x: along, y: cross)
         tileViewport = target
         layoutStrip(offset: target, animated: false)
     }

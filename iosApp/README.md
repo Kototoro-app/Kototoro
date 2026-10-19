@@ -109,6 +109,9 @@ Native 的 `IosProductTest` 覆盖 Retina 密度与相机缩放分离、晚到�
 新作品默认从左到右，旧横向设置保持原有从右到左方向。定向回归：`ReaderSettingsTests`、
 `LocalImportTests/testHorizontalContinuousDirectionZoomAndBookmarkRestore` 和
 `LocalImportTests/testHorizontalReverseAutoScrollAdvancesToTheNextChapter`，需先暂存上述 picker 夹具。
+条漫双击缩放按共享场景的页内锚点（`IosReader.progress`／`scrollOrigin`）重排，不按缩放比例换算场景偏移：
+跳转或恢复后上方仍未测量的页面保留一屏估值，比例换算会把阅读页带偏。
+`LocalImportTests/testContinuousDoubleTapZoomsAtTheTap` 与 `testContinuousDoubleTapKeepsThePageAfterAJump` 覆盖该契约。
 `IosProductTest` 另覆盖横向 LTR/RTL 定位、缩放无关的页内偏移、晚到尺寸补偿及物理视口分块。
 分页跨章复用 Android 提取到 `reader-core` 的章节窗口规则：前章末两页、本章、后章前两页。
 普通翻页直接进入邻章页，并按页面归属更新章节；进度条、书签和历史仍使用章内页码。

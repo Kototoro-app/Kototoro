@@ -633,6 +633,62 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(waitForCentre("green"))
     }
 
+    /// The strip is laid out again for a zoom rather than magnified, and a page whose real size is still unknown keeps
+    /// its one-screen estimate, so the scene offsets above it do not follow the zoom. A jump measures only the page it
+    /// lands on: zooming and restoring around that page must keep the reader there instead of throwing it ahead.
+    @MainActor
+    func testContinuousDoubleTapKeepsThePageAfterAJump() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_webtoon", reuse: true)
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 30))
+        _ = revealChapter(in: app, timeout: 30)
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "chapter.", "01"))
+            .firstMatch.tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30))
+        selectReaderMode("条漫")
+        let canvas = app.scrollViews["reader.canvas"]
+        waitForChapterWindow(canvas, count: 16)
+        app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0.5)
+        let jumped = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            self.readingPage(canvas) != "1"
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [jumped], timeout: 10), .completed, "\(canvas.value ?? "no position")")
+        let page = readingPage(canvas)
+        waitForPage(page)
+        hideReaderControls(canvas)
+        // The page the jump measured sits under the tap; the ones above it never left their estimate.
+        let tap = CGVector(dx: 0.5, dy: 0.25)
+        canvas.coordinate(withNormalizedOffset: tap).doubleTap()
+        XCTAssertTrue(waitForZoom(canvas, "200%"), "\(canvas.value ?? "no position")")
+        XCTAssertEqual(readingPage(canvas), page, "\(canvas.value ?? "no position")")
+        attach("条漫跳转后双击放大保持阅读页")
+        canvas.coordinate(withNormalizedOffset: tap).doubleTap()
+        XCTAssertTrue(waitForZoom(canvas, "100%"), "\(canvas.value ?? "no position")")
+        XCTAssertEqual(readingPage(canvas), page, "\(canvas.value ?? "no position")")
+    }
+
+    /// The controls fade in and out: a tap made while they move belongs to them, not to the page read next.
+    private func hideReaderControls(_ canvas: XCUIElement) {
+        guard app.buttons["reader.more"].exists else { return }
+        canvas.tap()
+        let hidden = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            !self.app.buttons["reader.more"].exists
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [hidden], timeout: 5), .completed, "the reader controls stayed visible")
+    }
+
+    /// The reading page from the strip's own description, which stays readable while the controls are hidden.
+    private func readingPage(_ canvas: XCUIElement) -> String {
+        let tail = (canvas.value as? String ?? "").components(separatedBy: "第 ").dropFirst().first ?? ""
+        return String(tail.prefix { $0.isNumber })
+    }
+
+    private func waitForZoom(_ canvas: XCUIElement, _ zoom: String) -> Bool {
+        let zoomed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            (canvas.value as? String)?.contains("缩放 \(zoom)") == true
+        }, object: nil)
+        return XCTWaiter.wait(for: [zoomed], timeout: 10) == .completed
+    }
+
     private func waitForCentre(_ colour: String) -> Bool {
         let matches = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             guard let pixel = self.screenPixel(x: 0.5, y: 0.5) else { return false }

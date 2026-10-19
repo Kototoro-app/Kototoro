@@ -775,6 +775,20 @@ final class SourceReaderModel: ObservableObject {
         updateResources(force: true)
     }
 
+    /// A point on the strip's screen as the shared scene reads it: the page under [location] (a point on screen while
+    /// the strip is at [offset]) and the offset into that page in unzoomed pixels. Both are what a zoom leaves
+    /// unchanged, like a saved position, so laying the strip out at another zoom can put the same content back where
+    /// the finger is.
+    func stripAnchor(at offset: CGPoint, location: CGPoint) -> IosReaderProgress {
+        engine.progress(x: Float(offset.x + (stripIsVertical ? 0 : location.x)),
+                        y: Float(offset.y + (stripIsVertical ? location.y : 0)))
+    }
+
+    /// Where the strip must scroll for [anchor]'s content point of a strip laid out again at its current zoom.
+    func stripOrigin(of anchor: IosReaderProgress) -> CGFloat {
+        CGFloat(engine.scrollOrigin(index: anchor.index, offset: anchor.offset))
+    }
+
     func userScrolled() { awaitingRestore = false; autoScroll = false }
 
     /// Restores the strip to [origin] along the reading axis. The strip moves there at once when it is shown, or
