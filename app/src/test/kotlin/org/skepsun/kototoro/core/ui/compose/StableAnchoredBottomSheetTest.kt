@@ -83,4 +83,29 @@ class StableAnchoredBottomSheetTest {
         assertFalse(stableSheetReadyToOpen(hostHeightPx = 1000f, peekHeightPx = null, waitForPeek = true))
         assertTrue(stableSheetReadyToOpen(hostHeightPx = 1000f, peekHeightPx = 360f, waitForPeek = true))
     }
+
+    @Test
+    fun `header collapses above an available peek stop`() {
+        for (target in listOf(StableSheetAnchor.Full, StableSheetAnchor.ThreeQuarter)) {
+            assertTrue(stableSheetHeaderCollapsed(true, hasPeekAnchor = true, openExpanded = false, target = target))
+        }
+        assertFalse(
+            stableSheetHeaderCollapsed(true, hasPeekAnchor = true, openExpanded = false, target = StableSheetAnchor.Middle),
+        )
+    }
+
+    @Test
+    fun `a peek too tall for a stop collapses the header only at full height`() {
+        // A phone in landscape: the header alone fills three quarters, so full height must make room.
+        assertTrue(stableSheetHeaderCollapsed(true, hasPeekAnchor = false, openExpanded = false, target = StableSheetAnchor.Full))
+        assertFalse(
+            stableSheetHeaderCollapsed(true, hasPeekAnchor = false, openExpanded = false, target = StableSheetAnchor.ThreeQuarter),
+        )
+    }
+
+    @Test
+    fun `sheets opened expanded and sheets without a peek keep their header`() {
+        assertFalse(stableSheetHeaderCollapsed(true, hasPeekAnchor = false, openExpanded = true, target = StableSheetAnchor.Full))
+        assertFalse(stableSheetHeaderCollapsed(false, hasPeekAnchor = true, openExpanded = false, target = StableSheetAnchor.Full))
+    }
 }

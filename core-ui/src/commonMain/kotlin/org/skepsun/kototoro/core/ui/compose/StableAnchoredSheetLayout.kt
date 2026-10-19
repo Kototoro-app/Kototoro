@@ -92,6 +92,23 @@ fun stableSheetAnchorOffsets(hostHeightPx: Float, peekHeightPx: Float?): Map<Sta
 fun stableSheetInitialAnchor(usePeekAnchor: Boolean): StableSheetAnchor =
     if (usePeekAnchor) StableSheetAnchor.Middle else StableSheetAnchor.ThreeQuarter
 
+/**
+ * Whether a peek sheet collapses its header to make room for the content. With a peek stop that is any
+ * anchor above it. A peek too tall for a stop (a phone in landscape) opens at three quarters already
+ * filled by the header, so only dragging to full collapses it; dragging back down restores it. A sheet
+ * that [openExpanded] has no peek stop by design and keeps its header.
+ */
+fun stableSheetHeaderCollapsed(
+    usePeekAnchor: Boolean,
+    hasPeekAnchor: Boolean,
+    openExpanded: Boolean,
+    target: StableSheetAnchor,
+): Boolean = usePeekAnchor && when {
+    hasPeekAnchor -> target == StableSheetAnchor.Full || target == StableSheetAnchor.ThreeQuarter
+    openExpanded -> false
+    else -> target == StableSheetAnchor.Full
+}
+
 /** [preferred], or three quarters when [offsets] has no such anchor (a peek too tall for a middle anchor). */
 fun stableSheetOpenAnchor(
     offsets: Map<StableSheetAnchor, Float>,
@@ -320,6 +337,7 @@ fun StableAnchoredSheetLayout(
     /**
      * Opens at three quarters with no peek stop, as a landscape tablet does when the peek is too tall for one; the
      * header then stays in view (it only collapses when a sheet is dragged past an available peek).
+     * Without it, a peek too tall for a stop (a phone in landscape) collapses the header at full height.
      */
     openExpanded: Boolean = false,
     sheet: @Composable (StableSheetSlotScope) -> Unit,
@@ -405,10 +423,12 @@ fun StableAnchoredSheetLayout(
                     dragModifier = sheetDragModifier,
                     contentBottomPadding = with(density) { offset.toDp() },
                     dismiss = dismissWithAnimation,
-                    isExpandedPastPeek = usePeekAnchor &&
-                        state.anchoredState.anchors.positionOf(StableSheetAnchor.Middle).isFinite() &&
-                        (state.anchoredState.targetValue == StableSheetAnchor.Full ||
-                            state.anchoredState.targetValue == StableSheetAnchor.ThreeQuarter),
+                    isExpandedPastPeek = stableSheetHeaderCollapsed(
+                        usePeekAnchor = usePeekAnchor,
+                        hasPeekAnchor = state.anchoredState.anchors.positionOf(StableSheetAnchor.Middle).isFinite(),
+                        openExpanded = openExpanded,
+                        target = state.anchoredState.targetValue,
+                    ),
                 ),
             )
         }
