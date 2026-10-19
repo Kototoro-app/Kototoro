@@ -1287,10 +1287,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         val duration = videoPlayer?.durationMs ?: return true
                         if (duration <= 0) return true
 
-                        // Proportional Seek: One screen width equals the entire video duration
-                        // This makes the dot on the seek bar track the finger 1:1
+                        // One screen width covers the configured range (the whole video by default)
                         val deltaX = e2.x - initialTouchX
-                        val seekOffset = (deltaX / w * duration).toLong()
+                        val seekOffset = VideoSwipeSeek.offsetMs(
+                            deltaX = deltaX,
+                            widthPx = w,
+                            durationMs = duration,
+                            rangeSec = appSettings.videoSwipeSeekRangeSec,
+                        )
                         lastScrubPosition = (initialScrubPositionStart + seekOffset).coerceIn(0L, duration)
 
                         showSeekFeedback(lastScrubPosition, duration, seekOffset)
@@ -2811,6 +2815,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 },
             ),
             PlayerSettingsAction(
+                title = getString(R.string.video_swipe_seek_range),
+                subtitle = swipeSeekRangeLabel(appSettings.videoSwipeSeekRangeSec),
+                iconRes = org.skepsun.kototoro.R.drawable.ic_timelapse,
+                onClick = ::showSwipeSeekRangeDialog,
+            ),
+            PlayerSettingsAction(
                 title = getString(R.string.video_danmaku_enabled),
                 subtitle = if (appSettings.videoDanmakuEnabled) enabledText else disabledText,
                 iconRes = org.skepsun.kototoro.R.drawable.ic_danmaku,
@@ -3636,6 +3646,20 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         showSelectionDialog(titleRes, labels.asList(), checked) { which ->
             onSelect(options[which] * 1000)
         }
+    }
+
+    private fun showSwipeSeekRangeDialog() {
+        val options = VideoSwipeSeek.RANGE_OPTIONS_SEC
+        val checked = options.indexOf(appSettings.videoSwipeSeekRangeSec).takeIf { it >= 0 } ?: 0
+        showSelectionDialog(R.string.video_swipe_seek_range, options.map(::swipeSeekRangeLabel), checked) { which ->
+            appSettings.videoSwipeSeekRangeSec = options[which]
+        }
+    }
+
+    private fun swipeSeekRangeLabel(rangeSec: Int): String = when {
+        rangeSec <= VideoSwipeSeek.FULL_LENGTH -> getString(R.string.video_swipe_seek_range_full)
+        rangeSec % 60 == 0 -> getString(R.string.video_swipe_seek_range_minutes, rangeSec / 60)
+        else -> "${rangeSec}s"
     }
 
     private fun showSelectionDialog(

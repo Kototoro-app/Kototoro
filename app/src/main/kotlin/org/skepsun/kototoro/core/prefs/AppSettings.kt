@@ -1371,6 +1371,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_VIDEO_DOUBLE_TAP_SEEK_ENABLED, true)
         set(value) = prefs.edit { putBoolean(KEY_VIDEO_DOUBLE_TAP_SEEK_ENABLED, value) }
 
+    /** Playback time one full-width horizontal swipe covers, in seconds; 0 means the whole video. */
+    var videoSwipeSeekRangeSec: Int
+        get() = prefs.getSafeInt(KEY_VIDEO_SWIPE_SEEK_RANGE_SEC, 0).coerceAtLeast(0)
+        set(value) = prefs.edit { putInt(KEY_VIDEO_SWIPE_SEEK_RANGE_SEC, value.coerceAtLeast(0)) }
+
     var videoSubtitleFontSize: Float
         get() = prefs.getSafeFloat(KEY_VIDEO_SUBTITLE_FONT_SIZE, 18f)
         set(value) = prefs.edit { putFloat(KEY_VIDEO_SUBTITLE_FONT_SIZE, value) }
@@ -3207,6 +3212,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_TTS_CACHE_MB = "tts_cache_mb"
         const val KEY_VIDEO_ASPECT_RATIO = "video_aspect_ratio"
         const val KEY_VIDEO_DOUBLE_TAP_SEEK_ENABLED = "video_double_tap_seek_enabled"
+        const val KEY_VIDEO_SWIPE_SEEK_RANGE_SEC = "video_swipe_seek_range_sec"
         const val KEY_VIDEO_CONTROLS_ALPHA = "video_controls_alpha"
         const val KEY_VIDEO_GRADIENT_ALPHA = "video_gradient_alpha"
         const val KEY_READER_SCREEN_ON = "reader_screen_on"

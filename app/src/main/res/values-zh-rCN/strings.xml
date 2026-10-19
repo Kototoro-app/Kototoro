@@ -1036,6 +1036,9 @@
     <string name="video_default_speed">默认倍速</string>
     <string name="video_seek_forward_time">快进时间</string>
     <string name="video_seek_backward_time">快退时间</string>
+    <string name="video_swipe_seek_range">滑动快进范围</string>
+    <string name="video_swipe_seek_range_full">滑过整屏 = 整个视频</string>
+    <string name="video_swipe_seek_range_minutes">滑过整屏 = %1$d 分钟</string>
     <string name="video_volume_boost">音量增强</string>
     <string name="video_auto_next">自动续播</string>
     <string name="video_landscape_sensor">跟随重力上下反转</string>

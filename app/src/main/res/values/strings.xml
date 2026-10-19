@@ -658,6 +658,9 @@
     <string name="video_default_speed">Default Speed</string>
     <string name="video_seek_forward_time">Fast Forward Time</string>
     <string name="video_seek_backward_time">Rewind Time</string>
+    <string name="video_swipe_seek_range">Swipe seek range</string>
+    <string name="video_swipe_seek_range_full">Whole video per screen width</string>
+    <string name="video_swipe_seek_range_minutes">%1$d min per screen width</string>
     <string name="video_volume_boost">Volume Boost</string>
     <string name="video_auto_next">Auto Play Next</string>
     <string name="video_landscape_sensor">Landscape Sensor Mode</string>
