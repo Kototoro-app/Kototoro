@@ -584,7 +584,10 @@ internal fun DetailsPaneActionsRow(
                                         modernStyle = isModernDockEnabled,
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 4.dp),
+                                            // Same chrome height as the tab switcher and the chapter tools.
+                                            modifier = Modifier
+                                                .height(ModernDetailsDockChromeHeight)
+                                                .padding(horizontal = 4.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             DetailsChromeButton(
