@@ -545,6 +545,45 @@ final class LocalImportTests: XCTestCase {
         attach("长章节逐页拖动跨章保持章内页码")
     }
 
+    /// Switching a paged reader in the middle of a chapter to the vertical strip restores the reading page exactly:
+    /// the new strip is laid out from the scene and starts at the reading page, in the same chapter, flush with the
+    /// screen edge (the strip has no safe-area insets).
+    @MainActor
+    func testPagedToContinuousSwitchRestoresTheReadingPage() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_webtoon", reuse: true)
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 30))
+        _ = revealChapter(in: app, timeout: 30)
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "chapter.", "02"))
+            .firstMatch.tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30))
+        selectReaderMode("默认（从左到右）")
+        let pager = app.scrollViews["reader.canvas"]
+        app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0)
+        waitForPage("1")
+        dragPage(pager, forward: true)
+        waitForPage("2")
+        dragPage(pager, forward: true)
+        waitForPage("3")
+        let chapter = app.buttons["reader.chapters"].label
+        selectReaderMode("条漫")
+        let page = app.images.matching(NSPredicate(
+            format: "identifier == %@ AND label CONTAINS %@", "reader.image", "第 3 页"
+        )).firstMatch
+        let restored = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            page.exists && page.isHittable
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 15), .completed,
+                       "page 3 at \(page.frame), canvas \(app.scrollViews["reader.canvas"].value ?? "")")
+        XCTAssertEqual(app.staticTexts["reader.currentPage"].value as? String, "3")
+        XCTAssertEqual(app.buttons["reader.chapters"].label, chapter)
+        XCTAssertEqual(page.frame.minX, app.frame.minX, accuracy: 1)
+        attach("分页切换条漫恢复阅读页")
+        let canvas = app.scrollViews["reader.canvas"]
+        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.7)).press(forDuration: 0.05,
+            thenDragTo: canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)), withVelocity: .slow,
+            thenHoldForDuration: 0.3)
+    }
+
     /// A paged double tap zooms about the tapped point (the page is red/green/blue thirds: tapping the blue third
     /// brings blue to the centre, where a centre zoom would keep green), a zoomed page pans instead of turning, and
     /// back at fit the same drag turns the page.
@@ -674,6 +713,7 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(app.buttons["reader.chapters"].label.contains("02"))
         XCTAssertEqual(app.staticTexts["reader.currentPage"].value as? String, "3")
         waitForChapterWindow(canvas, count: 9)
+        dragStrip(canvas, forward: false)
         dragStrip(canvas, forward: false)
         waitForReaderChapter("02")
         attach("连续条漫普通滚动跨章")
@@ -1195,10 +1235,14 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30))
         selectReaderMode("条漫")
         let canvas = app.scrollViews["reader.canvas"]
-        canvas.swipeUp()
-        let moved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in self.readingOffset(canvas) > 300 },
-                                              object: nil)
-        wait(for: [moved], timeout: 10)
+        // A swipe while the strip replaces the paged view can land on neither; swipe again until the strip moves.
+        for _ in 0..<3 where readingOffset(canvas) <= 300 {
+            canvas.swipeUp()
+            let moved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in self.readingOffset(canvas) > 300 },
+                                                  object: nil)
+            _ = XCTWaiter.wait(for: [moved], timeout: 5)
+        }
+        XCTAssertGreaterThan(readingOffset(canvas), 300)
         let saved = readingOffset(canvas)
         app.buttons["reader.more"].tap()
         app.segmentedControls.buttons["控件"].tap()

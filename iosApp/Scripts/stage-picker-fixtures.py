@@ -10,6 +10,7 @@
   * fixture_reader_pull_long.cbz — explicit previous-chapter last-page restore.
   * fixture_reader_window.cbz — bounded paging windows across three chapters.
   * fixture_reader_paged.cbz — longer chapters for page-by-page drags across a chapter boundary.
+  * fixture_reader_webtoon.cbz — tall pages across three chapters, for paged/strip mode switches.
   * fixture_reader_zoom.cbz — red/green/blue thirds, to see where a paged double tap zooms.
   * fixture_storage_comic.cbz / fixture_storage_tasks.cbz — cache cleanup and offline file ownership.
   * fixture_novel_controls.txt — long chapters for novel controls, paging and floating action preferences.
@@ -144,6 +145,11 @@ for storage in storages:
             for page in range(1, 9):
                 shade = tuple(max(0, value - page * 12) for value in color)
                 archive.writestr(f"{chapter}/{page:03d}.png", png(600, 900, shade))
+    with zipfile.ZipFile(os.path.join(storage, "fixture_reader_webtoon.cbz"), "w") as archive:
+        for chapter, color in [("01", (200, 60, 60)), ("02", (60, 60, 200)), ("03", (60, 200, 60))]:
+            for page in range(1, 9):
+                shade = tuple(max(0, value - page * 12) for value in color)
+                archive.writestr(f"{chapter}/{page:03d}.png", png(720, 2400, shade))
     with zipfile.ZipFile(os.path.join(storage, "fixture_reader_zoom.cbz"), "w") as archive:
         archive.writestr("001.png", png(600, 900, None, [(200, 40, 40), (40, 200, 40), (40, 40, 200)]))
         archive.writestr("002.png", png(600, 900, (90, 90, 90)))
