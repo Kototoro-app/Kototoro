@@ -189,6 +189,8 @@
     <string name="reader_a11y_previous_chapter">上一章</string>
     <string name="reader_a11y_next_chapter">下一章</string>
     <string name="reader_more_tab_reading">阅读</string>
+    <string name="reader_panel_section_two_pages">双页</string>
+    <string name="reader_more_tab_layout">布局</string>
     <string name="reader_more_tab_display">显示</string>
     <string name="reader_more_tab_page">页面</string>
     <string name="reader_more_tab_translation">翻译</string>
