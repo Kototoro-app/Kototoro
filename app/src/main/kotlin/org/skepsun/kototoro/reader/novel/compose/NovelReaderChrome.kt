@@ -70,6 +70,7 @@ internal data class NovelReaderChromeCallbacks(
     val onTtsPrevious: () -> Unit = {},
     val onTtsPlayPause: () -> Unit = {},
     val onTtsNext: () -> Unit = {},
+    val onTtsSpeedChange: (Float) -> Unit = {},
     val onTtsVoice: () -> Unit = {},
     val onTtsClose: () -> Unit = {},
 )
@@ -285,6 +286,7 @@ private fun NovelToolsPanel(
                 IconButton(onClick = callbacks.onTtsNext) {
                     Icon(painterResource(R.drawable.ic_next), stringResource(R.string.next))
                 }
+                TtsSpeedButton(state.ttsSpeed, callbacks.onTtsSpeedChange)
                 IconButton(onClick = callbacks.onTtsVoice) {
                     Icon(painterResource(R.drawable.ic_voice_input), stringResource(R.string.tts_settings_title))
                 }

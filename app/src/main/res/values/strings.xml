@@ -1647,6 +1647,7 @@
     <string name="tts_section_voice_subtitle">Voice &amp; subtitle (TTS)</string>
     <string name="tts_enable">Enable TTS system</string>
     <string name="tts_engine_type">TTS engine type</string>
+    <string name="tts_speed">Speech speed</string>
     <string name="tts_engine_service_label">TTS engine</string>
     <string name="epub_download_service_label">EPUB download</string>
     <string name="tts_engine_system">System TTS (Native)</string>

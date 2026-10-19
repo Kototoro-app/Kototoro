@@ -111,6 +111,10 @@ class ExoPlayerController(context: Context) {
         player.play()
     }
 
+    fun setSpeed(speed: Float) {
+        player.setPlaybackSpeed(speed)
+    }
+
     fun seekNext() {
         if (player.hasNextMediaItem()) {
             player.seekToNextMediaItem()

@@ -51,8 +51,9 @@ class TtsManager(
     // For caching hash purposes (read from preferences)
     private val engineId: String
     private val voiceId: String
-    private val speed: Float
-    private val pitch: Float
+    // Audio is always synthesized at 1.0x; the user speed is applied by the player.
+    private val speed: Float = 1.0f
+    private val pitch: Float = 1.0f
 
     init {
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
@@ -62,8 +63,11 @@ class TtsManager(
         } else {
             prefs.getString("tts_system_voice", "default") ?: "default"
         }
-        speed = 1.0f // TODO: read from settings when implemented
-        pitch = 1.0f // TODO: read from settings when implemented
+        playerController.setSpeed(TtsPlaybackSpeed.read(prefs))
+    }
+
+    fun setSpeed(speed: Float) {
+        playerController.setSpeed(TtsPlaybackSpeed.normalize(speed))
     }
 
     companion object {

@@ -10,11 +10,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,9 +48,11 @@ internal fun NovelReaderOverlay(
     onMessageExpired: (Long) -> Unit,
     ttsVisible: Boolean,
     ttsState: TtsState,
+    ttsSpeed: Float,
     onTtsPrevious: () -> Unit,
     onTtsPlayPause: () -> Unit,
     onTtsNext: () -> Unit,
+    onTtsSpeedChange: (Float) -> Unit,
     onTtsVoice: () -> Unit,
     onTtsClose: () -> Unit,
 ) {
@@ -112,6 +120,7 @@ internal fun NovelReaderOverlay(
                         onTtsPlayPause,
                     )
                     TtsButton(R.drawable.ic_next, stringResource(R.string.next), onTtsNext)
+                    TtsSpeedButton(ttsSpeed, onTtsSpeedChange)
                     TtsButton(R.drawable.ic_voice_input, stringResource(R.string.tts_settings_title), onTtsVoice)
                     TtsButton(R.drawable.ic_tts_close, stringResource(R.string.close), onTtsClose)
                 }
@@ -124,5 +133,36 @@ internal fun NovelReaderOverlay(
 private fun TtsButton(icon: Int, description: String, onClick: () -> Unit) {
     IconButton(onClick = onClick) {
         Icon(painterResource(icon), contentDescription = description)
+    }
+}
+
+/** Shows the current TTS speed and opens a menu with the preset speeds. */
+@Composable
+internal fun TtsSpeedButton(speed: Float, onSpeedChange: (Float) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val title = stringResource(R.string.tts_speed)
+    Box {
+        TextButton(
+            onClick = { expanded = true },
+            modifier = Modifier.semantics { contentDescription = "$title ${TtsPlaybackSpeed.label(speed)}" },
+        ) {
+            Text(TtsPlaybackSpeed.label(speed), style = MaterialTheme.typography.labelLarge)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            TtsPlaybackSpeed.OPTIONS.forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            TtsPlaybackSpeed.label(option),
+                            color = if (option == speed) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onSpeedChange(option)
+                    },
+                )
+            }
+        }
     }
 }

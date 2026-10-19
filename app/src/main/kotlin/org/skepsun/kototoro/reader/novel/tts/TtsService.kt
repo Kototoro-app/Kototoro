@@ -34,6 +34,13 @@ class TtsService : LifecycleService() {
     private var stateCollectionJob: kotlinx.coroutines.Job? = null
     private var isForegroundStarted = false
 
+    // Speed set from the reader controls or from TTS settings applies to the running playback.
+    private val speedListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+        if (key == TtsPlaybackSpeed.KEY && ::ttsManager.isInitialized) {
+            ttsManager.setSpeed(TtsPlaybackSpeed.read(prefs))
+        }
+    }
+
     inner class TtsBinder : Binder() {
         fun getService(): TtsService = this@TtsService
     }
@@ -44,6 +51,8 @@ class TtsService : LifecycleService() {
         createNotificationChannel()
         ttsManager = createTtsManager()
         observeManagerState()
+        androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+            .registerOnSharedPreferenceChangeListener(speedListener)
     }
 
     private fun observeManagerState() {
@@ -65,6 +74,8 @@ class TtsService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+            .unregisterOnSharedPreferenceChangeListener(speedListener)
         if (::ttsManager.isInitialized) {
             ttsManager.release()
         }
@@ -89,7 +100,6 @@ class TtsService : LifecycleService() {
     fun seekNext() {
         ttsManager.seekNext()
     }
-
     fun seekPrev() {
         ttsManager.seekPrev()
     }

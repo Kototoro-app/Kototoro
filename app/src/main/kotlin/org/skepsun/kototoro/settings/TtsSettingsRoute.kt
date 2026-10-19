@@ -49,6 +49,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.reader.novel.tts.LegadoTtsParser
+import org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed
 import org.skepsun.kototoro.reader.novel.tts.engine.HttpTTSEngine
 import org.skepsun.kototoro.reader.novel.tts.engine.SystemTTSEngine
 import org.skepsun.kototoro.reader.novel.tts.engine.TTSEngine
@@ -80,6 +81,9 @@ fun TtsSettingsRoute(
         prefs.getString(TtsSettingsCoordinator.KEY_TTS_ENGINE_TYPE, TtsSettingsCoordinator.ENGINE_SYSTEM)
             ?: TtsSettingsCoordinator.ENGINE_SYSTEM
     }.value
+    val speed = settings.observeAsState(TtsPlaybackSpeed.KEY) {
+        TtsPlaybackSpeed.read(prefs)
+    }.value
     val systemVoice = settings.observeAsState(TtsSettingsCoordinator.KEY_TTS_SYSTEM_VOICE) {
         prefs.getString(
             TtsSettingsCoordinator.KEY_TTS_SYSTEM_VOICE,
@@ -100,6 +104,7 @@ fun TtsSettingsRoute(
         state = TtsSettingsUiState(
             enabled = enabled,
             engineType = engineType,
+            speed = speed,
             systemVoice = systemVoice,
             systemVoiceOptions = systemVoiceOptions,
             systemVoiceSummary = systemVoiceSummary,
@@ -115,6 +120,7 @@ fun TtsSettingsRoute(
         onEngineTypeChange = { value ->
             settings.prefs.edit { putString(TtsSettingsCoordinator.KEY_TTS_ENGINE_TYPE, value) }
         },
+        onSpeedChange = { value -> TtsPlaybackSpeed.write(settings.prefs, value) },
         onSystemVoiceChange = { value ->
             settings.prefs.edit { putString(TtsSettingsCoordinator.KEY_TTS_SYSTEM_VOICE, value) }
         },
@@ -334,6 +340,10 @@ class TtsSettingsCoordinator(
                         testMediaPlayer = null
                         isTestRunningFlow.value = false
                         true
+                    }
+                    // Preview at the configured speed; a device that cannot stretch audio plays at 1.0x.
+                    runCatching {
+                        player.playbackParams = player.playbackParams.setSpeed(TtsPlaybackSpeed.read(appSettings.prefs))
                     }
                     player.start()
                     shouldResetState = false

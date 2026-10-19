@@ -394,6 +394,10 @@ class NovelReaderActivity :
                 composeReaderViewModel.publishSettings(readerSettings)
             }
         }.launchIn(lifecycleScope)
+        settings.observeAsFlow(org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed.KEY) {
+            org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed.read(prefs)
+        }.onEach(composeReaderViewModel::publishTtsSpeed)
+            .launchIn(lifecycleScope)
         isEInkModeEnabled = settings.isEInkModeEnabled
         settings.observeAsFlow(AppSettings.KEY_EINK_MODE) { isEInkModeEnabled }
             .onEach { enabled ->
@@ -646,6 +650,7 @@ class NovelReaderActivity :
             onTtsPrevious = { ttsService?.seekPrev() },
             onTtsPlayPause = ::onTtsPlayPauseClicked,
             onTtsNext = { ttsService?.seekNext() },
+            onTtsSpeedChange = ::onTtsSpeedChange,
             onTtsVoice = ::showVoiceSelectionDialog,
             onTtsClose = {
                 onTtsStopClicked()
@@ -705,6 +710,7 @@ class NovelReaderActivity :
                             onTtsPrevious = { ttsService?.seekPrev() },
                             onTtsPlayPause = ::onTtsPlayPauseClicked,
                             onTtsNext = { ttsService?.seekNext() },
+                            onTtsSpeedChange = ::onTtsSpeedChange,
                             onTtsVoice = ::showVoiceSelectionDialog,
                             onTtsClose = {
                                 onTtsStopClicked()
@@ -2141,6 +2147,11 @@ class NovelReaderActivity :
 
     private fun onTtsStopClicked() {
         ttsService?.stopTts()
+    }
+
+    private fun onTtsSpeedChange(speed: Float) {
+        // The running service picks the new value up from preferences.
+        org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed.write(settings.prefs, speed)
     }
 
     /**
