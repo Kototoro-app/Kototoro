@@ -33,7 +33,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.MimeTypes
 import org.skepsun.kototoro.core.util.ext.isFileUri
 import org.skepsun.kototoro.core.util.ext.isZipUri
-import org.skepsun.kototoro.core.util.ext.toFileNameSafe
+import org.skepsun.kototoro.core.util.ext.toExportFileName
 import org.skepsun.kototoro.core.util.ext.toFileOrNull
 import org.skepsun.kototoro.core.util.ext.writeAllCancellable
 import org.skepsun.kototoro.parsers.model.Content
@@ -277,7 +277,7 @@ class PageSaveHelper @AssistedInject constructor(
     ) {
 
         fun getFileBaseName(mangaTitleLength: Int) = buildString {
-            append(manga.title.toFileNameSafe().take(mangaTitleLength.coerceAtLeast(0)))
+            append(manga.title.toExportFileName(mangaTitleLength.coerceAtLeast(0)))
             manga.findChapterById(chapterId)?.let { chapter ->
                 append('-')
                 append(chapter.number)

@@ -54,6 +54,27 @@ fun String.toFileNameSafe(): String = this.transliterate(false)
     .replace(fileNameWhitespace, "_")
     .ifBlank { FALLBACK_FILE_NAME }
 
+private val exportFileNameIllegalChars = Regex("[\\\\/:*?\"<>|\\p{Cntrl}]")
+
+/**
+ * For files the user exports and reads back (saved pages, notes). [toFileNameSafe] names download
+ * folders and must stay stable, so it drops kana, Hangul and full-width text; this keeps every
+ * script and readable punctuation, removing only what file systems reject. [maxLength] counts
+ * code points, so a surrogate pair is never split.
+ */
+fun String.toExportFileName(maxLength: Int = Int.MAX_VALUE): String {
+    val cleaned = replace(exportFileNameIllegalChars, " ")
+        .replace(fileNameWhitespace, " ")
+        .trim()
+        .trimStart('.')
+    val end = if (cleaned.codePointCount(0, cleaned.length) > maxLength) {
+        cleaned.offsetByCodePoints(0, maxLength.coerceAtLeast(0))
+    } else {
+        cleaned.length
+    }
+    return cleaned.substring(0, end).trim().trimEnd('.').ifBlank { FALLBACK_FILE_NAME }
+}
+
 fun CharSequence.sanitize(): CharSequence {
     return filterNot { c -> c.isReplacement() }
 }

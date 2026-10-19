@@ -57,7 +57,7 @@ import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ReaderIntent
 import org.skepsun.kototoro.core.util.ext.findActivity
-import org.skepsun.kototoro.core.util.ext.toFileNameSafe
+import org.skepsun.kototoro.core.util.ext.toExportFileName
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
@@ -525,7 +525,7 @@ private fun NovelNotesTabContent(
                 BookNotesExportHelper.shareMarkdownFile(context, manga, notes)
             },
             onSaveMarkdown = {
-                val safeTitle = manga.title.toFileNameSafe().ifBlank { "book" }.take(50)
+                val safeTitle = manga.title.toExportFileName(maxLength = 50)
                 createDocumentLauncher.launch(
                     context.getString(R.string.book_notes_export_filename, safeTitle),
                 )
