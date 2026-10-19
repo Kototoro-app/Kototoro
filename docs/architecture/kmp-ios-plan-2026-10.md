@@ -5723,6 +5723,10 @@ HLS/内嵌字幕。AVPlayer 不能把独立字幕文件加入 HLS 或渐进式�
   也提供 VoiceOver 动作。滚回原处走共享场景的锚点：`progress` 给出起点下的页与未缩放偏移，`scrollOrigin` 给出新排版
   下的滚动位置；不能按缩放比例换算场景偏移，因为跳转或恢复后上方页面仍是一屏估值，比例换算会把阅读页带偏
   （旧实现偏移一页以上，上方未测量页越多越远）。横向平移轴仍按比例缩放。
+  排版本身无法插值（页面尺寸与其间偏移不是旧排版的等比缩放），而且页面要按新尺寸重切瓦片解码，提交后的前几帧是空白，
+  所以移动用快照呈现：提交前对条漫取 `snapshotView`，提交后把快照绕触点放大到 `ratio`（双击）或原地（捏合松手时
+  预览已是目标尺寸），0.32s 缓动、最后 0.2s 淡出，新页面在快照下面解码完成。`UIAccessibility.isReduceMotionEnabled`
+  时直接切换；捏合若在原地结束（`ratio == 1`）不提交任何排版，预览用的 transform 和快照一并丢弃。
   翻页点击区、自动滚动和跨章节导航沿用原逻辑，跨章节时保留横向平移位置。
   缩放只在本次会话有效，切换阅读模式后恢复适应宽度（与 Android 一致，不持久化）。
 
@@ -5738,6 +5742,10 @@ HLS/内嵌字幕。AVPlayer 不能把独立字幕文件加入 HLS 或渐进式�
 修正后两次都停在第 5 页；`testContinuousDoubleTapZoomsAtTheTap`、
 `testHorizontalContinuousDirectionZoomAndBookmarkRestore`、`testPagedToContinuousSwitchRestoresTheReadingPage` 与
 `testPagedDoubleTapZoomsAtTheTapAndPansBeforeTurning` 同批次通过。
+动画用模拟器录屏逐帧测量（`xcrun simctl io recordVideo` 加 30fps 抽帧，按页面色带边界和背景占比判断）：
+快照方案下整个缩放窗口内背景占比全程 0.000，色带边界连续外移（1×→2× 时页左缘 388→342→264→156→38→0 像素）；
+而直接把新排版按 `1 / ratio` 缩放、以及完全不加动画两种写法，放大后背景占比都会升到 0.62–0.75 并持续约 0.2s，
+说明空白来自页面按新尺寸重切瓦片，慢的不是动画本身。
 同时修正了上一轮 `testContinueReadingAccessoryResumes` 新增的断言：模拟器上已有小说阅读记录，所以小说空间的底栏附件可以合法地显示小说。现在改为断言附件不再显示刚读的漫画，并加 `defer`，确保中途失败时空间也恢复为“全部”（此前一次中途失败把 `space.kind=NOVEL` 留在设备上，导致后续用例找不到漫画源）。两个用例随后在同一批次中通过。
 
 ## 112. iOS 小说章节下载与离线阅读
