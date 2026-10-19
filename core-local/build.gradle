@@ -4,10 +4,17 @@
 // directories and the legacy text decoder, and checks video codec/container support before importing.
 plugins {
 	id 'org.jetbrains.kotlin.multiplatform'
+	id 'com.android.kotlin.multiplatform.library'
 	id 'org.jetbrains.kotlin.plugin.serialization'
 }
 
 kotlin {
+	// Android reads the shared formats (ComicInfo.xml) from :app; its I/O stays in the app's own parser.
+	androidLibrary {
+		namespace = 'org.skepsun.kototoro.local.shared'
+		compileSdk = 37
+		minSdk = 26
+	}
 	jvm {
 		compilerOptions {
 			jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
@@ -25,6 +32,8 @@ kotlin {
 				implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
 			}
 		}
+		// Android and the JVM share the one platform file (the system file system).
+		getByName('androidMain').kotlin.srcDir('src/jvmMain/kotlin')
 		getByName('jvmTest') {
 			dependencies {
 				implementation 'org.junit.jupiter:junit-jupiter:5.8.2'

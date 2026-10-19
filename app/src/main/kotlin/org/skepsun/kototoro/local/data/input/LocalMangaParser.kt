@@ -1,5 +1,9 @@
 package org.skepsun.kototoro.local.data.input
 
+import org.skepsun.kototoro.parsers.model.ContentRating
+import org.skepsun.kototoro.parsers.model.ContentState
+import org.skepsun.kototoro.parsers.model.ContentTag
+import org.skepsun.kototoro.local.shared.ComicInfo
 import android.net.Uri
 import androidx.core.net.toFile
 import androidx.core.net.toUri
@@ -334,6 +338,20 @@ class LocalContentParser {
                     }
                 }
 
+                val comicInfo = if (inferedSource == org.skepsun.kototoro.core.model.LocalMangaSource) {
+                    fileSystem.readComicInfo(rootPath)
+                } else {
+                    null
+                }
+                // A single-chapter archive takes the chapter's own name and number from ComicInfo.
+                if (comicInfo != null) {
+                    detectedChapters = detectedChapters?.singleOrNull()?.let { (chapter, path) ->
+                        listOf(chapter.copy(
+                            title = comicInfo.title ?: chapter.title,
+                            number = comicInfo.chapterNumber ?: chapter.number,
+                        ) to path)
+                    } ?: detectedChapters
+                }
                 val content = Content(
                     id = rootFile.absolutePath.longHashCode(),
                     title = title,
@@ -350,7 +368,7 @@ class LocalContentParser {
                     authors = emptySet(),
                     largeCoverUrl = null,
                     description = null,
-                )
+                ).withComicInfo(comicInfo)
 
                 if (shouldGenerateIndex && detectedChapters != null) {
                     runCatchingCancellable {
@@ -666,8 +684,9 @@ class LocalContentParser {
             chapters = null,
             source = source,
         )
+        val comicInfo = if (source == LocalMangaSource) root.readComicInfo() else null
         val index = ContentIndex(null)
-        index.setContentInfo(content)
+        index.setContentInfo(content.withComicInfo(comicInfo))
         chapters.forEachIndexed { chapterIndex, (chapter, relativePath) ->
             index.addChapter(IndexedValue(chapterIndex, chapter), relativePath, null)
         }
@@ -718,6 +737,39 @@ class LocalContentParser {
             }
         } ?: return@runCatchingCancellable null
         archive.uri.toZipUri(entryName).toString()
+    }.onFailure { it.printStackTraceDebug() }.getOrNull()
+
+    /** ComicInfo.xml at the root of a work, else in its first chapter archive (Mihon writes one per chapter). */
+    @Blocking
+    private fun FileSystem.readComicInfo(rootPath: Path): ComicInfo? = runCatchingCancellable {
+        fun FileSystem.atRoot(dir: Path): ComicInfo? = list(dir)
+            .firstOrNull { it.name.equals(ComicInfo.FILE_NAME, ignoreCase = true) && isRegularFile(it) }
+            ?.let { read(it) { readUtf8() } }
+            ?.let(ComicInfo::parse)
+        atRoot(rootPath) ?: list(rootPath)
+            .filter { isRegularFile(it) && hasZipExtension(it.name) && this == FileSystem.SYSTEM }
+            .minWithOrNull(compareBy(AlphanumComparator()) { it.name })
+            ?.let { archive -> openZip(archive).use { zip -> zip.atRoot(Path.DIRECTORY_SEPARATOR.toPath()) } }
+    }.onFailure { it.printStackTraceDebug() }.getOrNull()
+
+    /** The same lookup for SAF folders; a chapter archive is streamed only up to its ComicInfo.xml. */
+    @Blocking
+    private fun UniFile.readComicInfo(): ComicInfo? = runCatchingCancellable {
+        listFiles().orEmpty()
+            .firstOrNull { it.isFile && it.name.equals(ComicInfo.FILE_NAME, ignoreCase = true) }
+            ?.let { file -> file.openInputStream().use { it.readBytes().decodeToString() } }
+            ?.let(ComicInfo::parse)
+            ?: listFiles().orEmpty()
+                .filter { it.isFile && hasZipExtension(it.name.orEmpty()) }
+                .minWithOrNull(compareBy(AlphanumComparator()) { it.name.orEmpty() })
+                ?.openInputStream()?.use { input ->
+                    ZipInputStream(input.buffered()).use { zip ->
+                        generateSequence { zip.nextEntry }
+                            .firstOrNull { it.name.equals(ComicInfo.FILE_NAME, ignoreCase = true) }
+                            ?.let { zip.readBytes().decodeToString() }
+                    }
+                }
+                ?.let(ComicInfo::parse)
     }.onFailure { it.printStackTraceDebug() }.getOrNull()
 
     private fun UniFile.walkRelative(): List<Pair<String, UniFile>> {
@@ -974,6 +1026,27 @@ class LocalContentParser {
         }
 
         private fun Uri.fileFromPath(): File = File(requireNotNull(path) { "Uri path is null: $this" })
+
+        /** Fills what the folder name and pages cannot tell from ComicInfo.xml; detected chapters stay as they are. */
+        private fun Content.withComicInfo(info: ComicInfo?): Content {
+            if (info == null) return this
+            return copy(
+                title = info.series ?: title,
+                description = info.summary ?: description,
+                authors = info.authors.toSet().ifEmpty { authors },
+                tags = info.allTags.mapTo(LinkedHashSet()) { ContentTag(title = it, key = it.lowercase(), source = source) }
+                    .ifEmpty { tags },
+                state = when (info.status) {
+                    ComicInfo.Status.ONGOING -> ContentState.ONGOING
+                    ComicInfo.Status.FINISHED -> ContentState.FINISHED
+                    ComicInfo.Status.ABANDONED -> ContentState.ABANDONED
+                    ComicInfo.Status.PAUSED -> ContentState.PAUSED
+                    null -> state
+                },
+                contentRating = if (info.isAdult) ContentRating.ADULT else contentRating,
+                publicUrl = info.web ?: publicUrl,
+            )
+        }
 
         /** A cover URL that needs neither the network nor the source: a file, zip or content URI. */
         private fun String?.takeIfLocalUrl(): String? = this?.takeIf { it.isNotBlank() && !it.toUri().isNetworkUri() }

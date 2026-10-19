@@ -38,6 +38,27 @@ class LocalSourceRuntimeTest {
     }
 
     @Test
+    fun comicInfoDescribesArchivesWithoutAnIndex() = runTest {
+        val comicInfo = """<?xml version="1.0"?><ComicInfo><Series>Witch Hat Atelier</Series>
+            |<Title>The Return</Title><Number>12</Number><Summary>Coco learns magic.</Summary>
+            |<Writer>Kamome Shirahama</Writer><Genre>Fantasy, Adventure</Genre></ComicInfo>""".trimMargin()
+        val file = zip("ch12.cbz", mapOf(
+            "ComicInfo.xml" to comicInfo.encodeToByteArray(),
+            "001.png" to png,
+            "002.png" to png,
+        ))
+        val runtime = runtime()
+        val details = runtime.getDetails(runtime.import(file, "ch12.cbz"), SourceDetailsFetchMode.ALLOW_CACHE)
+        assertEquals("Witch Hat Atelier", details.title)
+        assertEquals("Coco learns magic.", details.description)
+        assertEquals(setOf("Kamome Shirahama"), details.authors)
+        assertEquals(setOf("Fantasy", "Adventure"), details.tags.map { it.title }.toSet())
+        assertEquals(listOf("The Return"), details.chapters!!.map { it.title })
+        assertEquals(12f, details.chapters!!.single().number)
+        assertEquals(2, runtime.getPages(details.chapters!!.single(), null).size)
+    }
+
+    @Test
     fun epubSectionsOfOneDocumentBecomeChaptersForNewImportsOnly() = runTest {
         val opf = """<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0">
             |<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>分节</dc:title></metadata>

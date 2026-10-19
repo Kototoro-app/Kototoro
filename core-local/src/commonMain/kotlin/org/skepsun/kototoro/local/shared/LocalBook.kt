@@ -138,17 +138,32 @@ class LocalBookReader(
         val index = files.firstOrNull { it == INDEX }?.let { name ->
             runCatching { json.parseToJsonElement(zip.read(("/$name").toPath()) { readUtf8() }).jsonObject }.getOrNull()
         }
+        // Mihon and other readers describe an archive in ComicInfo.xml; Kototoro's own index.json takes precedence.
+        val comicInfo = if (index != null) null else files
+            .firstOrNull { it.equals(ComicInfo.FILE_NAME, ignoreCase = true) }
+            ?.let { name -> runCatching { zip.read(("/$name").toPath()) { readUtf8() } }.getOrNull() }
+            ?.let(ComicInfo::parse)
+        val title = index?.string("title") ?: comicInfo?.series ?: fallbackTitle
         val indexed = index?.let { indexedChapters(it, images) }.orEmpty()
-        val chapters = indexed.ifEmpty { folderChapters(images, index?.string("title") ?: fallbackTitle) }
+        val chapters = indexed.ifEmpty {
+            folderChapters(images, title).let { folders ->
+                // A single-chapter archive takes the chapter's own name and number from ComicInfo.
+                val single = folders.singleOrNull() ?: return@let folders
+                listOf(single.copy(
+                    title = comicInfo?.title ?: single.title,
+                    number = comicInfo?.chapterNumber ?: single.number,
+                ))
+            }
+        }
         require(chapters.isNotEmpty()) { "压缩包里没有图片" }
         val coverEntry = index?.string("cover_entry")?.takeIf { it in files }
         return LocalBook(
-            title = index?.string("title") ?: fallbackTitle,
-            authors = index?.let { it.strings("authors").ifEmpty { listOfNotNull(it.string("author")) } }.orEmpty(),
-            description = index?.string("description"),
-            tags = (index?.get("tags") as? JsonArray).orEmpty().mapNotNull {
-                (it as? JsonObject)?.string("title")
-            },
+            title = title,
+            authors = index?.let { it.strings("authors").ifEmpty { listOfNotNull(it.string("author")) } }
+                ?: comicInfo?.authors.orEmpty(),
+            description = index?.string("description") ?: comicInfo?.summary,
+            tags = index?.let { (it["tags"] as? JsonArray).orEmpty().mapNotNull { tag -> (tag as? JsonObject)?.string("title") } }
+                ?: comicInfo?.allTags.orEmpty(),
             cover = coverEntry ?: chapters.first().pages.first(),
             chapters = chapters,
         )
