@@ -68,7 +68,7 @@ fun ChaptersScreenRoot(
 
     val appContext = context.applicationContext
     val settings = remember(appContext) { AppSettings(appContext) }
-    val gridSize by settings.observeAsState(AppSettings.KEY_GRID_SIZE_PAGES) { gridSizePages }
+    val gridSize by settings.observeAsState(AppSettings.KEY_GRID_SIZE_CHAPTERS) { gridSizeChapters }
 
     val gridScale = (gridSize / 100f)
 

@@ -116,6 +116,7 @@ internal fun DetailsPaneActionsRow(
     isDownloadedOnly: Boolean,
     isDownloadedFilterVisible: Boolean,
     pageGridSizeValue: Float,
+    chapterGridSizeValue: Float,
     pageThumbnailAspectRatio: Float,
     isPageThumbnailsFitPreview: Boolean,
     onChapterSearchToggle: () -> Unit,
@@ -125,6 +126,7 @@ internal fun DetailsPaneActionsRow(
     onToggleMergeRepeatedChapters: () -> Unit,
     onToggleDownloadedOnly: () -> Unit,
     onPageGridSizeChange: (Float) -> Unit,
+    onChapterGridSizeChange: (Float) -> Unit,
     onPageThumbnailAspectRatioChange: (Float) -> Unit,
     onTogglePageThumbnailsFitPreview: () -> Unit,
     showCollapsedHandle: Boolean,
@@ -288,10 +290,13 @@ internal fun DetailsPaneActionsRow(
             }
 
             DetailsPaneTopBarMode.GridSizeControls -> {
+                // The chapter grid has its own size and no thumbnail shape; pages keep both.
+                val isChaptersTab = selectedTabId == DETAILS_TAB_CHAPTERS
                 PageGridSizeControlsRow(
-                    sizeValue = pageGridSizeValue,
+                    sizeValue = if (isChaptersTab) chapterGridSizeValue else pageGridSizeValue,
                     aspectRatio = pageThumbnailAspectRatio,
-                    onSizeValueChange = onPageGridSizeChange,
+                    showAspectRatio = !isChaptersTab,
+                    onSizeValueChange = if (isChaptersTab) onChapterGridSizeChange else onPageGridSizeChange,
                     onAspectRatioChange = onPageThumbnailAspectRatioChange,
                     onBackClick = detailsPaneState::hideGridSizeControls,
                     modifier = Modifier.fillMaxWidth(),
@@ -811,6 +816,7 @@ private fun PageGridSizeControlsRow(
     onSizeValueChange: (Float) -> Unit,
     onAspectRatioChange: (Float) -> Unit,
     onBackClick: () -> Unit,
+    showAspectRatio: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val heightRatio = 1f / aspectRatio.coerceIn(PageThumbnailAspectRatioMin, PageThumbnailAspectRatioMax)
@@ -848,7 +854,7 @@ private fun PageGridSizeControlsRow(
                 onValueChange = onSizeValueChange,
                 valueRange = 50f..150f,
             )
-            LabeledGridSlider(
+            if (showAspectRatio) LabeledGridSlider(
                 label = stringResource(R.string.grid_aspect_ratio),
                 value = heightRatio,
                 onValueChange = { heightRatioValue ->

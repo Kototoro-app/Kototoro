@@ -778,6 +778,12 @@ private fun DetailsScreenContent(
             }
         }
     }
+    val chapterGridSizeValue by settings.observeAsState(AppSettings.KEY_GRID_SIZE_CHAPTERS) {
+        gridSizeChapters.toFloat()
+    }
+    val updateChapterGridSize: (Float) -> Unit = remember(settings) {
+        { value -> settings.gridSizeChapters = value.toInt() }
+    }
     val updatePageThumbnailAspectRatio: (Float) -> Unit = remember(detailsPaneState, settings) {
         { value ->
             detailsPaneState.updatePageThumbnailAspectRatio(value) { updatedValue ->
@@ -1385,6 +1391,7 @@ private fun DetailsScreenContent(
                                     isDownloadedOnly = isDownloadedOnly,
                                     isDownloadedFilterVisible = mangaDetails?.local != null,
                                     pageGridSizeValue = pageGridSizeValue,
+                                    chapterGridSizeValue = chapterGridSizeValue,
                                     pageThumbnailAspectRatio = pageThumbnailAspectRatioValue,
                                     isPageThumbnailsFitPreview = isPageThumbnailsFitPreview,
                                     onChapterQueryChange = updateChapterQuery,
@@ -1395,6 +1402,7 @@ private fun DetailsScreenContent(
                                     onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
                                     onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
                                     onPageGridSizeChange = updatePageGridSize,
+                                    onChapterGridSizeChange = updateChapterGridSize,
                                     onPageThumbnailAspectRatioChange = updatePageThumbnailAspectRatio,
                                     onTogglePageThumbnailsFitPreview = togglePageThumbnailsFitPreview,
                                     showCollapsedHandle = false,
@@ -1570,6 +1578,7 @@ private fun DetailsScreenContent(
                             isDownloadedOnly = isDownloadedOnly,
                             isDownloadedFilterVisible = mangaDetails?.local != null,
                             pageGridSizeValue = pageGridSizeValue,
+                            chapterGridSizeValue = chapterGridSizeValue,
                             pageThumbnailAspectRatio = pageThumbnailAspectRatioValue,
                             isPageThumbnailsFitPreview = isPageThumbnailsFitPreview,
                             onChapterQueryChange = updateChapterQuery,
@@ -1580,6 +1589,7 @@ private fun DetailsScreenContent(
                             onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
                             onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
                             onPageGridSizeChange = updatePageGridSize,
+                            onChapterGridSizeChange = updateChapterGridSize,
                             onPageThumbnailAspectRatioChange = updatePageThumbnailAspectRatio,
                             onTogglePageThumbnailsFitPreview = togglePageThumbnailsFitPreview,
                             showCollapsedHandle = true,

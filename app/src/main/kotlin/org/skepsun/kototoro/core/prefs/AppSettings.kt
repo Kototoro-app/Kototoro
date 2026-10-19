@@ -573,6 +573,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getSafeInt(KEY_GRID_SIZE_PAGES, 100).coerceIn(50, 150)
         set(value) = prefs.edit { putInt(KEY_GRID_SIZE_PAGES, value.coerceIn(50, 150)) }
 
+    /** The chapter grid's own size; until first changed it follows the page grid it used to share. */
+    var gridSizeChapters: Int
+        get() = prefs.getSafeInt(KEY_GRID_SIZE_CHAPTERS, gridSizePages).coerceIn(50, 150)
+        set(value) = prefs.edit { putInt(KEY_GRID_SIZE_CHAPTERS, value.coerceIn(50, 150)) }
+
     var pageThumbnailAspectRatio: Float
         get() = prefs.getSafeFloat(KEY_PAGE_THUMBNAIL_ASPECT_RATIO, PAGE_THUMBNAIL_ASPECT_RATIO_DEFAULT)
             .coerceIn(PAGE_THUMBNAIL_ASPECT_RATIO_MIN, PAGE_THUMBNAIL_ASPECT_RATIO_MAX)
@@ -2958,6 +2963,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_UPDATES_FEED_CLEAR = "updates_feed_clear"
         const val KEY_GRID_SIZE = "grid_size"
         const val KEY_GRID_SIZE_PAGES = "grid_size_pages"
+        const val KEY_GRID_SIZE_CHAPTERS = "grid_size_chapters"
         const val KEY_PAGE_THUMBNAIL_ASPECT_RATIO = "page_thumbnail_aspect_ratio"
         const val KEY_PAGE_THUMBNAILS_FIT_PREVIEW = "page_thumbnails_fit_preview"
         const val KEY_RAIL_ANIMATION_INTENSITY = "rail_animation_intensity"
