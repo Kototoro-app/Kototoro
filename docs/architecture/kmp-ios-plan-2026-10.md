@@ -5720,7 +5720,10 @@ HLS/内嵌字幕。AVPlayer 不能把独立字幕文件加入 HLS 或渐进式�
 - 条漫的 ScrollView 改为纵横双向滚动（横向按内容尺寸回弹）。缩放后，页面瓦片按实际显示尺寸取视口和采样率，
   `visibleTiles` 仍使用屏幕视口，超长页的分块会随缩放提高清晰度。
 - 捏合时先用 `scaleEffect` 绕起点预览，松手后提交新的排版，并把捏合起点下的内容滚回原处；双击在 1× 和 2× 之间切换，
-  也提供 VoiceOver 动作。翻页点击区、自动滚动和跨章节导航沿用原逻辑，跨章节时保留横向平移位置。
+  也提供 VoiceOver 动作。滚回原处走共享场景的锚点：`progress` 给出起点下的页与未缩放偏移，`scrollOrigin` 给出新排版
+  下的滚动位置；不能按缩放比例换算场景偏移，因为跳转或恢复后上方页面仍是一屏估值，比例换算会把阅读页带偏
+  （旧实现偏移一页以上，上方未测量页越多越远）。横向平移轴仍按比例缩放。
+  翻页点击区、自动滚动和跨章节导航沿用原逻辑，跨章节时保留横向平移位置。
   缩放只在本次会话有效，切换阅读模式后恢复适应宽度（与 Android 一致，不持久化）。
 
 **未做**：横向条漫（模式 4）的交互缩放（共享层已支持，Swift 尚未启用，需要处理从右到左的偏移镜像）；
@@ -5730,6 +5733,11 @@ HLS/内嵌字幕。AVPlayer 不能把独立字幕文件加入 HLS 或渐进式�
 共享测试 8 项通过。真实扩展预览新增 `testWebtoonStripPinchZoomPansAndResets`（再漫画《大理寺日志》）：
 页面宽度从 1× 放大到 4×、可横向平移、双击还原。首次运行在捏合前失败，用临时日志确认手势和提交链路正常，
 随后连续两次通过；测试已在切换模式后等待布局稳定。放大、平移和还原的截图已检查，未做真机验收。
+`LocalImportTests/testContinuousDoubleTapKeepsThePageAfterAJump` 用本地条漫夹具在跳转到第 5 页后连续双击放大、还原，
+断言 `reader.canvas` 的阅读页不变：旧的比例换算在跳转后的排版上落到第 6 页（上方 4 页仍是一屏估值），
+修正后两次都停在第 5 页；`testContinuousDoubleTapZoomsAtTheTap`、
+`testHorizontalContinuousDirectionZoomAndBookmarkRestore`、`testPagedToContinuousSwitchRestoresTheReadingPage` 与
+`testPagedDoubleTapZoomsAtTheTapAndPansBeforeTurning` 同批次通过。
 同时修正了上一轮 `testContinueReadingAccessoryResumes` 新增的断言：模拟器上已有小说阅读记录，所以小说空间的底栏附件可以合法地显示小说。现在改为断言附件不再显示刚读的漫画，并加 `defer`，确保中途失败时空间也恢复为“全部”（此前一次中途失败把 `space.kind=NOVEL` 留在设备上，导致后续用例找不到漫画源）。两个用例随后在同一批次中通过。
 
 ## 112. iOS 小说章节下载与离线阅读

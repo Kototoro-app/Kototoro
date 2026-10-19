@@ -137,7 +137,7 @@ final class SourceReaderModel: ObservableObject {
     private var savedPosition: IosReadingPosition?
     private(set) var restoreOrigin: CGFloat = 0
     /// The continuous scroll origin of the position being read now.
-    var currentOrigin: CGFloat { CGFloat(engine.scrollOrigin(index: Int32(windowIndex), offset: offset)) }
+    var currentOrigin: CGFloat { stripOrigin(of: IosReaderProgress(index: Int32(windowIndex), offset: offset)) }
     private var awaitingRestore = false
     /// The continuous viewport's first visible page and its offset, compared by identity to tell a move back.
     private var viewAnchor: (page: IosReaderPage, offset: Float)?
