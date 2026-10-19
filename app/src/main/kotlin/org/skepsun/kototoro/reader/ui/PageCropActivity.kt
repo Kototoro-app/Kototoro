@@ -131,6 +131,12 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
                                 cropImageView.setTransformImageListener(this@PageCropActivity)
                                 cropImageView.setImageToWrapCropBoundsAnimDuration(WRAP_ANIM_DURATION_MS)
                                 cropImageView.setMaxScaleMultiplier(MAX_SCALE_MULTIPLIER)
+                                // uCrop sizes the crop frame from the first layout only. When the window is still
+                                // settling (e.g. launched during a rotation), re-apply the ratio at the final size.
+                                cropView.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
+                                    val resized = r - l != oldR - oldL || b - t != oldB - oldT
+                                    if (resized && isImageLoaded) cropView.post { applyAspectRatio(selectedRatio) }
+                                }
                                 runCatching { cropImageView.setImageUri(sourceUri, destinationUri) }
                                     .onFailure { cancelCrop() }
                             }
