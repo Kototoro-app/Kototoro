@@ -84,6 +84,8 @@ data class ComposeReaderOptionsState(
     val visible: Boolean = false,
     val mode: ReaderMode = ReaderMode.STANDARD,
     val continuousHorizontalReversed: Boolean = false,
+    /** This title's chapters are read in reverse list order (sources that list newest first). */
+    val chaptersReversed: Boolean = false,
     /** Scene renderer for the webtoon mode; off by default. */
     val webtoonSceneReader: Boolean = false,
     /** Scene renderer for single/double page; off by default, matching the released behaviour. */
@@ -119,6 +121,7 @@ data class ComposeReaderOptionsCallbacks(
     val onDismiss: () -> Unit = {},
     val onModeChanged: (ReaderMode) -> Unit = {},
     val onContinuousHorizontalReversedChanged: (Boolean) -> Unit = {},
+    val onChaptersReversedChanged: (Boolean) -> Unit = {},
     val onWebtoonSceneReaderChanged: (Boolean) -> Unit = {},
     val onPagedSceneReaderChanged: (Boolean) -> Unit = {},
     val onAnimationChanged: (ReaderAnimation) -> Unit = {},
@@ -179,6 +182,8 @@ data class ReaderOptionsFeatures(
     val saveColorFilter: Boolean = true,
     val saveColorFilterForManga: Boolean = true,
     val superResolution: Boolean = true,
+    /** Per-title chapter order override; off until a host persists it. */
+    val chaptersReversed: Boolean = false,
 )
 
 /** The reader options' text, named after Android's string resources (the Windows host reads the same resources). */
@@ -222,6 +227,7 @@ data class ReaderOptionsStrings(
     val imageServer: String,
     val automatic: String,
     val colorCorrection: ReaderColorCorrectionLabels,
+    val chaptersReversed: String = "",
 ) {
     fun mode(mode: ReaderMode): String = when (mode) {
         ReaderMode.STANDARD -> modeStandard
@@ -322,6 +328,18 @@ fun ReaderLayoutOptionsPage(
     features: ReaderOptionsFeatures = ReaderOptionsFeatures(),
 ) {
     ReaderOptionsPageList {
+        if (features.chaptersReversed) {
+            item {
+                ReaderOptionGroup {
+                    ReaderOptionSwitchRow(
+                        label = strings.chaptersReversed,
+                        checked = state.chaptersReversed,
+                        onCheckedChange = callbacks.onChaptersReversedChanged,
+                        modifier = Modifier.testTag("reader-options-chapters-reversed"),
+                    )
+                }
+            }
+        }
         if (state.mode == ReaderMode.CONTINUOUS_HORIZONTAL) {
             // Direction is a preference of its own rather than another mode entry: the mode says
             // how pages are laid out, this says which way they are read.

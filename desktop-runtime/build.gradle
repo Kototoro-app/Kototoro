@@ -39,8 +39,9 @@ application {
 
 tasks.withType(Test).configureEach {
 	useJUnitPlatform()
-	def schema84 = rootProject.file('app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/84.json')
-	systemProperty 'kototoro.schema84', schema84.absolutePath
+	// The test compares the desktop file with Android's exported schema of the current DATABASE_VERSION.
+	def schemaDir = rootProject.file('app/schemas/org.skepsun.kototoro.core.db.MangaDatabase')
+	systemProperty 'kototoro.schemaDir', schemaDir.absolutePath
 	providers.gradleProperty('ncnnDirectory').orNull?.with { systemProperty 'kototoro.ncnn.dir', it }
 	// Opt-in: a directory holding real extension APKs (novelfull.apk), as for :dex-convert.
 	providers.gradleProperty('realApkDirectory').orNull?.with { systemProperty 'kototoro.dex.real.apks', it }

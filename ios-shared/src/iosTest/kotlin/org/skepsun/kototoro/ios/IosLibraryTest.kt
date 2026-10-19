@@ -2,6 +2,7 @@
 
 package org.skepsun.kototoro.ios
 
+import org.skepsun.kototoro.core.db.DATABASE_VERSION
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.core.source.SourceChapter
@@ -233,7 +234,7 @@ class IosLibraryTest {
         try {
             val first = IosLibrary(path)
             val savedId = try {
-                assertEquals(84, first.schemaVersion)
+                assertEquals(DATABASE_VERSION, first.schemaVersion)
                 assertEquals(emptyList(), first.categories())
                 first.addCategory("  我的漫画  ")
                 assertFailsWith<IllegalArgumentException> { first.addCategory(" \n ") }

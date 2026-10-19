@@ -96,7 +96,7 @@ class DesktopRuntimeTest {
     }
 
     @Test
-    fun `disk schema matches Android v84 and images share the private root`() = runBlocking {
+    fun `disk schema matches Android's current schema and images share the private root`() = runBlocking {
         val runtime = DesktopRuntime.open(directory)
         val png = Base64.getDecoder().decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXuoAAAAASUVORK5CYII=",
@@ -110,7 +110,7 @@ class DesktopRuntimeTest {
         assertArrayEquals(png, Files.readAllBytes(runtime.paths.images.resolve(image.relativePath)))
         runtime.close()
         val schema = SourceProtocolJson.parseToJsonElement(
-            Files.readString(Path.of(System.getProperty("kototoro.schema84"))),
+            Files.readString(Path.of(System.getProperty("kototoro.schemaDir"), "$DATABASE_VERSION.json")),
         ).jsonObject.getValue("database").jsonObject
         BundledSQLiteDriver().open(info.database).use { connection ->
             connection.prepare("PRAGMA user_version").use { statement ->

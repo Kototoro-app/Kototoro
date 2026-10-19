@@ -69,7 +69,7 @@ internal fun ComposeReaderOptionsPanel(
                 state = state,
                 callbacks = callbacks,
                 strings = strings,
-                features = ReaderOptionsFeatures(),
+                features = AndroidReaderOptionsFeatures,
                 actions = mangaQuickActions(translationAvailable, translationActive),
                 actionIcon = { painterResource(MangaQuickActionId.valueOf(it.id).iconResId) },
                 actionLabel = { stringResource(MangaQuickActionId.valueOf(it.id).labelResId) },
@@ -94,7 +94,7 @@ internal fun ComposeReaderOptionsPanel(
             ReaderOptionsDetailTabs(
                 tabs = listOf(
                     ReaderOptionsTab(stringResource(R.string.reader_more_tab_layout)) {
-                        ReaderLayoutOptionsPage(state, callbacks, strings)
+                        ReaderLayoutOptionsPage(state, callbacks, strings, AndroidReaderOptionsFeatures)
                     },
                     ReaderOptionsTab(stringResource(R.string.reader_more_tab_display)) {
                         ReaderDisplayOptionsPage(state, callbacks, strings) {
@@ -160,7 +160,10 @@ internal fun rememberReaderOptionsStrings() = ReaderOptionsStrings(
     imageServer = stringResource(R.string.image_server),
     automatic = stringResource(R.string.automatic),
     colorCorrection = rememberReaderColorCorrectionLabels(),
+    chaptersReversed = stringResource(R.string.reader_chapters_reversed),
 )
+
+private val AndroidReaderOptionsFeatures = ReaderOptionsFeatures(chaptersReversed = true)
 private enum class TranslationPageTab {
     SETTINGS,
     LOGS,

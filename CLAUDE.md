@@ -358,8 +358,8 @@ KMP/iOS 方案与进度见 `docs/architecture/kmp-ios-plan-2026-10.md`。KMP 模
 - 自动回退到完整 APK 下载
 
 **数据库**：
-- Room 数据库（`MangaDatabase`）在 KMP 模块 `core-db/`，DATABASE_VERSION = 84（`core-db/src/commonMain/.../core/db/MangaDatabase.kt`）；导出的 schema 仍位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`（已提交，由 `core-db` 的 Room 插件导出，`app` 的 androidTest 以 assets 读取）
-- 迁移文件 `core-db/src/androidMain/kotlin/org/skepsun/kototoro/core/db/migrations/Migration1To2.kt` 到 `Migration83To84.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `getDatabaseMigrations` 列表中，位于 `core-db` 的 `MangaDatabaseMigrations.kt`）
+- Room 数据库（`MangaDatabase`）在 KMP 模块 `core-db/`，DATABASE_VERSION = 85（`core-db/src/commonMain/.../core/db/MangaDatabase.kt`）；导出的 schema 仍位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`（已提交，由 `core-db` 的 Room 插件导出，`app` 的 androidTest 以 assets 读取）
+- 迁移文件 `core-db/src/androidMain/kotlin/org/skepsun/kototoro/core/db/migrations/Migration1To2.kt` 到 `Migration83To84.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `getDatabaseMigrations` 列表中，位于 `core-db` 的 `MangaDatabaseMigrations.kt`）；84→85 起的迁移在 commonMain（`Migration84To85.kt` 与 `sharedDatabaseMigrations()`），Android/Windows/iOS 三端共用
 - Android 必须继续使用框架 SQLite 驱动：旧迁移实现的是 `migrate(SupportSQLiteDatabase)`，换成 `BundledSQLiteDriver` 会抛 `NotImplementedError`
 - DAO 的过滤条件使用数据类型 `ListFilterCriteria`（`core-db`）；应用层的 `ListFilterOption`（带资源 id 与图标）在 Repository 边界用 `toCriteria()` 转换
 - 用户状态（收藏/历史/统计/偏好/追踪）直接挂在 `manga` 行上；实体图谱与 work 表已在 v84 移除（`Migration83To84` → `ProjectionOwnershipMigrationResolver`）
@@ -449,11 +449,11 @@ RELEASE_KEY_PASSWORD=***
 ## 常见任务
 
 ### 添加新的数据库迁移
-1. 在 `core-db/src/androidMain/kotlin/org/skepsun/kototoro/core/db/migrations/` 创建新的 `MigrationXToY.kt`
-2. 在 `core-db` 的 `MangaDatabaseMigrations.kt` 中的 `getDatabaseMigrations` 列表里注册迁移
+1. 在 `core-db/src/commonMain/kotlin/org/skepsun/kototoro/core/db/migrations/` 创建 `open class MigrationXToY`，覆写 `migrate(connection: SQLiteConnection)`（Windows/iOS 的 bundled 驱动调用它），SQL 放在 companion 常量里，并加入 `sharedDatabaseMigrations()`（桌面 `DesktopDatabase` 与 iOS `IosLibrary` 的 builder 注册的就是它）
+2. 在 `core-db` 的 `MangaDatabaseMigrations.kt` 中的 `getDatabaseMigrations` 列表里注册一个子类，覆写 `migrate(db: SupportSQLiteDatabase)` 执行同一 SQL（Android framework 驱动只调用这个重载，默认实现会抛 `NotImplementedError`）；参考 `AndroidMigration84To85`
 3. 递增 `core-db` 中 `MangaDatabase.kt` 的 `DATABASE_VERSION` 常量
 4. 更新 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/` 中的 schema JSON（构建 `core-db` 时由 Room KSP 导出，需提交）
-5. 实体、DAO 只能使用 commonMain 可用的 API（不要用 `System.currentTimeMillis()`、`java.*`、`SupportSQLiteQuery`、`BuildConfig`、资源 id 等）；用 `./gradlew :core-db:compileCommonMainKotlinMetadata` 检查。新迁移用 `app/src/androidTest/.../MangaDatabaseSnapshotChainTest` 验证（把新的快照版本加进它的 `snapshots` 列表）；该包里 `MangaDatabaseTest` 有 4 个既有失败，见 `docs/architecture/kmp-ios-plan-2026-10.md` §12
+5. 实体、DAO 只能使用 commonMain 可用的 API（不要用 `System.currentTimeMillis()`、`java.*`、`SupportSQLiteQuery`、`BuildConfig`、资源 id 等）；用 `./gradlew :core-db:compileCommonMainKotlinMetadata` 检查。新迁移用 `app/src/androidTest/.../MangaDatabaseSnapshotChainTest` 验证 Android（把新的快照版本加进它的 `snapshots` 列表），用 `core-db` 的 `SharedMigrationTest`（`:core-db:jvmTest`）验证 bundled 驱动从旧版本文件升级；该包里 `MangaDatabaseTest` 有 4 个既有失败，见 `docs/architecture/kmp-ios-plan-2026-10.md` §12
 
 ### 添加新的源类型
 1. 在对应模块（如 `mihon/`、`ireader/`）实现源接口

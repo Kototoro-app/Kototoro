@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.db.DATABASE_VERSION
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.desktop.runtime.DesktopRuntime
 import java.awt.Window
@@ -42,7 +43,7 @@ internal object DesktopWindowProbe {
         watchdog.join(1000)
         failure.get()?.let { throw it }
         check(!watchdog.isAlive) { "Window watchdog remained active" }
-        runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == 84) } }
+        runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == DATABASE_VERSION) } }
         val moved = root.resolveSibling("$mode-closed")
         Files.move(root, moved)
         Files.move(moved, root)

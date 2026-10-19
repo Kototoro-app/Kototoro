@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import org.skepsun.kototoro.core.db.DATABASE_VERSION
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.migrations.sharedDatabaseMigrations
 import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
 import org.skepsun.kototoro.parsers.network.CloudFlareProtection
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
@@ -55,6 +56,7 @@ class IosLibrary {
         }
         database = Room.databaseBuilder<MangaDatabase>(name = databasePath)
             .setDriver(BundledSQLiteDriver())
+            .addMigrations(*sharedDatabaseMigrations())
             .setQueryCoroutineContext(Dispatchers.IO)
             .build()
     }

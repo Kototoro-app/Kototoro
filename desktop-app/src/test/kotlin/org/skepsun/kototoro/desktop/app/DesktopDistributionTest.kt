@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.db.DATABASE_VERSION
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -44,7 +45,7 @@ class DesktopDistributionTest {
             "--check-runtime", report.toString()), "native-exe")
         val result = Properties().apply { Files.newBufferedReader(report).use { load(it) } }
         assertEquals("ok", result.getProperty("status"))
-        assertEquals("84", result.getProperty("schema"))
+        assertEquals(DATABASE_VERSION.toString(), result.getProperty("schema"))
         assertEquals("ok", result.getProperty("backup"))
         assertEquals("ok", result.getProperty("image"))
         assertEquals("ok", result.getProperty("browser"))

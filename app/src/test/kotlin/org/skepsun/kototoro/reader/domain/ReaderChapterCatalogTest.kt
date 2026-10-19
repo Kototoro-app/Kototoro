@@ -43,6 +43,41 @@ class ReaderChapterCatalogTest {
 		assertEquals(listOf(2L, 4L), result.map(ContentChapter::id))
 	}
 
+	@Test
+	fun `reversed order walks a newest-first source forwards`() {
+		// issue #529: the source lists 101, 100, 99; "next" after 100 must be 101.
+		val newest = chapter(id = 101L, number = 101f, branch = null, uploadDate = 300L)
+		val middle = chapter(id = 100L, number = 100f, branch = null, uploadDate = 200L)
+		val oldest = chapter(id = 99L, number = 99f, branch = null, uploadDate = 100L)
+		val details = details(listOf(newest, middle, oldest))
+
+		val result = resolveReaderChapterCatalog(
+			manga = details,
+			currentChapter = middle,
+			mergeBranches = false,
+			reversed = true,
+		)
+
+		assertEquals(listOf(99L, 100L, 101L), result.map(ContentChapter::id))
+		assertEquals(101L, result[result.indexOf(middle) + 1].id)
+	}
+
+	@Test
+	fun `reversed order also applies to merged branches`() {
+		val englishOne = chapter(id = 1L, number = 1f, branch = "English", uploadDate = 100L)
+		val englishTwo = chapter(id = 3L, number = 2f, branch = "English", uploadDate = 100L)
+		val details = details(listOf(englishOne, englishTwo))
+
+		val result = resolveReaderChapterCatalog(
+			manga = details,
+			currentChapter = englishOne,
+			mergeBranches = true,
+			reversed = true,
+		)
+
+		assertEquals(listOf(3L, 1L), result.map(ContentChapter::id))
+	}
+
 	private fun details(chapters: List<ContentChapter>) = ContentDetails(
 		Content(
 			id = 1L,

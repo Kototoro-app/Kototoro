@@ -39,6 +39,10 @@ class ChaptersLoader @Inject constructor(
     val size: Int
         get() = chapters.size()
 
+    /** Per-title override for sources that list chapters newest first. */
+    @Volatile
+    var isChaptersReversed: Boolean = false
+
     suspend fun init(manga: ContentDetails) = mutex.withLock {
         chapters.clear()
         manga.allChapters.forEach {
@@ -183,7 +187,7 @@ class ChaptersLoader @Inject constructor(
         val contentType = manga.toContent().source.getContentType()
         val currentChapter = peekChapter(currentId) ?: manga.allChapters.find { it.id == currentId }
         val mergeBranches = settings.isMergeRepeatedChapters && contentType.isManga()
-        val chaptersList = resolveReaderChapterCatalog(manga, currentChapter, mergeBranches)
+        val chaptersList = resolveReaderChapterCatalog(manga, currentChapter, mergeBranches, isChaptersReversed)
         val index = if (currentChapter != null && mergeBranches) {
             val currentKey = currentChapter.getMergeKey()
             chaptersList.indexOfFirst { it.getMergeKey() == currentKey }
@@ -223,12 +227,14 @@ internal fun resolveReaderChapterCatalog(
     manga: ContentDetails,
     currentChapter: ContentChapter?,
     mergeBranches: Boolean,
+    reversed: Boolean = false,
 ): List<ContentChapter> {
-    return if (mergeBranches) {
+    val catalog = if (mergeBranches) {
         manga.chapters.values.flatten().mergeRepeated()
     } else if (currentChapter != null) {
         manga.chapters[currentChapter.branch].orEmpty()
     } else {
         manga.allChapters
     }
+    return if (reversed) catalog.asReversed() else catalog
 }

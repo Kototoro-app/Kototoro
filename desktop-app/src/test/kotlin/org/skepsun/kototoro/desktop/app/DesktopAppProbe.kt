@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.db.DATABASE_VERSION
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
@@ -219,7 +220,7 @@ object DesktopAppProbe {
                     }
                 }
             } finally { runBlocking { controller.shutdown() } }
-            runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == 84) } }
+            runBlocking { DesktopRuntime.open(root).use { check(it.storageInfo().schemaVersion == DATABASE_VERSION) } }
             val moved = root.resolveSibling("closed-$mode")
             val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10)
             while (true) {

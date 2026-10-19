@@ -181,6 +181,7 @@ class ReaderViewModel @Inject constructor(
     private val completedReaderAdjacentLoads = mutableSetOf<ReaderAdjacentLoadRequest>()
 
     val readerMode = MutableStateFlow<ReaderMode?>(null)
+    val isChapterOrderReversed = MutableStateFlow(false)
     val onPageSaved = MutableEventFlow<Collection<Uri>>()
     val onLoadingError = MutableEventFlow<Throwable>()
     val onShowToast = MutableEventFlow<Int>()
@@ -702,6 +703,17 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
+    fun setChapterOrderReversed(reversed: Boolean) {
+        launchJob {
+            val manga = checkNotNull(getContentOrNull())
+            dataRepository.saveChaptersReversed(manga, reversed)
+            chaptersLoader.isChaptersReversed = reversed
+            isChapterOrderReversed.value = reversed
+            // Adjacent chapters already in the window were loaded in the old order; rebuild it around the page.
+            switchChapterBy(0)
+        }
+    }
+
     fun switchChapterBy(delta: Int, openLastPage: Boolean = false) {
         val prevJob = loadingJob
         loadingJob = launchLoadingJob(Dispatchers.Default) {
@@ -1034,6 +1046,9 @@ class ReaderViewModel @Inject constructor(
                         }
                         chaptersLoader.init(details)
                         val manga = details.toContent()
+                        val reversed = dataRepository.isChaptersReversed(manga.id)
+                        chaptersLoader.isChaptersReversed = reversed
+                        isChapterOrderReversed.value = reversed
                         val contentType = if (manga.looksLikeLocalVideoContent()) {
                             ContentType.VIDEO
                         } else {
@@ -1524,7 +1539,7 @@ class ReaderViewModel @Inject constructor(
         val details = mangaDetails.value ?: return emptyList()
         val contentType = details.toContent().source.getContentType()
         val useMerge = isMergeRepeatedChapters.value && contentType.isManga()
-        return if (useMerge) {
+        val chapters = if (useMerge) {
             val allBranches = details.chapters.keys.toList()
             val rawChapters = allBranches.flatMap { details.chapters[it].orEmpty() }
             rawChapters.mergeRepeated()
@@ -1536,5 +1551,6 @@ class ReaderViewModel @Inject constructor(
                 details.allChapters
             }
         }
+        return if (isChapterOrderReversed.value) chapters.asReversed() else chapters
     }
 }

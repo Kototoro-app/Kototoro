@@ -387,6 +387,10 @@ class ReaderActivity :
                         settings.isContinuousHorizontalReversed = reversed
                         composeReaderController.updateOptions { copy(continuousHorizontalReversed = reversed) }
                     },
+                    onChaptersReversedChanged = { reversed ->
+                        viewModel.setChapterOrderReversed(reversed)
+                        composeReaderController.updateOptions { copy(chaptersReversed = reversed) }
+                    },
                     onWebtoonSceneReaderChanged = { enabled ->
                         settings.isExperimentalSceneReaderEnabled = enabled
                         composeReaderController.updateOptions { copy(webtoonSceneReader = enabled) }
@@ -1159,6 +1163,7 @@ class ReaderActivity :
             ComposeReaderOptionsState(
                 mode = composeReaderController.readerMode,
                 continuousHorizontalReversed = settings.isContinuousHorizontalReversed,
+                chaptersReversed = viewModel.isChapterOrderReversed.value,
                 webtoonSceneReader = settings.isExperimentalSceneReaderEnabled,
                 pagedSceneReader = settings.isExperimentalPagedSceneReaderEnabled,
                 animation = settings.readerAnimation,

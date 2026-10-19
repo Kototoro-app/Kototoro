@@ -3,6 +3,7 @@ package org.skepsun.kototoro.desktop.runtime
 import androidx.room.Room
 import kotlinx.coroutines.Dispatchers
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.migrations.sharedDatabaseMigrations
 import java.io.IOException
 import java.io.Closeable
 import java.nio.file.Files
@@ -31,6 +32,7 @@ internal class DesktopDatabase private constructor(
             try {
                 val database = Room.databaseBuilder<MangaDatabase>(name = path.toString())
                     .setDriver(driver)
+                    .addMigrations(*sharedDatabaseMigrations())
                     .setQueryCoroutineContext(Dispatchers.IO)
                     .build()
                 return DesktopDatabase(database, driver)

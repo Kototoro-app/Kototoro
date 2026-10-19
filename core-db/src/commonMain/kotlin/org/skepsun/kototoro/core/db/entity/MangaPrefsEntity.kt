@@ -36,4 +36,6 @@ data class MangaPrefsEntity(
     @ColumnInfo(name = "reading_status") val readingStatus: String?,
     @ColumnInfo(name = "ignored_tracking_suggestion_service") val ignoredTrackingSuggestionService: Int?,
     @ColumnInfo(name = "ignored_tracking_suggestion_remote_id") val ignoredTrackingSuggestionRemoteId: Long?,
+    /** Reader walks this title's chapters in reverse, for sources that list them newest first. */
+    @ColumnInfo(name = "chapters_reversed", defaultValue = "0") val isChaptersReversed: Boolean = false,
 )
