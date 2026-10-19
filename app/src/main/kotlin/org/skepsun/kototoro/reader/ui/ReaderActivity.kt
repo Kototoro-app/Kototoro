@@ -1261,11 +1261,33 @@ class ReaderActivity :
     }
 
     override fun onSavePageClick() {
-        viewModel.saveCurrentPage(pageSaveHelper)
+        withSpreadPageChoice { page -> viewModel.saveCurrentPage(pageSaveHelper, page) }
     }
 
     override fun onCropNoteClick() {
-        viewModel.cropAndAnnotateCurrentPage(pageSaveHelper)
+        withSpreadPageChoice { page -> viewModel.cropAndAnnotateCurrentPage(pageSaveHelper, page) }
+    }
+
+    /**
+     * On a two-page spread, asks which page to use unless a long press already picked a side. Left and
+     * right are as shown on screen, so right-to-left reading mirrors the spread's reading order.
+     */
+    private fun withSpreadPageChoice(action: (ReaderPage?) -> Unit) {
+        val spread = viewModel.getVisibleSpreadPages()
+        if (!isDoubleReaderMode || spread.size != 2 || viewModel.targetPagePosition.value != null) {
+            action(null)
+            return
+        }
+        val reversed = composeReaderController.readerMode == ReaderMode.REVERSED
+        val left = if (reversed) spread[1] else spread[0]
+        val right = if (reversed) spread[0] else spread[1]
+        composeReaderController.showSelectionDialog(
+            title = getString(R.string.reader_spread_page_choice),
+            entries = listOf(
+                getString(R.string.reader_spread_left_page, left.index + 1),
+                getString(R.string.reader_spread_right_page, right.index + 1),
+            ),
+        ) { which -> action(if (which == 0) left else right) }
     }
 
     override fun onScrollTimerClick(isLongClick: Boolean) {

@@ -128,6 +128,9 @@
     <string name="continuous_horizontal">Continuous horizontal</string>
     <string name="continuous_horizontal_reversed">Read right to left</string>
     <string name="reader_chapters_reversed">Reverse chapter order for this title</string>
+    <string name="reader_spread_page_choice">Which page?</string>
+    <string name="reader_spread_left_page">Left page (page %1$d)</string>
+    <string name="reader_spread_right_page">Right page (page %1$d)</string>
     <string name="read_mode">Read mode</string>
     <string name="ai">AI</string>
     <string name="reader_translation_long_press_hint">Long press Translation for language shortcuts</string>
