@@ -164,7 +164,21 @@ fun ChaptersScreenRoot(
             }
         }
     }
+    // Videos ask for a quality first; other content asks about metered networks.
+    val startDownload: (Set<Long>) -> Unit = remember(router, viewModel) {
+        { chapterIds ->
+            val manga = viewModel.mangaDetails.value?.toContent()
+            if (manga?.source?.getContentType() == ContentType.VIDEO) {
+                viewModel.probeAndDownload(chapterIds)
+            } else {
+                router.askForDownloadOverMeteredNetwork { allow ->
+                    viewModel.download(chapterIds, allow)
+                }
+            }
+        }
+    }
     val handleSelectionAction: (Int) -> Unit = remember(
+        startDownload,
         context,
         deletableChapterIds,
         downloadableChapterIds,
@@ -181,16 +195,7 @@ fun ChaptersScreenRoot(
             } else {
                 val removeBookmarks = selectedItems.isNotEmpty() && selectedItems.all { it.isBookmarked }
                 when (actionId) {
-                    R.id.action_save -> {
-                        val manga = viewModel.mangaDetails.value?.toContent()
-                        if (manga?.source?.getContentType() == ContentType.VIDEO) {
-                            viewModel.probeAndDownload(downloadableChapterIds)
-                        } else {
-                            router.askForDownloadOverMeteredNetwork { allow ->
-                                viewModel.download(downloadableChapterIds, allow)
-                            }
-                        }
-                    }
+                    R.id.action_save -> startDownload(downloadableChapterIds)
 
                     R.id.action_mark_current -> {
                         if (selectedIds.size == 1) {
@@ -288,6 +293,7 @@ fun ChaptersScreenRoot(
             isLoading = isLoading,
         emptyMessageResId = emptyReason?.msgResId,
         initialChapterId = initialCurrentChapterId,
+        onItemDownload = { item -> startDownload(setOf(item.chapter.id)) },
         onItemClick = { item ->
             if (selectedIds.isNotEmpty()) {
                 if (selectedIds.contains(item.chapter.id)) {

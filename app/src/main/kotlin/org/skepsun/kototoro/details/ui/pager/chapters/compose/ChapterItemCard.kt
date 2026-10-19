@@ -1,6 +1,13 @@
 package org.skepsun.kototoro.details.ui.pager.chapters.compose
 
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import org.skepsun.kototoro.R
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -21,6 +28,8 @@ fun ChapterListCard(
     onLongClick: () -> Unit,
     focusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
+    /** Shows a download button at the end of the row; null hides it. */
+    onDownload: (() -> Unit)? = null,
 ) = SharedChapterListCard(
     item = item.cardData(),
     isSelected = isSelected,
@@ -29,6 +38,18 @@ fun ChapterListCard(
     focusRequester = focusRequester,
     modifier = modifier,
     focusModifier = Modifier.tvFocusable(shape = RoundedCornerShape(8.dp), borderWidth = 2.dp, addFocusTarget = false),
+    actions = onDownload?.let { download ->
+        {
+            IconButton(onClick = download, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_download),
+                    contentDescription = stringResource(R.string.download),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+    },
 )
 
 @Composable

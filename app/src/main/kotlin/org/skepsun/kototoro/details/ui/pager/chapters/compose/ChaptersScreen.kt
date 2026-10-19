@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.details.ui.pager.chapters.compose
 
+import org.skepsun.kototoro.core.model.isLocal
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -55,6 +56,8 @@ fun ChaptersScreen(
     initialChapterId: Long?,
     onItemClick: (ChapterListItem) -> Unit,
     onItemLongClick: (ChapterListItem) -> Unit,
+    /** Downloads one chapter from its row; null hides the per-chapter download button. */
+    onItemDownload: ((ChapterListItem) -> Unit)? = null,
     onHeaderClick: (CollapsibleListHeader) -> Unit,
     onFilterChipClick: (ChipModel) -> Unit,
     onSelectionActionClick: (Int) -> Unit,
@@ -144,8 +147,11 @@ fun ChaptersScreen(
                     ChapterGridCard(item, selectedItemIds.contains(item.chapter.id), onClick,
                         onLongClick = { onItemLongClick(item) }, focusRequester = focusRequester)
                 } else {
+                    val canDownload = onItemDownload != null && selectedItemIds.isEmpty() &&
+                        !item.isDownloaded && !item.chapter.source.isLocal
                     ChapterListCard(item, selectedItemIds.contains(item.chapter.id), onClick,
-                        onLongClick = { onItemLongClick(item) }, focusRequester = focusRequester)
+                        onLongClick = { onItemLongClick(item) }, focusRequester = focusRequester,
+                        onDownload = if (canDownload) ({ onItemDownload?.invoke(item) }) else null)
                 }
             }
             is CollapsibleListHeader -> CollapsibleHeaderUI(item, onClick = { onHeaderClick(item) })
