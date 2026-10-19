@@ -2170,6 +2170,10 @@
     <string name="shiki_category_manga_ranked">漫画排行</string>
     <string name="shiki_category_manga_popular">热门漫画</string>
     <string name="novel_page_turn_animation">翻页动画</string>
+    <string name="novel_text_direction">文字方向</string>
+    <string name="novel_text_direction_auto">自动</string>
+    <string name="novel_text_direction_ltr">从左到右</string>
+    <string name="novel_text_direction_rtl">从右到左</string>
     <string name="novel_page_turn_slide">平移</string>
     <string name="novel_page_turn_simulation">仿真</string>
 

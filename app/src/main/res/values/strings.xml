@@ -3245,6 +3245,10 @@
     <string name="novel_mode_paged">Paged</string>
     <string name="novel_mode_scroll">Scroll</string>
     <string name="novel_page_turn_animation">Page Turn Animation</string>
+    <string name="novel_text_direction">Text direction</string>
+    <string name="novel_text_direction_auto">Auto</string>
+    <string name="novel_text_direction_ltr">Left to right</string>
+    <string name="novel_text_direction_rtl">Right to left</string>
     <string name="novel_page_turn_slide">Slide</string>
     <string name="novel_page_turn_simulation">Simulation</string>
     <string name="fetching_video_quality">Fetching video qualities…</string>

@@ -37,6 +37,7 @@ import org.skepsun.kototoro.reader.novel.NovelReaderSettings
 import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
 import org.skepsun.kototoro.reader.novel.NovelTranslationDisplayMode
 import org.skepsun.kototoro.reader.novel.ReadingMode
+import org.skepsun.kototoro.reader.novel.TextDirection
 import org.skepsun.kototoro.reader.novel.novelReaderPalette
 import org.skepsun.kototoro.reader.ui.compose.ReaderAnimationIcon
 import org.skepsun.kototoro.reader.ui.compose.ReaderOptionsDetailTabs
@@ -318,6 +319,20 @@ private fun NovelReadingPage(
                     icon = { NovelPageAnimationIcon(NovelPageTurnAnimation.entries[it]) },
                 )
             }
+        }
+    }
+    item {
+        ReaderOptionSection(stringResource(R.string.novel_text_direction)) {
+            val directions = listOf(TextDirection.AUTO, TextDirection.LTR, TextDirection.RTL)
+            ReaderChoiceChips(
+                options = listOf(
+                    stringResource(R.string.novel_text_direction_auto),
+                    stringResource(R.string.novel_text_direction_ltr),
+                    stringResource(R.string.novel_text_direction_rtl),
+                ),
+                selectedIndex = directions.indexOf(settings.textDirection),
+                onSelected = { update { copy(textDirection = directions[it]) } },
+            )
         }
     }
     item {

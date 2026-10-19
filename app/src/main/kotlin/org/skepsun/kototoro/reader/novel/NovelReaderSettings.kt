@@ -23,7 +23,7 @@ data class NovelReaderSettings(
     val themePreset: NovelReaderThemePreset = NovelReaderThemePreset.PAPER,
     val readingMode: ReadingMode = ReadingMode.PAGED,
     val pageTurnAnimation: NovelPageTurnAnimation = NovelPageTurnAnimation.SLIDE,
-    val textDirection: TextDirection = TextDirection.LTR,
+    val textDirection: TextDirection = TextDirection.AUTO,
     val enableDualPage: Boolean = true,
     val enableFullscreen: Boolean = false,
     val showReadingStatus: Boolean = true,  // 显示阅读状态（之前是 showFooter）
@@ -88,6 +88,7 @@ data class NovelReaderSettings(
             putString(KEY_THEME_PRESET, normalized.themePreset.name)
             putString(KEY_READING_MODE, normalized.readingMode.name)
             putString(KEY_PAGE_TURN_ANIMATION, normalized.pageTurnAnimation.name)
+            remove(KEY_LEGACY_TEXT_DIRECTION)
             putString(KEY_TEXT_DIRECTION, normalized.textDirection.name)
             putBoolean(KEY_DUAL_PAGE, normalized.enableDualPage)
             putBoolean(KEY_FULLSCREEN, normalized.enableFullscreen)
@@ -131,7 +132,10 @@ data class NovelReaderSettings(
         private const val KEY_THEME_PRESET = "theme_preset"
         private const val KEY_READING_MODE = "reading_mode"
         private const val KEY_PAGE_TURN_ANIMATION = "page_turn_animation"
-        private const val KEY_TEXT_DIRECTION = "text_direction"
+        // The legacy key was written as LTR on every save before the direction was selectable, so it
+        // does not record a user choice and is ignored in favour of the AUTO default.
+        private const val KEY_LEGACY_TEXT_DIRECTION = "text_direction"
+        private const val KEY_TEXT_DIRECTION = "text_direction_mode"
         private const val KEY_DUAL_PAGE = "dual_page"
         private const val KEY_FULLSCREEN = "fullscreen"
         private const val KEY_SHOW_READING_STATUS = "show_reading_status"
@@ -179,8 +183,8 @@ data class NovelReaderSettings(
                     )
                 }.getOrDefault(NovelPageTurnAnimation.SLIDE),
                 textDirection = runCatching {
-                    TextDirection.valueOf(prefs.getString(KEY_TEXT_DIRECTION, null) ?: TextDirection.LTR.name)
-                }.getOrDefault(TextDirection.LTR),
+                    TextDirection.valueOf(prefs.getString(KEY_TEXT_DIRECTION, null) ?: TextDirection.AUTO.name)
+                }.getOrDefault(TextDirection.AUTO),
                 enableDualPage = prefs.getBoolean(KEY_DUAL_PAGE, true),
                 enableFullscreen = prefs.getBoolean(KEY_FULLSCREEN, false),
                 showReadingStatus = prefs.getBoolean(KEY_SHOW_READING_STATUS, true),

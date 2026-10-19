@@ -216,8 +216,8 @@ private fun NovelPageText(
 ) {
     val horizontal = settings.marginHorizontal.dp
     val vertical = settings.marginVertical.dp
-    val direction = if (settings.textDirection == NovelTextDirection.RTL) TextDirection.Rtl else TextDirection.Ltr
-    val alignment = if (direction == TextDirection.Rtl) TextAlign.Right else TextAlign.Start
+    val direction = settings.composeTextDirection()
+    val alignment = TextAlign.Start
     Box(modifier = modifier.padding(PaddingValues(horizontal = horizontal, vertical = vertical))) {
         NovelSelectionContainer(
             chapterId = page.chapterId,
@@ -308,8 +308,8 @@ fun ComposeNovelChapter(
             actualListState.animateScrollToItem(targetBlockIndex)
         }
     }
-    val direction = if (settings.textDirection == NovelTextDirection.RTL) TextDirection.Rtl else TextDirection.Ltr
-    val alignment = if (direction == TextDirection.Rtl) TextAlign.Right else TextAlign.Start
+    val direction = settings.composeTextDirection()
+    val alignment = TextAlign.Start
     val paragraphSpacing = with(LocalDensity.current) {
         (settings.fontSizeSp * settings.lineSpacing * settings.paragraphSpacingLines).sp.toDp()
     }
@@ -513,8 +513,8 @@ private fun ComposeNovelChapterWindow(
             listState.animateScrollToItem(targetBlockIndex)
         }
     }
-    val direction = if (settings.textDirection == NovelTextDirection.RTL) TextDirection.Rtl else TextDirection.Ltr
-    val alignment = if (direction == TextDirection.Rtl) TextAlign.Right else TextAlign.Start
+    val direction = settings.composeTextDirection()
+    val alignment = TextAlign.Start
     val paragraphSpacing = with(LocalDensity.current) {
         (settings.fontSizeSp * settings.lineSpacing * settings.paragraphSpacingLines).sp.toDp()
     }
@@ -1452,8 +1452,8 @@ private fun ComposeNovelPagedChapter(
     val textMeasurer = rememberTextMeasurer(cacheSize = 0)
     val palette = novelReaderPalette(settings.themePreset, isSystemInDarkTheme())
     val textColor = Color(palette.textColor)
-    val direction = if (settings.textDirection == NovelTextDirection.RTL) TextDirection.Rtl else TextDirection.Ltr
-    val alignment = if (direction == TextDirection.Rtl) TextAlign.Right else TextAlign.Start
+    val direction = settings.composeTextDirection()
+    val alignment = TextAlign.Start
     val style = MaterialTheme.typography.bodyLarge.copy(
         fontFamily = fontFamily,
         fontSize = settings.fontSizeSp.sp,
@@ -2590,3 +2590,10 @@ private sealed interface NovelTextSegment {
 }
 
 private val INLINE_IMAGE_TOKEN = Regex("\\[INLINE_IMAGE_\\d+]")
+
+/** Start alignment follows each paragraph's resolved direction, so RTL paragraphs align right. */
+private fun NovelReaderSettings.composeTextDirection(): TextDirection = when (textDirection) {
+    NovelTextDirection.AUTO -> TextDirection.Content
+    NovelTextDirection.LTR -> TextDirection.Ltr
+    NovelTextDirection.RTL -> TextDirection.Rtl
+}
