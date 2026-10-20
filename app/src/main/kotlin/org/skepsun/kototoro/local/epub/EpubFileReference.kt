@@ -85,7 +85,9 @@ private fun materializeEpub(context: Context, uri: Uri): File? {
         if (sourceModified > 0L) target.setLastModified(sourceModified)
     }
     // The parsers only ever hand us a File, so the copy cannot be released by its reader; keep the
-    // folder bounded instead so a local novel library cannot grow by one full book per title.
+    // folder bounded instead so a local novel library cannot grow by one full book per title. The
+    // copy is marked in use first, so this trim (or a concurrent one) never deletes the book being read.
+    LocalSafEpubCache.markInUse(target)
     LocalSafEpubCache.trim(context.cacheDir, keep = target)
     return target.takeIf(File::isFile)
 }
