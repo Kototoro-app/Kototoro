@@ -284,6 +284,23 @@ class IosProductTest {
     }
 
     @Test
+    fun continuousStripCanZoomBelowFitAndKeepSemanticProgress() {
+        val reader = IosReader()
+        reader.configure(6, 800, 600, 3, false, false, 0)
+        repeat(6) { reader.setImageSize(it, 800, 1200) }
+        reader.setZoom(0.5f)
+        assertEquals(400f, reader.slots()[0].placements.single().width)
+        assertEquals(600f, reader.slots()[1].placements.single().y)
+        assertEquals(IosReaderProgress(1, 200f), reader.progress(0f, 700f))
+        assertEquals(700f, reader.scrollOrigin(1, 200f))
+        reader.setZoom(0.1f)
+        assertEquals(400f, reader.slots()[0].placements.single().width)
+        reader.setZoom(1f)
+        assertEquals(800f, reader.slots()[0].placements.single().width)
+        assertEquals(1400f, reader.scrollOrigin(1, 200f))
+    }
+
+    @Test
     fun horizontalContinuousStartsInAndroidsDefaultReadingDirection() {
         val reader = IosReader()
         reader.configure(3, 400, 600, 4, false, false, 0, false)
@@ -299,7 +316,7 @@ class IosProductTest {
         for (reversed in listOf(false, true)) {
             reader.configure(3, 400, 600, 4, false, false, 0, false, reversed)
             repeat(3) { reader.setImageSize(it, 1200, 600) }
-            for (zoom in listOf(1f, 2f, 4f)) {
+            for (zoom in listOf(0.5f, 1f, 2f, 4f)) {
                 reader.setZoom(zoom)
                 repeat(3) { index ->
                     val origin = reader.scrollOrigin(index, 150f)

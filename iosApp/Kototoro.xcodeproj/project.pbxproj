@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C7A000000000000000000001 /* ReaderStripZoomSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A000000000000000000004 /* ReaderStripZoomSession.swift */; };
+		C7A000000000000000000002 /* ReaderStripZoomSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A000000000000000000004 /* ReaderStripZoomSession.swift */; };
+		C7A000000000000000000003 /* ReaderStripZoomSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A000000000000000000005 /* ReaderStripZoomSessionTests.swift */; };
 		BE0000000000000000000001 /* GoogleDriveAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0000000000000000000011 /* GoogleDriveAuth.swift */; };
 		BE0000000000000000000002 /* GoogleDriveSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0000000000000000000012 /* GoogleDriveSync.swift */; };
 		BE0000000000000000000003 /* GoogleDriveSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0000000000000000000013 /* GoogleDriveSyncTests.swift */; };
@@ -117,6 +120,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		C7A000000000000000000004 /* ReaderStripZoomSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderStripZoomSession.swift; sourceTree = "<group>"; };
+		C7A000000000000000000005 /* ReaderStripZoomSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderStripZoomSessionTests.swift; sourceTree = "<group>"; };
 		BE0000000000000000000011 /* GoogleDriveAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveAuth.swift; sourceTree = "<group>"; };
 		BE0000000000000000000012 /* GoogleDriveSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveSync.swift; sourceTree = "<group>"; };
 		BE0000000000000000000013 /* GoogleDriveSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveSyncTests.swift; sourceTree = "<group>"; };
@@ -267,6 +272,7 @@
                 AD7100000000000000000002 /* TrackingAccounts.swift */,
 				FB0000000000000000000004 /* ReaderPageTurn.swift */,
 				FB00000000000000000000F7 /* ReaderStrip.swift */,
+				C7A000000000000000000004 /* ReaderStripZoomSession.swift */,
 				F30000000000000000000002 /* ReaderDownloadsView.swift */,
 				F10000000000000000000007 /* RepositoryLink.swift */,
 				F10000000000000000000005 /* RepositoriesView.swift */,
@@ -326,6 +332,7 @@
 				C00000000000000000000015 /* SourceImageFileTests.swift */,
 				FD0000000000000000000002 /* ReaderDownloadStoreTests.swift */,
 				FD0000000000000000000003 /* ReaderSettingsTests.swift */,
+				C7A000000000000000000005 /* ReaderStripZoomSessionTests.swift */,
 				D00000000000000000000014 /* VideoSourceTests.swift */,
 				E00000000000000000000014 /* ExtensionEcosystemTests.swift */,
 			);
@@ -495,6 +502,7 @@
                 AD7100000000000000000001 /* TrackingAccounts.swift in Sources */,
 				FA0000000000000000000005 /* ReaderPageTurn.swift in Sources */,
 				FA00000000000000000000F7 /* ReaderStrip.swift in Sources */,
+				C7A000000000000000000001 /* ReaderStripZoomSession.swift in Sources */,
 				F20000000000000000000002 /* ReaderDownloadsView.swift in Sources */,
 				F80000000000000000000001 /* BackupView.swift in Sources */,
 				F80000000000000000000005 /* SourceIcon.swift in Sources */,
@@ -576,6 +584,8 @@
 				FC0000000000000000000003 /* ReaderDownloadStoreTests.swift in Sources */,
 				FC0000000000000000000004 /* ReaderSettings.swift in Sources */,
 				FC0000000000000000000005 /* ReaderSettingsTests.swift in Sources */,
+				C7A000000000000000000002 /* ReaderStripZoomSession.swift in Sources */,
+				C7A000000000000000000003 /* ReaderStripZoomSessionTests.swift in Sources */,
 				D00000000000000000000004 /* VideoSourceTests.swift in Sources */,
 				E00000000000000000000004 /* ExtensionEcosystemTests.swift in Sources */,
 			);

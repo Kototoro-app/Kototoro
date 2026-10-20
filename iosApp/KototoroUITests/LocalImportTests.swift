@@ -661,6 +661,110 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(waitForCentre("green"))
     }
 
+    @MainActor
+    func testContinuousLongPageRepeatedZoomRestoresTheViewport() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_long", reuse: true)
+        openFirstChapter(title: "fixture_reader_long")
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30))
+        selectReaderMode("条漫")
+        let canvas = app.scrollViews["reader.canvas"]
+        // Reused long-page fixtures can resume within page 1; changing the selected page clears that old offset.
+        app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 1)
+        app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0)
+        // A tiled page exposes individual image tiles to accessibility, whose centres need not match the screen.
+        XCTAssertEqual(readingPage(canvas), "1")
+        XCTAssertTrue(waitForCentre("red"))
+        hideReaderControls(canvas)
+        canvas.swipeUp()
+        let moved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            self.readingOffset(canvas) > 300
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [moved], timeout: 10), .completed, "\(canvas.value ?? "")")
+        let saved = readingOffset(canvas)
+        let tap = canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.3))
+        // The 800 × 12000 fixture exceeds the base decode budget and exercises the tiled long-page path.
+        for _ in 0..<10 {
+            tap.doubleTap()
+            XCTAssertTrue(waitForZoom(canvas, "200%"))
+            tap.doubleTap()
+            XCTAssertTrue(waitForZoom(canvas, "100%"))
+            XCTAssertEqual(readingPage(canvas), "1")
+            XCTAssertEqual(readingOffset(canvas), saved, accuracy: 5)
+            XCTAssertTrue(waitForCentre("red"))
+        }
+        attach("长图分块连续双击恢复视口")
+    }
+
+    @MainActor
+    func testContinuousMixedPageZoomRestoresVisibleNeighbours() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_zoom_neighbours", reuse: true)
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 30))
+        _ = revealChapter(in: app, timeout: 30)
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "chapter.", "01"))
+            .firstMatch.tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30))
+        selectReaderMode("条漫")
+        let canvas = app.scrollViews["reader.canvas"]
+        // Adjacent chapters load only within ten pages of the end of this eighteen-page chapter.
+        app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0.5)
+        waitForChapterWindow(canvas, count: 36)
+        app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0.35)
+        hideReaderControls(canvas)
+        let loaded = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            self.fixturePagePixelFraction(canvas) > 0.9
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [loaded], timeout: 15), .completed)
+        let visiblePages = app.images.matching(identifier: "reader.image").allElementsBoundByIndex.filter {
+            $0.frame.intersection(canvas.frame).height > 20
+        }
+        XCTAssertGreaterThanOrEqual(Set(visiblePages.map(\.label)).count, 2,
+                                   "The fixture must show multiple pages before exercising neighbour retention")
+        let page = readingPage(canvas), offset = readingOffset(canvas)
+        let tap = canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.3))
+        for _ in 0..<10 {
+            tap.doubleTap()
+            XCTAssertTrue(waitForZoom(canvas, "200%"))
+            tap.doubleTap()
+            XCTAssertTrue(waitForZoom(canvas, "100%"))
+            XCTAssertEqual(readingPage(canvas), page)
+            XCTAssertEqual(readingOffset(canvas), offset, accuracy: 5)
+            XCTAssertGreaterThan(fixturePagePixelFraction(canvas), 0.9)
+        }
+        attach("多页条漫连续双击恢复可见邻页")
+    }
+
+    @MainActor
+    func testContinuousRepeatedZoomAndPinchBelowFit() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_zoom", reuse: true)
+        openFirstChapter(title: "fixture_reader_zoom")
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30))
+        selectReaderMode("条漫")
+        let canvas = app.scrollViews["reader.canvas"]
+        app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0)
+        waitForPage("1")
+        hideReaderControls(canvas)
+        let tap = canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.3))
+        for _ in 0..<10 {
+            tap.doubleTap()
+            XCTAssertTrue(waitForZoom(canvas, "200%"))
+            tap.doubleTap()
+            XCTAssertTrue(waitForZoom(canvas, "100%"))
+            XCTAssertTrue(waitForCentre("green"))
+        }
+        canvas.pinch(withScale: 0.5, velocity: -1)
+        XCTAssertLessThan(readingZoom(canvas), 100, "Pinching in must expose more of the strip than the initial fit")
+        XCTAssertTrue(waitForCentre("green", y: 0.2), "A narrower strip must remain centered")
+        attach("条漫缩小至初始视图以下")
+        tap.doubleTap()
+        XCTAssertTrue(waitForZoom(canvas, "100%"), "Double tapping a shrunken strip must restore normal size first")
+        XCTAssertTrue(waitForCentre("green"))
+        tap.doubleTap()
+        XCTAssertTrue(waitForZoom(canvas, "200%"))
+        tap.doubleTap()
+        XCTAssertTrue(waitForZoom(canvas, "100%"))
+        XCTAssertTrue(waitForCentre("green"))
+    }
+
     /// Native pinch and double tap share the same camera. Rebasing after each gesture must not accumulate scale
     /// or move the viewport; the accompanying video check covers the intermediate frames, not only this end state.
     @MainActor
@@ -715,13 +819,15 @@ final class LocalImportTests: XCTestCase {
         hideReaderControls(canvas)
         // The page the jump measured sits under the tap; the ones above it never left their estimate.
         let tap = CGVector(dx: 0.5, dy: 0.25)
-        canvas.coordinate(withNormalizedOffset: tap).doubleTap()
-        XCTAssertTrue(waitForZoom(canvas, "200%"), "\(canvas.value ?? "no position")")
-        XCTAssertEqual(readingPage(canvas), page, "\(canvas.value ?? "no position")")
-        attach("条漫跳转后双击放大保持阅读页")
-        canvas.coordinate(withNormalizedOffset: tap).doubleTap()
-        XCTAssertTrue(waitForZoom(canvas, "100%"), "\(canvas.value ?? "no position")")
-        XCTAssertEqual(readingPage(canvas), page, "\(canvas.value ?? "no position")")
+        for _ in 0..<3 {
+            canvas.coordinate(withNormalizedOffset: tap).doubleTap()
+            XCTAssertTrue(waitForZoom(canvas, "200%"), "\(canvas.value ?? "no position")")
+            XCTAssertEqual(readingPage(canvas), page, "\(canvas.value ?? "no position")")
+            canvas.coordinate(withNormalizedOffset: tap).doubleTap()
+            XCTAssertTrue(waitForZoom(canvas, "100%"), "\(canvas.value ?? "no position")")
+            XCTAssertEqual(readingPage(canvas), page, "\(canvas.value ?? "no position")")
+        }
+        attach("条漫跳转后连续双击保持阅读页")
     }
 
     /// The controls fade in and out: a tap made while they move belongs to them, not to the page read next.
@@ -747,9 +853,9 @@ final class LocalImportTests: XCTestCase {
         return XCTWaiter.wait(for: [zoomed], timeout: 10) == .completed
     }
 
-    private func waitForCentre(_ colour: String) -> Bool {
+    private func waitForCentre(_ colour: String, y: CGFloat = 0.5) -> Bool {
         let matches = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            guard let pixel = self.screenPixel(x: 0.5, y: 0.5) else { return false }
+            guard let pixel = self.screenPixel(x: 0.5, y: y) else { return false }
             let (red, green, blue) = (Int(pixel[0]), Int(pixel[1]), Int(pixel[2]))
             switch colour {
             case "red": return red > green + 80 && red > blue + 80
@@ -1561,9 +1667,10 @@ final class LocalImportTests: XCTestCase {
 
     private func readingOffset(_ canvas: XCUIElement) -> Int {
         let value = canvas.value as? String ?? ""
-        // The description continues after the offset (window size), so only its number is read.
+        // The offset can contain localized grouping separators; stop before the window size, then read its digits.
         let tail = value.components(separatedBy: "页内偏移 ").dropFirst().first ?? ""
-        return Int(tail.prefix { $0 == "-" || $0.isNumber }) ?? -1
+        let number = tail.components(separatedBy: "，").first ?? ""
+        return Int(number.filter { $0 == "-" || $0.isNumber }) ?? -1
     }
 
     private func selectReaderMode(_ mode: String) {

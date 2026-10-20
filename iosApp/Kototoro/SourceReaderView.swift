@@ -73,6 +73,7 @@ final class SourceReaderModel: ObservableObject {
     /// The vertical strip's zoom (Android's webtoon scaling frame): the strip is laid out wider rather than magnified,
     /// so pages decode and tile at the size shown. Session-only, back to fit when the reading mode changes.
     @Published private(set) var stripZoom: CGFloat = 1
+    private let stripZoomSession = ReaderStripZoomSession()
     let runtime: IosSources
     let content: IosSourceContent
     private let chapterByID: [String: IosSourceChapter]
@@ -301,6 +302,9 @@ final class SourceReaderModel: ObservableObject {
             } else {
                 loadedPage = try await pageArtifact(key: key, page: page).loadedPage(cropMargins: cropMargins)
             }
+            // UIKit still draws the old scene while pinching/double tapping. A late image must not resize that
+            // scene or evict its displayed neighbours before the compensated viewport is installed.
+            await stripZoomSession.waitForLayout()
             try Task.checkCancellation()
             // The window may have been rebuilt meanwhile: the page goes where it is now, if it is still shown.
             guard request == token, let target = window.firstIndex(of: key) else { return }
@@ -424,7 +428,10 @@ final class SourceReaderModel: ObservableObject {
         let updated = engine.chapterWindow(previous: keys(previousChapter), current: keys(chapter),
                                            next: keys(nextChapter),
                                            adjacentPageCount: continuous ? Int32.max : 2)
-        if loaded && (isLoadingPages || isPageZoomed || (!continuous && isUserPaging)) { pendingWindow = true; return }
+        if loaded && (isLoadingPages || isPageZoomed || stripZoomSession.isActive || (!continuous && isUserPaging)) {
+            pendingWindow = true
+            return
+        }
         pendingWindow = false
         guard updated != window else { return }
         let previous = window
@@ -562,6 +569,7 @@ final class SourceReaderModel: ObservableObject {
     /// [force]d; paged modes keep Android's pager neighbours and its ten-page prefetch window.
     private func updateResources(force: Bool = false) {
         guard loaded, !window.isEmpty else { return }
+        guard !stripZoomSession.isActive else { needsReplan = true; return }
         preloadAdjacentChapters()
         if preferences.mode >= 3 {
             guard let planned = engine.resourceWindow(
@@ -644,6 +652,7 @@ final class SourceReaderModel: ObservableObject {
     /// Decoded images stay bounded to the planned decode window and the pages on screen; immutable on-disk artifacts
     /// survive eviction and are decoded again when their page returns.
     private func evictImages() {
+        guard !stripZoomSession.isActive else { return }
         var keep = Set(decodeWindow.compactMap { windowPositions[$0] })
         if preferences.mode >= 3 {
             let x = Float(viewportOffset.x), y = Float(viewportOffset.y)
@@ -783,6 +792,19 @@ final class SourceReaderModel: ObservableObject {
         offset = nextOffset
         let nextSlot = Int(slots.first { $0.anchor == Int32(windowIndex) }?.index ?? 0)
         if slotIndex != nextSlot { slotIndex = nextSlot }
+        updateResources()
+    }
+
+    func beginStripZoom() {
+        stripZoomSession.begin()
+        needsReplan = true
+    }
+
+    /// Called after the native camera has rebased and reported its final viewport, or when its host detaches.
+    func endStripZoom() {
+        guard stripZoomSession.isActive else { return }
+        stripZoomSession.end()
+        if pendingWindow { publishWindow() }
         updateResources()
     }
 

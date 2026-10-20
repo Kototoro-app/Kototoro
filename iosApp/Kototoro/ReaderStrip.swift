@@ -109,6 +109,11 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
 
     var offset: CGPoint { scrollView.contentOffset }
     private var vertical: Bool { model.stripIsVertical }
+    private var doubleTapZoom: CGFloat { abs(model.stripZoom - 1) < 0.001 ? 2 : 1 }
+    private var crossAxisPadding: CGFloat {
+        let extent = vertical ? view.bounds.width : view.bounds.height
+        return max(0, extent - floor(extent * model.stripZoom)) / 2
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -144,7 +149,7 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        guard view.bounds.width > 1, view.bounds.height > 1, !zooming, !rebasingZoom else { return }
+        guard view.bounds.width > 1, view.bounds.height > 1, !zooming, !rebasingZoom, !applying else { return }
         if !attached {
             attached = true
             model.strip = self
@@ -161,12 +166,12 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
         guard isViewLoaded, attached else { return }
         layoutStrip(offset: nil, animated: false)
         scrollView.accessibilityValue = model.readingPositionDescription
-        let name = model.stripZoom > 1 ? String(localized: "还原缩放") : String(localized: "放大")
+        let name = doubleTapZoom == 1 ? String(localized: "还原缩放") : String(localized: "放大")
         if name != zoomActionName {
             zoomActionName = name
             scrollView.accessibilityCustomActions = [UIAccessibilityCustomAction(name: name) { [weak self] _ in
                 guard let self else { return false }
-                self.animateZoom(self.model.stripZoom > 1 ? 1 : 2,
+                self.animateZoom(self.doubleTapZoom,
                                  at: CGPoint(x: self.view.bounds.midX, y: self.view.bounds.midY))
                 return true
             }]
@@ -177,6 +182,10 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
         zoomAnimation?.link.invalidate()
         zoomAnimation = nil
         if model.strip === self { model.strip = nil }
+        if zooming {
+            zooming = false
+            model.endStripZoom()
+        }
     }
 
     // MARK: - Layout
@@ -188,7 +197,7 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
     }
 
     func layoutStrip(offset target: CGPoint?, animated: Bool) {
-        guard isViewLoaded, !zooming, !rebasingZoom else { return }
+        guard isViewLoaded, !zooming, !rebasingZoom, !applying else { return }
         let size = contentSize()
         applying = true
         UIView.performWithoutAnimation {
@@ -245,7 +254,8 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
         var wanted: [String: (index: Int, frame: CGRect)] = [:]
         for item in model.identifiedSlots {
             guard let placement = item.slot.placements.first else { continue }
-            let frame = CGRect(x: CGFloat(placement.x), y: CGFloat(placement.y),
+            let frame = CGRect(x: CGFloat(placement.x) + (vertical ? crossAxisPadding : 0),
+                               y: CGFloat(placement.y) + (vertical ? 0 : crossAxisPadding),
                                width: CGFloat(placement.width), height: CGFloat(placement.height))
             let lower = vertical ? frame.minY : frame.minX, upper = vertical ? frame.maxY : frame.maxX
             if upper > start && lower < end { wanted[item.id] = (Int(placement.index), frame) }
@@ -302,7 +312,9 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
     // MARK: - Scrolling
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        guard !rebasingZoom else { return }
+        // Updating contentSize can synchronously scroll with the OLD offset. Only lay cells out after the matching
+        // compensated offset is installed, or a zoom rebase can recycle the very pages still on screen.
+        guard !rebasingZoom, !applying else { return }
         if zooming { layoutCells(); return }
         let point = scrollView.contentOffset
         let bounds = scrollView.bounds
@@ -310,7 +322,6 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
             tileViewport = point
         }
         layoutCells()
-        guard !applying else { return }
         let now = CACurrentMediaTime()
         if let sample, now - sample.time > 0.001 {
             let elapsed = CGFloat(now - sample.time)
@@ -376,7 +387,7 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
     }
 
     @objc private func doubleTapped(_ gesture: UITapGestureRecognizer) {
-        animateZoom(model.stripZoom > 1 ? 1 : 2, at: gesture.location(in: view))
+        animateZoom(doubleTapZoom, at: gesture.location(in: view))
     }
 
     // MARK: - Zoom
@@ -396,12 +407,14 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
 
     private func beginZoom() {
         zooming = true
+        model.beginStripZoom()
         model.userScrolled()
         model.isUserPaging = true
     }
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
         guard !rebasingZoom else { return }
+        centerZoomedContent()
         // A zoom out exposes more of the strip than the old viewport's neighbour band.
         layoutCells()
     }
@@ -419,26 +432,50 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
         let location = zoomLocation ?? CGPoint(x: self.view.bounds.midX, y: self.view.bounds.midY)
         zoomLocation = nil
         let current = scrollView.contentOffset
+        let oldPadding = crossAxisPadding
+        let contentOrigin = content.frame.origin
         let anchor = model.stripAnchor(at: CGPoint(x: current.x / scale, y: current.y / scale),
                                        location: CGPoint(x: location.x / scale, y: location.y / scale))
         rebasingZoom = true
-        model.setStripZoom(model.stripZoom * scale)
-        let origin = model.stripOrigin(of: anchor)
-        let along = min(max(0, origin - (vertical ? location.y : location.x)), CGFloat(model.engine.scrollLimit()))
-        let target = vertical ? CGPoint(x: current.x, y: along) : CGPoint(x: along, y: current.y)
         // Bake the camera into the scene and page sizes in one turn. The viewport never transforms and no cropped
         // screenshot is laid over a second, already-resized copy of the page.
-        UIView.performWithoutAnimation {
-            scrollView.minimumZoomScale = min(1, scrollView.minimumZoomScale)
-            scrollView.maximumZoomScale = max(1, scrollView.maximumZoomScale)
-            scrollView.setZoomScale(1, animated: false)
-            zooming = false
-            rebasingZoom = false
-            tileViewport = target
-            layoutStrip(offset: target, animated: false)
-            updateZoomLimits()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            UIView.performWithoutAnimation {
+                // Publish the scene in the same transaction as the camera reset so hosted pages never see a mix
+                // of the previous transform and the resized scene (or the reset transform and the old scene).
+                model.setStripZoom(model.stripZoom * scale)
+                let origin = model.stripOrigin(of: anchor)
+                let along = min(max(0, origin - (vertical ? location.y : location.x)),
+                                CGFloat(model.engine.scrollLimit()))
+                let cross = (vertical ? current.x - contentOrigin.x : current.y - contentOrigin.y)
+                    + crossAxisPadding - oldPadding * scale
+                let target = vertical ? CGPoint(x: cross, y: along) : CGPoint(x: along, y: cross)
+                scrollView.minimumZoomScale = min(1, scrollView.minimumZoomScale)
+                scrollView.maximumZoomScale = max(1, scrollView.maximumZoomScale)
+                scrollView.setZoomScale(1, animated: false)
+                content.frame.origin = .zero
+                zooming = false
+                rebasingZoom = false
+                tileViewport = target
+                layoutStrip(offset: target, animated: false)
+                updateZoomLimits()
+            }
         }
         settle()
+        model.endStripZoom()
+    }
+
+    /// Center a temporarily shrunken native camera without changing the scene's reading-axis coordinates/insets.
+    private func centerZoomedContent() {
+        var center = content.center
+        if vertical { center.x = max(scrollView.bounds.width, content.bounds.width * scrollView.zoomScale) / 2 }
+        else { center.y = max(scrollView.bounds.height, content.bounds.height * scrollView.zoomScale) / 2 }
+        if content.center != center { content.center = center }
     }
 
     private func updateZoomLimits() {
@@ -461,8 +498,17 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
         let point = CGPoint(x: (start.x + location.x) / from, y: (start.y + location.y) / from)
         let size = CGSize(width: scrollView.contentSize.width / from * to,
                           height: scrollView.contentSize.height / from * to)
-        let end = CGPoint(x: min(max(0, point.x * to - location.x), max(0, size.width - view.bounds.width)),
+        var end = CGPoint(x: min(max(0, point.x * to - location.x), max(0, size.width - view.bounds.width)),
                           y: min(max(0, point.y * to - location.y), max(0, size.height - view.bounds.height)))
+        // A strip baked below fit contains side padding. Scale that padding along with the native content, then
+        // constrain the target to the page's edges so baking the padding away does not move the last frame.
+        let extent = vertical ? view.bounds.width : view.bounds.height
+        let nativeExtent = vertical ? size.width : size.height
+        let pageExtent = extent * model.stripZoom * to
+        let lower = crossAxisPadding * to + max(0, extent - nativeExtent) / 2 - max(0, extent - pageExtent) / 2
+        let upper = lower + max(0, pageExtent - extent)
+        if vertical { end.x = min(max(lower, end.x), upper) }
+        else { end.y = min(max(lower, end.y), upper) }
         // Content point c stays at screen point a while offset = c × scale − a. The c and a that give both the start
         // and the end offset make one zoom about a fixed point, so no step needs clamping.
         let focus = CGPoint(x: (end.x - start.x) / (to - from), y: (end.y - start.y) / (to - from))

@@ -12,6 +12,7 @@
   * fixture_reader_paged.cbz — longer chapters for page-by-page drags across a chapter boundary.
   * fixture_reader_webtoon.cbz — tall pages across three chapters, for paged/strip mode switches.
   * fixture_reader_zoom.cbz — red/green/blue thirds, to see where a paged double tap zooms.
+  * fixture_reader_zoom_neighbours.cbz — short pages for visible-neighbour zoom rebasing.
   * fixture_storage_comic.cbz / fixture_storage_tasks.cbz — cache cleanup and offline file ownership.
   * fixture_novel_controls.txt — long chapters for novel controls, paging and floating action preferences.
 
@@ -153,6 +154,12 @@ for storage in storages:
     with zipfile.ZipFile(os.path.join(storage, "fixture_reader_zoom.cbz"), "w") as archive:
         archive.writestr("001.png", png(600, 900, None, [(200, 40, 40), (40, 200, 40), (40, 40, 200)]))
         archive.writestr("002.png", png(600, 900, (90, 90, 90)))
+    with zipfile.ZipFile(os.path.join(storage, "fixture_reader_zoom_neighbours.cbz"), "w") as archive:
+        heights = [240, 480, 360, 600, 480, 360]
+        for chapter in range(1, 4):
+            for page in range(1, 19):
+                archive.writestr(f"{chapter:02d}/{page:03d}.png",
+                                 png(720, heights[(page - 1) % len(heights)], (180 + page % 3 * 20, 40, 40)))
     with open(os.path.join(storage, "fixture_novel.txt"), "wb") as file:
         file.write(novel.encode("gb18030"))
     with open(os.path.join(storage, "fixture_novel_controls.txt"), "w", encoding="utf-8") as file:

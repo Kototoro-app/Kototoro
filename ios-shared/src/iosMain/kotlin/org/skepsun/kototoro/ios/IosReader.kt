@@ -497,7 +497,7 @@ class IosReader {
         /** Above any window position and split-half id, so a stable id never names a position. */
         private const val STABLE_ID_BASE = 1L shl 40
         const val MAXIMUM_DIMENSION = 16384
-        const val MINIMUM_ZOOM = 1f
+        const val MINIMUM_ZOOM = 0.5f
         const val MAXIMUM_ZOOM = 4f
         /** Paged slots zoom as far as the shared camera allows (Android's paged reader, 5×). */
         const val MAXIMUM_PAGE_ZOOM = PagedCameraTransform.MAX_SCALE
