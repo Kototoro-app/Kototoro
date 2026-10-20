@@ -17,6 +17,11 @@ export default defineConfig({
     /(\.\.\/)+scripts\//,
     /^\/Users\//,
     /(\.\.\/)+komikku\//,
+    // Source files cited from the iOS parity/audit notes. These relative links are correct — they
+    // resolve on GitHub and in an IDE — but a .kt/.swift/.gradle file is not a site page, so the
+    // VitePress build treats them as dead. Listed per module rather than as a blanket `(\.\./)+` so
+    // a genuinely broken doc-to-doc link still fails the build.
+    /(\.\.\/)+(iosApp|ios-shared|reader-core|core-local|core-ui|core-library|source-host|parser-host|mihon-ios-shims)\//,
   ],
   lastUpdated: true,
   cleanUrls: true,
