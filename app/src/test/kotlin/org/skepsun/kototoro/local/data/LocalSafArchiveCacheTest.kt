@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
+import java.io.IOException
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
@@ -93,12 +94,54 @@ class LocalSafArchiveCacheTest {
         assertTrue(original.isFile)
     }
 
+    @Test
+    fun `large archives are copied one at a time`() = runTest {
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val secondEntered = CompletableDeferred<Unit>()
+        val original = archive()
+        val first = async {
+            useArchive(original, "first.cbz", largeThresholdBytes = 0L) {
+                entered.complete(Unit)
+                release.await()
+            }
+        }
+        entered.await()
+        val second = async { useArchive(original, "second.cbz", largeThresholdBytes = 0L) { secondEntered.complete(Unit) } }
+        assertTrue(!secondEntered.isCompleted, "A second large copy must wait for the first one to be released")
+        release.complete(Unit)
+        first.await()
+        second.await()
+        assertTrue(copies().isEmpty())
+    }
+
+    @Test
+    fun `an archive is not copied when it cannot fit in the remaining space`() = runTest {
+        val original = archive()
+        val failure = runCatching {
+            useArchive(original, availableBytes = { 1024L }) { error("Must not reach the copy") }
+        }.exceptionOrNull()
+        assertTrue(failure is IOException, "Expected an explicit storage failure, got $failure")
+        assertTrue(failure?.message.orEmpty().contains("free space"))
+        assertTrue(copies().isEmpty())
+        assertTrue(original.isFile)
+    }
+
     private suspend fun <T> useArchive(
         source: File,
         fileName: String = "source.cbz",
+        availableBytes: (() -> Long)? = null,
+        largeThresholdBytes: Long = 96L * 1024 * 1024,
         action: suspend (File) -> T,
     ): T = LocalSafArchiveCache.withArchive(
-        directory, fileName, source.length(), source.lastModified(), openInput = source::inputStream, action = action,
+        cacheDir = directory,
+        fileName = fileName,
+        sourceLength = source.length(),
+        sourceModified = source.lastModified(),
+        availableBytes = availableBytes,
+        largeThresholdBytes = largeThresholdBytes,
+        openInput = source::inputStream,
+        action = action,
     )
 
     private fun copies() = File(directory, "local_saf").listFiles().orEmpty().toList()

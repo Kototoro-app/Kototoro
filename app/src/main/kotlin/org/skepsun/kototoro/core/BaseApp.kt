@@ -36,6 +36,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.dialog.CrashReportCopyDialog
 import org.skepsun.kototoro.core.util.ext.processLifecycleScope
 import org.skepsun.kototoro.local.data.LocalStorageChanges
+import org.skepsun.kototoro.local.data.LocalStorageManager
 import org.skepsun.kototoro.local.data.index.LocalContentIndex
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.mihon.MihonExtensionManager
@@ -93,6 +94,15 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
             runCatching {
                 setupDatabaseObservers()
                 entryPoint.localStorageChanges().collect(entryPoint.localContentIndexProvider().get())
+            }
+        }
+        processLifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // Copies left behind by an interrupted scan or an EPUB reader survive process death;
+                // nothing owns them at startup, so reclaim them before the cache grows with the library.
+                entryPoint.localStorageManager().clearUnusedLocalArchiveCache()
+            } catch (e: Throwable) {
+                e.printStackTrace()
             }
         }
         // Building this part of the Dagger graph (schedulers, scrobbler storages, extension managers)
@@ -200,6 +210,7 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
         fun appValidator(): AppValidator
         fun workScheduleManager(): WorkScheduleManager
         fun localContentIndexProvider(): Provider<LocalContentIndex>
+        fun localStorageManager(): LocalStorageManager
         @LocalStorageChanges
         fun localStorageChanges(): MutableSharedFlow<LocalContent?>
         fun mihonExtensionManager(): MihonExtensionManager

@@ -3,6 +3,7 @@ package org.skepsun.kototoro.local.epub
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import org.skepsun.kototoro.local.data.LocalSafEpubCache
 import org.skepsun.kototoro.parsers.util.longHashCode
 import java.io.File
 
@@ -71,8 +72,8 @@ internal fun resolveEpubFile(context: Context, reference: String): File? {
 private fun materializeEpub(context: Context, uri: Uri): File? {
     val sourceUri = uri.buildUpon().fragment(null).build()
     val metadata = DocumentFile.fromSingleUri(context, sourceUri)
-    val cacheDir = File(context.cacheDir, "local_saf_epub").apply { mkdirs() }
-    val target = File(cacheDir, "${sourceUri.toString().longHashCode()}.epub")
+    val directory = LocalSafEpubCache.directory(context.cacheDir).apply { mkdirs() }
+    val target = File(directory, "${sourceUri.toString().longHashCode()}.epub")
     val sourceLength = metadata?.length() ?: -1L
     val sourceModified = metadata?.lastModified() ?: 0L
     val needsRefresh = !target.isFile ||
@@ -83,6 +84,9 @@ private fun materializeEpub(context: Context, uri: Uri): File? {
         input.use { source -> target.outputStream().use(source::copyTo) }
         if (sourceModified > 0L) target.setLastModified(sourceModified)
     }
+    // The parsers only ever hand us a File, so the copy cannot be released by its reader; keep the
+    // folder bounded instead so a local novel library cannot grow by one full book per title.
+    LocalSafEpubCache.trim(context.cacheDir, keep = target)
     return target.takeIf(File::isFile)
 }
 
