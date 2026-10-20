@@ -24,6 +24,9 @@ import android.util.Log
 import org.skepsun.kototoro.R
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.currentCoroutineContext
@@ -100,6 +103,7 @@ import org.skepsun.kototoro.video.player.PlaybackMediaKind
 import org.skepsun.kototoro.video.player.PlaybackRequest
 import org.skepsun.kototoro.video.player.PlaybackRequestNormalizer
 import org.skepsun.kototoro.video.player.HlsManifestProbe
+import org.skepsun.kototoro.video.player.VideoStreamSizeProbe
 import org.skepsun.kototoro.video.player.isAniyomiLocalHlsProxyUrl
 import org.skepsun.kototoro.video.player.VideoPlayerEngine
 import org.skepsun.kototoro.video.data.VideoLocalCacheProxy
@@ -117,6 +121,8 @@ import org.skepsun.kototoro.video.performance.PlaybackFallbackReason
 import org.skepsun.kototoro.video.performance.PlaybackSessionDiagnostics
 import org.skepsun.kototoro.video.performance.VideoPlaybackPolicy
 import org.skepsun.kototoro.video.domain.resolveCloudstreamVideo
+import org.skepsun.kototoro.video.domain.formatVideoSize
+import org.skepsun.kototoro.video.domain.parseVideoSizeHint
 import org.skepsun.kototoro.video.domain.isSuspiciousCloudstreamPlaybackDuration
 import org.skepsun.kototoro.video.domain.isStalledCloudstreamPlayback
 import org.skepsun.kototoro.video.domain.shouldProbeCloudstreamAsHls
@@ -209,6 +215,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     companion object {
         private const val CLOUDSTREAM_PLAYBACK_HEALTH_CHECK_DELAY_MS = 5_000L
         private const val CLOUDSTREAM_HLS_PROBE_TIMEOUT_MS = 10_000L
+        private const val VIDEO_SIZE_PROBE_TIMEOUT_MS = 6_000L
+        private const val VIDEO_SIZE_PROBE_CONCURRENCY = 3
         private const val ENABLE_M3U8_PROXY_CACHE = false
         private const val TORRENT_VIDEO_MARKER = "kototoro:torrent"
         private const val HLS_VIDEO_MARKER = "kototoro:hls"
@@ -270,6 +278,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var initialScrubPositionStart: Long = 0L
     private var lastScrubPosition: Long = 0L
     private var availableVideos: List<Video> = emptyList()
+    // Best-effort stream sizes for the quality list: cached per url, probed once per session.
+    private val videoSizeCache = HashMap<String, Long>()
+    private val probedVideoSizeUrls = HashSet<String>()
+    private var videoSizeProbeJob: Job? = null
+    private var qualityDialogVideos: List<Video>? = null
     private var cloudstreamLinkJob: Job? = null
     private var cloudstreamFallbackJob: Job? = null
     private var isPlaybackKeepingScreenOn = false
@@ -335,6 +348,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     @Inject
     @ContentHttpClient
     lateinit var contentHttpClient: OkHttpClient
+
+    private val videoSizeProbe: VideoStreamSizeProbe by lazy { VideoStreamSizeProbe(contentHttpClient) }
 
     @Inject
     lateinit var videoCache: VideoCache
@@ -715,7 +730,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                             state = state,
                             onDismissRequest = {
                                 actionDialogState = null
-                                selectionDialogState = null
+                                closeSelectionDialog()
                                 superResolutionDialogVisible = false
                             },
                             onItemSelected = { item, itemBounds ->
@@ -777,9 +792,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     selectionDialogState?.let { dialogState ->
                         VideoSelectionDialog(
                             state = dialogState,
-                            onDismissRequest = { selectionDialogState = null },
+                            onDismissRequest = { closeSelectionDialog() },
                             onSelect = { index ->
-                                selectionDialogState = null
+                                closeSelectionDialog()
                                 actionDialogState = null
                                 dialogState.onSelect(index)
                             },
@@ -1398,7 +1413,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             return
         }
         when {
-            selectionDialogState != null -> selectionDialogState = null
+            selectionDialogState != null -> closeSelectionDialog()
             subtitleSettingsDialogVisible -> subtitleSettingsDialogVisible = false
             chapterDialogState != null -> chapterDialogState = null
             videoAnnotationState != null -> videoAnnotationState = null
@@ -1459,10 +1474,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         return getString(org.skepsun.kototoro.R.string.video_quality_line, index + 1)
     }
 
-    private fun Video.sourceDisplayLabel(index: Int): String {
+    private fun Video.sourceDisplayLabel(index: Int, sizeLabel: String? = null): String {
         val title = videoTitle.trim()
         val quality = resolution?.takeIf { it > 0 }?.let { "${it}p" }
-        return listOfNotNull(quality, currentTorrentSeederLabel(), title.takeIf { it.isNotEmpty() })
+        return listOfNotNull(quality, sizeLabel, currentTorrentSeederLabel(), title.takeIf { it.isNotEmpty() })
             .joinToString(" - ")
             .ifEmpty { qualityDisplayLabel(index) }
     }
@@ -2428,7 +2443,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
         cloudstreamFallbackJob?.cancel()
         cloudstreamFallbackJob = null
-        selectionDialogState = null
+        closeSelectionDialog()
         actionDialogState = null
         currentVideoSource = source
         availableVideos = emptyList()
@@ -3583,14 +3598,88 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             showPlayerMessage(org.skepsun.kototoro.R.string.operation_not_supported)
             return
         }
-        val titles = videoSnapshot.mapIndexed { index, video ->
-            video.sourceDisplayLabel(index)
-        }.toTypedArray()
+        qualityDialogVideos = videoSnapshot
+        val titles = buildQualityDialogTitles(videoSnapshot).toTypedArray()
         val selected = currentVideoIndex.coerceIn(0, titles.lastIndex)
         showSelectionDialog(R.string.video_quality, titles.asList(), selected) { which ->
             val selectedVideo = videoSnapshot.getOrNull(which) ?: return@showSelectionDialog
             switchVideoQuality(selectedVideo)
         }
+        probeVideoSizes(videoSnapshot)
+    }
+
+    private fun buildQualityDialogTitles(videos: List<Video>): List<String> {
+        return videos.mapIndexed { index, video -> video.sourceDisplayLabel(index, videoSizeLabel(video)) }
+    }
+
+    /**
+     * Byte size is best-effort: title hints and one bounded probe per url. `null` simply means
+     * the size stays hidden for that quality.
+     */
+    private fun videoSizeLabel(video: Video): String? {
+        val url = video.videoUrl
+        val bytes = videoSizeCache[url]
+            ?: parseVideoSizeHint(video.videoTitle)?.also { videoSizeCache[url] = it }
+        return bytes?.let(::formatVideoSize)?.takeIf { it.isNotEmpty() }
+    }
+
+    private fun probeVideoSizes(videos: List<Video>) {
+        videoSizeProbeJob?.cancel()
+        videoSizeProbeJob = null
+        val pending = videos
+            .filter { video ->
+                val url = video.videoUrl
+                url.isNotBlank() &&
+                    url !in videoSizeCache &&
+                    url !in probedVideoSizeUrls &&
+                    video.internalData != HLS_VIDEO_MARKER &&
+                    video.internalData != TORRENT_VIDEO_MARKER
+            }
+            .distinctBy { it.videoUrl }
+        if (pending.isEmpty()) return
+        val isCloudstream = currentVideoSource is CloudstreamSource
+        videoSizeProbeJob = lifecycleScope.launch {
+            pending.chunked(VIDEO_SIZE_PROBE_CONCURRENCY).forEach { batch ->
+                val results = coroutineScope {
+                    batch.map { video ->
+                        async { video.videoUrl to probeVideoSize(video, isCloudstream) }
+                    }.awaitAll()
+                }
+                var updated = false
+                results.forEach { (url, bytes) ->
+                    probedVideoSizeUrls += url
+                    if (bytes != null && bytes > 0) {
+                        videoSizeCache[url] = bytes
+                        updated = true
+                    }
+                }
+                if (updated) refreshOpenQualityDialog()
+            }
+        }
+    }
+
+    private suspend fun probeVideoSize(video: Video, isCloudstream: Boolean): Long? {
+        val headers = PlaybackRequestNormalizer.normalize(
+            url = video.videoUrl,
+            originalHeaders = headersToMap(video.headers),
+            isCloudstream = isCloudstream,
+        ).headers
+        return withTimeoutOrNull(VIDEO_SIZE_PROBE_TIMEOUT_MS) {
+            videoSizeProbe.probe(video.videoUrl, headers)
+        }
+    }
+
+    private fun refreshOpenQualityDialog() {
+        val videos = qualityDialogVideos ?: return
+        val state = selectionDialogState ?: return
+        selectionDialogState = state.copy(options = buildQualityDialogTitles(videos))
+    }
+
+    private fun closeSelectionDialog() {
+        selectionDialogState = null
+        qualityDialogVideos = null
+        videoSizeProbeJob?.cancel()
+        videoSizeProbeJob = null
     }
 
     private fun showAspectRatioDialog() {
@@ -3963,15 +4052,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     private fun buildVideoDetailsText(): String {
         fun String?.orDash(): String = this?.takeIf { it.isNotBlank() } ?: "-"
-        fun formatBytes(bytes: Long): String {
-            if (bytes < 1024) return "${bytes} B"
-            val kb = bytes / 1024.0
-            if (kb < 1024) return String.format("%.1f KB", kb)
-            val mb = kb / 1024.0
-            if (mb < 1024) return String.format("%.1f MB", mb)
-            val gb = mb / 1024.0
-            return String.format("%.2f GB", gb)
-        }
 
         val (title, chapter) = extractChapterInfo()
         val decoderSetting = "MediaCodec (fallback enabled)"
@@ -4020,7 +4100,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             appendLine(getString(org.skepsun.kototoro.R.string.video_info_hits, proxyStats.hit))
             appendLine(getString(org.skepsun.kototoro.R.string.video_info_misses, proxyStats.miss))
             appendLine(getString(org.skepsun.kototoro.R.string.video_info_writes, proxyStats.writeCount))
-            appendLine(getString(org.skepsun.kototoro.R.string.video_info_write_bytes, formatBytes(proxyStats.writeBytes)))
+            appendLine(
+                getString(
+                    org.skepsun.kototoro.R.string.video_info_write_bytes,
+                    formatVideoSize(proxyStats.writeBytes),
+                ),
+            )
             appendLine()
             appendLine(getString(org.skepsun.kototoro.R.string.video_info_playback_diagnostics))
             appendLine(getString(org.skepsun.kototoro.R.string.video_info_device_tier, devicePerformanceInfo.tier.name))
