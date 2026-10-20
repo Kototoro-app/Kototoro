@@ -258,7 +258,8 @@ class CloudstreamCatalog(
             onEvent?.invoke(CloudstreamPlaybackEvent.Link(page, directLinkType))
             return listOf(page)
         }
-        val cacheKey = source.name to chapter.id
+        // Chapter IDs are scoped to a title, while this cache is shared across all titles.
+        val cacheKey = Triple(source.name, chapter.id, chapter.url)
         val snapshot = playbackCache.prepare(cacheKey, clearCache)
         val subtitles = LinkedHashMap<String, SubtitleFile>().apply { snapshot.subtitles.forEach { put(it.url, it) } }
         val links = LinkedHashMap<String, ExtractorLink>().apply {
@@ -462,7 +463,7 @@ class CloudstreamCatalog(
             ExtractorLinkType.MAGNET,
         )
         private val playbackCache =
-            CloudstreamLinkSessionCache<Pair<String, Long>, ExtractorLink, SubtitleFile>(PLAYBACK_CACHE_TTL_MILLIS)
+            CloudstreamLinkSessionCache<Triple<String, Long, String>, ExtractorLink, SubtitleFile>(PLAYBACK_CACHE_TTL_MILLIS)
     }
 }
 
