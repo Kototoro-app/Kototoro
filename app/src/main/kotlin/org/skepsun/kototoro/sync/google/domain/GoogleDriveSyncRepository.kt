@@ -1001,6 +1001,9 @@ class GoogleDriveSyncRepository @Inject constructor(
                                 .apply()
                             hasJarUpdated = true
                         }
+                        deleteStaleExtensionFiles(pluginsDir, targetFile, ext.packageId).forEach { stale ->
+                            Log.i(TAG, "Removed stale jar ${stale.name} of ${ext.packageId}")
+                        }
                     }.onFailure {
                         if (it is CancellationException) throw it
                         unrestored += ext.name

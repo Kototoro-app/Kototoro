@@ -229,7 +229,31 @@ object JarExtensionLoader {
                 )
             }
         }
-        return plugins
+        return dropDuplicatePackages(plugins)
+    }
+
+    /**
+     * Two JARs of the same package expose the same classes and the same sources, so keeping both only
+     * creates a duplicate plugin whose sources are all reported as shadowed. The newest build wins and
+     * the stale files are left on disk for the installer to clean up.
+     */
+    private fun dropDuplicatePackages(plugins: List<LoadedJarPlugin>): List<LoadedJarPlugin> {
+        val result = deduplicateJarPackages(plugins) { it.jarName }
+        if (result.dropped.isEmpty()) {
+            return result.kept
+        }
+        val winnerByPackage = result.kept.associateBy { it.jarName.jarPackageKey() }
+        result.dropped.forEach { duplicate ->
+            val packageKey = duplicate.jarName.jarPackageKey()
+            android.util.Log.w(
+                "KototoroInit",
+                "Skipped duplicate JAR package: ${duplicate.jarName} " +
+                    "(version=${duplicate.jarName.jarVersionCode()}), " +
+                    "keeping ${winnerByPackage[packageKey]?.jarName} " +
+                    "(version=${winnerByPackage[packageKey]?.jarName?.jarVersionCode()})",
+            )
+        }
+        return result.kept
     }
 
     private fun tryFindEnumClass(cl: ClassLoader, name: String): Class<*>? {
