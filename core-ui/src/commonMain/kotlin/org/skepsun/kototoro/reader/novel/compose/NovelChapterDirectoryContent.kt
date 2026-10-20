@@ -48,6 +48,10 @@ fun NovelChapterDirectoryContent(
     dragModifier: Modifier = Modifier,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /** Per-row translate action; null hides the translate button. */
+    onChapterTranslate: ((NovelChapterDirectoryEntry) -> Unit)? = null,
+    /** Accessibility label of the per-row translate button. */
+    translateContentDescription: String = "",
 ) {
     val colors = currentReaderPanelColors()
     var reversed by remember { mutableStateOf(false) }
@@ -127,6 +131,10 @@ fun NovelChapterDirectoryContent(
                             modifier = Modifier.testTag(
                                 "novel-directory-chapter:${item.chapter.id}:${item.originalIndex}",
                             ),
+                            onTranslate = onChapterTranslate?.let { translate -> { translate(item.chapter) } },
+                            isTranslated = item.chapter.isTranslated,
+                            translationProgress = item.chapter.translationProgress,
+                            translateContentDescription = translateContentDescription,
                         )
                     }
                 }
@@ -144,6 +152,10 @@ private fun NovelChapterRow(
     onClick: () -> Unit,
     enabled: Boolean,
     modifier: Modifier,
+    onTranslate: (() -> Unit)? = null,
+    isTranslated: Boolean = false,
+    translationProgress: Float? = null,
+    translateContentDescription: String = "",
 ) {
     val colors = currentReaderPanelColors()
     val current = state == NovelChapterReadState.CURRENT
@@ -182,8 +194,27 @@ private fun NovelChapterRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .weight(1f)
-                .padding(end = 16.dp),
+                .padding(end = 8.dp),
         )
+        if (onTranslate != null) {
+            IconButton(onClick = onTranslate, modifier = Modifier.size(40.dp)) {
+                if (translationProgress != null && !isTranslated) {
+                    CircularProgressIndicator(
+                        progress = { translationProgress },
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = colors.accent,
+                    )
+                } else {
+                    Icon(
+                        imageVector = ReaderPanelIcons.Translate,
+                        contentDescription = translateContentDescription,
+                        tint = if (isTranslated) colors.accent else colors.contentSecondary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+        }
     }
 }
 

@@ -64,6 +64,12 @@ fun ChaptersScreenRoot(
     val emptyReason by viewModel.emptyReason.collectAsStateWithLifecycle(initialValue = null)
     val chapters by viewModel.chapters.collectAsStateWithLifecycle(initialValue = emptyList())
     val selectedBranch by viewModel.selectedBranch.collectAsStateWithLifecycle(initialValue = null)
+    val contentDetails by viewModel.mangaDetails.collectAsStateWithLifecycle(initialValue = null)
+    val contentType = contentDetails?.toContent()?.source?.getContentType()
+    val canTranslateChapters = contentType != ContentType.VIDEO && contentType != ContentType.HENTAI_VIDEO
+    val activeTranslationChapterIds by viewModel.activeTranslationChapterIds.collectAsStateWithLifecycle(
+        initialValue = emptySet(),
+    )
     var qualityProbeResult by remember { mutableStateOf<ChaptersPagesViewModel.QualityProbeResult?>(null) }
 
     val appContext = context.applicationContext
@@ -126,6 +132,9 @@ fun ChaptersScreenRoot(
         viewModel.onShowVideoQualityDialog.observeEvent(lifecycleOwner) { result ->
             qualityProbeResult = result
         }
+        viewModel.onShowMessage.observeEvent(lifecycleOwner) { messageResId ->
+            Snackbar.make(viewForSnackbar, messageResId, Snackbar.LENGTH_LONG).show()
+        }
         onDispose {
             onSelectionStateChange(null)
         }
@@ -174,6 +183,13 @@ fun ChaptersScreenRoot(
                 router.askForDownloadOverMeteredNetwork { allow ->
                     viewModel.download(chapterIds, allow)
                 }
+            }
+        }
+    }
+    val startTranslation: (Set<Long>, Boolean) -> Unit = remember(router, viewModel) {
+        { chapterIds, isRetranslation ->
+            router.askForDownloadOverMeteredNetwork { allow ->
+                viewModel.translate(chapterIds, allow, isRetranslation)
             }
         }
     }
@@ -233,11 +249,15 @@ fun ChaptersScreenRoot(
         }
     }
     val selectionState = remember(
+        activeTranslationChapterIds,
+        canTranslateChapters,
         deletableChapterIds,
         downloadableChapterIds,
         handleSelectionAction,
         selectedIds,
         selectedItems,
+        startTranslation,
+        viewModel,
         visibleSelectableIds,
     ) {
         if (selectedIds.isEmpty()) {
@@ -251,6 +271,8 @@ fun ChaptersScreenRoot(
                 canMarkCurrent = selectedItems.size == 1 && !selectedItems.first().isCurrent,
                 canBookmark = selectedItems.isNotEmpty(),
                 isBookmarkRemoveAction = selectedItems.isNotEmpty() && selectedItems.all { it.isBookmarked },
+                canTranslate = canTranslateChapters && selectedItems.isNotEmpty(),
+                canCancelTranslation = activeTranslationChapterIds.isNotEmpty(),
                 onClearSelection = { selectedItemIds.clear() },
                 onSelectAll = {
                     selectedItemIds.clear()
@@ -260,6 +282,8 @@ fun ChaptersScreenRoot(
                 onDelete = { handleSelectionAction(R.id.action_delete) },
                 onMarkCurrent = { handleSelectionAction(R.id.action_mark_current) },
                 onBookmark = { handleSelectionAction(R.id.action_bookmark) },
+                onTranslate = { startTranslation(selectedIds, false) },
+                onCancelTranslation = { viewModel.cancelTranslation() },
             )
         }
     }
@@ -294,6 +318,11 @@ fun ChaptersScreenRoot(
         emptyMessageResId = emptyReason?.msgResId,
         initialChapterId = initialCurrentChapterId,
         onItemDownload = { item -> startDownload(setOf(item.chapter.id)) },
+        onItemTranslate = if (canTranslateChapters) {
+            { item, isRetranslation -> startTranslation(setOf(item.chapter.id), isRetranslation) }
+        } else {
+            null
+        },
         onItemClick = { item ->
             if (selectedIds.isNotEmpty()) {
                 if (selectedIds.contains(item.chapter.id)) {

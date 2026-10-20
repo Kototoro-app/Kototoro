@@ -10,6 +10,10 @@ data class NovelChapterDirectoryEntry(
     val volume: Int = 0,
     val groupTitle: String = "",
     val searchAliases: List<String> = emptyList(),
+    /** The chapter already has a stored translation for the current settings. */
+    val isTranslated: Boolean = false,
+    /** Fraction of the chapter already translated, when a translation exists but is not complete. */
+    val translationProgress: Float? = null,
 )
 
 sealed interface NovelChapterDirectoryItem {

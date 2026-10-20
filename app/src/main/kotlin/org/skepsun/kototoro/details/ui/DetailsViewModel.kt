@@ -373,6 +373,7 @@ class DetailsViewModel @Inject constructor(
     private val sourceTypeIdentifier: SourceTypeIdentifier,
     private val trackingRepository: TrackingRepository,
     private val spaceContentPolicy: SpaceContentPolicy,
+    chapterTranslationStore: org.skepsun.kototoro.reader.translate.data.ChapterTranslationStore,
 ) : ChaptersPagesViewModel(
     settings = settings,
     interactor = interactor,
@@ -382,6 +383,7 @@ class DetailsViewModel @Inject constructor(
     deleteLocalContentUseCase = deleteLocalContentUseCase,
     mangaRepositoryFactory = mangaRepositoryFactory,
     localStorageChanges = localStorageChanges,
+    chapterTranslationStore = chapterTranslationStore,
 ) {
 
     private val intent = ContentIntent(savedStateHandle)

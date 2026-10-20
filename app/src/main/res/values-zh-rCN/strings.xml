@@ -2646,6 +2646,12 @@
     <string name="jar_plugins_update_all">全部更新</string>
     <string name="jar_plugins_updating">正在更新 JAR 插件...</string>
     <string name="translate_title">翻译标题</string>
+    <string name="translate_chapter">翻译本章</string>
+    <string name="translate">翻译</string>
+    <string name="translate_chapter_again">重新翻译</string>
+    <string name="translate_chapter_again_summary">本章已有翻译。重新翻译会覆盖当前设置对应的译文。</string>
+    <string name="cancel_translation">取消翻译</string>
+    <string name="translation_cancelled">已取消翻译</string>
     <string name="translating">翻译中…</string>
     <string name="translation_failed">翻译失败</string>
     <string name="clear_translation">清除翻译</string>

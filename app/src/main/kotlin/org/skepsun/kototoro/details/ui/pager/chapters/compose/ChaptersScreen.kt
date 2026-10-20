@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.details.ui.pager.chapters.compose
 
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.isLocal
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,7 +11,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -58,6 +63,13 @@ fun ChaptersScreen(
     onItemLongClick: (ChapterListItem) -> Unit,
     /** Downloads one chapter from its row; null hides the per-chapter download button. */
     onItemDownload: ((ChapterListItem) -> Unit)? = null,
+    /**
+     * Translates one chapter from its row; null hides the per-chapter translate button.
+     *
+     * The second argument is true when the chapter already has a translation and the user confirmed
+     * translating it again: the job must then ignore the renders of the previous run.
+     */
+    onItemTranslate: ((ChapterListItem, Boolean) -> Unit)? = null,
     onHeaderClick: (CollapsibleListHeader) -> Unit,
     onFilterChipClick: (ChipModel) -> Unit,
     onSelectionActionClick: (Int) -> Unit,
@@ -67,6 +79,15 @@ fun ChaptersScreen(
     val context = LocalContext.current
     val hapticFeedback = LocalHapticFeedback.current
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    // A translated chapter keeps its translate button; using it again asks before dropping the existing renders.
+    val retranslationRequest = remember { mutableStateOf<ChapterListItem?>(null) }
+    val requestTranslate: (ChapterListItem) -> Unit = { item ->
+        if (item.isTranslated || item.isTranslationStale) {
+            retranslationRequest.value = item
+        } else {
+            onItemTranslate?.invoke(item, false)
+        }
+    }
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
     val initialIndex = remember(items, initialChapterId) {
@@ -147,16 +168,42 @@ fun ChaptersScreen(
                     ChapterGridCard(item, selectedItemIds.contains(item.chapter.id), onClick,
                         onLongClick = { onItemLongClick(item) }, focusRequester = focusRequester)
                 } else {
-                    val canDownload = onItemDownload != null && selectedItemIds.isEmpty() &&
+                    val isSelectionActive = selectedItemIds.isNotEmpty()
+                    val canDownload = onItemDownload != null && !isSelectionActive &&
                         !item.isDownloaded && !item.chapter.source.isLocal
+                    val canTranslate = onItemTranslate != null && !isSelectionActive
                     ChapterListCard(item, selectedItemIds.contains(item.chapter.id), onClick,
                         onLongClick = { onItemLongClick(item) }, focusRequester = focusRequester,
-                        onDownload = if (canDownload) ({ onItemDownload?.invoke(item) }) else null)
+                        onDownload = if (canDownload) ({ onItemDownload?.invoke(item) }) else null,
+                        onTranslate = if (canTranslate) ({ requestTranslate(item) }) else null)
                 }
             }
             is CollapsibleListHeader -> CollapsibleHeaderUI(item, onClick = { onHeaderClick(item) })
             is ListHeader -> ChapterHeaderUI(text = item.getText(context) ?: "")
         }
+    }
+    val retranslationTarget = retranslationRequest.value
+    if (retranslationTarget != null) {
+        AlertDialog(
+            onDismissRequest = { retranslationRequest.value = null },
+            title = { Text(stringResource(R.string.translate_chapter_again)) },
+            text = { Text(stringResource(R.string.translate_chapter_again_summary)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        retranslationRequest.value = null
+                        onItemTranslate?.invoke(retranslationTarget, true)
+                    },
+                ) {
+                    Text(stringResource(R.string.translate))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { retranslationRequest.value = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
     }
 }
 

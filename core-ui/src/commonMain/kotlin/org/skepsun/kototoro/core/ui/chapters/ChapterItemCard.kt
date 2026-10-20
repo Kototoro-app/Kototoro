@@ -3,6 +3,7 @@ package org.skepsun.kototoro.core.ui.chapters
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -10,6 +11,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
@@ -28,6 +30,10 @@ data class ChapterCardData(
     val isBookmarked: Boolean = false,
     val isDownloaded: Boolean = false,
     val isNew: Boolean = false,
+    /** A background translation of this chapter already finished with the current settings. */
+    val isTranslated: Boolean = false,
+    /** Pixels exist but were produced by other translation settings; the row offers a re-translate. */
+    val isTranslationStale: Boolean = false,
 )
 
 /** Android's chapter row, including current/read, selection, bookmark and download presentation. */
@@ -89,6 +95,34 @@ fun ChapterListCard(
             Icon(ReaderPanelIcons.Storage, "Downloaded", tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 8.dp).size(24.dp))
         }
+        if (item.isTranslated || item.isTranslationStale) {
+            // A filled chip, so the "translated" mark cannot be mistaken for the row's translate button.
+            Box(
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (item.isTranslationStale) {
+                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.55f)
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = ReaderPanelIcons.Translate,
+                    contentDescription = if (item.isTranslationStale) {
+                        "Translated with older settings"
+                    } else {
+                        "Translated"
+                    },
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(13.dp),
+                )
+            }
+        }
         actions?.invoke(this)
     }
 }
@@ -132,6 +166,10 @@ fun ChapterGridCard(
             Row(Modifier.align(Alignment.BottomEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (item.isDownloaded) {
                     Icon(ReaderPanelIcons.SaveOk, "Downloaded", tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(14.dp))
+                }
+                if (item.isTranslated || item.isTranslationStale) {
+                    Icon(ReaderPanelIcons.Translate, "Translated", tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(14.dp))
                 }
                 if (item.isBookmarked) {

@@ -2,6 +2,7 @@ package org.skepsun.kototoro.reader.translate.domain
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -62,6 +63,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withContext
 import okio.source
+import java.io.File
 import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -241,15 +243,15 @@ class ReaderPageTranslationProcessor @Inject constructor(
         if (sourceLang == targetLang) {
             return null
         }
-        val renderCacheKey = buildRenderedCacheKey(
-            pageUrl = page.url,
-            sourceUri = sourceUri.toString(),
+        val keys = resolveRenderedCacheKeys(
+            page = page,
+            localSourceUri = sourceUri.takeIf { it.isFileUri() },
+            sourceUri = sourceUri,
             sourceLang = sourceLang,
             targetLang = targetLang,
-            pageEpoch = getPageRenderEpoch(page.id),
             autoRecognizerLanguage = normalizedAutoRecognizerLanguage,
         )
-        return cache[renderCacheKey]?.toUri()?.also {
+        return findRendered(keys)?.toUri()?.also {
             appendPageLog(page.id, "metric.render_cache.hit=1")
             rememberRenderedSource(it, sourceUri)
         }
@@ -284,15 +286,16 @@ class ReaderPageTranslationProcessor @Inject constructor(
             return sourceUri
         }
         Log.d(LOG_TAG, "process debug: local uri ready page=${page.id} uri=$localUri")
-        val renderCacheKey = buildRenderedCacheKey(
-            pageUrl = page.url,
-            sourceUri = sourceUri.toString(),
+        val keys = resolveRenderedCacheKeys(
+            page = page,
+            localSourceUri = localUri,
+            sourceUri = sourceUri,
             sourceLang = sourceLang,
             targetLang = targetLang,
-            pageEpoch = getPageRenderEpoch(page.id),
             autoRecognizerLanguage = normalizedAutoRecognizerLanguage,
         )
-        cache[renderCacheKey]?.let {
+        val renderCacheKey = keys.writeKey
+        findRendered(keys)?.let {
             Log.d(LOG_TAG, "process debug: render cache hit before start page=${page.id}")
             return it.toUri().also { rendered ->
                 rememberRenderedSource(rendered, localUri)
@@ -320,7 +323,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
             permitSemaphore.withPermit {
                 Log.d(LOG_TAG, "process debug: permit acquired page=${page.id}")
                 appendPageLog(page.id, processStartLog)
-                cache[renderCacheKey]?.let {
+                findRendered(keys)?.let {
                     appendPageLog(page.id, "metric.render_cache.hit=1")
                     Log.d(LOG_TAG, "process debug: render cache hit after permit page=${page.id}")
                     return@withPermit it.toUri().also { rendered ->
@@ -348,6 +351,360 @@ class ReaderPageTranslationProcessor @Inject constructor(
     fun observeDebugLogUpdates(): Flow<Long> {
         return debugLogStore.observeUpdates()
     }
+
+    // region chapter-scoped translation
+
+    /** One page of a chapter-scoped translation job: the page itself plus its resolvable image uri. */
+    data class ChapterPageSource(
+        val page: ContentPage,
+        val sourceUri: Uri,
+    )
+
+    enum class ChapterTranslationPhase {
+        OCR,
+        TRANSLATE,
+        RENDER,
+    }
+
+    /** Result of a chapter-scoped translation run. */
+    data class ChapterTranslationOutcome(
+        val sourceLang: String,
+        val targetLang: String,
+        val pagesTotal: Int,
+        val renderedPageIds: Set<Long>,
+        val cachedPageIds: Set<Long>,
+        val textlessPageIds: Set<Long>,
+        val failedPageIds: Set<Long>,
+        val skippedPageIds: Set<Long>,
+        val requestedTextCount: Int,
+        val translatedTextCount: Int,
+    ) {
+        val pagesWithTranslation: Int
+            get() = renderedPageIds.size + cachedPageIds.size
+
+        val isSuccess: Boolean
+            get() = pagesTotal == 0 || pagesWithTranslation > 0
+    }
+
+    /**
+     * Translates every page of one chapter with chapter-wide batching: OCR runs over all pages first,
+     * the collected bubble texts are translated in a handful of requests instead of one batch per page,
+     * and only then are the pages rendered from the already translated text.
+     *
+     * This is what the background "translate chapter" job uses; the reader keeps its per-page [process]
+     * path so on-screen latency stays low.
+     */
+    suspend fun translateChapterPages(
+        pages: List<ChapterPageSource>,
+        autoRecognizerLanguage: String? = null,
+        /**
+         * Re-translation requested by the user: the renders of the previous run are ignored instead of
+         * being reported as "already translated with these settings".
+         */
+        forceRefresh: Boolean = false,
+        onProgress: suspend (phase: ChapterTranslationPhase, index: Int, total: Int) -> Unit = { _, _, _ -> },
+    ): ChapterTranslationOutcome {
+        val normalizedAutoRecognizerLanguage = autoRecognizerLanguage.normalizeReaderTranslationLanguageTag()
+        val targetLang = settings.readerTranslationTargetLanguage.normalizeReaderTranslationLanguageTag() ?: "zh"
+        val renderedPageIds = LinkedHashSet<Long>()
+        val cachedPageIds = LinkedHashSet<Long>()
+        val textlessPageIds = LinkedHashSet<Long>()
+        val failedPageIds = LinkedHashSet<Long>()
+        val skippedPageIds = LinkedHashSet<Long>()
+        if (pages.isEmpty()) {
+            return ChapterTranslationOutcome(
+                sourceLang = "",
+                targetLang = targetLang,
+                pagesTotal = 0,
+                renderedPageIds = renderedPageIds,
+                cachedPageIds = cachedPageIds,
+                textlessPageIds = textlessPageIds,
+                failedPageIds = failedPageIds,
+                skippedPageIds = skippedPageIds,
+                requestedTextCount = 0,
+                translatedTextCount = 0,
+            )
+        }
+
+        // End-to-end API models translate the whole page image, so there is no text to batch per chapter.
+        if (settings.readerTranslationPipelineMode == ReaderTranslationPipelineMode.END_TO_END_API) {
+            val e2eSourceLang = resolveSourceLanguage(pages.first().page, normalizedAutoRecognizerLanguage)
+            for ((index, item) in pages.withIndex()) {
+                onProgress(ChapterTranslationPhase.RENDER, index, pages.size)
+                val rendered = process(
+                    page = item.page,
+                    sourceUri = item.sourceUri,
+                    forceEnabled = true,
+                    autoRecognizerLanguage = normalizedAutoRecognizerLanguage,
+                )
+                if (rendered == item.sourceUri) {
+                    failedPageIds += item.page.id
+                } else {
+                    renderedPageIds += item.page.id
+                }
+            }
+            return ChapterTranslationOutcome(
+                sourceLang = e2eSourceLang,
+                targetLang = targetLang,
+                pagesTotal = pages.size,
+                renderedPageIds = renderedPageIds,
+                cachedPageIds = cachedPageIds,
+                textlessPageIds = textlessPageIds,
+                failedPageIds = failedPageIds,
+                skippedPageIds = skippedPageIds,
+                requestedTextCount = 0,
+                translatedTextCount = 0,
+            )
+        }
+
+        class PageWork(
+            val page: ContentPage,
+            val localUri: Uri,
+            val renderCacheKey: String,
+            val sourceLang: String,
+        ) {
+            var bubbleInputs: List<BubbleInput> = emptyList()
+        }
+
+        var resolvedSourceLang: String? = null
+        val works = ArrayList<PageWork>(pages.size)
+        for (item in pages) {
+            val pageId = item.page.id
+            val sourceLang = resolveSourceLanguage(item.page, normalizedAutoRecognizerLanguage)
+            if (sourceLang == targetLang) {
+                skippedPageIds += pageId
+                continue
+            }
+            val localUri = ensureLocalFileUri(item.sourceUri)
+            if (localUri == null) {
+                log { "chapter translate skip: cannot localize uri=${item.sourceUri}" }
+                appendPageLog(pageId, "fail_code=${ReaderTranslationFailCode.PROCESS_EXCEPTION}")
+                failedPageIds += pageId
+                continue
+            }
+            val keys = resolveRenderedCacheKeys(
+                page = item.page,
+                localSourceUri = localUri,
+                sourceUri = item.sourceUri,
+                sourceLang = sourceLang,
+                targetLang = targetLang,
+                autoRecognizerLanguage = normalizedAutoRecognizerLanguage,
+            )
+            val renderCacheKey = keys.writeKey
+            val cached = if (forceRefresh) null else findRendered(keys)
+            if (cached != null) {
+                cachedPageIds += pageId
+                rememberRenderedSource(cached.toUri(), localUri)
+                appendPageLog(pageId, "metric.render_cache.hit=1")
+                continue
+            }
+            if (resolvedSourceLang == null) {
+                resolvedSourceLang = sourceLang
+            }
+            works += PageWork(item.page, localUri, renderCacheKey, sourceLang)
+        }
+
+        // Phase 1: OCR every remaining page and keep only the bubble geometry + source text.
+        for ((index, work) in works.withIndex()) {
+            onProgress(ChapterTranslationPhase.OCR, index, works.size)
+            work.bubbleInputs = processingSemaphore.withPermit {
+                withContext(
+                    loggingPageId.asContextElement(work.page.id) +
+                        automaticRecognizerLanguage.asContextElement(normalizedAutoRecognizerLanguage),
+                ) {
+                    analyzeChapterPage(work.page.id, work.localUri, work.sourceLang, targetLang)
+                }
+            }
+            if (work.bubbleInputs.isEmpty()) {
+                textlessPageIds += work.page.id
+            }
+        }
+
+        // Phase 2: translate the whole chapter's distinct bubble texts in as few requests as possible.
+        val textsBySourceLang = LinkedHashMap<String, LinkedHashSet<String>>()
+        for (work in works) {
+            if (work.bubbleInputs.isEmpty()) continue
+            val bucket = textsBySourceLang.getOrPut(work.sourceLang) { LinkedHashSet() }
+            for (bubble in work.bubbleInputs) {
+                bucket += bubble.sourceText
+            }
+        }
+        val requestedTextCount = textsBySourceLang.values.sumOf { it.size }
+        val translationsBySourceLang = HashMap<String, Map<String, String>>(textsBySourceLang.size)
+        if (requestedTextCount > 0) {
+            onProgress(ChapterTranslationPhase.TRANSLATE, 0, works.size)
+            for ((sourceLang, texts) in textsBySourceLang) {
+                val translated = runCatching {
+                    translationCoordinator.translateBlocksCached(
+                        texts = texts.toList(),
+                        sourceLang = sourceLang,
+                        targetLang = targetLang,
+                        batchLimit = CHAPTER_TRANSLATION_BATCH_LIMIT,
+                        charBudgetPerBatch = CHAPTER_TRANSLATION_CHAR_BUDGET,
+                    )
+                }.onFailure {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    it.printStackTraceDebug()
+                    log { "chapter translate failed source=$sourceLang err=${it.message.orEmpty()}" }
+                }.getOrDefault(emptyMap())
+                translationsBySourceLang[sourceLang] = translated
+                log {
+                    "chapter translate done source=$sourceLang texts=${texts.size} " +
+                        "translated=${translated.count { entry -> entry.value.isNotBlank() }}"
+                }
+            }
+        }
+        val translatedTextCount = translationsBySourceLang.values.sumOf { map ->
+            map.count { it.value.isNotBlank() }
+        }
+
+        // Phase 3: render each page from the shared translation map.
+        for ((index, work) in works.withIndex()) {
+            onProgress(ChapterTranslationPhase.RENDER, index, works.size)
+            if (work.bubbleInputs.isEmpty()) continue
+            val translatedMap = translationsBySourceLang[work.sourceLang].orEmpty()
+            val output = processingSemaphore.withPermit {
+                withContext(
+                    loggingPageId.asContextElement(work.page.id) +
+                        automaticRecognizerLanguage.asContextElement(normalizedAutoRecognizerLanguage),
+                ) {
+                    renderChapterPage(
+                        pageId = work.page.id,
+                        localUri = work.localUri,
+                        renderCacheKey = work.renderCacheKey,
+                        bubbleInputs = work.bubbleInputs,
+                        translatedMap = translatedMap,
+                        targetLang = targetLang,
+                    )
+                }
+            }
+            if (output == null) {
+                failedPageIds += work.page.id
+            } else {
+                renderedPageIds += work.page.id
+            }
+        }
+
+        log {
+            "chapter translate summary pages=${pages.size} rendered=${renderedPageIds.size} " +
+                "cached=${cachedPageIds.size} textless=${textlessPageIds.size} failed=${failedPageIds.size} " +
+                "skipped=${skippedPageIds.size} texts=$requestedTextCount translated=$translatedTextCount"
+        }
+        return ChapterTranslationOutcome(
+            sourceLang = resolvedSourceLang.orEmpty(),
+            targetLang = targetLang,
+            pagesTotal = pages.size,
+            renderedPageIds = renderedPageIds,
+            cachedPageIds = cachedPageIds,
+            textlessPageIds = textlessPageIds,
+            failedPageIds = failedPageIds,
+            skippedPageIds = skippedPageIds,
+            requestedTextCount = requestedTextCount,
+            translatedTextCount = translatedTextCount,
+        )
+    }
+
+    private suspend fun analyzeChapterPage(
+        pageId: Long,
+        localUri: Uri,
+        sourceLang: String,
+        targetLang: String,
+    ): List<BubbleInput> {
+        val sourceBitmap = runInterruptible(Dispatchers.IO) {
+            BitmapDecoderCompat.decode(localUri.toFile())
+        }
+        val bitmap = runCatching { sourceBitmap.copy(Bitmap.Config.ARGB_8888, true) }
+            .onFailure { sourceBitmap.recycle() }
+            .getOrNull()
+            ?: return emptyList()
+        if (bitmap !== sourceBitmap) {
+            sourceBitmap.recycle()
+        }
+        return try {
+            val ocrStartMs = SystemClock.elapsedRealtime()
+            val ocrPipeline = ocrPipelineCoordinator.execute(
+                sourceUri = localUri,
+                sourceLang = sourceLang,
+                pageId = pageId,
+                bitmap = bitmap,
+            )
+            appendPageLog(pageId, "metric.ocr.total_ms=${SystemClock.elapsedRealtime() - ocrStartMs}")
+            appendPageLog(pageId, "metric.ocr.blocks=${ocrPipeline.pageTextBlocks.size}")
+            ocrPipeline.failCode?.let { appendPageLog(pageId, "fail_code=$it") }
+            val bubbleInputs = buildBubbleInputsFromFragments(
+                fragments = ocrPipeline.textFragments,
+                sourceLang = sourceLang,
+                targetLang = targetLang,
+            )
+            appendPageLog(pageId, "metric.translation.bubbles=${bubbleInputs.size}")
+            bubbleInputs
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    private suspend fun renderChapterPage(
+        pageId: Long,
+        localUri: Uri,
+        renderCacheKey: String,
+        bubbleInputs: List<BubbleInput>,
+        translatedMap: Map<String, String>,
+        targetLang: String,
+    ): Uri? {
+        val sourceBitmap = runInterruptible(Dispatchers.IO) {
+            BitmapDecoderCompat.decode(localUri.toFile())
+        }
+        val bitmap = runCatching { sourceBitmap.copy(Bitmap.Config.ARGB_8888, true) }
+            .onFailure { sourceBitmap.recycle() }
+            .getOrNull()
+            ?: return null
+        if (bitmap !== sourceBitmap) {
+            sourceBitmap.recycle()
+        }
+        return try {
+            val canvas = Canvas(bitmap)
+            val renderStartMs = SystemClock.elapsedRealtime()
+            val renderPreparation = bubbleRenderCoordinator.prepareBubbles(
+                bubbleInputs = bubbleInputs,
+                translatedMap = translatedMap,
+                targetLang = targetLang,
+                bitmap = bitmap,
+            )
+            val preparedBubbles = renderPreparation.preparedBubbles
+            if (preparedBubbles.isEmpty()) {
+                val failCode = if (renderPreparation.nonEmptyTranslatedCount == 0) {
+                    ReaderTranslationFailCode.TRANSLATE_EMPTY
+                } else {
+                    ReaderTranslationFailCode.RENDER_FILTERED
+                }
+                appendPageLog(pageId, "fail_code=$failCode")
+                log { "chapter render skipped page=$pageId fail_code=$failCode" }
+                null
+            } else {
+                // Two-pass render: draw all bubble backgrounds first, then all texts to avoid later bubbles covering earlier texts.
+                for (bubble in preparedBubbles) {
+                    drawBubbleBackground(canvas, bubble)
+                }
+                for (bubble in preparedBubbles) {
+                    drawBubbleText(canvas, bubble)
+                }
+                if (settings.isReaderTranslationDebugLogsEnabled) {
+                    for (bubble in preparedBubbles) {
+                        drawBubbleDebugOverlay(canvas, bubble)
+                    }
+                }
+                val output = cache.set(renderCacheKey, bitmap).toUri()
+                rememberRenderedSource(output, localUri)
+                appendPageLog(pageId, "metric.render.total_ms=${SystemClock.elapsedRealtime() - renderStartMs}")
+                appendPageLog(pageId, "metric.render.bubbles=${preparedBubbles.size}")
+                output
+            }
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    // endregion
 
     @WorkerThread
     private suspend fun processImpl(
@@ -3491,6 +3848,107 @@ class ReaderPageTranslationProcessor @Inject constructor(
         }
     }
 
+    /**
+     * Rendered-page cache keys for one page.
+     *
+     * [primary] is content addressed: the source image fingerprint (byte size + dimensions) plus the recipe.
+     * The same page keeps the same key whether it was read from the source site or from the downloaded copy,
+     * so a chapter translated online still renders translated after it is downloaded (and vice versa). The
+     * reader and the background chapter job therefore share one render cache instead of two.
+     *
+     * [legacy] is the old page-url based key; it is only read, so caches written before the switch survive.
+     */
+    private data class RenderedCacheKeys(
+        val primary: String?,
+        val legacy: String,
+    ) {
+        val writeKey: String get() = primary ?: legacy
+    }
+
+    private suspend fun resolveRenderedCacheKeys(
+        page: ContentPage,
+        localSourceUri: Uri?,
+        sourceUri: Uri,
+        sourceLang: String,
+        targetLang: String,
+        autoRecognizerLanguage: String?,
+    ): RenderedCacheKeys {
+        val legacy = buildRenderedCacheKey(
+            pageUrl = page.url,
+            sourceUri = sourceUri.toString(),
+            sourceLang = sourceLang,
+            targetLang = targetLang,
+            pageEpoch = getPageRenderEpoch(page.id),
+            autoRecognizerLanguage = autoRecognizerLanguage,
+        )
+        val fingerprint = localSourceUri?.let { pageSourceFingerprint(it) }
+        val primary = fingerprint?.let {
+            buildContentAddressedRenderedCacheKey(
+                sourceFingerprint = it,
+                sourceLang = sourceLang,
+                targetLang = targetLang,
+                pageEpoch = getPageRenderEpoch(page.id),
+                autoRecognizerLanguage = autoRecognizerLanguage,
+            )
+        }
+        return RenderedCacheKeys(primary = primary, legacy = legacy)
+    }
+
+    private suspend fun findRendered(keys: RenderedCacheKeys): File? {
+        keys.primary?.let { key -> cache[key]?.let { return it } }
+        return cache[keys.legacy]
+    }
+
+    /**
+     * Cheap identity of the pixels being translated: file size plus decoded dimensions.
+     *
+     * Hashing the bytes of every page would cost more than it buys; size + dimensions already separates
+     * distinct pages, and a recipe change (or an explicit re-translate) is what covers the rare case of a
+     * source site serving different pixels of identical size.
+     */
+    private fun pageSourceFingerprint(localUri: Uri): String? {
+        if (!localUri.isFileUri()) return null
+        val file = localUri.toFile()
+        if (!file.isFile || file.length() <= 0L) return null
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        runCatching { BitmapFactory.decodeFile(file.absolutePath, options) }
+        if (options.outWidth <= 0 || options.outHeight <= 0) return null
+        return "${file.length()}:${options.outWidth}x${options.outHeight}"
+    }
+
+    private fun buildContentAddressedRenderedCacheKey(
+        sourceFingerprint: String,
+        sourceLang: String,
+        targetLang: String,
+        pageEpoch: Int,
+        autoRecognizerLanguage: String?,
+    ): String {
+        val raw = listOf(
+            TRANSLATION_PIPELINE_VERSION,
+            "src:$sourceFingerprint",
+            sourceLang,
+            targetLang,
+            renderCacheEpoch.toString(),
+            pageEpoch.toString(),
+            settings.readerTranslationMode.name,
+            settings.readerTranslationOnnxModelId,
+            settings.readerTranslationApiProviderPreset,
+            settings.readerTranslationApiEndpoint,
+            settings.readerTranslationApiModel,
+            settings.readerTranslationOcrEngine.name,
+            settings.readerTranslationPipelineMode.name,
+            OCR_STRATEGY_PAGE_DET_REC,
+            settings.isReaderTranslationQualityFilterEnabled.toString(),
+            settings.readerTranslationPaddleOfficialModelId,
+            autoRecognizerLanguage.orEmpty(),
+            settings.readerTranslationPaddleDetModelId,
+            settings.readerTranslationPaddleRecModelUrl,
+            settings.readerTranslationPaddleRecModelVersion,
+            settings.readerTranslationPaddleRecModelSha256,
+        ).joinToString("|")
+        return "${RENDER_CACHE_PREFIX_V2}${raw.sha256()}"
+    }
+
     private fun buildRenderedCacheKey(
         pageUrl: String,
         sourceUri: String,
@@ -3663,6 +4121,16 @@ class ReaderPageTranslationProcessor @Inject constructor(
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         const val DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
         const val MAX_OPENAI_BATCH_SIZE = 3
+
+        /**
+         * Chapter-scoped translation aggregates every bubble of a chapter, so it can afford far larger
+         * batches than the reader's per-page path. Fewer requests per chapter is the point of the
+         * chapter translate job; the response parser matches results by id and tolerates partial maps.
+         */
+        const val CHAPTER_TRANSLATION_BATCH_LIMIT = 24
+
+        /** Keeps a single chapter translation request inside a sane prompt size (~1.5k tokens of text). */
+        const val CHAPTER_TRANSLATION_CHAR_BUDGET = 4000
         const val TRANSLATION_PIPELINE_VERSION = "2026-08-01-overlay-fit-v8"
         const val OPENAI_TRANSLATION_SYSTEM_PROMPT = """
 		You translate manga OCR text.
@@ -3696,6 +4164,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
         val VISIBLE_OVERLAY_EXPAND_SCALES = floatArrayOf(1f)
         const val TEXT_CACHE_PREFIX = "reader_translate_text_"
         const val RENDER_CACHE_PREFIX = "reader_translate_render_"
+        const val RENDER_CACHE_PREFIX_V2 = "reader_translate_render2_"
         const val OCR_CACHE_PREFIX = "reader_translate_ocr_"
         const val LOG_TAG = "ReaderTranslate"
         const val MAX_PAGE_LOG_LINES = 500

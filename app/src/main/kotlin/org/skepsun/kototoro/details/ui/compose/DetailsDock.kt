@@ -721,6 +721,22 @@ private fun ChapterSelectionTopBar(
                         )
                     }
                 }
+                if (state.canTranslate) {
+                    ChapterSelectionActionButton(onClick = state.onTranslate) {
+                        Icon(
+                            painter = rememberSafePainter(R.drawable.ic_translate),
+                            contentDescription = stringResource(R.string.translate_chapter),
+                        )
+                    }
+                }
+                if (state.canCancelTranslation) {
+                    ChapterSelectionActionButton(onClick = state.onCancelTranslation) {
+                        Icon(
+                            painter = rememberSafePainter(R.drawable.ic_cancel_multiple),
+                            contentDescription = stringResource(R.string.cancel_translation),
+                        )
+                    }
+                }
                 if (state.canDelete) {
                     ChapterSelectionActionButton(onClick = state.onDelete) {
                         Icon(

@@ -22,10 +22,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -104,6 +106,12 @@ internal fun ComposeNovelChaptersSheet(
     onDeleteBookmark: (Bookmark) -> Unit = {},
     bookTitle: String = "",
     eInkMode: Boolean = false,
+    /** Chapters that already have a stored translation for the current settings. */
+    translatedChapterIds: Set<Long> = emptySet(),
+    /** Fraction translated for chapters whose translation is not complete yet. */
+    translationProgress: Map<Long, Float> = emptyMap(),
+    /** Translates one chapter from its row; null hides the in-row translate button. */
+    onTranslateChapter: ((ContentChapter, Boolean) -> Unit)? = null,
 ) {
     val pagerState = rememberPagerState(
         initialPage = initialTab.ordinal.coerceIn(0, NovelChaptersSheetTab.entries.lastIndex),
@@ -169,6 +177,9 @@ internal fun ComposeNovelChaptersSheet(
                             locateRequest = locateRequest,
                             dragModifier = sheetDragModifier,
                             modifier = Modifier.fillMaxSize(),
+                            translatedChapterIds = translatedChapterIds,
+                            translationProgress = translationProgress,
+                            onTranslateChapter = onTranslateChapter,
                         )
                     }
                     NovelChaptersSheetTab.NOTES -> {
@@ -218,9 +229,28 @@ internal fun ComposeNovelChaptersContent(
     locateRequest: Int = 0,
     dragModifier: Modifier = Modifier,
     modifier: Modifier = Modifier,
+    translatedChapterIds: Set<Long> = emptySet(),
+    translationProgress: Map<Long, Float> = emptyMap(),
+    onTranslateChapter: ((ContentChapter, Boolean) -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val directory = remember(chapters) { chapters.map(ContentChapter::directoryEntry) }
+    val directory = remember(chapters, translatedChapterIds, translationProgress) {
+        chapters.map { chapter ->
+            chapter.directoryEntry().copy(
+                isTranslated = chapter.id in translatedChapterIds,
+                translationProgress = translationProgress[chapter.id],
+            )
+        }
+    }
+    // Reusing the translate button on a translated chapter replaces that translation, so ask first.
+    val retranslationRequest = remember { mutableStateOf<ContentChapter?>(null) }
+    val requestTranslate: (ContentChapter) -> Unit = { chapter ->
+        if (chapter.id in translatedChapterIds) {
+            retranslationRequest.value = chapter
+        } else {
+            onTranslateChapter?.invoke(chapter, false)
+        }
+    }
     val volumeTitle: (Int) -> String = remember(context) { { context.getString(R.string.volume_, it) } }
     NovelChapterDirectoryContent(
         chapters = directory,
@@ -236,7 +266,36 @@ internal fun ComposeNovelChaptersContent(
         locateRequest = locateRequest,
         dragModifier = dragModifier,
         modifier = modifier,
+        onChapterTranslate = if (onTranslateChapter != null) {
+            { entry -> chapters.firstOrNull { it.id == entry.id }?.let(requestTranslate) }
+        } else {
+            null
+        },
+        translateContentDescription = stringResource(R.string.translate_chapter),
     )
+    val target = retranslationRequest.value
+    if (target != null) {
+        AlertDialog(
+            onDismissRequest = { retranslationRequest.value = null },
+            title = { Text(stringResource(R.string.translate_chapter_again)) },
+            text = { Text(stringResource(R.string.translate_chapter_again_summary)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        retranslationRequest.value = null
+                        onTranslateChapter?.invoke(target, true)
+                    },
+                ) {
+                    Text(stringResource(R.string.translate))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { retranslationRequest.value = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
 }
 
 private fun ContentChapter.directoryEntry() = NovelChapterDirectoryEntry(

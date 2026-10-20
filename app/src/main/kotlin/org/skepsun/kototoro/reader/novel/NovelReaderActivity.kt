@@ -48,6 +48,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.core.graphics.ColorUtils
 import androidx.core.content.FileProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -73,6 +74,15 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
+import kotlinx.coroutines.flow.MutableStateFlow
+import org.skepsun.kototoro.core.model.getLocale
+import org.skepsun.kototoro.download.ui.worker.DownloadTask
+import org.skepsun.kototoro.download.ui.worker.DownloadTaskKind
+import org.skepsun.kototoro.download.ui.worker.DownloadWorker
+import org.skepsun.kototoro.download.ui.worker.ExecutionChapterRef
+import org.skepsun.kototoro.reader.translate.data.ChapterTranslationStore
+import org.skepsun.kototoro.reader.translate.data.resolveChapterTranslationKey
+import org.skepsun.kototoro.reader.translate.data.resolveChapterTranslationLanguagePair
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.prefs.observeAsState
@@ -184,6 +194,12 @@ class NovelReaderActivity :
     lateinit var settings: AppSettings
 
     @Inject
+    lateinit var chapterTranslationStore: ChapterTranslationStore
+
+    @Inject
+    lateinit var downloadScheduler: DownloadWorker.Scheduler
+
+    @Inject
     lateinit var tapGridSettings: org.skepsun.kototoro.reader.data.TapGridSettings
 
     @Inject
@@ -235,6 +251,57 @@ class NovelReaderActivity :
     lateinit var spaceSwitcherDelegate: SpaceSwitcherDelegate
 
     private lateinit var manga: Content
+
+    /** Chapters whose translation is stored for the current settings; drives the chapter panel badge. */
+    private val translatedChapterIds = MutableStateFlow<Set<Long>>(emptySet())
+
+    /** Fraction of the chapter already translated, for chapters a job left unfinished. */
+    private val chapterTranslationProgress = MutableStateFlow<Map<Long, Float>>(emptyMap())
+
+    private suspend fun refreshChapterTranslationStates() {
+        val content = if (::manga.isInitialized) manga else return
+        val languagePair = resolveChapterTranslationLanguagePair(
+            preferredSourceLanguage = settings.readerTranslationSourceLanguage,
+            contentLanguage = content.source.getLocale()?.language,
+            targetLanguage = settings.readerTranslationTargetLanguage,
+        )
+        val key = settings.resolveChapterTranslationKey(
+            sourceLang = languagePair.first,
+            targetLang = languagePair.second,
+        )
+        val states = chapterTranslationStore.chapterStates(mangaId = content.id, key = key)
+        translatedChapterIds.value = states.filterValues { it.isPrepared }.keys
+        chapterTranslationProgress.value = buildMap {
+            for ((chapterId, state) in states) {
+                val progress = state.progress ?: continue
+                if (state.isPartial) put(chapterId, progress)
+            }
+        }
+    }
+
+    /**
+     * Chapter panel translate action: downloads the chapter when needed, then translates it as a whole.
+     * [isRetranslation] is set only after the user confirmed replacing an existing translation.
+     */
+    private fun translateChapterFromSheet(chapter: ContentChapter, isRetranslation: Boolean) {
+        val content = if (::manga.isInitialized) manga else return
+        lifecycleScope.launch {
+            val task = DownloadTask.createExecutionTask(
+                executionMangaId = content.id,
+                displayMangaId = content.id,
+                isPaused = false,
+                isSilent = true,
+                executionChapterIds = longArrayOf(chapter.id),
+                executionChapterRefs = listOf(ExecutionChapterRef.fromChapter(chapter)),
+                destination = null,
+                format = null,
+                allowMeteredNetwork = true,
+                kind = DownloadTaskKind.TRANSLATE,
+                isRetranslation = isRetranslation,
+            )
+            downloadScheduler.schedule(setOf(content to task))
+        }
+    }
     private lateinit var repository: ContentRepository
     private var originalContent: Content? = null  // Store original for online fallback
     private lateinit var readerSettings: NovelReaderSettings
@@ -834,8 +901,21 @@ class NovelReaderActivity :
                         }
 
                         if (state.chaptersSheetVisible) {
+                            val translatedIds by translatedChapterIds.collectAsStateWithLifecycle()
+                            val progress by chapterTranslationProgress.collectAsStateWithLifecycle()
+                            LaunchedEffect(Unit) {
+                                refreshChapterTranslationStates()
+                                chapterTranslationStore.changes.collect {
+                                    refreshChapterTranslationStates()
+                                }
+                            }
                             ComposeNovelChaptersSheet(
                                 chapters = state.chapters,
+                                translatedChapterIds = translatedIds,
+                                translationProgress = progress,
+                                onTranslateChapter = { chapter, isRetranslation ->
+                                    translateChapterFromSheet(chapter, isRetranslation)
+                                },
                                 currentIndex = state.currentChapterIndex,
                                 searchDocuments = state.continuousChapters,
                                 markings = state.novelMarkings,

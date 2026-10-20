@@ -127,6 +127,7 @@ class ReaderViewModel @Inject constructor(
     downloadScheduler: DownloadWorker.Scheduler,
     mangaRepositoryFactory: org.skepsun.kototoro.core.parser.ContentRepository.Factory,
     readerSettingsProducerFactory: ReaderSettings.Producer.Factory,
+    chapterTranslationStore: org.skepsun.kototoro.reader.translate.data.ChapterTranslationStore,
 ) : ChaptersPagesViewModel(
     settings = settings,
     interactor = interactor,
@@ -136,6 +137,7 @@ class ReaderViewModel @Inject constructor(
     deleteLocalContentUseCase = deleteLocalContentUseCase,
     mangaRepositoryFactory = mangaRepositoryFactory,
     localStorageChanges = localStorageChanges,
+    chapterTranslationStore = chapterTranslationStore,
 ) {
     data class TranslationPageTaskSnapshot(
         val pageId: Long,
@@ -1245,6 +1247,7 @@ class ReaderViewModel @Inject constructor(
                 translationStateUpdatedAtByPageId[event.pageId] = System.currentTimeMillis()
                 translationTaskPanelVersion.update { it + 1 }
                 updateCurrentChapterTranslationProgress()
+                persistChapterTranslationProgress()
                 if (event.state == TranslationLayerState.READY) {
                     markPageForReload(event.pageId)
                     rebuildPages()
@@ -1298,6 +1301,21 @@ class ReaderViewModel @Inject constructor(
             totalCount = pages.size,
         )
         chapterTranslationProgress.value = progress.takeIf { it.hasStarted }
+    }
+
+    /**
+     * Mirrors the reader's own page progress into [ChapterTranslationStore] so the chapter list shows a
+     * "translated" badge (or a partial ring) for chapters translated interactively, not only by a job.
+     */
+    private suspend fun persistChapterTranslationProgress() {
+        val progress = chapterTranslationProgress.value ?: return
+        val content = mangaDetails.value?.toContent() ?: return
+        recordChapterTranslationProgress(
+            mangaId = content.id,
+            chapterId = progress.chapterId,
+            donePages = progress.readyCount,
+            totalPages = progress.totalCount,
+        )
     }
 
     @WorkerThread

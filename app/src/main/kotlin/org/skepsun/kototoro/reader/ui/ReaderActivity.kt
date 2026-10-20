@@ -792,6 +792,20 @@ class ReaderActivity :
             updateTranslationToggleButton()
             viewModel.refreshTranslationDisplay()
         }.launchIn(lifecycleScope)
+        // Chapters that the chapter list translated in the background open translated: the layers are
+        // already on disk, so demanding a tap on the translate button only hid a finished result.
+        combine(
+            viewModel.uiState.map { it?.chapter?.id },
+            viewModel.translatedChapterIds,
+        ) { chapterId, translatedIds -> chapterId != null && chapterId in translatedIds }
+            .distinctUntilChanged()
+            .onEach { isTranslatedChapter ->
+                if (isTranslatedChapter && !settings.isReaderTranslationEnabled) {
+                    settings.isReaderTranslationShowTranslated = true
+                    settings.isReaderTranslationEnabled = true
+                }
+            }
+            .launchIn(lifecycleScope)
         settings.observeAsFlow(AppSettings.KEY_EINK_MODE) { isEInkModeEnabled }
             .onEach { enabled ->
                 if (!enabled) eInkRefreshPolicy.reset()

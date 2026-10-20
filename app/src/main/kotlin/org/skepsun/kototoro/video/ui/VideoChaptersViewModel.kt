@@ -31,6 +31,7 @@ import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.DeleteLocalContentUseCase
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.reader.ui.ReaderState
+import org.skepsun.kototoro.reader.translate.data.ChapterTranslationStore
 import org.skepsun.kototoro.video.data.VideoDownloadIndex
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
 import org.skepsun.kototoro.details.ui.model.ChapterListItem.Companion.FLAG_DOWNLOADED
@@ -51,6 +52,7 @@ class VideoChaptersViewModel @Inject constructor(
     private val detailsLoadUseCase: DetailsLoadUseCase,
     private val videoDownloadIndex: VideoDownloadIndex,
     mangaRepositoryFactory: org.skepsun.kototoro.core.parser.ContentRepository.Factory,
+    chapterTranslationStore: ChapterTranslationStore,
 ) : ChaptersPagesViewModel(
     settings = settings,
     interactor = interactor,
@@ -60,6 +62,7 @@ class VideoChaptersViewModel @Inject constructor(
     deleteLocalContentUseCase = deleteLocalContentUseCase,
     mangaRepositoryFactory = mangaRepositoryFactory,
     localStorageChanges = localStorageChanges,
+    chapterTranslationStore = chapterTranslationStore,
 ) {
 
     private val intent = ContentIntent(savedStateHandle)

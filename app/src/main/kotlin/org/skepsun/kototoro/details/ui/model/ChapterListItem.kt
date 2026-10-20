@@ -12,6 +12,11 @@ import kotlin.experimental.and
 data class ChapterListItem(
     val chapter: ContentChapter,
     val flags: Byte,
+    /** A background translation of this chapter already finished for the current language pair. */
+    val isTranslated: Boolean = false,
+    val isTranslationStale: Boolean = false,
+    /** Fraction of the chapter already translated; null when no translation has started. */
+    val translationProgress: Float? = null,
 ) : ListModel {
 
     private var cachedTitle: String? = null
@@ -97,6 +102,15 @@ data class ChapterListItem(
         }
         return if (chapter == previousState.chapter && flags != previousState.flags) {
             flags
+        } else if (
+            chapter == previousState.chapter &&
+            (
+                isTranslated != previousState.isTranslated ||
+                    isTranslationStale != previousState.isTranslationStale ||
+                    translationProgress != previousState.translationProgress
+                )
+        ) {
+            isTranslated
         } else {
             super.getChangePayload(previousState)
         }

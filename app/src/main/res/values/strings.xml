@@ -87,6 +87,12 @@
     <string name="processing_">Processing…</string>
     <string name="download_complete">Downloaded</string>
     <string name="translation_prepared">Translation prepared</string>
+    <string name="translate_chapter">Translate chapter</string>
+    <string name="translate">Translate</string>
+    <string name="translate_chapter_again">Translate again</string>
+    <string name="translate_chapter_again_summary">This chapter is already translated. Translating again replaces the saved translation for the current settings.</string>
+    <string name="cancel_translation">Cancel translation</string>
+    <string name="translation_cancelled">Translation cancelled</string>
     <string name="super_resolution_prepared">Super resolution prepared</string>
     <string name="downloads">Downloads</string>
     <string name="by_name">Name</string>

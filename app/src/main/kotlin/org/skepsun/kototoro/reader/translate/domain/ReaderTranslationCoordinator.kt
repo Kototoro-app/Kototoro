@@ -85,6 +85,8 @@ internal class ReaderTranslationCoordinator(
         targetLang: String,
         glossary: List<DictPair> = emptyList(),
         onDiscoveredPairs: suspend (List<DictPair>) -> Unit = {},
+        batchLimit: Int = maxOpenAiBatchSize,
+        charBudgetPerBatch: Int = Int.MAX_VALUE,
     ): Map<String, String> {
         if (texts.isEmpty()) return emptyMap()
         val uniqueTexts = texts.distinct()
@@ -232,6 +234,8 @@ internal class ReaderTranslationCoordinator(
                     targetLang = targetLang,
                     glossary = glossary,
                     cacheSuffix = glossarySignature,
+                    batchLimit = batchLimit,
+                    charBudgetPerBatch = charBudgetPerBatch,
                 )
                 if (apiResult.discoveredPairs.isNotEmpty()) {
                     onDiscoveredPairs(apiResult.discoveredPairs)
@@ -330,6 +334,8 @@ internal class ReaderTranslationCoordinator(
         targetLang: String,
         glossary: List<DictPair>,
         cacheSuffix: String,
+        batchLimit: Int,
+        charBudgetPerBatch: Int,
     ): ApiBatchResult {
         val endpoint = resolveTranslationApiEndpoint()
         if (endpoint.isBlank() || texts.isEmpty()) {
@@ -337,7 +343,7 @@ internal class ReaderTranslationCoordinator(
         }
 
         return if (isOpenAiCompatibleChatCompletionsEndpoint(endpoint)) {
-            translateBatchByOpenAi(texts, sourceLang, targetLang, glossary)
+            translateBatchByOpenAi(texts, sourceLang, targetLang, glossary, batchLimit, charBudgetPerBatch)
         } else {
             val map = LinkedHashMap<String, String>(texts.size)
             for (text in texts) {
@@ -352,11 +358,13 @@ internal class ReaderTranslationCoordinator(
         sourceLang: String,
         targetLang: String,
         glossary: List<DictPair>,
+        batchLimit: Int,
+        charBudgetPerBatch: Int,
     ): ApiBatchResult {
         if (texts.isEmpty()) return ApiBatchResult(emptyMap())
         val mapped = LinkedHashMap<String, String>(texts.size)
         val discoveredPairs = mutableListOf<DictPair>()
-        val batches = buildOpenAiMicroBatches(texts)
+        val batches = buildOpenAiMicroBatches(texts, batchLimit, charBudgetPerBatch)
         log { "openai batch requests count=${batches.size} texts=${texts.size}" }
         for (batch in batches) {
             if (batch.size == 1) {
@@ -848,16 +856,28 @@ internal class ReaderTranslationCoordinator(
         return normalized.contains("api.deepseek.com")
     }
 
-    private fun buildOpenAiMicroBatches(texts: List<String>): List<List<String>> {
+    private fun buildOpenAiMicroBatches(
+        texts: List<String>,
+        maxBatchSize: Int = maxOpenAiBatchSize,
+        charBudgetPerBatch: Int = Int.MAX_VALUE,
+    ): List<List<String>> {
+        val effectiveMaxBatchSize = maxBatchSize.coerceAtLeast(1)
         if (texts.isEmpty()) return emptyList()
-        if (texts.size <= maxOpenAiBatchSize) return listOf(texts)
+        // Reader-time translation keeps its historical single-request fast path; chapter-scoped
+        // translation always runs the batching rules so noisy/long lines stay isolated.
+        val isHistoricalScope = maxBatchSize == maxOpenAiBatchSize && charBudgetPerBatch == Int.MAX_VALUE
+        if (isHistoricalScope && texts.size <= effectiveMaxBatchSize) {
+            return listOf(texts)
+        }
         val result = mutableListOf<List<String>>()
         val current = mutableListOf<String>()
+        var currentChars = 0
 
         fun flush() {
             if (current.isNotEmpty()) {
                 result += current.toList()
                 current.clear()
+                currentChars = 0
             }
         }
 
@@ -873,12 +893,18 @@ internal class ReaderTranslationCoordinator(
             }
             if (current.isNotEmpty()) {
                 val hasShortSfxLike = current.any { it.length <= 10 && it.count { ch -> ch.isJapaneseKana() } >= 2 }
-                if ((shortSfxLike && !hasShortSfxLike && current.size >= 2) || current.size >= maxOpenAiBatchSize) {
+                val wouldOverflowChars = currentChars + text.length > charBudgetPerBatch
+                if (
+                    (shortSfxLike && !hasShortSfxLike && current.size >= 2) ||
+                    current.size >= effectiveMaxBatchSize ||
+                    wouldOverflowChars
+                ) {
                     flush()
                 }
             }
             current += text
-            if (current.size >= maxOpenAiBatchSize) {
+            currentChars += text.length
+            if (current.size >= effectiveMaxBatchSize) {
                 flush()
             }
         }

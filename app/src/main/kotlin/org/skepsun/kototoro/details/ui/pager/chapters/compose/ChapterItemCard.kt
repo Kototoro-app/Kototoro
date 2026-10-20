@@ -2,6 +2,7 @@ package org.skepsun.kototoro.details.ui.pager.chapters.compose
 
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +31,8 @@ fun ChapterListCard(
     modifier: Modifier = Modifier,
     /** Shows a download button at the end of the row; null hides it. */
     onDownload: (() -> Unit)? = null,
+    /** Shows a translate button at the end of the row; null hides it. */
+    onTranslate: (() -> Unit)? = null,
 ) = SharedChapterListCard(
     item = item.cardData(),
     isSelected = isSelected,
@@ -38,17 +41,43 @@ fun ChapterListCard(
     focusRequester = focusRequester,
     modifier = modifier,
     focusModifier = Modifier.tvFocusable(shape = RoundedCornerShape(8.dp), borderWidth = 2.dp, addFocusTarget = false),
-    actions = onDownload?.let { download ->
+    actions = if (onDownload != null || onTranslate != null) {
         {
-            IconButton(onClick = download, modifier = Modifier.size(40.dp)) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_download),
-                    contentDescription = stringResource(R.string.download),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp),
-                )
+            onTranslate?.let { translate ->
+                IconButton(onClick = translate, modifier = Modifier.size(40.dp)) {
+                    val progress = item.translationProgress
+                    if (progress != null && !item.isTranslated) {
+                        // A translation is in flight (or a chapter was left half translated): show how far it got.
+                        CircularProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_translate),
+                            contentDescription = stringResource(R.string.translate_chapter),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+            }
+            onDownload?.let { download ->
+                IconButton(onClick = download, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_download),
+                        contentDescription = stringResource(R.string.download),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
             }
         }
+    } else {
+        null
     },
 )
 
@@ -79,4 +108,5 @@ private fun ChapterListItem.cardData() = ChapterCardData(
     isBookmarked = isBookmarked,
     isDownloaded = isDownloaded,
     isNew = isNew,
+    isTranslated = isTranslated,
 )
