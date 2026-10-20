@@ -45,6 +45,7 @@ class IosLibrary {
     val statistics by lazy { IosStatistics(this) }
     val recovery by lazy { IosLibraryRecovery(this) }
     val googleDriveSync by lazy { IosGoogleDriveSync(this) }
+    val suggestions by lazy { IosSuggestions(this) }
 
     /** Sources of the current catalog; works of other sources cannot be opened or refreshed here. */
     internal val knownSources: Set<String> get() = sourceRefs.load().keys

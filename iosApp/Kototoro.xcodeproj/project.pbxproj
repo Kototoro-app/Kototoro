@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        AD7400000000000000000005 /* TrackingRecommendationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7400000000000000000006 /* TrackingRecommendationsView.swift */; };
+        AD7400000000000000000003 /* SuggestionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7400000000000000000004 /* SuggestionsTests.swift */; };
+        AD7400000000000000000001 /* SuggestionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7400000000000000000002 /* SuggestionsView.swift */; };
 		C7A000000000000000000001 /* ReaderStripZoomSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A000000000000000000004 /* ReaderStripZoomSession.swift */; };
 		C7A000000000000000000002 /* ReaderStripZoomSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A000000000000000000004 /* ReaderStripZoomSession.swift */; };
 		C7A000000000000000000003 /* ReaderStripZoomSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A000000000000000000005 /* ReaderStripZoomSessionTests.swift */; };
@@ -120,6 +123,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+        AD7400000000000000000006 /* TrackingRecommendationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingRecommendationsView.swift; sourceTree = "<group>"; };
+        AD7400000000000000000004 /* SuggestionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionsTests.swift; sourceTree = "<group>"; };
+        AD7400000000000000000002 /* SuggestionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionsView.swift; sourceTree = "<group>"; };
 		C7A000000000000000000004 /* ReaderStripZoomSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderStripZoomSession.swift; sourceTree = "<group>"; };
 		C7A000000000000000000005 /* ReaderStripZoomSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderStripZoomSessionTests.swift; sourceTree = "<group>"; };
 		BE0000000000000000000011 /* GoogleDriveAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveAuth.swift; sourceTree = "<group>"; };
@@ -269,6 +275,8 @@
 				FB0000000000000000000008 /* SourceWebBrowser.swift */,
 				FB0000000000000000000007 /* SourceSettingsView.swift */,
                 AC0000000000000000000002 /* TrackingSitesView.swift */,
+                AD7400000000000000000002 /* SuggestionsView.swift */,
+                AD7400000000000000000006 /* TrackingRecommendationsView.swift */,
                 AD7100000000000000000002 /* TrackingAccounts.swift */,
 				FB0000000000000000000004 /* ReaderPageTurn.swift */,
 				FB00000000000000000000F7 /* ReaderStrip.swift */,
@@ -318,6 +326,7 @@
 				F80000000000000000000004 /* BackupFlowTests.swift */,
 				F80000000000000000000021 /* LocalImportTests.swift */,
                 AD7100000000000000000004 /* TrackingSitesTests.swift */,
+                AD7400000000000000000004 /* SuggestionsTests.swift */,
 				AD0000000000000000000005 /* DetailsChapterPreviewTests.swift */,
 				B10000000000000000000004 /* BatchSelectionTests.swift */,
 				B21000000000000000000012 /* LibraryCollectionIndexTests.swift */,
@@ -499,6 +508,8 @@
 				FA0000000000000000000008 /* SourceWebBrowser.swift in Sources */,
 				FA0000000000000000000007 /* SourceSettingsView.swift in Sources */,
                 AC0000000000000000000001 /* TrackingSitesView.swift in Sources */,
+                AD7400000000000000000001 /* SuggestionsView.swift in Sources */,
+                AD7400000000000000000005 /* TrackingRecommendationsView.swift in Sources */,
                 AD7100000000000000000001 /* TrackingAccounts.swift in Sources */,
 				FA0000000000000000000005 /* ReaderPageTurn.swift in Sources */,
 				FA00000000000000000000F7 /* ReaderStrip.swift in Sources */,
@@ -560,6 +571,7 @@
 				F80000000000000000000003 /* BackupFlowTests.swift in Sources */,
 				F80000000000000000000020 /* LocalImportTests.swift in Sources */,
                 AD7100000000000000000003 /* TrackingSitesTests.swift in Sources */,
+                AD7400000000000000000003 /* SuggestionsTests.swift in Sources */,
 				AD0000000000000000000002 /* DetailsChapterPreview.swift in Sources */,
 				AD0000000000000000000003 /* DetailsChapterPreviewTests.swift in Sources */,
 				F40000000000000000000003 /* ExtensionPresentation.swift in Sources */,

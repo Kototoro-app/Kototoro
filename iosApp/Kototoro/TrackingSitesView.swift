@@ -1,13 +1,26 @@
 import KototoroShared
 import SwiftUI
 
+/// Capture the selected item and service once so parent refreshes do not replace an open preview's navigation.
+struct TrackingPreviewSelection: Identifiable {
+    let item: IosTrackingItem
+    let tracking: IosTracking
+    var id: String { item.key }
+}
+
 /// Public catalog search and the metadata authority of a source work share the same picker.
 struct TrackingSitesView: View {
     @EnvironmentObject private var library: LibraryModel
     @Environment(\.dismiss) private var dismiss
     var content: IosSourceContent? = nil
     var initialMediaKind = "MANGA"
+    var initialService: Int? = nil
+    var initialCategory: String? = nil
+    var initialWeekday: Int? = nil
+    var followsSpace = false
     var onChange: () -> Void = {}
+    @AppStorage(ContentSpace.key) private var space = ""
+    @AppStorage(ContentSpace.enabledKey) private var spacesEnabled = true
     @AppStorage("tracking.preferredSite") private var service = 5
     @AppStorage("tracking.bangumi.apiBase") private var bangumiApiBase = "https://api.bgm.tv"
     @State private var mediaKind = "MANGA"
@@ -17,7 +30,7 @@ struct TrackingSitesView: View {
     @State private var results: [IosTrackingItem] = []
     @State private var bindings: [IosTrackingItem] = []
     @State private var selectedKey: String?
-    @State private var preview: IosTrackingItem?
+    @State private var preview: TrackingPreviewSelection?
     @State private var loading = false
     @State private var mutating = false
     @State private var usingKey: String?
@@ -26,13 +39,21 @@ struct TrackingSitesView: View {
     @State private var hasMore = false
     @State private var request: UUID?
     @State private var section = "discover"
-    @State private var popular = true
+    @State private var category = "popular"
+    @State private var weekday = 0
     @State private var videoType = "anime"
 
-    private var searchIdentity: String { "\(service)|\(mediaKind)|\(submittedQuery)|\(popular)|\(section)|\(videoType)|\(bangumiApiBase)" }
+    private var searchIdentity: String {
+        "\(service)|\(mediaKind)|\(submittedQuery)|\(effectiveCategory)|" +
+            "\(TrackingScheduleWindow(weekday: weekday).start)|\(section)|\(videoType)|\(bangumiApiBase)"
+    }
     private var availableSites: [IosTrackingSite] {
         library.library?.tracking.sites.filter { $0.supports(mediaKind: mediaKind) } ?? []
     }
+    private var catalogSections: [IosTrackingSection] {
+        library.library?.tracking.recommendationSections(service: Int32(service), mediaKind: mediaKind) ?? []
+    }
+    private var effectiveCategory: String { catalogSections.contains { $0.id == category } ? category : "popular" }
 
     var body: some View {
         List {
@@ -49,7 +70,7 @@ struct TrackingSitesView: View {
                 TrackingAccountRows(model: library.trackingAccounts, sites: library.library?.tracking.sites ?? [])
             } else {
                 Section {
-                    if content == nil {
+                    if content == nil && !(followsSpace && spacesEnabled && !space.isEmpty) {
                         Picker("作品类型", selection: $mediaKind) {
                             Text("漫画").tag("MANGA")
                             Text("小说").tag("NOVEL")
@@ -73,7 +94,7 @@ struct TrackingSitesView: View {
                         }.padding(.vertical, 3)
                     }
                     .scrollIndicators(.hidden)
-                    if service == 7 {
+                    if service == 7 && (!effectiveCategory.hasPrefix("calendar") || !submittedQuery.isEmpty) {
                         Picker("影视类型", selection: $videoType) {
                             Text("动画").tag("anime")
                             Text("剧集").tag("tv")
@@ -90,11 +111,21 @@ struct TrackingSitesView: View {
                             .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                             .accessibilityIdentifier("tracking.search")
                     }
-                    if submittedQuery.isEmpty && service != 7 {
-                        Picker("榜单", selection: $popular) {
-                            Text("热门作品").tag(true)
-                            Text("高分作品").tag(false)
+                    if submittedQuery.isEmpty {
+                        Picker("榜单", selection: Binding(get: { effectiveCategory }, set: { category = $0 })) {
+                            ForEach(catalogSections, id: \.id) { Text($0.title).tag($0.id) }
                         }.pickerStyle(.segmented).accessibilityIdentifier("tracking.ranking")
+                        if effectiveCategory.hasPrefix("calendar") {
+                            Picker("放送日", selection: $weekday) {
+                                ForEach(1...7, id: \.self) { Text(TrackingRecommendationsView.weekdayTitle($0)).tag($0) }
+                            }.accessibilityIdentifier("tracking.weekday")
+                            if service != 5 {
+                                Text(TrackingScheduleWindow(weekday: weekday).date,
+                                     format: .dateTime.year().month().day())
+                                    .font(.caption).foregroundStyle(.secondary)
+                                Text("按本地时区查看本周排期").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
                     } else if !submittedQuery.isEmpty {
                         Button("清除搜索，浏览榜单", systemImage: "xmark.circle") {
                             query = ""; submittedQuery = ""
@@ -117,7 +148,11 @@ struct TrackingSitesView: View {
                 Section {
                     ForEach(results, id: \.key) { item in
                         HStack(spacing: 10) {
-                            Button { preview = item } label: { TrackingItemRow(item: item) }
+                            Button {
+                                if let tracking = library.library?.tracking {
+                                    preview = TrackingPreviewSelection(item: item, tracking: tracking)
+                                }
+                            } label: { TrackingItemRow(item: item) }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("tracking.result.\(item.remoteId)")
                             if let content, item.mediaKind == content.mediaKind {
@@ -143,7 +178,7 @@ struct TrackingSitesView: View {
                 }
                 if content == nil {
                     Section {
-                        Text("点开作品可查看介绍，再关联到作品库中的作品，使用网站资料或开启进度追踪。")
+                        Text("点开作品可查看介绍，通过全局搜索或作品库选择对应作品，再使用网站资料或开启进度追踪。")
                     }
                     .font(.footnote).foregroundStyle(.secondary)
                 }
@@ -160,7 +195,11 @@ struct TrackingSitesView: View {
         .refreshable { await search(reset: true); await loadBindings() }
         .task {
             guard let tracking = library.library?.tracking else { return }
-            mediaKind = content?.mediaKind ?? initialMediaKind
+            mediaKind = content?.mediaKind ??
+                (followsSpace && spacesEnabled && !space.isEmpty ? space : initialMediaKind)
+            if let initialService { service = initialService }
+            category = initialCategory ?? "popular"
+            weekday = initialWeekday ?? (Calendar.current.component(.weekday, from: Date()) + 5) % 7 + 1
             ensureSite()
             await loadBindings()
             if let content {
@@ -170,13 +209,17 @@ struct TrackingSitesView: View {
             await library.trackingAccounts.prepare(tracking)
         }
         .onChange(of: mediaKind) { _, _ in ensureSite() }
+        .onChange(of: effectiveCategory) { _, value in
+            if service == 7 && value.hasPrefix("calendar") { videoType = value == "calendar_tv" ? "tv" : "anime" }
+        }
+        .onChange(of: space) { _, kind in
+            if followsSpace && spacesEnabled && !kind.isEmpty { mediaKind = kind }
+        }
         .task(id: searchIdentity) { await search(reset: true) }
-        .sheet(isPresented: Binding(get: { preview != nil }, set: { if !$0 { preview = nil } })) {
-            if let item = preview, let tracking = library.library?.tracking {
-                TrackingItemPreview(item: item, mediaKind: mediaKind, tracking: tracking, content: content,
+        .sheet(item: $preview, onDismiss: { Task { await library.refresh() } }) { selection in
+                TrackingItemPreview(item: selection.item, tracking: selection.tracking, content: content,
                     onBound: { Task { await loadBindings(); await library.refresh(); onChange() } },
                     onTracked: { Task { await loadBindings(); await library.refresh() } })
-            }
         }
     }
 
@@ -248,10 +291,13 @@ struct TrackingSitesView: View {
         defer { if request == token { loading = false } }
         do {
             let items: [IosTrackingItem]
-            if service == 7 {
+            if service == 7 && (!submittedQuery.isEmpty || !effectiveCategory.hasPrefix("calendar")) {
                 items = try await tracking.videos(query: submittedQuery, remoteType: videoType, page: next)
             } else if submittedQuery.isEmpty {
-                items = try await tracking.browse(service: Int32(service), mediaKind: mediaKind, popular: popular, page: next)
+                let window = TrackingScheduleWindow(weekday: weekday)
+                items = try await tracking.recommendations(service: Int32(service), mediaKind: mediaKind,
+                    category: effectiveCategory, weekday: Int32(weekday), page: next,
+                    dayStart: window.start, dayEnd: window.end)
             } else {
                 items = try await tracking.search(service: Int32(service), query: submittedQuery, mediaKind: mediaKind, page: next)
             }
@@ -259,7 +305,8 @@ struct TrackingSitesView: View {
             var keys = Set(results.map(\.key))
             results += items.filter { keys.insert($0.key).inserted }
             page = next
-            hasMore = items.count >= Int(availableSites.first(where: { Int($0.id) == service })?.pageSize ?? 20)
+            hasMore = !(submittedQuery.isEmpty && effectiveCategory.hasPrefix("calendar")) &&
+                items.count >= Int(availableSites.first(where: { Int($0.id) == service })?.pageSize ?? 20)
         } catch {
             if !Task.isCancelled, request == token, identity == searchIdentity {
                 self.error = error.localizedDescription
@@ -324,9 +371,69 @@ private struct TrackingItemRow: View {
     }
 }
 
+private struct TrackingArtwork: View {
+    let url: String?
+
+    var body: some View {
+        AsyncImage(url: url.flatMap(URL.init(string:))) { image in image.resizable().scaledToFill() } placeholder: {
+            Rectangle().fill(Color.gray.opacity(0.3)).overlay { Image(systemName: "book.closed").foregroundStyle(.secondary) }
+        }
+    }
+}
+
+private struct TrackingPreviewHero: View {
+    let item: IosTrackingItem
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 18) {
+            TrackingArtwork(url: item.coverUrl).frame(width: 104, height: 156)
+                .clipShape(.rect(cornerRadius: 12)).shadow(color: .black.opacity(0.3), radius: 12, y: 6)
+            VStack(alignment: .leading, spacing: 10) {
+                if let url = URL(string: item.url) {
+                    Link(destination: url) {
+                        Label(item.siteTitle, systemImage: "arrow.up.right")
+                            .font(.caption.weight(.semibold)).padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(.white.opacity(0.16), in: .capsule)
+                    }.foregroundStyle(.white.opacity(0.9))
+                }
+                Text(item.title).font(.title3.bold()).lineLimit(4).textSelection(.enabled)
+                    .accessibilityIdentifier("tracking.preview.title")
+                HStack(spacing: 8) {
+                    Text(ContentSpace.title(item.mediaKind))
+                    if let year = item.year { Text(String(year.intValue)) }
+                }.font(.caption).foregroundStyle(.white.opacity(0.75))
+                if let score = item.score, item.scoreMax > 0 {
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        Image(systemName: "star.fill").font(.caption).foregroundStyle(.yellow)
+                        Text(String(format: "%.1f", score.floatValue / item.scoreMax * 10))
+                            .font(.title3.bold().monospacedDigit())
+                        Text("/ 10").font(.caption).foregroundStyle(.white.opacity(0.65))
+                    }
+                }
+                if let total = item.totalChapters, total.intValue > 0 {
+                    Text(item.mediaKind == "VIDEO" ? String(localized: "共 \(total.intValue) 集") :
+                        String(localized: "共 \(total.intValue) 章"))
+                        .font(.caption).foregroundStyle(.white.opacity(0.75))
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(20).frame(maxWidth: .infinity, minHeight: 216, alignment: .leading)
+        .foregroundStyle(.white)
+        .background {
+            GeometryReader { geometry in
+                TrackingArtwork(url: item.coverUrl).frame(width: geometry.size.width, height: geometry.size.height)
+                    .blur(radius: 24).overlay(Color.black.opacity(0.65))
+            }
+        }
+        .background(Color(.secondarySystemBackground))
+        .clipShape(.rect(cornerRadius: 22))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("tracking.preview.hero")
+    }
+}
+
 struct TrackingItemPreview: View {
     let item: IosTrackingItem
-    let mediaKind: String
     let tracking: IosTracking
     let content: IosSourceContent?
     let onBound: () -> Void
@@ -337,57 +444,61 @@ struct TrackingItemPreview: View {
     @State private var loading = true
     @State private var saving = false
     @EnvironmentObject private var library: LibraryModel
+    @EnvironmentObject private var sources: SourcesModel
     @State private var choosingWork = false
+    @State private var searchingWork = false
+    @State private var sourceQuery = ""
     @State private var chosenWork: IosSourceContent?
     @State private var supplement: IosTrackingSupplement?
     @State private var supplementError: String?
-    @State private var relatedPreview: IosTrackingItem?
+    @State private var relatedPreview: TrackingPreviewSelection?
+    @State private var expandedSummary = false
+    @State private var openingWork = false
+    @State private var bound = false
     private var target: IosSourceContent? { content ?? chosenWork }
+    private var displayed: IosTrackingItem { details ?? item }
 
     var body: some View {
         NavigationStack {
             List {
-                TrackingItemRow(item: details ?? item)
+                Section {
+                    TrackingPreviewHero(item: displayed)
+                        .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
+                }
                 if loading { ProgressView("正在读取详情…") }
                 if let error {
                     Text(error).foregroundStyle(.red)
                     if details == nil { Button("重试") { Task { await load() } } }
                 }
+                association
                 if let details {
-                    if let score = details.score {
-                        LabeledContent("评分", value: String(format: "%.1f / %.0f", score.floatValue, details.scoreMax))
-                    }
-                    if !details.authors.isEmpty { LabeledContent("作者", value: details.authors.joined(separator: "、")) }
-                    if !details.tags.isEmpty { Text(details.tags.joined(separator: " · ")).font(.subheadline) }
-                    if let summary = details.summary { Text(summary).textSelection(.enabled) }
-                    if let url = URL(string: details.url) { Link("在网站查看", destination: url) }
-                    if let content = target, content.mediaKind == details.mediaKind {
-                        Section("关联到本地作品") {
-                            Text(content.title).font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        Button(saving ? "正在绑定…" : "绑定并使用此作品的信息") {
-                            Task {
-                                saving = true; error = nil
-                                defer { saving = false }
-                                do {
-                                    try await tracking.bind(content: content, item: details)
-                                    onBound(); dismiss()
-                                } catch { self.error = error.localizedDescription }
+                    if let summary = details.summary, !summary.isEmpty {
+                        Section("简介") {
+                            Text(summary).font(.body).lineSpacing(5)
+                                .lineLimit(expandedSummary ? nil : 6).textSelection(.enabled)
+                            if summary.count > 100 || summary.components(separatedBy: .newlines).count > 4 {
+                                Button(expandedSummary ? "收起简介" : "展开简介") { expandedSummary.toggle() }
+                                    .font(.subheadline).accessibilityIdentifier("tracking.summary.expand")
                             }
                         }
-                        .disabled(saving)
-                        .accessibilityIdentifier("tracking.bind")
-                        NavigationLink {
-                            TrackingProgressView(content: content, item: details, tracking: tracking, model: library.trackingAccounts, onSaved: onTracked)
-                        } label: { Label("管理追踪进度", systemImage: "chart.line.uptrend.xyaxis") }
-                            .disabled(saving)
-                            .accessibilityIdentifier("tracking.track")
-                    } else if target == nil {
-                        Button("关联作品库中的作品", systemImage: "link.badge.plus") { choosingWork = true }
-                            .accessibilityIdentifier("tracking.chooseLocalWork")
-                    } else {
-                        Text("作品类型不同，请选择相同类型的条目。")
-                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if !details.authors.isEmpty || !details.tags.isEmpty || !details.alternateTitles.isEmpty {
+                        Section("作品信息") {
+                            if !details.alternateTitles.isEmpty {
+                                LabeledContent("其他名称", value: details.alternateTitles.joined(separator: "\n"))
+                            }
+                            if !details.authors.isEmpty {
+                                LabeledContent("作者 / 制作", value: details.authors.joined(separator: "、"))
+                            }
+                            if !details.tags.isEmpty {
+                                FlowLayout(spacing: 8) {
+                                    ForEach(Array(details.tags.prefix(12).enumerated()), id: \.offset) { _, tag in
+                                        Text(tag).font(.caption).padding(.horizontal, 10).padding(.vertical, 6)
+                                            .background(.quaternary, in: .capsule)
+                                    }
+                                }.padding(.vertical, 4)
+                            }
+                        }.font(.subheadline)
                     }
                     if let supplement {
                         people(supplement.characters, title: String(localized: "角色与声优"))
@@ -409,20 +520,100 @@ struct TrackingItemPreview: View {
             .interactiveDismissDisabled(saving)
             .task { await load() }
             .task { await loadSupplement() }
-            .sheet(isPresented: Binding(get: { relatedPreview != nil }, set: { if !$0 { relatedPreview = nil } })) {
-                if let relatedPreview {
-                    TrackingItemPreview(item: relatedPreview, mediaKind: relatedPreview.mediaKind, tracking: tracking,
-                                        content: nil, onBound: onBound, onTracked: onTracked)
+            .navigationDestination(isPresented: $openingWork) {
+                if let target, let runtime = sources.runtime {
+                    SourceDetailsView(runtime: runtime, content: target)
                 }
+            }
+            .sheet(item: $relatedPreview) { selection in
+                TrackingItemPreview(item: selection.item, tracking: selection.tracking,
+                                    content: nil, onBound: onBound, onTracked: onTracked)
             }
             .sheet(isPresented: $choosingWork) {
                 NavigationStack {
                     TrackingLocalWorkPicker(mediaKind: (details ?? item).mediaKind) {
-                        chosenWork = $0; choosingWork = false
+                        chosenWork = $0; bound = false; choosingWork = false
                     }
                 }
             }
+            .navigationDestination(isPresented: $searchingWork) {
+                GlobalSearchView(query: $sourceQuery, selectionMediaKind: (details ?? item).mediaKind) {
+                    chosenWork = $0
+                    bound = false
+                    searchingWork = false
+                }
+            }
         }
+    }
+
+    private var association: some View {
+        Section {
+            if let target, target.mediaKind == displayed.mediaKind {
+                HStack(spacing: 12) {
+                    if let runtime = sources.runtime {
+                        CoverImage(runtime: runtime, content: target).frame(width: 42, height: 62)
+                            .clipShape(.rect(cornerRadius: 6))
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(target.title).font(.headline).lineLimit(2)
+                        Text(sources.sources.first { $0.name == target.sourceName }?.title ?? target.sourceName)
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }.accessibilityIdentifier("tracking.chosenWork")
+                Button {
+                    Task { await bind(target) }
+                } label: {
+                    HStack {
+                        if saving { ProgressView() }
+                        Label(bound ? "已关联此作品" : "绑定并使用此作品的信息",
+                              systemImage: bound ? "checkmark.circle.fill" : "link")
+                    }.frame(maxWidth: .infinity).padding(.vertical, 5)
+                }
+                .buttonStyle(.borderedProminent).disabled(saving || loading || details == nil || bound)
+                .accessibilityIdentifier("tracking.bind")
+                if content == nil {
+                    Button("重新选择作品", systemImage: "arrow.triangle.2.circlepath") {
+                        if sourceQuery.isEmpty { sourceQuery = displayed.title }
+                        searchingWork = true
+                    }.disabled(saving)
+                }
+                NavigationLink {
+                    TrackingProgressView(content: target, item: displayed, tracking: tracking,
+                        model: library.trackingAccounts, onSaved: onTracked)
+                } label: { Label("管理追踪进度", systemImage: "chart.line.uptrend.xyaxis") }
+                    .disabled(saving || loading || details == nil).accessibilityIdentifier("tracking.track")
+            } else if target == nil {
+                Button {
+                    sourceQuery = displayed.title
+                    searchingWork = true
+                } label: {
+                    Label("搜索作品并关联", systemImage: "magnifyingglass")
+                        .frame(maxWidth: .infinity).padding(.vertical, 5)
+                }.buttonStyle(.borderedProminent).accessibilityIdentifier("tracking.searchWork")
+                Button("关联作品库中的作品", systemImage: "books.vertical") { choosingWork = true }
+                    .accessibilityIdentifier("tracking.chooseLocalWork")
+            } else {
+                Text("作品类型不同，请选择相同类型的条目。").font(.caption).foregroundStyle(.secondary)
+            }
+        } header: { Text(target == nil ? "找到可阅读或播放的作品" : "关联到本地作品") }
+          footer: { Text("关联后使用网站封面与简介；账号进度同步可在关联后单独开启。") }
+    }
+
+    @MainActor private func bind(_ target: IosSourceContent) async {
+        guard let details else { return }
+        saving = true; error = nil
+        defer { saving = false }
+        do {
+            try await tracking.bind(content: target, item: details)
+            bound = true
+            if content == nil && sources.runtime != nil {
+                // Refresh the parent after dismissal; publishing while pushing can replace the preview's state.
+                openingWork = true
+            } else {
+                onBound()
+                dismiss()
+            }
+        } catch { self.error = error.localizedDescription }
     }
 
     @ViewBuilder private func people(_ values: [IosTrackingPerson], title: String) -> some View {
@@ -454,7 +645,7 @@ struct TrackingItemPreview: View {
         if !values.isEmpty {
             Section(title) {
                 ForEach(Array(values.enumerated()), id: \.offset) { _, entry in
-                    Button { relatedPreview = entry.item } label: {
+                    Button { relatedPreview = TrackingPreviewSelection(item: entry.item, tracking: tracking) } label: {
                         VStack(alignment: .leading, spacing: 3) {
                             TrackingItemRow(item: entry.item)
                             if !entry.relation.isEmpty { Text(entry.relation).font(.caption).foregroundStyle(.secondary) }
@@ -477,7 +668,7 @@ struct TrackingItemPreview: View {
         loading = true; error = nil
         defer { loading = false }
         do {
-            let result = try await tracking.details(item: item, mediaKind: mediaKind)
+            let result = try await tracking.details(item: item, mediaKind: item.mediaKind)
             if !Task.isCancelled { details = result }
         } catch { if !Task.isCancelled { self.error = error.localizedDescription } }
     }

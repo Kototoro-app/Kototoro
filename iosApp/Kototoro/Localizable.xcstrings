@@ -1032,6 +1032,16 @@
         }
       }
     },
+    "不推荐": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exclude"
+          }
+        }
+      }
+    },
     "不支持 ZIP64 备份": {
       "extractionState": "manual",
       "localizations": {
@@ -1090,6 +1100,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Strict"
+          }
+        }
+      }
+    },
+    "为你推荐": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For You"
           }
         }
       }
@@ -1211,6 +1231,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Popularity (ascending)"
+          }
+        }
+      }
+    },
+    "仅从已启用的在线来源生成推荐，并均衡不同来源的作品数量。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommendations use enabled online sources and balance the number of works from each source."
           }
         }
       }
@@ -1556,6 +1586,16 @@
         }
       }
     },
+    "优先推荐": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prefer"
+          }
+        }
+      }
+    },
     "作品": {
       "localizations": {
         "en": {
@@ -1758,6 +1798,16 @@
         }
       }
     },
+    "使用来源中的标签名称，多个标签以英文逗号分隔。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use the tag names from your sources, separated by commas."
+          }
+        }
+      }
+    },
     "使用此接口": {
       "localizations": {
         "en": {
@@ -1879,6 +1929,16 @@
         }
       }
     },
+    "偏好标签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preferred tags"
+          }
+        }
+      }
+    },
     "停止后保留网站列表与本地作品资料，不再自动同步此作品。": {
       "localizations": {
         "en": {
@@ -1995,6 +2055,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Open or favorite the work from a source first, then choose the matching site entry."
+          }
+        }
+      }
+    },
+    "先告诉我们你喜欢什么": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tell us what you enjoy"
           }
         }
       }
@@ -2530,6 +2600,16 @@
         }
       }
     },
+    "分区": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Section"
+          }
+        }
+      }
+    },
     "分支": {
       "localizations": {
         "en": {
@@ -2607,6 +2687,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Switch content space, or adjust source types in the display menu."
+          }
+        }
+      }
+    },
+    "切换推荐内容": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch recommendation feed"
           }
         }
       }
@@ -2907,6 +2997,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Episodes"
+          }
+        }
+      }
+    },
+    "加入收藏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to favourites"
           }
         }
       }
@@ -3658,6 +3758,76 @@
           "stringUnit": {
             "state": "translated",
             "value": "Back 10 seconds"
+          }
+        }
+      }
+    },
+    "周一": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mon"
+          }
+        }
+      }
+    },
+    "周三": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wed"
+          }
+        }
+      }
+    },
+    "周二": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tue"
+          }
+        }
+      }
+    },
+    "周五": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fri"
+          }
+        }
+      }
+    },
+    "周六": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sat"
+          }
+        }
+      }
+    },
+    "周四": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thu"
+          }
+        }
+      }
+    },
+    "周日": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sun"
           }
         }
       }
@@ -4657,6 +4827,16 @@
         }
       }
     },
+    "展开推荐": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expand recommendations"
+          }
+        }
+      }
+    },
     "展开详细统计": {
       "localizations": {
         "en": {
@@ -5477,6 +5657,16 @@
         }
       }
     },
+    "开启推荐": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable recommendations"
+          }
+        }
+      }
+    },
     "开始播放": {
       "localizations": {
         "en": {
@@ -5544,6 +5734,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "This build doesn't include the extension runtime, so extensions can't be installed"
+          }
+        }
+      }
+    },
+    "当前空间暂无推荐作品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No recommendations in this space"
           }
         }
       }
@@ -6323,6 +6523,26 @@
         }
       }
     },
+    "排除成人内容": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exclude adult content"
+          }
+        }
+      }
+    },
+    "排除标签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Excluded tags"
+          }
+        }
+      }
+    },
     "控件": {
       "localizations": {
         "en": {
@@ -6343,12 +6563,52 @@
         }
       }
     },
+    "推荐偏好": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommendation preferences"
+          }
+        }
+      }
+    },
+    "推荐内容": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommendation feed"
+          }
+        }
+      }
+    },
+    "推荐来源": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommendation sources"
+          }
+        }
+      }
+    },
     "推荐组合": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Recommended combination"
+          }
+        }
+      }
+    },
+    "推荐选项": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommendation options"
           }
         }
       }
@@ -6714,12 +6974,42 @@
         }
       }
     },
+    "收藏或阅读一些作品，也可以在推荐偏好中填写喜欢的标签。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add favourites, read some works, or enter your favourite tags in recommendation preferences."
+          }
+        }
+      }
+    },
+    "收藏或阅读作品，或设置偏好标签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add favourites, read a work, or set your preferred tags"
+          }
+        }
+      }
+    },
     "收起": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Collapse"
+          }
+        }
+      }
+    },
+    "收起推荐": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collapse recommendations"
           }
         }
       }
@@ -6750,6 +7040,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dropped"
+          }
+        }
+      }
+    },
+    "放送日": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Broadcast day"
           }
         }
       }
@@ -7393,6 +7693,16 @@
         }
       }
     },
+    "暂无推荐作品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No recommendations yet"
+          }
+        }
+      }
+    },
     "暂无文字预览": {
       "localizations": {
         "en": {
@@ -7480,6 +7790,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Couldn't load the work info. Check your network or switch sites."
+          }
+        }
+      }
+    },
+    "暂未获取到推荐，请检查来源或网络后重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not fetch recommendations. Check your sources or connection and try again."
           }
         }
       }
@@ -8252,6 +8572,16 @@
         }
       }
     },
+    "标签偏好": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tag preferences"
+          }
+        }
+      }
+    },
     "标题": {
       "localizations": {
         "en": {
@@ -8298,6 +8628,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Review & migrate"
+          }
+        }
+      }
+    },
+    "根据你的阅读偏好": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Based on your reading preferences"
+          }
+        }
+      }
+    },
+    "根据收藏、阅读记录和偏好标签，从已启用的来源寻找作品。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find works from enabled sources based on your favourites, reading history and preferred tags."
+          }
+        }
+      }
+    },
+    "根据收藏与阅读偏好，发现更多作品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discover works based on your library and reading preferences"
           }
         }
       }
@@ -8538,6 +8898,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Installing %@"
+          }
+        }
+      }
+    },
+    "正在寻找推荐作品…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finding recommendations…"
           }
         }
       }
@@ -8812,6 +9182,16 @@
         }
       }
     },
+    "正在读取网站推荐…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading website picks…"
+          }
+        }
+      }
+    },
     "正在读取网站记录…": {
       "localizations": {
         "en": {
@@ -8872,6 +9252,16 @@
         }
       }
     },
+    "正常推荐": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normal priority"
+          }
+        }
+      }
+    },
     "此 GitHub 发布没有 JAR 插件": {
       "extractionState": "manual",
       "localizations": {
@@ -8890,6 +9280,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "This repository was already added from another URL"
+          }
+        }
+      }
+    },
+    "此分区暂无作品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No works in this section"
           }
         }
       }
@@ -9016,6 +9416,16 @@
         }
       }
     },
+    "每日放送": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daily schedule"
+          }
+        }
+      }
+    },
     "每组都会合并到选中的那一部。其余条目会移出收藏和历史，已下载的内容和书签会保留。": {
       "localizations": {
         "en": {
@@ -9062,6 +9472,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "No sources of the same type to search. Install or enable sources first."
+          }
+        }
+      }
+    },
+    "没有可用来源": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No sources available"
           }
         }
       }
@@ -9183,6 +9603,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Open in browser"
+          }
+        }
+      }
+    },
+    "浏览或打开推荐时会检查更新，每六小时重新生成一次；也可以下拉刷新。关闭后停止获取推荐。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommendations refresh when you browse or visit this page, up to once every six hours. Pull to refresh anytime. Disable to stop fetching recommendations."
           }
         }
       }
@@ -10593,6 +11023,16 @@
         }
       }
     },
+    "编辑收藏分类": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit favourite categories"
+          }
+        }
+      }
+    },
     "缩放": {
       "localizations": {
         "en": {
@@ -10659,6 +11099,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Discover on sites"
+          }
+        }
+      }
+    },
+    "网站推荐": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Website picks"
           }
         }
       }
@@ -11035,6 +11485,16 @@
         }
       }
     },
+    "设置偏好": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set preferences"
+          }
+        }
+      }
+    },
     "设置未能保存，请重试。": {
       "localizations": {
         "en": {
@@ -11081,6 +11541,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Try other keywords, or adjust the language and ecosystem filters."
+          }
+        }
+      }
+    },
+    "试试其他内容空间、调整偏好，或下拉刷新。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try another content space, adjust your preferences, or pull to refresh."
           }
         }
       }
@@ -11163,6 +11633,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Allow access to the app's data in Google Drive, then reconnect"
+          }
+        }
+      }
+    },
+    "请先在浏览页添加并启用来源，或调整推荐偏好。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add and enable sources in Browse, or adjust your recommendation preferences."
           }
         }
       }

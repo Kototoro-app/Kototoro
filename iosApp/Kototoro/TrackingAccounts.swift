@@ -324,7 +324,7 @@ private struct TrackingCollectionView: View {
     @State private var page: Int32 = 0
     @State private var hasMore = false
     @State private var error: String?
-    @State private var preview: IosTrackingItem?
+    @State private var preview: TrackingPreviewSelection?
     @State private var request: UUID?
     private var identity: String { "\(kind)|\(status)" }
 
@@ -355,7 +355,11 @@ private struct TrackingCollectionView: View {
             }
             Section {
                 ForEach(results, id: \.item.key) { entry in
-                    Button { preview = entry.item } label: {
+                    Button {
+                        if let tracking = model.tracking {
+                            preview = TrackingPreviewSelection(item: entry.item, tracking: tracking)
+                        }
+                    } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(entry.item.title).foregroundStyle(.primary)
                             Text(kind == "VIDEO" ? String(localized: "已看 \(entry.progress) 集") : String(localized: "已读 \(entry.progress) 章"))
@@ -377,10 +381,8 @@ private struct TrackingCollectionView: View {
         .task { if site.id == 7 { kind = "VIDEO" } }
         .task(id: identity) { await load(reset: true) }
         .refreshable { await load(reset: true) }
-        .sheet(isPresented: Binding(get: { preview != nil }, set: { if !$0 { preview = nil } })) {
-            if let preview, let tracking = model.tracking {
-                TrackingItemPreview(item: preview, mediaKind: preview.mediaKind, tracking: tracking, content: nil, onBound: {})
-            }
+        .sheet(item: $preview) { selection in
+            TrackingItemPreview(item: selection.item, tracking: selection.tracking, content: nil, onBound: {})
         }
     }
 

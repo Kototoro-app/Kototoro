@@ -13,17 +13,26 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonArray
 
 /** IDs match Android's persisted ScrobblerService IDs. No account or list writes are performed here. */
 enum class PublicTrackingSite(val id: Int, val title: String, val pageSize: Int = 20) {
     SHIKIMORI(1, "Shikimori"), ANILIST(2, "AniList"), MAL(3, "MyAnimeList"),
     KITSU(4, "Kitsu"), BANGUMI(5, "Bangumi", 10), MANGAUPDATES(6, "MangaUpdates"), SIMKL(7, "SIMKL", 10);
 
+    fun supportsCalendar(kind: String): Boolean = kind == "VIDEO" && this in
+        listOf(BANGUMI, ANILIST, SHIKIMORI, SIMKL)
+
     fun supports(kind: String): Boolean = kind in listOf("MANGA", "NOVEL", "VIDEO") && when (this) {
         MANGAUPDATES -> kind != "VIDEO"
         SIMKL -> kind == "VIDEO"
         else -> true
     }
+}
+
+/** The platform supplies local day boundaries, including timezone and daylight-saving transitions. */
+data class TrackingScheduleDay(val start: Long, val end: Long) {
+    init { require(end > start && end - start <= 26 * 60 * 60) }
 }
 
 data class TrackingMetadata(
@@ -53,6 +62,52 @@ class PublicTrackingApi(
     private val bangumi = BangumiDiscoveryApi(client)
     private val additional = AdditionalTrackingApi(client, clientIds)
     private val supplements = TrackingSupplementApi(client, clientIds, ::catalogItem, bangumiBaseUrl)
+
+    /** Calendar is a finite, weekday-specific anime feed; it cannot be requested for a book space. */
+    suspend fun recommendations(
+        site: PublicTrackingSite,
+        mediaKind: String,
+        category: String,
+        weekday: Int,
+        page: Int,
+        day: TrackingScheduleDay? = null,
+    ): List<TrackingMetadata> {
+        require(page > 0 && site.supports(mediaKind))
+        if (category.startsWith("calendar")) {
+            require(site.supportsCalendar(mediaKind) && weekday in 1..7)
+            require(category == "calendar" || (site == PublicTrackingSite.SIMKL && category == "calendar_tv"))
+            if (page > 1) return emptyList()
+            val items = when (site) {
+                PublicTrackingSite.BANGUMI -> {
+                    Json.parseToJsonElement(bangumi.calendar(bangumiBaseUrl)).jsonArray
+                        .map { it.jsonObject }.filter { it.obj("weekday").int("id") == weekday }
+                        .flatMap { it.array("items") }.map { it.jsonObject }.filter { it.int("type") == 2 }
+                        .map { bangumiItem(it, "VIDEO", false) }
+                }
+                PublicTrackingSite.ANILIST -> anilistCalendar(requireNotNull(day))
+                else -> additional.calendar(site, requireNotNull(day), category == "calendar_tv", page)
+            }
+            return items.filter { it.remoteId > 0 && it.title.isNotBlank() && it.mediaKind == mediaKind }
+                .distinctBy { it.remoteId }
+        }
+        require(category == "popular" || category == "rating")
+        return browse(site, mediaKind, category == "popular", page).filter { it.mediaKind == mediaKind }
+    }
+
+    private suspend fun anilistCalendar(day: TrackingScheduleDay): List<TrackingMetadata> {
+        val result = ArrayList<TrackingMetadata>()
+        var page = 1
+        do {
+            check(page <= 100) { "AniList 排期分页超出范围" }
+            val data = anilist("""query { Page(page: $page, perPage: 50) {
+                pageInfo { hasNextPage }
+                airingSchedules(airingAt_greater: ${day.start - 1}, airingAt_lesser: ${day.end},
+                sort: TIME) { media { $ANILIST_SEARCH_FIELDS } } } }""").obj("Page")
+            result += data.array("airingSchedules").map { anilistItem(it.jsonObject.obj("media"), "VIDEO", false) }
+            page++
+        } while (data.obj("pageInfo").text("hasNextPage") == "true")
+        return result
+    }
 
     suspend fun supplement(site: PublicTrackingSite, id: Long, kind: String): TrackingSupplement {
         require(id > 0 && site.supports(kind))
@@ -140,7 +195,12 @@ class PublicTrackingApi(
                     header("Content-Type", "application/json")
                     setBody(JsonObject(mapOf("keyword" to JsonPrimitive(""),
                         "sort" to JsonPrimitive(if (popular) "heat" else "rank"),
-                        "filter" to JsonObject(mapOf("type" to JsonArray(listOf(JsonPrimitive(if (anime) 2 else 1))))),
+                        "filter" to JsonObject(buildMap {
+                            put("type", JsonArray(listOf(JsonPrimitive(if (anime) 2 else 1))))
+                            // Bangumi's book type includes both manga and novels; constrain recommendations by tag.
+                            if (!anime) put("tag", JsonArray(listOf(JsonPrimitive(
+                                if (mediaKind == "NOVEL") "小说" else "漫画"))))
+                        }),
                     )).toString())
                 }.execute { parse(it.bodyAsText()) }
                 data.array("data").map { bangumiItem(it.jsonObject, mediaKind, false) }

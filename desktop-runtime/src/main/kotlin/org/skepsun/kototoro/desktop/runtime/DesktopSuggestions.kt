@@ -1,23 +1,16 @@
 package org.skepsun.kototoro.desktop.runtime
 
+import org.skepsun.kototoro.core.library.SourceSuggestionPreferences
+import org.skepsun.kototoro.core.library.SourceSuggestions
 import org.skepsun.kototoro.core.source.SourceContent
-import org.skepsun.kototoro.core.source.SourceFilter
 import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.core.source.SourceRuntime
 import org.skepsun.kototoro.parsers.util.almostEquals
 import org.skepsun.kototoro.suggestions.domain.SUGGESTION_TAG_THRESHOLD
 import org.skepsun.kototoro.suggestions.domain.SuggestionLimits
-import org.skepsun.kototoro.suggestions.domain.SuggestionTagBlacklist
 import org.skepsun.kototoro.suggestions.domain.SuggestionTagMatcher
-import org.skepsun.kototoro.suggestions.domain.cleanSuggestionList
-import org.skepsun.kototoro.suggestions.domain.collectSourceResults
 import org.skepsun.kototoro.suggestions.domain.parseSuggestionTags
-import org.skepsun.kototoro.suggestions.domain.pickSuggestionSortOrder
-import org.skepsun.kototoro.suggestions.domain.pickSuggestionTag
-import org.skepsun.kototoro.suggestions.domain.rankSuggestions
-import org.skepsun.kototoro.suggestions.domain.suggestionRelevance
-import org.skepsun.kototoro.suggestions.domain.suggestionSeedTags
 
 /** Windows counterparts of Android's suggestion settings, stored under Android's keys and defaults. */
 data class DesktopSuggestionSettings(
@@ -99,42 +92,11 @@ class DesktopSuggestions(
             it.source.name in settings.excludedSources || (settings.excludeNsfw && it.isNsfw())
         })
         if (seed.isEmpty() || candidates.isEmpty()) return 0
-        val blacklist = SuggestionTagBlacklist(settings.tagBlacklist, matcher)
-        val tags = suggestionSeedTags(settings.tagWhitelist.toList(), seed.flatMap { content -> content.tags.map { it.title } })
-        val raw = collectSourceResults(candidates) { listing -> fetch(listing, tags, blacklist, settings) }
-        val ranked = rankSuggestions(
-            items = raw,
-            relevance = { suggestionRelevance(it.tags.map { tag -> tag.title }, tags, matcher) },
-            id = { it.id },
-            source = { it.source.name },
-            preferredSources = settings.preferredSources - settings.excludedSources,
-            limits = limits,
-        )
-        return library.replaceSuggestions(ranked.map { it.item to it.relevance }, now())
-    }
-
-    private suspend fun fetch(listing: SourceListing, tags: List<String>, blacklist: SuggestionTagBlacklist,
-        settings: DesktopSuggestionSettings): List<SourceContent> {
-        val name = listing.source.name
-        val order = pickSuggestionSortOrder(runtime.describe(name).sortOrders)
-        val available = runCatching { runtime.getFilterOptions(name).availableTags }.getOrDefault(emptySet())
-        val tag = pickSuggestionTag(tags, available, { it.title }, { blacklist.containsTitle(it.title) }, matcher)
-        val tagged = runtime.getList(name, 0, order, tag?.let { SourceFilter(tags = setOf(it)) })
-        // Android falls back to the unfiltered list when the tagged one is empty.
-        val list = if (tagged.isEmpty() && tag != null) runtime.getList(name, 0, order, null) else tagged
-        return cleanSuggestionList(
-            items = list,
-            title = { it.title },
-            hasAddress = { it.url.isNotBlank() || it.publicUrl.isNotBlank() },
-            excluded = { content ->
-                (settings.excludeNsfw && content.isNsfw()) || blacklist.containsAny(content.tags.map { it.title })
-            },
-            limits = limits,
-            shuffle = shuffle,
-        )
+        val result = SourceSuggestions(runtime, matcher, limits, shuffle).generate(seed, candidates.map { it.source },
+            SourceSuggestionPreferences(settings.excludeNsfw, settings.tagBlacklist, settings.tagWhitelist,
+                settings.preferredSources, settings.excludedSources))
+        return library.replaceSuggestions(result.items.map { it.item to it.relevance }, now())
     }
 }
 
 private fun SourceListing.isNsfw() = source.contentType.startsWith("HENTAI_")
-
-private fun SourceContent.isNsfw() = contentRating == "ADULT" || source.contentType.startsWith("HENTAI_")

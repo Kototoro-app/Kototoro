@@ -2,7 +2,7 @@ import KototoroShared
 import SwiftUI
 
 /// Android's multi-source search: every enabled source (pinned first, then the manual order) is queried with at most
-/// four requests in flight; each source keeps its own row, state and retry, and the library and history are searched
+/// bounded requests in flight; each source keeps its own row, state and retry, and the library and history are searched
 /// locally first.
 @MainActor
 final class GlobalSearchModel: ObservableObject {
@@ -88,7 +88,7 @@ final class GlobalSearchModel: ObservableObject {
                 }
                 startNext()
             }
-            if !buffer.isEmpty {
+            if !Task.isCancelled && !buffer.isEmpty {
                 applyBatch(buffer)
                 buffer.removeAll()
             }
@@ -116,6 +116,9 @@ struct GlobalSearchView: View {
     @EnvironmentObject private var sources: SourcesModel
     @StateObject private var model = GlobalSearchModel()
     @Binding var query: String
+    var selectionMediaKind: String? = nil
+    var onSelect: ((IosSourceContent) -> Void)? = nil
+    @Environment(\.dismiss) private var dismiss
     @State private var libraryMatches: [IosSourceContent] = []
     @State private var historyMatches: [IosSourceContent] = []
     @AppStorage("search.recent") private var storedRecent = ""
@@ -126,22 +129,18 @@ struct GlobalSearchView: View {
     private var recent: [String] { storedRecent.split(separator: "\n").map(String.init) }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 18) {
-                    if model.submitted.isEmpty { suggestions } else { results }
-                }
-                .padding(.vertical, 12)
-            }
-            .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("搜索")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { filterMenu }
-            }
+        Group {
+            if onSelect == nil { NavigationStack { page } }
+            else { page }
         }
-        .searchable(text: $query, prompt: "搜索全部来源中的作品")
         .onSubmit(of: .search) { submit(query) }
+        .task(id: "\(sources.isLoading)|\(sources.catalogRevision)|\(sources.runtime != nil)") {
+            if onSelect != nil, !sources.isLoading, model.submitted.isEmpty { submit(query) }
+        }
+        .onChange(of: [hiddenKinds, String(pinnedOnly), String(showAdult)] + targets.map(\.name)) { _, _ in
+            if !model.submitted.isEmpty { submit(model.submitted) }
+        }
+        .onDisappear { if onSelect != nil { model.cancel() } }
         .onChange(of: query) { _, value in
             if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 model.cancel()
@@ -151,11 +150,37 @@ struct GlobalSearchView: View {
         }
     }
 
+    private var page: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    Text(selectionMediaKind.map(ContentSpace.title) ?? String(localized: "搜索范围"))
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Spacer()
+                    filterMenu
+                }.padding(.horizontal, 20)
+                if model.submitted.isEmpty { suggestions } else { results }
+            }
+            .padding(.vertical, 12)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "搜索全部来源中的作品")
+        .navigationTitle(onSelect == nil ? "搜索" : "搜索并选择作品")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if onSelect != nil {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+            }
+        }
+    }
+
     /// Enabled sources in browse order (pinned first, then manual order), after the search filters.
     private var targets: [IosSource] {
         let kinds = SourceFilterOption.decode(hiddenKinds)
         let enabled = sources.sources.filter { source in
-            sources.isEnabled(source) && (showAdult || !source.isAdult) && !kinds.contains(source.mediaKind) &&
+            sources.isEnabled(source) && (showAdult || !source.isAdult) &&
+                (selectionMediaKind.map { source.mediaKind == $0 } ?? !kinds.contains(source.mediaKind)) &&
                 (!pinnedOnly || sources.isPinned(source))
         }
         let ordered = sources.ordered(enabled)
@@ -166,12 +191,24 @@ struct GlobalSearchView: View {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty, let runtime = sources.runtime else { return }
         query = value
-        storedRecent = ([value] + recent.filter { $0 != value }).prefix(12).joined(separator: "\n")
+        // Association searches are transient: broadcasting recent-search defaults can recreate the sheet host.
+        if onSelect == nil {
+            storedRecent = ([value] + recent.filter { $0 != value }).prefix(12).joined(separator: "\n")
+        }
+        let kinds = SourceFilterOption.decode(hiddenKinds)
+        let pinned = Set(sources.sources.filter(sources.isPinned).map(\.name))
+        func matches(_ item: IosSourceContent) -> Bool {
+            (selectionMediaKind.map { item.mediaKind == $0 } ?? !kinds.contains(item.mediaKind)) &&
+                (showAdult || (!item.contentType.hasPrefix("HENTAI_") && item.contentRating != "ADULT")) &&
+                (!pinnedOnly || pinned.contains(item.sourceName)) &&
+                (item.title.localizedCaseInsensitiveContains(value) ||
+                    item.altTitles.contains { $0.localizedCaseInsensitiveContains(value) })
+        }
         libraryMatches = library.favourites.map(\.content).filter {
-            $0.title.localizedCaseInsensitiveContains(value) || $0.altTitles.contains { $0.localizedCaseInsensitiveContains(value) }
+            matches($0)
         }
         historyMatches = library.history.map(\.content).filter {
-            $0.title.localizedCaseInsensitiveContains(value) || $0.altTitles.contains { $0.localizedCaseInsensitiveContains(value) }
+            matches($0)
         }
         model.search(value, sources: targets, runtime: runtime)
     }
@@ -274,7 +311,7 @@ struct GlobalSearchView: View {
             if let count { Text("\(count)").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary) }
             Spacer()
             NavigationLink {
-                SourceBrowseView(runtime: runtime, source: source, initialQuery: model.submitted)
+                SourceBrowseView(runtime: runtime, source: source, initialQuery: model.submitted, onPick: onSelect)
                     .submitScope()
             } label: {
                 Text("更多").font(.subheadline)
@@ -288,18 +325,14 @@ struct GlobalSearchView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(alignment: .top, spacing: 12) {
                 ForEach(items, id: \.contentKey) { item in
-                    NavigationLink {
-                        SourceDetailsView(runtime: runtime, content: item)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Color.clear.frame(width: 100, height: 150)
-                                .overlay { CoverImage(runtime: runtime, content: item) }
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            Text(item.title).font(.caption.weight(.medium)).lineLimit(2, reservesSpace: true)
-                                .fontDesign(.default)
-                                .foregroundStyle(.primary)
+                    Group {
+                        if let onSelect {
+                            Button { onSelect(item) } label: { resultCard(item, runtime: runtime) }
+                        } else {
+                            NavigationLink {
+                                SourceDetailsView(runtime: runtime, content: item)
+                            } label: { resultCard(item, runtime: runtime) }
                         }
-                        .frame(width: 100)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("search.result.\(item.sourceName).\(item.id)")
@@ -309,15 +342,27 @@ struct GlobalSearchView: View {
         }
     }
 
+    private func resultCard(_ item: IosSourceContent, runtime: IosSources) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Color.clear.frame(width: 100, height: 150)
+                .overlay { CoverImage(runtime: runtime, content: item) }
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            Text(item.title).font(.caption.weight(.medium)).lineLimit(2, reservesSpace: true)
+                .fontDesign(.default).foregroundStyle(.primary)
+        }.frame(width: 100)
+    }
+
     private var filterMenu: some View {
         Menu {
-            Section("内容类型") {
-                ForEach(SourceFilterOption.kinds, id: \.id) { kind in
-                    Toggle(isOn: Binding(get: { !SourceFilterOption.decode(hiddenKinds).contains(kind.id) }, set: { visible in
-                        var hidden = SourceFilterOption.decode(hiddenKinds)
-                        if visible { hidden.remove(kind.id) } else { hidden.insert(kind.id) }
-                        hiddenKinds = SourceFilterOption.encode(hidden)
-                    })) { Label(kind.title, systemImage: kind.icon) }
+            if selectionMediaKind == nil {
+                Section("内容类型") {
+                    ForEach(SourceFilterOption.kinds, id: \.id) { kind in
+                        Toggle(isOn: Binding(get: { !SourceFilterOption.decode(hiddenKinds).contains(kind.id) }, set: { visible in
+                            var hidden = SourceFilterOption.decode(hiddenKinds)
+                            if visible { hidden.remove(kind.id) } else { hidden.insert(kind.id) }
+                            hiddenKinds = SourceFilterOption.encode(hidden)
+                        })) { Label(kind.title, systemImage: kind.icon) }
+                    }
                 }
             }
             Toggle("仅搜索置顶来源", systemImage: "pin", isOn: $pinnedOnly)

@@ -6,6 +6,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.*
 import kotlinx.serialization.json.*
+import kotlin.time.Instant
 
 /** Catalog protocols used by the native clients. No proxy or third-party catalog is required. */
 internal class AdditionalTrackingApi(private val client: HttpClient, private val clientIds: Map<Int, String>) {
@@ -21,6 +22,42 @@ internal class AdditionalTrackingApi(private val client: HttpClient, private val
 
     suspend fun browse(site: PublicTrackingSite, kind: String, popular: Boolean, page: Int): List<TrackingMetadata> =
         list(site, kind, page, null, popular)
+
+    suspend fun calendar(site: PublicTrackingSite, day: TrackingScheduleDay, tv: Boolean, page: Int): List<TrackingMetadata> {
+        if (page > 1) return emptyList()
+        return when (site) {
+            PublicTrackingSite.SHIKIMORI -> get("https://shikimori.io/api/calendar").jsonArray
+                .map { it.jsonObject }.filter { inDay(it.str("next_episode_at"), day) }
+                .sortedBy { Instant.parse(it.str("next_episode_at")!!).epochSeconds }
+                .map { shikimori(it.obj("anime"), "VIDEO") }
+            PublicTrackingSite.SIMKL -> {
+                val type = if (tv) "tv" else "anime"
+                // Local dates may span two UTC months; the v2 archives contain the exact UTC airing timestamps.
+                val months = listOf(day.start, day.end - 1).map { Instant.fromEpochSeconds(it).toString().take(7) }.distinct()
+                val results = ArrayList<Pair<Long, TrackingMetadata>>()
+                for (month in months) {
+                    val year = month.substringBefore('-')
+                    val number = month.substringAfter('-').toInt()
+                    val data = get("https://data.simkl.in/calendar/v2/$year/$number/$type.json", site = site).jsonObject
+                    val metadata = data.obj("metadata")
+                    for (entry in data.arr("calendar").map { it.jsonObject }) {
+                        val date = entry.str("date")
+                        if (!inDay(date, day)) continue
+                        val id = entry.number("simkl_id") ?: continue
+                        val item = simkl(metadata.obj(id.toString()), type)
+                        results += Instant.parse(date!!).epochSeconds to item
+                    }
+                }
+                results.sortedBy { it.first }.map { it.second }
+            }
+            else -> error("此网站不支持每日放送")
+        }
+    }
+
+    private fun inDay(date: String?, day: TrackingScheduleDay): Boolean {
+        val instant = date?.let { runCatching { Instant.parse(it).epochSeconds }.getOrNull() } ?: return false
+        return instant >= day.start && instant < day.end
+    }
 
     private suspend fun list(site: PublicTrackingSite, kind: String, page: Int, query: String?, popular: Boolean): List<TrackingMetadata> {
         val type = if (kind == "VIDEO") "anime" else "manga"
@@ -90,7 +127,12 @@ internal class AdditionalTrackingApi(private val client: HttpClient, private val
             params.forEach { (key, value) -> parameter(key, value) }
             if (site == PublicTrackingSite.MAL || site == PublicTrackingSite.SIMKL) {
                 val id = clientIds[site.id]?.takeIf { it.isNotBlank() } ?: error("此网站缺少应用配置")
-                if (site == PublicTrackingSite.MAL) header("X-MAL-CLIENT-ID", id) else parameter("client_id", id)
+                if (site == PublicTrackingSite.MAL) header("X-MAL-CLIENT-ID", id) else {
+                    parameter("client_id", id)
+                    parameter("app-name", "Kototoro")
+                    parameter("app-version", "1.0")
+                    header("User-Agent", "Kototoro/1.0")
+                }
             }
         }
         check(response.status.isSuccess()) { "HTTP ${response.status.value}" }
@@ -152,8 +194,10 @@ internal class AdditionalTrackingApi(private val client: HttpClient, private val
 
     private fun simkl(raw: JsonObject, remoteType: String = "anime"): TrackingMetadata {
         val j = (raw["show"] as? JsonObject) ?: (raw["movie"] as? JsonObject) ?: raw
-        val id = j.obj("ids").number("simkl") ?: j.number("id") ?: 0
-        return TrackingMetadata(7, id, j.str("title").orEmpty(), listOfNotNull(j.str("title_en")),
+        val id = j.obj("ids").number("simkl_id") ?: j.obj("ids").number("simkl") ?: j.number("id") ?: 0
+        return TrackingMetadata(7, id, j.str("title").orEmpty(),
+            (listOfNotNull(j.str("title_en"), j.str("title_romaji")) +
+                j.arr("alt_titles").mapNotNull { it.jsonObject.str("name") }).distinct(),
             j.str("poster")?.let { if (it.startsWith("https://")) it else "https://simkl.in/posters/${it}_m.jpg" },
             cleanTrackingDescription(j.str("overview")), j.obj("ratings").obj("simkl").decimal("rating"),
             tags = j.arr("genres").mapNotNull { (it as? JsonPrimitive)?.contentOrNull },

@@ -205,12 +205,15 @@ struct SourceBrowseView: View {
     @State private var selecting = false
     @State private var selectedKeys: Set<String> = []
     @State private var favouriteRequest: FavouriteCategoryRequest?
+    private let onPick: ((IosSourceContent) -> Void)?
 
     /// Imported files (本地漫画 / 本地小说): an import button instead of source settings.
     private var isLocal: Bool { model.source.ecosystem == "LOCAL" }
 
-    init(runtime: IosSources, source: IosSource, initialQuery: String? = nil) {
+    init(runtime: IosSources, source: IosSource, initialQuery: String? = nil,
+         onPick: ((IosSourceContent) -> Void)? = nil) {
         _model = StateObject(wrappedValue: SourceBrowseModel(runtime: runtime, source: source, initialQuery: initialQuery))
+        self.onPick = onPick
     }
 
     @AppStorage("listMode.browse") private var mode = ContentListMode.grid
@@ -222,8 +225,9 @@ struct SourceBrowseView: View {
                               identifierPrefix: "source.content.",
                               onItemAppear: { item in
                                   if item.id == model.items.last?.id, model.error == nil { Task { await model.loadMore() } }
-                              }, selectedKeys: selecting ? selectedKeys : nil,
+                              }, selectedKeys: onPick != nil ? [] : (selecting ? selectedKeys : nil),
                               onSelect: { item in
+                                  if let onPick { onPick(item.content); return }
                                   let key = ContentMarks.key(item.content)
                                   if selectedKeys.contains(key) { selectedKeys.remove(key) }
                                   else { selectedKeys.insert(key) }

@@ -64,6 +64,7 @@ def vod(vod_id, name, type_id, type_name, with_play):
 
 CATALOG = [(101, "测试动画", 2, "动画"), (102, "测试电影", 1, "电影")]
 PAGE_TWO_MODE = "off"
+CALENDAR_REQUESTS = 0
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -71,10 +72,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
     def do_GET(self):
-        global PAGE_TWO_MODE
+        global PAGE_TWO_MODE, CALENDAR_REQUESTS
         url = urllib.parse.urlsplit(self.path)
         if url.path == "/health":
-            return self.reply({"ok": True})
+            return self.reply({"ok": True, "calendarRequests": CALENDAR_REQUESTS})
+        if url.path == "/tracking/calendar":
+            CALENDAR_REQUESTS += 1
+            return self.reply([{"weekday": {"id": day}, "items": [
+                self.tracking_work(day * 100 + i, 2, f"周{day}放送 {i}") for i in range(1, 13)
+            ]} for day in range(1, 8)])
+        if url.path.startswith("/tracking/v0/subjects/"):
+            item_id = int(url.path.rsplit("/", 1)[-1])
+            return self.reply(self.tracking_work(item_id, 2, f"放送作品 {item_id}"))
         if url.path == "/usage-sites.json":
             tag = urllib.parse.parse_qs(url.query).get("run", [""])[0]
             return self.reply(usage_sites(tag))
@@ -84,7 +93,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if url.path == "/recover-page-2":
             PAGE_TWO_MODE = "ok"
             return self.reply({"ok": True})
-        if url.path.rstrip("/") in ("/api.php/provide/vod", "/related/api.php/provide/vod"):
+        if url.path.rstrip("/") in ("/api.php/provide/vod", "/related/api.php/provide/vod", "/binding/api.php/provide/vod"):
             query = urllib.parse.parse_qs(url.query)
             ids = query.get("ids", query.get("id", []))
             words = query.get("wd", [])
@@ -111,6 +120,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                "class": [{"type_id": 1, "type_name": "电影"}, {"type_id": 2, "type_name": "动画"}],
                                "list": items})
         return super().do_GET()
+
+    def do_POST(self):
+        if self.path.startswith("/tracking/v0/search/subjects"):
+            request = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
+            filters = request.get("filter", {})
+            kind = filters.get("type", [1])[0]
+            title = "推荐动画" if kind == 2 else "推荐小说" if "小说" in filters.get("tag", []) else "推荐漫画"
+            base_id = 2900 if kind == 2 else 1900 if "小说" in filters.get("tag", []) else 900
+            return self.reply({"data": [self.tracking_work(base_id + i, kind, f"{title} {i}") for i in range(1, 13)]})
+        self.send_error(404)
+
+    @staticmethod
+    def tracking_work(item_id, kind, title):
+        return {"id": item_id, "type": kind, "name": title, "name_cn": title,
+                "summary": "这是本地推荐测试资料，讲述主角与同伴踏上旅程、相互扶持并探索未知世界的故事。" * 10,
+                "images": {"medium": f"{BASE}/cover.jpg", "large": f"{BASE}/cover.jpg"},
+                "rating": {"score": 8.5}, "date": "2026-10-01", "eps": 12,
+                "tags": [{"name": "冒险"}, {"name": "奇幻"}], "infobox": [{"key": "导演", "value": "测试导演"}]}
 
     def reply(self, payload):
         body = json.dumps(payload, ensure_ascii=False).encode()

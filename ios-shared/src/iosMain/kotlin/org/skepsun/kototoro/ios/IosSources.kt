@@ -510,7 +510,7 @@ class IosSources(
     private val cms = videoSources?.let { store -> MacCmsSourceRuntime(store.http) { store.stored() } }
     private val local = if (localDirectory == null || imageDirectory == null) null else
         LocalSourceRuntime(localDirectory.toPath(), imageDirectory.toPath(), decodeLegacyText = ::decodeLegacyText)
-    private val runtime = RoutedSourceRuntime(
+    internal val runtime = RoutedSourceRuntime(
         listOfNotNull(
             local?.let { RoutedSourceRuntime.Route(LocalSourceRuntime::owns, it) },
             cms?.let { RoutedSourceRuntime.Route(MacCmsSourceRuntime::owns, it) },

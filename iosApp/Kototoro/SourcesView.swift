@@ -297,6 +297,7 @@ struct SourcesView: View {
     @AppStorage("sources.newOnly") private var newOnly = false
     @State private var reordering = false
     @State private var migration: LibraryMigrationRequest?
+    @State private var trackingPreview: TrackingPreviewSelection?
     @Environment(\.openGlobalSearch) private var openGlobalSearch
 
     init(library: LibraryModel? = nil, model: SourcesModel) {
@@ -424,6 +425,15 @@ struct SourcesView: View {
                 NavigationStack { BatchMigrationView(contents: request.contents) }
             }
         }
+        // Presentation belongs to the screen, not a List row that can be recreated as source usage changes.
+        .sheet(item: $trackingPreview, onDismiss: { Task { await library.refresh() } }) { selection in
+            TrackingItemPreview(item: selection.item, tracking: selection.tracking, content: nil, onBound: {})
+        }
+    }
+
+    private func previewTracking(_ item: IosTrackingItem) {
+        guard let tracking = library.library?.tracking else { return }
+        trackingPreview = TrackingPreviewSelection(item: item, tracking: tracking)
     }
 
     /// The former menu hid kinds; one remaining kind becomes the switch's selection, anything else shows all.
@@ -443,8 +453,15 @@ struct SourcesView: View {
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
             }
+            if query.isEmpty && !newOnly {
+                Section {
+                    BrowseRecommendationsView(spaceKind: kind, onPreview: previewTracking)
+                        .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                        // Transparent List rows still clip their contents to the cell's rounded corners.
+                        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                }
+            }
             statusSections
-            if query.isEmpty && !newOnly { Section { trackingDiscovery } }
             if display.newSourceCount > 0 { Section { newSourcesNotice(count: display.newSourceCount) } }
             ForEach(display.sections, id: \.id) { section in
                 Section("\(section.title) · \(section.sources.count)") {
@@ -479,6 +496,9 @@ struct SourcesView: View {
                 if !spacesEnabled && ContentKindPicker.isShown(availableKinds) {
                     ContentKindPicker(selection: $pageKind, available: availableKinds).padding(.horizontal, 16)
                 }
+                if query.isEmpty && !newOnly {
+                    BrowseRecommendationsView(spaceKind: kind, onPreview: previewTracking).padding(.horizontal, 16)
+                }
                 if let error = model.error {
                     Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red).padding(.horizontal)
                         .accessibilityIdentifier("sources.error")
@@ -490,10 +510,6 @@ struct SourcesView: View {
                     runtimeLabel.padding(.horizontal, 20)
                 }
                 if display.newSourceCount > 0 { newSourcesNotice(count: display.newSourceCount).padding(.horizontal, 20) }
-                if query.isEmpty && !newOnly {
-                    trackingDiscovery.padding(14).background(.thinMaterial, in: .rect(cornerRadius: 16))
-                        .padding(.horizontal, 16)
-                }
                 ForEach(display.sections, id: \.id) { section in
                     VStack(alignment: .leading, spacing: 8) {
                         Text("\(section.title) · \(section.sources.count)")
@@ -538,23 +554,6 @@ struct SourcesView: View {
     }
 
     // MARK: Parts
-
-    private var trackingDiscovery: some View {
-        NavigationLink {
-            TrackingSitesView(initialMediaKind: kind ?? "MANGA")
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "globe.asia.australia.fill").font(.title2).foregroundStyle(.tint)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("网站发现").font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                    Text("浏览榜单、查找作品与追踪进度").font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
-            }
-        }
-        .accessibilityIdentifier("sources.tracking")
-    }
 
     @ViewBuilder
     private var statusSections: some View {

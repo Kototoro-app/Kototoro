@@ -3,9 +3,9 @@ package org.skepsun.kototoro.suggestions.domain
 import kotlin.math.pow
 
 /*
- * Android's suggestion rules, shared with the Windows host: seed tags from what the user reads, one tagged list
- * per source, tag relevance scoring and source-balanced ranking. Fuzzy tag matching is injected because the
- * parser's `almostEquals` is JVM-only; both hosts pass it with [SUGGESTION_TAG_THRESHOLD].
+ * Android's suggestion rules, shared with Apple and Windows hosts: seed tags from what the user reads, one tagged
+ * list per source, tag relevance scoring and source-balanced ranking. JVM hosts inject the parser's `almostEquals`;
+ * Apple uses [suggestionTagsMatch] with the same [SUGGESTION_TAG_THRESHOLD].
  */
 
 /** Tag titles closer than this (normalised edit distance) count as the same tag. */
@@ -23,6 +23,25 @@ fun parseSuggestionTags(text: String?): Set<String> {
 
 /** Fuzzy tag title comparison, e.g. `{ a, b -> a.almostEquals(b, SUGGESTION_TAG_THRESHOLD) }`. */
 typealias SuggestionTagMatcher = (String, String) -> Boolean
+
+/** Portable counterpart of the parser's case-insensitive `almostEquals`, using mean tag length. */
+fun suggestionTagsMatch(left: String, right: String): Boolean {
+    val a = left.lowercase()
+    val b = right.lowercase()
+    if (a.isEmpty() || b.isEmpty()) return false
+    var costs = IntArray(a.length + 1) { it }
+    var next = IntArray(a.length + 1)
+    for (i in 1..b.length) {
+        next[0] = i
+        for (j in 1..a.length) {
+            next[j] = minOf(costs[j] + 1, next[j - 1] + 1, costs[j - 1] + if (a[j - 1] == b[i - 1]) 0 else 1)
+        }
+        val previous = costs
+        costs = next
+        next = previous
+    }
+    return costs[a.length] / ((left.length + right.length) / 2f) < SUGGESTION_TAG_THRESHOLD
+}
 
 data class SuggestionLimits(
     /** Suggestions stored after ranking. */

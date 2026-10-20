@@ -23,6 +23,7 @@ import org.skepsun.kototoro.tracking.discovery.TrackingMetadata
 import org.skepsun.kototoro.tracking.discovery.TrackingPerson
 import org.skepsun.kototoro.tracking.discovery.TrackingRelated
 import org.skepsun.kototoro.tracking.discovery.TrackingSupplement
+import org.skepsun.kototoro.tracking.discovery.TrackingScheduleDay
 
 class IosTrackingSite internal constructor(private val value: PublicTrackingSite) {
     val id: Int get() = value.id
@@ -31,6 +32,8 @@ class IosTrackingSite internal constructor(private val value: PublicTrackingSite
     val supportsNotes: Boolean get() = id !in listOf(6, 7)
     fun supports(mediaKind: String): Boolean = value.supports(mediaKind)
 }
+
+data class IosTrackingSection(val id: String, val title: String)
 
 class IosTrackingItem internal constructor(
     internal val value: TrackingMetadata,
@@ -98,6 +101,23 @@ class IosTracking internal constructor(
         PublicTrackingSite.MAL, PublicTrackingSite.KITSU, PublicTrackingSite.SHIKIMORI,
         PublicTrackingSite.MANGAUPDATES, PublicTrackingSite.SIMKL).map(::IosTrackingSite)
     val accounts by lazy { IosTrackingAccounts(library, client) }
+
+    fun recommendationSections(service: Int, mediaKind: String): List<IosTrackingSection> {
+        if (!site(service).supports(mediaKind)) return emptyList()
+        return buildList {
+            add(IosTrackingSection("popular", localized("热门作品")))
+            if (service != 7) add(IosTrackingSection("rating", localized("高分作品")))
+            if (site(service).supportsCalendar(mediaKind)) add(IosTrackingSection("calendar", localized("每日放送")))
+            if (service == 7 && mediaKind == "VIDEO") add(IosTrackingSection("calendar_tv", localized("每日播出 · 剧集")))
+        }
+    }
+
+    @Throws(Exception::class)
+    suspend fun recommendations(service: Int, mediaKind: String, category: String, weekday: Int,
+        page: Int, dayStart: Long, dayEnd: Long): List<IosTrackingItem> = request {
+        api.recommendations(site(service), mediaKind, category, weekday, page,
+            TrackingScheduleDay(dayStart, dayEnd)).map(::IosTrackingItem)
+    }
 
     @Throws(Exception::class)
     suspend fun browse(service: Int, mediaKind: String, popular: Boolean, page: Int): List<IosTrackingItem> = request {

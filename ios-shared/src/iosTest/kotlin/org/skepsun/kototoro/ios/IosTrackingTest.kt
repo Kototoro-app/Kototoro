@@ -17,6 +17,20 @@ import kotlin.test.*
 
 class IosTrackingTest {
     @Test
+    fun recommendationSectionsOnlyExposeSchedulesSupportedByTheSiteAndSpace() = withDatabase { path ->
+        val library = IosLibrary(path)
+        try {
+            for (service in 1..7) {
+                assertFalse(library.tracking.recommendationSections(service, "MANGA").any { it.id.startsWith("calendar") })
+                assertFalse(library.tracking.recommendationSections(service, "NOVEL").any { it.id.startsWith("calendar") })
+                val sections = library.tracking.recommendationSections(service, "VIDEO")
+                assertEquals(service in listOf(1, 2, 5, 7), sections.any { it.id == "calendar" })
+                assertEquals(service == 7, sections.any { it.id == "calendar_tv" })
+            }
+        } finally { library.close() }
+    }
+
+    @Test
     fun duplicateAnimeAndMangaRemoteIdsCannotOverwriteTheExistingMetadataCache() = withDatabase { path ->
         val library = IosLibrary(path)
         try {
