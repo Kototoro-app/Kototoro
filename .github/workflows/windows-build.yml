@@ -33,25 +33,25 @@ jobs:
     outputs:
       artifact-name: kototoro-windows-${{ inputs.channel }}-${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.ref }}
           submodules: recursive
 
       - name: Set up compatibility bootstrap JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25.0.1'
 
       - name: Set up packaging JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Gradle JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -127,7 +127,7 @@ jobs:
           $checksums | Set-Content -LiteralPath "release-windows/$assetStem.sha256" -Encoding utf8
 
       - name: Upload Windows package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: kototoro-windows-${{ inputs.channel }}-${{ github.run_id }}
           path: release-windows/*
@@ -137,7 +137,7 @@ jobs:
 
       - name: Upload packaging diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: windows-diagnostics-${{ inputs.channel }}-${{ github.run_id }}
           path: |
