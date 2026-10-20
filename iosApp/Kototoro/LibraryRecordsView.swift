@@ -27,11 +27,17 @@ private struct DateThresholds {
     }
 }
 
-private enum DateGroup: String, CaseIterable, Comparable {
-    case today = "今天"
-    case yesterday = "昨天"
-    case thisWeek = "本周"
-    case earlier = "更早"
+private enum DateGroup: CaseIterable, Comparable {
+    case today, yesterday, thisWeek, earlier
+
+    var title: String {
+        switch self {
+        case .today: String(localized: "今天")
+        case .yesterday: String(localized: "昨天")
+        case .thisWeek: String(localized: "本周")
+        case .earlier: String(localized: "更早")
+        }
+    }
 
     private var sortOrder: Int {
         switch self {
@@ -47,13 +53,17 @@ private enum DateGroup: String, CaseIterable, Comparable {
     }
 }
 
-/// History and update records in date-grouped layouts and an optional unified timeline.
+/// History, update and download records in date-grouped layouts and a unified timeline.
 struct LibraryRecordsView: View {
     @EnvironmentObject private var library: LibraryModel
     @EnvironmentObject private var sources: SourcesModel
+    @EnvironmentObject private var downloadQueue: ReaderDownloadQueue
+    @StateObject private var downloaded = DownloadedWorksModel()
+    /// 0 history, 1 updates, 2 downloads, 3 timeline.
     @State private var selection = 0
     @AppStorage("listMode.history") private var historyMode = ContentListMode.list
     @AppStorage("listMode.updates") private var updatesMode = ContentListMode.list
+    @AppStorage("listMode.downloads") private var downloadsMode = ContentListMode.list
     @AppStorage("records.kind") private var pageKind = ""
     @AppStorage(ContentSpace.key) private var space = ""
     @AppStorage(ContentSpace.enabledKey) private var spacesEnabled = true
@@ -72,30 +82,48 @@ struct LibraryRecordsView: View {
         filterKind ?? "ALL"
     }
 
+    /// History and the timeline read the reading statistics.
+    private var showsStats: Bool { selection == 0 || selection == 3 }
+    /// Updates and the timeline show what update checks found.
+    private var showsUpdates: Bool { selection == 1 || selection == 3 }
+    private var pageTitle: String {
+        [String(localized: "历史"), String(localized: "更新"), String(localized: "下载"), String(localized: "时间轴")][selection]
+    }
+    private var searchPrompt: String {
+        [String(localized: "搜索历史"), String(localized: "搜索更新"), String(localized: "搜索下载"),
+         String(localized: "搜索时间轴")][selection]
+    }
+    /// Finished downloads changed: their records are read again.
+    private var finishedDownloads: Int { downloadQueue.entries.filter { $0.state == .completed }.count }
+
     private var statsRequest: String {
         "\(library.recordsRevision)|\(range.rawValue)|\(effectiveKind)|\(query)"
     }
 
     private final class KindsCache {
         var revision: Int = -1
+        var downloads = -1
         var snapshot: AnyObject?
         var kinds: Set<String> = []
     }
     @State private var kindsCache = KindsCache()
 
     private var availableKinds: Set<String> {
-        if kindsCache.revision == library.recordsRevision && kindsCache.snapshot === stats.snapshot {
+        if kindsCache.revision == library.recordsRevision && kindsCache.snapshot === stats.snapshot &&
+            kindsCache.downloads == downloaded.works.count {
             return kindsCache.kinds
         }
         var kinds = Set<String>()
         for entry in library.history { kinds.insert(entry.content.mediaKind) }
         for update in library.updates { kinds.insert(update.content.mediaKind) }
+        for work in downloaded.works { kinds.insert(work.content.mediaKind) }
         if let snapshot = stats.snapshot {
             for work in snapshot.works { kinds.insert(work.content.mediaKind) }
             for event in snapshot.timeline { kinds.insert(event.content.mediaKind) }
         }
         kindsCache.revision = library.recordsRevision
         kindsCache.snapshot = stats.snapshot
+        kindsCache.downloads = downloaded.works.count
         kindsCache.kinds = kinds
         return kinds
     }
@@ -117,7 +145,7 @@ struct LibraryRecordsView: View {
                     if !spacesEnabled && ContentKindPicker.isShown(availableKinds) {
                         ContentKindPicker(selection: $pageKind, available: availableKinds).padding(.horizontal)
                     }
-                    if selection != 1 {
+                    if showsStats {
                         HStack {
                             Picker("统计周期", selection: $range) {
                                 ForEach(ReadingStatsRange.allCases) { Text($0.title).tag($0) }
@@ -140,12 +168,11 @@ struct LibraryRecordsView: View {
                             .padding(.horizontal)
                     }
                     if let runtime = sources.runtime {
-                        if selection == 0 {
-                            history(runtime)
-                        } else if selection == 1 {
-                            updates(runtime)
-                        } else {
-                            timeline(runtime)
+                        switch selection {
+                        case 0: history(runtime)
+                        case 1: updates(runtime)
+                        case 2: downloads(runtime)
+                        default: timeline(runtime)
                         }
                     }
                 }
@@ -153,25 +180,23 @@ struct LibraryRecordsView: View {
                 .padding(.bottom, 24)
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle(selection == 0 ? "历史" : (selection == 1 ? "更新" : "时间轴"))
+            .navigationTitle(pageTitle)
             .navigationBarTitleDisplayMode(.inline)
-            .pageSearch(text: $query, prompt: selection == 0 ? "搜索历史" : (selection == 1 ? "搜索更新" : "搜索时间轴"))
+            .pageSearch(text: $query, prompt: searchPrompt)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Picker("记录", selection: $selection) {
-                        Text("历史").tag(0)
-                        Text("更新").tag(1)
-                        Text("时间轴").tag(2)
+                    // Longer translations fall back to icons rather than truncated titles.
+                    ViewThatFits(in: .horizontal) {
+                        recordsPicker(icons: false).fixedSize()
+                        recordsPicker(icons: true).frame(maxWidth: 240)
                     }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 240)
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if spacesEnabled { SpaceMenu() }
-                    if selection != 2 {
-                        ContentListModeMenu(mode: selection == 0 ? $historyMode : $updatesMode)
+                    if selection != 3 {
+                        ContentListModeMenu(mode: selection == 0 ? $historyMode : selection == 1 ? $updatesMode : $downloadsMode)
                     }
-                    if selection >= 1, let runtime = sources.runtime {
+                    if showsUpdates, let runtime = sources.runtime {
                         Button("检查更新", systemImage: "arrow.clockwise") { Task { await library.checkUpdates(runtime) } }
                             .disabled(library.isCheckingUpdates)
                             .accessibilityIdentifier("updates.check")
@@ -179,7 +204,8 @@ struct LibraryRecordsView: View {
                 }
             }
             .refreshable {
-                if selection >= 1, let runtime = sources.runtime { await library.checkUpdates(runtime) }
+                if selection == 2 { await downloaded.load(queue: downloadQueue) }
+                else if showsUpdates, let runtime = sources.runtime { await library.checkUpdates(runtime) }
                 else {
                     await library.refresh()
                     await stats.load(library.library, range: range, kind: effectiveKind, query: query)
@@ -187,7 +213,7 @@ struct LibraryRecordsView: View {
                 }
             }
             .task(id: statsRequest) {
-                guard selection != 1 else { return }
+                guard showsStats else { return }
                 guard lastStatsRequest != statsRequest else { return }
                 if !query.isEmpty {
                     do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
@@ -195,11 +221,12 @@ struct LibraryRecordsView: View {
                 await stats.load(library.library, range: range, kind: effectiveKind, query: query)
                 lastStatsRequest = statsRequest
             }
+            .task(id: finishedDownloads) { await downloaded.load(queue: downloadQueue) }
             .onChange(of: range) { _, _ in selectedDay = nil }
             .onChange(of: effectiveKind) { _, _ in selectedDay = nil }
-            .onChange(of: selection) { _, newSelection in
+            .onChange(of: selection) { _, _ in
                 selectedDay = nil
-                if newSelection != 1, lastStatsRequest != statsRequest {
+                if showsStats, lastStatsRequest != statsRequest {
                     Task {
                         await stats.load(library.library, range: range, kind: effectiveKind, query: query)
                         lastStatsRequest = statsRequest
@@ -216,7 +243,7 @@ struct LibraryRecordsView: View {
                 work.isHistoryVisible && (selectedDay == nil || work.dailyActivity.contains { $0.date == selectedDay })
             }
             if matched.isEmpty {
-                if !query.isEmpty { filteredEmpty("阅读记录") }
+                if !query.isEmpty { filteredEmpty(String(localized: "阅读记录")) }
                 else {
                     ContentUnavailableView("此范围暂无阅读记录", systemImage: "clock",
                         description: Text("可切换统计周期查看更早的记录。阅读时长从启用此功能后开始记录。"))
@@ -228,7 +255,7 @@ struct LibraryRecordsView: View {
                 ForEach(DateGroup.allCases, id: \.self) { group in
                     if let entries = grouped[group], !entries.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(selectedDay ?? group.rawValue)
+                            Text(selectedDay ?? group.title)
                                 .font(.headline.weight(.semibold)).foregroundStyle(.secondary)
                                 .padding(.horizontal).padding(.top, 6)
                             let items = entries.map { work in
@@ -287,7 +314,7 @@ struct LibraryRecordsView: View {
         } else {
             let matched = library.updates.filter { matches($0.content) }
             if matched.isEmpty {
-                filteredEmpty("更新")
+                filteredEmpty(String(localized: "更新"))
             } else {
                 let thresholds = DateThresholds.current()
                 let grouped = Dictionary(grouping: matched) { update in
@@ -296,7 +323,7 @@ struct LibraryRecordsView: View {
                 ForEach(DateGroup.allCases, id: \.self) { group in
                     if let updatesList = grouped[group], !updatesList.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(group.rawValue)
+                            Text(group.title)
                                 .font(.headline.weight(.semibold))
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal)
@@ -320,10 +347,71 @@ struct LibraryRecordsView: View {
         }
     }
 
+    private func recordsPicker(icons: Bool) -> some View {
+        Picker("记录", selection: $selection) {
+            ForEach(Array(zip([String(localized: "历史"), String(localized: "更新"), String(localized: "下载"),
+                               String(localized: "时间轴")],
+                              ["clock", "arrow.triangle.2.circlepath", "arrow.down.circle", "timeline.selection"]).enumerated()),
+                    id: \.offset) { index, item in
+                if icons { Image(systemName: item.1).accessibilityLabel(item.0).tag(index) }
+                else { Text(item.0).tag(index) }
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
+    /// Works with finished downloads, by when their latest chapter finished; they open the work's details.
+    @ViewBuilder
+    private func downloads(_ runtime: IosSources) -> some View {
+        NavigationLink { ReaderDownloadsView() } label: {
+            Label("下载队列", systemImage: "arrow.down.circle")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16).frame(minHeight: 44)
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal)
+        .accessibilityIdentifier("records.downloads.queue")
+        if !downloaded.loaded {
+            ProgressView().frame(maxWidth: .infinity).padding()
+        } else if downloaded.works.isEmpty {
+            ContentUnavailableView("暂无下载", systemImage: "arrow.down.circle",
+                                   description: Text("下载完成的章节会按作品列在这里，可离线阅读。"))
+                .padding(.top, 40)
+        } else {
+            let matched = downloaded.works.filter { matches($0.content) }
+            if matched.isEmpty {
+                filteredEmpty(String(localized: "下载"))
+            } else {
+                let thresholds = DateThresholds.current()
+                let grouped = Dictionary(grouping: matched) {
+                    thresholds.group(for: Int64($0.latest.timeIntervalSince1970 * 1000))
+                }
+                ForEach(DateGroup.allCases, id: \.self) { group in
+                    if let works = grouped[group], !works.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(group.title)
+                                .font(.headline.weight(.semibold)).foregroundStyle(.secondary)
+                                .padding(.horizontal).padding(.top, 6)
+                            let items = works.map {
+                                ContentItem(content: $0.content, subtitle: String(localized: "已下载 \($0.chapterCount) 章"))
+                            }
+                            ContentCollection(runtime: runtime, items: items, mode: downloadsMode,
+                                              identifierPrefix: "downloaded.") { item in
+                                // Without the downloaded subset, so the details list the work's saved or fetched chapters.
+                                SourceDetailsView(runtime: runtime, content: item.content.withoutChapters)
+                            } actions: { _ in EmptyView() }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private func timeline(_ runtime: IosSources) -> some View {
         if let snapshot = stats.snapshot {
-            RecordsTimeline(events: snapshot.timeline, runtime: runtime)
+            RecordsTimeline(events: snapshot.timeline, downloads: downloaded.works, runtime: runtime)
         } else if stats.loading {
             ProgressView().frame(maxWidth: .infinity).padding()
         }
@@ -331,43 +419,65 @@ struct LibraryRecordsView: View {
 }
 
 /// Dates share the center line; each lane orders its own events without forcing unrelated times into pairs.
+/// Reading and downloads share the left lane (what the reader did), found updates the right.
 private struct RecordsTimeline: View {
     let events: [IosTimelineEvent]
+    let downloads: [DownloadedWork]
     let runtime: IosSources
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var selected: SelectedEvent?
-    private struct SelectedEvent: Identifiable {
-        let event: IosTimelineEvent
-        var id: String { event.id }
+    @State private var selected: TimelineItem?
+
+    /// A reading or update event, or the chapters of one work that finished downloading on one day.
+    private struct TimelineItem: Identifiable {
+        enum Kind {
+            case event(IosTimelineEvent)
+            case download(count: Int)
+        }
+        let id: String
+        let content: IosSourceContent
+        let timestamp: Int64
+        let kind: Kind
+
+        var event: IosTimelineEvent? { if case .event(let event) = kind { event } else { nil } }
+        var isUpdate: Bool { event?.isUpdate == true }
+        var downloadCount: Int? { if case .download(let count) = kind { count } else { nil } }
     }
     private struct TimelineDayGroup {
         let date: String
-        let all: [IosTimelineEvent]
-        let history: [IosTimelineEvent]
-        let updates: [IosTimelineEvent]
+        let all: [TimelineItem]
+        let history: [TimelineItem]
+        let updates: [TimelineItem]
+    }
+
+    /// One item per work and day, at the day's last finished chapter.
+    private var downloadItems: [TimelineItem] {
+        downloads.flatMap { work in
+            Dictionary(grouping: work.completions) { ReadingStatsFormat.day($0) }.map { day, dates in
+                let latest = dates.max() ?? work.latest
+                return TimelineItem(id: "download.\(work.id).\(day)", content: work.content,
+                                    timestamp: Int64(latest.timeIntervalSince1970 * 1000), kind: .download(count: dates.count))
+            }
+        }
     }
 
     var body: some View {
-        if events.isEmpty {
+        let items = (events.map { TimelineItem(id: $0.id, content: $0.content, timestamp: $0.timestamp, kind: .event($0)) }
+            + downloadItems).sorted { $0.timestamp > $1.timestamp }
+        if items.isEmpty {
             ContentUnavailableView("暂无足迹", systemImage: "timeline.selection",
-                description: Text("阅读足迹与发现更新的记录会按日期保留在这里。"))
+                description: Text("阅读、下载与发现更新的记录会按日期保留在这里。"))
                 .padding(.top, 32)
         } else {
-            let grouped = Dictionary(grouping: events) { ReadingStatsFormat.day(ReadingStatsFormat.date($0.timestamp)) }
+            let grouped = Dictionary(grouping: items) { ReadingStatsFormat.day(ReadingStatsFormat.date($0.timestamp)) }
             let dates = grouped.keys.sorted(by: >)
             let dayGroups: [TimelineDayGroup] = dates.compactMap { date in
-                guard let dayEvents = grouped[date] else { return nil }
-                var history: [IosTimelineEvent] = []
-                var updates: [IosTimelineEvent] = []
-                for event in dayEvents {
-                    if event.isUpdate { updates.append(event) }
-                    else { history.append(event) }
-                }
-                return TimelineDayGroup(date: date, all: dayEvents, history: history, updates: updates)
+                guard let dayItems = grouped[date] else { return nil }
+                return TimelineDayGroup(date: date, all: dayItems, history: dayItems.filter { !$0.isUpdate },
+                                        updates: dayItems.filter(\.isUpdate))
             }
             LazyVStack(spacing: 20) {
                 HStack {
-                    Text("阅读历史").frame(maxWidth: .infinity)
+                    Text("历史 & 下载").frame(maxWidth: .infinity)
                     Color.clear.frame(width: 24, height: 1)
                     Text("发现更新").frame(maxWidth: .infinity)
                 }
@@ -376,13 +486,13 @@ private struct RecordsTimeline: View {
                 .background(Color(uiColor: .systemGroupedBackground))
                 ForEach(dayGroups, id: \.date) { group in
                     VStack(spacing: 12) {
-                        Text(dayTitle(group.date, events: group.all))
+                        Text(dayTitle(group.date, items: group.all))
                             .font(.caption.weight(.medium)).padding(.horizontal, 10).padding(.vertical, 4)
                             .background(Color(uiColor: .systemGroupedBackground), in: Capsule())
                         if dynamicTypeSize.isAccessibilitySize {
                             VStack(alignment: .leading, spacing: 10) {
-                                ForEach(group.all, id: \.id) { event in
-                                    eventRow(event, alignment: .leading, showsKind: true)
+                                ForEach(group.all) { item in
+                                    eventRow(item, alignment: .leading, showsKind: true)
                                 }
                             }.background(Color(uiColor: .systemGroupedBackground))
                         } else {
@@ -401,22 +511,27 @@ private struct RecordsTimeline: View {
                 NavigationStack {
                     List {
                         Section {
-                            Text(item.event.content.title).font(.headline)
-                            LabeledContent(item.event.isUpdate ? "发现更新时间" : "阅读日期",
-                                value: ReadingStatsFormat.date(item.event.timestamp).formatted(date: .abbreviated, time: .shortened))
-                            if item.event.duration > 0 {
-                                LabeledContent("阅读时长", value: ReadingStatsFormat.duration(item.event.duration))
+                            Text(item.content.title).font(.headline)
+                            LabeledContent(timeTitle(item),
+                                value: ReadingStatsFormat.date(item.timestamp).formatted(date: .abbreviated, time: .shortened))
+                            if let event = item.event {
+                                if event.duration > 0 {
+                                    LabeledContent("阅读时长", value: ReadingStatsFormat.duration(event.duration))
+                                }
+                                if !event.isUpdate && event.count > 0 {
+                                    LabeledContent("阅读次数", value: "\(event.count)")
+                                }
+                                Text(event.detail).font(.subheadline)
+                            } else if let count = item.downloadCount {
+                                LabeledContent("下载完成", value: String(localized: "\(count) 章"))
                             }
-                            if !item.event.isUpdate && item.event.count > 0 {
-                                LabeledContent("阅读次数", value: "\(item.event.count)")
-                            }
-                            Text(item.event.detail).font(.subheadline)
                         }
                         NavigationLink("打开作品") {
-                            SourceDetailsView(runtime: runtime, content: item.event.content)
+                            SourceDetailsView(runtime: runtime,
+                                              content: item.downloadCount == nil ? item.content : item.content.withoutChapters)
                         }
                     }
-                    .navigationTitle(item.event.isUpdate ? "更新记录" : "阅读记录")
+                    .navigationTitle(recordTitle(item))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { selected = nil } } }
                 }
@@ -425,30 +540,52 @@ private struct RecordsTimeline: View {
         }
     }
 
-    private func lane(_ events: [IosTimelineEvent], alignment: HorizontalAlignment) -> some View {
+    private func kindTitle(_ item: TimelineItem) -> String {
+        item.downloadCount != nil ? String(localized: "下载") : item.isUpdate ? String(localized: "发现更新")
+            : String(localized: "阅读")
+    }
+
+    private func timeTitle(_ item: TimelineItem) -> String {
+        item.downloadCount != nil ? String(localized: "下载时间") : item.isUpdate ? String(localized: "发现更新时间")
+            : String(localized: "阅读时间")
+    }
+
+    private func recordTitle(_ item: TimelineItem) -> String {
+        item.downloadCount != nil ? String(localized: "下载记录") : item.isUpdate ? String(localized: "更新记录")
+            : String(localized: "阅读记录")
+    }
+
+    private func lane(_ items: [TimelineItem], alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 10) {
-            ForEach(events, id: \.id) { event in eventRow(event, alignment: alignment, showsKind: false) }
+            ForEach(items) { item in eventRow(item, alignment: alignment, showsKind: false) }
         }
         .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
     }
 
-    private func eventRow(_ event: IosTimelineEvent, alignment: HorizontalAlignment, showsKind: Bool) -> some View {
-        Button { selected = SelectedEvent(event: event) } label: {
-            let cover = CoverImage(runtime: runtime, content: event.content)
+    private func eventRow(_ item: TimelineItem, alignment: HorizontalAlignment, showsKind: Bool) -> some View {
+        Button { selected = item } label: {
+            let cover = CoverImage(runtime: runtime, content: item.content)
                 .frame(width: 32, height: 48)
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                 .accessibilityHidden(true)
             HStack(alignment: .top, spacing: 8) {
                 if alignment == .leading { cover }
                 VStack(alignment: alignment, spacing: 4) {
-                    Text(event.content.title).font(.subheadline.weight(.medium)).lineLimit(2)
+                    Text(item.content.title).font(.subheadline.weight(.medium)).lineLimit(2)
                         .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
-                    if showsKind { Text(event.isUpdate ? "发现更新" : "阅读").font(.caption).foregroundStyle(.secondary) }
-                    Text(event.isUpdate ? "新增 \(event.count) 章节" : event.detail)
-                        .font(.caption).foregroundStyle(event.isUpdate ? Color.orange : .secondary).lineLimit(1)
+                    if showsKind { Text(kindTitle(item)).font(.caption).foregroundStyle(.secondary) }
+                    if let count = item.downloadCount {
+                        Label("下载 \(count) 章", systemImage: "arrow.down.circle")
+                            .font(.caption).foregroundStyle(.tint).lineLimit(1)
+                    } else if let event = item.event {
+                        Text(event.isUpdate ? String(localized: "新增 \(event.count) 章节") : event.detail)
+                            .font(.caption).foregroundStyle(event.isUpdate ? Color.orange : .secondary).lineLimit(1)
+                    }
                     HStack(spacing: 4) {
-                        Text(ReadingStatsFormat.date(event.timestamp), format: .dateTime.hour().minute())
-                        if event.duration > 0 { Text("· " + ReadingStatsFormat.duration(event.duration)) }
+                        Text(ReadingStatsFormat.date(item.timestamp), format: .dateTime.hour().minute())
+                        if let duration = item.event?.duration, duration > 0 {
+                            Text("· " + ReadingStatsFormat.duration(duration))
+                        }
                     }.font(.caption2).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
@@ -458,12 +595,13 @@ private struct RecordsTimeline: View {
             .padding(.vertical, 3).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("timeline.\(event.id)")
+        .accessibilityIdentifier("timeline.\(item.id)")
     }
 
-    private func dayTitle(_ date: String, events: [IosTimelineEvent]) -> String {
-        guard let event = events.first else { return date }
-        let title = ReadingStatsFormat.dayTitle(event.timestamp)
-        return title == "今天" || title == "昨天" ? title + " · " + date : date
+    private func dayTitle(_ date: String, items: [TimelineItem]) -> String {
+        guard let item = items.first else { return date }
+        let day = ReadingStatsFormat.date(item.timestamp)
+        guard Calendar.current.isDateInToday(day) || Calendar.current.isDateInYesterday(day) else { return date }
+        return String(localized: "\(ReadingStatsFormat.dayTitle(item.timestamp)) · \(date)")
     }
 }

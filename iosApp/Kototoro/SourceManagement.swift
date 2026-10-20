@@ -20,7 +20,7 @@ enum SourceLanguage {
 
     static func title(_ locale: String) -> String {
         let value = locale.lowercased()
-        if value.isEmpty || value == "all" || value == "multi" { return "多语言" }
+        if value.isEmpty || value == "all" || value == "multi" { return String(localized: "多语言") }
         return Locale.current.localizedString(forIdentifier: locale.replacingOccurrences(of: "_", with: "-")) ?? locale
     }
 }
@@ -28,7 +28,7 @@ enum SourceLanguage {
 /// Browse source kinds (content) and ecosystems (where a source comes from), for filtering the source list.
 enum SourceFilterOption {
     static let kinds: [(id: String, title: String, icon: String)] = [
-        ("MANGA", "漫画", "book.closed"), ("NOVEL", "小说", "text.book.closed"), ("VIDEO", "视频", "play.rectangle"),
+        ("MANGA", String(localized: "漫画"), "book.closed"), ("NOVEL", String(localized: "小说"), "text.book.closed"), ("VIDEO", String(localized: "视频"), "play.rectangle"),
     ]
 
     static func ecosystemKey(_ source: IosSource) -> String { source.kind == "video" ? "TVBOX" : source.ecosystem }
@@ -75,7 +75,7 @@ enum ContentSpace {
     }
 
     static func title(_ kind: String) -> String {
-        SourceFilterOption.kinds.first { $0.id == kind }?.title ?? "全部"
+        SourceFilterOption.kinds.first { $0.id == kind }?.title ?? String(localized: "全部")
     }
 
     static func icon(_ kind: String) -> String {
@@ -90,7 +90,7 @@ enum ContentSpace {
     }
 
     /// Under the page title while a space narrows it, as Android names the active space in its top bar.
-    static func subtitle(_ kind: String) -> String { kind.isEmpty ? "" : "\(title(kind))空间" }
+    static func subtitle(_ kind: String) -> String { kind.isEmpty ? "" : String(localized: "\(title(kind))空间") }
 }
 
 /// A root page's space subtitle. An empty one is not set at all: an empty navigation subtitle is still a subtitle to
@@ -294,7 +294,7 @@ struct SourceToggleRow: View {
                 SourceIcon(runtime: sources.runtime, source: source, size: 28)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(source.title).lineLimit(1)
-                    Text([source.kind == "video" ? "影视站点" : SourceLanguage.title(source.locale),
+                    Text([source.kind == "video" ? String(localized: "影视站点") : SourceLanguage.title(source.locale),
                           SourcesView.kindName(source.mediaKind)].joined(separator: " · "))
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
@@ -368,7 +368,7 @@ struct SourceTile: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 2)
 
-            Text(source.kind == "video" ? "影视" : SourceLanguage.title(source.locale))
+            Text(source.kind == "video" ? String(localized: "影视") : SourceLanguage.title(source.locale))
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -449,7 +449,7 @@ struct SourceOrderSheet: View {
             SourceIcon(runtime: sources.runtime, source: source, size: 28)
             VStack(alignment: .leading, spacing: 1) {
                 Text(source.title).lineLimit(1)
-                Text(source.kind == "video" ? "影视站点" : SourceLanguage.title(source.locale))
+                Text(source.kind == "video" ? String(localized: "影视站点") : SourceLanguage.title(source.locale))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

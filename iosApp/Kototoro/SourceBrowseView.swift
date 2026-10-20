@@ -245,7 +245,7 @@ struct SourceBrowseView: View {
                     Button("取消收藏", systemImage: "heart.slash", role: .destructive) {
                         Task {
                             do { try await library.setFavourite(item.content, favourite: false) }
-                            catch { showMessage("收藏失败", SourceErrorText.describe(error)) }
+                            catch { showMessage(String(localized: "收藏失败"), SourceErrorText.describe(error)) }
                         }
                     }
                 }
@@ -259,7 +259,7 @@ struct SourceBrowseView: View {
                                 try await model.runtime.removeLocal(content: item.content)
                                 await model.reload()
                             } catch {
-                                if !Task.isCancelled { showMessage("删除本地文件失败", SourceErrorText.describe(error)) }
+                                if !Task.isCancelled { showMessage(String(localized: "删除本地文件失败"), SourceErrorText.describe(error)) }
                             }
                         }
                     }
@@ -267,7 +267,7 @@ struct SourceBrowseView: View {
             }
             footer
         }
-        .navigationTitle(selecting ? "已选择 \(selectedKeys.count) 部" : model.source.title)
+        .navigationTitle(selecting ? String(localized: "已选择 \(selectedKeys.count) 部") : model.source.title)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(selecting)
         // A search button in the toolbar (top right), as standard iOS list screens do, instead of a drawer.
@@ -330,7 +330,7 @@ struct SourceBrowseView: View {
             guard case .success(let urls) = result else { return }
             Task {
                 if let result = await LocalImport.run(urls, runtime: model.runtime) {
-                    showMessage("导入本地文件", result)
+                    showMessage(String(localized: "导入本地文件"), result)
                 }
                 await model.reload()
             }
@@ -375,7 +375,7 @@ struct SourceBrowseView: View {
                     // Every source has the entry: an empty panel explains itself, a failed one can be retried.
                     filterChip
                     if !model.categories.isEmpty {
-                    chip("全部", selected: model.allCategoriesSelected) { await model.select(nil) }
+                    chip(String(localized: "全部"), selected: model.allCategoriesSelected) { await model.select(nil) }
                     ForEach(model.categories, id: \.key) { tag in
                         chip(tag.title, selected: model.selectedCategory?.key == tag.key) { await model.select(tag) }
                     }
@@ -771,8 +771,8 @@ enum LocalImport {
                 failed.append("\(url.lastPathComponent)：\(SourceErrorText.describe(error))")
             }
         }
-        if failed.isEmpty { return imported.count > 1 ? "已导入 \(imported.count) 个文件" : nil }
-        return (imported.isEmpty ? "" : "已导入 \(imported.count) 个文件。\n") + "未能导入：\n" + failed.joined(separator: "\n")
+        if failed.isEmpty { return imported.count > 1 ? String(localized: "已导入 \(imported.count) 个文件") : nil }
+        return (imported.isEmpty ? "" : String(localized: "已导入 \(imported.count) 个文件。\n")) + String(localized: "未能导入：\n") + failed.joined(separator: "\n")
     }
 
     /// Container names alone do not establish codec support. Keep an unplayable file out of the local library.
@@ -787,7 +787,7 @@ enum LocalImport {
             throw CancellationError()
         } catch {
             throw NSError(domain: "org.skepsun.kototoro.local", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "系统播放器无法读取此视频。请使用支持的视频编码（例如 H.264 的 MP4/MOV 文件）。"
+                NSLocalizedDescriptionKey: String(localized: "系统播放器无法读取此视频。请使用支持的视频编码（例如 H.264 的 MP4/MOV 文件）。")
             ])
         }
     }

@@ -96,8 +96,8 @@ struct RepositoriesView: View {
                             Label(languageSelectionTitle, systemImage: "globe")
                         }.menuActionDismissBehavior(.disabled)
                             .buttonStyle(.glass).controlSize(.small)
-                            .accessibilityLabel("筛选语言，当前" + (selectedLanguageTitles.isEmpty
-                                ? "全部语言" : selectedLanguageTitles.joined(separator: "、")))
+                            .accessibilityLabel(String(localized: "筛选语言，当前") + (selectedLanguageTitles.isEmpty
+                                ? String(localized: "全部语言") : selectedLanguageTitles.joined(separator: "、")))
                             .accessibilityIdentifier("extension.language")
                         if !selectedLanguages.isEmpty {
                             Button("重置") { setLanguages([]) }
@@ -199,8 +199,8 @@ struct RepositoriesView: View {
         selectedLanguages.sorted().map(ExtensionLanguage.title)
     }
     private var languageSelectionTitle: String {
-        if selectedLanguages.isEmpty { return "全部语言" }
-        if selectedLanguages.count > 2 { return "已选 \(selectedLanguages.count) 种语言" }
+        if selectedLanguages.isEmpty { return String(localized: "全部语言") }
+        if selectedLanguages.count > 2 { return String(localized: "已选 \(selectedLanguages.count) 种语言") }
         return selectedLanguageTitles.joined(separator: "、")
     }
     private func languageBinding(_ code: String) -> Binding<Bool> {
@@ -379,7 +379,7 @@ struct RepositoriesView: View {
             let key = SourceFilterOption.ecosystemKey(source)
             let languageMatches = selectedLanguages.isEmpty || source.kind == "video" ||
                 selectedLanguages.contains { SourceLanguage.code(of: $0) == SourceLanguage.code(of: source.locale) } ||
-                SourceLanguage.title(source.locale) == "多语言"
+                SourceLanguage.title(source.locale) == String(localized: "多语言")
             let state = sources.isEnabled(source)
             return (ecosystem.isEmpty || key == ecosystem || (ecosystem == "JAR" && key == "JAR")) &&
                 (showAdult || !source.isAdult) && languageMatches &&
@@ -392,8 +392,8 @@ struct RepositoriesView: View {
             source.kind == "video" ? "TVBOX" : source.group.isEmpty ? source.ecosystem : source.group
         }
         let keys = groups.keys.sorted { lhs, rhs in
-            let left = lhs == "TVBOX" ? "苹果 CMS / TVBox 站点" : titles[lhs] ?? lhs
-            let right = rhs == "TVBOX" ? "苹果 CMS / TVBox 站点" : titles[rhs] ?? rhs
+            let left = lhs == "TVBOX" ? String(localized: "苹果 CMS / TVBox 站点") : titles[lhs] ?? lhs
+            let right = rhs == "TVBOX" ? String(localized: "苹果 CMS / TVBox 站点") : titles[rhs] ?? rhs
             return left.localizedStandardCompare(right) == .orderedAscending
         }
         if sources.sources.isEmpty {
@@ -410,7 +410,7 @@ struct RepositoriesView: View {
             Section {
                 ForEach(members, id: \.name) { SourceToggleRow(source: $0) }
             } header: {
-                SourceGroupHeader(title: key == "TVBOX" ? "苹果 CMS / TVBox 站点" : titles[key] ?? key, members: members)
+                SourceGroupHeader(title: key == "TVBOX" ? String(localized: "苹果 CMS / TVBox 站点") : titles[key] ?? key, members: members)
             }
         }
     }
@@ -630,17 +630,17 @@ struct RepositoryStatusView: View {
         guard let range = message.range(of: "Source JAR failure: ") else { return message }
         let code = message[range.upperBound...].prefix { $0.isLetter || $0 == "_" }
         let reason: String? = switch code {
-        case "UNSUPPORTED_LIBRARY": "扩展的库版本不受支持（Mihon/Tsundoku 支持 1.4–1.6，Aniyomi 支持 12–16）"
-        case "UNSUPPORTED_BYTECODE": "扩展的字节码版本过新，当前运行时无法加载"
-        case "INVALID_ARCHIVE": "安装包已损坏或不是有效的扩展文件"
-        case "INVALID_MANIFEST": "扩展清单无法识别"
-        case "AMBIGUOUS_ECOSYSTEM": "扩展同时声明了多种类型，无法确定由哪个运行时加载"
-        case "HASH_MISMATCH": "下载的文件校验失败，请重试"
-        case "PACKAGE_MISMATCH", "VERSION_MISMATCH": "安装包与仓库记录的包名或版本不一致"
-        case "API_UNAVAILABLE": "扩展依赖的接口在 iOS 兼容层中不可用"
-        case "CONSTRUCTION_FAILED": "扩展初始化失败"
-        case "NO_SOURCES": "扩展没有提供任何来源"
-        case "DUPLICATE_SOURCE", "ALREADY_LOADED": "已存在相同 ID 的来源"
+        case "UNSUPPORTED_LIBRARY": String(localized: "扩展的库版本不受支持（Mihon/Tsundoku 支持 1.4–1.6，Aniyomi 支持 12–16）")
+        case "UNSUPPORTED_BYTECODE": String(localized: "扩展的字节码版本过新，当前运行时无法加载")
+        case "INVALID_ARCHIVE": String(localized: "安装包已损坏或不是有效的扩展文件")
+        case "INVALID_MANIFEST": String(localized: "扩展清单无法识别")
+        case "AMBIGUOUS_ECOSYSTEM": String(localized: "扩展同时声明了多种类型，无法确定由哪个运行时加载")
+        case "HASH_MISMATCH": String(localized: "下载的文件校验失败，请重试")
+        case "PACKAGE_MISMATCH", "VERSION_MISMATCH": String(localized: "安装包与仓库记录的包名或版本不一致")
+        case "API_UNAVAILABLE": String(localized: "扩展依赖的接口在 iOS 兼容层中不可用")
+        case "CONSTRUCTION_FAILED": String(localized: "扩展初始化失败")
+        case "NO_SOURCES": String(localized: "扩展没有提供任何来源")
+        case "DUPLICATE_SOURCE", "ALREADY_LOADED": String(localized: "已存在相同 ID 的来源")
         default: nil
         }
         return reason.map { "\($0)（\(code)）" } ?? message
@@ -657,7 +657,7 @@ struct RepositoryStatusView: View {
                 }
             }
         } else if model.busy {
-            ProgressView(model.status ?? "正在处理…").accessibilityIdentifier("repository.progress")
+            ProgressView(model.status ?? String(localized: "正在处理…")).accessibilityIdentifier("repository.progress")
         } else if let status = model.status {
             Label(status, systemImage: "checkmark.circle").font(.subheadline).foregroundStyle(.secondary)
                 .accessibilityIdentifier("repository.status")
@@ -818,7 +818,7 @@ private struct ExtensionDetailsView: View {
                     if let available = row.available {
                         Section {
                             if row.state == .update { LabeledContent("可更新至", value: available.version) }
-                            Button(row.state == .installed ? "重新安装" : row.stateTitle,
+                            Button(row.state == .installed ? String(localized: "重新安装") : row.stateTitle,
                                    systemImage: row.state == .update ? "arrow.triangle.2.circlepath" : "arrow.down.circle") {
                                 Task { await model.install(row) }
                             }.disabled(model.busy || NativeSourceTransport.isFixtureRuntime)
@@ -833,7 +833,7 @@ private struct ExtensionDetailsView: View {
                                 SourceToggleRow(source: $0)
                             }
                         } header: {
-                            SourceGroupHeader(title: "来源", members: provided)
+                            SourceGroupHeader(title: String(localized: "来源"), members: provided)
                         } footer: {
                             Text("关闭的来源不会出现在浏览页；多语言扩展默认只开启系统语言的来源。")
                         }

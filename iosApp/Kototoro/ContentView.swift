@@ -83,7 +83,7 @@ struct ContentView: View {
                     ReaderLoadingSettingsSection()
                     Section("关于") {
                         LabeledContent("应用", value: "Kototoro")
-                        LabeledContent("版本", value: "iOS 开发版")
+                        LabeledContent("版本", value: String(localized: "iOS 开发版"))
                     }
                 }
                 .navigationTitle("设置")
@@ -141,7 +141,7 @@ struct ContentView: View {
             guard let runtime = sources.runtime else { return }
             Task {
                 openedFileMessage = await LocalImport.run([url], runtime: runtime)
-                    ?? "已导入“\(url.deletingPathExtension().lastPathComponent)”，可在“浏览 · 本地作品”中查看"
+                    ?? String(localized: "已导入“\(url.deletingPathExtension().lastPathComponent)”，可在“浏览 · 本地作品”中查看")
             }
         }
         .alert("导入本地文件", isPresented: Binding(get: { openedFileMessage != nil },
@@ -230,7 +230,7 @@ struct FavouriteCategoriesView: View {
         NavigationStack {
             List {
                 Section {
-                    Text(contents.count == 1 ? contents[0].title : "已选择 \(contents.count) 部作品")
+                    Text(contents.count == 1 ? contents[0].title : String(localized: "已选择 \(contents.count) 部作品"))
                         .font(.headline)
                     if loading { ProgressView("正在读取分类…") }
                     else {

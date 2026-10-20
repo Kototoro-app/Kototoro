@@ -134,7 +134,7 @@ struct SourceFilterSheet: View {
                                 }
                                 .padding(.vertical, 4)
                             } header: {
-                                Text(panel.groups.count == 1 && group.title == "Tags" ? "标签" : group.title)
+                                Text(panel.groups.count == 1 && group.title == "Tags" ? String(localized: "标签") : group.title)
                             } footer: {
                                 if panel.excludeTags && !group.isExclusive { Text("再次点击排除该标签。") }
                             }
@@ -148,10 +148,10 @@ struct SourceFilterSheet: View {
                             .accessibilityIdentifier("filter.author")
                     }
                 }
-                options("连载状态", panel.states, \.states)
-                options("内容分级", panel.contentRatings, \.ratings)
-                options("类型", panel.types, \.types)
-                options("受众", panel.demographics, \.demographics)
+                options(String(localized: "连载状态"), panel.states, \.states)
+                options(String(localized: "内容分级"), panel.contentRatings, \.ratings)
+                options(String(localized: "类型"), panel.types, \.types)
+                options(String(localized: "受众"), panel.demographics, \.demographics)
                 if !panel.locales.isEmpty {
                     Section("语言") {
                         Picker("语言", selection: $draft.locale) {
@@ -172,8 +172,8 @@ struct SourceFilterSheet: View {
                 }
                 if panel.yearRange {
                     Section("年份范围") {
-                        yearStepper("起始", $draft.yearFrom, upper: draft.yearTo == 0 ? nil : draft.yearTo)
-                        yearStepper("截止", $draft.yearTo, lower: draft.yearFrom)
+                        yearStepper(String(localized: "起始"), $draft.yearFrom, upper: draft.yearTo == 0 ? nil : draft.yearTo)
+                        yearStepper(String(localized: "截止"), $draft.yearTo, lower: draft.yearFrom)
                     }
                 }
                 if panel.year {
@@ -204,7 +204,7 @@ struct SourceFilterSheet: View {
     private func yearStepper(_ title: String, _ value: Binding<Int>, lower: Int = 0, upper: Int? = nil) -> some View {
         let maximum = upper ?? Calendar.current.component(.year, from: .now)
         return Stepper(value: value, in: 0...maximum) {
-            LabeledContent(title, value: value.wrappedValue == 0 ? "不限" : "\(value.wrappedValue) 年")
+            LabeledContent(title, value: value.wrappedValue == 0 ? String(localized: "不限") : String(localized: "\(value.wrappedValue) 年"))
         }
         .onChange(of: value.wrappedValue) { old, new in
             // Stepping up from "no limit" starts at a useful year rather than year 1.
@@ -218,7 +218,7 @@ struct SourceFilterSheet: View {
     /// Top-level controls split at the extension's headers, each run becoming one form section.
     private var dynamicSections: [(title: String, controls: [IosFilterControl])] {
         var result: [(title: String, controls: [IosFilterControl])] = []
-        var title = "来源筛选"
+        var title = String(localized: "来源筛选")
         var current: [IosFilterControl] = []
         for control in panel.controls {
             switch control.kind {
@@ -289,7 +289,7 @@ struct SourceFilterSheet: View {
         case "separator":
             return AnyView(EmptyView())
         default:
-            return AnyView(LabeledContent(control.name, value: "暂不支持").foregroundStyle(.secondary))
+            return AnyView(LabeledContent(control.name, value: String(localized: "暂不支持")).foregroundStyle(.secondary))
         }
     }
 
@@ -397,55 +397,55 @@ struct SourceFilterSheet: View {
 
     static func orderTitle(_ order: String) -> String {
         switch order {
-        case "UPDATED": "最近更新"
-        case "UPDATED_ASC": "最早更新"
-        case "POPULARITY": "人气"
-        case "POPULARITY_ASC": "人气（升序）"
-        case "POPULARITY_TODAY": "今日人气"
-        case "POPULARITY_WEEK": "本周人气"
-        case "POPULARITY_MONTH": "本月人气"
-        case "POPULARITY_YEAR": "年度人气"
-        case "RATING": "评分"
-        case "RATING_ASC": "评分（升序）"
-        case "NEWEST": "最新"
-        case "NEWEST_ASC": "最早"
-        case "ALPHABETICAL": "名称 A–Z"
-        case "ALPHABETICAL_DESC": "名称 Z–A"
-        case "ADDED": "最近收录"
-        case "ADDED_ASC": "最早收录"
-        case "RELEVANCE": "相关度"
+        case "UPDATED": String(localized: "最近更新")
+        case "UPDATED_ASC": String(localized: "最早更新")
+        case "POPULARITY": String(localized: "人气")
+        case "POPULARITY_ASC": String(localized: "人气（升序）")
+        case "POPULARITY_TODAY": String(localized: "今日人气")
+        case "POPULARITY_WEEK": String(localized: "本周人气")
+        case "POPULARITY_MONTH": String(localized: "本月人气")
+        case "POPULARITY_YEAR": String(localized: "年度人气")
+        case "RATING": String(localized: "评分")
+        case "RATING_ASC": String(localized: "评分（升序）")
+        case "NEWEST": String(localized: "最新")
+        case "NEWEST_ASC": String(localized: "最早")
+        case "ALPHABETICAL": String(localized: "名称 A–Z")
+        case "ALPHABETICAL_DESC": String(localized: "名称 Z–A")
+        case "ADDED": String(localized: "最近收录")
+        case "ADDED_ASC": String(localized: "最早收录")
+        case "RELEVANCE": String(localized: "相关度")
         default: order
         }
     }
 
     static func optionTitle(_ value: String) -> String {
         switch value {
-        case "ONGOING": "连载中"
-        case "FINISHED": "已完结"
-        case "ABANDONED": "已放弃"
-        case "PAUSED": "暂停"
-        case "UPCOMING": "即将推出"
-        case "RESTRICTED": "受限"
-        case "SAFE": "全年龄"
-        case "SUGGESTIVE": "轻度"
-        case "ADULT": "成人"
-        case "MANGA": "日漫"
-        case "MANHWA": "韩漫"
-        case "MANHUA": "国漫"
-        case "COMICS": "美漫"
-        case "NOVEL": "小说"
-        case "ONE_SHOT": "短篇"
-        case "DOUJINSHI": "同人"
-        case "IMAGE_SET": "图集"
+        case "ONGOING": String(localized: "连载中")
+        case "FINISHED": String(localized: "已完结")
+        case "ABANDONED": String(localized: "已放弃")
+        case "PAUSED": String(localized: "暂停")
+        case "UPCOMING": String(localized: "即将推出")
+        case "RESTRICTED": String(localized: "受限")
+        case "SAFE": String(localized: "全年龄")
+        case "SUGGESTIVE": String(localized: "轻度")
+        case "ADULT": String(localized: "成人")
+        case "MANGA": String(localized: "日漫")
+        case "MANHWA": String(localized: "韩漫")
+        case "MANHUA": String(localized: "国漫")
+        case "COMICS": String(localized: "美漫")
+        case "NOVEL": String(localized: "小说")
+        case "ONE_SHOT": String(localized: "短篇")
+        case "DOUJINSHI": String(localized: "同人")
+        case "IMAGE_SET": String(localized: "图集")
         case "ARTIST_CG": "CG"
-        case "GAME_CG": "游戏 CG"
-        case "OTHER": "其他"
-        case "SHOUNEN": "少年"
-        case "SHOUJO": "少女"
-        case "SEINEN": "青年"
-        case "JOSEI": "女性"
-        case "KODOMO": "儿童"
-        case "NONE": "无"
+        case "GAME_CG": String(localized: "游戏 CG")
+        case "OTHER": String(localized: "其他")
+        case "SHOUNEN": String(localized: "少年")
+        case "SHOUJO": String(localized: "少女")
+        case "SEINEN": String(localized: "青年")
+        case "JOSEI": String(localized: "女性")
+        case "KODOMO": String(localized: "儿童")
+        case "NONE": String(localized: "无")
         default: value
         }
     }

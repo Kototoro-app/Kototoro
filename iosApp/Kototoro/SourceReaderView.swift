@@ -571,10 +571,13 @@ final class SourceReaderModel: ObservableObject {
             ) else { return }
             let requests = planned.filter { window.indices.contains(Int($0.index)) }
                 .sorted { $0.priority < $1.priority }
-            decodeWindow = Set(requests.filter(\.decode).map { pageIdentity(window[Int($0.index)]) })
+            let unzoomed = unzoomedStripPages()
+            let decoded = requests.filter(\.decode).map { Int($0.index) } + unzoomed
+            decodeWindow = Set(decoded.map { pageIdentity(window[$0]) })
             downloadWindow = requests.filter { !$0.decode }.map { pageIdentity(window[Int($0.index)]) }
             // Visible and near pages load at once, nearest priority first.
             for request in requests where request.decode { startWanted(Int(request.index)) }
+            for target in unzoomed { startWanted(target) }
         } else {
             let neighbors = neighborPages()
             decodeWindow = Set(neighbors.map { pageIdentity(window[$0]) })
@@ -594,6 +597,23 @@ final class SourceReaderModel: ObservableObject {
 
     /// Plans again from scratch, starting every wanted page that is neither shown nor loading.
     func refreshResources() { updateResources(force: true) }
+
+    /// The pages a zoomed strip shows once it zooms back out to fit about any point on screen. The prediction plans
+    /// for the zoomed viewport, so a zoom out would otherwise reveal pages it evicted and draw them blank until the
+    /// zoom ends; this keeps what the unzoomed strip itself kept.
+    private func unzoomedStripPages() -> [Int] {
+        guard stripZoom > 1 else { return [] }
+        let vertical = stripIsVertical
+        let extent = vertical ? viewport.height : viewport.width
+        let origin = vertical ? viewportOffset.y : viewportOffset.x
+        let lower = origin - extent * (stripZoom - 1), upper = origin + extent * stripZoom
+        return slots.flatMap(\.placements).compactMap { placement in
+            let start = CGFloat(vertical ? placement.y : placement.x)
+            let end = start + CGFloat(vertical ? placement.height : placement.width)
+            let index = Int(placement.index)
+            return end > lower && start < upper && window.indices.contains(index) ? index : nil
+        }
+    }
 
     private func startWanted(_ target: Int) {
         guard window.indices.contains(target), images[target] == nil, pageFailures[target] == nil else { return }
@@ -678,9 +698,10 @@ final class SourceReaderModel: ObservableObject {
     }
 
     func pageDescription(at target: Int) -> String {
-        guard window.indices.contains(target) else { return "漫画页" }
+        guard window.indices.contains(target) else { return String(localized: "漫画页") }
         let key = window[target]
-        return "\(chapterByID[key.chapterId]?.title ?? "章节")，第 \(key.index + 1) 页"
+        let chapter = chapterByID[key.chapterId]?.title ?? String(localized: "章节")
+        return String(localized: "\(chapter)，第 \(key.index + 1) 页")
     }
 
     func slotIdentity(_ slot: IosReaderSlot) -> String {
@@ -772,7 +793,9 @@ final class SourceReaderModel: ObservableObject {
         stripZoom = zoom
         engine.setZoom(zoom: Float(zoom))
         slots = engine.slots()
-        updateResources(force: true)
+        // The strip reports its compensated viewport immediately after laying out these slots. Planning here would
+        // use the previous scene's offset and could evict the page that is still under the zoom anchor.
+        needsReplan = true
     }
 
     /// A point on the strip's screen as the shared scene reads it: the page under [location] (a point on screen while
@@ -816,7 +839,7 @@ final class SourceReaderModel: ObservableObject {
     }
 
     var readingPositionDescription: String {
-        "第 \(index + 1) 页，缩放 \(Int(stripZoom * 100))%，页内偏移 \(Int(offset))，窗口 \(window.count) 页"
+        String(localized: "第 \(index + 1) 页，缩放 \(Int(stripZoom * 100))%，页内偏移 \(Int(offset))，窗口 \(window.count) 页")
     }
 
     func jump(to page: Int, scroll: Float = 0) {
@@ -1062,10 +1085,10 @@ struct SourceReaderView: View {
     private var currentDownloadStatus: String? {
         if let downloadStatus { return downloadStatus }
         if ReaderDownloads.isDownloaded(content: model.content, chapter: model.chapter) {
-            return "本章已下载，可离线阅读"
+            return String(localized: "本章已下载，可离线阅读")
         }
         if downloadEntry?.state == .completed {
-            return "下载文件不完整，可重新下载本章"
+            return String(localized: "下载文件不完整，可重新下载本章")
         }
         return downloadEntry?.status
     }
@@ -1493,7 +1516,7 @@ struct SourceReaderView: View {
         if let panel {
             VStack(spacing: 0) {
                 HStack {
-                    Text(panel == .more ? "更多" : (panel == .thumbnails ? "缩略图" : model.chapter.title)).font(.headline).lineLimit(1)
+                    Text(panel == .more ? String(localized: "更多") : (panel == .thumbnails ? String(localized: "缩略图") : model.chapter.title)).font(.headline).lineLimit(1)
                     Spacer()
                     Button("收起", systemImage: "xmark") { withAnimation(chromeAnimation) { self.panel = nil } }
                         .labelStyle(.iconOnly).buttonStyle(.borderless).accessibilityIdentifier("reader.panel.close")

@@ -74,7 +74,7 @@ internal class IosExternalBackupService(private val library: IosLibrary) {
             val app = if (aniyomi != null && (aniyomi.backupAnime.isNotEmpty() || aniyomi.backupAnimeSources.isNotEmpty()))
                 ExternalBackupApp.ANIYOMI else ExternalBackupApp.MIHON
             val payload = decodeMihonOrAniyomiBackup(bytes, app)
-                ?: throw IllegalArgumentException("无法识别的备份文件：支持 Kototoro/Kotatsu、Mihon/Tachiyomi、Aniyomi 和 Venera 备份")
+                ?: throw IllegalArgumentException(localized("无法识别的备份文件：支持 Kototoro/Kotatsu、Mihon/Tachiyomi、Aniyomi 和 Venera 备份"))
             IosExternalBackupPreview(payload, if (app == ExternalBackupApp.ANIYOMI) "Aniyomi" else "Mihon", filename)
         }
     }
@@ -89,7 +89,7 @@ internal class IosExternalBackupService(private val library: IosLibrary) {
                     override suspend fun <R> run(block: suspend () -> R): R =
                         database.useWriterConnection { connection -> connection.immediateTransaction { block() } }
                 },
-                defaultCategoryTitle = "收藏",
+                defaultCategoryTitle = localized("收藏"),
                 isNsfwSource = { name -> sources.firstOrNull { it.name == name }?.isAdult == true },
             ).import(preview.payload)
             IosExternalImportResult(
@@ -128,7 +128,7 @@ internal class IosExternalBackupService(private val library: IosLibrary) {
                 FileSystem.SYSTEM.write(file) { write(zip.read(entry)) }
                 connections[name] = BundledSQLiteDriver().open(file.toString(), SQLITE_OPEN_READONLY)
             }
-            if (connections.isEmpty()) throw IllegalArgumentException("所选 ZIP 既不是 Kototoro 备份，也不是 Venera 备份")
+            if (connections.isEmpty()) throw IllegalArgumentException(localized("所选 ZIP 既不是 Kototoro 备份，也不是 Venera 备份"))
             return VeneraBackupDecoding.decode(connections[VeneraBackupDecoding.FAVORITES_FILE]?.let(::SqliteVenera),
                 connections[VeneraBackupDecoding.HISTORY_FILE]?.let(::SqliteVenera))
         } finally {

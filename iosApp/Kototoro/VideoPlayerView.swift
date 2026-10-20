@@ -93,7 +93,7 @@ final class VideoPlayerModel: ObservableObject {
             guard self.request == request else { return }
             guard !pages.isEmpty else {
                 throw NSError(domain: "org.skepsun.kototoro.video", code: 1,
-                              userInfo: [NSLocalizedDescriptionKey: "此剧集没有可播放的地址"])
+                              userInfo: [NSLocalizedDescriptionKey: String(localized: "此剧集没有可播放的地址")])
             }
             streams = pages
             if position == 0, let saved = try await library?.position(content: content), saved.chapterId == selected.id {
@@ -112,7 +112,7 @@ final class VideoPlayerModel: ObservableObject {
         stop(keepStreams: true)
         streamIndex = index
         guard let url = URL(string: streams[index].url) else {
-            error = "无效的播放地址"
+            error = String(localized: "无效的播放地址")
             return
         }
         error = nil
@@ -315,7 +315,7 @@ final class VideoPlayerModel: ObservableObject {
                 if self.streamIndex + 1 < self.streams.count {
                     self.select(stream: self.streamIndex + 1)
                 } else {
-                    self.error = item.error?.localizedDescription ?? "无法播放此剧集"
+                    self.error = item.error?.localizedDescription ?? String(localized: "无法播放此剧集")
                 }
             }
             .store(in: &observers)
@@ -470,17 +470,17 @@ struct VideoPlayerView: View {
     private var centerBar: some View {
         HStack(spacing: 36) {
             if let previous = model.previous {
-                circleButton("上一集", "backward.end.fill", size: 22) { Task { await model.move(to: previous) } }
+                circleButton(String(localized: "上一集"), "backward.end.fill", size: 22) { Task { await model.move(to: previous) } }
                     .accessibilityIdentifier("player.previous")
             }
-            circleButton("后退 10 秒", "gobackward.10", size: 26) { model.skip(by: -10) }
-            circleButton(model.isPlaying ? "暂停" : "播放", model.isPlaying ? "pause.fill" : "play.fill", size: 40) {
+            circleButton(String(localized: "后退 10 秒"), "gobackward.10", size: 26) { model.skip(by: -10) }
+            circleButton(model.isPlaying ? String(localized: "暂停") : String(localized: "播放"), model.isPlaying ? "pause.fill" : "play.fill", size: 40) {
                 model.togglePlay()
             }
             .accessibilityIdentifier("player.playPause")
-            circleButton("前进 10 秒", "goforward.10", size: 26) { model.skip(by: 10) }
+            circleButton(String(localized: "前进 10 秒"), "goforward.10", size: 26) { model.skip(by: 10) }
             if let next = model.next {
-                circleButton("下一集", "forward.end.fill", size: 22) { Task { await model.move(to: next) } }
+                circleButton(String(localized: "下一集"), "forward.end.fill", size: 22) { Task { await model.move(to: next) } }
                     .accessibilityIdentifier("player.next")
             }
         }
@@ -617,7 +617,7 @@ private struct VideoEpisodesView: View {
                     Section {
                         Picker("线路", selection: $selectedLine) {
                             ForEach(model.lines, id: \.self) { line in
-                                Text(line ?? "默认").tag(line)
+                                Text(line ?? String(localized: "默认")).tag(line)
                             }
                         }
                         .pickerStyle(.menu)
@@ -651,12 +651,12 @@ private struct VideoEpisodesView: View {
 
 extension VideoPlayerView {
     static func streamName(_ stream: IosSourcePage, _ index: Int) -> String {
-        stream.label?.trimmingCharacters(in: .whitespaces).nilIfEmpty ?? "线路 \(index + 1)"
+        stream.label?.trimmingCharacters(in: .whitespaces).nilIfEmpty ?? String(localized: "线路 \(index + 1)")
     }
 
     static func subtitleName(_ track: SubtitleTrack, _ index: Int, failed: Bool) -> String {
-        let name = SubtitleLanguage.title(track.lang) ?? "外挂字幕 \(index + 1)"
-        return failed ? "\(name)（加载失败）" : name
+        let name = SubtitleLanguage.title(track.lang) ?? String(localized: "外挂字幕 \(index + 1)")
+        return failed ? String(localized: "\(name)（加载失败）") : name
     }
 }
 

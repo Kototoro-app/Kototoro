@@ -99,12 +99,12 @@ class IosTrackingAccounts internal constructor(private val library: IosLibrary, 
     @Throws(Exception::class)
     suspend fun update(content: IosSourceContent, item: IosTrackingItem, status: String, progress: Int,
         score: Float, note: String): IosTrackingProgress = authenticated(item.service) { session ->
-        require(item.mediaKind == content.mediaKind) { "作品类型不匹配" }
+        require(item.mediaKind == content.mediaKind) { localized("作品类型不匹配") }
         requireTrackingCatalogIdentity(library.database.getTrackingSiteDao().findItem(item.service, item.value.remoteId),
             item.value.toEntity())
         val kind = accountKind(content.mediaKind, item.remoteType)
         val old = api.entry(session, item.value.remoteId, kind)
-        if (item.service == 7 && kind != "VIDEO_MOVIE") require(progress >= (old?.progress ?: 0)) { "SIMKL 当前只支持增加已看集数" }
+        if (item.service == 7 && kind != "VIDEO_MOVIE") require(progress >= (old?.progress ?: 0)) { localized("SIMKL 当前只支持增加已看集数") }
         val updated = api.update(session, kind,
             (old ?: TrackingEntry(item.value.remoteId)).copy(status = status, progress = progress, score = score, note = note), old != null)
         library.saveDetails(content)
@@ -158,12 +158,12 @@ class IosTrackingAccounts internal constructor(private val library: IosLibrary, 
     }
 
     private suspend fun <T> authenticated(service: Int, action: suspend (TrackingSession) -> T): T = friendly { mutex.withLock {
-        val session = sessions[service] ?: error("请先连接 ${trackingSiteTitle(service)} 账号")
+        val session = sessions[service] ?: error(localized("请先连接 %@ 账号", trackingSiteTitle(service)))
         try {
             action(session)
         } catch (error: ResponseException) {
             if (error.response.status.value != 401) throw error
-            if (session.refreshToken == null) throw IllegalStateException("授权已过期，请重新连接账号", error)
+            if (session.refreshToken == null) throw IllegalStateException(localized("授权已过期，请重新连接账号"), error)
             val refreshed = api.refresh(session)
             sessions[service] = refreshed
             action(refreshed)
@@ -177,14 +177,14 @@ class IosTrackingAccounts internal constructor(private val library: IosLibrary, 
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (error: HttpRequestTimeoutException) {
-        throw IllegalStateException("连接超时，请检查网络后重试", error)
+        throw IllegalStateException(localized("连接超时，请检查网络后重试"), error)
     } catch (error: ResponseException) {
         val status = error.response.status.value
         throw IllegalStateException(when (status) {
-            400, 422 -> "网站未接受当前信息，请检查账号或追踪内容后重试"
-            401, 403 -> "授权无效或已过期，请重新连接账号"
-            429 -> "请求过于频繁，请稍后重试"
-            else -> "网站暂时无法响应（HTTP $status），请稍后重试"
+            400, 422 -> localized("网站未接受当前信息，请检查账号或追踪内容后重试")
+            401, 403 -> localized("授权无效或已过期，请重新连接账号")
+            429 -> localized("请求过于频繁，请稍后重试")
+            else -> localized("网站暂时无法响应（HTTP %@），请稍后重试", status)
         }, error)
     }
 }

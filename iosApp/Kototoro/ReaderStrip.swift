@@ -82,9 +82,20 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
     private var attached = false
     private var sample: (offset: CGPoint, time: CFTimeInterval)?
     private var velocity = CGPoint.zero
-    private var pinchAnchor = CGPoint.zero
-    /// The snapshot masking the move a zoom is making, if one is in flight.
-    private var zoomGhost: UIView?
+    /// UIKit owns the camera during a pinch or an animated double tap. Scene layout resumes on completion.
+    private var zooming = false
+    private var rebasingZoom = false
+    private var zoomLocation: CGPoint?
+    private struct ZoomAnimation {
+        let link: CADisplayLink
+        let start: CFTimeInterval
+        let from: CGFloat, to: CGFloat
+        let focus: CGPoint, anchor: CGPoint
+    }
+    private var zoomAnimation: ZoomAnimation?
+    /// A double tap's frame is setting the scale: UIKit's zoom callbacks are not a gesture.
+    private var steppingZoom = false
+    private static let zoomDuration: CFTimeInterval = 0.3
     private var zoomActionName = ""
 
     init(model: SourceReaderModel, settings: ReaderSettings) {
@@ -114,6 +125,8 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
         scrollView.alwaysBounceHorizontal = !vertical
         scrollView.backgroundColor = .clear
         scrollView.delegate = self
+        scrollView.bouncesZoom = false
+        updateZoomLimits()
         scrollView.accessibilityIdentifier = "reader.canvas"
         content.backgroundColor = .clear
         scrollView.addSubview(content)
@@ -125,15 +138,13 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
         let singleTap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
         singleTap.require(toFail: doubleTap)
         singleTap.delegate = self
-        let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))
-        pinch.delegate = self
-        for gesture in [doubleTap, singleTap, pinch] { scrollView.addGestureRecognizer(gesture) }
+        for gesture in [doubleTap, singleTap] { scrollView.addGestureRecognizer(gesture) }
         model.strip = self
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        guard view.bounds.width > 1, view.bounds.height > 1, scrollView.transform.isIdentity else { return }
+        guard view.bounds.width > 1, view.bounds.height > 1, !zooming, !rebasingZoom else { return }
         if !attached {
             attached = true
             model.strip = self
@@ -150,19 +161,21 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
         guard isViewLoaded, attached else { return }
         layoutStrip(offset: nil, animated: false)
         scrollView.accessibilityValue = model.readingPositionDescription
-        let name = model.stripZoom > 1 ? "还原缩放" : "放大"
+        let name = model.stripZoom > 1 ? String(localized: "还原缩放") : String(localized: "放大")
         if name != zoomActionName {
             zoomActionName = name
             scrollView.accessibilityCustomActions = [UIAccessibilityCustomAction(name: name) { [weak self] _ in
                 guard let self else { return false }
-                self.commitZoom(self.model.stripZoom > 1 ? 1 : 2,
-                                at: CGPoint(x: self.view.bounds.midX, y: self.view.bounds.midY), animated: true)
+                self.animateZoom(self.model.stripZoom > 1 ? 1 : 2,
+                                 at: CGPoint(x: self.view.bounds.midX, y: self.view.bounds.midY))
                 return true
             }]
         }
     }
 
     func detach() {
+        zoomAnimation?.link.invalidate()
+        zoomAnimation = nil
         if model.strip === self { model.strip = nil }
     }
 
@@ -175,7 +188,7 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
     }
 
     func layoutStrip(offset target: CGPoint?, animated: Bool) {
-        guard isViewLoaded else { return }
+        guard isViewLoaded, !zooming, !rebasingZoom else { return }
         let size = contentSize()
         applying = true
         UIView.performWithoutAnimation {
@@ -224,7 +237,7 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
 
     /// Builds the pages on screen and one screen on each side; pages that left that band give their views back.
     private func layoutCells() {
-        let bounds = scrollView.bounds
+        let bounds = content.convert(scrollView.bounds, from: scrollView)
         guard bounds.width > 1, bounds.height > 1 else { return }
         let extent = vertical ? bounds.height : bounds.width
         let start = (vertical ? bounds.minY : bounds.minX) - extent
@@ -251,6 +264,7 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
             if page != cell.page {
                 cell.page = page
                 cell.host.rootView = page
+                cell.host.view.layoutIfNeeded()
             }
         }
     }
@@ -288,6 +302,8 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
     // MARK: - Scrolling
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard !rebasingZoom else { return }
+        if zooming { layoutCells(); return }
         let point = scrollView.contentOffset
         let bounds = scrollView.bounds
         if abs(point.x - tileViewport.x) > bounds.width / 4 || abs(point.y - tileViewport.y) > bounds.height / 4 {
@@ -306,6 +322,7 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
     }
 
     private func report() {
+        guard !zooming, !rebasingZoom else { return }
         let point = scrollView.contentOffset
         let moving = scrollView.isTracking || scrollView.isDecelerating
         model.continuousPosition(x: point.x, y: point.y, velocity: moving ? velocity : .zero,
@@ -330,6 +347,7 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
     /// The strip came to rest: tiles resolve for where it is, every wanted page that is neither shown nor loading
     /// starts again, and the position is saved.
     private func settle() {
+        guard !zooming, !rebasingZoom else { return }
         velocity = .zero
         sample = nil
         model.isUserPaging = false
@@ -343,11 +361,6 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
     }
 
     // MARK: - Gestures
-
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
-                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-        gestureRecognizer is UIPinchGestureRecognizer
-    }
 
     /// A page showing its error keeps its taps for the retry and verification buttons.
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
@@ -363,94 +376,124 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
     }
 
     @objc private func doubleTapped(_ gesture: UITapGestureRecognizer) {
-        commitZoom(model.stripZoom > 1 ? 1 : 2, at: gesture.location(in: view), animated: true)
+        animateZoom(model.stripZoom > 1 ? 1 : 2, at: gesture.location(in: view))
     }
 
-    /// The pinch previews as a transform about where it started; on release the strip is laid out again at the new
-    /// zoom (`SourceReaderModel.setStripZoom`), so pages decode and tile at the size shown. The preview already has
-    /// that size, so it only fades out over the move.
-    @objc private func pinched(_ gesture: UIPinchGestureRecognizer) {
-        let zoom = model.stripZoom
-        let minimum = CGFloat(IosReader.companion.MINIMUM_ZOOM) / zoom
-        let maximum = CGFloat(IosReader.companion.MAXIMUM_ZOOM) / zoom
-        let scale = min(max(gesture.scale, minimum), maximum)
-        switch gesture.state {
-        case .began:
-            pinchAnchor = gesture.location(in: view)
-            scrollView.transform = preview(scale, at: pinchAnchor)
-        case .changed:
-            scrollView.transform = preview(scale, at: pinchAnchor)
-        case .ended:
-            // Taken before the preview comes off, so it shows what is on screen; a pinch that ends where it started
-            // commits nothing, so it is dropped with the preview.
-            let ghost = scrollView.transform.isIdentity ? nil : view.snapshotView(afterScreenUpdates: false)
-            scrollView.transform = .identity
-            scrollView.frame = view.bounds
-            commitZoom(zoom * scale, at: pinchAnchor, animated: true, maskedBy: ghost, scalingMask: false)
-        default:
-            scrollView.transform = .identity
-            scrollView.frame = view.bounds
+    // MARK: - Zoom
+
+    func viewForZooming(in scrollView: UIScrollView) -> UIView? { content }
+
+    func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+        guard !rebasingZoom, !steppingZoom else { return }
+        // A pinch that interrupts a double tap's zoom takes the camera from where that zoom has got to.
+        if let animation = zoomAnimation {
+            animation.link.invalidate()
+            zoomAnimation = nil
+            zoomLocation = nil
         }
+        beginZoom()
     }
 
-    /// [scale] about [anchor] (a point in the strip's own coordinates): the content under it stays there.
-    private func preview(_ scale: CGFloat, at anchor: CGPoint) -> CGAffineTransform {
-        let dx = anchor.x - view.bounds.midX, dy = anchor.y - view.bounds.midY
-        return CGAffineTransform(translationX: dx, y: dy).scaledBy(x: scale, y: scale).translatedBy(x: -dx, y: -dy)
-    }
-
-    /// Lays the strip out at [zoom] and scrolls so the content under [location] (a point on screen) stays put, then
-    /// shows the move.
-    /// - Parameters:
-    ///   - maskedBy: A snapshot of the strip taken while it still showed the old zoom. The pages decode again at the
-    ///     new size, so the strip itself is blank for the first frames and there is nothing to animate.
-    ///   - scalingMask: Whether the snapshot predates the zoom (the strip grew by `ratio`, so the snapshot grows with
-    ///     it) or already shows the new size (a pinch release, which only fades).
-    private func commitZoom(_ zoom: CGFloat, at location: CGPoint, animated: Bool, maskedBy ghost: UIView? = nil,
-                            scalingMask: Bool = true) {
+    private func beginZoom() {
+        zooming = true
         model.userScrolled()
+        model.isUserPaging = true
+    }
+
+    func scrollViewDidZoom(_ scrollView: UIScrollView) {
+        guard !rebasingZoom else { return }
+        // A zoom out exposes more of the strip than the old viewport's neighbour band.
+        layoutCells()
+    }
+
+    func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+        guard !rebasingZoom, !steppingZoom, zoomAnimation == nil else { return }
+        finishZoom(scale)
+    }
+
+    /// Bakes the scroll view's temporary [scale] into the scene at the new zoom, keeping the content under
+    /// [zoomLocation] (the screen centre for a pinch) where it is.
+    private func finishZoom(_ scale: CGFloat) {
+        // Native zoom offsets include the temporary scale. Resolve the visible centre in the OLD scene first;
+        // estimates above it need not scale, so multiplying the old reading-axis offset is not sufficient.
+        let location = zoomLocation ?? CGPoint(x: self.view.bounds.midX, y: self.view.bounds.midY)
+        zoomLocation = nil
         let current = scrollView.contentOffset
-        // The content under the finger, as the scene reads it before the strip is laid out again…
-        let anchor = model.stripAnchor(at: current, location: location)
-        let previous = model.stripZoom
-        let mask = ghost ?? (animated ? view.snapshotView(afterScreenUpdates: false) : nil)
-        model.setStripZoom(zoom)
-        let ratio = model.stripZoom / previous
-        guard ratio != 1 else { return }
-        // …and where the scene puts it afterwards. Scaling the offset by the zoom ratio is not the same move: a page
-        // whose real size is still unknown keeps its one-screen estimate, so the offsets around a zoomed page do not
-        // follow the zoom, and a jump or a restore leaves the pages above it unmeasured (`PageGeometryHint.Estimated`).
-        // The scene is the only thing that knows where a page's content went, so it is asked for the reading axis; the
-        // cross axis is the strip's own width or height, which does scale with the zoom.
+        let anchor = model.stripAnchor(at: CGPoint(x: current.x / scale, y: current.y / scale),
+                                       location: CGPoint(x: location.x / scale, y: location.y / scale))
+        rebasingZoom = true
+        model.setStripZoom(model.stripZoom * scale)
         let origin = model.stripOrigin(of: anchor)
         let along = min(max(0, origin - (vertical ? location.y : location.x)), CGFloat(model.engine.scrollLimit()))
-        let cross = (vertical ? current.x + location.x : current.y + location.y) * ratio
-            - (vertical ? location.x : location.y)
-        let target = vertical ? CGPoint(x: cross, y: along) : CGPoint(x: along, y: cross)
-        tileViewport = target
-        layoutStrip(offset: target, animated: false)
-        // The layout itself cannot be interpolated — page sizes and the offsets around them are not a uniform scale of
-        // the old ones, which is the whole reason the target comes from the scene — but a snapshot of the old zoom can
-        // be grown to the size the content lands at, about [location], and faded as the new pages come in.
-        guard let mask, animated, !UIAccessibility.isReduceMotionEnabled else { return }
-        settle(mask, to: scalingMask ? preview(ratio, at: location) : .identity)
+        let target = vertical ? CGPoint(x: current.x, y: along) : CGPoint(x: along, y: current.y)
+        // Bake the camera into the scene and page sizes in one turn. The viewport never transforms and no cropped
+        // screenshot is laid over a second, already-resized copy of the page.
+        UIView.performWithoutAnimation {
+            scrollView.minimumZoomScale = min(1, scrollView.minimumZoomScale)
+            scrollView.maximumZoomScale = max(1, scrollView.maximumZoomScale)
+            scrollView.setZoomScale(1, animated: false)
+            zooming = false
+            rebasingZoom = false
+            tileViewport = target
+            layoutStrip(offset: target, animated: false)
+            updateZoomLimits()
+        }
+        settle()
     }
 
-    /// Fades a snapshot of the strip out over the move it masks.
-    private func settle(_ mask: UIView, to transform: CGAffineTransform) {
-        zoomGhost?.removeFromSuperview()
-        zoomGhost = mask
-        mask.isUserInteractionEnabled = false
-        mask.frame = view.bounds
-        view.addSubview(mask)
-        UIView.animate(withDuration: 0.32, delay: 0, options: [.curveEaseInOut]) {
-            mask.transform = transform
+    private func updateZoomLimits() {
+        scrollView.minimumZoomScale = CGFloat(IosReader.companion.MINIMUM_ZOOM) / model.stripZoom
+        scrollView.maximumZoomScale = CGFloat(IosReader.companion.MAXIMUM_ZOOM) / model.stripZoom
+    }
+
+    /// A double tap's zoom, stepped on the main thread every frame. `zoom(to:animated:)` leaves the move to the render
+    /// server, which drew the hosted pages blank for most of a zoom out on device; each step here lays the cells out
+    /// for the frame actually shown.
+    private func animateZoom(_ zoom: CGFloat, at location: CGPoint) {
+        guard !zooming, !rebasingZoom else { return }
+        let from = scrollView.zoomScale
+        let to = min(max(zoom / model.stripZoom, scrollView.minimumZoomScale), scrollView.maximumZoomScale)
+        guard abs(to - from) > 0.001 else { return }
+        beginZoom()
+        zoomLocation = location
+        let start = scrollView.contentOffset
+        // The content under the tap stays under it, unless that would show past the scaled content's edges.
+        let point = CGPoint(x: (start.x + location.x) / from, y: (start.y + location.y) / from)
+        let size = CGSize(width: scrollView.contentSize.width / from * to,
+                          height: scrollView.contentSize.height / from * to)
+        let end = CGPoint(x: min(max(0, point.x * to - location.x), max(0, size.width - view.bounds.width)),
+                          y: min(max(0, point.y * to - location.y), max(0, size.height - view.bounds.height)))
+        // Content point c stays at screen point a while offset = c × scale − a. The c and a that give both the start
+        // and the end offset make one zoom about a fixed point, so no step needs clamping.
+        let focus = CGPoint(x: (end.x - start.x) / (to - from), y: (end.y - start.y) / (to - from))
+        let anchor = CGPoint(x: focus.x * from - start.x, y: focus.y * from - start.y)
+        guard !UIAccessibility.isReduceMotionEnabled else {
+            stepZoom(to, focus: focus, anchor: anchor)
+            finishZoom(to)
+            return
         }
-        UIView.animate(withDuration: 0.20, delay: 0.12, options: [.curveEaseIn]) {
-            mask.alpha = 0
-        } completion: { [weak self] _ in
-            mask.removeFromSuperview()
-            if self?.zoomGhost === mask { self?.zoomGhost = nil }
-        }
+        let link = CADisplayLink(target: self, selector: #selector(zoomFrame(_:)))
+        zoomAnimation = ZoomAnimation(link: link, start: CACurrentMediaTime(), from: from, to: to,
+                                      focus: focus, anchor: anchor)
+        link.add(to: .main, forMode: .common)
+    }
+
+    @objc private func zoomFrame(_ link: CADisplayLink) {
+        guard let animation = zoomAnimation else { return link.invalidate() }
+        let progress = min(1, (link.targetTimestamp - animation.start) / Self.zoomDuration)
+        let eased = CGFloat(1 - pow(1 - progress, 3))
+        stepZoom(animation.from + (animation.to - animation.from) * eased, focus: animation.focus,
+                 anchor: animation.anchor)
+        guard progress >= 1 else { return }
+        link.invalidate()
+        zoomAnimation = nil
+        finishZoom(animation.to)
+    }
+
+    private func stepZoom(_ scale: CGFloat, focus: CGPoint, anchor: CGPoint) {
+        steppingZoom = true
+        defer { steppingZoom = false }
+        scrollView.setZoomScale(scale, animated: false)
+        scrollView.contentOffset = CGPoint(x: focus.x * scale - anchor.x, y: focus.y * scale - anchor.y)
     }
 }

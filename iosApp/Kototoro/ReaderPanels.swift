@@ -68,7 +68,7 @@ struct ReaderChapterPanel: View {
             if tab == 0 {
                 HStack {
                     if branches.count > 1 {
-                        Menu(branch ?? "全部分支") {
+                        Menu(branch ?? String(localized: "全部分支")) {
                             Button("全部分支") { branch = nil }
                             ForEach(branches, id: \.self) { value in Button(value) { branch = value } }
                         }
@@ -84,10 +84,11 @@ struct ReaderChapterPanel: View {
                     Button(selecting ? "完成" : "多选") { selecting.toggle(); selection = [] }
                 }.padding(.horizontal, 12)
 
-                ScrollView {
+                ScrollViewReader { proxy in ScrollView {
+                    let read = readChapterIDs
                     if grid {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 8) {
-                            ForEach(chapters, id: \.id) { chapter in chapterButton(chapter) }
+                            ForEach(chapters, id: \.id) { chapter in chapterButton(chapter, read: read) }
                         }.padding(12)
                     } else {
                         LazyVStack(alignment: .leading, spacing: 10) {
@@ -96,11 +97,18 @@ struct ReaderChapterPanel: View {
                                     get: { expandedVolumes.contains(volume) },
                                     set: { if $0 { expandedVolumes.insert(volume) } else { expandedVolumes.remove(volume) } }
                                 )) {
-                                    ForEach(chapters.filter { $0.volume == volume }, id: \.id) { chapter in chapterButton(chapter) }
+                                    ForEach(chapters.filter { $0.volume == volume }, id: \.id) { chapter in chapterButton(chapter, read: read) }
                                 }
                             }
                         }.padding(12)
                     }
+                }
+                // Opens on the chapter being read, like the details directory; the volume holding it is expanded first.
+                .task {
+                    expandedVolumes.insert(model.chapter.volume)
+                    await Task.yield()
+                    proxy.scrollTo(model.chapter.id, anchor: .center)
+                }
                 }
 
                 if let status { Text(status).font(.caption).padding(.horizontal, 12) }
@@ -170,12 +178,20 @@ struct ReaderChapterPanel: View {
                 }
             }
         }
-        .task { branch = model.chapter.branch; expandedVolumes.insert(model.chapter.volume); await model.refreshBookmarks() }
+        .task { branch = model.chapter.branch; await model.refreshBookmarks() }
         .onChange(of: tab) { _, _ in query = ""; selecting = false; selection = [] }
         .sheet(isPresented: $showingDownloads) { ReaderDownloadsSheet() }
     }
 
-    private func chapterButton(_ chapter: IosSourceChapter) -> some View {
+    /// The details directory's rule (`SourceDetailsModel.isBeforeResume`): chapters before the one being read, in source
+    /// order and on its branch and line.
+    private var readChapterIDs: Set<String> {
+        let all = model.content.chapters, current = model.chapter
+        guard let end = all.firstIndex(where: { $0.id == current.id }) else { return [] }
+        return Set(all[..<end].filter { $0.branch == current.branch && $0.line == current.line }.map(\.id))
+    }
+
+    private func chapterButton(_ chapter: IosSourceChapter, read: Set<String>) -> some View {
         Button {
             if selecting {
                 if selection.contains(chapter.id) { selection.remove(chapter.id) } else { selection.insert(chapter.id) }
@@ -183,10 +199,9 @@ struct ReaderChapterPanel: View {
         } label: {
             HStack {
                 if selecting { Image(systemName: selection.contains(chapter.id) ? "checkmark.circle.fill" : "circle") }
-                Text(chapter.title).lineLimit(2)
-                Spacer(minLength: 0)
+                DetailsChapterLabel(chapter: chapter, resume: nil, isRead: read.contains(chapter.id),
+                                    offline: ChapterOfflineMark.of(model.content, chapter))
                 if chapter.id == model.chapter.id { Image(systemName: "book.fill") }
-                if ReaderDownloads.isDownloaded(content: model.content, chapter: chapter) { Image(systemName: "arrow.down.circle.fill") }
             }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
         }.buttonStyle(.plain).background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 12))
             .accessibilityIdentifier("reader.chapter.\(chapter.id)")
@@ -197,7 +212,7 @@ struct ReaderChapterPanel: View {
         if download {
             do {
                 try downloads.enqueue(content: model.content, chapters: selected)
-                status = "已加入下载队列，共 \(selected.count) 章"
+                status = String(localized: "已加入下载队列，共 \(selected.count) 章")
             } catch { status = error.localizedDescription }
             return
         }
@@ -206,11 +221,11 @@ struct ReaderChapterPanel: View {
             var done = 0
             do {
                 for chapter in selected {
-                    status = "\(download ? "下载" : "移除") \(done + 1)/\(selected.count)"
+                    status = download ? String(localized: "下载 \(done + 1)/\(selected.count)") : String(localized: "移除 \(done + 1)/\(selected.count)")
                     // A removed task can still own a finishing JNI request; do not delete its destination yet.
                     guard !downloads.isFinishing(content: model.content, chapter: chapter) else {
                         if let entry = downloads.entry(content: model.content, chapter: chapter) { try downloads.pause(entry.id) }
-                        status = "已暂停下载，请待当前请求结束后移除下载"
+                        status = String(localized: "已暂停下载，请待当前请求结束后移除下载")
                         busy = false
                         return
                     }
@@ -219,8 +234,8 @@ struct ReaderChapterPanel: View {
                     )
                     done += 1
                 }
-                status = "完成 \(done) 章"
-            } catch { status = "已完成 \(done) 章；\(error.localizedDescription)" }
+                status = String(localized: "完成 \(done) 章")
+            } catch { status = String(localized: "已完成 \(done) 章；\(error.localizedDescription)") }
             busy = false
         }
     }
@@ -237,11 +252,11 @@ struct ReaderMorePanel: View {
     @State private var savedDefault = false
 
     static let actions: [(String, String, String)] = [
-        ("chapters", "章节列表", "list.bullet"), ("thumbnails", "缩略图", "square.grid.2x2"),
-        ("bookmark", "添加书签", "bookmark"),
-        ("save", "保存页面", "square.and.arrow.down"), ("crop", "裁切批注", "crop"),
-        ("auto", "自动翻页", "play.circle"), ("direction", "切换方向", "arrow.left.arrow.right"),
-        ("download", "下载本章", "arrow.down.circle"), ("browser", "浏览器打开", "safari"),
+        ("chapters", String(localized: "章节列表"), "list.bullet"), ("thumbnails", String(localized: "缩略图"), "square.grid.2x2"),
+        ("bookmark", String(localized: "添加书签"), "bookmark"),
+        ("save", String(localized: "保存页面"), "square.and.arrow.down"), ("crop", String(localized: "裁切批注"), "crop"),
+        ("auto", String(localized: "自动翻页"), "play.circle"), ("direction", String(localized: "切换方向"), "arrow.left.arrow.right"),
+        ("download", String(localized: "下载本章"), "arrow.down.circle"), ("browser", String(localized: "浏览器打开"), "safari"),
     ]
     static func actionTitle(_ id: String) -> String { actions.first { $0.0 == id }?.1 ?? id }
     static func actionSymbol(_ id: String) -> String { actions.first { $0.0 == id }?.2 ?? "circle" }
@@ -258,8 +273,8 @@ struct ReaderMorePanel: View {
                                 Button {
                                     if action.0 == "auto" { autoScroll.toggle() } else { onAction(action.0) }
                                 } label: {
-                                    Label(action.0 == "auto" && autoScroll ? "停止自动翻页" :
-                                          action.0 == "bookmark" && isBookmarked ? "取消书签" : action.1,
+                                    Label(action.0 == "auto" && autoScroll ? String(localized: "停止自动翻页") :
+                                          action.0 == "bookmark" && isBookmarked ? String(localized: "取消书签") : action.1,
                                           systemImage: action.0 == "bookmark" && isBookmarked ? "bookmark.fill" : action.2)
                                         .font(.subheadline).frame(maxWidth: .infinity, minHeight: 52)
                                 }.buttonStyle(.glass).disabled(action.0 == "download" && downloading)

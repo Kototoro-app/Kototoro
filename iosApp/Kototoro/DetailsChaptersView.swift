@@ -20,6 +20,8 @@ struct DetailsChaptersView: View {
     @State private var playing: PlaybackRequest?
     @State private var preview: PlaybackRequest?
     @State private var positioned = false
+    /// Downloaded books whose chapters are folded away; books open expanded, as on Android.
+    @State private var collapsedBooks = Set<String>()
 
     private var content: IosSourceContent { model.details ?? model.content }
     private var chapters: [IosSourceChapter] {
@@ -55,12 +57,12 @@ struct DetailsChaptersView: View {
                             if model.isVideo {
                                 if model.lines.count > 1 {
                                     Picker("线路", selection: $model.selectedLine) {
-                                        ForEach(model.lines, id: \.self) { Text($0 ?? "默认").tag($0) }
+                                        ForEach(model.lines, id: \.self) { Text($0 ?? String(localized: "默认")).tag($0) }
                                     }
                                 }
                             } else if model.branches.count > 1 {
                                 Picker("分支", selection: $model.selectedBranch) {
-                                    ForEach(model.branches, id: \.self) { Text($0 ?? "默认").tag($0) }
+                                    ForEach(model.branches, id: \.self) { Text($0 ?? String(localized: "默认")).tag($0) }
                                 }
                             }
                             Section("排序") { DetailsChapterSortOptions(order: $chapterOrder, newestFirst: $newestFirst) }
@@ -149,52 +151,18 @@ struct DetailsChaptersView: View {
             if list.isEmpty {
                 ContentUnavailableView(query.isEmpty ? "暂无章节" : "没有匹配的章节", systemImage: "list.bullet")
             }
-            ForEach(list, id: \.id) { chapter in
-                Group {
-                    if selecting {
-                        chapterLabel(chapter, status: statuses[chapter.id])
-                            .accessibilityElement(children: .combine)
-                            .accessibilityIdentifier("chapter.\(chapter.id)")
-                    } else {
-                        HStack(spacing: 12) {
-                            Button {
-                                let request = PlaybackRequest(content: content, chapter: chapter)
-                                if model.isVideo { playing = request } else { reading = request }
-                            } label: { chapterLabel(chapter, status: statuses[chapter.id]) }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("chapter.\(chapter.id)")
-                            if !model.isVideo && !model.isNovel {
-                                Button { preview = PlaybackRequest(content: content, chapter: chapter) } label: {
-                                    Image(systemName: "square.grid.2x2").frame(minWidth: 44, minHeight: 44)
-                                }
-                                .buttonStyle(.borderless)
-                                .accessibilityLabel("浏览\(chapter.title)的页面")
-                                .accessibilityIdentifier("details.chapter.preview.\(chapter.id)")
-                            }
-                        }
+            // Searching and selecting list chapters alone; otherwise a downloaded book gathers its chapters.
+            ForEach(query.isEmpty && !selecting ? ChapterRow.rows(list, in: content) : list.map(ChapterRow.chapter)) { row in
+                switch row {
+                case .chapter(let chapter): chapterRow(chapter, statuses: statuses)
+                case .book(let book, let chapters):
+                    DisclosureGroup(isExpanded: Binding(get: { !collapsedBooks.contains(book.id) },
+                                                        set: { if $0 { collapsedBooks.remove(book.id) } else { collapsedBooks.insert(book.id) } })) {
+                        ForEach(chapters, id: \.id) { chapterRow($0, statuses: statuses) }
+                    } label: {
+                        ChapterBookLabel(book: book, count: chapters.count, status: statuses[book.id])
                     }
-                }
-                .tag(chapter.id)
-                .id(chapter.id)
-                .listRowBackground(chapter.id == resume?.chapterId ? Color.accentColor.opacity(0.1) : nil)
-                .contextMenu {
-                    if !model.isVideo {
-                        Button("下载本章", systemImage: "arrow.down.circle") { enqueue([chapter]) }
-                        Button("选择章节", systemImage: "checkmark.circle") {
-                            selectedIDs = [chapter.id]
-                            editMode = .active
-                        }
-                        if !model.isNovel {
-                            Button("浏览本章页面", systemImage: "square.grid.2x2") {
-                                preview = PlaybackRequest(content: content, chapter: chapter)
-                            }
-                        }
-                    }
-                }
-                .swipeActions(edge: .trailing) {
-                    if !model.isVideo && !selecting {
-                        Button("下载", systemImage: "arrow.down.circle") { enqueue([chapter]) }.tint(.accentColor)
-                    }
+                    .accessibilityIdentifier("details.book.\(book.id)")
                 }
             }
         }
@@ -202,9 +170,62 @@ struct DetailsChaptersView: View {
         .accessibilityIdentifier("details.chapters.list")
     }
 
+    private func chapterRow(_ chapter: IosSourceChapter, statuses: [String: String]) -> some View {
+        // A book's chapters are already downloaded with it.
+        let downloadable = !model.isVideo && content.bookOf(chapter: chapter) == nil
+        return Group {
+            if selecting {
+                chapterLabel(chapter, status: statuses[chapter.id])
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("chapter.\(chapter.id)")
+            } else {
+                HStack(spacing: 12) {
+                    Button {
+                        let request = PlaybackRequest(content: content, chapter: chapter)
+                        if model.isVideo { playing = request } else { reading = request }
+                    } label: { chapterLabel(chapter, status: statuses[chapter.id]) }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("chapter.\(chapter.id)")
+                    if !model.isVideo && !model.isNovel {
+                        Button { preview = PlaybackRequest(content: content, chapter: chapter) } label: {
+                            Image(systemName: "square.grid.2x2").frame(minWidth: 44, minHeight: 44)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("浏览\(chapter.title)的页面")
+                        .accessibilityIdentifier("details.chapter.preview.\(chapter.id)")
+                    }
+                }
+            }
+        }
+        .tag(chapter.id)
+        .id(chapter.id)
+        .listRowBackground(chapter.id == resume?.chapterId ? Color.accentColor.opacity(0.1) : nil)
+        .contextMenu {
+            if !model.isVideo {
+                if downloadable { Button("下载本章", systemImage: "arrow.down.circle") { enqueue([chapter]) } }
+                Button("选择章节", systemImage: "checkmark.circle") {
+                    selectedIDs = [chapter.id]
+                    editMode = .active
+                }
+                if !model.isNovel {
+                    Button("浏览本章页面", systemImage: "square.grid.2x2") {
+                        preview = PlaybackRequest(content: content, chapter: chapter)
+                    }
+                }
+            }
+        }
+        .swipeActions(edge: .trailing) {
+            if downloadable && !selecting {
+                Button("下载", systemImage: "arrow.down.circle") { enqueue([chapter]) }.tint(.accentColor)
+            }
+        }
+    }
+
     private func chapterLabel(_ chapter: IosSourceChapter, status: String?) -> some View {
+        // A book's chapters are marked once, on the book they are grouped under.
         DetailsChapterLabel(chapter: chapter, resume: resume, isRead: model.isBeforeResume(chapter, resume: resume),
-                            isVideo: model.isVideo, downloadStatus: status)
+                            isVideo: model.isVideo, downloadStatus: status,
+                            offline: content.bookOf(chapter: chapter) == nil ? ChapterOfflineMark.of(content, chapter) : nil)
     }
 
     private func finishSelection() {
@@ -216,7 +237,7 @@ struct DetailsChaptersView: View {
         guard !chapters.isEmpty else { return }
         do {
             try downloads.enqueue(content: content, chapters: chapters)
-            downloadStatus = "已加入下载队列：\(chapters.count) 章"
+            downloadStatus = String(localized: "已加入下载队列：\(chapters.count) 章")
             finishSelection()
         } catch { downloadError = error.localizedDescription }
     }
@@ -244,6 +265,10 @@ struct DetailsChapterLabel: View {
     let isRead: Bool
     var isVideo = false
     var downloadStatus: String? = nil
+    /// The downloaded book a chapter belongs to, where rows are not grouped under it.
+    var book: String? = nil
+    /// Readable offline: downloaded, or part of an imported work.
+    var offline: ChapterOfflineMark? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -252,12 +277,16 @@ struct DetailsChapterLabel: View {
                     .font(chapter.id == resume?.chapterId ? .body.weight(.semibold) : .body)
                     .foregroundStyle(isRead ? .secondary : .primary)
                     .lineLimit(2)
-                if let subtitle = SourceDetailsView.chapterSubtitle(chapter) {
+                if let subtitle = book ?? SourceDetailsView.chapterSubtitle(chapter) {
                     Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 if let downloadStatus { Text(downloadStatus).font(.caption).foregroundStyle(.secondary) }
             }
             Spacer(minLength: 4)
+            if let offline {
+                Image(systemName: offline.icon).font(.caption).foregroundStyle(.secondary)
+                    .accessibilityLabel(offline.label)
+            }
             if chapter.id == resume?.chapterId, let resume {
                 Text("\(Int(resume.progress * 100))%")
                     .font(.caption.monospacedDigit()).foregroundStyle(.tint)
@@ -306,7 +335,7 @@ struct DetailsBookmarksView: View {
             ForEach(bookmarks, id: \.id) { bookmark in
                 Button {
                     guard let chapter = model.chapters.first(where: { $0.id == bookmark.chapterId }) else {
-                        error = "该书签对应的章节已不存在，请刷新章节或检查内容源。"
+                        error = String(localized: "该书签对应的章节已不存在，请刷新章节或检查内容源。")
                         return
                     }
                     reading = PlaybackRequest(content: model.details ?? model.content, chapter: chapter,
@@ -362,5 +391,69 @@ struct DetailsReaderDestination: View {
             }
         }
         .id(request.id)
+    }
+}
+
+/// A chapter list row: a chapter, or a downloaded book gathering its own chapters (Android's EPUB volume groups).
+enum ChapterRow: Identifiable {
+    case chapter(IosSourceChapter)
+    case book(IosSourceChapter, [IosSourceChapter])
+
+    var id: String {
+        switch self {
+        case .chapter(let chapter): chapter.id
+        case .book(let book, _): "book.\(book.id)"
+        }
+    }
+
+    /// Consecutive chapters of one downloaded book become its group; everything else stays a plain row.
+    static func rows(_ chapters: [IosSourceChapter], in content: IosSourceContent) -> [ChapterRow] {
+        guard content.hasBooks else { return chapters.map(ChapterRow.chapter) }
+        var rows: [ChapterRow] = []
+        for chapter in chapters {
+            guard let book = content.bookOf(chapter: chapter) else { rows.append(.chapter(chapter)); continue }
+            if case .book(let last, let members)? = rows.last, last.id == book.id {
+                rows[rows.count - 1] = .book(last, members + [chapter])
+            } else {
+                rows.append(.book(book, [chapter]))
+            }
+        }
+        return rows
+    }
+}
+
+struct ChapterBookLabel: View {
+    let book: IosSourceChapter
+    let count: Int
+    var status: String? = nil
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "book.closed").foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(book.title).font(.body.weight(.semibold)).lineLimit(2)
+                if let status { Text(status).font(.caption).foregroundStyle(.secondary) }
+            }
+            Spacer(minLength: 4)
+            Image(systemName: ChapterOfflineMark.downloaded.icon).font(.caption).foregroundStyle(.secondary)
+                .accessibilityLabel(ChapterOfflineMark.downloaded.label)
+            Text("\(count) 章").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+        }
+        .frame(minHeight: 44)
+    }
+}
+
+/// How a chapter reads without the network, shown beside it in chapter lists.
+struct ChapterOfflineMark: Equatable {
+    let icon: String
+    let label: String
+
+    static let downloaded = ChapterOfflineMark(icon: "arrow.down.circle.fill", label: String(localized: "已下载"))
+    static let local = ChapterOfflineMark(icon: "internaldrive", label: String(localized: "本地"))
+
+    /// Every chapter of an imported work is local; a source's chapter is marked once its download finished.
+    static func of(_ content: IosSourceContent, _ chapter: IosSourceChapter) -> ChapterOfflineMark? {
+        if content.isLocal { return .local }
+        return ReaderDownloads.isDownloaded(content: content, chapter: chapter) ? .downloaded : nil
     }
 }

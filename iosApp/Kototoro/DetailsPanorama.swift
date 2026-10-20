@@ -8,9 +8,9 @@ enum PanoramaPreset: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .clear: "清晰"
-        case .balanced: "均衡"
-        case .soft: "柔和"
+        case .clear: String(localized: "清晰")
+        case .balanced: String(localized: "均衡")
+        case .soft: String(localized: "柔和")
         }
     }
 
@@ -30,7 +30,7 @@ enum PanoramaPreset: String, CaseIterable, Identifiable {
 enum PanoramaLayout: String, CaseIterable, Identifiable {
     case top, fullScreen
     var id: String { rawValue }
-    var title: String { self == .top ? "顶部横幅" : "全屏背景" }
+    var title: String { self == .top ? String(localized: "顶部横幅") : String(localized: "全屏背景") }
 }
 
 enum PanoramaKeys {

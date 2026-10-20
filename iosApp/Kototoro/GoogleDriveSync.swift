@@ -42,7 +42,7 @@ final class GoogleDriveSyncModel: ObservableObject {
             needsAuthorization = false
             lastSync = nil
             defaults.removeObject(forKey: "googleDrive.lastSync")
-            message = "已连接。点击“立即同步”合并此设备与云端的数据。"
+            message = String(localized: "已连接。点击“立即同步”合并此设备与云端的数据。")
         } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
         } catch is CancellationError {
         } catch { message = error.localizedDescription }
@@ -58,7 +58,7 @@ final class GoogleDriveSyncModel: ObservableObject {
             needsAuthorization = false
             defaults.removeObject(forKey: "googleDrive.lastSync")
             defaults.set(false, forKey: Self.onStartKey)
-            message = "已断开连接，本地与云端数据均保留"
+            message = String(localized: "已断开连接，本地与云端数据均保留")
         } catch { message = error.localizedDescription }
     }
 
@@ -67,7 +67,7 @@ final class GoogleDriveSyncModel: ObservableObject {
         if automatic && (!defaults.bool(forKey: Self.onStartKey) || Date().timeIntervalSince(lastAttempt) < 60) { return }
         busy = true
         lastAttempt = Date()
-        message = "正在合并 Google Drive 数据…"
+        message = String(localized: "正在合并 Google Drive 数据…")
         defer { busy = false }
         do {
             var token = try await accessToken(forceRefresh: false)
@@ -87,7 +87,7 @@ final class GoogleDriveSyncModel: ObservableObject {
             needsAuthorization = true
             message = GoogleDriveError.authorizationRequired.localizedDescription
         } catch is CancellationError {
-            message = "同步已取消，可稍后重试"
+            message = String(localized: "同步已取消，可稍后重试")
         } catch { message = error.localizedDescription }
         // Downloads may already have been applied even if the subsequent upload failed.
         await model.refresh()

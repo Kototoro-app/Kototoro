@@ -15,6 +15,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.skepsun.kototoro.core.source.RoutedSourceRuntime
+import org.skepsun.kototoro.core.library.SourceChapterPart
 import org.skepsun.kototoro.core.library.withTrackingMetadata
 import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.source.SourceChapterContent
@@ -107,6 +108,17 @@ class IosChapterText internal constructor(internal val value: SourceChapterConte
 
     /** The chapter as the reader shows it, one block per line; the shared HTML conversion Android's EPUB reader uses. */
     fun document(): IosNovelDocument = IosNovelDocument(novelHtmlToStyledText(value.html))
+
+    /** The titles of a whole book's own chapters (an EPUB download); empty for an ordinary chapter. */
+    val sections: List<String> get() = value.sections.map { it.title }
+
+    /** The book's chapter [index] alone, with the book's pictures; null when there is no such chapter. */
+    fun section(index: Int): IosChapterText? {
+        val section = value.sections.getOrNull(index) ?: return null
+        val end = value.sections.getOrNull(index + 1)?.start ?: value.html.length
+        if (section.start !in 0..end || end > value.html.length) return null
+        return IosChapterText(SourceChapterContent(value.html.substring(section.start, end), value.images))
+    }
 }
 
 /**
@@ -139,15 +151,9 @@ class IosNovelDocument internal constructor(internal val styled: NovelStyledText
      * separates repeats); bookmarks without an excerpt, or whose excerpt is gone, keep their stored line.
      */
     fun bookmarkIndex(bookmark: IosBookmark, content: IosSourceContent): Int {
-        val chapters = content.value.chapters.orEmpty()
-        val chapter = chapters.firstOrNull { it.id == bookmark.value.chapterId }
-        val branch = chapters.filter { it.branch == chapter?.branch }
-        val chapterIndex = branch.indexOfFirst { it.id == bookmark.value.chapterId }
-        val progress = if (chapterIndex >= 0) {
-            novelBookmarkChapterProgress(bookmark.value.percent, chapterIndex, branch.size)
-        } else {
-            0f
-        }
+        val progress = content.branchPlace(bookmark.value.chapterId)?.let { (chapterIndex, count) ->
+            novelBookmarkChapterProgress(bookmark.value.percent, chapterIndex, count)
+        } ?: 0f
         val segments = lines.map { (it as? NovelDocumentBlock.Text)?.original.orEmpty() }
         val located = resolveNovelBookmarkPosition(segments, bookmark.textPreview, bookmark.index, progress) ?: bookmark.index
         return located.coerceIn(0, (lines.size - 1).coerceAtLeast(0))
@@ -332,6 +338,8 @@ class IosSourceTag internal constructor(internal val value: SourceTag) {
 class IosSourceContent internal constructor(
     internal val value: SourceContent,
     internal val metadata: org.skepsun.kototoro.core.db.entity.TrackingSiteItemEntity? = null,
+    /** Downloaded books listed by their own chapters: the download's chapter id → those chapters' titles. */
+    private val books: Map<Long, List<String>> = emptyMap(),
 ) {
     private val display = value.withTrackingMetadata(metadata)
     val usesTrackingCover: Boolean get() = !metadata?.coverUrl.isNullOrBlank()
@@ -355,17 +363,96 @@ class IosSourceContent internal constructor(
     val summary: String? get() = display.description?.takeIf(String::isNotBlank)
     val coverUrl: String? get() = (display.largeCoverUrl ?: display.coverUrl)?.takeIf(String::isNotBlank)
     val hasCover: Boolean get() = coverUrl != null
-    val chapters: List<IosSourceChapter> get() = value.chapters.orEmpty().map(::IosSourceChapter)
+    val chapters: List<IosSourceChapter> get() = listed.map(::IosSourceChapter)
     /** Without building the chapter list (each [chapters] read maps and bridges every chapter). */
-    val chapterCount: Int get() = value.chapters?.size ?: 0
+    val chapterCount: Int get() = listed.size
 
     fun adjacentChapter(chapter: IosSourceChapter, forward: Boolean): IosSourceChapter? =
-        SourceChapterNavigation.adjacent(value.chapters.orEmpty(), chapter.value.id, forward)?.let(::IosSourceChapter)
+        SourceChapterNavigation.adjacent(listed, chapter.value.id, forward)?.let(::IosSourceChapter)
+
+    /**
+     * The source's chapters, with each downloaded book replaced by its own chapters as Android lists an EPUB download
+     * (the download names their group). Sources, history and downloads keep using [value]'s chapters.
+     */
+    internal val listed: List<SourceChapter> by lazy {
+        if (books.isEmpty()) value.chapters.orEmpty() else value.chapters.orEmpty().flatMap { chapter ->
+            books[chapter.id]?.takeIf { it.isNotEmpty() }?.let { titles ->
+                titles.mapIndexed { index, title -> bookChapter(chapter, index, titles.size, title) }
+            } ?: listOf(chapter)
+        }
+    }
+    private val parts: Map<Long, SourceChapterPart> by lazy {
+        val chapters = value.chapters.orEmpty().associateBy { it.id }
+        buildMap {
+            for ((id, titles) in books) {
+                val parent = chapters[id] ?: continue
+                titles.indices.forEach { put(bookChapterId(parent.id, it), SourceChapterPart(parent, it, titles.size)) }
+            }
+        }
+    }
+
+    /** This work's fields with [other]'s chapters: a source that answered without its chapters keeps the shown list. */
+    fun withChaptersOf(other: IosSourceContent): IosSourceContent =
+        IosSourceContent(value.copy(chapters = other.value.chapters), metadata)
+
+    /** This work without a chapter list, so its details screen lists the saved or fetched chapters. */
+    val withoutChapters: IosSourceContent get() = IosSourceContent(value.copy(chapters = null), metadata)
+
+    /** The source's own chapters, downloads of books included (what [chapters] lists by their chapters). */
+    val sourceChapters: List<IosSourceChapter> get() = value.chapters.orEmpty().map(::IosSourceChapter)
+
+    /** This work with the given downloaded books listed by their chapters: download chapter id → chapter titles. */
+    fun withBooks(books: Map<String, List<String>>): IosSourceContent {
+        val parsed = books.mapNotNull { (id, titles) -> id.toLongOrNull()?.let { it to titles } }.toMap()
+        return if (parsed == this.books) this else IosSourceContent(value, metadata, parsed)
+    }
+
+    /** Some downloaded book is listed by its chapters. */
+    val hasBooks: Boolean get() = parts.isNotEmpty()
+
+    /** The download a book's chapter is listed from; null for the source's own chapters. */
+    fun bookOf(chapter: IosSourceChapter): IosSourceChapter? = parts[chapter.value.id]?.parent?.let(::IosSourceChapter)
+
+    /** The chapter's place inside its book; -1 for the source's own chapters. */
+    fun bookIndex(chapter: IosSourceChapter): Int = parts[chapter.value.id]?.index ?: -1
+
+    /** The first chapter listed for a download shown by its chapters, or the chapter itself. */
+    fun listedChapter(chapter: IosSourceChapter): IosSourceChapter =
+        if (books[chapter.value.id].isNullOrEmpty()) chapter
+        else listed.firstOrNull { parts[it.id]?.parent?.id == chapter.value.id }?.let(::IosSourceChapter) ?: chapter
+
+    internal fun part(chapter: SourceChapter): SourceChapterPart? = parts[chapter.id]
+
+    /** The id the stored chapter list knows a chapter by: a book's chapter is stored as its download. */
+    internal fun storedChapterId(id: Long): Long = parts[id]?.parent?.id ?: id
+
+    /** The chapter's index and the chapter count of its branch, a book's chapters sharing the download's place. */
+    internal fun branchPlace(chapterId: Long): Pair<Int, Int>? {
+        val part = parts[chapterId]
+        val all = value.chapters.orEmpty()
+        val stored = all.firstOrNull { it.id == (part?.parent?.id ?: chapterId) } ?: return null
+        val branch = all.filter { it.branch == stored.branch }
+        val count = part?.count ?: 1
+        return branch.indexOfFirst { it.id == stored.id } * count + (part?.index ?: 0) to branch.size * count
+    }
 }
+
+/** Android's id for chapter [index] of an EPUB download (`EpubInternalChapterLoader`), so history matches. */
+private fun bookChapterId(parentId: Long, index: Int): Long = parentId + index * 1_000_000L + 1
+
+/** Chapter [index] of a downloaded book in place of its download [parent], numbered within the download's number. */
+private fun bookChapter(parent: SourceChapter, index: Int, count: Int, title: String) = parent.copy(
+    id = bookChapterId(parent.id, index),
+    title = title.takeIf(String::isNotBlank) ?: localized("第 %@ 章", index + 1),
+    number = parent.number + index.toFloat() / count,
+    url = "${parent.url}#chapter/$index",
+    sourceData = null,
+    ebookFormats = emptyList(),
+)
 
 class IosSourceChapter internal constructor(internal val value: SourceChapter) {
     val id: String get() = value.id.toString()
-    val title: String get() = value.title?.takeIf(String::isNotBlank) ?: "第 ${chapterNumber(value.number)} 话"
+    val title: String get() = value.title?.takeIf(String::isNotBlank) ?: localized("第 %@ 话", chapterNumber(value.number))
     val branch: String? get() = value.branch
     val number: Float get() = value.number
     val volume: Int get() = value.volume
@@ -440,7 +527,7 @@ class IosSources(
     /** Versioned host management is separate from the source invocation protocol. */
     @Throws(Exception::class)
     suspend fun manage(requestJson: String): String = withContext(Dispatchers.IO) {
-        checkNotNull(transport) { "此构建未包含扩展运行时" }.exchange(requestJson)
+        checkNotNull(transport) { localized("此构建未包含扩展运行时") }.exchange(requestJson)
     }
 
     @Throws(Exception::class)
@@ -458,14 +545,14 @@ class IosSources(
             } catch (error: kotlin.coroutines.cancellation.CancellationException) {
                 throw error
             } catch (error: Exception) {
-                extensionError = error.message ?: "扩展运行时调用失败"
+                extensionError = error.message ?: localized("扩展运行时调用失败")
                 emptyList()
             }
         }.orEmpty()
         val imported = if (local == null) emptyList() else listOf(
-            IosSource(LocalSourceRuntime.MANGA.name, "本地漫画", "", LocalSourceRuntime.MANGA.contentType, "local"),
-            IosSource(LocalSourceRuntime.NOVEL.name, "本地小说", "", LocalSourceRuntime.NOVEL.contentType, "local"),
-            IosSource(LocalSourceRuntime.VIDEO.name, "本地视频", "", LocalSourceRuntime.VIDEO.contentType, "local"),
+            IosSource(LocalSourceRuntime.MANGA.name, localized("本地漫画"), "", LocalSourceRuntime.MANGA.contentType, "local"),
+            IosSource(LocalSourceRuntime.NOVEL.name, localized("本地小说"), "", LocalSourceRuntime.NOVEL.contentType, "local"),
+            IosSource(LocalSourceRuntime.VIDEO.name, localized("本地视频"), "", LocalSourceRuntime.VIDEO.contentType, "local"),
         )
         return IosSourceCatalog(imported + video + external, extensionError)
     }
@@ -479,14 +566,14 @@ class IosSources(
     /** Imports a local file (copied into the app); [fileName] decides the format and default title. */
     @Throws(Exception::class)
     suspend fun importLocal(path: String, fileName: String): IosSourceContent =
-        IosSourceContent(checkNotNull(local) { "本地导入不可用" }.import(path.toPath(), fileName))
+        IosSourceContent(checkNotNull(local) { localized("本地导入不可用") }.import(path.toPath(), fileName))
 
     fun isLocal(content: IosSourceContent): Boolean = LocalSourceRuntime.owns(content.value.source.name)
 
     /** Deletes the imported file; favourites and history of the work stay like those of any removed source. */
     @Throws(Exception::class)
     suspend fun removeLocal(content: IosSourceContent) {
-        checkNotNull(local) { "本地导入不可用" }.remove(content.value.id)
+        checkNotNull(local) { localized("本地导入不可用") }.remove(content.value.id)
     }
 
     private class ManagementInfo(val titles: Map<String, String>, val groups: Map<String, Pair<String, Int>>)
@@ -511,7 +598,7 @@ class IosSources(
 
     /** Extension sources only (the embedded-JVM preview); kept for callers that predate native sources. */
     @Throws(Exception::class)
-    suspend fun sources(): List<IosSource> = checkNotNull(extensions) { "此构建未包含扩展运行时" }
+    suspend fun sources(): List<IosSource> = checkNotNull(extensions) { localized("此构建未包含扩展运行时") }
         .getSources().map { IosSource(it.name, it.name, it.locale, it.contentType, "extension") }
 
     /** Call after sites were imported or removed so cached detection is not reused. */
@@ -702,7 +789,7 @@ class IosSources(
     @Throws(Exception::class)
     suspend fun image(page: IosSourcePage, cancellation: IosCancellation): IosSourceImage = coroutineScope {
         val work = async {
-            withTimeoutOrNull(IMAGE_TIMEOUT_MILLIS) { image(page) } ?: throw IllegalStateException("页面加载超时")
+            withTimeoutOrNull(IMAGE_TIMEOUT_MILLIS) { image(page) } ?: throw IllegalStateException(localized("页面加载超时"))
         }
         val watcher = launch {
             cancellation.signal.await()

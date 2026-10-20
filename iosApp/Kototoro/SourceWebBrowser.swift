@@ -30,7 +30,7 @@ struct SourceWebBrowser: View {
                     if page.isLoading { ProgressView(value: page.progress).progressViewStyle(.linear) }
                 }
                 .safeAreaInset(edge: .bottom) { status }
-                .navigationTitle(page.title.isEmpty ? (target.url.host() ?? "浏览器") : page.title)
+                .navigationTitle(page.title.isEmpty ? (target.url.host() ?? String(localized: "浏览器")) : page.title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -51,8 +51,8 @@ struct SourceWebBrowser: View {
     @ViewBuilder
     private var status: some View {
         let text: String? = if let error { error }
-            else if page.hasClearance { "已通过验证，点“完成”后返回重试" }
-            else { "如出现验证页面，请在此完成验证，然后点“完成”" }
+            else if page.hasClearance { String(localized: "已通过验证，点“完成”后返回重试") }
+            else { String(localized: "如出现验证页面，请在此完成验证，然后点“完成”") }
         if let text {
             Label(text, systemImage: page.hasClearance ? "checkmark.shield" : "shield.lefthalf.filled")
                 .font(.footnote)

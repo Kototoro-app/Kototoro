@@ -168,13 +168,19 @@ final class SourceDetailsModel: ObservableObject {
         defer { if detailsRequest == request { isLoading = false } }
         let identity = ContentMarks.key(content)
         do {
-            let result = try await runtime.refreshDetails(content: details ?? content)
+            let fetchedResult = try await runtime.refreshDetails(content: details ?? content)
             guard !Task.isCancelled, detailsRequest == request, identity == ContentMarks.key(content) else { return }
-            apply(result); fetched = true; error = nil; challenge = nil
-            DetailsCache.put(result)
+            error = nil; challenge = nil
+            let result = await settled(fetchedResult)
+            guard detailsRequest == request else { return }
+            apply(result); fetched = true
+            if fetchedResult.chapterCount > 0 { DetailsCache.put(result) }
             await loadRelated()
         } catch {
-            if !Task.isCancelled, detailsRequest == request, identity == ContentMarks.key(content) { fail(error) }
+            if !Task.isCancelled, detailsRequest == request, identity == ContentMarks.key(content) {
+                fail(error)
+                await showDownloadedChapters()
+            }
         }
     }
 
@@ -192,10 +198,44 @@ final class SourceDetailsModel: ObservableObject {
         Task { await loadRelated() }
     }
 
+    /// The queue whose finished downloads stand in for the chapter list when there is no other.
+    weak var downloads: ReaderDownloadQueue?
+
+    /**
+     * Some sources answer a failed request with the work and no chapters. That keeps the list already shown (cached
+     * or saved), or else lists the downloaded chapters, instead of emptying the directory.
+     */
+    private func settled(_ result: IosSourceContent) async -> IosSourceContent {
+        guard result.chapterCount == 0 else { return result }
+        if let shown = details, shown.chapterCount > 0 {
+            error = String(localized: "来源没有返回章节，显示的是上次保存的目录")
+            return result.withChaptersOf(other: shown)
+        }
+        guard let downloads, let offline = await DownloadedWorksModel.offlineContent(for: result, queue: downloads)
+        else { return result }
+        error = String(localized: "来源没有返回章节，仅显示已下载的章节")
+        return result.withChaptersOf(other: offline)
+    }
+
+    /// Nothing listed and the source failed: the downloaded chapters stay readable.
+    func showDownloadedChapters() async {
+        guard (details?.chapterCount ?? 0) == 0, let downloads,
+              let offline = await DownloadedWorksModel.offlineContent(for: details ?? content, queue: downloads),
+              (details?.chapterCount ?? 0) == 0 else { return }
+        apply((details ?? offline).withChaptersOf(other: offline))
+    }
+
     /// Readable text, and whether the site asked for browser verification.
     private func fail(_ error: Error) {
         self.error = SourceErrorText.describe(error)
         challenge = SourceErrorText.challenge(error)
+    }
+
+    /// A book download finished or was removed: list it by its chapters, or as the download again.
+    func relistBooks() {
+        guard isNovel, let details else { return }
+        let listed = NovelDownloads.listingBooks(details)
+        if listed !== details { apply(listed) }
     }
 
     var isVideo: Bool { content.mediaKind == "VIDEO" }
@@ -220,12 +260,14 @@ final class SourceDetailsModel: ObservableObject {
         } else if let library, let saved = try? await library.storedDetails(content: content), details == nil {
             apply(saved)
             Task { await loadRelated() }
+        } else {
+            await showDownloadedChapters()
         }
     }
 
     /// Keeps the chosen line and branch when they still exist.
     private func apply(_ result: IosSourceContent) {
-        details = result
+        details = NovelDownloads.listingBooks(result)
         if !lines.contains(selectedLine) { selectedLine = lines.first ?? nil }
         if !branches.contains(selectedBranch) { selectedBranch = branches.first ?? nil }
         rebuildVisibleChapters()
@@ -239,17 +281,22 @@ final class SourceDetailsModel: ObservableObject {
         error = nil; challenge = nil
         defer { if detailsRequest == request { isLoading = false } }
         do {
-            let result = try await runtime.details(content: content)
+            let fetchedResult = try await runtime.details(content: content)
             try Task.checkCancellation()
+            guard detailsRequest == request else { return }
+            let result = await settled(fetchedResult)
             if detailsRequest == request {
                 apply(result)
                 fetched = true
-                DetailsCache.put(result)
+                if fetchedResult.chapterCount > 0 { DetailsCache.put(result) }
                 await loadRelated()
             }
         } catch {
             // A shown cached or saved list stays (offline reading); the error offers a retry above it.
-            if !Task.isCancelled, detailsRequest == request { fail(error) }
+            if !Task.isCancelled, detailsRequest == request {
+                fail(error)
+                await showDownloadedChapters()
+            }
         }
     }
 }
@@ -257,6 +304,7 @@ final class SourceDetailsModel: ObservableObject {
 struct SourceDetailsView: View {
     @EnvironmentObject private var library: LibraryModel
     @EnvironmentObject private var sources: SourcesModel
+    @EnvironmentObject private var downloads: ReaderDownloadQueue
     @StateObject private var model: SourceDetailsModel
     @State private var playing: PlaybackRequest?
     @State private var reading: PlaybackRequest?
@@ -372,6 +420,7 @@ struct SourceDetailsView: View {
         .navigationTitle(panorama && scrollOffset < 170 ? "" : shownContent.title)
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            model.downloads = downloads
             await refreshMetadata()
             // Continuing from the library or history needs no fresh list: resume from the saved one at once.
             await model.showCached(stored: library.library)
@@ -385,11 +434,17 @@ struct SourceDetailsView: View {
             await sources.refreshSettings()
             resumeIfAsked()
         }
-        .onAppear { model.orderByNumber = chapterOrder == "number" }
+        .onAppear {
+            model.orderByNumber = chapterOrder == "number"
+            // Downloads may have been removed in storage management meanwhile.
+            model.relistBooks()
+        }
         .sheet(isPresented: $showingReadingStats) {
             ContentReadingStatsSheet(content: shownContent, runtime: model.runtime)
         }
         .onChange(of: chapterOrder) { _, order in withAnimation { model.orderByNumber = order == "number" } }
+        // A finished or removed book download lists the book by its chapters, or as the download again.
+        .onChange(of: finishedDownloads) { _, _ in model.relistBooks() }
         .toolbar {
             ToolbarItem(placement: .bottomBar) {
                 Button(model.isVideo ? "剧集" : "章节", systemImage: "list.bullet") { showingAllChapters = true }
@@ -442,7 +497,7 @@ struct SourceDetailsView: View {
                     Task {
                         await refreshMetadata()
                         managingTracking = false
-                        toastMessage = shownContent.metadataSiteTitle.map { "已使用 \($0) 资料" } ?? "已恢复内容源资料"
+                        toastMessage = shownContent.metadataSiteTitle.map { String(localized: "已使用 \($0) 资料") } ?? String(localized: "已恢复内容源资料")
                     }
                 }
             }
@@ -491,6 +546,13 @@ struct SourceDetailsView: View {
         await model.refresh()
         await refreshRecords()
         await sources.refreshSettings()
+    }
+
+    private var finishedDownloads: [String] {
+        guard model.isNovel else { return [] }
+        return downloads.entries.filter {
+            $0.state == .completed && $0.request.source == model.content.sourceName && $0.request.contentID == model.content.id
+        }.map(\.id)
     }
 
     private func refreshRecords() async {
@@ -636,7 +698,7 @@ struct SourceDetailsView: View {
                         Button("复制标题", systemImage: "doc.on.doc") {
                             UIPasteboard.general.string = shown.title
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            toastMessage = "已复制标题"
+                            toastMessage = String(localized: "已复制标题")
                         }
                         .labelStyle(.iconOnly)
                         .buttonStyle(.glass)
@@ -728,7 +790,7 @@ struct SourceDetailsView: View {
                             let readCount = (model.chapterIndices[resume.chapterId] ?? -1) + 1
                             return "\(readCount)/\(totalChapters)"
                         } else {
-                            return model.isVideo ? "\(totalChapters) 集" : "\(totalChapters) 章"
+                            return model.isVideo ? String(localized: "\(totalChapters) 集") : String(localized: "\(totalChapters) 章")
                         }
                     }()
                     Button {
@@ -883,8 +945,8 @@ struct SourceDetailsView: View {
     }
 
     private func primaryReadButton(identifier: String) -> some View {
-        let title = resumeChapter() != nil ? (model.isVideo ? "继续播放" : "继续阅读")
-            : (model.isVideo ? "开始播放" : "开始阅读")
+        let title = resumeChapter() != nil ? (model.isVideo ? String(localized: "继续播放") : String(localized: "继续阅读"))
+            : (model.isVideo ? String(localized: "开始播放") : String(localized: "开始阅读"))
         return Button {
             if let details = model.details, let target = primaryTarget { openChapter(target, from: details) }
         } label: {
@@ -923,12 +985,12 @@ struct SourceDetailsView: View {
                     Spacer(minLength: 0)
                     if model.isVideo && model.lines.count > 1 {
                         Picker("线路", selection: $model.selectedLine) {
-                            ForEach(model.lines, id: \.self) { Text($0 ?? "默认").tag($0) }
+                            ForEach(model.lines, id: \.self) { Text($0 ?? String(localized: "默认")).tag($0) }
                         }
                         .accessibilityIdentifier("details.line")
                     } else if !model.isVideo && model.branches.count > 1 {
                         Picker("分支", selection: $model.selectedBranch) {
-                            ForEach(model.branches, id: \.self) { Text($0 ?? "默认").tag($0) }
+                            ForEach(model.branches, id: \.self) { Text($0 ?? String(localized: "默认")).tag($0) }
                         }
                     }
                     Menu("排序", systemImage: "arrow.up.arrow.down") {
@@ -962,7 +1024,9 @@ struct SourceDetailsView: View {
                             if chapter.id != preview.first?.id { Divider() }
                             Button { openChapter(chapter, from: details) } label: {
                                 DetailsChapterLabel(chapter: chapter, resume: resume,
-                                                    isRead: model.isBeforeResume(chapter, resume: resume), isVideo: model.isVideo)
+                                                    isRead: model.isBeforeResume(chapter, resume: resume), isVideo: model.isVideo,
+                                                    book: details.bookOf(chapter: chapter)?.title,
+                                                    offline: model.isVideo ? nil : ChapterOfflineMark.of(details, chapter))
                                     .padding(.vertical, 4)
                             }
                             .buttonStyle(.plain)
@@ -1001,7 +1065,7 @@ struct SourceDetailsView: View {
                             if let chapter = model.chapters.first(where: { $0.id == bookmark.chapterId }) {
                                 reading = PlaybackRequest(content: details, chapter: chapter, initialBookmark: bookmark)
                             } else {
-                                toastMessage = "书签对应的章节已不存在，请刷新章节或检查内容源。"
+                                toastMessage = String(localized: "书签对应的章节已不存在，请刷新章节或检查内容源。")
                             }
                         } label: {
                             BookmarkPreviewLabel(runtime: model.runtime, content: details, bookmark: bookmark,
@@ -1045,21 +1109,21 @@ struct SourceDetailsView: View {
 
     static func mediaKindTitle(_ kind: String) -> String {
         switch kind {
-        case "MANGA": "漫画"
-        case "NOVEL": "小说"
-        case "VIDEO": "视频"
+        case "MANGA": String(localized: "漫画")
+        case "NOVEL": String(localized: "小说")
+        case "VIDEO": String(localized: "视频")
         default: kind
         }
     }
 
     static func stateTitle(_ state: String) -> String {
         switch state {
-        case "ONGOING": "连载中"
-        case "FINISHED": "已完结"
-        case "ABANDONED": "已放弃"
-        case "PAUSED": "暂停更新"
-        case "UPCOMING": "即将推出"
-        case "RESTRICTED": "受限"
+        case "ONGOING": String(localized: "连载中")
+        case "FINISHED": String(localized: "已完结")
+        case "ABANDONED": String(localized: "已放弃")
+        case "PAUSED": String(localized: "暂停更新")
+        case "UPCOMING": String(localized: "即将推出")
+        case "RESTRICTED": String(localized: "受限")
         default: state
         }
     }
@@ -1520,7 +1584,7 @@ struct ChapterThumbnailsView: View {
                 }
             } label: {
                 HStack(spacing: 5) {
-                    Text(selectedChapter?.title ?? "选择章节")
+                    Text(selectedChapter?.title ?? String(localized: "选择章节"))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)

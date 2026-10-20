@@ -80,7 +80,7 @@ class IosLibrary {
                 val categories = database.getFavouriteCategoriesDao()
                 val currentIds = categories.findAll().map { it.categoryId }.toSet()
                 require(orderedIds.size == currentIds.size && orderedIds.toSet() == currentIds) {
-                    "分类列表已变化，请重新打开管理分类后保存"
+                    localized("分类列表已变化，请重新打开管理分类后保存")
                 }
                 val visible = visibleIds.toSet()
                 require(visible.all { it in currentIds }) { "Visible category no longer exists" }
@@ -286,7 +286,9 @@ class IosLibrary {
     suspend fun removeHistory(content: IosSourceContent) = records.removeHistory(content.value.id)
 
     @Throws(Exception::class)
-    suspend fun saveDetails(content: IosSourceContent) = records.save(content.value)
+    suspend fun saveDetails(content: IosSourceContent) =
+        // Details without chapters (a source that failed quietly) keep the saved list instead of erasing it.
+        records.save(content.value.let { if (it.chapters?.isEmpty() == true) it.copy(chapters = null) else it })
 
     /** Moves Android-compatible library records after Swift has fetched and confirmed the target's details. */
     @Throws(Exception::class)
@@ -306,9 +308,13 @@ class IosLibrary {
     @Throws(Exception::class)
     suspend fun position(content: IosSourceContent): IosReadingPosition? {
         val history = records.progress(content.value.id) ?: return null
-        val chapters = content.value.chapters ?: storedDetails(content)?.value?.chapters ?: return null
+        // A downloaded book's chapters are listed, and recorded, in place of the download.
+        val chapters = content.listed.takeIf { content.value.chapters != null }
+            ?: storedDetails(content)?.value?.chapters ?: return null
         val ids = chapters.map { it.id }
         val recovered = recoverHistoryChapterId(false, history.chapterId, history.parentChapterId, history.percent, ids)
+            // A book's chapter whose download is not listed by its chapters resumes at the download.
+            ?: history.parentChapterId?.takeIf { history.chapterId !in ids && it in ids }
         val chapterId = recovered ?: history.chapterId
         if (chapterId !in ids) return null
         return IosReadingPosition(chapterId.toString(), if (recovered == null) history.page else 0,
@@ -322,7 +328,7 @@ class IosLibrary {
     @Throws(Exception::class)
     suspend fun recordPosition(content: IosSourceContent, chapter: IosSourceChapter, index: Int,
         count: Int, lastVisible: Int, scroll: Float) =
-        records.recordPage(content.value, chapter.value, index, count, lastVisible, scroll)
+        records.recordPage(content.value, chapter.value, index, count, lastVisible, scroll, content.part(chapter.value))
 
     @Throws(Exception::class)
     suspend fun bookmarks(content: IosSourceContent): List<IosBookmark> = records.bookmarks(content.value.id).map(::IosBookmark)
@@ -333,7 +339,8 @@ class IosLibrary {
 
     @Throws(Exception::class)
     suspend fun toggleNovelBookmark(content: IosSourceContent, chapter: IosSourceChapter, index: Int,
-        count: Int, preview: String) = records.toggleNovelBookmark(content.value, chapter.value, index, count, preview)
+        count: Int, preview: String) =
+        records.toggleNovelBookmark(content.value, chapter.value, index, count, preview, content.part(chapter.value))
 
     @Throws(Exception::class)
     suspend fun removeBookmark(content: IosSourceContent, bookmark: IosBookmark) = records.removeBookmark(content.value, bookmark.value)

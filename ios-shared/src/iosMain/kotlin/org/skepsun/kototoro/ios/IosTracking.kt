@@ -83,7 +83,7 @@ internal fun trackingSiteTitle(service: Int): String =
             3 -> "MyAnimeList"
             6 -> "MangaUpdates"
             7 -> "SIMKL"
-            else -> "追踪网站"
+            else -> localized("追踪网站")
         }
 
 /** Native composition root; HTTP/parsing and binding/display rules live in the shared modules. */
@@ -142,7 +142,7 @@ class IosTracking internal constructor(
         val details = if (item.detailed) item.value else {
             request { resolveDetails(item, content.mediaKind) }
         }
-        require(details.mediaKind == content.mediaKind) { "作品类型不匹配，请选择相同类型的作品资料" }
+        require(details.mediaKind == content.mediaKind) { localized("作品类型不匹配，请选择相同类型的作品资料") }
         library.saveDetails(content)
         store.bind(content.value, details.toEntity())
     }
@@ -160,7 +160,7 @@ class IosTracking internal constructor(
     internal suspend fun selected(ids: List<Long>): Map<Long, TrackingSiteItemEntity> = store.selected(ids)
 
     private fun site(id: Int) = PublicTrackingSite.entries.firstOrNull { it.id == id }
-        ?: error("此追踪网站尚不支持在线检索")
+        ?: error(localized("此追踪网站尚不支持在线检索"))
 
     private suspend fun resolveDetails(item: IosTrackingItem, kind: String): TrackingMetadata =
         if (item.service == 7 && item.remoteType != null) api.details(site(7), item.value.remoteId, kind, item.remoteType!!)
@@ -171,11 +171,11 @@ class IosTracking internal constructor(
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (error: HttpRequestTimeoutException) {
-        throw IllegalStateException("连接超时，请重试或切换网站", error)
+        throw IllegalStateException(localized("连接超时，请重试或切换网站"), error)
     } catch (error: ResponseException) {
-        throw IllegalStateException("网站暂时无法响应（HTTP ${error.response.status.value}），请稍后重试", error)
+        throw IllegalStateException(localized("网站暂时无法响应（HTTP %@），请稍后重试", error.response.status.value), error)
     } catch (error: Exception) {
-        throw IllegalStateException("暂时无法读取作品资料，请检查网络或切换网站", error)
+        throw IllegalStateException(localized("暂时无法读取作品资料，请检查网络或切换网站"), error)
     }
 
     internal companion object {

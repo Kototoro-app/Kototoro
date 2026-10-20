@@ -107,8 +107,8 @@ struct LibraryMigrationView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(title(key))
-                                Text("\(groups[key]?.count ?? 0) 部作品" +
-                                     (library.missingSources.contains { $0.key == key } ? " · 来源缺失" : ""))
+                                Text(String(localized: "\(groups[key]?.count ?? 0) 部作品") +
+                                     (library.missingSources.contains { $0.key == key } ? String(localized: " · 来源缺失") : ""))
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         }.accessibilityIdentifier("migration.source.\(key)")
@@ -183,7 +183,7 @@ final class BatchMigrationModel: ObservableObject {
         let original: IosSourceContent
         var candidates: [IosSourceContent] = []
         var target: IosSourceContent?
-        var message = "等待搜索"
+        var message = String(localized: "等待搜索")
         var completed = false
         var skipped = false
         var id: String { ContentMarks.key(original) }
@@ -201,23 +201,23 @@ final class BatchMigrationModel: ObservableObject {
     var completedCount: Int { rows.filter(\.completed).count }
     var skippedCount: Int { rows.filter(\.skipped).count }
     var unselectedCount: Int { rows.filter { !$0.completed && !$0.skipped && $0.target == nil }.count }
-    func stop() { stopRequested = true; progress = "正在结束当前作品，随后停止…" }
+    func stop() { stopRequested = true; progress = String(localized: "正在结束当前作品，随后停止…") }
     func choose(_ target: IosSourceContent, for id: String) {
         guard !running, let index = rows.firstIndex(where: { $0.id == id }), !rows[index].completed else { return }
         rows[index].target = target
         rows[index].skipped = false
-        rows[index].message = "已选择，等待迁移"
+        rows[index].message = String(localized: "已选择，等待迁移")
     }
     func skip(_ id: String) {
         guard !running, let index = rows.firstIndex(where: { $0.id == id }), !rows[index].completed else { return }
         rows[index].target = nil
         rows[index].skipped = true
-        rows[index].message = "已跳过，不参与批量搜索与迁移"
+        rows[index].message = String(localized: "已跳过，不参与批量搜索与迁移")
     }
     func include(_ id: String) {
         guard !running, let index = rows.firstIndex(where: { $0.id == id }), !rows[index].completed else { return }
         rows[index].skipped = false
-        rows[index].message = "等待搜索"
+        rows[index].message = String(localized: "等待搜索")
     }
     func selectUnambiguous() {
         guard !running else { return }
@@ -226,7 +226,7 @@ final class BatchMigrationModel: ObservableObject {
             guard let match = IosMigrationMatching.shared.uniqueExactMatch(original: rows[index].original,
                 candidates: rows[index].candidates), reserved.insert(ContentMarks.key(match)).inserted else { continue }
             rows[index].target = match
-            rows[index].message = "已采用唯一同名候选，请核对作者与版本"
+            rows[index].message = String(localized: "已采用唯一同名候选，请核对作者与版本")
         }
     }
     private func begin() { running = true; stopRequested = false }
@@ -248,7 +248,7 @@ final class BatchMigrationModel: ObservableObject {
             }
             for (offset, source) in eligible.enumerated() {
                 if stopRequested || Task.isCancelled { break }
-                progress = "\(original.title) · 正在搜索 \(source.title)（\(offset + 1)/\(eligible.count)）"
+                progress = String(localized: "\(original.title) · 正在搜索 \(source.title)（\(offset + 1)/\(eligible.count)）")
                 do {
                     let results = try await runtime.filteredPage(sourceName: source.name, page: 0, loadedCount: 0,
                                                                query: query ?? original.title, selection: nil)
@@ -256,11 +256,12 @@ final class BatchMigrationModel: ObservableObject {
                 } catch { failures.append("\(source.title)：\(SourceErrorText.describe(error))") }
             }
             rows[index].candidates = IosMigrationMatching.shared.rank(original: original, candidates: found)
-            rows[index].message = "找到 \(rows[index].candidates.count) 个候选，请选择" +
-                (failures.isEmpty ? "" : "；\(failures.count) 个来源失败：\(failures.joined(separator: "；"))")
-            if eligible.isEmpty { rows[index].message = "没有可搜索的同类型来源，请先安装或启用来源" }
+            let candidateCount = rows[index].candidates.count
+            rows[index].message = failures.isEmpty ? String(localized: "找到 \(candidateCount) 个候选，请选择")
+                : String(localized: "找到 \(candidateCount) 个候选，请选择；\(failures.count) 个来源失败：\(ListFormatter.localizedString(byJoining: failures))")
+            if eligible.isEmpty { rows[index].message = String(localized: "没有可搜索的同类型来源，请先安装或启用来源") }
         }
-        progress = stopRequested ? "已停止搜索，可继续搜索剩余作品" : "搜索完成，请逐部核对候选"
+        progress = stopRequested ? String(localized: "已停止搜索，可继续搜索剩余作品") : String(localized: "搜索完成，请逐部核对候选")
     }
 
     func migrate(runtime: IosSources, library: LibraryModel, keepOriginal: Bool) async {
@@ -274,14 +275,14 @@ final class BatchMigrationModel: ObservableObject {
             guard let candidate = rows[index].target else { continue }
             let key = ContentMarks.key(candidate)
             guard !originals.contains(key), !usedTargets.contains(key) else {
-                rows[index].message = "目标与本批其他作品重复，请重新选择，避免合并不同作品"
+                rows[index].message = String(localized: "目标与本批其他作品重复，请重新选择，避免合并不同作品")
                 continue
             }
-            progress = "正在迁移 \(rows[index].original.title)（已完成 \(completedCount)/\(rows.count)）"
+            progress = String(localized: "正在迁移 \(rows[index].original.title)（已完成 \(completedCount)/\(rows.count)）")
             do {
                 let details = try await runtime.details(content: candidate)
                 guard ContentMarks.key(details) == key else {
-                    rows[index].message = "目标作品身份已变化，未迁移；请重新搜索并选择"
+                    rows[index].message = String(localized: "目标作品身份已变化，未迁移；请重新搜索并选择")
                     continue
                 }
                 // Stop before writing if the user stopped while waiting for the source.
@@ -289,12 +290,12 @@ final class BatchMigrationModel: ObservableObject {
                 try await database.changeSource(content: rows[index].original, target: details, keepOriginal: keepOriginal)
                 rows[index].completed = true
                 usedTargets.insert(key)
-                rows[index].message = "迁移成功"
-            } catch { rows[index].message = "迁移失败：\(SourceErrorText.describe(error))。原记录保留，可重试。" }
+                rows[index].message = String(localized: "迁移成功")
+            } catch { rows[index].message = String(localized: "迁移失败：\(SourceErrorText.describe(error))。原记录保留，可重试。") }
         }
         await library.refresh()
-        progress = "\(stopRequested ? "已停止" : "本轮完成")：\(completedCount) 部成功，\(readyCount) 部待处理，" +
-            "\(unselectedCount) 部未选择，\(skippedCount) 部已跳过"
+        let counts = String(localized: "\(completedCount) 部成功，\(readyCount) 部待处理，\(unselectedCount) 部未选择，\(skippedCount) 部已跳过")
+        progress = stopRequested ? String(localized: "已停止：\(counts)") : String(localized: "本轮完成：\(counts)")
     }
 }
 
@@ -397,7 +398,8 @@ struct BatchMigrationView: View {
         }
         .interactiveDismissDisabled(model.running)
         .onChange(of: scenePhase) { _, phase in if phase == .background && model.running { model.stop() } }
-        .confirmationDialog("\(keepOriginal ? "复制" : "迁移") \(model.readyCount) 部作品？", isPresented: $confirming,
+        .confirmationDialog(keepOriginal ? String(localized: "复制 \(model.readyCount) 部作品？")
+                                : String(localized: "迁移 \(model.readyCount) 部作品？"), isPresented: $confirming,
                             titleVisibility: .visible) {
             Button(keepOriginal ? "确认复制" : "确认迁移并移除原收藏和历史", role: keepOriginal ? nil : .destructive) {
                 guard let runtime = sources.runtime else { return }
@@ -441,7 +443,8 @@ struct BatchMigrationView: View {
             } else if model.completedCount == model.rows.count && !model.rows.isEmpty {
                 Label("全部迁移完成", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
             } else {
-                Button("\(model.completedCount > 0 ? "继续／重试" : "迁移")已选择的 \(model.readyCount) 部作品") { confirming = true }
+                Button(model.completedCount > 0 ? String(localized: "继续／重试已选择的 \(model.readyCount) 部作品")
+                       : String(localized: "迁移已选择的 \(model.readyCount) 部作品")) { confirming = true }
                     .buttonStyle(.borderedProminent).frame(maxWidth: .infinity, alignment: .trailing)
                     .disabled(model.readyCount == 0 || library.library == nil || sources.runtime == nil)
                     .accessibilityIdentifier("migration.execute")

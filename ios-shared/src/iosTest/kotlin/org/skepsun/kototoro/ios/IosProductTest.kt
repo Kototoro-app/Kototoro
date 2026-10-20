@@ -569,6 +569,77 @@ class IosProductTest {
         }
     }
 
+    @Test
+    fun downloadedBooksListTheirChaptersAndRecordThemWithTheDownload() = runBlocking {
+        val text = IosChapterText(SourceChapterContent("<p>序章</p>\n<p>第一章</p>\n",
+            sections = listOf(SourceChapterSection("序章", 0), SourceChapterSection("第一章", 10))))
+        val archive = IosChapterTextArchive()
+        val restored = archive.decode(archive.encode(text))
+        assertEquals(listOf("序章", "第一章"), restored.sections)
+        assertEquals("<p>序章</p>\n", restored.section(0)?.html)
+        assertEquals("<p>第一章</p>\n", restored.section(1)?.html)
+        assertNull(restored.section(2))
+
+        val novelSource = SourceRef("TSUNDOKU_NOVEL", "zh", "NOVEL")
+        val book = chapter.copy(id = 1000, title = "第一卷", number = 1f, url = "/book/1", source = novelSource)
+        val after = chapter.copy(id = 2000, title = "第二卷", number = 2f, url = "/book/2", source = novelSource)
+        val plain = IosSourceContent(content.copy(id = 78L, source = novelSource, chapters = listOf(book, after)))
+        val item = plain.withBooks(mapOf(book.id.toString() to restored.sections))
+        assertEquals(listOf("序章", "第一章", "第二卷"), item.chapters.map { it.title })
+        // Android's internal chapter ids, so history written on either side matches.
+        assertEquals(listOf("1001", "1001001", "2000"), item.chapters.map { it.id })
+        val second = item.chapters[1]
+        assertEquals("第一卷", item.bookOf(second)?.title)
+        assertEquals(1, item.bookIndex(second))
+        assertNull(item.bookOf(item.chapters[2]))
+        assertEquals("第二卷", item.adjacentChapter(second, forward = true)?.title)
+        assertEquals("序章", item.listedChapter(IosSourceChapter(book)).title)
+        // Reading statistics place a book's chapter instead of failing on it (a crash when opened from Swift).
+        IosReadingTracker(item).update(second, index = 0, count = 2, lastVisible = 0, scroll = 0f, active = true)
+
+        withDatabase { path ->
+            val library = IosLibrary(path)
+            try {
+                library.recordPosition(item, second, index = 0, count = 2, scroll = 0f)
+                val position = assertNotNull(library.position(item))
+                assertEquals(second.id, position.chapterId)
+                // The second of two chapters in the first of two downloads, half read.
+                assertEquals(0.375f, position.progress)
+                // Without the book listed, reading resumes at its download.
+                assertEquals(book.id.toString(), library.position(plain)?.chapterId)
+                library.toggleNovelBookmark(item, second, index = 1, count = 2, preview = "第一章")
+                assertEquals(second.id, library.bookmarks(item).single().chapterId)
+            } finally { library.close() }
+        }
+    }
+
+    @Test
+    fun downloadsListAWorkOfflineAndAnEmptyAnswerKeepsTheSavedChapters() = runBlocking {
+        val novelSource = SourceRef("TSUNDOKU_NOVEL", "zh", "NOVEL")
+        val first = chapter.copy(id = 10, title = "第一卷", number = 1f, url = "/v/1", source = novelSource)
+        val second = chapter.copy(id = 20, title = "第二卷", number = 2f, url = "/v/2", source = novelSource)
+        val work = content.copy(id = 79L, source = novelSource, chapters = listOf(first, second))
+        val codec = IosDownloadArchive()
+        val item = IosSourceContent(work)
+        val offline = assertNotNull(codec.offlineContent(listOf(
+            codec.encode(item, IosSourceChapter(second)), codec.encode(item, IosSourceChapter(first)), "broken",
+        )))
+        assertEquals(work.id.toString(), offline.id)
+        assertEquals(listOf("第一卷", "第二卷"), offline.chapters.map { it.title })
+        assertNull(codec.offlineContent(listOf("broken")))
+
+        val empty = IosSourceContent(work.copy(chapters = emptyList()))
+        assertEquals(listOf("第一卷", "第二卷"), empty.withChaptersOf(item).chapters.map { it.title })
+        withDatabase { path ->
+            val library = IosLibrary(path)
+            try {
+                library.saveDetails(item)
+                library.saveDetails(empty)
+                assertEquals(2, library.storedDetails(item)?.chapterCount)
+            } finally { library.close() }
+        }
+    }
+
     private suspend fun withDatabase(block: suspend (String) -> Unit) {
         val dir = NSTemporaryDirectory() + NSUUID().UUIDString
         val files = NSFileManager.defaultManager

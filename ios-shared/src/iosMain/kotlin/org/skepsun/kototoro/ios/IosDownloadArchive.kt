@@ -10,8 +10,8 @@ import org.skepsun.kototoro.core.source.SourceContent
 class IosDownloadArchive {
     @Throws(Exception::class)
     fun encode(content: IosSourceContent, chapter: IosSourceChapter): String {
-        require(content.value.source.name == chapter.value.source.name) { "下载章节与作品来源不一致" }
-        require(content.mediaKind in DOWNLOADABLE) { "当前仅支持漫画与小说章节下载" }
+        require(content.value.source.name == chapter.value.source.name) { localized("下载章节与作品来源不一致") }
+        require(content.mediaKind in DOWNLOADABLE) { localized("当前仅支持漫画与小说章节下载") }
         // A thousand-chapter catalog must not be duplicated once per queued chapter.
         return Json.encodeToString(Request(content.value.copy(chapters = null), chapter.value))
     }
@@ -19,12 +19,30 @@ class IosDownloadArchive {
     @Throws(Exception::class)
     fun decode(json: String): IosDownloadRequest {
         val request = Json.decodeFromString<Request>(json)
-        require(request.version == 1) { "下载任务版本尚不支持" }
+        require(request.version == 1) { localized("下载任务版本尚不支持") }
         val content = IosSourceContent(request.content)
         val chapter = IosSourceChapter(request.chapter)
-        require(request.content.source.name == request.chapter.source.name) { "下载章节与作品来源不一致" }
-        require(content.mediaKind in DOWNLOADABLE) { "当前仅支持漫画与小说章节下载" }
+        require(request.content.source.name == request.chapter.source.name) { localized("下载章节与作品来源不一致") }
+        require(content.mediaKind in DOWNLOADABLE) { localized("当前仅支持漫画与小说章节下载") }
         return IosDownloadRequest(content, chapter)
+    }
+
+    /**
+     * The work as its downloads describe it, listing only the downloaded chapters (by volume and number), for reading
+     * offline when the source cannot list them and no list was saved. Null without a readable download of one work.
+     */
+    fun offlineContent(payloads: List<String>): IosSourceContent? {
+        val requests = payloads.mapNotNull { payload ->
+            runCatching { Json.decodeFromString<Request>(payload) }.getOrNull()?.takeIf { it.version == 1 }
+        }
+        val work = requests.firstOrNull()?.content ?: return null
+        val chapters = requests
+            .filter { it.content.id == work.id && it.content.source.name == work.source.name &&
+                it.chapter.source.name == work.source.name }
+            .map { it.chapter }
+            .distinctBy { it.id }
+            .sortedWith(compareBy({ it.volume }, { it.number }))
+        return IosSourceContent(work.copy(chapters = chapters))
     }
 
     @Serializable
@@ -42,7 +60,7 @@ class IosChapterTextArchive {
     @Throws(Exception::class)
     fun decode(json: String): IosChapterText {
         val stored = Json.decodeFromString<Stored>(json)
-        require(stored.version == 1) { "离线章节版本尚不支持" }
+        require(stored.version == 1) { localized("离线章节版本尚不支持") }
         return IosChapterText(stored.content)
     }
 

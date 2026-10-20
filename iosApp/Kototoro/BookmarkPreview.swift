@@ -67,10 +67,10 @@ struct BookmarkPreviewLabel: View {
                 BookmarkPageImage(runtime: runtime, content: content, bookmark: bookmark, chapter: chapter)
             }
             VStack(alignment: .leading, spacing: 7) {
-                Text(chapter?.title ?? "章节已失效")
+                Text(chapter?.title ?? String(localized: "章节已失效"))
                     .font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(2)
                 if isNovel {
-                    Text(bookmark.textPreview.isEmpty ? "暂无文字预览" : bookmark.textPreview)
+                    Text(bookmark.textPreview.isEmpty ? String(localized: "暂无文字预览") : bookmark.textPreview)
                         .font(.subheadline).foregroundStyle(bookmark.textPreview.isEmpty ? .secondary : .primary)
                         .lineSpacing(3).lineLimit(4)
                         .accessibilityIdentifier("bookmark.excerpt.\(bookmark.id)")

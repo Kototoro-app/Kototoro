@@ -8,12 +8,12 @@ enum ContentListMode: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .list: "列表"
-        case .detailed: "详细列表"
-        case .grid: "网格"
-        case .compactGrid: "紧凑网格"
-        case .movieGrid: "电影网格"
-        case .compactMovieGrid: "紧凑电影网格"
+        case .list: String(localized: "列表")
+        case .detailed: String(localized: "详细列表")
+        case .grid: String(localized: "网格")
+        case .compactGrid: String(localized: "紧凑网格")
+        case .movieGrid: String(localized: "电影网格")
+        case .compactMovieGrid: String(localized: "紧凑电影网格")
         }
     }
 
@@ -426,7 +426,7 @@ private struct CoverFrame: View {
                 if showsProgress, let progress = item.progress, !item.isFinished {
                     CardProgressBar(progress: progress)
                         .padding(.horizontal, 6).padding(.bottom, 5)
-                        .accessibilityLabel("已读 \(Int(progress * 100))%")
+                        .accessibilityLabel(String(localized: "已读 \(Int(progress * 100))%"))
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -500,9 +500,9 @@ private struct ContentStatusLine: View {
     let item: ContentItem
     var body: some View {
         let parts = [
-            item.isFinished ? "已读完" : item.progress.map { "已读 \(Int($0 * 100))%" },
-            item.marks.favourite ? "已收藏" : nil,
-            item.marks.downloaded ? "已下载" : nil,
+            item.isFinished ? String(localized: "已读完") : item.progress.map { String(localized: "已读 \(Int($0 * 100))%") },
+            item.marks.favourite ? String(localized: "已收藏") : nil,
+            item.marks.downloaded ? String(localized: "已下载") : nil,
         ].compactMap { $0 }
         // An explicit badge (the updates list) already shows the count on the cover.
         let newChapters = item.badge == nil ? item.marks.newChapters : 0

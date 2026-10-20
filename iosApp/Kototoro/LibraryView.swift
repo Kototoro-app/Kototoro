@@ -7,9 +7,9 @@ enum LibrarySort: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .updated: "最近更新"
-        case .title: "标题"
-        case .progress: "阅读进度"
+        case .updated: String(localized: "最近更新")
+        case .title: String(localized: "标题")
+        case .progress: String(localized: "阅读进度")
         }
     }
 }
@@ -107,7 +107,7 @@ struct LibraryView: View {
             .navigationTitle("作品库")
             .navigationBarTitleDisplayMode(.inline)
             // The system search field under the title; the search tab stays the app-wide search.
-            .pageSearch(text: $query, prompt: "搜索作品库")
+            .pageSearch(text: $query, prompt: String(localized: "搜索作品库"))
             .refreshable { await library.refresh() }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -160,8 +160,8 @@ struct LibraryView: View {
                 Button("删除分类并取消收藏其中作品", role: .destructive) { deletingWithWorks = category }
             } message: { category in
                 let shared = sharedWorkCount(category.id)
-                Text("仅删除分类：作品从这个分类移除，只在此分类中的作品将取消收藏。"
-                     + (shared > 0 ? "其中 \(shared) 部还在其他分类，会保留。" : ""))
+                Text(String(localized: "仅删除分类：作品从这个分类移除，只在此分类中的作品将取消收藏。")
+                     + (shared > 0 ? String(localized: "其中 \(shared) 部还在其他分类，会保留。") : ""))
             }
             .confirmationDialog("取消收藏分类中的全部作品？",
                                 isPresented: Binding(get: { deletingWithWorks != nil }, set: { if !$0 { deletingWithWorks = nil } }),
@@ -173,8 +173,8 @@ struct LibraryView: View {
                 }
             } message: { category in
                 let shared = sharedWorkCount(category.id)
-                Text("这些作品会从所有分类取消收藏" + (shared > 0 ? "，包括其中 \(shared) 部也在其他分类的作品" : "")
-                     + "。阅读历史不受影响；删除会同步到 Google Drive。")
+                Text(String(localized: "这些作品会从所有分类取消收藏") + (shared > 0 ? String(localized: "，包括其中 \(shared) 部也在其他分类的作品") : "")
+                     + String(localized: "。阅读历史不受影响；删除会同步到 Google Drive。"))
             }
             .confirmationDialog("取消收藏所选作品？", isPresented: $confirmingUnfavourite, titleVisibility: .visible) {
                 Button("取消收藏 \(selected.count) 部作品", role: .destructive) {
@@ -210,7 +210,8 @@ struct LibraryView: View {
             Text("已选 \(selected.count) 部").font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
             GlassEffectContainer(spacing: 8) {
                 HStack(spacing: 8) {
-                    Button(allSelected ? "取消全选" : "全选\(selectedCategory == nil ? "" : "本分类")（\(visibleKeys.count)）") {
+                    Button(allSelected ? String(localized: "取消全选") : selectedCategory == nil ? String(localized: "全选（\(visibleKeys.count)）")
+                           : String(localized: "全选本分类（\(visibleKeys.count)）")) {
                         selected = BatchSelection.toggling(visible: visibleKeys, in: selected)
                     }
                     .accessibilityIdentifier("library.selectAll")
@@ -271,7 +272,7 @@ struct LibraryView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 GlassEffectContainer(spacing: 8) {
                     HStack(spacing: 8) {
-                        chip("全部", count: kindFavourites.count, selected: selectedCategory == nil) { select(nil) }
+                        chip(String(localized: "全部"), count: kindFavourites.count, selected: selectedCategory == nil) { select(nil) }
                             .accessibilityIdentifier("category.all")
                             .id(Int32?.none)
                         ForEach(visibleCategories, id: \.id) { category in
@@ -381,7 +382,7 @@ struct LibraryView: View {
             let shown = items
             if shown.isEmpty {
                 if kindFavourites.isEmpty {
-                    SpaceEmptyView(what: "收藏").padding(.top, 40)
+                    SpaceEmptyView(what: String(localized: "收藏")).padding(.top, 40)
                 } else if query.trimmingCharacters(in: .whitespaces).isEmpty {
                     ContentUnavailableView("这个分类还没有作品", systemImage: "folder",
                                            description: Text("在来源列表长按作品，或在详情页点收藏时选择分类。"))
@@ -509,9 +510,9 @@ private struct CategoryManagementSheet: View {
                 Button("删除分类并取消收藏其中作品", role: .destructive) { deletingWithWorks = category }
             } message: { category in
                 let shared = sharedCount(category.id)
-                Text("仅删除分类：作品从这个分类移除，只在此分类中的作品将取消收藏。"
-                     + (shared > 0 ? "其中 \(shared) 部还在其他分类，会保留。" : "")
-                     + "删除会立即生效，不受“取消”影响。")
+                Text(String(localized: "仅删除分类：作品从这个分类移除，只在此分类中的作品将取消收藏。")
+                     + (shared > 0 ? String(localized: "其中 \(shared) 部还在其他分类，会保留。") : "")
+                     + String(localized: "删除会立即生效，不受“取消”影响。"))
             }
             .confirmationDialog("取消收藏分类中的全部作品？",
                                 isPresented: Binding(get: { deletingWithWorks != nil }, set: { if !$0 { deletingWithWorks = nil } }),
@@ -521,8 +522,8 @@ private struct CategoryManagementSheet: View {
                 }
             } message: { category in
                 let shared = sharedCount(category.id)
-                Text("这些作品会从所有分类取消收藏" + (shared > 0 ? "，包括其中 \(shared) 部也在其他分类的作品" : "")
-                     + "。阅读历史不受影响；删除会同步到 Google Drive。")
+                Text(String(localized: "这些作品会从所有分类取消收藏") + (shared > 0 ? String(localized: "，包括其中 \(shared) 部也在其他分类的作品") : "")
+                     + String(localized: "。阅读历史不受影响；删除会同步到 Google Drive。"))
             }
         }
     }

@@ -35,9 +35,9 @@ class IosGoogleDriveSync internal constructor(library: IosLibrary) {
                 synchronize(GoogleDriveSyncApi(client), accessToken, deviceId)
             } catch (error: GoogleDriveSyncApiException) {
                 when (error.code) {
-                    401 -> IosDriveSyncReport(false, true, "Google 授权已失效，请重新连接账号")
-                    403 -> IosDriveSyncReport(false, false, "Google Drive 拒绝访问，请检查授权范围及 Drive API 配置")
-                    else -> throw IllegalStateException("Google Drive 暂时无法同步（HTTP ${error.code}）")
+                    401 -> IosDriveSyncReport(false, true, localized("Google 授权已失效，请重新连接账号"))
+                    403 -> IosDriveSyncReport(false, false, localized("Google Drive 拒绝访问，请检查授权范围及 Drive API 配置"))
+                    else -> throw IllegalStateException(localized("Google Drive 暂时无法同步（HTTP %@）", error.code))
                 }
             } finally { client.close() }
         }
@@ -58,9 +58,9 @@ class IosGoogleDriveSync internal constructor(library: IosLibrary) {
             api.upload(token, json.encodeToString(GoogleDriveSyncSnapshot.serializer(), upload).encodeToByteArray(),
                 files.firstOrNull()?.id)
             // Android owns settings/package installation. Do not delete its extra or legacy files.
-            return IosDriveSyncReport(true, false, "收藏、分类、阅读进度和阅读统计已同步")
+            return IosDriveSyncReport(true, false, localized("收藏、分类、阅读进度和阅读统计已同步"))
         }
-        error("其他设备正在更新云端数据，请稍后重试")
+        error(localized("其他设备正在更新云端数据，请稍后重试"))
     }
 
     internal companion object {
@@ -79,7 +79,7 @@ class IosGoogleDriveSync internal constructor(library: IosLibrary) {
                 probe["schema"]?.jsonPrimitive?.intOrNull,
                 probe["namespace"]?.jsonPrimitive?.content,
                 probe["semantic_schema"]?.jsonPrimitive?.intOrNull,
-            )) { "云端同步格式不受支持，请更新应用后重试" }
+            )) { localized("云端同步格式不受支持，请更新应用后重试") }
             return json.decodeFromString(GoogleDriveSyncSnapshot.serializer(), text)
         }
     }

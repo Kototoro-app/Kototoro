@@ -5,10 +5,10 @@ enum ReaderStorageError: LocalizedError, Equatable {
     case busy, invalidPath, invalidMetadata, recoveryConflict
     var errorDescription: String? {
         switch self {
-        case .busy: "文件正在使用，请等待阅读或下载请求结束后再清理。"
-        case .invalidPath: "存储路径无法安全读取，原文件已保留。"
-        case .invalidMetadata: "离线文件信息无法读取，原文件已保留。"
-        case .recoveryConflict: "未完成的文件清理无法恢复，请先检查存储。"
+        case .busy: String(localized: "文件正在使用，请等待阅读或下载请求结束后再清理。")
+        case .invalidPath: String(localized: "存储路径无法安全读取，原文件已保留。")
+        case .invalidMetadata: String(localized: "离线文件信息无法读取，原文件已保留。")
+        case .recoveryConflict: String(localized: "未完成的文件清理无法恢复，请先检查存储。")
         }
     }
 }
@@ -88,6 +88,14 @@ struct ReaderStorageMetadata: Codable, Equatable, Sendable {
     }
 }
 
+/// A finished offline chapter: what it is, the request it was downloaded with (the work's and chapter's source fields,
+/// absent for downloads made before requests were kept) and when it finished.
+struct ReaderDownloadRecord: Sendable {
+    let metadata: ReaderStorageMetadata
+    let payload: String?
+    let completedAt: Date
+}
+
 struct ReaderStorageItem: Identifiable, Sendable {
     let id: String
     let metadata: ReaderStorageMetadata?
@@ -146,6 +154,39 @@ actor ReaderStorageStore {
         self.files = files
     }
 
+    /// Keeps the download's request next to its files, so the work stays listed (and readable) once its task is gone.
+    func keep(payload: String, for metadata: ReaderStorageMetadata) throws {
+        let data = Data(payload.utf8)
+        guard data.count <= Self.maximumRequestBytes else { throw ReaderStorageError.invalidMetadata }
+        try data.write(to: try chapter(metadata.directoryID, create: true).appendingPathComponent(Self.requestName),
+                       options: .atomic)
+    }
+
+    /// Every finished offline chapter with its request, newest first.
+    func downloadRecords() throws -> [ReaderDownloadRecord] {
+        var result: [ReaderDownloadRecord] = []
+        for folder in try children(downloads) where Self.isDirectoryID(folder.lastPathComponent) {
+            try Task.checkCancellation()
+            let id = folder.lastPathComponent
+            guard let metadata: ReaderStorageMetadata = try? read(folder.appendingPathComponent("download.json"),
+                                                                 maximumBytes: 128 * 1024),
+                  metadata.version == 1, metadata.directoryID == id else { continue }
+            let manifest = ["chapter.json", "novel.json"].map { folder.appendingPathComponent($0) }
+                .first { files.fileExists(atPath: $0.path) }
+            guard let manifest, let completed = try? manifest.resourceValues(forKeys: Self.keys).contentModificationDate
+            else { continue }
+            let request = folder.appendingPathComponent(Self.requestName)
+            let size = (try? request.resourceValues(forKeys: Self.keys).fileSize) ?? 0
+            let payload = size > 0 && size <= Self.maximumRequestBytes
+                ? (try? Data(contentsOf: request)).map { String(decoding: $0, as: UTF8.self) } : nil
+            result.append(ReaderDownloadRecord(metadata: metadata, payload: payload, completedAt: completed))
+        }
+        return result.sorted { $0.completedAt > $1.completedAt }
+    }
+
+    private static let requestName = "request.json"
+    private static let maximumRequestBytes = 1024 * 1024
+
     func record(_ metadata: ReaderStorageMetadata) throws {
         guard metadata.version == 1, !metadata.source.isEmpty, !metadata.contentID.isEmpty,
               !metadata.chapterID.isEmpty else { throw ReaderStorageError.invalidMetadata }
@@ -176,7 +217,7 @@ actor ReaderStorageStore {
             let novelManifest = folder.appendingPathComponent("novel.json")
             let completed = files.fileExists(atPath: chapterManifest.path)
                 || files.fileExists(atPath: novelManifest.path)
-            let status = completed ? "已下载" : "未完成的下载"
+            let status = completed ? String(localized: "已下载") : String(localized: "未完成的下载")
             items.append(ReaderStorageItem(
                 id: id, metadata: metadata, bytes: try records(folder).reduce(0) { $0 + $1.bytes },
                 modified: values.contentModificationDate, status: status

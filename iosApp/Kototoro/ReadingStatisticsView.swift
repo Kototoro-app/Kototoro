@@ -8,11 +8,11 @@ enum ReadingStatsRange: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .day: "今天"
-        case .week: "近 7 天"
-        case .month: "近 30 天"
-        case .quarter: "近 90 天"
-        case .all: "全部"
+        case .day: String(localized: "今天")
+        case .week: String(localized: "近 7 天")
+        case .month: String(localized: "近 30 天")
+        case .quarter: String(localized: "近 90 天")
+        case .all: String(localized: "全部")
         }
     }
 }
@@ -20,9 +20,9 @@ enum ReadingStatsRange: String, CaseIterable, Identifiable {
 enum ReadingStatsFormat {
     static func duration(_ milliseconds: Int64) -> String {
         let minutes = max(0, milliseconds) / 60_000
-        if milliseconds > 0 && minutes == 0 { return "不足 1 分钟" }
-        if minutes < 60 { return "\(minutes) 分钟" }
-        return minutes % 60 == 0 ? "\(minutes / 60) 小时" : "\(minutes / 60) 小时 \(minutes % 60) 分"
+        if milliseconds > 0 && minutes == 0 { return String(localized: "不足 1 分钟") }
+        if minutes < 60 { return String(localized: "\(minutes) 分钟") }
+        return minutes % 60 == 0 ? String(localized: "\(minutes / 60) 小时") : String(localized: "\(minutes / 60) 小时 \(minutes % 60) 分")
     }
 
     static func date(_ milliseconds: Int64) -> Date { Date(timeIntervalSince1970: Double(milliseconds) / 1000) }
@@ -34,8 +34,8 @@ enum ReadingStatsFormat {
 
     static func dayTitle(_ milliseconds: Int64) -> String {
         let date = date(milliseconds)
-        if Calendar.current.isDateInToday(date) { return "今天" }
-        if Calendar.current.isDateInYesterday(date) { return "昨天" }
+        if Calendar.current.isDateInToday(date) { return String(localized: "今天") }
+        if Calendar.current.isDateInYesterday(date) { return String(localized: "昨天") }
         return date.formatted(.dateTime.month().day())
     }
 }
@@ -95,10 +95,10 @@ struct ReadingStatsOverview: View {
                 .accessibilityIdentifier("stats.expand")
             }
             HStack(spacing: 0) {
-                metric("作品", snapshot.workCount)
-                metric("活跃天", snapshot.activeDays)
-                metric("阅读次数", snapshot.sessionCount)
-                metric("连续天", snapshot.currentStreak)
+                metric(String(localized: "作品"), snapshot.workCount)
+                metric(String(localized: "活跃天"), snapshot.activeDays)
+                metric(String(localized: "阅读次数"), snapshot.sessionCount)
+                metric(String(localized: "连续天"), snapshot.currentStreak)
             }
             Text(snapshot.dailyActivity.count == 1 ? "今日活动" : "近 \(snapshot.dailyActivity.count) 天活动")
                 .font(.caption2).foregroundStyle(.secondary)
@@ -219,13 +219,13 @@ struct ContentReadingStatsSheet: View {
                         ReadingStatsOverview(snapshot: snapshot, selectedDay: $selectedDay,
                                              runtime: runtime, showsRanking: false)
                         if let work = snapshot.works.first, work.hasTimedStats {
-                            let unit = content.mediaKind == "MANGA" ? "浏览页数" : content.mediaKind == "NOVEL" ? "涉及章节" : "涉及集数"
+                            let unit = content.mediaKind == "MANGA" ? String(localized: "浏览页数") : content.mediaKind == "NOVEL" ? String(localized: "涉及章节") : String(localized: "涉及集数")
                             HStack {
                                 Label("\(work.units) \(unit)", systemImage: "book.pages")
                                 Spacer()
-                                if work.hasProgress { Text("当前进度 \(Int(work.progress * 100))%") }
+                                if work.hasProgress { Text(String(localized: "当前进度 \(Int(work.progress * 100))%")) }
                             }.font(.caption).foregroundStyle(.secondary)
-                            Text("首次阅读 · " + ReadingStatsFormat.date(work.firstActivityAt).formatted(date: .abbreviated, time: .omitted))
+                            Text(String(localized: "首次阅读 · ") + ReadingStatsFormat.date(work.firstActivityAt).formatted(date: .abbreviated, time: .omitted))
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         let events = snapshot.timeline.filter { selectedDay == nil || ReadingStatsFormat.day(ReadingStatsFormat.date($0.timestamp)) == selectedDay }

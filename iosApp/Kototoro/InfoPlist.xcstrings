@@ -1,0 +1,39 @@
+{
+  "sourceLanguage": "zh-Hans",
+  "strings": {
+    "本地视频": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local video"
+          }
+        }
+      }
+    },
+    "漫画压缩包": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comic archive"
+          }
+        }
+      }
+    },
+    "电子书": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E-book"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

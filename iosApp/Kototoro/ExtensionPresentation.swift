@@ -8,7 +8,7 @@ enum ExtensionEcosystem: String, CaseIterable, Identifiable {
         case .mihon: "Mihon"
         case .aniyomi: "Aniyomi"
         case .tsundoku: "Tsundoku"
-        case .jar: "解析器插件"
+        case .jar: String(localized: "解析器插件")
         }
     }
     var symbol: String {
@@ -21,10 +21,10 @@ enum ExtensionEcosystem: String, CaseIterable, Identifiable {
     }
     var description: String {
         switch self {
-        case .mihon: "漫画来源"
-        case .aniyomi: "动漫与视频来源"
-        case .tsundoku: "小说来源"
-        case .jar: "漫画、小说与视频解析器"
+        case .mihon: String(localized: "漫画来源")
+        case .aniyomi: String(localized: "动漫与视频来源")
+        case .tsundoku: String(localized: "小说来源")
+        case .jar: String(localized: "漫画、小说与视频解析器")
         }
     }
 }
@@ -86,7 +86,7 @@ struct ExtensionSummary: Identifiable {
     let state: State
     var installedVersion: String? {
         guard let installed else { return nil }
-        return installed.versionName?.nilIfBlank ?? "构建 \(installed.versionCode)"
+        return installed.versionName?.nilIfBlank ?? String(localized: "构建 \(installed.versionCode)")
     }
     var permitsInstallation: Bool {
         available != nil
@@ -97,10 +97,10 @@ struct ExtensionSummary: Identifiable {
     var isMultilingual: Bool { languages.count > 1 || languages.contains("all") || languages.contains("multi") }
     var stateTitle: String {
         switch state {
-        case .available: "安装"
-        case .installed: "已安装"
-        case .update: "更新"
-        case .installing: "安装中"
+        case .available: String(localized: "安装")
+        case .installed: String(localized: "已安装")
+        case .update: String(localized: "更新")
+        case .installing: String(localized: "安装中")
         }
     }
 }
@@ -110,10 +110,10 @@ enum ExtensionScope: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .all: "全部"
-        case .installed: "已安装"
-        case .available: "可安装"
-        case .updates: "更新"
+        case .all: String(localized: "全部")
+        case .installed: String(localized: "已安装")
+        case .available: String(localized: "可安装")
+        case .updates: String(localized: "更新")
         }
     }
 }
@@ -145,16 +145,16 @@ struct ExtensionFilter {
         }
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty || ([row.title, row.packageName, row.ecosystemTitle, row.languageDescription,
-                                 row.available?.repositoryTitle ?? "", multilingual ? "多语言" : ""] + row.sourceNames)
+                                 row.available?.repositoryTitle ?? "", multilingual ? String(localized: "多语言") : ""] + row.sourceNames)
             .contains { $0.localizedCaseInsensitiveContains(text) }
     }
 }
 
 enum ExtensionLanguage {
     static func title(_ code: String) -> String {
-        if code == "all" || code == "multi" { return "多语言" }
-        if code == "other" { return "其他语言" }
-        if code.isEmpty { return "未指定语言" }
+        if code == "all" || code == "multi" { return String(localized: "多语言") }
+        if code == "other" { return String(localized: "其他语言") }
+        if code.isEmpty { return String(localized: "未指定语言") }
         return Locale(identifier: "zh_Hans").localizedString(forIdentifier: code) ?? code.uppercased()
     }
 }
@@ -191,7 +191,7 @@ enum ExtensionIndex {
             return ExtensionSummary(
                 id: id, packageName: package, ecosystem: ecosystem,
                 title: title, version: local?.versionName?.nilIfBlank ?? candidate?.version.nilIfBlank ??
-                    "构建 \(local?.versionCode ?? 0)",
+                    String(localized: "构建 \(local?.versionCode ?? 0)"),
                 languages: Array(Set(local?.languages?.nonEmpty ?? candidate?.languages.nonEmpty ??
                                      cached?.languages ?? [])).sorted(),
                 sourceNames: sourceNames, iconURL: candidate?.iconURL ?? cached?.iconURL,

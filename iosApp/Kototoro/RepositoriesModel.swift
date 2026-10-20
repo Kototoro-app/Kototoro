@@ -174,7 +174,7 @@ final class RepositoriesModel: ObservableObject {
             catalogs[Self.key(fetched)] = fetched
             repositoryErrors[Self.key(fetched)] = nil
             saved = try await store.saved()
-            status = "已添加 \(fetched.title)，共 \(fetched.extensions.count) 个扩展"
+            status = String(localized: "已添加 \(fetched.title)，共 \(fetched.extensions.count) 个扩展")
         } catch { report(error) }
     }
     func open(_ repository: IosRepository) async {
@@ -198,14 +198,14 @@ final class RepositoriesModel: ObservableObject {
     }
     func remove(_ repository: IosRepository) async {
         guard !busy, !isRefreshing else { return }
-        busy = true; error = nil; status = "正在移除仓库…"
+        busy = true; error = nil; status = String(localized: "正在移除仓库…")
         defer { busy = false }
         do {
             try await store?.remove(repository: repository)
             saved = try await store?.saved() ?? []
             catalogs[Self.key(repository)] = nil
             repositoryErrors[Self.key(repository)] = nil
-            status = "已移除 \(repository.title)"
+            status = String(localized: "已移除 \(repository.title)")
         }
         catch { report(error) }
     }
@@ -217,7 +217,7 @@ final class RepositoriesModel: ObservableObject {
     }
     private func performInstall(_ extensionItem: IosExtension, catalog: IosRepositoryCatalog) async throws {
         guard let url = Self.resourceURL(extensionItem.url, catalog: catalog) else { throw URLError(.badURL) }
-        status = "正在下载 \(extensionItem.title)…"
+        status = String(localized: "正在下载 \(extensionItem.title)…")
         // URLSession downloads to disk; do not buffer large APKs on the UI thread.
         let (temp, response) = try await URLSession.shared.download(from: url)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -238,8 +238,8 @@ final class RepositoriesModel: ObservableObject {
         // interpreter-only embedded JVM: large parser plugins take minutes, so say so and keep the app awake.
         let megabytes = max(1, size / 1_048_576)
         status = size > 1_048_576
-            ? "正在转换并安装 \(extensionItem.title)（\(megabytes) MB，请保持应用在前台）…"
-            : "正在转换、校验并安装 \(extensionItem.title)…"
+            ? String(localized: "正在转换并安装 \(extensionItem.title)（\(megabytes) MB，请保持应用在前台）…")
+            : String(localized: "正在转换、校验并安装 \(extensionItem.title)…")
         try await manage(["managementVersion": 1, "operation": "install", "path": file.path,
                           "sha256": hash, "packageName": extensionItem.id, "versionCode": extensionItem.versionCode,
                           "ecosystem": catalog.kind])
@@ -259,7 +259,7 @@ final class RepositoriesModel: ObservableObject {
                 try await performInstall(extensionItem, catalog: catalog)
             }
             try await sources?.runtime?.sourcesChanged(); await sources?.load()
-            status = "\(extensionItem.title) 已安装"
+            status = String(localized: "\(extensionItem.title) 已安装")
         } catch { report(error) }
     }
 
@@ -268,12 +268,12 @@ final class RepositoriesModel: ObservableObject {
     }
 
     func updateAll() async {
-        await installBatch(rows.filter { $0.state == .update && $0.permitsInstallation }, operation: "更新")
+        await installBatch(rows.filter { $0.state == .update && $0.permitsInstallation }, operation: String(localized: "更新"))
     }
 
     /// One serialized pipeline owns installation, status, cancellation and per-package retry evidence.
     func installMissing(_ requested: [ExtensionSummary]) async {
-        await installBatch(requested, operation: "安装")
+        await installBatch(requested, operation: String(localized: "安装"))
     }
 
     private func installBatch(_ requested: [ExtensionSummary], operation: String) async {
@@ -286,7 +286,7 @@ final class RepositoriesModel: ObservableObject {
             return
         }
         guard NativeSourceTransport.isAvailable else {
-            error = "当前构建未包含扩展运行时，无法安装扩展"
+            error = String(localized: "当前构建未包含扩展运行时，无法安装扩展")
             return
         }
         busy = true
@@ -322,8 +322,9 @@ final class RepositoriesModel: ObservableObject {
         await sources?.load()
         let succeeded = batchResults.filter { $0.error == nil }.count
         let failed = batchResults.count - succeeded
-        status = "\(batchCancelled || Task.isCancelled ? "已停止" : operation + "完成")：\(succeeded) 个成功，\(failed) 个失败，" +
-            "\(pending.count - batchResults.count) 个未处理"
+        let counts = String(localized: "\(succeeded) 个成功，\(failed) 个失败，\(pending.count - batchResults.count) 个未处理")
+        status = batchCancelled || Task.isCancelled ? String(localized: "已停止：\(counts)")
+            : String(localized: "\(operation)完成：\(counts)")
         UINotificationFeedbackGenerator().notificationOccurred(failed > 0 ? .warning : .success)
     }
 
@@ -372,25 +373,25 @@ final class RepositoriesModel: ObservableObject {
             let stem = url.deletingPathExtension().lastPathComponent
                 .replacingOccurrences(of: "[^A-Za-z0-9_.-]", with: "_", options: .regularExpression)
             let fallbackName = stem.isEmpty ? "local.plugin" : String(stem.prefix(200))
-            status = "正在转换、校验并安装 \(url.lastPathComponent)…"
+            status = String(localized: "正在转换、校验并安装 \(url.lastPathComponent)…")
             try await Self.keepingAwake {
                 try await manage(["managementVersion": 1, "operation": "install", "path": file.path,
                                   "sha256": hash, "packageName": fallbackName, "versionCode": 0, "ecosystem": ""])
             }
             try await sources?.runtime?.sourcesChanged(); await sources?.load()
-            status = "\(url.lastPathComponent) 已安装"
+            status = String(localized: "\(url.lastPathComponent) 已安装")
         } catch { report(error) }
     }
     func uninstall(_ item: InstalledExtension) async {
         guard !busy, !item.bundled else { return }
         busy = true; error = nil; activeID = item.id
-        status = "正在卸载扩展…"
+        status = String(localized: "正在卸载扩展…")
         defer { busy = false; activeID = nil }
         do {
             try await manage(["managementVersion": 1, "operation": "uninstall",
                               "packageName": item.packageName, "ecosystem": item.ecosystem])
             try await sources?.runtime?.sourcesChanged(); await sources?.load()
-            status = "已卸载扩展"
+            status = String(localized: "已卸载扩展")
         } catch { report(error) }
     }
     private func manage(_ request: [String: Any]) async throws {
@@ -470,7 +471,7 @@ final class RepositoriesModel: ObservableObject {
 }
 private struct RepositoryHTTPError: LocalizedError {
     let status: Int
-    var errorDescription: String? { "仓库返回 HTTP \(status)" }
+    var errorDescription: String? { String(localized: "仓库返回 HTTP \(status)") }
 }
 
 
@@ -479,6 +480,7 @@ struct InstallDownloadError: LocalizedError {
     let url: URL
     let statusCode: Int?
     var errorDescription: String? {
-        "下载失败（HTTP \(statusCode.map(String.init) ?? "?")）：\(url.absoluteString)"
+        let code = statusCode.map(String.init) ?? "?"
+        return String(localized: "下载失败（HTTP \(code)）：\(url.absoluteString)")
     }
 }

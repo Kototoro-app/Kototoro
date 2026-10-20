@@ -222,8 +222,8 @@ struct GlobalSearchView: View {
         }
         .padding(.horizontal, 20)
         if let runtime = sources.runtime {
-            localSection("作品库", identifier: "search.library", matches: libraryMatches, runtime: runtime)
-            localSection("历史", identifier: "search.history", matches: historyMatches, runtime: runtime)
+            localSection(String(localized: "作品库"), identifier: "search.library", matches: libraryMatches, runtime: runtime)
+            localSection(String(localized: "历史"), identifier: "search.history", matches: historyMatches, runtime: runtime)
             ForEach(model.rows) { row in
                 switch row.status {
                 case .loading:

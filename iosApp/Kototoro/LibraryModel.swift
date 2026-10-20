@@ -165,7 +165,7 @@ final class LibraryModel: ObservableObject {
         defer { isCheckingUpdates = false }
         do {
             let report = try await library.checkUpdates(sources: sources)
-            updateSummary = "已检查 \(report.checked) 部，\(report.withUpdates) 部有更新，\(report.failed) 部失败"
+            updateSummary = String(localized: "已检查 \(report.checked) 部，\(report.withUpdates) 部有更新，\(report.failed) 部失败")
             try await refreshRecords()
         } catch { self.error = error.localizedDescription }
     }

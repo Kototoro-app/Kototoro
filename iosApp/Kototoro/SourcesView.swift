@@ -30,12 +30,12 @@ final class SourcesModel: ObservableObject {
     var extensionSourceList: [IosSource] { sources.filter { $0.kind == "extension" } }
 
     static let ecosystems: [(id: String, title: String, icon: String)] = [
-        ("LOCAL", "本地作品", "folder"),
-        ("MIHON", "Mihon 漫画", "book.closed"),
-        ("TSUNDOKU", "Tsundoku 小说", "text.book.closed"),
-        ("ANIYOMI", "Aniyomi 动漫", "play.rectangle"),
-        ("JAR", "解析器插件（kototoro / kotatsu / UMA）", "shippingbox"),
-        ("TVBOX", "苹果 CMS / TVBox 影视", "play.tv"),
+        ("LOCAL", String(localized: "本地作品"), "folder"),
+        ("MIHON", String(localized: "Mihon 漫画"), "book.closed"),
+        ("TSUNDOKU", String(localized: "Tsundoku 小说"), "text.book.closed"),
+        ("ANIYOMI", String(localized: "Aniyomi 动漫"), "play.rectangle"),
+        ("JAR", String(localized: "解析器插件（kototoro / kotatsu / UMA）"), "shippingbox"),
+        ("TVBOX", String(localized: "苹果 CMS / TVBox 影视"), "play.tv"),
     ]
 
     func isEnabled(_ source: IosSource) -> Bool { settings[source.name]?.enabled ?? Self.defaultEnabled(source) }
@@ -234,8 +234,8 @@ final class SourcesModel: ObservableObject {
                                                         title: title)
         try await runtime.sourcesChanged()
         await load()
-        var text = "已导入 \(summary.imported) 个站点"
-        if summary.skippedSpiderSites > 0 { text += "，跳过 \(summary.skippedSpiderSites) 个需要爬虫运行时的站点" }
+        var text = String(localized: "已导入 \(summary.imported) 个站点")
+        if summary.skippedSpiderSites > 0 { text += String(localized: "，跳过 \(summary.skippedSpiderSites) 个需要爬虫运行时的站点") }
         return text
     }
 
@@ -260,9 +260,9 @@ enum SourceGrouping: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .ecosystem: "按来源类型"
-        case .content: "按内容类型"
-        case .none: "不分组"
+        case .ecosystem: String(localized: "按来源类型")
+        case .content: String(localized: "按内容类型")
+        case .none: String(localized: "不分组")
         }
     }
 }
@@ -272,10 +272,10 @@ enum SourceSort: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .manual: "手动顺序"
-        case .title: "名称"
-        case .lastUsed: "最近使用"
-        case .popularity: "使用频率"
+        case .manual: String(localized: "手动顺序")
+        case .title: String(localized: "名称")
+        case .lastUsed: String(localized: "最近使用")
+        case .popularity: String(localized: "使用频率")
         }
     }
 }
@@ -355,7 +355,7 @@ struct SourcesView: View {
             else { rest.append(source) }
         }
         var result: [(id: String, title: String, sources: [IosSource])] = []
-        if !pinned.isEmpty { result.append(("pinned", "置顶", pinned)) }
+        if !pinned.isEmpty { result.append(("pinned", String(localized: "置顶"), pinned)) }
         switch effectiveGrouping {
         case .ecosystem:
             let grouped = Dictionary(grouping: rest, by: { SourceFilterOption.ecosystemKey($0) })
@@ -372,7 +372,7 @@ struct SourcesView: View {
                 }
             }
         case .none:
-            if !rest.isEmpty { result.append(("all", pinned.isEmpty ? "全部来源" : "其他来源", rest)) }
+            if !rest.isEmpty { result.append(("all", pinned.isEmpty ? String(localized: "全部来源") : String(localized: "其他来源"), rest)) }
         }
         return DisplaySources(sections: result, newSourceCount: newCount)
     }
@@ -407,7 +407,7 @@ struct SourcesView: View {
                 }
             }
             // The system search field under the title; the search tab stays the app-wide search.
-            .pageSearch(text: $query, prompt: "搜索源")
+            .pageSearch(text: $query, prompt: String(localized: "搜索源"))
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     NavigationLink { RepositoriesView() } label: {
@@ -579,7 +579,7 @@ struct SourcesView: View {
 
     /// Shown only with the embedded extension runtime (preview builds name their profile here).
     private var runtimeLabel: some View {
-        Text(model.previewLabel ?? "扩展运行时已启用")
+        Text(model.previewLabel ?? String(localized: "扩展运行时已启用"))
             .font(.footnote).foregroundStyle(.secondary)
             .accessibilityIdentifier("sources.extensionRuntime")
     }
@@ -695,8 +695,8 @@ struct SourcesView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(source.title)
                     if model.isNewSource(source) { SourceNewBadge() }
-                    Text(source.kind == "video" ? "影视站点"
-                         : source.kind == "local" ? "导入的\(Self.kindName(source.mediaKind))文件"
+                    Text(source.kind == "video" ? String(localized: "影视站点")
+                         : source.kind == "local" ? String(localized: "导入的\(Self.kindName(source.mediaKind))文件")
                          : [SourceLanguage.title(source.locale), Self.kindName(source.mediaKind)].joined(separator: " · "))
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -713,9 +713,9 @@ struct SourcesView: View {
 extension SourcesView {
     static func kindName(_ mediaKind: String) -> String {
         switch mediaKind {
-        case "VIDEO": "视频"
-        case "NOVEL": "小说"
-        default: "漫画"
+        case "VIDEO": String(localized: "视频")
+        case "NOVEL": String(localized: "小说")
+        default: String(localized: "漫画")
         }
     }
 }

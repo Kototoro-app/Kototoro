@@ -33,7 +33,7 @@ enum SourceImageFile {
     static func createSource(data: Data) throws -> CGImageSource {
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
-            throw failure("无法解码此图片格式")
+            throw failure(String(localized: "无法解码此图片格式"))
         }
         return source
     }
@@ -51,7 +51,7 @@ enum SourceImageFile {
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceThumbnailMaxPixelSize: max(1, maxPixelSize),
-        ] as CFDictionary) else { throw failure("无法解码此图片格式") }
+        ] as CFDictionary) else { throw failure(String(localized: "无法解码此图片格式")) }
         return UIImage(cgImage: image)
     }
 
@@ -79,7 +79,7 @@ enum SourceImageFile {
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let image = CGImageSourceCreateImageAtIndex(source, 0, sourceOptions),
               image.width > 0, image.height > 0 else {
-            throw failure("无法解码此图片格式")
+            throw failure(String(localized: "无法解码此图片格式"))
         }
         return (image.width, image.height)
     }
@@ -90,11 +90,11 @@ enum SourceImageFile {
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions),
               let full = CGImageSourceCreateImageAtIndex(source, 0, sourceOptions) else {
-            throw failure("无法解码此图片格式")
+            throw failure(String(localized: "无法解码此图片格式"))
         }
         let region = rect.integral.intersection(CGRect(x: 0, y: 0, width: full.width, height: full.height))
         guard !region.isEmpty, let cropped = full.cropping(to: region) else {
-            throw failure("页面区域越界")
+            throw failure(String(localized: "页面区域越界"))
         }
         let sample = max(1, sampleSize)
         if sample == 1 { return UIImage(cgImage: cropped) }
@@ -174,16 +174,16 @@ enum SourceImageFile {
     static func validatedData(directory: URL, relativePath: String, sha256: String, byteSize: Int64) throws -> Data {
         guard sha256.utf8.count == 64, isHex64(sha256),
               relativePath == "\(sha256).img", byteSize > 0, byteSize <= 64 * 1024 * 1024 else {
-            throw failure("图片记录无效")
+            throw failure(String(localized: "图片记录无效"))
         }
         let file = directory.appendingPathComponent(relativePath)
         let attributes = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
         guard attributes.isRegularFile == true, attributes.isSymbolicLink != true,
-              attributes.fileSize.map(Int64.init) == byteSize else { throw failure("图片文件缺失或长度不符") }
+              attributes.fileSize.map(Int64.init) == byteSize else { throw failure(String(localized: "图片文件缺失或长度不符")) }
         let data = try Data(contentsOf: file, options: .mappedIfSafe)
         guard Int64(data.count) == byteSize,
               hexDigest(data: data) == sha256 else {
-            throw failure("图片文件校验失败")
+            throw failure(String(localized: "图片文件校验失败"))
         }
         return data
     }

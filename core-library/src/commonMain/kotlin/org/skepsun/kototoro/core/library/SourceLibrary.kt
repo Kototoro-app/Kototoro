@@ -73,14 +73,17 @@ class SourceLibrary(
         index: Int, pageCount: Int, scroll: Float = 0f) {
         require(scroll.isFinite() && scroll >= 0f && scroll.toDouble() <= Int.MAX_VALUE.toDouble())
         require(page.source.name == chapter.source.name)
-        toggleBookmarkPosition(content, chapter, index, pageCount, page.id, scroll.toInt(), page.preview ?: page.url)
+        toggleBookmarkPosition(content, chapter, index, pageCount, page.id, scroll.toInt(), page.preview ?: page.url, null)
     }
 
-    /** Novel positions are engine block indexes; the schema's image field holds a plain text excerpt. */
+    /**
+     * Novel positions are engine block indexes; the schema's image field holds a plain text excerpt. A chapter of a
+     * downloaded book is bookmarked under its own id, placed by the download it came from ([part]).
+     */
     suspend fun toggleNovelBookmark(content: SourceContent, chapter: SourceChapter, block: Int,
-        blockCount: Int, preview: String) {
+        blockCount: Int, preview: String, part: SourceChapterPart? = null) {
         require(content.source.contentType in setOf("NOVEL", "HENTAI_NOVEL"))
-        toggleBookmarkPosition(content, chapter, block, blockCount, null, 0, sourceNovelBookmarkPreview(preview))
+        toggleBookmarkPosition(content, chapter, block, blockCount, null, 0, sourceNovelBookmarkPreview(preview), part)
     }
 
     suspend fun removeBookmark(content: SourceContent, bookmark: SourceBookmark) =
@@ -97,18 +100,23 @@ class SourceLibrary(
         }
 
     private suspend fun toggleBookmarkPosition(content: SourceContent, chapter: SourceChapter, index: Int,
-        pageCount: Int, pageId: Long?, scroll: Int, preview: String) = database.useWriterConnection { connection ->
+        pageCount: Int, pageId: Long?, scroll: Int, preview: String, part: SourceChapterPart?,
+    ) = database.useWriterConnection { connection ->
         require(pageCount > 0 && index in 0 until pageCount)
-        val branch = requireNotNull(content.chapters).filter { it.branch == chapter.branch }
-        val chapterIndex = branch.indexOfFirst { it.id == chapter.id }
-        require(chapterIndex >= 0 && branch[chapterIndex].url == chapter.url &&
-            branch[chapterIndex].source.name == chapter.source.name)
+        val stored = part?.let { require(it.index in 0 until it.count); it.parent } ?: chapter
+        val branch = requireNotNull(content.chapters).filter { it.branch == stored.branch }
+        val storedIndex = branch.indexOfFirst { it.id == stored.id }
+        require(storedIndex >= 0 && branch[storedIndex].url == stored.url &&
+            branch[storedIndex].source.name == stored.source.name)
+        // A book's chapter takes its share of the download's place in the branch.
+        val parts = part?.count ?: 1
+        val chapterIndex = storedIndex * parts + (part?.index ?: 0)
         connection.immediateTransaction {
             val existing = database.getMangaDao().find(content.id)?.manga
             if (existing == null) saveInTransaction(content) else requireSameIdentity(existing, content)
             require(database.getChaptersDao().findAll(content.id).any {
-                it.chapterId == chapter.id && it.branch == chapter.branch && it.url == chapter.url &&
-                    it.source == chapter.source.name
+                it.chapterId == stored.id && it.branch == stored.branch && it.url == stored.url &&
+                    it.source == stored.source.name
             }) { "Refresh details before bookmarking a changed chapter" }
             val dao = database.getBookmarksDao()
             if (dao.observe(content.id, chapter.id, index).first() != null) {
@@ -119,7 +127,7 @@ class SourceLibrary(
                 if (pageId == null) while (dao.find(content.id, id) != null) id++
                 dao.insert(BookmarkEntity(content.id, id, chapter.id, index, scroll,
                     preview, now,
-                    novelBookmarkProgress(chapterIndex, branch.size, index, pageCount)))
+                    novelBookmarkProgress(chapterIndex, branch.size * parts, index, pageCount)))
             }
         }
     }
@@ -303,28 +311,35 @@ class SourceLibrary(
         }
     }
 
+    /**
+     * A chapter of a downloaded book ([part]) is recorded under its own id with the download as its parent, as
+     * Android records EPUB chapters; the download is what the stored chapter list holds.
+     */
     suspend fun recordPage(content: SourceContent, chapter: SourceChapter, page: Int, pageCount: Int,
-        lastVisiblePage: Int = page, scroll: Float = 0f) =
+        lastVisiblePage: Int = page, scroll: Float = 0f, part: SourceChapterPart? = null) =
         database.useWriterConnection { connection ->
             require(pageCount > 0 && page in 0 until pageCount)
             require(lastVisiblePage in page until pageCount)
             require(scroll.isFinite() && scroll >= 0f)
-            val branch = requireNotNull(content.chapters).filter { it.branch == chapter.branch }
-            val chapterIndex = branch.indexOfFirst { it.id == chapter.id }
-            require(chapterIndex >= 0) { "Reading chapter is missing from this work" }
+            val stored = part?.let { require(it.index in 0 until it.count); it.parent } ?: chapter
+            val branch = requireNotNull(content.chapters).filter { it.branch == stored.branch }
+            val storedIndex = branch.indexOfFirst { it.id == stored.id }
+            require(storedIndex >= 0) { "Reading chapter is missing from this work" }
+            val parts = part?.count ?: 1
+            val chapterIndex = storedIndex * parts + (part?.index ?: 0)
             connection.immediateTransaction {
                 val existing = database.getMangaDao().find(content.id)?.manga
                 if (existing == null) saveInTransaction(content) else requireSameIdentity(existing, content)
                 require(database.getChaptersDao().findAll(content.id).any {
-                    it.chapterId == chapter.id && it.branch == chapter.branch && it.url == chapter.url
+                    it.chapterId == stored.id && it.branch == stored.branch && it.url == stored.url
                 }) { "Refresh details before recording a changed chapter" }
                 val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
                 val previous = database.getHistoryDao().find(content.id)
                 database.getHistoryDao().upsert(HistoryEntity(
                     mangaId = content.id, createdAt = previous?.createdAt ?: now, updatedAt = now,
                     chapterId = chapter.id, page = page, scroll = scroll,
-                    percent = (chapterIndex + (lastVisiblePage + 1f) / pageCount) / branch.size,
-                    deletedAt = 0, chaptersCount = branch.size, parentChapterId = null,
+                    percent = (chapterIndex + (lastVisiblePage + 1f) / pageCount) / (branch.size * parts),
+                    deletedAt = 0, chaptersCount = branch.size, parentChapterId = part?.parent?.id,
                 ))
             }
         }
@@ -387,3 +402,6 @@ class SourceLibrary(
 
     private fun split(value: String?): Set<String> = value?.split('\n')?.filter { it.isNotBlank() }?.toSet().orEmpty()
 }
+
+/** Chapter [index] of the [count] inside a downloaded book, listed in place of the download ([parent]). */
+data class SourceChapterPart(val parent: SourceChapter, val index: Int, val count: Int)

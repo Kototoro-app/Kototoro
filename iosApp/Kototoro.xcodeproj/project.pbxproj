@@ -77,6 +77,8 @@
 		F40000000000000000000004 /* ExtensionPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F50000000000000000000003 /* ExtensionPresentationTests.swift */; };
 		F40000000000000000000005 /* RepositoryManagementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F50000000000000000000004 /* RepositoryManagementTests.swift */; };
 		F60000000000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F70000000000000000000001 /* Assets.xcassets */; };
+		F60000000000000000000002 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = F70000000000000000000002 /* Localizable.xcstrings */; };
+		F60000000000000000000003 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = F70000000000000000000003 /* InfoPlist.xcstrings */; };
 		F80000000000000000000001 /* BackupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000002 /* BackupView.swift */; };
 		F80000000000000000000003 /* BackupFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000004 /* BackupFlowTests.swift */; };
 		F80000000000000000000005 /* SourceIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80000000000000000000006 /* SourceIcon.swift */; };
@@ -176,6 +178,8 @@
 		F50000000000000000000003 /* ExtensionPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionPresentationTests.swift; sourceTree = "<group>"; };
 		F50000000000000000000004 /* RepositoryManagementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoryManagementTests.swift; sourceTree = "<group>"; };
 		F70000000000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F70000000000000000000002 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		F70000000000000000000003 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 		F80000000000000000000002 /* BackupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupView.swift; sourceTree = "<group>"; };
 		F80000000000000000000004 /* BackupFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupFlowTests.swift; sourceTree = "<group>"; };
 		F80000000000000000000006 /* SourceIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceIcon.swift; sourceTree = "<group>"; };
@@ -239,6 +243,8 @@
 				FF0000000000000000000001 /* ReaderStorage.swift */,
 				FF0000000000000000000002 /* ReaderStorageView.swift */,
 				F70000000000000000000001 /* Assets.xcassets */,
+				F70000000000000000000002 /* Localizable.xcstrings */,
+				F70000000000000000000003 /* InfoPlist.xcstrings */,
 				F80000000000000000000002 /* BackupView.swift */,
 				F80000000000000000000006 /* SourceIcon.swift */,
 				F80000000000000000000008 /* SourceFilterSheet.swift */,
@@ -416,6 +422,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				F60000000000000000000001 /* Assets.xcassets in Resources */,
+				F60000000000000000000002 /* Localizable.xcstrings in Resources */,
+				F60000000000000000000003 /* InfoPlist.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -630,6 +638,8 @@
 					"$(SRCROOT)/build/jvm/include",
 				);
 				INFOPLIST_FILE = Kototoro/Info.plist;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Kototoro;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -685,6 +695,8 @@
 					"$(SRCROOT)/build/jvm/include",
 				);
 				INFOPLIST_FILE = Kototoro/Info.plist;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Kototoro;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

@@ -134,10 +134,10 @@ class IosStatistics internal constructor(private val owner: IosLibrary) {
                     }.maxOfOrNull { it.startedAt + it.duration }
                     val timestamp = minOf(now, dayEnd, latest?.endAt ?: legacyEnd ?: (day.startedAt + 1)) - 1
                     val detail = latest?.let { chapters[it.mangaId to it.endChapterId]?.title }
-                        ?: if (!work.hasTimedStats) work.chapterTitle else "旧版阅读统计"
+                        ?: if (!work.hasTimedStats) work.chapterTitle else localized("旧版阅读统计")
                     timeline += IosTimelineEvent("read-${work.content.id}-${day.date}", work.content,
                         if (!work.hasTimedStats) work.updatedAt else timestamp, false,
-                        detail?.takeIf(String::isNotBlank) ?: "阅读记录", day.duration, dailySessions.size)
+                        detail?.takeIf(String::isNotBlank) ?: localized("阅读记录"), day.duration, dailySessions.size)
                 }
             }
             logs.forEach { log -> contents[log.mangaId]?.let { content ->
@@ -158,9 +158,12 @@ class IosStatistics internal constructor(private val owner: IosLibrary) {
         db.useWriterConnection { connection -> connection.immediateTransaction {
             val stored = requireNotNull(db.getMangaDao().find(content.value.id)).manga
             require(stored.source == content.sourceName && stored.url == content.url) { "Reading work changed" }
-            val chapters = db.getChaptersDao().findByIds(listOf(value.start.chapterId, value.end.chapterId))
-            require(chapters.any { it.mangaId == stored.id && it.chapterId == value.start.chapterId } &&
-                chapters.any { it.mangaId == stored.id && it.chapterId == value.end.chapterId })
+            // A downloaded book's chapters are stored as the download they are listed from.
+            val start = content.storedChapterId(value.start.chapterId)
+            val end = content.storedChapterId(value.end.chapterId)
+            val chapters = db.getChaptersDao().findByIds(listOf(start, end))
+            require(chapters.any { it.mangaId == stored.id && it.chapterId == start } &&
+                chapters.any { it.mangaId == stored.id && it.chapterId == end })
             val dao = db.getReadingRecordDao()
             val previous = dao.findAtStart(stored.id, value.startedAt)
             if (previous != null && previous.endAt >= value.endedAt) return@immediateTransaction
@@ -182,7 +185,7 @@ class IosReadingSample internal constructor(internal val value: ReadingSessionSa
 }
 
 /** Synchronous state belongs to the Swift main actor; samples crossing the database boundary are immutable. */
-class IosReadingTracker(content: IosSourceContent) {
+class IosReadingTracker(private val content: IosSourceContent) {
     private val tracker = ReadingSessionTracker()
     private val chapterProgress = content.value.chapters.orEmpty().groupBy { it.branch }.values.flatMap { branch ->
         branch.mapIndexed { index, chapter -> chapter.id to (index to branch.size) }
@@ -191,7 +194,9 @@ class IosReadingTracker(content: IosSourceContent) {
     fun update(chapter: IosSourceChapter, index: Int, count: Int, lastVisible: Int, scroll: Float,
         active: Boolean): IosReadingSample? {
         require(count > 0 && index in 0 until count && lastVisible in index until count && scroll.isFinite())
-        val (chapterIndex, chapterCount) = requireNotNull(chapterProgress[chapter.value.id])
+        // A downloaded book's chapter takes its share of the download's place, as history records it.
+        val (chapterIndex, chapterCount) = requireNotNull(chapterProgress[chapter.value.id]
+            ?: content.branchPlace(chapter.value.id))
         val position = ReadingSessionPosition(chapter.value.id, index, scroll.coerceIn(0f, Int.MAX_VALUE.toFloat()).toInt(),
             (chapterIndex + (lastVisible + 1f) / count) / chapterCount)
         return tracker.update(position, Clock.System.now().toEpochMilliseconds(), active, lastVisible)?.let(::IosReadingSample)

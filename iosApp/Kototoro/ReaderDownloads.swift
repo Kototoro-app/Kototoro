@@ -8,6 +8,8 @@ enum ReaderDownloads {
     private typealias ImageRecord = ReaderDownloadStore.ImageRecord
     private typealias Manifest = ReaderDownloadStore.Manifest
     static func directory(content: IosSourceContent, chapter: IosSourceChapter) throws -> URL {
+        // A downloaded book's chapters live in the download they are listed from.
+        let chapter = content.bookOf(chapter: chapter) ?? chapter
         let root = try NativeSourceTransport.dataDirectory.appendingPathComponent("downloads", isDirectory: true)
         let hash = ReaderStorageMetadata.directoryID(contentID: content.id, chapterID: chapter.id)
         return root.appendingPathComponent(hash, isDirectory: true)
@@ -165,7 +167,8 @@ enum ReaderDownloads {
 
 extension ReaderDownloadQueue {
     func isFinishing(content: IosSourceContent, chapter: IosSourceChapter) -> Bool {
-        isFinishing(ReaderDownloadRequest(source: content.sourceName, contentID: content.id, chapterID: chapter.id,
+        let chapter = content.bookOf(chapter: chapter) ?? chapter
+        return isFinishing(ReaderDownloadRequest(source: content.sourceName, contentID: content.id, chapterID: chapter.id,
                                          title: "", chapterTitle: "", payload: "").id)
     }
 
@@ -175,7 +178,9 @@ extension ReaderDownloadQueue {
             guard decoded.content.sourceName == request.source, decoded.content.id == request.contentID,
                   decoded.chapter.id == request.chapterID else { throw URLError(.cannotParseResponse) }
             try await withReaderStorage {
-                try await ReaderStorageModel.downloadStore().record(request.storageMetadata)
+                let store = try ReaderStorageModel.downloadStore()
+                try await store.record(request.storageMetadata)
+                try await store.keep(payload: request.payload, for: request.storageMetadata)
                 try await ReaderDownloads.download(runtime: runtime, content: decoded.content,
                                                    chapter: decoded.chapter, progress: progress)
             }
@@ -184,6 +189,9 @@ extension ReaderDownloadQueue {
 
     func enqueue(content: IosSourceContent, chapters: [IosSourceChapter]) throws {
         let codec = IosDownloadArchive()
+        // A downloaded book's chapters download as the book, once.
+        var seen = Set<String>()
+        let chapters = chapters.map { content.bookOf(chapter: $0) ?? $0 }.filter { seen.insert($0.id).inserted }
         try enqueue(chapters.map { chapter in
             ReaderDownloadRequest(source: content.sourceName, contentID: content.id, chapterID: chapter.id,
                                   title: content.title, chapterTitle: chapter.title,
@@ -193,7 +201,8 @@ extension ReaderDownloadQueue {
     }
 
     func entry(content: IosSourceContent, chapter: IosSourceChapter) -> ReaderDownloadEntry? {
-        entries.first {
+        let chapter = content.bookOf(chapter: chapter) ?? chapter
+        return entries.first {
             $0.request.source == content.sourceName && $0.request.contentID == content.id && $0.request.chapterID == chapter.id
         }
     }
@@ -204,6 +213,8 @@ extension ReaderDownloadQueue {
 enum NovelDownloads {
     static let manifestName = "novel.json"
     private static let textName = "text.json"
+    /// The chapter titles of a downloaded book (an EPUB), which then lists it by its chapters.
+    private static let bookName = "book.json"
     private static let maximumImageBytes = 32 * 1024 * 1024
 
     private struct Manifest: Codable {
@@ -211,14 +222,20 @@ enum NovelDownloads {
         let images: [String: String]
     }
 
-    /// The chapter text and its local pictures when downloaded, otherwise nil.
+    /// The chapter text and its local pictures when downloaded, otherwise nil; a book's chapter gets its own text.
     static func offline(content: IosSourceContent, chapter: IosSourceChapter) throws -> (IosChapterText, [String: URL])? {
         let dir = try ReaderDownloads.directory(content: content, chapter: chapter)
         let manifestFile = dir.appendingPathComponent(manifestName)
         guard FileManager.default.fileExists(atPath: manifestFile.path) else { return nil }
         let manifest = try JSONDecoder().decode(Manifest.self, from: Data(contentsOf: manifestFile))
-        let text = try IosChapterTextArchive().decode(json: String(decoding: Data(contentsOf: dir.appendingPathComponent(textName)),
+        var text = try IosChapterTextArchive().decode(json: String(decoding: Data(contentsOf: dir.appendingPathComponent(textName)),
                                                                    as: UTF8.self))
+        // A downloaded book's chapter reads its part of the book.
+        let index = content.bookIndex(chapter: chapter)
+        if index >= 0 {
+            guard let section = text.section(index: index) else { return nil }
+            text = section
+        }
         return (text, manifest.images.mapValues { dir.appendingPathComponent($0) })
     }
 
@@ -264,7 +281,25 @@ enum NovelDownloads {
             try progress(index + 2, total)
         }
         try Task.checkCancellation()
+        let book = dir.appendingPathComponent(bookName)
+        if text.sections.isEmpty { try? FileManager.default.removeItem(at: book) }
+        else { try JSONEncoder().encode(text.sections).write(to: book, options: .atomic) }
         try JSONEncoder().encode(Manifest(images: images)).write(to: dir.appendingPathComponent(manifestName), options: .atomic)
+    }
+
+    /// The work with each finished book download listed by its chapters, as Android lists an EPUB download.
+    static func listingBooks(_ content: IosSourceContent) -> IosSourceContent {
+        guard content.mediaKind == "NOVEL", !content.isLocal else { return content }
+        var books: [String: [String]] = [:]
+        for chapter in content.sourceChapters {
+            guard let dir = try? ReaderDownloads.directory(content: content, chapter: chapter),
+                  FileManager.default.fileExists(atPath: dir.appendingPathComponent(manifestName).path),
+                  let data = try? Data(contentsOf: dir.appendingPathComponent(bookName)),
+                  let titles = try? JSONDecoder().decode([String].self, from: data), !titles.isEmpty
+            else { continue }
+            books[chapter.id] = titles
+        }
+        return content.withBooks(books: books)
     }
 
     private static func isValidImage(_ file: URL) -> Bool {

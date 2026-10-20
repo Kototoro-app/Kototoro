@@ -34,15 +34,15 @@ struct ReaderDownloadEntry: Codable, Identifiable {
     var failure: String?
     var id: String { request.id }
     /// Novel progress counts the text and its pictures, not pages.
-    private var unit: String { request.isNovel ? "" : " 页" }
+    private var unit: String { request.isNovel ? "" : String(localized: " 页") }
 
     var status: String {
         switch state {
-        case .queued: "等待下载"
-        case .running: "正在下载 \(completedPages)/\(totalPages)\(unit)"
-        case .paused: "已暂停 · \(completedPages)/\(totalPages)\(unit)"
-        case .failed: failure ?? "下载失败"
-        case .completed: request.isNovel ? "已下载" : "已下载 · \(totalPages) 页"
+        case .queued: String(localized: "等待下载")
+        case .running: String(localized: "正在下载 \(completedPages)/\(totalPages)\(unit)")
+        case .paused: String(localized: "已暂停 · \(completedPages)/\(totalPages)\(unit)")
+        case .failed: failure ?? String(localized: "下载失败")
+        case .completed: request.isNovel ? String(localized: "已下载") : String(localized: "已下载 · \(totalPages) 页")
         }
     }
 }
@@ -246,8 +246,8 @@ final class ReaderDownloadQueue: ObservableObject {
         case invalidArchive, tooManyTasks
         var errorDescription: String? {
             switch self {
-            case .invalidArchive: "下载队列无法读取，已保留原文件。"
-            case .tooManyTasks: "下载队列已满，请先移除已完成的任务。"
+            case .invalidArchive: String(localized: "下载队列无法读取，已保留原文件。")
+            case .tooManyTasks: String(localized: "下载队列已满，请先移除已完成的任务。")
             }
         }
     }

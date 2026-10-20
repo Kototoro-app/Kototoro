@@ -34,7 +34,7 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["阅读时段"].waitForExistence(timeout: 5))
         app.buttons["stats.expand"].tap()
         app.segmentedControls.buttons["时间轴"].tap()
-        XCTAssertTrue(app.staticTexts["阅读历史"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["历史 & 下载"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["发现更新"].exists)
         let event = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
             "timeline.read-", "fixture_comic")).firstMatch
@@ -371,6 +371,34 @@ final class LocalImportTests: XCTestCase {
         for _ in 0..<8 where !first.exists { app.collectionViews.firstMatch.swipeUp() }
         XCTAssertTrue(first.waitForExistence(timeout: 10), app.debugDescription)
         attach("详情章节选择及下载队列")
+        // A record shows its work's cover and opens that work's details.
+        let open = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "download.open.")).firstMatch
+        XCTAssertTrue(open.waitForExistence(timeout: 5), app.debugDescription)
+        open.tap()
+        XCTAssertTrue(app.buttons["details.chapters.showAll"].waitForExistence(timeout: 10), app.debugDescription)
+        attach("下载记录打开详情")
+        // The finished download is a record of its own: the downloads tab lists the work, the timeline the day's download.
+        app.terminate()
+        app.launch()
+        app.mainTab("记录").tap()
+        app.segmentedControls.buttons["下载"].tap()
+        let work = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "downloaded.", "fixture_reader_chapters")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 15), app.debugDescription)
+        attach("记录下载分页")
+        app.segmentedControls.buttons["时间轴"].tap()
+        XCTAssertTrue(app.staticTexts["历史 & 下载"].waitForExistence(timeout: 10))
+        let download = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+            "timeline.download.", "fixture_reader_chapters")).firstMatch
+        XCTAssertTrue(download.waitForExistence(timeout: 10), app.debugDescription)
+        attach("时间轴历史与下载")
+        app.segmentedControls.buttons["下载"].tap()
+        work.tap()
+        app.openDetailsChapters()
+        let local = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+            "chapter.", "本地")).firstMatch
+        XCTAssertTrue(local.waitForExistence(timeout: 10), "导入作品的章节应标为本地：\(app.debugDescription)")
+        attach("章节离线标识")
     }
 
     @MainActor
@@ -631,6 +659,36 @@ final class LocalImportTests: XCTestCase {
         attach("条漫双击按点放大")
         canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).doubleTap()
         XCTAssertTrue(waitForCentre("green"))
+    }
+
+    /// Native pinch and double tap share the same camera. Rebasing after each gesture must not accumulate scale
+    /// or move the viewport; the accompanying video check covers the intermediate frames, not only this end state.
+    @MainActor
+    func testContinuousPinchThenDoubleTapRestoresFit() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_zoom", reuse: true)
+        openFirstChapter(title: "fixture_reader_zoom")
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30))
+        selectReaderMode("条漫")
+        let canvas = app.scrollViews["reader.canvas"]
+        app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0)
+        waitForPage("1")
+        hideReaderControls(canvas)
+        let viewport = canvas.frame
+        for _ in 0..<2 {
+            canvas.pinch(withScale: 2, velocity: 1)
+            let magnified = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                let description = canvas.value as? String ?? ""
+                return description.contains("缩放") && !description.contains("缩放 100%")
+            }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [magnified], timeout: 10), .completed)
+            XCTAssertEqual(canvas.frame, viewport)
+            canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).doubleTap()
+            XCTAssertTrue(waitForZoom(canvas, "100%"))
+            XCTAssertTrue(waitForCentre("green"))
+            XCTAssertEqual(readingPage(canvas), "1")
+            XCTAssertEqual(canvas.frame, viewport)
+        }
+        attach("条漫捏合与双击连续还原")
     }
 
     /// The strip is laid out again for a zoom rather than magnified, and a page whose real size is still unknown keeps

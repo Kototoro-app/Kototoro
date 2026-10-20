@@ -23,15 +23,15 @@ internal class BackupZipReader private constructor(private val bytes: ByteArray,
 
     /** Inflates and CRC-checks one entry; a mismatch rejects the whole archive. */
     fun read(entry: BackupZipEntry): ByteArray {
-        require(entry.size <= MAX_ENTRY_BYTES) { "备份单节超过 256 MiB 限制" }
+        require(entry.size <= MAX_ENTRY_BYTES) { localized("备份单节超过 256 MiB 限制") }
         val end = entry.dataOffset + entry.compressedSize
-        require(entry.dataOffset >= 0 && end <= bytes.size) { "备份 ZIP 数据越界" }
+        require(entry.dataOffset >= 0 && end <= bytes.size) { localized("备份 ZIP 数据越界") }
         val output = when (entry.method) {
             0 -> bytes.copyOfRange(entry.dataOffset.toInt(), end.toInt())
             8 -> inflate(bytes, entry.dataOffset.toInt(), entry.compressedSize.toInt(), entry.size)
-            else -> throw IllegalArgumentException("备份 ZIP 使用了不支持的压缩方式")
+            else -> throw IllegalArgumentException(localized("备份 ZIP 使用了不支持的压缩方式"))
         }
-        require(output.size.toLong() == entry.size && crc(output) == entry.crc) { "备份 ZIP 校验失败：${entry.name}" }
+        require(output.size.toLong() == entry.size && crc(output) == entry.crc) { localized("备份 ZIP 校验失败：%@", entry.name) }
         return output
     }
 
@@ -49,18 +49,18 @@ internal class BackupZipReader private constructor(private val bytes: ByteArray,
         fun parse(bytes: ByteArray, strict: Boolean): BackupZipReader {
             val eocd = (bytes.size - 22 downTo maxOf(0, bytes.size - 22 - 65535)).firstOrNull {
                 bytes.u32(it) == 0x06054b50u
-            } ?: throw IllegalArgumentException("所选文件不是有效的 ZIP 备份")
+            } ?: throw IllegalArgumentException(localized("所选文件不是有效的 ZIP 备份"))
             val count = bytes.u16(eocd + 10)
             val directorySize = bytes.u32(eocd + 12).toLong()
             val directoryOffset = bytes.u32(eocd + 16).toLong()
             require(bytes.u16(eocd + 4) == 0 && bytes.u16(eocd + 6) == 0 && count != 0xffff &&
-                directoryOffset != 0xffffffffL && directoryOffset + directorySize <= eocd) { "备份 ZIP 目录无效" }
-            require(count <= if (strict) 256 else 65534) { "备份包含过多条目" }
+                directoryOffset != 0xffffffffL && directoryOffset + directorySize <= eocd) { localized("备份 ZIP 目录无效") }
+            require(count <= if (strict) 256 else 65534) { localized("备份包含过多条目") }
             val names = hashSetOf<String>()
             var expanded = 0L
             var position = directoryOffset.toInt()
             val entries = List(count) {
-                require(position + 46 <= eocd && bytes.u32(position) == 0x02014b50u) { "备份 ZIP 目录无效" }
+                require(position + 46 <= eocd && bytes.u32(position) == 0x02014b50u) { localized("备份 ZIP 目录无效") }
                 val flags = bytes.u16(position + 8)
                 val method = bytes.u16(position + 10)
                 val crc = bytes.u32(position + 16)
@@ -70,16 +70,16 @@ internal class BackupZipReader private constructor(private val bytes: ByteArray,
                 val extraLength = bytes.u16(position + 30)
                 val commentLength = bytes.u16(position + 32)
                 val local = bytes.u32(position + 42).toLong()
-                require(position + 46 + nameLength <= eocd) { "备份 ZIP 目录无效" }
+                require(position + 46 + nameLength <= eocd) { localized("备份 ZIP 目录无效") }
                 val name = bytes.decodeToString(position + 46, position + 46 + nameLength)
-                require(flags and 1 == 0) { "不支持加密的备份" }
-                require(compressed != 0xffffffffL && size != 0xffffffffL && local != 0xffffffffL) { "不支持 ZIP64 备份" }
+                require(flags and 1 == 0) { localized("不支持加密的备份") }
+                require(compressed != 0xffffffffL && size != 0xffffffffL && local != 0xffffffffL) { localized("不支持 ZIP64 备份") }
                 require(!strict || name.isNotEmpty() && name.length <= 128 && '/' !in name && '\\' !in name &&
-                    names.add(name.lowercase())) { "备份包含重复或无效的节名" }
-                require(!strict || size <= MAX_ENTRY_BYTES) { "备份单节超过 256 MiB 限制" }
+                    names.add(name.lowercase())) { localized("备份包含重复或无效的节名") }
+                require(!strict || size <= MAX_ENTRY_BYTES) { localized("备份单节超过 256 MiB 限制") }
                 if (strict) expanded += size
-                require(expanded <= MAX_EXPANDED_BYTES) { "备份解压数据超过 1 GiB 限制" }
-                require(local + 30 <= bytes.size && bytes.u32(local.toInt()) == 0x04034b50u) { "备份 ZIP 本地头无效" }
+                require(expanded <= MAX_EXPANDED_BYTES) { localized("备份解压数据超过 1 GiB 限制") }
+                require(local + 30 <= bytes.size && bytes.u32(local.toInt()) == 0x04034b50u) { localized("备份 ZIP 本地头无效") }
                 val dataOffset = local + 30 + bytes.u16(local.toInt() + 26) + bytes.u16(local.toInt() + 28)
                 position += 46 + nameLength + extraLength + commentLength
                 BackupZipEntry(name, method, crc, compressed, size, dataOffset)
@@ -95,7 +95,7 @@ internal class BackupZipReader private constructor(private val bytes: ByteArray,
 /** Streams sections with data descriptors; the file appears at [target] only after a complete write. */
 internal class BackupZipWriter(private val target: String) : AutoCloseable {
     private val temporary = "$target.partial"
-    private val file = fopen(temporary, "wb") ?: throw IllegalStateException("无法创建备份文件")
+    private val file = fopen(temporary, "wb") ?: throw IllegalStateException(localized("无法创建备份文件"))
     private var offset = 0L
     private val central = mutableListOf<ByteArray>()
     private var stream: CPointer<z_stream>? = null
@@ -118,14 +118,14 @@ internal class BackupZipWriter(private val target: String) : AutoCloseable {
         val created = nativeHeap.alloc<z_stream>()
         memset(created.ptr, 0, sizeOf<z_stream>().convert())
         check(deflateInit2_(created.ptr, 6, Z_DEFLATED, -15, 8, Z_DEFAULT_STRATEGY, ZLIB_VERSION,
-            sizeOf<z_stream>().toInt()) == Z_OK) { "无法初始化压缩" }
+            sizeOf<z_stream>().toInt()) == Z_OK) { localized("无法初始化压缩") }
         stream = created.ptr
     }
 
     fun write(data: ByteArray) {
         if (data.isEmpty()) return
         entrySize += data.size
-        require(entrySize <= BackupZipReader.MAX_ENTRY_BYTES) { "备份数据超过大小限制，未生成备份文件" }
+        require(entrySize <= BackupZipReader.MAX_ENTRY_BYTES) { localized("备份数据超过大小限制，未生成备份文件") }
         data.usePinned { entryCrc = crc32(entryCrc, it.addressOf(0).reinterpret(), data.size.convert()) }
         var copied = 0
         while (copied < data.size) {
@@ -154,10 +154,10 @@ internal class BackupZipWriter(private val target: String) : AutoCloseable {
         central.forEach(::emit)
         emit(ByteBuilder().u32(0x06054b50u).u16(0).u16(0).u16(central.size).u16(central.size)
             .u32((offset - start).toUInt()).u32(start.toUInt()).u16(0).build())
-        check(fflush(file) == 0 && fclose(file) == 0) { "无法写入备份文件" }
+        check(fflush(file) == 0 && fclose(file) == 0) { localized("无法写入备份文件") }
         finished = true
-        require(access(target, F_OK) != 0) { "目标文件已存在，请选择新的备份文件名" }
-        check(rename(temporary, target) == 0) { "无法保存备份文件" }
+        require(access(target, F_OK) != 0) { localized("目标文件已存在，请选择新的备份文件名") }
+        check(rename(temporary, target) == 0) { localized("无法保存备份文件") }
     }
 
     override fun close() {
@@ -176,7 +176,7 @@ internal class BackupZipWriter(private val target: String) : AutoCloseable {
                 active.next_out = out.addressOf(0).reinterpret()
                 active.avail_out = output.size.convert()
                 val result = deflate(active.ptr, flush)
-                check(result == Z_OK || result == Z_STREAM_END || result == Z_BUF_ERROR) { "压缩备份失败" }
+                check(result == Z_OK || result == Z_STREAM_END || result == Z_BUF_ERROR) { localized("压缩备份失败") }
                 val produced = output.size - active.avail_out.toInt()
                 if (produced > 0) { emit(output.copyOf(produced)); entryCompressed += produced }
                 if (flush == Z_FINISH) { if (result == Z_STREAM_END) break }
@@ -189,9 +189,9 @@ internal class BackupZipWriter(private val target: String) : AutoCloseable {
     private fun emit(bytes: ByteArray) {
         if (bytes.isEmpty()) return
         offset += bytes.size
-        require(offset <= BackupZipReader.MAX_ARCHIVE_BYTES) { "备份数据超过大小限制，未生成备份文件" }
+        require(offset <= BackupZipReader.MAX_ARCHIVE_BYTES) { localized("备份数据超过大小限制，未生成备份文件") }
         val written = bytes.usePinned { fwrite(it.addressOf(0), 1u, bytes.size.convert(), file) }
-        check(written.toLong() == bytes.size.toLong()) { "无法写入备份文件" }
+        check(written.toLong() == bytes.size.toLong()) { localized("无法写入备份文件") }
     }
 }
 
@@ -204,12 +204,12 @@ private class ByteBuilder {
 }
 
 private fun ByteArray.u16(at: Int): Int {
-    require(at >= 0 && at + 2 <= size) { "备份 ZIP 数据越界" }
+    require(at >= 0 && at + 2 <= size) { localized("备份 ZIP 数据越界") }
     return (this[at].toInt() and 0xff) or ((this[at + 1].toInt() and 0xff) shl 8)
 }
 
 private fun ByteArray.u32(at: Int): UInt {
-    require(at >= 0 && at + 4 <= size) { "备份 ZIP 数据越界" }
+    require(at >= 0 && at + 4 <= size) { localized("备份 ZIP 数据越界") }
     return (0 until 4).fold(0u) { acc, i -> acc or ((this[at + i].toUInt() and 0xffu) shl (i * 8)) }
 }
 
@@ -219,7 +219,7 @@ private fun crc(data: ByteArray): UInt = if (data.isEmpty()) 0u else
 private fun inflate(source: ByteArray, offset: Int, length: Int, expected: Long): ByteArray = memScoped {
     val stream = alloc<z_stream>()
     memset(stream.ptr, 0, sizeOf<z_stream>().convert())
-    check(inflateInit2_(stream.ptr, -15, ZLIB_VERSION, sizeOf<z_stream>().toInt()) == Z_OK) { "无法初始化解压" }
+    check(inflateInit2_(stream.ptr, -15, ZLIB_VERSION, sizeOf<z_stream>().toInt()) == Z_OK) { localized("无法初始化解压") }
     val output = ByteArray(expected.toInt())
     try {
         source.usePinned { input ->
@@ -231,14 +231,14 @@ private fun inflate(source: ByteArray, offset: Int, length: Int, expected: Long)
                 stream.next_out = out.addressOf(0).reinterpret()
                 stream.avail_out = output.size.convert()
                 val result = inflate(stream.ptr, Z_FINISH)
-                require(result == Z_STREAM_END || result == Z_BUF_ERROR || result == Z_OK) { "备份 ZIP 解压失败" }
-                require(stream.avail_out == 0u) { "备份 ZIP 解压长度不一致" }
+                require(result == Z_STREAM_END || result == Z_BUF_ERROR || result == Z_OK) { localized("备份 ZIP 解压失败") }
+                require(stream.avail_out == 0u) { localized("备份 ZIP 解压长度不一致") }
             }
             spare.usePinned { out ->
                 stream.next_out = out.addressOf(0).reinterpret()
                 stream.avail_out = 1u
                 val result = inflate(stream.ptr, Z_FINISH)
-                require(result == Z_STREAM_END && stream.avail_out == 1u) { "备份 ZIP 解压长度不一致" }
+                require(result == Z_STREAM_END && stream.avail_out == 1u) { localized("备份 ZIP 解压长度不一致") }
             }
         }
     } finally { inflateEnd(stream.ptr) }
@@ -246,15 +246,15 @@ private fun inflate(source: ByteArray, offset: Int, length: Int, expected: Long)
 }
 
 internal fun readFile(path: String, limit: Long): ByteArray {
-    val file = fopen(path, "rb") ?: throw IllegalArgumentException("无法读取所选备份文件")
+    val file = fopen(path, "rb") ?: throw IllegalArgumentException(localized("无法读取所选备份文件"))
     try {
         check(fseeko(file, 0, SEEK_END) == 0)
         val length = ftello(file)
-        require(length in 22..limit) { if (length > limit) "备份压缩文件超过 256 MiB 限制" else "所选文件不是有效的 ZIP 备份" }
+        require(length in 22..limit) { if (length > limit) localized("备份压缩文件超过 256 MiB 限制") else localized("所选文件不是有效的 ZIP 备份") }
         check(fseeko(file, 0, SEEK_SET) == 0)
         val bytes = ByteArray(length.toInt())
         val read = bytes.usePinned { fread(it.addressOf(0), 1u, bytes.size.convert(), file) }
-        check(read.toLong() == length) { "无法读取所选备份文件" }
+        check(read.toLong() == length) { localized("无法读取所选备份文件") }
         return bytes
     } finally { fclose(file) }
 }

@@ -105,7 +105,7 @@ class IosRepositories(private val library: IosLibrary) {
                 asset.getValue("browser_download_url").jsonPrimitive.content, ""), "parser", code, version,
                 ExtensionStoreIndex.ContentWarning.UNSPECIFIED, emptyList())
         }
-        require(rows.isNotEmpty()) { "此 GitHub 发布没有 JAR 插件" }
+        require(rows.isNotEmpty()) { localized("此 GitHub 发布没有 JAR 插件") }
         val norm = normalizeRepoUrl(url)
         return IosRepositoryCatalog(norm, "JAR", root["name"]?.jsonPrimitive?.contentOrNull?.ifBlank { null } ?: version,
             "", null, norm, rows, ExtensionRepoUrls.resourceBase(norm))
@@ -135,10 +135,10 @@ class IosRepositories(private val library: IosLibrary) {
             (catalog.signingKey.isNotBlank() && previous.signingKeyFingerprint.equals(catalog.signingKey.trim(), ignoreCase = true)) ||
             (catalog.signingKey.isNotBlank() && previous.signingKeyFingerprint.equals(sha256Hex(catalog.signingKey.trim()), ignoreCase = true))
         require(matchesPrevious) {
-            "仓库签名信息已变化，请核对地址"
+            localized("仓库签名信息已变化，请核对地址")
         }
         val duplicate = dao.getByFingerprint(type, fingerprint)
-        require(duplicate == null || duplicate.baseUrl == normalizedUrl || duplicate.baseUrl == catalog.url) { "此仓库已从其他地址添加" }
+        require(duplicate == null || duplicate.baseUrl == normalizedUrl || duplicate.baseUrl == catalog.url) { localized("此仓库已从其他地址添加") }
         val time = kotlin.time.Clock.System.now().toEpochMilliseconds()
         if (previous != null && previous.baseUrl != normalizedUrl) {
             dao.delete(type, previous.baseUrl)

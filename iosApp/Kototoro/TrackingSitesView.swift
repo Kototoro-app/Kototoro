@@ -184,7 +184,7 @@ struct TrackingSitesView: View {
         Section {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("当前资料 · \(bindings.first(where: { $0.key == selectedKey })?.siteTitle ?? "内容源")")
+                    Text("当前资料 · \(bindings.first(where: { $0.key == selectedKey })?.siteTitle ?? String(localized: "内容源"))")
                         .font(.subheadline.weight(.medium))
                     Text(bindings.first(where: { $0.key == selectedKey })?.title ?? content?.title ?? "")
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -390,10 +390,10 @@ struct TrackingItemPreview: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     if let supplement {
-                        people(supplement.characters, title: "角色与声优")
-                        people(supplement.staff, title: "创作者与制作人员")
-                        related(supplement.related, title: "关联作品")
-                        related(supplement.recommendations, title: "你可能也喜欢")
+                        people(supplement.characters, title: String(localized: "角色与声优"))
+                        people(supplement.staff, title: String(localized: "创作者与制作人员"))
+                        related(supplement.related, title: String(localized: "关联作品"))
+                        related(supplement.recommendations, title: String(localized: "你可能也喜欢"))
                     }
                     if let supplementError {
                         Section {
@@ -470,7 +470,7 @@ struct TrackingItemPreview: View {
         do {
             let value = try await tracking.supplement(item: item)
             if !Task.isCancelled { supplement = value }
-        } catch { if !Task.isCancelled { supplementError = "补充资料暂时无法读取，作品信息和关联功能仍可使用。" } }
+        } catch { if !Task.isCancelled { supplementError = String(localized: "补充资料暂时无法读取，作品信息和关联功能仍可使用。") } }
     }
 
     @MainActor private func load() async {
@@ -497,7 +497,7 @@ private struct TrackingAccountRows: View {
                             .frame(width: 40, height: 40).background(.tint.opacity(0.12), in: .rect(cornerRadius: 12))
                         VStack(alignment: .leading, spacing: 4) {
                             Text(site.title).font(.headline)
-                            Text(model.accounts[site.id] ?? "连接账号以同步进度")
+                            Text(model.accounts[site.id] ?? String(localized: "连接账号以同步进度"))
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -552,11 +552,11 @@ struct TrackingConnectionView: View {
         guard let url = URLComponents(string: value), url.scheme?.lowercased() == "https",
               url.host?.isEmpty == false, url.user == nil, url.password == nil,
               url.query == nil, url.fragment == nil else {
-            message = "请输入完整的 HTTPS 接口地址。"
+            message = String(localized: "请输入完整的 HTTPS 接口地址。")
             return
         }
         base = value.hasSuffix("/") ? String(value.dropLast()) : value
-        message = "已保存，返回后会重新读取作品资料。"
+        message = String(localized: "已保存，返回后会重新读取作品资料。")
     }
 }
 

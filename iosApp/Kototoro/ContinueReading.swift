@@ -59,7 +59,7 @@ struct ContinueReadingAccessory: View {
 enum ContinueReadingDetail {
     /// "继续阅读 · 第 12 话 · 35%": the chapter read last, then the overall progress when known.
     static func text(_ entry: IosLibraryEntry) -> String {
-        let action = entry.content.mediaKind == "VIDEO" ? "继续播放" : "继续阅读"
+        let action = entry.content.mediaKind == "VIDEO" ? String(localized: "继续播放") : String(localized: "继续阅读")
         var parts = [action]
         if let chapter = entry.lastChapterTitle { parts.append(chapter) }
         if entry.hasProgress && entry.progress >= 0.01 { parts.append("\(Int(entry.progress * 100))%") }

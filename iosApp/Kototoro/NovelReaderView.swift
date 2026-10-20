@@ -82,8 +82,10 @@ final class NovelReaderModel: ObservableObject {
     init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter,
          initialBookmark: IosBookmark? = nil, initialIndex: Int? = nil) {
         self.runtime = runtime
+        // Downloaded books are read by their chapters; a download listed that way opens at the first of them.
+        let content = NovelDownloads.listingBooks(content)
         self.content = content
-        self.chapter = chapter
+        self.chapter = content.listedChapter(chapter: chapter)
         self.initialBookmark = initialBookmark
         self.initialIndex = initialIndex
     }
@@ -111,7 +113,7 @@ final class NovelReaderModel: ObservableObject {
         do {
             // A downloaded chapter reads offline; a damaged download falls back to the source.
             let offline = try? NovelDownloads.offline(content: content, chapter: selected)
-            let text = if let offline { offline.0 } else { try await runtime.chapterText(chapter: selected) }
+            let text = if let offline { offline.0 } else { try await onlineText(selected) }
             try Task.checkCancellation()
             guard self.request == request else { return }
             // Parsing large chapters off the main actor keeps scrolling responsive.
@@ -151,6 +153,12 @@ final class NovelReaderModel: ObservableObject {
                 challenge = SourceErrorText.challenge(error)
             }
         }
+    }
+
+    /// A downloaded book's chapter whose download is gone reads its part of the book from the source.
+    private func onlineText(_ chapter: IosSourceChapter) async throws -> IosChapterText? {
+        guard let book = content.bookOf(chapter: chapter) else { return try await runtime.chapterText(chapter: chapter) }
+        return try await runtime.chapterText(chapter: book)?.section(index: content.bookIndex(chapter: chapter))
     }
 
     /// Opens another chapter at its start, or at its end when going back a page from the first one.
@@ -278,10 +286,10 @@ private enum NovelReaderAction: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .bookmark: "书签"
-        case .chapters: "目录与书签"
-        case .typography: "阅读设置"
-        case .downloads: "下载队列"
+        case .bookmark: String(localized: "书签")
+        case .chapters: String(localized: "目录与书签")
+        case .typography: String(localized: "阅读设置")
+        case .downloads: String(localized: "下载队列")
         }
     }
     var symbol: String {
@@ -324,6 +332,8 @@ struct NovelReaderView: View {
     @AppStorage(NovelStyle.Key.floatingActions) private var floatingActions = "bookmark"
     @State private var activeSheet: ReaderSheet?
     @State private var sheetTab = 0
+    /// Downloaded books folded away in the chapter list; books open expanded, as on Android.
+    @State private var collapsedBooks = Set<String>()
     @State private var downloadError: String?
     @State private var chromeHidden = false
     @State private var showingMore = false
@@ -652,7 +662,7 @@ struct NovelReaderView: View {
     }
 
     private var downloadStatus: String? {
-        if ReaderDownloads.isDownloaded(content: model.content, chapter: model.chapter) { return "本章已下载，可离线阅读" }
+        if ReaderDownloads.isDownloaded(content: model.content, chapter: model.chapter) { return String(localized: "本章已下载，可离线阅读") }
         return downloads.entry(content: model.content, chapter: model.chapter)?.status
     }
 
@@ -672,6 +682,31 @@ struct NovelReaderView: View {
         catch { downloadError = error.localizedDescription }
     }
 
+    private func chapterRow(_ item: IosSourceChapter) -> some View {
+        Button {
+            activeSheet = nil
+            Task { await model.move(to: item) }
+        } label: {
+            HStack {
+                Text(item.title)
+                Spacer()
+                // A book's chapters share their download, whose state the group shows.
+                if model.content.bookOf(chapter: item) == nil, let offline = ChapterOfflineMark.of(model.content, item) {
+                    Image(systemName: offline.icon).foregroundStyle(.secondary).accessibilityLabel(offline.label)
+                }
+                if item.id == model.chapter.id { Image(systemName: "book.fill") }
+            }
+        }
+        .id(item.id)
+        .accessibilityIdentifier("novel.chapter.\(item.id)")
+        .swipeActions {
+            if !model.runtime.isLocal(content: model.content),
+               !ReaderDownloads.isDownloaded(content: model.content, chapter: item) {
+                Button("下载", systemImage: "arrow.down.circle") { enqueue([item]) }.tint(.accentColor)
+            }
+        }
+    }
+
     private var navigationSheet: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -682,27 +717,29 @@ struct NovelReaderView: View {
                 .pickerStyle(.segmented)
                 .padding(12)
                 if sheetTab == 0 {
-                    List(model.content.chapters, id: \.id) { item in
-                        Button {
-                            activeSheet = nil
-                            Task { await model.move(to: item) }
-                        } label: {
-                            HStack {
-                                Text(item.title)
-                                Spacer()
-                                if ReaderDownloads.isDownloaded(content: model.content, chapter: item) {
-                                    Image(systemName: "arrow.down.circle.fill").foregroundStyle(.secondary)
-                                        .accessibilityLabel("已下载")
+                    // A downloaded book gathers its chapters under the download, as Android groups EPUB volumes.
+                    ScrollViewReader { proxy in
+                        List {
+                            ForEach(ChapterRow.rows(model.content.chapters, in: model.content)) { row in
+                                switch row {
+                                case .chapter(let item): chapterRow(item)
+                                case .book(let book, let chapters):
+                                    DisclosureGroup(isExpanded: Binding(
+                                        get: { !collapsedBooks.contains(book.id) },
+                                        set: { if $0 { collapsedBooks.remove(book.id) } else { collapsedBooks.insert(book.id) } }
+                                    )) {
+                                        ForEach(chapters, id: \.id) { chapterRow($0) }
+                                    } label: {
+                                        ChapterBookLabel(book: book, count: chapters.count)
+                                    }
+                                    .accessibilityIdentifier("novel.book.\(book.id)")
                                 }
-                                if item.id == model.chapter.id { Image(systemName: "book.fill") }
                             }
                         }
-                        .accessibilityIdentifier("novel.chapter.\(item.id)")
-                        .swipeActions {
-                            if !model.runtime.isLocal(content: model.content),
-                               !ReaderDownloads.isDownloaded(content: model.content, chapter: item) {
-                                Button("下载", systemImage: "arrow.down.circle") { enqueue([item]) }.tint(.accentColor)
-                            }
+                        .task {
+                            if let book = model.content.bookOf(chapter: model.chapter) { collapsedBooks.remove(book.id) }
+                            await Task.yield()
+                            proxy.scrollTo(model.chapter.id, anchor: .center)
                         }
                     }
                 } else if model.bookmarks.isEmpty {
@@ -1457,7 +1494,7 @@ struct NovelReaderSettingsSheet: View {
     @AppStorage(NovelStyle.Key.pageTurn) private var pageTurn = "SLIDE"
 
     private let limits = IosNovelStyle.shared
-    private static let themeNames = ["PAPER": "纸张", "SEPIA": "旧书", "MOSS": "苔绿", "SLATE": "石板"]
+    private static let themeNames = ["PAPER": String(localized: "纸张"), "SEPIA": String(localized: "旧书"), "MOSS": String(localized: "苔绿"), "SLATE": String(localized: "石板")]
 
     var body: some View {
         NavigationStack {
@@ -1502,9 +1539,9 @@ struct NovelReaderSettingsSheet: View {
                         Text("无衬线").tag("SYSTEM_SANS")
                         Text("等宽").tag("SYSTEM_MONOSPACE")
                     }
-                    slider("字号", value: $fontSize, range: Double(limits.minFontSize)...Double(limits.maxFontSize),
+                    slider(String(localized: "字号"), value: $fontSize, range: Double(limits.minFontSize)...Double(limits.maxFontSize),
                            step: Double(limits.fontSizeStep), format: "%.1f")
-                    slider("行距", value: $lineSpacing, range: Double(limits.minLineSpacing)...Double(limits.maxLineSpacing),
+                    slider(String(localized: "行距"), value: $lineSpacing, range: Double(limits.minLineSpacing)...Double(limits.maxLineSpacing),
                            step: Double(limits.lineSpacingStep), format: "%.1f")
                     Stepper("段间空行 \(paragraphSpacing)", value: $paragraphSpacing, in: 0...Int(limits.maxParagraphSpacing))
                     Toggle("段首缩进", isOn: $indent)

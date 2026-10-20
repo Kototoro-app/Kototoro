@@ -127,9 +127,9 @@ enum ReaderLoading {
 
         var title: String {
             switch self {
-            case .always: "总是"
-            case .unmetered: "仅连接 Wi-Fi 时"
-            case .never: "从不"
+            case .always: String(localized: "总是")
+            case .unmetered: String(localized: "仅连接 Wi-Fi 时")
+            case .never: String(localized: "从不")
             }
         }
     }

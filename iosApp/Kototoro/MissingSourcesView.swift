@@ -202,7 +202,7 @@ struct MissingSourcesView: View {
                         Label {
                             VStack(alignment: .leading) {
                                 Text(result.title)
-                                Text(result.error ?? "扩展已安装；来源是否恢复以上方检查结果为准")
+                                Text(result.error ?? String(localized: "扩展已安装；来源是否恢复以上方检查结果为准"))
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         } icon: {

@@ -32,7 +32,7 @@ final class TrackingAccountsModel: NSObject, ObservableObject, ASWebAuthenticati
                     if let data = try TrackingKeychain.read(site.id), let value = String(data: data, encoding: .utf8) {
                         try await tracking.accounts.restore(serialized: value)
                     }
-                } catch { syncMessages["account.\(site.id)"] = "无法读取账号，请重新连接：\(error.localizedDescription)" }
+                } catch { syncMessages["account.\(site.id)"] = String(localized: "无法读取账号，请重新连接：\(error.localizedDescription)") }
             }
             await refresh()
         }
@@ -51,7 +51,7 @@ final class TrackingAccountsModel: NSObject, ObservableObject, ASWebAuthenticati
     }
 
     func connect(_ site: IosTrackingSite, username: String, password: String, token: String) async throws {
-        guard let api else { throw TrackingError.message("正在准备账号，请稍后重试") }
+        guard let api else { throw TrackingError.message(String(localized: "正在准备账号，请稍后重试")) }
         if !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             try await api.connectToken(service: site.id, token: token)
         } else if site.id == 4 || site.id == 6 {
@@ -60,17 +60,17 @@ final class TrackingAccountsModel: NSObject, ObservableObject, ASWebAuthenticati
             let state = UUID().uuidString
             let verifier = UUID().uuidString.replacingOccurrences(of: "-", with: "") + UUID().uuidString.replacingOccurrences(of: "-", with: "")
             let address = try api.authorizationUrl(service: site.id, state: state, verifier: verifier)
-            guard let url = URL(string: address) else { throw TrackingError.message("授权地址无效") }
+            guard let url = URL(string: address) else { throw TrackingError.message(String(localized: "授权地址无效")) }
             let callback = try await authenticate(url)
             let components = URLComponents(url: callback, resolvingAgainstBaseURL: false)
             let fields = components?.queryItems ?? []
             guard callback.scheme == "kototoro", callback.host == URLComponents(string: address)?.queryItems?
                 .first(where: { $0.name == "redirect_uri" }).flatMap({ $0.value }).flatMap(URL.init(string:))?.host,
                   fields.first(where: { $0.name == "state" })?.value == state else {
-                throw TrackingError.message("授权回调无法验证，请重新连接")
+                throw TrackingError.message(String(localized: "授权回调无法验证，请重新连接"))
             }
             guard let code = fields.first(where: { $0.name == "code" })?.value, !code.isEmpty else {
-                throw TrackingError.message("网站未完成授权，请重试")
+                throw TrackingError.message(String(localized: "网站未完成授权，请重试"))
             }
             try await api.authorize(service: site.id, code: code, verifier: verifier)
         }
@@ -97,7 +97,7 @@ final class TrackingAccountsModel: NSObject, ObservableObject, ASWebAuthenticati
     }
 
     func progress(content: IosSourceContent, item: IosTrackingItem) async throws -> IosTrackingProgress {
-        guard let api else { throw TrackingError.message("请先连接账号") }
+        guard let api else { throw TrackingError.message(String(localized: "请先连接账号")) }
         do {
             let result = try await api.progress(content: content, item: item)
             try await persist(item.service)
@@ -106,11 +106,11 @@ final class TrackingAccountsModel: NSObject, ObservableObject, ASWebAuthenticati
     }
 
     func update(content: IosSourceContent, item: IosTrackingItem, status: String, progress: Int32, score: Float, note: String) async throws {
-        guard let api else { throw TrackingError.message("请先连接账号") }
+        guard let api else { throw TrackingError.message(String(localized: "请先连接账号")) }
         do {
             _ = try await api.update(content: content, item: item, status: status, progress: progress, score: score, note: note)
             try await persist(item.service)
-            syncMessages[content.id] = "已同步到 \(item.siteTitle)"
+            syncMessages[content.id] = String(localized: "已同步到 \(item.siteTitle)")
             syncFailures.remove(content.id)
             saveSyncState()
             revision += 1
@@ -118,7 +118,7 @@ final class TrackingAccountsModel: NSObject, ObservableObject, ASWebAuthenticati
     }
 
     func collection(service: Int32, kind: String, status: String, page: Int32) async throws -> [IosTrackingCollectionItem] {
-        guard let api else { throw TrackingError.message("请先连接账号") }
+        guard let api else { throw TrackingError.message(String(localized: "请先连接账号")) }
         do {
             let result = try await api.collection(service: service, mediaKind: kind, status: status, page: page)
             try await persist(service)
@@ -138,20 +138,20 @@ final class TrackingAccountsModel: NSObject, ObservableObject, ASWebAuthenticati
         for service in services {
             do {
                 if try await api.syncProgress(content: content, service: service).boolValue {
-                    completed.append(tracking?.sites.first(where: { $0.id == service })?.title ?? "网站")
+                    completed.append(tracking?.sites.first(where: { $0.id == service })?.title ?? String(localized: "网站"))
                 }
                 try await persist(service)
             } catch {
                 try? await persist(service)
-                failed.append("\(tracking?.sites.first(where: { $0.id == service })?.title ?? "网站")：\(error.localizedDescription)")
+                failed.append("\(tracking?.sites.first(where: { $0.id == service })?.title ?? String(localized: "网站"))：\(error.localizedDescription)")
             }
         }
         if !failed.isEmpty {
-            syncMessages[content.id] = "进度尚未同步。" + failed.joined(separator: "；")
+            syncMessages[content.id] = String(localized: "进度尚未同步。") + failed.joined(separator: "；")
             syncFailures.insert(content.id)
         } else {
             syncFailures.remove(content.id)
-            if !completed.isEmpty { syncMessages[content.id] = "进度已同步到 " + completed.joined(separator: "、") }
+            if !completed.isEmpty { syncMessages[content.id] = String(localized: "进度已同步到 ") + completed.joined(separator: "、") }
         }
         saveSyncState()
     }
@@ -172,13 +172,13 @@ final class TrackingAccountsModel: NSObject, ObservableObject, ASWebAuthenticati
             let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "kototoro") { [weak self] callback, error in
                 Task { @MainActor in self?.authentication = nil }
                 if let callback { continuation.resume(returning: callback) }
-                else { continuation.resume(throwing: error ?? TrackingError.message("授权未完成")) }
+                else { continuation.resume(throwing: error ?? TrackingError.message(String(localized: "授权未完成"))) }
             }
             session.presentationContextProvider = self
             authentication = session
             if !session.start() {
                 authentication = nil
-                continuation.resume(throwing: TrackingError.message("无法打开授权页面"))
+                continuation.resume(throwing: TrackingError.message(String(localized: "无法打开授权页面")))
             }
         }
     }
@@ -207,7 +207,7 @@ private enum TrackingKeychain {
         var result: CFTypeRef?
         let status = SecItemCopyMatching(fields as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess else { throw TrackingError.message("无法访问安全存储（\(status)）") }
+        guard status == errSecSuccess else { throw TrackingError.message(String(localized: "无法访问安全存储（\(status)）")) }
         return result as? Data
     }
 
@@ -215,14 +215,14 @@ private enum TrackingKeychain {
         let fields = query(service)
         guard let data else {
             let status = SecItemDelete(fields as CFDictionary)
-            guard status == errSecSuccess || status == errSecItemNotFound else { throw TrackingError.message("无法移除安全凭据（\(status)）") }
+            guard status == errSecSuccess || status == errSecItemNotFound else { throw TrackingError.message(String(localized: "无法移除安全凭据（\(status)）")) }
             return
         }
         let values: [String: Any] = [kSecValueData as String: data,
                                     kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
         var status = SecItemUpdate(fields as CFDictionary, values as CFDictionary)
         if status == errSecItemNotFound { status = SecItemAdd(fields.merging(values) { _, new in new } as CFDictionary, nil) }
-        guard status == errSecSuccess else { throw TrackingError.message("无法保存安全凭据（\(status)）") }
+        guard status == errSecSuccess else { throw TrackingError.message(String(localized: "无法保存安全凭据（\(status)）")) }
     }
 }
 
@@ -358,7 +358,7 @@ private struct TrackingCollectionView: View {
                     Button { preview = entry.item } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(entry.item.title).foregroundStyle(.primary)
-                            Text("已\(kind == "VIDEO" ? "看" : "读") \(entry.progress) \(kind == "VIDEO" ? "集" : "章")")
+                            Text(kind == "VIDEO" ? String(localized: "已看 \(entry.progress) 集") : String(localized: "已读 \(entry.progress) 章"))
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
@@ -456,11 +456,12 @@ struct TrackingProgressView: View {
                             .accessibilityIdentifier("tracking.progress")
                     } }
                     if local > 0 && !isMovie {
-                        Button("使用本地进度 · 第 \(local) \(content.mediaKind == "VIDEO" ? "集" : "章")") { progress = String(local) }
+                        Button(content.mediaKind == "VIDEO" ? String(localized: "使用本地进度 · 第 \(local) 集")
+                               : String(localized: "使用本地进度 · 第 \(local) 章")) { progress = String(local) }
                             .accessibilityIdentifier("tracking.useLocalProgress")
                     }
                     Stepper(value: $score, in: 0...10, step: scoreStep) {
-                        LabeledContent("我的评分", value: score == 0 ? "未评分" :
+                        LabeledContent("我的评分", value: score == 0 ? String(localized: "未评分") :
                             "\(score.formatted(.number.precision(.fractionLength(0...1)))) / 10")
                     }
                     if site?.supportsNotes == true { TextField("短评 / 备注", text: $note, axis: .vertical).lineLimit(3...6) }
@@ -469,7 +470,7 @@ struct TrackingProgressView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 } header: { Text("网站追踪记录") }
-                footer: { Text("保存后写入 \(item.siteTitle) 的账号列表。\(item.service == 7 ? "SIMKL 当前仅支持增加已看集数。" : "")") }
+                footer: { Text("保存后写入 \(item.siteTitle) 的账号列表。\(item.service == 7 ? String(localized: "SIMKL 当前仅支持增加已看集数。") : "")") }
                 Section {
                     Button(saving ? "正在同步…" : (tracked ? "保存并同步" : "开始追踪")) { Task { await save() } }
                         .disabled(saving || validProgress == nil)

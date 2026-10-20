@@ -21,12 +21,12 @@ final class ReaderStorageModel: ObservableObject {
     private static let backingStore: Result<ReaderStorageStore, Error> = Result {
         let data = try NativeSourceTransport.dataDirectory
         return ReaderStorageStore(downloads: data.appendingPathComponent("downloads"), caches: [
-            ReaderCacheLocation(id: "images", title: "页面与大图", directory: data.appendingPathComponent("images")),
-            ReaderCacheLocation(id: "covers", title: "封面缓存",
+            ReaderCacheLocation(id: "images", title: String(localized: "页面与大图"), directory: data.appendingPathComponent("images")),
+            ReaderCacheLocation(id: "covers", title: String(localized: "封面缓存"),
                                 directory: URL.cachesDirectory.appendingPathComponent("covers")),
-            ReaderCacheLocation(id: "source-icons", title: "来源图标",
+            ReaderCacheLocation(id: "source-icons", title: String(localized: "来源图标"),
                                 directory: URL.cachesDirectory.appendingPathComponent("source-icons")),
-            ReaderCacheLocation(id: "extension-icons", title: "扩展图标",
+            ReaderCacheLocation(id: "extension-icons", title: String(localized: "扩展图标"),
                                 directory: URL.cachesDirectory.appendingPathComponent("extension-icons"))
         ])
     }
@@ -199,7 +199,7 @@ struct ReaderStorageView: View {
                     ForEach(snapshot.items) { item in
                         HStack {
                             VStack(alignment: .leading, spacing: 5) {
-                                Text(item.metadata?.title ?? "未关联的离线章节").font(.headline)
+                                Text(item.metadata?.title ?? String(localized: "未关联的离线章节")).font(.headline)
                                 if let metadata = item.metadata {
                                     Text(metadata.chapterTitle).foregroundStyle(.secondary)
                                 } else if let modified = item.modified {
@@ -214,7 +214,7 @@ struct ReaderStorageView: View {
                                 .accessibilityIdentifier("storage.delete.\(item.id)")
                         }.accessibilityElement(children: .contain)
                             .accessibilityLabel(
-                                "\(item.metadata?.title ?? "离线章节") · \(item.metadata?.chapterTitle ?? "")"
+                                "\(item.metadata?.title ?? String(localized: "离线章节")) · \(item.metadata?.chapterTitle ?? "")"
                             )
                             .accessibilityIdentifier("storage.chapter.\(item.id)")
                     }
@@ -246,8 +246,8 @@ struct ReaderStorageView: View {
             if confirmingCacheClear {
                 Text("页面、封面和图标需要重新加载。离线章节和本地导入作品会保留。")
             } else {
-                Text("\(selected?.metadata?.title ?? "离线章节") · \(selected?.metadata?.chapterTitle ?? "")\n"
-                     + "删除后需重新下载。收藏和阅读进度会保留。")
+                Text("\(selected?.metadata?.title ?? String(localized: "离线章节")) · \(selected?.metadata?.chapterTitle ?? "")\n"
+                     + String(localized: "删除后需重新下载。收藏和阅读进度会保留。"))
             }
         }
     }

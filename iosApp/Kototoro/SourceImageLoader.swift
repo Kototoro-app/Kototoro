@@ -47,7 +47,7 @@ struct ReaderImageArtifact: Equatable, Sendable {
                 .integral.intersection(CGRect(x: 0, y: 0, width: base.width, height: base.height))
             guard !region.isEmpty, let cropped = base.cropping(to: region) else {
                 throw NSError(domain: "org.skepsun.kototoro.image", code: 1,
-                              userInfo: [NSLocalizedDescriptionKey: "页面区域越界"])
+                              userInfo: [NSLocalizedDescriptionKey: String(localized: "页面区域越界")])
             }
             return UIImage(cgImage: cropped)
         }
@@ -176,7 +176,7 @@ actor ReaderTileBaseCache {
                                                                byteSize: length, maxPixelSize: maxPixelSize)
                         guard let cgImage = image.cgImage else {
                             throw NSError(domain: "org.skepsun.kototoro.image", code: 1,
-                                          userInfo: [NSLocalizedDescriptionKey: "无法解码此图片格式"])
+                                          userInfo: [NSLocalizedDescriptionKey: String(localized: "无法解码此图片格式")])
                         }
                         return cgImage
                     }
