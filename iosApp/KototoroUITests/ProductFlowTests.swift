@@ -1,6 +1,86 @@
 import XCTest
 
 final class ProductFlowTests: XCTestCase {
+    /// Needs at least one favourite. Selection starts from a work's menu and borrows the top bar; the library's
+    /// other tools sit in its more menu; a source's listing searches with the field under its title.
+    @MainActor
+    func testLibrarySelectionFromMenuMoreMenuAndSourceSearchDrawer() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-space.enabled", "NO"]
+        app.launch()
+        func shot(_ name: String) {
+            let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name
+            attachment.lifetime = .keepAlways; add(attachment)
+        }
+        app.mainTab("作品库").tap()
+        let work = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "favourite.")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertFalse(app.buttons["library.select"].exists, "Selection has no toolbar button of its own")
+        work.press(forDuration: 0.8)
+        XCTAssertTrue(app.buttons["library.select"].waitForExistence(timeout: 5), app.debugDescription)
+        app.buttons["library.select"].tap()
+        let done = app.navigationBars.buttons["library.selectDone"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(work.isSelected)
+        XCTAssertTrue(app.navigationBars.buttons["library.selection.unfavourite"].isEnabled)
+        XCTAssertTrue(app.navigationBars.buttons["library.selection.migrate"].exists)
+        XCTAssertFalse(app.buttons["library.more"].exists, "Selection replaces the toolbar's buttons")
+        shot("Library selection toolbar")
+        done.tap()
+        XCTAssertTrue(app.buttons["library.more"].waitForExistence(timeout: 5))
+        XCTAssertFalse(work.isSelected)
+
+        app.buttons["library.more"].tap()
+        XCTAssertTrue(app.buttons["library.migrate"].waitForExistence(timeout: 5))
+        shot("Library more menu")
+        app.buttons["library.duplicates"].tap()
+        let empty = app.descendants(matching: .any)["duplicates.empty"]
+        let merge = app.buttons["duplicates.merge"].firstMatch
+        let found = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in empty.exists || merge.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [found], timeout: 30), .completed, app.debugDescription)
+        shot("Find duplicates")
+        // Fuzzy matching reveals its threshold; a released slider searches again.
+        let fuzzy = app.switches["duplicates.fuzzy"]
+        XCTAssertTrue(fuzzy.waitForExistence(timeout: 5), app.debugDescription)
+        if fuzzy.value as? String == "1" { fuzzy.switches.firstMatch.tap() }
+        XCTAssertFalse(app.sliders["duplicates.threshold"].exists)
+        fuzzy.switches.firstMatch.tap()
+        let slider = app.sliders["duplicates.threshold"]
+        XCTAssertTrue(slider.waitForExistence(timeout: 5), app.debugDescription)
+        slider.adjust(toNormalizedSliderPosition: 0.2)
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in empty.exists || merge.exists }, object: nil)], timeout: 30), .completed,
+            app.debugDescription)
+        shot("Find duplicates fuzzy")
+        fuzzy.switches.firstMatch.tap()
+        XCTAssertTrue(slider.waitForNonExistence(timeout: 5))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        app.mainTab("浏览").tap()
+        let local = app.buttons["source.LOCAL"]
+        for _ in 0..<5 where !local.waitForExistence(timeout: 3) { app.swipeUp() }
+        XCTAssertTrue(local.exists, app.debugDescription)
+        local.tap()
+        XCTAssertFalse(app.navigationBars.buttons["搜索"].exists, "The listing has no toolbar search button")
+        let field = app.pageSearchField()
+        XCTAssertTrue(field.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(field.placeholderValue?.hasSuffix("中搜索"), true)
+        field.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "The field should take focus")
+        field.typeText("abc")
+        shot("Source search drawer")
+        // The drawer's close button: "关闭" beside the field on current systems, "取消" on earlier ones.
+        let cancel = app.navigationBars.buttons.matching(NSPredicate(format: "label IN %@", ["关闭", "取消"])).firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5), app.debugDescription)
+        cancel.tap()
+        // Closed, and still closed a moment later: the old toolbar search refocused itself right away.
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 3), "Cancel closes the search")
+        sleep(1)
+        XCTAssertFalse(app.keyboards.firstMatch.exists, "The search reopened")
+        shot("Source search closed")
+    }
+
     @MainActor
     func testBatchMigrationReviewsTwoWorksAndMissingSourceRecoverySurvivesRestart() {
         continueAfterFailure = false
@@ -42,6 +122,7 @@ final class ProductFlowTests: XCTestCase {
             XCTAssertTrue(app.buttons["favourite.save"].waitForNonExistence(timeout: 10))
         }
         app.mainTab("作品库").tap()
+        app.buttons["library.more"].tap()
         app.buttons["library.migrate"].tap()
         XCTAssertTrue(app.segmentedControls["migration.scope"].waitForExistence(timeout: 10))
         let emptySearch = app.pageSearchField()

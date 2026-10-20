@@ -28,6 +28,20 @@ abstract class MigrationDao {
     )
     abstract suspend fun findLibraryRows(): List<LibraryRow>
 
+    /** Tracking-site entries of active favourites: metadata links, then account bindings (always manual). */
+    @Query(
+        """
+        SELECT l.manga_id AS mangaId, l.service AS service, l.remote_id AS remoteId, l.is_manual AS manual
+        FROM tracking_site_links l
+        WHERE l.remote_id > 0 AND l.manga_id IN (SELECT manga_id FROM favourites WHERE deleted_at = 0)
+        UNION ALL
+        SELECT s.manga_id AS mangaId, s.scrobbler AS service, s.target_id AS remoteId, 1 AS manual
+        FROM scrobblings s
+        WHERE s.target_id > 0 AND s.manga_id IN (SELECT manga_id FROM favourites WHERE deleted_at = 0)
+        """,
+    )
+    abstract suspend fun findLibraryTrackingIds(): List<LibraryTrackingId>
+
     @Query("SELECT content_type FROM manga WHERE manga_id = :mangaId")
     abstract suspend fun findStoredContentType(mangaId: Long): String?
 

@@ -193,7 +193,6 @@ final class VideoSourceTests: XCTestCase {
         let first = element(app, "source.content.\(contentId(101, name))")
         let movie = element(app, "source.content.\(contentId(102, name))")
         XCTAssertTrue(first.waitForExistence(timeout: 30))
-        app.navigationBars.buttons["搜索"].tap()
         let search = app.pageSearchField()
         XCTAssertTrue(search.waitForExistence(timeout: 10))
         search.tap(); search.typeText("测试动画\n")

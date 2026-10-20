@@ -132,12 +132,56 @@ class IosLibraryTest {
         assertNull(IosMigrationMatching.uniqueExactMatch(original, listOf(video, original)))
     }
 
-    private fun migrationWork(id: Long, name: String, numbers: List<Float>, type: String = "NOVEL"): IosSourceContent {
+    private fun migrationWork(id: Long, name: String, numbers: List<Float>, type: String = "NOVEL",
+        title: String = "换源测试"): IosSourceContent {
         val source = SourceRef(name, "zh", type)
-        return IosSourceContent(SourceContent(id, "换源测试", emptySet(), "/$id", "https://fixture.invalid/$id",
+        return IosSourceContent(SourceContent(id, title, emptySet(), "/$id", "https://fixture.invalid/$id",
             0f, null, null, emptySet(), null, emptySet(), source, chapters = numbers.mapIndexed { index, number ->
                 SourceChapter(id * 10 + index, "第 $number 章", number, 1, "/$id/$index", null, 0, null, source)
             }))
+    }
+
+    @Test
+    fun duplicatesGroupTraditionalTitlesAndMergeKeepsFurthestProgressAndCategories() = runBlocking {
+        val directory = NSTemporaryDirectory() + NSUUID().UUIDString
+        val files = NSFileManager.defaultManager
+        check(files.createDirectoryAtPath(directory, true, null, null))
+        val further = migrationWork(701, "OLD", listOf(1f, 2f, 3f), title = "间谍过家家")
+        val kept = migrationWork(702, "NEW", listOf(1f, 2f, 3f, 4f), title = "間諜過家家")
+        val video = migrationWork(703, "NEW", listOf(1f), type = "VIDEO", title = "间谍过家家")
+        val near = migrationWork(704, "THIRD", listOf(1f), title = "間諜過佳家")
+        try {
+            val library = IosLibrary("$directory/library.db")
+            try {
+                library.addCategory("甲"); library.addCategory("乙")
+                val ids = library.categories().map { it.id }
+                library.setCategories(further, listOf(ids[0])); library.setCategories(kept, listOf(ids[1]))
+                library.setFavourite(video, true)
+                library.setFavourite(near, true)
+                library.recordPosition(further, further.chapters[2], 1, 10, 1000f)
+                kotlinx.coroutines.delay(10)
+                library.recordPosition(kept, kept.chapters[0], 0, 10, 0f)
+                val group = library.duplicates.groups(emptyList(), false, 0.85).single()
+                assertEquals(setOf(further.id, kept.id), group.entries.map { it.id }.toSet())
+                // Neither source is in the catalog, so the furthest read is recommended.
+                assertEquals(further.id, group.recommendedId)
+                assertTrue(library.duplicates.groups(listOf(group.key), false, 0.85).isEmpty())
+                assertFalse(group.fuzzy)
+                // 繁/简 folded first, then 4 of 5 characters agree (0.8).
+                val fuzzy = library.duplicates.groups(emptyList(), true, 0.8).single()
+                assertEquals(setOf(further.id, kept.id, near.id), fuzzy.entries.map { it.id }.toSet())
+                assertTrue(fuzzy.fuzzy)
+                assertEquals(2, library.duplicates.groups(emptyList(), true, 0.9).single().entries.size)
+                val keep = group.entries.first { it.id == kept.id }
+                assertTrue(library.duplicates.needsChapters(group, keep))
+                library.duplicates.merge(group, keep, library.storedDetails(kept))
+                assertEquals(setOf(kept.id, video.id, near.id), library.favourites().map { it.content.id }.toSet())
+                assertEquals(ids.toSet(), library.favouriteCategories(kept).toSet())
+                assertEquals(kept.chapters[2].id, library.position(kept)?.chapterId)
+                assertNull(library.position(further))
+                assertTrue(library.duplicates.groups(emptyList(), false, 0.85).isEmpty())
+            } finally { library.close() }
+        } finally { files.removeItemAtPath(directory, null) }
     }
 
     @Test

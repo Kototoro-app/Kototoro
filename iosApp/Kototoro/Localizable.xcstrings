@@ -156,6 +156,16 @@
     "%d %@": {
       "shouldTranslate": false
     },
+    "%d 话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d chapters"
+          }
+        }
+      }
+    },
     "%d 部作品 · %d 部收藏 · %d 部历史": {
       "localizations": {
         "en": {
@@ -328,6 +338,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld chapters"
+          }
+        }
+      }
+    },
+    "%lld 部 · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld entries · %@"
           }
         }
       }
@@ -1034,6 +1054,16 @@
         }
       }
     },
+    "不是重复": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not duplicates"
+          }
+        }
+      }
+    },
     "不足 1 分钟": {
       "localizations": {
         "en": {
@@ -1050,6 +1080,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Any"
+          }
+        }
+      }
+    },
+    "严格": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strict"
           }
         }
       }
@@ -1808,6 +1848,17 @@
         }
       }
     },
+    "保留作品的身份已变化，请重新查找重复": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The kept entry's identity changed. Find duplicates again."
+          }
+        }
+      }
+    },
     "保留原作品": {
       "localizations": {
         "en": {
@@ -2118,6 +2169,16 @@
         }
       }
     },
+    "全部合并": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge all"
+          }
+        }
+      }
+    },
     "全部开启": {
       "localizations": {
         "en": {
@@ -2314,6 +2375,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld of them are also in other categories and will be kept."
+          }
+        }
+      }
+    },
+    "其中有模糊匹配的组，请先逐组确认。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some groups were matched fuzzily; check them one by one first."
           }
         }
       }
@@ -2960,6 +3031,16 @@
         }
       }
     },
+    "匹配方式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Matching"
+          }
+        }
+      }
+    },
     "区间": {
       "localizations": {
         "en": {
@@ -3331,6 +3412,16 @@
         }
       }
     },
+    "可以调低相似度阈值，找出写法差异更大的标题。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lower the similarity threshold to find titles written more differently."
+          }
+        }
+      }
+    },
     "可切换统计周期查看更早的记录。阅读时长从启用此功能后开始记录。": {
       "localizations": {
         "en": {
@@ -3447,6 +3538,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Each page switches content type at the top."
+          }
+        }
+      }
+    },
+    "合并全部 %lld 组重复？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge all %lld duplicate groups?"
+          }
+        }
+      }
+    },
+    "合并到选中作品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge into selected"
+          }
+        }
+      }
+    },
+    "合并失败：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge failed: %@"
           }
         }
       }
@@ -4316,6 +4437,16 @@
         }
       }
     },
+    "宽松": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loose"
+          }
+        }
+      }
+    },
     "宽页左右拆分": {
       "localizations": {
         "en": {
@@ -4712,6 +4843,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Merged %@ records"
+          }
+        }
+      }
+    },
+    "已合并 %lld 组": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merged %lld groups"
+          }
+        }
+      }
+    },
+    "已合并 %lld 组。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merged %lld groups."
           }
         }
       }
@@ -6070,6 +6221,16 @@
         }
       }
     },
+    "换源 / 迁移": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Migrate sources"
+          }
+        }
+      }
+    },
     "授权回调无法验证，请重新连接": {
       "localizations": {
         "en": {
@@ -6168,6 +6329,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Controls"
+          }
+        }
+      }
+    },
+    "推荐": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommended"
           }
         }
       }
@@ -6898,6 +7069,16 @@
         }
       }
     },
+    "无法查找重复": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't find duplicates"
+          }
+        }
+      }
+    },
     "无法移除 Google 安全凭据（%d）": {
       "localizations": {
         "en": {
@@ -6955,6 +7136,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Couldn't read Google credentials (%d)"
+          }
+        }
+      }
+    },
+    "无法读取保留作品的章节，阅读进度不能合并；请检查来源后重试": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't read the kept entry's chapters, so reading progress can't be merged. Check the source and try again."
           }
         }
       }
@@ -7572,6 +7764,16 @@
         }
       }
     },
+    "未读": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unread"
+          }
+        }
+      }
+    },
     "未选中": {
       "localizations": {
         "en": {
@@ -7816,6 +8018,16 @@
         }
       }
     },
+    "来源不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source unavailable"
+          }
+        }
+      }
+    },
     "来源不可用，可能已被移除或停用": {
       "extractionState": "manual",
       "localizations": {
@@ -8000,6 +8212,16 @@
         }
       }
     },
+    "查找重复": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find duplicates"
+          }
+        }
+      }
+    },
     "查看仓库": {
       "localizations": {
         "en": {
@@ -8036,6 +8258,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Title"
+          }
+        }
+      }
+    },
+    "标题只是相近，请确认是同一部作品再合并。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The titles are only similar. Make sure they are the same work before merging."
+          }
+        }
+      }
+    },
+    "标题或别名相同（含繁简体）的同类收藏会出现在这里。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Favourites of the same kind with a matching title or alternative title (including Traditional/Simplified Chinese) appear here."
+          }
+        }
+      }
+    },
+    "标题或别名相同（忽略大小写、标点和繁简体），或在追踪站手动关联到同一条目的作品会当作重复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entries with the same title or alternative title (ignoring case, punctuation and Traditional/Simplified Chinese), or linked by you to the same tracking-site entry, count as duplicates."
           }
         }
       }
@@ -8126,6 +8378,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mode"
+          }
+        }
+      }
+    },
+    "模糊": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fuzzy"
+          }
+        }
+      }
+    },
+    "模糊匹配": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fuzzy matching"
           }
         }
       }
@@ -8336,6 +8608,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Updating chapters…"
+          }
+        }
+      }
+    },
+    "正在查找重复…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finding duplicates…"
           }
         }
       }
@@ -8734,6 +9016,16 @@
         }
       }
     },
+    "每组都会合并到选中的那一部。其余条目会移出收藏和历史，已下载的内容和书签会保留。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each group merges into its selected entry. The other entries leave the library and history; downloads and bookmarks are kept."
+          }
+        }
+      }
+    },
     "没有内容": {
       "localizations": {
         "en": {
@@ -8750,6 +9042,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "No matching chapters"
+          }
+        }
+      }
+    },
+    "没有发现重复的收藏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No duplicate favourites found"
           }
         }
       }
@@ -9315,6 +9617,16 @@
         }
       }
     },
+    "点选要保留的那一部。合并会把收藏分类、笔记、统计和追踪并入保留的作品，并保留读得最远的进度。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap the entry to keep. Merging moves categories, notes, statistics and tracking into it and keeps the furthest reading progress."
+          }
+        }
+      }
+    },
     "热门作品": {
       "localizations": {
         "en": {
@@ -9522,6 +9834,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "The file already exists. Choose a new backup file name."
+          }
+        }
+      }
+    },
+    "相似度阈值": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Similarity threshold"
           }
         }
       }
@@ -10908,6 +11230,16 @@
         }
       }
     },
+    "读到第 %@ 话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read to chapter %@"
+          }
+        }
+      }
+    },
     "读完": {
       "localizations": {
         "en": {
@@ -11164,6 +11496,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Back"
+          }
+        }
+      }
+    },
+    "还会把相似度达到阈值的标题、去掉括号副标题后相同的标题，以及自动关联到同一追踪站条目的作品算作重复。数字（季数、卷数）不同，或只是在另一个标题后追加内容（多为续作、外传）的不会模糊匹配。阈值越低结果越多，也越容易误判。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Titles at least this similar, titles equal once bracketed subtitles are dropped, and entries automatically matched to the same tracking-site entry also count. Titles with different numbers (seasons, volumes), or that only add to another title (usually sequels or spin-offs), never match fuzzily. A lower threshold finds more, with more false matches."
           }
         }
       }

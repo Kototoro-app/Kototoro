@@ -26,6 +26,7 @@
 		B10000000000000000000002 /* BatchSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* BatchSelection.swift */; };
 		AF0000000000000000000002 /* MissingSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0000000000000000000012 /* MissingSourcesView.swift */; };
 		AF0000000000000000000001 /* LibraryMigrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0000000000000000000011 /* LibraryMigrationView.swift */; };
+		D7C0000000000000000000A1 /* LibraryDuplicatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7C0000000000000000000A2 /* LibraryDuplicatesView.swift */; };
 		AE0000000000000000000002 /* ReadingStatisticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0000000000000000000012 /* ReadingStatisticsView.swift */; };
 		AE0000000000000000000001 /* ReadingActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0000000000000000000011 /* ReadingActivity.swift */; };
         AC0000000000000000000001 /* TrackingSitesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0000000000000000000002 /* TrackingSitesView.swift */; };
@@ -130,6 +131,7 @@
 		B10000000000000000000004 /* BatchSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchSelectionTests.swift; sourceTree = "<group>"; };
 		B10000000000000000000001 /* BatchSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchSelection.swift; sourceTree = "<group>"; };
 		AF0000000000000000000012 /* MissingSourcesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissingSourcesView.swift; sourceTree = "<group>"; };
+		D7C0000000000000000000A2 /* LibraryDuplicatesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryDuplicatesView.swift; sourceTree = "<group>"; };
 		AF0000000000000000000011 /* LibraryMigrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMigrationView.swift; sourceTree = "<group>"; };
 		AE0000000000000000000012 /* ReadingStatisticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingStatisticsView.swift; sourceTree = "<group>"; };
 		AE0000000000000000000011 /* ReadingActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingActivity.swift; sourceTree = "<group>"; };
@@ -288,6 +290,7 @@
 				B10000000000000000000001 /* BatchSelection.swift */,
 				B21000000000000000000011 /* LibraryCollectionIndex.swift */,
 				AF0000000000000000000011 /* LibraryMigrationView.swift */,
+				D7C0000000000000000000A2 /* LibraryDuplicatesView.swift */,
 				C00000000000000000000012 /* SourceReaderView.swift */,
 				C00000000000000000000013 /* SourceImageFile.swift */,
 				C00000000000000000000014 /* SourceImageLoader.swift */,
@@ -525,6 +528,7 @@
 				B10000000000000000000002 /* BatchSelection.swift in Sources */,
 				B21000000000000000000001 /* LibraryCollectionIndex.swift in Sources */,
 				AF0000000000000000000001 /* LibraryMigrationView.swift in Sources */,
+				D7C0000000000000000000A1 /* LibraryDuplicatesView.swift in Sources */,
 				C00000000000000000000002 /* SourceReaderView.swift in Sources */,
 				C00000000000000000000003 /* SourceImageFile.swift in Sources */,
 				C00000000000000000000004 /* SourceImageLoader.swift in Sources */,

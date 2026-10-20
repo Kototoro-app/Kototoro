@@ -219,46 +219,86 @@ class SourceLibrary(
         database.useWriterConnection { connection ->
             connection.immediateTransaction {
                 currentCoroutineContext().ensureActive()
-                val storedOld = find(old.id)
-                storedOld?.let { requireSameIdentity(requireNotNull(database.getMangaDao().find(old.id)).manga, old) }
-                val original = storedOld?.takeIf { !it.chapters.isNullOrEmpty() } ?: old
-                val dao = database.getMigrationDao()
-                val favourites = database.getFavouritesDao()
-                val history = database.getHistoryDao()
-                val prefs = database.getPreferencesDao()
-                val links = database.getTrackingSiteDao()
-                val tracks = database.getTracksDao()
-                val snapshot = MigrationSnapshot(favourites.findActiveByMangaId(old.id), history.find(old.id),
-                    prefs.find(old.id), links.findLinksByManga(old.id), tracks.find(old.id),
-                    dao.findNotes(old.id), dao.findSessions(old.id), dao.findJumpPoints(old.id))
-                val previousTargetHistory = history.find(target.id)
-                val plan = MigrationPlanRules.plan(original.migrationInput(snapshot.history?.chapterId),
-                    target.migrationInput(null), snapshot,
-                    if (keepOriginal) MigrationMode.COPY else MigrationMode.REPLACE,
-                    MigrationDataFlag.ALL, kotlin.time.Clock.System.now().toEpochMilliseconds())
-                saveInTransaction(target)
-                if (plan.deleteOldFavourites) favourites.delete(old.id)
-                for (entry in plan.favouritesToUpsert) {
-                    // Existing target memberships keep their own pin and sorting preference.
-                    if (favourites.find(target.id, entry.categoryId)?.deletedAt != 0L) favourites.upsert(entry)
-                }
-                if (plan.deleteOldHistory) history.delete(old.id)
-                plan.historyToUpsert?.let {
-                    if (previousTargetHistory == null || previousTargetHistory.updatedAt < it.updatedAt) history.upsert(it)
-                }
-                plan.prefsToUpsert?.let { if (prefs.find(target.id) == null) prefs.upsert(it) }
-                plan.trackingLinksToDelete.forEach { links.deleteLink(it.service, it.remoteId, it.mangaId) }
-                plan.trackingLinksToUpsert.forEach { links.upsertLink(it) }
-                if (plan.deleteOldTrack) tracks.delete(old.id)
-                plan.trackToUpsert?.let { tracks.upsert(it) }
-                if (plan.notesToUpdate.isNotEmpty()) dao.updateNotes(plan.notesToUpdate)
-                if (plan.notesToInsert.isNotEmpty()) dao.insertNotes(plan.notesToInsert)
-                if (plan.moveStats) dao.moveStats(old.id, target.id)
-                if (plan.sessionsToUpdate.isNotEmpty()) dao.updateSessions(plan.sessionsToUpdate)
-                if (plan.jumpPointsToUpdate.isNotEmpty()) dao.updateJumpPoints(plan.jumpPointsToUpdate)
+                migrateInTransaction(old, target, if (keepOriginal) MigrationMode.COPY else MigrationMode.REPLACE,
+                    MigrationDataFlag.ALL, forceHistory = false, keepTargetTrack = false)
                 currentCoroutineContext().ensureActive()
             }
         }
+    }
+
+    /**
+     * Android's duplicate merge: every duplicate folds into [keep] in one transaction. Categories, notes, stats and
+     * tracking links move over; only [progressFrom] (the duplicate read furthest beyond [keep]) moves its reading
+     * progress, so the furthest progress survives. The duplicates leave favourites and history, but their rows stay
+     * (downloads, bookmarks), and the kept entry's own update tracking is kept.
+     */
+    suspend fun mergeDuplicates(keep: SourceContent, duplicates: List<SourceContent>, progressFrom: Long?) {
+        require(duplicates.isNotEmpty() && duplicates.none { it.id == keep.id } &&
+            duplicates.map { it.id }.distinct().size == duplicates.size)
+        require(progressFrom == null || duplicates.any { it.id == progressFrom })
+        require(progressFrom == null || !keep.chapters.isNullOrEmpty()) { "无法读取保留作品的章节，进度不能合并" }
+        database.useWriterConnection { connection ->
+            connection.immediateTransaction {
+                currentCoroutineContext().ensureActive()
+                requireSameIdentity(requireNotNull(database.getMangaDao().find(keep.id)) { "保留的作品已不在作品库" }.manga, keep)
+                for (duplicate in duplicates) {
+                    val takeProgress = duplicate.id == progressFrom
+                    migrateInTransaction(duplicate, keep, MigrationMode.REPLACE,
+                        if (takeProgress) MigrationDataFlag.ALL else MigrationDataFlag.ALL - MigrationDataFlag.PROGRESS,
+                        forceHistory = takeProgress, keepTargetTrack = true)
+                    // The duplicate is gone from the library; do not leave it behind in history.
+                    database.getHistoryDao().delete(duplicate.id)
+                }
+                currentCoroutineContext().ensureActive()
+            }
+        }
+    }
+
+    private suspend fun migrateInTransaction(
+        old: SourceContent,
+        target: SourceContent,
+        mode: MigrationMode,
+        flags: Set<MigrationDataFlag>,
+        forceHistory: Boolean,
+        keepTargetTrack: Boolean,
+    ) {
+        val storedOld = find(old.id)
+        storedOld?.let { requireSameIdentity(requireNotNull(database.getMangaDao().find(old.id)).manga, old) }
+        val original = storedOld?.takeIf { !it.chapters.isNullOrEmpty() } ?: old
+        val dao = database.getMigrationDao()
+        val favourites = database.getFavouritesDao()
+        val history = database.getHistoryDao()
+        val prefs = database.getPreferencesDao()
+        val links = database.getTrackingSiteDao()
+        val tracks = database.getTracksDao()
+        val snapshot = MigrationSnapshot(favourites.findActiveByMangaId(old.id), history.find(old.id),
+            prefs.find(old.id), links.findLinksByManga(old.id), tracks.find(old.id),
+            dao.findNotes(old.id), dao.findSessions(old.id), dao.findJumpPoints(old.id))
+        val previousTargetHistory = history.find(target.id)
+        val plan = MigrationPlanRules.plan(original.migrationInput(snapshot.history?.chapterId),
+            target.migrationInput(null), snapshot, mode, flags, kotlin.time.Clock.System.now().toEpochMilliseconds())
+        saveInTransaction(target)
+        if (plan.deleteOldFavourites) favourites.delete(old.id)
+        for (entry in plan.favouritesToUpsert) {
+            // Existing target memberships keep their own pin and sorting preference.
+            if (favourites.find(target.id, entry.categoryId)?.deletedAt != 0L) favourites.upsert(entry)
+        }
+        if (plan.deleteOldHistory) history.delete(old.id)
+        plan.historyToUpsert?.let {
+            if (forceHistory || previousTargetHistory == null || previousTargetHistory.updatedAt < it.updatedAt) {
+                history.upsert(it)
+            }
+        }
+        plan.prefsToUpsert?.let { if (prefs.find(target.id) == null) prefs.upsert(it) }
+        plan.trackingLinksToDelete.forEach { links.deleteLink(it.service, it.remoteId, it.mangaId) }
+        plan.trackingLinksToUpsert.forEach { links.upsertLink(it) }
+        if (plan.deleteOldTrack) tracks.delete(old.id)
+        plan.trackToUpsert?.let { if (!keepTargetTrack || tracks.find(target.id) == null) tracks.upsert(it) }
+        if (plan.notesToUpdate.isNotEmpty()) dao.updateNotes(plan.notesToUpdate)
+        if (plan.notesToInsert.isNotEmpty()) dao.insertNotes(plan.notesToInsert)
+        if (plan.moveStats) dao.moveStats(old.id, target.id)
+        if (plan.sessionsToUpdate.isNotEmpty()) dao.updateSessions(plan.sessionsToUpdate)
+        if (plan.jumpPointsToUpdate.isNotEmpty()) dao.updateJumpPoints(plan.jumpPointsToUpdate)
     }
 
     private fun SourceContent.migrationInput(historyChapterId: Long?): MigrationContentInput {

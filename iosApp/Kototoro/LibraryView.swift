@@ -42,6 +42,7 @@ struct LibraryView: View {
     @State private var categoryContent: CategoryContent?
     @State private var managingCategories = false
     @State private var migrating = false
+    @State private var findingDuplicates = false
     /// Batch selection: keys of the works chosen, kept across searches and categories until done.
     @State private var selecting = false
     @State private var selected: Set<String> = []
@@ -102,42 +103,44 @@ struct LibraryView: View {
             }
             // Swiping sideways over the works moves to the previous / next category, like the chips do.
             .gesture(HorizontalSwipeGesture(onEnded: swipe))
-            .safeAreaInset(edge: .bottom) { if selecting { selectionBar } }
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("作品库")
+            .navigationTitle(selecting ? String(localized: "已选择 \(selected.count) 部") : String(localized: "作品库"))
             .navigationBarTitleDisplayMode(.inline)
             // The system search field under the title; the search tab stays the app-wide search.
             .pageSearch(text: $query, prompt: String(localized: "搜索作品库"))
             .refreshable { await library.refresh() }
             .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    if selecting {
-                        Button("完成") { endSelection() }.accessibilityIdentifier("library.selectDone")
-                    } else {
-                        Button {
-                            selecting = true
-                        } label: { Label("选择", systemImage: "checkmark.circle") }
-                            .disabled(items.isEmpty)
-                            .accessibilityIdentifier("library.select")
-                        Button {
-                            migrationSubset = nil
-                            migrating = true
-                        } label: { Label("批量换源", systemImage: "arrow.triangle.swap") }
-                            .accessibilityIdentifier("library.migrate")
-                    }
-                    if spacesEnabled { SpaceMenu() }
-                    ContentListModeMenu(mode: $mode) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("排序").font(.subheadline)
-                            Picker("排序", selection: $sort) {
-                                ForEach(LibrarySort.allCases) { Text($0.title).tag($0) }
+                if selecting {
+                    selectionToolbar
+                } else {
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        if spacesEnabled { SpaceMenu() }
+                        ContentListModeMenu(mode: $mode) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("排序").font(.subheadline)
+                                Picker("排序", selection: $sort) {
+                                    ForEach(LibrarySort.allCases) { Text($0.title).tag($0) }
+                                }
+                                .pickerStyle(.segmented)
+                                .accessibilityIdentifier("library.sort")
                             }
-                            .pickerStyle(.segmented)
-                            .accessibilityIdentifier("library.sort")
                         }
+                        Menu {
+                            Button("换源 / 迁移", systemImage: "arrow.triangle.swap") {
+                                migrationSubset = nil
+                                migrating = true
+                            }
+                            .accessibilityIdentifier("library.migrate")
+                            Button("查找重复", systemImage: "square.on.square") { findingDuplicates = true }
+                                .accessibilityIdentifier("library.duplicates")
+                        } label: {
+                            Label("更多", systemImage: "ellipsis")
+                        }
+                        .accessibilityIdentifier("library.more")
                     }
                 }
             }
+            .navigationDestination(isPresented: $findingDuplicates) { LibraryDuplicatesView() }
             .navigationDestination(isPresented: $migrating) {
                 LibraryMigrationView(favourites: migrationSubset ?? kindFavourites.map(\.content))
             }
@@ -203,44 +206,42 @@ struct LibraryView: View {
         (collection.byCategory[category] ?? []).filter { $0.categoryIds.contains { $0.int32Value != category } }.count
     }
 
-    private var selectionBar: some View {
+    /// Selection temporarily replaces the top bar's buttons, as a source's list does.
+    @ToolbarContentBuilder
+    private var selectionToolbar: some ToolbarContent {
         let visibleKeys = Set(items.map { ContentMarks.key($0.content) })
         let allSelected = !visibleKeys.isEmpty && visibleKeys.isSubset(of: selected)
-        return VStack(spacing: 8) {
-            Text("已选 \(selected.count) 部").font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
-            GlassEffectContainer(spacing: 8) {
-                HStack(spacing: 8) {
-                    Button(allSelected ? String(localized: "取消全选") : selectedCategory == nil ? String(localized: "全选（\(visibleKeys.count)）")
-                           : String(localized: "全选本分类（\(visibleKeys.count)）")) {
-                        selected = BatchSelection.toggling(visible: visibleKeys, in: selected)
-                    }
-                    .accessibilityIdentifier("library.selectAll")
-                    Button("换源", systemImage: "arrow.triangle.swap") {
-                        migrationSubset = selectedContents
-                        migrating = true
-                    }
-                    .disabled(selected.isEmpty)
-                    .accessibilityIdentifier("library.selection.migrate")
-                    if let category = selectedCategory {
-                        Button("移出分类", systemImage: "folder.badge.minus") {
-                            let contents = selectedContents
-                            Task {
-                                try? await library.updateCategories(contents, changes: [category: false])
-                                endSelection()
-                            }
-                        }
-                        .disabled(selected.isEmpty)
-                        .accessibilityIdentifier("library.selection.removeFromCategory")
-                    }
-                    Button("取消收藏", systemImage: "heart.slash", role: .destructive) { confirmingUnfavourite = true }
-                        .disabled(selected.isEmpty)
-                        .accessibilityIdentifier("library.selection.unfavourite")
-                }
-                .buttonStyle(.glass)
-                .font(.subheadline)
-            }
+        ToolbarItem(placement: .topBarLeading) {
+            Button("退出多选", systemImage: "xmark") { endSelection() }
+                .accessibilityIdentifier("library.selectDone")
         }
-        .padding(.horizontal).padding(.vertical, 8)
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            Button(allSelected ? String(localized: "取消全选") : String(localized: "全选")) {
+                selected = BatchSelection.toggling(visible: visibleKeys, in: selected)
+            }
+            .disabled(visibleKeys.isEmpty)
+            .accessibilityIdentifier("library.selectAll")
+            Button("换源", systemImage: "arrow.triangle.swap") {
+                migrationSubset = selectedContents
+                migrating = true
+            }
+            .disabled(selected.isEmpty)
+            .accessibilityIdentifier("library.selection.migrate")
+            if let category = selectedCategory {
+                Button("移出分类", systemImage: "folder.badge.minus") {
+                    let contents = selectedContents
+                    Task {
+                        try? await library.updateCategories(contents, changes: [category: false])
+                        endSelection()
+                    }
+                }
+                .disabled(selected.isEmpty)
+                .accessibilityIdentifier("library.selection.removeFromCategory")
+            }
+            Button("取消收藏", systemImage: "heart.slash", role: .destructive) { confirmingUnfavourite = true }
+                .disabled(selected.isEmpty)
+                .accessibilityIdentifier("library.selection.unfavourite")
+        }
     }
 
     // MARK: Categories
@@ -400,6 +401,11 @@ struct LibraryView: View {
                     SourceDetailsView(runtime: runtime, content: item.content)
                 } actions: { item in
                     Button("整理分类", systemImage: "folder") { categoryContent = CategoryContent(content: item.content) }
+                    Button("选择多个", systemImage: "checkmark.circle") {
+                        selected = [ContentMarks.key(item.content)]
+                        selecting = true
+                    }
+                    .accessibilityIdentifier("library.select")
                     Button("取消收藏", systemImage: "heart.slash", role: .destructive) {
                         Task { try? await library.setFavourite(item.content, favourite: false) }
                     }

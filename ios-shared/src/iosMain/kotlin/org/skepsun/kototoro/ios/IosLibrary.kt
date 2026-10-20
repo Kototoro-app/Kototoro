@@ -41,9 +41,13 @@ class IosLibrary {
     private val sourceRefs = AtomicReference<Map<String, SourceRef>>(emptyMap())
     internal val records by lazy { SourceLibrary(database) { sourceRefs.load()[it] } }
     val tracking by lazy { IosTracking(this) }
+    val duplicates by lazy { IosLibraryDuplicates(this) }
     val statistics by lazy { IosStatistics(this) }
     val recovery by lazy { IosLibraryRecovery(this) }
     val googleDriveSync by lazy { IosGoogleDriveSync(this) }
+
+    /** Sources of the current catalog; works of other sources cannot be opened or refreshed here. */
+    internal val knownSources: Set<String> get() = sourceRefs.load().keys
 
     fun updateSources(sources: List<IosSource>) {
         sourceRefs.store(sources.associate { it.name to SourceRef(it.name, it.locale, it.contentType) })

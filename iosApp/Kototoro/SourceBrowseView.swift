@@ -270,11 +270,11 @@ struct SourceBrowseView: View {
         .navigationTitle(selecting ? String(localized: "已选择 \(selectedKeys.count) 部") : model.source.title)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(selecting)
-        // A search button in the toolbar (top right), as standard iOS list screens do, instead of a drawer.
-        .searchable(text: $model.query, isPresented: $searchPresented, placement: .toolbar,
+        // The system search field under the title, as the main pages place theirs: pulling down reveals it and
+        // scrolling the works hides it again.
+        .searchable(text: $model.query, isPresented: $searchPresented,
+                    placement: .navigationBarDrawer(displayMode: .automatic),
                     prompt: "在\(model.source.title)中搜索")
-        .searchToolbarBehavior(.minimize)
-        .toolbar(removing: selecting ? .search : nil)
         .onSubmit(of: .search) { Task { await model.submitSearch() } }
         .onChange(of: model.query) { _, value in
             if value.isEmpty { Task { await model.clearSearch() } }
@@ -307,8 +307,6 @@ struct SourceBrowseView: View {
                     .accessibilityIdentifier("browse.selection.favourite")
                 }
             } else {
-                // The minimized search sits with the other actions at the top right.
-                DefaultToolbarItem(kind: .search, placement: .topBarTrailing)
                 ToolbarItem(placement: .topBarTrailing) { ContentListModeMenu(mode: $mode) }
                 // Filtering stays on the chip at the start of the category row; the toolbar opens the source's settings.
                 ToolbarItem(placement: .topBarTrailing) {
