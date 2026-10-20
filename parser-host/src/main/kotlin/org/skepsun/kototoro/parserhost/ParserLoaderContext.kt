@@ -18,8 +18,13 @@ internal class ParserLoaderContext(
     private val siblingParser: (String) -> ContentParser,
 ) : ContentLoaderContext() {
 
-    override val httpClient: OkHttpClient get() = platform.httpClient
-    override val cookieJar: CookieJar get() = platform.cookieJar
+    /** The platform's client, with each parser's headers and interceptor applied to the requests it tags. */
+    override val httpClient: OkHttpClient by lazy {
+        platform.httpClient.newBuilder()
+            .addInterceptor(ParserRequestInterceptor({ platform.defaultUserAgent }, siblingParser))
+            .build()
+    }
+    override val cookieJar: CookieJar by lazy { ParserCookieJar(platform.cookieJar) }
 
     override fun newParserInstance(source: ContentSource): ContentParser = siblingParser(source.name)
 

@@ -4,6 +4,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import okio.Path.Companion.toPath
 import org.skepsun.kototoro.core.source.SourceChapterContent
+import org.skepsun.kototoro.core.source.SourceChapterSection
 import org.skepsun.kototoro.core.source.SourceContentImage
 import org.skepsun.kototoro.local.shared.LocalBookReader
 import org.skepsun.kototoro.local.shared.LocalFormat
@@ -15,7 +16,10 @@ import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.zip.ZipFile
 
-/** EPUB-only sources publish a whole volume instead of HTML pages. Keep the source's client and identity. */
+/**
+ * EPUB-only sources publish a whole volume instead of HTML pages. Keep the source's client and identity; the volume's
+ * own chapters are its sections.
+ */
 internal class ParserEpubContent(private val requests: ParserImageRequests, private val assets: Path) {
     suspend fun load(parser: ContentParser, url: String, title: String): SourceChapterContent {
         val context = currentCoroutineContext()
@@ -65,6 +69,8 @@ internal class ParserEpubContent(private val requests: ParserImageRequests, priv
             val book = reader.read(path, LocalFormat.EPUB, title)
             val html = StringBuilder()
             val images = linkedMapOf<String, SourceContentImage>()
+            // The book's chapters stay addressable, so a download can list them like Android's EPUB volume groups.
+            val sections = ArrayList<SourceChapterSection>(book.chapters.size)
             for (chapter in book.chapters) {
                 context.ensureActive()
                 val content = reader.chapterContent(path, chapter) { _, bytes ->
@@ -78,12 +84,13 @@ internal class ParserEpubContent(private val requests: ParserImageRequests, priv
                     } finally { Files.deleteIfExists(temporary) }
                     target.toUri().toASCIIString()
                 }
+                sections += SourceChapterSection(chapter.title, html.length)
                 html.append(content.html).append('\n')
                 if (html.length > MAXIMUM_TEXT) throw IOException("EPUB text exceeds configured limit")
                 content.images.forEach { images[it.url] = it }
             }
             if (html.isBlank()) throw IOException("EPUB has no readable text")
-            return SourceChapterContent(html.toString(), images.values.toList())
+            return SourceChapterContent(html.toString(), images.values.toList(), sections)
         } finally { Files.deleteIfExists(file) }
     }
 

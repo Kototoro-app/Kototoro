@@ -92,11 +92,14 @@ class MihonIosPlatform : SourceHostPreferenceUiPlatform, SourceHostRuntimePlatfo
         previousInjekt = Injekt
         Injekt = InjektScope(KoinRegistrar())
         WebView.setProviderFactory { throw UnsupportedOperationException("WKWebView is not connected") }
+        // Read before the store loads it: its own startup load loses cookies of dotted domains.
+        val savedCookies = app.getSharedPreferences("cookie_store", 0).all
         app.onCreate()
         previousCookies = CookieHandler.getDefault()
         val helper = try { koin.koin.get<NetworkHelper>() } finally {
             ownedCookies = CookieHandler.getDefault().takeUnless { it === previousCookies }
         }
+        restoreIosCookies(helper.cookieStore, savedCookies)
         // Kototoro's per-source domain setting reaches extensions whose address R8 folded into a constant.
         client = installDomainRewrite(helper)
         installWebView()

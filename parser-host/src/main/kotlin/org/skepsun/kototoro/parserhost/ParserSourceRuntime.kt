@@ -158,12 +158,15 @@ class ParserSourceRuntime(
         SourceBrowserSession("https://$domain", userAgent?.takeIf(String::isNotBlank) ?: platform.defaultUserAgent)
     }
 
-    /** Parser requests share the platform's cookie jar, so the clearance reaches every parser of that site. */
+    /**
+     * Parser requests share the platform's cookie jar, so the clearance reaches every parser of that site. A login
+     * made in the browser stays across restarts, as in Android's WebView store.
+     */
     override suspend fun importCookies(sourceName: String, url: String, cookies: List<String>): Int =
         execute(sourceName) { _ ->
             val httpUrl = url.toHttpUrlOrNull() ?: throw SourceInvalidArgumentException()
             val parsed = cookies.mapNotNull { Cookie.parse(httpUrl, it) }
-            platform.cookieJar.saveFromResponse(httpUrl, parsed)
+            ParserCookieJar(platform.cookieJar).saveFromResponse(httpUrl, parsed)
             parsed.size
         }
 

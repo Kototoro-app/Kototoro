@@ -63,9 +63,20 @@ data class SourceExternalTrack(val url: String, val lang: String, val headers: M
 @Serializable
 data class SourceContentImage(val url: String, val headers: Map<String, String> = emptyMap())
 
-/** The text of a novel chapter as HTML (images may keep their original URLs) plus the images it uses. */
+/**
+ * The text of a novel chapter as HTML (images may keep their original URLs) plus the images it uses. A whole book
+ * (an EPUB download) also lists its own chapters as [sections], in reading order.
+ */
 @Serializable
-data class SourceChapterContent(val html: String, val images: List<SourceContentImage> = emptyList())
+data class SourceChapterContent(
+    val html: String,
+    val images: List<SourceContentImage> = emptyList(),
+    val sections: List<SourceChapterSection> = emptyList(),
+)
+
+/** A chapter of a book inside [SourceChapterContent.html]: its text starts at character [start]. */
+@Serializable
+data class SourceChapterSection(val title: String, val start: Int)
 
 @Serializable
 data class SourcePage(

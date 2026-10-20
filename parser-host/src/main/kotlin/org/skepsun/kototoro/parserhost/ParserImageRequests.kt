@@ -11,7 +11,6 @@ import org.skepsun.kototoro.core.source.SourceInvalidArgumentException
 import org.skepsun.kototoro.parsers.ContentParser
 import java.io.IOException
 import java.io.InputStream
-import java.net.IDN
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
@@ -68,19 +67,7 @@ internal class ParserImageRequests(private val platform: ParserPlatform) {
         } catch (_: IllegalArgumentException) {
             throw SourceInvalidArgumentException()
         }
-        val headers = explicit.headers.newBuilder()
-        val parserHeaders = parser.getRequestHeaders()
-        for (index in 0 until parserHeaders.size) {
-            val name = parserHeaders.name(index)
-            if (explicit.header(name) == null) headers[name] = parserHeaders.value(index)
-        }
-        if (explicit.header("User-Agent") == null && headers["User-Agent"] == null) {
-            headers["User-Agent"] = platform.defaultUserAgent
-        }
-        if (headers["Referer"] == null) {
-            runCatching { headers["Referer"] = "https://${IDN.toASCII(parser.domain)}/" }
-        }
-        return explicit.newBuilder().headers(headers.build()).build()
+        return explicit.newBuilder().headers(parserRequestHeaders(parser, explicit.headers, platform.defaultUserAgent)).build()
     }
 
     suspend fun execute(parser: ContentParser, request: Request): Response {
