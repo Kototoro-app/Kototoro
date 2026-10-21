@@ -86,6 +86,48 @@ jobs:
             if ($process.ExitCode -ne 0) { throw "WebView2 Runtime installation failed: $($process.ExitCode)" }
           }
 
+      # Hosted runners have no GPU driver, so no Vulkan loader: the packaged libmpv imports vulkan-1.dll and the
+      # ncnn upscalers need a Vulkan device. Install the Khronos loader and Mesa's CPU driver (lavapipe) so the
+      # distribution test still plays video and upscales pages with the bundled components.
+      - name: Install software Vulkan
+        run: |
+          $downloads = Join-Path "$env:RUNNER_TEMP" 'vulkan'
+          New-Item -ItemType Directory -Path "$downloads" -Force | Out-Null
+          $inputs = @(
+            @{ Name = 'VulkanRT-X64-1.4.350.0-Installer.exe'
+               Url = 'https://sdk.lunarg.com/sdk/download/1.4.350.0/windows/VulkanRT-X64-1.4.350.0-Installer.exe'
+               Sha256 = '2e26a920afe0cc7adb49c3133fb9dd36fc7a4a1e93277717800c48b32eefffdf' },
+            @{ Name = 'mesa3d-26.2.4-release-msvc.7z'
+               Url = 'https://github.com/pal1000/mesa-dist-win/releases/download/26.2.4/mesa3d-26.2.4-release-msvc.7z'
+               Sha256 = '351fc8c8b695878ffb3eaa044b3ead08672a48b1a045e3c3e3975811df0f6695' }
+          )
+          foreach ($item in $inputs) {
+            $file = Join-Path "$downloads" $item.Name
+            & curl.exe --fail --location --retry 3 --connect-timeout 20 --silent --show-error --output "$file" $item.Url
+            if ($LASTEXITCODE -ne 0) { throw "Download failed: $($item.Name)" }
+            if ((Get-FileHash -LiteralPath "$file" -Algorithm SHA256).Hash -ne $item.Sha256) {
+              throw "SHA-256 mismatch: $($item.Name)"
+            }
+          }
+          $process = Start-Process -FilePath (Join-Path "$downloads" $inputs[0].Name) -ArgumentList '/S' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Vulkan Runtime installation failed: $($process.ExitCode)" }
+          if (!(Test-Path -LiteralPath "$env:SystemRoot/System32/vulkan-1.dll")) { throw 'vulkan-1.dll was not installed.' }
+          $mesa = Join-Path "$downloads" 'mesa'
+          & 7z x -y "-o$mesa" (Join-Path "$downloads" $inputs[1].Name) 'x64/*' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Mesa extraction failed.' }
+          $icd = @(Get-ChildItem -LiteralPath "$mesa/x64" -Filter 'lvp_icd*.json')
+          if ($icd.Count -ne 1) { throw "Expected one lavapipe ICD manifest, found $($icd.Count)." }
+          # The test launches the packaged EXE with a reduced environment, so register the driver machine-wide.
+          $drivers = 'HKLM:\SOFTWARE\Khronos\Vulkan\Drivers'
+          New-Item -Path $drivers -Force | Out-Null
+          New-ItemProperty -Path $drivers -Name $icd[0].FullName -PropertyType DWord -Value 0 -Force | Out-Null
+          $vulkaninfo = Get-Command vulkaninfo -ErrorAction SilentlyContinue
+          if ($vulkaninfo) {
+            $summary = & $vulkaninfo.Source --summary 2>&1 | Out-String
+            Write-Output $summary
+            if ($summary -notmatch 'llvmpipe') { throw 'Vulkan does not expose the lavapipe device.' }
+          }
+
       - name: Build and verify Windows package
         id: package
         env:
