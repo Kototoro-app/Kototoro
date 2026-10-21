@@ -73,4 +73,28 @@ class FavouriteCategoryVisibilityTest {
 
         assertEquals(categories, result)
     }
+
+    @Test
+    fun `picker lists categories holding favourites first`() {
+        val result = orderCategoriesForPicker(categories, favouriteCounts = mapOf(1L to 0, 2L to 7, 3L to 0))
+
+        assertEquals(listOf(2L, 1L, 3L), result.map { it.id })
+    }
+
+    @Test
+    fun `picker keeps the configured order inside each group`() {
+        val result = orderCategoriesForPicker(
+            categories = listOf(category(1), category(2), category(3), category(4)),
+            favouriteCounts = mapOf(1L to 0, 2L to 3, 3L to 0, 4L to 1),
+        )
+
+        assertEquals(listOf(2L, 4L, 1L, 3L), result.map { it.id })
+    }
+
+    @Test
+    fun `picker leaves the list alone until the counts arrive`() {
+        val result = orderCategoriesForPicker(categories, favouriteCounts = emptyMap())
+
+        assertEquals(categories, result)
+    }
 }

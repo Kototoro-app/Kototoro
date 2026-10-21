@@ -24,3 +24,20 @@ internal fun filterCategoriesForSpace(
     val filtered = categories.filter { it.id !in hiddenIds || it.id in keepIds }
     return filtered.ifEmpty { categories }
 }
+
+/**
+ * Order of the "categories to show" picker: the categories that hold favourites in the
+ * current Space come first, empty ones follow.
+ *
+ * A Space built over manga sources owns none of the anime categories and vice versa, so the
+ * long tail of empty rows would otherwise bury the handful of rows worth toggling. Both
+ * groups keep the configured category order (the sort is stable), and while the counts are
+ * not loaded yet the list is returned untouched.
+ */
+internal fun orderCategoriesForPicker(
+    categories: List<FavouriteCategory>,
+    favouriteCounts: Map<Long, Int>,
+): List<FavouriteCategory> = when {
+    categories.size < 2 || favouriteCounts.isEmpty() -> categories
+    else -> categories.sortedBy { if (favouriteCounts.getOrDefault(it.id, 0) > 0) 0 else 1 }
+}

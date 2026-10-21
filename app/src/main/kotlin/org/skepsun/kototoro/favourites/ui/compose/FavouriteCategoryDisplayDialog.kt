@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -24,6 +25,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory
+import org.skepsun.kototoro.favourites.domain.orderCategoriesForPicker
 import org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel.CategoryVisibilityState
 
 /**
@@ -33,6 +35,10 @@ import org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel
  * Space shows it. Toggling a box writes the local Space preference only, so the same
  * category can be shown in one Space and hidden in another while the category itself,
  * its members, backups and sync stay exactly as they were.
+ *
+ * Categories that hold favourites in this Space come first: a Space over manga sources
+ * owns none of the anime categories, and burying the six useful rows under twenty empty
+ * ones would hide the actual choice.
  */
 @Composable
 internal fun FavouriteCategoryDisplayDialog(
@@ -41,6 +47,9 @@ internal fun FavouriteCategoryDisplayDialog(
     onShowAll: () -> Unit,
     onDismissRequest: () -> Unit,
 ) {
+    val orderedCategories = remember(state.categories, state.favouriteCounts) {
+        orderCategoriesForPicker(state.categories, state.favouriteCounts)
+    }
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = { Text(stringResource(R.string.favourite_categories_in_space)) },
@@ -54,9 +63,10 @@ internal fun FavouriteCategoryDisplayDialog(
                         modifier = Modifier.padding(bottom = 12.dp),
                     )
                 }
-                items(state.categories, key = { it.id }) { category ->
+                items(orderedCategories, key = { it.id }) { category ->
                     CategoryShownRow(
                         category = category,
+                        favouriteCount = state.favouriteCounts.getOrDefault(category.id, 0),
                         isShown = category.id !in state.hiddenCategoryIds,
                         onShownChanged = { onShownChanged(category.id, it) },
                     )
@@ -83,6 +93,7 @@ internal fun FavouriteCategoryDisplayDialog(
 @Composable
 private fun CategoryShownRow(
     category: FavouriteCategory,
+    favouriteCount: Int,
     isShown: Boolean,
     onShownChanged: (Boolean) -> Unit,
 ) {
@@ -105,6 +116,14 @@ private fun CategoryShownRow(
                 painter = painterResource(R.drawable.ic_eye_off),
                 contentDescription = stringResource(R.string.category_hidden_from_shelf),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (favouriteCount > 0) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = favouriteCount.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Spacer(modifier = Modifier.width(8.dp))

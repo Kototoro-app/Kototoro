@@ -111,13 +111,15 @@ class FavouritesContainerViewModel @Inject constructor(
 
     /**
      * What the "categories to show" editor of the current Space needs: every category,
-     * including the ones hidden from the library, plus the currently hidden ids.
+     * including the ones hidden from the library, the currently hidden ids, and how many
+     * favourites each category holds in this Space.
      * Null when no Space is active, which is also when the editor entry point is hidden.
      */
     data class CategoryVisibilityState(
         val spaceId: SpaceId,
         val categories: List<FavouriteCategory>,
         val hiddenCategoryIds: Set<Long>,
+        val favouriteCounts: Map<Long, Int> = emptyMap(),
     )
 
     val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { this.listMode }
@@ -181,22 +183,6 @@ class FavouritesContainerViewModel @Inject constructor(
             }
         }
         .distinctUntilChanged()
-
-    val categoryVisibility: StateFlow<CategoryVisibilityState?> = combine(
-        activeSpaceId,
-        favouritesRepository.observeCategories().withErrorHandling(),
-        hiddenCategoryIds,
-    ) { spaceId, categories, hidden ->
-        if (spaceId == null || categories.isEmpty()) {
-            null
-        } else {
-            CategoryVisibilityState(
-                spaceId = spaceId,
-                categories = categories,
-                hiddenCategoryIds = hidden,
-            )
-        }
-    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
     /** Shows or hides one category in the current Space only; shared data stays untouched. */
     fun setCategoryShownInSpace(categoryId: Long, isShown: Boolean) {
@@ -278,6 +264,38 @@ class FavouritesContainerViewModel @Inject constructor(
             SharingStarted.WhileSubscribed(5_000),
             FavouriteLibraryUiState(),
         )
+
+    /**
+     * Favourites per category as the current Space shows them. A Space built over manga
+     * sources leaves its anime categories empty, so the "categories to show" picker knows
+     * which rows are worth putting first.
+     */
+    private val favouriteCounts: StateFlow<Map<Long, Int>> = libraryState
+        .map { it.categoryCounts }
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /**
+     * State of the per-Space category picker: the full category list (so hidden and
+     * shelf-hidden ones stay reachable), the ids this Space hides, and the counts used to
+     * order the rows. Null outside a Space, where every category is listed anyway.
+     */
+    val categoryVisibility: StateFlow<CategoryVisibilityState?> = combine(
+        activeSpaceId,
+        favouritesRepository.observeCategories().withErrorHandling(),
+        hiddenCategoryIds,
+        favouriteCounts,
+    ) { spaceId, categories, hidden, counts ->
+        if (spaceId == null || categories.isEmpty()) {
+            null
+        } else {
+            CategoryVisibilityState(
+                spaceId = spaceId,
+                categories = categories,
+                hiddenCategoryIds = hidden,
+                favouriteCounts = counts,
+            )
+        }
+    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.WhileSubscribed(5_000), null)
 
 
     // ---------------------------------------------------------------------
