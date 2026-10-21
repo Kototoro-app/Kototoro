@@ -6,6 +6,9 @@
   * fixture_reader_chapters.cbz / fixture_reader_download.cbz — automatic chapter turns and offline repair.
   * fixture_reader_directory.cbz — scroll-to-panel handoff through a long chapter directory.
   * fixture_details_layout.cbz — long synopsis and chapters for native reading-toolbar visibility.
+  * fixture_details_title.cbz — a title far longer than the details header's six-line open budget.
+  * fixture_title_short.cbz / fixture_title_two_lines.cbz / fixture_title_three_lines.cbz / fixture_title_token.cbz —
+    titles that fit the folded line budget, plus one long token with no break opportunity.
   * fixture_reader_horizontal.cbz — horizontal reading direction, zoom and anchored restore.
   * fixture_reader_pull_long.cbz — explicit previous-chapter last-page restore.
   * fixture_reader_window.cbz — bounded paging windows across three chapters.
@@ -120,6 +123,37 @@ for storage in storages:
         }, ensure_ascii=False))
         for chapter in range(1, 61):
             archive.writestr(f"{chapter:02d}/001.png", png(300, 200, (60, 120, 180)))
+    with zipfile.ZipFile(os.path.join(storage, "fixture_details_title.cbz"), "w") as archive:
+        archive.writestr("index.json", json.dumps({
+            # Far more than the six lines the details header opens to, so the fold/expand budget is observable.
+            "title": "超长标题折叠测试：" + "山海来信与远方旅人的相遇，在漫长的旅途中写下了无数的故事与眷恋。" * 4,
+            "description": "标题折叠回归：折叠三行，展开最多六行。",
+        }, ensure_ascii=False))
+        archive.writestr("001.png", png(300, 420, (200, 60, 60)))
+    with zipfile.ZipFile(os.path.join(storage, "fixture_title_short.cbz"), "w") as archive:
+        archive.writestr("index.json", json.dumps({
+            "title": "短标题",
+            "description": "单行标题：折叠状态就是完整标题。",
+        }, ensure_ascii=False))
+        archive.writestr("001.png", png(300, 420, (70, 150, 90)))
+    with zipfile.ZipFile(os.path.join(storage, "fixture_title_two_lines.cbz"), "w") as archive:
+        archive.writestr("index.json", json.dumps({
+            "title": "两行标题回归用例正好占满两行文字的完整内容",
+            "description": "两行标题：折叠显示全部两行。",
+        }, ensure_ascii=False))
+        archive.writestr("001.png", png(300, 420, (70, 110, 200)))
+    with zipfile.ZipFile(os.path.join(storage, "fixture_title_three_lines.cbz"), "w") as archive:
+        archive.writestr("index.json", json.dumps({
+            "title": "三行标题回归用例折叠时应当完整显示三行文字内容不再截断",
+            "description": "三行标题：折叠显示全部三行。",
+        }, ensure_ascii=False))
+        archive.writestr("001.png", png(300, 420, (150, 90, 200)))
+    with zipfile.ZipFile(os.path.join(storage, "fixture_title_token.cbz"), "w") as archive:
+        archive.writestr("index.json", json.dumps({
+            "title": "LonelyTokenWithNoSpacesSoSwiftUIMustDecideWhereToBreakTheLine2026WEB1080p",
+            "description": "无空格长单词：必须在文字列内换行，而不是压成一行省略号。",
+        }, ensure_ascii=False))
+        archive.writestr("001.png", png(300, 420, (200, 120, 60)))
     with zipfile.ZipFile(os.path.join(storage, "fixture_reader_download.cbz"), "w") as archive:
         archive.writestr("001.png", png(300, 420, (200, 60, 60)))
         archive.writestr("002.png", png(300, 420, (60, 60, 200)))

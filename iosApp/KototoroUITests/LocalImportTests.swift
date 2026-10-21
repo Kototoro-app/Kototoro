@@ -177,6 +177,89 @@ final class LocalImportTests: XCTestCase {
     }
 
     @MainActor
+    func testLongDetailsTitleExpandsAndCollapsesWithinTheAndroidLineBudget() throws {
+        // The fixture title needs far more than six lines at a phone width; Android folds it at three and opens it
+        // to six, never to the whole paragraph, so the read button stays on screen.
+        importFile(source: "LOCAL", file: "fixture_details_title", expectImport: false)
+        let work = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+            "source.content.", "超长标题折叠测试")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 30), app.debugDescription)
+        work.tap()
+
+        let title = app.staticTexts["details.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 30), app.debugDescription)
+        let folded = title.frame.height
+        XCTAssertGreaterThan(folded, 30, app.debugDescription)
+        // The row stretches over the header text column, so a tap past the end of the last line still toggles.
+        XCTAssertGreaterThan(title.frame.width, app.windows.firstMatch.frame.width * 0.5,
+                             "The whole title row, not only its glyphs, must be tappable")
+        attach("标题折叠三行")
+
+        title.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        let opened = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in title.frame.height > folded + 8 }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [opened], timeout: 5), .completed, app.debugDescription)
+        let openHeight = title.frame.height
+        XCTAssertGreaterThan(openHeight, folded * 1.5, "Tapping the title must show more of it")
+        XCTAssertLessThan(openHeight, folded * 2.6, "An open title stops at six lines, like Android")
+        attach("标题展开六行")
+
+        title.tap()
+        let closed = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in title.frame.height < openHeight - 8 }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 5), .completed, app.debugDescription)
+        XCTAssertEqual(title.frame.height, folded, accuracy: 1.5, "The second tap folds the title again")
+        attach("标题再次折叠")
+    }
+
+    @MainActor
+    func testFoldedTitlesKeepEveryLineTheyNeed() throws {
+        // Android folds at three lines and only enables the tap when the folded title overflows, so a title that
+        // fits must show all of its lines; a title without break opportunities must wrap instead of truncating.
+        let shortHeight = foldedTitleHeight(file: "fixture_title_short", marker: "短标题", shot: "单行标题")
+        let tokenHeight = foldedTitleHeight(file: "fixture_title_token", marker: "LonelyToken", shot: "无空格长单词标题")
+        let twoHeight = foldedTitleHeight(file: "fixture_title_two_lines", marker: "两行标题回归", shot: "两行标题")
+
+        let three = openTitle(file: "fixture_title_three_lines", marker: "三行标题回归")
+        _ = three.frame
+        attach("三行标题折叠状态")
+        let threeHeight = three.frame.height
+        let heights = "short=\(shortHeight) token=\(tokenHeight) two=\(twoHeight) three=\(threeHeight)"
+        XCTAssertGreaterThan(twoHeight, shortHeight * 1.5, "Two-line title keeps both lines while folded (\(heights))")
+        XCTAssertGreaterThan(tokenHeight, shortHeight * 1.5, "Long token wraps instead of one line (\(heights))")
+        XCTAssertGreaterThan(threeHeight, twoHeight * 1.25, "Three-line title keeps all lines (\(heights))")
+        XCTAssertLessThan(threeHeight, shortHeight * 3.6, "The fold still stops at three lines (\(heights))")
+        // Nothing overflows at three lines, so the toggle leaves the height alone.
+        three.tap()
+        XCTAssertEqual(three.frame.height, threeHeight, accuracy: 1.5)
+        attach("三行标题点按后不变")
+    }
+
+    @MainActor
+    private func foldedTitleHeight(file: String, marker: String, shot: String) -> CGFloat {
+        let title = openTitle(file: file, marker: marker)
+        _ = title.frame
+        attach(shot)
+        let height = title.frame.height
+        // Details pushes over the tab bar, so return to the list before the next import.
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        return height
+    }
+
+    @MainActor
+    private func openTitle(file: String, marker: String) -> XCUIElement {
+        importFile(source: "LOCAL", file: file, expectImport: false)
+        let work = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "source.content.", marker)).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 30), app.debugDescription)
+        work.tap()
+        let title = app.staticTexts["details.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 30), app.debugDescription)
+        return title
+    }
+
+    @MainActor
     func testChapterPagePreviewOpensAnExactPageAndReturnsToTheDirectory() throws {
         importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
         app.openDetailsChapters()
@@ -2026,12 +2109,18 @@ final class LocalImportTests: XCTestCase {
         for cell in pickerList.cells.allElementsBoundByIndex where cell.isSelected && cell.label != picked.label {
             if cell.isHittable { cell.tap() }
         }
-        if !picked.isSelected { picked.tap() }
-        // Multiple selection keeps the picker open until 打开 is pressed.
-        for label in ["打开", "Open"] where app.buttons[label].waitForExistence(timeout: 3) {
-            let open = app.buttons[label]
-            XCTAssertTrue(open.isEnabled, app.debugDescription)
-            open.tap(); break
+        // A tap lands on a cell the grid just scrolled only sometimes; ask again before failing the import.
+        var opened = false
+        for _ in 0..<2 where !opened {
+            if !picked.isSelected { picked.tap() }
+            // Multiple selection keeps the picker open until 打开 is pressed.
+            for label in ["打开", "Open"] where app.buttons[label].waitForExistence(timeout: 3) {
+                let open = app.buttons[label]
+                XCTAssertTrue(open.isEnabled, app.debugDescription)
+                open.tap()
+                opened = true
+                break
+            }
         }
         XCTAssertTrue(pickerList.waitForNonExistence(timeout: 15), app.debugDescription)
         if !expectImport { return }

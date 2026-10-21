@@ -72,6 +72,11 @@ MangaUpdates、SIMKL 的目录和账号入口。作品详情的“追踪与资�
 回归：`-only-testing:KototoroUITests/ProductFlowTests/testBrowseAndDetailsShareMultiCategoryFavouritesAndBulkSelection`（需 CMS fixture）。
 详情页头部显示开始／继续阅读按钮；头部阅读区滚出可视范围后，系统底部工具栏才显示章节与阅读入口，
 滚回头部即隐藏。显隐使用 SwiftUI 的 `onScrollVisibilityChange`，不依赖固定滚动距离。
+标题沿用 Android 头部规则：折叠三行，点标题展开最多六行、再点折回；需要更多行的超长标题两种状态都省略，
+不会把阅读按钮挤出屏幕。标题整行宽都可点（不启用 `textSelection`：它会吞掉这个点按，复制改由头部
+「复制标题」按钮提供）。附加标题固定两行，与 Android 一致。回归：
+`-only-testing:KototoroUITests/LocalImportTests/testLongDetailsTitleExpandsAndCollapsesWithinTheAndroidLineBudget`
+（需 `fixture_details_title.cbz`）。
 有续读章节时才显示“从第一章／集开始”的菜单；资料卡隐藏缺失作者与状态的占位，保留有效资料、章节数及进度。
 资料、简介、章节预览和书签卡片使用系统 `regularMaterial`，正文不叠加 Liquid Glass。
 阅读、复制及收藏等操作使用原生玻璃按钮，同组控件置于 `GlassEffectContainer`；

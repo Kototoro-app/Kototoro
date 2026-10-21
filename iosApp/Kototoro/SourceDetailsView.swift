@@ -301,6 +301,26 @@ final class SourceDetailsModel: ObservableObject {
     }
 }
 
+/// Android's details header folds a long title at three lines and opens it no further than six
+/// (`DetailsHeader.detailsTitleMaxLines`), so a pathological title lengthens the header by three lines at most
+/// instead of pushing the read button down the page. The rendered text uses Android's character budget as well;
+/// the copy action still receives the whole title.
+enum DetailsTitlePolicy {
+    static let collapsedLines = 3
+    static let expandedLines = 6
+    /// Android keeps alternative titles at two lines, whatever the main title is doing.
+    static let alternateTitleLines = 2
+    static let renderedCharacterLimit = 1_000
+
+    static func lineLimit(isExpanded: Bool) -> Int {
+        isExpanded ? expandedLines : collapsedLines
+    }
+
+    static func rendered(_ title: String) -> String {
+        String(title.prefix(renderedCharacterLimit))
+    }
+}
+
 struct SourceDetailsView: View {
     @EnvironmentObject private var library: LibraryModel
     @EnvironmentObject private var sources: SourcesModel
@@ -643,19 +663,36 @@ struct SourceDetailsView: View {
                 .onTapGesture { previewingCover = true }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(shown.title)
+                // Tapping toggles between the folded three lines and at most six, like Android; a title that needs
+                // more stays ellipsized in both states, so it can never expand the header without bound. The text is
+                // not selectable: `textSelection` installs the text interaction that swallows this tap on a device,
+                // and the copy button already hands over the whole title. The stretched frame keeps the empty space
+                // to the right of a short last line tappable.
+                let title = DetailsTitlePolicy.rendered(shown.title)
+                Text(title)
                     .font(.title3.weight(.bold))
                     .lineSpacing(2)
-                    .lineLimit(isTitleExpanded ? nil : 3)
-                    .textSelection(.enabled)
-                    .onTapGesture { withAnimation { isTitleExpanded.toggle() } }
+                    .lineLimit(DetailsTitlePolicy.lineLimit(isExpanded: isTitleExpanded))
+                    // Take the height the wrapped text needs at the proposed width. Without this the header lays the
+                    // text out on one line and ellipsizes it, so a two- or three-line title could never be read.
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+                    .onTapGesture {
+                        withAnimation(.snappy) { isTitleExpanded.toggle() }
+                    }
+                    .accessibilityHint(isTitleExpanded ? Text("收起") : Text("展开"))
                     .accessibilityIdentifier("details.title")
+                    // Applying tracking metadata replaces the title; the new one starts folded, as in Android.
+                    .onChange(of: title) { _, _ in isTitleExpanded = false }
 
                 if let alt = shown.altTitles.first, !alt.isEmpty {
                     Text(alt)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(isTitleExpanded ? nil : 2)
+                        .lineLimit(DetailsTitlePolicy.alternateTitleLines)
+                        // Same reason as the main title: the header column would otherwise keep one line only.
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if let src = sources.sources.first(where: { $0.name == shown.sourceName }) {
