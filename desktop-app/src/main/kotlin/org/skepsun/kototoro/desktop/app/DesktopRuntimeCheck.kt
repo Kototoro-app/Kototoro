@@ -38,7 +38,10 @@ internal object DesktopRuntimeCheck {
                         backups.preview(backup).use { archive ->
                             check(archive.counts.keys == setOf(BackupSection.CONTENTS, BackupSection.CATEGORIES,
                                 BackupSection.FAVOURITES, BackupSection.HISTORY, BackupSection.SOURCES,
-                                BackupSection.BOOKMARKS, BackupSection.STATS))
+                                BackupSection.BOOKMARKS, BackupSection.STATS, BackupSection.SOURCE_ORIGINS,
+                                BackupSection.EXTENSION_REPOS, BackupSection.TRACKS, BackupSection.TRACK_LOGS)) {
+                                "Unexpected backup sections: ${archive.counts.keys}"
+                            }
                             check(archive.otherEntries.isEmpty())
                         }
                         result.setProperty("backup", "ok")
