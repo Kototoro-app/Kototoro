@@ -141,6 +141,7 @@ class FavouritesContainerViewModelTest {
             librarySearchQueries = org.skepsun.kototoro.search.domain.LibrarySearchQueries(),
             trackingRepository = mockk<TrackingRepository>(relaxed = true),
             trackWorkerScheduler = scheduler,
+            categoryDisplayPreferences = mockk(relaxed = true),
         )
     }
 }

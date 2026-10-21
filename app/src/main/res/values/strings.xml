@@ -4082,4 +4082,14 @@
     <string name="mangabaka_create_token">Create a token on MangaBaka</string>
     <string name="mangabaka_token_hint">Create a personal access token in MangaBaka account settings and paste it here. This token grants full access to your MangaBaka account.</string>
     <string name="mangabaka_auth_failed">Could not sign in or load your library. Check your token, permissions and connection, then try again.</string>
+    <string name="favourite_categories_in_space">Categories to show in this Space</string>
+    <string name="favourite_categories_in_space_hint">Categories are shared by every Space. This only changes which of them are listed here, so the same category can be shown in one Space and hidden in another. A Space that would hide every category keeps showing all of them.</string>
+    <string name="choose_categories_to_show">Categories to show</string>
+    <string name="show_all_categories">Show all categories</string>
+    <string name="category_hidden_from_shelf">Hidden from the shelf</string>
+    <string name="custom_cover">Custom cover</string>
+    <string name="custom_cover_summary">Replaces the automatic stack of member covers for this category</string>
+    <string name="choose_cover">Choose image</string>
+    <string name="remove_custom_cover">Reset cover</string>
+    <string name="custom_cover_failed">Could not read this image</string>
 </resources>

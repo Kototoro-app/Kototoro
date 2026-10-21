@@ -1756,6 +1756,7 @@ private fun DetailsScreenContent(
 
             if (showFavoriteDialog && isWorkActionEnabled && content != null) {
             val allCategories by viewModel.allCategories.collectAsStateWithLifecycle()
+            val hasHiddenCategories by viewModel.hasHiddenCategories.collectAsStateWithLifecycle()
             val memberCategoryIds = remember(favouriteCategories) {
                 favouriteCategories.mapTo(mutableSetOf()) { it.id }
             }
@@ -1768,9 +1769,15 @@ private fun DetailsScreenContent(
                 },
                 onManageCategories = {
                     detailsScreenState.setShowFavoriteDialog(false)
+                    viewModel.setShowAllCategories(false)
                     handleActionClick(DetailsAction.ManageCategories)
                 },
-                onDismiss = { detailsScreenState.setShowFavoriteDialog(false) },
+                onDismiss = {
+                    detailsScreenState.setShowFavoriteDialog(false)
+                    viewModel.setShowAllCategories(false)
+                },
+                hasHiddenCategories = hasHiddenCategories,
+                onShowAllCategories = { viewModel.setShowAllCategories(true) },
             )
             }
 

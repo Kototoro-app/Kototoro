@@ -37,6 +37,7 @@ import androidx.compose.runtime.State
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.compose.KototoroExploreHostRoute
 import org.skepsun.kototoro.explore.ui.compose.ExploreSourceSelectionTopBarState
+import org.skepsun.kototoro.favourites.ui.compose.FavouriteCategoryDisplayDialog
 import org.skepsun.kototoro.favourites.ui.compose.FavoritesFilterPanelRoute
 import org.skepsun.kototoro.favourites.ui.compose.KototoroFavoritesHostRoute
 import org.skepsun.kototoro.favourites.ui.list.FavouritesListHost
@@ -1797,6 +1798,10 @@ internal fun FavoritesTopLevelRouteContent(
     var favoritesSelectionDialog by remember { mutableStateOf<FavoritesSelectionDialogState?>(null) }
     var activeReorderItems by remember { mutableStateOf<List<org.skepsun.kototoro.core.ui.compose.ReorderItem>?>(null) }
     var activeReorderCategoryHost by remember { mutableStateOf<FavouritesListHost?>(null) }
+    // Per-Space category visibility is display state: null outside a Space, where every
+    // category is listed anyway.
+    val categoryVisibility by viewModel.categoryVisibility.collectAsStateWithLifecycle()
+    var showCategoryDisplayDialog by remember { mutableStateOf(false) }
 
     fun showToast(messageRes: Int) {
         android.widget.Toast.makeText(context, messageRes, android.widget.Toast.LENGTH_SHORT).show()
@@ -1957,60 +1962,84 @@ internal fun FavoritesTopLevelRouteContent(
         }
     }
 
-    DisposableEffect(appRouter, viewModel) {
+    val visibility = categoryVisibility
+    if (showCategoryDisplayDialog && visibility != null) {
+        FavouriteCategoryDisplayDialog(
+            state = visibility,
+            onShownChanged = viewModel::setCategoryShownInSpace,
+            onShowAll = viewModel::showAllCategoriesInSpace,
+            onDismissRequest = { showCategoryDisplayDialog = false },
+        )
+    }
+
+    DisposableEffect(appRouter, viewModel, categoryVisibility?.spaceId) {
         onContextualMenuActionsChanged(
             RouteScopedTopBarMenuActions(
                 ownerRoute = TOP_BAR_OWNER_FAVORITES,
-                actions = listOf(
-                    KototoroTopBarMenuAction(
-                        org.skepsun.kototoro.R.string.reorder,
-                        org.skepsun.kototoro.R.drawable.ic_reorder_handle,
-                    ) {
-                        val activeHost = activeFavouritesHostRef.value
-                        if (activeHost == null || activeHost.categoryId == org.skepsun.kototoro.core.model.FavouriteCategory.NO_ID) {
-                            showToast(org.skepsun.kototoro.R.string.reorder_select_category_hint)
-                        } else {
-                            activeReorderCategoryHost = activeHost
-                            activeReorderItems = activeHost.orderItems()
-                        }
-                    },
-                    KototoroTopBarMenuAction(
-                        org.skepsun.kototoro.R.string.reset_filter,
-                        org.skepsun.kototoro.R.drawable.ic_revert,
-                    ) {
-                        viewModel.resetFilters()
-                    },
-                    KototoroTopBarMenuAction(
-                        org.skepsun.kototoro.R.string.favourites_categories,
-                        org.skepsun.kototoro.R.drawable.ic_tag,
-                    ) {
-                        appRouter.openFavoriteCategories()
-                    },
-                    KototoroTopBarMenuAction(
-                        org.skepsun.kototoro.R.string.import_favourites,
-                        org.skepsun.kototoro.R.drawable.ic_import,
-                    ) {
-                        showImportDialog()
-                    },
-                    KototoroTopBarMenuAction(
-                        org.skepsun.kototoro.R.string.sync_favourites,
-                        org.skepsun.kototoro.R.drawable.ic_sync,
-                    ) {
-                        showSyncDialog()
-                    },
-                    KototoroTopBarMenuAction(
-                        org.skepsun.kototoro.R.string.migration_sources_title,
-                        org.skepsun.kototoro.R.drawable.ic_swap_vert,
-                    ) {
-                        appRouter.openMigrationSources()
-                    },
-                    KototoroTopBarMenuAction(
-                        org.skepsun.kototoro.R.string.library_duplicates_title,
-                        org.skepsun.kototoro.R.drawable.ic_search,
-                    ) {
-                        appRouter.openLibraryDuplicates()
-                    },
-                ),
+                actions = buildList {
+                    if (categoryVisibility != null) {
+                        add(
+                            KototoroTopBarMenuAction(
+                                org.skepsun.kototoro.R.string.choose_categories_to_show,
+                                org.skepsun.kototoro.R.drawable.ic_eye,
+                            ) {
+                                showCategoryDisplayDialog = true
+                            },
+                        )
+                    }
+                    addAll(
+                        listOf(
+                            KototoroTopBarMenuAction(
+                                org.skepsun.kototoro.R.string.reorder,
+                                org.skepsun.kototoro.R.drawable.ic_reorder_handle,
+                            ) {
+                                val activeHost = activeFavouritesHostRef.value
+                                if (activeHost == null || activeHost.categoryId == org.skepsun.kototoro.core.model.FavouriteCategory.NO_ID) {
+                                    showToast(org.skepsun.kototoro.R.string.reorder_select_category_hint)
+                                } else {
+                                    activeReorderCategoryHost = activeHost
+                                    activeReorderItems = activeHost.orderItems()
+                                }
+                            },
+                            KototoroTopBarMenuAction(
+                                org.skepsun.kototoro.R.string.reset_filter,
+                                org.skepsun.kototoro.R.drawable.ic_revert,
+                            ) {
+                                viewModel.resetFilters()
+                            },
+                            KototoroTopBarMenuAction(
+                                org.skepsun.kototoro.R.string.favourites_categories,
+                                org.skepsun.kototoro.R.drawable.ic_tag,
+                            ) {
+                                appRouter.openFavoriteCategories()
+                            },
+                            KototoroTopBarMenuAction(
+                                org.skepsun.kototoro.R.string.import_favourites,
+                                org.skepsun.kototoro.R.drawable.ic_import,
+                            ) {
+                                showImportDialog()
+                            },
+                            KototoroTopBarMenuAction(
+                                org.skepsun.kototoro.R.string.sync_favourites,
+                                org.skepsun.kototoro.R.drawable.ic_sync,
+                            ) {
+                                showSyncDialog()
+                            },
+                            KototoroTopBarMenuAction(
+                                org.skepsun.kototoro.R.string.migration_sources_title,
+                                org.skepsun.kototoro.R.drawable.ic_swap_vert,
+                            ) {
+                                appRouter.openMigrationSources()
+                            },
+                            KototoroTopBarMenuAction(
+                                org.skepsun.kototoro.R.string.library_duplicates_title,
+                                org.skepsun.kototoro.R.drawable.ic_search,
+                            ) {
+                                appRouter.openLibraryDuplicates()
+                            },
+                        ),
+                    )
+                },
             ),
         )
         onDispose {

@@ -31,7 +31,9 @@ import org.skepsun.kototoro.core.ui.util.ReversibleHandle
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
+import org.skepsun.kototoro.favourites.data.FavouriteCategoryDisplayPreferences
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
+import org.skepsun.kototoro.favourites.domain.filterCategoriesForSpace
 import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.ParserContentRepository
@@ -55,6 +57,7 @@ import org.skepsun.kototoro.explore.ui.model.SourceTag
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
+import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
 import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
@@ -87,6 +90,7 @@ class FavouritesContainerViewModel @Inject constructor(
     private val librarySearchQueries: LibrarySearchQueries,
     private val trackingRepository: org.skepsun.kototoro.tracker.domain.TrackingRepository,
     private val trackWorkerScheduler: org.skepsun.kototoro.tracker.work.TrackWorker.Scheduler,
+    private val categoryDisplayPreferences: FavouriteCategoryDisplayPreferences,
 ) : BaseViewModel(), SpaceBindableViewModel {
     private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
     init {
@@ -103,6 +107,17 @@ class FavouritesContainerViewModel @Inject constructor(
         val isLoading: Boolean = true,
         val categories: List<FavouriteTabModel> = emptyList(),
         val isEmpty: Boolean = false,
+    )
+
+    /**
+     * What the "categories to show" editor of the current Space needs: every category,
+     * including the ones hidden from the library, plus the currently hidden ids.
+     * Null when no Space is active, which is also when the editor entry point is hidden.
+     */
+    data class CategoryVisibilityState(
+        val spaceId: SpaceId,
+        val categories: List<FavouriteCategory>,
+        val hiddenCategoryIds: Set<Long>,
     )
 
     val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { this.listMode }
@@ -151,7 +166,48 @@ class FavouritesContainerViewModel @Inject constructor(
     // favourites tables.
     // ---------------------------------------------------------------------
 
-    private val activeSpaceId = spaceBinding.spaceId
+    val activeSpaceId = spaceBinding.spaceId
+
+    /**
+     * Categories the active Space hides. Empty (not null) for the global favourites view:
+     * outside a Space every category stays visible, which is the pre-existing behaviour.
+     */
+    private val hiddenCategoryIds = activeSpaceId
+        .flatMapLatest { spaceId ->
+            if (spaceId == null) {
+                flowOf(emptySet())
+            } else {
+                categoryDisplayPreferences.observeHiddenCategoryIds(spaceId)
+            }
+        }
+        .distinctUntilChanged()
+
+    val categoryVisibility: StateFlow<CategoryVisibilityState?> = combine(
+        activeSpaceId,
+        favouritesRepository.observeCategories().withErrorHandling(),
+        hiddenCategoryIds,
+    ) { spaceId, categories, hidden ->
+        if (spaceId == null || categories.isEmpty()) {
+            null
+        } else {
+            CategoryVisibilityState(
+                spaceId = spaceId,
+                categories = categories,
+                hiddenCategoryIds = hidden,
+            )
+        }
+    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
+
+    /** Shows or hides one category in the current Space only; shared data stays untouched. */
+    fun setCategoryShownInSpace(categoryId: Long, isShown: Boolean) {
+        val spaceId = activeSpaceId.value ?: return
+        categoryDisplayPreferences.setCategoryHidden(spaceId, categoryId, isHidden = !isShown)
+    }
+
+    /** Drops the Space filter entirely: every category is shown again. */
+    fun showAllCategoriesInSpace() {
+        activeSpaceId.value?.let(categoryDisplayPreferences::showAll)
+    }
 
     private val activeSourcePreset = settings.observeAsFlow(AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID) { activeSourcePresetId }
         .flatMapLatest { id ->
@@ -452,15 +508,18 @@ class FavouritesContainerViewModel @Inject constructor(
         categoriesStateFlow,
         libraryState,
         currentGroupTab,
-        combine(selectedSourceTags, globalFavoritesState.appliedFilter, ::Pair),
+        combine(selectedSourceTags, globalFavoritesState.appliedFilter, hiddenCategoryIds) { tags, filters, hidden ->
+            Triple(tags, filters, hidden)
+        },
         observeAllFavouritesVisibility(),
-    ) { list, libState, groupTab, (sourceTags, quickFilters), showAll ->
+    ) { list, libState, groupTab, (sourceTags, quickFilters, hiddenIds), showAll ->
         if (list == null || !libState.isInitialized) {
             return@combine FavoritesHostUiState()
         }
 
         buildFavoritesHostUiState(
-            categories = list.map { FavouriteTabModel(it.id, it.title, it.order) },
+            categories = filterCategoriesForSpace(list, hiddenIds)
+                .map { FavouriteTabModel(it.id, it.title, it.order) },
             categoryCounts = libState.categoryCounts,
             groupTab = groupTab,
             hasSourceTags = sourceTags.isNotEmpty(),

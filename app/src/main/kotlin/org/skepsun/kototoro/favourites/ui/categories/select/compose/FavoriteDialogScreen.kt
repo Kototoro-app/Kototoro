@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.favourites.ui.categories.select.compose
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -49,6 +51,8 @@ import org.skepsun.kototoro.parsers.model.Content
  * @param onCategoryToggle  callback when a category checkbox is toggled (categoryId, newChecked)
  * @param onManageCategories  callback to open the category management screen
  * @param onDismiss  callback when the dialog is dismissed
+ * @param hasHiddenCategories  true when the Space hides categories the dialog does not list
+ * @param onShowAllCategories  reveals the categories the Space hides, for this dialog only
  */
 @Composable
 fun FavoriteCategoryDialog(
@@ -58,6 +62,8 @@ fun FavoriteCategoryDialog(
     onCategoryToggle: (categoryId: Long, isChecked: Boolean) -> Unit,
     onManageCategories: () -> Unit,
     onDismiss: () -> Unit,
+    hasHiddenCategories: Boolean = false,
+    onShowAllCategories: () -> Unit = {},
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -70,29 +76,35 @@ fun FavoriteCategoryDialog(
             )
         },
         text = {
-            if (allCategories.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.empty_favourite_categories),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(vertical = 16.dp),
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 360.dp),
-                ) {
-                    items(
-                        items = allCategories,
-                        key = { it.id },
-                        contentType = { "category_row" },
-                    ) { category ->
-                        val isChecked = category.id in memberCategoryIds
-                        CategoryRow(
-                            category = category,
-                            isChecked = isChecked,
-                            onClick = { onCategoryToggle(category.id, !isChecked) },
-                        )
+            Column {
+                if (allCategories.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.empty_favourite_categories),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(vertical = 16.dp),
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 360.dp),
+                    ) {
+                        items(
+                            items = allCategories,
+                            key = { it.id },
+                            contentType = { "category_row" },
+                        ) { category ->
+                            val isChecked = category.id in memberCategoryIds
+                            CategoryRow(
+                                category = category,
+                                isChecked = isChecked,
+                                onClick = { onCategoryToggle(category.id, !isChecked) },
+                            )
+                        }
                     }
                 }
+                ShowAllCategoriesButton(
+                    isVisible = hasHiddenCategories,
+                    onClick = onShowAllCategories,
+                )
             }
         },
         confirmButton = {
@@ -122,13 +134,15 @@ fun FavoriteCategoryDialogRoute(
         viewModel.initialize(manga)
     }
 
-    val items by viewModel.content.collectAsStateWithLifecycle()
+    val content by viewModel.content.collectAsStateWithLifecycle()
     FavoriteCategoryDialog(
         contentTitle = manga.joinToStringWithLimit(LocalContext.current, 92) { it.title },
-        items = items,
+        items = content.items,
         onCategoryToggle = viewModel::setChecked,
         onManageCategories = onManageCategories,
         onDismiss = onDismiss,
+        hasHiddenCategories = content.hasHiddenCategories,
+        onShowAllCategories = { viewModel.setShowAllCategories(true) },
     )
 }
 
@@ -139,6 +153,8 @@ fun FavoriteCategoryDialog(
     onCategoryToggle: (categoryId: Long, isChecked: Boolean) -> Unit,
     onManageCategories: () -> Unit,
     onDismiss: () -> Unit,
+    hasHiddenCategories: Boolean = false,
+    onShowAllCategories: () -> Unit = {},
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -151,10 +167,16 @@ fun FavoriteCategoryDialog(
             )
         },
         text = {
-            FavoriteCategoryDialogContent(
-                items = items,
-                onCategoryToggle = onCategoryToggle,
-            )
+            Column {
+                FavoriteCategoryDialogContent(
+                    items = items,
+                    onCategoryToggle = onCategoryToggle,
+                )
+                ShowAllCategoriesButton(
+                    isVisible = hasHiddenCategories,
+                    onClick = onShowAllCategories,
+                )
+            }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
@@ -290,6 +312,28 @@ private fun CategoryRow(
                 modifier = Modifier.padding(horizontal = 4.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/**
+ * Escape hatch for the Space category filter: the dialog lists what the Space shows, this
+ * reveals the rest for this dialog session without touching the Space preference.
+ */
+@Composable
+private fun ShowAllCategoriesButton(
+    isVisible: Boolean,
+    onClick: () -> Unit,
+) {
+    if (!isVisible) {
+        return
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        TextButton(onClick = onClick) {
+            Text(stringResource(R.string.show_all_categories))
         }
     }
 }

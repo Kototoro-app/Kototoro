@@ -595,7 +595,10 @@ private fun CategoryRow(
         shadowElevation = elevation,
     ) {
         Row(modifier = rowModifier, verticalAlignment = Alignment.CenterVertically) {
-            CoverStack(item.covers, Modifier.height(dimensionResource(R.dimen.category_covers_height)).aspectRatio(13f / 18f))
+            CategoryCover(
+                item = item,
+                modifier = Modifier.height(dimensionResource(R.dimen.category_covers_height)).aspectRatio(13f / 18f),
+            )
             Column(
                 modifier = Modifier.weight(1f).padding(start = dimensionResource(R.dimen.margin_normal), end = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -655,6 +658,25 @@ private fun AllCategoriesRow(
                 Icon(painterResource(if (item.isVisible) R.drawable.ic_eye else R.drawable.ic_eye_off), stringResource(R.string.show_all))
             }
         }
+    }
+}
+
+@Composable
+private fun CategoryCover(item: CategoryListModel, modifier: Modifier) {
+    val customCover = item.customCover
+    if (customCover == null) {
+        // No artwork picked (or the file is gone): the automatic stack still says something
+        // about the category's contents.
+        CoverStack(item.covers, modifier)
+    } else {
+        AsyncImage(
+            model = customCover,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+        )
     }
 }
 
