@@ -359,6 +359,44 @@ final class SuggestionsTests: XCTestCase {
     }
 
     @MainActor
+    func testLargeRecommendationCatalogKeepsDetailsUsable() async throws {
+        let health = URLRequest(url: URL(string: "http://127.0.0.1:8765/health")!, timeoutInterval: 2)
+        guard (try? await URLSession.shared.data(for: health)) != nil else {
+            throw XCTSkip("Start serve-cms-fixture.py first")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-suggestions", "YES", "-suggestions_preferred_tags", "动画",
+                               "-suggestions_exclude_tags", "", "-suggestions.updatedAt", "0",
+                               "-space.enabled", "YES", "-space.kind", "VIDEO", "-sources.layout", "list",
+                               "-browse.recommendations.feed", "personal", "-browse.recommendations.collapsed", "NO"]
+        app.launch()
+        importVideoSite(app, url: "http://127.0.0.1:8765/recommendation-sites.json", title: nil)
+        app.terminate(); app.launch()
+        app.mainTab("浏览").tap()
+        let entry = app.buttons["sources.suggestions"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 20))
+        entry.tap()
+        let work = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "suggestion.")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 60), app.debugDescription)
+        let openedAt = Date()
+        work.tap()
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 10))
+        XCTAssertLessThan(Date().timeIntervalSince(openedAt), 5,
+                          "A large recommendation catalog must not block details navigation")
+        for _ in 0..<3 {
+            let startedAt = Date()
+            app.buttons["details.more"].tap()
+            XCTAssertLessThan(Date().timeIntervalSince(startedAt), 5,
+                              "The recommendation catalog must not block controls on the details screen")
+            XCTAssertTrue(app.buttons["details.changeSource"].waitForExistence(timeout: 3))
+            app.navigationBars.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.15)).tap()
+            XCTAssertTrue(app.buttons["details.changeSource"].waitForNonExistence(timeout: 3))
+        }
+        attach(app, "大量推荐进入视频详情")
+    }
+
+    @MainActor
     func testRecommendationsFromNativeSourceOpenDetails() async throws {
         // The fixture also exercises the unfiltered fallback for sources with no matching preference tag.
         let health = URLRequest(url: URL(string: "http://127.0.0.1:8765/health")!, timeoutInterval: 2)
@@ -383,9 +421,43 @@ final class SuggestionsTests: XCTestCase {
                                                     "suggestion.", "测试动画")).firstMatch
         XCTAssertTrue(work.waitForExistence(timeout: 90), app.debugDescription)
         attach(app, "为你推荐作品列表")
+        let openedAt = Date()
         work.tap()
         XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 20))
         XCTAssertEqual(app.staticTexts["details.title"].label, "测试动画")
+        XCTAssertLessThan(Date().timeIntervalSince(openedAt), 5, "Opening a cached recommendation must stay responsive")
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "全部剧集，")).firstMatch.exists,
+                       "Video details must not repeat the episode-directory control above the summary")
+        for _ in 0..<3 {
+            let startedAt = Date()
+            app.buttons["details.more"].tap()
+            XCTAssertLessThan(Date().timeIntervalSince(startedAt), 5,
+                              "Opening a details control must stay responsive after navigation")
+            XCTAssertTrue(app.buttons["details.changeSource"].waitForExistence(timeout: 3))
+            app.navigationBars.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.15)).tap()
+            XCTAssertTrue(app.buttons["details.changeSource"].waitForNonExistence(timeout: 3))
+        }
+        attach(app, "推荐视频详情控件")
+        let line = app.descendants(matching: .any)["details.line"].firstMatch
+        XCTAssertTrue(line.waitForExistence(timeout: 5))
+        line.tap(); tapMenuItem(app, "备用")
+        let episodes = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter."))
+        XCTAssertEqual(episodes.count, 1, "The backup line has only one episode")
+        line.tap(); tapMenuItem(app, "高清")
+        XCTAssertEqual(episodes.count, 2)
+        let firstEpisode = episodes.firstMatch
+        for _ in 0..<3 where !firstEpisode.isHittable { app.collectionViews.firstMatch.swipeUp() }
+        XCTAssertTrue(firstEpisode.isHittable)
+        firstEpisode.tap()
+        let position = app.staticTexts["player.position"]
+        XCTAssertTrue(position.waitForExistence(timeout: 20))
+        let advancing = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label != %@ AND label != %@",
+            "已播放 0 秒", ""), object: position)
+        XCTAssertEqual(XCTWaiter.wait(for: [advancing], timeout: 20), .completed)
+        XCTAssertFalse(app.staticTexts["player.error"].exists)
+        playerControl(app, "player.close").tap()
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 10))
+        attach(app, "视频选集播放后返回详情")
     }
 
     @MainActor private func attach(_ app: XCUIApplication, _ name: String) {

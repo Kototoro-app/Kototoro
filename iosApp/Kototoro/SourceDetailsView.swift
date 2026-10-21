@@ -767,7 +767,14 @@ struct SourceDetailsView: View {
         }
     }
 
+    @ViewBuilder
     private func infoCard(_ shown: IosSourceContent) -> some View {
+        if !model.isVideo || !shown.authors.isEmpty || shown.state != nil || (resume?.progress ?? 0) > 0 {
+            infoCardContent(shown)
+        }
+    }
+
+    private func infoCardContent(_ shown: IosSourceContent) -> some View {
         VStack(spacing: 10) {
             if !shown.authors.isEmpty || shown.state != nil {
                 HStack(alignment: .top, spacing: 12) {
@@ -780,33 +787,9 @@ struct SourceDetailsView: View {
                     }
                 }
             }
-            HStack(spacing: 12) {
-                Label(Self.mediaKindTitle(shown.mediaKind), systemImage: "character.book.closed")
-                Spacer(minLength: 0)
-                let totalChapters = model.isVideo ? model.visibleChapters.count : model.chapters.count
-                if totalChapters > 0 {
-                    let progressText: String = {
-                        if let resume, resume.progress > 0 {
-                            let readCount = (model.chapterIndices[resume.chapterId] ?? -1) + 1
-                            return "\(readCount)/\(totalChapters)"
-                        } else {
-                            return model.isVideo ? String(localized: "\(totalChapters) 集") : String(localized: "\(totalChapters) 章")
-                        }
-                    }()
-                    Button {
-                        showingAllChapters = true
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(progressText)
-                            Image(systemName: "chevron.right")
-                                .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(model.isVideo ? "全部剧集，\(progressText)" : "全部章节，\(progressText)")
-                }
+            if !model.isVideo {
+                chapterInfo
             }
-            .font(.subheadline)
 
             if let resume = resume, resume.progress > 0 {
                 HStack(spacing: 8) {
@@ -821,6 +804,36 @@ struct SourceDetailsView: View {
         }
         .padding(16)
         .modifier(DetailsContentPanel())
+    }
+
+    private var chapterInfo: some View {
+        HStack(spacing: 12) {
+            Label(Self.mediaKindTitle(shownContent.mediaKind), systemImage: "character.book.closed")
+            Spacer(minLength: 0)
+            let totalChapters = model.chapters.count
+            if totalChapters > 0 {
+                let progressText: String = {
+                    if let resume, resume.progress > 0 {
+                        let readCount = (model.chapterIndices[resume.chapterId] ?? -1) + 1
+                        return "\(readCount)/\(totalChapters)"
+                    } else {
+                        return String(localized: "\(totalChapters) 章")
+                    }
+                }()
+                Button {
+                    showingAllChapters = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(progressText)
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("全部章节，\(progressText)")
+            }
+        }
+        .font(.subheadline)
     }
 
     @ViewBuilder
@@ -979,7 +992,7 @@ struct SourceDetailsView: View {
         let preview = DetailsChapterPreview.items(all, currentID: resume?.chapterId, id: { $0.id },
                                                  limit: model.isVideo ? 8 : 5)
         return Section {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: model.isVideo ? 8 : 12) {
                 HStack(spacing: 12) {
                     Text(model.isVideo ? "剧集" : "章节").font(.headline)
                     Spacer(minLength: 0)
@@ -987,6 +1000,8 @@ struct SourceDetailsView: View {
                         Picker("线路", selection: $model.selectedLine) {
                             ForEach(model.lines, id: \.self) { Text($0 ?? String(localized: "默认")).tag($0) }
                         }
+                        .labelsHidden()
+                        .font(.subheadline.weight(.medium))
                         .accessibilityIdentifier("details.line")
                     } else if !model.isVideo && model.branches.count > 1 {
                         Picker("分支", selection: $model.selectedBranch) {
@@ -1001,6 +1016,7 @@ struct SourceDetailsView: View {
                 }
                 .buttonStyle(.borderless)
                 .pickerStyle(.menu)
+                .tint(model.isVideo ? .primary : .accentColor)
 
                 if preview.isEmpty {
                     Text("暂无章节").foregroundStyle(.secondary).accessibilityIdentifier("details.empty")
@@ -1008,12 +1024,7 @@ struct SourceDetailsView: View {
                     ForEach(Self.rows(Array(preview)), id: \.first?.id) { row in
                         HStack(spacing: 10) {
                             ForEach(row, id: \.id) { chapter in
-                                Button { openChapter(chapter, from: details) } label: {
-                                    Text(Self.episodeTitle(chapter)).lineLimit(1).frame(maxWidth: .infinity, minHeight: 44)
-                                }
-                                .buttonStyle(.bordered)
-                                .tint(chapter.id == resume?.chapterId ? .accentColor : .secondary)
-                                .accessibilityIdentifier("chapter.\(chapter.id)")
+                                episodeButton(chapter, from: details)
                             }
                             ForEach(row.count..<Self.rowSize, id: \.self) { _ in Color.clear.frame(maxWidth: .infinity) }
                         }
@@ -1038,14 +1049,17 @@ struct SourceDetailsView: View {
                 Button { showingAllChapters = true } label: {
                     HStack {
                         Text(model.isVideo ? "全部 \(all.count) 集" : "全部 \(all.count) 章")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline.weight(model.isVideo ? .medium : .semibold))
                         Spacer()
-                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
                     }
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
+                .tint(model.isVideo ? .primary : .accentColor)
                 .accessibilityIdentifier("details.chapters.showAll")
             }
             .padding(16)
@@ -1054,6 +1068,30 @@ struct SourceDetailsView: View {
             .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 10, trailing: 0))
         }
         .listRowSeparator(.hidden)
+    }
+
+    private func episodeButton(_ chapter: IosSourceChapter, from details: IosSourceContent) -> some View {
+        let current = chapter.id == resume?.chapterId
+        return Button { openChapter(chapter, from: details) } label: {
+            Text(Self.episodeTitle(chapter))
+                .font(.subheadline.weight(current ? .semibold : .medium))
+                .monospacedDigit()
+                .lineLimit(1)
+                .foregroundStyle(current ? Color.accentColor : .primary)
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .background(current ? Color.accentColor.opacity(0.12) : Color(.tertiarySystemFill).opacity(0.6),
+                            in: .rect(cornerRadius: 10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(current ? Color.accentColor.opacity(0.45) : Color(.separator).opacity(0.15),
+                                      lineWidth: 0.5)
+                }
+                .frame(minHeight: 44)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(current ? .isSelected : [])
+        .accessibilityIdentifier("chapter.\(chapter.id)")
     }
 
     private func bookmarkPreview(_ details: IosSourceContent) -> some View {

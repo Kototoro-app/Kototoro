@@ -42,7 +42,7 @@ struct SuggestionsView: View {
     }
     private var configuration: String {
         // JSON avoids collisions between user-entered tags and source identities; the timestamp is persistent.
-        let values = [String(settings.excludeNsfw), preferredTags, excludedTags, preferredSources, excludedSources]
+        let values = [String(!showAdult || excludeAdult), preferredTags, excludedTags, preferredSources, excludedSources]
             + candidates.map { "\($0.name)|\($0.contentType)" }.sorted()
         return String(decoding: (try? JSONEncoder().encode(values)) ?? Data(), as: UTF8.self)
     }
@@ -55,14 +55,19 @@ struct SuggestionsView: View {
             preferredTags.split(separator: ",").contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
     private var availableKinds: Set<String> {
-        Set(candidates.filter { !settings.excludeNsfw || !$0.isAdult }.map(\.mediaKind))
+        let excludeNsfw = !showAdult || excludeAdult
+        return Set(candidates.filter { !excludeNsfw || !$0.isAdult }.map(\.mediaKind))
     }
     private var selectedKind: String? {
         if previewLimit != nil { return previewKind }
+        // A fixed space does not need to enumerate the source catalog to choose a media type.
+        if spacesEnabled { return space.isEmpty ? nil : space }
         return ContentSpace.filter(enabled: spacesEnabled, space: space, page: pageKind, available: availableKinds)
     }
     private var visible: [ContentItem] {
-        items.filter { selectedKind == nil || $0.mediaKind == selectedKind }.map { ContentItem(content: $0) }
+        // Resolving a page's type can scan the source catalog; do it once for the whole list.
+        let kind = selectedKind
+        return items.filter { kind == nil || $0.mediaKind == kind }.map { ContentItem(content: $0) }
     }
 
     var body: some View {
@@ -77,7 +82,8 @@ struct SuggestionsView: View {
     }
 
     private func preview(limit: Int) -> some View {
-        VStack(alignment: .leading, spacing: compact ? 8 : 12) {
+        let visible = collapsed.wrappedValue ? [] : self.visible
+        return VStack(alignment: .leading, spacing: compact ? 8 : 12) {
             HStack {
                 NavigationLink { SuggestionsView().navigationLinkIndicatorVisibility(.automatic) } label: {
                     HStack(spacing: 6) {
@@ -147,7 +153,9 @@ struct SuggestionsView: View {
     }
 
     private var page: some View {
-        ScrollView {
+        let visible = self.visible
+        let settings = self.settings
+        return ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 if !spacesEnabled && ContentKindPicker.isShown(availableKinds) {
                     ContentKindPicker(selection: $pageKind, available: availableKinds).padding(.horizontal)

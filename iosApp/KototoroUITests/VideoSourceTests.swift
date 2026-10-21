@@ -568,7 +568,12 @@ func importVideoSite(_ app: XCUIApplication, url: String, title: String?, timeou
         for _ in 0..<3 where (field.value(forKey: "hasKeyboardFocus") as? Bool) != true { sleep(1); field.tap() }
         field.typeText(title)
     }
-    app.buttons["repository.import"].tap()
+    let importButton = app.buttons["repository.import"]
+    importButton.tap()
+    // Retry a missed toolbar tap only while the import has not started.
+    if !address.waitForNonExistence(timeout: 3), importButton.exists, importButton.isEnabled {
+        importButton.tap()
+    }
     XCTAssertTrue(address.waitForNonExistence(timeout: timeout), "Import failed: \(app.debugDescription)")
     let status = app.staticTexts["repository.status"]
     XCTAssertTrue(status.waitForExistence(timeout: 5) && status.label.contains("已导入"), app.debugDescription)

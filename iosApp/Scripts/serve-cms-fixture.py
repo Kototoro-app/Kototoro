@@ -87,18 +87,26 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if url.path == "/usage-sites.json":
             tag = urllib.parse.parse_qs(url.query).get("run", [""])[0]
             return self.reply(usage_sites(tag))
+        if url.path == "/recommendation-sites.json":
+            return self.reply({"sites": [
+                {"key": f"recommendation_{i}", "name": f"推荐压力来源 {i}", "type": 1,
+                 "api": f"{BASE}/recommendations/{i}/api.php/provide/vod/"} for i in range(256)
+            ]})
         if url.path == "/fail-page-2":
             PAGE_TWO_MODE = "fail"
             return self.reply({"ok": True})
         if url.path == "/recover-page-2":
             PAGE_TWO_MODE = "ok"
             return self.reply({"ok": True})
-        if url.path.rstrip("/") in ("/api.php/provide/vod", "/related/api.php/provide/vod", "/binding/api.php/provide/vod"):
+        if (url.path.rstrip("/") in ("/api.php/provide/vod", "/related/api.php/provide/vod", "/binding/api.php/provide/vod")
+                or url.path.startswith("/recommendations/") and url.path.rstrip("/").endswith("/api.php/provide/vod")):
             query = urllib.parse.parse_qs(url.query)
             ids = query.get("ids", query.get("id", []))
             words = query.get("wd", [])
             category = query.get("t", [])
-            items = [vod(i, n, t, tn, bool(ids)) for i, n, t, tn in CATALOG
+            catalog = ([(i, f"测试动画 {i}", 2, "动画") for i in range(101, 121)]
+                       if url.path.startswith("/recommendations/") else CATALOG)
+            items = [vod(i, n, t, tn, bool(ids)) for i, n, t, tn in catalog
                      if (not ids or str(i) in ids) and
                      (not words or url.path.startswith("/related/") or words[0] in n) and
                      (not category or str(t) == category[0])]
