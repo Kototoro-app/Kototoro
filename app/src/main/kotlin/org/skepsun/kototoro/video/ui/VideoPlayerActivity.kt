@@ -2499,7 +2499,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         // Some Cloudstream extensions host an AppCompat DialogFragment directly from loadLinks
         // (for example, a Turnstile challenge). Register this activity explicitly because the
         // plugin callback can outlive normal activity lifecycle callback ordering.
-        com.lagradost.cloudstream3.CommonActivity.setActivityInstance(this)
+        com.lagradost.cloudstream3.CommonActivity.INSTANCE.setActivityInstance(this)
         Log.d(
             "VideoPlayerActivity",
             "Cloudstream activity bridge registered chapter=${chapter.id} activity=${javaClass.simpleName}",

@@ -73,6 +73,14 @@ Kototoro 的 `prepareCloudstreamRuntimeJar` 仍有两项宿主职责：
 `app/src/main/kotlin/com/lagradost/cloudstream3/` 下提供最小宿主兼容层，包括 `Plugin`、`VideoClickAction`、
 `DataStore` 和 `TextUtil`。兼容层只实现插件实际需要的 Android 行为，不复制 Cloudstream 应用壳。
 
+`CommonActivity` 位于 `app/src/main/java/com/lagradost/cloudstream3/CommonActivity.java`：Cloudstream 把它声明为
+Kotlin `object`，插件省略可选参数调用 `showToast("…")` 时实际引用的是编译器生成的默认参数桥
+`showToast$default(CommonActivity, String, Integer, int, Object)`。Kotlin 无法声明含 `$` 的方法名，因此这个兼容层
+只能用 Java 编写，并同时保留上游的 `INSTANCE` 字段与实例方法形态，让插件的 DEX 引用和宿主兼容性检查都能解析。
+
+插件在安装前会经过 `CloudstreamPluginCompatibilityChecker` 的 DEX 检查：引用了宿主缺失的类或方法时直接判定为
+不兼容并给出完整签名，而不是等到激活后才抛 `NoSuchMethodError`。新增兼容层成员时应同时补一条该检查的测试。
+
 ## R8 与验证清单
 
 Cloudstream 插件由外部 JAR 动态加载，R8 无法从 Kototoro 的静态调用图推导完整成员集合。因此正式构建必须保留

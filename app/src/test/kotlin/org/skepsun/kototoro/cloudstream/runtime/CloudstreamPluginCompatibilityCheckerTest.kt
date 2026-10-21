@@ -73,14 +73,31 @@ class CloudstreamPluginCompatibilityCheckerTest : FunSpec({
     test("existing host class with a missing method is rejected before plugin activation") {
         val result = CloudstreamPluginCompatibilityChecker.inspect(
             createPluginArchive(createExecutableMethodDex(
-                "Lcom/lagradost/cloudstream3/CommonActivity;", "showToast",
+                "Lcom/lagradost/cloudstream3/CommonActivity;", "showToastWithDuration",
                 listOf("Ljava/lang/String;", "Ljava/lang/Integer;"),
             )),
             CloudstreamPluginCompatibilityChecker::class.java.classLoader!!,
         ).shouldBeInstanceOf<CloudstreamPluginCompatibility.Incompatible>()
 
         result.missingHostClasses shouldBe emptyList()
-        result.reason.contains("CommonActivity.showToast") shouldBe true
+        result.reason.contains("CommonActivity.showToastWithDuration") shouldBe true
+    }
+
+    test("the Kotlin default argument bridge plugins call for showToast is available") {
+        // Plugins compiled against Cloudstream call showToast("text") through this synthetic bridge.
+        CloudstreamPluginCompatibilityChecker.inspect(
+            createPluginArchive(createExecutableMethodDex(
+                "Lcom/lagradost/cloudstream3/CommonActivity;", "showToast\$default",
+                listOf(
+                    "Lcom/lagradost/cloudstream3/CommonActivity;",
+                    "Ljava/lang/String;",
+                    "Ljava/lang/Integer;",
+                    "I",
+                    "Ljava/lang/Object;",
+                ),
+            )),
+            CloudstreamPluginCompatibilityChecker::class.java.classLoader!!,
+        ) shouldBe CloudstreamPluginCompatibility.Compatible
     }
 
     test("an executable call to an available host method is accepted") {

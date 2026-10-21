@@ -22,7 +22,7 @@ class ForegroundActivityHolder @Inject constructor() : DefaultActivityLifecycleC
     override fun onActivityResumed(activity: Activity) {
         activityRef = WeakReference(activity)
         cloudstreamActivityRef = WeakReference(activity)
-        CommonActivity.setActivityInstance(activity)
+        CommonActivity.INSTANCE.setActivityInstance(activity)
     }
 
     override fun onActivityPaused(activity: Activity) {
@@ -37,7 +37,7 @@ class ForegroundActivityHolder @Inject constructor() : DefaultActivityLifecycleC
         }
         if (cloudstreamActivityRef?.get() == activity) {
             cloudstreamActivityRef = null
-            CommonActivity.setActivityInstance(null)
+            CommonActivity.INSTANCE.setActivityInstance(null)
         }
     }
 }
