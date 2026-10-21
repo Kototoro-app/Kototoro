@@ -19,6 +19,7 @@ data class MigrationSourcesState(
     val isLoading: Boolean = true,
 ) {
     val attention: List<SourceHealth> get() = sources.filter { it.status.needsAttention }
+    val suspicious: List<SourceHealth> get() = sources.filter { it.status == SourceHealthStatus.SUSPICIOUS }
     val disabled: List<SourceHealth> get() = sources.filter { it.status == SourceHealthStatus.DISABLED }
     val healthy: List<SourceHealth> get() = sources.filter { it.status == SourceHealthStatus.HEALTHY }
     val attentionIds: LongArray get() = attention.flatMap { it.contentIds }.toLongArray()

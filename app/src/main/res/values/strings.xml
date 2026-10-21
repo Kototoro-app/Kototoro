@@ -3983,6 +3983,8 @@
     <string name="migration_health_broken">Marked broken</string>
     <string name="migration_health_broken_summary">The extension repository marks this source broken</string>
     <string name="migration_health_failing">Updates failing</string>
+    <string name="migration_health_suspicious">Intermittent failures</string>
+    <string name="migration_health_suspicious_summary">Some update checks failed recently; this is often a temporary network problem on this device</string>
     <string name="migration_health_disabled">Disabled</string>
     <plurals name="migration_health_disabled_summary">
         <item quantity="one">%d favourite · turned off in sources, still opens and checks for updates</item>

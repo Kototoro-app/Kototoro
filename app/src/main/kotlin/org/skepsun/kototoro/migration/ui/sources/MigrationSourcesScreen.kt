@@ -95,6 +95,10 @@ fun MigrationSourcesScreen(
                 item { GroupHeader(stringResource(R.string.migration_health_needs_attention)) }
                 items(state.attention, key = { it.source.name }) { SourceRow(it, onClick = { picking = it }) }
             }
+            if (state.suspicious.isNotEmpty()) {
+                item { GroupHeader(stringResource(R.string.migration_health_suspicious)) }
+                items(state.suspicious, key = { it.source.name }) { SourceRow(it, onClick = { picking = it }) }
+            }
             if (state.disabled.isNotEmpty()) {
                 item { GroupHeader(stringResource(R.string.migration_health_disabled)) }
                 items(state.disabled, key = { it.source.name }) { health ->
@@ -197,6 +201,7 @@ private fun StatusTag(status: SourceHealthStatus) {
         SourceHealthStatus.UNINSTALLED -> Triple(R.string.migration_health_uninstalled, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
         SourceHealthStatus.BROKEN -> Triple(R.string.migration_health_broken, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
         SourceHealthStatus.FAILING -> Triple(R.string.migration_health_failing, Color(0xFFFFF1D6), Color(0xFF8A5A00))
+        SourceHealthStatus.SUSPICIOUS -> Triple(R.string.migration_health_suspicious, MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant)
         SourceHealthStatus.DISABLED -> Triple(R.string.migration_health_disabled, MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant)
         SourceHealthStatus.HEALTHY -> return
     }
@@ -226,6 +231,8 @@ private fun statusSummary(health: SourceHealth): String? = when (health.status) 
         (health.siteHint?.let { " · ${health.source.name}" } ?: "")
     SourceHealthStatus.BROKEN -> stringResource(R.string.migration_health_broken_summary)
     SourceHealthStatus.FAILING -> refreshErrorText(RefreshError.parse(health.errorSummary))
+    SourceHealthStatus.SUSPICIOUS -> stringResource(R.string.migration_health_suspicious_summary) +
+        (refreshErrorText(RefreshError.parse(health.errorSummary))?.let { " · $it" } ?: "")
     SourceHealthStatus.DISABLED ->
         pluralStringResource(R.plurals.migration_health_disabled_summary, health.favouriteCount, health.favouriteCount)
     SourceHealthStatus.HEALTHY -> null

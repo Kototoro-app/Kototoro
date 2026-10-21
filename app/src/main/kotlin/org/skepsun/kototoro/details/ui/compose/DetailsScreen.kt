@@ -533,7 +533,8 @@ private fun DetailsScreenContent(
         org.skepsun.kototoro.migration.domain.SourceHealthStatus.UNINSTALLED -> stringResource(R.string.migration_health_uninstalled)
         org.skepsun.kototoro.migration.domain.SourceHealthStatus.BROKEN -> stringResource(R.string.migration_health_broken)
         org.skepsun.kototoro.migration.domain.SourceHealthStatus.FAILING -> stringResource(R.string.migration_health_failing)
-        // A disabled source still works; the entry being open proves it, so no migrate prompt.
+        // A disabled or merely suspicious source still works; the entry being open proves it, so no migrate prompt.
+        org.skepsun.kototoro.migration.domain.SourceHealthStatus.SUSPICIOUS,
         org.skepsun.kototoro.migration.domain.SourceHealthStatus.DISABLED,
         org.skepsun.kototoro.migration.domain.SourceHealthStatus.HEALTHY -> null
     }
