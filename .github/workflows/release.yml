@@ -170,3 +170,33 @@ jobs:
           set -euo pipefail
           gh release view "$TAG_NAME" >/dev/null
           gh release upload "$TAG_NAME" release-windows/* --clobber
+
+  ios:
+    needs: build
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ios-build.yml
+    with:
+      ref: ${{ needs.build.outputs.built-sha }}
+      channel: release
+      version-name: ${{ needs.build.outputs.version-name }}
+
+  publish-ios:
+    needs: [build, ios]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.ios.outputs.artifact-name }}
+          path: release-ios
+      - name: Attach iOS package to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG_NAME" >/dev/null
+          gh release upload "$TAG_NAME" release-ios/* --clobber

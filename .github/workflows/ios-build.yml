@@ -1,0 +1,192 @@
+name: iOS Package
+
+# Full iOS build with the embedded extension runtime: OpenJDK Mobile Zero is compiled from the pinned source
+# for the simulator (Java image + staging) and for devices, then archived into an unsigned IPA.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+      channel:
+        required: true
+        type: string
+      version-name:
+        required: false
+        default: ''
+        type: string
+    outputs:
+      artifact-name:
+        value: ${{ jobs.build.outputs.artifact-name }}
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Asset channel suffix
+        required: true
+        default: nightly
+        type: choice
+        options: [nightly, release]
+
+jobs:
+  build:
+    # build-jvm-preview.py requires Apple Silicon; the app's deployment target (iOS 26) requires Xcode 26.
+    runs-on: macos-26
+    timeout-minutes: 300
+    permissions:
+      contents: read
+    outputs:
+      artifact-name: kototoro-ios-${{ inputs.channel }}-${{ github.run_id }}
+    env:
+      IOS_DIR: iosApp/build
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          submodules: recursive
+          # package-ipa.sh uses the commit count as the build number.
+          fetch-depth: 0
+
+      # The OpenJDK Mobile build and the staging scripts require exactly JDK 24; Gradle runs on it as well.
+      - name: Set up JDK 24
+        id: jdk
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: gradle
+
+      - name: Configure JDK and Gradle for Xcode build phases
+        env:
+          JDK_HOME: ${{ steps.jdk.outputs.path }}
+        run: |
+          set -euo pipefail
+          # Xcode build phases locate Java with /usr/libexec/java_home, which ignores the tool cache.
+          bundle="$(cd "$JDK_HOME/../.." && pwd)"
+          test -f "$bundle/Contents/Info.plist"
+          mkdir -p "$HOME/Library/Java/JavaVirtualMachines"
+          ln -sfn "$bundle" "$HOME/Library/Java/JavaVirtualMachines/kototoro-temurin-24.jdk"
+          /usr/libexec/java_home -V || true
+          test "$(cd "$(/usr/libexec/java_home -v 24)" && pwd -P)" = "$(cd "$JDK_HOME" && pwd -P)"
+          echo "Xcode phases use: $(/usr/libexec/java_home -v '17+')"
+          # User-level properties also apply to the Gradle runs started from inside xcodebuild.
+          mkdir -p "$HOME/.gradle"
+          {
+            echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g"
+            echo "kotlin.daemon.jvmargs=-Xmx2g"
+            echo "org.gradle.workers.max=3"
+            echo "org.gradle.java.installations.paths=$JDK_HOME"
+          } >> "$HOME/.gradle/gradle.properties"
+          echo "KOTOTORO_JVM_BOOT_JDK=$JDK_HOME" >> "$GITHUB_ENV"
+          chmod +x gradlew iosApp/Scripts/*.sh iosApp/Scripts/*.py
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          python3 --version
+          java -version
+          sysctl -n hw.ncpu hw.memsize
+          df -h "$GITHUB_WORKSPACE"
+
+      - name: Prepare Android SDK platform
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" > /dev/null
+
+      # Only pinned downloads (SHA-256 verified by the scripts) and the locally built m4/autoconf are cached;
+      # OpenJDK itself is always compiled from source.
+      - name: Cache pinned downloads and build tools
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ env.IOS_DIR }}/jvm-work/*.tar.gz
+            ${{ env.IOS_DIR }}/jvm-work/*.tar.xz
+            ${{ env.IOS_DIR }}/jvm-work/*.zip
+            ${{ env.IOS_DIR }}/jvm-work/*.ipa
+            ${{ env.IOS_DIR }}/jvm-work/*.apk
+            ${{ env.IOS_DIR }}/jvm-work/*.jar
+            ${{ env.IOS_DIR }}/tools
+          key: ios-jvm-inputs-${{ runner.arch }}-${{ hashFiles('iosApp/Scripts/jvm-preview-pins.json', 'iosApp/Scripts/stage-mihon-preview.py') }}
+
+      - name: Resolve version
+        id: version
+        env:
+          VERSION_NAME: ${{ inputs.version-name }}
+        run: |
+          set -euo pipefail
+          base="$(./gradlew -q printVersionName --no-daemon --console=plain | tail -n 1 | tr -d '[:space:]')"
+          if [[ ! "$base" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+            echo "Invalid application version '$base'." >&2
+            exit 1
+          fi
+          marketing="${BASH_REMATCH[0]}"
+          name="${VERSION_NAME:-$base}"
+          if [[ ! "$name" =~ ^[A-Za-z0-9][A-Za-z0-9.+-]*$ ]]; then
+            echo "Invalid asset version '$name'." >&2
+            exit 1
+          fi
+          echo "marketing=$marketing" >> "$GITHUB_OUTPUT"
+          echo "build=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "iOS version $marketing ($(git rev-list --count HEAD)), asset $name"
+
+      # Simulator Zero VM: produces the Java module image, source-host libraries and the fixture profile
+      # that the staging step and the device build reuse.
+      - name: Build OpenJDK Mobile (simulator) and Java image
+        run: python3 iosApp/Scripts/build-jvm-preview.py
+
+      - name: Stage extension runtime profile
+        run: python3 iosApp/Scripts/stage-mihon-preview.py
+
+      - name: Free simulator OpenJDK build tree
+        run: |
+          rm -rf "$IOS_DIR"/jvm-work/kototoro-openjdk/mobile-*/build/iossim-aarch64-zero-release
+          df -h "$GITHUB_WORKSPACE"
+
+      - name: Build OpenJDK Mobile (device)
+        run: python3 iosApp/Scripts/build-jvm-preview.py --platform iphoneos --profile "$IOS_DIR/jvm-real-api"
+
+      - name: Archive unsigned IPA with embedded JVM
+        env:
+          MARKETING: ${{ steps.version.outputs.marketing }}
+          BUILD_NUMBER: ${{ steps.version.outputs.build }}
+        run: iosApp/Scripts/package-ipa.sh --jvm "$MARKETING" "$BUILD_NUMBER"
+
+      - name: Verify bundled JVM host startup
+        run: |
+          python3 iosApp/Scripts/probe-jvm-preview.py --startup-only \
+            --runtime "$IOS_DIR/Kototoro-Release-ios-jvm.xcarchive/Products/Applications/Kototoro.app/jvm"
+
+      - name: Collect IPA
+        env:
+          MARKETING: ${{ steps.version.outputs.marketing }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          case "$CHANNEL" in release|nightly) ;; *) echo "Unknown iOS channel." >&2; exit 1 ;; esac
+          mkdir -p release-ios
+          asset="Kototoro-$VERSION_NAME-ios-$CHANNEL-unsigned"
+          cp "$IOS_DIR/release-ios/Kototoro-$MARKETING-ios-jvm-unsigned.ipa" "release-ios/$asset.ipa"
+          (cd release-ios && shasum -a 256 "$asset.ipa" > "$asset.sha256")
+          ls -l release-ios
+
+      - name: Upload iOS package
+        uses: actions/upload-artifact@v6
+        with:
+          name: kototoro-ios-${{ inputs.channel }}-${{ github.run_id }}
+          path: release-ios/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: kototoro-ios-diagnostics-${{ github.run_id }}
+          path: |
+            ${{ env.IOS_DIR }}/jvm-work/kototoro-openjdk/mobile-*/build/*/config.log
+            ${{ env.IOS_DIR }}/jvm-work/kototoro-openjdk/mobile-*/build/*/build.log
+            ${{ env.IOS_DIR }}/jvm-work/kototoro-openjdk/mobile-*/build/*/make-support/failure-logs/
+            ${{ env.IOS_DIR }}/jvm-probe-*/host.log
+          if-no-files-found: ignore
+          retention-days: 7
