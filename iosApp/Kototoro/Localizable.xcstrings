@@ -1596,6 +1596,16 @@
         }
       }
     },
+    "佚名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anonymous"
+          }
+        }
+      }
+    },
     "作品": {
       "localizations": {
         "en": {
@@ -10093,6 +10103,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Status"
+          }
+        }
+      }
+    },
+    "状态未知": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status unknown"
           }
         }
       }

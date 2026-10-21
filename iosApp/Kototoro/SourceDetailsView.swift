@@ -800,33 +800,43 @@ struct SourceDetailsView: View {
                     }
                 }
                 .buttonStyle(.plain)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func infoCard(_ shown: IosSourceContent) -> some View {
-        if !model.isVideo || !shown.authors.isEmpty || shown.state != nil || (resume?.progress ?? 0) > 0 {
-            infoCardContent(shown)
-        }
-    }
-
-    private func infoCardContent(_ shown: IosSourceContent) -> some View {
-        VStack(spacing: 10) {
-            if !shown.authors.isEmpty || shown.state != nil {
-                HStack(alignment: .top, spacing: 12) {
-                    authorItem(shown)
-                    Spacer(minLength: 0)
-                    if let state = shown.state {
-                        Label(Self.stateTitle(state), systemImage: state == "ONGOING" ? "play.circle" : "checkmark.circle")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(Self.stateTint(state))
-                    }
+            } else {
+                HStack(spacing: 6) {
+                    Image(systemName: "person.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("佚名")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
             }
-            if !model.isVideo {
-                chapterInfo
+        }
+    }
+
+    /// Android's info items keep the state row when the source has none and dim it as unknown; the panel keeps the
+    /// same shape here instead of dropping rows the source cannot fill.
+    private func stateItem(_ shown: IosSourceContent) -> some View {
+        Group {
+            if let state = shown.state {
+                Label(Self.stateTitle(state), systemImage: state == "ONGOING" ? "play.circle" : "checkmark.circle")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Self.stateTint(state))
+            } else {
+                Label("状态未知", systemImage: "questionmark.circle")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private func infoCard(_ shown: IosSourceContent) -> some View {
+        VStack(spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                authorItem(shown)
+                Spacer(minLength: 0)
+                stateItem(shown)
+            }
+            chapterInfo
 
             if let resume = resume, resume.progress > 0 {
                 HStack(spacing: 8) {
@@ -843,20 +853,20 @@ struct SourceDetailsView: View {
         .modifier(DetailsContentPanel())
     }
 
+    /// Android's header shows the same reading progress as `currentChapter + 1 / total` (`0/N` before the first
+    /// chapter), and always includes it, video included. The count follows the listed chapters: the chosen line for
+    /// video, all chapters otherwise, so the value matches the directory heading below.
     private var chapterInfo: some View {
         HStack(spacing: 12) {
             Label(Self.mediaKindTitle(shownContent.mediaKind), systemImage: "character.book.closed")
             Spacer(minLength: 0)
-            let totalChapters = model.chapters.count
+            let listed = model.isVideo ? model.visibleChapters : model.chapters
+            let totalChapters = listed.count
+            let readChapter = resume.flatMap { position in
+                listed.firstIndex { $0.id == position.chapterId }
+            }.map { $0 + 1 } ?? 0
+            let progressText = totalChapters > 0 ? "\(readChapter)/\(totalChapters)" : "-"
             if totalChapters > 0 {
-                let progressText: String = {
-                    if let resume, resume.progress > 0 {
-                        let readCount = (model.chapterIndices[resume.chapterId] ?? -1) + 1
-                        return "\(readCount)/\(totalChapters)"
-                    } else {
-                        return String(localized: "\(totalChapters) 章")
-                    }
-                }()
                 Button {
                     showingAllChapters = true
                 } label: {
@@ -867,7 +877,9 @@ struct SourceDetailsView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("全部章节，\(progressText)")
+                .accessibilityLabel("全部\(model.isVideo ? "剧集" : "章节")，\(progressText)")
+            } else {
+                Text(progressText).foregroundStyle(.secondary)
             }
         }
         .font(.subheadline)

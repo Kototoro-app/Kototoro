@@ -426,8 +426,10 @@ final class SuggestionsTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 20))
         XCTAssertEqual(app.staticTexts["details.title"].label, "测试动画")
         XCTAssertLessThan(Date().timeIntervalSince(openedAt), 5, "Opening a cached recommendation must stay responsive")
-        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "全部剧集，")).firstMatch.exists,
-                       "Video details must not repeat the episode-directory control above the summary")
+        let episodeProgress = app.buttons.matching(NSPredicate(format: "label MATCHES %@", "全部剧集，[0-9]+/[0-9]+"))
+            .firstMatch
+        XCTAssertTrue(episodeProgress.waitForExistence(timeout: 10),
+                      "Video details keep the Android episode progress row above the summary")
         for _ in 0..<3 {
             let startedAt = Date()
             app.buttons["details.more"].tap()

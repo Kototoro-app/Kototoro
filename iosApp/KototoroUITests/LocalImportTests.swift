@@ -93,6 +93,13 @@ final class LocalImportTests: XCTestCase {
     @MainActor
     func testVideoPlaybackCollectsStatistics() throws {
         importFile(source: "LOCAL_VIDEO", file: "fixture_video", reuse: true)
+        let episodes = app.buttons.matching(NSPredicate(format: "label MATCHES %@", "全部剧集，[0-9]+/[0-9]+"))
+            .firstMatch
+        XCTAssertTrue(episodes.waitForExistence(timeout: 20),
+                      "Video details keep the episode progress row above the summary")
+        XCTAssertTrue(app.staticTexts["佚名"].exists, "Video details keep the unknown-author placeholder")
+        XCTAssertTrue(app.staticTexts["状态未知"].exists, "Video details keep the unknown-state placeholder")
+        attach("视频资料卡")
         let read = app.detailsReadButton()
         XCTAssertTrue(read.waitForExistence(timeout: 20), app.debugDescription)
         read.tap()
@@ -142,8 +149,9 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(headerRead.isHittable)
         XCTAssertFalse(app.buttons["details.read"].isHittable)
         XCTAssertFalse(app.buttons["details.readOptions"].exists)
-        XCTAssertFalse(app.staticTexts["佚名"].exists)
-        XCTAssertFalse(app.staticTexts["状态未知"].exists)
+        // Android keeps the author and state items when the source has neither, dimmed as unknown.
+        XCTAssertTrue(app.staticTexts["佚名"].exists)
+        XCTAssertTrue(app.staticTexts["状态未知"].exists)
         let chapter = revealChapter(in: app, timeout: 30)
         XCTAssertTrue(chapter.isHittable, app.debugDescription)
         XCTAssertLessThanOrEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chapter.")).count, 5)
@@ -174,6 +182,25 @@ final class LocalImportTests: XCTestCase {
         }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [toolbarHidden], timeout: 5), .completed)
         attach("返回头部后隐藏重复阅读入口")
+    }
+
+    @MainActor
+    func testDetailsChapterInfoRowShowsUnreadProgressAndOpensTheDirectory() throws {
+        // Android's header reads `current chapter + 1 / total` and starts at 0/N; the same row opens the directory,
+        // video included.
+        importFile(source: "LOCAL", file: "fixture_details_title", expectImport: false)
+        let work = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+            "source.content.", "超长标题折叠测试")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 30), app.debugDescription)
+        work.tap()
+
+        let row = app.buttons["全部章节，0/1"]
+        XCTAssertTrue(row.waitForExistence(timeout: 20), app.debugDescription)
+        attach("资料卡未读进度")
+        row.tap()
+        XCTAssertTrue(app.navigationBars["全部章节"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.descendants(matching: .any)["details.chapters.list"].firstMatch.waitForExistence(timeout: 5))
     }
 
     @MainActor

@@ -77,7 +77,12 @@ MangaUpdates、SIMKL 的目录和账号入口。作品详情的“追踪与资�
 「复制标题」按钮提供）。附加标题固定两行，与 Android 一致。回归：
 `-only-testing:KototoroUITests/LocalImportTests/testLongDetailsTitleExpandsAndCollapsesWithinTheAndroidLineBudget`
 （需 `fixture_details_title.cbz`）。
-有续读章节时才显示“从第一章／集开始”的菜单；资料卡隐藏缺失作者与状态的占位，保留有效资料、章节数及进度。
+有续读章节时才显示“从第一章／集开始”的菜单；资料卡始终显示作者与状态行，来源未提供时以「佚名」
+「状态未知」次要色占位（对齐 Android 的 `unknown_author`／`unknown`），不因字段缺失隐藏整行。
+资料卡的「章节／剧集」行沿用 Android 头部的 `current + 1 / total` 读数：未读为 `0/N`，无章节显示 `-`，
+点击进入完整目录；漫画、小说与视频都显示该行，不因内容类型隐藏资料卡（视频按所选线路计数）。
+回归：`-only-testing:KototoroUITests/LocalImportTests/testDetailsChapterInfoRowShowsUnreadProgressAndOpensTheDirectory`、
+`LocalImportTests/testVideoPlaybackCollectsStatistics`（视频行，需 `fixture_video.mp4`）。
 资料、简介、章节预览和书签卡片使用系统 `regularMaterial`，正文不叠加 Liquid Glass。
 阅读、复制及收藏等操作使用原生玻璃按钮，同组控件置于 `GlassEffectContainer`；
 内容卡片在降低透明度时切换为不透明系统背景，边界随增强对比度设置调整。
