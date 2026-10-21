@@ -77,6 +77,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.rememberChapterRowActionPrefs
 import org.skepsun.kototoro.core.ui.compose.KototoroMotion
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
@@ -1066,6 +1067,33 @@ private fun ExpandedPaneUtilityDock(
                             },
                         )
                     }
+                    val rowActions = rememberChapterRowActionPrefs()
+                    CompactDropdownMenuItem(
+                        text = { Text(stringResource(R.string.chapter_show_download_button)) },
+                        leadingIcon = {
+                            DetailsMenuIcon(R.drawable.ic_download)
+                        },
+                        trailingIcon = {
+                            MenuSelectionIndicator(selected = rowActions.showDownload)
+                        },
+                        onClick = {
+                            expanded = false
+                            rowActions.setShowDownload(!rowActions.showDownload)
+                        },
+                    )
+                    CompactDropdownMenuItem(
+                        text = { Text(stringResource(R.string.chapter_show_translate_button)) },
+                        leadingIcon = {
+                            DetailsMenuIcon(R.drawable.ic_translate)
+                        },
+                        trailingIcon = {
+                            MenuSelectionIndicator(selected = rowActions.showTranslate)
+                        },
+                        onClick = {
+                            expanded = false
+                            rowActions.setShowTranslate(!rowActions.showTranslate)
+                        },
+                    )
                 }
             }
         }

@@ -408,6 +408,8 @@
     <string name="reverse">Reverse</string>
     <string name="chapters_grid_view">Grid view</string>
     <string name="hide_read_chapters">Hide read chapters</string>
+    <string name="chapter_show_download_button">Show download buttons</string>
+    <string name="chapter_show_translate_button">Show translate buttons</string>
     <string name="merge_branch_chapters">Merge branch chapters</string>
     <string name="sign_in">Sign in</string>
     <string name="sign_in_in_settings">Sign in in settings</string>

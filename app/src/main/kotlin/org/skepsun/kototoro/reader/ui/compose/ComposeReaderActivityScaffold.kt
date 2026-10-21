@@ -120,6 +120,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ReaderControl
 import org.skepsun.kototoro.core.prefs.ReaderInfoBarLayout
+import org.skepsun.kototoro.core.prefs.rememberChapterRowActionPrefs
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
@@ -399,11 +400,28 @@ private fun ReaderChapterPanelMoreMenu(
                 },
             )
         }
+        val rowActions = rememberChapterRowActionPrefs()
+        ReaderChapterPanelMenuItem(
+            text = stringResource(R.string.chapter_show_download_button),
+            selected = rowActions.showDownload,
+            onClick = {
+                onDismissRequest()
+                rowActions.setShowDownload(!rowActions.showDownload)
+            },
+        )
+        ReaderChapterPanelMenuItem(
+            text = stringResource(R.string.chapter_show_translate_button),
+            selected = rowActions.showTranslate,
+            onClick = {
+                onDismissRequest()
+                rowActions.setShowTranslate(!rowActions.showTranslate)
+            },
+        )
     }
 }
 
 @Composable
-private fun ReaderChapterPanelMenuItem(
+internal fun ReaderChapterPanelMenuItem(
     text: String,
     selected: Boolean,
     enabled: Boolean = true,

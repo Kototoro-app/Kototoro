@@ -258,6 +258,9 @@ class NovelReaderActivity :
     /** Fraction of the chapter already translated, for chapters a job left unfinished. */
     private val chapterTranslationProgress = MutableStateFlow<Map<Long, Float>>(emptyMap())
 
+    /** Chapters stored offline already; their row shows a downloaded marker instead of the download button. */
+    private val downloadedChapterIds = MutableStateFlow<Set<Long>>(emptySet())
+
     private suspend fun refreshChapterTranslationStates() {
         val content = if (::manga.isInitialized) manga else return
         val languagePair = resolveChapterTranslationLanguagePair(
@@ -301,6 +304,43 @@ class NovelReaderActivity :
             )
             downloadScheduler.schedule(setOf(content to task))
         }
+    }
+
+    /** Chapter panel download action: queues this chapter into the normal download queue. */
+    private fun downloadChapterFromSheet(chapter: ContentChapter) {
+        val content = if (::manga.isInitialized) manga else return
+        lifecycleScope.launch {
+            val task = DownloadTask.createExecutionTask(
+                executionMangaId = content.id,
+                displayMangaId = content.id,
+                isPaused = false,
+                isSilent = false,
+                executionChapterIds = longArrayOf(chapter.id),
+                executionChapterRefs = listOf(ExecutionChapterRef.fromChapter(chapter)),
+                destination = null,
+                format = null,
+                allowMeteredNetwork = true,
+                kind = DownloadTaskKind.DOWNLOAD,
+            )
+            downloadScheduler.schedule(setOf(content to task))
+            // Hide the row button right away; the finished work triggers a refresh of the marker.
+            downloadedChapterIds.value = downloadedChapterIds.value + chapter.id
+            showReaderMessage(R.string.download_started)
+        }
+    }
+
+    /** Re-reads the chapters already stored offline for the current content. */
+    private suspend fun refreshDownloadedChapterIds() {
+        val content = if (::manga.isInitialized) manga else return
+        val ids = withContext(Dispatchers.IO) {
+            runCatching {
+                localContentRepository.getDetails(content).chapters
+                    .orEmpty()
+                    .filter { it.source.isLocal }
+                    .mapTo(LinkedHashSet()) { it.id }
+            }.getOrNull()
+        } ?: return
+        downloadedChapterIds.value = ids
     }
     private lateinit var repository: ContentRepository
     private var originalContent: Content? = null  // Store original for online fallback
@@ -903,8 +943,16 @@ class NovelReaderActivity :
                         if (state.chaptersSheetVisible) {
                             val translatedIds by translatedChapterIds.collectAsStateWithLifecycle()
                             val progress by chapterTranslationProgress.collectAsStateWithLifecycle()
+                            val downloadedIds by downloadedChapterIds.collectAsStateWithLifecycle()
                             LaunchedEffect(Unit) {
                                 refreshChapterTranslationStates()
+                                launch {
+                                    refreshDownloadedChapterIds()
+                                    downloadScheduler.observeWorks()
+                                        .map { works -> works.count { it.state.isFinished } }
+                                        .distinctUntilChanged()
+                                        .collect { refreshDownloadedChapterIds() }
+                                }
                                 chapterTranslationStore.changes.collect {
                                     refreshChapterTranslationStates()
                                 }
@@ -913,9 +961,11 @@ class NovelReaderActivity :
                                 chapters = state.chapters,
                                 translatedChapterIds = translatedIds,
                                 translationProgress = progress,
+                                downloadedChapterIds = downloadedIds,
                                 onTranslateChapter = { chapter, isRetranslation ->
                                     translateChapterFromSheet(chapter, isRetranslation)
                                 },
+                                onDownloadChapter = { chapter -> downloadChapterFromSheet(chapter) },
                                 currentIndex = state.currentChapterIndex,
                                 searchDocuments = state.continuousChapters,
                                 markings = state.novelMarkings,

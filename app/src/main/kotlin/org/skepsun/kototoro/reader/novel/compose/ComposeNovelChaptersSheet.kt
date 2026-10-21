@@ -21,9 +21,11 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -53,12 +55,16 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.bookmarks.domain.Bookmark
 import org.skepsun.kototoro.core.model.LocalNovelSource
+import org.skepsun.kototoro.core.model.isLocal
+import org.skepsun.kototoro.core.prefs.rememberChapterRowActionPrefs
+import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
 import org.skepsun.kototoro.reader.novel.novelReaderPalette
 import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingEntity
 import androidx.compose.foundation.background
 import androidx.compose.runtime.mutableIntStateOf
+import org.skepsun.kototoro.reader.ui.compose.ReaderChapterPanelMenuItem
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChapterPanelHeader
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelTabBar
 import org.skepsun.kototoro.reader.ui.compose.design.currentReaderPanelColors
@@ -112,7 +118,13 @@ internal fun ComposeNovelChaptersSheet(
     translationProgress: Map<Long, Float> = emptyMap(),
     /** Translates one chapter from its row; null hides the in-row translate button. */
     onTranslateChapter: ((ContentChapter, Boolean) -> Unit)? = null,
+    /** Chapters available offline already. */
+    downloadedChapterIds: Set<Long> = emptySet(),
+    /** Downloads one chapter from its row; null hides the in-row download button. */
+    onDownloadChapter: ((ContentChapter) -> Unit)? = null,
 ) {
+    val rowActions = rememberChapterRowActionPrefs()
+    var moreMenuExpanded by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(
         initialPage = initialTab.ordinal.coerceIn(0, NovelChaptersSheetTab.entries.lastIndex),
         pageCount = { NovelChaptersSheetTab.entries.size },
@@ -149,6 +161,35 @@ internal fun ComposeNovelChaptersSheet(
                             locateRequest++
                         },
                     )
+                    Box {
+                        IconButton(onClick = { moreMenuExpanded = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = stringResource(R.string.more),
+                            )
+                        }
+                        GlassDropdownMenu(
+                            expanded = moreMenuExpanded,
+                            onDismissRequest = { moreMenuExpanded = false },
+                        ) {
+                            ReaderChapterPanelMenuItem(
+                                text = stringResource(R.string.chapter_show_download_button),
+                                selected = rowActions.showDownload,
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    rowActions.setShowDownload(!rowActions.showDownload)
+                                },
+                            )
+                            ReaderChapterPanelMenuItem(
+                                text = stringResource(R.string.chapter_show_translate_button),
+                                selected = rowActions.showTranslate,
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    rowActions.setShowTranslate(!rowActions.showTranslate)
+                                },
+                            )
+                        }
+                    }
                 },
             )
             ReaderPanelTabBar(
@@ -179,7 +220,9 @@ internal fun ComposeNovelChaptersSheet(
                             modifier = Modifier.fillMaxSize(),
                             translatedChapterIds = translatedChapterIds,
                             translationProgress = translationProgress,
-                            onTranslateChapter = onTranslateChapter,
+                            onTranslateChapter = onTranslateChapter?.takeIf { rowActions.showTranslate },
+                            downloadedChapterIds = downloadedChapterIds,
+                            onDownloadChapter = onDownloadChapter?.takeIf { rowActions.showDownload },
                         )
                     }
                     NovelChaptersSheetTab.NOTES -> {
@@ -232,13 +275,16 @@ internal fun ComposeNovelChaptersContent(
     translatedChapterIds: Set<Long> = emptySet(),
     translationProgress: Map<Long, Float> = emptyMap(),
     onTranslateChapter: ((ContentChapter, Boolean) -> Unit)? = null,
+    downloadedChapterIds: Set<Long> = emptySet(),
+    onDownloadChapter: ((ContentChapter) -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val directory = remember(chapters, translatedChapterIds, translationProgress) {
+    val directory = remember(chapters, translatedChapterIds, translationProgress, downloadedChapterIds) {
         chapters.map { chapter ->
             chapter.directoryEntry().copy(
                 isTranslated = chapter.id in translatedChapterIds,
                 translationProgress = translationProgress[chapter.id],
+                isDownloaded = chapter.source.isLocal || chapter.id in downloadedChapterIds,
             )
         }
     }
@@ -272,6 +318,13 @@ internal fun ComposeNovelChaptersContent(
             null
         },
         translateContentDescription = stringResource(R.string.translate_chapter),
+        onChapterDownload = if (onDownloadChapter != null) {
+            { entry -> chapters.firstOrNull { it.id == entry.id }?.let(onDownloadChapter) }
+        } else {
+            null
+        },
+        downloadContentDescription = stringResource(R.string.download),
+        downloadedContentDescription = stringResource(R.string.downloaded),
     )
     val target = retranslationRequest.value
     if (target != null) {

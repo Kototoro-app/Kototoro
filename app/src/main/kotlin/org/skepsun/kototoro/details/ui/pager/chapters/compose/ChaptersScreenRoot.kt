@@ -31,6 +31,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ReaderIntent
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.prefs.rememberChapterRowActionPrefs
 import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.observeEvent
@@ -74,6 +75,7 @@ fun ChaptersScreenRoot(
 
     val appContext = context.applicationContext
     val settings = remember(appContext) { AppSettings(appContext) }
+    val rowActions = rememberChapterRowActionPrefs()
     val gridSize by settings.observeAsState(AppSettings.KEY_GRID_SIZE_CHAPTERS) { gridSizeChapters }
 
     val gridScale = (gridSize / 100f)
@@ -317,8 +319,12 @@ fun ChaptersScreenRoot(
             isLoading = isLoading,
         emptyMessageResId = emptyReason?.msgResId,
         initialChapterId = initialCurrentChapterId,
-        onItemDownload = { item -> startDownload(setOf(item.chapter.id)) },
-        onItemTranslate = if (canTranslateChapters) {
+        onItemDownload = if (rowActions.showDownload) {
+            { item -> startDownload(setOf(item.chapter.id)) }
+        } else {
+            null
+        },
+        onItemTranslate = if (canTranslateChapters && rowActions.showTranslate) {
             { item, isRetranslation -> startTranslation(setOf(item.chapter.id), isRetranslation) }
         } else {
             null

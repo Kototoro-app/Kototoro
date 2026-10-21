@@ -14,6 +14,8 @@ data class NovelChapterDirectoryEntry(
     val isTranslated: Boolean = false,
     /** Fraction of the chapter already translated, when a translation exists but is not complete. */
     val translationProgress: Float? = null,
+    /** The chapter is available offline (downloaded or part of a local book). */
+    val isDownloaded: Boolean = false,
 )
 
 sealed interface NovelChapterDirectoryItem {

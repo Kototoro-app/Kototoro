@@ -52,6 +52,12 @@ fun NovelChapterDirectoryContent(
     onChapterTranslate: ((NovelChapterDirectoryEntry) -> Unit)? = null,
     /** Accessibility label of the per-row translate button. */
     translateContentDescription: String = "",
+    /** Per-row download action; null hides the download button. */
+    onChapterDownload: ((NovelChapterDirectoryEntry) -> Unit)? = null,
+    /** Accessibility label of the per-row download button. */
+    downloadContentDescription: String = "",
+    /** Accessibility label of the offline marker shown instead of the download button. */
+    downloadedContentDescription: String = "",
 ) {
     val colors = currentReaderPanelColors()
     var reversed by remember { mutableStateOf(false) }
@@ -135,6 +141,12 @@ fun NovelChapterDirectoryContent(
                             isTranslated = item.chapter.isTranslated,
                             translationProgress = item.chapter.translationProgress,
                             translateContentDescription = translateContentDescription,
+                            onDownload = onChapterDownload
+                                ?.takeIf { !item.chapter.isDownloaded }
+                                ?.let { download -> { download(item.chapter) } },
+                            isDownloaded = item.chapter.isDownloaded,
+                            downloadContentDescription = downloadContentDescription,
+                            downloadedContentDescription = downloadedContentDescription,
                         )
                     }
                 }
@@ -156,6 +168,10 @@ private fun NovelChapterRow(
     isTranslated: Boolean = false,
     translationProgress: Float? = null,
     translateContentDescription: String = "",
+    onDownload: (() -> Unit)? = null,
+    isDownloaded: Boolean = false,
+    downloadContentDescription: String = "",
+    downloadedContentDescription: String = "",
 ) {
     val colors = currentReaderPanelColors()
     val current = state == NovelChapterReadState.CURRENT
@@ -196,6 +212,25 @@ private fun NovelChapterRow(
                 .weight(1f)
                 .padding(end = 8.dp),
         )
+        if (onDownload != null) {
+            IconButton(onClick = onDownload, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    imageVector = ReaderPanelIcons.Download,
+                    contentDescription = downloadContentDescription,
+                    tint = colors.contentSecondary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        } else if (isDownloaded) {
+            Icon(
+                imageVector = ReaderPanelIcons.SaveOk,
+                contentDescription = downloadedContentDescription,
+                tint = colors.contentSecondary,
+                modifier = Modifier
+                    .padding(end = 10.dp)
+                    .size(18.dp),
+            )
+        }
         if (onTranslate != null) {
             IconButton(onClick = onTranslate, modifier = Modifier.size(40.dp)) {
                 if (translationProgress != null && !isTranslated) {
