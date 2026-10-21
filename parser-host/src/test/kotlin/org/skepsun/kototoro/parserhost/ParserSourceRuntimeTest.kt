@@ -84,6 +84,31 @@ class ParserSourceRuntimeTest {
     }
 
     @Test
+    fun `browser session user agent matches requests when the platform supplies its own default`() = runBlocking {
+        val source = "FIXTURE_KOTOTORO_ONLY"
+        val sdkClient = okhttp3.OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            chain.proceed(if (request.header("User-Agent") == null) {
+                request.newBuilder().header("User-Agent", "SDK desktop default").build()
+            } else request)
+        }.build()
+        TestPlatform(root.resolve("sdk"), sdkClient).use { sdkPlatform ->
+            ParserPluginRegistry(sdkPlatform).use { sdkRegistry ->
+                sdkRegistry.load(Fixtures.kototoro, "kototoro-parsers")
+                val sdkRuntime = ParserSourceRuntime(sdkRegistry, sdkPlatform)
+                val session = sdkRuntime.browserSession(source)
+                sdkRegistry.withParser(source) { handle ->
+                    val client = ParserLoaderContext(sdkPlatform) { handle.parser }.httpClient
+                    val request = okhttp3.Request.Builder().url(server.url("/list"))
+                        .tag(org.skepsun.kototoro.parsers.model.ContentSource::class.java, handle.parser.source).build()
+                    client.newCall(request).execute().close()
+                }
+                assertEquals(session.userAgent, requests.poll(5, TimeUnit.SECONDS)!!.getHeader("User-Agent"))
+            }
+        }
+    }
+
+    @Test
     fun `parser requests carry the parser headers and go through its interceptor`() = runBlocking {
         useServerAsDomain("FIXTURE_KOTOTORO_ONLY")
         registry.withParser("FIXTURE_KOTOTORO_ONLY") { handle ->

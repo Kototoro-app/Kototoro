@@ -21,7 +21,7 @@ internal class ParserLoaderContext(
     /** The platform's client, with each parser's headers and interceptor applied to the requests it tags. */
     override val httpClient: OkHttpClient by lazy {
         platform.httpClient.newBuilder()
-            .addInterceptor(ParserRequestInterceptor({ platform.defaultUserAgent }, siblingParser))
+            .apply { interceptors().add(0, ParserRequestInterceptor({ platform.defaultUserAgent }, siblingParser)) }
             .build()
     }
     override val cookieJar: CookieJar by lazy { ParserCookieJar(platform.cookieJar) }

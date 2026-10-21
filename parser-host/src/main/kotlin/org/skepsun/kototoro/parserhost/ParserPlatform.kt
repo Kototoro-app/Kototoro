@@ -4,6 +4,7 @@ import okhttp3.CookieJar
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.skepsun.kototoro.core.source.SourcePreferenceStore
+import org.skepsun.kototoro.core.source.SourceBrowserSession
 import org.skepsun.kototoro.parsers.bitmap.Bitmap
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.network.UserAgents
@@ -27,6 +28,9 @@ interface ParserPlatform {
 
     val defaultUserAgent: String get() = UserAgents.CHROME_DESKTOP
     val preferredLocales: List<Locale> get() = listOf(Locale.getDefault())
+
+    /** A platform may retain the actual challenged path and UA instead of opening an unchallenged home page. */
+    fun browserSession(url: String, userAgent: String): SourceBrowserSession = SourceBrowserSession(url, userAgent)
 
     fun createBitmap(width: Int, height: Int): Bitmap =
         throw UnsupportedOperationException("This host has no bitmap implementation")

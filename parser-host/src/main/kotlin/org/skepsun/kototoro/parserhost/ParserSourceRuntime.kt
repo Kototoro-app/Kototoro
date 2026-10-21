@@ -155,7 +155,7 @@ class ParserSourceRuntime(
     override suspend fun browserSession(sourceName: String): SourceBrowserSession = execute(sourceName) { handle ->
         val domain = handle.parser.domain.takeIf(String::isNotBlank) ?: throw SourceOperationUnsupportedException()
         val userAgent = runCatching { handle.parser.getRequestHeaders()["User-Agent"] }.getOrNull()
-        SourceBrowserSession("https://$domain", userAgent?.takeIf(String::isNotBlank) ?: platform.defaultUserAgent)
+        platform.browserSession("https://$domain", userAgent?.takeIf(String::isNotBlank) ?: platform.defaultUserAgent)
     }
 
     /**
