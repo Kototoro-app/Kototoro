@@ -29,8 +29,9 @@ on:
 
 jobs:
   build:
-    # build-jvm-preview.py requires Apple Silicon; the app's deployment target (iOS 26) requires Xcode 26.
-    runs-on: macos-26
+    # build-jvm-preview.py requires Apple Silicon, and the app builds against the iOS 27 SDK (Xcode 27); macos-26
+    # images stop at Xcode 26.6. xcode-27 is GitHub's macOS 27 image with Xcode 27.0 as its default.
+    runs-on: xcode-27
     timeout-minutes: 300
     permissions:
       contents: read
