@@ -1139,6 +1139,7 @@ struct NovelPagedReader: View {
     @ObservedObject var model: NovelReaderModel
     let style: NovelStyle
     let onToggleChrome: () -> Void
+    private let footerHeight: CGFloat = 22
     @State private var pages: [NovelLaidOutPage] = []
     @State private var current: Int?
     @State private var appliedTarget: UUID?
@@ -1159,7 +1160,7 @@ struct NovelPagedReader: View {
         GeometryReader { geometry in
             let insets = cutout
             let content = CGSize(width: geometry.size.width - insets.left - insets.right - 2 * style.marginHorizontal,
-                                 height: geometry.size.height - insets.top - 2 * style.marginVertical)
+                                 height: geometry.size.height - insets.top - 2 * style.marginVertical - footerHeight)
             NovelPager(count: pages.count, current: $current, curl: style.pageTurn == "SIMULATION",
                        version: layoutVersion, background: style.colors.uiBackground,
                        page: { index in
@@ -1221,18 +1222,18 @@ struct NovelPagedReader: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, style.marginVertical)
+        .padding(.top, style.marginVertical)
+        .padding(.bottom, style.marginVertical + footerHeight)
         .overlay(alignment: .bottom) {
-            // The footer belongs to the configured lower margin, not a second inset taken from the text.
-            // Small margins keep a smaller footer instead of overlapping the last line.
+            // The lower margin is the gap above the footer, just as the upper margin starts below the cutout.
             HStack {
                 Text(model.chapter.title).lineLimit(1)
                 Spacer()
                 Text("\(index + 1) / \(pages.count)").monospacedDigit()
             }
-            .font(.system(size: min(11, style.marginVertical * 0.75)))
+            .font(.system(size: 11))
             .foregroundStyle(style.colors.secondaryText)
-            .frame(height: style.marginVertical)
+            .frame(height: footerHeight, alignment: .top)
             .padding(.horizontal, style.marginHorizontal)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("novel.footer")

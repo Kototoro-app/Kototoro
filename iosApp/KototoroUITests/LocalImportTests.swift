@@ -1788,21 +1788,20 @@ final class LocalImportTests: XCTestCase {
     }
 
     @MainActor
-    func testNovelPagedTextMarginsAreSymmetricAndContainTheFooter() throws {
+    func testNovelPagedTextMarginsStartAtCutoutAndFooter() throws {
         for margin: CGFloat in [60, 12] {
             app.launchArguments = ["-novel.reader.marginVertical", String(Int(margin))]
             openNovelControls(mode: "PAGED")
             let text = app.staticTexts["novel.firstParagraph"]
             let bounds = text.frame
-            let bottom = app.frame.maxY - bounds.maxY
-            XCTAssertEqual(bottom, margin, accuracy: 1, app.debugDescription)
+            let footer = app.descendants(matching: .any)["novel.footer"].firstMatch
+            XCTAssertTrue(footer.exists)
+            XCTAssertEqual(footer.frame.minY - bounds.maxY, margin, accuracy: 1, app.debugDescription)
             // XCTest does not expose the system status-bar element on this simulator. The top controls are inset
             // 12 points from the same safe-area edge; use their measured bounds, not a hard-coded notch size.
             let safeTop = app.buttons["novel.back"].frame.minY - 12
             XCTAssertEqual(bounds.minY - safeTop, margin, accuracy: 1,
                            "The top margin excludes the sensor/status-bar safe area")
-            let footer = app.descendants(matching: .any)["novel.footer"].firstMatch
-            XCTAssertTrue(footer.exists)
             XCTAssertGreaterThanOrEqual(footer.frame.minY, bounds.maxY - 1)
             XCTAssertLessThanOrEqual(footer.frame.maxY, app.frame.maxY + 1)
             attach("小说正文上下\(Int(margin))点边距与页脚位置")
@@ -1810,8 +1809,58 @@ final class LocalImportTests: XCTestCase {
             XCTAssertTrue(app.buttons["novel.more"].waitForNonExistence(timeout: 10))
             XCTAssertEqual(text.frame.minY, bounds.minY, accuracy: 1)
             XCTAssertEqual(text.frame.maxY, bounds.maxY, accuracy: 1)
+            XCTAssertLessThan(firstTextInkOffset(text), 40, "TextKit must not add a second top safe-area inset")
             attach("小说\(Int(margin))点边距的沉浸正文")
         }
+    }
+
+    @MainActor
+    private func firstTextInkOffset(_ text: XCUIElement) -> CGFloat {
+        guard let image = text.screenshot().image.cgImage else { return .infinity }
+        let width = image.width
+        let height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = pixels.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(data: bytes.baseAddress, width: width, height: height,
+                bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return .infinity }
+        let scale = CGFloat(width) / text.frame.width
+        for y in 0..<height {
+            var ink = 0
+            for x in 0..<width {
+                let offset = (y * width + x) * 4
+                let contrast = (0..<3).reduce(0) { $0 + abs(Int(pixels[offset + $1]) - Int(pixels[$1])) }
+                if contrast > 120 { ink += 1 }
+            }
+            if ink > 5 { return CGFloat(y) / scale }
+        }
+        return .infinity
+    }
+
+    @MainActor
+    func testContinueReadingDetailsDismissesWithEdgeSwipe() throws {
+        openNovelControls(mode: "PAGED")
+        app.buttons["novel.back"].tap()
+        for _ in 0..<4 where !app.mainTab("作品库").exists {
+            app.navigationBars.buttons["BackButton"].firstMatch.tap()
+        }
+        app.mainTab("作品库").tap()
+        let accessory = app.buttons["continueReading"]
+        XCTAssertTrue(accessory.waitForExistence(timeout: 10), app.debugDescription)
+        accessory.tap()
+        XCTAssertTrue(app.buttons["novel.back"].waitForExistence(timeout: 30), app.debugDescription)
+        app.buttons["novel.back"].tap()
+        let close = app.buttons["continueReading.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: 10), app.debugDescription)
+        let window = app.windows.firstMatch
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.5)).press(forDuration: 0.1,
+            thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)))
+        XCTAssertTrue(close.waitForNonExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(accessory.waitForExistence(timeout: 10), app.debugDescription)
     }
 
     private func openNovelControls(mode: String) {

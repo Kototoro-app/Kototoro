@@ -78,6 +78,7 @@ private struct ContinueReadingPresentation: ViewModifier {
             if let runtime = sources.runtime {
                 NavigationStack {
                     SourceDetailsView(runtime: runtime, content: item.content, autoResume: true)
+                        .background(ContinueReadingEdgeDismiss { opened = nil })
                         .toolbar {
                             ToolbarItem(placement: .topBarLeading) {
                                 Button("关闭", systemImage: "xmark") { opened = nil }
@@ -89,6 +90,53 @@ private struct ContinueReadingPresentation: ViewModifier {
                 .environmentObject(library)
                 .environmentObject(sources)
                 .environmentObject(downloads)
+            }
+        }
+    }
+}
+
+/// The resumed details are the cover's navigation root, so UIKit has no previous page to pop to.
+private struct ContinueReadingEdgeDismiss: UIViewControllerRepresentable {
+    let dismiss: () -> Void
+
+    func makeUIViewController(context: Context) -> Controller { Controller(dismiss: dismiss) }
+    func updateUIViewController(_ controller: Controller, context: Context) { controller.dismissCover = dismiss }
+
+    final class Controller: UIViewController, UIGestureRecognizerDelegate {
+        var dismissCover: () -> Void
+        private weak var installedView: UIView?
+        private lazy var edge = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(swiped(_:)))
+
+        init(dismiss: @escaping () -> Void) {
+            dismissCover = dismiss
+            super.init(nibName: nil, bundle: nil)
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            guard let navigationView = navigationController?.view else { return }
+            edge.edges = .left
+            edge.delegate = self
+            navigationView.addGestureRecognizer(edge)
+            installedView = navigationView
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            installedView?.removeGestureRecognizer(edge)
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            navigationController?.viewControllers.count == 1
+        }
+
+        @objc private func swiped(_ gesture: UIScreenEdgePanGestureRecognizer) {
+            guard gesture.state == .ended, let view = gesture.view else { return }
+            let distance = gesture.translation(in: view).x
+            if distance > view.bounds.width * 0.25 || (distance > 0 && gesture.velocity(in: view).x > 500) {
+                dismissCover()
             }
         }
     }
