@@ -134,7 +134,8 @@ jobs:
         run: python3 iosApp/Scripts/build-jvm-preview.py
 
       - name: Stage extension runtime profile
-        run: python3 iosApp/Scripts/stage-mihon-preview.py
+        # Release IPAs ship no sample extensions, so do not depend on their third-party release assets.
+        run: python3 iosApp/Scripts/stage-mihon-preview.py --runtime-only
 
       - name: Free simulator OpenJDK build tree
         run: |

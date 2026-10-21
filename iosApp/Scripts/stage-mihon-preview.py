@@ -10,7 +10,10 @@ Artifacts come from repositories listed on the Kototoro repo hub, pinned by SHA-
   * JAR       kototoro-parsers plugin 137   -> parser enum names, served by :parser-host
 
 Everything is written under ignored iosApp/build; nothing enters the default distribution.
+--runtime-only stages the same runtime without the samples, which Release IPAs drop anyway; CI uses it so the
+build does not depend on third-party extension releases that may be removed.
 """
+import argparse
 import hashlib
 import json
 import os
@@ -69,6 +72,9 @@ def sha256(path):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--runtime-only", action="store_true", help="Skip the sample extensions")
+    artifacts = [] if parser.parse_args().runtime_only else ARTIFACTS
     if not (SOURCE / "libkototoro-jvm.a").is_file():
         raise RuntimeError("Run build-jvm-preview.py first")
     if not (SOURCE / "runtime-origin.json").is_file():
@@ -90,7 +96,7 @@ def main():
     sources = TARGET / "sources"
     sources.mkdir()
     pairs = []
-    for name, url, expected in ARTIFACTS:
+    for name, url, expected in artifacts:
         local = WORK / name
         if not local.exists():
             builder.run(["curl", "--fail", "--location", "--retry", "3", "--output", local, url])
@@ -101,13 +107,13 @@ def main():
     env = dict(os.environ)
     env["JAVA_HOME"] = os.environ.get("KOTOTORO_JVM_BOOT_JDK") or subprocess.check_output(
         ["/usr/libexec/java_home", "-v", "24"], text=True).strip()
+    conversion = [":dex-convert:convertApk", "-PconvertPairs=" + "|".join(pairs)] if pairs else []
     output = subprocess.run(
-        [ROOT / "gradlew", ":mihon-ios-compat:stagePreview", ":dex-convert:convertApk", "--console=plain",
-         "-PwithMihonIosCompat", "-PmihonIosCompatibilityDirectory=" + str(compatibility),
-         "-PconvertPairs=" + "|".join(pairs), "--no-daemon"],
+        [ROOT / "gradlew", ":mihon-ios-compat:stagePreview", *conversion, "--console=plain",
+         "-PwithMihonIosCompat", "-PmihonIosCompatibilityDirectory=" + str(compatibility), "--no-daemon"],
         cwd=ROOT, env=env, check=True, text=True, stdout=subprocess.PIPE).stdout
     converted = [json.loads(line.split(" ", 1)[1]) for line in output.splitlines() if line.startswith("CONVERTED ")]
-    if len(converted) != len(ARTIFACTS):
+    if len(converted) != len(artifacts):
         raise RuntimeError("Converter did not report every artifact:\n" + output)
 
     for name in ["java_bundle", "include"]:
@@ -135,7 +141,7 @@ def main():
             shutil.copy2(item, lib / ("20-" + item.name))
 
     jars, plugins = [], []
-    for (name, _, _), info in zip(ARTIFACTS, converted):
+    for (name, _, _), info in zip(artifacts, converted):
         relative = Path(info["output"]).name
         if info["kind"] == "apk":
             jars.append({"path": relative, "identity": {
