@@ -38,7 +38,7 @@ internal class DomainRewriteInterceptor : Interceptor {
 internal fun installDomainRewrite(helper: NetworkHelper): OkHttpClient {
     val rewritten = HashMap<OkHttpClient, OkHttpClient>()
     fun rewrite(client: OkHttpClient) = rewritten.getOrPut(client) {
-        client.newBuilder().apply { interceptors().add(0, DomainRewriteInterceptor()) }.build()
+        iosNetworkClient(client)
     }
     val client = rewrite(helper.client)
     val cloudflare = rewrite(helper.cloudflareClient)
@@ -51,3 +51,14 @@ internal fun installDomainRewrite(helper: NetworkHelper): OkHttpClient {
     HostDomainRewrites.installed = true
     return client
 }
+
+/** The pinned server interceptor needs FlareSolverr; iOS hands real challenges to the native browser instead. */
+internal fun iosNetworkClient(client: OkHttpClient): OkHttpClient = client.newBuilder().apply {
+    val interceptors = interceptors()
+    val index = interceptors.indexOfFirst {
+        it.javaClass.name == "eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor"
+    }
+    check(index >= 0) { "Pinned SDK Cloudflare interceptor is unavailable" }
+    interceptors[index] = IosCloudflareInterceptor(client.cookieJar)
+    interceptors.add(0, DomainRewriteInterceptor())
+}.build()

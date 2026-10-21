@@ -630,6 +630,57 @@ final class ExtensionEcosystemTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testWenku8VerificationNeverClaimsCompletionForAnUnresolvedChallenge() throws {
+        try verifyWenku8(requireListing: false)
+    }
+
+    @MainActor
+    func testWenku8LoggedInBrowserSessionLoadsTheSourceListing() throws {
+        try verifyWenku8(requireListing: true)
+    }
+
+    @MainActor
+    private func verifyWenku8(requireListing: Bool) throws {
+        app.terminate()
+        app.launchEnvironment["KOTOTORO_SOURCE_DIAGNOSTICS"] = "1"
+        app.launch()
+        app.mainTab("浏览").tap()
+        let field = searchField()
+        field.tap()
+        field.typeText("轻小说文库")
+        let source = app.buttons["source.WENKU8"]
+        XCTAssertTrue(source.waitForExistence(timeout: 30), app.debugDescription)
+        source.tap()
+        let first = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "source.content.")).firstMatch
+        let verify = app.buttons["source.verify"]
+        _ = XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            first.exists || (verify.exists && !self.element("source.solving").exists)
+                || self.app.staticTexts["没有内容"].exists
+        }, object: nil)], timeout: 100)
+        if !first.exists && verify.exists {
+            verify.tap()
+            XCTAssertTrue(app.buttons["browser.done"].waitForExistence(timeout: 15))
+            sleep(10)
+            attach("Wenku8 browser before returning")
+            if !app.buttons["browser.done"].isEnabled {
+                XCTAssertFalse(element("browser.status").label.contains("已通过验证"))
+                app.buttons["browser.close"].tap()
+                XCTAssertFalse(requireListing, "The site still has an interactive challenge")
+                return
+            }
+            app.buttons["browser.done"].tap()
+        }
+        _ = XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            first.exists || verify.exists
+        }, object: nil)], timeout: 60)
+        XCTAssertTrue(first.exists || verify.exists, "A failed verification must retain the challenge: \(app.debugDescription)")
+        XCTAssertFalse(app.staticTexts["没有内容"].exists, "Cancelling the error view must not discard the retry")
+        if requireListing { XCTAssertTrue(first.exists, "The logged-in browser session must load actual source content") }
+        attach(first.exists ? "Wenku8 readable listing" : "Wenku8 unresolved challenge")
+    }
+
     /// A real Cloudflare-protected site (Comix, comix.to): a challenge on the listing is shown as such and cleared by
     /// the automatic hidden-browser pass, after which the listing, details and a chapter's pages load. Needs network.
     @MainActor

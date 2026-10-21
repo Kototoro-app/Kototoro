@@ -13,6 +13,7 @@ final class ExtensionWebKit: NSObject {
     static let shared = ExtensionWebKit()
     private var views: [Int64: BridgedWebView] = [:]
     private var nextView: Int64 = 1
+    private var httpRequests: [UUID: WebKitHttpRequest] = [:]
     /// Ordered delivery of notifications (page started before finished, progress, console...).
     fileprivate let events = DispatchQueue(label: "org.skepsun.kototoro.webkit.events")
     /// Calls whose answer something waits for (navigation decisions, intercepted requests, interface results).
@@ -37,6 +38,24 @@ final class ExtensionWebKit: NSObject {
     fileprivate func perform(_ operation: String, _ view: Int64, _ payload: [String: Any]) -> String? {
         Self.log("op \(view) \(operation) \(String(describing: payload["url"] ?? payload["baseUrl"] ?? ""))")
         switch operation {
+        case "http.fetch":
+            return wait { (done: @escaping (String?) -> Void) in
+                let id = UUID()
+                guard let request = WebKitHttpRequest(payload: payload, completion: { [weak self] response in
+                    self?.httpRequests.removeValue(forKey: id)
+                    done(response)
+                }) else { done(nil); return }
+                self.httpRequests[id] = request
+                request.start()
+            }
+        case "userAgent.default":
+            return wait { (done: @escaping (String?) -> Void) in
+                let view = WKWebView(frame: .zero)
+                view.evaluateJavaScript("navigator.userAgent") { [view] value, _ in
+                    _ = view
+                    done(value as? String)
+                }
+            }
         case "create":
             return onMain { () -> String in
                 let id = self.nextView
@@ -130,7 +149,7 @@ final class ExtensionWebKit: NSObject {
     }
 
     /// Starts [start] on the main thread and waits (on this Java thread) until it calls back, at most 30 seconds.
-    fileprivate func wait<T>(_ start: @escaping (@escaping (T?) -> Void) -> Void) -> T? {
+    fileprivate func wait<T>(_ start: @escaping @MainActor (@escaping (T?) -> Void) -> Void) -> T? {
         if Thread.isMainThread { return nil }
         let semaphore = DispatchSemaphore(value: 0)
         var value: T?

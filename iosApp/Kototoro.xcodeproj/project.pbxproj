@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        CF2200000000000000000001 /* WebKitHttpRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2200000000000000000004 /* WebKitHttpRequest.swift */; };
+        CF2100000000000000000001 /* BrowserVerificationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2100000000000000000004 /* BrowserVerificationState.swift */; };
+        CF2100000000000000000002 /* BrowserVerificationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2100000000000000000004 /* BrowserVerificationState.swift */; };
+        CF2100000000000000000003 /* BrowserVerificationStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2100000000000000000005 /* BrowserVerificationStateTests.swift */; };
         AD7400000000000000000005 /* TrackingRecommendationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7400000000000000000006 /* TrackingRecommendationsView.swift */; };
         AD7400000000000000000003 /* SuggestionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7400000000000000000004 /* SuggestionsTests.swift */; };
         AD7400000000000000000001 /* SuggestionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7400000000000000000002 /* SuggestionsView.swift */; };
@@ -123,6 +127,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+        CF2200000000000000000004 /* WebKitHttpRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebKitHttpRequest.swift; sourceTree = "<group>"; };
+        CF2100000000000000000004 /* BrowserVerificationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserVerificationState.swift; sourceTree = "<group>"; };
+        CF2100000000000000000005 /* BrowserVerificationStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserVerificationStateTests.swift; sourceTree = "<group>"; };
         AD7400000000000000000006 /* TrackingRecommendationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingRecommendationsView.swift; sourceTree = "<group>"; };
         AD7400000000000000000004 /* SuggestionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionsTests.swift; sourceTree = "<group>"; };
         AD7400000000000000000002 /* SuggestionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionsView.swift; sourceTree = "<group>"; };
@@ -273,6 +280,8 @@
 				FD0000000000000000000001 /* ReaderDownloadStore.swift */,
 				FB0000000000000000000005 /* ContinueReading.swift */,
 				FB0000000000000000000008 /* SourceWebBrowser.swift */,
+                CF2100000000000000000004 /* BrowserVerificationState.swift */,
+                CF2200000000000000000004 /* WebKitHttpRequest.swift */,
 				FB0000000000000000000007 /* SourceSettingsView.swift */,
                 AC0000000000000000000002 /* TrackingSitesView.swift */,
                 AD7400000000000000000002 /* SuggestionsView.swift */,
@@ -321,6 +330,7 @@
 			children = (
 				BE0000000000000000000013 /* GoogleDriveSyncTests.swift */,
 				BD0000000000000000000007 /* BookmarkImageStoreTests.swift */,
+                CF2100000000000000000005 /* BrowserVerificationStateTests.swift */,
 				FF0000000000000000000003 /* ReaderStorageTests.swift */,
 				F50000000000000000000004 /* RepositoryManagementTests.swift */,
 				F80000000000000000000004 /* BackupFlowTests.swift */,
@@ -506,6 +516,8 @@
 				FC0000000000000000000001 /* ReaderDownloadStore.swift in Sources */,
 				FA0000000000000000000006 /* ContinueReading.swift in Sources */,
 				FA0000000000000000000008 /* SourceWebBrowser.swift in Sources */,
+                CF2100000000000000000001 /* BrowserVerificationState.swift in Sources */,
+                CF2200000000000000000001 /* WebKitHttpRequest.swift in Sources */,
 				FA0000000000000000000007 /* SourceSettingsView.swift in Sources */,
                 AC0000000000000000000001 /* TrackingSitesView.swift in Sources */,
                 AD7400000000000000000001 /* SuggestionsView.swift in Sources */,
@@ -565,6 +577,8 @@
 				BE0000000000000000000004 /* GoogleDriveAuth.swift in Sources */,
 				BD0000000000000000000002 /* BookmarkImageStore.swift in Sources */,
 				BD0000000000000000000004 /* BookmarkImageStoreTests.swift in Sources */,
+                CF2100000000000000000002 /* BrowserVerificationState.swift in Sources */,
+                CF2100000000000000000003 /* BrowserVerificationStateTests.swift in Sources */,
 				FE0000000000000000000002 /* ReaderStorage.swift in Sources */,
 				FE0000000000000000000004 /* ReaderStorageTests.swift in Sources */,
 				F40000000000000000000005 /* RepositoryManagementTests.swift in Sources */,

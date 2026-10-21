@@ -7,6 +7,16 @@ struct BrowserTarget: Identifiable {
     /// The User-Agent the source's requests carry: Cloudflare binds its clearance to it, so the page must use it too.
     let userAgent: String?
     var id: String { url.absoluteString }
+
+    static func verification(origin: String?, session: IosBrowserSession?) -> BrowserTarget? {
+        let challenged = origin.flatMap(URL.init(string:))
+        let requested = session.flatMap { URL(string: $0.url) }
+        let sameSite = challenged == nil || (challenged?.host == requested?.host
+            && challenged?.scheme == requested?.scheme && challenged?.port == requested?.port)
+        guard let url = sameSite ? (requested ?? challenged) : challenged,
+              ["https", "http"].contains(url.scheme?.lowercased() ?? "") else { return nil }
+        return BrowserTarget(url: url, userAgent: session?.userAgent)
+    }
 }
 
 /// The in-app browser for a source's site: manual Cloudflare (or login) verification, the way Mihon opens a source
@@ -41,7 +51,7 @@ struct SourceWebBrowser: View {
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("完成") { Task { await finish() } }
-                            .disabled(saving)
+                            .disabled(saving || !page.canFinish)
                             .accessibilityIdentifier("browser.done")
                     }
                 }
@@ -67,6 +77,8 @@ struct SourceWebBrowser: View {
     private func finish() async {
         saving = true
         defer { saving = false }
+        await page.refreshClearance(for: target.url)
+        guard page.canFinish else { return }
         let cookies = await page.cookies(for: target.url)
         guard !cookies.isEmpty else { onFinish(0); dismiss(); return }
         do {
@@ -86,6 +98,9 @@ final class BrowserPage {
     var isLoading = false
     var progress = 0.0
     var hasClearance = false
+    var canFinish = false
+    var mainFrameStatus: Int?
+    var navigationRevision = 0
     weak var webView: WKWebView?
 
     func reload() { webView?.reload() }
@@ -102,10 +117,21 @@ final class BrowserPage {
 
     func refreshClearance(for url: URL) async {
         guard let host = url.host()?.lowercased() else { return }
+        let revision = navigationRevision
+        let challenge = (try? await webView?.evaluateJavaScript(ChallengeNavigation.challengeScript)) as? Bool
+        guard revision == navigationRevision else { return }
+        let state = BrowserVerificationState(status: mainFrameStatus, challengePresent: challenge)
+        canFinish = state.verified(hasClearance: true)
+        guard canFinish else {
+            hasClearance = false
+            return
+        }
         let all = await WKWebsiteDataStore.default().httpCookieStore.allCookies()
+        guard revision == navigationRevision else { return }
         hasClearance = all.contains { cookie in
             let domain = cookie.domain.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
-            return cookie.name == "cf_clearance" && (host == domain || host.hasSuffix("." + domain))
+            return cookie.name == "cf_clearance" && (cookie.expiresDate == nil || cookie.expiresDate! > Date())
+                && (host == domain || host.hasSuffix("." + domain))
         }
     }
 
@@ -145,7 +171,13 @@ private struct BrowserWebView: UIViewRepresentable {
 
     func updateUIView(_ view: WKWebView, context: Context) {}
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
+        view.configuration.websiteDataStore.httpCookieStore.remove(coordinator)
+        view.navigationDelegate = nil
+        view.stopLoading()
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate, WKHTTPCookieStoreObserver {
         let page: BrowserPage
         let target: BrowserTarget
         private var observations: [NSKeyValueObservation] = []
@@ -156,6 +188,7 @@ private struct BrowserWebView: UIViewRepresentable {
         }
 
         func observe(_ view: WKWebView) {
+            view.configuration.websiteDataStore.httpCookieStore.add(self)
             observations = [
                 view.observe(\.title) { [page] view, _ in Task { @MainActor in page.title = view.title ?? "" } },
                 view.observe(\.isLoading) { [page] view, _ in Task { @MainActor in page.isLoading = view.isLoading } },
@@ -163,6 +196,29 @@ private struct BrowserWebView: UIViewRepresentable {
                     Task { @MainActor in page.progress = view.estimatedProgress }
                 },
             ]
+        }
+
+        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+            page.hasClearance = false
+            page.canFinish = false
+            page.mainFrameStatus = nil
+            page.navigationRevision += 1
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
+                     decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+            if navigationResponse.isForMainFrame {
+                page.mainFrameStatus = (navigationResponse.response as? HTTPURLResponse)?.statusCode
+                if page.mainFrameStatus == 403 || page.mainFrameStatus == 503 {
+                    page.hasClearance = false
+                    page.canFinish = false
+                }
+            }
+            decisionHandler(.allow)
+        }
+
+        func cookiesDidChange(in cookieStore: WKHTTPCookieStore) {
+            Task { @MainActor in await page.refreshClearance(for: target.url) }
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -195,38 +251,110 @@ enum SourceErrorText {
 final class ChallengeSolver {
     static let shared = ChallengeSolver()
     private var attempts: [String: Date] = [:]
-    private static let timeout: Duration = .seconds(20)
+    private var active: [String: Task<[String]?, Never>] = [:]
+    private static let timeout: Duration = .seconds(30)
 
     /// True when the clearance was obtained and handed to the runtime; the caller should retry its request.
     func solve(runtime: IosSources, sourceName: String, challenge: IosChallenge) async -> Bool {
         let session = try? await runtime.browserSession(sourceName: sourceName)
-        guard let address = challenge.origin ?? session?.url, let url = URL(string: address) else { return false }
-        let key = url.host() ?? address
-        if let last = attempts[key], Date().timeIntervalSince(last) < 120 { return false }
-        attempts[key] = Date()
-        let page = BrowserPage()
+        guard let target = BrowserTarget.verification(origin: challenge.origin, session: session) else { return false }
+        let key = (target.url.host() ?? target.url.absoluteString) + "|" + (target.userAgent ?? "")
+        let task: Task<[String]?, Never>
+        if let pending = active[key] {
+            task = pending
+        } else {
+            if let last = attempts[key], Date().timeIntervalSince(last) < 120 { return false }
+            attempts = attempts.filter { Date().timeIntervalSince($0.value) < 120 }
+            attempts[key] = Date()
+            task = Task { await self.obtainClearance(target: target) }
+            active[key] = task
+        }
+        let cookies = await task.value
+        active[key] = nil
+        guard !Task.isCancelled, let cookies else { return false }
+        let kept = try? await runtime.importCookies(sourceName: sourceName, url: target.url.absoluteString, cookies: cookies)
+        return (kept?.intValue ?? 0) > 0
+    }
+
+    private func obtainClearance(target: BrowserTarget) async -> [String]? {
+        guard let window = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first
+        else { return nil }
+        let store = WKWebsiteDataStore.default().httpCookieStore
+        let previous = await store.allCookies().filter {
+            $0.name == "cf_clearance" && ExtensionWebKit.matches($0, target.url)
+        }
+        // A stale clearance cannot count as success or prevent WebKit from obtaining a fresh one.
+        for cookie in previous { await store.deleteCookie(cookie) }
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
+        if let ua = target.userAgent, ua.contains("iPhone") || ua.contains("iPad") || ua.contains("Android") {
+            configuration.defaultWebpagePreferences.preferredContentMode = .mobile
+        }
         let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: configuration)
-        webView.customUserAgent = session?.userAgent
+        let navigation = ChallengeNavigation()
+        webView.navigationDelegate = navigation
+        webView.customUserAgent = target.userAgent
         // Scripts of a view outside any window are throttled; keep it in the window, transparent and untouchable.
         webView.alpha = 0.01
         webView.isUserInteractionEnabled = false
-        let window = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
-        window?.insertSubview(webView, at: 0)
-        defer { webView.stopLoading(); webView.removeFromSuperview() }
-        webView.load(URLRequest(url: url))
+        window.insertSubview(webView, at: 0)
+        defer { webView.stopLoading(); webView.navigationDelegate = nil; webView.removeFromSuperview() }
+        webView.load(URLRequest(url: target.url))
         let deadline = ContinuousClock.now + Self.timeout
+        let page = BrowserPage()
         while ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .seconds(1))
-            if Task.isCancelled { return false }
-            await page.refreshClearance(for: url)
-            if page.hasClearance { break }
+            do { try await Task.sleep(for: .milliseconds(500)) } catch { return nil }
+            if navigation.failed { return nil }
+            guard navigation.finished else { continue }
+            guard let challenged = navigation.challenged else { continue }
+            let state = BrowserVerificationState(status: navigation.status, challengePresent: challenged)
+            guard state.verified(hasClearance: true) else { continue }
+            let fresh = await store.allCookies().contains { cookie in
+                cookie.name == "cf_clearance" && ExtensionWebKit.matches(cookie, target.url)
+                    && !previous.contains { $0.value == cookie.value }
+            }
+            guard fresh else { return nil }
+            return await page.cookies(for: target.url)
         }
-        guard page.hasClearance else { return false }
-        let cookies = await page.cookies(for: url)
-        let kept = try? await runtime.importCookies(sourceName: sourceName, url: url.absoluteString, cookies: cookies)
-        return (kept?.intValue ?? 0) > 0
+        return nil
+    }
+}
+
+@MainActor
+private final class ChallengeNavigation: NSObject, WKNavigationDelegate {
+    var finished = false
+    var failed = false
+    var status: Int?
+    var challenged: Bool?
+    static let challengeScript = """
+    document.title.toLowerCase().includes('just a moment') ||
+    document.querySelector('#challenge-error-title, #challenge-error-text, #challenge-running, #challenge-form, '
+        + 'input[name="cf-turnstile-response"], iframe[src*="challenges.cloudflare.com"]') !== null
+    """
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        finished = false
+        status = nil
+        challenged = nil
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
+                 decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        if navigationResponse.isForMainFrame {
+            status = (navigationResponse.response as? HTTPURLResponse)?.statusCode
+        }
+        decisionHandler(.allow)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        finished = true
+        webView.evaluateJavaScript(Self.challengeScript) { [weak self] value, _ in
+            self?.challenged = value as? Bool
+        }
+    }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { failed = true }
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        if (error as NSError).code != NSURLErrorCancelled { failed = true }
     }
 }
 
@@ -258,13 +386,13 @@ struct ChallengeVerifyButton: View {
             solving = true
             let solved = await ChallengeSolver.shared.solve(runtime: runtime, sourceName: sourceName, challenge: challenge)
             solving = false
-            if solved { await retry() }
+            // Retrying removes this error view; its SwiftUI task is then cancelled along with the view.
+            if solved && !Task.isCancelled { Task { await retry() } }
         }
     }
 
     private func open() async {
         let session = try? await runtime.browserSession(sourceName: sourceName)
-        guard let address = challenge.origin ?? session?.url, let url = URL(string: address) else { return }
-        browsing = BrowserTarget(url: url, userAgent: session?.userAgent)
+        browsing = BrowserTarget.verification(origin: challenge.origin, session: session)
     }
 }
