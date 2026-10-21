@@ -27,6 +27,7 @@ import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.core.model.LocalVideoSource
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.core.util.AlphanumComparator
+import org.skepsun.kototoro.core.util.ContentZipArchive
 import org.skepsun.kototoro.core.util.MimeTypes
 import org.skepsun.kototoro.core.util.ext.URI_SCHEME_ZIP
 import org.skepsun.kototoro.core.util.ext.isDirectory
@@ -104,12 +105,16 @@ class LocalContentParser {
     private val cacheDir: File
     private val displayName: String
 
-    constructor(file: File, displayName: String = file.name) {
+    /** Random access to [rootFile]'s archive when it lives behind SAF; [rootFile] then only names it. */
+    private val archive: ContentZipArchive?
+
+    constructor(file: File, displayName: String = file.name, archive: ContentZipArchive? = null) {
         this.uri = null
         this.rootFile = file
         this.uniFile = null
         this.cacheDir = file.parentFile ?: App.getInstance().cacheDir
         this.displayName = displayName
+        this.archive = archive
     }
 
     constructor(uri: Uri) {
@@ -126,6 +131,7 @@ class LocalContentParser {
         }
         this.cacheDir = App.getInstance().cacheDir
         this.displayName = uniFile?.name ?: rootFile.name
+        this.archive = null
     }
 
     constructor(file: UniFile, cacheDir: File) {
@@ -134,6 +140,7 @@ class LocalContentParser {
         this.uniFile = file
         this.cacheDir = cacheDir
         this.displayName = file.name ?: rootFile.name
+        this.archive = null
     }
 
     suspend fun getContent(withDetails: Boolean, forceRefresh: Boolean = false): LocalContent {
@@ -464,10 +471,10 @@ class LocalContentParser {
                         )
                     }
             }
-            return withMaterialized(file) { localFile ->
+            return withRandomAccess(file) { localFile, archive ->
                 val localUrl = localFile.toUri().withFragmentFrom(chapter.url.toUri()).toString()
                 val localChapter = chapter.copy(url = localUrl)
-                LocalContentParser(localFile).getPages(localChapter).map { page ->
+                LocalContentParser(localFile, archive = archive).getPages(localChapter).map { page ->
                     val entry = page.url.toUri().fragment
                     val sourceUrl = if (entry.isNullOrEmpty()) file.uri.toString() else file.uri.toZipUri(entry).toString()
                     page.copy(url = sourceUrl)
@@ -476,7 +483,10 @@ class LocalContentParser {
         }
         return runInterruptible(Dispatchers.IO) {
             val chapterUri = chapter.url.toUri().resolve()
-            chapterUri.resolveFsAndPath().use { (fileSystem, rootPath) ->
+            val fsAndPath = archive?.let {
+                FsAndPath(it.fileSystem, chapterUri.fragment.orEmpty().toRootedPath(), isCloseable = false)
+            } ?: chapterUri.resolveFsAndPath()
+            fsAndPath.use { (fileSystem, rootPath) ->
                 if (fileSystem.metadataOrNull(rootPath)?.isDirectory != true) {
                     return@runInterruptible listOf(
                         ContentPage(
@@ -497,7 +507,11 @@ class LocalContentParser {
                 selectChapterEntries(entries, rootPath, pattern) { it.isImage() }
                     .sortedWith(compareBy(AlphanumComparator()) { x -> x.toString() })
                     .map { x ->
-                        val entryUri = chapterUri.child(x, resolve = true).toString()
+                        val entryUri = if (archive != null) {
+                            chapterUri.child(x, resolve = true, isZip = true)
+                        } else {
+                            chapterUri.child(x, resolve = true)
+                        }.toString()
                         ContentPage(
                             id = entryUri.longHashCode(),
                             url = entryUri,
@@ -515,8 +529,8 @@ class LocalContentParser {
             if (directFile != null) {
                 return LocalContentParser(directFile).getContent(withDetails, forceRefresh)
             }
-            return withMaterialized(file, forceRefresh) { localFile ->
-                val parsed = LocalContentParser(localFile, file.name ?: localFile.name).getContent(withDetails)
+            return withRandomAccess(file, forceRefresh) { localFile, archive ->
+                val parsed = LocalContentParser(localFile, file.name ?: localFile.name, archive).getContent(withDetails)
                 val stableCoverUrl = parsed.manga.coverUrl
                     ?.toUri()
                     ?.takeIf(Uri::isZipUri)
@@ -533,7 +547,10 @@ class LocalContentParser {
                     },
                 )
                 // Capture metadata before releasing the parser's copy; storageUri owns subsequent reads.
-                LocalContent(localManga, localFile, file.uri).also { it.createdAt }
+                // A random-access parse has no copy at all, so the date comes from the document itself.
+                LocalContent(localManga, localFile, file.uri).also { content ->
+                    file.lastModified().takeIf { it > 0 }?.let { content.createdAt = it } ?: content.createdAt
+                }
             }
         }
 
@@ -762,15 +779,27 @@ class LocalContentParser {
             ?: listFiles().orEmpty()
                 .filter { it.isFile && hasZipExtension(it.name.orEmpty()) }
                 .minWithOrNull(compareBy(AlphanumComparator()) { it.name.orEmpty() })
-                ?.openInputStream()?.use { input ->
-                    ZipInputStream(input.buffered()).use { zip ->
-                        generateSequence { zip.nextEntry }
-                            .firstOrNull { it.name.equals(ComicInfo.FILE_NAME, ignoreCase = true) }
-                            ?.let { zip.readBytes().decodeToString() }
-                    }
-                }
+                ?.let { archive -> archive.readRootComicInfo() }
                 ?.let(ComicInfo::parse)
     }.onFailure { it.printStackTraceDebug() }.getOrNull()
+
+    /** ComicInfo.xml at the root of a SAF archive; it can sit anywhere, so only a provider that cannot seek is read through. */
+    @Blocking
+    private fun UniFile.readRootComicInfo(): String? {
+        ContentZipArchive.open(App.getInstance().contentResolver, uri)?.use { archive ->
+            val fileSystem = archive.fileSystem
+            return fileSystem.list(Path.DIRECTORY_SEPARATOR.toPath())
+                .firstOrNull { it.name.equals(ComicInfo.FILE_NAME, ignoreCase = true) && fileSystem.isRegularFile(it) }
+                ?.let { fileSystem.read(it) { readUtf8() } }
+        }
+        return openInputStream().use { input ->
+            ZipInputStream(input.buffered()).use { zip ->
+                generateSequence { zip.nextEntry }
+                    .firstOrNull { it.name.equals(ComicInfo.FILE_NAME, ignoreCase = true) }
+                    ?.let { zip.readBytes().decodeToString() }
+            }
+        }
+    }
 
     private fun UniFile.walkRelative(): List<Pair<String, UniFile>> {
         val result = ArrayList<Pair<String, UniFile>>()
@@ -809,16 +838,35 @@ class LocalContentParser {
 
     private fun String.isNovelName(): Boolean = endsWith(".epub", true) || endsWith(".txt", true)
 
+    /**
+     * Runs [action] on a SAF archive through random access, or through a temporary copy when the
+     * provider cannot seek. The [File] names the archive either way and keeps the content id the
+     * copy has always had; with a non-null [ContentZipArchive] it does not exist on disk.
+     */
+    private suspend fun <T> withRandomAccess(
+        file: UniFile,
+        forceRefresh: Boolean = false,
+        action: suspend (File, ContentZipArchive?) -> T,
+    ): T {
+        if (hasZipExtension(file.name.orEmpty())) {
+            val archive = runInterruptible(Dispatchers.IO) {
+                ContentZipArchive.open(App.getInstance().contentResolver, file.uri)
+            }
+            if (archive != null) {
+                return archive.use { action(LocalSafArchiveCache.target(cacheDir, file.safCopyName()), it) }
+            }
+        }
+        return withMaterialized(file, forceRefresh) { action(it, null) }
+    }
+
     private suspend fun <T> withMaterialized(
         file: UniFile,
         forceRefresh: Boolean = false,
         action: suspend (File) -> T,
     ): T {
-        val extension = file.name?.substringAfterLast('.', "").orEmpty()
-        val suffix = extension.takeIf(String::isNotEmpty)?.let { ".$it" }.orEmpty()
         return LocalSafArchiveCache.withArchive(
             cacheDir = cacheDir,
-            fileName = "${file.uri.toString().longHashCode()}$suffix",
+            fileName = file.safCopyName(),
             sourceLength = file.length(),
             sourceModified = file.lastModified(),
             forceRefresh = forceRefresh,
@@ -827,20 +875,26 @@ class LocalContentParser {
         )
     }
 
+    private fun UniFile.safCopyName(): String {
+        val extension = name?.substringAfterLast('.', "").orEmpty()
+        val suffix = extension.takeIf(String::isNotEmpty)?.let { ".$it" }.orEmpty()
+        return "${uri.toString().longHashCode()}$suffix"
+    }
+
     private fun buildChildUriString(path: Path, resolve: Boolean): String {
         return uri?.child(path, resolve).toString()
             .takeIf { uri != null }
-            ?: rootFile.buildChildUriString(path, resolve)
+            ?: rootFile.buildChildUriString(path, resolve, isZip = archive != null || rootFile.isZipArchive)
     }
 
     private fun resolveFsAndPath(): FsAndPath {
+        archive?.let { return FsAndPath(it.fileSystem, "".toRootedPath(), isCloseable = false) }
         return uri?.resolveFsAndPath() ?: rootFile.resolveFsAndPath()
     }
 
-    private fun Uri.child(path: Path, resolve: Boolean): Uri {
+    private fun Uri.child(path: Path, resolve: Boolean, isZip: Boolean = isZipUri() || fileFromPath().isZipArchive): Uri {
         val file = fileFromPath()
         val builder = buildUpon()
-        val isZip = isZipUri() || file.isZipArchive
         if (isZip) {
             builder.scheme(URI_SCHEME_ZIP)
         }
@@ -1051,9 +1105,9 @@ class LocalContentParser {
         /** A cover URL that needs neither the network nor the source: a file, zip or content URI. */
         private fun String?.takeIfLocalUrl(): String? = this?.takeIf { it.isNotBlank() && !it.toUri().isNetworkUri() }
 
-        private fun File.buildChildUriString(path: Path, resolve: Boolean): String {
+        private fun File.buildChildUriString(path: Path, resolve: Boolean, isZip: Boolean = isZipArchive): String {
             // Directory listings yield absolute paths; archive file systems are rooted at "/".
-            val ownPath = if (isZipArchive) null else toOkioPath()
+            val ownPath = if (isZip) null else toOkioPath()
             val relative = if (ownPath != null && path.isAbsolute && path.segments.take(ownPath.segments.size) == ownPath.segments &&
                 path.root == ownPath.root
             ) {
@@ -1061,7 +1115,7 @@ class LocalContentParser {
             } else {
                 path.toString().removePrefix(Path.DIRECTORY_SEPARATOR)
             }
-            return if (isZipArchive) {
+            return if (isZip) {
                 toZipUri(relative).toString()
             } else if (!resolve) {
                 if (relative.isBlank()) {

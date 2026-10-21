@@ -12,14 +12,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.saket.telephoto.subsamplingimage.SubSamplingImageSource
 import me.saket.telephoto.subsamplingimage.internal.ImageRegionDecoder
+import org.skepsun.kototoro.core.util.ContentZipArchive
 import org.skepsun.kototoro.core.util.ext.isContentZipUri
 import org.skepsun.kototoro.core.util.ext.isZipUri
-import org.skepsun.kototoro.core.util.ext.toUnderlyingZipUri
 import tachiyomi.decoder.ImageDecoder
 import java.io.IOException
 import java.io.InputStream
 import java.util.zip.ZipFile
-import java.util.zip.ZipInputStream
 
 /** Uses Mihon's native decoder for formats unsupported by Android's BitmapRegionDecoder. */
 internal class NativeSubSamplingImageSource(
@@ -77,17 +76,7 @@ private inline fun <T> withUriInputStream(
     block: (InputStream) -> T,
 ): T? {
     return if (uri.isContentZipUri()) {
-        val entryName = uri.fragment ?: throw IOException("ZIP URI has no entry name: $uri")
-        context.contentResolver.openInputStream(uri.toUnderlyingZipUri())?.use { input ->
-            ZipInputStream(input.buffered()).use { zip ->
-                var entry = zip.nextEntry
-                while (entry != null && entry.name != entryName) {
-                    entry = zip.nextEntry
-                }
-                if (entry == null) throw IOException("ZIP entry not found: $entryName")
-                block(zip)
-            }
-        }
+        ContentZipArchive.withEntry(context.contentResolver, uri, block)
     } else if (uri.isZipUri()) {
         ZipFile(uri.schemeSpecificPart).use { zip ->
             val entryName = uri.fragment ?: throw IOException("ZIP URI has no entry name: $uri")

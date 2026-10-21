@@ -26,7 +26,7 @@ data class LocalContent(
 ) {
 
     var createdAt: Long = -1L
-        private set
+        internal set
         get() {
             if (field == -1L) {
                 field = runCatching { file.creationTime }.getOrElse {

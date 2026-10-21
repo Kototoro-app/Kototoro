@@ -39,6 +39,9 @@ internal object LocalSafArchiveCache {
 
     fun directory(cacheDir: File): File = File(cacheDir, DIRECTORY_NAME)
 
+    /** Where the copy of [fileName] lives; its path is also part of the archive's content id. */
+    fun target(cacheDir: File, fileName: String): File = File(directory(cacheDir), fileName).absoluteFile
+
     suspend fun <T> withArchive(
         cacheDir: File,
         fileName: String,
@@ -50,7 +53,7 @@ internal object LocalSafArchiveCache {
         openInput: () -> InputStream,
         action: suspend (File) -> T,
     ): T {
-        val target = File(directory(cacheDir), fileName).absoluteFile
+        val target = target(cacheDir, fileName)
         val gate = if (sourceLength > largeThresholdBytes) largeCopies else smallCopies
         return locks.withLock(target) {
             gate.withPermit {
