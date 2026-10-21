@@ -8,6 +8,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.ElementsIntoSet
 import okhttp3.OkHttpClient
+import okhttp3.CookieJar
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.MangaDatabase
@@ -28,6 +29,10 @@ import org.skepsun.kototoro.scrobbling.kitsu.domain.KitsuScrobbler
 import org.skepsun.kototoro.scrobbling.mal.data.MALAuthenticator
 import org.skepsun.kototoro.scrobbling.mal.data.MALInterceptor
 import org.skepsun.kototoro.scrobbling.mal.domain.MALScrobbler
+import org.skepsun.kototoro.scrobbling.mangabaka.data.MangaBakaApi
+import org.skepsun.kototoro.scrobbling.mangabaka.data.MangaBakaAuth
+import org.skepsun.kototoro.scrobbling.mangabaka.data.MangaBakaRepository
+import org.skepsun.kototoro.scrobbling.mangabaka.domain.MangaBakaScrobbler
 import org.skepsun.kototoro.scrobbling.simkl.data.SimklInterceptor
 import org.skepsun.kototoro.scrobbling.simkl.data.SimklRepository
 import org.skepsun.kototoro.scrobbling.simkl.domain.SimklScrobbler
@@ -220,6 +225,7 @@ object ScrobblingModule {
         bangumiScrobbler: BangumiScrobbler,
         mangaUpdatesScrobbler: org.skepsun.kototoro.scrobbling.mangaupdates.domain.MangaUpdatesScrobbler,
         simklScrobbler: SimklScrobbler,
+        mangaBakaScrobbler: MangaBakaScrobbler,
     ): Set<@JvmSuppressWildcards Scrobbler> = setOf(
         shikimoriScrobbler,
         aniListScrobbler,
@@ -228,5 +234,36 @@ object ScrobblingModule {
         bangumiScrobbler,
         mangaUpdatesScrobbler,
         simklScrobbler,
+        mangaBakaScrobbler,
     )
+
+    @Provides
+    @Singleton
+    @ScrobblerType(ScrobblerService.MANGABAKA)
+    fun provideMangaBakaStorage(@ApplicationContext context: Context): ScrobblerStorage =
+        ScrobblerStorage(context, ScrobblerService.MANGABAKA)
+
+    @Provides
+    @Singleton
+    fun provideMangaBakaRepository(
+        @BaseHttpClient client: OkHttpClient,
+        @ScrobblerType(ScrobblerService.MANGABAKA) storage: ScrobblerStorage,
+        db: MangaDatabase,
+    ): MangaBakaRepository {
+        // Do not follow redirects with PAT headers or log credentials.
+        val accountClient = client.newBuilder().apply {
+            followRedirects(false)
+            followSslRedirects(false)
+            cookieJar(CookieJar.NO_COOKIES)
+            interceptors().removeAll { it is CurlLoggingInterceptor }
+        }.build()
+        return MangaBakaRepository(
+            MangaBakaApi(accountClient),
+            storage,
+            MangaBakaAuth(
+                accountClient, storage, BuildConfig.MANGABAKA_CLIENT_ID,
+            ),
+            db,
+        )
+    }
 }

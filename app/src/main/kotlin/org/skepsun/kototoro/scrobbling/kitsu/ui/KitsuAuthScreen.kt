@@ -77,8 +77,8 @@ fun KitsuAuthScreen(
     ) {
         AuthHeader(
             title = R.string.kitsu,
-            icon = R.drawable.ic_kitsu,
-            tintIcon = true,
+            icon = R.drawable.ic_kitsu_brand,
+            tintIcon = false,
         )
         Text(
             text = stringResource(R.string.email_password_enter_hint),

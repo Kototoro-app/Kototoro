@@ -178,6 +178,14 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
     }
 
     override fun getCapabilities(service: ScrobblerService): TrackingSiteCapabilities = when (service) {
+        ScrobblerService.MANGABAKA -> TrackingSiteCapabilities(
+            supportsDiscovery = false,
+            supportsTrending = false,
+            supportsSearch = true,
+            supportsDetails = true,
+            supportsStatusSync = true,
+            supportsManualBinding = true,
+        )
         ScrobblerService.BANGUMI -> TrackingSiteCapabilities(
             supportsDiscovery = true,
             supportsTrending = true,
@@ -585,6 +593,11 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
             return (anime + manga)
                 .distinctBy { it.id }
                 .map { it.toTrackingListItem(ScrobblerService.MAL) }
+        }
+        if (catalog.service == ScrobblerService.MANGABAKA) {
+            if (!searchManga) return emptyList()
+            return repositoryMap[catalog.service].findContent(query, catalog.page * 20)
+                .map { it.toTrackingListItem(catalog.service) }
         }
         if (catalog.service == ScrobblerService.MANGAUPDATES) {
             // MangaUpdates only supports manga-type content; skip entirely for VIDEO

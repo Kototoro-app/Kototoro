@@ -986,12 +986,15 @@ private fun supportedStatusesForService(service: ScrobblerService): List<Scrobbl
         ScrobblerService.KITSU,
         ScrobblerService.MANGAUPDATES,
         ScrobblerService.SIMKL,
+        ScrobblerService.MANGABAKA,
         ScrobblerService.ANILIST,
         ScrobblerService.SHIKIMORI,
         -> listOf(
             ScrobblingStatus.PLANNED,
             ScrobblingStatus.READING,
-            if (service == ScrobblerService.SHIKIMORI) ScrobblingStatus.RE_READING else null,
+            if (service == ScrobblerService.SHIKIMORI || service == ScrobblerService.MANGABAKA) {
+                ScrobblingStatus.RE_READING
+            } else null,
             ScrobblingStatus.COMPLETED,
             ScrobblingStatus.ON_HOLD,
             ScrobblingStatus.DROPPED,

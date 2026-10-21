@@ -8,6 +8,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.ScrobblerRepositoryMap
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.kitsu.ui.KitsuAuthActivity
+import org.skepsun.kototoro.scrobbling.mangabaka.ui.MangaBakaAuthActivity
 import javax.inject.Inject
 
 class ScrobblerAuthHelper @Inject constructor(
@@ -26,7 +27,9 @@ class ScrobblerAuthHelper @Inject constructor(
 
     @SuppressLint("UnsafeImplicitIntentLaunch")
     fun startAuth(context: Context, scrobbler: ScrobblerService) = runCatching {
-        if (scrobbler == ScrobblerService.KITSU) {
+        if (scrobbler == ScrobblerService.MANGABAKA) {
+            context.startActivity(Intent(context, MangaBakaAuthActivity::class.java))
+        } else if (scrobbler == ScrobblerService.KITSU) {
             launchKitsuAuth(context)
         } else if (scrobbler == ScrobblerService.MANGAUPDATES) {
             context.startActivity(Intent(context, org.skepsun.kototoro.scrobbling.mangaupdates.ui.MangaUpdatesAuthActivity::class.java))

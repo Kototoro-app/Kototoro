@@ -72,6 +72,7 @@ import org.skepsun.kototoro.core.util.ext.sanitize
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryService
@@ -297,7 +298,7 @@ private fun ScrobblingHeader(
                 Icon(
                     painter = rememberSafePainter(scrobbler.scrobbler.iconResId),
                     contentDescription = stringResource(scrobbler.scrobbler.titleResId),
-                    tint = MaterialTheme.colorScheme.onSecondary,
+                    tint = scrobblerIconTint(scrobbler.scrobbler.iconResId, MaterialTheme.colorScheme.onSecondary),
                     modifier = Modifier
                         .size(32.dp)
                         .padding(4.dp),

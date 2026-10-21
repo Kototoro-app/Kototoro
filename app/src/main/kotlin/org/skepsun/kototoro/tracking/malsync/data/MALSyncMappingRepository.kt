@@ -72,7 +72,7 @@ class MALSyncMappingRepository @Inject constructor(
         ScrobblerService.SHIKIMORI -> MALSyncService.SHIKIMORI
         ScrobblerService.BANGUMI -> MALSyncService.BANGUMI
         ScrobblerService.MANGAUPDATES -> MALSyncService.MANGAUPDATES
-        ScrobblerService.SIMKL -> null
+        ScrobblerService.SIMKL, ScrobblerService.MANGABAKA -> null
     }
 
     private fun MALSyncService.toScrobblerService(): ScrobblerService = when (this) {

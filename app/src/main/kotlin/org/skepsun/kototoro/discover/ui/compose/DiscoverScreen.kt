@@ -1,5 +1,8 @@
 package org.skepsun.kototoro.discover.ui.compose
 
+import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
+import androidx.compose.foundation.layout.size
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
@@ -363,7 +366,8 @@ private fun DiscoverServiceSwitcherChip(
                 androidx.compose.material3.Icon(
                     painter = rememberSafePainter(activeService.iconResId),
                     contentDescription = null,
-                    modifier = Modifier.padding(end = 2.dp),
+                    tint = scrobblerIconTint(activeService.iconResId),
+                    modifier = Modifier.size(20.dp).padding(end = 2.dp),
                 )
             },
             trailingIcon = {
@@ -386,6 +390,8 @@ private fun DiscoverServiceSwitcherChip(
                         androidx.compose.material3.Icon(
                             painter = rememberSafePainter(candidate.iconResId),
                             contentDescription = null,
+                            tint = scrobblerIconTint(candidate.iconResId),
+                            modifier = Modifier.size(20.dp),
                         )
                     },
                     onClick = {

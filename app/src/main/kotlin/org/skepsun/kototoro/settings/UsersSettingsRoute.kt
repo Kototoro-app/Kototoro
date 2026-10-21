@@ -191,6 +191,7 @@ private fun formatStatsSummary(
         ScrobblerService.KITSU,
         ScrobblerService.BANGUMI,
         ScrobblerService.MANGAUPDATES,
+        ScrobblerService.MANGABAKA,
         ScrobblerService.SHIKIMORI,
         -> listOfNotNull(
             stats.animeCount?.let { context.getString(R.string.anime_count_short, it) },
@@ -265,4 +266,5 @@ private val TRACKING_SERVICES = listOf(
     ScrobblerService.BANGUMI,
     ScrobblerService.MANGAUPDATES,
     ScrobblerService.SIMKL,
+    ScrobblerService.MANGABAKA,
 )

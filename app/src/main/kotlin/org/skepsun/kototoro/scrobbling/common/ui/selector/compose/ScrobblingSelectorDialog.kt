@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -209,6 +210,8 @@ private fun ScrobblerTabs(viewModel: ScrobblingSelectorViewModel) {
                             Icon(
                                 painter = rememberSafePainter(scrobbler.scrobblerService.iconResId),
                                 contentDescription = null,
+                                tint = scrobblerIconTint(scrobbler.scrobblerService.iconResId),
+                                modifier = Modifier.size(24.dp),
                             )
                         },
                     )

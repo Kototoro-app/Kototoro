@@ -128,6 +128,7 @@ class MigrateUseCase @Inject constructor(
                     url = prevInfo.externalUrl,
                 ),
             )
+            if (scrobbler.preservesRemoteStateOnBinding) continue
             scrobbler.updateScrobblingInfo(
                 mangaId = stored.id,
                 rating = prevInfo.rating,

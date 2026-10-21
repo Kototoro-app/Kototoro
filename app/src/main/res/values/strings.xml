@@ -4076,4 +4076,10 @@
     <string name="avif_animation_downsampling_summary">Reduces resolution to keep animations playing within the budget. Disabled by default to preserve original resolution; animations whose two playback buffers exceed the budget show only the first frame. Increase the budget if even one frame cannot fit.</string>
     <string name="avif_animation_recommended">Use recommended AVIF settings</string>
     <string name="avif_animation_recommended_summary">Use an automatic %1$d MiB budget based on this device’s RAM and app memory limit, and preserve original resolution.</string>
+    <string name="mangabaka" translatable="false">MangaBaka</string>
+    <string name="mangabaka_browser_login">Sign in with your browser</string>
+    <string name="mangabaka_access_token">Personal access token</string>
+    <string name="mangabaka_create_token">Create a token on MangaBaka</string>
+    <string name="mangabaka_token_hint">Create a personal access token in MangaBaka account settings and paste it here. This token grants full access to your MangaBaka account.</string>
+    <string name="mangabaka_auth_failed">Could not sign in or load your library. Check your token, permissions and connection, then try again.</string>
 </resources>

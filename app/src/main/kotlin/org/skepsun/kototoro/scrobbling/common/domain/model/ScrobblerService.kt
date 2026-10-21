@@ -10,11 +10,12 @@ enum class ScrobblerService(
     @DrawableRes val iconResId: Int,
 ) {
 
-    SHIKIMORI(1, R.string.shikimori, R.drawable.ic_shikimori),
-    ANILIST(2, R.string.anilist, R.drawable.ic_anilist),
-    MAL(3, R.string.mal, R.drawable.ic_mal),
-    KITSU(4, R.string.kitsu, R.drawable.ic_kitsu),
-    BANGUMI(5, R.string.bangumi, R.drawable.ic_bangumi_outline),
-    MANGAUPDATES(6, R.string.mangaupdates, R.drawable.ic_mangaupdates_outline),
-    SIMKL(7, R.string.simkl, R.drawable.ic_simkl)
+    SHIKIMORI(1, R.string.shikimori, R.drawable.ic_shikimori_brand),
+    ANILIST(2, R.string.anilist, R.drawable.ic_anilist_brand),
+    MAL(3, R.string.mal, R.drawable.ic_mal_brand),
+    KITSU(4, R.string.kitsu, R.drawable.ic_kitsu_brand),
+    BANGUMI(5, R.string.bangumi, R.drawable.ic_bangumi),
+    MANGAUPDATES(6, R.string.mangaupdates, R.drawable.ic_mangaupdates),
+    SIMKL(7, R.string.simkl, R.drawable.ic_simkl_brand),
+    MANGABAKA(8, R.string.mangabaka, R.drawable.ic_mangabaka),
 }

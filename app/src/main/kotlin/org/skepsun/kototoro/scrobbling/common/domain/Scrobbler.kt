@@ -53,6 +53,9 @@ abstract class Scrobbler(
     val isEnabled: Boolean
         get() = repository.isAuthorized
 
+    /** Binding imports the remote entry; callers must not initialize it from a local snapshot. */
+    open val preservesRemoteStateOnBinding: Boolean = false
+
     suspend fun authorize(authCode: String): ScrobblerUser {
         repository.authorize(authCode)
         return repository.loadUser().also { user ->

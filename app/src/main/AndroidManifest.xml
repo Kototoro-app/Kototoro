@@ -376,6 +376,18 @@
             android:supportsPictureInPicture="true"
             android:resizeableActivity="true" />
 		<activity
+			android:name="org.skepsun.kototoro.scrobbling.mangabaka.ui.MangaBakaAuthActivity"
+			android:exported="true"
+			android:launchMode="singleTop"
+			android:label="@string/mangabaka">
+			<intent-filter>
+				<action android:name="android.intent.action.VIEW" />
+				<category android:name="android.intent.category.DEFAULT" />
+				<category android:name="android.intent.category.BROWSABLE" />
+				<data android:scheme="kototoro" android:host="mangabaka-auth" />
+			</intent-filter>
+		</activity>
+		<activity
 			android:name="org.skepsun.kototoro.scrobbling.kitsu.ui.KitsuAuthActivity"
 			android:exported="false"
 			android:label="@string/kitsu"

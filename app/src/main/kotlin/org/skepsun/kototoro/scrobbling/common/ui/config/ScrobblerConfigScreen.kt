@@ -50,6 +50,7 @@ import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.list.ui.model.EmptyState
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
@@ -148,6 +149,7 @@ private fun UserAvatar(user: ScrobblerUser?, onClick: () -> Unit) {
                 Icon(
                     painter = rememberSafePainter(fallback),
                     contentDescription = null,
+                    tint = scrobblerIconTint(fallback),
                     modifier = Modifier.size(22.dp),
                 )
             } else {

@@ -145,6 +145,8 @@ class ScrobblerConfigViewModel @Inject constructor(
                 scrobbler = scrobbler.scrobblerService.id,
                 sourceMangaId = info.mangaId,
                 targetMangaId = mangaId,
+                sourceTargetId = info.targetId,
+                sourceMediaType = info.mediaType.orEmpty(),
             ) {
                 ScrobblingEntity(
                     scrobbler = scrobbler.scrobblerService.id,

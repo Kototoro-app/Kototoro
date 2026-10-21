@@ -69,6 +69,7 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
 
 const val DETAILS_TAB_CHAPTERS = 0
 const val DETAILS_TAB_PAGES = 1
@@ -557,6 +558,8 @@ private fun ChapterSourceTabsRow(
                             Icon(
                                 painter = painterResource(tab.trackingService.iconResId),
                                 contentDescription = null,
+                                tint = scrobblerIconTint(tab.trackingService.iconResId),
+                                modifier = Modifier.size(24.dp),
                             )
                         }
 

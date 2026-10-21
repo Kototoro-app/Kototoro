@@ -1469,7 +1469,7 @@ class DetailsViewModel @Inject constructor(
             -> entityType == EntityType.PERSON || entityType == EntityType.CHARACTER
 
             ScrobblerService.MANGAUPDATES -> entityType == EntityType.PERSON
-            ScrobblerService.SIMKL -> false
+            ScrobblerService.SIMKL, ScrobblerService.MANGABAKA -> false
         }
     }
 
@@ -3966,6 +3966,7 @@ class DetailsViewModel @Inject constructor(
             "Scrobbling info for manga $mangaId not found after linking target ${item.remoteId} " +
                 "(${item.service.name}, mediaType=${contentType.toScrobblerMediaType()})"
         }
+        if (scrobbler.preservesRemoteStateOnBinding) return
         val history = historyRepository.getOne(manga)
         scrobbler.updateScrobblingInfo(
             mangaId = mangaId,

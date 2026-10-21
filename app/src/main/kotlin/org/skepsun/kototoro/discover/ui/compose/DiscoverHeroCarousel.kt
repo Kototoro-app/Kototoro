@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.discover.ui.compose
 
+import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
+
 import android.os.Build
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
@@ -413,7 +415,7 @@ fun DiscoverHeroCarousel(
                                         painter = rememberSafePainter(service.iconResId),
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp),
-                                        tint = heroContentColor,
+                                        tint = scrobblerIconTint(service.iconResId, heroContentColor),
                                     )
                                     Text(
                                         text = stringResource(service.titleResId),
@@ -444,6 +446,7 @@ fun DiscoverHeroCarousel(
                                             Icon(
                                                 painter = rememberSafePainter(candidate.iconResId),
                                                 contentDescription = null,
+                                                tint = scrobblerIconTint(candidate.iconResId),
                                                 modifier = Modifier.size(18.dp),
                                             )
                                         },

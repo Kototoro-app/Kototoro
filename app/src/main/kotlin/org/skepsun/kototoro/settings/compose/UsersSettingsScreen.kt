@@ -38,6 +38,7 @@ import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
 
 data class UserTrackingAccountItem(
     val service: ScrobblerService,
@@ -214,7 +215,7 @@ private fun UserTrackingAccountAvatar(
             Icon(
                 painter = rememberSafePainter(iconRes),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = scrobblerIconTint(iconRes, MaterialTheme.colorScheme.onSurfaceVariant),
                 modifier = Modifier.size(22.dp),
             )
         } else {

@@ -68,6 +68,11 @@ android {
 			localProperties.load(new FileInputStream(localPropertiesFile))
 		}
 		resValue 'string', 'tg_backup_bot_token', localProperties.getProperty('tg_backup_bot_token', '')
+		buildConfigField 'String', 'MANGABAKA_CLIENT_ID', groovy.json.JsonOutput.toJson(
+			providers.gradleProperty('mangabakaClientId').getOrElse(
+				localProperties.getProperty('mangabaka_client_id', 'vCGYJtdnDzunRzShmuaKlkjwVKkMIwcA')
+			)
+		)
 		def dandanAppId = (project.findProperty('dandanplay.appId')
 			?: localProperties.getProperty('dandanplay.appId')
 			?: 'demo_app_id').toString()
