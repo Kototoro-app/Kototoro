@@ -35,6 +35,87 @@ Run unit tests:
 ./gradlew :app:testDebugUnitTest --no-daemon
 ```
 
+## Windows and iOS (Kotlin Multiplatform)
+
+Android, Windows and iOS share the Kotlin Multiplatform modules: `core-db` (Room database and migrations),
+`core-domain`, `core-backup`, `core-net`, `core-source` (source protocol), `core-library`, `core-local`,
+`reader-core`, `reader-novel` and `core-ui` (Compose shared by Android and Windows). Third-party extensions run in
+a JVM through `source-host` / `parser-host`. The overall plan and progress are in the
+[KMP / iOS plan](./architecture/kmp-ios-plan-2026-10.md); user-facing status is on [Windows & iOS](./platforms.md).
+
+KMP modules are checked for portability with `./gradlew :<module>:compileCommonMainKotlinMetadata`, and their
+tests run with `:<module>:jvmTest` (not `test`).
+
+### Windows desktop app
+
+The desktop modules are opt-in (`-PwithDesktopApp`), so ordinary Android builds and Android Studio sync do not
+configure them. They need JDK 21+ and the pinned compatibility JARs (AndroidCompat / Suwayomi APIs). Build the
+compatibility directory and the WebView2 SDK inputs once with the same script CI uses (it compiles the pinned
+Suwayomi source and verifies every JAR's SHA-256; JDK 25 is required):
+
+```powershell
+./.github/scripts/prepare-windows-ci.ps1 -SourceJavaHome "C:/path/to/jdk-25"
+# output: build/windows-ci-compatibility
+```
+
+Run from source while developing:
+
+```powershell
+./desktop-app/run-windows.ps1 -CompatibilityDirectory "build/windows-ci-compatibility" -JavaVersion 21
+```
+
+Build a runnable app folder (no ZIP/MSI, no tests) — `--no-configuration-cache` is required:
+
+```powershell
+./gradlew.bat -PwithDesktopApp -PwithWindowsDistribution `
+  "-PmihonCompatibilityDirectory=build/windows-ci-compatibility" -PmihonCompatibilityJavaVersion=21 `
+  :desktop-app:createDistributable --no-configuration-cache
+# output: desktop-app/build/compose/binaries/main/app/Kototoro/Kototoro.exe
+```
+
+Replace the task with `:desktop-app:windowsDistributionTest` to also run the packaged-image self check (bundled
+JVM, database, backup, WebView2 bridge, libmpv and ncnn upscalers), or run `./desktop-app/package-windows.ps1`
+for the tested image plus the portable ZIP and MSI. The self check needs Vulkan: a GPU driver locally, or a
+software driver such as Mesa lavapipe. More detail is in
+[desktop-app/README.md](https://github.com/Kototoro-app/Kototoro/blob/devel/desktop-app/README.md).
+
+### iOS app
+
+Requires an Apple Silicon Mac with **Xcode 27** (the app uses the iOS 27 SDK; deployment target iOS 26) and
+JDK 17+. Open `iosApp/Kototoro.xcodeproj`, choose the `Kototoro` scheme and run it on a simulator; the Xcode build
+phase compiles the shared `KototoroShared` framework through Gradle.
+
+The extension runtime (OpenJDK Mobile Zero, built from pinned source) is optional and needs JDK 24. To produce
+the same unsigned IPA that CI publishes:
+
+```bash
+python3 iosApp/Scripts/build-jvm-preview.py                       # simulator VM + Java image
+python3 iosApp/Scripts/stage-mihon-preview.py --runtime-only      # extension runtime profile
+python3 iosApp/Scripts/build-jvm-preview.py --platform iphoneos \
+    --profile iosApp/build/jvm-real-api                           # device VM
+iosApp/Scripts/package-ipa.sh --jvm                               # iosApp/build/release-ios/*.ipa
+```
+
+Without `--runtime-only`, the staging script also downloads and converts pinned sample extensions for simulator
+testing. Simulator workflows, UI tests and real-extension previews are described in
+[iosApp/README.md](https://github.com/Kototoro-app/Kototoro/blob/devel/iosApp/README.md) and the
+[iOS development handoff](./architecture/ios-development-handoff-2026-10.md).
+
+### CI packaging
+
+`release.yml` (on `v*` tags) and `nightly.yml` (daily, devel) build the Android APKs, then call two reusable
+workflows:
+
+- `windows-build.yml` — builds the compatibility JARs from source, installs a pinned software Vulkan driver
+  (Khronos loader + Mesa lavapipe, because hosted runners have no GPU), runs the packaged-image test and uploads
+  the ZIP (plus the MSI for releases).
+- `ios-build.yml` — runs on GitHub's `xcode-27` image, compiles OpenJDK Mobile for the simulator and the device,
+  archives the unsigned IPA with the embedded JVM and checks that the bundled JVM host starts.
+
+To try workflow changes without publishing, push a branch and run `gh workflow run nightly.yml --ref <branch>`:
+non-devel runs only upload artifacts. Nightly cancels an in-progress run of the same branch, so wait for one to
+finish before dispatching the next.
+
 ## Documentation Website
 
 Kototoro now uses VitePress for the documentation website and GitHub Pages for hosting.
@@ -63,6 +144,7 @@ Deployment model:
 
 - [Documentation Hub](./README.md)
 - [Getting Started](./getting-started.md)
+- [Windows & iOS (Preview)](./platforms.md)
 - [Reader Features](./reader-features.md)
 - [Automatic Translation](./automatic-translation.md)
 - [WebDAV Sync](./webdav-sync.md)

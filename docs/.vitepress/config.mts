@@ -68,6 +68,7 @@ export default defineConfig({
         text: "Guides",
         items: [
           { text: "Getting Started", link: "/getting-started" },
+          { text: "Windows & iOS (Preview)", link: "/platforms" },
           { text: "Reader Features", link: "/reader-features" },
           { text: "Automatic Translation", link: "/automatic-translation" },
           { text: "Source Integrations", link: "/source-integrations" },
@@ -81,6 +82,9 @@ export default defineConfig({
         items: [
           { text: "Architecture Review", link: "/architecture/architecture-review" },
           { text: "Architecture Roadmap", link: "/architecture/architecture-roadmap" },
+          { text: "KMP / iOS Plan", link: "/architecture/kmp-ios-plan-2026-10" },
+          { text: "Windows Feature Parity", link: "/architecture/windows-feature-parity-2026-10" },
+          { text: "iOS Feature Parity", link: "/architecture/ios-android-feature-parity-2026-10" },
           { text: "Reader Scene Closure Plan (2026-09)", link: "/architecture/reader-scene-closure-plan-2026-09" },
           { text: "Favourites Library Plan", link: "/architecture/favourites-komikku-alignment-implementation-plan-2026-09" },
           { text: "Unified Cloudflare Solver", link: "/architecture/unified-cloudflare-solver-plan-2026-08" },
