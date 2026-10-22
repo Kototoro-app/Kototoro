@@ -148,6 +148,13 @@ internal object DesktopParserProbe {
                     waitForIdle()
                     onNodeWithTag("novel-bookmarks-panel").assertExists()
                 }
+                fun expandDetails() {
+                    // A card opens the floating preview; the tabs belong to the expanded details screen.
+                    if (onAllNodesWithTag("details-expand").fetchSemanticsNodes().isNotEmpty()) {
+                        onNodeWithTag("details-expand").performClick(); idle()
+                    }
+                    onNodeWithTag("details-full").assertExists()
+                }
                 fun novelBookmarks() {
                     val content = controller.state.value.content!!
                     val bookmarks = controller.state.value.bookmarks
@@ -284,15 +291,19 @@ internal object DesktopParserProbe {
                     snapshot("details-info")
                     // The link Android shares is what a desktop copies.
                     onNodeWithTag("details-copy-link").performScrollTo().performClick(); idle()
-                    val copyLabel = onNodeWithTag("details-copy-link").fetchSemanticsNode()
-                        .config[SemanticsProperties.Text].joinToString("")
                     val clip = runCatching {
                         Toolkit.getDefaultToolkit().systemClipboard.getData(DataFlavor.stringFlavor) as? String
                     }.getOrNull()
-                    println("COPY: label=$copyLabel clip=$clip url=${book.url}")
                     // The button keeps saying so until another work is shown, which is what a copy means here.
                     onNodeWithTag("details-copy-link").assertTextContains("已复制链接")
                     if (clip != null) check(clip.endsWith(book.url)) { "clipboard: $clip" }
+                    // Android's bookmark tab belongs to the details screen; before reading it is empty.
+                    onNodeWithTag("details-tab:BOOKMARKS").performClick(); idle()
+                    onNodeWithTag("details-bookmarks").assertExists()
+                    onNodeWithTag("details-bookmarks-clear").assertIsNotEnabled()
+                    check(controller.state.value.bookmarks.isEmpty())
+                    onNodeWithTag("details-tab:CHAPTERS").performClick(); idle()
+                    onNodeWithTag("details-info").assertExists()
                     runBlocking { controller.addFavourite().join() }
                     onNodeWithTag("preview-read").performClick(); idle()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.NOVEL }
@@ -456,6 +467,25 @@ internal object DesktopParserProbe {
                     check(controller.state.value.pages.size == 3 && controller.state.value.readerImages.isNotEmpty())
                     check(requested.any { it.startsWith("/img/") }) { "page images must come from the plugin's own domain" }
                     check(runBlocking { session.library.progress(comic.id) } != null)
+                    // A page bookmark shows its page image in the details tab, and clearing empties the work.
+                    onNodeWithTag("reader-bookmark-toggle").performClick(); idle()
+                    val pageBookmark = controller.state.value.bookmarks.single()
+                    check(pageBookmark.contentId == comic.id)
+                    onNodeWithTag("reader-back").performClick(); idle()
+                    expandDetails()
+                    onNodeWithTag("details-tab:BOOKMARKS").performClick(); idle()
+                    onNodeWithTag("details-bookmarks-grid").assertExists()
+                    onNodeWithTag("details-bookmark:${pageBookmark.pageId}").assertExists()
+                    // The card merges its descendants, so the image node lives on the unmerged tree.
+                    waitUntil(timeoutMillis = 15_000) {
+                        onAllNodesWithTag("bookmark-thumb-image:${pageBookmark.pageId}", useUnmergedTree = true)
+                            .fetchSemanticsNodes().isNotEmpty()
+                    }
+                    snapshot("details-bookmarks")
+                    onNodeWithTag("details-bookmarks-clear").performClick(); idle()
+                    check(controller.state.value.bookmarks.isEmpty())
+                    check(runBlocking { session.library.bookmarks(comic.id) }.isEmpty())
+                    onNodeWithTag("details-bookmarks-grid").assertDoesNotExist()
                 } else {
                     onNodeWithTag("source:FIXTURE_KOTOTORO_ONLY").performClick(); idle()
                     check(controller.state.value.items.size == 2)
@@ -484,6 +514,32 @@ internal object DesktopParserProbe {
                     check(controller.state.value.bookmarks.size == 1)
                     novelKey(Key.B); idle()
                     check(controller.state.value.bookmarks.size == 2)
+                    // The details bookmark tab lists novel positions with their excerpt, jumps, and deletes.
+                    val jump = controller.state.value.bookmarks.minByOrNull { it.page }!!
+                    onNodeWithTag("reader-back").performClick(); idle()
+                    expandDetails()
+                    onNodeWithTag("details-tab:BOOKMARKS").performClick(); idle()
+                    onNodeWithTag("details-bookmarks-list").assertExists()
+                    onNodeWithTag("details-bookmark:${jump.pageId}").assertExists().performClick(); idle()
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.NOVEL }
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.novel?.firstVisible == jump.page }
+                    onNodeWithTag("novel-block:${jump.page}").assertIsDisplayed()
+                    onNodeWithTag("reader-back").performClick(); idle()
+                    expandDetails()
+                    onNodeWithTag("details-tab:BOOKMARKS").performClick(); idle()
+                    snapshot("details-bookmarks-novel")
+                    onNodeWithTag("bookmark-delete:${jump.pageId}").performClick(); idle()
+                    check(controller.state.value.bookmarks.size == 1)
+                    check(controller.state.value.bookmarks.none { it.pageId == jump.pageId })
+                    check(runBlocking { session.library.bookmarks(controller.state.value.content!!.id) }
+                        .none { it.pageId == jump.pageId })
+                    // Opening a chapter from the details list enters the reader again for the settings panel.
+                    val remaining = controller.state.value.bookmarks.single()
+                    onNodeWithTag("details-tab:CHAPTERS").performClick(); idle()
+                    onNodeWithTag("chapter-directory-list")
+                        .performScrollToNode(hasTestTag("read-chapter:${remaining.chapterId}"))
+                    onNodeWithTag("read-chapter:${remaining.chapterId}").performClick(); idle()
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.NOVEL }
                     // The shared panel also fits the smaller window after a real process restart.
                     onNodeWithTag("reader-options").performClick(); waitForIdle()
                     onNodeWithTag("novel-serif").assertIsDisplayed().assertIsOn()

@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.source.SourceChapter
@@ -203,20 +204,57 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                 DesktopDetailsInfo(content, enabled = !state.busy)
             }
         }
+        var tab by remember(content.id) { mutableStateOf(DesktopDetailsTab.CHAPTERS) }
+        val bookmarks = remember(state.bookmarks, content.id) { state.bookmarks.count { it.contentId == content.id } }
+        val tabs: @Composable (Modifier) -> Unit = { tabsModifier ->
+            Row(tabsModifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DesktopDetailsTab.entries.forEach { candidate ->
+                    val label = when (candidate) {
+                        DesktopDetailsTab.CHAPTERS -> desktopText("details.chapters", content.chapters?.size ?: 0)
+                        DesktopDetailsTab.BOOKMARKS -> desktopText("details.tabBookmarks", bookmarks)
+                    }
+                    OutlinedButton({ tab = candidate }, enabled = !state.busy,
+                        colors = ButtonDefaults.outlinedButtonColors(backgroundColor =
+                            if (tab == candidate) Accent.copy(alpha = .12f) else Color.Transparent),
+                        modifier = Modifier.weight(1f, fill = false).testTag("details-tab:${candidate.name}")) {
+                        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
         if (expanded) {
             TabletDetailsPanes(Modifier.fillMaxSize().testTag("details-two-pane"),
                 summary = { paneModifier ->
                     Surface(paneModifier, shape = RoundedCornerShape(20.dp),
                         color = MaterialTheme.colors.surface.copy(alpha = .92f)) { metadata(Modifier.fillMaxSize()) }
                 },
-                chapters = { paneModifier -> DesktopDetailsChapters(controller, state, directory, paneModifier) },
+                chapters = { paneModifier ->
+                    Column(paneModifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        tabs(Modifier.fillMaxWidth())
+                        when (tab) {
+                            DesktopDetailsTab.CHAPTERS -> DesktopDetailsChapters(controller, state, directory,
+                                Modifier.weight(1f))
+                            DesktopDetailsTab.BOOKMARKS -> DesktopDetailsBookmarks(controller, state,
+                                Modifier.weight(1f))
+                        }
+                    }
+                },
             )
         } else {
-            DesktopDetailsChapters(controller, state, directory, Modifier.fillMaxSize().testTag("details-stacked"),
-                leadingContent = { metadata(Modifier.fillMaxWidth()) })
+            Column(Modifier.fillMaxSize().testTag("details-stacked"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                tabs(Modifier.fillMaxWidth())
+                when (tab) {
+                    DesktopDetailsTab.CHAPTERS -> DesktopDetailsChapters(controller, state, directory,
+                        Modifier.weight(1f), leadingContent = { metadata(Modifier.fillMaxWidth()) })
+                    DesktopDetailsTab.BOOKMARKS -> DesktopDetailsBookmarks(controller, state, Modifier.weight(1f))
+                }
+            }
         }
     }
 }
+
+/** Android's details tabs; the Windows panes switch between the same two lists instead of scrolling past both. */
+internal enum class DesktopDetailsTab { CHAPTERS, BOOKMARKS }
 
 /** Android's chapter list pipeline: one branch, then order and search, then volume headers on what remains. */
 internal data class DesktopChapterList(

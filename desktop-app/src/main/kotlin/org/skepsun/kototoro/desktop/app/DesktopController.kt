@@ -1332,6 +1332,42 @@ class DesktopController(val session: DesktopSession) {
         readOnIo(chapter, bookmark = bookmark)
     }
 
+    /** Android's bookmark list also opens from the details tabs, before the reader was ever opened. */
+    fun openDetailsBookmark(bookmark: DesktopBookmark) = navigate {
+        val content = requireNotNull(state.value.content)
+        require(content.id == bookmark.contentId) { desktopText("error.bookmarkMissing") }
+        val chapter = content.chapters?.firstOrNull { it.id == bookmark.chapterId }
+            ?: error(desktopText("error.bookmarkChapterMissing"))
+        when (DesktopReaderKind.of(content)) {
+            DesktopReaderKind.NOVEL -> readNovelOnIo(chapter, bookmark)
+            DesktopReaderKind.VIDEO -> watchOnIo(chapter)
+            DesktopReaderKind.PAGES -> readOnIo(chapter, bookmark = bookmark)
+        }
+    }
+
+    fun removeBookmark(bookmark: DesktopBookmark) = action {
+        val content = requireNotNull(state.value.content)
+        require(content.id == bookmark.contentId) { desktopText("error.bookmarkMissing") }
+        session.library.removeBookmark(content, bookmark)
+        val bookmarks = session.library.bookmarks(content.id)
+        mutableState.update { it.copy(bookmarks = bookmarks, novel = it.novel?.let { novel ->
+            novel.copy(bookmarkBlocks = novelBookmarkBlocks(content, novel.chapter, novel.blocks, bookmarks))
+        }) }
+    }
+
+    fun clearBookmarks() = action {
+        val content = requireNotNull(state.value.content)
+        val contentId = content.id
+        // One transaction per bookmark keeps a stale card from deleting a replacement.
+        for (bookmark in session.library.bookmarks(contentId)) {
+            runCatching { session.library.removeBookmark(content, bookmark) }
+        }
+        val bookmarks = session.library.bookmarks(contentId)
+        mutableState.update { it.copy(bookmarks = bookmarks, novel = it.novel?.let { novel ->
+            novel.copy(bookmarkBlocks = novelBookmarkBlocks(content, novel.chapter, novel.blocks, bookmarks))
+        }) }
+    }
+
     fun turnPage(forward: Boolean) = action {
         val snapshot = state.value
         val continuousMode = snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS

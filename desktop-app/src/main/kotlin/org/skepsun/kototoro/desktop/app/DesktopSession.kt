@@ -191,6 +191,11 @@ class DesktopSession private constructor(
         downloadStore.find(contentId, chapter)?.takeIf { it.isComplete }?.pages?.map { it.page }
             ?: sources.getPages(chapter, null)
 
+    /** The page a bookmark points at, for its card in the details bookmark list; null when the page is gone. */
+    internal suspend fun bookmarkImage(contentId: Long, chapter: SourceChapter,
+        pageIndex: Int): DesktopReaderImage? = chapterPages(contentId, chapter).getOrNull(pageIndex)
+        ?.let { readerImage(it) }
+
     internal suspend fun downloadPages(chapter: SourceChapter) = downloadRequest { sources.getPages(chapter, null) }
 
     internal suspend fun prepareDownload(page: SourcePage, revision: String, known: SourceImageArtifact?) =
