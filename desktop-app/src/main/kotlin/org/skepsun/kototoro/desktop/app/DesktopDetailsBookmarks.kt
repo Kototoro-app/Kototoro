@@ -55,14 +55,63 @@ internal fun DesktopDetailsBookmarks(controller: DesktopController, state: Deskt
     val bookmarks = remember(state.bookmarks, content.id) { state.bookmarks.filter { it.contentId == content.id } }
     val enabled = !state.busy
     val pageReader = DesktopReaderKind.of(content) == DesktopReaderKind.PAGES
+    // Android enters multi-select by long-pressing a card; the header switch does the same with a mouse.
+    var selecting by remember(content.id) { mutableStateOf(false) }
+    var selection by remember(content.id) { mutableStateOf(emptySet<Long>()) }
+    // A stable key: mapping the list on every recomposition would restart the effect and never settle.
+    val bookmarkIds = remember(bookmarks) { bookmarks.mapTo(LinkedHashSet()) { it.pageId } }
+    LaunchedEffect(bookmarkIds) {
+        if (selection.isNotEmpty()) selection = selection.intersect(bookmarkIds)
+        if (bookmarkIds.isEmpty()) {
+            selecting = false
+            selection = emptySet()
+        }
+    }
+    val toggle: (Long) -> Unit = { pageId ->
+        selection = if (pageId in selection) selection - pageId else selection + pageId
+    }
     Column(modifier.fillMaxSize().testTag("details-bookmarks"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(desktopText("reader.bookmarksCount", bookmarks.size), modifier = Modifier.weight(1f),
+            Text(if (selecting) desktopText("details.bookmarksSelectedCount", selection.size)
+            else desktopText("reader.bookmarksCount", bookmarks.size),
+                modifier = Modifier.weight(1f).testTag("details-bookmarks-count"),
                 style = MaterialTheme.typography.subtitle1, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 color = Muted)
-            TextButton(controller::clearBookmarks, enabled = enabled && bookmarks.isNotEmpty(),
+            TextButton({
+                selecting = !selecting
+                if (!selecting) selection = emptySet()
+            }, enabled = enabled && bookmarks.isNotEmpty(),
+                modifier = Modifier.testTag("details-bookmarks-select")) {
+                if (selecting) {
+                    Text(desktopText("details.cancelSelection"))
+                } else {
+                    Text(desktopText("details.selectBookmarks"))
+                }
+            }
+            TextButton(controller::clearBookmarks, enabled = enabled && !selecting && bookmarks.isNotEmpty(),
                 modifier = Modifier.testTag("details-bookmarks-clear")) {
                 Text(desktopText("details.bookmarksClear"))
+            }
+        }
+        if (selecting) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton({ selection = bookmarks.mapTo(HashSet()) { it.pageId } },
+                    enabled = enabled && selection.size < bookmarks.size,
+                    modifier = Modifier.testTag("details-bookmarks-select-all")) {
+                    Text(desktopText("details.selectAll"))
+                }
+                TextButton({ selection = emptySet() }, enabled = enabled && selection.isNotEmpty(),
+                    modifier = Modifier.testTag("details-bookmarks-select-none")) {
+                    Text(desktopText("downloads.selectNone"))
+                }
+                OutlinedButton({
+                    controller.removeBookmarks(selection)
+                    selecting = false
+                    selection = emptySet()
+                }, enabled = enabled && selection.isNotEmpty(),
+                    modifier = Modifier.testTag("details-bookmarks-select-delete")) {
+                    Text(desktopText("details.bookmarksDeleteSelected", selection.size))
+                }
             }
         }
         if (bookmarks.isEmpty()) {
@@ -77,25 +126,34 @@ internal fun DesktopDetailsBookmarks(controller: DesktopController, state: Deskt
             LazyColumn(Modifier.fillMaxSize().testTag("details-bookmarks-list"),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(bookmarks, key = { it.pageId }) { bookmark ->
+                    val checked = bookmark.pageId in selection
                     Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colors.surface,
                         modifier = Modifier.testTag("details-bookmark:${bookmark.pageId}")) {
-                        Column(Modifier.fillMaxWidth().clickable(enabled = enabled) {
-                            controller.openDetailsBookmark(bookmark)
-                        }.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(content.chapters?.firstOrNull { it.id == bookmark.chapterId }?.title
-                                ?: desktopText("reader.chapterMissing"), maxLines = 2,
-                                overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
-                            if (!bookmark.isChapterOnly()) {
-                                Text(previews[bookmark.pageId].orEmpty(), color = Muted, fontSize = 12.sp,
-                                    maxLines = 3, overflow = TextOverflow.Ellipsis)
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
-                                Text(bookmarkLabel(bookmark), color = Accent, fontSize = 12.sp,
-                                    modifier = Modifier.weight(1f))
-                                TextButton(onClick = { controller.removeBookmark(bookmark) }, enabled = enabled,
-                                    modifier = Modifier.testTag("bookmark-delete:${bookmark.pageId}")) {
-                                    Text(desktopText("details.bookmarkDelete"), fontSize = 11.sp, maxLines = 1)
+                        Row(Modifier.fillMaxWidth().clickable(enabled = enabled) {
+                            if (selecting) toggle(bookmark.pageId) else controller.openDetailsBookmark(bookmark)
+                        }.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (selecting) Checkbox(checked = checked, onCheckedChange = { toggle(bookmark.pageId) },
+                                enabled = enabled, modifier = Modifier.testTag("bookmark-check:${bookmark.pageId}"))
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(content.chapters?.firstOrNull { it.id == bookmark.chapterId }?.title
+                                    ?: desktopText("reader.chapterMissing"), maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
+                                if (!bookmark.isChapterOnly()) {
+                                    Text(previews[bookmark.pageId].orEmpty(), color = Muted, fontSize = 12.sp,
+                                        maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Text(bookmarkLabel(bookmark), color = Accent, fontSize = 12.sp,
+                                        modifier = Modifier.weight(1f))
+                                    if (!selecting) {
+                                        TextButton(onClick = { controller.removeBookmark(bookmark) },
+                                            enabled = enabled,
+                                            modifier = Modifier.testTag("bookmark-delete:${bookmark.pageId}")) {
+                                            Text(desktopText("details.bookmarkDelete"), fontSize = 11.sp,
+                                                maxLines = 1)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -108,7 +166,7 @@ internal fun DesktopDetailsBookmarks(controller: DesktopController, state: Deskt
             horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 16.dp)) {
             items(bookmarks, key = { it.pageId }) { bookmark ->
-                BookmarkCard(controller, content, bookmark, enabled)
+                BookmarkCard(controller, content, bookmark, enabled, selecting, bookmark.pageId in selection, toggle)
             }
         }
     }
@@ -116,25 +174,31 @@ internal fun DesktopDetailsBookmarks(controller: DesktopController, state: Deskt
 
 @Composable
 private fun BookmarkCard(controller: DesktopController, content: SourceContent, bookmark: DesktopBookmark,
-    enabled: Boolean) {
+    enabled: Boolean, selecting: Boolean, checked: Boolean, toggle: (Long) -> Unit) {
     val chapter = content.chapters?.firstOrNull { it.id == bookmark.chapterId }
     Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colors.surface,
         modifier = Modifier.testTag("details-bookmark:${bookmark.pageId}")) {
-        Column(Modifier.fillMaxWidth().clickable(enabled = enabled && chapter != null) {
-            controller.openDetailsBookmark(bookmark)
+        Column(Modifier.fillMaxWidth().clickable(enabled = enabled && (selecting || chapter != null)) {
+            if (selecting) toggle(bookmark.pageId) else controller.openDetailsBookmark(bookmark)
         }.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.fillMaxWidth().aspectRatio(3f / 4f).clip(RoundedCornerShape(10.dp))
                 .background(Accent.copy(alpha = .06f)).testTag("bookmark-thumb:${bookmark.pageId}")) {
                 BookmarkThumbnail(controller, content, chapter, bookmark, Modifier.fillMaxSize())
+                if (selecting) {
+                    Checkbox(checked = checked, onCheckedChange = { toggle(bookmark.pageId) }, enabled = enabled,
+                        modifier = Modifier.align(Alignment.TopEnd).testTag("bookmark-check:${bookmark.pageId}"))
+                }
             }
             Text(chapter?.title ?: desktopText("reader.chapterMissing"), maxLines = 2,
                 overflow = TextOverflow.Ellipsis, fontSize = 13.sp)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(bookmarkLabel(bookmark), color = Accent, fontSize = 12.sp,
                     modifier = Modifier.weight(1f), maxLines = 1)
-                TextButton(onClick = { controller.removeBookmark(bookmark) }, enabled = enabled,
-                    modifier = Modifier.testTag("bookmark-delete:${bookmark.pageId}")) {
-                    Text(desktopText("details.bookmarkDelete"), fontSize = 11.sp, maxLines = 1)
+                if (!selecting) {
+                    TextButton(onClick = { controller.removeBookmark(bookmark) }, enabled = enabled,
+                        modifier = Modifier.testTag("bookmark-delete:${bookmark.pageId}")) {
+                        Text(desktopText("details.bookmarkDelete"), fontSize = 11.sp, maxLines = 1)
+                    }
                 }
             }
         }

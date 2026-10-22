@@ -1447,6 +1447,25 @@ class DesktopController(val session: DesktopSession) {
     }
 
     /**
+     * Android deletes several bookmarks from one long-press menu; on the desktop the same set comes from a
+     * selection on the details grid. Cards of other works or already gone are skipped instead of failing.
+     */
+    fun removeBookmarks(pageIds: Set<Long>) = action {
+        if (pageIds.isEmpty()) return@action
+        val content = requireNotNull(state.value.content)
+        val contentId = content.id
+        val targets = session.library.bookmarks(contentId).filter { it.pageId in pageIds }
+        for (bookmark in targets) {
+            runCatching { session.library.removeBookmark(content, bookmark) }
+        }
+        val bookmarks = session.library.bookmarks(contentId)
+        mutableState.update { it.copy(bookmarks = bookmarks, message = desktopText("details.bookmarksDeleted", targets.size),
+            novel = it.novel?.let { novel ->
+                novel.copy(bookmarkBlocks = novelBookmarkBlocks(content, novel.chapter, novel.blocks, bookmarks))
+            }) }
+    }
+
+    /**
      * Android's chapter bookmark command in the details batch bar. Removing takes every bookmark of the
      * selected chapters; adding only touches chapters that hold none, so a saved page is never widened.
      */
