@@ -37,6 +37,7 @@ class ExternalExtensionManagerFacade<ResultT, SuccessT, ErrorT, SourceT, Catalog
     >(
         context = context,
         scope = scope,
+        ecosystem = ecosystem,
     )
 
     val installedExtensions: StateFlow<List<SuccessT>> = runtime.installedExtensions

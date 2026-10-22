@@ -68,6 +68,7 @@ object GlobalExtensionManager {
 
     @Synchronized
     fun initialize(context: Context) {
+        val startedAt = android.os.SystemClock.elapsedRealtime()
         val pluginDir = File(context.filesDir, "plugins")
         val plugins = JarExtensionLoader.loadFromDirectory(context, pluginDir)
 
@@ -117,6 +118,12 @@ object GlobalExtensionManager {
 
         applyDeduplication(prefs)
         publishRegistryUpdate()
+        android.util.Log.i(
+            "KototoroInit",
+            "GlobalExtensionManager.initialize done manga=${_mangaSources.value.size} " +
+                "content=${_contentSources.value.size} jars=${_installedJarNames.value.size} " +
+                "total_ms=${android.os.SystemClock.elapsedRealtime() - startedAt}",
+        )
     }
 
     private fun applyDeduplication(prefs: SharedPreferences) {

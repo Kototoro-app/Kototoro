@@ -131,8 +131,18 @@ object JarExtensionLoader {
             .listFiles { file -> file.extension.equals("jar", ignoreCase = true) }
             ?.sortedBy { it.name.lowercase() }
             .orEmpty()
+        // Two JARs of one package expose the same classes and the same sources, and the stale one is
+        // dropped after loading anyway. Dropping it before the scan keeps its whole DEX unread.
+        val uniqueJarFiles = deduplicateJarPackages(jarFiles) { it.name }
+        uniqueJarFiles.dropped.forEach { stale ->
+            android.util.Log.w("KototoroInit", "Skipped duplicate JAR package before scan: ${stale.name}")
+        }
+        val brokenSourceCache = JarBrokenSourceCache.get(context)
+        brokenSourceCache.retainOnly(uniqueJarFiles.kept)
 
-        for (jarFile in jarFiles) {
+        val loadStartedAt = android.os.SystemClock.elapsedRealtime()
+
+        for (jarFile in uniqueJarFiles.kept) {
             jarFile.setReadOnly() // Fix Android 14+ classloader restrictions
             val dexClassLoader = PluginClassLoader(
                 jarFile.absolutePath,
@@ -141,38 +151,50 @@ object JarExtensionLoader {
                 parentClassLoader
             )
 
-            // Parse DEX to find broken sources
-            val brokenSourceNames = mutableSetOf<String>()
-            try {
-                val dexFile = DexFile(jarFile.absolutePath)
-                val entries = dexFile.entries()
-                while (entries.hasMoreElements()) {
-                    val className = entries.nextElement()
-                    try {
-                        val clazz = dexClassLoader.loadClass(className)
-
-                        val brokenKotatsu = clazz.getAnnotation(org.koitharu.kotatsu.parsers.Broken::class.java)
-                        if (brokenKotatsu != null) {
-                            val mangaParserAnn = clazz.getAnnotation(org.koitharu.kotatsu.parsers.MangaSourceParser::class.java)
-                            if (mangaParserAnn != null) {
-                                brokenSourceNames.add(mangaParserAnn.name)
-                            }
-                        }
-
-                        val brokenKototoro = clazz.getAnnotation(org.skepsun.kototoro.parsers.Broken::class.java)
-                        if (brokenKototoro != null) {
-                            val contentParserAnn = clazz.getAnnotation(org.skepsun.kototoro.parsers.ContentSourceParser::class.java)
-                            if (contentParserAnn != null) {
-                                brokenSourceNames.add(contentParserAnn.name)
-                            }
-                        }
-                    } catch (e: Throwable) {
-                        // ignore class loading errors
-                    }
+            // Reading the @Broken flags means loading every class of the DEX, so the result is
+            // persisted per file identity and only recomputed when the JAR itself changes.
+            val cachedBrokenSourceNames = brokenSourceCache.read(jarFile)
+            val brokenSourceNames: Set<String> = if (cachedBrokenSourceNames != null) {
+                android.util.Log.i(
+                    "KototoroInit",
+                    "Broken scan cache hit for ${jarFile.name} broken=${cachedBrokenSourceNames.size}",
+                )
+                cachedBrokenSourceNames
+            } else {
+                val scanStartedAt = android.os.SystemClock.elapsedRealtime()
+                val scanned = scanBrokenSourceNames(dexClassLoader, jarFile)
+                android.util.Log.i(
+                    "KototoroInit",
+                    "Scanned ${jarFile.name} classes=${scanned?.classCount ?: 0} " +
+                        "scan_ms=${android.os.SystemClock.elapsedRealtime() - scanStartedAt} " +
+                        "broken=${scanned?.brokenSourceNames?.size ?: 0}",
+                )
+                val scannedNames = scanned?.brokenSourceNames.orEmpty()
+                if (scanned != null) {
+                    brokenSourceCache.write(jarFile, scannedNames)
                 }
-                dexFile.close()
-            } catch (e: Throwable) {
-                android.util.Log.e("KototoroInit", "Failed to parse DexFile for broken sources: ${e.message}", e)
+                scannedNames
+            }
+
+            fun record(
+                architecture: ParserPluginArchitecture,
+                factoryMethod: Method,
+                sources: List<Any>,
+            ) {
+                plugins.add(
+                    LoadedJarPlugin(
+                        jarName = jarFile.name,
+                        classLoader = dexClassLoader,
+                        architecture = architecture,
+                        factoryMethod = factoryMethod,
+                        sources = sources,
+                        brokenSourceNames = brokenSourceNames,
+                    ),
+                )
+                android.util.Log.i(
+                    "KototoroInit",
+                    "Loaded ${jarFile.name} architecture=$architecture sources=${sources.size}",
+                )
             }
 
             // Try Kotatsu Parser Architecture
@@ -183,8 +205,7 @@ object JarExtensionLoader {
                 val sources = resolveFactorySources<MangaSource>(newParserMethod, fallbackSourceClass)
 
                 if (newParserMethod != null && sources.isNotEmpty()) {
-                    plugins.add(LoadedJarPlugin(jarFile.name, dexClassLoader, ParserPluginArchitecture.KOTATSU, newParserMethod, sources, brokenSourceNames))
-                    android.util.Log.i("KototoroInit", "Loaded ${jarFile.name} architecture=KOTATSU sources=${sources.size}")
+                    record(ParserPluginArchitecture.KOTATSU, newParserMethod, sources)
                     continue // Success, move to next jar
                 }
             } catch (e: Throwable) {
@@ -200,8 +221,7 @@ object JarExtensionLoader {
                 val sources = resolveFactorySources<ContentSource>(newParserMethod, fallbackSourceClass)
 
                 if (newParserMethod != null && sources.isNotEmpty()) {
-                    plugins.add(LoadedJarPlugin(jarFile.name, dexClassLoader, ParserPluginArchitecture.KOTOTORO, newParserMethod, sources, brokenSourceNames))
-                    android.util.Log.i("KototoroInit", "Loaded ${jarFile.name} architecture=KOTOTORO sources=${sources.size}")
+                    record(ParserPluginArchitecture.KOTOTORO, newParserMethod, sources)
                     continue
                 }
             } catch (e: Throwable) {
@@ -217,8 +237,7 @@ object JarExtensionLoader {
                 val sources = resolveFactorySources<tsuki.model.MangaSource>(newParserMethod, fallbackSourceClass)
 
                 if (newParserMethod != null && sources.isNotEmpty()) {
-                    plugins.add(LoadedJarPlugin(jarFile.name, dexClassLoader, ParserPluginArchitecture.TSUKI, newParserMethod, sources, brokenSourceNames))
-                    android.util.Log.i("KototoroInit", "Loaded ${jarFile.name} architecture=TSUKI sources=${sources.size}")
+                    record(ParserPluginArchitecture.TSUKI, newParserMethod, sources)
                     continue
                 }
             } catch (e: Throwable) {
@@ -229,8 +248,67 @@ object JarExtensionLoader {
                 )
             }
         }
+        android.util.Log.i(
+            "KototoroInit",
+            "JAR load finished jars=${uniqueJarFiles.kept.size} plugins=${plugins.size} " +
+                "total_ms=${android.os.SystemClock.elapsedRealtime() - loadStartedAt}",
+        )
         return dropDuplicatePackages(plugins)
     }
+
+    /**
+     * Loads every class of the plugin DEX to read its `@Broken` marker. Returns `null` when the DEX
+     * itself cannot be read; that result must not be cached, so the next start can retry.
+     */
+    private fun scanBrokenSourceNames(
+        dexClassLoader: ClassLoader,
+        jarFile: File,
+    ): ScannedBrokenSources? {
+        val brokenSourceNames = mutableSetOf<String>()
+        var classCount = 0
+        try {
+            val dexFile = DexFile(jarFile.absolutePath)
+            try {
+                val entries = dexFile.entries()
+                while (entries.hasMoreElements()) {
+                    val className = entries.nextElement()
+                    classCount++
+                    try {
+                        val clazz = dexClassLoader.loadClass(className)
+
+                        if (clazz.getAnnotation(org.koitharu.kotatsu.parsers.Broken::class.java) != null) {
+                            val mangaParserAnn =
+                                clazz.getAnnotation(org.koitharu.kotatsu.parsers.MangaSourceParser::class.java)
+                            if (mangaParserAnn != null) {
+                                brokenSourceNames.add(mangaParserAnn.name)
+                            }
+                        }
+
+                        if (clazz.getAnnotation(org.skepsun.kototoro.parsers.Broken::class.java) != null) {
+                            val contentParserAnn =
+                                clazz.getAnnotation(org.skepsun.kototoro.parsers.ContentSourceParser::class.java)
+                            if (contentParserAnn != null) {
+                                brokenSourceNames.add(contentParserAnn.name)
+                            }
+                        }
+                    } catch (_: Throwable) {
+                        // A single unloadable class must not abort the scan for the whole JAR.
+                    }
+                }
+            } finally {
+                dexFile.close()
+            }
+        } catch (e: Throwable) {
+            android.util.Log.e("KototoroInit", "Failed to parse DexFile for broken sources: ${e.message}", e)
+            return null
+        }
+        return ScannedBrokenSources(brokenSourceNames, classCount)
+    }
+
+    private class ScannedBrokenSources(
+        val brokenSourceNames: Set<String>,
+        val classCount: Int,
+    )
 
     /**
      * Two JARs of the same package expose the same classes and the same sources, so keeping both only
