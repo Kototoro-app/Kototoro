@@ -49,6 +49,8 @@ private const val LAST_APP_UPDATE_CHECK = "last_app_update_check"
 private const val NEXT_CHAPTER_LOOKAHEAD = 2
 /** First pages of the next chapter loaded with it. */
 private const val NEXT_CHAPTER_PAGES = 2
+/** After a failed automatic upload, how long the timer waits before it tries the same server again. */
+private const val AUTO_BACKUP_RETRY_MILLIS = 10L * 60 * 1000
 
 internal val DetailsOrigins = setOf(DesktopScreen.HOME, DesktopScreen.FEED, DesktopScreen.EXPLORE, DesktopScreen.LIBRARY,
     DesktopScreen.HISTORY)
@@ -188,9 +190,10 @@ class DesktopController(val session: DesktopSession) {
     internal val backupPreview = mutableBackupPreview.asStateFlow()
     /** Android's in-app update flow: check the published releases, download, and swap the image on restart. */
     internal val updates = DesktopUpdateOperations(mutableState, session, scope)
-    /** Android's WebDAV backup destination: same shared protocol, driven by hand from the backups page. */
+    /** Android's WebDAV backup destination: same shared protocol, uploaded by hand or by the timer below. */
     private val webDav = DesktopWebDavOperations(session.storage, backups)
     internal val webDavUi = webDav.ui
+    private var autoBackupJob: Job? = null
 
     init {
         // The saved language applies before the first screen is composed; `--lang` outranks it for this run.
@@ -209,6 +212,8 @@ class DesktopController(val session: DesktopSession) {
         // The stamped version and the saved update toggles, before the first check or the first composed screen.
         updates.restore()
         webDav.restore()
+        // Only starts a loop when the saved destination has an interval; otherwise it returns immediately.
+        startAutoBackup()
     }
 
     private suspend fun startupUpdates() {
@@ -966,7 +971,32 @@ class DesktopController(val session: DesktopSession) {
             message = desktopText("backups.merged", processed)) }
     }
 
-    internal fun webDavSettings(value: DesktopWebDavSettings) = webDav.settings(value)
+    internal fun webDavSettings(value: DesktopWebDavSettings) {
+        webDav.settings(value)
+        // The interval lives in the settings, so a changed value must take effect without a restart.
+        startAutoBackup()
+    }
+
+    /**
+     * The timer Android's periodic worker replaces: sleep until the saved interval has passed, upload once, repeat.
+     * A disabled timer simply ends the loop; saving settings starts a new one.
+     */
+    private fun startAutoBackup() {
+        autoBackupJob?.cancel()
+        autoBackupJob = scope.launch {
+            while (isActive) {
+                val delayMillis = webDav.autoBackupDelay() ?: return@launch
+                if (delayMillis > 0L) {
+                    delay(delayMillis)
+                    continue
+                }
+                if (webDav.autoBackup() == DesktopAutoBackup.Failed) {
+                    // A dead server must not turn the timer into a retry loop against it.
+                    delay(AUTO_BACKUP_RETRY_MILLIS)
+                }
+            }
+        }
+    }
 
     internal fun webDavProbe() = action {
         webDav.probe()
@@ -983,6 +1013,8 @@ class DesktopController(val session: DesktopSession) {
             desktopText("webdav.uploadedTrimmed", result.name, result.size / 1024, result.removed.size)
         }
         mutableState.update { it.copy(message = message) }
+        // A manual upload moves the timer's baseline, so a sleeping loop must be recomputed against it.
+        startAutoBackup()
     }
 
     /** The remote file is downloaded, then previewed through the same archive/merge flow a local file uses. */

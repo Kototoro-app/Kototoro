@@ -80,6 +80,20 @@ internal fun DesktopWebDavSection(controller: DesktopController, ui: DesktopWebD
                     enabled = enabled,
                     modifier = Modifier.width(180.dp).testTag("webdav-keep"),
                 )
+                // `0` is the off switch: the page then works exactly like the manual-only version.
+                var interval by remember(settings.intervalHours) { mutableStateOf(settings.intervalHours.toString()) }
+                OutlinedTextField(
+                    value = interval,
+                    onValueChange = {
+                        val digits = it.filter(Char::isDigit).take(3)
+                        interval = digits
+                        controller.webDavSettings(settings.copy(intervalHours = digits.toIntOrNull() ?: 0))
+                    },
+                    label = { Text(desktopText("webdav.interval")) },
+                    singleLine = true,
+                    enabled = enabled,
+                    modifier = Modifier.width(200.dp).testTag("webdav-interval"),
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton({ controller.webDavProbe() }, enabled = enabled && settings.configured,
@@ -90,6 +104,22 @@ internal fun DesktopWebDavSection(controller: DesktopController, ui: DesktopWebD
                     modifier = Modifier.testTag("webdav-upload")) { Text(desktopText("webdav.upload")) }
             }
             if (ui.reachable == true) Text(desktopText("webdav.reachable"), style = MaterialTheme.typography.body2)
+            // Only shown when a timer is configured: without one, "never uploaded" would be noise.
+            if (settings.autoBackupEnabled) {
+                Text(
+                    if (ui.lastUploadMillis > 0L) {
+                        desktopText(
+                            "webdav.autoLast",
+                            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, DesktopStrings.locale)
+                                .format(Date(ui.lastUploadMillis)),
+                        )
+                    } else {
+                        desktopText("webdav.autoNever")
+                    },
+                    style = MaterialTheme.typography.body2,
+                    modifier = Modifier.testTag("webdav-auto-status"),
+                )
+            }
             ui.error?.let { Text(it, color = MaterialTheme.colors.error, style = MaterialTheme.typography.body2) }
             when {
                 !ui.listed -> Text(desktopText("webdav.unlisted"), style = MaterialTheme.typography.body2)

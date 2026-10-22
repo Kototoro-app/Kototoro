@@ -28,8 +28,13 @@ internal data class DesktopWebDavSettings(
     val password: String = "",
     /** Files kept per namespace; the shared catalog decides which ones are retired, `0` keeps everything. */
     val maxCount: Int = 3,
+    /** Hours between automatic uploads; `0` leaves the timer off and the page purely manual. */
+    val intervalHours: Int = 0,
 ) {
     val configured: Boolean get() = serverUrl.isNotBlank()
+
+    /** The timer only runs for a destination it could actually reach, so a half-filled form stays quiet. */
+    val autoBackupEnabled: Boolean get() = intervalHours > 0 && configured
 
     fun toPreferences(): Map<String, SourcePreferenceValue?> = mapOf(
         KEY_SERVER to SourcePreferenceValue.Text(serverUrl),
@@ -37,6 +42,7 @@ internal data class DesktopWebDavSettings(
         KEY_USER to SourcePreferenceValue.Text(username),
         KEY_PASSWORD to SourcePreferenceValue.Text(password),
         KEY_MAX_COUNT to SourcePreferenceValue.Integer(maxCount),
+        KEY_INTERVAL to SourcePreferenceValue.Integer(intervalHours),
     )
 
     companion object {
@@ -45,6 +51,7 @@ internal data class DesktopWebDavSettings(
         const val KEY_USER = "webdav_username"
         const val KEY_PASSWORD = "webdav_password"
         const val KEY_MAX_COUNT = "webdav_remote_max_count"
+        const val KEY_INTERVAL = "webdav_auto_interval_hours"
 
         fun from(values: Map<String, SourcePreferenceValue>) = DesktopWebDavSettings(
             serverUrl = (values[KEY_SERVER] as? SourcePreferenceValue.Text)?.value.orEmpty(),
@@ -52,6 +59,7 @@ internal data class DesktopWebDavSettings(
             username = (values[KEY_USER] as? SourcePreferenceValue.Text)?.value.orEmpty(),
             password = (values[KEY_PASSWORD] as? SourcePreferenceValue.Text)?.value.orEmpty(),
             maxCount = (values[KEY_MAX_COUNT] as? SourcePreferenceValue.Integer)?.value ?: 3,
+            intervalHours = ((values[KEY_INTERVAL] as? SourcePreferenceValue.Integer)?.value ?: 0).coerceAtLeast(0),
         )
     }
 }
