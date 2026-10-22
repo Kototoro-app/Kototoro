@@ -185,6 +185,9 @@ class DesktopController(val session: DesktopSession) {
         { session.readerRevision(it.source.name) }, session::downloadPages, session::prepareDownload)
     private val mutableCleanup = MutableStateFlow<DesktopDownloadCleanupPlan?>(null)
     internal val cleanupPreview = mutableCleanup.asStateFlow()
+    /** Chapter keys the download page has selected; kept here so a batch survives leaving and reopening the page. */
+    private val mutableDownloadSelection = MutableStateFlow<Set<String>>(emptySet())
+    internal val downloadSelection = mutableDownloadSelection.asStateFlow()
     private val backups = DesktopLibraryBackup(session.storage.database)
     private val mutableBackupPreview = MutableStateFlow<DesktopBackupArchive?>(null)
     internal val backupPreview = mutableBackupPreview.asStateFlow()
@@ -1058,6 +1061,60 @@ class DesktopController(val session: DesktopSession) {
     internal fun resumeDownload(download: SourceChapterDownload) = action {
         downloads.enqueue(download.contentId, download.chapter)
     }
+
+    internal fun toggleDownloadSelection(key: String) {
+        mutableDownloadSelection.update { DesktopDownloadSelection.toggle(it, key) }
+    }
+
+    internal fun selectAllDownloads() {
+        mutableDownloadSelection.value = DesktopDownloadSelection.all(downloads.state.value.map { it.key })
+    }
+
+    internal fun clearDownloadSelection() { mutableDownloadSelection.value = emptySet() }
+
+    /** Batch pause: every waiting or running chapter stops, finished ones are left alone. */
+    internal fun pauseSelectedDownloads() = action {
+        val rows = selectedDownloads(DesktopDownloadBatch::pausable)
+        rows.forEach { downloads.pause(it.key) }
+        mutableState.update { it.copy(message = desktopText("downloads.batchPaused", rows.size)) }
+    }
+
+    /** Batch continue and batch retry differ only in which rows they take, so the queue logic stays in one place. */
+    internal fun resumeSelectedDownloads() = action {
+        val rows = selectedDownloads(DesktopDownloadBatch::resumable)
+        rows.forEach { downloads.enqueue(it.record.contentId, it.record.chapter, it.record.contentTitle) }
+        mutableState.update { it.copy(message = desktopText("downloads.batchQueued", rows.size)) }
+    }
+
+    internal fun retrySelectedDownloads() = action {
+        val rows = selectedDownloads(DesktopDownloadBatch::retryable)
+        rows.forEach { downloads.enqueue(it.record.contentId, it.record.chapter, it.record.contentTitle) }
+        mutableState.update { it.copy(message = desktopText("downloads.batchQueued", rows.size)) }
+    }
+
+    /**
+     * Batch remove forgets the saved chapters, not the images: the blocks they referenced become unreferenced and the
+     * existing cleanup pass offers them back, so a removal cannot silently leave files nobody can find again.
+     */
+    internal fun removeSelectedDownloads() = action {
+        val rows = selectedDownloads { states ->
+            DesktopDownloadBatch.removable(states, mutableDownloadSelection.value)
+        }
+        var removed = 0
+        for (row in rows) {
+            downloads.pause(row.key)
+            downloads.settle(row.key)
+            if (session.downloadStore.delete(row.record.contentId, row.record.chapter, session.storage.preferences)) {
+                removed++
+            }
+        }
+        downloads.forget(rows.map { it.key })
+        mutableDownloadSelection.update { DesktopDownloadSelection.retain(it, downloads.state.value.map { row -> row.key }) }
+        mutableState.update { it.copy(message = desktopText("downloads.batchRemoved", removed)) }
+    }
+
+    private fun selectedDownloads(pick: (List<DesktopDownloadState>) -> List<DesktopDownloadState>) =
+        pick(downloads.state.value.filter { it.key in mutableDownloadSelection.value })
 
     internal fun readDownload(download: SourceChapterDownload) = action {
         val content = requireNotNull(session.library.find(download.contentId)) { desktopText("error.localWorkMissing") }
