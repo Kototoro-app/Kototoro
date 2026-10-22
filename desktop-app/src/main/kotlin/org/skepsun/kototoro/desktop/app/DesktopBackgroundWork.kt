@@ -30,4 +30,9 @@ internal fun dueBackgroundTasks(
 }
 
 /** Android's tracker frequency choices (TrackerSettingsRoute): manual, less, default and more frequently. */
-internal val DesktopTrackerFrequencies = listOf(-1f to "手动", 0.4f to "低频", 1f to "默认", 2f to "高频")
+internal fun desktopTrackerFrequencies(): List<Pair<Float, String>> = listOf(
+    -1f to desktopText("settings.frequency.manual"),
+    0.4f to desktopText("settings.frequency.low"),
+    1f to desktopText("settings.frequency.default"),
+    2f to desktopText("settings.frequency.high"),
+)

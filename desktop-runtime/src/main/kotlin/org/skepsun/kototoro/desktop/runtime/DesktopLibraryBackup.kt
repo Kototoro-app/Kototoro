@@ -32,7 +32,7 @@ class DesktopLibraryBackup(database: MangaDatabase) {
 
     suspend fun export(path: Path) = withContext(Dispatchers.IO) {
         val target = path.toAbsolutePath().normalize()
-        require(!Files.exists(target)) { "目标文件已存在，请选择新的备份文件名" }
+        require(!Files.exists(target)) { DesktopRuntimeStrings.text("runtime.backup.targetExists", "the backup file already exists; choose a new name") }
         val temporary = Files.createTempFile(requireNotNull(target.parent), ".kototoro-backup-", ".tmp")
         try {
             ZipOutputStream(BackupLimitedOutput(Files.newOutputStream(temporary), DesktopBackupArchive.MAX_ARCHIVE_BYTES)).use { zip ->
@@ -57,12 +57,12 @@ private class BackupZipWriter(private val zip: ZipOutputStream) : LibraryBackupO
 internal class BackupLimitedOutput(private val output: OutputStream, private val limit: Long) : OutputStream() {
     private var count = 0L
     override fun write(value: Int) {
-        require(count < limit) { "备份数据超过大小限制，未生成备份文件" }
+        require(count < limit) { DesktopRuntimeStrings.text("runtime.backup.tooLarge", "the backup data exceeds the size limit; no file was written") }
         output.write(value)
         count++
     }
     override fun write(bytes: ByteArray, offset: Int, length: Int) {
-        require(length.toLong() <= limit - count) { "备份数据超过大小限制，未生成备份文件" }
+        require(length.toLong() <= limit - count) { DesktopRuntimeStrings.text("runtime.backup.tooLarge", "the backup data exceeds the size limit; no file was written") }
         output.write(bytes, offset, length)
         count += length
     }

@@ -26,11 +26,20 @@ data class DesktopNovel(
     val bookmarkBlocks: Map<Long, Int> = emptyMap(),
 )
 
-enum class DesktopNovelTheme(val title: String, val background: Long, val text: Long, val muted: Long) {
-    LIGHT("白色", 0xFFFFFFFF, 0xFF1B2635, 0xFF687385),
-    SEPIA("护眼黄", 0xFFF4ECD8, 0xFF3A2F20, 0xFF7A6A52),
-    GREEN("豆沙绿", 0xFFCCE8CF, 0xFF1F3A25, 0xFF4F7357),
-    DARK("夜间", 0xFF15191F, 0xFFD5D9E0, 0xFF8E97A6),
+enum class DesktopNovelTheme(val background: Long, val text: Long, val muted: Long) {
+    LIGHT(0xFFFFFFFF, 0xFF1B2635, 0xFF687385),
+    SEPIA(0xFFF4ECD8, 0xFF3A2F20, 0xFF7A6A52),
+    GREEN(0xFFCCE8CF, 0xFF1F3A25, 0xFF4F7357),
+    DARK(0xFF15191F, 0xFFD5D9E0, 0xFF8E97A6);
+
+    /** Resolved per call, so an already-open options panel follows a language switch. */
+    val title: String
+        get() = when (this) {
+            LIGHT -> desktopText("novel.theme.LIGHT")
+            SEPIA -> desktopText("novel.theme.SEPIA")
+            GREEN -> desktopText("novel.theme.GREEN")
+            DARK -> desktopText("novel.theme.DARK")
+        }
 }
 
 data class DesktopNovelSettings(

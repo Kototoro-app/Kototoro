@@ -18,19 +18,19 @@ internal fun DesktopBackgroundSettings(controller: DesktopController, state: Des
     val tracker = state.trackerSettings
     Surface(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth().testTag("settings-suggestions")) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("推荐", style = MaterialTheme.typography.titleMedium)
-            SettingSwitch("启用推荐", "根据阅读历史和收藏的标签，每 6 小时从已安装来源生成一次", suggestions.enabled, enabled,
+            Text(desktopText("settings.suggestions"), style = MaterialTheme.typography.titleMedium)
+            SettingSwitch(desktopText("settings.suggestionsEnabled"), desktopText("settings.suggestionsEnabledDetail"), suggestions.enabled, enabled,
                 "settings-suggestions-enabled") { controller.suggestionSettings(suggestions.copy(enabled = it)) }
-            SettingSwitch("排除成人内容", null, suggestions.excludeNsfw, enabled && suggestions.enabled,
+            SettingSwitch(desktopText("settings.suggestionsNsfw"), null, suggestions.excludeNsfw, enabled && suggestions.enabled,
                 "settings-suggestions-nsfw") { controller.suggestionSettings(suggestions.copy(excludeNsfw = it)) }
-            TagListField("排除标签", suggestions.tagBlacklist, enabled && suggestions.enabled, "settings-suggestions-exclude-tags") {
+            TagListField(desktopText("settings.suggestionsExcludeTags"), suggestions.tagBlacklist, enabled && suggestions.enabled, "settings-suggestions-exclude-tags") {
                 controller.suggestionSettings(suggestions.copy(tagBlacklist = it))
             }
-            TagListField("偏好标签", suggestions.tagWhitelist, enabled && suggestions.enabled, "settings-suggestions-preferred-tags") {
+            TagListField(desktopText("settings.suggestionsPreferredTags"), suggestions.tagWhitelist, enabled && suggestions.enabled, "settings-suggestions-preferred-tags") {
                 controller.suggestionSettings(suggestions.copy(tagWhitelist = it))
             }
             if (state.sources.isNotEmpty()) {
-                Text("来源", style = MaterialTheme.typography.labelLarge)
+                Text(desktopText("settings.sources"), style = MaterialTheme.typography.labelLarge)
                 state.sources.forEach { source ->
                     val name = source.source.name
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -39,12 +39,12 @@ internal fun DesktopBackgroundSettings(controller: DesktopController, state: Des
                             onClick = { controller.suggestionSettings(suggestions.copy(
                                 preferredSources = suggestions.preferredSources.toggle(name),
                                 excludedSources = suggestions.excludedSources - name)) },
-                            label = { Text("优先") }, modifier = Modifier.testTag("settings-suggestions-prefer:$name"))
+                            label = { Text(desktopText("settings.prefer")) }, modifier = Modifier.testTag("settings-suggestions-prefer:$name"))
                         FilterChip(name in suggestions.excludedSources, enabled = enabled && suggestions.enabled,
                             onClick = { controller.suggestionSettings(suggestions.copy(
                                 excludedSources = suggestions.excludedSources.toggle(name),
                                 preferredSources = suggestions.preferredSources - name)) },
-                            label = { Text("排除") }, modifier = Modifier.testTag("settings-suggestions-exclude:$name"))
+                            label = { Text(desktopText("settings.exclude")) }, modifier = Modifier.testTag("settings-suggestions-exclude:$name"))
                     }
                 }
             }
@@ -52,12 +52,12 @@ internal fun DesktopBackgroundSettings(controller: DesktopController, state: Des
     }
     Surface(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth().testTag("settings-tracker")) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("更新检查", style = MaterialTheme.typography.titleMedium)
-            SettingSwitch("检查新章节", "检查开启了更新追踪的收藏分类中的作品", tracker.enabled, enabled,
+            Text(desktopText("settings.updates"), style = MaterialTheme.typography.titleMedium)
+            SettingSwitch(desktopText("settings.checkNewChapters"), desktopText("settings.checkNewChaptersDetail"), tracker.enabled, enabled,
                 "settings-tracker-enabled") { controller.trackerSettings(tracker.copy(enabled = it)) }
-            Text("自动检查更新频率", style = MaterialTheme.typography.labelLarge)
+            Text(desktopText("settings.checkFrequency"), style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DesktopTrackerFrequencies.forEach { (value, label) ->
+                desktopTrackerFrequencies().forEach { (value, label) ->
                     FilterChip(tracker.frequency == value, enabled = enabled && tracker.enabled,
                         onClick = { controller.trackerSettings(tracker.copy(frequency = value)) },
                         label = { Text(label) }, modifier = Modifier.testTag("settings-tracker-frequency:$value"))
@@ -88,8 +88,8 @@ private fun TagListField(title: String, tags: Set<String>, enabled: Boolean, tag
     var text by remember(tags) { mutableStateOf(tags.joinToString(", ")) }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(text, { text = it }, label = { Text(title) }, singleLine = true, enabled = enabled,
-            placeholder = { Text("用逗号分隔") }, modifier = Modifier.weight(1f).testTag(tag))
+            placeholder = { Text(desktopText("settings.tagSeparator")) }, modifier = Modifier.weight(1f).testTag(tag))
         TextButton({ onSave(parseSuggestionTags(text)) }, enabled = enabled && parseSuggestionTags(text) != tags,
-            modifier = Modifier.testTag("$tag-save")) { Text("保存") }
+            modifier = Modifier.testTag("$tag-save")) { Text(desktopText("common.save")) }
     }
 }

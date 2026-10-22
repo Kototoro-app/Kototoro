@@ -51,8 +51,12 @@ internal class DesktopScrollOperations(private val state: MutableStateFlow<Deskt
                                         error = null) else it
                                 }
                             } catch (error: CancellationException) { throw error }
-                            catch (error: Exception) { failed(chapterId, epoch, page.id, error.message ?: "页面加载失败") }
-                            catch (error: LinkageError) { failed(chapterId, epoch, page.id, "来源 API 不兼容") }
+                            catch (error: Exception) {
+                                failed(chapterId, epoch, page.id, error.message ?: desktopText("reader.pageLoadFailed"))
+                            }
+                            catch (error: LinkageError) {
+                                failed(chapterId, epoch, page.id, desktopText("error.sourceApiIncompatibleShort"))
+                            }
                         }
                     }
                     val challenges = session.browserChallenges

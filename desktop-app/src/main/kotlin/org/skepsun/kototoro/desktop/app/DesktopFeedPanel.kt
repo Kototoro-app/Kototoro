@@ -27,19 +27,20 @@ import org.skepsun.kototoro.tracker.domain.feed.FeedUpdateRow
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
-/** Android's date buckets for the feed timeline ("刚刚", "今天", "昨天", "n 天前", then the date). */
+/** Android's date buckets for the feed timeline ("just now", "today", "yesterday", "n days ago", then the date). */
 internal fun feedDateLabel(createdAt: Long, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String? {
     val instant = Instant.ofEpochMilli(createdAt)
     val date = instant.atZone(zone).toLocalDate()
     val days = date.until(LocalDate.ofInstant(now, zone), ChronoUnit.DAYS)
     return when {
         days < 0 -> null
-        days == 0L -> if (instant.until(now, ChronoUnit.MINUTES) < 3) "刚刚" else "今天"
-        days == 1L -> "昨天"
-        days < 6 -> "$days 天前"
-        else -> "${date.monthValue}月${date.dayOfMonth}日"
+        days == 0L -> if (instant.until(now, ChronoUnit.MINUTES) < 3) desktopText("feed.timeNow") else desktopText("feed.timeToday")
+        days == 1L -> desktopText("feed.timeYesterday")
+        days < 6 -> desktopText("feed.timeDaysAgo", days)
+        else -> date.format(DateTimeFormatter.ofPattern("MMMd", DesktopStrings.locale))
     }
 }
 
@@ -65,11 +66,11 @@ internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppSt
     }
     Column(Modifier.fillMaxSize().testTag("feed-panel"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TopBarTitleBlock("订阅")
+            TopBarTitleBlock(desktopText("nav.subscriptions"))
             Spacer(Modifier.weight(1f))
             DesktopSourceFilterControls(filter, state.sources, controller::feedFilter, enabled, "feed")
             Button({ controller.checkUpdates() }, enabled = enabled, modifier = Modifier.testTag("feed-check")) {
-                Text("检查更新")
+                Text(desktopText("feed.checkUpdates"))
             }
         }
         if (state.trackedCategories == 0) {
@@ -77,10 +78,10 @@ internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppSt
                 modifier = Modifier.fillMaxWidth().testTag("feed-tracking-off")) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("收藏分类尚未开启更新追踪。与 Android 一样，只有开启追踪的分类中的作品会检查新章节。",
+                    Text(desktopText("feed.trackingOff"),
                         modifier = Modifier.weight(1f))
                     FilledTonalButton({ controller.enableTracking() }, enabled = enabled,
-                        modifier = Modifier.testTag("feed-enable-tracking")) { Text("全部开启") }
+                        modifier = Modifier.testTag("feed-enable-tracking")) { Text(desktopText("feed.enableTracking")) }
                 }
             }
         }
@@ -92,9 +93,9 @@ internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppSt
                     key = { it.ownerId },
                     title = { it.title },
                     newChapters = { it.newChapters },
-                    newChaptersLabel = { "$it 个新章节" },
-                    headerTitle = "更新内容",
-                    moreLabel = "全部",
+                    newChaptersLabel = { desktopText("common.newChapters", it) },
+                    headerTitle = desktopText("feed.updatesTitle"),
+                    moreLabel = desktopText("common.all"),
                     onItemClick = { controller.openTracked(it.displayMangaId ?: it.mangaId) },
                     onMoreClick = null,
                     screenPadding = 0.dp,
@@ -117,8 +118,8 @@ internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppSt
             if (rows.isEmpty()) item(key = "empty") {
                 Column(Modifier.fillMaxWidth().padding(top = 48.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("暂无更新记录", style = MaterialTheme.typography.titleMedium)
-                    Text("点击“检查更新”检查已追踪的收藏作品。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(desktopText("feed.emptyTitle"), style = MaterialTheme.typography.titleMedium)
+                    Text(desktopText("feed.emptyDetail"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             var previousLabel: String? = null
@@ -139,13 +140,13 @@ private fun FeedRow(controller: DesktopController, state: DesktopAppState, row: 
     val open = { row.displayMangaId?.let { if (enabled) controller.openTracked(it) } }
     FeedTimelineCard(
         title = row.overrideTitle ?: row.title,
-        chapterText = "${row.chapters.size} 个新章节",
+        chapterText = desktopText("common.newChapters", row.chapters.size),
         isNew = row.unread,
         onClick = { open() },
         modifier = Modifier.testTag("feed-row:${row.logId}"),
         screenPadding = 0.dp,
         timelineLabel = label,
-        continueAction = FeedContinueAction(painterResource("icons/ic_read.svg"), "继续阅读") {
+        continueAction = FeedContinueAction(painterResource("icons/ic_read.svg"), desktopText("feed.continueReading")) {
             row.displayMangaId?.let { if (enabled) controller.continueTracked(it) }
         },
         cover = { content?.let { DesktopCover(it, controller.session.covers, Modifier.matchParentSize()) } },

@@ -51,8 +51,8 @@ fun DesktopStartup(error: String?) = DesktopTheme {
             Text("Kototoro", fontSize = 32.sp, fontWeight = FontWeight.Bold)
             if (error == null) {
                 CircularProgressIndicator()
-                Text("正在打开本地数据…", color = Muted)
-            } else Text("启动失败：$error", color = MaterialTheme.colors.error, modifier = Modifier.widthIn(max = 700.dp))
+                Text(desktopText("app.opening"), color = Muted)
+            } else Text(desktopText("app.startFailed", error), color = MaterialTheme.colors.error, modifier = Modifier.widthIn(max = 700.dp))
         }
     }
 }
@@ -86,23 +86,23 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                         var windowNotice by remember(pending.id) { mutableStateOf<String?>(null) }
                         Surface(color = MaterialTheme.colors.surface, shape = RoundedCornerShape(20.dp)) {
                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("来源需要网页验证，请在浏览器窗口中完成操作。")
+                                Text(desktopText("challenge.hint"))
                                 Text(pending.url, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Button(onClick = { challenges.complete(pending.id, true) }, enabled = !closing,
-                                        modifier = Modifier.testTag("challenge-continue")) { Text("已完成，继续请求") }
+                                        modifier = Modifier.testTag("challenge-continue")) { Text(desktopText("challenge.continue")) }
                                     OutlinedButton(onClick = { challenges.complete(pending.id, false) }, enabled = !closing,
-                                        modifier = Modifier.testTag("challenge-cancel")) { Text("取消验证") }
+                                        modifier = Modifier.testTag("challenge-cancel")) { Text(desktopText("challenge.cancel")) }
                                     OutlinedButton(onClick = {
                                         browserScope.launch {
                                             try {
                                                 windowNotice = if (challenges.showWindow(pending.id)?.visible == true) {
-                                                    "验证窗口已显示"
-                                                } else "验证已结束"
+                                                    desktopText("challenge.shown")
+                                                } else desktopText("challenge.ended")
                                             } catch (error: CancellationException) { throw error }
-                                            catch (_: Exception) { windowNotice = "无法显示验证窗口，请重试或取消验证" }
+                                            catch (_: Exception) { windowNotice = desktopText("challenge.showFailed") }
                                         }
-                                    }, enabled = !closing, modifier = Modifier.testTag("challenge-show")) { Text("显示验证窗口") }
+                                    }, enabled = !closing, modifier = Modifier.testTag("challenge-show")) { Text(desktopText("challenge.show")) }
                                 }
                                 windowNotice?.let { Text(it) }
                             }
@@ -144,16 +144,16 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
     Column(Modifier.width(240.dp).fillMaxHeight().background(MaterialTheme.colors.surface,
         RoundedCornerShape(20.dp)).padding(16.dp).testTag("source-pane"),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("我的来源", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+        Text(desktopText("browse.mySources"), fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Ink)
         Button(onClick = {
             val chooser = JFileChooser().apply {
-                fileFilter = FileNameExtensionFilter("扩展（Mihon / Kototoro / Kotatsu / UMA JAR、Aniyomi APK、Cloudstream .cs3）", "jar", "apk", "cs3")
+                fileFilter = FileNameExtensionFilter(desktopText("browse.importFilter"), "jar", "apk", "cs3")
             }
             if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) controller.importJar(chooser.selectedFile.toPath())
-        }, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text("导入扩展 JAR") }
+        }, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text(desktopText("browse.importJar")) }
         Divider()
-        Text("来源 · ${state.sources.size}", fontWeight = FontWeight.SemiBold)
-        DesktopSearchField(filter, { filter = it }, "查找来源", modifier = Modifier.fillMaxWidth())
+        Text(desktopText("browse.sources", state.sources.size), fontWeight = FontWeight.SemiBold)
+        DesktopSearchField(filter, { filter = it }, desktopText("browse.findSource"), modifier = Modifier.fillMaxWidth())
         LazyColumn(Modifier.weight(1f).testTag("source-list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val sources = state.sources.filter {
                 (it.displayName.contains(filter, true) || it.source.locale.contains(filter, true)) &&
@@ -166,12 +166,12 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
                     Column(Modifier.fillMaxWidth().testTag("source:${source.source.name}")
                         .clickable(enabled = enabled) { controller.selectSource(source) }.padding(12.dp)) {
                         Text(source.displayName, maxLines = 2, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
-                        Text("${DesktopSourceLabels.ecosystem(source.ecosystem)} · ${source.source.locale.ifBlank { "多语言" }}" +
+                        Text("${DesktopSourceLabels.ecosystem(source.ecosystem)} · ${source.source.locale.ifBlank { desktopText("common.multilingual") }}" +
                             " · ${DesktopSourceLabels.contentType(source.source.contentType)}", fontSize = 12.sp, color = Muted)
                     }
                 }
             }
-            if (sources.isEmpty()) item { Text("导入 JAR 后，来源会显示在这里", fontSize = 12.sp, color = Muted) }
+            if (sources.isEmpty()) item { Text(desktopText("browse.sourcesEmpty"), fontSize = 12.sp, color = Muted) }
         }
     }
 }
@@ -179,19 +179,19 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
 @Composable
 private fun Header(state: DesktopAppState) {
     val title = when (state.screen) {
-        DesktopScreen.HOME -> "主页"
-        DesktopScreen.FEED -> "订阅"
-        DesktopScreen.EXPLORE -> state.selectedSource?.displayName ?: "浏览来源"
-        DesktopScreen.LIBRARY -> "收藏"
-        DesktopScreen.HISTORY -> "阅读历史"
-        DesktopScreen.DOWNLOADS -> "章节下载"
-        DesktopScreen.BACKUPS -> "备份与恢复"
-        DesktopScreen.EXTENSIONS -> "扩展与仓库"
-        DesktopScreen.DETAILS -> "作品详情"
-        DesktopScreen.READER, DesktopScreen.NOVEL, DesktopScreen.VIDEO -> state.chapter?.title ?: "阅读"
-        DesktopScreen.PREFERENCES -> "来源设置"
-        DesktopScreen.BROWSER -> "浏览器调试"
-        DesktopScreen.MORE -> "更多"
+        DesktopScreen.HOME -> desktopText("nav.home")
+        DesktopScreen.FEED -> desktopText("nav.subscriptions")
+        DesktopScreen.EXPLORE -> state.selectedSource?.displayName ?: desktopText("screens.browseSource")
+        DesktopScreen.LIBRARY -> desktopText("nav.favourites")
+        DesktopScreen.HISTORY -> desktopText("screens.history")
+        DesktopScreen.DOWNLOADS -> desktopText("screens.downloads")
+        DesktopScreen.BACKUPS -> desktopText("screens.backups")
+        DesktopScreen.EXTENSIONS -> desktopText("screens.extensions")
+        DesktopScreen.DETAILS -> desktopText("screens.details")
+        DesktopScreen.READER, DesktopScreen.NOVEL, DesktopScreen.VIDEO -> state.chapter?.title ?: desktopText("screens.reader")
+        DesktopScreen.PREFERENCES -> desktopText("screens.sourcePreferences")
+        DesktopScreen.BROWSER -> desktopText("screens.browser")
+        DesktopScreen.MORE -> desktopText("common.more")
     }
     Text(title, style = MaterialTheme.typography.h5, color = Ink,
         modifier = Modifier.heightIn(min = 40.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -225,7 +225,7 @@ private fun Browse(controller: DesktopController, state: DesktopAppState, enable
 @Composable
 private fun SourceResults(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
     if (state.selectedSource == null) {
-        EmptyPanel("你的 Windows 阅读空间", "在“扩展与仓库”中安装来源，或导入本地 JAR，然后从左侧选择来源开始浏览。")
+        EmptyPanel(desktopText("browse.worksEmptyTitle"), desktopText("browse.worksEmptyDetail"))
         return
     }
     var query by remember(state.selectedSource.source.name, state.query) { mutableStateOf(state.query) }
@@ -234,31 +234,32 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton({ controller.exitSource() }, enabled = enabled, modifier = Modifier.testTag("source-back")) {
                 // Android's forward arrow, mirrored.
-                Icon(painterResource("icons/ic_arrow_forward.svg"), contentDescription = "返回来源列表", tint = Ink,
+                Icon(painterResource("icons/ic_arrow_forward.svg"), contentDescription = desktopText("browse.backToSources"), tint = Ink,
                     modifier = Modifier.size(22.dp).graphicsLayer(scaleX = -1f))
             }
             Text(state.selectedSource.displayName, style = MaterialTheme.typography.h5, color = Ink,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            DesktopSearchField(query, { query = it }, "搜索作品", enabled = enabled,
+            DesktopSearchField(query, { query = it }, desktopText("browse.searchWorks"), enabled = enabled,
                 modifier = Modifier.weight(1f), tag = "source-query")
-            Button({ controller.browse(0, query) }, enabled = enabled) { Text("搜索") }
+            Button({ controller.browse(0, query) }, enabled = enabled) { Text(desktopText("browse.search")) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             val orders = state.descriptor?.sortOrders.orEmpty()
             if (state.descriptor == null || "POPULARITY" in orders) {
-                OutlinedButton({ query = ""; controller.browseUnfiltered() }, enabled = enabled) { Text("热门") }
+                OutlinedButton({ query = ""; controller.browseUnfiltered() }, enabled = enabled) { Text(desktopText("browse.popular")) }
             }
             if ("UPDATED" in orders) {
-                OutlinedButton({ query = ""; controller.browseUnfiltered(latest = true) }, enabled = enabled) { Text("最新") }
+                OutlinedButton({ query = ""; controller.browseUnfiltered(latest = true) }, enabled = enabled) { Text(desktopText("browse.latest")) }
             }
             // Sources with more than the two Mihon orders (all parser plugins) get the full list.
             if (orders.any { it != "POPULARITY" && it != "UPDATED" }) {
                 var expanded by remember(state.selectedSource.source.name) { mutableStateOf(false) }
                 Box {
                     OutlinedButton({ expanded = true }, enabled = enabled, modifier = Modifier.testTag("source-sort")) {
-                        Text("排序 · ${DesktopSourceLabels.sortOrder(state.browseOrder ?: state.descriptor?.defaultSortOrder.orEmpty())}")
+                        Text(desktopText("browse.sort",
+                            DesktopSourceLabels.sortOrder(state.browseOrder ?: state.descriptor?.defaultSortOrder.orEmpty())))
                     }
                     DropdownMenu(expanded && enabled, { expanded = false }) {
                         orders.forEach { order ->
@@ -271,20 +272,20 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
             if (state.descriptor?.isDynamicFilteringSupported == true) {
                 OutlinedButton({ controller.filters() }, enabled = enabled,
                     modifier = Modifier.testTag("source-filters")) {
-                    Text(if (state.appliedFilters.isEmpty()) "筛选" else "筛选 · 已应用")
+                    Text(if (state.appliedFilters.isEmpty()) desktopText("browse.filters") else desktopText("browse.filtersApplied"))
                 }
             }
             if (state.descriptor?.isPreferencesSupported == true) {
-                OutlinedButton({ controller.preferences() }, enabled = enabled) { Text("源设置") }
+                OutlinedButton({ controller.preferences() }, enabled = enabled) { Text(desktopText("browse.sourceSettings")) }
             }
         }
         Box(Modifier.weight(1f)) { ContentGrid(state.items, enabled, controller.session.covers, controller::details) }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton({ controller.browse((state.offset - 1).coerceAtLeast(0)) },
-                enabled = enabled && state.offset > 0) { Text("上一批") }
-            Text("第 ${state.offset + 1} 批", color = Muted)
+                enabled = enabled && state.offset > 0) { Text(desktopText("browse.previousPage")) }
+            Text(desktopText("browse.pageNumber", state.offset + 1), color = Muted)
             OutlinedButton({ controller.browse(state.offset + 1) },
-                enabled = enabled && state.items.isNotEmpty()) { Text("下一批") }
+                enabled = enabled && state.items.isNotEmpty()) { Text(desktopText("browse.nextPage")) }
         }
     }
 }
@@ -292,7 +293,7 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
 @Composable
 internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers: DesktopCovers,
     onOpen: (SourceContent) -> Unit, progressOf: (SourceContent) -> Float? = { null }) {
-    if (contents.isEmpty()) { EmptyPanel("这里还没有作品", "选择来源浏览，或在作品详情中加入收藏。"); return }
+    if (contents.isEmpty()) { EmptyPanel(desktopText("browse.noWorks"), desktopText("browse.noWorksDetail")); return }
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
     val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle, isDark = !MaterialTheme.colors.isLight)
     LazyVerticalGrid(columns = GridCells.Adaptive(112.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -335,7 +336,7 @@ private fun Details(controller: DesktopController, state: DesktopAppState) {
 private fun Preferences(controller: DesktopController, state: DesktopAppState) {
     val screen = state.preferences ?: return
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        OutlinedButton({ controller.browse() }, enabled = !state.busy) { Text("返回浏览") }
+        OutlinedButton({ controller.browse() }, enabled = !state.busy) { Text(desktopText("browse.backToBrowse")) }
         // Kototoro's own rows (User-Agent) come first, as in Android's source settings.
         screen.nodes.sortedBy { if (it.id.startsWith("host:")) 0 else 1 }
             .forEach { node -> PreferenceNode(controller, node, !state.busy) }
@@ -356,7 +357,7 @@ private fun PreferenceNode(controller: DesktopController, node: SourcePreference
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedTextField(text, { text = it }, enabled = enabled, modifier = Modifier.weight(1f),
                             visualTransformation = if (node.isSecret) PasswordVisualTransformation() else VisualTransformation.None)
-                        Button({ controller.updatePreference(node, SourcePreferenceValue.Text(text)) }, enabled = enabled) { Text("保存") }
+                        Button({ controller.updatePreference(node, SourcePreferenceValue.Text(text)) }, enabled = enabled) { Text(desktopText("common.save")) }
                     }
                 }
                 SourcePreferenceKind.TOGGLE -> Switch((node.value as? SourcePreferenceValue.Toggle)?.value ?: false,
@@ -381,8 +382,8 @@ private fun PreferenceNode(controller: DesktopController, node: SourcePreference
                 }
                 SourcePreferenceKind.GROUP -> node.children.forEach { PreferenceNode(controller, it, enabled) }
                 SourcePreferenceKind.ACTION -> OutlinedButton({ controller.updatePreference(node, SourcePreferenceValue.Action()) },
-                    enabled = enabled, modifier = Modifier.testTag("preference:${node.id}")) { Text("执行") }
-                SourcePreferenceKind.UNSUPPORTED -> Text("此控件尚未支持", fontSize = 12.sp, color = Muted)
+                    enabled = enabled, modifier = Modifier.testTag("preference:${node.id}")) { Text(desktopText("preference.execute")) }
+                SourcePreferenceKind.UNSUPPORTED -> Text(desktopText("preference.unsupported"), fontSize = 12.sp, color = Muted)
                 SourcePreferenceKind.INFO -> Unit
             }
         }

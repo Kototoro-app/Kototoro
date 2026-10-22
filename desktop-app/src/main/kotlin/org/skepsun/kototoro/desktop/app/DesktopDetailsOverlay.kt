@@ -50,10 +50,10 @@ internal fun DesktopDetailsOverlay(controller: DesktopController, state: Desktop
             shape = RoundedCornerShape(28.dp), elevation = 8.dp, color = MaterialTheme.colors.background) {
             Column(Modifier.fillMaxSize().padding(12.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("作品详情", fontWeight = FontWeight.SemiBold,
+                    Text(desktopText("screens.details"), fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f))
                     TextButton({ controller.dismissDetails() }, enabled = enabled,
-                        modifier = Modifier.testTag("details-close")) { Text("关闭") }
+                        modifier = Modifier.testTag("details-close")) { Text(desktopText("common.close")) }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) { DesktopTabletDetails(controller, state) }
             }

@@ -195,7 +195,7 @@ class DesktopAppTest {
             "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
             *System.getProperties().stringPropertyNames()
                 .filter { it == "kototoro.dex.real.apks" || it == "kototoro.desktop.cloudstream.fixture" || it == "kototoro.libmpv.dir" || it == "kototoro.desktop.anime.fixture.jar" || it == "kototoro.ncnn.dir" ||
-                    it.startsWith("kototoro.real.") }
+                    it == "kototoro.desktop.locale" || it.startsWith("kototoro.real.") }
                 .map { "-D$it=${System.getProperty(it)}" }.toTypedArray(),
             "-cp", System.getProperty("kototoro.desktop.test.classpath"),
             DesktopAppProbe::class.java.name, mode, root.toString(),

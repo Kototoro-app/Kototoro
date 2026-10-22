@@ -4,12 +4,27 @@ import org.skepsun.kototoro.core.source.SourceEcosystem
 import org.skepsun.kototoro.desktop.runtime.DesktopLibraryEntry
 import org.skepsun.kototoro.desktop.runtime.DesktopLibrarySnapshot
 
-enum class DesktopLibraryOrder(val title: String) {
-    RECENT("默认顺序"), TITLE("标题"), LAST_READ("最近阅读"), PROGRESS("阅读进度"),
+/** Labels are resolved per access, so a language switch relabels the chips without a restart. */
+enum class DesktopLibraryOrder {
+    RECENT, TITLE, LAST_READ, PROGRESS;
+
+    val title: String get() = when (this) {
+        RECENT -> desktopText("library.order.recent")
+        TITLE -> desktopText("library.order.title")
+        LAST_READ -> desktopText("library.order.lastRead")
+        PROGRESS -> desktopText("library.order.progress")
+    }
 }
 
-enum class DesktopLibraryReading(val title: String) {
-    ALL("全部"), UNREAD("未读"), READING("阅读中"), FINISHED("已读完"),
+enum class DesktopLibraryReading {
+    ALL, UNREAD, READING, FINISHED;
+
+    val title: String get() = when (this) {
+        ALL -> desktopText("library.progress.all")
+        UNREAD -> desktopText("library.progress.unread")
+        READING -> desktopText("library.progress.reading")
+        FINISHED -> desktopText("library.progress.finished")
+    }
 }
 
 data class DesktopLibrarySelection(

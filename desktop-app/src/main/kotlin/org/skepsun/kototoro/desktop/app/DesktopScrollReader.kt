@@ -234,7 +234,9 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
                         if (page.id in state.readerFailedPages && page.id !in state.readerImages) {
                             Box(item, contentAlignment = Alignment.Center) {
                                 TextButton({ controller.reloadPage() }, enabled = page.id !in state.readerLoading,
-                                    modifier = Modifier.testTag("reader-page-retry:${page.id}")) { Text("页面加载失败，重试") }
+                                    modifier = Modifier.testTag("reader-page-retry:${page.id}")) {
+                                    Text(desktopText("reader.pageLoadRetry"))
+                                }
                             }
                         } else {
                             val image = state.readerImages[page.id]

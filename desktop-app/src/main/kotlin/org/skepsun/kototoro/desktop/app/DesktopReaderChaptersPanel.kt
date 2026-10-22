@@ -95,7 +95,8 @@ internal fun DesktopReaderChaptersPanel(
             )
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).then(dragModifier),
                 verticalAlignment = Alignment.CenterVertically) {
-                Text("${list.count} 章", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                Text(desktopText("reader.chaptersCount", list.count), modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelLarge)
                 IconButton({ reversed = !reversed }, enabled = enabled,
                     modifier = Modifier.testTag("reader-chapter-reverse")) {
                     Icon(ReaderPanelIcons.SortDesc, AndroidStrings["reverse_order"])
@@ -122,7 +123,8 @@ internal fun DesktopReaderChaptersPanel(
                 listState = listState,
                 gridState = gridState,
                 filters = {
-                    ChapterBranchChips(list.options, list.selectedBranch, title = { it ?: "默认" },
+                    ChapterBranchChips(list.options, list.selectedBranch,
+                        title = { it ?: desktopText("details.chapterBranchDefault") },
                         onSelect = { branch = it }, enabled = enabled, modifier = dragModifier,
                         chipModifier = { Modifier.testTag("reader-chapter-branch:${it.name ?: "default"}") })
                 },

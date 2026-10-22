@@ -17,21 +17,21 @@ internal fun DesktopExtensionsPanel(controller: DesktopController, closing: Bool
     var query by remember { mutableStateOf("") }
     val enabled = !state.busy && !closing
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("扩展仓库", style = MaterialTheme.typography.h6)
-        Text("添加仓库后选择扩展安装。支持 index.pb、新版 index.json 与 Aniyomi 等仓库的 index.min.json；只发布 APK 的扩展会在本机转换为 JVM 类文件后安装。")
+        Text(desktopText("extensions.repositories"), style = MaterialTheme.typography.h6)
+        Text(desktopText("extensions.repositoryDetail"))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedTextField(address, { address = it }, label = { Text("仓库地址") },
+            OutlinedTextField(address, { address = it }, label = { Text(desktopText("extensions.repositoryAddress")) },
                 placeholder = { Text("https://example.com/index.pb") }, singleLine = true, enabled = enabled,
                 modifier = Modifier.weight(1f).testTag("repository-url"))
             Button({ controller.fetchRepository(address) }, enabled = enabled && address.isNotBlank(),
-                modifier = Modifier.testTag("repository-add")) { Text("添加 / 读取仓库") }
+                modifier = Modifier.testTag("repository-add")) { Text(desktopText("extensions.addRepository")) }
         }
         if (state.repositories.isNotEmpty()) {
             LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(state.repositories, key = { it.indexUrl }) { repo ->
                     TextButton({ address = repo.indexUrl; controller.fetchRepository(repo.indexUrl) }, enabled = enabled,
                         modifier = Modifier.testTag("repository:${repo.indexUrl}")) {
-                        Text("${repo.name} · 刷新", maxLines = 1)
+                        Text(desktopText("extensions.refreshRepository", repo.name), maxLines = 1)
                     }
                 }
             }
@@ -54,9 +54,10 @@ private fun ExtensionCatalog(
 ) {
     val catalog = state.extensionCatalog
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(catalog?.let { "${it.repository.name} · ${it.extensions.size} 个扩展" } ?: "仓库扩展",
+        Text(catalog?.let { desktopText("extensions.catalogCount", it.repository.name, it.extensions.size) }
+            ?: desktopText("extensions.catalog"),
             style = MaterialTheme.typography.subtitle1)
-        OutlinedTextField(query, onQueryChange, label = { Text("查找扩展、语言或来源") }, singleLine = true,
+        OutlinedTextField(query, onQueryChange, label = { Text(desktopText("extensions.search")) }, singleLine = true,
             enabled = catalog != null, modifier = Modifier.fillMaxWidth().testTag("extension-search"))
         val extensions = catalog?.extensions.orEmpty().filter { extension ->
             query.isBlank() || extension.name.contains(query, true) || extension.packageName.contains(query, true) ||
@@ -79,20 +80,20 @@ private fun ExtensionCatalog(
                 val hasPackage = extension.resources.jarUrl.isNotBlank() || extension.resources.apkUrl.isNotBlank()
                 val ecosystem = when {
                     cloudstreamPlugin -> "Cloudstream"
-                    parserPlugin -> "解析器插件"
+                    parserPlugin -> desktopText("extensions.kind.parser")
                     anime -> "Aniyomi"
                     extension.packageName.contains(".novelextension.") -> "Tsundoku"
                     else -> "Mihon"
                 }
                 val label = when {
-                    !hasPackage -> "没有安装包"
-                    !compatible -> "API 暂不支持"
-                    parserInstalled -> "已安装"
-                    installed != null && installed > extension.versionCode -> "本地版本较新"
-                    installed == extension.versionCode -> "已安装"
-                    installed != null -> "更新"
-                    extension.resources.jarUrl.isBlank() && !parserPlugin && !cloudstreamPlugin -> "安装（转换 APK）"
-                    else -> "安装"
+                    !hasPackage -> desktopText("extensions.noPackage")
+                    !compatible -> desktopText("extensions.unsupportedApi")
+                    parserInstalled -> desktopText("extensions.installed")
+                    installed != null && installed > extension.versionCode -> desktopText("extensions.newerLocal")
+                    installed == extension.versionCode -> desktopText("extensions.installed")
+                    installed != null -> desktopText("extensions.update")
+                    extension.resources.jarUrl.isBlank() && !parserPlugin && !cloudstreamPlugin -> desktopText("extensions.installConvert")
+                    else -> desktopText("extensions.install")
                 }
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -100,7 +101,7 @@ private fun ExtensionCatalog(
                             style = MaterialTheme.typography.subtitle1)
                         Text(extension.sources.takeIf { it.isNotEmpty() }
                             ?.joinToString { "${it.name} (${it.language})" }
-                            ?: "安装后读取插件内置来源", maxLines = 2)
+                            ?: desktopText("extensions.sourcesAfterInstall"), maxLines = 2)
                         Button({ controller.installExtension(extension) }, enabled = enabled && hasPackage && compatible &&
                             !parserInstalled && (installed == null || installed < extension.versionCode),
                             modifier = Modifier.testTag("extension-install:${extension.packageName}")) { Text(label) }
@@ -122,17 +123,17 @@ private fun InstalledExtensions(
     var confirm by remember { mutableStateOf<DesktopInstalledEntry?>(null) }
     val updates = state.extensionUpdates.associateBy { it.extension.packageName }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("已安装 · ${state.installedEntries.size}", style = MaterialTheme.typography.subtitle1)
+        Text(desktopText("extensions.installedCount", state.installedEntries.size), style = MaterialTheme.typography.subtitle1)
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Checkbox(state.autoUpdateExtensions, { controller.setAutoUpdateExtensions(it) },
                 modifier = Modifier.testTag("extension-auto-update"))
-            Text("启动时自动更新")
+            Text(desktopText("extensions.autoUpdate"))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton({ controller.checkExtensionUpdates() }, enabled = enabled,
-                modifier = Modifier.weight(1f).testTag("extension-check-updates")) { Text("检查更新") }
+                modifier = Modifier.weight(1f).testTag("extension-check-updates")) { Text(desktopText("extensions.checkUpdates")) }
             Button({ controller.applyUpdates() }, enabled = enabled && updates.isNotEmpty(),
-                modifier = Modifier.weight(1f).testTag("extension-update-all")) { Text("全部更新（${updates.size}）") }
+                modifier = Modifier.weight(1f).testTag("extension-update-all")) { Text(desktopText("extensions.updateAll", updates.size)) }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("installed-list"),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -142,14 +143,15 @@ private fun InstalledExtensions(
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(entry.label, maxLines = 1)
-                        Text("${DesktopSourceLabels.ecosystem(entry.ecosystem)} · ${entry.version} · ${entry.sources} 个来源" +
-                            (update?.let { " · 可更新到 ${it.extension.versionName}" } ?: ""),
+                        Text(desktopText("extensions.entrySummary",
+                            DesktopSourceLabels.ecosystem(entry.ecosystem), entry.version, entry.sources) +
+                            (update?.let { " · " + desktopText("extensions.updateAvailable", it.extension.versionName) } ?: ""),
                             style = MaterialTheme.typography.caption, maxLines = 1)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (update != null) Button({ controller.applyUpdates(listOf(update)) }, enabled = enabled,
-                                modifier = Modifier.testTag("extension-update:${entry.id}")) { Text("更新") }
+                                modifier = Modifier.testTag("extension-update:${entry.id}")) { Text(desktopText("extensions.update")) }
                             TextButton({ confirm = entry }, enabled = enabled,
-                                modifier = Modifier.testTag("extension-uninstall:${entry.id}")) { Text("卸载") }
+                                modifier = Modifier.testTag("extension-uninstall:${entry.id}")) { Text(desktopText("extensions.uninstall")) }
                         }
                     }
                 }
@@ -158,10 +160,10 @@ private fun InstalledExtensions(
     }
     confirm?.let { entry ->
         AlertDialog(onDismissRequest = { confirm = null },
-            title = { Text("卸载 ${entry.label}？") },
-            text = { Text("移除它的 ${entry.sources} 个来源和安装文件。收藏、历史与下载保留，重新安装后可继续使用。") },
+            title = { Text(desktopText("extensions.uninstallTitle", entry.label)) },
+            text = { Text(desktopText("extensions.uninstallDetail", entry.sources)) },
             confirmButton = { Button({ confirm = null; controller.uninstall(entry) },
-                modifier = Modifier.testTag("extension-uninstall-confirm")) { Text("卸载") } },
-            dismissButton = { TextButton({ confirm = null }) { Text("取消") } })
+                modifier = Modifier.testTag("extension-uninstall-confirm")) { Text(desktopText("extensions.uninstall")) } },
+            dismissButton = { TextButton({ confirm = null }) { Text(desktopText("common.cancel")) } })
     }
 }

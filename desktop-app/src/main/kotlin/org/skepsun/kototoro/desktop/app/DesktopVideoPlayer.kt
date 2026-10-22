@@ -108,7 +108,7 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
                         .associate { it.substringBefore('=').trim() to it.substringAfter('=').trim() }
                     player = MpvPlayer(library, window, diagnostics + extra)
                 } catch (error: Throwable) {
-                    failure = "播放器启动失败：${error.message ?: error.javaClass.simpleName}"
+                    failure = desktopText("video.playerStartFailed", error.message ?: error.javaClass.simpleName)
                 }
             }
         }
@@ -128,7 +128,7 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
         resumeAt = null
         withContext(Dispatchers.IO) {
             runCatching { current.load(video.stream.toMpvStream(start, title)) }
-                .onFailure { failure = "无法打开视频：${it.message}" }
+                .onFailure { failure = desktopText("video.openFailed", it.message ?: it.javaClass.simpleName) }
         }
     }
     // Enhancement shaders follow the saved choice, for every stream this window plays.
@@ -138,7 +138,7 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
         val current = player ?: return@LaunchedEffect
         enhancementError = withContext(Dispatchers.IO) {
             runCatching { current.setShaders(shaders.files(state.videoEnhancement)) }.exceptionOrNull()
-                ?.let { "画质增强不可用：${it.message}" }
+                ?.let { desktopText("video.enhancementUnavailable", it.message ?: it.javaClass.simpleName) }
         }
     }
     LaunchedEffect(mpv.position.toInt(), mpv.duration.toInt(), mpv.loaded) {
@@ -182,21 +182,21 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
     }) {
         Row(Modifier.fillMaxWidth().height(56.dp).background(PlayerPanel).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(back) { Text("返回详情", color = PlayerText) }
+            TextButton(back) { Text(desktopText("video.backToDetails"), color = PlayerText) }
             Column(Modifier.weight(1f)) {
                 Text(state.content?.title.orEmpty(), color = PlayerText, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(video.chapter.title ?: "第 ${video.chapter.number} 集", color = PlayerMuted, fontSize = 12.sp,
+                Text(video.chapter.title ?: desktopText("common.episodeTitle", video.chapter.number), color = PlayerMuted, fontSize = 12.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             TextButton({ castOpen = true }, enabled = player != null, modifier = Modifier.testTag("video-cast")) {
-                Text(if (state.cast != null) "投屏中" else "投屏", color = PlayerText)
+                Text(if (state.cast != null) desktopText("video.casting") else desktopText("video.cast"), color = PlayerText)
             }
             TextButton({ episodesOpen = !episodesOpen }, modifier = Modifier.testTag("video-episodes")) {
-                Text("剧集", color = PlayerText)
+                Text(desktopText("video.episodes"), color = PlayerText)
             }
             TextButton({ onToggleFullscreen?.invoke() }, enabled = onToggleFullscreen != null) {
-                Text(if (fullscreen) "退出全屏" else "全屏", color = PlayerText)
+                Text(if (fullscreen) desktopText("video.exitFullscreen") else desktopText("video.fullscreen"), color = PlayerText)
             }
         }
         Row(Modifier.weight(1f).fillMaxWidth()) {
@@ -228,7 +228,7 @@ private fun EpisodeList(controller: DesktopController, state: DesktopAppState, v
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items(episodes, key = { it.id }) { episode ->
             val current = episode.id == video.chapter.id
-            Text(episode.title ?: "第 ${episode.number} 集", color = if (current) Color(0xFF7FD1B9) else PlayerText,
+            Text(episode.title ?: desktopText("common.episodeTitle", episode.number), color = if (current) Color(0xFF7FD1B9) else PlayerText,
                 fontWeight = if (current) FontWeight.Bold else FontWeight.Normal, maxLines = 2,
                 modifier = Modifier.fillMaxWidth().clickable(enabled = !current && !state.busy) { controller.read(episode) }
                     .padding(10.dp).testTag("video-episode:${episode.id}"))
@@ -242,8 +242,8 @@ private fun Controls(video: DesktopVideo, mpv: MpvState, failure: String?, hasPr
     var dragging by remember { mutableStateOf<Float?>(null) }
     Column(Modifier.fillMaxWidth().background(PlayerPanel).padding(horizontal = 16.dp, vertical = 8.dp)) {
         val status = failure ?: mpv.error ?: when {
-            mpv.loading -> "正在加载视频…"
-            mpv.buffering -> "缓冲中…"
+            mpv.loading -> desktopText("video.loading")
+            mpv.buffering -> desktopText("video.buffering")
             else -> null
         }
         status?.let { Text(it, color = if (failure != null || mpv.error != null) Color(0xFFFF8A80) else PlayerMuted,
@@ -261,26 +261,26 @@ private fun Controls(video: DesktopVideo, mpv: MpvState, failure: String?, hasPr
             Text(clock(mpv.duration), color = PlayerText, fontSize = 13.sp)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            PlayerButton("上一集", enabled && hasPrevious) { controller.changeVideoEpisode(false) }
+            PlayerButton(desktopText("video.previousEpisode"), enabled && hasPrevious) { controller.changeVideoEpisode(false) }
             PlayerButton("-10s", enabled) { control { it.seek(-10.0, relative = true) } }
-            PlayerButton(if (mpv.paused) "播放" else "暂停", enabled, "video-play") { control { it.togglePause() } }
+            PlayerButton(if (mpv.paused) desktopText("video.play") else desktopText("video.pause"), enabled, "video-play") { control { it.togglePause() } }
             PlayerButton("+10s", enabled) { control { it.seek(10.0, relative = true) } }
-            PlayerButton("下一集", enabled && hasNext) { controller.changeVideoEpisode(true) }
+            PlayerButton(desktopText("video.nextEpisode"), enabled && hasNext) { controller.changeVideoEpisode(true) }
             Spacer(Modifier.weight(1f))
-            Menu("画质 · ${video.label(video.selected)}", video.streams.indices.map { video.label(it) to (it == video.selected) },
+            Menu(desktopText("video.quality", video.label(video.selected)), video.streams.indices.map { video.label(it) to (it == video.selected) },
                 enabled && video.streams.size > 1, "video-quality") { controller.selectVideoStream(it) }
-            Menu("字幕", listOf("关闭" to mpv.subtitles.none { it.selected }) + mpv.subtitles.map { it.label to it.selected },
+            Menu(desktopText("video.subtitles"), listOf(desktopText("common.close") to mpv.subtitles.none { it.selected }) + mpv.subtitles.map { it.label to it.selected },
                 enabled && mpv.subtitles.isNotEmpty(), "video-subtitles") { index ->
                 control { it.selectSubtitle(if (index == 0) null else mpv.subtitles[index - 1].id) }
             }
-            Menu("音轨", mpv.audio.map { it.label to it.selected }, enabled && mpv.audio.size > 1, "video-audio") { index ->
+            Menu(desktopText("video.audio"), mpv.audio.map { it.label to it.selected }, enabled && mpv.audio.size > 1, "video-audio") { index ->
                 control { it.selectAudio(mpv.audio[index].id) }
             }
             Menu("${trimSpeed(mpv.speed)}x", Speeds.map { "${trimSpeed(it)}x" to (it == mpv.speed) }, enabled, "video-speed") { index ->
                 control { it.setSpeed(Speeds[index]) }
             }
             EnhancementMenu(enhancement, enabled) { controller.setVideoEnhancement(it) }
-            PlayerButton(if (mpv.muted) "取消静音" else "静音", enabled) { control { it.setMuted(!mpv.muted) } }
+            PlayerButton(if (mpv.muted) desktopText("video.unmute") else desktopText("video.mute"), enabled) { control { it.setMuted(!mpv.muted) } }
             Slider(mpv.volume.toFloat(), { volume -> control { it.setVolume(volume.toInt()) } }, valueRange = 0f..130f,
                 enabled = enabled, modifier = Modifier.width(120.dp).testTag("video-volume"))
         }
@@ -317,7 +317,7 @@ private fun EnhancementMenu(enhancement: MpvEnhancement, enabled: Boolean, onCha
     var open by remember { mutableStateOf(false) }
     Box {
         TextButton({ open = true }, enabled = enabled, modifier = Modifier.testTag("video-enhancement")) {
-            Text(if (enhancement.mode == MpvEnhancementMode.OFF) "画质增强" else enhancement.mode.title,
+            Text(if (enhancement.mode == MpvEnhancementMode.OFF) desktopText("video.enhancement") else enhancement.mode.title,
                 color = if (enabled) PlayerText else PlayerMuted, maxLines = 1)
         }
         DropdownMenu(open, { open = false }) {
@@ -329,13 +329,13 @@ private fun EnhancementMenu(enhancement: MpvEnhancement, enabled: Boolean, onCha
             }
             if (enhancement.mode == MpvEnhancementMode.FSR) {
                 Column(Modifier.width(260.dp).padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Text("FSR 锐度 ${(enhancement.fsrSharpness * 100).toInt()}%", fontSize = 13.sp)
+                    Text(desktopText("video.fsrSharpness", (enhancement.fsrSharpness * 100).toInt()), fontSize = 13.sp)
                     var draft by remember(enhancement.fsrSharpness) { mutableStateOf(enhancement.fsrSharpness) }
                     Slider(draft, { draft = it }, valueRange = 0f..1f,
                         onValueChangeFinished = { onChange(enhancement.copy(fsrSharpness = draft)) })
                 }
             }
-            Text("增强在显卡上实时运行；Anime4K 质量档对显卡要求较高。", fontSize = 12.sp,
+            Text(desktopText("video.enhancementHint"), fontSize = 12.sp,
                 modifier = Modifier.width(260.dp).padding(horizontal = 16.dp, vertical = 6.dp))
         }
     }
@@ -351,28 +351,27 @@ private fun MissingLibrary(controller: DesktopController, video: DesktopVideo, s
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Surface(color = PlayerPanel, shape = RoundedCornerShape(12.dp), modifier = Modifier.widthIn(max = 720.dp)) {
             Column(Modifier.padding(24.dp).testTag("video-missing-library"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("需要 libmpv 才能在应用内播放", color = PlayerText, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                Text("Kototoro 用 mpv 播放视频，但没有自带它。请下载 Windows 版 libmpv（例如 mpv-dev-lgpl-x86_64 压缩包），" +
-                    "把其中的 libmpv-2.dll 放到下面的文件夹，然后点“重新检测”。", color = PlayerMuted)
+                Text(desktopText("video.libmpvMissing"), color = PlayerText, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                Text(desktopText("video.libmpvHint"), color = PlayerMuted)
                 Text(folder.toString(), color = PlayerText)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button({
                         runCatching { Files.createDirectories(folder); java.awt.Desktop.getDesktop().open(folder.toFile()) }
-                            .onFailure { notice = "无法打开文件夹：${it.message}" }
-                    }) { Text("打开文件夹") }
-                    OutlinedButton(onRetry, modifier = Modifier.testTag("video-retry-library")) { Text("重新检测") }
+                            .onFailure { notice = desktopText("video.openFolderFailed", it.message ?: it.javaClass.simpleName) }
+                    }) { Text(desktopText("video.openFolder")) }
+                    OutlinedButton(onRetry, modifier = Modifier.testTag("video-retry-library")) { Text(desktopText("video.detectAgain")) }
                     OutlinedButton({
                         Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(video.stream.url), null)
-                        notice = "已复制视频地址（部分来源还需要请求头才能播放）"
-                    }) { Text("复制视频地址") }
+                        notice = desktopText("video.urlCopied")
+                    }) { Text(desktopText("video.copyUrl")) }
                     if (external != null) OutlinedButton({
                         val stream = video.stream.toMpvStream(video.startSeconds,
                             listOfNotNull(state.content?.title, video.chapter.title).joinToString(" · "))
                         runCatching { ProcessBuilder(MpvLocator.commandLine(external, stream)).start() }
-                            .onSuccess { notice = "已在外部 mpv 中打开" }
-                            .onFailure { notice = "无法启动 mpv：${it.message}" }
-                    }) { Text("用外部 mpv 播放") }
-                    TextButton(onBack) { Text("返回详情") }
+                            .onSuccess { notice = desktopText("video.externalOpened") }
+                            .onFailure { notice = desktopText("video.externalFailed", it.message ?: it.javaClass.simpleName) }
+                    }) { Text(desktopText("video.playExternal")) }
+                    TextButton(onBack) { Text(desktopText("video.backToDetails")) }
                 }
                 notice?.let { Text(it, color = PlayerMuted) }
             }
@@ -440,14 +439,14 @@ private fun CastDialog(onDismiss: () -> Unit, onSelect: (org.skepsun.kototoro.de
         devices = null
         devices = withContext(Dispatchers.IO) { runCatching { org.skepsun.kototoro.desktop.player.DlnaDiscovery.discover() }.getOrDefault(emptyList()) }
     }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("投屏到 DLNA 设备") }, text = {
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(desktopText("video.castDialogTitle")) }, text = {
         Column(Modifier.widthIn(min = 360.dp).testTag("cast-dialog"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val found = devices
             when {
                 found == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Text("正在搜索局域网中的设备…")
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Text(desktopText("video.castSearching"))
                 }
-                found.isEmpty() -> Text("没有找到设备。请确认电视/盒子与电脑在同一网络，且 Windows 防火墙允许 Kototoro 的网络访问。")
+                found.isEmpty() -> Text(desktopText("video.castNotFound"))
                 else -> found.forEach { device ->
                     OutlinedButton({ onSelect(device) }, modifier = Modifier.fillMaxWidth().testTag("cast-device:${device.name}")) {
                         Text(device.name)
@@ -455,7 +454,7 @@ private fun CastDialog(onDismiss: () -> Unit, onSelect: (org.skepsun.kototoro.de
                 }
             }
         }
-    }, confirmButton = { TextButton({ round++ }) { Text("重新搜索") } }, dismissButton = { TextButton(onDismiss) { Text("取消") } })
+    }, confirmButton = { TextButton({ round++ }) { Text(desktopText("video.castSearchAgain")) } }, dismissButton = { TextButton(onDismiss) { Text(desktopText("common.cancel")) } })
 }
 
 @Composable
@@ -467,7 +466,7 @@ private fun CastControls(cast: DesktopCast, onEnd: () -> Unit) {
         scope.launch(Dispatchers.IO) { runCatching { block(cast.renderer) } }
     }
     Column(Modifier.fillMaxWidth().background(PlayerPanel).padding(horizontal = 16.dp, vertical = 8.dp).testTag("cast-controls")) {
-        Text("正在投屏到 ${cast.renderer.device.name} · ${castState(status.state)}", color = PlayerText, fontSize = 13.sp)
+        Text(desktopText("video.castTo", cast.renderer.device.name, castState(status.state)), color = PlayerText, fontSize = 13.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(clock(dragging?.toDouble() ?: status.position), color = PlayerText, fontSize = 13.sp)
             Slider((dragging ?: status.position.toFloat()).coerceIn(0f, status.duration.toFloat().coerceAtLeast(1f)),
@@ -478,17 +477,17 @@ private fun CastControls(cast: DesktopCast, onEnd: () -> Unit) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             PlayerButton("-10s", true) { remote { it.seek((status.position - 10).coerceAtLeast(0.0)) } }
-            PlayerButton(if (status.state == "PLAYING") "暂停" else "播放", true, "cast-play") {
+            PlayerButton(if (status.state == "PLAYING") desktopText("video.pause") else desktopText("video.play"), true, "cast-play") {
                 remote { if (status.state == "PLAYING") it.pause() else it.play() }
             }
             PlayerButton("+10s", true) { remote { it.seek(status.position + 10) } }
             Spacer(Modifier.weight(1f))
-            PlayerButton("结束投屏（本机继续）", true, "cast-end") { onEnd() }
+            PlayerButton(desktopText("video.castEnd"), true, "cast-end") { onEnd() }
         }
     }
 }
 
 private fun castState(state: String) = when (state) {
-    "PLAYING" -> "播放中"; "PAUSED_PLAYBACK" -> "已暂停"; "STOPPED" -> "已停止"; "TRANSITIONING" -> "加载中"
-    "NO_MEDIA_PRESENT" -> "无媒体"; else -> state
+    "PLAYING" -> desktopText("video.castState.PLAYING"); "PAUSED_PLAYBACK" -> desktopText("video.castState.PAUSED_PLAYBACK"); "STOPPED" -> desktopText("video.castState.STOPPED"); "TRANSITIONING" -> desktopText("video.castState.TRANSITIONING")
+    "NO_MEDIA_PRESENT" -> desktopText("video.castState.NO_MEDIA_PRESENT"); else -> state
 }

@@ -60,6 +60,8 @@ data class DesktopAppState(
     val screen: DesktopScreen = DesktopScreen.EXPLORE,
     val appearance: DesktopAppearance = DesktopAppearance.SYSTEM,
     val interfaceStyle: DesktopInterfaceStyle = DesktopInterfaceStyle.MATERIAL,
+    /** The saved interface language tag; null follows the system language. */
+    val language: String? = null,
     val sources: List<SourceListing> = emptyList(),
     val repositories: List<DesktopRepository> = emptyList(),
     val extensionCatalog: DesktopRepositoryCatalog? = null,
@@ -93,6 +95,8 @@ data class DesktopAppState(
     val trackerSettings: org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings = org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings(),
     /** Stored suggestions, most relevant first (Android's recommendations). */
     val suggestions: List<SourceContent> = emptyList(),
+    /** True while [DesktopController.refreshSuggestions] runs in the background; the window stays usable. */
+    val suggestionsGenerating: Boolean = false,
     /** Works shown by [feed] rows, keyed by manga id, for covers and opening. */
     val feedContents: Map<Long, SourceContent> = emptyMap(),
     /** Favourite categories with update tracking; -1 until the subscriptions page loads. */
@@ -163,7 +167,8 @@ class DesktopController(val session: DesktopSession) {
         } ?: DesktopAppearance.SYSTEM,
         interfaceStyle = DesktopInterfaceStyle.entries.firstOrNull {
             it.name == (appearancePreferences.snapshot()["interface_style"] as? SourcePreferenceValue.Text)?.value
-        } ?: DesktopInterfaceStyle.MATERIAL))
+        } ?: DesktopInterfaceStyle.MATERIAL,
+        language = restoredLanguage()))
     val state = mutableState.asStateFlow()
     private val continuous = DesktopScrollOperations(mutableState, session, scope, gate)
     private val novelOperations = DesktopNovelOperations(mutableState, session, scope, gate)
@@ -177,6 +182,8 @@ class DesktopController(val session: DesktopSession) {
     internal val backupPreview = mutableBackupPreview.asStateFlow()
 
     init {
+        // The saved language applies before the first screen is composed; `--lang` outranks it for this run.
+        if (!DesktopStrings.isPinned) DesktopStrings.select(mutableState.value.language)
         refreshSources()
         mutableState.update { it.copy(autoUpdateExtensions =
             (updatePreferences.snapshot()["auto_update"] as? SourcePreferenceValue.Toggle)?.value ?: false) }
@@ -195,35 +202,50 @@ class DesktopController(val session: DesktopSession) {
         val check = session.checkUpdates()
         mutableState.update { it.copy(extensionUpdates = check.updates) }
         if (check.updates.isNotEmpty() && state.value.autoUpdateExtensions) applyUpdates(check.updates).join()
-        else if (check.updates.isNotEmpty()) mutableState.update { it.copy(message = "${check.updates.size} 个扩展有更新，可在“扩展与仓库”中更新") }
+        else if (check.updates.isNotEmpty()) mutableState.update { it.copy(message = desktopText("extensions.updatesAvailableHint", check.updates.size)) }
     }
 
     fun setAutoUpdateExtensions(enabled: Boolean) {
         mutableState.update { it.copy(autoUpdateExtensions = enabled) }
         if (!updatePreferences.edit(SourcePreferenceEdit(changes = mapOf("auto_update" to SourcePreferenceValue.Toggle(enabled))))) {
-            mutableState.update { it.copy(error = "自动更新设置保存失败") }
+            mutableState.update { it.copy(error = desktopText("extensions.autoUpdateSaveFailed")) }
         }
     }
 
     internal fun appearance(value: DesktopAppearance) = action {
         check(appearancePreferences.edit(SourcePreferenceEdit(changes = mapOf(
             "theme" to SourcePreferenceValue.Text(value.name),
-        )))) { "外观设置保存失败" }
+        )))) { desktopText("settings.appearanceSaveFailed") }
         mutableState.update { it.copy(appearance = value) }
     }
+
+    /** Shows the UI in [value] (null: follow the system language) and remembers the choice for the next start. */
+    fun language(value: String?) = action {
+        val tag = value?.takeIf(String::isNotBlank)
+        val saved = appearancePreferences.edit(SourcePreferenceEdit(changes = mapOf(
+            "language" to SourcePreferenceValue.Text(tag.orEmpty()),
+        )))
+        if (saved) {
+            DesktopStrings.select(tag)
+            mutableState.update { it.copy(language = tag) }
+        } else mutableState.update { it.copy(error = desktopText("error.languageSaveFailed")) }
+    }
+
+    private fun restoredLanguage(): String? =
+        (appearancePreferences.snapshot()["language"] as? SourcePreferenceValue.Text)?.value?.takeIf(String::isNotBlank)
 
     internal fun interfaceStyle(value: DesktopInterfaceStyle) = action {
         check(appearancePreferences.edit(SourcePreferenceEdit(changes = mapOf(
             "interface_style" to SourcePreferenceValue.Text(value.name),
-        )))) { "界面风格保存失败" }
+        )))) { desktopText("settings.interfaceStyleSaveFailed") }
         mutableState.update { it.copy(interfaceStyle = value) }
     }
 
     fun checkExtensionUpdates() = action {
         val check = session.checkUpdates()
         mutableState.update { it.copy(extensionUpdates = check.updates, installedEntries = session.installedEntries(),
-            message = if (check.updates.isEmpty()) "所有扩展都是最新版本" else "${check.updates.size} 个扩展有更新",
-            error = check.failures.takeIf { failures -> failures.isNotEmpty() }?.joinToString("；", "部分仓库读取失败：")) }
+            message = if (check.updates.isEmpty()) desktopText("extensions.allUpToDate") else desktopText("extensions.updatesAvailable", check.updates.size),
+            error = check.failures.takeIf { failures -> failures.isNotEmpty() }?.joinToString("；", desktopText("extensions.repositoryReadFailed"))) }
     }
 
     /** Installs the given updates one by one; one failing update does not stop the others. */
@@ -243,7 +265,8 @@ class DesktopController(val session: DesktopSession) {
             installedEntries = session.installedEntries(),
             extensionUpdates = previous.extensionUpdates.filterNot { it in updated },
             selectedSource = previous.selectedSource?.let { selected -> descriptors.firstOrNull { it.source.name == selected.source.name } },
-            message = "已更新 $done 个扩展", error = failures.takeIf { it.isNotEmpty() }?.joinToString("；", "更新失败：")) }
+            message = desktopText("extensions.updated", done),
+            error = failures.takeIf { it.isNotEmpty() }?.joinToString("\n", desktopText("extensions.updateFailed"))) }
     }
 
     fun uninstall(entry: DesktopInstalledEntry) = action {
@@ -255,7 +278,7 @@ class DesktopController(val session: DesktopSession) {
                 extensionUpdates = previous.extensionUpdates.filterNot { it.extension.packageName == entry.id },
                 selectedSource = if (removed) null else previous.selectedSource,
                 descriptor = if (removed) null else previous.descriptor, items = if (removed) emptyList() else previous.items,
-                message = "已卸载 ${entry.label}")
+                message = desktopText("extensions.uninstalled", entry.label))
         }
     }
 
@@ -265,7 +288,7 @@ class DesktopController(val session: DesktopSession) {
 
     fun importJar(path: Path) = action {
         val extension = session.importJar(path)
-        publishInstallation(extension.label, "已导入", DesktopScreen.EXPLORE)
+        publishInstallation(extension.label, desktopText("extensions.imported"), DesktopScreen.EXPLORE)
     }
 
     fun showExtensions() = navigate {
@@ -277,12 +300,12 @@ class DesktopController(val session: DesktopSession) {
         val catalog = session.repositories.fetch(address)
         mutableState.update { it.copy(screen = DesktopScreen.EXTENSIONS, extensionCatalog = catalog,
             repositories = session.repositories.saved(), installedExtensions = installedVersions(),
-            message = "已读取 ${catalog.repository.name}，${catalog.extensions.size} 个扩展") }
+            message = desktopText("extensions.catalogRead", catalog.repository.name, catalog.extensions.size)) }
     }
 
     fun installExtension(extension: ExtensionStoreIndex.Extension) = action {
-        val catalog = requireNotNull(state.value.extensionCatalog) { "请先读取仓库" }
-        publishInstallation(session.installExtension(catalog, extension).label, "已安装")
+        val catalog = requireNotNull(state.value.extensionCatalog) { desktopText("extensions.readRepositoryFirst") }
+        publishInstallation(session.installExtension(catalog, extension).label, desktopText("extensions.installed"))
     }
 
     private fun installedVersions() = session.installedVersions()
@@ -330,7 +353,7 @@ class DesktopController(val session: DesktopSession) {
 
     /** Lists in the given sort order; [order] must be one of the source's declared orders. */
     fun browseOrdered(order: String) = navigate {
-        require(order in state.value.descriptor?.sortOrders.orEmpty()) { "来源不支持此排序" }
+        require(order in state.value.descriptor?.sortOrders.orEmpty()) { desktopText("error.sortUnsupported") }
         browseOnIo(0, state.value.query, order, state.value.appliedFilters)
     }
 
@@ -341,7 +364,7 @@ class DesktopController(val session: DesktopSession) {
     }
 
     fun filters() = action {
-        val source = requireNotNull(state.value.selectedSource) { "请先选择来源" }
+        val source = requireNotNull(state.value.selectedSource) { desktopText("extensions.selectSourceFirst") }
         val definition = session.sources.getDynamicFilters(source.source.name)
         require(definition.source.name == source.source.name)
         mutableState.update { it.copy(dynamicFilters = definition, filterDialogOpen = true) }
@@ -359,7 +382,7 @@ class DesktopController(val session: DesktopSession) {
 
     private suspend fun browseOnIo(offset: Int, query: String, order: String? = state.value.browseOrder,
         changes: List<SourceFilterChange> = state.value.appliedFilters) {
-        val source = requireNotNull(state.value.selectedSource) { "请先选择来源" }
+        val source = requireNotNull(state.value.selectedSource) { desktopText("extensions.selectSourceFirst") }
         val filter = if (query.isNotBlank() || changes.isNotEmpty()) {
             SourceFilter(query = query.takeIf { it.isNotBlank() }, dynamicFilters = changes)
         } else null
@@ -424,15 +447,38 @@ class DesktopController(val session: DesktopSession) {
             feedContents = contents, suggestions = suggestions, content = null) }
     }
 
-    /** Rebuilds recommendations now, as Android's suggestions worker does periodically. */
-    fun refreshSuggestions() = action {
-        mutableState.update { it.copy(message = "正在从已安装来源生成推荐…") }
-        val stored = backgroundMutex.withLock { runSuggestionsOnIo() }
-        mutableState.update { it.copy(message = when {
-            stored > 0 -> "已生成 $stored 条推荐"
-            state.value.sources.isEmpty() -> "请先安装内容源"
-            else -> "暂无推荐：阅读或收藏一些作品后再试"
-        }) }
+    /**
+     * Rebuilds recommendations in the background, as Android's suggestions worker does periodically.
+     *
+     * Asking every installed source for candidates takes as long as the network does, so it must not go through
+     * [action]: that sets [DesktopState.busy] and holds the operation gate, which left the whole window stuck on
+     * "recommendations are being fetched" until the last source answered. Progress is [suggestionsGenerating], and
+     * [backgroundMutex] keeps it from running beside the periodic worker.
+     */
+    fun refreshSuggestions() {
+        if (state.value.suggestionsGenerating) return
+        mutableState.update { it.copy(suggestionsGenerating = true, message = desktopText("message.generatingSuggestions")) }
+        scope.launch {
+            try {
+                val stored = backgroundMutex.withLock { runSuggestionsOnIo() }
+                mutableState.update { it.copy(message = when {
+                    stored > 0 -> desktopText("message.suggestionsGenerated", stored)
+                    state.value.sources.isEmpty() -> desktopText("message.installSourceFirst")
+                    else -> desktopText("message.noSuggestions")
+                }) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: LinkageError) {
+                mutableState.update { it.copy(error = desktopText("error.sourceApiIncompatible", error.message ?: error.javaClass.simpleName)) }
+            } catch (error: Exception) {
+                val diagnostic = if (error is SourceRemoteException && error.error.code == SourceErrorCode.RUNTIME_FAILURE) {
+                    session.sourceDiagnostics.message(error.requestId)
+                } else null
+                mutableState.update { it.copy(error = diagnostic ?: error.message ?: error.javaClass.simpleName) }
+            } finally {
+                mutableState.update { it.copy(suggestionsGenerating = false) }
+            }
+        }
     }
 
     /** Android shows suggestions only once enabled; enabling also generates them, like the worker's first run. */
@@ -444,14 +490,14 @@ class DesktopController(val session: DesktopSession) {
     internal fun suggestionSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings) {
         mutableState.update { it.copy(suggestionSettings = settings) }
         if (!backgroundPreferences.edit(SourcePreferenceEdit(changes = settings.toPreferences()))) {
-            mutableState.update { it.copy(error = "推荐设置保存失败") }
+            mutableState.update { it.copy(error = desktopText("settings.suggestionsSaveFailed")) }
         }
     }
 
     internal fun trackerSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings) {
         mutableState.update { it.copy(trackerSettings = settings) }
         if (!backgroundPreferences.edit(SourcePreferenceEdit(changes = settings.toPreferences()))) {
-            mutableState.update { it.copy(error = "更新检查设置保存失败") }
+            mutableState.update { it.copy(error = desktopText("settings.trackerSaveFailed")) }
         }
     }
 
@@ -495,7 +541,9 @@ class DesktopController(val session: DesktopSession) {
             val feed = session.feed.observe(session.storage.database).first()
             val contents = feedContentsOnIo(feed)
             mutableState.update { it.copy(feed = feed, feedContents = contents,
-                message = if (report.withUpdates > 0) "后台检查：${report.withUpdates} 部作品有 ${report.newChapters} 个新章节" else it.message) }
+                message = if (report.withUpdates > 0) {
+                desktopText("message.backgroundCheck", report.withUpdates, report.newChapters)
+            } else it.message) }
         }
         if (DesktopBackgroundTask.SUGGESTIONS in due) backgroundMutex.withLock { runSuggestionsOnIo() }
         return due
@@ -521,15 +569,17 @@ class DesktopController(val session: DesktopSession) {
     /** Checks every tracked work now, reporting progress, as Android's tracker worker does in the background. */
     fun checkUpdates() = action {
         val report = backgroundMutex.withLock {
-            runTrackerOnIo { done, total -> mutableState.update { it.copy(message = "正在检查更新 $done / $total") } }
+            runTrackerOnIo { done, total -> mutableState.update { it.copy(message = desktopText("message.checkingUpdates", done, total)) } }
         }
         loadFeedOnIo()
         mutableState.update { it.copy(message = when {
-            report.checked == 0 -> "没有需要检查的作品：请先收藏作品，并为收藏分类开启更新追踪"
-            report.withUpdates == 0 -> "已检查 ${report.checked} 部作品，暂无新章节" +
-                if (report.failed > 0) "（${report.failed} 部检查失败）" else ""
-            else -> "${report.withUpdates} 部作品有 ${report.newChapters} 个新章节" +
-                if (report.failed > 0) "（${report.failed} 部检查失败）" else ""
+            report.checked == 0 -> desktopText("message.nothingToCheck")
+            report.withUpdates == 0 -> if (report.failed > 0) {
+                desktopText("message.checkedNoNewFailed", report.checked, report.failed)
+            } else desktopText("message.checkedNoNew", report.checked)
+            else -> if (report.failed > 0) {
+                desktopText("message.checkedNewFailed", report.withUpdates, report.newChapters, report.failed)
+            } else desktopText("message.checkedNew", report.withUpdates, report.newChapters)
         }) }
     }
 
@@ -542,7 +592,7 @@ class DesktopController(val session: DesktopSession) {
     /** Opening an update marks it read (counter and unread logs), then shows the work. */
     fun openTracked(mangaId: Long) = navigate {
         session.tracker.markRead(mangaId)
-        val content = requireNotNull(session.library.find(mangaId)) { "作品记录不存在" }
+        val content = requireNotNull(session.library.find(mangaId)) { desktopText("error.workNotFound") }
         detailsOnIo(content)
         loadFeedOnIo()
     }
@@ -550,7 +600,7 @@ class DesktopController(val session: DesktopSession) {
     /** Android's "continue reading" on a feed entry: mark it read and resume from history. */
     fun continueTracked(mangaId: Long) = navigate {
         session.tracker.markRead(mangaId)
-        val content = requireNotNull(session.library.find(mangaId)) { "作品记录不存在" }
+        val content = requireNotNull(session.library.find(mangaId)) { desktopText("error.workNotFound") }
         detailsOnIo(content)
         when (DesktopReaderKind.of(state.value.content)) {
             DesktopReaderKind.NOVEL -> readNovelOnIo()
@@ -561,7 +611,7 @@ class DesktopController(val session: DesktopSession) {
 
     /** Android's "random" quick action: open a random favourite. */
     fun randomFavourite() = navigate {
-        val favourite = session.library.favourites().randomOrNull() ?: error("收藏为空")
+        val favourite = session.library.favourites().randomOrNull() ?: error(desktopText("error.favouritesEmpty"))
         detailsOnIo(favourite)
     }
 
@@ -603,7 +653,7 @@ class DesktopController(val session: DesktopSession) {
 
     fun addFavourite() = action {
         session.library.addFavourite(requireNotNull(state.value.content))
-        mutableState.update { it.copy(isFavourite = true, message = "已加入收藏") }
+        mutableState.update { it.copy(isFavourite = true, message = desktopText("message.addedToFavourites")) }
     }
 
     fun read(chapter: SourceChapter? = null) = navigate {
@@ -616,15 +666,15 @@ class DesktopController(val session: DesktopSession) {
 
     private suspend fun readNovelOnIo(chapter: SourceChapter? = null, bookmark: DesktopBookmark? = null) {
         val content = requireNotNull(state.value.content)
-        val chapters = requireNotNull(content.chapters) { "没有可阅读章节" }
+        val chapters = requireNotNull(content.chapters) { desktopText("error.noChapters") }
         val progress = session.library.progress(content.id)
         val restoredId = progress?.let { recoverHistoryChapterId(false, it.chapterId, it.parentChapterId,
             it.percent, chapters.map { c -> c.id }) ?: it.chapterId }
         val selected = chapter ?: chapters.firstOrNull { it.id == restoredId } ?: firstChapterOfBranch(chapters)
         val next = SourceChapterNavigation.adjacent(chapters, selected.id, true)?.url
-        val body = session.sources.getChapterContent(selected, next) ?: error("此章节没有可显示的文本")
+        val body = session.sources.getChapterContent(selected, next) ?: error(desktopText("error.noChapterText"))
         val blocks = DesktopNovelHtml.parse(body.html, content.publicUrl.takeIf { it.startsWith("http") }.orEmpty())
-        require(blocks.isNotEmpty()) { "此章节没有可显示的文本" }
+        require(blocks.isNotEmpty()) { desktopText("error.noChapterText") }
         val start = if (bookmark != null) {
             require(bookmark.contentId == content.id && bookmark.chapterId == selected.id)
             novelBookmarkIndex(content, selected, blocks, bookmark)
@@ -647,12 +697,12 @@ class DesktopController(val session: DesktopSession) {
     private suspend fun watchOnIo(chapter: SourceChapter? = null) {
         closeCast(resume = false)
         val content = requireNotNull(state.value.content)
-        val chapters = requireNotNull(content.chapters) { "没有可播放的剧集" }
+        val chapters = requireNotNull(content.chapters) { desktopText("error.noEpisodes") }
         val progress = session.library.progress(content.id)
         val selected = chapter ?: chapters.firstOrNull { it.id == progress?.chapterId } ?: firstChapterOfBranch(chapters)
         val next = SourceChapterNavigation.adjacent(chapters, selected.id, true)?.url
         val streams = session.sources.getPages(selected, next).filter { it.url.isNotBlank() }
-        require(streams.isNotEmpty()) { "此集没有可播放的视频" }
+        require(streams.isNotEmpty()) { desktopText("error.noVideo") }
         val start = if (progress != null && progress.chapterId == selected.id) progress.page.toDouble() else 0.0
         videoOperations.forget()
         mutableState.update { it.copy(screen = DesktopScreen.VIDEO, chapter = selected, pages = emptyList(),
@@ -667,7 +717,7 @@ class DesktopController(val session: DesktopSession) {
             "enhancement" to SourcePreferenceValue.Text(enhancement.mode.name),
             "fsr_sharpness" to SourcePreferenceValue.FloatBits(enhancement.fsrSharpness.toRawBits()),
         )))
-        if (!saved) mutableState.update { it.copy(error = "画质增强设置已应用，磁盘保存失败") }
+        if (!saved) mutableState.update { it.copy(error = desktopText("error.enhancementInMemory")) }
     }
 
     private fun restoredVideoEnhancement(): org.skepsun.kototoro.desktop.player.MpvEnhancement {
@@ -682,11 +732,11 @@ class DesktopController(val session: DesktopSession) {
     /** Casts the playing stream to [device] from the current position; the local player pauses meanwhile. */
     fun startCast(device: org.skepsun.kototoro.desktop.player.DlnaDevice) = action {
         val snapshot = state.value
-        val video = requireNotNull(snapshot.video) { "没有正在播放的视频" }
+        val video = requireNotNull(snapshot.video) { desktopText("error.videoNotPlaying") }
         snapshot.cast?.let { previous -> mutableState.update { it.copy(cast = null) }; withContext(Dispatchers.IO) { previous.close() } }
         val title = listOfNotNull(snapshot.content?.title, video.chapter.title).joinToString(" · ")
         val cast = withContext(Dispatchers.IO) { DesktopCast.start(device, video.stream, title, video.position) }
-        mutableState.update { it.copy(cast = cast, message = "正在投屏到 ${device.name}") }
+        mutableState.update { it.copy(cast = cast, message = desktopText("message.castingTo", device.name)) }
     }
 
     /** Ends the cast; the local player continues from where the renderer was. */
@@ -740,9 +790,9 @@ class DesktopController(val session: DesktopSession) {
     fun openNovelBookmark(bookmark: DesktopBookmark) = action {
         val snapshot = state.value
         require(snapshot.screen == DesktopScreen.NOVEL && snapshot.content?.id == bookmark.contentId)
-        require(session.library.bookmarks(bookmark.contentId).contains(bookmark)) { "书签已不存在" }
+        require(session.library.bookmarks(bookmark.contentId).contains(bookmark)) { desktopText("error.bookmarkMissing") }
         val chapter = snapshot.content.chapters?.firstOrNull { it.id == bookmark.chapterId }
-            ?: error("书签章节已不存在，请刷新作品详情")
+            ?: error(desktopText("error.bookmarkChapterMissing"))
         val novel = requireNotNull(snapshot.novel)
         if (novel.chapter == chapter) {
             val target = novelBookmarkIndex(snapshot.content, chapter, novel.blocks, bookmark)
@@ -771,7 +821,7 @@ class DesktopController(val session: DesktopSession) {
         val hint = novelBookmarkChapterProgress(bookmark.percent, index, branch.size)
         return requireNotNull(resolveNovelBookmarkPosition(blocks.map { it.bookmarkText() },
             parseNovelBookmarkPreview(bookmark.preview), bookmark.page, hint)) {
-            "书签正文已变化或位置已失效，请刷新作品详情"
+            desktopText("error.bookmarkChanged")
         }
     }
 
@@ -795,7 +845,7 @@ class DesktopController(val session: DesktopSession) {
             "theme" to SourcePreferenceValue.Text(settings.theme.name),
             "serif" to SourcePreferenceValue.Toggle(settings.serif),
         )))
-        if (!saved) mutableState.update { it.copy(error = "阅读设置已更新到内存，磁盘保存失败") }
+        if (!saved) mutableState.update { it.copy(error = desktopText("error.readerSettingsInMemory")) }
     }
 
     private fun restoredNovelSettings(): DesktopNovelSettings {
@@ -816,13 +866,13 @@ class DesktopController(val session: DesktopSession) {
 
     /** Inline images of the open chapter go through the same source client, cache and challenge handling as pages. */
     internal suspend fun novelImage(url: String): DesktopReaderImage {
-        val novel = requireNotNull(state.value.novel) { "没有打开的小说章节" }
+        val novel = requireNotNull(state.value.novel) { desktopText("error.novelNotOpen") }
         return session.novelImage(novel.chapter, novel.images[url] ?: SourceContentImage(url))
     }
 
     fun downloadChapter(chapter: SourceChapter) = action {
         val content = requireNotNull(state.value.content)
-        require(content.chapters.orEmpty().any { it == chapter }) { "章节不属于当前作品" }
+        require(content.chapters.orEmpty().any { it == chapter }) { desktopText("error.chapterNotOfWork") }
         downloads.enqueue(content.id, chapter, content.title)
     }
 
@@ -832,7 +882,7 @@ class DesktopController(val session: DesktopSession) {
 
     internal fun exportLibraryBackup(path: Path) = action {
         backups.export(path)
-        mutableState.update { it.copy(message = "图书馆备份已保存：${path.fileName}") }
+        mutableState.update { it.copy(message = desktopText("backups.saved", path.fileName)) }
     }
 
     internal fun previewLibraryBackup(path: Path) = action {
@@ -850,11 +900,11 @@ class DesktopController(val session: DesktopSession) {
     }
 
     internal fun restoreLibraryBackup(preview: DesktopBackupArchive) = action {
-        require(mutableBackupPreview.value === preview) { "备份预览已过期，请重新选择文件" }
+        require(mutableBackupPreview.value === preview) { desktopText("backups.expired") }
         mutableBackupPreview.value = null
         val processed = preview.use { backups.restore(it) }
         mutableState.update { it.copy(items = emptyList(), content = null,
-            message = "合并恢复完成，已处理 $processed 条记录") }
+            message = desktopText("backups.merged", processed)) }
     }
 
     internal fun previewDownloadCleanup() = action {
@@ -865,12 +915,13 @@ class DesktopController(val session: DesktopSession) {
     internal fun dismissDownloadCleanup() { mutableCleanup.value = null }
 
     internal fun cleanupDownloads(plan: DesktopDownloadCleanupPlan) = action {
-        require(mutableCleanup.value === plan) { "回收预览已过期，请重新检查" }
+        require(mutableCleanup.value === plan) { desktopText("error.reclaimExpired") }
         mutableCleanup.value = null
         val context = currentCoroutineContext()
         val result = session.downloadStore.cleanup(plan, session.storage.preferences) { context.ensureActive() }
-        mutableState.update { it.copy(message = "已回收 ${result.removed} 条旧记录（${result.bytes / 1024} KB）" +
-            if (result.skipped == 0) "" else "，跳过 ${result.skipped} 条已变化记录") }
+        mutableState.update { it.copy(message = if (result.skipped == 0) {
+            desktopText("downloads.cleanupDone", result.removed, result.bytes / 1024)
+        } else desktopText("downloads.cleanupDoneSkipped", result.removed, result.bytes / 1024, result.skipped)) }
     }
 
     internal fun resumeDownload(download: SourceChapterDownload) = action {
@@ -878,8 +929,8 @@ class DesktopController(val session: DesktopSession) {
     }
 
     internal fun readDownload(download: SourceChapterDownload) = action {
-        val content = requireNotNull(session.library.find(download.contentId)) { "本地作品记录不存在" }
-        require(session.downloadStore.find(download.contentId, download.chapter)?.isComplete == true) { "章节尚未下载完成" }
+        val content = requireNotNull(session.library.find(download.contentId)) { desktopText("error.localWorkMissing") }
+        require(session.downloadStore.find(download.contentId, download.chapter)?.isComplete == true) { desktopText("error.downloadIncomplete") }
         mutableState.update { it.copy(content = content) }
         readOnIo(download.chapter)
     }
@@ -887,7 +938,7 @@ class DesktopController(val session: DesktopSession) {
     private suspend fun readOnIo(chapter: SourceChapter? = null, startAtEnd: Boolean = false,
         bookmark: DesktopBookmark? = null) {
         val content = requireNotNull(state.value.content)
-        val chapters = requireNotNull(content.chapters) { "没有可阅读章节" }
+        val chapters = requireNotNull(content.chapters) { desktopText("error.noChapters") }
         val progress = session.library.progress(content.id)
         val restoredId = progress?.let { recoverHistoryChapterId(false, it.chapterId, it.parentChapterId,
             it.percent, chapters.map { c -> c.id }) ?: it.chapterId }
@@ -898,12 +949,12 @@ class DesktopController(val session: DesktopSession) {
             nextChapter?.takeIf { it.first == selected.id }?.second.also { nextChapter = null }
         }
             ?: session.chapterPages(content.id, selected)
-        require(pages.isNotEmpty()) { "此章节没有页面" }
+        require(pages.isNotEmpty()) { desktopText("error.noPages") }
         val bookmarkedIndex = bookmark?.let { saved ->
             require(saved.contentId == content.id && saved.chapterId == selected.id)
             pages.indexOfFirst { it.id == saved.pageId }.takeIf { it >= 0 }
                 ?: saved.page.takeIf { it in pages.indices }
-                ?: error("书签页面已不存在")
+                ?: error(desktopText("error.bookmarkPageMissing"))
         }
         val index = bookmarkedIndex ?: if (startAtEnd) pages.lastIndex else if (chapter == null && selected.id == restoredId) {
             progress.page.coerceIn(pages.indices)
@@ -941,9 +992,9 @@ class DesktopController(val session: DesktopSession) {
     fun openBookmark(bookmark: DesktopBookmark) = action {
         val snapshot = state.value
         require(snapshot.screen == DesktopScreen.READER && snapshot.content?.id == bookmark.contentId)
-        require(snapshot.bookmarks.contains(bookmark)) { "书签已不存在" }
+        require(snapshot.bookmarks.contains(bookmark)) { desktopText("error.bookmarkMissing") }
         val chapter = snapshot.content.chapters?.firstOrNull { it.id == bookmark.chapterId }
-            ?: error("书签章节已不存在，请刷新作品详情")
+            ?: error(desktopText("error.bookmarkChapterMissing"))
         readOnIo(chapter, bookmark = bookmark)
     }
 
@@ -1063,7 +1114,7 @@ class DesktopController(val session: DesktopSession) {
                 autoScrollSpeed = settings.autoScrollSpeed, tapGrid = settings.tapGrid) != settings) {
             pageOnIo(state.value.pageIndex)
         }
-        if (!saved) mutableState.update { it.copy(error = "阅读设置已更新到内存，磁盘保存失败") }
+        if (!saved) mutableState.update { it.copy(error = desktopText("error.readerSettingsInMemory")) }
     }
 
     private fun restoredReaderSettings(): DesktopReaderSettings {
@@ -1129,13 +1180,13 @@ class DesktopController(val session: DesktopSession) {
     /** Downloads and installs the official program a super-resolution model needs. */
     fun installUpscaler(tool: org.skepsun.kototoro.desktop.runtime.DesktopUpscaleTool) = action {
         session.superResolution.install(tool)
-        mutableState.update { it.copy(message = "已安装 ${tool.title}") }
+        mutableState.update { it.copy(message = desktopText("extensions.installedTool", tool.title)) }
         reloadUpscaledPage()
     }
 
     fun installUpscalerArchive(tool: org.skepsun.kototoro.desktop.runtime.DesktopUpscaleTool, archive: Path) = action {
         session.superResolution.installArchive(tool, archive)
-        mutableState.update { it.copy(message = "已安装 ${tool.title}") }
+        mutableState.update { it.copy(message = desktopText("extensions.installedTool", tool.title)) }
         reloadUpscaledPage()
     }
 
@@ -1237,7 +1288,7 @@ class DesktopController(val session: DesktopSession) {
     }
 
     fun preferences() = navigate {
-        val source = requireNotNull(state.value.selectedSource) { "请先选择来源" }
+        val source = requireNotNull(state.value.selectedSource) { desktopText("extensions.selectSourceFirst") }
         val screen = session.sources.getPreferences(source.source.name)
         mutableState.update { it.copy(screen = DesktopScreen.PREFERENCES, preferences = screen) }
     }
@@ -1245,7 +1296,7 @@ class DesktopController(val session: DesktopSession) {
     fun updatePreference(node: SourcePreferenceNode, value: SourcePreferenceValue) = action {
         val screen = requireNotNull(state.value.preferences)
         node.actionUrl?.let { url ->
-            val browser = requireNotNull(session.browser) { "请先配置 WebView2 浏览器" }
+            val browser = requireNotNull(session.browser) { desktopText("error.webView2Required") }
             browser.openUrl(url)
             browser.showWindow()
             mutableState.update { it.copy(screen = DesktopScreen.BROWSER) }
@@ -1253,9 +1304,9 @@ class DesktopController(val session: DesktopSession) {
         }
         val result = session.sources.updatePreference(screen.source.name, screen.revision, node.id, value)
         val message = when (result.status) {
-            SourcePreferenceUpdateStatus.ACCEPTED -> "设置已保存"
-            SourcePreferenceUpdateStatus.REJECTED -> "来源拒绝了这项设置"
-            SourcePreferenceUpdateStatus.PERSISTENCE_FAILED -> "设置已更新到内存，磁盘保存失败"
+            SourcePreferenceUpdateStatus.ACCEPTED -> desktopText("settings.saved")
+            SourcePreferenceUpdateStatus.REJECTED -> desktopText("settings.rejected")
+            SourcePreferenceUpdateStatus.PERSISTENCE_FAILED -> desktopText("settings.persistedInMemory")
         }
         mutableState.update { it.copy(preferences = result.screen, message = message) }
     }
@@ -1322,7 +1373,7 @@ class DesktopController(val session: DesktopSession) {
                 } else null
                 mutableState.update { it.copy(error = diagnostic ?: error.message ?: error.javaClass.simpleName) }
             } catch (error: LinkageError) {
-                mutableState.update { it.copy(error = "来源 API 不兼容：${error.message ?: error.javaClass.simpleName}") }
+                mutableState.update { it.copy(error = desktopText("error.sourceApiIncompatible", error.message ?: error.javaClass.simpleName)) }
             }
         }
     }

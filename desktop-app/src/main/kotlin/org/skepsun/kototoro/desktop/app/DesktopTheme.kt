@@ -17,8 +17,25 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.theme.*
 
-enum class DesktopAppearance(val title: String) { SYSTEM("跟随系统"), LIGHT("浅色"), DARK("深色") }
-enum class DesktopInterfaceStyle(val title: String) { MATERIAL("Material 3"), IOS("iOS 玻璃") }
+/** The label is resolved per access, so a language switch relabels the buttons without a restart. */
+enum class DesktopAppearance {
+    SYSTEM, LIGHT, DARK;
+
+    val title: String get() = when (this) {
+        SYSTEM -> desktopText("appearance.system")
+        LIGHT -> desktopText("appearance.light")
+        DARK -> desktopText("appearance.dark")
+    }
+}
+
+enum class DesktopInterfaceStyle {
+    MATERIAL, IOS;
+
+    val title: String get() = when (this) {
+        MATERIAL -> desktopText("interfaceStyle.material")
+        IOS -> desktopText("interfaceStyle.glass")
+    }
+}
 
 internal val LocalDesktopInterfaceStyle = staticCompositionLocalOf { DesktopInterfaceStyle.MATERIAL }
 

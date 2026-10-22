@@ -32,14 +32,14 @@ internal object DesktopImageDecoder {
                         reader.input = input
                         val width = reader.getWidth(0)
                         val height = reader.getHeight(0)
-                        require(width > 0 && height > 0) { "页面尺寸无效" }
+                        require(width > 0 && height > 0) { desktopText("error.imageSizeInvalid") }
                         return DesktopReaderImage(path, width, height, true)
                     }
                 } finally { reader.dispose() }
             }
         }
         return Image.makeFromEncoded(Files.readAllBytes(path)).use {
-            require(it.width > 0 && it.height > 0) { "页面尺寸无效" }
+            require(it.width > 0 && it.height > 0) { desktopText("error.imageSizeInvalid") }
             DesktopReaderImage(path, it.width, it.height)
         }
     }
@@ -82,9 +82,13 @@ internal object DesktopImageDecoder {
             val bitmap = Bitmap()
             try {
                 check(bitmap.allocPixels(image.imageInfo.withWidthHeight(size.width, size.height)
-                    .withColorType(ColorType.N32).withColorAlphaType(ColorAlphaType.PREMUL))) { "页面像素分配失败" }
+                    .withColorType(ColorType.N32).withColorAlphaType(ColorAlphaType.PREMUL))) {
+                    desktopText("error.imageAllocationFailed")
+                }
                 requireNotNull(bitmap.peekPixels()).use { pixels ->
-                    check(image.scalePixels(pixels, SamplingMode.LINEAR, false)) { "页面解码失败" }
+                    check(image.scalePixels(pixels, SamplingMode.LINEAR, false)) {
+                        desktopText("error.imageDecodeFailed")
+                    }
                 }
                 context.ensureActive()
                 bitmap.setImmutable()

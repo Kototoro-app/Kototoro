@@ -15,42 +15,42 @@ internal object DesktopSourceLabels {
     }
 
     fun contentType(name: String) = when (name) {
-        "MANGA" -> "漫画"
-        "MANHWA" -> "韩漫"
-        "MANHUA" -> "国漫"
-        "HENTAI_MANGA" -> "成人漫画"
-        "HENTAI_NOVEL" -> "成人小说"
-        "HENTAI_VIDEO" -> "成人视频"
-        "COMICS" -> "欧美漫画"
-        "VIDEO" -> "视频"
-        "NOVEL" -> "小说"
-        "ONE_SHOT" -> "短篇"
-        "DOUJINSHI" -> "同人志"
-        "IMAGE_SET" -> "图集"
-        "ARTIST_CG" -> "画师 CG"
-        "GAME_CG" -> "游戏 CG"
-        else -> "其他"
+        "MANGA" -> desktopText("label.contentType.MANGA")
+        "MANHWA" -> desktopText("label.contentType.MANHWA")
+        "MANHUA" -> desktopText("label.contentType.MANHUA")
+        "HENTAI_MANGA" -> desktopText("label.contentType.HENTAI_MANGA")
+        "HENTAI_NOVEL" -> desktopText("label.contentType.HENTAI_NOVEL")
+        "HENTAI_VIDEO" -> desktopText("label.contentType.HENTAI_VIDEO")
+        "COMICS" -> desktopText("label.contentType.COMICS")
+        "VIDEO" -> desktopText("label.contentType.VIDEO")
+        "NOVEL" -> desktopText("label.contentType.NOVEL")
+        "ONE_SHOT" -> desktopText("label.contentType.ONE_SHOT")
+        "DOUJINSHI" -> desktopText("label.contentType.DOUJINSHI")
+        "IMAGE_SET" -> desktopText("label.contentType.IMAGE_SET")
+        "ARTIST_CG" -> desktopText("label.contentType.ARTIST_CG")
+        "GAME_CG" -> desktopText("label.contentType.GAME_CG")
+        else -> desktopText("label.contentType.OTHER")
     }
 
     fun sortOrder(name: String) = when (name) {
-        "UPDATED" -> "最近更新"
-        "UPDATED_ASC" -> "最早更新"
-        "POPULARITY" -> "人气"
-        "POPULARITY_ASC" -> "人气（升序）"
-        "POPULARITY_HOUR" -> "人气 · 1 小时"
-        "POPULARITY_TODAY" -> "人气 · 今日"
-        "POPULARITY_WEEK" -> "人气 · 本周"
-        "POPULARITY_MONTH" -> "人气 · 本月"
-        "POPULARITY_YEAR" -> "人气 · 本年"
-        "RATING" -> "评分"
-        "RATING_ASC" -> "评分（升序）"
-        "NEWEST" -> "最新发布"
-        "NEWEST_ASC" -> "最早发布"
-        "ALPHABETICAL" -> "名称 A–Z"
-        "ALPHABETICAL_DESC" -> "名称 Z–A"
-        "ADDED" -> "最近添加"
-        "ADDED_ASC" -> "最早添加"
-        "RELEVANCE" -> "相关度"
+        "UPDATED" -> desktopText("label.sort.UPDATED")
+        "UPDATED_ASC" -> desktopText("label.sort.UPDATED_ASC")
+        "POPULARITY" -> desktopText("label.sort.POPULARITY")
+        "POPULARITY_ASC" -> desktopText("label.sort.POPULARITY_ASC")
+        "POPULARITY_HOUR" -> desktopText("label.sort.POPULARITY_HOUR")
+        "POPULARITY_TODAY" -> desktopText("label.sort.POPULARITY_TODAY")
+        "POPULARITY_WEEK" -> desktopText("label.sort.POPULARITY_WEEK")
+        "POPULARITY_MONTH" -> desktopText("label.sort.POPULARITY_MONTH")
+        "POPULARITY_YEAR" -> desktopText("label.sort.POPULARITY_YEAR")
+        "RATING" -> desktopText("label.sort.RATING")
+        "RATING_ASC" -> desktopText("label.sort.RATING_ASC")
+        "NEWEST" -> desktopText("label.sort.NEWEST")
+        "NEWEST_ASC" -> desktopText("label.sort.NEWEST_ASC")
+        "ALPHABETICAL" -> desktopText("label.sort.ALPHABETICAL")
+        "ALPHABETICAL_DESC" -> desktopText("label.sort.ALPHABETICAL_DESC")
+        "ADDED" -> desktopText("label.sort.ADDED")
+        "ADDED_ASC" -> desktopText("label.sort.ADDED_ASC")
+        "RELEVANCE" -> desktopText("label.sort.RELEVANCE")
         else -> name
     }
 }

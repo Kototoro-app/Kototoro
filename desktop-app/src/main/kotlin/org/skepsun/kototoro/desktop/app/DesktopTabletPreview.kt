@@ -28,25 +28,25 @@ internal fun DesktopTabletPreview(controller: DesktopController, state: DesktopA
             description = content.description.orEmpty().replace(Regex("<[^>]*>"), "").trim(),
             tags = content.tags.map { it.title },
             ratingText = content.rating.takeIf { it > 0f }?.let { String.format(Locale.getDefault(), "%.1f", it * 10f) },
-            chapterCountText = if (count > 0) "$count 章节" else null,
+            chapterCountText = if (count > 0) desktopText("reader.chaptersCount", count) else null,
             statusLabel = content.state?.let { when (it) {
-                "ONGOING" -> "连载中"
-                "FINISHED" -> "已完结"
-                "ABANDONED" -> "已停更"
-                "PAUSED" -> "暂停更新"
+                "ONGOING" -> desktopText("details.status.ongoing")
+                "FINISHED" -> desktopText("details.status.finished")
+                "ABANDONED" -> desktopText("details.status.abandoned")
+                "PAUSED" -> desktopText("details.status.paused")
                 else -> null
             } },
             chapterSections = buildList {
-                add(TabletPreviewSection(if (groups.isSingleGroup) "章节" else "最新章节",
-                    chapters.map { it.previewData() }, if (count > chapters.size) "共 $count 章节" else null))
-                if (!groups.isSingleGroup) add(TabletPreviewSection("最初章节", groups.earliest.map { it.previewData() }))
+                add(TabletPreviewSection(if (groups.isSingleGroup) desktopText("reader.panel.chapters") else desktopText("details.latestChapters"),
+                    chapters.map { it.previewData() }, if (count > chapters.size) desktopText("common.chaptersTotal", count) else null))
+                if (!groups.isSingleGroup) add(TabletPreviewSection(desktopText("details.firstChapters"), groups.earliest.map { it.previewData() }))
             },
         )
     }
     TabletPreviewContent(
         data = data,
-        labels = TabletPreviewLabels("关闭", if (video) "播放" else "阅读", "详情",
-            if (state.isFavourite) "已收藏" else "加入收藏", "详情加载失败", "重试"),
+        labels = TabletPreviewLabels(desktopText("common.close"), if (video) desktopText("details.play") else desktopText("screens.reader"), desktopText("details.info"),
+            if (state.isFavourite) desktopText("details.favourited") else desktopText("details.favourite"), desktopText("details.loadFailed"), desktopText("common.retry")),
         cover = { modifier -> DesktopCover(content, controller.session.covers, modifier, large = true) },
         icon = { icon -> when (icon) {
             TabletPreviewIcon.CLOSE -> painterResource("icons/ic_tts_close.svg")
@@ -62,7 +62,7 @@ internal fun DesktopTabletPreview(controller: DesktopController, state: DesktopA
 }
 
 private fun SourceChapter.previewData(): TabletPreviewChapter = TabletPreviewChapter(
-    id = id, title = title?.takeIf(String::isNotBlank) ?: "第 $number 章",
+    id = id, title = title?.takeIf(String::isNotBlank) ?: desktopText("common.chapterTitle", number),
     metadata = buildList {
         if (number > 0f) add("#$number")
         (scanlator?.takeIf(String::isNotBlank) ?: branch?.takeIf(String::isNotBlank))?.let(::add)

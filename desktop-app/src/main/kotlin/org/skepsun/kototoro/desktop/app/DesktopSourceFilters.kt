@@ -47,7 +47,7 @@ internal val DesktopSourceTagEntries: List<SourceTag> = SourceTag.quickFilterEnt
 }
 
 internal fun SourceTag.desktopTitle(): String = when (this) {
-    SourceTag.BUILTIN -> "内置"
+    SourceTag.BUILTIN -> desktopText("source.builtin")
     SourceTag.MIHON -> "Mihon"
     SourceTag.ANIYOMI -> "Aniyomi"
     SourceTag.TSUNDOKU -> "Tsundoku"
@@ -62,10 +62,10 @@ internal val DesktopContentTabs: List<BrowseGroupTab> =
     listOf(BrowseGroupTab.All, BrowseGroupTab.Content, BrowseGroupTab.Novel, BrowseGroupTab.Video)
 
 internal fun BrowseGroupTab.desktopTitle(): String = when (this) {
-    BrowseGroupTab.Content -> "漫画"
-    BrowseGroupTab.Novel -> "小说"
-    BrowseGroupTab.Video -> "视频"
-    else -> "全部"
+    BrowseGroupTab.Content -> desktopText("label.contentType.MANGA")
+    BrowseGroupTab.Novel -> desktopText("label.contentType.NOVEL")
+    BrowseGroupTab.Video -> desktopText("label.contentType.VIDEO")
+    else -> desktopText("common.all")
 }
 
 private fun BrowseGroupTab.tag(): String = id
@@ -137,12 +137,12 @@ internal fun DesktopSourceFilterControls(filter: DesktopSourceFilter, sources: L
             Box {
                 IconButton({ tagMenu = true }, enabled = enabled, modifier = Modifier.testTag("$tagPrefix-source-tags")) {
                     Icon(painterResource(filter.tags.singleOrNull()?.desktopIcon() ?: "icons/ic_filter_menu.svg"),
-                        contentDescription = "源类型", modifier = Modifier.size(20.dp),
+                        contentDescription = desktopText("source.type"), modifier = Modifier.size(20.dp),
                         tint = if (filter.tags.isNotEmpty()) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 DropdownMenu(tagMenu && enabled, { tagMenu = false }) {
-                    DropdownMenuItem({ Text("全部") }, onClick = { tagMenu = false; onChange(filter.toggle(null)) },
+                    DropdownMenuItem({ Text(desktopText("common.all")) }, onClick = { tagMenu = false; onChange(filter.toggle(null)) },
                         leadingIcon = { Checkbox(filter.tags.isEmpty(), onCheckedChange = null) },
                         modifier = Modifier.testTag("$tagPrefix-source-tag:all"))
                     SourceTag.menuOrder(DesktopSourceTagEntries, filter.tags).forEach { tag ->

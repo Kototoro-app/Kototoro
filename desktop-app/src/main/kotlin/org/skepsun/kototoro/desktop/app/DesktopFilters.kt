@@ -35,7 +35,7 @@ internal fun DesktopFilters(controller: DesktopController, state: DesktopAppStat
     // Keep the draft in composition while exposing the main window's challenge/cancellation controls.
     if (state.busy) return
     AlertDialog(onDismissRequest = { if (!state.busy) controller.dismissFilters() },
-        modifier = Modifier.width(580.dp).testTag("filter-dialog"), title = { Text("来源筛选") },
+        modifier = Modifier.width(580.dp).testTag("filter-dialog"), title = { Text(desktopText("filters.title")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (state.error != null) Text(state.error, color = MaterialTheme.colors.error)
@@ -46,17 +46,17 @@ internal fun DesktopFilters(controller: DesktopController, state: DesktopAppStat
                         }
                     }
                 }
-                if (rows.isEmpty()) Text("此来源没有筛选项")
+                if (rows.isEmpty()) Text(desktopText("filters.empty"))
             }
         }, buttons = {
             Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton({ draft.clear(); draft.putAll(defaults) }, enabled = !state.busy,
-                    modifier = Modifier.testTag("filter-reset")) { Text("恢复默认") }
+                    modifier = Modifier.testTag("filter-reset")) { Text(desktopText("filters.restoreDefaults")) }
                 Spacer(Modifier.weight(1f))
                 TextButton({ controller.dismissFilters() }, enabled = !state.busy,
-                    modifier = Modifier.testTag("filter-cancel")) { Text("取消") }
+                    modifier = Modifier.testTag("filter-cancel")) { Text(desktopText("common.cancel")) }
                 Button({ controller.applyFilters(query, draft.map { SourceFilterChange(it.key, it.value) }) },
-                    enabled = !state.busy, modifier = Modifier.testTag("filter-apply")) { Text("应用") }
+                    enabled = !state.busy, modifier = Modifier.testTag("filter-apply")) { Text(desktopText("common.apply")) }
             }
         })
 }
@@ -81,9 +81,9 @@ private fun FilterControl(node: SourceFilterNode, value: SourceFilterValue?, ena
                     SourceTriState.entries[(tri.ordinal + 1) % SourceTriState.entries.size])) },
                     enabled = enabled, modifier = Modifier.testTag(tag)) {
                     Text(when (tri) {
-                        SourceTriState.IGNORE -> "不限"
-                        SourceTriState.INCLUDE -> "包含"
-                        SourceTriState.EXCLUDE -> "排除"
+                        SourceTriState.IGNORE -> desktopText("filters.triStateIgnore")
+                        SourceTriState.INCLUDE -> desktopText("filters.triStateInclude")
+                        SourceTriState.EXCLUDE -> desktopText("filters.triStateExclude")
                     })
                 }
             }
@@ -101,7 +101,7 @@ private fun FilterControl(node: SourceFilterNode, value: SourceFilterValue?, ena
                     Box(Modifier.weight(1f)) {
                         OutlinedButton({ expanded = true }, enabled = enabled && node.values.isNotEmpty(),
                             modifier = Modifier.fillMaxWidth().testTag(tag)) {
-                            Text(index?.let { node.values.getOrNull(it) } ?: "未选择")
+                            Text(index?.let { node.values.getOrNull(it) } ?: desktopText("filters.unselected"))
                         }
                         DropdownMenu(expanded && enabled, { expanded = false }) {
                             node.values.forEachIndexed { position, label ->
@@ -115,14 +115,14 @@ private fun FilterControl(node: SourceFilterNode, value: SourceFilterValue?, ena
                     if (node.kind == SourceFilterKind.SORT) {
                         OutlinedButton({ sort?.let { onChange(it.copy(ascending = !it.ascending)) } },
                             enabled = enabled && sort != null, modifier = Modifier.testTag("$tag:direction")) {
-                            Text(if (sort?.ascending == true) "升序" else "降序")
+                            Text(if (sort?.ascending == true) desktopText("filters.ascending") else desktopText("filters.descending"))
                         }
                         TextButton({ onChange(null) }, enabled = enabled && sort != null,
-                            modifier = Modifier.testTag("$tag:clear")) { Text("清除") }
+                            modifier = Modifier.testTag("$tag:clear")) { Text(desktopText("common.clear")) }
                     }
                 }
             }
         }
-        SourceFilterKind.UNSUPPORTED -> Text("${node.name}：暂不支持此控件", color = MaterialTheme.colors.onSurface.copy(alpha = .6f))
+        SourceFilterKind.UNSUPPORTED -> Text(desktopText("filters.unsupported", node.name), color = MaterialTheme.colors.onSurface.copy(alpha = .6f))
     }
 }

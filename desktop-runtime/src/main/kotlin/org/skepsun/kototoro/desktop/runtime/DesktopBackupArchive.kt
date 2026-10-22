@@ -33,7 +33,7 @@ class DesktopBackupArchive private constructor(
     private val closed = AtomicBoolean()
 
     override suspend fun <T> rows(section: BackupSection, serializer: DeserializationStrategy<T>, consume: suspend (T) -> Unit) {
-        check(!closed.get()) { "备份预览已经关闭，请重新选择文件" }
+        check(!closed.get()) { DesktopRuntimeStrings.text("runtime.backup.previewClosed", "the preview was closed; choose the file again") }
         val entry = zip.entries().asSequence().firstOrNull { BackupSection.of(it.name) == section } ?: return
         zip.getInputStream(entry).use { input ->
             for (row in DesktopBackupJson.decodeToSequence(input, serializer, DecodeSequenceMode.ARRAY_WRAPPED)) {
@@ -65,7 +65,7 @@ class DesktopBackupArchive private constructor(
                         val read = source.read(buffer)
                         if (read < 0) break
                         copied += read
-                        require(copied <= MAX_ARCHIVE_BYTES) { "备份压缩文件超过 512 MiB 限制" }
+                        require(copied <= MAX_ARCHIVE_BYTES) { DesktopRuntimeStrings.text("runtime.backup.archiveTooLarge", "the backup archive exceeds the 512 MiB limit") }
                         output.write(buffer, 0, read)
                     }
                 } }
@@ -78,27 +78,27 @@ class DesktopBackupArchive private constructor(
                         val entry = input.nextEntry ?: break
                         require(!entry.isDirectory && entry.name.length <= 128 &&
                             '/' !in entry.name && '\\' !in entry.name && names.size < 256 &&
-                            names.add(entry.name.lowercase())) { "备份包含重复或无效的节名" }
+                            names.add(entry.name.lowercase())) { DesktopRuntimeStrings.text("runtime.backup.invalidSections", "the backup has duplicate or invalid section names") }
                         while (true) {
                             currentCoroutineContext().ensureActive()
                             val read = input.read(buffer)
                             if (read < 0) break
                             expanded += read
-                            require(expanded <= MAX_EXPANDED_BYTES) { "备份解压数据超过 1 GiB 限制" }
+                            require(expanded <= MAX_EXPANDED_BYTES) { DesktopRuntimeStrings.text("runtime.backup.expandedTooLarge", "the expanded backup exceeds the 1 GiB limit") }
                         }
                         input.closeEntry()
                     }
                 }
                 opened = ZipFile(snapshot.toFile())
                 val centralNames = opened.entries().asSequence().map { it.name.lowercase() }.toList()
-                require(centralNames.size == names.size && centralNames.toSet() == names) { "备份 ZIP 目录与内容不一致" }
+                require(centralNames.size == names.size && centralNames.toSet() == names) { DesktopRuntimeStrings.text("runtime.backup.directoryMismatch", "the backup ZIP's directory does not match its contents") }
                 val indexEntry = opened.entries().asSequence().singleOrNull {
                     BackupSection.of(it.name) == BackupSection.INDEX
-                } ?: throw IllegalArgumentException("所选文件没有 Kototoro/Kotatsu 备份索引")
+                } ?: throw IllegalArgumentException(DesktopRuntimeStrings.text("runtime.backup.noIndex", "the chosen file has no Kototoro/Kotatsu backup index"))
                 val indices = opened.getInputStream(indexEntry).use {
                     DesktopBackupJson.decodeToSequence(it, BackupIndex.serializer(), DecodeSequenceMode.ARRAY_WRAPPED).take(2).toList()
                 }
-                require(indices.size == 1) { "备份索引数量无效" }
+                require(indices.size == 1) { DesktopRuntimeStrings.text("runtime.backup.invalidIndexCount", "the backup index count is invalid") }
                 val index = indices.single()
                 LibraryBackup.requireSupported(index)
                 val archive = DesktopBackupArchive(snapshot, opened, path.fileName.toString(), index, emptyMap(), emptyList())

@@ -55,7 +55,7 @@ internal fun DesktopDetailsChapters(
     val controls: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("章节 · ${list.count}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                Text(desktopText("details.chapters", list.count), modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                 IconButton({
                     ui.query = ""; ui.targetChapterId = current?.id; ui.locateRequest++
                     controller.selectChapterBranch(current?.branch)
@@ -74,7 +74,7 @@ internal fun DesktopDetailsChapters(
             SharedNovelReaderSearchField(ui.query, { ui.query = it }, AndroidStrings["search_chapters"],
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 clearContentDescription = AndroidStrings["clear"], queryTag = "details-chapter-query")
-            ChapterBranchChips(list.options, list.selectedBranch, title = { it ?: "默认" },
+            ChapterBranchChips(list.options, list.selectedBranch, title = { it ?: desktopText("details.chapterBranchDefault") },
                 onSelect = controller::selectChapterBranch, enabled = enabled,
                 chipModifier = { Modifier.testTag("chapter-branch:${it.name ?: "default"}") })
         }
