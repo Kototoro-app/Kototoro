@@ -1015,14 +1015,18 @@ struct SourceDetailsView: View {
             if let details = model.details, let target = primaryTarget { openChapter(target, from: details) }
         } label: {
             if identifier == "details.header.read" {
-                VStack(spacing: 3) {
+                // One line: stacking the chapter under the title made this button taller than the
+                // options circle beside it, so the pair read as two different thicknesses. The
+                // chapter keeps its place inline and truncates instead of wrapping.
+                HStack(spacing: 6) {
                     Text(title).font(.headline)
                     if let chapter = resumeChapter() {
-                        Text(chapter.title).font(.caption).lineLimit(1)
+                        Text(chapter.title).font(.caption).opacity(0.85)
                     }
                 }
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity, minHeight: 28, alignment: .center)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .frame(maxWidth: .infinity, minHeight: 24, alignment: .center)
             } else {
                 Label(title, systemImage: model.isVideo ? "play.fill" : "book.fill")
                     .labelStyle(.iconOnly)
