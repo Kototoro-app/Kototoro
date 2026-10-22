@@ -260,6 +260,7 @@ Edge WebView2 Runtime。MSI 使用当前用户安装权限，将程序放在 `%L
 ```powershell
 ./Kototoro.exe --data-dir "E:/tmp/独立 preview"
 ./Kototoro.exe --data-dir "E:/tmp/runtime-check" --check-runtime "E:/tmp/runtime-check.properties"
+./Kototoro.exe --check-update "E:/tmp/update-check.properties"
 ```
 
 运行时检查必须提供独立数据目录，执行本地 Room/备份格式/Skia/浏览器检查，不请求来源网站。
@@ -354,6 +355,14 @@ ZIP 必须包含 `Kototoro.exe`（MSI 校验复合文档头），校验通过才
 
 “自动下载”和“退出时安装”可分别开启；从构建目录（Gradle/IDE）启动的副本没有可替换的镜像，面板会说明
 不支持自更新。签名校验（Authenticode）与 S3/代理镜像仍待接入。
+
+安装好的镜像可以用 `--check-update <文件>` 自查而不用打开窗口：报告写入
+`version.name/package/channel/parsed`、`install.supported/kind/root/executable`、`channel.newest`（该频道
+当前发布的最新版本与 tag）和 `status`——`available`（有可安装的新版本，附带版本、包名、大小、SHA-256 地址）、
+`upToDate`（发布的就是本副本或更旧）、`unpublished`（该频道还没有可安装的发布）、`failed`（问不到，带
+`error`）。退出码 0 表示问到了发布频道，1 表示问不到或本副本没有版本标记。`--channel` 可临时改看另一个
+频道，此时 `channel.newest` 会如实说明那边发布了什么、是否比本副本新。打包脚本与 Windows CI 用它核对
+镜像自称的版本/频道与发布资产名一致，且该副本能认出自己的安装布局。
 
 ## 验证
 
