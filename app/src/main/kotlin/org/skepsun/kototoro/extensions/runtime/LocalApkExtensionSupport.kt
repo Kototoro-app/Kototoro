@@ -10,26 +10,23 @@ object LocalApkExtensionSupport {
     private const val EXTENSIONS_DIR = "extensions"
     private const val LOAD_CACHE_DIR = "extension_apk_cache"
 
+    private val archiveIndexes = LocalArchivePackageIndex()
+
     fun getManagedExtensionsDir(context: Context, ecosystem: String): File {
         return File(File(context.filesDir, EXTENSIONS_DIR), ecosystem).apply { mkdirs() }
     }
 
     fun findLocalApkFiles(context: Context, ecosystem: String): List<File> {
-        val root = getManagedExtensionsDir(context, ecosystem)
-        val directApks = root.listFiles()
-            ?.filter { it.isFile && it.extension.equals("apk", ignoreCase = true) }
-            .orEmpty()
-        val nestedApks = root.listFiles()
-            ?.filter { it.isDirectory }
-            ?.mapNotNull { dir ->
-                val preferred = File(dir, "${dir.name}.apk")
-                when {
-                    preferred.isFile -> preferred
-                    else -> dir.listFiles()
-                        ?.firstOrNull { it.isFile && it.extension.equals("apk", ignoreCase = true) }
-                }
+        val children = getManagedExtensionsDir(context, ecosystem).listFiles().orEmpty()
+        val directApks = children.filter { it.isFile && it.extension.equals("apk", ignoreCase = true) }
+        val nestedApks = children.filter { it.isDirectory }.mapNotNull { dir ->
+            val preferred = File(dir, "${dir.name}.apk")
+            when {
+                preferred.isFile -> preferred
+                else -> dir.listFiles()
+                    ?.firstOrNull { it.isFile && it.extension.equals("apk", ignoreCase = true) }
             }
-            .orEmpty()
+        }
         return (directApks + nestedApks).distinctBy { it.absolutePath }
     }
 
@@ -38,9 +35,7 @@ object LocalApkExtensionSupport {
         pkgManager: PackageManager,
         ecosystem: String,
     ): List<PackageInfo> {
-        return findLocalApkFiles(context, ecosystem).mapNotNull { apkFile ->
-            ExternalExtensionLoaderSupport.getPackageArchiveInfoOrNull(pkgManager, apkFile)
-        }
+        return localArchiveEntries(context, pkgManager, ecosystem).map { it.second }
     }
 
     fun getLocalArchivePackageInfoOrNull(
@@ -49,9 +44,38 @@ object LocalApkExtensionSupport {
         ecosystem: String,
         packageName: String,
     ): PackageInfo? {
-        return getLocalArchivePackages(context, pkgManager, ecosystem)
-            .firstOrNull { it.packageName == packageName }
+        val root = getManagedExtensionsDir(context, ecosystem)
+        // Managed APKs are stored as `<package>.apk` or `<package>/<package>.apk`, so the usual lookup
+        // needs a single archive parse instead of a walk over every archive of the ecosystem.
+        directApkCandidates(root, packageName).firstNotNullOfOrNull { apkFile ->
+            when {
+                !apkFile.isFile -> null
+                else -> ExternalExtensionLoaderSupport.getPackageArchiveInfoOrNull(pkgManager, apkFile)
+                    ?.takeIf { it.packageName == packageName }
+            }
+        }?.let { return it }
+        // Unusual file layouts still resolve, but the directory is parsed once per change, not per call.
+        return localArchiveEntries(context, pkgManager, ecosystem)
+            .firstOrNull { entry -> entry.second.packageName == packageName }
+            ?.second
     }
+
+    private fun localArchiveEntries(
+        context: Context,
+        pkgManager: PackageManager,
+        ecosystem: String,
+    ): List<Pair<File, PackageInfo>> {
+        return archiveIndexes.entries(
+            key = ecosystem,
+            apkFiles = findLocalApkFiles(context, ecosystem),
+            parse = { apkFile -> ExternalExtensionLoaderSupport.getPackageArchiveInfoOrNull(pkgManager, apkFile) },
+        )
+    }
+
+    internal fun directApkCandidates(root: File, packageName: String): List<File> = listOf(
+        File(File(root, packageName), "$packageName.apk"),
+        File(root, "$packageName.apk"),
+    )
 
     fun prepareLoadableApkPath(
         context: Context,
