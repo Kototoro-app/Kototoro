@@ -66,7 +66,8 @@ internal object DesktopLanguages {
  *
  * Lookups are resolved per call rather than composed into a bundle: [tag] is snapshot state, so every composable that
  * shows text is invalidated when the language changes, and a language switch needs no restart. A missing key returns
- * the key itself, which [DesktopStringsTest] turns into a build failure instead of a blank button at runtime.
+ * the key itself at runtime; `:desktop-app:verifyDesktopStrings` rejects one at build time, together with a key no
+ * screen uses and a translation that misses a key of the base catalog.
  */
 internal object DesktopStrings {
     private val catalogs = ConcurrentHashMap<String, Properties>()

@@ -162,6 +162,8 @@ jobs:
             "-Dorg.gradle.java.installations.paths=$env:JAVA_HOME_21_X64,$env:JAVA_HOME",
             '-Dorg.gradle.jvmargs=-Xmx3g', '-Pkotlin.daemon.jvmargs=-Xmx3g', '--max-workers=2',
             '--no-configuration-cache', '--no-daemon', '--console=plain', '--stacktrace')
+          # Compile the desktop tests too: they share these sources and nothing else builds them on Windows.
+          $arguments += ':desktop-app:compileTestKotlin'
           if ($env:CHANNEL -eq 'release') {
             $wixBin = @("$env:WIX", "$env:WIX/bin") | Where-Object {
               $_ -and (Test-Path -LiteralPath "$_/dark.exe")
