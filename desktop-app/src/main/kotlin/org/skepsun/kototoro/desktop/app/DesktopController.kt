@@ -1368,6 +1368,31 @@ class DesktopController(val session: DesktopSession) {
         }) }
     }
 
+    /**
+     * Android's chapter bookmark command in the details batch bar. Removing takes every bookmark of the
+     * selected chapters; adding only touches chapters that hold none, so a saved page is never widened.
+     */
+    fun toggleChapterBookmarks(chapters: List<SourceChapter>, remove: Boolean) = action {
+        val content = requireNotNull(state.value.content)
+        val contentId = content.id
+        val stored = session.library.bookmarks(contentId)
+        if (remove) {
+            val chapterIds = chapters.mapTo(HashSet()) { it.id }
+            for (bookmark in stored.filter { it.chapterId in chapterIds }) {
+                runCatching { session.library.removeBookmark(content, bookmark) }
+            }
+        } else {
+            val covered = stored.mapTo(HashSet()) { it.chapterId }
+            for (chapter in chapters) {
+                if (chapter.id !in covered) runCatching { session.library.addChapterBookmark(content, chapter) }
+            }
+        }
+        val bookmarks = session.library.bookmarks(contentId)
+        mutableState.update { it.copy(bookmarks = bookmarks, novel = it.novel?.let { novel ->
+            novel.copy(bookmarkBlocks = novelBookmarkBlocks(content, novel.chapter, novel.blocks, bookmarks))
+        }) }
+    }
+
     fun turnPage(forward: Boolean) = action {
         val snapshot = state.value
         val continuousMode = snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS

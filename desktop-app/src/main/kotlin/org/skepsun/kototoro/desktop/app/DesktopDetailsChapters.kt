@@ -87,6 +87,8 @@ internal fun DesktopDetailsChapters(
     }
     val selectedChapters = ui.selection.resolve(visible)
     val selectedDownloaded = selectedChapters.count { chapter -> downloaded.any { DesktopDownloadStore.sameChapter(it, chapter) } }
+    // Android flips the command once every selected chapter already holds a bookmark.
+    val selectedBookmarked = selectedChapters.isNotEmpty() && selectedChapters.all { it.id in bookmarked }
     val pagesKind = DesktopReaderKind.of(state.content) == DesktopReaderKind.PAGES
     val controls: @Composable () -> Unit = {        Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -142,9 +144,11 @@ internal fun DesktopDetailsChapters(
                     visible = visible,
                     downloadedCount = selectedDownloaded,
                     canDownload = pagesKind,
+                    removeBookmarks = selectedBookmarked,
                     onSelectAll = { ui.selection = ui.selection.withAll(visible) },
                     onClear = { ui.selection = DesktopChapterSelection() },
                     onDownload = { controller.downloadChapters(selectedChapters) },
+                    onBookmark = { controller.toggleChapterBookmarks(selectedChapters, selectedBookmarked) },
                     onMarkRead = { controller.markChaptersRead(selectedChapters) },
                     onDelete = { controller.deleteChapterDownloads(selectedChapters) },
                 )
@@ -222,9 +226,11 @@ private fun DesktopChapterSelectionBar(
     visible: List<SourceChapter>,
     downloadedCount: Int,
     canDownload: Boolean,
+    removeBookmarks: Boolean,
     onSelectAll: () -> Unit,
     onClear: () -> Unit,
     onDownload: () -> Unit,
+    onBookmark: () -> Unit,
     onMarkRead: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -246,6 +252,14 @@ private fun DesktopChapterSelectionBar(
         TextButton(onDownload, enabled = hasSelection && canDownload,
             modifier = Modifier.testTag("details-selection-download")) {
             Text(AndroidStrings["download"])
+        }
+        TextButton(onBookmark, enabled = hasSelection,
+            modifier = Modifier.testTag("details-selection-bookmark")) {
+            if (removeBookmarks) {
+                Text(desktopText("details.chapterBookmarkRemove"))
+            } else {
+                Text(desktopText("details.chapterBookmarkAdd"))
+            }
         }
         TextButton(onMarkRead, enabled = hasSelection,
             modifier = Modifier.testTag("details-selection-read")) {

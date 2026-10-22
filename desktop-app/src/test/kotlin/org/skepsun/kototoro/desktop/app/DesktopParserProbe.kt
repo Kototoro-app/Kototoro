@@ -486,6 +486,31 @@ internal object DesktopParserProbe {
                     check(controller.state.value.bookmarks.isEmpty())
                     check(runBlocking { session.library.bookmarks(comic.id) }.isEmpty())
                     onNodeWithTag("details-bookmarks-grid").assertDoesNotExist()
+                    // Android's batch bookmarks a whole chapter from the chapter selection bar.
+                    onNodeWithTag("details-tab:CHAPTERS").performClick(); idle()
+                    onNodeWithTag("details-chapter-select").performClick(); idle()
+                    val chapterBookmarks = comic.chapters!!.take(2)
+                    for (chapter in chapterBookmarks) {
+                        onNodeWithTag("read-chapter:${chapter.id}").performScrollTo().performClick(); idle()
+                    }
+                    onNodeWithTag("details-selection-count").assertTextContains("已选 2 章")
+                    onNodeWithTag("details-selection-bookmark").assertTextContains("添加书签").performClick(); idle()
+                    val chapterOnly = runBlocking { session.library.bookmarks(comic.id) }
+                    check(chapterOnly.size == 2 && chapterOnly.all { it.pageId == it.chapterId }) { "$chapterOnly" }
+                    check(chapterOnly.map { it.chapterId }.toSet() == chapterBookmarks.map { it.id }.toSet())
+                    onNodeWithTag("details-tab:BOOKMARKS").performClick(); idle()
+                    onNodeWithTag("details-bookmarks-grid").assertExists()
+                    for (chapter in chapterBookmarks) {
+                        onNodeWithTag("details-bookmark:${chapter.id}").assertExists()
+                    }
+                    snapshot("details-chapter-bookmarks")
+                    // Once every selected chapter is bookmarked the same button removes them.
+                    onNodeWithTag("details-tab:CHAPTERS").performClick(); idle()
+                    onNodeWithTag("details-selection-bookmark").assertTextContains("删除书签").performClick(); idle()
+                    check(runBlocking { session.library.bookmarks(comic.id) }.isEmpty())
+                    onNodeWithTag("details-selection-clear").performClick(); idle()
+                    onNodeWithTag("details-chapter-select").performClick(); idle()
+                    onNodeWithTag("details-chapter-select").assertTextContains("选择章节")
                 } else {
                     onNodeWithTag("source:FIXTURE_KOTOTORO_ONLY").performClick(); idle()
                     check(controller.state.value.items.size == 2)

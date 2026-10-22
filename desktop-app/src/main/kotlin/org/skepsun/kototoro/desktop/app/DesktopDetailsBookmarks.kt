@@ -34,6 +34,16 @@ import org.skepsun.kototoro.desktop.runtime.DesktopBookmark
 private const val THUMBNAIL_PIXELS = 400_000L
 private const val THUMBNAIL_DIMENSION = 1024
 
+/** Android stores a chapter bookmark under the chapter id, without a page of its own. */
+private fun DesktopBookmark.isChapterOnly() = pageId == chapterId
+
+@Composable
+private fun bookmarkLabel(bookmark: DesktopBookmark): String = if (bookmark.isChapterOnly()) {
+    desktopText("details.chapterBookmarkLabel")
+} else {
+    desktopText("common.pageOf", bookmark.page + 1, (bookmark.percent * 100).toInt())
+}
+
 /**
  * Android shows the saved positions of a work as page thumbnails in a details tab. The same list here
  * opens from the details panes, so a bookmark can be revisited without entering the reader first.
@@ -75,13 +85,14 @@ internal fun DesktopDetailsBookmarks(controller: DesktopController, state: Deskt
                             Text(content.chapters?.firstOrNull { it.id == bookmark.chapterId }?.title
                                 ?: desktopText("reader.chapterMissing"), maxLines = 2,
                                 overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
-                            Text(previews[bookmark.pageId].orEmpty(), color = Muted, fontSize = 12.sp,
-                                maxLines = 3, overflow = TextOverflow.Ellipsis)
+                            if (!bookmark.isChapterOnly()) {
+                                Text(previews[bookmark.pageId].orEmpty(), color = Muted, fontSize = 12.sp,
+                                    maxLines = 3, overflow = TextOverflow.Ellipsis)
+                            }
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalAlignment = Alignment.CenterVertically) {
-                                val pages = desktopText("common.pageOf", bookmark.page + 1,
-                                    (bookmark.percent * 100).toInt())
-                                Text(pages, color = Accent, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                                Text(bookmarkLabel(bookmark), color = Accent, fontSize = 12.sp,
+                                    modifier = Modifier.weight(1f))
                                 TextButton(onClick = { controller.removeBookmark(bookmark) }, enabled = enabled,
                                     modifier = Modifier.testTag("bookmark-delete:${bookmark.pageId}")) {
                                     Text(desktopText("details.bookmarkDelete"), fontSize = 11.sp, maxLines = 1)
@@ -119,8 +130,8 @@ private fun BookmarkCard(controller: DesktopController, content: SourceContent, 
             Text(chapter?.title ?: desktopText("reader.chapterMissing"), maxLines = 2,
                 overflow = TextOverflow.Ellipsis, fontSize = 13.sp)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(desktopText("common.pageOf", bookmark.page + 1, (bookmark.percent * 100).toInt()),
-                    color = Accent, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1)
+                Text(bookmarkLabel(bookmark), color = Accent, fontSize = 12.sp,
+                    modifier = Modifier.weight(1f), maxLines = 1)
                 TextButton(onClick = { controller.removeBookmark(bookmark) }, enabled = enabled,
                     modifier = Modifier.testTag("bookmark-delete:${bookmark.pageId}")) {
                     Text(desktopText("details.bookmarkDelete"), fontSize = 11.sp, maxLines = 1)

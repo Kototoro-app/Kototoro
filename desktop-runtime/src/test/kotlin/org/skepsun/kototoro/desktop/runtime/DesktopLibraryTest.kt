@@ -180,6 +180,35 @@ class DesktopLibraryTest {
     }
 
     @Test
+    fun `chapter bookmark covers the chapter without a position and survives reopening`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = library(runtime)
+            library.addChapterBookmark(content, chapters[0])
+            val bookmark = library.bookmarks(content.id).single()
+            assertEquals(chapters[0].id, bookmark.pageId)
+            assertEquals(chapters[0].id, bookmark.chapterId)
+            assertEquals(0, bookmark.page)
+            assertEquals(0f, bookmark.percent)
+            // A second add is a no-op, so the chapter keeps one card.
+            library.addChapterBookmark(content, chapters[0])
+            assertEquals(1, library.bookmarks(content.id).size)
+            // A regenerated chapter is rejected the same way a page bookmark is.
+            assertThrows(IllegalArgumentException::class.java) {
+                runBlocking { library.addChapterBookmark(content, chapters[0].copy(url = "/changed")) }
+            }
+            assertEquals(1, library.bookmarks(content.id).size)
+        }
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = library(runtime)
+            val bookmark = library.bookmarks(content.id).single()
+            assertEquals(chapters[0].id, bookmark.pageId)
+            assertNull(library.progress(content.id))
+            library.removeBookmark(content, bookmark)
+            assertTrue(library.bookmarks(content.id).isEmpty())
+        }
+    }
+
+    @Test
     fun `library snapshot contains active memberships and history facets without deleted categories`() = runBlocking<Unit> {
         DesktopRuntime.open(directory).use { runtime ->
             val library = library(runtime)

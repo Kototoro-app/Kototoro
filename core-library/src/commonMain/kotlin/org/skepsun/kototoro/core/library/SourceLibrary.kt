@@ -99,6 +99,28 @@ class SourceLibrary(
             }
         }
 
+    /**
+     * Android's chapter card bookmark: the whole chapter at its first page, without a reading position.
+     * The chapter id doubles as the page id, so one chapter holds at most one such card.
+     */
+    suspend fun addChapterBookmark(content: SourceContent, chapter: SourceChapter) =
+        database.useWriterConnection { connection ->
+            connection.immediateTransaction {
+                val existing = database.getMangaDao().find(content.id)?.manga
+                if (existing == null) saveInTransaction(content) else requireSameIdentity(existing, content)
+                require(database.getChaptersDao().findAll(content.id).any {
+                    it.chapterId == chapter.id && it.branch == chapter.branch && it.url == chapter.url &&
+                        it.source == chapter.source.name
+                }) { "Refresh details before bookmarking a changed chapter" }
+                val dao = database.getBookmarksDao()
+                if (dao.find(content.id, chapter.id) == null) {
+                    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+                    dao.insert(BookmarkEntity(content.id, chapter.id, chapter.id, 0, 0,
+                        content.coverUrl.orEmpty(), now, 0f))
+                }
+            }
+        }
+
     private suspend fun toggleBookmarkPosition(content: SourceContent, chapter: SourceChapter, index: Int,
         pageCount: Int, pageId: Long?, scroll: Int, preview: String, part: SourceChapterPart?,
     ) = database.useWriterConnection { connection ->
