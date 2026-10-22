@@ -756,6 +756,20 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { it.copy(isFavourite = true, message = desktopText("message.addedToFavourites")) }
     }
 
+    /** Android's details heart toggles, so a work can leave the shelf from the same button that added it. */
+    fun toggleFavourite() = action {
+        val content = requireNotNull(state.value.content) { desktopText("error.workNotFound") }
+        if (state.value.isFavourite) {
+            session.library.removeFavourite(content.id)
+            mutableState.update {
+                it.copy(isFavourite = false, message = desktopText("message.removedFromFavourites"))
+            }
+        } else {
+            session.library.addFavourite(content)
+            mutableState.update { it.copy(isFavourite = true, message = desktopText("message.addedToFavourites")) }
+        }
+    }
+
     fun read(chapter: SourceChapter? = null) = navigate {
         when (DesktopReaderKind.of(state.value.content)) {
             DesktopReaderKind.NOVEL -> readNovelOnIo(chapter)

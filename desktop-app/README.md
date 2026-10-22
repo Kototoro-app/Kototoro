@@ -11,6 +11,8 @@ Windows/JVM 的 Compose Desktop 应用入口，复用 `desktop-runtime` 的共�
 2:3 竖版网格；窗口达到 1000dp 时，详情将作品信息和可搜索、排序的章节列表分成两栏，
 较窄窗口使用横向封面与操作区，章节随页面滚动。导航图标直接由 Android 现有 vector 资源生成
 SVG，构建遇到不支持的变换会失败；没有引入另一套图标依赖。
+详情页的收藏按钮与 Android 一样是双向的：未收藏时显示“加入收藏”，已收藏后变为“取消收藏”，
+点击即用共享 `SourceLibrary.removeFavourite` 把作品移出书架，提示同步更新。
 
 主页直接调用 Android / Windows 共用的 `HomeScreenLayout`、`HomeHeroPager`、`HomeHeroCardSurface`
 和 `HomeHeroStandardContent`，统一懒列表、宽屏居中、内容面板断点、双栏、快捷入口与 Hero 动画。

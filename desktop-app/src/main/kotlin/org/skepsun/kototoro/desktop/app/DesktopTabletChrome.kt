@@ -172,8 +172,10 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("preview-read")) {
                     Text(if (DesktopReaderKind.of(content) == DesktopReaderKind.VIDEO) desktopText("details.startWatching") else desktopText("details.startReading"))
                 }
-                OutlinedButton({ controller.addFavourite() }, enabled = !state.busy && !state.isFavourite,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("preview-favourite")) { Text(if (state.isFavourite) desktopText("details.favourited") else desktopText("details.favourite")) }
+                OutlinedButton({ controller.toggleFavourite() }, enabled = !state.busy,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("preview-favourite")) {
+                    Text(if (state.isFavourite) desktopText("details.unfavourite") else desktopText("details.favourite"))
+                }
             }
         }
         val metadata: @Composable (Modifier) -> Unit = { modifier ->

@@ -87,6 +87,13 @@ internal object DesktopDownloadsProbe {
                     onNodeWithTag("details-chapter-select").performClick(); idle()
                     controller.markChapterUnread(chapter); idle()
                     check(runBlocking { session.library.progress(content.id) } == null)
+                    // Android's details heart toggles: the same button must also take the work off the shelf.
+                    onNodeWithTag("preview-favourite").performClick(); idle()
+                    check(controller.state.value.isFavourite)
+                    check(runBlocking { session.library.isFavourite(content.id) })
+                    onNodeWithTag("preview-favourite").performClick(); idle()
+                    check(!controller.state.value.isFavourite)
+                    check(!runBlocking { session.library.isFavourite(content.id) })
                     System.setProperty("fixture.reader.failure.index", "14")
                     onNodeWithTag("download-chapter:${chapter.id}").performClick()
                     status(DesktopDownloadStatus.FAILED)
