@@ -18,6 +18,42 @@ import kotlin.time.Clock
 
 class IosStatisticsTest {
     @Test
+    fun updateDownloadsRequireUniqueStoredChapterNamesAndKeepOpaqueFields() {
+        val original = work(1)
+        val chapter = original.value.chapters!!.single().copy(sourceData = "opaque-request")
+        val content = IosSourceContent(original.value.copy(chapters = listOf(chapter)))
+        val resolved = resolveUpdateDownloadChapters(content, listOf("第一话", "第一话"))
+        assertEquals(listOf(chapter), resolved.map { it.value })
+        assertTrue(resolveUpdateDownloadChapters(content, listOf("第一话", "已删除的章节")).isEmpty())
+        val ambiguous = IosSourceContent(original.value.copy(chapters = listOf(
+            chapter, chapter.copy(id = 11, branch = "另一分支"),
+        )))
+        assertTrue(resolveUpdateDownloadChapters(ambiguous, listOf("第一话")).isEmpty())
+    }
+
+    @Test
+    fun timelineExportsPerEventProgressDownloadChaptersAndTheSharedDateWindow() = withDirectory { directory ->
+        val library = IosLibrary("$directory/library.db")
+        val content = work(1)
+        val now = Clock.System.now().toEpochMilliseconds() - 60_000
+        try {
+            library.saveDetails(content)
+            library.statistics.record(content, sample(content, now, now + 20_000))
+            library.database.getTrackLogsDao().insert(TrackLogEntity(
+                mangaId = 1, chapters = "第一话", createdAt = now, isUnread = true,
+            ))
+            val snapshot = library.statistics.snapshot("DAY", "ALL", "", null)
+            val reading = snapshot.timeline.single { !it.isUpdate }
+            assertTrue(reading.hasProgress)
+            assertEquals(0.5f, reading.progress)
+            assertEquals(listOf("10"), snapshot.timeline.single { it.isUpdate }.downloadChapters.map { it.id })
+            assertTrue(snapshot.windowFrom <= now)
+            assertTrue(snapshot.windowUntil >= now + 20_000)
+            assertEquals(0L, library.statistics.snapshot("ALL", "ALL", "", null).windowFrom)
+        } finally { library.close() }
+    }
+
+    @Test
     fun checkpointsReopenAndBackUpWithoutDuplicatingDurationOrSessions() = withDirectory { directory ->
         val content = work(1)
         val now = Clock.System.now().toEpochMilliseconds() - 60_000

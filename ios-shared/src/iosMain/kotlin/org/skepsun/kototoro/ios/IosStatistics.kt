@@ -52,12 +52,17 @@ data class IosTimelineEvent(
     val detail: String,
     val duration: Long,
     val count: Int,
+    val hasProgress: Boolean = false,
+    val progress: Float = 0f,
+    val downloadChapters: List<IosSourceChapter> = emptyList(),
 )
 
 class IosStatsDashboard internal constructor(
     value: ReadingStatistics,
     val works: List<IosStatsWork>,
     val timeline: List<IosTimelineEvent>,
+    val windowFrom: Long,
+    val windowUntil: Long,
 ) {
     val totalDuration = value.totalDuration
     val activeDays = value.activeDays
@@ -99,6 +104,9 @@ class IosStatistics internal constructor(private val owner: IosLibrary) {
                     (text.isEmpty() || it.title.contains(text, ignoreCase = true) ||
                         it.authors.any { author -> author.contains(text, ignoreCase = true) }) }
                 .associateBy { it.value.id }
+            val updateContents = logs.map { it.mangaId }.distinct()
+                .filter { contents[it]?.mediaKind in setOf("MANGA", "NOVEL") }
+                .associateWith { owner.records.find(it)?.let(::IosSourceContent) }
             val value = deriveReadingStatistics(sessions, legacy,
                 contents.mapValues { StatsContentKind.fromType(it.value.contentType) }, window)
             val statsById = value.works.associateBy { it.contentId }
@@ -137,15 +145,18 @@ class IosStatistics internal constructor(private val owner: IosLibrary) {
                         ?: if (!work.hasTimedStats) work.chapterTitle else localized("旧版阅读统计")
                     timeline += IosTimelineEvent("read-${work.content.id}-${day.date}", work.content,
                         if (!work.hasTimedStats) work.updatedAt else timestamp, false,
-                        detail?.takeIf(String::isNotBlank) ?: localized("阅读记录"), day.duration, dailySessions.size)
+                        detail?.takeIf(String::isNotBlank) ?: localized("阅读记录"), day.duration, dailySessions.size,
+                        latest != null || (!work.hasTimedStats && work.hasProgress),
+                        latest?.endPercent ?: if (!work.hasTimedStats) work.progress else 0f)
                 }
             }
             logs.forEach { log -> contents[log.mangaId]?.let { content ->
                 val names = log.chapters.lines().filter(String::isNotBlank)
                 timeline += IosTimelineEvent("update-${log.id}", content, log.createdAt, true,
-                    names.joinToString("、"), 0, names.size)
+                    names.joinToString("、"), 0, names.size,
+                    downloadChapters = resolveUpdateDownloadChapters(updateContents[log.mangaId] ?: content, names))
             } }
-            IosStatsDashboard(value, works, timeline.sortedByDescending { it.timestamp })
+            IosStatsDashboard(value, works, timeline.sortedByDescending { it.timestamp }, window.from, now)
         } }
     }
 

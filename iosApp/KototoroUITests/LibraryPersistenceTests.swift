@@ -2,6 +2,55 @@ import XCTest
 
 final class LibraryPersistenceTests: XCTestCase {
     @MainActor
+    func testRecordsFiltersCompactStatsAndDownloadList() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.mainTab("记录").waitForExistence(timeout: 30))
+        app.mainTab("记录").tap()
+        let title = app.staticTexts["records.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertLessThan(title.frame.midX, app.frame.width / 2)
+        XCTAssertFalse(app.buttons["records.more"].exists)
+        XCTAssertTrue(app.staticTexts["本期概览"].waitForExistence(timeout: 20), app.debugDescription)
+        let compactTop = app.buttons["timeline.filter.all"].frame.minY
+        app.selectRecordsFilter("reading")
+        XCTAssertTrue(app.staticTexts["stats.duration"].waitForExistence(timeout: 10))
+        let chart = app.descendants(matching: .any)["stats.activity"]
+        XCTAssertFalse(chart.exists)
+        XCTAssertLessThanOrEqual(abs(app.buttons["timeline.filter.reading"].frame.minY - compactTop), 16)
+        app.buttons["stats.expand"].tap()
+        XCTAssertTrue(chart.waitForExistence(timeout: 5))
+        app.buttons["stats.expand"].tap()
+        XCTAssertTrue(chart.waitForNonExistence(timeout: 5))
+        let reading = XCTAttachment(screenshot: app.screenshot())
+        reading.name = "Compact reading statistics"
+        reading.lifetime = .keepAlways
+        add(reading)
+        for filter in ["updates", "downloads", "all"] {
+            app.selectRecordsFilter(filter)
+            XCTAssertTrue(app.buttons["timeline.filter.\(filter)"].isSelected)
+            XCTAssertTrue(title.exists)
+            let excluded = filter == "updates" ? ["timeline.read-", "timeline.download."]
+                : filter == "downloads" ? ["timeline.read-", "timeline.update-"] : []
+            for prefix in excluded {
+                XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch.exists)
+            }
+        }
+        app.selectRecordsFilter("downloads")
+        let entry = app.buttons["records.downloads.queue"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
+        let downloads = XCTAttachment(screenshot: app.screenshot())
+        downloads.name = "Download timeline and task list entry"
+        downloads.lifetime = .keepAlways
+        add(downloads)
+        entry.tap()
+        XCTAssertTrue(app.navigationBars["下载"].waitForExistence(timeout: 10), app.debugDescription)
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(title.waitForExistence(timeout: 10), app.debugDescription)
+    }
+
+    @MainActor
     func testCategoryOrderAndVisibilitySurviveRestartAndCancelDoesNotWrite() {
         continueAfterFailure = false
         let app = XCUIApplication(); app.launch()

@@ -7,6 +7,7 @@ struct KototoroApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(library: library)
+                .scrollEdgeEffectStyle(.soft, for: .top)
                 .task { await library.load() }
         }
     }

@@ -73,11 +73,12 @@ struct ReadingStatsOverview: View {
     @Binding var selectedDay: String?
     var runtime: IosSources?
     var showsRanking = true
+    var compact = false
     @State private var expanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: compact ? .top : .firstTextBaseline, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("阅读概览").font(.caption).foregroundStyle(.secondary)
                     Text(ReadingStatsFormat.duration(snapshot.totalDuration))
@@ -86,7 +87,10 @@ struct ReadingStatsOverview: View {
                 }
                 Spacer(minLength: 4)
                 Button {
-                    withAnimation(.snappy) { expanded.toggle() }
+                    withAnimation(.snappy) {
+                        expanded.toggle()
+                        if compact && !expanded { selectedDay = nil }
+                    }
                 } label: {
                     Image(systemName: expanded ? "chevron.up" : "chart.bar.xaxis")
                         .frame(width: 44, height: 44)
@@ -100,17 +104,19 @@ struct ReadingStatsOverview: View {
                 metric(String(localized: "阅读次数"), snapshot.sessionCount)
                 metric(String(localized: "连续天"), snapshot.currentStreak)
             }
-            Text(snapshot.dailyActivity.count == 1 ? "今日活动" : "近 \(snapshot.dailyActivity.count) 天活动")
-                .font(.caption2).foregroundStyle(.secondary)
-            activityChart
-            if let selectedDay {
-                HStack {
-                    Text("\(selectedDay) · \(ReadingStatsFormat.duration(snapshot.dailyActivity.first { $0.date == selectedDay }?.duration ?? 0))")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Spacer(minLength: 0)
-                    Button("全部日期") { self.selectedDay = nil }.font(.caption)
+            if !compact || expanded {
+                Text(snapshot.dailyActivity.count == 1 ? "今日活动" : "近 \(snapshot.dailyActivity.count) 天活动")
+                    .font(.caption2).foregroundStyle(.secondary)
+                activityChart
+                if let selectedDay {
+                    HStack {
+                        Text("\(selectedDay) · \(ReadingStatsFormat.duration(snapshot.dailyActivity.first { $0.date == selectedDay }?.duration ?? 0))")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                        Button("全部日期") { self.selectedDay = nil }.font(.caption)
+                    }
+                    .accessibilityIdentifier("stats.selectedDay")
                 }
-                .accessibilityIdentifier("stats.selectedDay")
             }
             if expanded { expandedStats }
         }

@@ -32,4 +32,12 @@ class IosBookmark internal constructor(internal val value: SourceBookmark) {
 }
 
 data class IosUpdate(val content: IosSourceContent, val newChapters: Int, val checkedAt: Long)
+
+/** Logs retain names rather than ids; ambiguous or missing names must be selected in the directory. */
+internal fun resolveUpdateDownloadChapters(content: IosSourceContent, names: List<String>): List<IosSourceChapter> {
+    val chapters = content.value.chapters.orEmpty().groupBy { it.title ?: "第 ${it.number} 章" }
+    return names.distinct().map { name ->
+        IosSourceChapter(chapters[name]?.singleOrNull() ?: return emptyList())
+    }
+}
 data class IosUpdateReport(val checked: Int, val withUpdates: Int, val failed: Int, val newChapters: Int)

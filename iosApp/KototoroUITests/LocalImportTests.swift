@@ -25,7 +25,7 @@ final class LocalImportTests: XCTestCase {
         app.terminate()
         app.launch()
         app.mainTab("记录").tap()
-        app.segmentedControls.buttons["历史"].tap()
+        app.selectRecordsFilter("reading")
         let duration = app.staticTexts["stats.duration"]
         XCTAssertTrue(duration.waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertNotEqual(duration.label, "0 分钟")
@@ -33,7 +33,7 @@ final class LocalImportTests: XCTestCase {
         app.buttons["stats.expand"].tap()
         XCTAssertTrue(app.staticTexts["阅读时段"].waitForExistence(timeout: 5))
         app.buttons["stats.expand"].tap()
-        app.segmentedControls.buttons["时间轴"].tap()
+        app.selectRecordsFilter("all")
         XCTAssertTrue(app.staticTexts["历史 & 下载"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["发现更新"].exists)
         let event = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
@@ -487,23 +487,33 @@ final class LocalImportTests: XCTestCase {
         open.tap()
         XCTAssertTrue(app.buttons["details.chapters.showAll"].waitForExistence(timeout: 10), app.debugDescription)
         attach("下载记录打开详情")
-        // The finished download is a record of its own: the downloads tab lists the work, the timeline the day's download.
+        // A finished download remains available through the filtered and combined timeline.
         app.terminate()
         app.launch()
         app.mainTab("记录").tap()
-        app.segmentedControls.buttons["下载"].tap()
+        app.selectRecordsFilter("downloads")
+        app.buttons["space.menu"].tap()
+        let videoSpace = app.buttons["space.select.VIDEO"]
+        for _ in 0..<5 where !videoSpace.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        videoSpace.tap()
+        let showAll = app.buttons["space.showAll"]
+        XCTAssertTrue(showAll.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.staticTexts["其他内容空间里还有下载记录。"].exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "timeline.download.")).firstMatch.exists)
+        showAll.tap()
         let work = app.descendants(matching: .any).matching(NSPredicate(
-            format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "downloaded.", "fixture_reader_chapters")).firstMatch
+            format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "timeline.download.", "fixture_reader_chapters")).firstMatch
         XCTAssertTrue(work.waitForExistence(timeout: 15), app.debugDescription)
-        attach("记录下载分页")
-        app.segmentedControls.buttons["时间轴"].tap()
+        attach("记录下载筛选")
+        app.selectRecordsFilter("all")
         XCTAssertTrue(app.staticTexts["历史 & 下载"].waitForExistence(timeout: 10))
         let download = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
             "timeline.download.", "fixture_reader_chapters")).firstMatch
         XCTAssertTrue(download.waitForExistence(timeout: 10), app.debugDescription)
         attach("时间轴历史与下载")
-        app.segmentedControls.buttons["下载"].tap()
+        app.selectRecordsFilter("downloads")
         work.tap()
+        app.buttons["打开作品"].tap()
         app.openDetailsChapters()
         let local = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
             "chapter.", "本地")).firstMatch

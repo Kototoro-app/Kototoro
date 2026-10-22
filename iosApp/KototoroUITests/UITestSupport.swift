@@ -1,6 +1,11 @@
 import XCTest
 
 extension XCUIApplication {
+    /// All record kinds stay on the same timeline.
+    func selectRecordsFilter(_ filter: String) {
+        buttons["timeline.filter.\(filter)"].tap()
+    }
+
     /// Reading stays in the header until it scrolls away, then moves to the native toolbar.
     func detailsReadButton() -> XCUIElement {
         let toolbar = buttons["details.read"]
