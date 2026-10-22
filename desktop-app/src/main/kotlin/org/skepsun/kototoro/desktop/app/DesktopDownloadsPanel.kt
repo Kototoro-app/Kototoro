@@ -18,6 +18,7 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
     val state by controller.state.collectAsState()
     val preview by controller.cleanupPreview.collectAsState()
     val usage = remember(downloads) { desktopDownloadUsage(downloads.map { it.record }) }
+    val autoCleanup by controller.autoCleanupDownloads.collectAsState()
     val selected = remember(downloads, selection) {
         downloads.filter { it.key in selection }
     }
@@ -49,6 +50,9 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
                 modifier = Modifier.testTag("download-storage")) { Text(desktopText("downloads.storage")) }
             Text(desktopText("downloads.usage", usage.chapters, usage.completeChapters, usage.pages,
                 usage.bytes / 1024), modifier = Modifier.testTag("download-usage"))
+            Checkbox(checked = autoCleanup, onCheckedChange = controller::setAutoDownloadCleanup, enabled = !closing,
+                modifier = Modifier.testTag("download-auto-cleanup"))
+            Text(desktopText("downloads.autoCleanup"))
         }
         if (downloads.isEmpty()) Text(desktopText("downloads.empty"))
         if (downloads.isNotEmpty()) {

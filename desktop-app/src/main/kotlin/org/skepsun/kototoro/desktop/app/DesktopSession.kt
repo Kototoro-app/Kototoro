@@ -101,6 +101,9 @@ class DesktopSession private constructor(
     internal val downloadStore = DesktopDownloadStore(storage.preferences)
     /** CBZ export reads the same verified blobs as the reader; no second copy of the images lives in the store. */
     internal val downloadExporter = DesktopDownloadExporter(storage.paths.images)
+    /** Automatic sweep of the unreachable page blocks; the controller runs it when the queue goes idle. */
+    internal val downloadMaintenance = DesktopDownloadMaintenance(downloadStore, storage.preferences,
+        storage.preferences.open("desktop_download_maintenance"))
 
     init { startupErrors.addAll(downloadStore.errors); startupErrors.addAll(repositories.errors) }
 

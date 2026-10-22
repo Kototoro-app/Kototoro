@@ -21,6 +21,9 @@ internal object DesktopDownloadsProbe {
         val session = runBlocking { DesktopSession.open(Path.of(args[1])) }
         val controller = DesktopController(session)
         try {
+            // This probe drives the manual "reclaim" flow, so the automatic sweep (which runs as soon as the queue
+            // goes idle) is switched off first and turned back on at the end to prove the toggle works.
+            if (mode.endsWith("write")) controller.setAutoDownloadCleanup(false)
             if (mode.endsWith("write")) runBlocking { controller.importJar(Path.of(args[6])).join() }
             runDesktopComposeUiTest(width = if (mode.endsWith("read")) 920 else 1260,
                 height = if (mode.endsWith("read")) 620 else 850) {
@@ -94,6 +97,11 @@ internal object DesktopDownloadsProbe {
                     check(session.downloadStore.previewCleanup(session.storage.preferences).candidates.isEmpty())
                     check(controller.downloads.state.value.single().status == DesktopDownloadStatus.COMPLETE)
                     check(runBlocking { session.library.progress(content.id) } == null)
+                    // The switch round-trips through the preference store and back to the default.
+                    onNodeWithTag("download-auto-cleanup").performClick()
+                    idle()
+                    check(controller.autoCleanupDownloads.value)
+                    check(session.downloadMaintenance.automatic)
                     System.setProperty("fixture.reader.offline", "true")
                     System.setProperty("fixture.reader.pages.offline", "true")
                     snapshot("complete")

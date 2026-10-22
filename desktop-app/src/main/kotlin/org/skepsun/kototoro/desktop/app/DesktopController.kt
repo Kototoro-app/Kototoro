@@ -3,7 +3,9 @@ package org.skepsun.kototoro.desktop.app
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -185,6 +187,8 @@ class DesktopController(val session: DesktopSession) {
         { session.readerRevision(it.source.name) }, session::downloadPages, session::prepareDownload)
     private val mutableCleanup = MutableStateFlow<DesktopDownloadCleanupPlan?>(null)
     internal val cleanupPreview = mutableCleanup.asStateFlow()
+    private val mutableAutoCleanup = MutableStateFlow(session.downloadMaintenance.automatic)
+    internal val autoCleanupDownloads = mutableAutoCleanup.asStateFlow()
     /** Chapter keys the download page has selected; kept here so a batch survives leaving and reopening the page. */
     private val mutableDownloadSelection = MutableStateFlow<Set<String>>(emptySet())
     internal val downloadSelection = mutableDownloadSelection.asStateFlow()
@@ -217,6 +221,23 @@ class DesktopController(val session: DesktopSession) {
         webDav.restore()
         // Only starts a loop when the saved destination has an interval; otherwise it returns immediately.
         startAutoBackup()
+        // Sweeps unreachable page blocks at start and whenever the queue goes idle, so the metadata half of
+        // the download storage does not grow for weeks just because nobody clicked "reclaim".
+        scope.launch(DesktopDispatchers.background) {
+            downloads.state.map { rows -> rows.any { it.status.isActive } }.distinctUntilChanged()
+                .collect { active -> if (!active) reclaimDownloadsInBackground() }
+        }
+    }
+
+    private suspend fun reclaimDownloadsInBackground() {
+        val result = runCatching { session.downloadMaintenance.reclaim() }.getOrNull() ?: return
+        if (result.removed == 0) return
+        mutableState.update { it.copy(message = desktopText("downloads.cleanupAuto", result.removed, result.bytes / 1024)) }
+    }
+
+    internal fun setAutoDownloadCleanup(enabled: Boolean) {
+        session.downloadMaintenance.automatic = enabled
+        mutableAutoCleanup.value = session.downloadMaintenance.automatic
     }
 
     private suspend fun startupUpdates() {
