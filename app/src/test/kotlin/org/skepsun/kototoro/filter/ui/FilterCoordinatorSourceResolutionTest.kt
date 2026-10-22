@@ -23,6 +23,7 @@ import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.filter.data.SavedFiltersRepository
 import org.skepsun.kototoro.parsers.model.SortOrder
+import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.search.domain.ContentSearchRepository
 
 /**
@@ -112,6 +113,34 @@ class FilterCoordinatorSourceResolutionTest {
 		)
 
 		assertEquals("UNKNOWN", capturedSource.captured.name)
+	}
+
+	@Test
+	fun `manual filter input edits preserve fields with overlapping names`() {
+		val repository = mockRepository("MIHON_42")
+		val factory = mockk<ContentRepository.Factory>(relaxed = true)
+		every { factory.create(any()) } returns repository
+		val coordinator = FilterCoordinator(
+			savedStateHandle = SavedStateHandle(),
+			mangaRepositoryFactory = factory,
+			searchRepository = mockk(relaxed = true),
+			savedFiltersRepository = mockSavedFilters(),
+			settings = mockSettings(),
+			lifecycle = mockk<ViewModelLifecycle>(relaxed = true),
+		)
+		val author = ContentTag("📝 Author", "text:top:Author", repository.source)
+		val extra = ContentTag("📝 AuthorExtra", "text:top:AuthorExtra", repository.source)
+		val chapters = ContentTag("📝 Min chapters", "text:top:Min chapters", repository.source)
+		coordinator.setTextInputValue(extra, "Other")
+		assertEquals(null, coordinator.getTextInputValue(author))
+		coordinator.setTextInputValue(author, "Writer=+&")
+		coordinator.setTextInputValue(chapters, "25")
+		assertEquals("Writer=+&", coordinator.getTextInputValue(author))
+		assertEquals("Other", coordinator.getTextInputValue(extra))
+		assertEquals("25", coordinator.getTextInputValue(chapters))
+		coordinator.setTextInputValue(author, "")
+		assertEquals(null, coordinator.getTextInputValue(author))
+		assertEquals("Other", coordinator.getTextInputValue(extra))
 	}
 
 	private fun mockRepository(sourceName: String): ContentRepository {

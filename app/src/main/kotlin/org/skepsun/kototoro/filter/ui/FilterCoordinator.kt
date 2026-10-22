@@ -520,7 +520,7 @@ class FilterCoordinator @Inject constructor(
     fun getTextInputValue(tag: ContentTag): String? {
         val baseKey = tag.key
         return currentListFilter.value.tags
-            .find { it.key.startsWith(baseKey) && it.key.contains("=") }
+            .find { it.key.startsWith("$baseKey=") }
             ?.key?.substringAfter("=")
     }
 
@@ -532,7 +532,7 @@ class FilterCoordinator @Inject constructor(
         currentListFilter.update { oldValue ->
             // Remove any existing tag with the same base key
             val baseKey = originalTag.key
-            val filteredTags = oldValue.tags.filter { !it.key.startsWith(baseKey) }.toSet()
+            val filteredTags = oldValue.tags.filterNot { it.key == baseKey || it.key.startsWith("$baseKey=") }.toSet()
 
             // Add new tag with value if not empty
             val newTags = if (value.isNotBlank()) {
