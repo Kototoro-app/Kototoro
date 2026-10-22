@@ -1100,6 +1100,17 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { it.copy(message = desktopText("downloads.exported", file.fileName)) }
     }
 
+    /**
+     * Android puts every downloaded chapter where the user can reach it; on the desktop that is one CBZ per chapter
+     * in the chosen folder. Incomplete chapters are skipped, and a damaged one does not abort the rest of the batch.
+     */
+    internal fun exportAllDownloads(directory: Path) = action {
+        val result = session.downloadExporter.exportAll(downloads.state.value.map { it.record }, directory)
+        mutableState.update { it.copy(message = if (result.failed > 0)
+            desktopText("downloads.exportAllPartial", result.written, result.failed)
+        else desktopText("downloads.exportAllDone", result.written)) }
+    }
+
     fun showDownloads() = navigate {
         mutableState.update { it.copy(screen = DesktopScreen.DOWNLOADS) }
         loadImageCacheOnIo()

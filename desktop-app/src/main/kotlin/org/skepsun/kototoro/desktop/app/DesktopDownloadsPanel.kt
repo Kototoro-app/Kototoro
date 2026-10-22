@@ -26,6 +26,7 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
     val selectedPaused = selected.count { it.status == DesktopDownloadStatus.PAUSED }
     val selectedFailed = selected.count { it.status == DesktopDownloadStatus.FAILED }
     val selectedRemovable = selected.count { !it.status.isActive }
+    val completedCount = downloads.count { it.status == DesktopDownloadStatus.COMPLETE }
     // A finished chapter publishes blobs after the page was opened; re-read the cache figures once the queue settles.
     val activeCount = downloads.count { it.status.isActive }
     LaunchedEffect(activeCount) { if (activeCount == 0) controller.refreshImageCache() }
@@ -84,6 +85,18 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
                 OutlinedButton(controller::removeSelectedDownloads, enabled = !closing && selectedRemovable > 0,
                     modifier = Modifier.testTag("download-batch-remove")) {
                     Text(desktopText("downloads.batchRemove", selectedRemovable))
+                }
+                OutlinedButton({
+                    val chooser = JFileChooser().apply {
+                        fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+                        dialogTitle = desktopText("downloads.exportAll")
+                    }
+                    if (chooser.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) {
+                        controller.exportAllDownloads(chooser.selectedFile.toPath())
+                    }
+                }, enabled = !closing && !state.busy && completedCount > 0,
+                    modifier = Modifier.testTag("download-export-all")) {
+                    Text(desktopText("downloads.exportAll"))
                 }
             }
         }

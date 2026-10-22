@@ -76,6 +76,53 @@ class DesktopDownloadExportTest {
     }
 
     @Test
+    fun `exportAll writes every completed chapter and counts the damaged one`() = runBlocking<Unit> {
+        val files = FileSourceImageStore(directory.resolve("images"))
+        FileSourcePreferenceStore(directory.resolve("prefs")).use { preferences ->
+            val store = DesktopDownloadStore(preferences)
+            val cache = DesktopReaderImages(files.directory, preferences.open("cache")) { artifact(files, it) }
+            val queue = DesktopDownloads(store, this, { revision }, { pages }, { page, hash, known ->
+                cache.prepareDownload(page, hash, known)
+            })
+            val second = chapter.copy(id = chapter.id - 1, title = "第 2 话")
+            queue.enqueue(12, chapter, "作品").join()
+            queue.enqueue(12, second, "作品").join()
+            val records = queue.state.value.map { it.record }
+            assertEquals(2, records.size)
+            val target = directory.resolve("out").also { Files.createDirectories(it) }
+            val exporter = DesktopDownloadExporter(files.directory)
+
+            val progress = mutableListOf<Int>()
+            val result = exporter.exportAll(records, target) { done, _ -> progress += done }
+            assertEquals(DesktopBatchExport(target, written = 2, failed = 0), result)
+            assertEquals(2L, Files.list(target).use { it.count() })
+            assertEquals(listOf(0, 1, 2), progress)
+
+            // A chapter whose blob is not on disk is counted and skipped so the rest of the batch still lands.
+            val damaged = records.last().copy(
+                chapter = chapter.copy(id = chapter.id - 2, title = "第 3 话"),
+                pages = records.last().pages.map { page ->
+                    val artifact = requireNotNull(page.artifact)
+                    page.copy(artifact = artifact.copy(
+                        relativePath = "b".repeat(64) + ".img",
+                        sha256 = "b".repeat(64),
+                    ))
+                },
+            )
+            val partialTarget = directory.resolve("partial").also { Files.createDirectories(it) }
+            val partial = exporter.exportAll(records + damaged, partialTarget)
+            assertEquals(2, partial.written)
+            assertEquals(1, partial.failed)
+            assertEquals(2L, Files.list(partialTarget).use { it.count() })
+            // Only complete chapters are candidates at all; a queue entry still downloading is not exported.
+            val downloading = SourceChapterDownload(12, chapter, revision, listOf(SourceDownloadPage(pages[0])))
+            assertThrows(IllegalArgumentException::class.java) {
+                runBlocking { exporter.exportAll(listOf(downloading), partialTarget) }
+            }
+        }
+    }
+
+    @Test
     fun `file names lose the characters Windows rejects`() {
         assertEquals("作品 - 第 1 话_ 序.cbz", DesktopDownloadExporter(directory)
             .fileName(SourceChapterDownload(12, chapter, revision, contentTitle = "作品")))

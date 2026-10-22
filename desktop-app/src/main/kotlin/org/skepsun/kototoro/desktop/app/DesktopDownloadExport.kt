@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.source.SourceChapterDownload
@@ -56,6 +57,39 @@ internal class DesktopDownloadExporter(private val directory: Path) {
     private fun chapterLabel(record: SourceChapterDownload): String =
         record.chapter.title?.takeIf(String::isNotBlank)
             ?: desktopText("common.chapterTitle", record.chapter.number)
+}
+
+/** What a batch export produced; the counts are shown to the user and asserted by tests. */
+internal data class DesktopBatchExport(val directory: Path, val written: Int, val failed: Int)
+
+/**
+ * Exports a whole work's completed chapters into one folder, Android's "write downloads where the user can see them"
+ * in desktop form: one CBZ per chapter, named after the work and chapter. A chapter that fails (missing or damaged
+ * blob) is counted and skipped so one bad page does not lose the rest of the batch.
+ */
+internal suspend fun DesktopDownloadExporter.exportAll(
+    records: List<SourceChapterDownload>,
+    targetDirectory: Path,
+    onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+): DesktopBatchExport = withContext(Dispatchers.IO) {
+    val complete = records.filter { it.isComplete }
+    require(complete.isNotEmpty()) { desktopText("downloads.exportNothing") }
+    require(Files.isDirectory(targetDirectory)) { desktopText("downloads.exportDirectory") }
+    var written = 0
+    var failed = 0
+    complete.forEachIndexed { index, record ->
+        onProgress(index, complete.size)
+        try {
+            export(record, targetDirectory)
+            written++
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            failed++
+        }
+    }
+    onProgress(complete.size, complete.size)
+    DesktopBatchExport(targetDirectory, written, failed)
 }
 
 /** Strips the characters Windows rejects in file names and keeps the readable part bounded. */

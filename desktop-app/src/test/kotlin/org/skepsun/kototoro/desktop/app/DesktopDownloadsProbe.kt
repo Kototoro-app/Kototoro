@@ -173,6 +173,25 @@ internal object DesktopDownloadsProbe {
                     check(protectedBlobs.all { Files.exists(images.resolve(it)) }) { "a clear removed a saved image" }
                     idle()
                     snapshot("image-cache")
+                    // One CBZ per completed chapter, the desktop form of Android writing downloads into a folder.
+                    onNodeWithTag("download-export-all").assertExists().assertIsEnabled()
+                    val exportDirectory = Files.createTempDirectory("kototoro-export")
+                    try {
+                        controller.exportAllDownloads(exportDirectory)
+                        waitUntil(timeoutMillis = 30_000) { !controller.state.value.busy }
+                        val archives = Files.list(exportDirectory).use { stream ->
+                            stream.filter { it.fileName.toString().endsWith(".cbz") }.toList()
+                        }
+                        check(archives.size == 1) { "the batch wrote ${archives.size} archives" }
+                        check(Files.size(archives.first()) > 0)
+                        java.util.zip.ZipFile(archives.first().toFile()).use { zip ->
+                            check(zip.entries().asSequence().count() == 5) { "the archive lost pages" }
+                        }
+                        snapshot("export-all")
+                    } finally {
+                        Files.list(exportDirectory).use { stream -> stream.toList() }.forEach(Files::deleteIfExists)
+                        Files.deleteIfExists(exportDirectory)
+                    }
                     System.setProperty("fixture.reader.offline", "true")
                     System.setProperty("fixture.reader.pages.offline", "true")
                     snapshot("complete")
