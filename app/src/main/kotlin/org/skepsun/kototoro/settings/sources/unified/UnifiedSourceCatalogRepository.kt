@@ -477,6 +477,7 @@ class UnifiedSourceCatalogRepository @Inject constructor(
     }
 
     private suspend fun buildSourceItems(): List<UnifiedSourceItem> {
+        val startedAt = android.os.SystemClock.elapsedRealtime()
         val availableSources = contentSourcesRepository.getAllAvailableSourcesForListing()
         val sourceEntities = database.getSourcesDao().findAll().associateBy { it.source }
         val jsonSummaries = database.getJsonSourceDao().observeAllSummaries().first()
@@ -507,7 +508,8 @@ class UnifiedSourceCatalogRepository @Inject constructor(
                 "mihonWrapped=${mihonExtensionManager.getMihonMangaSources().size} " +
                 "tsundokuWrapped=${tsundokuExtensionManager.getTsundokuNovelSources().size} " +
                 "mihonInstalled=${mihonExtensionManager.installedExtensions.value.size} " +
-                "mihonItems=${items.count { it.kind == UnifiedSourceKind.MIHON }} total=${items.size}",
+                "mihonItems=${items.count { it.kind == UnifiedSourceKind.MIHON }} total=${items.size} " +
+                "ms=${android.os.SystemClock.elapsedRealtime() - startedAt}",
         )
         return items
     }
