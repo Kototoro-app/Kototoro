@@ -158,7 +158,8 @@ jobs:
           if ($versionName -notmatch '^[A-Za-z0-9][A-Za-z0-9.+-]*$') { throw 'Invalid asset version.' }
           $arguments = @('-PwithDesktopApp', '-PwithWindowsDistribution',
             "-PmihonCompatibilityDirectory=$PWD/build/windows-ci-compatibility", '-PmihonCompatibilityJavaVersion=21',
-            "-PdesktopPackageVersion=$packageVersion", ":desktop-app:windowsPortableZip",
+            "-PdesktopPackageVersion=$packageVersion", "-PdesktopVersionName=$versionName",
+            "-PdesktopChannel=$env:CHANNEL", ":desktop-app:windowsPortableZip",
             "-Dorg.gradle.java.installations.paths=$env:JAVA_HOME_21_X64,$env:JAVA_HOME",
             '-Dorg.gradle.jvmargs=-Xmx3g', '-Pkotlin.daemon.jvmargs=-Xmx3g', '--max-workers=2',
             '--no-configuration-cache', '--no-daemon', '--console=plain', '--stacktrace')

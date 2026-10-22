@@ -59,7 +59,7 @@ fun DesktopStartup(error: String?) = DesktopTheme {
 
 @Composable
 fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscreen: Boolean = false,
-    onToggleFullscreen: (() -> Unit)? = null) = DesktopTheme(controller.state.collectAsState().value.appearance,
+    onToggleFullscreen: (() -> Unit)? = null, onExitRequest: () -> Unit = {}) = DesktopTheme(controller.state.collectAsState().value.appearance,
         controller.state.collectAsState().value.interfaceStyle) {
     val state by controller.state.collectAsState()
     val challenges = controller.session.browserChallenges
@@ -126,7 +126,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.DOWNLOADS -> DesktopDownloadsPanel(controller, closing)
                             DesktopScreen.BACKUPS -> DesktopBackupsPanel(controller, closing)
                             DesktopScreen.EXTENSIONS -> DesktopExtensionsPanel(controller, closing)
-                            DesktopScreen.MORE -> DesktopMorePanel(controller, !closing)
+                            DesktopScreen.MORE -> DesktopMorePanel(controller, !closing, onExitRequest)
                         }
                         if (state.screen == DesktopScreen.DETAILS && state.detailsOrigin != null) {
                             DesktopDetailsOverlay(controller, state, !state.busy && !closing)

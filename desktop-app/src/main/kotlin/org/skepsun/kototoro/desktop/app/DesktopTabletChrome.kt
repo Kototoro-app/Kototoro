@@ -89,7 +89,7 @@ private fun LanguageChoice(title: String, selected: Boolean, enabled: Boolean, t
 }
 
 @Composable
-internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean) {
+internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, onExitRequest: () -> Unit = {}) {
     val state by controller.state.collectAsState()
     Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -131,6 +131,7 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean) {
             }
         }
         DesktopBackgroundSettings(controller, state, enabled)
+        DesktopAppUpdateSection(controller, state, enabled, onExitRequest)
         Divider(Modifier.padding(vertical = 12.dp))
         Text(desktopText("more.advancedTools"), fontWeight = FontWeight.SemiBold, color = Muted)
         MoreDestination(desktopText("more.browser"), "ic_web", desktopText("more.browserSummary"), enabled) { controller.browser() }

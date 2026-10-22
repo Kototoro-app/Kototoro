@@ -252,13 +252,18 @@ def verifyDesktopStrings = tasks.register('verifyDesktopStrings') {
         // from the catalog, every catalog key has to be used, and no Chinese literal may remain in the UI code.
         def used = new TreeSet<String>()
         def hardcoded = []
-        def call = ~/(?:desktopText|DesktopRuntimeStrings\.text)\("([^"]+)"/
+        // A call may wrap its key onto the next line, so the key scan runs over the whole file; the Chinese literal
+        // check stays line based, because it only has to point at the offending line.
+        def call = ~/(?:desktopText|DesktopRuntimeStrings\.text)\(\s*"([^"]+)"/
         def chinese = ~/"[^"\n]*[\u4e00-\u9fff][^"\n]*"/
         kotlinSources.files.sort { it.path }.each { file ->
-            file.eachLine { line ->
+            def text = file.getText('UTF-8')
+            (text =~ call).each { match -> used << match[1] }
+            // Read as UTF-8 explicitly: on Windows the platform default would turn the catalogs' own characters into
+            // CJK mojibake and report them as hardcoded text.
+            file.eachLine('UTF-8') { line ->
                 def trimmed = line.trim()
                 if (!trimmed.startsWith('*') && !trimmed.startsWith('//') && !trimmed.startsWith('/*')) {
-                    (line =~ call).each { match -> used << match[1] }
                     def found = (line =~ chinese)
                     if (found.find()) hardcoded << "${file.name}: ${found.group()}".toString()
                 }
@@ -317,6 +322,44 @@ def runtimeJavaVersion = providers.gradleProperty('mihonCompatibilityJavaVersion
 def desktopLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(runtimeJavaVersion) }
 def bundleWindowsRuntime = providers.gradleProperty('withWindowsDistribution').isPresent()
 def windowsPackageVersion = providers.gradleProperty('desktopPackageVersion').getOrElse('0.1.0')
+
+// The Windows client checks for its own updates, so the build stamps what this copy *is* — version name, package
+// version and release channel — into the resources. The default version name is the application's, read from its
+// build file: a Windows build is named after the release it belongs to, and CI overrides it with the asset name it
+// publishes (`-PdesktopVersionName`), which for a nightly is the `N<date>` form.
+def desktopVersionName = providers.gradleProperty('desktopVersionName').map { it.trim() }.orElse(
+    providers.provider {
+        def matcher = rootProject.file('app/build.gradle').getText('UTF-8') =~ /(?m)^\s*versionName\s*=\s*['"]([^'"]+)['"]/
+        if (!matcher.find()) throw new GradleException('Cannot read the application versionName from app/build.gradle')
+        matcher.group(1)
+    })
+def desktopUpdateChannel = providers.gradleProperty('desktopChannel').getOrElse('release')
+def desktopVersionResources = layout.buildDirectory.dir('generated/desktop-version')
+def prepareDesktopVersion = tasks.register('prepareDesktopVersion') {
+    def versionName = desktopVersionName
+    def channel = desktopUpdateChannel
+    inputs.property('versionName', versionName)
+    inputs.property('channel', channel)
+    inputs.property('packageVersion', windowsPackageVersion)
+    outputs.dir(desktopVersionResources)
+    doLast {
+        def name = versionName.get()
+        def allowed = channel in ['release', 'nightly']
+        def versionAllowed = name ==~ /^[A-Za-z0-9][A-Za-z0-9.+-]*$/
+        if (!allowed) throw new GradleException("Unknown Windows update channel: ${channel}")
+        if (!versionAllowed) throw new GradleException("Invalid Windows version name: ${name}")
+        def target = desktopVersionResources.get().file('desktop-version.properties').asFile
+        target.parentFile.mkdirs()
+        target.setText(
+            "# Stamped by :desktop-app:prepareDesktopVersion; the update check compares this copy against the releases.\n" +
+                "versionName=${name}\n" +
+                "packageVersion=${windowsPackageVersion}\n" +
+                "channel=${channel}\n", 'UTF-8')
+    }
+}
+sourceSets.main.resources.srcDir(desktopVersionResources)
+tasks.named('processResources').configure { dependsOn prepareDesktopVersion }
+
 def windowsWixDirectory = providers.gradleProperty('windowsWixDirectory')
     .getOrElse(rootProject.layout.buildDirectory.dir('wix311').get().asFile.absolutePath)
 // Optional: a directory holding libmpv-2.dll (run/tests); distributions bundle it either from here or from the pinned

@@ -53,6 +53,19 @@ internal fun runDesktop(args: Array<String>) {
         var previousPlacement by remember { mutableStateOf(WindowPlacement.Floating) }
         val scope = rememberCoroutineScope()
         var startup by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+        // One quit path for the window button, the titlebar close and an update that needs the process to end.
+        val requestExit: () -> Unit = {
+            if (!closing) {
+                closing = true
+                scope.launch {
+                    try {
+                        startup?.cancel()
+                        startup?.join()
+                        controller?.shutdown()
+                    } finally { exitApplication() }
+                }
+            }
+        }
         LaunchedEffect(root) {
             startup = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
             var acquired: DesktopSession? = null
@@ -77,18 +90,7 @@ internal fun runDesktop(args: Array<String>) {
         Window(
             title = "Kototoro · Windows",
             state = windowState,
-            onCloseRequest = {
-                if (!closing) {
-                    closing = true
-                    scope.launch {
-                        try {
-                            startup?.cancel()
-                            startup?.join()
-                            controller?.shutdown()
-                        } finally { exitApplication() }
-                    }
-                }
-            },
+            onCloseRequest = requestExit,
         ) {
             window.minimumSize = Dimension(920, 620)
             val owner = controller
@@ -99,7 +101,7 @@ internal fun runDesktop(args: Array<String>) {
                         previousPlacement = windowState.placement
                         windowState.placement = WindowPlacement.Fullscreen
                     }
-                })
+                }, onExitRequest = requestExit)
         }
     }
 }

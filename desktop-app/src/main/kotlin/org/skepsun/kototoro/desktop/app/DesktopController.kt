@@ -25,6 +25,7 @@ import org.skepsun.kototoro.desktop.runtime.DesktopBookmark
 import org.skepsun.kototoro.desktop.runtime.DesktopLibrarySnapshot
 import org.skepsun.kototoro.desktop.runtime.DesktopRepository
 import org.skepsun.kototoro.desktop.runtime.DesktopRepositoryCatalog
+import org.skepsun.kototoro.desktop.runtime.DesktopUpdateSettings
 import org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex
 import org.skepsun.kototoro.core.ui.chapters.ChapterBranchLocale
 import org.skepsun.kototoro.core.ui.chapters.chaptersOfBranch
@@ -41,6 +42,7 @@ private const val TAP_GRID_PREFIX = "tap_grid."
 /** Lists that open details as a floating preview and get it back on dismiss. */
 private const val LAST_TRACKER_RUN = "last_tracker_run"
 private const val LAST_SUGGESTIONS_RUN = "last_suggestions_run"
+private const val LAST_APP_UPDATE_CHECK = "last_app_update_check"
 /** Page groups (paged) or pages (continuous) before a chapter's end at which the next chapter is prepared. */
 private const val NEXT_CHAPTER_LOOKAHEAD = 2
 /** First pages of the next chapter loaded with it. */
@@ -137,6 +139,8 @@ data class DesktopAppState(
     val filterDialogOpen: Boolean = false,
     val preferences: SourcePreferenceScreen? = null,
     val isFavourite: Boolean = false,
+    /** This copy's version, the channel it came from, and the in-app update flow's progress. */
+    val update: DesktopUpdateUi = DesktopUpdateUi(),
     val busy: Boolean = false,
     val error: String? = null,
     val message: String? = null,
@@ -180,6 +184,8 @@ class DesktopController(val session: DesktopSession) {
     private val backups = DesktopLibraryBackup(session.storage.database)
     private val mutableBackupPreview = MutableStateFlow<DesktopBackupArchive?>(null)
     internal val backupPreview = mutableBackupPreview.asStateFlow()
+    /** Android's in-app update flow: check the published releases, download, and swap the image on restart. */
+    internal val updates = DesktopUpdateOperations(mutableState, session, scope)
 
     init {
         // The saved language applies before the first screen is composed; `--lang` outranks it for this run.
@@ -195,6 +201,8 @@ class DesktopController(val session: DesktopSession) {
         }
         // Repositories are read in the background at start: updates are installed (when allowed) or announced.
         scope.launch { runCatching { startupUpdates() } }
+        // The stamped version and the saved update toggles, before the first check or the first composed screen.
+        updates.restore()
     }
 
     private suspend fun startupUpdates() {
@@ -211,6 +219,21 @@ class DesktopController(val session: DesktopSession) {
             mutableState.update { it.copy(error = desktopText("extensions.autoUpdateSaveFailed")) }
         }
     }
+
+    /** Android's "check for updates" button: runs the same check the periodic loop does, but right now. */
+    fun checkAppUpdate() {
+        updates.check()
+        recordRun(LAST_APP_UPDATE_CHECK)
+    }
+
+    fun downloadAppUpdate() = updates.download()
+
+    /** Swaps the downloaded package and closes the window; [onClose] is the window's own quit path. */
+    fun installAppUpdate(onClose: () -> Unit) = updates.install(onClose)
+
+    fun discardAppUpdate() = action { updates.discard() }
+
+    fun appUpdateSettings(value: DesktopUpdateSettings) = updates.settings(value)
 
     internal fun appearance(value: DesktopAppearance) = action {
         check(appearancePreferences.edit(SourcePreferenceEdit(changes = mapOf(
@@ -520,22 +543,52 @@ class DesktopController(val session: DesktopSession) {
         (backgroundPreferences.snapshot()[key] as? SourcePreferenceValue.LongInteger)?.value ?: 0L
 
     /**
-     * Runs Android's periodic jobs (tracker, suggestions) while the app is open, outside the UI action queue so the
-     * window stays responsive. Only the real app starts it; probes drive the work explicitly.
+     * Runs Android's periodic jobs (tracker, suggestions) and the application-update check while the app is open,
+     * outside the UI action queue so the window stays responsive. Each loop sleeps until its own next job is due
+     * ([nextWakeDelay]) instead of polling on a fixed tick, and the update check has its own loop: a slow repository
+     * or a package download must never delay the tracker, nor the other way round. Only the real app starts it;
+     * probes drive the work explicitly.
      */
-    fun startBackgroundWork(initialDelayMillis: Long = 60_000L, pollMillis: Long = 15 * 60_000L) {
-        scope.launch {
+    fun startBackgroundWork(initialDelayMillis: Long = 60_000L) {
+        scope.launch(DesktopDispatchers.background) {
             delay(initialDelayMillis)
             while (isActive) {
                 runCatching { runDueBackgroundWork() }
-                delay(pollMillis)
+                delay(nextWakeDelay(System.currentTimeMillis(), backgroundSchedules()) ?: MAXIMUM_WAKE_MS)
+            }
+        }
+        scope.launch(DesktopDispatchers.background) {
+            delay(initialDelayMillis)
+            while (isActive) {
+                runCatching { runAppUpdateCheck() }
+                delay(nextWakeDelay(System.currentTimeMillis(), listOf(appUpdateSchedule(lastRun(
+                    LAST_APP_UPDATE_CHECK), state.value.update.settings))) ?: MAXIMUM_WAKE_MS)
             }
         }
     }
 
+    private fun backgroundSchedules(): List<DesktopBackgroundSchedule> = desktopBackgroundSchedules(
+        lastTrackerRun = lastRun(LAST_TRACKER_RUN),
+        lastSuggestionsRun = lastRun(LAST_SUGGESTIONS_RUN),
+        tracker = state.value.trackerSettings,
+        suggestions = state.value.suggestionSettings,
+    )
+
+    /**
+     * Checks for an application update when its interval elapsed. The run is recorded before the check starts, so a
+     * restart does not re-check immediately and a network failure waits for the next interval instead of retrying in
+     * a loop; the "check now" button is the way to retry sooner.
+     */
+    internal fun runAppUpdateCheck(now: Long = System.currentTimeMillis()): Boolean {
+        val schedule = appUpdateSchedule(lastRun(LAST_APP_UPDATE_CHECK), state.value.update.settings)
+        if (DesktopBackgroundTask.APP_UPDATE !in dueTasks(now, listOf(schedule))) return false
+        recordRun(LAST_APP_UPDATE_CHECK)
+        updates.checkInBackground()
+        return true
+    }
+
     internal suspend fun runDueBackgroundWork(now: Long = System.currentTimeMillis()): Set<DesktopBackgroundTask> {
-        val due = dueBackgroundTasks(now, lastRun(LAST_TRACKER_RUN), lastRun(LAST_SUGGESTIONS_RUN),
-            state.value.trackerSettings, state.value.suggestionSettings)
+        val due = dueTasks(now, backgroundSchedules())
         if (DesktopBackgroundTask.TRACKER in due) {
             val report = backgroundMutex.withLock { runTrackerOnIo() }
             val feed = session.feed.observe(session.storage.database).first()
@@ -1105,7 +1158,7 @@ class DesktopController(val session: DesktopSession) {
         session.cropPages = settings.cropActive
         // Loaded pages were made for the previous super-resolution or crop choice; they are loaded (from cache) again.
         val reload = previous.upscale != settings.upscale || previous.cropActive != settings.cropActive
-        if (reload) synchronized(this) { prefetchJob?.cancel() }
+        if (reload) cancelPrefetch()
         mutableState.update { it.copy(readerSettings = settings,
             readerImages = if (reload) emptyMap() else it.readerImages) }
         if (state.value.screen == DesktopScreen.READER &&
@@ -1214,16 +1267,34 @@ class DesktopController(val session: DesktopSession) {
         prefetchAroundSlot(state.value)
     }
 
-    private var prefetchJob: Job? = null
+    // The prefetcher is one long-lived worker with a queue instead of a job that is cancelled and restarted per turn:
+    // a turn only re-plans the queue, so a page already being decoded finishes and is kept, and nothing is asked for
+    // twice. All four fields are guarded by [prefetchLock].
+    private val prefetchLock = Any()
+    private val prefetchPending = LinkedHashSet<Long>()
+    private val prefetchInFlight = HashSet<Long>()
+    private var prefetchLoaded: Pair<Long, MutableSet<Long>> = 0L to HashSet()
+    private var prefetchWorker: Job? = null
     private var prefetchFailures: Pair<Long, MutableSet<Long>> = 0L to java.util.concurrent.ConcurrentHashMap.newKeySet()
 
     /** Whether background page prefetching is still running (tests wait for it before counting requests). */
-    internal val isPrefetching: Boolean get() = synchronized(this) { prefetchJob?.isActive == true }
+    internal val isPrefetching: Boolean get() = synchronized(prefetchLock) {
+        prefetchWorker?.isActive == true || prefetchPending.isNotEmpty()
+    }
+
+    /** Drops queued work and stops the worker; the reader reloads its own pages (new upscale or crop choice). */
+    private fun cancelPrefetch() = synchronized(prefetchLock) {
+        prefetchPending.clear()
+        prefetchInFlight.clear()
+        prefetchLoaded = prefetchLoaded.first to HashSet()
+        prefetchWorker?.cancel()
+        prefetchWorker = null
+    }
 
     /**
      * Android's paged resource window (reader-core): the slots around the current one load in the background, two
      * ahead and two behind, nearest first, so a turn finds its pages ready. Outside the action gate: it never delays
-     * a turn, and a newer window replaces it.
+     * a turn, and a newer window re-plans the queue of the running worker.
      */
     private fun prefetchAroundSlot(snapshot: DesktopAppState) {
         if (snapshot.screen != DesktopScreen.READER || snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS) return
@@ -1241,24 +1312,70 @@ class DesktopController(val session: DesktopSession) {
     internal fun prefetchPages(chapterId: Long, indices: List<Int>) {
         val snapshot = state.value
         if (snapshot.screen != DesktopScreen.READER || snapshot.chapter?.id != chapterId) return
-        synchronized(this) {
-            if (prefetchFailures.first != chapterId) prefetchFailures = chapterId to java.util.concurrent.ConcurrentHashMap.newKeySet()
-            // A page whose background load failed is left to the reader: showing it loads (and reports) it again.
+        synchronized(prefetchLock) {
+            if (prefetchFailures.first != chapterId) {
+                prefetchFailures = chapterId to java.util.concurrent.ConcurrentHashMap.newKeySet()
+                prefetchLoaded = chapterId to HashSet()
+                prefetchPending.clear()
+            }
             val failed = prefetchFailures.second
+            val loaded = prefetchLoaded.second
+            // A page whose background load failed is left to the reader: showing it loads (and reports) it again.
             val pages = indices.distinct().mapNotNull { snapshot.pages.getOrNull(it) }
                 .filter { it.id !in snapshot.readerImages && it.id !in snapshot.readerFailedPages && it.id !in failed }
-            prefetchJob?.cancel()
-            if (pages.isEmpty()) return
-            prefetchJob = scope.launch(Dispatchers.IO) {
-                for (page in pages) {
-                    currentCoroutineContext().ensureActive()
-                    val image = try { session.readerImage(page) } catch (error: CancellationException) { throw error }
-                        catch (_: Exception) { failed += page.id; continue }
-                    mutableState.update { current ->
-                        if (current.screen == DesktopScreen.READER && current.chapter?.id == chapterId &&
-                            current.pages.any { it.id == page.id }) current.copy(readerImages = current.readerImages + (page.id to image))
-                        else current
+            // Nearest first: this plan replaces the queue order but keeps pages another turn already asked for.
+            prefetchPending.clear()
+            pages.forEach { page ->
+                if (page.id !in loaded && page.id !in prefetchInFlight) prefetchPending.add(page.id)
+            }
+            if (prefetchPending.isNotEmpty()) ensurePrefetchWorkerLocked(chapterId)
+        }
+    }
+
+    /** Starts the worker if it is idle; the caller holds [prefetchLock]. */
+    private fun ensurePrefetchWorkerLocked(chapterId: Long) {
+        if (prefetchWorker?.isActive == true) return
+        prefetchWorker = scope.launch(DesktopDispatchers.decode) {
+            try {
+                while (true) {
+                    val id = synchronized(prefetchLock) {
+                        val next = prefetchPending.firstOrNull() ?: return@launch
+                        prefetchPending.remove(next)
+                        prefetchInFlight.add(next)
+                        next
                     }
+                    try {
+                        val page = state.value.pages.firstOrNull { it.id == id } ?: continue
+                        // Another path (the reader itself) may have loaded it while it waited in the queue.
+                        if (page.id !in state.value.readerImages) {
+                            val image = try {
+                                session.readerImage(page)
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (_: Exception) {
+                                prefetchFailures.second.add(page.id)
+                                continue
+                            }
+                            mutableState.update { current ->
+                                if (current.screen == DesktopScreen.READER && current.chapter?.id == chapterId &&
+                                    current.pages.any { it.id == page.id }) {
+                                    current.copy(readerImages = current.readerImages + (page.id to image))
+                                } else current
+                            }
+                        }
+                    } finally {
+                        synchronized(prefetchLock) {
+                            prefetchInFlight.remove(id)
+                            // Switching chapter replaces the records; an id of the old chapter is not carried over.
+                            if (prefetchLoaded.first == chapterId) prefetchLoaded.second.add(id)
+                        }
+                    }
+                }
+            } finally {
+                synchronized(prefetchLock) {
+                    prefetchWorker = null
+                    // A plan may have arrived while the loop was deciding to stop.
+                    if (prefetchPending.isNotEmpty()) ensurePrefetchWorkerLocked(chapterId)
                 }
             }
         }
@@ -1379,6 +1496,8 @@ class DesktopController(val session: DesktopSession) {
     }
 
     suspend fun shutdown() {
+        // A downloaded package the user chose to apply on exit is swapped after this session's files are closed.
+        runCatching { updates.installOnExitIfRequested() }
         session.browserChallenges?.close()
         job.cancelAndJoin()
         withContext(NonCancellable + Dispatchers.IO) {
