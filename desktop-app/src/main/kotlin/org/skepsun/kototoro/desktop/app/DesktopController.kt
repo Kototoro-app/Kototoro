@@ -1019,6 +1019,38 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { it.copy(detailsChapterId = progress?.chapterId, message = message) }
     }
 
+    /** Batch "mark as read": history lands on the last chapter of the given reading order, like Android's batch action. */
+    fun markChaptersRead(chapters: List<SourceChapter>) = action {
+        val content = requireNotNull(state.value.content) { desktopText("error.workNotFound") }
+        require(chapters.isNotEmpty()) { desktopText("details.chapterMissing") }
+        val targets = chapters.mapNotNull { desktopMarkReadTarget(content, it) }
+        require(targets.isNotEmpty()) { desktopText("details.chapterMissing") }
+        session.library.recordPage(content, targets.last(), page = 0, pageCount = 1)
+        val progress = session.library.progress(content.id)
+        mutableState.update {
+            it.copy(detailsChapterId = progress?.chapterId, message = desktopText("details.markedReadCount", targets.size))
+        }
+    }
+
+    /** Drops every selected chapter's completed download, leaving shared image blocks to the reclaim view. */
+    fun deleteChapterDownloads(chapters: List<SourceChapter>) = action {
+        val content = requireNotNull(state.value.content) { desktopText("error.workNotFound") }
+        val keys = chapters.mapTo(HashSet()) { DesktopDownloadStore.key(content.id, it) }
+        val rows = downloads.state.value.filter { it.key in keys }
+        require(rows.isNotEmpty()) { desktopText("downloads.chapterMissing") }
+        var removed = 0
+        for (row in rows) {
+            downloads.pause(row.key)
+            downloads.settle(row.key)
+            if (session.downloadStore.delete(content.id, row.record.chapter, session.storage.preferences)) {
+                removed++
+            }
+        }
+        downloads.forget(rows.map { it.key })
+        mutableDownloadSelection.update { DesktopDownloadSelection.retain(it, downloads.state.value.map { state -> state.key }) }
+        mutableState.update { it.copy(message = desktopText("downloads.batchRemoved", removed)) }
+    }
+
     /** Drops one chapter's completed download; the index entry and its manifest go, shared image files stay. */
     fun deleteChapterDownload(chapter: SourceChapter) = action {
         val content = requireNotNull(state.value.content) { desktopText("error.workNotFound") }

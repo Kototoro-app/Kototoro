@@ -65,6 +65,23 @@ internal object DesktopDownloadsProbe {
                     onNodeWithTag("details-mark-unread:${chapter.id}").performClick(); idle()
                     check(runBlocking { session.library.progress(content.id) } == null)
                     check(controller.state.value.detailsChapterId == null)
+                    // Android's batch mode: a select toggle replaces navigation, then one bar acts on every row.
+                    val second = controller.state.value.content!!.chapters!!.first { it.number == 2f }
+                    onNodeWithTag("details-chapter-select").performClick(); idle()
+                    onNodeWithTag("read-chapter:${chapter.id}").performClick(); idle()
+                    onNodeWithTag("read-chapter:${second.id}").performClick(); idle()
+                    onNodeWithTag("details-selection-bar").assertExists()
+                    onNodeWithTag("details-selection-count").assertExists()
+                    // A batch is still one reading position: the last chapter of the selection wins.
+                    onNodeWithTag("details-selection-read").performClick(); idle()
+                    check(runBlocking { session.library.progress(content.id) }?.chapterId == second.id)
+                    check(controller.state.value.detailsChapterId == second.id)
+                    onNodeWithTag("details-selection-all").performClick(); idle()
+                    onNodeWithTag("details-selection-clear").performClick(); idle()
+                    // Leaving the mode hands clicks back to navigation, and the download steps below start clean.
+                    onNodeWithTag("details-chapter-select").performClick(); idle()
+                    controller.markChapterUnread(chapter); idle()
+                    check(runBlocking { session.library.progress(content.id) } == null)
                     System.setProperty("fixture.reader.failure.index", "14")
                     onNodeWithTag("download-chapter:${chapter.id}").performClick()
                     status(DesktopDownloadStatus.FAILED)

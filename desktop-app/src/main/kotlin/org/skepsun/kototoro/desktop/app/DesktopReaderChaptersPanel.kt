@@ -149,7 +149,8 @@ internal fun DesktopReaderChaptersPanel(
                             }
                         }
                         val cardModifier = Modifier.testTag("reader-chapter:${chapter.id}")
-                        DesktopChapterDirectoryCard(chapter, data, isGrid, enabled, onClick, cardModifier)
+                        DesktopChapterDirectoryCard(chapter, data, isGrid, enabled, isSelected = false,
+                            onClick = onClick, modifier = cardModifier)
                     }
                 }
             }

@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.ui.chapters.*
 import org.skepsun.kototoro.reader.novel.compose.SharedNovelReaderSearchField
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
@@ -23,8 +24,17 @@ internal class DesktopDetailsChapterState {
     var grid by mutableStateOf(false)
     var locateRequest by mutableIntStateOf(0)
     var targetChapterId by mutableStateOf<Long?>(null)
+    /** Android's batch mode; a mouse reaches it from the header toggle or by holding on a row. */
+    var selecting by mutableStateOf(false)
+    var selection by mutableStateOf(DesktopChapterSelection())
     val listState = LazyListState()
     val gridState = LazyGridState()
+
+    /** Batch actions and plain clicks both end up here, so leaving the mode never leaves a selection behind. */
+    fun leaveSelection() {
+        selecting = false
+        selection = DesktopChapterSelection()
+    }
 }
 
 /** Windows data/actions over Android's shared directory; stacked details supply metadata as its leading item. */
@@ -72,10 +82,20 @@ internal fun DesktopDetailsChapters(
             options.map { it to desktopDownloadTargets(ordered, current, downloaded, it) }
         }.filter { (_, targets) -> targets.isNotEmpty() }
     }
-    val controls: @Composable () -> Unit = {
-        Column(Modifier.fillMaxWidth()) {
+    val visible = remember(list.sections) {
+        list.sections.mapNotNull { (it as? ChapterSection.Item)?.chapter }
+    }
+    val selectedChapters = ui.selection.resolve(visible)
+    val selectedDownloaded = selectedChapters.count { chapter -> downloaded.any { DesktopDownloadStore.sameChapter(it, chapter) } }
+    val pagesKind = DesktopReaderKind.of(state.content) == DesktopReaderKind.PAGES
+    val controls: @Composable () -> Unit = {        Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(desktopText("details.chapters", list.count), modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                TextButton({
+                    if (ui.selecting) ui.leaveSelection() else ui.selecting = true
+                }, enabled = enabled && list.count > 0, modifier = Modifier.testTag("details-chapter-select")) {
+                    Text(if (ui.selecting) desktopText("details.cancelSelection") else desktopText("details.selectChapters"))
+                }
                 if (DesktopReaderKind.of(state.content) == DesktopReaderKind.PAGES) {
                     Box {
                         var open by remember { mutableStateOf(false) }
@@ -116,6 +136,19 @@ internal fun DesktopDetailsChapters(
             ChapterBranchChips(list.options, list.selectedBranch, title = { it ?: desktopText("details.chapterBranchDefault") },
                 onSelect = controller::selectChapterBranch, enabled = enabled,
                 chipModifier = { Modifier.testTag("chapter-branch:${it.name ?: "default"}") })
+            if (ui.selecting) {
+                DesktopChapterSelectionBar(
+                    selection = ui.selection,
+                    visible = visible,
+                    downloadedCount = selectedDownloaded,
+                    canDownload = pagesKind,
+                    onSelectAll = { ui.selection = ui.selection.withAll(visible) },
+                    onClear = { ui.selection = DesktopChapterSelection() },
+                    onDownload = { controller.downloadChapters(selectedChapters) },
+                    onMarkRead = { controller.markChaptersRead(selectedChapters) },
+                    onDelete = { controller.deleteChapterDownloads(selectedChapters) },
+                )
+            }
         }
     }
     Box(modifier) {
@@ -153,8 +186,20 @@ internal fun DesktopDetailsChapters(
                     val isDownloaded = downloaded.any { DesktopDownloadStore.sameChapter(it, chapter) }
                     DesktopChapterDirectoryCard(
                         chapter, desktopChapterCardData(chapter, current, bookmarked, downloaded), grid, enabled,
-                        onClick = { if (enabled) controller.read(chapter) },
+                        isSelected = ui.selection.contains(chapter),
+                        onClick = {
+                            // In batch mode a click picks the row instead of leaving the list, like Android.
+                            if (enabled) {
+                                if (ui.selecting) ui.selection = ui.selection.toggle(chapter) else controller.read(chapter)
+                            }
+                        },
                         modifier = Modifier.testTag("read-chapter:${chapter.id}"),
+                        onLongClick = {
+                            if (enabled) {
+                                ui.selecting = true
+                                ui.selection = ui.selection.toggle(chapter)
+                            }
+                        },
                         onDownload = if (DesktopReaderKind.of(state.content) == DesktopReaderKind.PAGES) {
                             { controller.downloadChapter(chapter) }
                         } else null,
@@ -165,6 +210,52 @@ internal fun DesktopDetailsChapters(
                     )
                 }
             }
+        }
+    }
+}
+
+/** Android's chapter selection bar: the same actions in the same order, as labels instead of icon-only buttons. */
+@Composable
+private fun DesktopChapterSelectionBar(
+    selection: DesktopChapterSelection,
+    visible: List<SourceChapter>,
+    downloadedCount: Int,
+    canDownload: Boolean,
+    onSelectAll: () -> Unit,
+    onClear: () -> Unit,
+    onDownload: () -> Unit,
+    onMarkRead: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val hasSelection = !selection.isEmpty
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+            .testTag("details-selection-bar"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            desktopText("details.selectionCount", selection.size),
+            modifier = Modifier.weight(1f).testTag("details-selection-count"),
+            style = MaterialTheme.typography.titleSmall,
+        )
+        TextButton(onSelectAll, enabled = selection.size < visible.size,
+            modifier = Modifier.testTag("details-selection-all")) {
+            Text(desktopText("details.selectAll"))
+        }
+        TextButton(onDownload, enabled = hasSelection && canDownload,
+            modifier = Modifier.testTag("details-selection-download")) {
+            Text(AndroidStrings["download"])
+        }
+        TextButton(onMarkRead, enabled = hasSelection,
+            modifier = Modifier.testTag("details-selection-read")) {
+            Text(desktopText("details.markRead"))
+        }
+        TextButton(onDelete, enabled = downloadedCount > 0,
+            modifier = Modifier.testTag("details-selection-delete")) {
+            Text(desktopText("details.deleteDownload"))
+        }
+        TextButton(onClear, enabled = hasSelection, modifier = Modifier.testTag("details-selection-clear")) {
+            Text(desktopText("details.clearSelection"))
         }
     }
 }

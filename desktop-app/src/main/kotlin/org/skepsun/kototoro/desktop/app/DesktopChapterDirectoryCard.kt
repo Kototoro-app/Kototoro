@@ -45,8 +45,10 @@ internal fun DesktopChapterDirectoryCard(
     data: ChapterCardData,
     isGrid: Boolean,
     enabled: Boolean,
+    isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier,
+    onLongClick: (() -> Unit)? = null,
     onDownload: (() -> Unit)? = null,
     onMarkRead: (() -> Unit)? = null,
     onMarkUnread: (() -> Unit)? = null,
@@ -83,6 +85,9 @@ internal fun DesktopChapterDirectoryCard(
             }
         }
     }
-    if (isGrid) ChapterGridCard(data, false, onClick, enabled = enabled, modifier = modifier, actions = actions)
-    else ChapterListCard(data, false, onClick, enabled = enabled, modifier = modifier, actions = actions)
+    if (isGrid) {
+        ChapterGridCard(data, isSelected, onClick, onLongClick, modifier = modifier, enabled = enabled, actions = actions)
+    } else {
+        ChapterListCard(data, isSelected, onClick, onLongClick, modifier = modifier, enabled = enabled, actions = actions)
+    }
 }
