@@ -150,6 +150,7 @@ internal fun DesktopDetailsChapters(
                     Modifier.testTag("chapter-header:${desktopChapterSectionTitle(section)}"))
                 is ChapterSection.Item -> {
                     val chapter = section.chapter
+                    val isDownloaded = downloaded.any { DesktopDownloadStore.sameChapter(it, chapter) }
                     DesktopChapterDirectoryCard(
                         chapter, desktopChapterCardData(chapter, current, bookmarked, downloaded), grid, enabled,
                         onClick = { if (enabled) controller.read(chapter) },
@@ -157,6 +158,10 @@ internal fun DesktopDetailsChapters(
                         onDownload = if (DesktopReaderKind.of(state.content) == DesktopReaderKind.PAGES) {
                             { controller.downloadChapter(chapter) }
                         } else null,
+                        // Android's long-press sheet; "read" stays usable on the current chapter so a badge can be reset.
+                        onMarkRead = ({ controller.markChapterRead(chapter) }),
+                        onMarkUnread = ({ controller.markChapterUnread(chapter) }),
+                        onDeleteDownload = if (isDownloaded) ({ controller.deleteChapterDownload(chapter) }) else null,
                     )
                 }
             }

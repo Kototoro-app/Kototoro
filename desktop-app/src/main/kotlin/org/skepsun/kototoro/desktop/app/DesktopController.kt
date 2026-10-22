@@ -990,6 +990,51 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { it.copy(message = desktopText("downloads.batchQueued", targets.size)) }
     }
 
+    /** Android's chapter long-press "read": history moves onto the chapter, leaving later chapters unread. */
+    fun markChapterRead(chapter: SourceChapter) = markChapterProgress(chapter, read = true)
+
+    /** The "unread" counterpart; the first chapter of a branch clears the record instead. */
+    fun markChapterUnread(chapter: SourceChapter) = markChapterProgress(chapter, read = false)
+
+    private fun markChapterProgress(chapter: SourceChapter, read: Boolean) = action {
+        val content = requireNotNull(state.value.content) { desktopText("error.workNotFound") }
+        val target = if (read) {
+            requireNotNull(desktopMarkReadTarget(content, chapter)) { desktopText("details.chapterMissing") }
+        } else {
+            when (val mark = desktopUnreadMark(content, chapter)) {
+                is DesktopUnreadMark.Move -> mark.chapter
+                DesktopUnreadMark.Missing -> error(desktopText("details.chapterMissing"))
+                DesktopUnreadMark.Clear -> null
+            }
+        }
+        if (target == null) {
+            session.library.removeHistory(content.id)
+        } else {
+            // One page of one chapter: percent lands at that chapter's end, as Android's mark-as-read does.
+            session.library.recordPage(content, target, page = 0, pageCount = 1)
+        }
+        val progress = session.library.progress(content.id)
+        val message = if (read) desktopText("details.markedRead", desktopChapterTitle(chapter))
+            else desktopText("details.markedUnread", desktopChapterTitle(chapter))
+        mutableState.update { it.copy(detailsChapterId = progress?.chapterId, message = message) }
+    }
+
+    /** Drops one chapter's completed download; the index entry and its manifest go, shared image files stay. */
+    fun deleteChapterDownload(chapter: SourceChapter) = action {
+        val content = requireNotNull(state.value.content) { desktopText("error.workNotFound") }
+        val key = DesktopDownloadStore.key(content.id, chapter)
+        val row = downloads.state.value.firstOrNull { it.key == key }
+        requireNotNull(row) { desktopText("downloads.chapterMissing") }
+        downloads.pause(key)
+        downloads.settle(key)
+        val removed = session.downloadStore.delete(content.id, chapter, session.storage.preferences)
+        downloads.forget(listOf(key))
+        mutableDownloadSelection.update { DesktopDownloadSelection.retain(it, downloads.state.value.map { state -> state.key }) }
+        val message = if (removed) desktopText("downloads.chapterRemoved", desktopChapterTitle(chapter))
+            else desktopText("downloads.chapterMissing")
+        mutableState.update { it.copy(message = message) }
+    }
+
     /** Exports one completed chapter as a CBZ so it can leave the app; the stored chapter stays readable. */
     internal fun exportDownload(record: SourceChapterDownload, directory: Path) = action {
         val file = session.downloadExporter.export(record, directory)

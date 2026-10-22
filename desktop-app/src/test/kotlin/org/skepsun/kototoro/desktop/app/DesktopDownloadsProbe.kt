@@ -55,6 +55,16 @@ internal object DesktopDownloadsProbe {
                     onNodeWithTag("details-expand").performClick(); idle()
                     onNodeWithTag("details-full").assertExists()
                     val chapter = controller.state.value.content!!.chapters!!.first { it.number == 1f }
+                    // Android's chapter long-press sheet, reached through the card's overflow menu on a mouse.
+                    onNodeWithTag("chapter-menu:${chapter.id}").performClick(); idle()
+                    onNodeWithTag("details-mark-read:${chapter.id}").performClick(); idle()
+                    check(runBlocking { session.library.progress(content.id) }?.chapterId == chapter.id)
+                    check(controller.state.value.detailsChapterId == chapter.id)
+                    onNodeWithTag("chapter-menu:${chapter.id}").performClick(); idle()
+                    // The first chapter has nothing before it, so "unread" clears the record instead of pointing at it.
+                    onNodeWithTag("details-mark-unread:${chapter.id}").performClick(); idle()
+                    check(runBlocking { session.library.progress(content.id) } == null)
+                    check(controller.state.value.detailsChapterId == null)
                     System.setProperty("fixture.reader.failure.index", "14")
                     onNodeWithTag("download-chapter:${chapter.id}").performClick()
                     status(DesktopDownloadStatus.FAILED)
