@@ -228,6 +228,7 @@ final class LocalImportTests: XCTestCase {
         let playing = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in self.playedSeconds >= 6 }, object: nil)
         wait(for: [playing], timeout: 30)
         showVideoControls()
+        attach("播放器液态玻璃控件")
         app.sliders["player.scrubber"].adjust(toNormalizedSliderPosition: 0.05)
         let play = app.buttons["player.playPause"]
         if play.label == "播放" { play.tap() }

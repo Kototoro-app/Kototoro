@@ -403,31 +403,36 @@ struct VideoPlayerView: View {
     // MARK: Controls
 
     private var controls: some View {
-        ZStack {
-            LinearGradient(colors: [.black.opacity(0.55), .clear, .clear, .black.opacity(0.65)],
-                           startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-            VStack(spacing: 0) {
-                topBar
-                Spacer()
-                centerBar
-                Spacer()
-                bottomBar
+        GlassEffectContainer(spacing: 12) {
+            ZStack {
+                // Lighter than the scrim the flat controls needed: the glass carries most of the
+                // separation now, and a heavy gradient would flatten it back into a dark bar.
+                LinearGradient(colors: [.black.opacity(0.34), .clear, .clear, .black.opacity(0.46)],
+                               startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                VStack(spacing: 0) {
+                    topBar
+                    Spacer(minLength: 0)
+                    centerBar
+                    Spacer(minLength: 0)
+                    bottomBar
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .foregroundStyle(.white)
         }
-        .foregroundStyle(.white)
     }
 
     private var topBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Button("关闭", systemImage: "xmark") { dismiss() }
                 .labelStyle(.iconOnly)
                 .font(.title3.weight(.semibold))
                 .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+                .contentShape(Circle())
+                .glassEffect(.regular.interactive(), in: .circle)
                 .accessibilityIdentifier("player.close")
             VStack(alignment: .leading, spacing: 1) {
                 Text(model.content.title).font(.subheadline.weight(.semibold)).lineLimit(1)
@@ -441,13 +446,17 @@ struct VideoPlayerView: View {
                     hideTask?.cancel()
                     showingEpisodes = true
                 }
-                .labelStyle(.iconOnly).font(.title3).frame(width: 40, height: 40)
+                .labelStyle(.iconOnly).font(.title3).frame(width: 44, height: 44)
+                .glassEffect(.regular.interactive(), in: .circle)
                 .accessibilityIdentifier("player.episodes")
             }
-            AirPlayButton().frame(width: 36, height: 36)
+            // The route picker draws its own glyph; it only borrows the circle so the row stays level.
+            AirPlayButton().frame(width: 44, height: 44)
+                .glassEffect(.regular, in: .circle)
             if pip.isPossible {
                 Button("画中画", systemImage: "pip.enter") { pip.start() }
-                    .labelStyle(.iconOnly).font(.title3).frame(width: 40, height: 40)
+                    .labelStyle(.iconOnly).font(.title3).frame(width: 44, height: 44)
+                    .glassEffect(.regular.interactive(), in: .circle)
                     .accessibilityIdentifier("player.pip")
             }
             if model.streams.count > 1 {
@@ -459,8 +468,9 @@ struct VideoPlayerView: View {
                     }
                 } label: {
                     Label("线路", systemImage: "antenna.radiowaves.left.and.right").labelStyle(.iconOnly)
-                        .font(.title3).frame(width: 40, height: 40)
+                        .font(.title3).frame(width: 44, height: 44)
                 }
+                .glassEffect(.regular.interactive(), in: .circle)
                 .accessibilityIdentifier("player.streams")
             }
         }
@@ -468,13 +478,14 @@ struct VideoPlayerView: View {
     }
 
     private var centerBar: some View {
-        HStack(spacing: 36) {
+        HStack(spacing: 16) {
             if let previous = model.previous {
                 circleButton(String(localized: "上一集"), "backward.end.fill", size: 22) { Task { await model.move(to: previous) } }
                     .accessibilityIdentifier("player.previous")
             }
             circleButton(String(localized: "后退 10 秒"), "gobackward.10", size: 26) { model.skip(by: -10) }
-            circleButton(model.isPlaying ? String(localized: "暂停") : String(localized: "播放"), model.isPlaying ? "pause.fill" : "play.fill", size: 40) {
+            circleButton(model.isPlaying ? String(localized: "暂停") : String(localized: "播放"),
+                         model.isPlaying ? "pause.fill" : "play.fill", size: 40, tinted: true) {
                 model.togglePlay()
             }
             .accessibilityIdentifier("player.playPause")
@@ -486,40 +497,48 @@ struct VideoPlayerView: View {
         }
     }
 
-    private func circleButton(_ title: String, _ icon: String, size: CGFloat, action: @escaping () -> Void) -> some View {
+    /// Circle glass buttons: the diameter follows the glyph but never drops below the 44 pt touch target.
+    private func circleButton(_ title: String, _ icon: String, size: CGFloat, tinted: Bool = false,
+                              action: @escaping () -> Void) -> some View {
         Button { action(); scheduleHide() } label: {
             Image(systemName: icon).font(.system(size: size, weight: .semibold))
-                .frame(width: size * 1.9, height: size * 1.9)
+                .frame(width: max(44, size * 1.6), height: max(44, size * 1.6))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .glassEffect(tinted ? .regular.tint(.accentColor).interactive() : .regular.interactive(), in: .circle)
         .accessibilityLabel(title)
     }
 
     private var bottomBar: some View {
-        VStack(spacing: 6) {
-            Slider(value: Binding(get: { scrubbing ?? model.position },
-                                  set: { scrubbing = $0 }),
-                   in: 0...max(model.duration, 1)) { editing in
-                if !editing, let target = scrubbing { model.seek(to: target); scrubbing = nil; scheduleHide() }
-                if editing { hideTask?.cancel() }
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                Text(Self.time(scrubbing ?? model.position)).font(.caption.monospacedDigit()).fixedSize()
+                Slider(value: Binding(get: { scrubbing ?? model.position },
+                                      set: { scrubbing = $0 }),
+                       in: 0...max(model.duration, 1)) { editing in
+                    if !editing, let target = scrubbing { model.seek(to: target); scrubbing = nil; scheduleHide() }
+                    if editing { hideTask?.cancel() }
+                }
+                .tint(.white)
+                .disabled(model.duration <= 0)
+                .accessibilityIdentifier("player.scrubber")
+                Text(Self.time(model.duration)).font(.caption.monospacedDigit()).fixedSize().opacity(0.75)
             }
-            .tint(.white)
-            .disabled(model.duration <= 0)
-            .accessibilityIdentifier("player.scrubber")
-            HStack(spacing: 14) {
-                Text(Self.time(scrubbing ?? model.position)).monospacedDigit()
-                Text("/ " + Self.time(model.duration)).monospacedDigit().foregroundStyle(.white.opacity(0.7))
-                Spacer()
+            .padding(.horizontal, 14)
+            .frame(height: 44)
+            .glassEffect(.regular, in: .capsule)
+            HStack(spacing: 10) {
+                Spacer(minLength: 0)
                 Menu {
                     Picker("播放速度", selection: Binding(get: { model.rate }, set: { model.setRate($0) })) {
                         ForEach([0.5, 0.75, 1, 1.25, 1.5, 2] as [Float], id: \.self) { Text(Self.rateTitle($0)).tag($0) }
                     }
                 } label: {
                     Text(Self.rateTitle(model.rate)).font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(.white.opacity(0.18), in: .capsule)
+                        .frame(height: 44).padding(.horizontal, 12)
                 }
+                .glassEffect(.regular.interactive(), in: .capsule)
                 .accessibilityIdentifier("player.rate")
                 if !model.audioOptions.isEmpty || !model.subtitleOptions.isEmpty || !model.externalSubtitles.isEmpty {
                     Menu {
@@ -539,15 +558,17 @@ struct VideoPlayerView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: "captions.bubble").font(.title3).frame(width: 36, height: 32)
+                        Image(systemName: "captions.bubble").font(.title3).frame(width: 44, height: 44)
                     }
+                    .glassEffect(.regular.interactive(), in: .circle)
                     .accessibilityIdentifier("player.tracks")
                 }
                 Button(fill ? "适应屏幕" : "填充屏幕",
                        systemImage: fill ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") {
                     withAnimation(.snappy) { fill.toggle() }
                 }
-                .labelStyle(.iconOnly).font(.title3).frame(width: 36, height: 32)
+                .labelStyle(.iconOnly).font(.title3).frame(width: 44, height: 44)
+                .glassEffect(.regular.interactive(), in: .circle)
             }
             .font(.caption)
         }
