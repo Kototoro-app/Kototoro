@@ -99,7 +99,10 @@ internal object DesktopStrings {
 
     operator fun get(key: String): String {
         val tag = mutableTag.value // read through the snapshot state, so composables re-read after a switch
-        return catalog("desktop-strings", tag)[key] ?: baseCatalog("desktop-strings")[key] ?: key
+        // getProperty, not get: Properties is a Hashtable, whose get returns Any?.
+        return catalog("desktop-strings", tag).getProperty(key)
+            ?: baseCatalog("desktop-strings").getProperty(key)
+            ?: key
     }
 
     /** The string [key] with [args] substituted, formatted in the interface language. */
@@ -118,7 +121,7 @@ internal object DesktopStrings {
     /** The strings of one Android resource file in the interface language, falling back to Android's default. */
     internal fun android(name: String, key: String): String? {
         val tag = mutableTag.value
-        return catalog(name, tag)[key] ?: baseCatalog(name)[key]
+        return catalog(name, tag).getProperty(key) ?: baseCatalog(name).getProperty(key)
     }
 
     private fun catalog(name: String, tag: String): Properties = catalogs.getOrPut("$name@$tag") {

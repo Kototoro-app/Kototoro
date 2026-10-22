@@ -1,6 +1,20 @@
 name: Windows Package
 
 on:
+  # A manual run builds Windows alone, without the Android and iOS jobs of the nightly: the quickest way to check that
+  # a desktop change compiles and still packages. Leave `ref` empty to build the branch the run was started from.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit or branch to build'
+        required: false
+        default: ''
+        type: string
+      channel:
+        description: 'Package channel: nightly or release'
+        required: false
+        default: 'nightly'
+        type: string
   workflow_call:
     inputs:
       ref:
