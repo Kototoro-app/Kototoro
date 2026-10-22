@@ -49,6 +49,7 @@ internal fun DesktopChapterDirectoryCard(
     onClick: () -> Unit,
     modifier: Modifier,
     onLongClick: (() -> Unit)? = null,
+    showActions: Boolean = true,
     onDownload: (() -> Unit)? = null,
     onMarkRead: (() -> Unit)? = null,
     onMarkUnread: (() -> Unit)? = null,
@@ -59,7 +60,8 @@ internal fun DesktopChapterDirectoryCard(
         onMarkUnread?.let { Triple("details-mark-unread", desktopText("details.markUnread"), it) },
         onDeleteDownload?.let { Triple("details-delete-download", desktopText("details.deleteDownload"), it) },
     )
-    val actions: (@Composable RowScope.() -> Unit)? = if (menu.isEmpty() && onDownload == null) null else {
+    // Android hides the per-row buttons while a selection is active, so batch commands are the only buttons offered.
+    val actions: (@Composable RowScope.() -> Unit)? = if (!showActions || (menu.isEmpty() && onDownload == null)) null else {
         {
             if (menu.isNotEmpty()) {
                 Box {

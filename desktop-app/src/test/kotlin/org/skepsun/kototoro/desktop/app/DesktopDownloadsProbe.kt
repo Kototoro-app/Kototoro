@@ -72,11 +72,16 @@ internal object DesktopDownloadsProbe {
                     onNodeWithTag("read-chapter:${second.id}").performClick(); idle()
                     onNodeWithTag("details-selection-bar").assertExists()
                     onNodeWithTag("details-selection-count").assertExists()
+                    // Android hides the per-row buttons while selecting, so only the batch bar offers commands.
+                    onNodeWithTag("chapter-menu:${chapter.id}").assertDoesNotExist()
+                    onNodeWithTag("download-chapter:${chapter.id}").assertDoesNotExist()
+                    snapshot("chapter-selection")
                     // A batch is still one reading position: the last chapter of the selection wins.
                     onNodeWithTag("details-selection-read").performClick(); idle()
                     check(runBlocking { session.library.progress(content.id) }?.chapterId == second.id)
                     check(controller.state.value.detailsChapterId == second.id)
                     onNodeWithTag("details-selection-all").performClick(); idle()
+                    snapshot("chapter-selection-all")
                     onNodeWithTag("details-selection-clear").performClick(); idle()
                     // Leaving the mode hands clicks back to navigation, and the download steps below start clean.
                     onNodeWithTag("details-chapter-select").performClick(); idle()

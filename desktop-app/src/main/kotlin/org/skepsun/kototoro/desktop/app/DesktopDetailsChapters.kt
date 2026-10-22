@@ -200,6 +200,7 @@ internal fun DesktopDetailsChapters(
                                 ui.selection = ui.selection.toggle(chapter)
                             }
                         },
+                        showActions = !ui.selecting,
                         onDownload = if (DesktopReaderKind.of(state.content) == DesktopReaderKind.PAGES) {
                             { controller.downloadChapter(chapter) }
                         } else null,
