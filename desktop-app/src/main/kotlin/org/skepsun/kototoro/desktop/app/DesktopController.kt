@@ -943,6 +943,20 @@ class DesktopController(val session: DesktopSession) {
         downloads.enqueue(content.id, chapter, content.title)
     }
 
+    /**
+     * The whole-work scopes go through one action so a menu click cannot interleave with navigation,
+     * and ownership is checked once instead of per chapter. Chapters that are already active or
+     * complete are filtered out by [desktopDownloadTargets] before this runs.
+     */
+    fun downloadChapters(chapters: List<SourceChapter>) = action {
+        val content = requireNotNull(state.value.content)
+        val owned = content.chapters.orEmpty()
+        val targets = chapters.filter { candidate -> owned.any { it == candidate } }
+        require(targets.isNotEmpty()) { desktopText("downloads.nothingToQueue") }
+        targets.forEach { downloads.enqueue(content.id, it, content.title) }
+        mutableState.update { it.copy(message = desktopText("downloads.batchQueued", targets.size)) }
+    }
+
     fun showDownloads() = navigate { mutableState.update { it.copy(screen = DesktopScreen.DOWNLOADS) } }
 
     fun showBackups() = navigate { mutableState.update { it.copy(screen = DesktopScreen.BACKUPS) } }

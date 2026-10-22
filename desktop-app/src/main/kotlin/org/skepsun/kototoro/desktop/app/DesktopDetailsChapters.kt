@@ -52,10 +52,49 @@ internal fun DesktopDetailsChapters(
         state.bookmarks.filter { it.contentId == state.content?.id }.map { it.chapterId }.toSet()
     }
     val enabled = !state.busy
+    // The menu works on the whole work even when the list is filtered to one branch, matching Android's dialog.
+    val ordered = remember(chapters) {
+        desktopChapterList(chapters, null, "", false).sections.mapNotNull { (it as? ChapterSection.Item)?.chapter }
+    }
+    val downloadMenu = remember(ordered, current, downloaded, state.chapterBranch) {
+        val scopes = buildList {
+            add(DesktopDownloadScope.WHOLE)
+            add(DesktopDownloadScope.UNREAD)
+            add(DesktopDownloadScope.BRANCH)
+            add(DesktopDownloadScope.FIRST)
+        }
+        scopes.flatMap { scope ->
+            val options = if (scope == DesktopDownloadScope.FIRST) {
+                DesktopDownloadMenuOptions.map { DesktopDownloadOption(scope, count = it) }
+            } else {
+                listOf(DesktopDownloadOption(scope, branch = state.chapterBranch.takeIf { scope == DesktopDownloadScope.BRANCH }))
+            }
+            options.map { it to desktopDownloadTargets(ordered, current, downloaded, it) }
+        }.filter { (_, targets) -> targets.isNotEmpty() }
+    }
     val controls: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(desktopText("details.chapters", list.count), modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                if (DesktopReaderKind.of(state.content) == DesktopReaderKind.PAGES) {
+                    Box {
+                        var open by remember { mutableStateOf(false) }
+                        IconButton({ open = true }, enabled = enabled && downloadMenu.isNotEmpty(),
+                            modifier = Modifier.testTag("details-download-menu")) {
+                            Icon(ReaderPanelIcons.Download, desktopText("details.downloadChapters"))
+                        }
+                        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                            downloadMenu.forEach { (option, targets) ->
+                                DropdownMenuItem({
+                                    Text(desktopDownloadMenuLabel(option, targets.size, state.chapterBranch))
+                                }, {
+                                    open = false
+                                    controller.downloadChapters(targets)
+                                }, modifier = Modifier.testTag(desktopDownloadMenuTag(option)))
+                            }
+                        }
+                    }
+                }
                 IconButton({
                     ui.query = ""; ui.targetChapterId = current?.id; ui.locateRequest++
                     controller.selectChapterBranch(current?.branch)
