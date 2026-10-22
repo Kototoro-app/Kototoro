@@ -332,6 +332,93 @@ internal object DesktopParserProbe {
                     waitUntil(timeoutMillis = 15_000) { runBlocking { session.library.progress(book.id) }?.page == 16 }
                     novelKey(Key.B); idle()
                     novelBookmarks()
+                    // Paged reading: whole paragraphs per page, turned by the wheel and the paging keys.
+                    fun pagedNovel() {
+                        val requests = requested.size
+                        fun statusLabel(): String {
+                            novelKey(Key.H); waitForIdle()
+                            onNodeWithTag("novel-progress", useUnmergedTree = true).assertExists()
+                            val label = onNodeWithTag("novel-progress", useUnmergedTree = true).fetchSemanticsNode()
+                                .config[SemanticsProperties.Text].joinToString("") { it.text }
+                            novelKey(Key.H); waitForIdle()
+                            return label
+                        }
+                        // "第 3 / 5 页 · 60%": the status bar counts pages while paged, not paragraphs.
+                        fun pageOf(label: String): Pair<Int, Int> {
+                            val match = Regex("^第 (\\d+) / (\\d+) 页").find(label)
+                            check(match != null) { "paged status: $label" }
+                            return match.groupValues[1].toInt() to match.groupValues[2].toInt()
+                        }
+                        // The paragraph the scroll reader showed is on the page that opens.
+                        val reading = controller.state.value.novel!!.firstVisible
+                        controller.novelSettings(controller.state.value.novelSettings.copy(paged = true)); waitForIdle()
+                        check(controller.state.value.novelSettings.paged)
+                        val store = session.storage.preferences.open("desktop_novel").snapshot()
+                        check(store["paged"] == SourcePreferenceValue.Toggle(true)) { store["paged"].toString() }
+                        onNodeWithTag("novel-paged").assertIsDisplayed()
+                        onNodeWithTag("novel-list").assertDoesNotExist()
+                        onNodeWithTag("reader-page-slider").assertIsDisplayed()
+                        onNodeWithTag("novel-block:$reading").assertIsDisplayed()
+                        val first = controller.state.value.novel!!.firstVisible
+                        // A font change re-measures every page and keeps the anchored paragraph on screen.
+                        controller.novelSettings(controller.state.value.novelSettings.copy(fontSize = 23)); waitForIdle()
+                        onNodeWithTag("novel-block:$first").assertIsDisplayed()
+                        controller.novelSettings(controller.state.value.novelSettings.copy(fontSize = 20)); waitForIdle()
+                        onNodeWithTag("novel-block:$first").assertIsDisplayed()
+                        val (startPage, pages) = pageOf(statusLabel())
+                        check(pages > 1) { "the fixture chapter must span pages, got $pages" }
+                        check(startPage in 1..pages) { "the opening page must hold the read paragraph: $startPage of $pages" }
+                        snapshot("novel-paged")
+                        // A page holds several paragraphs, so the reported anchor moves by a page, not a block.
+                        novelKey(Key.PageDown); waitForIdle()
+                        val second = controller.state.value.novel!!.firstVisible
+                        check(second > first) { "PageDown did not turn the page: $first -> $second" }
+                        onNodeWithTag("novel-block:$second").assertIsDisplayed()
+                        check(pageOf(statusLabel()).first == minOf(startPage + 1, pages)) { "paged status after turning" }
+                        waitUntil(timeoutMillis = 15_000) { runBlocking { session.library.progress(book.id) }?.page == second }
+                        // The wheel goes back one page; a burst still counts once, so a beat is left between flips.
+                        onNodeWithTag("novel-paged").performMouseInput { moveTo(center); scroll(-3f) }
+                        waitForIdle()
+                        check(controller.state.value.novel!!.firstVisible == first)
+                        Thread.sleep(120)
+                        onNodeWithTag("novel-paged").performMouseInput { moveTo(center); scroll(3f) }
+                        waitForIdle()
+                        check(controller.state.value.novel!!.firstVisible == second)
+                        // The slider counts pages too: the chosen page decides which paragraph is reported.
+                        onNodeWithTag("reader-page-slider").performSemanticsAction(SemanticsActions.SetProgress) {
+                            it((pages - 1).toFloat())
+                        }
+                        waitForIdle()
+                        val lastPageStart = controller.state.value.novel!!.firstVisible
+                        check(lastPageStart > second) { "the slider did not reach the last page: $second -> $lastPageStart" }
+                        onNodeWithTag("novel-block:$lastPageStart").assertIsDisplayed()
+                        check(pageOf(statusLabel()) == pages to pages) { "paged status after the slider" }
+                        // Home and End reach the chapter's ends without leaving it.
+                        novelKey(Key.MoveHome); waitForIdle()
+                        check(controller.state.value.novel!!.firstVisible == 0)
+                        check(pageOf(statusLabel()).first == 1)
+                        novelKey(Key.MoveEnd); waitForIdle()
+                        val end = controller.state.value.novel!!
+                        check(end.firstVisible == lastPageStart && end.chapter.id == book.chapters!![1].id) {
+                            "End must stay on the chapter's last page: ${end.firstVisible} in ${end.chapter.id}"
+                        }
+                        snapshot("novel-paged-end")
+                        // Scrolling resumes at the page's first paragraph, and the stored setting goes back.
+                        onNodeWithTag("reader-page-slider").performSemanticsAction(SemanticsActions.SetProgress) {
+                            it((pages / 2).toFloat())
+                        }
+                        waitForIdle()
+                        val resume = controller.state.value.novel!!.firstVisible
+                        controller.novelSettings(controller.state.value.novelSettings.copy(paged = false)); waitForIdle()
+                        onNodeWithTag("novel-list").assertIsDisplayed()
+                        onNodeWithTag("novel-paged").assertDoesNotExist()
+                        onNodeWithTag("novel-block:$resume").assertIsDisplayed()
+                        waitUntil(timeoutMillis = 10_000) { controller.state.value.novel!!.firstVisible == resume }
+                        check(session.storage.preferences.open("desktop_novel").snapshot()["paged"] ==
+                            SourcePreferenceValue.Toggle(false))
+                        check(requested.size == requests) { "paging must not fetch anything" }
+                    }
+                    pagedNovel()
                     importedNovelBookmark()
 
                     // A manga-type UMA source still takes the page reader and its images come from the plugin's domain.

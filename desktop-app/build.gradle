@@ -292,6 +292,8 @@ dependencies {
     implementation project(':cloudstream-desktop')
     implementation project(':core-domain')
     implementation project(':reader-core')
+    // Novel paging reuses the shared line splitter Android paginates with, not a Windows-only rewrite.
+    implementation project(':reader-novel')
     // The WebDAV sync protocol and its remote catalog/retention rules are shared with Android, not reimplemented here.
     implementation project(':core-net')
     implementation libs.ktor.client.java

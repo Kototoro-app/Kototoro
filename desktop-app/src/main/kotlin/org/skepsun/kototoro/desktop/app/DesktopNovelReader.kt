@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -23,12 +24,7 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
@@ -57,20 +53,47 @@ internal fun DesktopNovelReader(controller: DesktopController, state: DesktopApp
     var panel by remember { mutableStateOf<NovelPanel?>(null) }
     val hasPrevious = state.adjacentChapter(false) != null
     val hasNext = state.adjacentChapter(true) != null
+    val paged = settings.paged
+    // One pager per chapter: pages follow the measured window, while the anchor survives a mode switch.
+    val pager = remember(novel.chapter.id) { DesktopNovelPagerState(novel.startBlock) }
+    fun flipPage(forward: Boolean) {
+        if (!enabled) return
+        val moved = if (forward) pager.next() else pager.previous()
+        if (moved) return
+        when {
+            forward && hasNext -> controller.changeNovelChapter(true)
+            !forward && hasPrevious -> controller.changeNovelChapter(false)
+        }
+    }
     fun back() {
         if (fullscreen) onToggleFullscreen?.invoke()
         controller.backToDetails()
     }
     // Position first, then reporting: the first emission must not overwrite a restored position with block 0.
     LaunchedEffect(novel.chapter.id, novel.navigation) {
-        list.scrollToItem(novel.startBlock)
+        if (!paged) list.scrollToItem(novel.startBlock)
         focus.requestFocus()
+    }
+    // Switching modes continues at the paragraph being read: paged mode opens the page that holds it, and scrolling
+    // resumes at the page's first paragraph.
+    LaunchedEffect(paged) {
+        if (paged) pager.jumpToBlock(novel.firstVisible)
+        else list.scrollToItem(pager.anchorBlock.coerceIn(0, novel.blocks.lastIndex.coerceAtLeast(0)))
+        focus.requestFocus()
+    }
+    // Each mode reports its own first/last block; switching modes restarts the reporter, not the position.
+    LaunchedEffect(novel.chapter.id, paged) {
+        if (paged) return@LaunchedEffect
         snapshotFlow {
             val visible = list.layoutInfo.visibleItemsInfo.filter { it.index < novel.blocks.size }
             // Items behind the fixed top padding are composed too; they are not the saved reading anchor.
             list.firstVisibleItemIndex.coerceAtMost(novel.blocks.lastIndex.coerceAtLeast(0)) to
                 (visible.lastOrNull()?.index ?: 0)
         }.collect { (first, last) -> controller.novelProgress(novel.chapter.id, first, last.coerceAtLeast(first)) }
+    }
+    LaunchedEffect(novel.chapter.id, paged, pager.page, pager.pages) {
+        if (!paged) return@LaunchedEffect
+        pager.range?.let { range -> controller.novelProgress(novel.chapter.id, range.first, range.last) }
     }
     CompositionLocalProvider(LocalContentColor provides Color(colors.text)) {
         Box(Modifier.fillMaxSize().background(Color(colors.background)).testTag("novel-reader")
@@ -86,13 +109,21 @@ internal fun DesktopNovelReader(controller: DesktopController, state: DesktopApp
                     event.key == Key.H -> { controlsVisible = !controlsVisible; true }
                     event.key == Key.F11 && onToggleFullscreen != null -> { onToggleFullscreen(); true }
                     event.key == Key.PageDown || event.key == Key.Spacebar && !event.isShiftPressed -> {
-                        scope.launch { list.animateScrollBy(list.layoutInfo.viewportSize.height * .9f) }; true
+                        if (paged) flipPage(true) else scope.launch { list.animateScrollBy(list.layoutInfo.viewportSize.height * .9f) }
+                        true
                     }
                     event.key == Key.PageUp || event.key == Key.Spacebar -> {
-                        scope.launch { list.animateScrollBy(-list.layoutInfo.viewportSize.height * .9f) }; true
+                        if (paged) flipPage(false) else scope.launch { list.animateScrollBy(-list.layoutInfo.viewportSize.height * .9f) }
+                        true
                     }
-                    event.key == Key.MoveHome -> { scope.launch { list.scrollToItem(0) }; true }
-                    event.key == Key.MoveEnd -> { scope.launch { list.scrollToItem(novel.blocks.lastIndex) }; true }
+                    event.key == Key.MoveHome -> {
+                        if (paged) pager.jumpToBlock(0) else scope.launch { list.scrollToItem(0) }
+                        true
+                    }
+                    event.key == Key.MoveEnd -> {
+                        if (paged) pager.jumpToBlock(novel.blocks.lastIndex) else scope.launch { list.scrollToItem(novel.blocks.lastIndex) }
+                        true
+                    }
                     else -> false
                 }
             }) {
@@ -102,32 +133,11 @@ internal fun DesktopNovelReader(controller: DesktopController, state: DesktopApp
                     focus.requestFocus()
                 })
             }) {
-                LazyColumn(Modifier.fillMaxSize().testTag("novel-list"), state = list,
-                    contentPadding = PaddingValues(
-                        top = NovelReaderChromeLayout.TopHeight,
-                        bottom = NovelReaderChromeLayout.BottomHeight,
-                    )) {
-                    itemsIndexed(novel.blocks) { index, block ->
-                        Box(Modifier.fillMaxWidth().padding(horizontal = 28.dp), contentAlignment = Alignment.TopCenter) {
-                            Box(Modifier.widthIn(max = settings.width.dp).fillMaxWidth().testTag("novel-block:$index")) {
-                                NovelBlockView(controller, block, settings)
-                            }
-                        }
-                    }
-                    item {
-                        Row(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalArrangement = Arrangement.Center) {
-                            OutlinedButton({ controller.changeNovelChapter(false) }, enabled = enabled && hasPrevious,
-                                colors = themedOutline(colors),
-                                modifier = Modifier.testTag("novel-previous-chapter")) {
-                                Text(desktopText("novel.previousChapter"))
-                            }
-                            Spacer(Modifier.width(16.dp))
-                            Button({ controller.changeNovelChapter(true) }, enabled = enabled && hasNext,
-                                modifier = Modifier.testTag("novel-next-chapter")) {
-                                Text(desktopText("novel.nextChapter"))
-                            }
-                        }
-                    }
+                if (paged) {
+                    DesktopNovelPagedBody(controller, novel, settings, pager, onFlip = ::flipPage,
+                        modifier = Modifier.fillMaxSize())
+                } else {
+                    DesktopNovelScrollBody(controller, novel, settings, list, enabled, hasPrevious, hasNext, colors)
                 }
             }
             DesktopNovelReaderChrome(
@@ -138,23 +148,31 @@ internal fun DesktopNovelReader(controller: DesktopController, state: DesktopApp
                 panelVisible = panel != null,
                 previousEnabled = enabled && hasPrevious,
                 nextEnabled = enabled && hasNext,
-                bookmarked = novel.firstVisible in novel.bookmarkBlocks.values,
+                bookmarked = if (paged) {
+                    val saved = novel.bookmarkBlocks.values
+                    pager.range?.any { it in saved } == true
+                } else {
+                    novel.firstVisible in novel.bookmarkBlocks.values
+                },
                 onToggleBookmark = { if (enabled) controller.toggleNovelBookmark() },
                 onBookmarks = { panel = NovelPanel.BOOKMARKS },
                 actions = NovelReaderChromeActions(
                     onBack = ::back,
                     onChapters = { panel = NovelPanel.CHAPTERS },
                     onOptions = { panel = NovelPanel.SETTINGS },
-                    onProgressSelected = { block ->
-                        if (enabled && block in novel.blocks.indices) {
-                            scope.launch { list.scrollToItem(block) }
-                            focus.requestFocus()
-                        }
-                    },
+                onProgressSelected = { position ->
+                    // Paged mode shows the slider in pages; the pager works in paragraphs, so the page decides.
+                    val block = if (paged) pager.pages.getOrNull(position)?.first ?: position else position
+                    if (enabled && block in novel.blocks.indices) {
+                        if (paged) pager.jumpToBlock(block) else scope.launch { list.scrollToItem(block) }
+                        focus.requestFocus()
+                    }
+                },
                     onPreviousChapter = { if (enabled) controller.changeNovelChapter(false) },
                     onNextChapter = { if (enabled) controller.changeNovelChapter(true) },
                 ),
                 onShowControls = { controlsVisible = true; focus.requestFocus() },
+                pageStatus = if (paged && !pager.isEmpty) pager.page to pager.pages.size else null,
             )
             panel?.let { selected ->
                 val close: () -> Unit = { panel = null; focus.requestFocus() }
@@ -169,27 +187,67 @@ internal fun DesktopNovelReader(controller: DesktopController, state: DesktopApp
 }
 
 @Composable
-private fun NovelBlockView(controller: DesktopController, block: NovelBlock, settings: DesktopNovelSettings) {
-    val colors = settings.theme
-    val family = if (settings.serif) FontFamily.Serif else FontFamily.Default
-    when (block) {
-        is NovelBlock.Paragraph -> Text(buildAnnotatedString {
-            block.runs.forEach { run ->
-                withStyle(SpanStyle(fontWeight = if (run.bold) FontWeight.Bold else null,
-                    fontStyle = if (run.italic) FontStyle.Italic else null)) { append(run.text) }
+private fun DesktopNovelScrollBody(
+    controller: DesktopController,
+    novel: DesktopNovel,
+    settings: DesktopNovelSettings,
+    list: LazyListState,
+    enabled: Boolean,
+    hasPrevious: Boolean,
+    hasNext: Boolean,
+    colors: DesktopNovelTheme,
+) {
+    LazyColumn(Modifier.fillMaxSize().testTag("novel-list"), state = list,
+        contentPadding = PaddingValues(
+            top = NovelReaderChromeLayout.TopHeight,
+            bottom = NovelReaderChromeLayout.BottomHeight,
+        )) {
+        itemsIndexed(novel.blocks) { index, block ->
+            Box(Modifier.fillMaxWidth().padding(horizontal = 28.dp), contentAlignment = Alignment.TopCenter) {
+                Box(Modifier.widthIn(max = settings.width.dp).fillMaxWidth().testTag("novel-block:$index")) {
+                    NovelBlockView(controller, block, settings)
+                }
             }
-        }, color = Color(colors.text), fontSize = settings.fontSize.sp, lineHeight = (settings.fontSize * settings.lineSpacing).sp,
-            fontFamily = family, modifier = Modifier.padding(bottom = (settings.fontSize * .7f).dp))
-        is NovelBlock.Heading -> Text(block.text, color = Color(colors.text), fontFamily = family, fontWeight = FontWeight.Bold,
-            fontSize = (settings.fontSize + (7 - block.level).coerceIn(1, 6) * 2).sp,
-            modifier = Modifier.padding(top = 12.dp, bottom = 16.dp))
-        NovelBlock.Rule -> Divider(Modifier.padding(vertical = 16.dp), color = Color(colors.muted).copy(alpha = .4f))
-        is NovelBlock.Image -> NovelInlineImage(controller, block.url, Color(colors.muted))
+        }
+        item {
+            Row(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalArrangement = Arrangement.Center) {
+                OutlinedButton({ controller.changeNovelChapter(false) }, enabled = enabled && hasPrevious,
+                    colors = themedOutline(colors),
+                    modifier = Modifier.testTag("novel-previous-chapter")) {
+                    Text(desktopText("novel.previousChapter"))
+                }
+                Spacer(Modifier.width(16.dp))
+                Button({ controller.changeNovelChapter(true) }, enabled = enabled && hasNext,
+                    modifier = Modifier.testTag("novel-next-chapter")) {
+                    Text(desktopText("novel.nextChapter"))
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun NovelInlineImage(controller: DesktopController, url: String, muted: Color) {
+internal fun NovelBlockView(
+    controller: DesktopController,
+    block: NovelBlock,
+    settings: DesktopNovelSettings,
+    styles: DesktopNovelTextStyles = settings.desktopNovelStyles(),
+    maxImageHeight: Dp? = null,
+) {
+    val colors = settings.theme
+    when (block) {
+        is NovelBlock.Paragraph -> Text(block.annotatedText(), style = styles.body,
+            modifier = Modifier.padding(bottom = (settings.fontSize * .7f).dp))
+        is NovelBlock.Heading -> Text(block.text, style = styles.heading(block.level),
+            modifier = Modifier.padding(top = 12.dp, bottom = 16.dp))
+        NovelBlock.Rule -> Divider(Modifier.padding(vertical = 16.dp), color = Color(colors.muted).copy(alpha = .4f))
+        is NovelBlock.Image -> NovelInlineImage(controller, block.url, Color(colors.muted),
+            maxImageHeight?.let(::desktopNovelImageHeight))
+    }
+}
+
+@Composable
+private fun NovelInlineImage(controller: DesktopController, url: String, muted: Color, maxHeight: Dp? = null) {
     var failure by remember(url) { mutableStateOf<String?>(null) }
     val bitmap by produceState<ImageBitmap?>(null, url) {
         value = null
@@ -208,7 +266,7 @@ private fun NovelInlineImage(controller: DesktopController, url: String, muted: 
         if (image == null) Text(failure ?: desktopText("novel.imageLoading"), color = muted, fontSize = 13.sp)
         // Small pictures keep their own width instead of being stretched to the whole text column.
         else Image(image, null, contentScale = ContentScale.Fit, modifier = Modifier.widthIn(max = image.width.coerceAtLeast(1).dp)
-            .fillMaxWidth().heightIn(max = 900.dp).testTag("novel-image"))
+            .fillMaxWidth().heightIn(max = maxHeight ?: 900.dp).testTag("novel-image"))
     }
 }
 

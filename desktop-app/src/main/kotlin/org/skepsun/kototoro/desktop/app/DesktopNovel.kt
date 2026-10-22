@@ -48,6 +48,8 @@ data class DesktopNovelSettings(
     val width: Int = 760,
     val theme: DesktopNovelTheme = DesktopNovelTheme.LIGHT,
     val serif: Boolean = false,
+    /** Android's reading modes: continuous scrolling, or whole pages turned by the wheel and the paging keys. */
+    val paged: Boolean = false,
 ) {
     companion object {
         val FONT_SIZES = 14..36

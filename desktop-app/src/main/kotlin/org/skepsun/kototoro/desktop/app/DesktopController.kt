@@ -958,6 +958,7 @@ class DesktopController(val session: DesktopSession) {
             "width" to SourcePreferenceValue.Integer(settings.width),
             "theme" to SourcePreferenceValue.Text(settings.theme.name),
             "serif" to SourcePreferenceValue.Toggle(settings.serif),
+            "paged" to SourcePreferenceValue.Toggle(settings.paged),
         )))
         if (!saved) mutableState.update { it.copy(error = desktopText("error.readerSettingsInMemory")) }
     }
@@ -975,6 +976,7 @@ class DesktopController(val session: DesktopSession) {
             theme = DesktopNovelTheme.entries.firstOrNull {
                 it.name == (snapshot["theme"] as? SourcePreferenceValue.Text)?.value } ?: defaults.theme,
             serif = (snapshot["serif"] as? SourcePreferenceValue.Toggle)?.value ?: defaults.serif,
+            paged = (snapshot["paged"] as? SourcePreferenceValue.Toggle)?.value ?: defaults.paged,
         )
     }
 

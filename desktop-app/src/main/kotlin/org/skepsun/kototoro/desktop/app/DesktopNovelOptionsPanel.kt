@@ -108,6 +108,16 @@ internal fun DesktopNovelOptionsPanel(
                     },
                     ReaderOptionsTab(AndroidStrings["novel_reader_tab_reading"]) {
                         ReaderOptionsPageList {
+                            item {
+                                ReaderOptionGroup {
+                                    ReaderOptionSwitchRow(
+                                        label = desktopText("novel.pagedMode"),
+                                        checked = settings.paged,
+                                        onCheckedChange = { controller.novelSettings(settings.copy(paged = it)) },
+                                        modifier = Modifier.testTag("novel-paged-mode"),
+                                    )
+                                }
+                            }
                             if (onToggleFullscreen != null) item {
                                 ReaderOptionGroup {
                                     ReaderOptionSwitchRow(
