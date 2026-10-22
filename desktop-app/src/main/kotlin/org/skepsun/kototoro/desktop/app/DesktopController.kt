@@ -957,6 +957,12 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { it.copy(message = desktopText("downloads.batchQueued", targets.size)) }
     }
 
+    /** Exports one completed chapter as a CBZ so it can leave the app; the stored chapter stays readable. */
+    internal fun exportDownload(record: SourceChapterDownload, directory: Path) = action {
+        val file = session.downloadExporter.export(record, directory)
+        mutableState.update { it.copy(message = desktopText("downloads.exported", file.fileName)) }
+    }
+
     fun showDownloads() = navigate { mutableState.update { it.copy(screen = DesktopScreen.DOWNLOADS) } }
 
     fun showBackups() = navigate { mutableState.update { it.copy(screen = DesktopScreen.BACKUPS) } }

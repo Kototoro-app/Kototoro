@@ -99,6 +99,8 @@ class DesktopSession private constructor(
         sources.fetchImage(it)
     }
     internal val downloadStore = DesktopDownloadStore(storage.preferences)
+    /** CBZ export reads the same verified blobs as the reader; no second copy of the images lives in the store. */
+    internal val downloadExporter = DesktopDownloadExporter(storage.paths.images)
 
     init { startupErrors.addAll(downloadStore.errors); startupErrors.addAll(repositories.errors) }
 

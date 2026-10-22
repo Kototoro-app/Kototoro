@@ -9,6 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import javax.swing.JFileChooser
 
 @Composable
 internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boolean) {
@@ -110,6 +111,20 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
                                 Button({ controller.readDownload(record) }, enabled = !closing && !state.busy &&
                                     item.status == DesktopDownloadStatus.COMPLETE,
                                     modifier = Modifier.testTag("download-read:${item.key}")) { Text(desktopText("downloads.readOffline")) }
+                                if (item.status == DesktopDownloadStatus.COMPLETE) {
+                                    OutlinedButton({
+                                        val chooser = JFileChooser().apply {
+                                            fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+                                            dialogTitle = desktopText("downloads.export")
+                                        }
+                                        if (chooser.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) {
+                                            controller.exportDownload(record, chooser.selectedFile.toPath())
+                                        }
+                                    }, enabled = !closing && !state.busy,
+                                        modifier = Modifier.testTag("download-export:${item.key}")) {
+                                        Text(desktopText("downloads.export"))
+                                    }
+                                }
                             }
                         }
                     }
