@@ -8,6 +8,7 @@ import kotlinx.coroutines.runBlocking
 import org.jetbrains.skia.Image
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.FileTime
 
 /** Both page metadata and image clients go offline for the actual downloaded reader. */
 internal object DesktopDownloadsProbe {
@@ -44,6 +45,7 @@ internal object DesktopDownloadsProbe {
                         Files.write(Path.of(args[3]).resolve("$mode-$name.png"), it.bytes)
                     } }
                 }
+
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.sources.size == 1 }
                 idle()
                 if (mode.endsWith("write")) {
@@ -141,6 +143,36 @@ internal object DesktopDownloadsProbe {
                     idle()
                     check(controller.autoCleanupDownloads.value)
                     check(session.downloadMaintenance.automatic)
+                    // The image cache row reports what offline reading protects, and a new limit applies at once.
+                    onNodeWithTag("image-cache-usage").assertExists()
+                    // The figures refresh once the queue settles, so the usage the page shows includes this chapter.
+                    waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy &&
+                        controller.state.value.imageCache.protectedBytes > 0 }
+                    val before = controller.state.value.imageCache
+                    check(before.usedBytes >= before.protectedBytes)
+                    val images = session.storage.paths.images
+                    val protectedBlobs = session.downloadedImageBlobs()
+                    check(protectedBlobs.isNotEmpty()) { "a downloaded chapter keeps its blobs" }
+                    // A page the reader left behind is what a clear may reclaim; saved-chapter blobs never are.
+                    val stale = images.resolve("f".repeat(64) + ".img")
+                    Files.write(stale, ByteArray(4096) { 3 })
+                    Files.setLastModifiedTime(stale, FileTime.fromMillis(System.currentTimeMillis() - 10 * 60_000L))
+                    onNodeWithTag("image-cache-budget").performClick(); idle()
+                    onNodeWithTag("image-cache-budget:512").performClick()
+                    waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy &&
+                        controller.state.value.imageCache.budgetBytes == 512L * 1024 * 1024 }
+                    check(Files.exists(stale)) { "the sweep keeps a blob inside the budget" }
+                    onNodeWithTag("image-cache-clear").performClick()
+                    waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy }
+                    val after = controller.state.value.imageCache
+                    check(after.deletedFiles == 1) { "the clear reclaims the leftover page" }
+                    check(Files.notExists(stale))
+                    check(after.protectedBytes == before.protectedBytes) { "protected ${after.protectedBytes} vs ${before.protectedBytes}" }
+                    check(after.usedBytes >= after.protectedBytes)
+                    // Clearing protects the saved chapter: every blob it references is still on disk for offline reading.
+                    check(protectedBlobs.all { Files.exists(images.resolve(it)) }) { "a clear removed a saved image" }
+                    idle()
+                    snapshot("image-cache")
                     System.setProperty("fixture.reader.offline", "true")
                     System.setProperty("fixture.reader.pages.offline", "true")
                     snapshot("complete")

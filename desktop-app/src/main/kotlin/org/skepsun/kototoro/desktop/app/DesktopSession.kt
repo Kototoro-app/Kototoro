@@ -105,6 +105,17 @@ class DesktopSession private constructor(
     internal val downloadMaintenance = DesktopDownloadMaintenance(downloadStore, storage.preferences,
         storage.preferences.open("desktop_download_maintenance"))
 
+    /** Blobs a saved chapter still needs; the image budget never evicts these, offline reading would break. */
+    internal fun downloadedImageBlobs(): Set<String> = downloadStore.records.value
+        .flatMap { record -> record.pages.mapNotNull { page -> page.artifact?.relativePath } }
+        .toSet()
+
+    internal fun imageCacheReport(budgetMb: Int): DesktopImageCacheReport =
+        DesktopImageBudget.inspect(storage.paths.images, downloadedImageBlobs(), budgetMb)
+
+    internal suspend fun enforceImageBudget(budgetMb: Int, clear: Boolean = false): DesktopImageCacheReport =
+        DesktopImageBudget.enforce(storage.paths.images, downloadedImageBlobs(), budgetMb, clear)
+
     init { startupErrors.addAll(downloadStore.errors); startupErrors.addAll(repositories.errors) }
 
     /** NCNN super-resolution of reader pages; the controller keeps [upscale] in step with the reader settings. */

@@ -26,6 +26,9 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
     val selectedPaused = selected.count { it.status == DesktopDownloadStatus.PAUSED }
     val selectedFailed = selected.count { it.status == DesktopDownloadStatus.FAILED }
     val selectedRemovable = selected.count { !it.status.isActive }
+    // A finished chapter publishes blobs after the page was opened; re-read the cache figures once the queue settles.
+    val activeCount = downloads.count { it.status.isActive }
+    LaunchedEffect(activeCount) { if (activeCount == 0) controller.refreshImageCache() }
     preview?.let { plan ->
         AlertDialog(onDismissRequest = controller::dismissDownloadCleanup,
             modifier = Modifier.testTag("download-cleanup-dialog"),
@@ -54,6 +57,7 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
                 modifier = Modifier.testTag("download-auto-cleanup"))
             Text(desktopText("downloads.autoCleanup"))
         }
+        DesktopImageCacheRow(controller, state.imageCache, !closing && !state.busy)
         if (downloads.isEmpty()) Text(desktopText("downloads.empty"))
         if (downloads.isNotEmpty()) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -137,3 +141,42 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
         }
     }
 }
+
+/**
+ * Android's storage page condenses its image cache settings into one row: what the directory holds, how much of it
+ * saved chapters keep, the current limit and a manual sweep. The limit is enforced by the periodic loop, but choosing
+ * a value applies it at once, because the user is watching this number.
+ */
+@Composable
+private fun DesktopImageCacheRow(controller: DesktopController, cache: DesktopImageCacheReport, enabled: Boolean) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val budget = controller.imageBudgetMb()
+    val label = desktopImageBudgetLabel(budget)
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(desktopText("downloads.imageCache"), modifier = Modifier.testTag("image-cache-title"))
+        Text(desktopText("downloads.imageCacheUsage", desktopCacheSize(cache.usedBytes),
+            desktopCacheSize(cache.protectedBytes), label), modifier = Modifier.testTag("image-cache-usage"))
+        Box {
+            OutlinedButton({ menuOpen = true }, enabled = enabled,
+                modifier = Modifier.testTag("image-cache-budget")) {
+                Text(desktopText("downloads.imageCacheBudget", label))
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                for (choice in DesktopImageBudget.choicesMb) {
+                    DropdownMenuItem(onClick = {
+                        menuOpen = false
+                        controller.setImageBudget(choice)
+                    }, modifier = Modifier.testTag("image-cache-budget:$choice")) {
+                        Text(desktopImageBudgetLabel(choice))
+                    }
+                }
+            }
+        }
+        TextButton({ controller.clearImageCache() }, enabled = enabled,
+            modifier = Modifier.testTag("image-cache-clear")) { Text(desktopText("downloads.imageCacheClear")) }
+    }
+}
+
+private fun desktopImageBudgetLabel(megabytes: Int): String =
+    if (megabytes == DesktopImageBudget.UNLIMITED_MB) desktopText("downloads.imageCacheUnlimited")
+    else desktopCacheSize(megabytes.toLong() * 1024 * 1024)

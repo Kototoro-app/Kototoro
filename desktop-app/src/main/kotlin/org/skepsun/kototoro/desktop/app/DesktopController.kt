@@ -53,6 +53,10 @@ private const val NEXT_CHAPTER_LOOKAHEAD = 2
 private const val NEXT_CHAPTER_PAGES = 2
 /** After a failed automatic upload, how long the timer waits before it tries the same server again. */
 private const val AUTO_BACKUP_RETRY_MILLIS = 10L * 60 * 1000
+/** The total image budget lives in the settings store Android keeps for Windows-only storage choices. */
+private const val IMAGE_BUDGET = "image_budget_mb"
+/** A sweep lists and stats the whole image directory, so the periodic loop runs it at most this often. */
+private const val IMAGE_SWEEP_INTERVAL_MILLIS = DesktopImageBudget.SWEEP_INTERVAL_MILLIS
 
 internal val DetailsOrigins = setOf(DesktopScreen.HOME, DesktopScreen.FEED, DesktopScreen.EXPLORE, DesktopScreen.LIBRARY,
     DesktopScreen.HISTORY)
@@ -147,6 +151,8 @@ data class DesktopAppState(
     val isFavourite: Boolean = false,
     /** This copy's version, the channel it came from, and the in-app update flow's progress. */
     val update: DesktopUpdateUi = DesktopUpdateUi(),
+    /** The image cache's total size, the part saved chapters need, and its budget. */
+    val imageCache: DesktopImageCacheReport = DesktopImageCacheReport(),
     val busy: Boolean = false,
     val error: String? = null,
     val message: String? = null,
@@ -189,6 +195,9 @@ class DesktopController(val session: DesktopSession) {
     internal val cleanupPreview = mutableCleanup.asStateFlow()
     private val mutableAutoCleanup = MutableStateFlow(session.downloadMaintenance.automatic)
     internal val autoCleanupDownloads = mutableAutoCleanup.asStateFlow()
+    /** Android's total image budget; the page shows what the reader cache holds and what saving protects. */
+    private val storagePreferences = session.storage.preferences.open("desktop_storage")
+    private var lastImageSweepAt = 0L
     /** Chapter keys the download page has selected; kept here so a batch survives leaving and reopening the page. */
     private val mutableDownloadSelection = MutableStateFlow<Set<String>>(emptySet())
     internal val downloadSelection = mutableDownloadSelection.asStateFlow()
@@ -601,6 +610,8 @@ class DesktopController(val session: DesktopSession) {
             delay(initialDelayMillis)
             while (isActive) {
                 runCatching { runDueBackgroundWork() }
+                // The image budget rides on the same loop: it wakes at least every MAXIMUM_WAKE_MS and throttles itself.
+                runCatching { enforceImageBudgetIfDue() }
                 delay(nextWakeDelay(System.currentTimeMillis(), backgroundSchedules()) ?: MAXIMUM_WAKE_MS)
             }
         }
@@ -1089,7 +1100,63 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { it.copy(message = desktopText("downloads.exported", file.fileName)) }
     }
 
-    fun showDownloads() = navigate { mutableState.update { it.copy(screen = DesktopScreen.DOWNLOADS) } }
+    fun showDownloads() = navigate {
+        mutableState.update { it.copy(screen = DesktopScreen.DOWNLOADS) }
+        loadImageCacheOnIo()
+    }
+
+    /** The budget the user picked; zero means unlimited, which is Android's "no limit" choice. */
+    internal fun imageBudgetMb(): Int =
+        (storagePreferences.snapshot()[IMAGE_BUDGET] as? SourcePreferenceValue.Integer)?.value
+            ?: DesktopImageBudget.DEFAULT_MB
+
+    internal suspend fun loadImageCacheOnIo() {
+        val report = runCatching { session.imageCacheReport(imageBudgetMb()) }.getOrNull() ?: return
+        mutableState.update { it.copy(imageCache = report) }
+    }
+
+    /** Re-reads the figures when the queue settles: finishing a chapter publishes blobs the page has not counted yet. */
+    fun refreshImageCache() = action { loadImageCacheOnIo() }
+
+    /**
+     * Applies a new total image budget now instead of waiting for the next sweep: the user just changed the number and
+     * expects the directory to match it, and the report the page shows comes from the same run.
+     */
+    fun setImageBudget(megabytes: Int) = action {
+        require(megabytes == DesktopImageBudget.UNLIMITED_MB || megabytes in DesktopImageBudget.choicesMb)
+        storagePreferences.edit(SourcePreferenceEdit(changes = mapOf(
+            IMAGE_BUDGET to SourcePreferenceValue.Integer(megabytes))))
+        enforceImageBudgetOnIo()
+    }
+
+    /** Frees every unprotected blob; saved chapters keep theirs, so offline reading still works afterwards. */
+    fun clearImageCache() = action {
+        val report = session.enforceImageBudget(imageBudgetMb(), clear = true)
+        mutableState.update { it.copy(imageCache = report, message =
+            if (report.deletedFiles > 0) desktopText("downloads.imageCacheCleared", report.deletedFiles,
+                desktopCacheSize(report.deletedBytes))
+            else desktopText("downloads.imageCacheClearKept")) }
+    }
+
+    private suspend fun enforceImageBudgetOnIo() {
+        lastImageSweepAt = System.currentTimeMillis()
+        val report = runCatching { session.enforceImageBudget(imageBudgetMb()) }.getOrNull() ?: return
+        mutableState.update { it.copy(imageCache = report) }
+    }
+
+    /**
+     * The budget is enforced by the periodic loop, not per page: a sweep lists the whole directory, so running it after
+     * every image would cost more than the images do. [DesktopImageBudget.GRACE_MILLIS] keeps a fresh page safe when a
+     * reading session creates blobs faster than the interval.
+     */
+    internal suspend fun enforceImageBudgetIfDue(now: Long = System.currentTimeMillis()): Boolean {
+        if (now - lastImageSweepAt < IMAGE_SWEEP_INTERVAL_MILLIS) return false
+        lastImageSweepAt = now
+        return runCatching { session.enforceImageBudget(imageBudgetMb()) }.getOrNull()?.let { report ->
+            mutableState.update { it.copy(imageCache = report) }
+            report.deletedFiles > 0
+        } ?: false
+    }
 
     fun showBackups() = navigate { mutableState.update { it.copy(screen = DesktopScreen.BACKUPS) } }
 
