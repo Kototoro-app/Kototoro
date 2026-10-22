@@ -54,8 +54,19 @@ data class DesktopReaderColorFilter(
 }
 
 /** Android's reader backgrounds; AUTO and DEFAULT follow the app's light or dark appearance. */
-enum class DesktopReaderBackground(val title: String) {
-    DEFAULT("默认"), LIGHT("浅色"), DARK("深色"), WHITE("白色"), BLACK("黑色"), AUTO("跟随系统"),
+enum class DesktopReaderBackground {
+    DEFAULT, LIGHT, DARK, WHITE, BLACK, AUTO;
+
+    /** Resolved per call, so an already-open options panel follows a language switch. */
+    val title: String
+        get() = when (this) {
+            DEFAULT -> desktopText("reader.background.DEFAULT")
+            LIGHT -> desktopText("reader.background.LIGHT")
+            DARK -> desktopText("reader.background.DARK")
+            WHITE -> desktopText("reader.background.WHITE")
+            BLACK -> desktopText("reader.background.BLACK")
+            AUTO -> desktopText("reader.background.AUTO")
+        }
 }
 
 /** Paged reading direction: vertical wins over right-to-left, as Android's vertical mode. */

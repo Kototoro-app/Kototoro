@@ -17,23 +17,25 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
     preview?.let { plan ->
         AlertDialog(onDismissRequest = controller::dismissDownloadCleanup,
             modifier = Modifier.testTag("download-cleanup-dialog"),
-            title = { Text("回收旧下载记录") },
-            text = { Text("下载记录占用 ${plan.metadataBytes / 1024} KB。可回收 ${plan.candidates.size} 条旧记录，" +
-                "约 ${plan.reclaimableBytes / 1024} KB。仅回收未引用的元数据块，章节和图片保留。") },
+            title = { Text(desktopText("downloads.cleanupTitle")) },
+            text = {
+                Text(desktopText("downloads.cleanupText", plan.metadataBytes / 1024, plan.candidates.size,
+                    plan.reclaimableBytes / 1024))
+            },
             confirmButton = {
                 TextButton({ controller.cleanupDownloads(plan) }, enabled = !closing && !state.busy &&
-                    plan.candidates.isNotEmpty(), modifier = Modifier.testTag("download-cleanup-confirm")) { Text("确认回收") }
+                    plan.candidates.isNotEmpty(), modifier = Modifier.testTag("download-cleanup-confirm")) { Text(desktopText("downloads.cleanupConfirm")) }
             },
             dismissButton = {
                 TextButton(controller::dismissDownloadCleanup, modifier = Modifier.testTag("download-cleanup-cancel")) {
-                    Text("取消")
+                    Text(desktopText("common.cancel"))
                 }
             })
     }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         OutlinedButton({ controller.previewDownloadCleanup() }, enabled = !closing && !state.busy,
-            modifier = Modifier.testTag("download-storage")) { Text("下载占用 / 回收旧记录") }
-        if (downloads.isEmpty()) Text("在作品详情中选择章节下载，可保存整章供离线阅读。")
+            modifier = Modifier.testTag("download-storage")) { Text(desktopText("downloads.storage")) }
+        if (downloads.isEmpty()) Text(desktopText("downloads.empty"))
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(downloads, key = { it.key }) { item ->
                 val record = item.record
@@ -41,27 +43,27 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
                 Card(Modifier.fillMaxWidth().testTag("download:${item.key}"), elevation = 0.dp) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(record.contentTitle)
-                        Text(record.chapter.title ?: "第 ${record.chapter.number} 章")
+                        Text(record.chapter.title ?: desktopText("common.chapterTitle", record.chapter.number))
                         record.chapter.branch?.let { Text(it) }
                         Text(when (item.status) {
-                            DesktopDownloadStatus.QUEUED -> "等待下载"
-                            DesktopDownloadStatus.DOWNLOADING -> "正在下载"
-                            DesktopDownloadStatus.PAUSED -> "已暂停"
-                            DesktopDownloadStatus.COMPLETE -> "已下载"
-                            DesktopDownloadStatus.FAILED -> "下载失败"
+                            DesktopDownloadStatus.QUEUED -> desktopText("downloads.status.QUEUED")
+                            DesktopDownloadStatus.DOWNLOADING -> desktopText("downloads.status.DOWNLOADING")
+                            DesktopDownloadStatus.PAUSED -> desktopText("downloads.status.PAUSED")
+                            DesktopDownloadStatus.COMPLETE -> desktopText("downloads.status.COMPLETE")
+                            DesktopDownloadStatus.FAILED -> desktopText("downloads.status.FAILED")
                         }, modifier = Modifier.testTag("download-status:${item.key}"))
-                        Text("${record.completedPages} / ${record.pages.size} 页")
+                        Text(desktopText("downloads.pages", record.completedPages, record.pages.size))
                         item.error?.let { Text(it, color = MaterialTheme.colors.error) }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             if (active) OutlinedButton({ controller.downloads.pause(item.key) }, enabled = !closing,
-                                modifier = Modifier.testTag("download-pause:${item.key}")) { Text("暂停") }
+                                modifier = Modifier.testTag("download-pause:${item.key}")) { Text(desktopText("downloads.pause")) }
                             else OutlinedButton({ controller.resumeDownload(record) }, enabled = !closing && !state.busy,
                                 modifier = Modifier.testTag("download-resume:${item.key}")) {
-                                Text(if (item.status == DesktopDownloadStatus.COMPLETE) "校验 / 继续" else "继续下载")
+                                Text(if (item.status == DesktopDownloadStatus.COMPLETE) desktopText("downloads.verify") else desktopText("downloads.resume"))
                             }
                             Button({ controller.readDownload(record) }, enabled = !closing && !state.busy &&
                                 item.status == DesktopDownloadStatus.COMPLETE,
-                                modifier = Modifier.testTag("download-read:${item.key}")) { Text("离线阅读") }
+                                modifier = Modifier.testTag("download-read:${item.key}")) { Text(desktopText("downloads.readOffline")) }
                         }
                     }
                 }

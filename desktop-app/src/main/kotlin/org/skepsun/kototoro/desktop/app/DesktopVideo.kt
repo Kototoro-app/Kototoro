@@ -32,7 +32,7 @@ data class DesktopVideo(
         val page = streams[index]
         val quality = page.playbackQuality?.let { "${it}p" }
         return listOfNotNull(page.playbackLabel?.takeIf(String::isNotBlank), quality)
-            .distinct().joinToString(" · ").ifBlank { "线路 ${index + 1}" }
+            .distinct().joinToString(" · ").ifBlank { desktopText("video.line", index + 1) }
     }
 }
 

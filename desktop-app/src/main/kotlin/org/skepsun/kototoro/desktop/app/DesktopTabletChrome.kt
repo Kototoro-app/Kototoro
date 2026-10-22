@@ -26,9 +26,9 @@ import org.skepsun.kototoro.core.ui.chapters.*
 @Composable
 internal fun DesktopNavigationRail(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
     // Android's tablet order: home, favourites, browse, history, subscriptions (then Windows' "more").
-    val destinations = listOf(TabletNavigationDestination(4, "主页"), TabletNavigationDestination(0, "收藏"),
-        TabletNavigationDestination(1, "浏览"), TabletNavigationDestination(2, "历史"),
-        TabletNavigationDestination(5, "订阅"), TabletNavigationDestination(3, "更多"))
+    val destinations = listOf(TabletNavigationDestination(4, desktopText("nav.home")), TabletNavigationDestination(0, desktopText("nav.favourites")),
+        TabletNavigationDestination(1, desktopText("nav.browse")), TabletNavigationDestination(2, desktopText("nav.history")),
+        TabletNavigationDestination(5, desktopText("nav.subscriptions")), TabletNavigationDestination(3, desktopText("common.more")))
     val selected = when (state.screen) {
         DesktopScreen.HOME -> 4
         DesktopScreen.FEED -> 5
@@ -79,19 +79,38 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
     }
 }
 
+/** One language row: the chosen one is tinted, as the appearance buttons are. */
+@Composable
+private fun LanguageChoice(title: String, selected: Boolean, enabled: Boolean, tag: String, onClick: () -> Unit) {
+    OutlinedButton({ onClick() }, enabled = enabled,
+        colors = ButtonDefaults.outlinedButtonColors(backgroundColor =
+            if (selected) Accent.copy(alpha = .12f) else Color.Transparent),
+        modifier = Modifier.testTag(tag)) { Text(title) }
+}
+
 @Composable
 internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean) {
     val state by controller.state.collectAsState()
     Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        MoreDestination("扩展与仓库", "ic_extension", "管理来源、添加仓库与导入本地扩展", enabled) {
+        MoreDestination(desktopText("more.extensions"), "ic_extension", desktopText("more.extensionsSummary"), enabled) {
             controller.showExtensions()
         }
-        MoreDestination("下载", "ic_download", "查看离线章节与下载任务", enabled) { controller.showDownloads() }
-        MoreDestination("备份与恢复", "ic_backup_restore", "导出书库，或预览并合并备份", enabled) { controller.showBackups() }
+        MoreDestination(desktopText("more.downloads"), "ic_download", desktopText("more.downloadsSummary"), enabled) { controller.showDownloads() }
+        MoreDestination(desktopText("more.backups"), "ic_backup_restore", desktopText("more.backupsSummary"), enabled) { controller.showBackups() }
         Surface(shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("外观", style = MaterialTheme.typography.subtitle1)
+                Text(desktopText("more.language"), style = MaterialTheme.typography.subtitle1)
+                Text(desktopText("more.languageDetail"), color = Muted, fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LanguageChoice(desktopText("more.languageSystem"), state.language == null, enabled,
+                        "language:system") { controller.language(null) }
+                    DesktopLanguages.bundled.forEach { language ->
+                        LanguageChoice(language.nativeName, state.language == language.tag, enabled,
+                            "language:${language.tag}") { controller.language(language.tag) }
+                    }
+                }
+                Text(desktopText("more.appearance"), style = MaterialTheme.typography.subtitle1)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     DesktopAppearance.entries.forEach { appearance ->
                         OutlinedButton({ controller.appearance(appearance) }, enabled = enabled,
@@ -100,7 +119,7 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean) {
                             modifier = Modifier.testTag("appearance:${appearance.name}")) { Text(appearance.title) }
                     }
                 }
-                Text("界面风格", style = MaterialTheme.typography.subtitle1)
+                Text(desktopText("more.interfaceStyle"), style = MaterialTheme.typography.subtitle1)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     DesktopInterfaceStyle.entries.forEach { style ->
                         OutlinedButton({ controller.interfaceStyle(style) }, enabled = enabled,
@@ -113,8 +132,8 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean) {
         }
         DesktopBackgroundSettings(controller, state, enabled)
         Divider(Modifier.padding(vertical = 12.dp))
-        Text("高级工具", fontWeight = FontWeight.SemiBold, color = Muted)
-        MoreDestination("浏览器调试", "ic_web", "打开网页，检查来源的网页验证", enabled) { controller.browser() }
+        Text(desktopText("more.advancedTools"), fontWeight = FontWeight.SemiBold, color = Muted)
+        MoreDestination(desktopText("more.browser"), "ic_web", desktopText("more.browserSummary"), enabled) { controller.browser() }
     }
 }
 
@@ -145,15 +164,15 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
         val summary: @Composable (Modifier) -> Unit = { modifier ->
             Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(content.title, style = if (expanded) MaterialTheme.typography.h4 else MaterialTheme.typography.h6)
-                Text(content.authors.joinToString(" · ").ifBlank { "作者信息未提供" }, color = Muted)
+                Text(content.authors.joinToString(" · ").ifBlank { desktopText("details.authorsUnknown") }, color = Muted)
                 Text(state.sources.firstOrNull { it.source.name == content.source.name }?.displayName ?: content.source.name,
                     color = Accent, fontSize = 12.sp)
                 Button({ controller.read() }, enabled = !state.busy && !content.chapters.isNullOrEmpty(),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("preview-read")) {
-                    Text(if (DesktopReaderKind.of(content) == DesktopReaderKind.VIDEO) "开始 / 继续播放" else "开始 / 继续阅读")
+                    Text(if (DesktopReaderKind.of(content) == DesktopReaderKind.VIDEO) desktopText("details.startWatching") else desktopText("details.startReading"))
                 }
                 OutlinedButton({ controller.addFavourite() }, enabled = !state.busy && !state.isFavourite,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("preview-favourite")) { Text(if (state.isFavourite) "已收藏" else "加入收藏") }
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("preview-favourite")) { Text(if (state.isFavourite) desktopText("details.favourited") else desktopText("details.favourite")) }
             }
         }
         val metadata: @Composable (Modifier) -> Unit = { modifier ->
@@ -173,7 +192,7 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                 content.description?.takeIf(String::isNotBlank)?.let {
                     Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colors.surface) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("简介", style = MaterialTheme.typography.subtitle1)
+                            Text(desktopText("details.synopsis"), style = MaterialTheme.typography.subtitle1)
                             Text(it.replace(Regex("<[^>]*>"), ""), color = Muted, style = MaterialTheme.typography.body2)
                         }
                     }

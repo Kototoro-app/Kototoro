@@ -117,10 +117,15 @@ internal fun DesktopNovelReader(controller: DesktopController, state: DesktopApp
                     item {
                         Row(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalArrangement = Arrangement.Center) {
                             OutlinedButton({ controller.changeNovelChapter(false) }, enabled = enabled && hasPrevious,
-                                colors = themedOutline(colors), modifier = Modifier.testTag("novel-previous-chapter")) { Text("上一章") }
+                                colors = themedOutline(colors),
+                                modifier = Modifier.testTag("novel-previous-chapter")) {
+                                Text(desktopText("novel.previousChapter"))
+                            }
                             Spacer(Modifier.width(16.dp))
                             Button({ controller.changeNovelChapter(true) }, enabled = enabled && hasNext,
-                                modifier = Modifier.testTag("novel-next-chapter")) { Text("下一章") }
+                                modifier = Modifier.testTag("novel-next-chapter")) {
+                                Text(desktopText("novel.nextChapter"))
+                            }
                         }
                     }
                 }
@@ -195,12 +200,12 @@ private fun NovelInlineImage(controller: DesktopController, url: String, muted: 
             value = decoded.asComposeImageBitmap()
             unpublished = null
         } catch (error: CancellationException) { throw error }
-        catch (error: Exception) { failure = "插图加载失败" }
+        catch (error: Exception) { failure = desktopText("novel.imageFailed") }
         finally { unpublished?.close() }
     }
     Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
         val image = bitmap
-        if (image == null) Text(failure ?: "正在加载插图…", color = muted, fontSize = 13.sp)
+        if (image == null) Text(failure ?: desktopText("novel.imageLoading"), color = muted, fontSize = 13.sp)
         // Small pictures keep their own width instead of being stretched to the whole text column.
         else Image(image, null, contentScale = ContentScale.Fit, modifier = Modifier.widthIn(max = image.width.coerceAtLeast(1).dp)
             .fillMaxWidth().heightIn(max = 900.dp).testTag("novel-image"))

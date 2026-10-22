@@ -41,20 +41,21 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
     }) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TopBarTitleBlock(if (history) "历史" else "收藏")
-                DesktopSearchField(selection.query, { update(selection.copy(query = it)) }, "搜索标题或作者", enabled = enabled,
+                TopBarTitleBlock(if (history) desktopText("nav.history") else desktopText("nav.favourites"))
+                DesktopSearchField(selection.query, { update(selection.copy(query = it)) }, desktopText("library.search"), enabled = enabled,
                     modifier = Modifier.weight(1f), tag = "library-query")
                 DesktopSourceFilterControls(selection.sourceFilter, state.sources,
                     { update(selection.copy(sourceFilter = it)) }, enabled, if (history) "history" else "library")
                 OutlinedButton({ drawer = !drawer }, modifier = Modifier.testTag("library-filters")) {
-                    Text(if (selection.filterCount == 0) "筛选与排序" else "筛选 · ${selection.filterCount}")
+                    Text(if (selection.filterCount == 0) desktopText("library.filterAndSort")
+                else desktopText("library.filterWithCount", selection.filterCount))
                 }
-                TextButton({ controller.library(history) }, enabled = enabled) { Text("刷新") }
+                TextButton({ controller.library(history) }, enabled = enabled) { Text(desktopText("common.refresh")) }
             }
             // Android favourites show categories as the tabs rail under the top bar.
             if (!history && state.library.categories.isNotEmpty()) {
                 val tabs = remember(state.library.categories) {
-                    listOf(TopBarTabItem(AllCategoriesTab, "全部")) +
+                    listOf(TopBarTabItem(AllCategoriesTab, desktopText("library.allCategories"))) +
                         state.library.categories.map { TopBarTabItem(it.id, it.title) }
                 }
                 TopBarTabsRail(tabs, selection.categoryId ?: AllCategoriesTab,
@@ -65,7 +66,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                         Modifier.testTag("library-category:${if (tab.id == AllCategoriesTab) "all" else tab.id}")
                     })
             }
-            Text("${entries.size} / ${state.library.entries.size} 部作品", color = Muted, fontSize = 12.sp,
+            Text(desktopText("library.count", entries.size, state.library.entries.size), color = Muted, fontSize = 12.sp,
                 modifier = Modifier.testTag("library-count"))
             Box(Modifier.weight(1f)) {
                 if (entries.isNotEmpty()) {
@@ -75,11 +76,11 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                 }
                 else Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(if (state.library.entries.isEmpty()) "这里还没有作品" else "没有符合条件的作品",
+                    Text(if (state.library.entries.isEmpty()) desktopText("library.empty") else desktopText("library.emptyFiltered"),
                         fontWeight = FontWeight.SemiBold)
                     if (state.library.entries.isNotEmpty()) TextButton({ update(DesktopLibrarySelection()) },
-                        modifier = Modifier.testTag("library-clear-empty")) { Text("清除搜索与筛选") }
-                    else Text("从来源打开作品后，可阅读或加入收藏。", color = Muted)
+                        modifier = Modifier.testTag("library-clear-empty")) { Text(desktopText("library.clearEmpty")) }
+                    else Text(desktopText("library.emptyHint"), color = Muted)
                 }
             }
         }
@@ -89,28 +90,28 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                 .testTag("library-filter-panel"), shape = RoundedCornerShape(20.dp), elevation = 12.dp) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("筛选与排序", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-                        TextButton({ drawer = false }, modifier = Modifier.testTag("library-filter-close")) { Text("关闭") }
+                        Text(desktopText("library.filterAndSort"), modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                        TextButton({ drawer = false }, modifier = Modifier.testTag("library-filter-close")) { Text(desktopText("common.close")) }
                     }
                     val scroll = rememberScrollState()
                     Box(Modifier.weight(1f)) {
                         Column(Modifier.fillMaxSize().padding(end = 12.dp).verticalScroll(scroll),
                             verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("排序", fontWeight = FontWeight.SemiBold)
+                            Text(desktopText("library.sort"), fontWeight = FontWeight.SemiBold)
                             DesktopLibraryOrder.entries.forEach { order ->
                                 FilterRadio(order.title, selection.order == order, enabled, "library-order:${order.name}") {
                                     update(selection.copy(order = order))
                                 }
                             }
                             Divider()
-                            Text("阅读进度", fontWeight = FontWeight.SemiBold)
+                            Text(desktopText("library.progress"), fontWeight = FontWeight.SemiBold)
                             DesktopLibraryReading.entries.forEach { reading ->
                                 FilterRadio(reading.title, selection.reading == reading, enabled, "library-reading:${reading.name}") {
                                     update(selection.copy(reading = reading))
                                 }
                             }
                             Divider()
-                            Text("来源", fontWeight = FontWeight.SemiBold)
+                            Text(desktopText("library.source"), fontWeight = FontWeight.SemiBold)
                             state.library.entries.map { it.content.source }.distinctBy { it.name }.forEach { source ->
                                 val title = state.sources.firstOrNull { it.source.name == source.name }?.displayName ?: source.name
                                 val selected = source.name in selection.sources
@@ -128,7 +129,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                             .fillMaxHeight().testTag("library-filter-scrollbar"))
                     }
                     OutlinedButton({ update(DesktopLibrarySelection()) }, enabled = enabled,
-                        modifier = Modifier.fillMaxWidth().testTag("library-filter-reset")) { Text("重置搜索与筛选") }
+                        modifier = Modifier.fillMaxWidth().testTag("library-filter-reset")) { Text(desktopText("library.resetFilters")) }
                 }
             }
         }

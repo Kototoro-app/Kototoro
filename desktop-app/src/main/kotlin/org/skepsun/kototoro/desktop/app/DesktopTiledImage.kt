@@ -62,7 +62,7 @@ internal fun DesktopTiledImage(image: DesktopReaderImage, node: VisibleNode?, di
                     }
                 } else if (failed) TextButton({ failed = false; retry++ }, modifier = Modifier.offset(y = with(density) {
                     ((node?.visibleRegion?.top ?: 0f) - (node?.sceneBounds?.top ?: 0f)).toDp()
-                })) { Text("页面区域解码失败，重试", color = Color.White) }
+                })) { Text(desktopText("error.tileDecodeFailed"), color = Color.White) }
             }
         }
     }

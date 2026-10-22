@@ -392,8 +392,8 @@ private fun DesktopReaderSlot(state: DesktopAppState, slot: PagedSlot, camera: P
 private const val TURN_MILLIS = 280
 
 internal fun fitTitle(mode: ZoomMode): String = when (mode) {
-    ZoomMode.FIT_CENTER -> "适应整页"
-    ZoomMode.FIT_WIDTH -> "适应宽度"
-    ZoomMode.FIT_HEIGHT -> "适应高度"
-    ZoomMode.KEEP_START -> "原始尺寸"
+    ZoomMode.FIT_CENTER -> desktopText("reader.zoom.fitCenter")
+    ZoomMode.FIT_WIDTH -> desktopText("reader.zoom.fitWidth")
+    ZoomMode.FIT_HEIGHT -> desktopText("reader.zoom.fitHeight")
+    ZoomMode.KEEP_START -> desktopText("reader.zoom.original")
 }

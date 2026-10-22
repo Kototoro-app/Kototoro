@@ -123,7 +123,7 @@ class DesktopSession private constructor(
     internal suspend fun readerImage(page: SourcePage, refresh: Boolean = false): DesktopReaderImage {
         if (!refresh) downloadStore.page(page)?.artifact?.let { artifact ->
             return cropped(upscaled(readerImages.openArtifact(page, artifact)
-                ?: throw IOException("下载图片缺失或损坏，请在下载页校验 / 继续")))
+                ?: throw IOException(desktopText("error.localDownloadMissing"))))
         }
         return cropped(upscaled(readerImages.load(page, readerRevision(page.source.name), refresh)))
     }
@@ -230,7 +230,7 @@ class DesktopSession private constructor(
         val context = currentCoroutineContext()
         context.ensureActive()
         val local = registry.installed().firstOrNull { it.metadata.packageName == managed.identity.packageName }
-        require(local == null || local.metadata.versionCode <= managed.identity.versionCode) { "不支持安装较旧的扩展版本" }
+        require(local == null || local.metadata.versionCode <= managed.identity.versionCode) { desktopText("error.olderExtension") }
         val extension = registry.replace(managed.path, managed.identity) {
             context.ensureActive()
             val jar = SourceHostJar(managed.path.toString(), managed.identity)
@@ -249,7 +249,8 @@ class DesktopSession private constructor(
             persistRepositoryPreference(installed, PARSER_KEY_PREFIX + managed.id,
                 SourcePreferenceValue.Text(SourceProtocolJson.encodeToString(record)))
         }
-        InstalledExtension("${plugin.id}（${plugin.sources.size} 个来源）", plugin.sources.map(::parserListing))
+        InstalledExtension(desktopText("extensions.installedSummary", plugin.id, plugin.sources.size),
+            plugin.sources.map(::parserListing))
     }
 
     /** Loads the plugin, then records it; a plugin whose record cannot be written is unloaded again. */
@@ -265,7 +266,7 @@ class DesktopSession private constructor(
                 cloudstream.unload(managed.id)
                 throw error
             }
-            InstalledExtension("${plugin.manifest.name ?: plugin.id}（${plugin.sources.size} 个来源）",
+            InstalledExtension(desktopText("extensions.installedSummary", plugin.manifest.name ?: plugin.id, plugin.sources.size),
                 plugin.sources.map(::cloudstreamListing))
         }
 
@@ -294,14 +295,14 @@ class DesktopSession private constructor(
             DesktopInstalledKind.CLOUDSTREAM -> CLOUDSTREAM_KEY_PREFIX + entry.id
             DesktopInstalledKind.EXTENSION -> entry.id
         }
-        require(key in installed.snapshot()) { "扩展记录不存在" }
-        if (!installed.edit(SourcePreferenceEdit(changes = mapOf(key to null)))) throw IOException("无法删除扩展记录")
+        require(key in installed.snapshot()) { desktopText("error.extensionRecordMissing") }
+        if (!installed.edit(SourcePreferenceEdit(changes = mapOf(key to null)))) throw IOException(desktopText("error.extensionRecordDelete"))
         val unloaded = when (entry.kind) {
             DesktopInstalledKind.PARSER -> parsers.unload(entry.id)
             DesktopInstalledKind.CLOUDSTREAM -> cloudstream.unload(entry.id)
             DesktopInstalledKind.EXTENSION -> registry.unload(entry.id)
         }
-        check(unloaded) { "扩展未加载" }
+        check(unloaded) { desktopText("error.extensionNotLoaded") }
         cleanupArtifacts()
     }
 
@@ -364,7 +365,7 @@ class DesktopSession private constructor(
                     registry.load(Path.of(jar.path), jar.identity)
                 }
             } catch (error: Exception) {
-                startupErrors += "扩展恢复失败：${error.message ?: error.javaClass.simpleName}"
+                startupErrors += desktopText("error.extensionRestoreFailed", error.message ?: error.javaClass.simpleName)
             }
         }
     }
@@ -393,6 +394,8 @@ class DesktopSession private constructor(
         }
 
         private suspend fun openOnIo(root: Path): DesktopSession {
+            // The runtime reports catalog keys with English fallbacks; from here they follow the interface language.
+            org.skepsun.kototoro.desktop.runtime.DesktopRuntimeStrings.install(DesktopStrings::localized)
             val storage = DesktopRuntime.open(root)
             val platform = MihonDesktopPlatform(storage.paths.root.resolve("compat"), enableBrowserChallenges = true)
             var registry: MihonJarRegistry? = null

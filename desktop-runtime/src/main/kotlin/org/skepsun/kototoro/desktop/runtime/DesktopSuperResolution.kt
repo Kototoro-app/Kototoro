@@ -48,14 +48,14 @@ enum class DesktopUpscaleTool(
  */
 enum class DesktopUpscaleModel(val title: String, val tool: DesktopUpscaleTool?, val scale: Int, val maxInputPixels: Long) {
     REALCUGAN_2X("RealCUGAN 2x", DesktopUpscaleTool.REALCUGAN, 2, 3000L * 4200L),
-    REALESRGAN_4X_ANIME("Real-ESRGAN 4x 动漫", DesktopUpscaleTool.REALESRGAN, 4, 1500L * 2100L),
-    REALESR_ANIMEVIDEO_2X("Real-ESR AnimeVideo 2x（快速）", DesktopUpscaleTool.REALESRGAN, 2, 3000L * 4200L),
+    REALESRGAN_4X_ANIME("Real-ESRGAN 4x anime", DesktopUpscaleTool.REALESRGAN, 4, 1500L * 2100L),
+    REALESR_ANIMEVIDEO_2X("Real-ESR AnimeVideo 2x (fast)", DesktopUpscaleTool.REALESRGAN, 2, 3000L * 4200L),
     ANIME4K_A("Anime4K A", null, 2, 3000L * 4200L),
     ANIME4K_B("Anime4K B", null, 2, 3000L * 4200L),
-    ANIME4K_C("Anime4K C（仅修复）", null, 1, 6000L * 8400L),
+    ANIME4K_C("Anime4K C (repair only)", null, 1, 6000L * 8400L),
     ANIME4K_AA("Anime4K A+A", null, 2, 3000L * 4200L),
     ANIME4K_BB("Anime4K B+B", null, 2, 3000L * 4200L),
-    ANIME4K_CA("Anime4K C+A（仅修复）", null, 1, 6000L * 8400L),
+    ANIME4K_CA("Anime4K C+A (repair only)", null, 1, 6000L * 8400L),
 }
 
 /** Renders a shader-based model ([DesktopUpscaleModel.tool] null) from input to a PNG output; blocking. */
@@ -78,7 +78,8 @@ class DesktopSuperResolution(
     private val cacheLimitBytes: Long = 1024L * 1024 * 1024,
     /** Present when the platform can run shaders (libmpv); null makes Anime4K models report themselves unavailable. */
     private val shaderUpscaler: (() -> DesktopShaderUpscaler?)? = null,
-    /** Programs shipped with the app (esources/upscale/<tool>), preferred over downloaded ones. */
+    /** Programs shipped with the app (
+esources/upscale/<tool>), preferred over downloaded ones. */
     private val bundled: Path? = System.getProperty("compose.application.resources.dir")?.takeIf(String::isNotBlank)
         ?.let { Path.of(it, "upscale") },
 ) {
@@ -119,13 +120,13 @@ class DesktopSuperResolution(
                 try {
                     val digest = sha256(archive)
                     if (!digest.equals(tool.sha256, ignoreCase = true)) {
-                        throw DesktopUpscaleException("${tool.title} 下载校验失败（SHA-256 不符）")
+                        throw DesktopUpscaleException(DesktopRuntimeStrings.text("runtime.upscale.archiveSha256", "%s: the downloaded archive failed the SHA-256 check", tool.title))
                     }
                     unpack(archive, staging)
                     val target = tools.resolve(tool.name.lowercase())
                     deleteTree(target)
                     Files.move(staging, target, StandardCopyOption.ATOMIC_MOVE)
-                    return executable(tool) ?: throw DesktopUpscaleException("${tool.title} 压缩包中没有 ${tool.executable}")
+                    return executable(tool) ?: throw DesktopUpscaleException(DesktopRuntimeStrings.text("runtime.upscale.executableMissing", "%s: %s is missing from the archive", tool.title, tool.executable))
                 } finally {
                     deleteTree(staging)
                 }
@@ -138,9 +139,9 @@ class DesktopSuperResolution(
     suspend fun upscale(input: Path, width: Int, height: Int, setting: DesktopUpscaleSetting): Path? {
         val model = setting.model ?: return null
         if (width.toLong() * height.toLong() > model.maxInputPixels) return null
-        val program: Path? = model.tool?.let { executable(it) ?: throw DesktopUpscaleException("尚未安装 ${it.title}") }
+        val program: Path? = model.tool?.let { executable(it) ?: throw DesktopUpscaleException(DesktopRuntimeStrings.text("runtime.upscale.toolNotInstalled", "%s is not installed", it.title)) }
         val shader = if (model.tool == null) shaderUpscaler?.invoke()
-            ?: throw DesktopUpscaleException("Anime4K 需要 libmpv（与视频播放相同）") else null
+            ?: throw DesktopUpscaleException(DesktopRuntimeStrings.text("runtime.upscale.needsLibmpv", "Anime4K needs libmpv, the same one video playback uses")) else null
         return withContext(Dispatchers.IO) {
             val key = cacheKey(input, setting)
             val output = cache.resolve("$key.png")
@@ -158,7 +159,7 @@ class DesktopSuperResolution(
                     Files.copy(input, source, StandardCopyOption.REPLACE_EXISTING)
                     if (shader != null) shader.upscale(source, result, width, height, model)
                     else run(requireNotNull(program), model, setting.noise, source, result)
-                    if (Files.size(result) == 0L) throw DesktopUpscaleException("${model.title} 没有生成图片")
+                    if (Files.size(result) == 0L) throw DesktopUpscaleException(DesktopRuntimeStrings.text("runtime.upscale.noImage", "%s produced no image", model.title))
                     Files.move(result, output, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
                     trim()
                     output
@@ -179,7 +180,7 @@ class DesktopSuperResolution(
                 "-m", directory.resolve("models").toString())
             DesktopUpscaleModel.REALESR_ANIMEVIDEO_2X -> listOf("-s", "2", "-n", "realesr-animevideov3",
                 "-m", directory.resolve("models").toString())
-            else -> throw DesktopUpscaleException("${model.title} 不使用外部程序")
+            else -> throw DesktopUpscaleException(DesktopRuntimeStrings.text("runtime.upscale.noProgram", "%s does not use an external program", model.title))
         }
         val process = ProcessBuilder(listOf(program.toString(), "-i", input.toString(), "-o", output.toString(), "-f", "png") + arguments)
             .directory(directory.toFile()).redirectErrorStream(true).start()
@@ -195,7 +196,7 @@ class DesktopSuperResolution(
         reader.join(1000)
         if (process.exitValue() != 0 || !Files.isRegularFile(output) || Files.size(output) == 0L) {
             val tail = synchronized(log) { log.lines().filter(String::isNotBlank).takeLast(4).joinToString(" / ") }
-            throw DesktopUpscaleException("${model.title} 处理失败（${process.exitValue()}）：$tail")
+            throw DesktopUpscaleException(DesktopRuntimeStrings.text("runtime.upscale.failed", "%s failed (exit %d): %s", model.title, process.exitValue(), tail))
         }
     }
 
@@ -229,7 +230,7 @@ class DesktopSuperResolution(
                             if (count < 0) break
                             output.write(buffer, 0, count)
                             copied += count
-                            if (copied > 256L * 1024 * 1024) throw IOException("下载超过大小限制")
+                            if (copied > 256L * 1024 * 1024) throw IOException(DesktopRuntimeStrings.text("runtime.download.tooLarge", "the download exceeds the size limit"))
                             progress(copied, total)
                         }
                     }
@@ -239,7 +240,7 @@ class DesktopSuperResolution(
                 failures += "${url.substringBefore('?')}: ${error.message ?: error.javaClass.simpleName}"
             }
         }
-        throw DesktopUpscaleException("${tool.title} 下载失败：${failures.joinToString("；")}")
+        throw DesktopUpscaleException(DesktopRuntimeStrings.text("runtime.upscale.downloadFailed", "%s could not be downloaded: %s", tool.title, failures.joinToString("; ")))
     }
 
     /** Unpacks without the archive's top folder; entries may not leave the staging directory. */

@@ -52,7 +52,7 @@ internal class DesktopDownloads(
                     store.save(record)
                     if (record.pages.isEmpty()) {
                         val requested = pages(chapter)
-                        require(requested.isNotEmpty()) { "此章节没有页面" }
+                        require(requested.isNotEmpty()) { desktopText("error.noPages") }
                         record = record.copy(pages = requested.map(::SourceDownloadPage))
                     }
                     store.save(record)
@@ -70,9 +70,9 @@ internal class DesktopDownloads(
                     publish(DesktopDownloadState(record, DesktopDownloadStatus.COMPLETE))
                 } catch (error: CancellationException) { throw error }
                 catch (error: Exception) {
-                    publish(DesktopDownloadState(record, DesktopDownloadStatus.FAILED, error.message ?: "下载失败"))
+                    publish(DesktopDownloadState(record, DesktopDownloadStatus.FAILED, error.message ?: desktopText("downloads.failed")))
                 } catch (error: LinkageError) {
-                    publish(DesktopDownloadState(record, DesktopDownloadStatus.FAILED, "来源 API 不兼容"))
+                    publish(DesktopDownloadState(record, DesktopDownloadStatus.FAILED, desktopText("error.sourceApiIncompatibleShort")))
                 }
             }
         }

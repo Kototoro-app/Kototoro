@@ -34,11 +34,11 @@ internal class DesktopBrowser(
     suspend fun openUrl(url: String): DesktopWebDocument = operation { engine, sharedCookies ->
         val address = java.net.URI(url)
         require(address.scheme in listOf("http", "https") && !address.host.isNullOrBlank()) {
-            "请输入有效的 HTTP 或 HTTPS 网页地址"
+            desktopText("browser.invalidUrl")
         }
         sharedCookies.push()
         engine.setWindowVisible(true)
-        check(engine.navigate(url)) { "网页加载失败" }
+        check(engine.navigate(url)) { desktopText("browser.loadFailed") }
         sharedCookies.pull()
         engine.document()
     }

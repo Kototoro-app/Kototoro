@@ -23,7 +23,7 @@ internal class DesktopDownloadStore(private val preferences: SourcePreferenceSto
                 preferences.open("desktop_download_index_v2_$shard").snapshot()
             } catch (_: Exception) {
                 unreadableShards.add(shard)
-                errors.add("下载索引读取失败：$shard")
+                errors.add(desktopText("error.downloadIndexRead", shard))
                 continue
             }
             for ((identity, value) in entries) {
@@ -34,14 +34,14 @@ internal class DesktopDownloadStore(private val preferences: SourcePreferenceSto
                     restored.add(read(identity))
                     registered.add(identity)
                 } catch (_: Exception) {
-                    errors.add("下载记录损坏：$identity")
+                    errors.add(desktopText("error.downloadRecordCorrupt", identity))
                 }
             }
         }
         mutableRecords.value = restored
         // Legacy snapshots stay intact. A completed new publication always wins over the old flat record.
         val legacy = try { preferences.open("desktop_downloads").snapshot() } catch (_: Exception) {
-            errors.add("旧版下载索引读取失败，已保留原文件")
+            errors.add(desktopText("error.downloadLegacyIndex"))
             emptyMap()
         }
         for ((identity, value) in legacy) {
@@ -51,7 +51,7 @@ internal class DesktopDownloadStore(private val preferences: SourcePreferenceSto
                     require(identity == key(it.contentId, it.chapter))
                 }
             } catch (_: Exception) {
-                errors.add("下载记录损坏：$identity")
+                errors.add(desktopText("error.downloadRecordCorrupt", identity))
                 continue
             }
             try {
@@ -59,7 +59,7 @@ internal class DesktopDownloadStore(private val preferences: SourcePreferenceSto
                 save(record)
             } catch (_: IOException) {
                 mutableRecords.value += record
-                errors.add("下载记录迁移失败，已保留原记录：$identity")
+                errors.add(desktopText("error.downloadMigrationFailed", identity))
             }
         }
     }
@@ -133,9 +133,9 @@ internal class DesktopDownloadStore(private val preferences: SourcePreferenceSto
         val saved = try {
             preferences.open(namespace).edit(SourcePreferenceEdit(changes = mapOf(key to value)))
         } catch (error: IllegalArgumentException) {
-            throw IOException("下载记录过大，无法保存", error)
+            throw IOException(desktopText("error.downloadRecordTooLarge"), error)
         }
-        if (!saved) throw IOException("下载记录磁盘保存失败")
+        if (!saved) throw IOException(desktopText("error.downloadSaveFailed"))
     }
 
     fun find(contentId: Long, chapter: SourceChapter) = records.value.firstOrNull {

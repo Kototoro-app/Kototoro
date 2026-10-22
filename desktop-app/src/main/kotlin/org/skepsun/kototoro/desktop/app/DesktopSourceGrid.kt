@@ -28,16 +28,16 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
     val metrics = sourceQuickAccessMetrics(1.15f)
     Column(Modifier.fillMaxSize().testTag("source-pane"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock("浏览")
-            DesktopSearchField(query, { query = it }, "搜索内容源…", modifier = Modifier.weight(1f),
+            org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock(desktopText("nav.browse"))
+            DesktopSearchField(query, { query = it }, desktopText("sourceGrid.search"), modifier = Modifier.weight(1f),
                 enabled = enabled, tag = "source-grid-query")
             DesktopSourceFilterControls(state.exploreFilter, state.sources, controller::exploreFilter, enabled, "explore")
             OutlinedButton({ controller.showExtensions() }, enabled = enabled,
-                modifier = Modifier.testTag("source-grid-extensions")) { Text("扩展管理") }
+                modifier = Modifier.testTag("source-grid-extensions")) { Text(desktopText("sourceGrid.extensions")) }
         }
-        Text("内容源 · ${sources.size}", fontWeight = FontWeight.SemiBold)
+        Text(desktopText("sourceGrid.sources", sources.size), fontWeight = FontWeight.SemiBold)
         if (state.sources.isEmpty()) {
-            Text("安装或导入扩展后，内容源会显示在这里。", color = Muted)
+            Text(desktopText("sourceGrid.empty"), color = Muted)
         }
         LazyVerticalGrid(GridCells.Adaptive(metrics.minCardWidth), modifier = Modifier.weight(1f).testTag("source-list"),
             horizontalArrangement = Arrangement.spacedBy(metrics.gridSpacing),
@@ -49,7 +49,7 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
                     modifier = Modifier.testTag("source:${source.source.name}"), enabled = enabled,
                     cardBackground = Color.Transparent,
                     supportingText = "${DesktopSourceLabels.ecosystem(source.ecosystem)} · " +
-                        "${source.source.locale.ifBlank { "多语言" }} · " +
+                        "${source.source.locale.ifBlank { desktopText("common.multilingual") }} · " +
                         DesktopSourceLabels.contentType(source.source.contentType),
                     icon = { iconModifier ->
                         Box(iconModifier, contentAlignment = Alignment.Center) {

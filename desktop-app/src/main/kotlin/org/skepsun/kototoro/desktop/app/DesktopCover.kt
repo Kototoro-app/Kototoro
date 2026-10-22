@@ -32,12 +32,12 @@ internal fun DesktopCover(content: SourceContent, cache: DesktopCovers, modifier
     val cover = rememberDesktopCover(content, cache, large, revision)
     Box(modifier, contentAlignment = Alignment.Center) {
         val image = cover.bitmap
-        if (image != null) Image(image, "${content.title}封面", contentScale = ContentScale.Crop,
+        if (image != null) Image(image, desktopText("details.cover", content.title), contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize().testTag("cover:${content.id}"))
         else Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(content.title.take(1), fontSize = 44.sp, color = Accent)
             if (cover.failed) TextButton({ revision++ }, modifier = Modifier.testTag("cover-retry:${content.id}")) {
-                Text("重试封面")
+                Text(desktopText("error.coverRetry"))
             }
         }
     }

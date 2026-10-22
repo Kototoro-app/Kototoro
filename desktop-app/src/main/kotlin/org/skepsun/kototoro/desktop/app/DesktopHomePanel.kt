@@ -36,10 +36,10 @@ import org.skepsun.kototoro.list.ui.compose.rememberCoverRimBorderBrush
 private data class HomeWork(val content: SourceContent, val progress: Float? = null, val newChapters: Int = 0)
 
 private fun HomeHeroKind.label() = when (this) {
-    HomeHeroKind.RESUME -> "继续阅读"
-    HomeHeroKind.HISTORY -> "最近阅读"
-    HomeHeroKind.UPDATE -> "最近更新"
-    HomeHeroKind.RECOMMENDATION -> "推荐"
+    HomeHeroKind.RESUME -> desktopText("home.hero.resume")
+    HomeHeroKind.HISTORY -> desktopText("home.hero.history")
+    HomeHeroKind.UPDATE -> desktopText("home.hero.update")
+    HomeHeroKind.RECOMMENDATION -> desktopText("home.hero.recommendation")
 }
 
 private fun HomeHeroKind.icon() = when (this) {
@@ -87,7 +87,7 @@ internal fun DesktopHomePanel(controller: DesktopController, state: DesktopAppSt
     Column(Modifier.fillMaxSize().testTag("home-panel"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TopBarTitleBlock("主页")
+            TopBarTitleBlock(desktopText("nav.home"))
             Spacer(Modifier.weight(1f))
             DesktopSourceFilterControls(filter, state.sources, controller::homeFilter, enabled, "home")
         }
@@ -107,8 +107,9 @@ internal fun DesktopHomePanel(controller: DesktopController, state: DesktopAppSt
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(HomeScreenSectionGap)) {
                     if (history.isNotEmpty()) HistoryRail(controller, history, open)
                     if (updates.isNotEmpty()) UpdatesRail(controller, updates)
-                    RecommendationsRail(controller, recommendations, state.suggestionSettings.enabled, enabled, open)
-                    if (history.isEmpty() && updates.isEmpty()) Text("阅读或收藏作品后，主页会显示历史和更新。",
+                    RecommendationsRail(controller, recommendations, state.suggestionSettings.enabled,
+                        state.suggestionsGenerating, enabled, open)
+                    if (history.isEmpty() && updates.isEmpty()) Text(desktopText("home.empty"),
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
@@ -148,8 +149,8 @@ private fun HomeHero(controller: DesktopController, entries: List<HomeHeroEntry<
                         title = content.title,
                         sourceTitle = controller.state.value.sources.firstOrNull { it.source.name == content.source.name }
                             ?.displayName ?: content.source.name,
-                        supportingText = entry.newChapters.takeIf { it > 0 }?.let { "新章节 $it" }
-                            ?: entry.progressPercent?.let { "已读 $it%" },
+                        supportingText = entry.newChapters.takeIf { it > 0 }?.let { desktopText("home.newChapters", it) }
+                            ?: entry.progressPercent?.let { desktopText("home.readPercent", it) },
                         compact = true,
                         textColor = Color.White,
                         modifier = textModifier,
@@ -171,7 +172,7 @@ private fun HistoryRail(controller: DesktopController, works: List<HomeWork>, op
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
     val rim = rememberCoverRimBorderBrush(isIosStyle, isDark = MaterialTheme.colorScheme.background.luminance() < .5f)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        HomeSectionHeader("历史", works.size, painterResource("icons/ic_arrow_forward.svg"),
+        HomeSectionHeader(desktopText("home.sectionHistory"), works.size, painterResource("icons/ic_arrow_forward.svg"),
             onMoreClick = { controller.library(true) }, titleModifier = Modifier.testTag("home-history-more"))
         LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(3.dp),
             modifier = Modifier.mouseDragScroll(listState, Orientation.Horizontal).testTag("home-history")) {
@@ -196,7 +197,7 @@ private fun UpdatesRail(controller: DesktopController, works: List<HomeWork>) {
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
     val rim = rememberCoverRimBorderBrush(isIosStyle, isDark = MaterialTheme.colorScheme.background.luminance() < .5f)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        HomeSectionHeader("更新", works.size, painterResource("icons/ic_arrow_forward.svg"),
+        HomeSectionHeader(desktopText("home.sectionUpdates"), works.size, painterResource("icons/ic_arrow_forward.svg"),
             onMoreClick = { controller.subscriptions() }, titleModifier = Modifier.testTag("home-updates-more"))
         // Android's list-mode rail: rows of covers with the new chapter count, three to a row on wide windows.
         BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -213,7 +214,7 @@ private fun UpdatesRail(controller: DesktopController, works: List<HomeWork>) {
                                 coverShape = RoundedCornerShape(10.dp),
                                 rimBorderBrush = rim,
                                 onClick = { controller.openTracked(work.content.id) },
-                                supportingText = "新章节 ${work.newChapters}",
+                                supportingText = desktopText("home.newChapters", work.newChapters),
                                 modifier = Modifier.weight(1f).testTag("home-update:${work.content.id}"),
                                 cover = {
                                     DesktopCover(work.content, controller.session.covers, Modifier.matchParentSize())
@@ -233,43 +234,45 @@ private fun UpdatesRail(controller: DesktopController, works: List<HomeWork>) {
 private fun QuickAccess(controller: DesktopController, enabled: Boolean, expanded: Boolean) {
     val icon: @Composable (String) -> androidx.compose.ui.graphics.painter.Painter = { painterResource("icons/$it.svg") }
     val actions = listOf(
-        HomeQuickAction("收藏", icon("ic_heart"), { controller.library() }, enabled),
-        HomeQuickAction("历史", icon("ic_history"), { controller.library(true) }, enabled),
-        HomeQuickAction("订阅", icon("ic_feed"), { controller.subscriptions() }, enabled),
-        HomeQuickAction("下载", icon("ic_download"), { controller.showDownloads() }, enabled),
-        HomeQuickAction("随机", icon("ic_dice"), { controller.randomFavourite() }, enabled),
-        HomeQuickAction("拓展", icon("ic_extension"), { controller.showExtensions() }, enabled),
-        HomeQuickAction("备份", icon("ic_backup_restore"), { controller.showBackups() }, enabled),
-        HomeQuickAction("设置", icon("ic_settings"), { controller.more() }, enabled),
+        HomeQuickAction(desktopText("home.quick.favourites"), icon("ic_heart"), { controller.library() }, enabled),
+        HomeQuickAction(desktopText("home.quick.history"), icon("ic_history"), { controller.library(true) }, enabled),
+        HomeQuickAction(desktopText("home.quick.subscriptions"), icon("ic_feed"), { controller.subscriptions() }, enabled),
+        HomeQuickAction(desktopText("home.quick.downloads"), icon("ic_download"), { controller.showDownloads() }, enabled),
+        HomeQuickAction(desktopText("home.quick.random"), icon("ic_dice"), { controller.randomFavourite() }, enabled),
+        HomeQuickAction(desktopText("home.quick.extensions"), icon("ic_extension"), { controller.showExtensions() }, enabled),
+        HomeQuickAction(desktopText("home.quick.backups"), icon("ic_backup_restore"), { controller.showBackups() }, enabled),
+        HomeQuickAction(desktopText("home.quick.settings"), icon("ic_settings"), { controller.more() }, enabled),
     )
-    HomeQuickActionsGrid("快捷入口", actions, Modifier.fillMaxWidth().testTag("home-quick-access"),
+    HomeQuickActionsGrid(desktopText("home.quickAccess"), actions, Modifier.fillMaxWidth().testTag("home-quick-access"),
         preferredTileWidth = if (expanded) 96.dp else 68.dp, isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS,
         tileModifier = { index, _ -> Modifier.testTag("home-quick:$index") })
 }
 
 @Composable
-private fun RecommendationsRail(controller: DesktopController, works: List<HomeWork>, suggestionsEnabled: Boolean, enabled: Boolean,
-    open: (SourceContent) -> Unit) {
+private fun RecommendationsRail(controller: DesktopController, works: List<HomeWork>, suggestionsEnabled: Boolean,
+    generating: Boolean, enabled: Boolean, open: (SourceContent) -> Unit) {
     val listState = rememberLazyListState()
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
     val rim = rememberCoverRimBorderBrush(isIosStyle, isDark = MaterialTheme.colorScheme.background.luminance() < .5f)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        HomeSectionHeader("推荐", works.size, painterResource("icons/ic_arrow_forward.svg"),
-            onMoreClick = { if (enabled) controller.refreshSuggestions() }, titleModifier = Modifier.testTag("home-recommendations-more"),
-            configureIcon = painterResource("icons/ic_suggestion.svg"), configureLabel = "刷新推荐",
+        HomeSectionHeader(desktopText("home.sectionRecommendations"), works.size, painterResource("icons/ic_arrow_forward.svg"),
+            onMoreClick = { if (enabled && !generating) controller.refreshSuggestions() },
+            titleModifier = Modifier.testTag("home-recommendations-more"),
+            configureIcon = painterResource("icons/ic_suggestion.svg"), configureLabel = desktopText("home.refreshRecommendations"),
             configureModifier = Modifier.testTag("home-recommendations-refresh"),
-            onConfigureClick = { if (enabled) controller.refreshSuggestions() })
+            onConfigureClick = { if (enabled && !generating) controller.refreshSuggestions() })
         if (works.isEmpty()) {
             Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow,
                 modifier = Modifier.fillMaxWidth().testTag("home-recommendations-empty")) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(if (suggestionsEnabled) "根据阅读历史和收藏的标签，从已安装的来源中挑选作品。"
-                        else "推荐尚未开启。开启后每 6 小时根据阅读历史和收藏的标签生成一次。",
+                    Text(if (generating) desktopText("message.generatingSuggestions")
+                        else if (suggestionsEnabled) desktopText("home.suggestionsDetail")
+                        else desktopText("home.suggestionsOffDetail"),
                         modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     FilledTonalButton({ if (suggestionsEnabled) controller.refreshSuggestions() else controller.enableSuggestions() },
-                        enabled = enabled, modifier = Modifier.testTag("home-recommendations-generate")) {
-                        Text(if (suggestionsEnabled) "生成推荐" else "开启推荐")
+                        enabled = enabled && !generating, modifier = Modifier.testTag("home-recommendations-generate")) {
+                        Text(if (suggestionsEnabled) desktopText("home.generateSuggestions") else desktopText("home.enableSuggestions"))
                     }
                 }
             }

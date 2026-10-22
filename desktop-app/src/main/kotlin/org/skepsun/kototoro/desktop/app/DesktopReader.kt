@@ -228,13 +228,13 @@ internal fun ReaderImage(page: DesktopReaderImage?, pageIndex: Int, modifier: Mo
             value = decoded.asComposeImageBitmap()
             unpublished = null
         } catch (error: CancellationException) { throw error }
-        catch (_: Exception) { failure = "页面解码失败，请重新加载" }
+        catch (_: Exception) { failure = desktopText("reader.decodeFailed") }
         finally { unpublished?.close() }
     }
     val style = LocalDesktopReaderPageStyle.current
     Box(modifier, contentAlignment = Alignment.Center) {
         val image = bitmap
-        if (image == null) Text(failure ?: "正在准备第 ${pageIndex + 1} 页…", color = style.text)
+        if (image == null) Text(failure ?: desktopText("reader.pagePreparing", pageIndex + 1), color = style.text)
         else {
             // A cropped page shows only its content bounds; the decode may be downscaled, so scale them to it.
             val crop = page?.crop?.takeIf { page.width > 0 && page.height > 0 }
@@ -250,7 +250,7 @@ internal fun ReaderImage(page: DesktopReaderImage?, pageIndex: Int, modifier: Mo
                             (crop.height * sy).toInt().coerceIn(1, image.height - top)))
                 }
             }
-            Image(painter, "第 ${pageIndex + 1} 页", contentScale = ContentScale.FillBounds,
+            Image(painter, desktopText("reader.pageLabel", pageIndex + 1), contentScale = ContentScale.FillBounds,
                 colorFilter = style.colorFilter, modifier = Modifier.fillMaxSize().testTag("reader-page"))
         }
     }

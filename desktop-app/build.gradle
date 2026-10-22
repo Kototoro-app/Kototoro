@@ -68,14 +68,55 @@ def prepareDesktopIcons = tasks.register('prepareDesktopIcons') {
 sourceSets.main.resources.srcDir(desktopIconResources)
 tasks.named('processResources').configure { dependsOn prepareDesktopIcons }
 
-// Android's own string resources (Simplified Chinese, falling back to the default locale) for the shared screens,
-// so both hosts show the same text. String arrays are resolved to their @string items.
+// Android's own string resources for the screens both hosts share, so Windows shows the same text as Android.
+//
+// The Windows UI language is resolved at runtime (see DesktopStrings): `follow the system`, or a language picked in
+// "More". Every language the app offers therefore needs the Android strings in that language, generated here as
+// `android-strings.properties` (English, from `values`) plus `android-strings_<tag>.properties` (one per language).
+// The offered set is discovered from `src/main/resources/i18n` — dropping in `desktop-strings_<tag>.properties` is
+// all it takes to add a language — so untranslated Android folders never ship and the distribution stays small.
+def desktopI18nDirectory = file('src/main/resources/i18n')
+def desktopAndroidResources = rootProject.file('app/src/main/res')
+/** Language tags with a desktop catalog, in the order the settings page lists them. */
+def desktopLocales = { ->
+    def tags = new LinkedHashSet<String>()
+    def files = desktopI18nDirectory.isDirectory() ? desktopI18nDirectory.listFiles() : null
+    files?.findAll { it.name ==~ /desktop-strings_[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*\.properties/ }?.sort { it.name }?.each {
+        tags << it.name.substring('desktop-strings_'.length(), it.name.length() - '.properties'.length())
+    }
+    // `en` is the base catalog (desktop-strings.properties) and always ships.
+    tags.add('en')
+    tags
+}
+/**
+ * The Android resource folder holding a language, following Android's qualifier syntax: `zh-CN` -> `values-zh-rCN`,
+ * `zh-Hant-TW` -> `values-b+zh+Hant+TW`, and the English base lives in `values`.
+ */
+def androidResourceDirectoryFor = { String tag ->
+    def parts = tag.split('-')
+    def language = parts[0]
+    def candidates = []
+    if (parts.length >= 3) {
+        // zh-Hant-TW: Android's BCP-47 form, then the region-only form some forks use.
+        candidates << "values-b+${parts[0]}+${parts[1]}+${parts[2]}"
+        candidates << "values-${language}-r${parts[2].toUpperCase()}"
+    } else if (parts.length == 2) {
+        candidates << "values-${language}-r${parts[1].toUpperCase()}"
+        candidates << "values-b+${language}+${parts[1]}"
+    }
+    if (language != 'en') candidates << "values-${language}"
+    candidates << 'values'
+    candidates.find { new File(desktopAndroidResources, it).isDirectory() }
+}
 def desktopStringResources = layout.buildDirectory.dir('generated/android-strings')
 def prepareDesktopStrings = tasks.register('prepareDesktopStrings') {
-    def resources = rootProject.file('app/src/main/res')
-    def sources = files(fileTree(new File(resources, 'values')) { include 'strings*.xml', 'arrays.xml' },
-        fileTree(new File(resources, 'values-zh-rCN')) { include 'strings*.xml', 'arrays.xml' })
+    def locales = desktopLocales()
+    def sources = files(locales.collect { tag ->
+        def directory = androidResourceDirectoryFor(tag)
+        fileTree(new File(desktopAndroidResources, directory)) { include 'strings*.xml', 'arrays.xml' }
+    })
     inputs.files(sources)
+    inputs.property('locales', locales.join(','))
     outputs.dir(desktopStringResources)
     doLast {
         def unescape = { String raw ->
@@ -91,29 +132,149 @@ def prepareDesktopStrings = tasks.register('prepareDesktopStrings') {
             }
             out.toString()
         }
-        def strings = [:]
-        def arrays = [:]
-        ['values', 'values-zh-rCN'].each { folder ->
-            new File(resources, folder).listFiles().findAll { it.name ==~ /(strings.*|arrays)\.xml/ }.sort { it.name }.each { file ->
-                def root = new groovy.xml.XmlParser(false, false).parse(file)
-                root.children().each { node ->
-                    def name = node.attribute('name')
-                    if (node.name() == 'string') strings[name] = unescape(node.text())
-                    else if (node.name() == 'string-array') arrays[name] = node.children().collect { unescape(it.text()) }
+        /** Every string/array of one Android resource folder; a later folder in [folders] wins, as on Android. */
+        def readFolder = { List<String> folders ->
+            def strings = [:]
+            def arrays = [:]
+            folders.each { folder ->
+                new File(desktopAndroidResources, folder).listFiles()
+                    .findAll { it.name ==~ /(strings.*|arrays)\.xml/ }.sort { it.name }.each { file ->
+                        def root = new groovy.xml.XmlParser(false, false).parse(file)
+                        root.children().each { node ->
+                            def name = node.attribute('name')
+                            if (node.name() == 'string') strings[name] = unescape(node.text())
+                            else if (node.name() == 'string-array') arrays[name] = node.children().collect { unescape(it.text()) }
+                        }
+                    }
+            }
+            [strings: strings, arrays: arrays]
+        }
+        /** `@string/name` references inside a value are replaced by the text, as the desktop UI has no resource ids. */
+        def resolveReferences = { Map<String, String> strings ->
+            def resolve = { String item ->
+                def seen = 0
+                while (item.startsWith('@string/') && seen++ < 8) item = strings[item.substring(8)] ?: item
+                item
+            }
+            strings.collectEntries { key, value -> [key, resolve(value)] }
+        }
+        /** Written as readable UTF-8, one `key=value` per line, so a catalog stays diffable for translators. */
+        def escape = { String value ->
+            def out = new StringBuilder()
+            for (int i = 0; i < value.length(); i++) {
+                def ch = value.charAt(i)
+                if (ch == ('\\' as char)) out.append('\\\\')
+                else if (ch == ('\n' as char)) out.append('\\n')
+                else if (ch == ('\r' as char)) out.append('\\r')
+                else if (ch == ('\t' as char)) out.append('\\t')
+                else if (ch < (' ' as char)) out.append(String.format('\\u%04x', (int) ch))
+                else {
+                    if (i == 0 && Character.isWhitespace(ch)) out.append('\\')
+                    out.append(ch)
+                }
+            }
+            out.toString()
+        }
+        def write = { String fileName, List<String> folders, Map<String, String> fallback ->
+            def read = readFolder(folders)
+            // A translation only carries the strings it translates; the rest stays English.
+            def strings = (fallback ?: [:]) + resolveReferences(read.strings)
+            def arrays = read.arrays.collectEntries { key, items ->
+                ['@array/' + key, items.collect { item ->
+                    item.startsWith('@string/') ? (strings[item.substring(8)] ?: item) : item
+                }.join('\u001F')]
+            }
+            def target = desktopStringResources.get().file("i18n/${fileName}").asFile
+            target.parentFile.mkdirs()
+            def lines = ["# Android string resources (${folders.join(', ')}) exported for the Windows UI."]
+            (strings + arrays).sort { it.key }.each { key, value -> lines << "${key}=${escape(value)}" }
+            target.setText(lines.join('\n') + '\n', 'UTF-8')
+            logger.info("Desktop strings ${fileName}: ${strings.size()} strings, ${arrays.size()} arrays")
+        }
+        def base = readFolder(['values'])
+        write('android-strings.properties', ['values'], null)
+        def baseStrings = resolveReferences(base.strings)
+        locales.each { tag ->
+            def directory = androidResourceDirectoryFor(tag)
+            if (directory == 'values') return
+            write("android-strings_${tag}.properties", [directory], baseStrings)
+        }
+        // The language list the settings page offers and the runtime resolves against: English first, then the rest.
+        def index = new File(desktopStringResources.get().asFile, 'i18n/desktop-languages.properties')
+        def ordered = ['en'] + (locales - ['en'])
+        index.parentFile.mkdirs()
+        index.setText("# Languages this build offers the Windows UI in (English is the base catalog).\n" +
+            "languages=${ordered.join(',')}\n", 'UTF-8')
+    }
+}
+
+// Guards the hand-maintained Windows catalogs: every translation must carry exactly the keys of the English base
+// catalog, and keep its String.format placeholders, so a wrong or missing translation fails the build instead of
+// showing up as a raw key or a crash at runtime.
+def verifyDesktopStrings = tasks.register('verifyDesktopStrings') {
+    group = 'verification'
+    description = 'Checks the Windows string catalogs against the English base catalog.'
+    def catalogs = layout.projectDirectory.dir('src/main/resources/i18n')
+    def base = new File(catalogs.asFile, 'desktop-strings.properties')
+    def translations = fileTree(catalogs.asFile) { include 'desktop-strings_*.properties' }
+    // The runtime module reports its messages through these catalogs too, so it is scanned as well.
+    def kotlinSources = fileTree('src/main/kotlin') { include '**/*.kt' } +
+        fileTree(rootProject.file('desktop-runtime/src/main/kotlin')) { include '**/*.kt' }
+    inputs.file(base)
+    inputs.files(translations)
+    inputs.files(kotlinSources)
+    doLast {
+        def placeholders = ~/%\d+\$?[-#+ 0,(]*\d*(?:\.\d+)?[a-zA-Z%]/
+        def load = { File file ->
+            def bundle = new Properties()
+            file.withInputStream { stream -> bundle.load(new InputStreamReader(stream, 'UTF-8')) }
+            bundle
+        }
+        def baseBundle = load(base)
+        def baseKeys = baseBundle.stringPropertyNames().sort()
+        if (baseKeys.isEmpty()) throw new GradleException("${base.name} has no keys")
+        translations.files.sort { it.name }.each { file ->
+            def bundle = load(file)
+            def keys = bundle.stringPropertyNames().sort()
+            def missing = baseKeys - keys
+            def extra = keys - baseKeys
+            if (missing) throw new GradleException("${file.name} misses ${missing.size()} keys: ${missing.take(5)}")
+            if (extra) throw new GradleException("${file.name} has ${extra.size()} unknown keys: ${extra.take(5)}")
+            baseKeys.each { key ->
+                def expected = (baseBundle.getProperty(key) =~ placeholders).collect { it }
+                def actual = (bundle.getProperty(key) =~ placeholders).collect { it }
+                if (expected.sort() != actual.sort()) {
+                    throw new GradleException("${file.name}: '${key}' placeholders ${actual} do not match the base catalog ${expected}")
                 }
             }
         }
-        def resolve = { String item -> item.startsWith('@string/') ? (strings[item.substring(8)] ?: item) : item }
-        def properties = new Properties()
-        strings.each { k, v -> properties.setProperty(k, v) }
-        arrays.each { k, v -> properties.setProperty('@array/' + k, v.collect(resolve).join('\u001F')) }
-        def target = desktopStringResources.get().file('android-strings.properties').asFile
-        target.parentFile.mkdirs()
-        target.withWriter('UTF-8') { properties.store(it, 'Generated from app/src/main/res by prepareDesktopStrings') }
+        // The translations are no use if a screen still hardcodes one language: every visible string has to come
+        // from the catalog, every catalog key has to be used, and no Chinese literal may remain in the UI code.
+        def used = new TreeSet<String>()
+        def hardcoded = []
+        def call = ~/(?:desktopText|DesktopRuntimeStrings\.text)\("([^"]+)"/
+        def chinese = ~/"[^"\n]*[\u4e00-\u9fff][^"\n]*"/
+        kotlinSources.files.sort { it.path }.each { file ->
+            file.eachLine { line ->
+                def trimmed = line.trim()
+                if (!trimmed.startsWith('*') && !trimmed.startsWith('//') && !trimmed.startsWith('/*')) {
+                    (line =~ call).each { match -> used << match[1] }
+                    def found = (line =~ chinese)
+                    if (found.find()) hardcoded << "${file.name}: ${found.group()}".toString()
+                }
+            }
+        }
+        def unknown = used - (baseKeys as Set)
+        if (unknown) throw new GradleException("desktopText() keys missing from ${base.name}: ${unknown.take(10)}")
+        def unused = (baseKeys as Set) - used
+        if (unused) throw new GradleException("${base.name} has keys no screen uses: ${unused.take(10)}")
+        if (hardcoded) throw new GradleException("hardcoded Chinese UI text (${hardcoded.size()}): ${hardcoded.take(5)}")
+        logger.lifecycle("Desktop string catalogs: ${baseKeys.size()} keys in ${base.name}, ${translations.files.size()} translation(s) verified, ${used.size()} keys used by the UI")
     }
 }
 sourceSets.main.resources.srcDir(desktopStringResources)
 tasks.named('processResources').configure { dependsOn prepareDesktopStrings }
+tasks.named('check').configure { dependsOn verifyDesktopStrings }
 
 dependencies {
     implementation compose.desktop.currentOs
@@ -406,6 +567,9 @@ tasks.withType(JavaExec).configureEach {
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
     javaLauncher = desktopLauncher
+    // The UI tests assert the text the app ships in Chinese, so the language is pinned instead of following the
+    // machine's locale (`--lang`/DesktopStrings.pin); without this, the same tests fail on an English CI machine.
+    systemProperty 'kototoro.desktop.locale', 'zh-CN'
     systemProperty 'kototoro.desktop.test.classpath', (sourceSets.test.runtimeClasspath + compatibilityFiles).asPath
     systemProperty 'kototoro.desktop.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/offline-desktop-fixture.jar').get().asFile
     systemProperty 'kototoro.desktop.challenge.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/interactive-desktop-fixture.jar').get().asFile

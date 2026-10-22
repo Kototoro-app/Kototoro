@@ -29,9 +29,12 @@ fun main(args: Array<String>) {
 
 internal fun runDesktop(args: Array<String>) {
     val options = args.toList()
-    require(options.size % 2 == 0 && options.chunked(2).all { it[0] in setOf("--data-dir", "--import", "--check-runtime") }) {
-        "Usage: [--data-dir <directory>] [--import <extension.jar>] [--check-runtime <report>]"
+    require(options.size % 2 == 0 &&
+        options.chunked(2).all { it[0] in setOf("--data-dir", "--import", "--check-runtime", "--lang") }) {
+        "Usage: [--data-dir <directory>] [--import <extension.jar>] [--check-runtime <report>] [--lang <tag>]"
     }
+    // `--lang` (or -Dkototoro.desktop.locale) fixes the language for this run instead of the saved choice.
+    options.chunked(2).lastOrNull { it[0] == "--lang" }?.let { DesktopStrings.pin(it[1]) }
     val root = options.chunked(2).lastOrNull { it[0] == "--data-dir" }?.get(1)?.let(Path::of)
         ?: DesktopDataPaths.defaultRoot()
     val imports = options.chunked(2).filter { it[0] == "--import" }.map { Path.of(it[1]) }
@@ -59,7 +62,7 @@ internal fun runDesktop(args: Array<String>) {
                 try { for (jar in imports) session.importJar(jar) } catch (error: CancellationException) {
                     throw error
                 } catch (error: Exception) {
-                    session.startupErrors += error.message ?: "扩展导入失败"
+                    session.startupErrors += error.message ?: desktopText("app.extensionImportFailed")
                 }
                 // Android's periodic tracker and suggestion jobs run while the window is open.
                 controller = DesktopController(session).also { it.startBackgroundWork() }
@@ -67,7 +70,7 @@ internal fun runDesktop(args: Array<String>) {
             } catch (error: CancellationException) {
                 throw error
             } catch (error: LinkageError) {
-                startupError = "运行时 API 不兼容：${error.message ?: error.javaClass.simpleName}"
+                startupError = desktopText("app.runtimeIncompatible", error.message ?: error.javaClass.simpleName)
             } catch (error: Exception) { startupError = error.message ?: error.javaClass.simpleName }
             finally { withContext(NonCancellable + Dispatchers.IO) { acquired?.close() } }
         }

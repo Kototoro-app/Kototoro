@@ -53,7 +53,7 @@ internal class DesktopReaderImages(
             openArtifact(page, artifact)?.let { return@withContext DesktopReaderFile(it, artifact) }
         }
         val artifact = fetch(page)
-        val image = requireNotNull(openArtifact(page, artifact)) { "页面缓存文件校验失败" }
+        val image = requireNotNull(openArtifact(page, artifact)) { desktopText("error.cacheFileChecksum") }
         currentCoroutineContext().ensureActive()
         DesktopReaderFile(image, artifact)
     }
@@ -79,10 +79,11 @@ internal class DesktopReaderImages(
                 }
                 val artifact = fetch(page)
                 require(artifact.pageId == page.id && artifact.source.name == page.source.name) {
-                    "来源返回的页面身份不匹配"
+                    desktopText("error.pageIdentityMismatch")
                 }
-                val path = requireNotNull(verifiedImagePath(directory, artifact.relativePath, artifact.sha256, artifact.byteSize)) {
-                    "页面缓存文件校验失败"
+                val path = requireNotNull(
+                    verifiedImagePath(directory, artifact.relativePath, artifact.sha256, artifact.byteSize)) {
+                    desktopText("error.cacheFileChecksum")
                 }
                 val image = header(path)
                 currentCoroutineContext().ensureActive()

@@ -84,7 +84,7 @@ internal fun DesktopNovelOptionsPanel(
                             ),
                             fontOption = {
                                 ReaderOptionSwitchRow(
-                                    label = "衬线字体",
+                                    label = desktopText("novel.serifFont"),
                                     checked = settings.serif,
                                     onCheckedChange = { controller.novelSettings(settings.copy(serif = it)) },
                                     modifier = Modifier.testTag("novel-serif"),
@@ -93,7 +93,7 @@ internal fun DesktopNovelOptionsPanel(
                             additionalOptions = {
                                 ReaderOptionDivider()
                                 NovelReaderValueStepper(NovelReaderValueOption(
-                                    label = "版心宽度",
+                                    label = desktopText("novel.contentWidth"),
                                     valueLabel = "${settings.width}dp",
                                     value = settings.width.toFloat(),
                                     range = DesktopNovelSettings.WIDTHS.let { it.first.toFloat()..it.last.toFloat() },
@@ -119,10 +119,9 @@ internal fun DesktopNovelOptionsPanel(
                                 }
                             }
                             item {
-                                ReaderOptionGroup(title = "快捷键") {
+                                ReaderOptionGroup(title = desktopText("reader.shortcuts")) {
                                     Text(
-                                        text = "PageUp / PageDown / 空格 翻页滚动\nHome / End 章首末\n" +
-                                            "H 收起或显示工具栏\nF11 全屏\nEsc 关闭面板或返回详情",
+                                        text = desktopText("novel.shortcutsHelp"),
                                         style = MaterialTheme.typography.bodyMedium,
                                         modifier = Modifier.padding(16.dp),
                                     )
