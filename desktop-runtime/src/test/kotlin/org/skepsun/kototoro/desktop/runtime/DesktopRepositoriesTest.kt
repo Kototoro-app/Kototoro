@@ -275,6 +275,36 @@ class DesktopRepositoriesTest {
         assertEquals("FixtureProvider", DesktopExtensionFiles.cloudstreamPluginId("FixtureProvider.cs3"))
     }
 
+    @Test
+    fun `a forgotten repository disappears from the saved list and from the next start`() = runBlocking<Unit> {
+        val first = encoded(index)
+        val second = encoded(index.copy(name = "第二个仓库"))
+        serve(mapOf("/one/index.pb" to first, "/two/index.pb" to second)).use { server ->
+            val root = directory.resolve("data")
+            FileSourcePreferenceStore(root.resolve("prefs")).use { store ->
+                DesktopRepositories(root, store.open("repos")).use { repos ->
+                    repos.fetch(server.url + "/one/index.pb")
+                    repos.fetch(server.url + "/two/index.pb")
+                    assertEquals(2, repos.saved().size)
+                    // An unknown address changes nothing and reports it, so the UI can say the entry is gone.
+                    assertFalse(repos.remove(server.url + "/missing/index.pb"))
+                    assertEquals(2, repos.saved().size)
+                    assertTrue(repos.remove(server.url + "/one/index.pb"))
+                    assertEquals(listOf(server.url + "/two/index.pb"), repos.saved().map { it.indexUrl })
+                    // Re-adding works, so forgetting is not a one-way door.
+                    repos.fetch(server.url + "/one/index.pb")
+                    assertEquals(2, repos.saved().size)
+                    assertTrue(repos.remove(server.url + "/two/index.pb"))
+                }
+            }
+            FileSourcePreferenceStore(root.resolve("prefs")).use { store ->
+                DesktopRepositories(root, store.open("repos")).use { repos ->
+                    assertEquals(listOf(server.url + "/one/index.pb"), repos.saved().map { it.indexUrl })
+                }
+            }
+        }
+    }
+
     private fun cs3(): ByteArray = ByteArrayOutputStream().also { output ->
         java.util.zip.ZipOutputStream(output).use { zip ->
             zip.putNextEntry(java.util.zip.ZipEntry("manifest.json"))

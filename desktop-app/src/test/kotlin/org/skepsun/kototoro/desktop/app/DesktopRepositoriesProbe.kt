@@ -157,6 +157,12 @@ internal object DesktopRepositoriesProbe {
                     check(controller.state.value.sources.none { it.sourceId == 9007199254740993L })
                     check(metadata.packageName !in session.storage.preferences.open("desktop_extensions").snapshot())
                     check(!Files.exists(Path.of(jar.path))) { "artifact kept after uninstall" }
+                    // Forgetting the repository drops the index entry; no artifact is touched by it.
+                    val removed = controller.state.value.repositories.single().indexUrl
+                    onNodeWithTag("repository-remove:$removed").performClick(); idle()
+                    check(controller.state.value.repositories.isEmpty())
+                    check(session.repositories.saved().isEmpty())
+                    check(controller.state.value.extensionCatalog == null)
                 }
             }
         } finally { runBlocking { controller.shutdown() }; server?.stop(0) }

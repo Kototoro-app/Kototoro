@@ -57,6 +57,20 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
 
     fun saved(): List<DesktopRepository> = repositories.toList()
 
+    /**
+     * Forgets a saved repository. Installed extensions stay installed (Android keeps them too and only marks
+     * them as not coming from a known repository), and no artifact is deleted here; this only drops the index
+     * entry so the repository stops appearing in the list. False means the address was not saved.
+     */
+    fun remove(indexUrl: String): Boolean {
+        val remaining = repositories.filterNot { it.indexUrl == indexUrl }
+        if (remaining.size == repositories.size) return false
+        persistRepositoryPreference(preferences, "repositories",
+            SourcePreferenceValue.Text(SourceProtocolJson.encodeToString(remaining)))
+        repositories = remaining
+        return true
+    }
+
     suspend fun fetch(address: String): DesktopRepositoryCatalog = withContext(Dispatchers.IO) {
         val input = repositoryUri(address)
         val name = input.path.substringAfterLast('/').lowercase()

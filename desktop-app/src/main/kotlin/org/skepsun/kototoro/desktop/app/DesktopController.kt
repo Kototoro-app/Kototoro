@@ -361,6 +361,18 @@ class DesktopController(val session: DesktopSession) {
             message = desktopText("extensions.catalogRead", catalog.repository.name, catalog.extensions.size)) }
     }
 
+    /** Drops a saved repository; its extensions stay installed, matching Android's "forget the source" behavior. */
+    fun removeRepository(repository: DesktopRepository) = action {
+        require(session.repositories.remove(repository.indexUrl)) { desktopText("extensions.repositoryMissing") }
+        mutableState.update {
+            it.copy(repositories = session.repositories.saved(),
+                extensionCatalog = it.extensionCatalog?.takeIf { catalog ->
+                    catalog.repository.indexUrl != repository.indexUrl
+                },
+                message = desktopText("extensions.repositoryRemoved", repository.name))
+        }
+    }
+
     fun installExtension(extension: ExtensionStoreIndex.Extension) = action {
         val catalog = requireNotNull(state.value.extensionCatalog) { desktopText("extensions.readRepositoryFirst") }
         publishInstallation(session.installExtension(catalog, extension).label, desktopText("extensions.installed"))
