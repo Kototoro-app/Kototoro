@@ -229,33 +229,33 @@ private struct ContentSpacePanel: View {
             .accessibilityAddTraits(selected ? .isSelected : [])
 
             if !kind.isEmpty, let latest {
-                Button {
-                    selection = kind
-                    resume(latest)
-                } label: {
-                    HStack(alignment: .bottom, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(latest.content.title).font(.subheadline.weight(.medium)).lineLimit(1)
-                            Text(ContinueReadingDetail.text(latest)).font(.caption).lineLimit(1)
-                        }
-                        Spacer(minLength: 0)
+                HStack(alignment: .bottom, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(latest.content.title).font(.subheadline.weight(.medium)).lineLimit(1)
+                        Text(ContinueReadingDetail.text(latest)).font(.caption).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    Button {
+                        selection = kind
+                        resume(latest)
+                    } label: {
                         Label(kind == "VIDEO" ? "继续播放" : "继续阅读",
                               systemImage: kind == "VIDEO" ? "play.fill" : "book.fill")
                             .font(.caption.weight(.semibold))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
                             .background(.white.opacity(0.16), in: Capsule())
+                            .contentShape(Capsule())
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 14)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .disabled(sources.runtime == nil)
+                    .accessibilityLabel(
+                        "\(kind == "VIDEO" ? String(localized: "继续播放") : String(localized: "继续阅读"))：\(latest.content.title)，\(ContinueReadingDetail.text(latest))"
+                    )
+                    .accessibilityIdentifier("space.resume.\(id)")
                 }
-                .buttonStyle(.plain)
-                .disabled(sources.runtime == nil)
-                .accessibilityLabel(
-                    "\(kind == "VIDEO" ? String(localized: "继续播放") : String(localized: "继续阅读"))：\(latest.content.title)，\(ContinueReadingDetail.text(latest))"
-                )
-                .accessibilityIdentifier("space.resume.\(id)")
+                .padding(.horizontal, 16)
+                .padding(.bottom, 14)
             } else {
                 Text(kind.isEmpty ? "汇总查看漫画、小说与视频" : "浏览来源与作品库")
                     .font(.caption)
