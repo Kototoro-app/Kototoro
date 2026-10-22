@@ -290,6 +290,8 @@ WebView2 SDK、播放器与超分组件继续使用各自固定版本和 SHA-256
 ```
 
 CI 使用应用版本作为 MSI 的三段版本，可通过 `-PdesktopPackageVersion` 覆盖；本地默认仍为 `0.1.0`。
+同名参数 `-PdesktopVersionName`（默认取 `app/build.gradle` 的 versionName）与 `-PdesktopChannel`
+（`release`/`nightly`）写入更新面板显示并参与版本比较，CI 直接传发布资产的版本名与频道。
 `-PwindowsWixDirectory` 可指定 MSI 内容检查所用 WiX 3 的 `bin` 目录。
 
 ## 图书馆备份
@@ -332,6 +334,26 @@ store，按章节发布清单，每 64 页保存一个内容寻址块，发现�
 下载页的“下载占用 / 回收旧记录”会预览元数据占用和可回收数量，确认后仅回收未被任何
 磁盘章节清单引用的旧页面块。取消不更改文件；确认时重新核对引用和文件身份。清单损坏
 或数据不完整时停止回收，章节、图片和其他设置保留。当前没有自动后台回收或图片总量预算。
+
+## 应用内更新
+
+“更多 → 关于与更新”显示当前版本与发布频道，并提供检查、下载与“重启并更新”。版本名、MSI 三段版本和
+频道由构建写入 `desktop-version.properties`（`:desktop-app:prepareDesktopVersion`，CI 用
+`-PdesktopVersionName`/`-PdesktopChannel` 覆盖），运行时不再猜测自己是什么版本。窗口打开时每 6 小时
+自动检查一次（可关闭），与追踪/推荐任务分属不同协程：慢仓库或下载不会推迟另一项，反之亦然。
+
+检查读取 GitHub Release：稳定频道只看 `Kototoro-app/Kototoro` 的非预发布版本，nightly 频道看
+`Kototoro-app/Kototoro-Nightly` 的 `nightly-<日期>` 标签；比较复用 Android 的版本语义（alpha/beta/rc 权重、
+`N<日期>` 形式），发布包里的其他平台资产（如 arm64）不会被误判。
+
+下载使用发布附带的 `.sha256`，流式写入 `<数据目录>/updates` 下的 `.part` 文件，核对大小与 SHA-256，
+ZIP 必须包含 `Kototoro.exe`（MSI 校验复合文档头），校验通过才原子改名；随后解压到暂存目录并核对镜像
+结构（EXE + `app/` + `runtime/`）。便携版整目录覆盖，MSI 安装改用 `msiexec`；两者都由一个等待本进程
+退出的 PowerShell 脚本执行（日志在 `updates/update.log`），完成后重启应用。程序目录与
+`%LOCALAPPDATA%/Kototoro` 用户数据分离，覆盖不触碰收藏、历史与下载。
+
+“自动下载”和“退出时安装”可分别开启；从构建目录（Gradle/IDE）启动的副本没有可替换的镜像，面板会说明
+不支持自更新。签名校验（Authenticode）与 S3/代理镜像仍待接入。
 
 ## 验证
 
