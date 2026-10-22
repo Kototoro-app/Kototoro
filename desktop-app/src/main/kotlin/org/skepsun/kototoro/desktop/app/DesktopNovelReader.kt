@@ -196,7 +196,7 @@ private fun NovelInlineImage(controller: DesktopController, url: String, muted: 
         var unpublished: Bitmap? = null
         try {
             val image = controller.novelImage(url)
-            val decoded = withContext(Dispatchers.IO) { DesktopImageDecoder.decode(image.path).also { unpublished = it } }
+            val decoded = withContext(DesktopDispatchers.decode) { DesktopImageDecoder.decode(image.path).also { unpublished = it } }
             value = decoded.asComposeImageBitmap()
             unpublished = null
         } catch (error: CancellationException) { throw error }

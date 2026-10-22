@@ -221,7 +221,7 @@ internal fun ReaderImage(page: DesktopReaderImage?, pageIndex: Int, modifier: Mo
         value = null
         var unpublished: Bitmap? = null
         if (path != null) try {
-            val decoded = withContext(Dispatchers.IO) {
+            val decoded = withContext(DesktopDispatchers.decode) {
                 DesktopImageDecoder.decode(path).also { unpublished = it }
             }
             // Compose adopts this bounded bitmap. Close only unpublished results on cancellation/failure.

@@ -53,7 +53,7 @@ private fun rememberDesktopCover(content: SourceContent, cache: DesktopCovers, l
         value = DesktopCoverState()
         if (!url.isNullOrBlank()) try {
             val path = cache.load(content, large, refresh = revision > 0)
-            val bitmap = withContext(Dispatchers.IO) {
+            val bitmap = withContext(DesktopDispatchers.decode) {
                 // The conversion creates a separate Bitmap retained by Compose.
                 SkiaImage.makeFromEncoded(Files.readAllBytes(path)).use { it.toComposeImageBitmap() }
             }

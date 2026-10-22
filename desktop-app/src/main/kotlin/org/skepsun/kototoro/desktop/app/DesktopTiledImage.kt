@@ -39,7 +39,7 @@ internal fun DesktopTiledImage(image: DesktopReaderImage, node: VisibleNode?, di
                 var retry by remember { mutableIntStateOf(0) }
                 val bitmap by produceState<ImageBitmap?>(null, image.path, tile.key, retry) {
                     try {
-                        value = withContext(Dispatchers.IO) {
+                        value = withContext(DesktopDispatchers.decode) {
                             val decoded = DesktopTileDecoder.decode(image.path, tile)
                             try { decoded.toComposeImageBitmap() } finally { decoded.flush() }
                         }

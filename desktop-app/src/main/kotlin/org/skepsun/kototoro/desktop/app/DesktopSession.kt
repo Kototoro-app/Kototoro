@@ -131,7 +131,7 @@ class DesktopSession private constructor(
     /** Plain white margins removed, as Android crops pages; long tiled pages keep their full geometry. */
     private suspend fun cropped(image: DesktopReaderImage): DesktopReaderImage {
         if (!cropPages || image.tiled) return image
-        val bounds = try { withContext(Dispatchers.IO) { DesktopImageDecoder.contentBounds(image.path, image.width, image.height) } }
+        val bounds = try { withContext(DesktopDispatchers.decode) { DesktopImageDecoder.contentBounds(image.path, image.width, image.height) } }
             catch (error: kotlinx.coroutines.CancellationException) { throw error } catch (_: Exception) { null }
         return image.copy(crop = bounds)
     }
