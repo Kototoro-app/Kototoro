@@ -25,6 +25,30 @@ final class LibraryModel: ObservableObject {
     )
     private(set) var favouriteKeys: Set<String> = []
     @Published private(set) var history: [IosLibraryEntry] = []
+    /// Last opened details per space, independent of the work offered for continued reading.
+    @Published private(set) var spaceArtwork: [String: IosSourceContent] = [:]
+    private static let spaceArtworkKey = "space.artwork.ids"
+
+    func recordSpaceVisit(_ content: IosSourceContent) {
+        let content = content.withoutChapters
+        spaceArtwork[content.mediaKind] = content
+        spaceArtwork[""] = content
+        var ids = UserDefaults.standard.dictionary(forKey: Self.spaceArtworkKey) as? [String: String] ?? [:]
+        ids[content.mediaKind] = content.id
+        ids[""] = content.id
+        UserDefaults.standard.set(ids, forKey: Self.spaceArtworkKey)
+    }
+
+    private func restoreSpaceArtwork() async {
+        guard let library else { return }
+        let ids = UserDefaults.standard.dictionary(forKey: Self.spaceArtworkKey) as? [String: String] ?? [:]
+        for (kind, id) in ids where spaceArtwork[kind] == nil {
+            if let content = try? await library.storedContent(id: id), spaceArtwork[kind] == nil {
+                spaceArtwork[kind] = content
+            }
+        }
+    }
+
     @Published private(set) var updates: [IosUpdate] = [] {
         didSet {
             var counts: [String: Int] = [:]
@@ -68,6 +92,7 @@ final class LibraryModel: ObservableObject {
             categories = try await library.categories()
             schemaVersion = library.schemaVersion
             try await refreshRecords()
+            await restoreSpaceArtwork()
         } catch {
             self.error = error.localizedDescription
         }

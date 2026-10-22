@@ -113,8 +113,10 @@ struct LibraryView: View {
                 if selecting {
                     selectionToolbar
                 } else {
-                    ToolbarItemGroup(placement: .topBarTrailing) {
+                    ToolbarItem(placement: .topBarLeading) {
                         if spacesEnabled { SpaceMenu() }
+                    }
+                    ToolbarItemGroup(placement: .topBarTrailing) {
                         ContentListModeMenu(mode: $mode) {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("排序").font(.subheadline)

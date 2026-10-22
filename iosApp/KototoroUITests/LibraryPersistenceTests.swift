@@ -2,15 +2,27 @@ import XCTest
 
 final class LibraryPersistenceTests: XCTestCase {
     @MainActor
+    func testRecordsNavigationTitleIsCentered() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        app.mainTab("记录").tap()
+        let title = app.navigationBars.staticTexts["记录"]
+        XCTAssertTrue(title.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(title.frame.midX, app.frame.midX, accuracy: 2)
+        XCTAssertTrue(app.buttons["space.menu"].exists)
+    }
+
+    @MainActor
     func testRecordsFiltersCompactStatsAndDownloadList() {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launch()
         XCTAssertTrue(app.mainTab("记录").waitForExistence(timeout: 30))
         app.mainTab("记录").tap()
-        let title = app.staticTexts["records.title"]
+        let title = app.navigationBars.staticTexts["记录"]
         XCTAssertTrue(title.waitForExistence(timeout: 10), app.debugDescription)
-        XCTAssertLessThan(title.frame.midX, app.frame.width / 2)
+        XCTAssertEqual(title.frame.midX, app.frame.midX, accuracy: 2)
         XCTAssertFalse(app.buttons["records.more"].exists)
         XCTAssertTrue(app.staticTexts["本期概览"].waitForExistence(timeout: 20), app.debugDescription)
         let compactTop = app.buttons["timeline.filter.all"].frame.minY

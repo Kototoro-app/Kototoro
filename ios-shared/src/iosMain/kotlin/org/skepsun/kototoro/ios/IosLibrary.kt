@@ -295,6 +295,14 @@ class IosLibrary {
         // Details without chapters (a source that failed quietly) keep the saved list instead of erasing it.
         records.save(content.value.let { if (it.chapters?.isEmpty() == true) it.copy(chapters = null) else it })
 
+    /** Lightweight saved details for restoring a space's last browsed artwork, without loading its chapters. */
+    @Throws(Exception::class)
+    suspend fun storedContent(id: String): IosSourceContent? {
+        val contentId = id.toLongOrNull() ?: return null
+        val content = records.findMany(listOf(contentId)).firstOrNull() ?: return null
+        return IosSourceContent(content, tracking.selected(listOf(contentId))[contentId])
+    }
+
     /** Moves Android-compatible library records after Swift has fetched and confirmed the target's details. */
     @Throws(Exception::class)
     suspend fun changeSource(content: IosSourceContent, target: IosSourceContent, keepOriginal: Boolean) =

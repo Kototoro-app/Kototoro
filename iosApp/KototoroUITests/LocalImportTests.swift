@@ -7,6 +7,57 @@ final class LocalImportTests: XCTestCase {
     private var app: XCUIApplication!
 
     @MainActor
+    func testSpaceSelectorSwitchesAndDismisses() throws {
+        app.mainTab("作品库").tap()
+        app.buttons["space.menu"].tap()
+        let novel = app.buttons["space.select.NOVEL"]
+        XCTAssertTrue(novel.waitForExistence(timeout: 5), app.debugDescription)
+        novel.tap()
+        XCTAssertTrue(app.buttons["space.close"].waitForNonExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.buttons["space.menu"].label.contains("小说"))
+        app.mainTab("浏览").tap()
+        app.buttons["space.menu"].tap()
+        XCTAssertTrue(app.buttons["space.select.NOVEL"].isSelected)
+        app.buttons["space.select.ALL"].tap()
+        XCTAssertTrue(app.buttons["space.close"].waitForNonExistence(timeout: 5))
+    }
+
+    /// Browsing details changes the space artwork without requiring a reading record, and survives relaunch.
+    @MainActor
+    func testSpaceArtworkFollowsBrowsedDetailsAndSurvivesRestart() throws {
+        importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 20), app.debugDescription)
+        // Ensure the cover is decoded before leaving; the panel reuses the same cached source image.
+        let cover = app.descendants(matching: .any)["details.cover"]
+        XCTAssertTrue(cover.waitForExistence(timeout: 5), app.debugDescription)
+        let loaded = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "已加载"), object: cover)
+        XCTAssertEqual(XCTWaiter.wait(for: [loaded], timeout: 15), .completed)
+        app.terminate()
+        app.launch()
+        app.mainTab("作品库").tap()
+        let menu = app.buttons["space.menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(menu.label.contains("漫画"))
+        menu.tap()
+        let manga = app.buttons["space.select.MANGA"]
+        XCTAssertTrue(manga.waitForExistence(timeout: 5))
+        XCTAssertTrue(manga.isSelected)
+        let artwork = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            self.fixturePagePixelFraction(manga, dimmed: true) > 0.2
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [artwork], timeout: 15), .completed,
+                       "The browsed comic's red cover should fill the space row after relaunch")
+        attach("空间最近浏览封面背景")
+        app.buttons["space.select.NOVEL"].tap()
+        XCTAssertTrue(app.buttons["space.close"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(menu.label.contains("小说"))
+        app.mainTab("浏览").tap()
+        app.buttons["space.menu"].tap()
+        XCTAssertTrue(app.buttons["space.select.NOVEL"].isSelected)
+        app.buttons["space.select.ALL"].tap()
+    }
+
+    @MainActor
     func testReadingStatisticsPersistAndAppearInHistoryAndTheCenteredTimeline() throws {
         importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
         let read = app.detailsReadButton()
@@ -52,7 +103,7 @@ final class LocalImportTests: XCTestCase {
 
     /// The comic fixture has a red cover/page 1 and a blue page 2; inspect pixels rather than placeholder presence.
     @MainActor
-    private func fixturePagePixelFraction(_ event: XCUIElement, blue: Bool = false) -> Double {
+    private func fixturePagePixelFraction(_ event: XCUIElement, blue: Bool = false, dimmed: Bool = false) -> Double {
         guard let image = event.screenshot().image.cgImage else { return 0 }
         let width = 120
         let height = max(1, image.height * width / image.width)
@@ -72,7 +123,8 @@ final class LocalImportTests: XCTestCase {
             let red = Int(pixels[index]), green = Int(pixels[index + 1])
             let dominant = blue ? Int(pixels[index + 2]) : red
             let other = blue ? red : Int(pixels[index + 2])
-            if dominant > 120 && green < 110 && other < 110 && dominant - green > 60 { coverPixels += 1 }
+            if dominant > (dimmed ? 40 : 120) && green < 110 && other < 110 &&
+                dominant - green > (dimmed ? 20 : 60) { coverPixels += 1 }
         }
         return Double(coverPixels) / Double(width * height)
     }

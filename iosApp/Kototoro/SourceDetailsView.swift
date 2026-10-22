@@ -455,6 +455,7 @@ struct SourceDetailsView: View {
             resumeIfAsked()
         }
         .onAppear {
+            library.recordSpaceVisit(shownContent)
             model.orderByNumber = chapterOrder == "number"
             // Downloads may have been removed in storage management meanwhile.
             model.relistBooks()
@@ -580,6 +581,7 @@ struct SourceDetailsView: View {
         guard let content = model.details, let database = library.library else { return }
         do {
             try await database.saveDetails(content: content)
+            if !Task.isCancelled { library.recordSpaceVisit(shownContent) }
             isFavourite = try await database.isFavourite(content: content).boolValue
             resume = try await database.position(content: content)
             bookmarks = try await database.bookmarks(content: content)

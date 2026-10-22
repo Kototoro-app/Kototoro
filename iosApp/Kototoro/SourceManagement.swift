@@ -89,24 +89,9 @@ enum ContentSpace {
         history.first { !enabled || matches(space, $0.content.mediaKind) }
     }
 
-    /// Under the page title while a space narrows it, as Android names the active space in its top bar.
-    static func subtitle(_ kind: String) -> String { kind.isEmpty ? "" : String(localized: "\(title(kind))空间") }
 }
 
-/// A root page's space subtitle. An empty one is not set at all: an empty navigation subtitle is still a subtitle to
-/// the bar, which lays the large title out for it, so pages without a space would keep a subtitle line.
-private struct SpaceSubtitle: ViewModifier {
-    let text: String
-    func body(content: Content) -> some View {
-        if text.isEmpty { content } else { content.navigationSubtitle(text) }
-    }
-}
-
-extension View {
-    func spaceSubtitle(_ text: String) -> some View { modifier(SpaceSubtitle(text: text)) }
-}
-
-/// The shared space panel, presented from each root page's trailing toolbar.
+/// The shared space selector, presented from each root page's toolbar.
 struct SpaceMenu: View {
     @AppStorage(ContentSpace.key) private var kind = ""
     @EnvironmentObject private var library: LibraryModel
@@ -117,8 +102,13 @@ struct SpaceMenu: View {
 
     var body: some View {
         Button { presented = true } label: {
-            Label("内容空间：\(ContentSpace.title(kind))", systemImage: ContentSpace.icon(kind))
+            HStack(spacing: 5) {
+                Text(ContentSpace.title(kind))
+                Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
+            }
+            .font(.subheadline.weight(.semibold))
         }
+        .accessibilityLabel("当前：\(ContentSpace.title(kind))，切换内容空间")
         .accessibilityIdentifier("space.menu")
         .sheet(isPresented: $presented, onDismiss: {
             // Present the reader only after the panel has finished dismissing.
@@ -131,7 +121,7 @@ struct SpaceMenu: View {
             }
             .environmentObject(library)
             .environmentObject(sources)
-            .presentationDetents([.large])
+            .presentationDetents([.height(540), .large])
             .presentationDragIndicator(.visible)
         }
         .continueReadingPresentation(opened: $opened)
@@ -144,22 +134,25 @@ private struct ContentSpacePanel: View {
     @EnvironmentObject private var library: LibraryModel
     @EnvironmentObject private var sources: SourcesModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 14) {
+                VStack(spacing: 10) {
                     card("")
                     ForEach(SourceFilterOption.kinds, id: \.id) { kind in card(kind.id) }
                 }
-                .padding()
+                .padding(16)
             }
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("内容空间")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }.accessibilityIdentifier("space.close")
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭", systemImage: "xmark") { dismiss() }
+                        .accessibilityIdentifier("space.close")
                 }
             }
             .task { await library.refresh() }
@@ -170,82 +163,94 @@ private struct ContentSpacePanel: View {
     private func card(_ kind: String) -> some View {
         let selected = selection == kind
         let latest = library.history.first { ContentSpace.matches(kind, $0.content.mediaKind) }
-        let favourites = library.favourites.filter { ContentSpace.matches(kind, $0.content.mediaKind) }.count
-        let sourceCount = sources.sources.filter {
-            sources.isEnabled($0) && ContentSpace.matches(kind, $0.mediaKind)
-        }.count
+        let artwork = library.spaceArtwork[kind] ?? latest?.content
         let id = kind.isEmpty ? "ALL" : kind
         return VStack(alignment: .leading, spacing: 0) {
             Button {
                 selection = kind
                 dismiss()
             } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     Image(systemName: ContentSpace.icon(kind))
-                        .font(.title2)
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 42, height: 42)
-                        .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(ContentSpace.title(kind)).font(.headline)
-                        Text("\(sourceCount) 个来源 · \(favourites) 个收藏")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+                        .font(.title3)
+                        .frame(width: 28)
+                    Text(kind.isEmpty ? String(localized: "全部内容") : ContentSpace.title(kind))
+                        .font(.headline)
                     Spacer(minLength: 8)
                     if selected {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                        Image(systemName: "checkmark.circle.fill")
+                            .accessibilityLabel("当前空间")
                     }
                 }
-                .padding(14)
+                .padding(16)
+                .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("space.select.\(id)")
             .accessibilityAddTraits(selected ? .isSelected : [])
 
-            // The all-content choice is an overview; resume belongs to the individual media spaces.
-            if !kind.isEmpty {
-                Divider().padding(.horizontal, 14)
-                if let latest {
-                    Button {
-                        selection = kind
-                        resume(latest)
-                    } label: {
-                        HStack(spacing: 10) {
-                            if let runtime = sources.runtime {
-                                CoverImage(runtime: runtime, content: latest.content, plain: true)
-                                    .frame(width: 34, height: 46)
-                                    .clipShape(RoundedRectangle(cornerRadius: 5))
-                            }
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(latest.content.title).font(.subheadline.weight(.medium)).lineLimit(1)
-                                Text(ContinueReadingDetail.text(latest))
-                                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                            }
-                            Spacer(minLength: 8)
-                            Image(systemName: kind == "VIDEO" ? "play.fill" : "book.fill")
-                                .foregroundStyle(Color.accentColor)
+            if !kind.isEmpty, let latest {
+                Button {
+                    selection = kind
+                    resume(latest)
+                } label: {
+                    HStack(alignment: .bottom, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(latest.content.title).font(.subheadline.weight(.medium)).lineLimit(1)
+                            Text(ContinueReadingDetail.text(latest)).font(.caption).lineLimit(1)
                         }
-                        .padding(14)
-                        .contentShape(Rectangle())
+                        Spacer(minLength: 0)
+                        Label(kind == "VIDEO" ? "继续播放" : "继续阅读",
+                              systemImage: kind == "VIDEO" ? "play.fill" : "book.fill")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(.white.opacity(0.16), in: Capsule())
                     }
-                    .buttonStyle(.plain)
-                    .disabled(sources.runtime == nil)
-                    .accessibilityLabel(
-                        "\(ContentSpace.title(kind))空间，\(ContinueReadingDetail.text(latest))：\(latest.content.title)"
-                    )
-                    .accessibilityIdentifier("space.resume.\(id)")
-                } else {
-                    Label("暂无阅读记录", systemImage: "clock")
-                        .font(.caption).foregroundStyle(.secondary).padding(14)
-                        .accessibilityIdentifier("space.empty.\(id)")
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 14)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .disabled(sources.runtime == nil)
+                .accessibilityLabel(
+                    "\(kind == "VIDEO" ? String(localized: "继续播放") : String(localized: "继续阅读"))：\(latest.content.title)，\(ContinueReadingDetail.text(latest))"
+                )
+                .accessibilityIdentifier("space.resume.\(id)")
+            } else {
+                Text(kind.isEmpty ? "汇总查看漫画、小说与视频" : "浏览来源与作品库")
+                    .font(.caption)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 14)
+                    .allowsHitTesting(false)
             }
         }
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
+        .foregroundStyle(.white)
+        .background {
+            Color(white: 0.16)
+                .overlay {
+                    if !reduceTransparency, let artwork, let runtime = sources.runtime {
+                        CoverImage(runtime: runtime, content: artwork, plain: true)
+                            .id(CoverCache.identity(artwork))
+                            .blur(radius: 3, opaque: true)
+                            .overlay {
+                                LinearGradient(
+                                    colors: [.black.opacity(0.80), .black.opacity(0.64), .black.opacity(0.38)],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
+                            }
+                            .overlay(.black.opacity(contrast == .increased ? 0.3 : 0.12))
+                    }
+                }
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18))
         .overlay {
-            RoundedRectangle(cornerRadius: 20)
-                .strokeBorder(selected ? Color.accentColor : Color.primary.opacity(0.08), lineWidth: selected ? 2 : 0.5)
+            RoundedRectangle(cornerRadius: 18)
+                .strokeBorder(.white.opacity(selected ? 0.95 : 0.18), lineWidth: selected ? 2 : 0.5)
+                .allowsHitTesting(false)
         }
     }
 }
@@ -258,7 +263,7 @@ struct ContentSpaceSettingsSection: View {
         Section {
             Toggle("内容空间", isOn: $enabled).accessibilityIdentifier("settings.spaces")
         } footer: {
-            Text(enabled ? "浏览、作品库与记录共用右上角的空间选择。"
+            Text(enabled ? "浏览、作品库与记录共用导航栏中的空间选择。"
                          : "各页面在顶部分别切换内容类型。")
         }
     }

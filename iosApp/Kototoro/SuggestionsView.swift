@@ -219,10 +219,11 @@ struct SuggestionsView: View {
         }
         .navigationTitle("为你推荐")
         .navigationBarTitleDisplayMode(.inline)
-        .spaceSubtitle(spacesEnabled ? ContentSpace.subtitle(space) : "")
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
+            ToolbarItem(placement: .topBarLeading) {
                 if spacesEnabled { SpaceMenu() }
+            }
+            ToolbarItemGroup(placement: .topBarTrailing) {
                 ContentListModeMenu(mode: $mode)
                 Button { editing = true } label: { Label("推荐偏好", systemImage: "slider.horizontal.3") }
                     .accessibilityIdentifier("suggestions.settings")

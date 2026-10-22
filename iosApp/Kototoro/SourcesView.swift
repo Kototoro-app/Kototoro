@@ -410,11 +410,13 @@ struct SourcesView: View {
             // The system search field under the title; the search tab stays the app-wide search.
             .pageSearch(text: $query, prompt: String(localized: "搜索源"))
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if spacesEnabled { SpaceMenu() }
+                }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     NavigationLink { RepositoriesView() } label: {
                         Label("仓库与扩展", systemImage: "shippingbox")
                     }.accessibilityIdentifier("sources.repositories")
-                    if spacesEnabled { SpaceMenu() }
                     displayMenu
                 }
             }

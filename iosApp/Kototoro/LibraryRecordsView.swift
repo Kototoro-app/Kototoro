@@ -190,15 +190,12 @@ private struct RecordsPage: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("记录")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(removing: .title)
         .pageSearch(text: $query, prompt: String(localized: "搜索记录"))
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Text("记录").font(.title2.bold()).accessibilityIdentifier("records.title")
-            }
-            .sharedBackgroundVisibility(.hidden)
-            ToolbarItemGroup(placement: .topBarTrailing) {
                 if spacesEnabled { SpaceMenu() }
+            }
+            ToolbarItemGroup(placement: .topBarTrailing) {
                 if let runtime = sources.runtime {
                     Button("检查更新", systemImage: "arrow.clockwise") { Task { await library.checkUpdates(runtime) } }
                         .disabled(library.isCheckingUpdates)
