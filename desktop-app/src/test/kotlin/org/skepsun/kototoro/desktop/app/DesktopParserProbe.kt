@@ -18,6 +18,8 @@ import org.skepsun.kototoro.core.source.SourcePagingMode
 import org.skepsun.kototoro.core.source.SourcePreferenceEdit
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.parserhost.ParserSourceRuntime
+import java.awt.Toolkit
+import java.awt.datatransfer.DataFlavor
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.nio.file.Files
@@ -269,6 +271,28 @@ internal object DesktopParserProbe {
                     val book = controller.state.value.content!!
                     check(book.chapters.orEmpty().size == 2)
                     onAllNodesWithText("下载").assertCountEquals(0) // no page-image downloads for text chapters
+                    // The overlay carries Android's shared preview; the full screen adds the facts and the share action.
+                    onNodeWithTag("details-expand").performClick(); idle()
+                    onNodeWithTag("details-full").assertExists()
+                    onNodeWithTag("details-info").assertExists()
+                    onNodeWithTag("details-status").assertTextContains("连载中", substring = true)
+                    onNodeWithTag("details-rating").assertTextContains("5.0", substring = true)
+                    onNodeWithTag("details-alt-titles").assertTextContains("Fixture Alias", substring = true)
+                    check(book.tags.map { it.title }.sorted() == listOf("Action", "Drama")) { book.tags.toString() }
+                    onNodeWithTag("details-tag:Drama").performScrollTo().assertIsDisplayed()
+                    onNodeWithTag("details-tag:Action").assertIsDisplayed()
+                    snapshot("details-info")
+                    // The link Android shares is what a desktop copies.
+                    onNodeWithTag("details-copy-link").performScrollTo().performClick(); idle()
+                    val copyLabel = onNodeWithTag("details-copy-link").fetchSemanticsNode()
+                        .config[SemanticsProperties.Text].joinToString("")
+                    val clip = runCatching {
+                        Toolkit.getDefaultToolkit().systemClipboard.getData(DataFlavor.stringFlavor) as? String
+                    }.getOrNull()
+                    println("COPY: label=$copyLabel clip=$clip url=${book.url}")
+                    // The button keeps saying so until another work is shown, which is what a copy means here.
+                    onNodeWithTag("details-copy-link").assertTextContains("已复制链接")
+                    if (clip != null) check(clip.endsWith(book.url)) { "clipboard: $clip" }
                     runBlocking { controller.addFavourite().join() }
                     onNodeWithTag("preview-read").performClick(); idle()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.NOVEL }

@@ -200,6 +200,7 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                         }
                     }
                 }
+                DesktopDetailsInfo(content, enabled = !state.busy)
             }
         }
         if (expanded) {

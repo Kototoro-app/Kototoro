@@ -13,6 +13,9 @@ Windows/JVM 的 Compose Desktop 应用入口，复用 `desktop-runtime` 的共�
 SVG，构建遇到不支持的变换会失败；没有引入另一套图标依赖。
 详情页的收藏按钮与 Android 一样是双向的：未收藏时显示“加入收藏”，已收藏后变为“取消收藏”，
 点击即用共享 `SourceLibrary.removeFavourite` 把作品移出书架，提示同步更新。
+简介下方是 Android 详情的信息区：状态、评分、别名、标签与“复制链接”按钮同源取自本次详情应答，
+缺项直接省略而不是留空；标签是只读胶囊（桌面暂无标签检索页），复制按钮把 Android 分享的链接放进
+系统剪贴板，之后按钮显示“已复制链接”，换作品后复原。
 
 主页直接调用 Android / Windows 共用的 `HomeScreenLayout`、`HomeHeroPager`、`HomeHeroCardSurface`
 和 `HomeHeroStandardContent`，统一懒列表、宽屏居中、内容面板断点、双栏、快捷入口与 Hero 动画。

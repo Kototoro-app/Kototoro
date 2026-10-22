@@ -29,13 +29,7 @@ internal fun DesktopTabletPreview(controller: DesktopController, state: DesktopA
             tags = content.tags.map { it.title },
             ratingText = content.rating.takeIf { it > 0f }?.let { String.format(Locale.getDefault(), "%.1f", it * 10f) },
             chapterCountText = if (count > 0) desktopText("reader.chaptersCount", count) else null,
-            statusLabel = content.state?.let { when (it) {
-                "ONGOING" -> desktopText("details.status.ongoing")
-                "FINISHED" -> desktopText("details.status.finished")
-                "ABANDONED" -> desktopText("details.status.abandoned")
-                "PAUSED" -> desktopText("details.status.paused")
-                else -> null
-            } },
+            statusLabel = desktopContentStatusLabel(content.state),
             chapterSections = buildList {
                 add(TabletPreviewSection(if (groups.isSingleGroup) desktopText("reader.panel.chapters") else desktopText("details.latestChapters"),
                     chapters.map { it.previewData() }, if (count > chapters.size) desktopText("common.chaptersTotal", count) else null))
