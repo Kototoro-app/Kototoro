@@ -1,0 +1,90 @@
+[
+    {
+        "tag_name":  "nightly-20261021",
+        "name":  "N20261021",
+        "draft":  false,
+        "prerelease":  true,
+        "published_at":  "2026-10-21T21:22:31Z",
+        "assets":  [
+                       {
+                           "name":  "Kototoro-N20261021-arm64-v8a-nightly.apk",
+                           "size":  126593623,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro-Nightly/releases/download/nightly-20261021/Kototoro-N20261021-arm64-v8a-nightly.apk"
+                       },
+                       {
+                           "name":  "Kototoro-N20261021-armeabi-v7a-nightly.apk",
+                           "size":  118703439,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro-Nightly/releases/download/nightly-20261021/Kototoro-N20261021-armeabi-v7a-nightly.apk"
+                       },
+                       {
+                           "name":  "Kototoro-N20261021-ios-nightly-unsigned.ipa",
+                           "size":  96941602,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro-Nightly/releases/download/nightly-20261021/Kototoro-N20261021-ios-nightly-unsigned.ipa"
+                       },
+                       {
+                           "name":  "Kototoro-N20261021-ios-nightly-unsigned.sha256",
+                           "size":  110,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro-Nightly/releases/download/nightly-20261021/Kototoro-N20261021-ios-nightly-unsigned.sha256"
+                       },
+                       {
+                           "name":  "Kototoro-N20261021-universal-nightly.apk",
+                           "size":  314941991,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro-Nightly/releases/download/nightly-20261021/Kototoro-N20261021-universal-nightly.apk"
+                       },
+                       {
+                           "name":  "Kototoro-N20261021-windows-x64-nightly.sha256",
+                           "size":  110,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro-Nightly/releases/download/nightly-20261021/Kototoro-N20261021-windows-x64-nightly.sha256"
+                       },
+                       {
+                           "name":  "Kototoro-N20261021-windows-x64-nightly.zip",
+                           "size":  306199547,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro-Nightly/releases/download/nightly-20261021/Kototoro-N20261021-windows-x64-nightly.zip"
+                       },
+                       {
+                           "name":  "Kototoro-N20261021-x86-nightly.apk",
+                           "size":  140977971,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro-Nightly/releases/download/nightly-20261021/Kototoro-N20261021-x86-nightly.apk"
+                       },
+                       {
+                           "name":  "Kototoro-N20261021-x86_64-nightly.apk",
+                           "size":  147894615,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro-Nightly/releases/download/nightly-20261021/Kototoro-N20261021-x86_64-nightly.apk"
+                       }
+                   ]
+    },
+    {
+        "tag_name":  "nightly-20261020",
+        "name":  "N20261020",
+        "draft":  false,
+        "prerelease":  true,
+        "published_at":  "2026-10-20T21:20:56Z",
+        "assets":  [
+                       {
+                           "name":  "Kototoro-N20261020-arm64-v8a-nightly.apk",
+                           "size":  126537177,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro-Nightly/releases/download/nightly-20261020/Kototoro-N20261020-arm64-v8a-nightly.apk"
+                       },
+                       {
+                           "name":  "Kototoro-N20261020-armeabi-v7a-nightly.apk",
+                           "size":  118646993,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro-Nightly/releases/download/nightly-20261020/Kototoro-N20261020-armeabi-v7a-nightly.apk"
+                       },
+                       {
+                           "name":  "Kototoro-N20261020-universal-nightly.apk",
+                           "size":  314885545,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro-Nightly/releases/download/nightly-20261020/Kototoro-N20261020-universal-nightly.apk"
+                       },
+                       {
+                           "name":  "Kototoro-N20261020-x86-nightly.apk",
+                           "size":  140921525,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro-Nightly/releases/download/nightly-20261020/Kototoro-N20261020-x86-nightly.apk"
+                       },
+                       {
+                           "name":  "Kototoro-N20261020-x86_64-nightly.apk",
+                           "size":  147838169,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro-Nightly/releases/download/nightly-20261020/Kototoro-N20261020-x86_64-nightly.apk"
+                       }
+                   ]
+    }
+]

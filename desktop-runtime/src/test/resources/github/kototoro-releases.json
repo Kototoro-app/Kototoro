@@ -1,0 +1,129 @@
+[
+    {
+        "tag_name":  "v2.3.1",
+        "name":  "v2.3.1",
+        "draft":  false,
+        "prerelease":  false,
+        "published_at":  "2026-10-21T16:35:01Z",
+        "assets":  [
+                       {
+                           "name":  "Kototoro-2.3.1-arm64-v8a-release.apk",
+                           "size":  126281339,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.3.1/Kototoro-2.3.1-arm64-v8a-release.apk"
+                       },
+                       {
+                           "name":  "Kototoro-2.3.1-armeabi-v7a-release.apk",
+                           "size":  118391155,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.3.1/Kototoro-2.3.1-armeabi-v7a-release.apk"
+                       },
+                       {
+                           "name":  "Kototoro-2.3.1-ios-release-unsigned.ipa",
+                           "size":  96941601,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.3.1/Kototoro-2.3.1-ios-release-unsigned.ipa"
+                       },
+                       {
+                           "name":  "Kototoro-2.3.1-ios-release-unsigned.sha256",
+                           "size":  106,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.3.1/Kototoro-2.3.1-ios-release-unsigned.sha256"
+                       },
+                       {
+                           "name":  "Kototoro-2.3.1-release.apk",
+                           "size":  314629707,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.3.1/Kototoro-2.3.1-release.apk"
+                       },
+                       {
+                           "name":  "Kototoro-2.3.1-windows-x64-release.msi",
+                           "size":  304623904,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.3.1/Kototoro-2.3.1-windows-x64-release.msi"
+                       },
+                       {
+                           "name":  "Kototoro-2.3.1-windows-x64-release.sha256",
+                           "size":  212,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.3.1/Kototoro-2.3.1-windows-x64-release.sha256"
+                       },
+                       {
+                           "name":  "Kototoro-2.3.1-windows-x64-release.zip",
+                           "size":  306199537,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.3.1/Kototoro-2.3.1-windows-x64-release.zip"
+                       },
+                       {
+                           "name":  "Kototoro-2.3.1-x86-release.apk",
+                           "size":  140665687,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.3.1/Kototoro-2.3.1-x86-release.apk"
+                       },
+                       {
+                           "name":  "Kototoro-2.3.1-x86_64-release.apk",
+                           "size":  147582331,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.3.1/Kototoro-2.3.1-x86_64-release.apk"
+                       }
+                   ]
+    },
+    {
+        "tag_name":  "v2.3.0",
+        "name":  "v2.3.0",
+        "draft":  false,
+        "prerelease":  false,
+        "published_at":  "2026-10-20T15:21:03Z",
+        "assets":  [
+                       {
+                           "name":  "Kototoro-2.3.0-arm64-v8a-release.apk",
+                           "size":  126218057,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.3.0/Kototoro-2.3.0-arm64-v8a-release.apk"
+                       },
+                       {
+                           "name":  "Kototoro-2.3.0-armeabi-v7a-release.apk",
+                           "size":  118327873,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.3.0/Kototoro-2.3.0-armeabi-v7a-release.apk"
+                       },
+                       {
+                           "name":  "Kototoro-2.3.0-release.apk",
+                           "size":  314566425,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.3.0/Kototoro-2.3.0-release.apk"
+                       },
+                       {
+                           "name":  "Kototoro-2.3.0-x86-release.apk",
+                           "size":  140602405,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.3.0/Kototoro-2.3.0-x86-release.apk"
+                       },
+                       {
+                           "name":  "Kototoro-2.3.0-x86_64-release.apk",
+                           "size":  147519049,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.3.0/Kototoro-2.3.0-x86_64-release.apk"
+                       }
+                   ]
+    },
+    {
+        "tag_name":  "v2.2.10",
+        "name":  "v2.2.10",
+        "draft":  false,
+        "prerelease":  false,
+        "published_at":  "2026-10-15T11:29:56Z",
+        "assets":  [
+                       {
+                           "name":  "Kototoro-2.2.10-arm64-v8a-release.apk",
+                           "size":  126084995,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.2.10/Kototoro-2.2.10-arm64-v8a-release.apk"
+                       },
+                       {
+                           "name":  "Kototoro-2.2.10-armeabi-v7a-release.apk",
+                           "size":  118194811,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.2.10/Kototoro-2.2.10-armeabi-v7a-release.apk"
+                       },
+                       {
+                           "name":  "Kototoro-2.2.10-release.apk",
+                           "size":  314433363,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.2.10/Kototoro-2.2.10-release.apk"
+                       },
+                       {
+                           "name":  "Kototoro-2.2.10-x86-release.apk",
+                           "size":  140469343,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.2.10/Kototoro-2.2.10-x86-release.apk"
+                       },
+                       {
+                           "name":  "Kototoro-2.2.10-x86_64-release.apk",
+                           "size":  147385987,
+                           "browser_download_url":  "https://github.com/Kototoro-app/Kototoro/releases/download/v2.2.10/Kototoro-2.2.10-x86_64-release.apk"
+                       }
+                   ]
+    }
+]
