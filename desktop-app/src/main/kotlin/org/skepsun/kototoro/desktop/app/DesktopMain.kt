@@ -30,8 +30,9 @@ fun main(args: Array<String>) {
 internal fun runDesktop(args: Array<String>) {
     val options = args.toList()
     require(options.size % 2 == 0 &&
-        options.chunked(2).all { it[0] in setOf("--data-dir", "--import", "--check-runtime", "--lang") }) {
-        "Usage: [--data-dir <directory>] [--import <extension.jar>] [--check-runtime <report>] [--lang <tag>]"
+        options.chunked(2).all { it[0] in setOf("--data-dir", "--import", "--check-runtime", "--check-update", "--channel", "--lang") }) {
+        "Usage: [--data-dir <directory>] [--import <extension.jar>] [--check-runtime <report>] " +
+            "[--check-update <report> [--channel <release|nightly>]] [--lang <tag>]"
     }
     // `--lang` (or -Dkototoro.desktop.locale) fixes the language for this run instead of the saved choice.
     options.chunked(2).lastOrNull { it[0] == "--lang" }?.let { DesktopStrings.pin(it[1]) }
@@ -44,6 +45,11 @@ internal fun runDesktop(args: Array<String>) {
         }
         DesktopRuntimeCheck.run(root, Path.of(it[1]), imports)
         return
+    }
+    // Answers the update question from a packaged image, where the window is not reachable: see DesktopUpdateCheck.
+    options.chunked(2).lastOrNull { it[0] == "--check-update" }?.let {
+        val channel = options.chunked(2).lastOrNull { pair -> pair[0] == "--channel" }?.get(1)
+        exitProcess(DesktopAppUpdateCheck.run(Path.of(it[1]), channel))
     }
     application(exitProcessOnExit = false) {
         var controller by remember { mutableStateOf<DesktopController?>(null) }
