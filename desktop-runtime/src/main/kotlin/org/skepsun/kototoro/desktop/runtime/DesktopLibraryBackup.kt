@@ -15,9 +15,14 @@ import java.io.OutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
+/**
+ * The data version a Windows export carries: the archive's own `data_version` and the `v<n>` segment of a WebDAV file
+ * name both read it, so an uploaded backup still says which library format it is.
+ */
+const val DESKTOP_BACKUP_DATA_VERSION = 1
+
 /** Library transport over shared backup DTOs and the existing v84 tables; merge never clears local tables. */
-class DesktopLibraryBackup(database: MangaDatabase) {
-    private val shared = LibraryBackup(database)
+class DesktopLibraryBackup(database: MangaDatabase) {    private val shared = LibraryBackup(database)
 
     suspend fun preview(path: Path): DesktopBackupArchive {
         var acquired: DesktopBackupArchive? = null
@@ -36,7 +41,7 @@ class DesktopLibraryBackup(database: MangaDatabase) {
         val temporary = Files.createTempFile(requireNotNull(target.parent), ".kototoro-backup-", ".tmp")
         try {
             ZipOutputStream(BackupLimitedOutput(Files.newOutputStream(temporary), DesktopBackupArchive.MAX_ARCHIVE_BYTES)).use { zip ->
-                shared.export(BackupZipWriter(zip), "org.skepsun.kototoro", 1, System.currentTimeMillis())
+                shared.export(BackupZipWriter(zip), "org.skepsun.kototoro", DESKTOP_BACKUP_DATA_VERSION, System.currentTimeMillis())
             }
             currentCoroutineContext().ensureActive()
             Files.move(temporary, target)

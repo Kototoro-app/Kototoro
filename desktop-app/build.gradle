@@ -292,9 +292,13 @@ dependencies {
     implementation project(':cloudstream-desktop')
     implementation project(':core-domain')
     implementation project(':reader-core')
+    // The WebDAV sync protocol and its remote catalog/retention rules are shared with Android, not reimplemented here.
+    implementation project(':core-net')
+    implementation libs.ktor.client.java
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
     testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+    testImplementation libs.ktor.client.mock
     testImplementation compose.uiTest
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
 }

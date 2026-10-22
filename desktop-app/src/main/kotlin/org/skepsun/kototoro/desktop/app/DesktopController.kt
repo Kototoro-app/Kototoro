@@ -11,6 +11,7 @@ import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.history.domain.recoverHistoryChapterId
 import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.reader.core.IntSize
+import java.nio.file.Files
 import java.nio.file.Path
 import org.skepsun.kototoro.desktop.runtime.DesktopNovelHtml
 import org.skepsun.kototoro.desktop.runtime.NovelBlock
@@ -19,6 +20,7 @@ import org.skepsun.kototoro.bookmarks.domain.parseNovelBookmarkPreview
 import org.skepsun.kototoro.bookmarks.domain.novelBookmarkChapterProgress
 import org.skepsun.kototoro.bookmarks.domain.resolveNovelBookmarkPosition
 import org.skepsun.kototoro.bookmarks.domain.NovelBookmarkTextIndex
+import org.skepsun.kototoro.backups.webdav.WebDavBackupFile
 import org.skepsun.kototoro.desktop.runtime.DesktopBackupArchive
 import org.skepsun.kototoro.desktop.runtime.DesktopLibraryBackup
 import org.skepsun.kototoro.desktop.runtime.DesktopBookmark
@@ -186,6 +188,9 @@ class DesktopController(val session: DesktopSession) {
     internal val backupPreview = mutableBackupPreview.asStateFlow()
     /** Android's in-app update flow: check the published releases, download, and swap the image on restart. */
     internal val updates = DesktopUpdateOperations(mutableState, session, scope)
+    /** Android's WebDAV backup destination: same shared protocol, driven by hand from the backups page. */
+    private val webDav = DesktopWebDavOperations(session.storage, backups)
+    internal val webDavUi = webDav.ui
 
     init {
         // The saved language applies before the first screen is composed; `--lang` outranks it for this run.
@@ -203,6 +208,7 @@ class DesktopController(val session: DesktopSession) {
         scope.launch { runCatching { startupUpdates() } }
         // The stamped version and the saved update toggles, before the first check or the first composed screen.
         updates.restore()
+        webDav.restore()
     }
 
     private suspend fun startupUpdates() {
@@ -960,6 +966,46 @@ class DesktopController(val session: DesktopSession) {
             message = desktopText("backups.merged", processed)) }
     }
 
+    internal fun webDavSettings(value: DesktopWebDavSettings) = webDav.settings(value)
+
+    internal fun webDavProbe() = action {
+        webDav.probe()
+        mutableState.update { it.copy(message = desktopText("webdav.reachable")) }
+    }
+
+    internal fun webDavRefresh() = action { webDav.refresh() }
+
+    internal fun webDavUpload() = action {
+        val result = webDav.upload()
+        val message = if (result.removed.isEmpty()) {
+            desktopText("webdav.uploaded", result.name, result.size / 1024)
+        } else {
+            desktopText("webdav.uploadedTrimmed", result.name, result.size / 1024, result.removed.size)
+        }
+        mutableState.update { it.copy(message = message) }
+    }
+
+    /** The remote file is downloaded, then previewed through the same archive/merge flow a local file uses. */
+    internal fun webDavRestore(file: WebDavBackupFile) = action {
+        val path = webDav.download(file)
+        val preview = try {
+            backups.preview(path)
+        } finally {
+            Files.deleteIfExists(path)
+        }
+        val previous = mutableBackupPreview.value
+        mutableBackupPreview.value = preview
+        previous?.close()
+        mutableState.update {
+            it.copy(screen = DesktopScreen.BACKUPS, message = desktopText("webdav.preview", file.name))
+        }
+    }
+
+    internal fun webDavDelete(file: WebDavBackupFile) = action {
+        webDav.delete(file)
+        mutableState.update { it.copy(message = desktopText("webdav.deleted", file.name)) }
+    }
+
     internal fun previewDownloadCleanup() = action {
         val context = currentCoroutineContext()
         mutableCleanup.value = session.downloadStore.previewCleanup(session.storage.preferences) { context.ensureActive() }
@@ -1503,8 +1549,15 @@ class DesktopController(val session: DesktopSession) {
         withContext(NonCancellable + Dispatchers.IO) {
             try { gate.withLock { continuous.flush(); novelOperations.flush(); videoOperations.flush() } }
             finally {
-                try { val preview = mutableBackupPreview.value; mutableBackupPreview.value = null; preview?.close() }
-                finally { session.close() }
+                try { webDav.close() } finally {
+                    try {
+                        val preview = mutableBackupPreview.value
+                        mutableBackupPreview.value = null
+                        preview?.close()
+                    } finally {
+                        session.close()
+                    }
+                }
             }
         }
     }

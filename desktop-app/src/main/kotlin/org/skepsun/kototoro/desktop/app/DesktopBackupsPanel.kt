@@ -19,6 +19,7 @@ import javax.swing.filechooser.FileNameExtensionFilter
 internal fun DesktopBackupsPanel(controller: DesktopController, closing: Boolean) {
     val state by controller.state.collectAsState()
     val preview by controller.backupPreview.collectAsState()
+    val webDav by controller.webDavUi.collectAsState()
     val enabled = !state.busy && !closing
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(desktopText("backups.title"), style = MaterialTheme.typography.h6)
@@ -60,6 +61,8 @@ internal fun DesktopBackupsPanel(controller: DesktopController, closing: Boolean
                     modifier = Modifier.testTag("backup-cancel")) { Text(desktopText("common.cancel")) }
             }
         }
+        Divider()
+        DesktopWebDavSection(controller, webDav, enabled)
     }
 }
 

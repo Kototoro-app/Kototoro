@@ -3,8 +3,8 @@ package org.skepsun.kototoro.backups.ui.periodical
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.backups.webdav.WebDavFormatException
 import org.skepsun.kototoro.backups.webdav.WebDavResource
-import org.xml.sax.SAXParseException
 
 class WebDavResponseParserTest {
     private fun document(responses: String) = """<multistatus xmlns="DAV:">$responses</multistatus>"""
@@ -61,6 +61,6 @@ class WebDavResponseParserTest {
 
     @Test
     fun `malformed XML remains a parser error`() {
-        assertThrows(SAXParseException::class.java) { parseWebDavResponse("<malformed>") }
+        assertThrows(WebDavFormatException::class.java) { parseWebDavResponse("<malformed>") }
     }
 }

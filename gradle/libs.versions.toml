@@ -228,6 +228,7 @@ jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 ktor-http = { module = "io.ktor:ktor-http", version.ref = "ktor" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
+ktor-client-java = { module = "io.ktor:ktor-client-java", version.ref = "ktor" }
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 rhino = { module = "org.mozilla:rhino", version.ref = "rhino" }

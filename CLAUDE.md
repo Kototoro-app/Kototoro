@@ -265,13 +265,17 @@ npm run docs:build
   底层单文件上限保持原值；元数据占用预览和确认回收未引用旧块已接，按磁盘全部清单
   重新核对，包括未发现清单；损坏/不完整图阻止回收，旧缓存视图退休。图片总磁盘预算与元数据驻留控制仍待。
   图书馆备份页已接导出/私有文件预览/取消/确认合并，包含书签/统计，未安装扩展也显示已恢复库；
-  退出关闭未确认的预览。其他备份节与外部格式/同步、预测预取/其他格式区域解码/下载批量管理与
+  退出关闭未确认的预览。同页 WebDAV 云同步已接：设置持久化、连接测试、上传并保留清理、远端列表、
+  下载后复用本地预览/合并（手动触发，无周期调度；Google Drive/系统同步仍待）。其他备份节与外部格式、
+  预测预取/其他格式区域解码/下载批量管理与
   导出/完整缓存清理/筛选预设与自定义控件继续推进。
   Windows 本地打包已接：独立 JVM/EXE、ZIP 与 per-user MSI，程序目录在 LocalAppData/Kototoro-App，
   与用户数据隔离；移动目录原生/窗口测试、MSI 全文件 SHA/目录检查已接。实际安装/升级/卸载、
   S3/签名仍待，见 README 与计划 §35、§40–54。
 - `core-net/` - 共享 HTTP 协议（KMP）：`GoogleDriveSyncApi`、嵌套 `DriveFile` 与 API 异常保持原包名。
-  WebDAV 的 `WebDavBackupClient`、远端备份分类/选取/保留规则与 `RemoteNamespace` 也在 commonMain。
+  WebDAV 的 `WebDavBackupClient`、远端备份分类/选取/保留规则与 `RemoteNamespace` 也在 commonMain；
+  multistatus/HTTP 日期解析 `parseWebDavResources` 同样在 commonMain（无 DOM，Windows 与 iOS 共用），
+  Android 的 `WebDavResponseParser` 只是它的薄封装。
   MALSync 的 `MALSyncMappingApi`、跨站映射分类/ID 选择/去重规则与窄投影模型也在 commonMain；
   `ScrobblerService` 的 Android 资源、平台 JSON 取值以及 Repository 的 64 项 LRU/同键去重留在应用。
   取消不写入空缓存；普通 HTTP/网络/解析失败仍保留既有空结果回退。
@@ -281,7 +285,7 @@ npm run docs:build
   平台注入并管理 Ktor `HttpClient`；Android 的 Hilt 网络模块复用 `createKtorOkHttpClient`，
   保留各自超时、重定向和连接恢复设置，WebDAV 继承原基础客户端的代理、Cookie 与拦截器。
   共享协议释放每次响应、保留各自重试边界并传递取消；WebDAV 文件通过 channel 回调流式传输。
-  授权、Repository、WebDAV XML/日期解析与文件 IO、其他 tracker/scrobbler 客户端及 iOS 引擎装配仍由平台负责，
+  授权、Repository、WebDAV 文件 IO、其他 tracker/scrobbler 客户端及 iOS 引擎装配仍由平台负责，
   Ktor 版本复用既有 3.5.0
 - `docs/` - VitePress 文档站点
 
