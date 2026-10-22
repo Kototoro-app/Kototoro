@@ -81,10 +81,8 @@ struct DetailsChaptersView: View {
                                 }
                                 .accessibilityIdentifier("details.chapters.current")
                             }
-                            if !model.isVideo {
-                                Button("下载队列", systemImage: "arrow.down.circle") { showingDownloads = true }
-                                    .accessibilityIdentifier("details.chapters.downloads")
-                            }
+                            Button("下载队列", systemImage: "arrow.down.circle") { showingDownloads = true }
+                                .accessibilityIdentifier("details.chapters.downloads")
                             Button(model.isVideo ? "刷新剧集" : "刷新章节", systemImage: "arrow.clockwise") {
                                 Task { await refresh() }
                             }
@@ -171,8 +169,8 @@ struct DetailsChaptersView: View {
     }
 
     private func chapterRow(_ chapter: IosSourceChapter, statuses: [String: String]) -> some View {
-        // A book's chapters are already downloaded with it.
-        let downloadable = !model.isVideo && content.bookOf(chapter: chapter) == nil
+        // A book's chapters are already downloaded with it; an episode is always a single download.
+        let downloadable = model.isVideo || content.bookOf(chapter: chapter) == nil
         return Group {
             if selecting {
                 chapterLabel(chapter, status: statuses[chapter.id])
@@ -201,16 +199,16 @@ struct DetailsChaptersView: View {
         .id(chapter.id)
         .listRowBackground(chapter.id == resume?.chapterId ? Color.accentColor.opacity(0.1) : nil)
         .contextMenu {
-            if !model.isVideo {
-                if downloadable { Button("下载本章", systemImage: "arrow.down.circle") { enqueue([chapter]) } }
-                Button("选择章节", systemImage: "checkmark.circle") {
-                    selectedIDs = [chapter.id]
-                    editMode = .active
-                }
-                if !model.isNovel {
-                    Button("浏览本章页面", systemImage: "square.grid.2x2") {
-                        preview = PlaybackRequest(content: content, chapter: chapter)
-                    }
+            if downloadable {
+                Button(model.isVideo ? "下载本集" : "下载本章", systemImage: "arrow.down.circle") { enqueue([chapter]) }
+            }
+            Button(model.isVideo ? "选择剧集" : "选择章节", systemImage: "checkmark.circle") {
+                selectedIDs = [chapter.id]
+                editMode = .active
+            }
+            if !model.isVideo && !model.isNovel {
+                Button("浏览本章页面", systemImage: "square.grid.2x2") {
+                    preview = PlaybackRequest(content: content, chapter: chapter)
                 }
             }
         }
@@ -237,7 +235,8 @@ struct DetailsChaptersView: View {
         guard !chapters.isEmpty else { return }
         do {
             try downloads.enqueue(content: content, chapters: chapters)
-            downloadStatus = String(localized: "已加入下载队列：\(chapters.count) 章")
+            downloadStatus = model.isVideo ? String(localized: "已加入下载队列：\(chapters.count) 集")
+                : String(localized: "已加入下载队列：\(chapters.count) 章")
             finishSelection()
         } catch { downloadError = error.localizedDescription }
     }

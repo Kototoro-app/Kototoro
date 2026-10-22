@@ -241,6 +241,60 @@ final class LocalImportTests: XCTestCase {
     }
 
     @MainActor
+    func testVideoDownloadPlaysBackOffline() throws {
+        importFile(source: "LOCAL_VIDEO", file: "fixture_video", reuse: true)
+        let read = app.detailsReadButton()
+        XCTAssertTrue(read.waitForExistence(timeout: 20), app.debugDescription)
+        read.tap()
+        let download = app.buttons["player.download"]
+        XCTAssertTrue(download.waitForExistence(timeout: 30), app.debugDescription)
+        // Pausing keeps the controls on screen; they fade about 3.5 s into playback, faster than this sequence.
+        showVideoControls()
+        let pause = app.buttons["player.playPause"]
+        XCTAssertTrue(pause.waitForExistence(timeout: 5), app.debugDescription)
+        pause.tap()
+        showVideoControls()
+        // An earlier run on this simulator may already hold the episode, in which case there is nothing to enqueue.
+        if download.exists, download.label != "本集已下载" {
+            download.tap()
+            let copied = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "本集已下载"),
+                                                   object: download)
+            wait(for: [copied], timeout: 60)
+        }
+        attach("播放器下载本集")
+        closePlayer()
+        // A finished episode shows up in the queue with the video wording: an episode counts percent, never pages.
+        app.openDetailsChapters()
+        XCTAssertTrue(app.navigationBars["全部剧集"].waitForExistence(timeout: 10), app.debugDescription)
+        app.buttons["details.chapters.options"].tap()
+        let queue = app.buttons["details.chapters.downloads"]
+        XCTAssertTrue(queue.waitForExistence(timeout: 10), app.debugDescription)
+        queue.tap()
+        // The queue keeps tasks from earlier runs, so find this episode's row by its work title.
+        let entry = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier BEGINSWITH 'download.entry.' AND label BEGINSWITH 'fixture_video'")).firstMatch
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), app.debugDescription)
+        let status = entry.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'download.status.'")).firstMatch
+        XCTAssertTrue(status.waitForExistence(timeout: 10), app.debugDescription)
+        let finished = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "已下载"),
+                                                 object: status)
+        wait(for: [finished], timeout: 60)
+        attach("下载队列中的剧集")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        // Opening the episode again plays the copy on disk instead of resolving the stream again.
+        let again = app.detailsReadButton()
+        XCTAssertTrue(again.waitForExistence(timeout: 20), app.debugDescription)
+        again.tap()
+        let offline = app.descendants(matching: .any)["player.offline"].firstMatch
+        XCTAssertTrue(offline.waitForExistence(timeout: 30), app.debugDescription)
+        let playing = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in self.playedSeconds >= 3 }, object: nil)
+        wait(for: [playing], timeout: 30)
+        attach("离线播放已下载剧集")
+    }
+
+    @MainActor
     private func openWorkStatistics() {
         let button = app.buttons["details.readingStats"]
         XCTAssertTrue(button.waitForExistence(timeout: 15), app.debugDescription)
@@ -2185,6 +2239,17 @@ final class LocalImportTests: XCTestCase {
         if !app.buttons["player.close"].isHittable {
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).tap()
         }
+    }
+
+    /// Closes a paused player: paused playback keeps the controls on screen, so the tap below can land.
+    private func closePlayer(file: StaticString = #filePath, line: UInt = #line) {
+        showVideoControls()
+        let close = app.buttons["player.close"]
+        guard close.waitForExistence(timeout: 3) else {
+            XCTFail("The player's close button must stay reachable", file: file, line: line)
+            return
+        }
+        close.tap()
     }
 
     private func importFile(source name: String, file: String, reuse: Bool = false, expectImport: Bool = true) {

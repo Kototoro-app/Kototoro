@@ -11,7 +11,7 @@ class IosDownloadArchive {
     @Throws(Exception::class)
     fun encode(content: IosSourceContent, chapter: IosSourceChapter): String {
         require(content.value.source.name == chapter.value.source.name) { localized("下载章节与作品来源不一致") }
-        require(content.mediaKind in DOWNLOADABLE) { localized("当前仅支持漫画与小说章节下载") }
+        require(content.mediaKind in DOWNLOADABLE) { localized("当前仅支持漫画、小说与视频下载") }
         // A thousand-chapter catalog must not be duplicated once per queued chapter.
         return Json.encodeToString(Request(content.value.copy(chapters = null), chapter.value))
     }
@@ -23,7 +23,7 @@ class IosDownloadArchive {
         val content = IosSourceContent(request.content)
         val chapter = IosSourceChapter(request.chapter)
         require(request.content.source.name == request.chapter.source.name) { localized("下载章节与作品来源不一致") }
-        require(content.mediaKind in DOWNLOADABLE) { localized("当前仅支持漫画与小说章节下载") }
+        require(content.mediaKind in DOWNLOADABLE) { localized("当前仅支持漫画、小说与视频下载") }
         return IosDownloadRequest(content, chapter)
     }
 
@@ -49,7 +49,7 @@ class IosDownloadArchive {
     private data class Request(val content: SourceContent, val chapter: SourceChapter, val version: Int = 1)
 
     private companion object {
-        val DOWNLOADABLE = setOf("MANGA", "NOVEL")
+        val DOWNLOADABLE = setOf("MANGA", "NOVEL", "VIDEO")
     }
 }
 

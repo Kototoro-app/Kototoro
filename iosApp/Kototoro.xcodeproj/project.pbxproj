@@ -72,6 +72,7 @@
 		F00000000000000000000001 /* LibraryRecordsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* LibraryRecordsView.swift */; };
 		F00000000000000000000002 /* ReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000002 /* ReaderSettings.swift */; };
 		F00000000000000000000003 /* ReaderDownloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000003 /* ReaderDownloads.swift */; };
+		F0000000000000000000000C /* VideoDownloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000000000000000000000C /* VideoDownloads.swift */; };
 		F00000000000000000000004 /* ReaderPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000004 /* ReaderPanels.swift */; };
 		F00000000000000000000005 /* RepositoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000005 /* RepositoriesView.swift */; };
 		F00000000000000000000006 /* ProductFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000006 /* ProductFlowTests.swift */; };
@@ -185,6 +186,7 @@
 		F10000000000000000000001 /* LibraryRecordsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryRecordsView.swift; sourceTree = "<group>"; };
 		F10000000000000000000002 /* ReaderSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSettings.swift; sourceTree = "<group>"; };
 		F10000000000000000000003 /* ReaderDownloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderDownloads.swift; sourceTree = "<group>"; };
+		F1000000000000000000000C /* VideoDownloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoDownloads.swift; sourceTree = "<group>"; };
 		F10000000000000000000004 /* ReaderPanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPanels.swift; sourceTree = "<group>"; };
 		F10000000000000000000005 /* RepositoriesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoriesView.swift; sourceTree = "<group>"; };
 		F10000000000000000000006 /* ProductFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductFlowTests.swift; sourceTree = "<group>"; };
@@ -295,6 +297,7 @@
 				F10000000000000000000005 /* RepositoriesView.swift */,
 				F10000000000000000000004 /* ReaderPanels.swift */,
 				F10000000000000000000003 /* ReaderDownloads.swift */,
+				F1000000000000000000000C /* VideoDownloads.swift */,
 				F10000000000000000000002 /* ReaderSettings.swift */,
 				F10000000000000000000001 /* LibraryRecordsView.swift */,
 				AE0000000000000000000012 /* ReadingStatisticsView.swift */,
@@ -539,6 +542,7 @@
 				F00000000000000000000005 /* RepositoriesView.swift in Sources */,
 				F00000000000000000000004 /* ReaderPanels.swift in Sources */,
 				F00000000000000000000003 /* ReaderDownloads.swift in Sources */,
+				F0000000000000000000000C /* VideoDownloads.swift in Sources */,
 				F00000000000000000000002 /* ReaderSettings.swift in Sources */,
 				F00000000000000000000001 /* LibraryRecordsView.swift in Sources */,
 				AE0000000000000000000002 /* ReadingStatisticsView.swift in Sources */,

@@ -42,6 +42,10 @@ final class VideoPlayerModel: ObservableObject {
     private var cues: IosSubtitles?
     private var cueObserver: Any?
     private var subtitleTask: Task<Void, Never>?
+    /// Playing the copy on disk, not a stream; the viewer is told so the source does not look broken.
+    @Published private(set) var isOffline = false
+    /// The episode is already downloaded (by this player or from the episode list).
+    @Published private(set) var isDownloaded = false
     /// The viewer's last choice, kept across streams and episodes of this session.
     private var subtitlesOff = false
     private var preferredSubtitle: String?
@@ -87,7 +91,18 @@ final class VideoPlayerModel: ObservableObject {
         isLoading = true
         error = nil
         defer { if self.request == request { isLoading = false } }
+        isDownloaded = VideoDownloads.isDownloaded(content: content, chapter: selected)
         do {
+            // A finished download plays from disk: no source request, no stale hoster, no subtitles to fetch.
+            if let offline = VideoDownloads.offline(content: content, chapter: selected) {
+                if position == 0, let saved = try await library?.position(content: content), saved.chapterId == selected.id {
+                    position = Double(saved.scroll)
+                }
+                try Task.checkCancellation()
+                guard self.request == request else { return }
+                play(offline, from: position)
+                return
+            }
             let pages = try await runtime.pages(chapter: selected)
             try Task.checkCancellation()
             guard self.request == request else { return }
@@ -103,6 +118,21 @@ final class VideoPlayerModel: ObservableObject {
         } catch {
             if !Task.isCancelled, self.request == request { self.error = error.localizedDescription }
         }
+    }
+
+    /// Play the downloaded episode: its own subtitles, and no headers because nothing leaves the device.
+    private func play(_ offline: VideoDownloads.Offline, from start: Double) {
+        error = nil
+        isOffline = true
+        streams = []
+        streamIndex = 0
+        externalSubtitles = offline.subtitles
+        play(url: offline.url, headers: [:], from: start)
+    }
+
+    /// Re-read the download state after a download finishes while the player is open.
+    func refreshDownloadState() {
+        isDownloaded = VideoDownloads.isDownloaded(content: content, chapter: chapter)
     }
 
     /// Switches stream and resumes from the current position.
@@ -129,6 +159,7 @@ final class VideoPlayerModel: ObservableObject {
 
     func stop(keepStreams: Bool = false) {
         activity.setActive(false)
+        isOffline = false
         Task { await activity.flush() }
         if !keepStreams {
             streams = []
@@ -329,6 +360,7 @@ final class VideoPlayerModel: ObservableObject {
 /// seconds of playback, always shown while paused. PiP and AirPlay use the system controllers.
 struct VideoPlayerView: View {
     @EnvironmentObject private var library: LibraryModel
+    @EnvironmentObject private var downloads: ReaderDownloadQueue
     @StateObject private var model: VideoPlayerModel
     @Environment(\.dismiss) private var dismiss
     @State private var controlsVisible = true
@@ -337,6 +369,7 @@ struct VideoPlayerView: View {
     @State private var fill = false
     @State private var pip = PictureInPicture()
     @State private var showingEpisodes = false
+    @State private var downloadError: String?
 
     init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter) {
         _model = StateObject(wrappedValue: VideoPlayerModel(runtime: runtime, content: content, chapter: chapter))
@@ -384,11 +417,16 @@ struct VideoPlayerView: View {
         .persistentSystemOverlays(controlsVisible ? .automatic : .hidden)
         .task { model.library = library.library; await model.load() }
         .onChange(of: model.isPlaying) { _, playing in if playing { scheduleHide() } else { setControls(true) } }
+        .onChange(of: downloads.completedContentKeys) { _, _ in model.refreshDownloadState() }
         .sheet(isPresented: $showingEpisodes, onDismiss: { setControls(true) }) {
             VideoEpisodesView(model: model)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .alert("无法下载", isPresented: Binding(get: { downloadError != nil },
+                                            set: { if !$0 { downloadError = nil } })) {
+            Button("好") { downloadError = nil }
+        } message: { Text(downloadError ?? "") }
         .onDisappear {
             Task {
                 await model.persist()
@@ -436,9 +474,16 @@ struct VideoPlayerView: View {
                 .accessibilityIdentifier("player.close")
             VStack(alignment: .leading, spacing: 1) {
                 Text(model.content.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                Text(SourceDetailsView.episodeTitle(model.chapter)).font(.caption).foregroundStyle(.white.opacity(0.8))
-                    .lineLimit(1)
-                    .accessibilityIdentifier("player.title")
+                HStack(spacing: 6) {
+                    Text(SourceDetailsView.episodeTitle(model.chapter)).lineLimit(1)
+                        .accessibilityIdentifier("player.title")
+                    if model.isOffline {
+                        Label("离线", systemImage: "arrow.down.circle.fill")
+                            .labelStyle(.titleAndIcon)
+                            .accessibilityIdentifier("player.offline")
+                    }
+                }
+                .font(.caption).foregroundStyle(.white.opacity(0.8))
             }
             Spacer(minLength: 0)
             if model.chapters.count > 1 {
@@ -529,6 +574,7 @@ struct VideoPlayerView: View {
             .frame(height: 44)
             .glassEffect(.regular, in: .capsule)
             HStack(spacing: 10) {
+                if let status = downloadStatus { Text(status).font(.caption).opacity(0.8) }
                 Spacer(minLength: 0)
                 Menu {
                     Picker("播放速度", selection: Binding(get: { model.rate }, set: { model.setRate($0) })) {
@@ -569,10 +615,39 @@ struct VideoPlayerView: View {
                 }
                 .labelStyle(.iconOnly).font(.title3).frame(width: 44, height: 44)
                 .glassEffect(.regular.interactive(), in: .circle)
+                downloadButton
             }
             .font(.caption)
         }
         .buttonStyle(.plain)
+    }
+
+    /// The progress the download queue shows for this episode, once it has a task.
+    private var downloadStatus: String? {
+        guard let entry = downloads.entry(content: model.content, chapter: model.chapter),
+              entry.state != .completed else { return nil }
+        return entry.status
+    }
+
+    private var downloadButton: some View {
+        let entry = downloads.entry(content: model.content, chapter: model.chapter)
+        let done = model.isDownloaded || entry?.state == .completed
+        let busy = entry?.state == .queued || entry?.state == .running
+        return Button {
+            do {
+                try downloads.enqueue(content: model.content, chapters: [model.chapter],
+                                      streamURL: model.streams.indices.contains(model.streamIndex)
+                                          ? model.streams[model.streamIndex].url : nil)
+                setControls(true)
+            } catch { downloadError = error.localizedDescription }
+        } label: {
+            Image(systemName: done ? "checkmark.circle.fill" : (busy ? "arrow.down.circle.dotted" : "arrow.down.circle"))
+                .font(.title3).frame(width: 44, height: 44)
+        }
+        .glassEffect(.regular.interactive(), in: .circle)
+        .disabled(done || busy)
+        .accessibilityLabel(done ? String(localized: "本集已下载") : String(localized: "下载本集"))
+        .accessibilityIdentifier("player.download")
     }
 
     private var subtitleChoice: Binding<SubtitleChoice> {
@@ -753,6 +828,10 @@ extension SubtitleTrack {
 enum SubtitleFile {
     static func download(_ track: SubtitleTrack, streamHeaders: [String: String]) async throws -> String {
         guard let url = URL(string: track.url) else { throw URLError(.badURL) }
+        // A downloaded episode keeps its subtitles beside it: read the file instead of asking the network.
+        if url.isFileURL {
+            return decode(try await Task.detached(priority: .userInitiated) { try Data(contentsOf: url) }.value)
+        }
         var request = URLRequest(url: url, timeoutInterval: 30)
         for (name, value) in streamHeaders.merging(track.headers, uniquingKeysWith: { _, own in own }) {
             request.setValue(value, forHTTPHeaderField: name)

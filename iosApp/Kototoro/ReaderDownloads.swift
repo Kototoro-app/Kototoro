@@ -15,8 +15,9 @@ enum ReaderDownloads {
         return root.appendingPathComponent(hash, isDirectory: true)
     }
     static func isDownloaded(content: IosSourceContent, chapter: IosSourceChapter) -> Bool {
+        if content.mediaKind == "VIDEO" { return VideoDownloads.isDownloaded(content: content, chapter: chapter) }
         guard let dir = try? directory(content: content, chapter: chapter) else { return false }
-        let manifest = content.mediaKind == "NOVEL" ? NovelDownloads.manifestName : "chapter.json"
+        let manifest = content.mediaKind == "NOVEL" ? NovelDownloads.manifestName : DownloadManifests.chapter
         if content.mediaKind != "NOVEL" && ReaderDownloadStore.isKnownInvalid(in: dir) { return false }
         return FileManager.default.fileExists(atPath: dir.appendingPathComponent(manifest).path)
     }
@@ -181,13 +182,19 @@ extension ReaderDownloadQueue {
                 let store = try ReaderStorageModel.downloadStore()
                 try await store.record(request.storageMetadata)
                 try await store.keep(payload: request.payload, for: request.storageMetadata)
-                try await ReaderDownloads.download(runtime: runtime, content: decoded.content,
-                                                   chapter: decoded.chapter, progress: progress)
+                if request.isVideo {
+                    try await VideoDownloads.download(runtime: runtime, content: decoded.content,
+                                                      chapter: decoded.chapter, streamURL: request.streamURL,
+                                                      progress: progress)
+                } else {
+                    try await ReaderDownloads.download(runtime: runtime, content: decoded.content,
+                                                       chapter: decoded.chapter, progress: progress)
+                }
             }
         }
     }
 
-    func enqueue(content: IosSourceContent, chapters: [IosSourceChapter]) throws {
+    func enqueue(content: IosSourceContent, chapters: [IosSourceChapter], streamURL: String? = nil) throws {
         let codec = IosDownloadArchive()
         // A downloaded book's chapters download as the book, once.
         var seen = Set<String>()
@@ -196,7 +203,7 @@ extension ReaderDownloadQueue {
             ReaderDownloadRequest(source: content.sourceName, contentID: content.id, chapterID: chapter.id,
                                   title: content.title, chapterTitle: chapter.title,
                                   payload: try codec.encode(content: content, chapter: chapter),
-                                  mediaKind: content.mediaKind)
+                                  mediaKind: content.mediaKind, streamURL: streamURL)
         })
     }
 
@@ -211,7 +218,7 @@ extension ReaderDownloadQueue {
 /// Novel chapters offline: the shared chapter text (HTML, pictures and their headers) plus each picture as a file.
 /// Text and finished pictures are kept as checkpoints, so pausing or a failed picture resumes where it stopped.
 enum NovelDownloads {
-    static let manifestName = "novel.json"
+    static let manifestName = DownloadManifests.novel
     private static let textName = "text.json"
     /// The chapter titles of a downloaded book (an EPUB), which then lists it by its chapters.
     private static let bookName = "book.json"

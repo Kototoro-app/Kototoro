@@ -73,6 +73,15 @@ func withReaderStorage<T>(_ body: () async throws -> T) async throws -> T {
     }
 }
 
+/// The manifest a finished download leaves in its directory, one per media kind. The listing lives in this file, so
+/// the UI test target (which compiles it without the download engine) still agrees on the names.
+enum DownloadManifests {
+    static let chapter = "chapter.json"
+    static let novel = "novel.json"
+    static let video = "video.json"
+    static let all = [chapter, novel, video]
+}
+
 struct ReaderStorageMetadata: Codable, Equatable, Sendable {
     let version: Int
     let source: String
@@ -171,7 +180,7 @@ actor ReaderStorageStore {
             guard let metadata: ReaderStorageMetadata = try? read(folder.appendingPathComponent("download.json"),
                                                                  maximumBytes: 128 * 1024),
                   metadata.version == 1, metadata.directoryID == id else { continue }
-            let manifest = ["chapter.json", "novel.json"].map { folder.appendingPathComponent($0) }
+            let manifest = DownloadManifests.all.map { folder.appendingPathComponent($0) }
                 .first { files.fileExists(atPath: $0.path) }
             guard let manifest, let completed = try? manifest.resourceValues(forKeys: Self.keys).contentModificationDate
             else { continue }
@@ -213,10 +222,9 @@ actor ReaderStorageStore {
             let stored: ReaderStorageMetadata? = try? read(folder.appendingPathComponent("download.json"),
                                                           maximumBytes: 128 * 1024)
             let metadata = stored.flatMap { $0.version == 1 && $0.directoryID == id ? $0 : nil } ?? known[id]
-            let chapterManifest = folder.appendingPathComponent("chapter.json")
-            let novelManifest = folder.appendingPathComponent("novel.json")
-            let completed = files.fileExists(atPath: chapterManifest.path)
-                || files.fileExists(atPath: novelManifest.path)
+            let completed = DownloadManifests.all.contains {
+                files.fileExists(atPath: folder.appendingPathComponent($0).path)
+            }
             let status = completed ? String(localized: "已下载") : String(localized: "未完成的下载")
             items.append(ReaderStorageItem(
                 id: id, metadata: metadata, bytes: try records(folder).reduce(0) { $0 + $1.bytes },

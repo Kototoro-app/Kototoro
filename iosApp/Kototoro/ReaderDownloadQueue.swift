@@ -9,10 +9,13 @@ struct ReaderDownloadRequest: Codable, Equatable, Sendable {
     let title: String
     let chapterTitle: String
     let payload: String
-    /// "NOVEL" for novel chapters; absent in queues saved before novels could be downloaded (all manga).
+    /// "NOVEL" for novel chapters, "VIDEO" for episodes; absent in queues saved before novels could be downloaded.
     var mediaKind: String? = nil
+    /// The stream an episode is taken from; nil downloads the source's preferred one.
+    var streamURL: String? = nil
 
     var isNovel: Bool { mediaKind == "NOVEL" }
+    var isVideo: Bool { mediaKind == "VIDEO" }
 
     var storageMetadata: ReaderStorageMetadata {
         ReaderStorageMetadata(version: 1, source: source, contentID: contentID, chapterID: chapterID,
@@ -33,16 +36,29 @@ struct ReaderDownloadEntry: Codable, Identifiable {
     var totalPages = 0
     var failure: String?
     var id: String { request.id }
-    /// Novel progress counts the text and its pictures, not pages.
+    /// Novel progress counts the text and its pictures, not pages; an episode counts percent.
     private var unit: String { request.isNovel ? "" : String(localized: " 页") }
 
     var status: String {
+        if request.isVideo { return videoStatus }
         switch state {
-        case .queued: String(localized: "等待下载")
-        case .running: String(localized: "正在下载 \(completedPages)/\(totalPages)\(unit)")
-        case .paused: String(localized: "已暂停 · \(completedPages)/\(totalPages)\(unit)")
-        case .failed: failure ?? String(localized: "下载失败")
-        case .completed: request.isNovel ? String(localized: "已下载") : String(localized: "已下载 · \(totalPages) 页")
+        case .queued: return String(localized: "等待下载")
+        case .running: return String(localized: "正在下载 \(completedPages)/\(totalPages)\(unit)")
+        case .paused: return String(localized: "已暂停 · \(completedPages)/\(totalPages)\(unit)")
+        case .failed: return failure ?? String(localized: "下载失败")
+        case .completed: return request.isNovel ? String(localized: "已下载")
+            : String(localized: "已下载 · \(totalPages) 页")
+        }
+    }
+
+    /// An episode has no pages to count: its progress is the share of the file already on disk.
+    private var videoStatus: String {
+        switch state {
+        case .queued: return String(localized: "等待下载")
+        case .running: return String(localized: "正在下载 \(completedPages)%")
+        case .paused: return String(localized: "已暂停 · \(completedPages)%")
+        case .failed: return failure ?? String(localized: "下载失败")
+        case .completed: return String(localized: "已下载")
         }
     }
 }

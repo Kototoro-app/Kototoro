@@ -44,14 +44,14 @@ struct ReaderDownloadsView: View {
             }
             Section {
                 NavigationLink("存储管理", destination: ReaderStorageView()).accessibilityIdentifier("downloads.storage")
-                Text("仅在应用前台下载，进入后台会暂停。继续时校验已保存的图片并从未完成页面恢复；移除任务保留已下载文件。")
+                Text("仅在应用前台下载，进入后台会暂停。继续时校验已保存的内容并从未完成处恢复；移除任务保留已下载文件。")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
         .overlay {
             if queue.entries.isEmpty && queue.error == nil && queue.storageFailure == nil {
                 ContentUnavailableView("暂无下载任务", systemImage: "arrow.down.circle",
-                                       description: Text("在漫画或小说阅读器中下载章节。已保存文件可从“存储管理”查看。"))
+                                       description: Text("在漫画、小说或视频播放器中下载章节与剧集。已保存文件可从“存储管理”查看。"))
                     .allowsHitTesting(false)
             }
         }
