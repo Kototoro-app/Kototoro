@@ -11,8 +11,11 @@ import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
-/** Replaces the server-only FlareSolverr handler with iOS's native browser handoff. */
-internal class IosCloudflareInterceptor(
+/**
+ * Replaces the server-only FlareSolverr handler with iOS's native browser handoff.
+ * KeiSource checks and reorders this interceptor by simple class name, so keep CloudflareInterceptor as its ABI.
+ */
+internal class CloudflareInterceptor(
     cookieJar: CookieJar = CookieJar.NO_COOKIES,
     private val browserFetch: (Request) -> Response? = { browserHttpResponse(it, cookieJar) },
 ) : Interceptor {

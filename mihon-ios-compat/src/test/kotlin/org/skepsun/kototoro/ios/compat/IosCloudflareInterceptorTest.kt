@@ -1,6 +1,6 @@
 package org.skepsun.kototoro.ios.compat
 
-import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
+import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor as SdkCloudflareInterceptor
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Request
@@ -15,10 +15,22 @@ import java.io.IOException
 
 class IosCloudflareInterceptorTest {
     @Test
+    fun `derived extension client retains the Cloudflare interceptor name required by KeiSource`() {
+        val client = client(200, "<html>Books</html>").newBuilder().apply {
+            check(interceptors().any { it.javaClass.simpleName == "CloudflareInterceptor" }) {
+                "CloudflareInterceptor must be present in default client"
+            }
+        }.build()
+        client.newCall(Request.Builder().url("https://site.test/list").build()).execute().use {
+            assertEquals(200, it.code)
+        }
+    }
+
+    @Test
     fun `native challenge uses browser bytes without requiring another cookie solve`() {
         val bytes = byteArrayOf(0xc7.toByte(), 0xe1.toByte(), 0xd0.toByte(), 0xa1.toByte())
         var fetched = 0
-        val client = OkHttpClient.Builder().addInterceptor(IosCloudflareInterceptor(browserFetch = { request ->
+        val client = OkHttpClient.Builder().addInterceptor(CloudflareInterceptor(browserFetch = { request ->
             fetched++
             assertEquals("/modules/article/articlelist.php?page=2", request.url.encodedPath + "?" + request.url.encodedQuery)
             assertEquals("source UA", request.header("User-Agent"))
@@ -40,7 +52,7 @@ class IosCloudflareInterceptorTest {
     @Test
     fun `browser fallback never replays a post or treats another challenge as success`() {
         var fetched = 0
-        val client = OkHttpClient.Builder().addInterceptor(IosCloudflareInterceptor(browserFetch = { request ->
+        val client = OkHttpClient.Builder().addInterceptor(CloudflareInterceptor(browserFetch = { request ->
             fetched++
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(403).message("challenge")
                 .header("Server", "cloudflare").header("cf-mitigated", "challenge")
@@ -62,7 +74,7 @@ class IosCloudflareInterceptorTest {
     }
 
     private fun client(code: Int, html: String, challenge: Boolean = false): OkHttpClient =
-        iosNetworkClient(OkHttpClient.Builder().addInterceptor(CloudflareInterceptor { })
+        iosNetworkClient(OkHttpClient.Builder().addInterceptor(SdkCloudflareInterceptor { })
             .addInterceptor { chain ->
                 Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(code).message("fixture")
                     .header("Server", "cloudflare").header("Content-Type", "text/html")
@@ -86,10 +98,10 @@ class IosCloudflareInterceptorTest {
             .header("User-Agent", "source UA").build()
         val error = assertThrows<IOException> { client.newCall(request).execute().close() }
         assertEquals("https://site.test", (error.cause as SourceChallengeException).origin)
-        val session = client.interceptors.filterIsInstance<IosCloudflareInterceptor>().single().session("https://site.test")
+        val session = client.interceptors.filterIsInstance<CloudflareInterceptor>().single().session("https://site.test")
         assertEquals(request.url.toString(), session?.url)
         assertEquals("source UA", session?.userAgent)
-        assertNull(client.interceptors.filterIsInstance<IosCloudflareInterceptor>().single().session("https://other.test"))
+        assertNull(client.interceptors.filterIsInstance<CloudflareInterceptor>().single().session("https://other.test"))
     }
 
     @Test

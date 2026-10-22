@@ -1,6 +1,52 @@
 import XCTest
 
 final class SourceRuntimeTests: XCTestCase {
+    /// Online check with MangaK's repository JAR staged in the real JVM preview profile.
+    @MainActor
+    func testMangaKBrowsingThroughPackagedRuntime() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["KOTOTORO_SOURCE_DIAGNOSTICS"] = "1"
+        app.launchArguments += ["-space.enabled", "YES", "-space.kind", "MANGA", "-sources.showAdult", "YES"]
+        app.launch()
+        app.mainTab("浏览").tap()
+        XCTAssertTrue(app.staticTexts["sources.extensionRuntime"].waitForExistence(timeout: 30), app.debugDescription)
+        let search = app.pageSearchField()
+        XCTAssertTrue(search.waitForExistence(timeout: 30), app.debugDescription)
+        search.tap()
+        search.typeText("MIHON_5020395055978987501")
+        let source = app.buttons["source.MIHON_5020395055978987501"]
+        XCTAssertTrue(source.waitForExistence(timeout: 90), app.debugDescription)
+        source.tap()
+        let item = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "source.content.")
+        ).firstMatch
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            item.exists || app.staticTexts["sources.error"].exists
+        }, object: nil)], timeout: 90)
+        let browse = XCTAttachment(screenshot: app.screenshot())
+        browse.name = "MangaK listing through packaged JVM"
+        browse.lifetime = .keepAlways
+        add(browse)
+        XCTAssertTrue(item.exists, app.debugDescription)
+        item.tap()
+        let chapter = chapterButton(in: app)
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            chapter.exists || app.staticTexts["details.error"].exists
+        }, object: nil)], timeout: 90)
+        XCTAssertTrue(chapter.exists, app.debugDescription)
+        chapter.tap()
+        let image = app.images["reader.image"]
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            image.exists || app.staticTexts["reader.error"].exists
+        }, object: nil)], timeout: 90)
+        let reader = XCTAttachment(screenshot: app.screenshot())
+        reader.name = "MangaK first chapter through packaged JVM"
+        reader.lifetime = .keepAlways
+        add(reader)
+        XCTAssertTrue(image.exists, app.debugDescription)
+    }
+
     /// Also runs with the empty device Release profile: local sources appear after the extension catalog settles.
     @MainActor
     func testPackagedExtensionRuntimeStartsWithoutLinkageErrors() throws {

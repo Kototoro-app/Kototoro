@@ -59,6 +59,6 @@ internal fun iosNetworkClient(client: OkHttpClient): OkHttpClient = client.newBu
         it.javaClass.name == "eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor"
     }
     check(index >= 0) { "Pinned SDK Cloudflare interceptor is unavailable" }
-    interceptors[index] = IosCloudflareInterceptor(client.cookieJar)
+    interceptors[index] = CloudflareInterceptor(client.cookieJar)
     interceptors.add(0, DomainRewriteInterceptor())
 }.build()

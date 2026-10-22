@@ -29,6 +29,6 @@ internal class IosParserPlatform(
     }
 
     override fun browserSession(url: String, userAgent: String): SourceBrowserSession =
-        client.interceptors.filterIsInstance<IosCloudflareInterceptor>().firstOrNull()?.session(url)
+        client.interceptors.filterIsInstance<CloudflareInterceptor>().firstOrNull()?.session(url)
             ?: super.browserSession(url, userAgent)
 }
