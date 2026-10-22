@@ -78,6 +78,18 @@ class DesktopAppUpdateTest {
     }
 
     @Test
+    fun `the newest published release is reported even when this copy already has it`() {
+        // `--check-update` asks "what is published"; selectUpdate answers "is there work to do".
+        val stable = parseReleases(RELEASES, DesktopUpdateChannel.RELEASE)
+        assertEquals("1.10.0", newestRelease(stable, DesktopUpdateChannel.RELEASE)!!.version.text)
+        assertNull(selectUpdate(stable, DesktopPackageVersion.parse("1.10.0"), DesktopUpdateChannel.RELEASE))
+        val nightly = parseReleases(NIGHTLY_RELEASES, DesktopUpdateChannel.NIGHTLY)
+        assertEquals("N20261022", newestRelease(nightly, DesktopUpdateChannel.NIGHTLY)!!.version.text)
+        // Nothing of the other channel is ever reachable, so a channel with no packages reports none.
+        assertNull(newestRelease(parseReleases(NIGHTLY_RELEASES, DesktopUpdateChannel.RELEASE), DesktopUpdateChannel.RELEASE))
+    }
+
+    @Test
     fun `checksum files parse in the published sha256sum format`() {
         val checksums = parseChecksums(
             """

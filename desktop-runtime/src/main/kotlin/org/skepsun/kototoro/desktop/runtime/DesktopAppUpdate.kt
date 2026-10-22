@@ -96,15 +96,7 @@ class DesktopAppUpdateClient(
 ) {
     /** The newest installable release, or null when the running version is up to date (or nothing is published). */
     suspend fun check(): DesktopAppUpdate? {
-        val releases = withContext(Dispatchers.IO) {
-            val body = String(readBytes(URI("https://api.github.com/repos/$repository/releases?per_page=$RELEASES_PER_PAGE"),
-                MAXIMUM_RELEASES_BYTES), Charsets.UTF_8)
-            parseReleases(body, channel)
-        }
-        // A release whose checksum file is missing cannot be verified, so it is skipped instead of offered.
-        val best = releases.filter { it.checksumsUrl != null }
-            .let { usable -> selectUpdate(usable, currentVersion, channel) }
-            ?: return null
+        val best = selectUpdate(usableReleases(), currentVersion, channel) ?: return null
         return DesktopAppUpdate(
             current = currentVersion,
             available = best,
@@ -112,6 +104,24 @@ class DesktopAppUpdateClient(
             notes = best.notes,
             sizeBytes = best.packages.values.maxOfOrNull { it.sizeBytes } ?: 0L,
         )
+    }
+
+    /**
+     * The newest release this channel publishes that could be installed, whether or not this copy already has it.
+     *
+     * [check] answers "is there something to do"; this answers "what is out there", which is what a diagnostic needs
+     * when the honest answer is that the published build is not newer than the installed one.
+     */
+    suspend fun newest(): DesktopUpdateRelease? = newestRelease(usableReleases(), channel)
+
+    /**
+     * The releases of this channel that can actually be installed: a package with a download URL, and — once
+     * published — a `.sha256` file, since a package that cannot be verified is never offered.
+     */
+    private suspend fun usableReleases(): List<DesktopUpdateRelease> = withContext(Dispatchers.IO) {
+        val body = String(readBytes(URI("https://api.github.com/repos/$repository/releases?per_page=$RELEASES_PER_PAGE"),
+            MAXIMUM_RELEASES_BYTES), Charsets.UTF_8)
+        parseReleases(body, channel).filter { it.checksumsUrl != null }
     }
 
     /** The release's published checksums, keyed by asset file name. */
@@ -347,10 +357,15 @@ internal fun selectUpdate(
     releases: List<DesktopUpdateRelease>,
     current: DesktopPackageVersion,
     channel: DesktopUpdateChannel,
+): DesktopUpdateRelease? = newestRelease(releases.filter { it.version > current }, channel)
+
+/** The newest release of [channel] that carries a downloadable package, ignoring what the running copy is. */
+internal fun newestRelease(
+    releases: List<DesktopUpdateRelease>,
+    channel: DesktopUpdateChannel,
 ): DesktopUpdateRelease? = releases
     .filter { it.packages.isNotEmpty() && it.packages.values.any { asset -> asset.downloadUrl.isNotBlank() } }
     .filter { channel == DesktopUpdateChannel.NIGHTLY || it.version.isStable }
-    .filter { it.version > current }
     .maxByOrNull { it.version }
 
 /**
