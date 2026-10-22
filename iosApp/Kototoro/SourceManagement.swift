@@ -91,40 +91,79 @@ enum ContentSpace {
 
 }
 
-/// The shared space selector, presented from each root page's toolbar.
+/// The same selector is available in the toolbar and the tab bar accessory.
 struct SpaceMenu: View {
+    var accessibilityID = "space.menu"
+    var compact = false
+    @AppStorage(ContentSpace.key) private var kind = ""
+    @Environment(\.openSpaceSwitcher) private var open
+
+    var body: some View {
+        Button(action: open) {
+            HStack(spacing: compact ? 3 : 5) {
+                if compact {
+                    Image(systemName: ContentSpace.icon(kind))
+                } else {
+                    Text(ContentSpace.title(kind))
+                }
+                if !compact {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+            }
+            .font(.subheadline.weight(.semibold))
+            .frame(minWidth: compact ? 44 : nil, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel("当前：\(ContentSpace.title(kind))，切换内容空间")
+        .accessibilityIdentifier(accessibilityID)
+    }
+}
+
+/// The tab container owns presentation: the accessory can disappear when a resumed reader opens.
+private struct SpaceSwitcherPresentation: ViewModifier {
+    let resume: (CategoryContent) -> Void
     @AppStorage(ContentSpace.key) private var kind = ""
     @EnvironmentObject private var library: LibraryModel
     @EnvironmentObject private var sources: SourcesModel
     @State private var presented = false
     @State private var pendingResume: CategoryContent?
-    @State private var opened: CategoryContent?
 
-    var body: some View {
-        Button { presented = true } label: {
-            HStack(spacing: 5) {
-                Text(ContentSpace.title(kind))
-                Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
+    func body(content: Content) -> some View {
+        content
+            .environment(\.openSpaceSwitcher) { presented = true }
+            .sheet(isPresented: $presented, onDismiss: {
+                if let pendingResume {
+                    self.pendingResume = nil
+                    resume(pendingResume)
+                }
+            }) {
+                ContentSpacePanel(selection: $kind) { entry in
+                    pendingResume = CategoryContent(content: entry.content)
+                    presented = false
+                }
+                .environmentObject(library)
+                .environmentObject(sources)
+                .presentationDetents([.height(540), .large])
+                .presentationDragIndicator(.visible)
             }
-            .font(.subheadline.weight(.semibold))
-        }
-        .accessibilityLabel("当前：\(ContentSpace.title(kind))，切换内容空间")
-        .accessibilityIdentifier("space.menu")
-        .sheet(isPresented: $presented, onDismiss: {
-            // Present the reader only after the panel has finished dismissing.
-            opened = pendingResume
-            pendingResume = nil
-        }) {
-            ContentSpacePanel(selection: $kind) { entry in
-                pendingResume = CategoryContent(content: entry.content)
-                presented = false
-            }
-            .environmentObject(library)
-            .environmentObject(sources)
-            .presentationDetents([.height(540), .large])
-            .presentationDragIndicator(.visible)
-        }
-        .continueReadingPresentation(opened: $opened)
+    }
+}
+
+private struct OpenSpaceSwitcherKey: EnvironmentKey {
+    static let defaultValue: () -> Void = {}
+}
+
+extension EnvironmentValues {
+    var openSpaceSwitcher: () -> Void {
+        get { self[OpenSpaceSwitcherKey.self] }
+        set { self[OpenSpaceSwitcherKey.self] = newValue }
+    }
+}
+
+extension View {
+    func spaceSwitcherPresentation(resume: @escaping (CategoryContent) -> Void) -> some View {
+        modifier(SpaceSwitcherPresentation(resume: resume))
     }
 }
 
@@ -155,7 +194,6 @@ private struct ContentSpacePanel: View {
                         .accessibilityIdentifier("space.close")
                 }
             }
-            .task { await library.refresh() }
         }
         .accessibilityIdentifier("space.panel")
     }

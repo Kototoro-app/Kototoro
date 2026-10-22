@@ -1,9 +1,7 @@
 import KototoroShared
 import SwiftUI
 
-/// Android's "continue reading" button, as the tab bar's bottom accessory (the system place for an ongoing activity,
-/// like Music's now playing): the latest work of the active space from the history, opened straight at the chapter
-/// being read.
+/// Current space and ongoing reading share the tab accessory, with separate, stable tap targets.
 struct ContinueReadingAccessory: View {
     @EnvironmentObject private var library: LibraryModel
     @EnvironmentObject private var sources: SourcesModel
@@ -16,42 +14,70 @@ struct ContinueReadingAccessory: View {
         ContentSpace.latest(in: library.history, enabled: spacesEnabled, space: space)
     }
 
+    private var compact: Bool { placement == .inline && spacesEnabled }
     var body: some View {
-        Button {
-            if let latest { open(CategoryContent(content: latest.content)) }
-        } label: {
-            HStack(spacing: 10) {
-                if let latest, sources.runtime != nil {
-                    // Loaded by the tab container: the system-hosted accessory does not run its views' tasks.
-                    Group {
-                        if let cover = ContinueReadingCover.shared.image { Image(uiImage: cover).renderingMode(.original).resizable().scaledToFill() }
-                        else { Rectangle().fill(.quaternary) }
-                    }
-                    .frame(width: 24, height: 34)
-                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                    .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(latest.content.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                        if placement != .inline {
-                            Text(ContinueReadingDetail.text(latest))
-                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                    }
-                    Spacer(minLength: 4)
-                    Image(systemName: latest.content.mediaKind == "VIDEO" ? "play.fill" : "book.fill")
-                        .font(.body.weight(.semibold))
-                } else {
-                    Image(systemName: "book")
-                    Text("开始阅读后可在这里继续").font(.subheadline).foregroundStyle(.secondary)
-                    Spacer(minLength: 0)
+        HStack(spacing: 0) {
+            if spacesEnabled {
+                SpaceMenu(accessibilityID: "continueReading.space", compact: true)
+                    .fixedSize(horizontal: true, vertical: false)
+                if latest != nil || !compact {
+                    Divider().frame(height: compact ? 18 : 28).accessibilityHidden(true)
                 }
             }
-            .padding(.horizontal, 14)
+            if let latest {
+                resumeButton(latest)
+            } else {
+                Text("开始阅读后可在这里继续")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .accessibilityIdentifier("continueReading.empty")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .buttonStyle(.plain)
+    }
+
+    private func resumeButton(_ latest: IosLibraryEntry) -> some View {
+        let video = latest.content.mediaKind == "VIDEO"
+        return Button {
+            open(CategoryContent(content: latest.content))
+        } label: {
+            HStack(spacing: compact ? 6 : 10) {
+                // The tab container loads covers; system-hosted accessory views do not run their tasks.
+                Group {
+                    if let cover = ContinueReadingCover.shared.image {
+                        Image(uiImage: cover).renderingMode(.original).resizable().scaledToFill()
+                    } else {
+                        Rectangle().fill(.quaternary)
+                    }
+                }
+                .frame(width: 24, height: 34)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(latest.content.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                    if placement != .inline {
+                        Text(ContinueReadingDetail.text(latest))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 4)
+                Image(systemName: video ? "play.fill" : "book.fill")
+                    .font(.body.weight(.semibold))
+            }
+            .padding(.horizontal, compact ? 8 : 12)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .disabled(latest == nil || sources.runtime == nil)
-        .accessibilityLabel(latest.map { "继续阅读：\($0.content.title)" } ?? "继续阅读")
+        .disabled(sources.runtime == nil)
+        .accessibilityLabel(
+            "\(video ? String(localized: "继续播放") : String(localized: "继续阅读"))：\(latest.content.title)"
+        )
         .accessibilityIdentifier("continueReading")
     }
 }

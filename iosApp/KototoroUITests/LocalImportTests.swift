@@ -7,6 +7,73 @@ final class LocalImportTests: XCTestCase {
     private var app: XCUIApplication!
 
     @MainActor
+    func testBottomAccessorySwitchesSpacesAndResumes() throws {
+        importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 20))
+        app.detailsReadButton().tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30), app.debugDescription)
+        app.terminate()
+        app.launch()
+        app.mainTab("作品库").tap()
+        let space = app.buttons["continueReading.space"]
+        XCTAssertTrue(space.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(space.label.contains("漫画"))
+        let reading = app.buttons["continueReading"]
+        XCTAssertTrue(reading.exists)
+        attach("底部空间与续读栏")
+        space.tap()
+        XCTAssertTrue(app.buttons["space.select.NOVEL"].waitForExistence(timeout: 5))
+        app.buttons["space.select.NOVEL"].tap()
+        XCTAssertTrue(app.buttons["space.close"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(space.label.contains("小说"))
+        XCTAssertTrue(app.buttons["space.menu"].label.contains("小说"))
+        // The shared sheet must finish dismissing before it opens a reader and hides the accessory.
+        space.tap()
+        let resume = app.buttons["space.resume.MANGA"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 5))
+        resume.tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertFalse(app.buttons["space.close"].exists)
+        app.buttons["reader.back"].tap()
+        app.buttons["continueReading.close"].tap()
+        XCTAssertTrue(space.waitForExistence(timeout: 10))
+        XCTAssertTrue(space.label.contains("漫画"))
+        // The separate resume target retains its original one-tap action.
+        app.buttons["continueReading"].tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30), app.debugDescription)
+        app.buttons["reader.back"].tap()
+        app.buttons["continueReading.close"].tap()
+    }
+
+    @MainActor
+    func testBottomSpaceAccessoryRemainsUsableWhenTabBarMinimizes() throws {
+        app.mainTab("记录").tap()
+        let space = app.buttons["continueReading.space"]
+        XCTAssertTrue(space.waitForExistence(timeout: 10), app.debugDescription)
+        // Use the full timeline so a previously selected space cannot leave too little content to scroll.
+        space.tap()
+        app.buttons["space.select.ALL"].tap()
+        XCTAssertTrue(app.buttons["space.close"].waitForNonExistence(timeout: 5))
+        let collapsed = app.tabBars.buttons.matching(NSPredicate(format: "value == %@", "已折叠")).firstMatch
+        for _ in 0..<3 where !collapsed.exists {
+            app.scrollViews.firstMatch.swipeUp()
+        }
+        XCTAssertTrue(collapsed.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(space.isHittable)
+        let resume = app.buttons["continueReading"]
+        XCTAssertTrue(resume.exists)
+        XCTAssertLessThanOrEqual(space.frame.width, 44)
+        XCTAssertGreaterThan(resume.frame.width, space.frame.width * 2)
+        XCTAssertLessThan(space.frame.maxX, resume.frame.midX)
+        attach("收缩后的空间与续读入口")
+        space.tap()
+        XCTAssertTrue(app.buttons["space.select.VIDEO"].waitForExistence(timeout: 5))
+        app.buttons["space.select.VIDEO"].tap()
+        XCTAssertTrue(app.buttons["space.close"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(space.label.contains("视频"))
+    }
+
+    @MainActor
     func testSpaceSelectorSwitchesAndDismisses() throws {
         app.mainTab("作品库").tap()
         app.buttons["space.menu"].tap()
@@ -103,7 +170,9 @@ final class LocalImportTests: XCTestCase {
 
     /// The comic fixture has a red cover/page 1 and a blue page 2; inspect pixels rather than placeholder presence.
     @MainActor
-    private func fixturePagePixelFraction(_ event: XCUIElement, blue: Bool = false, dimmed: Bool = false) -> Double {
+    private func fixturePagePixelFraction(
+        _ event: XCUIElement, blue: Bool = false, dimmed: Bool = false
+    ) -> Double {
         guard let image = event.screenshot().image.cgImage else { return 0 }
         let width = 120
         let height = max(1, image.height * width / image.width)
@@ -123,8 +192,9 @@ final class LocalImportTests: XCTestCase {
             let red = Int(pixels[index]), green = Int(pixels[index + 1])
             let dominant = blue ? Int(pixels[index + 2]) : red
             let other = blue ? red : Int(pixels[index + 2])
-            if dominant > (dimmed ? 40 : 120) && green < 110 && other < 110 &&
-                dominant - green > (dimmed ? 20 : 60) { coverPixels += 1 }
+            let matches = dominant > (dimmed ? 40 : 120) && green < 110 && other < 110 &&
+                dominant - green > (dimmed ? 20 : 60)
+            if matches { coverPixels += 1 }
         }
         return Double(coverPixels) / Double(width * height)
     }

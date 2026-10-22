@@ -102,8 +102,9 @@ struct ContentView: View {
         .modifier(MainTabPlacement())
         .tabBarMinimizeBehavior(.onScrollDown)
         .continueReadingAccessory(
-            enabled: !ReaderPresence.shared.shouldSuppressAccessory && latest != nil
+            enabled: !ReaderPresence.shared.shouldSuppressAccessory && (spacesEnabled || latest != nil)
         )
+        .spaceSwitcherPresentation { resumed = $0 }
         .continueReadingPresentation(opened: $resumed)
         .environment(\.openContinueReading) { resumed = $0 }
         .task(id: "\(latest?.content.sourceName ?? "")|\(latest?.content.id ?? "")|\(sources.runtime != nil)") {
