@@ -1755,3 +1755,42 @@ spaceUiState.switcherEnabled` 时放一个 `SpaceSwitcherRailButton`，
 
 下一轮要做的就是给这个抽屉补焦点：每个列表模式按钮、滑条、开关各挂一个环，并在展开时请求一次初始焦点
 （滑条已经有现成的 `tvSliderDpad`，可以直接用）。改完必须重跑 `zk3`→`zk4` 这组对照。
+
+## 第二十七轮：给"显示选项"抽屉补上电视焦点（2026-10-23）
+
+上一轮留下的问题：这个抽屉在电视上有焦点、看不见环。本轮补齐。
+
+### 改了什么
+
+`DisplayOptionsSheet.kt`：
+
+1. 内容 `Column` 加 `tvTakeInitialFocus()`——抽屉展开后由第一个可聚焦子项拿焦点，不再把焦点留在背后的齿轮上。
+2. `DisplayModeChip` 的 `AssistChip` 挂 `tvFocusable(CircleShape, addFocusTarget = false)`。该组件是 `internal` 共享的，
+   顺带让其它用到它的电视界面也受益。
+3. `GridSizeSlider` 里的 `KototoroSlider` 挂 `tvSliderDpad(...)`：环 + 方向键步进。
+   这个助手此前在仓库里**没有任何调用点**，本轮是第一次真正用上。
+4. "Show extra info on cards" 与"分组"两个 `Switch` 各挂 `tvFocusable(CircleShape, addFocusTarget = false)`。
+
+`RailRowsSelector.kt`：1/2/3 三个 `AssistChip` 同样挂环。它是全应用共用的组件，所以收藏、历史等页面的同款控件一并解决。
+
+### 验证（全部在 `emulator-5558` 上实测）
+
+| 步骤 | 截图 | 结果 |
+| --- | --- | --- |
+| 齿轮 CENTER 展开抽屉 | `zm0` | **"List" 芯片上出现环**，焦点不再留在背后的齿轮 |
+| RIGHT | `zm1` | 环移到 "Detailed list" |
+| CENTER | `zm2` | 勾选跟着走：Detailed list 选中，Compact grid 让出 |
+| DOWN×2 + DOWN | `zm4`/`zm7` | 环依次落到芯片各行，最后落到滑条 |
+| 滑条上 LEFT×2 | `zm7` | **80% → 70%**，环包住整条轨道 |
+| DOWN 到"Rows per page" | `zp4` | **"2" 芯片上出现环** |
+| DOWN 到开关 + CENTER | `zn0` | 开关变蓝（开），环在开关上 |
+| BACK | `zk5` | 抽屉关闭，环回到齿轮 |
+| 重新打开 | `zp5` | Grid size 仍是 70%、开关仍是开——写入是持久的 |
+
+### 还剩两个小尾巴
+
+1. **抽屉背后的齿轮环不灭**：抽屉是独立窗口，底层窗口的 `onFocusChanged` 收不到失焦事件，
+   于是齿轮的环一直亮在遮罩后面。视觉上像"两处同时选中"，但被遮罩压暗，暂不处理。
+2. **`SortOrderControl` 还没接**：同一抽屉在有排序项的主机里会多一段排序控件（`SortOrderControl.kt`，
+   是 `IconButton` + `DropdownMenu`）。下拉菜单的焦点问题本轮修过的 `TtsSpeedButton` 是同款，
+   可以直接套用"展开时聚焦当前值"的做法。
