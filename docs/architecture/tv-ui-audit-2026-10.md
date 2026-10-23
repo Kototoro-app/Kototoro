@@ -1420,3 +1420,63 @@ Material3 组件内部加一条隐式跳转规则。
 3. 顺带确认：朗读态下 BACK 仍先退朗读条（当前行为已正确），不要被上面的改动带坏。
 
 在这条修好之前，"电视上能听书"只能算半成品——能开不能控。
+
+## 第十九轮：把朗读条真正接进遥控器（2026-10-23）
+
+第十八轮只做到"确认朗读条按不动"。这轮把它修好并逐键验证。
+
+### 先纠正上一轮的判断：朗读条有两个，屏幕上的是另一个
+
+上一轮以为是 `NovelReaderOverlay.kt` 里那条贴底的六键横条。加日志后才发现：
+`state.ttsControlsVisible` 在那个 `NovelReaderOverlay` 实例里始终是 `false`（日志 `effect ttsVisible=false isTv=true`，
+之后再没变化），而屏幕上确实浮出了 ⏮⏸⏭ / `1.0×` / 🎤 / ✕。
+
+真相是：点到快捷行第 1 块 "TTS Settings" 后，`NovelReaderChrome.kt` 里的
+
+```
+val toolsPanelVisible = state.toolsSheetVisible || state.ttsControlsVisible
+if (toolsPanelVisible) { ModalBottomSheet { NovelToolsPanel(state, callbacks) } }
+```
+
+会**新开一个 `ModalBottomSheet`**，朗读控制就是在它的 `NovelToolsPanel` 里、4 个工具药丸下面追加的一行。
+`NovelReaderOverlay` 那条横条是另一个表面（`ttsControlsVisible && !chromeEnabled` 时才显示），这轮并没有走到它。
+
+所以上一轮按"覆盖层"思路加的焦点交接是打在空处——不是坏代码，只是没打中真正的表面。
+
+### 真正的原因有两层
+
+1. **按键路由**：`NovelReaderActivity` 只把 `isReaderControlsVisible`（顶栏）当作"有交互层"，
+   朗读弹层可见而顶栏收起时方向键被当成翻页吃掉。上一轮已改成
+   `isReaderControlsVisible || uiState.ttsControlsVisible`。
+2. **焦点空洞**：`ModalBottomSheet` 是刚弹出的新窗口，里面**没有任何节点持有焦点**，
+   而且 `NovelToolsPanel` 那六个 `IconButton` 连 `tvFocusable` 都没挂——就算焦点进来也画不出环。
+   遥控器按下去"没反应"就是这两件事叠加的结果。
+
+### 修法
+
+在 `NovelToolsPanel` 的朗读行里：
+
+- 六个按钮补 `tvFocusable(shape = CircleShape, addFocusTarget = false)`，环才有东西可画；
+- 播放/暂停键挂 `FocusRequester`，`LaunchedEffect(isTv)` 里逐帧重试 `requestFocus()`（最多 20 帧），
+  和第十五轮顶栏返回键、上一轮覆盖层用同一套写法；
+- 全部 `isTv` 门控，手机端行为不变。
+
+### 设备验证（emulator-5558，1920×1080）
+
+| 步骤 | 结果 | 截图 |
+| --- | --- | --- |
+| 快捷行 "TTS Settings" → CENTER | 弹层出现，焦点环已在播放/暂停键上（日志 `toolsRow ok=true`） | `wc4` / `xd0` |
+| RIGHT | 环移到 ⏭ | `wd0` |
+| RIGHT ×4 | 环走到 ✕（经过 `1.0×`、🎤） | `wd1` |
+| RIGHT（再按） | 停在 ✕，不越界 | `wd2` |
+| ✕ 上 CENTER | 朗读行收起，播放停止 | `wd3` |
+| `1.0×` 上 CENTER | 弹出倍速菜单 0.5×–3.0×，0.5× 已高亮可选中 | `xd2`（焦点窗口 `Pop-Up Window`） |
+
+去掉调试日志后重装、重走一遍，环与倍速菜单都照旧（`xd0`/`xd1`/`xd2`），确认不是日志在帮忙。
+
+### 留下的问题
+
+- `NovelReaderOverlay` 那条独立朗读横条这次没有场景走到（它要求弹层关闭且顶栏隐藏），
+  上一轮加给它的交接逻辑保持原样，等有场景时再验。
+- 朗读弹层是手机式 `ModalBottomSheet`：电视上它会占住 Almost 半屏且无法用方向键收起，
+  更合适的电视形态应是"贴底条 + BACK 收起"，留待后续评估。
