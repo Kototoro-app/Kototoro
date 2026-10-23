@@ -3139,6 +3139,29 @@ New chapters）。库里没有收藏数据，所以正文是空态（猫图标 +
   看起来像"原地"移动。
 - Release ▾、Rating ▾、New chapters 三个下拉和"Read later"页签这一轮没走到。
 
+### 补记（同日）：重排对话框在电视上给出上下移动按钮
+
+`ReorderDialog`（设置里的来源排序、统一来源页的排序按钮）在电视上是一条彻底的死胡同：行上只有
+拖拽手柄（`longPressDraggableHandle` + `draggableHandle`），遥控器既拖不动，也没有第二个可停的节点；
+对话框打开时没有任何初始焦点，能停的只剩底部 Cancel / Save，而这两个按钮也不画环。
+
+改法只在 TV 生效，手机保持原样（拖拽）：
+
+- 每行尾部把拖拽手柄换成两个 `IconButton`（↑ / ↓），复用 `customActions` 里那套移动逻辑——把它提取成
+  `canMoveUp` / `canMoveDown` / `moveItemUp` / `moveItemDown`，无障碍动作和按钮共用一份。
+- 移不动时（已在组首/组尾或会跨组）按钮 `enabled = false`：禁用按钮不是焦点目标，遥控器不会停在
+  一个按了没反应的按钮上。
+- 两个按钮带 `tvFocusable(addFocusTarget = false)` 的圆形环，Cancel / Save 补圆角环。
+- 对话框内容列挂 `tvTakeInitialFocus()`，打开即把焦点交给第一个可停的按钮（第一行的 ↓，此时 ↑ 禁用）。
+
+`items(key = …)` 带 key，行换位后节点身份不变，焦点理论上跟着条目走；**这一条本轮没有设备证据**：
+模拟器 0 个内容源，"来源排序"入口不出现，`ReorderDialog` 的三个调用点都要求 ≥2 个已装源。本轮只到
+`:app:compileDebugKotlin` BUILD SUCCESSFUL。
+
+### 遗留
+
+- 重排对话框的上下移动按钮与"换位后焦点跟随"缺设备验证（需要至少两个已装源）。
+
 
 
 

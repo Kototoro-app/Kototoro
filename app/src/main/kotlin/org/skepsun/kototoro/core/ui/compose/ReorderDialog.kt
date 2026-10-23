@@ -5,10 +5,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -21,6 +27,9 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTakeInitialFocus
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -40,6 +49,31 @@ fun ReorderDialog(
     var error by remember { mutableStateOf<String?>(null) }
     val moveUp = stringResource(R.string.reorder_move_up)
     val moveDown = stringResource(R.string.reorder_move_down)
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+
+    fun canMoveUp(item: ReorderItem): Boolean {
+        val index = ordered.indexOf(item)
+        return index > 0 && ordered[index].group == ordered[index - 1].group
+    }
+
+    fun canMoveDown(item: ReorderItem): Boolean {
+        val index = ordered.indexOf(item)
+        return index in 0 until ordered.lastIndex && ordered[index].group == ordered[index + 1].group
+    }
+
+    fun moveItemUp(item: ReorderItem) {
+        val index = ordered.indexOf(item)
+        if (canMoveUp(item)) {
+            ordered.add(index - 1, ordered.removeAt(index))
+        }
+    }
+
+    fun moveItemDown(item: ReorderItem) {
+        val index = ordered.indexOf(item)
+        if (canMoveDown(item)) {
+            ordered.add(index + 1, ordered.removeAt(index))
+        }
+    }
 
     val reorderableLazyListState = rememberReorderableLazyListState(listState) { from, to ->
         if (saving) return@rememberReorderableLazyListState
@@ -70,7 +104,8 @@ fun ReorderDialog(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(20.dp),
+                    .padding(20.dp)
+                    .tvTakeInitialFocus(),
             ) {
                 Text(
                     text = stringResource(R.string.reorder),
@@ -96,22 +131,24 @@ fun ReorderDialog(
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .longPressDraggableHandle(enabled = !saving)
+                                    .longPressDraggableHandle(enabled = !saving && !isTvPresentation)
                                     .semantics {
                                         customActions = listOf(
                                             CustomAccessibilityAction(moveUp) {
-                                                val index = ordered.indexOf(item)
-                                                if (index > 0 && ordered[index].group == ordered[index - 1].group) {
-                                                    ordered.add(index - 1, ordered.removeAt(index))
+                                                if (canMoveUp(item)) {
+                                                    moveItemUp(item)
                                                     true
-                                                } else false
+                                                } else {
+                                                    false
+                                                }
                                             },
                                             CustomAccessibilityAction(moveDown) {
-                                                val index = ordered.indexOf(item)
-                                                if (index in 0 until ordered.lastIndex && ordered[index].group == ordered[index + 1].group) {
-                                                    ordered.add(index + 1, ordered.removeAt(index))
+                                                if (canMoveDown(item)) {
+                                                    moveItemDown(item)
                                                     true
-                                                } else false
+                                                } else {
+                                                    false
+                                                }
                                             },
                                         )
                                     },
@@ -148,22 +185,39 @@ fun ReorderDialog(
                                         }
                                     }
                                     Spacer(Modifier.width(8.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .draggableHandle(enabled = !saving),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_reorder_handle),
-                                            contentDescription = stringResource(R.string.reorder),
-                                            tint = if (isDragging) {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                            },
-                                            modifier = Modifier.size(20.dp),
+                                    if (isTvPresentation) {
+                                        // A remote cannot drag: expose the same moves the accessibility
+                                        // actions already provide, one button per direction.
+                                        ReorderMoveButton(
+                                            icon = Icons.Filled.KeyboardArrowUp,
+                                            contentDescription = moveUp,
+                                            enabled = !saving && canMoveUp(item),
+                                            onClick = { moveItemUp(item) },
                                         )
+                                        ReorderMoveButton(
+                                            icon = Icons.Filled.KeyboardArrowDown,
+                                            contentDescription = moveDown,
+                                            enabled = !saving && canMoveDown(item),
+                                            onClick = { moveItemDown(item) },
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .draggableHandle(enabled = !saving),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_reorder_handle),
+                                                contentDescription = stringResource(R.string.reorder),
+                                                tint = if (isDragging) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                                },
+                                                modifier = Modifier.size(20.dp),
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -184,12 +238,26 @@ fun ReorderDialog(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(enabled = !saving, onClick = onDismissRequest) {
+                    TextButton(
+                        enabled = !saving,
+                        onClick = onDismissRequest,
+                        modifier = Modifier.tvFocusable(
+                            enabled = !saving,
+                            shape = RoundedCornerShape(20.dp),
+                            addFocusTarget = false,
+                        ),
+                    ) {
                         Text(stringResource(android.R.string.cancel))
                     }
                     Spacer(Modifier.width(8.dp))
+                    val canSave = !saving && !reorderableLazyListState.isAnyItemDragging && ordered.isNotEmpty()
                     Button(
-                        enabled = !saving && !reorderableLazyListState.isAnyItemDragging && ordered.isNotEmpty(),
+                        enabled = canSave,
+                        modifier = Modifier.tvFocusable(
+                            enabled = canSave,
+                            shape = RoundedCornerShape(20.dp),
+                            addFocusTarget = false,
+                        ),
                         onClick = {
                             saving = true
                             error = null
@@ -220,5 +288,34 @@ fun ReorderDialog(
                 }
             }
         }
+    }
+}
+
+/**
+ * One move-up / move-down stop of a reorder row for the TV presentation.
+ *
+ * A remote cannot drag a list, so the row exposes the two moves that already exist as accessibility
+ * actions. A move that would leave the item's group stays disabled: a disabled IconButton is not a
+ * focus target, so the D-pad never stops on a button that cannot do anything.
+ */
+@Composable
+private fun ReorderMoveButton(
+    icon: ImageVector,
+    contentDescription: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .size(40.dp)
+            .tvFocusable(enabled = enabled, shape = CircleShape, addFocusTarget = false),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
