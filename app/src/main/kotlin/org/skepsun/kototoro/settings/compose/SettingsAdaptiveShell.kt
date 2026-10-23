@@ -22,24 +22,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.settings.SettingsDestination
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvTakeFocusWhenEmpty
 
 private val SettingsListPaneWidth = 360.dp
-
-private const val TvDestinationFocusAttempts = 20
 
 @Composable
 fun SettingsAdaptiveShell(
@@ -142,27 +132,6 @@ private fun SettingsTwoPaneShell(
     destinationContent: @Composable (SettingsDestination) -> Unit,
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
-    val focusManager = LocalFocusManager.current
-    var isListPaneFocused by remember { mutableStateOf(false) }
-    if (isTvPresentation) {
-        // 双栏在电视上等价于“左分类 / 右详情”：从列表打开一页后把焦点送进右侧，
-        // 否则用户还要多按一次 RIGHT 才能操作刚打开的页面（原生 TV 设置也是直接进右侧）。
-        var handledDestination by remember { mutableStateOf<SettingsDestination?>(null) }
-        LaunchedEffect(destination, isListPaneFocused) {
-            val openedFromList = destination != SettingsDestination.Root &&
-                destination != handledDestination &&
-                isListPaneFocused
-            handledDestination = destination
-            if (openedFromList) {
-                repeat(TvDestinationFocusAttempts) {
-                    withFrameNanos { }
-                    if (focusManager.moveFocus(FocusDirection.Right)) {
-                        return@LaunchedEffect
-                    }
-                }
-            }
-        }
-    }
     Row(modifier = modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
@@ -170,13 +139,6 @@ private fun SettingsTwoPaneShell(
                 .width(SettingsListPaneWidth)
                 .windowInsetsPadding(
                     WindowInsets.safeDrawing.only(WindowInsetsSides.Start + WindowInsetsSides.Bottom),
-                )
-                .then(
-                    if (isTvPresentation) {
-                        Modifier.onFocusChanged { isListPaneFocused = it.hasFocus }
-                    } else {
-                        Modifier
-                    },
                 ),
         ) {
             rootContent(Modifier.fillMaxSize())
@@ -191,6 +153,16 @@ private fun SettingsTwoPaneShell(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
+                // 双栏在电视上等价于"左分类 / 右详情"：打开一页后焦点要落进右侧，否则用户还得再按
+                // 一次 RIGHT 才能操作刚打开的页面。用"没焦点就一直要"的写法而不是一次 moveFocus：
+                // 右侧内容比状态变化晚几帧才组合出来，一次请求会落空，页面就以"没有环"的样子打开。
+                .then(
+                    if (isTvPresentation) {
+                        Modifier.tvTakeFocusWhenEmpty(destination)
+                    } else {
+                        Modifier
+                    },
+                )
                 .windowInsetsPadding(
                     WindowInsets.safeDrawing.only(WindowInsetsSides.End + WindowInsetsSides.Bottom),
                 ),

@@ -2946,6 +2946,30 @@ fun Modifier.tvTabRing(): Modifier = tvFocusable(
   上机验证，没有逐一进到页面里看。
 - 设置右栏 RIGHT 跳到相邻行的怪癖只记录未修。
 
+### 补记（同日）：打开子页后焦点一定落进右栏
+
+上面那轮走查顺手暴露了一个更严重的问题：**从列表打开子页后，焦点并不总是跟着进右栏**。原来的
+实现是在 `LaunchedEffect(destination, isListPaneFocused)` 里最多试 20 帧 `moveFocus(Right)`，
+看起来够用，实际是两条竞态：一是 `handledDestination` 在"左栏没有焦点"的那次也会被写成当前
+destination，于是等焦点真正回到左栏、条件成立时反而因为"已经处理过"而跳过；二是 `moveFocus`
+和右栏内容的组合赛跑，右栏还没组合出可聚焦项时 moveFocus 返回 false 但焦点已经被挪走。
+
+现在换成"**没焦点就一直要**"的写法，并把这个原语放进 `TvFocus.kt`：
+
+```kotlin
+@Composable
+fun Modifier.tvTakeFocusWhenEmpty(key: Any?, attempts: Int = 20): Modifier
+```
+
+右栏套上它，`key` 用当前 destination：每次换页重新要一次焦点，只要右栏里还没有焦点就继续请求
+（有焦点立刻停，用户不会被打断）。它比 `moveFocus` 更贴切——右栏的第一站就是那一页的第一个控件，
+不需要方向几何。同一个原语也顺带修好了**从搜索框进子页**的路径：过去选完搜索结果焦点会回到左栏
+第一行，现在直接落在右栏。
+
+设备验证（emulator-5554）：连续 5 次"打开 Appearance → BACK → DOWN 回列表"，5 次都稳定落在
+右栏第一行 `[746,212][1896,340]`；从搜索 "reader" 选 "Reader settings" 后焦点落在
+`[746,332][1896,456]`（Reader actions 行，蓝色环可见）。
+
 
 
 

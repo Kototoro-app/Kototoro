@@ -52,6 +52,35 @@ fun Modifier.tvTakeInitialFocus(): Modifier {
 }
 
 /**
+ * Like [tvTakeInitialFocus], but for a pane whose content is swapped while the window keeps the
+ * focus elsewhere (a master-detail split opening a page on the right).
+ *
+ * One attempt is not enough there: the new content is composed a few frames after the state change,
+ * so a single `requestFocus` lands on nothing and the page opens without a ring. This keeps asking
+ * while nothing inside holds the focus, and starts over whenever [key] changes, one key per page.
+ * A healthy pane takes the focus on the first frame, which ends the loop before the user can react.
+ * No-op off TV.
+ */
+@Composable
+fun Modifier.tvTakeFocusWhenEmpty(key: Any?, attempts: Int = 20): Modifier {
+    if (!LocalUiPresentationConfig.current.isTv) return this
+    val requester = remember { FocusRequester() }
+    var hasFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(key, requester) {
+        hasFocus = false
+        repeat(attempts) {
+            withFrameNanos { }
+            if (hasFocus) return@LaunchedEffect
+            runCatching { requester.requestFocus() }
+        }
+    }
+    return this
+        .focusRequester(requester)
+        .focusGroup()
+        .onFocusChanged { hasFocus = it.hasFocus }
+}
+
+/**
  * Adds a keyboard/remote focus target only for the TV presentation.
  *
  * Order matters: place this modifier **before** the clickable/focusable node it should observe.
