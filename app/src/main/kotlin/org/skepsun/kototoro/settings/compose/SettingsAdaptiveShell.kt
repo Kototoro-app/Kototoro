@@ -22,7 +22,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.settings.SettingsDestination
@@ -30,6 +38,12 @@ import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvTakeFocusWhenEmpty
 
 private val SettingsListPaneWidth = 360.dp
+
+/**
+ * Bumped every time the two-pane shell falls back to the root destination on TV, so the list can put
+ * the focus back on the row that opened the page (see [SettingsRootScreen]).
+ */
+internal val LocalSettingsListReturnToken = compositionLocalOf { 0 }
 
 @Composable
 fun SettingsAdaptiveShell(
@@ -132,6 +146,22 @@ private fun SettingsTwoPaneShell(
     destinationContent: @Composable (SettingsDestination) -> Unit,
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    var hasOpenedPage by remember { mutableStateOf(false) }
+    var returnToken by remember { mutableStateOf(0) }
+    if (isTvPresentation) {
+        LaunchedEffect(destination) {
+            if (destination != SettingsDestination.Root) {
+                hasOpenedPage = true
+                return@LaunchedEffect
+            }
+            // 从子页 BACK 回来时右栏已经被清空，焦点停在顶栏返回键上，而在没有候选的右栏方向按
+            // RIGHT 只会被光束搜索吞掉。这里只负责发一个"回来了"的信号，由列表把焦点还给当初
+            // 打开子页的那一行；冷启动时 hasOpenedPage 还是 false，交给列表自己的首行焦点请求。
+            if (!hasOpenedPage) return@LaunchedEffect
+            withFrameNanos { }
+            returnToken++
+        }
+    }
     Row(modifier = modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
@@ -141,7 +171,9 @@ private fun SettingsTwoPaneShell(
                     WindowInsets.safeDrawing.only(WindowInsetsSides.Start + WindowInsetsSides.Bottom),
                 ),
         ) {
-            rootContent(Modifier.fillMaxSize())
+            CompositionLocalProvider(LocalSettingsListReturnToken provides returnToken) {
+                rootContent(Modifier.fillMaxSize())
+            }
         }
         Box(
             modifier = Modifier

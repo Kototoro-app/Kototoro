@@ -44,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -136,6 +137,8 @@ fun SettingsRootScreen(
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val firstFocusRequester = remember { FocusRequester() }
     var hasRequestedInitialFocus by remember { mutableStateOf(false) }
+    var lastRowFocusRequester by remember { mutableStateOf<FocusRequester?>(null) }
+    val returnToken = LocalSettingsListReturnToken.current
     LaunchedEffect(isTvPresentation, searchActive, searchQuery.isBlank(), sections.size, searchResults.size) {
         // 搜索态（即使查询还是空的）焦点属于顶栏输入框；这里再抢一次会让用户刚点开搜索
         // 就被弹回列表第一行。
@@ -145,6 +148,14 @@ fun SettingsRootScreen(
                 hasRequestedInitialFocus = true
             }
         }
+    }
+    LaunchedEffect(returnToken) {
+        // 双栏在电视上从子页 BACK 回来时右栏已经清空，焦点会停在顶栏返回键上——那里按 RIGHT 是
+        // 死键，因为屏幕另一半没有可聚焦的东西。这里把焦点还给当初打开子页的那一行，用户接着
+        // 按 CENTER 就能把子页重新打开，而不用先摸索回列表。
+        if (!isTvPresentation || returnToken <= 0 || searchActive) return@LaunchedEffect
+        withFrameNanos { }
+        runCatching { (lastRowFocusRequester ?: firstFocusRequester).requestFocus() }
     }
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -189,6 +200,7 @@ fun SettingsRootScreen(
                     SettingsSectionCard(
                         section = section,
                         firstFocusRequester = firstFocusRequester.takeIf { isTvPresentation && sectionIndex == 0 },
+                        onRowFocused = { lastRowFocusRequester = it },
                     )
                 }
             } else {
@@ -208,6 +220,7 @@ fun SettingsRootScreen(
 private fun SettingsSectionCard(
     section: SettingsRootSection,
     firstFocusRequester: FocusRequester? = null,
+    onRowFocused: (FocusRequester) -> Unit = {},
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -227,6 +240,7 @@ private fun SettingsSectionCard(
             SettingsRootRow(
                 item = section.items[index],
                 focusRequester = firstFocusRequester.takeIf { index == 0 },
+                onRowFocused = onRowFocused,
             )
         }
     }
@@ -311,13 +325,16 @@ private fun SettingsSearchResultRow(
 private fun SettingsRootRow(
     item: SettingsRootItem,
     focusRequester: FocusRequester? = null,
+    onRowFocused: (FocusRequester) -> Unit = {},
 ) {
     val tokens = LocalInterfaceStyleTokens.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val rowFocusRequester = remember { FocusRequester() }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .focusRequester(focusRequester ?: rowFocusRequester)
+            .onFocusChanged { if (it.isFocused) onRowFocused(rowFocusRequester) }
             .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)
             .clickable(onClick = item.onClick)
             .heightIn(min = tokens.settingsItemMinHeight)

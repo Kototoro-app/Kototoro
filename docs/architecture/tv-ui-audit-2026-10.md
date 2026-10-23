@@ -3025,6 +3025,28 @@ Online translation model）+ LLM provider preset 选择行，字段都接了
 - "Show in grid view" 这类纯告知行仍占一个焦点站。
 - 设置里 Appearance 的 Interface style / Page background、AI 的模型下载等更深一层的对话框没逐个走。
 
+### 补记（同日）：返回时焦点回到当初那一行
+
+上面那条"修法"已经落地。双栏外壳在退回 Root 时发一个 `returnToken`（`LocalSettingsListReturnToken`），
+列表把每个根行的 `FocusRequester` 记在 `lastRowFocusRequester` 里（行上的 `onFocusChanged`），收到
+token 变化就 `requestFocus` 那一行：
+
+```kotlin
+// SettingsAdaptiveShell.kt
+LaunchedEffect(destination) {
+    if (destination != SettingsDestination.Root) { hasOpenedPage = true; return@LaunchedEffect }
+    if (!hasOpenedPage) return@LaunchedEffect   // 冷启动交给列表自己的首行请求
+    withFrameNanos { }
+    returnToken++
+}
+```
+
+冷启动那一次仍然由 `SettingsRootScreen` 的 `firstFocusRequester` 负责，两处抢焦点不会互相打架。
+
+设备验证：设置 → DOWN×2（AI 行）→ CENTER 打开 → BACK，焦点回到 AI 行 `[24,411][696,583]`；
+再 UP 到 Reader settings 行 → CENTER 打开 → BACK，焦点回到 Reader settings 行 `[24,370][696,542]`
+（不是第一行，正是打开的那一行），环可见。
+
 ## 第五十一轮：详情页整屏走通，章节行尾按钮各有独立焦点环（2026-10-24）
 
 这一轮用库里那本审计用的 "TV Audit Strip"（1 章、本地、进度 25%）把详情页从冷启动走到退出。结论：
