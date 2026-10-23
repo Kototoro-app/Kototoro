@@ -172,6 +172,12 @@ private fun TtsButton(
 internal fun TtsSpeedButton(speed: Float, onSpeedChange: (Float) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val title = stringResource(R.string.tts_speed)
+    val isTv = LocalUiPresentationConfig.current.isTv
+    // 遥控器只能靠方向键移动焦点，菜单若从第一项起步，用户每次都得从头数到当前倍速。
+    // 电视上给每项挂一个 FocusRequester，展开时把焦点直接放到当前值上。
+    val optionFocus = remember {
+        TtsPlaybackSpeed.OPTIONS.associateWith { FocusRequester() }
+    }
     Box {
         TextButton(
             onClick = { expanded = true },
@@ -194,7 +200,24 @@ internal fun TtsSpeedButton(speed: Float, onSpeedChange: (Float) -> Unit) {
                         expanded = false
                         onSpeedChange(option)
                     },
+                    modifier = if (isTv) {
+                        Modifier.focusRequester(optionFocus.getValue(option))
+                    } else {
+                        Modifier
+                    },
                 )
+            }
+        }
+        if (isTv) {
+            val currentFocus = optionFocus.getValue(
+                TtsPlaybackSpeed.OPTIONS.firstOrNull { it == speed } ?: TtsPlaybackSpeed.OPTIONS.first(),
+            )
+            LaunchedEffect(expanded) {
+                if (!expanded) return@LaunchedEffect
+                repeat(TtsFocusAttempts) {
+                    withFrameNanos { }
+                    if (runCatching { currentFocus.requestFocus() }.isSuccess) return@LaunchedEffect
+                }
             }
         }
     }
