@@ -678,8 +678,31 @@ internal object DesktopTabletProbe {
                 // History's batch action is the "remove" the favourites shelf also has; it deletes the records, so the
                 // home "continue reading" row must lose the work as well.
                 onNodeWithTag("nav:历史").performClick(); idle()
+                // Android's FAVOURITE action on the history shelf is the category dialog: a work without a category is
+                // not a favourite, so ticking a box favourites it and dropping the last box makes it a plain history
+                // row again. The row stays on the shelf in both directions.
+                runBlocking { session.library.removeFavourite(content.id) }
+                runBlocking { controller.library(true).join() }; idle()
+                check(!runBlocking { session.library.isFavourite(content.id) }) { "the row starts unfavourited" }
                 onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
+                onNodeWithTag("library-selection-categories").performClick(); idle()
+                onNodeWithTag("library-category-pick-dialog").assertExists()
+                snapshotTag("library-category-pick-dialog", "history-category-pick")
+                onNodeWithTag("library-category-pick:${category.id}").performClick()
+                onNodeWithTag("library-category-pick-confirm").performClick(); idle()
+                check(runBlocking { session.library.isFavourite(content.id) }) { "the history row became a favourite" }
+                check(controller.state.value.library.entries.first { it.content.id == content.id }
+                    .categoryIds.toSet() == setOf(category.id))
+                check(controller.state.value.message == desktopText("library.categoriesUpdated", 1))
+                onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
+                onNodeWithTag("library-selection-categories").performClick(); idle()
+                onNodeWithTag("library-category-pick:${category.id}").performClick()
+                onNodeWithTag("library-category-pick-confirm").performClick(); idle()
+                onNodeWithTag("library-category-pick-dialog").assertDoesNotExist()
+                check(!runBlocking { session.library.isFavourite(content.id) }) { "the last category dropped it again" }
+                check(controller.state.value.library.entries.first { it.content.id == content.id }.categoryIds.isEmpty())
                 check(controller.state.value.historySelection.query.isEmpty())
+                onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
                 onNodeWithTag("library-selection-remove").performClick(); idle()
                 onNodeWithTag("library-selection-dialog").assertExists()
                 snapshotTag("library-selection-dialog", "history-selection-remove")

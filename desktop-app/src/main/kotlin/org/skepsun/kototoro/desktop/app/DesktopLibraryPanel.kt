@@ -82,7 +82,9 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
             if (checkedIds.isNotEmpty()) DesktopLibrarySelectionBar(
                 count = checkedIds.size, history = history, allPinned = allPinned, enabled = enabled,
                 onSelectAll = { selectedIds = LinkedHashSet(shownIds) },
-                onAssignCategories = if (history) null else ({ pickingCategories = true }),
+                // Android's FAVOURITE action on the history shelf is the same category dialog: a work with no
+                // category is not a favourite, so ticking a box favourites it and unticking the last one drops it.
+                onAssignCategories = { pickingCategories = true },
                 onMarkCompleted = { confirmingComplete = true },
                 // Android's pin is a toggle on the favourites shelf: the selected works flip as a group.
                 onTogglePin = if (history) null else ({ controller.setLibraryPinned(checkedIds, !allPinned) }),

@@ -6857,3 +6857,26 @@ Windows 侧的 `source-tvbox`（`MacCmsSourceRuntime` + `MacCmsParser`）早就�
 - 探针（`tablet`）：取消置顶之后选择仍只有一部作品，点“分享”直接读系统剪贴板，断言内容等于“标题 + 空行 + publicUrl”、`message` 是 `library.shared`(1)、`shareLinks` 为空（说明没有走回退对话框）；`tablet-library-selection-pin.png` 快照里能看到新增的“分享”按钮排在“移出收藏”之前。
 - 验证：`DesktopShareLinksTest` 3 项、`DesktopLibrarySelectionTest` 9 项全绿；`:desktop-app:test --tests "*DesktopAppTest*tablet*"` tests=1 failures=0，`tablet.log` 以 `DESKTOP_UI_OK=tablet` 结束；`:desktop-app:compileKotlin`、`:desktop-app:compileTestKotlin`、`:desktop-app:verifyDesktopStrings`、`:core-ui:verifyUiStrings`、`:core-library:compileCommonMainKotlinMetadata` 全部通过。
 - 环境备注：`DesktopAppTest` 的 parsers 探针（`parsers-read`）在本机超时失败，已用 `git stash` 在未改动的 HEAD 上复现，属既有环境问题（需要真实插件与联网），与本改动无关。
+
+## 148. Windows 历史选择栏的“收藏”（2026-10-24）
+
+日期：2026-10-24。承接 §140、§147：Android 历史列表的选择栏动作是
+SELECT_ALL / REMOVE / SAVE / FAVOURITE / MARK_AS_COMPLETED，其中 FAVOURITE 打开的就是收藏分类对话框
+（`AppRouter.showFavoriteDialog` → `FavoriteCategoryDialog`），历史页与收藏页共用同一个对话框。
+Windows 侧此前把“分类”只挂在收藏栏（历史传 `onAssignCategories = null`），历史页因而少了这个动作。
+
+- 现在两个书架都渲染 `library-selection-categories`：历史页点开的是同一个 `DesktopCategoryPickerDialog`，
+  勾选集合即目标分类集合，确认走 `setFavouriteCategories` → `SourceLibrary.updateCategories`。
+- 语义与 Android 相同：作品的“收藏”身份由分类成员关系决定，所以历史行勾上任意分类就变成收藏，
+  把最后一个分类取消就退回只有历史记录的状态；行本身始终留在历史页（历史页读的是 history 快照）。
+- 对话框初始勾选沿用“所选作品的分类交集”，历史页读到的是这些作品当前的收藏分类，
+  因此从历史页也能直接把作品移出收藏（与 Android 的 FAVOURITE 双向开关一致）。
+- 历史选择栏的动作集由此与 Android 只差 SAVE：全选 / 分类 / 标为已完成 / 移出 / 取消。
+- 无新增文案（复用 `library.selectionCategories` 与 `library.categoriesUpdated`）。
+- 探针（`tablet`）：历史页先把该作品移出收藏并重载快照（必须 `controller.library(true)`，
+  它的默认参数是收藏页，传错会把历史行整体换掉），勾选分类确认后断言 `isFavourite` 为真、
+  `categoryIds == setOf(category.id)`、提示是 `library.categoriesUpdated`(1)；
+  再进一次对话框取消该分类，断言又变回非收藏且 `categoryIds` 为空；截图 `tablet-history-category-pick.png`。
+- 验证：`:desktop-app:test --tests "*DesktopAppTest*tablet*"` tests=1 failures=0
+  （`tablet.log` 以 `DESKTOP_UI_OK=tablet` 结束）；`:desktop-app:compileKotlin`、
+  `:desktop-app:compileTestKotlin` 通过。
