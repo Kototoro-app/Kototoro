@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed
 import androidx.compose.runtime.Composable
@@ -29,6 +30,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -62,6 +66,17 @@ internal fun NovelReaderOverlay(
     var displayedMessage by remember { mutableStateOf(message) }
     LaunchedEffect(message) {
         if (message != null) displayedMessage = message
+    }
+    // 朗读条出现时没有任何节点持有焦点：顶栏是收起的，方向键也不会走到这里。
+    // 主动把焦点交给播放/暂停键，并逐帧重试，直到节点真正挂上（淡入要先完成放置）。
+    val isTv = LocalUiPresentationConfig.current.isTv
+    val ttsPlayPauseFocus = remember { FocusRequester() }
+    LaunchedEffect(ttsVisible, isTv) {
+        if (!isTv || !ttsVisible) return@LaunchedEffect
+        repeat(TtsFocusAttempts) {
+            withFrameNanos { }
+            if (runCatching { ttsPlayPauseFocus.requestFocus() }.isSuccess) return@LaunchedEffect
+        }
     }
     // 选项面板是同一层里的兄弟节点、且后组合，会盖住贴底的提示条；提示必须浮在它上面，
     // 否则"按了快捷动作却什么都没发生"在电视上完全无法诊断。
@@ -123,6 +138,7 @@ internal fun NovelReaderOverlay(
                         if (ttsState == TtsState.PLAYING) R.drawable.ic_pause else R.drawable.ic_play,
                         stringResource(if (ttsState == TtsState.PLAYING) R.string.pause else R.string.play),
                         onTtsPlayPause,
+                        focusRequester = ttsPlayPauseFocus.takeIf { isTv },
                     )
                     TtsButton(R.drawable.ic_next, stringResource(R.string.next), onTtsNext)
                     TtsSpeedButton(ttsSpeed, onTtsSpeedChange)
@@ -135,10 +151,17 @@ internal fun NovelReaderOverlay(
 }
 
 @Composable
-private fun TtsButton(icon: Int, description: String, onClick: () -> Unit) {
+private fun TtsButton(
+    icon: Int,
+    description: String,
+    onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
+) {
     IconButton(
         onClick = onClick,
-        modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+        modifier = Modifier
+            .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .tvFocusable(shape = CircleShape, addFocusTarget = false),
     ) {
         Icon(painterResource(icon), contentDescription = description)
     }
@@ -176,3 +199,5 @@ internal fun TtsSpeedButton(speed: Float, onSpeedChange: (Float) -> Unit) {
         }
     }
 }
+
+private const val TtsFocusAttempts = 20

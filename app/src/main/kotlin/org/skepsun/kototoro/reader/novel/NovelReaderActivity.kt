@@ -1279,7 +1279,10 @@ class NovelReaderActivity :
                 keyCode = event.keyCode,
                 action = event.action,
                 isTvPresentation = isTvPresentation,
-                controlsVisible = isReaderControlsVisible,
+                // 朗读条是独立可见层：它可见时必须让方向键进 Compose 焦点遍历，
+                // 否则会被下面的翻页分支全部吃掉，六个按钮永远拿不到焦点。
+                controlsVisible = isReaderControlsVisible ||
+                    composeReaderViewModel.uiState.value.ttsControlsVisible,
                 repeatCount = event.repeatCount,
             )
         ) {
