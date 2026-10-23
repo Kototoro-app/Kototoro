@@ -777,7 +777,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                     actionDialogState === selectedDialog &&
                                     selectionDialogState == null &&
                                     !superResolutionDialogVisible &&
-                                    videoInfoDialogText == null
+                                    videoInfoDialogText == null &&
+                                    dlnaDialogState == null
                                 ) {
                                     actionDialogState = null
                                 }

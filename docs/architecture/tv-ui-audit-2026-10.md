@@ -2215,3 +2215,59 @@ adb 单次往返 1–2 秒，`uiautomator dump` 更慢，而 chrome 的自动隐
 - 手机上这条链路完全不变：正文依旧只读可滚，不额外加焦点目标，`focusRequester` 只在电视分支里接上。
 - `SelectionContainer` 保留：详情文本仍可长按复制，电视上只是多了一个焦点停靠点。
 
+## 第三十七轮：超分展开态终于能看到了，DLNA 也归队（2026-10-24）
+
+第三十四轮把超分面板的展开态（算法选择、Anime4K 预设、FSR 滑杆）挂成了"只能在真机验证"，原因写得很直白：
+模拟器的 `tier=LOW`、`allowShaderPipeline=false`，开关一按就被播放策略还原成 OFF，展开分支根本渲染不出来。
+这一轮先解决"看不到"，再把展开态整条走一遍。
+
+### 让模拟器够得上 MID
+
+`DevicePerformanceClassifier` 的打分是 `isLowRamDevice +3 / 总内存 1..3072MB +2 / 核数 ≤4 +1 / 32 位 +1 /
+Leanback +1`，≥4 判 LOW、≥2 判 MID。AVD 默认 `hw.ramSize = 1536M`、`hw.cpu.ncore = 4`、TV 镜像自带 Leanback，
+正好 2+1+1 = 4 分，永远停在 LOW。把模拟器按 4GB 重启即可（不改 AVD 配置、不改代码）：
+
+```
+adb -s emulator-5558 emu kill
+emulator -avd kototoro_tv_api36 -gpu host -memory 4096 -no-boot-anim
+```
+
+`MemTotal: 4013816 kB` 让 +2 消失，剩 4 核 +1 与 Leanback +1 共 2 分 → MID → `allowShaderPipeline = true`，
+开关终于留得住，`Video Details` 里的 `Device Tier` 也从 `LOW` 变成 `MID`。注意新实例会换 serial（这次是
+`emulator-5554`），后面的 adb 命令都按新 serial 走。
+
+### 展开态的设备验证（emulator-5554，1920×1080，tier=MID）
+
+| 步骤 | 截图 | 结果 |
+| --- | --- | --- |
+| Options → Video enhancement | `m7` | 卡片打开，环在 `Enable for this video`；父面板已隐藏，右侧只剩播放器自己的音符悬浮按钮 |
+| CENTER（打开开关） | `m8` | 开关变白轨黑芯并**留在 ON**，下方原地长出 `Algorithm`（Anime4K / AMD FSR 1.0）与 `Anime4K preset`（Efficiency / Quality） |
+| DOWN | `m9` | 环落到 `Anime4K (animation)`，卡片自动上滚把标题让出去，`Quality` 完整露出 |
+| DOWN → AMD FSR 1.0 → CENTER | `n1` | 预设段原地换成 `FSR sharpness: 90%` 滑杆，算法行的圆点跟着走 |
+| UP | `n2` | 滑杆拿到焦点并画出整条圆角环 |
+| LEFT ×2 | `n2` | 数值 90% → 70%（每步 10%，`tvSliderDpad` 的 preview 拦截生效） |
+| BACK | `n4` | 卡片关闭，`Options` 面板回来，环停在 `Video enhancement` 那一行（dump 焦点框 `[800,417][1344,537]` 正是那一行） |
+
+### DLNA 也算"有独立窗口的条目"
+
+第三十五轮把 `Video enhancement`、`Video Details` 都收进了"父面板保持组合、只隐藏"的规则，但同一份
+`onItemSelected` 关门条件里没有 `dlnaDialogState`，于是 `Cast to device` 仍然是"打开子面板顺手把父面板拆掉"，
+BACK 之后人直接掉到裸 chrome 上（旧构建 `m5`：面板消失，焦点落到播放条上，想再进 Options 得重新从顶栏摸过去）。
+现在条件补成
+`selectionDialogState == null && !superResolutionDialogVisible && videoInfoDialogText == null && dlnaDialogState == null`：
+
+| 步骤 | 截图 | 结果 |
+| --- | --- | --- |
+| Options → Cast to device | `p3` | 扫描中的 DLNA 卡片单独显示，`Cancel` 带环，`Options` 面板不再从四周透出 |
+| BACK | `p4` | 面板整体回来，环停在 `Cast to device` 那一行（旧构建落到裸 chrome，焦点在播放条/速度按钮之间跳） |
+
+### 观察与遗留
+
+- 打开开关后、卡片开着的这段时间里播放器画面是黑帧；关掉卡片回到播放器，彩色测试图案立刻恢复（`n5`）。
+  这台模拟器走的是 host GPU，增强渲染路径在它上面不稳，不能在电视 UI 审计里当缺陷记；真机（或带真实
+  GLES 的盒子）需要复核一次"开增强后画面正常"。
+- `Add note` 的编辑器仍然走"先抓帧再开窗"的异步路径，`onItemSelected` 的同步关门判断看不到
+  `videoAnnotationState`，因此它还是会连父面板一起关掉。要修得把关门判定推迟到抓帧回调之后，
+  或者给条目加一个"会开窗"的标记，留待下一轮。
+- 手机上这些行本来就是全宽可点、控件自带交互，新增条件只影响电视分支的面板保活，手机未回归。
+
