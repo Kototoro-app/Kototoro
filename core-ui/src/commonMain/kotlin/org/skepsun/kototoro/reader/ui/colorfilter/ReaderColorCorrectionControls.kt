@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderOptionDivider
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderOptionGroup
@@ -142,7 +143,16 @@ private fun ColorFilterSlider(
             onValueChange = onValueChange,
             valueRange = -1f..1f,
             enabled = enabled,
-            modifier = modifier.fillMaxWidth(),
+            // A Slider keeps the D-pad for a drag it cannot start on a television, so brightness and
+            // contrast would be a focus stop that changes nothing. The preview pass steps the value.
+            modifier = modifier
+                .fillMaxWidth()
+                .tvSliderDpad(
+                    value = value.coerceIn(-1f, 1f),
+                    valueRange = -1f..1f,
+                    onValueChange = onValueChange,
+                    enabled = enabled,
+                ),
         )
     }
 }

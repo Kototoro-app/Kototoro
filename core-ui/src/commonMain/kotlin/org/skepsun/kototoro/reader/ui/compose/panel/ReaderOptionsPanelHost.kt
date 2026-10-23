@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -279,7 +280,18 @@ fun ReaderPanelHost(
                                 .onSizeChanged { headerHeightPx = it.height },
                         ) {
                             BottomSheetDefaults.DragHandle(color = colors.contentSecondary.copy(alpha = 0.6f))
-                            header()
+                            // Past the peek the sheet keeps the header composed but clips it to the handle,
+                            // so its children stay focusable above the detail page: UP from the page's first
+                            // row lands on a control nobody can see and the ring disappears for a press.
+                            // Dropping the header's focus while it is collapsed lets that press reach the tab
+                            // bar, which is the row actually drawn at the top. Off TV nothing collapses.
+                            Box(
+                                modifier = Modifier.focusProperties {
+                                    canFocus = !isTv || !scope.isExpandedPastPeek
+                                },
+                            ) {
+                                this@Column.header()
+                            }
                         }
                         Box(
                             modifier = Modifier
