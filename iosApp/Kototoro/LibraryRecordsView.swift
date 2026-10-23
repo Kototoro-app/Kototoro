@@ -316,13 +316,17 @@ private struct RecordsOverview: View {
 }
 
 private struct RecordUpdateDownloadButton: View {
-    let content: IosSourceContent
-    let chapters: [IosSourceChapter]
+    let event: IosTimelineEvent
     let runtime: IosSources
+    @EnvironmentObject private var library: LibraryModel
     @EnvironmentObject private var queue: ReaderDownloadQueue
+    @State private var preparedEvent: IosTimelineEvent?
     @State private var offline = Set<String>()
     @State private var preparing = false
     @State private var error: String?
+
+    private var content: IosSourceContent { preparedEvent?.content ?? event.content }
+    private var chapters: [IosSourceChapter] { preparedEvent?.downloadChapters ?? event.downloadChapters }
 
     private var entries: [ReaderDownloadEntry] {
         let ids = Set(chapters.map { (content.bookOf(chapter: $0) ?? $0).id })
@@ -345,34 +349,33 @@ private struct RecordUpdateDownloadButton: View {
 
     var body: some View {
         if content.mediaKind == "MANGA" || content.mediaKind == "NOVEL" {
-            Group {
-                if chapters.isEmpty {
-                    NavigationLink {
-                        SourceDetailsView(runtime: runtime, content: content)
-                    } label: { Label("选择章节下载", systemImage: "arrow.down.circle") }
-                } else {
-                    Button {
-                        preparing = true
-                        Task {
-                            defer { preparing = false }
-                            do {
-                                try await withReaderStorage {
-                                    let remaining = pending.filter { !ReaderDownloads.isDownloaded(content: content, chapter: $0) }
-                                    if !remaining.isEmpty { try queue.enqueue(content: content, chapters: remaining) }
-                                    refreshOffline()
-                                }
-                            } catch { self.error = error.localizedDescription }
+            Button {
+                preparing = true
+                error = nil
+                Task {
+                    defer { preparing = false }
+                    do {
+                        try await withReaderStorage {
+                            if chapters.isEmpty {
+                                guard let database = library.library else { throw CancellationError() }
+                                preparedEvent = try await database.prepareUpdateDownload(event: event, sources: runtime)
+                                refreshOffline()
+                            }
+                            let remaining = pending.filter { !ReaderDownloads.isDownloaded(content: content, chapter: $0) }
+                            if !remaining.isEmpty { try queue.enqueue(content: content, chapters: remaining) }
+                            refreshOffline()
                         }
-                    } label: {
-                        Label(preparing ? String(localized: "正在加入队列")
-                              : !pending.isEmpty ? String(localized: "下载更新")
-                              : entries.contains(where: { $0.state == .running }) ? String(localized: "正在下载")
-                              : !active.isEmpty ? String(localized: "已排队") : String(localized: "已下载"),
-                              systemImage: pending.isEmpty && active.isEmpty ? "checkmark.circle" : "arrow.down.circle")
-                    }
-                    .disabled(preparing || pending.isEmpty)
+                    } catch { self.error = error.localizedDescription }
                 }
+            } label: {
+                Label(preparing ? String(localized: "正在加入队列")
+                      : chapters.isEmpty || !pending.isEmpty ? String(localized: "下载更新")
+                      : entries.contains(where: { $0.state == .running }) ? String(localized: "正在下载")
+                      : !active.isEmpty ? String(localized: "已排队") : String(localized: "已下载"),
+                      systemImage: !chapters.isEmpty && pending.isEmpty && active.isEmpty
+                          ? "checkmark.circle" : "arrow.down.circle")
             }
+            .disabled(preparing || (!chapters.isEmpty && pending.isEmpty))
             .font(.caption)
             .buttonStyle(.bordered)
             .accessibilityIdentifier("records.downloadUpdate.\(content.id)")
@@ -594,7 +597,7 @@ private struct RecordsTimeline: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("timeline.\(item.id)")
             if let event = item.event, event.isUpdate {
-                RecordUpdateDownloadButton(content: item.content, chapters: event.downloadChapters, runtime: runtime)
+                RecordUpdateDownloadButton(event: event, runtime: runtime)
             }
         }
     }

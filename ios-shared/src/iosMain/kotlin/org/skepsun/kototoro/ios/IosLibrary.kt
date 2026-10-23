@@ -318,6 +318,32 @@ class IosLibrary {
             ?.takeIf { it.source.name == content.value.source.name && !it.chapters.isNullOrEmpty() }
             ?.let(::IosSourceContent)
 
+    /** Resolve a download from its saved update log, refreshing missing chapter metadata on explicit request. */
+    @Throws(Exception::class)
+    suspend fun prepareUpdateDownload(event: IosTimelineEvent, sources: IosSources): IosTimelineEvent {
+        require(event.isUpdate) { "Not an update event" }
+        val logId = requireNotNull(event.id.removePrefix("update-").toLongOrNull())
+        val log = checkNotNull(database.getTrackLogsDao().find(logId)) {
+            localized("更新记录已不存在，请刷新记录页。")
+        }
+        require(log.mangaId == event.content.value.id) { "Update content mismatch" }
+        val names = log.chapters.lines().filter(String::isNotBlank)
+        var content = storedDetails(event.content) ?: event.content
+        var chapters = resolveUpdateDownloadChapters(content, names)
+        if (chapters.isEmpty()) {
+            content = sources.refreshDetails(content)
+            require(content.value.id == log.mangaId && content.sourceName == event.content.sourceName) {
+                "Update details mismatch"
+            }
+            saveDetails(content)
+            chapters = resolveUpdateDownloadChapters(content, names)
+        }
+        check(chapters.isNotEmpty()) {
+            localized("无法匹配更新章节，请在作品详情中选择章节下载。")
+        }
+        return event.copy(content = content, downloadChapters = chapters)
+    }
+
     @Throws(Exception::class)
     suspend fun position(content: IosSourceContent): IosReadingPosition? {
         val history = records.progress(content.value.id) ?: return null
