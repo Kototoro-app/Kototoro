@@ -58,3 +58,54 @@ extension XCUIApplication {
     }
 }
 
+
+/// One finger of a synthesized multi-touch event, in screen points and seconds from the event start.
+struct SyntheticTouch {
+    let down: CGPoint
+    let at: Double
+    var moves: [(CGPoint, Double)] = []
+    let liftAt: Double
+}
+
+/// XCUICoordinate only drives one finger. Several concurrent fingers (a thumb swiping while a grip rests on the screen
+/// edge) go through XCTest's own event synthesis, the private API WebDriverAgent uses for multi-touch actions.
+func synthesizeTouches(_ touches: [SyntheticTouch], file: StaticString = #filePath, line: UInt = #line) {
+    typealias Alloc = @convention(c) (AnyClass, Selector) -> Unmanaged<AnyObject>
+    typealias InitPath = @convention(c) (AnyObject, Selector, CGPoint, Double) -> Unmanaged<AnyObject>
+    typealias Move = @convention(c) (AnyObject, Selector, CGPoint, Double) -> Void
+    typealias Lift = @convention(c) (AnyObject, Selector, Double) -> Void
+    typealias InitRecord = @convention(c) (AnyObject, Selector, NSString, Int) -> Unmanaged<AnyObject>
+    typealias Add = @convention(c) (AnyObject, Selector, AnyObject) -> Void
+    typealias Synthesize = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSError?>?) -> Bool
+    guard let pathClass = NSClassFromString("XCPointerEventPath"),
+          let recordClass = NSClassFromString("XCSynthesizedEventRecord") else {
+        return XCTFail("XCTest event synthesis is unavailable", file: file, line: line)
+    }
+    /// An instance method of [cls], or a class method when [meta] is set.
+    func method<T>(_ cls: AnyClass, _ name: String, as type: T.Type, meta: Bool = false) -> (T, Selector) {
+        let selector = NSSelectorFromString(name)
+        let owner: AnyClass = meta ? object_getClass(cls)! : cls
+        return (unsafeBitCast(class_getMethodImplementation(owner, selector), to: type), selector)
+    }
+    func alloc(_ cls: AnyClass) -> AnyObject {
+        let (fn, sel) = method(cls, "alloc", as: Alloc.self, meta: true)
+        return fn(cls, sel).takeUnretainedValue()
+    }
+    let (initRecord, initRecordSel) = method(recordClass, "initWithName:interfaceOrientation:", as: InitRecord.self)
+    let record = initRecord(alloc(recordClass), initRecordSel, "multi-touch", 1).takeRetainedValue()
+    let (initPath, initPathSel) = method(pathClass, "initForTouchAtPoint:offset:", as: InitPath.self)
+    let (move, moveSel) = method(pathClass, "moveToPoint:atOffset:", as: Move.self)
+    let (lift, liftSel) = method(pathClass, "liftUpAtOffset:", as: Lift.self)
+    let (add, addSel) = method(recordClass, "addPointerEventPath:", as: Add.self)
+    // Paths in landing order: a later path listed first lands a phantom touch at its start point at offset zero.
+    for touch in touches.sorted(by: { $0.at < $1.at }) {
+        let path = initPath(alloc(pathClass), initPathSel, touch.down, touch.at).takeRetainedValue()
+        for (point, offset) in touch.moves { move(path, moveSel, point, offset) }
+        lift(path, liftSel, touch.liftAt)
+        add(record, addSel, path)
+    }
+    var error: NSError?
+    let (synthesize, synthesizeSel) = method(recordClass, "synthesizeWithError:", as: Synthesize.self)
+    XCTAssertTrue(synthesize(record, synthesizeSel, &error), "\(error.map(String.init(describing:)) ?? "")",
+                  file: file, line: line)
+}

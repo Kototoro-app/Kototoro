@@ -66,7 +66,7 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
     private let settings: ReaderSettings
     var onTap: (CGPoint) -> Void = { _ in }
 
-    private let scrollView = UIScrollView()
+    private let scrollView = ReaderStripScrollView()
     private let content = UIView()
     private final class Cell {
         let host: UIHostingController<ReaderStripPage>

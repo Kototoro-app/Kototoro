@@ -543,6 +543,44 @@ final class LocalImportTests: XCTestCase {
     }
 
     @MainActor
+    func testGripOnTheScreenEdgeNeitherSlowsNorPinchesAPageSwipe() throws {
+        importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
+        app.detailsReadButton().tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 20))
+        selectReaderMode("默认（从左到右）")
+        let frame = app.windows.firstMatch.frame
+        // A slow swipe across 70% of the page, held still before lifting: it turns the page only if the scroll
+        // follows the thumb alone. Followed at half speed (the centre of thumb and grip), it springs back. A grip that
+        // lands before the thumb still reaches the scroll view, so only grips landing during the swipe are covered.
+        let cases: [(CGFloat?, Bool)] = [(nil, false), (frame.maxX - 6, false), (frame.minX + 6, false)]
+        for (gripX, gripFirst) in cases {
+            app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0)
+            waitForPage("1")
+            let start = gripFirst ? 0.4 : 0.0
+            let moves = (1...10).map { step in
+                (CGPoint(x: frame.width * (0.85 - 0.07 * Double(step)), y: frame.midY), start + 0.1 * Double(step))
+            }
+            var touches = [SyntheticTouch(down: CGPoint(x: frame.width * 0.85, y: frame.midY), at: start, moves: moves,
+                                          liftAt: start + 1.4)]
+            if let gripX {
+                // Both lift together: when one synthesized finger lifts first, the simulator hands the remaining
+                // finger's path to the other touch object, which would drag the thumb back to the grip.
+                touches.append(SyntheticTouch(down: CGPoint(x: gripX, y: frame.height * 0.7), at: gripFirst ? 0 : 0.2,
+                                              liftAt: start + 1.4))
+            }
+            synthesizeTouches(touches)
+            XCTContext.runActivity(named: "grip \(gripX.map { "\($0)" } ?? "none"), first \(gripFirst)") { _ in
+                waitForPage("2")
+            }
+            let page = app.images.matching(NSPredicate(
+                format: "identifier == %@ AND label CONTAINS %@", "reader.image", "第 2 页"
+            )).firstMatch
+            XCTAssertLessThanOrEqual(page.frame.width, frame.width + 1, "the grip zoomed the page")
+        }
+        attach("边缘握持不影响翻页")
+    }
+
+    @MainActor
     func testMangaBookmarkShowsItsPagePreviewAfterRestart() throws {
         importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
         app.detailsReadButton().tap()
