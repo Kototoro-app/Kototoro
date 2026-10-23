@@ -7,8 +7,8 @@ suspend fun MangaDatabase.normalizeTrackFeedState() {
     withTransaction {
         getTrackLogsDao().deleteOrphans()
         getTrackLogsDao().ensureUnreadUpdateLogs()
+        // Existing counters have already been merged by restore/sync. Historical events can overlap.
         getTracksDao().insertTracksFromUnreadLogs()
-        getTracksDao().restoreCountersFromUnreadLogs()
         getTracksDao().gc()
         getTrackLogsDao().gc()
         getTrackLogsDao().trim(TRACK_LOG_RETAINED_SIZE)
