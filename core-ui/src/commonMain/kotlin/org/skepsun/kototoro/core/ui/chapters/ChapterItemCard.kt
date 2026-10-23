@@ -55,6 +55,9 @@ fun ChapterListCard(
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val alphaFactor = if (item.isUnread || item.isCurrent) 1f else .6f
+    // The trailing actions are a separate focus stop: a D-pad cannot steer into a child that sits
+    // inside the focused node's bounds, so the click target covers the text area only and the
+    // buttons stay outside it. Touch is unchanged — the whole text row is still one big target.
     Row(
         modifier = modifier.fillMaxWidth()
             // Inset so a highlighted row reads as a card rather than an edge-to-edge band.
@@ -66,61 +69,66 @@ fun ChapterListCard(
                 item.isCurrent -> Modifier.background(
                     MaterialTheme.colorScheme.primaryContainer.copy(alpha = .45f), RoundedCornerShape(12.dp))
                 else -> Modifier
-            })
-            .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
-            .then(focusModifier)
-            .combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick)
-            .heightIn(min = 56.dp).padding(horizontal = 8.dp, vertical = 6.dp),
+            }),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (item.isCurrent) {
-            Icon(ReaderPanelIcons.CurrentChapter, null, tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(end = 8.dp).size(16.dp))
-        }
-        Column(Modifier.weight(1f).alpha(alphaFactor)) {
-            Text(item.title, style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (item.isCurrent) FontWeight.Bold else null, color = titleColor,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (!item.description.isNullOrBlank()) {
-                Text(item.description, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+        Row(
+            modifier = Modifier.weight(1f)
+                .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+                .then(focusModifier)
+                .combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick)
+                .heightIn(min = 56.dp).padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (item.isCurrent) {
+                Icon(ReaderPanelIcons.CurrentChapter, null, tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(end = 8.dp).size(16.dp))
             }
-        }
-        if (item.isBookmarked) {
-            Icon(ReaderPanelIcons.Bookmark, "Bookmarked", tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 8.dp).size(24.dp))
-        }
-        if (item.isDownloaded) {
-            Icon(ReaderPanelIcons.Storage, "Downloaded", tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 8.dp).size(24.dp))
-        }
-        if (item.isTranslated || item.isTranslationStale) {
-            // A filled chip, so the "translated" mark cannot be mistaken for the row's translate button.
-            Box(
-                modifier = Modifier
-                    .padding(start = 8.dp)
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (item.isTranslationStale) {
-                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.55f)
+            Column(Modifier.weight(1f).alpha(alphaFactor)) {
+                Text(item.title, style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (item.isCurrent) FontWeight.Bold else null, color = titleColor,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (!item.description.isNullOrBlank()) {
+                    Text(item.description, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                }
+            }
+            if (item.isBookmarked) {
+                Icon(ReaderPanelIcons.Bookmark, "Bookmarked", tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 8.dp).size(24.dp))
+            }
+            if (item.isDownloaded) {
+                Icon(ReaderPanelIcons.Storage, "Downloaded", tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 8.dp).size(24.dp))
+            }
+            if (item.isTranslated || item.isTranslationStale) {
+                // A filled chip, so the "translated" mark cannot be mistaken for the row's translate button.
+                Box(
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (item.isTranslationStale) {
+                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.55f)
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            },
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = ReaderPanelIcons.Translate,
+                        contentDescription = if (item.isTranslationStale) {
+                            "Translated with older settings"
                         } else {
-                            MaterialTheme.colorScheme.primary
+                            "Translated"
                         },
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = ReaderPanelIcons.Translate,
-                    contentDescription = if (item.isTranslationStale) {
-                        "Translated with older settings"
-                    } else {
-                        "Translated"
-                    },
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(13.dp),
-                )
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(13.dp),
+                    )
+                }
             }
         }
         actions?.invoke(this)

@@ -2669,6 +2669,50 @@ visible = bottomChromeVisibility.visible && !(isTvPresentation && expandedPanelV
   的注释记着），`uiautomator` 里它没有焦点目标，所以只是装饰，不是漏焦点。
 - 这层 chrome 的显隐是"电视 + 面板"，工具面板与自动滚动面板同样走这条路，但只验证了目录与选项。
 
+## 第四十四轮：章节行尾的下载/翻译按钮在电视上可以走到了（2026-10-24）
+
+第四十二轮留下的第一个问题就是"行尾按钮走不到"：`ChapterListCard` 的 `combinedClickable` 铺满整行，
+行尾那两个 `IconButton` 在几何上**落在**这个焦点节点的范围内，而 Compose 的方向搜索永远不会把焦点送进
+当前节点的包围盒里面，所以遥控器怎么按都到不了。手机上没人在意（手指直接点），电视上等于这两个功能不存在。
+
+### 改法：焦点目标只包正文，按钮留在外面
+
+`core-ui` 的 `ChapterListCard` 从"一个 Row 既布局又可点"改成两层：
+
+- 外层 `Row`：只做内边距、选中/当前章节的底色（整行宽的高亮不变）；
+- 内层 `Row`（`weight(1f)` + `focusRequester` + `focusModifier` + `combinedClickable`）：包住当前章节箭头、
+  标题/副标题和阅读状态图标；
+- `actions` 从外层 Row 调用，因此**不在**焦点目标的包围盒里 → RIGHT 能从正文走到第一个按钮。
+
+触摸行为不变（正文区域仍是整行可点，长按进入选择模式的区域也一样），行的最小高度 56dp 挪到内层。
+
+### 按钮自己也要有环、也要封边
+
+- 两个 `IconButton` 各加 `tvFocusable(shape = CircleShape, addFocusTarget = false)`：Material3 的
+  `IconButton` 焦点态只有一层几乎看不见的 state layer，电视上必须自己画环。
+- **行尾那颗**（有下载时是下载，否则是翻译）加 `tvHorizontalEdgeGuard(blockRight = true)`。
+  这里踩到一个新坑：不加守卫时，RIGHT 在最后一个按钮上会被**上层 `HorizontalPager` 吃掉**——
+  目录/页格/书签是同一个 pager 的三页，按键被当成翻页滚动，面板会自己滑到 Pages 页，焦点掉进页格里
+  （`sb3`：章节标签页上按 RIGHT，人还在章节行，画面已经切到 Pages）。加了守卫就只吞键、不滚动。
+
+### 设备验证（emulator-5554）
+
+| 场景 | 截图 | 结果 |
+| --- | --- | --- |
+| 目录面板：行 → RIGHT | `sa0`/`sd0` | 环出现在行尾翻译按钮上（`[1616,610][1712,706]`），标签页仍是 Chapters |
+| 再 RIGHT | — | 停在同一个按钮（此后无候选，不翻页、不丢焦点） |
+| LEFT | — | 回到行正文 `[216,602][1624,714]` |
+| DOWN | — | `Chapter 02` 行 `[216,714][1624,826]` |
+| 详情页：章节行 → RIGHT | `sg0` | 环出现在该行翻译按钮 `[1792,310][1888,406]`；再 RIGHT 不动 |
+| 详情页 LEFT | — | 回到行正文，再 LEFT 才离开列表去左栏 |
+
+### 遗留
+
+- 一轮里只验证到"一个按钮"的行（本地夹具的两章都已下载，`onDownload` 为空）。两个按钮同时存在时
+  "翻译 → 下载 → 停住"这条链是按代码顺序推出来的，没在设备上走一遍。
+- 从阅读器 BACK 回详情页时，第一帧没有任何焦点（`start: (empty)`），第一次按方向键才出现环。
+
+
 
 
 

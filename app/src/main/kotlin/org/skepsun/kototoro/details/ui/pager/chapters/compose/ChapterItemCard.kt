@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.details.ui.pager.chapters.compose
 
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -41,16 +42,21 @@ fun ChapterListCard(
     onLongClick = onLongClick,
     focusRequester = focusRequester,
     modifier = modifier,
-    // The row spans the whole panel width and its trailing buttons sit inside those bounds, so on a
-    // television there is nothing to its right. Without the guard RIGHT hands focus to the dimmed
-    // toolbar behind the panel while the panel stays open.
-    focusModifier = Modifier
-        .tvFocusable(shape = RoundedCornerShape(8.dp), borderWidth = 2.dp, addFocusTarget = false)
-        .tvHorizontalEdgeGuard(blockRight = true),
+    // The row's click target stops before the trailing buttons, so on a television RIGHT steps from
+    // the title onto the download / translate buttons instead of leaving the panel.
+    focusModifier = Modifier.tvFocusable(shape = RoundedCornerShape(8.dp), borderWidth = 2.dp, addFocusTarget = false),
     actions = if (onDownload != null || onTranslate != null) {
         {
+            // Whatever the row ends with has nothing to its right. Without the guard RIGHT scrolls
+            // the tab pager onto the next tab instead of simply stopping at the last button.
+            val translateEndsTheRow = onDownload == null
             onTranslate?.let { translate ->
-                IconButton(onClick = translate, modifier = Modifier.size(40.dp)) {
+                IconButton(
+                    onClick = translate,
+                    modifier = Modifier.size(40.dp)
+                        .tvFocusable(shape = CircleShape, addFocusTarget = false)
+                        .then(if (translateEndsTheRow) Modifier.tvHorizontalEdgeGuard(blockRight = true) else Modifier),
+                ) {
                     val progress = item.translationProgress
                     if (progress != null && !item.isTranslated) {
                         // A translation is in flight (or a chapter was left half translated): show how far it got.
@@ -72,7 +78,12 @@ fun ChapterListCard(
                 }
             }
             onDownload?.let { download ->
-                IconButton(onClick = download, modifier = Modifier.size(40.dp)) {
+                IconButton(
+                    onClick = download,
+                    modifier = Modifier.size(40.dp)
+                        .tvFocusable(shape = CircleShape, addFocusTarget = false)
+                        .tvHorizontalEdgeGuard(blockRight = true),
+                ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_download),
                         contentDescription = stringResource(R.string.download),
