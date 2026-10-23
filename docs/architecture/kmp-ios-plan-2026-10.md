@@ -6660,3 +6660,26 @@ failures=0，说明 `nav:更多`、`nav:扩展与仓库`、`nav:下载`、`nav:�
 该探针在“更多”里进入阅读设置页、逐个打开模式/方向/缩放/背景/动画五个对话框并断言
 `readerSettings` 的 mode、rightToLeft、fitMode、background、pageNumbers、automaticChapter、animation
 全部落值，再返回“更多”；截图 `tablet-reader-settings.png` 可见两节的卡片、右侧当前值与滑块。
+
+## 140. Windows 收藏/历史批量选择（2026-10-23）
+
+日期：2026-10-23。Android 的书架长按任意卡片即进入选择模式，顶栏换成 `KototoroSelectionTopBar`
+（全选/置顶/移除/下载/分类/分享/标为已读/迁移）。Windows 侧这两个书架此前只有逐卡操作：把一部作品挪出某个分类、
+或清掉一页历史，都要一个个点。本轮补上选择模式与其中三条动作。
+
+- 入口与 Android 一致：卡片长按进入（`ContentGrid` 新增 `selectedIds`/`onToggleSelection`，为 `null` 时是
+  原有浏览语义），进入后单击即勾选/取消，卡片左上角画勾选徽标（tag `content-selected:<id>`，需
+  `useUnmergedTree`，因为整卡是 merged 节点）。
+- 顶栏换成 `DesktopLibrarySelectionBar`（tag `library-selection-bar`）：已选数量、全选、分类、移出收藏、
+  取消。全选按**当前可见行**（搜索/筛选后的结果）计数，不是整个书架。
+- 收藏页的“分类”是 Android 批量分类对话框：勾选集合就是所选作品的目标分类集合（勾上加入、取消勾选移出），
+  因此对话框内只改本地草稿，`确定` 时才调 `SourceLibrary.updateCategories(contents, included, excluded)`
+  ——`included` 为勾选、`excluded` 为其余分类，未改动分类里的成员身份与已存详情保持原样。
+  初始勾选取所选作品分类的交集，避免把各自独有的分类显示成全选。
+- “移出收藏”与历史的“从历史移除”都走一次确认对话框（favourites 保留阅读进度，history 连进度一起删）；
+  分别接 `SourceLibrary.removeFavourite` 与 `removeHistory`，改完重载同一份快照，书架与首页“继续阅读”一致。
+- 仍未移植的 Android 动作：置顶（`PIN`）、下载（`SAVE`）、分享（`SHARE`）、标为已读（`MARK_AS_COMPLETED`）、
+  迁移/编辑覆盖（`MIGRATE`/`EDIT_OVERRIDE` 在 Android 属溢出菜单）。它们要么缺少桌面后端（分享、迁移），
+  要么与详情页已有的“标为已读”重复，故不在本轮硬凑。
+- 断言只走 `useUnmergedTree` 的徽标与顶栏 tag；对话框正文另挂 `library-category-pick-dialog` /
+  `library-selection-dialog` 供 `snapshotTag` 截图（对话框是独立 root，`onRoot()` 会二义）。

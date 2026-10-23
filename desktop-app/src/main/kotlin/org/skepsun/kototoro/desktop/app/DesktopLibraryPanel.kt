@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.core.source.SourceTag
 import org.skepsun.kototoro.core.ui.topbar.TopBarTabItem
 import org.skepsun.kototoro.core.ui.topbar.TopBarTabsRail
@@ -33,12 +34,22 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
     var drawer by remember(history) { mutableStateOf(false) }
     var managingCategories by remember(history) { mutableStateOf(false) }
     var pickingTags by remember(history) { mutableStateOf(false) }
+    // Android's batch selection: it lives with the shelf, so switching shelves or reloading the grid drops ids that
+    // are no longer shown instead of acting on hidden works.
+    var selectedIds by remember(history) { mutableStateOf(emptySet<Long>()) }
+    var pickingCategories by remember(history) { mutableStateOf(false) }
+    var confirmingRemove by remember(history) { mutableStateOf(false) }
     val ecosystems = remember(state.sources) { state.sources.associate { it.source.name to it.ecosystem } }
     // Android's "downloaded" filter reads which works hold stored chapters; the queue owns that state.
     val downloadStates by controller.downloads.state.collectAsState()
     val downloadedIds = remember(downloadStates) { downloadStates.mapTo(HashSet()) { it.record.contentId } }
     val entries = remember(state.library, selection, ecosystems, downloadedIds) {
         selection.select(state.library, ecosystems, downloadedIds)
+    }
+    val shownIds = remember(entries) { entries.mapTo(LinkedHashSet()) { it.content.id } }
+    val checkedIds = remember(selectedIds, shownIds) { selectedIds.intersect(shownIds) }
+    fun toggleSelection(content: SourceContent) {
+        selectedIds = if (content.id in selectedIds) selectedIds - content.id else selectedIds + content.id
     }
     // Most used tags first: the drawer lists works, so the popular tags stay above the fold.
     val tagChoices = remember(state.library) {
@@ -59,7 +70,13 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
         } else false
     }) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (checkedIds.isNotEmpty()) DesktopLibrarySelectionBar(
+                count = checkedIds.size, history = history, enabled = enabled,
+                onSelectAll = { selectedIds = LinkedHashSet(shownIds) },
+                onAssignCategories = if (history) null else ({ pickingCategories = true }),
+                onRemove = { confirmingRemove = true },
+                onCancel = { selectedIds = emptySet() },
+            ) else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TopBarTitleBlock(if (history) desktopText("nav.history") else desktopText("nav.favourites"))
                 DesktopSearchField(selection.query, { update(selection.copy(query = it)) }, desktopText("library.search"), enabled = enabled,
                     modifier = Modifier.weight(1f), tag = "library-query")
@@ -100,7 +117,9 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                         entries.associate { it.content.id to newChaptersBadge(it, history) }
                     }
                     ContentGrid(entries.map { it.content }, enabled, controller.session.covers, controller::details,
-                        progressOf = { progress[it.id] }, newChaptersOf = { newChapters[it.id] ?: 0 })
+                        progressOf = { progress[it.id] }, newChaptersOf = { newChapters[it.id] ?: 0 },
+                        selectedIds = checkedIds.takeIf { it.isNotEmpty() },
+                        onToggleSelection = ::toggleSelection)
                 }
                 else Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -206,6 +225,33 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
             }
         }
         if (managingCategories) DesktopCategoryDialog(controller, state) { managingCategories = false }
+        if (pickingCategories) DesktopCategoryPickerDialog(
+            count = checkedIds.size, categories = state.library.categories,
+            // Works may sit in different categories; the shared ones are what ticking a box means for all of them.
+            initial = remember(checkedIds, state.library) {
+                entries.filter { it.content.id in checkedIds }
+                    .map { it.categoryIds.toSet() }
+                    .reduceOrNull { a, b -> a.intersect(b) }
+                    ?: emptySet()
+            },
+            enabled = enabled,
+            onConfirm = { categories ->
+                pickingCategories = false
+                controller.setFavouriteCategories(checkedIds, categories)
+                selectedIds = emptySet()
+            },
+            onDismiss = { pickingCategories = false },
+        )
+        if (confirmingRemove) DesktopRemoveSelectionDialog(
+            count = checkedIds.size, history = history, enabled = enabled,
+            onConfirm = {
+                confirmingRemove = false
+                if (history) controller.removeHistoryRecords(checkedIds)
+                else controller.removeFavourites(checkedIds)
+                selectedIds = emptySet()
+            },
+            onDismiss = { confirmingRemove = false },
+        )
         if (pickingTags) DesktopTagPickerDialog(tagChoices, selection.tags,
             onToggle = { tag -> update(selection.copy(tags = if (tag in selection.tags) selection.tags - tag
                 else selection.tags + tag)) },

@@ -353,6 +353,30 @@ internal object DesktopTabletProbe {
                 check(onNodeWithTag("library-query").fetchSemanticsNode().config[SemanticsProperties.EditableText].text == content.title)
                 check(System.getProperty("fixture.reader.requests") == beforeQuery)
                 snapshot("library")
+                // Android's long-press selection: the bar replaces the header, "all" follows the shown rows, and the
+                // category dialog commits the checked set as the membership of every selected work.
+                onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
+                onNodeWithTag("library-selection-count").assertExists()
+                onNodeWithTag("content-selected:${content.id}", useUnmergedTree = true).assertExists()
+                snapshot("library-selection")
+                onNodeWithTag("library-selection-categories").performClick(); idle()
+                onNodeWithTag("library-category-pick:${category.id}").assertExists()
+                snapshotTag("library-category-pick-dialog", "library-category-pick")
+                onNodeWithTag("library-category-pick:${category.id}").performClick()
+                onNodeWithTag("library-category-pick:${category.id}").performClick()
+                onNodeWithTag("library-category-pick-confirm").performClick(); idle()
+                check(controller.state.value.library.entries.first { it.content.id == content.id }
+                    .categoryIds.toSet() == setOf(category.id))
+                onNodeWithTag("library-selection-count").assertDoesNotExist()
+                // Cancelling the removal dialog leaves the shelf untouched.
+                onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
+                onNodeWithTag("library-selection-remove").performClick(); idle()
+                onNodeWithTag("library-selection-confirm").assertExists()
+                snapshotTag("library-selection-dialog", "library-selection-remove")
+                onNodeWithTag("library-selection-dismiss").performClick(); idle()
+                check(controller.state.value.library.entries.any { it.content.id == content.id })
+                onNodeWithTag("library-selection-cancel").performClick(); idle()
+                check(controller.state.value.library.entries.any { it.content.id == content.id })
                 runBlocking {
                     repeat(36) { index ->
                         session.library.addFavourite(content.copy(id = content.id + 1000 + index,
@@ -486,6 +510,19 @@ internal object DesktopTabletProbe {
                 check(runBlocking { controller.runDueBackgroundWork(later) } ==
                     setOf(DesktopBackgroundTask.TRACKER, DesktopBackgroundTask.SUGGESTIONS))
                 check(controller.state.value.suggestions.isNotEmpty())
+                // History's batch action is the "remove" the favourites shelf also has; it deletes the records, so the
+                // home "continue reading" row must lose the work as well.
+                onNodeWithTag("nav:历史").performClick(); idle()
+                onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
+                check(controller.state.value.historySelection.query.isEmpty())
+                onNodeWithTag("library-selection-remove").performClick(); idle()
+                onNodeWithTag("library-selection-dialog").assertExists()
+                snapshotTag("library-selection-dialog", "history-selection-remove")
+                onNodeWithTag("library-selection-confirm").performClick(); idle()
+                check(controller.state.value.library.entries.none { it.content.id == content.id })
+                onNodeWithTag("library-selection-count").assertDoesNotExist()
+                onNodeWithTag("nav:主页").performClick(); idle()
+                onNodeWithTag("home-history:${content.id}").assertDoesNotExist()
             }
         } finally { runBlocking { controller.shutdown() } }
         println("DESKTOP_UI_OK=${args[0]}")

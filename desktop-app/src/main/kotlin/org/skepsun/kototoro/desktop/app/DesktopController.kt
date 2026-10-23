@@ -519,6 +519,31 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { it.copy(message = desktopText("library.categoryDeleted")) }
     }
 
+    /**
+     * Android's batch category dialog: the checked set becomes the membership of every selected work, so a box that
+     * is unticked removes the work from that category. [ids] are content ids from the grid.
+     */
+    fun setFavouriteCategories(ids: Collection<Long>, included: Set<Long>) = action {
+        val contents = session.library.findMany(ids)
+        val excluded = session.library.categories().mapTo(HashSet()) { it.id } - included
+        session.library.updateCategories(contents, included = included, excluded = excluded)
+        reloadLibrarySnapshot()
+        mutableState.update { it.copy(message = desktopText("library.categoriesUpdated", contents.size)) }
+    }
+
+    /** Batch "remove from favourites" and the history equivalent; both keep the works themselves. */
+    fun removeFavourites(ids: Collection<Long>) = action {
+        for (id in ids) session.library.removeFavourite(id)
+        reloadLibrarySnapshot()
+        mutableState.update { it.copy(message = desktopText("library.favouritesRemoved", ids.size)) }
+    }
+
+    fun removeHistoryRecords(ids: Collection<Long>) = action {
+        for (id in ids) session.library.removeHistory(id)
+        reloadLibrarySnapshot()
+        mutableState.update { it.copy(message = desktopText("library.historyRemoved", ids.size)) }
+    }
+
     fun moveCategory(id: Long, up: Boolean) = action {
         val ids = session.library.categories().map { it.id }
         val from = ids.indexOf(id)

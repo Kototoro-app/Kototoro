@@ -2,6 +2,7 @@ package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -299,15 +300,21 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
 @Composable
 internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers: DesktopCovers,
     onOpen: (SourceContent) -> Unit, progressOf: (SourceContent) -> Float? = { null },
-    newChaptersOf: (SourceContent) -> Int = { 0 }) {
+    newChaptersOf: (SourceContent) -> Int = { 0 },
+    /** Null is plain browsing; a set turns each card into a selection target, as Android's list does on long press. */
+    selectedIds: Set<Long>? = null, onToggleSelection: (SourceContent) -> Unit = {}) {
     if (contents.isEmpty()) { EmptyPanel(desktopText("browse.noWorks"), desktopText("browse.noWorksDetail")); return }
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
     val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle, isDark = LocalDesktopDark.current)
     LazyVerticalGrid(columns = GridCells.Adaptive(112.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize().testTag("content-grid")) {
         items(contents, key = { it.id }) { content ->
+            val selecting = selectedIds != null
+            val isSelected = selectedIds?.contains(content.id) == true
             BoxWithConstraints(Modifier.fillMaxWidth().testTag("content:${content.id}")
-                .clickable(enabled = enabled) { onOpen(content) }) {
+                .combinedClickable(enabled = enabled,
+                    onClick = { if (selecting) onToggleSelection(content) else onOpen(content) },
+                    onLongClick = { onToggleSelection(content) })) {
                 val style = CompactPosterCardStyle(maxWidth, maxWidth * (136f / 96f), 12.dp)
                 val metrics = remember(maxWidth) { contentCardBadgeMetricsFor(maxWidth) }
                 val percent = progressOf(content)?.takeIf { ReadingProgress.isValid(it) }
@@ -317,6 +324,12 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
                     modifier = Modifier.fillMaxWidth().aspectRatio(96f / 136f),
                     cover = { DesktopCover(content, covers, Modifier.matchParentSize()) },
                     overlays = {
+                        if (isSelected) Surface(Modifier.align(Alignment.TopStart).padding(start = 5.dp, top = 5.dp)
+                            .size(22.dp).testTag("content-selected:${content.id}"),
+                            shape = RoundedCornerShape(percent = 50), color = MaterialTheme.colorScheme.primary) {
+                            Icon(painterResource("icons/ic_check.svg"), null,
+                                tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(3.dp))
+                        }
                         // Android pins the unread counter to the top-right corner, a lone number in the
                         // accent pill (KototoroContentCard), and the language pill to the bottom-left.
                         val newChapters = newChaptersOf(content)
