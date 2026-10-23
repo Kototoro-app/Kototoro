@@ -97,6 +97,10 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SettingsSectionHeader(desktopText("more.features"))
         SettingsGroup {
+            SettingsValueRow(desktopText("screens.readerSettings"), desktopText("reader.settingsSummary"), null, enabled,
+                { controller.showReaderSettings() }, testTag = "reader-settings-open",
+                leadingIcon = painterResource("icons/ic_read.svg"))
+            SettingsRowDivider()
             SettingsValueRow(desktopText("settings.suggestions"), desktopText("more.recommendationsSummary"), null,
                 enabled, { controller.showRecommendations() }, testTag = "settings-recommendations-open",
                 leadingIcon = painterResource("icons/ic_suggestion.svg"))

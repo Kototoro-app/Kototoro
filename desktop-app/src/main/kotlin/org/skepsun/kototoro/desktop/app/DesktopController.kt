@@ -66,7 +66,7 @@ internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
     listOf(Locale.getDefault(Locale.Category.DISPLAY), Locale.getDefault()).distinct()
         .map { ChapterBranchLocale(it.getDisplayLanguage(it), it.getDisplayName(it)) }
 
-enum class DesktopScreen { HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS, RECOMMENDATIONS, EXTENSIONS, MORE }
+enum class DesktopScreen { HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS, RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, MORE }
 
 data class DesktopAppState(
     val screen: DesktopScreen = DesktopScreen.EXPLORE,
@@ -1213,6 +1213,9 @@ class DesktopController(val session: DesktopSession) {
     fun showBackups() = navigate { mutableState.update { it.copy(screen = DesktopScreen.BACKUPS) } }
 
     fun showRecommendations() = navigate { mutableState.update { it.copy(screen = DesktopScreen.RECOMMENDATIONS) } }
+
+    /** Android's reader settings screen; it edits the same preferences an open chapter reads. */
+    fun showReaderSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.READER_SETTINGS) } }
 
     internal fun exportLibraryBackup(path: Path) = action {
         backups.export(path)

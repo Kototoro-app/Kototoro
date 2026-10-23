@@ -6633,3 +6633,30 @@ tablet 探针现在走“更多”→“频率对话框”选中 2.0（断言写
 failures=0，说明 `nav:更多`、`nav:扩展与仓库`、`nav:下载`、`nav:备份与恢复`、`settings-recommendations-open`
 等入口未受结构改动影响；新截图 `tablet-more.png` 与 `tablet-boundary-compact-more.png` 可见分节卡片、
 带图标的功能行、右侧当前值与箭头。
+## 139. Windows 阅读设置页（2026-10-23）
+
+日期：2026-10-23。Android 的阅读设置是独立设置屏（`ReaderSettingsScreen`）；Windows 侧这些偏好只存在于
+**打开章节后**的阅读器侧面板里，与超分下载、点击区域混在一起，不打开一本书就改不了。§138 把“更多”整成
+设置页之后，这一页成了唯一还缺的 Android 设置屏，本轮补上。
+
+- 新页面 `DesktopScreen.READER_SETTINGS`（“更多 → 功能 → 阅读设置”，行 tag `reader-settings-open`，
+  图标 `ic_read.svg`），复用 §135–138 的节/行/对话框词汇：
+  - **页面**：阅读模式（单页/双页/连续）、阅读方向（从左到右/从右到左/从上到下）、缩放方式（适应整页/
+    适应宽度/适应高度/原始大小）、背景（默认/浅色/深色/白色/黑色/跟随系统）、显示页码、裁剪边距、
+    封面单独成页（连续模式隐藏）。
+  - **翻页**：到章节末尾自动跨章、翻页动画（连续模式置灰）、自动翻页/滚动速度滑块。
+- 方向只有一枚选项：共享场景里 `vertical` 优先于 `rightToLeft`，所以选“从上到下”会清掉 RTL，反之亦然，
+  与 `DesktopReaderSettings.readingDirection` 的判定一致。
+- 裁剪是 Android 的两份偏好（分页 `cropPaged` / 连续 `cropContinuous`）合成一行：页面按当前模式显示并写对应
+  的那一份，避免用户看到两个语义重复的开关。
+- 速度滑块用本地草稿、松手才提交（`onValueChangeFinished`），与阅读器面板一致，避免一次拖动写几十次偏好。
+- 页面编辑的是同一份 `DesktopReaderSettings`（同一批偏好键），所以这里改完下次打开章节即生效；阅读器面板
+  一行未动，两条入口并存。
+- `desktopText("reader.direction." + name)` 这种拼键会被 `verifyDesktopStrings` 当成字面量键而报缺失，
+  方向标题因此改成 `when` 显式列举。
+
+验证：`:desktop-app:compileKotlin`、`:desktop-app:verifyDesktopStrings` 通过；`DesktopAppTest`
+“tablet layout and immersive reader panels preserve progress in wide and narrow windows” tests=1 failures=0，
+该探针在“更多”里进入阅读设置页、逐个打开模式/方向/缩放/背景/动画五个对话框并断言
+`readerSettings` 的 mode、rightToLeft、fitMode、background、pageNumbers、automaticChapter、animation
+全部落值，再返回“更多”；截图 `tablet-reader-settings.png` 可见两节的卡片、右侧当前值与滑块。

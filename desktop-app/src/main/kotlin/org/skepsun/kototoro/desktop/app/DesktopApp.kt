@@ -125,6 +125,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.BACKUPS -> DesktopBackupsPanel(controller, closing)
                             DesktopScreen.RECOMMENDATIONS -> DesktopRecommendations(controller, listState)
                             DesktopScreen.EXTENSIONS -> DesktopExtensionsPanel(controller, closing)
+                            DesktopScreen.READER_SETTINGS -> DesktopReaderSettingsPage(controller, listState)
                             DesktopScreen.MORE -> DesktopMorePanel(controller, !closing, onExitRequest)
                         }
                         if (state.screen == DesktopScreen.DETAILS && state.detailsOrigin != null) {
@@ -189,6 +190,7 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.DOWNLOADS -> desktopText("screens.downloads")
         DesktopScreen.BACKUPS -> desktopText("screens.backups")
         DesktopScreen.RECOMMENDATIONS -> desktopText("screens.recommendations")
+        DesktopScreen.READER_SETTINGS -> desktopText("screens.readerSettings")
         DesktopScreen.EXTENSIONS -> desktopText("screens.extensions")
         DesktopScreen.DETAILS -> desktopText("screens.details")
         DesktopScreen.READER, DesktopScreen.NOVEL, DesktopScreen.VIDEO -> state.chapter?.title ?: desktopText("screens.reader")
