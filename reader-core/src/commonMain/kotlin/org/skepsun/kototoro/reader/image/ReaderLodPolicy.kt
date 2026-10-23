@@ -106,7 +106,7 @@ class ReaderLodPolicy(
         val effectiveRatio = ratio * (1.0f + tolerance)
         if (effectiveRatio < 2.0f) return 1
         val floored = effectiveRatio.toInt()
-        return Integer.highestOneBit(floored)
+        return floored.takeHighestOneBit()
     }
 
     private fun applyHysteresis(
@@ -141,7 +141,7 @@ class ReaderLodPolicy(
 
         fun calculateLodLevel(sampleSize: Int): Int {
             // sampleSize 1 -> level 4, sampleSize 2 -> level 3, sampleSize 4 -> level 2, ...
-            val power = 31 - Integer.numberOfLeadingZeros(sampleSize)
+            val power = 31 - sampleSize.countLeadingZeroBits()
             return maxOf(0, 4 - power)
         }
     }

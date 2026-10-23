@@ -71,6 +71,7 @@ import org.skepsun.kototoro.reader.core.IntSize
 import org.skepsun.kototoro.reader.core.PageGeometryHint
 import org.skepsun.kototoro.reader.core.PageId
 import org.skepsun.kototoro.reader.core.ReaderCameraSnapshot
+import org.skepsun.kototoro.reader.core.ReaderChapterRatioEstimator
 import org.skepsun.kototoro.reader.core.ReaderPrediction
 import org.skepsun.kototoro.reader.core.ReaderPredictionConfig
 import org.skepsun.kototoro.reader.core.ReaderViewport

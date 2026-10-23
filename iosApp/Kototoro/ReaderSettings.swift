@@ -60,6 +60,12 @@ struct ReaderPreferences: Codable, Equatable {
     }
 
     var readsRightToLeft: Bool { mode == 1 || mode == 4 && horizontalReversed }
+
+    /// The page view adjusts the image's colours (the UIKit page view then hosts the SwiftUI one, which applies them;
+    /// the book shadow alone it draws itself).
+    var hasColorAdjustments: Bool {
+        inverted || grayscale || brightness != 0 || contrast != 1
+    }
     var continuousForwardSign: CGFloat { mode == 4 && horizontalReversed ? -1 : 1 }
 
     /// A regular-width window covers expanded displays, including iPhone Duo; compact portrait stays single-page.

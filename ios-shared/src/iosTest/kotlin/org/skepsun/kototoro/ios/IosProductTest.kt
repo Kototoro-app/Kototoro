@@ -4,6 +4,7 @@ package org.skepsun.kototoro.ios
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.core.source.*
 import platform.Foundation.*
+import kotlin.math.abs
 import kotlin.test.*
 
 class IosProductTest {
@@ -232,6 +233,56 @@ class IosProductTest {
         assertTrue(fling.maxOf { it.index } > window.maxOf { it.index })
         reader.configure(pages.size, 600, 800, 0, false, false, 0)
         assertNull(reader.resourceWindow(0f, 0f, 0f, 0f, false, true))
+    }
+
+    @Test
+    fun continuousUnknownPagesTakeTheChapterRatioWithoutMovingTheReadPage() {
+        val reader = IosReader()
+        val pages = (0..9).map { IosReaderPage("chapter", it) }
+        reader.setPages(pages)
+        reader.configure(pages.size, 600, 800, 3, false, false, 0)
+        fun height(index: Int) = reader.slots()[index].placements.single().height
+        // Unknown pages are a screen tall, and one decoded page is not a chapter ratio yet.
+        assertEquals(800f, height(5))
+        reader.setImageSize(0, 600, 1800)
+        assertEquals(800f, height(5))
+        // Two pages agree on 1:3: every unknown page takes it, while the page being read stays where it is.
+        val origin = reader.scrollOrigin(1, 100f)
+        val moved = assertNotNull(reader.setImageSize(1, 600, 1800, 0f, origin))
+        assertTrue(abs(height(5) - 1800f) <= 1f, "unknown page height ${height(5)}")
+        assertEquals(IosReaderProgress(1, 100f), reader.progress(moved.x, moved.y))
+        // A new scene starts the ratio over.
+        reader.reset()
+        reader.setPages(pages)
+        reader.configure(pages.size, 600, 800, 3, false, false, 0)
+        assertEquals(800f, height(5))
+    }
+
+    @Test
+    fun continuousPagesDecodeWholeUnlessAndroidsPlannerWouldTileThem() {
+        val reader = IosReader()
+        // A common long strip page: one 17 MB bitmap within the 8192 px edge.
+        assertFalse(reader.plansTiled(720, 6000, 720, 6000))
+        // Past the 8192 px edge it is tiled.
+        assertTrue(reader.plansTiled(1290, 12000, 1290, 12000))
+        assertFalse(reader.plansTiled(0, 100, 1, 1))
+    }
+
+    @Test
+    fun lowPowerModePlansAndroidsReducedContinuousWindow() {
+        val reader = IosReader()
+        val pages = (0..39).map { IosReaderPage("chapter", it) }
+        reader.setPages(pages)
+        reader.configure(pages.size, 600, 800, 3, false, false, 0)
+        repeat(pages.size) { reader.setImageSize(it, 600, 800) }
+        val origin = reader.scrollOrigin(10, 0f)
+        val full = assertNotNull(reader.resourceWindow(0f, origin, 0f, 0f, false, true))
+        assertTrue(reader.setPreloadReduction(true))
+        assertFalse(reader.setPreloadReduction(true))
+        val reduced = assertNotNull(reader.resourceWindow(0f, origin, 0f, 0f, false, true))
+        assertTrue(reduced.size < full.size, "reduced ${reduced.size} vs full ${full.size}")
+        assertTrue(reader.setPreloadReduction(false))
+        assertEquals(full.size, assertNotNull(reader.resourceWindow(0f, origin, 0f, 0f, false, true)).size)
     }
 
     @Test
