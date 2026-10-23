@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -40,17 +42,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputEnterAction
 
 internal data class VideoAnnotationState(
     val mangaId: Long,
@@ -71,6 +80,16 @@ internal fun VideoAnnotationDialog(
     modifier: Modifier = Modifier,
 ) {
     var noteText by remember { mutableStateOf("") }
+    val isTv = LocalUiPresentationConfig.current.isTv
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val saveNoteFocusRequester = remember { FocusRequester() }
+    // On TV the note field would otherwise trap the remote: the IME owns the D-pad while open and
+    // Back closes the whole overlay. Done (IME action or Enter) hands focus to "save note" instead.
+    val leaveNote: () -> Unit = {
+        keyboardController?.hide()
+        saveNoteFocusRequester.requestFocus()
+        Unit
+    }
     val imageBitmap = remember(state.bitmap) { state.bitmap.asImageBitmap() }
     val formattedTime = remember(state.positionMs) { formatDuration(state.positionMs) }
 
@@ -211,10 +230,14 @@ internal fun VideoAnnotationDialog(
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { leaveNote() }),
                     minLines = 2,
                     maxLines = 4,
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .tvTextInputEnterAction(leaveNote),
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -232,6 +255,19 @@ internal fun VideoAnnotationDialog(
                     Button(
                         onClick = { onSave(noteText.trim().takeIf { it.isNotBlank() }) },
                         shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .focusRequester(saveNoteFocusRequester)
+                            .then(
+                                if (isTv) {
+                                    Modifier.tvFocusable(
+                                        enabled = true,
+                                        shape = RoundedCornerShape(12.dp),
+                                        addFocusTarget = false,
+                                    )
+                                } else {
+                                    Modifier
+                                },
+                            ),
                     ) {
                         Text(stringResource(R.string.save_note))
                     }

@@ -457,6 +457,7 @@ class SettingsActivity :
             val backgroundArtwork by backgroundArtworkRepository.observe()
                 .catch { emit(BackgroundArtwork()) }
                 .collectAsStateWithLifecycle(initialValue = BackgroundArtwork())
+            val isSettingsSearchActive by viewModel.isSearchActive.collectAsStateWithLifecycle()
             DynamicArtworkBackdrop(
                 content = backgroundArtwork.content,
                 imageUri = backgroundArtwork.imageUri,
@@ -469,6 +470,7 @@ class SettingsActivity :
                     destination = composeDestination,
                     destinationKey = ::composeDestinationStateKey,
                     modifier = Modifier.fillMaxSize(),
+                    searchActive = isSettingsSearchActive,
                     rootContent = { modifier -> RenderSettingsRootContent(modifier) },
                     destinationContent = { destination -> RenderComposeDestination(destination) },
                 )
@@ -1585,6 +1587,7 @@ class SettingsActivity :
                 searchQuery = searchQuery,
                 searchResults = searchResults,
                 onSearchResultClick = { item -> navigateToPreference(item) },
+                searchActive = isSearchActive,
                 listState = listState,
                 topInset = innerPadding.calculateTopPadding(),
                 applyHorizontalDisplayCutoutPadding = false,

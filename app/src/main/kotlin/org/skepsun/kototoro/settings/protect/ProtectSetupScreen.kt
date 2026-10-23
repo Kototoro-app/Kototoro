@@ -36,6 +36,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 private const val MIN_PASSWORD_LENGTH = 4
@@ -100,7 +101,8 @@ internal fun ProtectSetupScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 30.dp)
-                .focusRequester(passwordFocusRequester),
+                .focusRequester(passwordFocusRequester)
+                .tvTextInputFocusEscape(),
             isError = passwordError != null,
             textStyle = TextStyle(fontSize = 16.sp, textAlign = TextAlign.Center),
             visualTransformation = PasswordVisualTransformation(),

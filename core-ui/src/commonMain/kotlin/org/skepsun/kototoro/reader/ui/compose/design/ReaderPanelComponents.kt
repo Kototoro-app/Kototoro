@@ -51,6 +51,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.shapes.Capsule
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvHorizontalEdgeGuard
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import kotlin.math.roundToInt
 
 private val ChipShape = RoundedCornerShape(16.dp)
@@ -93,6 +95,10 @@ fun ReaderPanelTabBar(
                             .clip(Capsule())
                             .background(background)
                             .tvFocusable(shape = Capsule(), addFocusTarget = false)
+                            .tvHorizontalEdgeGuard(
+                                blockLeft = index == 0,
+                                blockRight = index == labels.lastIndex,
+                            )
                             .selectable(selected = selected, role = Role.Tab, onClick = { onSelected(index) })
                             .heightIn(min = 36.dp)
                             .padding(horizontal = 16.dp),
@@ -259,12 +265,18 @@ fun ReaderQuickActionGrid(
             actions.chunked(columns).forEach { row ->
                 Row(modifier = Modifier.fillMaxWidth()) {
                     row.forEach { action ->
+                        val flatIndex = actions.indexOf(action)
                         ReaderQuickTile(
                             action = action,
                             icon = icon(action),
                             label = label(action),
                             onClick = { onClick(action) },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .tvHorizontalEdgeGuard(
+                                    blockLeft = flatIndex == 0,
+                                    blockRight = flatIndex == actions.lastIndex,
+                                ),
                         )
                     }
                     repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
@@ -421,7 +433,9 @@ fun ReaderStepperRow(
                 value = value.coerceIn(valueRange),
                 onValueChange = onValueChange,
                 valueRange = valueRange,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tvSliderDpad(value = value, valueRange = valueRange, onValueChange = onValueChange, steps = 0),
             )
         }
     }
@@ -496,7 +510,15 @@ fun ReaderSliderRow(
             valueRange = valueRange,
             steps = steps,
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .tvSliderDpad(
+                    value = value,
+                    valueRange = valueRange,
+                    onValueChange = onValueChange,
+                    steps = steps,
+                    enabled = enabled,
+                ),
         )
     }
 }

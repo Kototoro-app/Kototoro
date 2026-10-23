@@ -33,6 +33,7 @@ import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.parsers.model.ContentType
 
 data class SuggestionSourceOption(
@@ -267,7 +268,7 @@ private fun SuggestionSourcesDialog(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
                 singleLine = true,
                 placeholder = { Text(stringResource(R.string.search)) },
             )

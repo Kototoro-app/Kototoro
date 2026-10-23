@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.util.ext.isHttpUrl
@@ -77,7 +78,7 @@ class SyncAuthActivity : BaseComposeActivity() {
                         label = { Text(getString(R.string.email)) },
                         enabled = !loading,
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
                     )
                     TextButton(onClick = { showHostDialog = true }) { Text(getString(R.string.settings)) }
                 } else {
@@ -88,7 +89,7 @@ class SyncAuthActivity : BaseComposeActivity() {
                         enabled = !loading,
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
                     )
                 }
                 if (loading) CircularProgressIndicator()
@@ -116,7 +117,12 @@ class SyncAuthActivity : BaseComposeActivity() {
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text(getString(R.string.sync_host_description))
-                            OutlinedTextField(value = hostValue, onValueChange = { hostValue = it }, singleLine = true)
+                            OutlinedTextField(
+                                value = hostValue,
+                                onValueChange = { hostValue = it },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
+                            )
                         }
                     },
                     confirmButton = {

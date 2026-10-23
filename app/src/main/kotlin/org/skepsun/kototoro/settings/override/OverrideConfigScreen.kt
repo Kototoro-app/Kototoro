@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -158,7 +159,7 @@ internal fun OverrideConfigScreen(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.take(120) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
                     label = { Text(text = stringResource(R.string.name)) },
                     placeholder = { Text(text = mangaTitle) },
                     trailingIcon = {

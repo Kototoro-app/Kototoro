@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
 import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 import androidx.core.content.edit
@@ -221,7 +222,7 @@ fun TtsSettingsRoute(
                         onValueChange = { importUrl = it },
                         placeholder = { Text(TtsSettingsCoordinator.URL_HINT) },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
                     )
                 }
             },

@@ -50,6 +50,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.getSummary
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.util.LocaleComparator
 import org.skepsun.kototoro.core.util.ext.getDisplayName
@@ -135,7 +136,7 @@ fun SourcesCatalogScreen(
                             OutlinedTextField(
                                 value = query,
                                 onValueChange = onQueryChange,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
                                 singleLine = true,
                                 placeholder = { Text(stringResource(R.string.search)) },
                             )

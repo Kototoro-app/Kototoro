@@ -59,6 +59,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
 import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 
@@ -126,7 +127,7 @@ fun GlobalTagBlacklistScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp).tvTextInputFocusEscape(),
                 placeholder = { Text(stringResource(R.string.search)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {

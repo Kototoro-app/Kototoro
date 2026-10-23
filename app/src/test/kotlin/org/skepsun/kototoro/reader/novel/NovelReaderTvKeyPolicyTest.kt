@@ -54,6 +54,70 @@ class NovelReaderTvKeyPolicyTest {
     }
 
     @Test
+    fun `tv up shows chrome while reading`() {
+        assertTrue(
+            shouldShowNovelReaderTvChrome(
+                isTvPresentation = true,
+                controlsVisible = false,
+                hasSubOverlay = false,
+                keyCode = KeyEvent.KEYCODE_DPAD_UP,
+            ),
+        )
+    }
+
+    @Test
+    fun `tv up does not show chrome when controls are already visible`() {
+        assertFalse(
+            shouldShowNovelReaderTvChrome(
+                isTvPresentation = true,
+                controlsVisible = true,
+                hasSubOverlay = false,
+                keyCode = KeyEvent.KEYCODE_DPAD_UP,
+            ),
+        )
+    }
+
+    @Test
+    fun `tv up does not show chrome off tv or over a sub overlay`() {
+        assertFalse(
+            shouldShowNovelReaderTvChrome(
+                isTvPresentation = false,
+                controlsVisible = false,
+                hasSubOverlay = false,
+                keyCode = KeyEvent.KEYCODE_DPAD_UP,
+            ),
+        )
+        assertFalse(
+            shouldShowNovelReaderTvChrome(
+                isTvPresentation = true,
+                controlsVisible = false,
+                hasSubOverlay = true,
+                keyCode = KeyEvent.KEYCODE_DPAD_UP,
+            ),
+        )
+    }
+
+    @Test
+    fun `only up reveals the chrome, other directions stay with the content`() {
+        val others = listOf(
+            KeyEvent.KEYCODE_DPAD_DOWN,
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_DPAD_CENTER,
+        )
+        others.forEach { keyCode ->
+            assertFalse(
+                shouldShowNovelReaderTvChrome(
+                    isTvPresentation = true,
+                    controlsVisible = false,
+                    hasSubOverlay = false,
+                    keyCode = keyCode,
+                ),
+            )
+        }
+    }
+
+    @Test
     fun `page keys resolve correct deltas considering navigation inverted setting`() {
         assertEquals(-1, resolveNovelReaderPageKeyDelta(KeyEvent.KEYCODE_PAGE_UP, isNavigationInverted = false))
         assertEquals(1, resolveNovelReaderPageKeyDelta(KeyEvent.KEYCODE_PAGE_UP, isNavigationInverted = true))

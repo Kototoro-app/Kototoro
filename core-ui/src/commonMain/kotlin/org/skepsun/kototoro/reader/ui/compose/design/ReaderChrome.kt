@@ -46,6 +46,11 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
@@ -61,6 +66,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import kotlin.math.roundToInt
 
@@ -379,6 +385,29 @@ fun ReaderProgressBar(
         dragValue = null
         onValueChangeFinished()
     }
+    val isTv = LocalUiPresentationConfig.current.isTv
+    val previousRequester = remember { FocusRequester() }
+    val nextRequester = remember { FocusRequester() }
+    // A remote cannot drag. Left/right step the position, and at either end they hand focus to the
+    // neighbouring chapter button: that button is otherwise unreachable (the slider owns the row).
+    val stepPage: (Float) -> Boolean = { delta ->
+        val next = (sliderState.value + delta).coerceIn(0f, effectiveMax)
+        if (next != sliderState.value) {
+            sliderState.value = next
+            dragValue = next
+            onValueChange(next)
+            onValueChangeFinished()
+            true
+        } else if (delta < 0f && previousEnabled) {
+            previousRequester.requestFocus()
+            true
+        } else if (delta > 0f && nextEnabled) {
+            nextRequester.requestFocus()
+            true
+        } else {
+            true
+        }
+    }
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -419,7 +448,11 @@ fun ReaderProgressBar(
                     IconButton(
                         onClick = onPreviousChapter,
                         enabled = previousEnabled,
-                        modifier = Modifier.size(40.dp).testTag("reader-previous-chapter"),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .focusRequester(previousRequester)
+                            .tvFocusable(shape = CircleShape, addFocusTarget = false)
+                            .testTag("reader-previous-chapter"),
                     ) {
                         Icon(
                             ReaderPanelIcons.Prev,
@@ -452,13 +485,38 @@ fun ReaderProgressBar(
                                     thumbTrackGapSize = 0.dp,
                                 )
                             },
-                            modifier = Modifier.testTag("reader-page-slider"),
+                            // The ring is what tells the user that left/right moves this slider; the
+                            // slider itself ignores the D-pad, so the keys are handled here.
+                            modifier = Modifier
+                                .tvFocusable(shape = RoundedRectangle(10.dp), addFocusTarget = false)
+                                .then(
+                                    if (isTv) {
+                                        Modifier.onPreviewKeyEvent { event ->
+                                            if (event.type != KeyEventType.KeyDown) {
+                                                false
+                                            } else {
+                                                when (event.key) {
+                                                    Key.DirectionLeft -> stepPage(-1f)
+                                                    Key.DirectionRight -> stepPage(1f)
+                                                    else -> false
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                                .testTag("reader-page-slider"),
                         )
                     }
                     IconButton(
                         onClick = onNextChapter,
                         enabled = nextEnabled,
-                        modifier = Modifier.size(40.dp).testTag("reader-next-chapter"),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .focusRequester(nextRequester)
+                            .tvFocusable(shape = CircleShape, addFocusTarget = false)
+                            .testTag("reader-next-chapter"),
                     ) {
                         Icon(
                             ReaderPanelIcons.Next,

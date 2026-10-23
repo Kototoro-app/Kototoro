@@ -32,6 +32,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvVerticalEdgeGuard
 import org.skepsun.kototoro.reader.novel.NovelPageTurnAnimation
 import org.skepsun.kototoro.reader.novel.NovelReaderSettings
 import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
@@ -148,6 +150,9 @@ private fun NovelQuickLayer(
                     )
                 },
                 contentPadding = PaddingValues(0.dp),
+                // Top row of the quick layer: UP has nowhere visible to go, the header above is
+                // already collapsed to the drag handle.
+                modifier = Modifier.tvVerticalEdgeGuard(blockUp = true),
             )
         },
         actions = {
@@ -391,11 +396,17 @@ private fun NovelTranslationToolsPage(
     }
     item {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilledTonalButton(onClick = onToggleTranslation, modifier = Modifier.fillMaxWidth()) {
+            FilledTonalButton(
+                onClick = onToggleTranslation,
+                modifier = Modifier.fillMaxWidth().tvFocusable(addFocusTarget = false),
+            ) {
                 Icon(painterResource(R.drawable.ic_translate), contentDescription = null)
                 Text(stringResource(R.string.novel_reader_translation_start), modifier = Modifier.padding(start = 8.dp))
             }
-            FilledTonalButton(onClick = onClearTranslationCache, modifier = Modifier.fillMaxWidth()) {
+            FilledTonalButton(
+                onClick = onClearTranslationCache,
+                modifier = Modifier.fillMaxWidth().tvFocusable(addFocusTarget = false),
+            ) {
                 Icon(painterResource(R.drawable.ic_delete), contentDescription = null)
                 Text(stringResource(R.string.clear_translation_cache), modifier = Modifier.padding(start = 8.dp))
             }

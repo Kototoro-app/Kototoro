@@ -49,6 +49,7 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.dictionary.DictionaryRule
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 
 @AndroidEntryPoint
 class DictionaryRulesActivity : BaseComposeActivity() {
@@ -246,7 +247,9 @@ private fun DictionaryRuleEditorDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.name)) }, singleLine = true)
+                OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.name)) }, singleLine = true,
+            modifier = Modifier.tvTextInputFocusEscape(),
+        )
                 OutlinedTextField(
                     urlRule,
                     { urlRule = it },
@@ -264,7 +267,8 @@ private fun DictionaryRuleEditorDialog(
                     { sortNumber = it },
                     label = { Text(stringResource(R.string.sort)) },
                     singleLine = true,
-                )
+            modifier = Modifier.tvTextInputFocusEscape(),
+        )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = enabled, onCheckedChange = { enabled = it })
                     Text(stringResource(R.string.enable))

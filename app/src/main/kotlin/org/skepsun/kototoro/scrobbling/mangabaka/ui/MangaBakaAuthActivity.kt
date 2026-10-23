@@ -40,6 +40,7 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.ui.config.ScrobblerConfigActivity
 import org.skepsun.kototoro.scrobbling.mangabaka.data.MangaBakaRepository
@@ -86,7 +87,7 @@ class MangaBakaAuthActivity : BaseComposeActivity() {
                     value = token, onValueChange = { token = it },
                     label = { Text(stringResource(R.string.mangabaka_access_token)) },
                     enabled = !loading, singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
                 )
                 if (failed) {
                     Text(stringResource(R.string.mangabaka_auth_failed), color = MaterialTheme.colorScheme.error)

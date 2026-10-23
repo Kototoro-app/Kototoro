@@ -28,6 +28,8 @@ import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -37,8 +39,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -52,14 +54,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
 import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionRepo
-import org.skepsun.kototoro.settings.sources.extensions.formatExtensionFingerprint
 import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
 import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
+import org.skepsun.kototoro.settings.sources.extensions.formatExtensionFingerprint
 
 @Composable
 internal fun <T> UnifiedSelectionDialog(
@@ -175,6 +179,7 @@ internal fun UnifiedRepositoryUrlDialog(
     onConfirm: (String) -> Unit,
 ) {
     var value by rememberSaveable(kind, initialUrl) { mutableStateOf(initialUrl) }
+    val fieldExit = rememberTvFieldExit()
     val hint = when (kind) {
         UnifiedSourceKind.LEGADO -> "https://example.com/legado.json"
         UnifiedSourceKind.TVBOX -> "http://z.qiqiv.cn/123.txt"
@@ -187,40 +192,7 @@ internal fun UnifiedRepositoryUrlDialog(
             SettingsDialogActionButton(
                 text = stringResource(android.R.string.ok),
                 onClick = { onConfirm(value) },
-            )
-        },
-        dismissButton = {
-            SettingsDialogActionButton(
-                text = stringResource(android.R.string.cancel),
-                onClick = onDismiss,
-            )
-        },
-        text = {
-            OutlinedTextField(
-                value = value,
-                onValueChange = { value = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text(hint) },
-            )
-        },
-    )
-}
-
-@Composable
-internal fun UnifiedInlineRepositoryDialog(
-    kind: UnifiedSourceKind,
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
-) {
-    var value by rememberSaveable(kind) { mutableStateOf("") }
-    SettingsAlertDialog(
-        title = stringResource(R.string.paste_repository_with_kind, stringResource(kind.dialogLabelResId())),
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            SettingsDialogActionButton(
-                text = stringResource(android.R.string.ok),
-                onClick = { onConfirm(value) },
+                modifier = fieldExit.targetModifier,
             )
         },
         dismissButton = {
@@ -235,8 +207,51 @@ internal fun UnifiedInlineRepositoryDialog(
                 onValueChange = { value = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 140.dp, max = 320.dp),
-                    label = { Text(stringResource(R.string.paste_content)) },
+                    .then(fieldExit.fieldModifier),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { fieldExit.onDone() }),
+                singleLine = true,
+                label = { Text(hint) },
+            )
+        },
+    )
+}
+
+@Composable
+internal fun UnifiedInlineRepositoryDialog(
+    kind: UnifiedSourceKind,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    var value by rememberSaveable(kind) { mutableStateOf("") }
+    val fieldExit = rememberTvFieldExit(multiline = true)
+    SettingsAlertDialog(
+        title = stringResource(R.string.paste_repository_with_kind, stringResource(kind.dialogLabelResId())),
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            SettingsDialogActionButton(
+                text = stringResource(android.R.string.ok),
+                onClick = { onConfirm(value) },
+                modifier = fieldExit.targetModifier,
+            )
+        },
+        dismissButton = {
+            SettingsDialogActionButton(
+                text = stringResource(android.R.string.cancel),
+                onClick = onDismiss,
+            )
+        },
+        text = {
+            OutlinedTextField(
+                value = value,
+                onValueChange = { value = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 140.dp, max = 320.dp)
+                    .then(fieldExit.fieldModifier),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { fieldExit.onDone() }),
+                label = { Text(stringResource(R.string.paste_content)) },
             )
         },
     )

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -330,7 +331,7 @@ internal fun SearchFilterPanel(
                 OutlinedTextField(
                     value = selectedAuthor.orEmpty(),
                     onValueChange = { onAuthorChange(it.ifBlank { null }) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
                     singleLine = true,
                     label = { Text(stringResource(R.string.author)) },
                     colors = OutlinedTextFieldDefaults.colors(

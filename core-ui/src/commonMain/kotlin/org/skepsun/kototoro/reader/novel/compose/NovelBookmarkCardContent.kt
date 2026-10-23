@@ -12,6 +12,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 
 /** Platform hosts supply normalized text and dates; the bookmark card has one layout on all readers. */
@@ -32,7 +33,10 @@ fun NovelBookmarkCardContent(
         enabled = enabled,
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = modifier
+            .tvFocusable(shape = RoundedCornerShape(18.dp), addFocusTarget = false)
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp),

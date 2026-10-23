@@ -127,6 +127,7 @@ fun SettingsRootScreen(
     searchResults: List<SettingsItem>,
     onSearchResultClick: (SettingsItem) -> Unit,
     modifier: Modifier = Modifier,
+    searchActive: Boolean = false,
     listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) },
     topInset: Dp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
     horizontalPadding: Dp = SettingsContentHorizontalPadding,
@@ -135,8 +136,10 @@ fun SettingsRootScreen(
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val firstFocusRequester = remember { FocusRequester() }
     var hasRequestedInitialFocus by remember { mutableStateOf(false) }
-    LaunchedEffect(isTvPresentation, searchQuery.isBlank(), sections.size, searchResults.size) {
-        if (isTvPresentation && searchQuery.isBlank() && !hasRequestedInitialFocus) {
+    LaunchedEffect(isTvPresentation, searchActive, searchQuery.isBlank(), sections.size, searchResults.size) {
+        // 搜索态（即使查询还是空的）焦点属于顶栏输入框；这里再抢一次会让用户刚点开搜索
+        // 就被弹回列表第一行。
+        if (isTvPresentation && !searchActive && searchQuery.isBlank() && !hasRequestedInitialFocus) {
             withFrameNanos { }
             if (firstFocusRequester.requestFocus()) {
                 hasRequestedInitialFocus = true

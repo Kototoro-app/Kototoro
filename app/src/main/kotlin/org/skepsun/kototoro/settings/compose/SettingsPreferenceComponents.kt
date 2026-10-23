@@ -6,11 +6,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,6 +21,8 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.ListAlt
@@ -57,27 +59,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
-import org.skepsun.kototoro.core.ui.compose.KototoroSlider
-import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
-import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
-import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
-import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
-import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
-import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import kotlin.math.roundToInt
+import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
+import org.skepsun.kototoro.core.ui.compose.KototoroSlider
+import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 
 data class SettingsChoiceOption<T>(
     val value: T,
@@ -884,7 +889,7 @@ fun SettingsTextInputPreference(
                 onValueChange(it)
             },
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
             placeholder = placeholder?.let {
                 { Text(text = it) }
             },
@@ -970,6 +975,7 @@ fun SettingsDialogTextPreference(
     if (isDialogVisible) {
         val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
         val isTvPresentation = LocalUiPresentationConfig.current.isTv
+        val fieldExit = rememberTvFieldExit()
         SettingsAlertDialog(
             title = title,
             onDismissRequest = {
@@ -983,7 +989,11 @@ fun SettingsDialogTextPreference(
                         onValueChange = {
                             pendingValue = it
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(fieldExit.fieldModifier),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { fieldExit.onDone() }),
                         placeholder = placeholder?.let { { Text(text = it) } },
                         trailingIcon = if (suggestions.isNotEmpty() && !isTvPresentation) {
                             {
@@ -1036,6 +1046,7 @@ fun SettingsDialogTextPreference(
             },
             confirmButton = {
                 SettingsDialogActionButton(
+                    modifier = fieldExit.targetModifier,
                     text = stringResource(android.R.string.ok),
                     onClick = {
                         onValueChange(pendingValue)

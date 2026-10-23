@@ -38,6 +38,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -47,6 +48,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -225,6 +227,31 @@ private class StableSheetState(
         anchoredState.animateTo(target, animationSpec = StableSheetAnimationSpec)
     }
 
+    /**
+     * Moves one anchor towards the top (a wider sheet), for a device that has no drag gesture: a
+     * remote can press a tab but cannot pull the sheet up, so the details would stay off screen.
+     */
+    suspend fun expandOne(): StableSheetAnchor? = stepAnchor(-1)
+
+    /** Moves one anchor towards the bottom but never to [StableSheetAnchor.Hidden]. */
+    suspend fun collapseOne(): StableSheetAnchor? = stepAnchor(1, allowHidden = false)
+
+    /** Whether a narrower anchor exists below the settled one (the peek counts, hidden does not). */
+    fun canCollapse(): Boolean {
+        val visible = StableSheetAnchor.entries.filter { anchoredState.anchors.positionOf(it).isFinite() }
+        val index = visible.indexOf(anchoredState.settledValue)
+        return index >= 0 && visible.getOrNull(index + 1)?.let { it != StableSheetAnchor.Hidden } == true
+    }
+
+    private suspend fun stepAnchor(direction: Int, allowHidden: Boolean = true): StableSheetAnchor? {
+        val visible = StableSheetAnchor.entries.filter { anchoredState.anchors.positionOf(it).isFinite() }
+        val current = anchoredState.settledValue
+        val next = visible.getOrNull(visible.indexOf(current) + direction) ?: return null
+        if (!allowHidden && next == StableSheetAnchor.Hidden) return null
+        anchoredState.animateTo(next, animationSpec = StableSheetAnimationSpec)
+        return next
+    }
+
     suspend fun dismiss(): Boolean {
         hasOpened = true
         if (!anchoredState.anchors.positionOf(StableSheetAnchor.Hidden).isFinite()) return false
@@ -317,6 +344,10 @@ class StableSheetSlotScope internal constructor(
     val contentBottomPadding: Dp,
     /** Animates the sheet away, then calls `onDismissRequest`. */
     val dismiss: () -> Unit,
+    /** One anchor up: a wider sheet, for a device that cannot drag it. */
+    val expand: () -> Unit,
+    /** One anchor down, stopping at the peek; a no-op when there is nothing to collapse. */
+    val collapse: () -> Unit,
     /** Expanded beyond an available peek anchor, which can restore the header when dragged down. */
     val isExpandedPastPeek: Boolean = false,
 )
@@ -340,9 +371,18 @@ fun StableAnchoredSheetLayout(
      * Without it, a peek too tall for a stop (a phone in landscape) collapses the header at full height.
      */
     openExpanded: Boolean = false,
+    /**
+     * Back moves one anchor down before it dismisses: with a remote there is no drag gesture, so
+     * without this an expanded sheet could only be left by closing it.
+     */
+    collapseBeforeDismiss: Boolean = false,
     sheet: @Composable (StableSheetSlotScope) -> Unit,
 ) {
     val density = LocalDensity.current
+    // Keyboard focus scrolling reports itself as user input, so the nested scroll connection would
+    // treat a D-pad press at the end of a list as a drag and pull the sheet back down.
+    val isTv = LocalUiPresentationConfig.current.isTv
+    val receivesNestedScroll = !isTv
     val state = remember(density) {
         StableSheetState(
             density,
@@ -388,7 +428,15 @@ fun StableAnchoredSheetLayout(
         snapshotFlow { state.hasAnchors }.first { it }
         state.open()
     }
-    PlatformBackHandler(onBack = dismissWithAnimation)
+    PlatformBackHandler(
+        onBack = {
+            if (collapseBeforeDismiss && state.canCollapse()) {
+                coroutineScope.launch { state.collapseOne() }
+            } else {
+                dismissWithAnimation()
+            }
+        },
+    )
 
     BoxWithConstraints(
         modifier = modifier
@@ -405,6 +453,9 @@ fun StableAnchoredSheetLayout(
                             .coerceIn(0f, 1f),
                     ),
                 )
+                // 遥控器上遮罩不该是一个可聚焦目标：方向键一旦落到它上面，
+                // 一次 CENTER 就会把用户正在操作的面板关掉。
+                .focusProperties { if (isTv) canFocus = false }
                 .clickable(onClick = dismissWithAnimation),
         )
         // Before the first measure pass the host height is unknown, so place the sheet by the constraints.
@@ -416,13 +467,21 @@ fun StableAnchoredSheetLayout(
                 .fillMaxHeight()
                 .align(Alignment.TopCenter)
                 .offset { IntOffset(0, offset.roundToInt()) }
-                .nestedScroll(nestedScrollConnection),
+                .then(if (receivesNestedScroll) Modifier.nestedScroll(nestedScrollConnection) else Modifier),
         ) {
             sheet(
                 StableSheetSlotScope(
                     dragModifier = sheetDragModifier,
                     contentBottomPadding = with(density) { offset.toDp() },
                     dismiss = dismissWithAnimation,
+                    expand = {
+                        coroutineScope.launch { state.expandOne() }
+                        Unit
+                    },
+                    collapse = {
+                        coroutineScope.launch { state.collapseOne() }
+                        Unit
+                    },
                     isExpandedPastPeek = stableSheetHeaderCollapsed(
                         usePeekAnchor = usePeekAnchor,
                         hasPeekAnchor = state.anchoredState.anchors.positionOf(StableSheetAnchor.Middle).isFinite(),

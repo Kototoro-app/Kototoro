@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,6 +45,8 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 
 internal fun ListModel.isChapterSectionHeader(): Boolean =
     this is ListHeader || this is CollapsibleListHeader
+
+private const val ChapterFocusAttempts = 20
 
 /** Android models and platform effects over the same directory layout used by Windows. */
 @Composable
@@ -101,7 +104,12 @@ fun ChaptersScreen(
     LaunchedEffect(isTvPresentation, requestInitialFocus, focusTargetIndex >= 0, isGridView, isScrollEnabled) {
         if (isTvPresentation && requestInitialFocus && isScrollEnabled && focusTargetIndex >= 0) {
             kotlinx.coroutines.yield()
-            runCatching { defaultFocusRequester.requestFocus() }
+            // The target row can arrive a few frames after the pane is measured; retry briefly so a
+            // restored chapter keeps the remote focus instead of leaving it on the previous pane.
+            repeat(ChapterFocusAttempts) {
+                if (runCatching { defaultFocusRequester.requestFocus() }.isSuccess) return@LaunchedEffect
+                withFrameNanos { }
+            }
         }
     }
     val paneNestedScrollConnection = rememberDetailsPaneNestedScrollConnection(

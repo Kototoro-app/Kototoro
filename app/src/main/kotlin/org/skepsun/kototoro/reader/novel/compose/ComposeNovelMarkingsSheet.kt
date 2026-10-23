@@ -38,6 +38,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +56,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.bookmarks.domain.Bookmark
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTakeInitialFocus
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
 import org.skepsun.kototoro.reader.novel.novelReaderPalette
@@ -89,8 +93,11 @@ internal fun ComposeNovelMarkingsSheet(
     val palette = novelReaderPalette(themePreset, isSystemInDarkTheme())
     val sheetColor = Color(palette.backgroundColor)
     val sheetContentColor = Color(palette.textColor)
+    // A remote cannot drag a half-opened sheet up, so on TV it starts where all of it is on screen.
+    val isTv = LocalUiPresentationConfig.current.isTv
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = isTv),
         modifier = Modifier.fillMaxHeight(0.92f),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = sheetColor,
@@ -113,6 +120,7 @@ internal fun ComposeNovelMarkingsSheet(
         )
         MaterialTheme(colorScheme = readerColors) {
             ComposeNovelNotesContent(
+                modifier = Modifier.tvTakeInitialFocus(),
                 bookmarks = bookmarks,
                 markings = markings,
                 chapters = chapters,
@@ -255,24 +263,28 @@ internal fun ComposeNovelNotesContent(
                     Text("${stringResource(NovelMarkingsTab.ALL.labelRes)} (${highlightCount + bookmarkCount})")
                 },
                 shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(10.dp), addFocusTarget = false),
             )
             FilterChip(
                 selected = selectedTab == NovelMarkingsTab.HIGHLIGHTS,
                 onClick = { selectedTab = NovelMarkingsTab.HIGHLIGHTS },
                 label = { Text("${stringResource(NovelMarkingsTab.HIGHLIGHTS.labelRes)} ($highlightCount)") },
                 shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(10.dp), addFocusTarget = false),
             )
             FilterChip(
                 selected = selectedTab == NovelMarkingsTab.ANNOTATIONS,
                 onClick = { selectedTab = NovelMarkingsTab.ANNOTATIONS },
                 label = { Text("${stringResource(NovelMarkingsTab.ANNOTATIONS.labelRes)} ($annotationCount)") },
                 shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(10.dp), addFocusTarget = false),
             )
             FilterChip(
                 selected = selectedTab == NovelMarkingsTab.BOOKMARKS,
                 onClick = { selectedTab = NovelMarkingsTab.BOOKMARKS },
                 label = { Text("${stringResource(NovelMarkingsTab.BOOKMARKS.labelRes)} ($bookmarkCount)") },
                 shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(10.dp), addFocusTarget = false),
             )
         }
 
@@ -288,7 +300,10 @@ internal fun ComposeNovelNotesContent(
                 placeholder = stringResource(R.string.novel_reader_notes_search_hint),
                 clearContentDescription = stringResource(R.string.clear),
             )
-            IconButton(onClick = { sortByChapter = !sortByChapter }) {
+            IconButton(
+                onClick = { sortByChapter = !sortByChapter },
+                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+            ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_sort_desc),
                     contentDescription = stringResource(
@@ -477,7 +492,10 @@ private fun NovelMarkingCard(
         onClick = onOpen,
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier
+            .tvFocusable(shape = RoundedCornerShape(18.dp), addFocusTarget = false)
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -569,11 +587,13 @@ internal fun NovelNoteEditorSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = LocalUiPresentationConfig.current.isTv),
         modifier = Modifier.fillMaxHeight(0.85f),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .tvTakeInitialFocus()
                 .imePadding()
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -663,11 +683,13 @@ internal fun NovelNoteDetailSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = LocalUiPresentationConfig.current.isTv),
         modifier = Modifier.fillMaxHeight(0.75f),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .tvTakeInitialFocus()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),

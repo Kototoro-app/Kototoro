@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import androidx.compose.foundation.layout.Arrangement
@@ -410,7 +411,7 @@ private fun FavouriteCategoriesTopBar(
                                 modifier = Modifier
                                     .weight(1f)
                                     .focusRequester(focusRequester)
-                                    .padding(horizontal = 8.dp),
+                                    .padding(horizontal = 8.dp).tvTextInputFocusEscape(),
                                 singleLine = true,
                                 textStyle = MaterialTheme.typography.bodyLarge.merge(
                                     TextStyle(color = MaterialTheme.colorScheme.onSurface),

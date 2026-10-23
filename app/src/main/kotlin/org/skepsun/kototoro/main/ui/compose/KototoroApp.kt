@@ -1658,7 +1658,9 @@ fun KototoroApp(
     var lastBackTime by remember { mutableLongStateOf(0L) }
     val primaryNavItemId = mainNavItems.firstOrNull()?.id ?: org.skepsun.kototoro.R.id.nav_home
 
-    BackHandler(enabled = !isSearchRoute && !isImmersiveRoute && !isSearchOverlayMounted) {
+    BackHandler(
+        enabled = !isSearchRoute && !isImmersiveRoute && !isSearchOverlayMounted && !spaceUiState.switcherVisible,
+    ) {
         if (currentTopLevelKey != topLevelKeyForBottomNavItem(primaryNavItemId)) {
             navigateToBottomNavItem(primaryNavItemId)
             lastBackTime = 0L

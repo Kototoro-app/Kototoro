@@ -53,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.KototoroRangeSlider
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.model.titleResId
@@ -285,7 +286,7 @@ private fun FilterNameInputDialog(
                     label = { Text(context.getString(R.string.filter_name)) },
                     singleLine = true,
                     isError = hasError,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
                 )
                 if (hasError) {
                     Text(
@@ -332,7 +333,7 @@ private fun TextInputTagDialog(
                 onValueChange = { value = it },
                 label = { Text(title) },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
             )
         },
         confirmButton = {
@@ -886,7 +887,7 @@ private fun AuthorsSection(
             value = authorInput,
             onValueChange = onAuthorInputChange,
             label = { Text(LocalContext.current.getString(R.string.author)) },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
             singleLine = true,
             keyboardOptions = KeyboardOptions.Default,
         )

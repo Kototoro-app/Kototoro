@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -46,6 +47,7 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import kotlin.math.roundToInt
 
 /**
@@ -138,6 +140,7 @@ internal fun WelcomeBottomSheet(
     val scope = rememberCoroutineScope()
     val currentOnDismissRequest = rememberUpdatedState(onDismissRequest)
     val state = remember(density) { WelcomeSheetState(density) }
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
 
     val dismiss: () -> Unit = {
         scope.launch { state.hide() }
@@ -171,6 +174,7 @@ internal fun WelcomeBottomSheet(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = state.scrimAlpha))
+                    .focusProperties { canFocus = false }
                     .clickable(onClick = dismiss),
             )
 
@@ -189,18 +193,22 @@ internal fun WelcomeBottomSheet(
                 ) {
                     // The ONLY draggable element: the top handle. It feeds the
                     // panel's drag state so the whole sheet follows the finger.
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 10.dp)
-                            .draggable(
-                                orientation = Orientation.Vertical,
-                                state = rememberDraggableState { deltaY -> state.drag(deltaY) },
-                                onDragStopped = { velocity -> state.settle(velocity) },
-                            ),
-                    ) {
-                        BottomSheetDefaults.DragHandle()
+                    // A TV remote cannot drag, so the handle is omitted there and
+                    // system back / the wizard action bar close the wizard.
+                    if (!isTvPresentation) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp)
+                                .draggable(
+                                    orientation = Orientation.Vertical,
+                                    state = rememberDraggableState { deltaY -> state.drag(deltaY) },
+                                    onDragStopped = { velocity -> state.settle(velocity) },
+                                ),
+                        ) {
+                            BottomSheetDefaults.DragHandle()
+                        }
                     }
 
                     // Content is NOT connected to the drag state: scroll freely.

@@ -17,6 +17,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
@@ -46,6 +48,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,6 +67,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.withFrameNanos
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
@@ -175,21 +183,30 @@ private fun WelcomeContent(
         viewModel.setCurrentPage(pagerState.currentPage)
     }
 
-    Box(
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
-    ) {
-        HorizontalPager(
-            state = pagerState,
-            userScrollEnabled = false,
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    // Bottom padding of a page: with the floating (touch) bar the last row has
+    // to clear the pill, while the static TV bar sits below the pager.
+    val pageBottomPadding = if (isTvPresentation) 40.dp else 128.dp
+
+    val wizardPage: @Composable (Int) -> Unit = { page ->
+        // `Modifier.align` inside a pager page is ignored by the lazy layout, so
+        // the readable column is centred by an explicit Box.
+        Box(
             modifier = Modifier.fillMaxSize(),
-        ) { page ->
+            contentAlignment = Alignment.TopCenter,
+        ) {
             Column(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
                     .widthIn(max = WIZARD_CONTENT_MAX_WIDTH)
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .fillMaxHeight()
                     .verticalScroll(rememberScrollState())
-                    .padding(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 128.dp),
+                    .padding(
+                        start = 20.dp,
+                        top = 16.dp,
+                        end = 20.dp,
+                        bottom = pageBottomPadding,
+                    ),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 when (page) {
@@ -225,11 +242,11 @@ private fun WelcomeContent(
                 }
             }
         }
+    }
 
+    val wizardActionArea: @Composable (Modifier) -> Unit = { barModifier ->
         Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
+            modifier = barModifier
                 .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             contentAlignment = Alignment.Center,
@@ -245,6 +262,11 @@ private fun WelcomeContent(
                                 scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
                             },
                             enabled = pagerState.currentPage > 0,
+                            modifier = Modifier.tvFocusable(
+                                enabled = pagerState.currentPage > 0,
+                                shape = RoundedCornerShape(999.dp),
+                                addFocusTarget = false,
+                            ),
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -295,7 +317,41 @@ private fun WelcomeContent(
             }
         }
     }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+    ) {
+        if (isTvPresentation) {
+            // TV: the action bar is a static row under the pager. Floating it over
+            // the content covered the last chips and left UP dead, because the
+            // bar overlapped the very content it should navigate back to.
+            Column(modifier = Modifier.fillMaxSize()) {
+                HorizontalPager(
+                    state = pagerState,
+                    userScrollEnabled = false,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                ) { page -> wizardPage(page) }
+                wizardActionArea(Modifier.fillMaxWidth())
+            }
+        } else {
+            HorizontalPager(
+                state = pagerState,
+                userScrollEnabled = false,
+                modifier = Modifier.fillMaxSize(),
+            ) { page -> wizardPage(page) }
+            wizardActionArea(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(),
+            )
+        }
+    }
 }
+
 
 /**
  * The setup-wizard action bar: `[back] [page dots] [primary action]`.
@@ -399,12 +455,35 @@ private fun WizardPrimaryButton(
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
                 label = "wizardPrimaryAction",
             ) { animatedLabel ->
+                val focusRequester = remember { FocusRequester() }
+                val isTvPresentation = LocalUiPresentationConfig.current.isTv
+                LaunchedEffect(isTvPresentation, page, animatedLabel == action.label) {
+                    if (isTvPresentation && animatedLabel == action.label) {
+                        withFrameNanos { }
+                        focusRequester.requestFocus()
+                    }
+                }
                 val onClick = if (animatedLabel == action.label) action.onClick else ({})
+                val buttonModifier = Modifier
+                    .focusRequester(focusRequester)
+                    .tvFocusable(
+                        enabled = action.enabled,
+                        shape = ButtonDefaults.shape,
+                        addFocusTarget = false,
+                        // The pill itself is colorScheme.primary: a primary ring on it
+                        // would be invisible, so the ring uses the on-primary color.
+                        ringColor = if (action.tonal) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onPrimary
+                        },
+                    )
+                    .height(52.dp)
                 if (action.tonal) {
                     FilledTonalButton(
                         onClick = onClick,
                         enabled = action.enabled,
-                        modifier = Modifier.height(52.dp),
+                        modifier = buttonModifier,
                     ) {
                         WizardPrimaryButtonContent(animatedLabel, action.iconVector, action.iconPainter)
                     }
@@ -412,7 +491,7 @@ private fun WizardPrimaryButton(
                     Button(
                         onClick = onClick,
                         enabled = action.enabled,
-                        modifier = Modifier.height(52.dp),
+                        modifier = buttonModifier,
                     ) {
                         WizardPrimaryButtonContent(animatedLabel, action.iconVector, action.iconPainter)
                     }
@@ -539,7 +618,9 @@ private fun WelcomeDoneStep(
         )
         FilledTonalButton(
             onClick = onOpenExtensionManagement,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .tvFocusable(shape = ButtonDefaults.shape, addFocusTarget = false),
         ) {
             Icon(
                 painter = rememberSafePainter(R.drawable.ic_settings),
@@ -557,7 +638,9 @@ private fun WelcomeDoneStep(
     ) {
         FilledTonalButton(
             onClick = onRestoreBackup,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .tvFocusable(shape = ButtonDefaults.shape, addFocusTarget = false),
         ) {
             Icon(
                 painter = rememberSafePainter(R.drawable.ic_backup_restore),
@@ -720,7 +803,10 @@ private fun WelcomePermissionRow(
                 color = MaterialTheme.colorScheme.primary,
             )
         } else if (actionLabel != null && onAction != null) {
-            TextButton(onClick = onAction) {
+            TextButton(
+                onClick = onAction,
+                modifier = Modifier.tvFocusable(shape = ButtonDefaults.shape, addFocusTarget = false),
+            ) {
                 Text(actionLabel)
             }
         }
@@ -854,6 +940,7 @@ private fun WelcomeSwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)
             .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

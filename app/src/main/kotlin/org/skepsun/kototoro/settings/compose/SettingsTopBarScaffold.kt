@@ -55,7 +55,9 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
@@ -220,7 +222,8 @@ internal fun SettingsCompactSearchField(
             },
             modifier = Modifier
                 .fillMaxSize()
-                .focusRequester(focusRequester),
+                .focusRequester(focusRequester)
+                .tvTextInputFocusEscape(),
             singleLine = true,
             textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
             decorationBox = { innerTextField ->
@@ -397,7 +400,11 @@ internal fun SettingsTopBarSurface(content: @Composable () -> Unit) {
             content = { content() },
         )
     }
-    if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+    // 电视上没有动态插画背景垫底，iOS 玻璃顶栏的 vibrancy 会让滚动内容直接透出，
+    // 与原文字叠在一起（10 英尺外读不清）。TV 下改用不透明顶栏，保留手机/iPad 的玻璃观感。
+    val useGlassTopBar = LocalInterfaceStyle.current == InterfaceStyle.IOS &&
+        !LocalUiPresentationConfig.current.isTv
+    if (useGlassTopBar) {
         GlassSurface(
             modifier = Modifier.fillMaxWidth(),
             style = GlassDefaults.topBarChromeStyle().copy(shadowElevation = 0.dp),

@@ -53,11 +53,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.paneTitle
@@ -69,6 +75,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.first
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.model.UnknownContentSource
@@ -82,6 +89,7 @@ import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.list.ui.compose.ContentCardUiPrefs
@@ -253,9 +261,14 @@ fun SearchResultsRoute(
     var selectedItemsIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val searchFocusRequester = remember { FocusRequester() }
-    var hasRequestedInitialSearchFocus by remember { mutableStateOf(false) }
+    var focusedSectionKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var focusedContentId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var restoreResultFocus by remember { mutableStateOf(focusedContentId != null) }
+    var hasRequestedInitialSearchFocus by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(isTvPresentation, isPickMode) {
-        if (isTvPresentation && !isPickMode && selectedItemsIds.isEmpty() && !hasRequestedInitialSearchFocus) {
+        if (isTvPresentation && !isPickMode && selectedItemsIds.isEmpty() &&
+            !hasRequestedInitialSearchFocus && focusedContentId == null
+        ) {
             withFrameNanos { }
             if (searchFocusRequester.requestFocus()) {
                 hasRequestedInitialSearchFocus = true
@@ -268,6 +281,32 @@ fun SearchResultsRoute(
     val preparedItems = remember(listModels) { prepareSearchItems(listModels) }
     val sections = preparedItems.sections
     val supplementaryItems = preparedItems.supplementaryItems
+    val resultsListState = rememberLazyListState()
+    val showsProgress = searchState.isSearching || sections.isNotEmpty() || searchState.totalSources > 0 ||
+        searchState.failedSources > 0
+    val savedSection = sections.firstOrNull { it.sectionKey == focusedSectionKey }
+    val savedItem = savedSection?.list?.firstOrNull { it.id == focusedContentId }
+    // While sources are loading, keep waiting for the original result instead of jumping to another source.
+    val restoreSection = if (savedItem != null) savedSection else if (!searchState.isSearching) {
+        savedSection?.takeIf { it.list.isNotEmpty() } ?: sections.firstOrNull { it.list.isNotEmpty() }
+    } else {
+        null
+    }
+    val restoreContentId = savedItem?.id ?: restoreSection?.list?.firstOrNull()?.id
+    LaunchedEffect(isTvPresentation, restoreResultFocus, restoreSection?.sectionKey) {
+        if (isTvPresentation && restoreResultFocus && restoreSection != null) {
+            if (resultsListState.layoutInfo.visibleItemsInfo.none { it.key == restoreSection.sectionKey }) {
+                val sectionIndex = sections.indexOf(restoreSection) + if (showsProgress) 1 else 0
+                resultsListState.scrollToItem(sectionIndex)
+            }
+        }
+    }
+    LaunchedEffect(isTvPresentation, restoreResultFocus, restoreContentId, searchState.isSearching) {
+        if (isTvPresentation && restoreResultFocus && restoreContentId == null && !searchState.isSearching) {
+            withFrameNanos { }
+            if (searchFocusRequester.requestFocus()) restoreResultFocus = false
+        }
+    }
     val selectedItems = remember(selectedItemsIds, listModels) {
         viewModel.getItems(selectedItemsIds)
     }
@@ -329,6 +368,9 @@ fun SearchResultsRoute(
                     searchFocusRequester = searchFocusRequester.takeIf {
                         isTvPresentation && selectedItemsIds.isEmpty() && !isPickMode
                     },
+                    onMoveFocusToResults = ({ restoreResultFocus = true }).takeIf {
+                        sections.any { it.list.isNotEmpty() }
+                    },
                 )
             } else {
                 KototoroSelectionTopBar(
@@ -370,6 +412,7 @@ fun SearchResultsRoute(
         },
     ) { paddingValues ->
         LazyColumn(
+            state = resultsListState,
             modifier = Modifier
                 .fillMaxSize()
                 .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
@@ -381,9 +424,7 @@ fun SearchResultsRoute(
             ),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            if (searchState.isSearching || sections.isNotEmpty() || searchState.totalSources > 0 ||
-                searchState.failedSources > 0
-            ) {
+            if (showsProgress) {
                 item(key = "search_progress", contentType = "search_progress") {
                     SearchResultsProgress(searchState, sections, viewModel::retryFailedSources)
                 }
@@ -426,6 +467,34 @@ fun SearchResultsRoute(
                     onItemLongClick = { item ->
                         if (!isPickMode) {
                             selectedItemsIds = selectedItemsIds.toggle(item.id)
+                        }
+                    },
+                    restoreFocusToId = restoreContentId.takeIf {
+                        isTvPresentation && restoreResultFocus && restoreSection?.sectionKey == section.sectionKey
+                    },
+                    onItemFocused = { item ->
+                        focusedSectionKey = section.sectionKey
+                        focusedContentId = item.id
+                        restoreResultFocus = false
+                    },
+                    onMoveVerticalFocus = { delta ->
+                        val sectionIndex = sections.indexOf(section)
+                        val candidates = if (delta > 0) {
+                            sections.drop(sectionIndex + 1)
+                        } else {
+                            sections.take(sectionIndex).asReversed()
+                        }
+                        val targetSection = candidates.firstOrNull { it.list.isNotEmpty() }
+                        if (targetSection == null) {
+                            false
+                        } else {
+                            val itemIndex = section.list.distinctBy { it.id }
+                                .indexOfFirst { it.id == focusedContentId }.coerceAtLeast(0)
+                            val targetItems = targetSection.list.distinctBy { it.id }
+                            focusedSectionKey = targetSection.sectionKey
+                            focusedContentId = targetItems[itemIndex.coerceAtMost(targetItems.lastIndex)].id
+                            restoreResultFocus = true
+                            true
                         }
                     },
                 )
@@ -551,7 +620,9 @@ private fun SearchResultsTopBar(
     advancedAuthor: String,
     onAdvancedAuthorChange: (String) -> Unit,
     searchFocusRequester: FocusRequester? = null,
+    onMoveFocusToResults: (() -> Unit)? = null,
 ) {
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     // Keep the whole input row above the space switcher's dock handle (it sits 72dp below the status
     // bar at the screen edge): a taller header put the search button underneath it.
     Surface {
@@ -560,7 +631,17 @@ private fun SearchResultsTopBar(
                 .fillMaxWidth()
                 .statusBarsPadding()
                 .padding(vertical = 8.dp)
-                .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
+                .then(if (isTvPresentation) Modifier.focusGroup() else Modifier)
+                .onKeyEvent { event ->
+                    if (isTvPresentation && !isAdvancedExpanded &&
+                        event.key == Key.DirectionDown && onMoveFocusToResults != null
+                    ) {
+                        if (event.type == KeyEventType.KeyDown) onMoveFocusToResults()
+                        true
+                    } else {
+                        false
+                    }
+                },
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
@@ -584,7 +665,8 @@ private fun SearchResultsTopBar(
                     onValueChange = onQueryChange,
                     modifier = Modifier
                         .weight(1f)
-                        .then(searchFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
+                        .then(searchFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+                        .tvTextInputFocusEscape(),
                     singleLine = true,
                     placeholder = { Text(stringResource(R.string.search_content)) },
                     shape = RoundedCornerShape(18.dp),
@@ -694,11 +776,28 @@ private fun SearchResultsSection(
     onSectionClick: () -> Unit,
     onItemClick: (ContentListModel) -> Unit,
     onItemLongClick: (ContentListModel) -> Unit,
+    restoreFocusToId: Long?,
+    onItemFocused: (ContentListModel) -> Unit,
+    onMoveVerticalFocus: (Int) -> Boolean,
 ) {
     val context = LocalContext.current
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val rowState = rememberLazyListState()
     val scrollIntensity = rememberHorizontalRailScrollIntensity(rowState)
     val uniqueItems = remember(section.list) { section.list.distinctBy { it.id } }
+    val resultFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(restoreFocusToId, uniqueItems) {
+        val targetId = restoreFocusToId ?: return@LaunchedEffect
+        val targetIndex = uniqueItems.indexOfFirst { it.id == targetId }
+        if (targetIndex < 0) return@LaunchedEffect
+        val targetKey = "${section.sectionKey}_$targetId"
+        if (rowState.layoutInfo.visibleItemsInfo.none { it.key == targetKey }) {
+            rowState.scrollToItem(targetIndex)
+        }
+        snapshotFlow { rowState.layoutInfo.visibleItemsInfo.any { it.key == targetKey } }.first { it }
+        withFrameNanos { }
+        resultFocusRequester.requestFocus()
+    }
 
     Column(
         modifier = Modifier
@@ -751,9 +850,17 @@ private fun SearchResultsSection(
                 state = rowState,
                 contentPadding = PaddingValues(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.then(
-                    if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier,
-                ),
+                modifier = Modifier
+                    .then(if (isTvPresentation) Modifier.focusGroup() else Modifier)
+                    .onKeyEvent { event ->
+                        val delta = when (event.key) {
+                            Key.DirectionDown -> 1
+                            Key.DirectionUp -> -1
+                            else -> 0
+                        }
+                        isTvPresentation && delta != 0 &&
+                            (event.type != KeyEventType.KeyDown || onMoveVerticalFocus(delta))
+                    },
             ) {
                 itemsIndexed(
                     items = uniqueItems,
@@ -782,6 +889,8 @@ private fun SearchResultsSection(
                                 uiPrefs = cardUiPrefs,
                                 onClick = { onItemClick(item) },
                                 onLongClick = { onItemLongClick(item) },
+                                focusRequester = resultFocusRequester.takeIf { item.id == restoreFocusToId },
+                                onFocused = { onItemFocused(item) },
                             )
                         }
                     }

@@ -73,6 +73,7 @@ import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.TopBarControlSurface
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
@@ -164,6 +165,7 @@ internal fun SearchInputRow(
             modifier = Modifier
                 .weight(1f)
                 .focusRequester(focusRequester)
+                .tvTextInputFocusEscape()
                 .padding(horizontal = 6.dp),
             singleLine = true,
             textStyle = MaterialTheme.typography.bodyLarge.merge(

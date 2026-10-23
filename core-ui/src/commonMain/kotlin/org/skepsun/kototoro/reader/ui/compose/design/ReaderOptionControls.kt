@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 
 @Composable
 fun ReaderOptionGroup(
@@ -97,6 +98,8 @@ fun ReaderOptionSwitchRow(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 52.dp)
+            // A remote needs a ring on every stop: the switch itself is not a focus target here.
+            .tvFocusable(shape = MaterialTheme.shapes.small, addFocusTarget = false)
             .toggleable(
                 value = checked,
                 enabled = enabled,
@@ -135,6 +138,7 @@ fun ReaderOptionValueRow(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
+            .tvFocusable(shape = MaterialTheme.shapes.small, addFocusTarget = false)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 6.dp),
     ) {

@@ -50,6 +50,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.list.domain.titleResId
@@ -118,7 +119,7 @@ internal fun FavouritesCategoryEditScreen(
                 enabled = !isLoading,
                 singleLine = true,
                 label = { Text(stringResource(R.string.name)) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
             )
             CoverEditor(
                 coverModel = coverModel,
@@ -137,7 +138,7 @@ internal fun FavouritesCategoryEditScreen(
                     label = { Text(stringResource(R.string.sort_order)) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(enabled = !isLoading) { sortMenuExpanded = true },
+                        .clickable(enabled = !isLoading) { sortMenuExpanded = true }.tvTextInputFocusEscape(),
                 )
                 DropdownMenu(
                     expanded = sortMenuExpanded,

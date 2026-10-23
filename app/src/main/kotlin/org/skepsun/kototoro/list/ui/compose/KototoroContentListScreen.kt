@@ -111,6 +111,11 @@ import kotlinx.coroutines.flow.first
 
 private const val LoadMoreVisibleThreshold = 4
 private const val GridColumnMinFitRatio = 0.94f
+private const val TvInitialFocusAttempts = 20
+
+/** TV grid scale multiplier; [compactPosterCardStyle] clamps the result at 1.4x. */
+private const val TvGridScaleBoost = 1.4f
+private const val MaxGridScale = 1.4f
 private val QuickFilterChipHeight = 32.dp
 private val QuickFilterChipIconSize = 16.dp
 internal val GridHorizontalPadding = AppLayoutTokens.compactItemHorizontalPadding
@@ -276,6 +281,14 @@ fun KototoroContentListScreen(
     }
     val context = LocalContext.current
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    // 10-foot UI: the same user grid scale renders covers ~100dp wide, which reads as postage
+    // stamps from a couch. Boost the scale on TV so covers and their title/metadata text grow
+    // together (columns then quantize to fewer, larger cells).
+    val effectiveGridScale = if (isTvPresentation) {
+        (gridScale * TvGridScaleBoost).coerceAtMost(MaxGridScale)
+    } else {
+        gridScale
+    }
     val pagingSnapshotItems = pagingItems?.itemSnapshotList?.items
     val firstContentIndex = remember(itemCount, items, pagingSnapshotItems) {
         (0 until itemCount).firstOrNull { index -> peekItem(index) is ContentListModel }
@@ -294,10 +307,16 @@ fun KototoroContentListScreen(
         ?: fallbackContentId
     val firstContentFocusRequester = remember { FocusRequester() }
     // Moving between cards updates focusTargetId; it must not schedule another focus request.
+    // A paged list can hand out the target card several frames after its page arrives, so retry
+    // instead of giving up silently: the first attempt often lands before the card is composed.
     LaunchedEffect(isTvPresentation, focusTargetId != null, listMode) {
         if (isTvPresentation && focusTargetId != null) {
-            withFrameNanos { }
-            runCatching { firstContentFocusRequester.requestFocus() }
+            repeat(TvInitialFocusAttempts) {
+                withFrameNanos { }
+                if (runCatching { firstContentFocusRequester.requestFocus() }.isSuccess) {
+                    return@LaunchedEffect
+                }
+            }
         }
     }
     val defaultSecondaryAction: (Throwable) -> Unit = remember(context) {
@@ -376,7 +395,7 @@ fun KototoroContentListScreen(
                     ListMode.COMPACT_GRID,
                     ListMode.MOVIE_GRID,
                     ListMode.COMPACT_MOVIE_GRID -> {
-                        val posterStyle = listMode.gridPosterCardStyle(gridScale)
+                        val posterStyle = listMode.gridPosterCardStyle(effectiveGridScale)
                         val actualGridState = gridState ?: rememberLazyGridState()
                         ScrollToTopEffect {
                             scrollToTopAfterPagingSettles(pagingItems) {
@@ -470,7 +489,7 @@ fun KototoroContentListScreen(
                                                 sharedTransitionEnabled = sharedTransitionEnabled,
                                                 sharedElementInstanceKey = sharedElementInstanceKey,
                                                 showSourceInfo = showSourceOnCards,
-                                                gridScale = gridScale,
+                                                gridScale = effectiveGridScale,
                                                 cardStyle = effectivePosterStyle,
                                                 compactOverlay = listMode.hasTitleOverlay,
                                                 cellContentPadding = PaddingValues(0.dp),
@@ -486,7 +505,7 @@ fun KototoroContentListScreen(
                                         SupplementaryListItem(
                                             item = listModel,
                                             listMode = listMode,
-                                            gridScale = gridScale,
+                                            gridScale = effectiveGridScale,
                                             horizontalBleed = GridHorizontalPadding,
                                             onQuickFilterOptionClick = onQuickFilterOptionClick,
                                             showQuickFilterInline = showQuickFilterInline,
@@ -568,7 +587,7 @@ fun KototoroContentListScreen(
                                             SupplementaryListItem(
                                                 item = listModel,
                                                 listMode = listMode,
-                                                gridScale = gridScale,
+                                                gridScale = effectiveGridScale,
                                                 onQuickFilterOptionClick = onQuickFilterOptionClick,
                                                 showQuickFilterInline = showQuickFilterInline,
                                                 leadingContent = quickFilterLeadingContent,
@@ -649,7 +668,7 @@ fun KototoroContentListScreen(
                                             SupplementaryListItem(
                                                 item = listModel,
                                                 listMode = listMode,
-                                                gridScale = gridScale,
+                                                gridScale = effectiveGridScale,
                                                 onQuickFilterOptionClick = onQuickFilterOptionClick,
                                                 showQuickFilterInline = showQuickFilterInline,
                                                 leadingContent = quickFilterLeadingContent,

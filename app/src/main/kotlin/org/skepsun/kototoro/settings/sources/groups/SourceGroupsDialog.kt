@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
 import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 
@@ -228,7 +229,8 @@ fun SourceGroupsDialog(
 					onValueChange = { name = it },
 					singleLine = true,
 					label = { Text(stringResource(R.string.source_groups_name_hint)) },
-				)
+            modifier = Modifier.tvTextInputFocusEscape(),
+        )
 			},
 		)
 	}

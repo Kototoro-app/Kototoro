@@ -108,6 +108,7 @@ import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.mangaExtra
@@ -454,7 +455,8 @@ fun KototoroSearchOverlay(
                                 color = style.inputContainerColor,
                                 shape = RoundedCornerShape(style.inputCornerRadius),
                             )
-                            .focusRequester(focusRequester),
+                            .focusRequester(focusRequester)
+                            .tvTextInputFocusEscape(),
                         placeholder = {
                             Text(
                                 text = if (activeLibraryScope != null) {
@@ -1119,8 +1121,8 @@ private fun SearchSuggestionRow(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius), addFocusTarget = false),
+            .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius), addFocusTarget = false)
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(style.rowCornerRadius),
         color = containerColor,
     ) {
@@ -1170,8 +1172,8 @@ private fun SourceSuggestionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(style.rowCornerRadius))
-            .clickable(onClick = onClick)
             .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius), addFocusTarget = false)
+            .clickable(onClick = onClick)
             .background(style.rowContainerColor)
             .padding(start = 14.dp, top = 6.dp, end = 8.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1247,8 +1249,8 @@ private fun LibraryMatchRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(style.rowCornerRadius))
-            .clickable(onClick = onClick)
             .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius), addFocusTarget = false)
+            .clickable(onClick = onClick)
             .background(style.rowContainerColor)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1305,8 +1307,8 @@ private fun TrackingEntitySuggestionCard(
     Surface(
         modifier = Modifier
             .width(SearchSuggestionCardWidth)
-            .clickable(onClick = onClick)
-            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false),
+            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false)
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(style.cardCornerRadius),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f)),
@@ -1389,8 +1391,8 @@ private fun ContentSuggestionCard(
     Surface(
         modifier = Modifier
             .width(SearchSuggestionCardWidth)
-            .clickable(onClick = onClick)
-            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false),
+            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false)
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(style.cardCornerRadius),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(
@@ -1450,8 +1452,8 @@ private fun LocalEntitySuggestionCard(
     Surface(
         modifier = Modifier
             .width(SearchSuggestionCardWidth)
-            .clickable(onClick = onClick)
-            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false),
+            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false)
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(style.cardCornerRadius),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(

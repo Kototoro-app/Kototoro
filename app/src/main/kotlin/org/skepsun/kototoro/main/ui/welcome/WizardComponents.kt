@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -30,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 
 /**
  * Unified header for every setup-wizard page: a tinted icon, the current
@@ -170,11 +172,20 @@ internal fun WizardFilterChip(
     enabled: Boolean,
     onClick: () -> Unit,
     label: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     FilterChip(
         selected = selected,
         onClick = onClick,
         enabled = enabled,
+        // A TV remote needs to see where focus is: without the ring the chips are
+        // an invisible minefield of D-pad stops. The chip owns the focus target
+        // (its own clickable), so the ring only observes it.
+        modifier = modifier.tvFocusable(
+            enabled = enabled,
+            shape = FilterChipDefaults.shape,
+            addFocusTarget = false,
+        ),
         label = label,
         leadingIcon = if (selected) {
             {

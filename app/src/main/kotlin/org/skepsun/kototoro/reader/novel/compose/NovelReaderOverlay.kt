@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.reader.novel.tts.TtsPlaybackSpeed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
@@ -60,7 +63,9 @@ internal fun NovelReaderOverlay(
     LaunchedEffect(message) {
         if (message != null) displayedMessage = message
     }
-    Box(modifier = Modifier.fillMaxSize()) {
+    // 选项面板是同一层里的兄弟节点、且后组合，会盖住贴底的提示条；提示必须浮在它上面，
+    // 否则"按了快捷动作却什么都没发生"在电视上完全无法诊断。
+    Box(modifier = Modifier.fillMaxSize().zIndex(1f)) {
         AnimatedVisibility(
             visible = loading,
             enter = fadeIn().whenReaderAnimationsEnabled(animationsEnabled),
@@ -131,7 +136,10 @@ internal fun NovelReaderOverlay(
 
 @Composable
 private fun TtsButton(icon: Int, description: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+    ) {
         Icon(painterResource(icon), contentDescription = description)
     }
 }
@@ -144,7 +152,9 @@ internal fun TtsSpeedButton(speed: Float, onSpeedChange: (Float) -> Unit) {
     Box {
         TextButton(
             onClick = { expanded = true },
-            modifier = Modifier.semantics { contentDescription = "$title ${TtsPlaybackSpeed.label(speed)}" },
+            modifier = Modifier
+                .tvFocusable(shape = MaterialTheme.shapes.small, addFocusTarget = false)
+                .semantics { contentDescription = "$title ${TtsPlaybackSpeed.label(speed)}" },
         ) {
             Text(TtsPlaybackSpeed.label(speed), style = MaterialTheme.typography.labelLarge)
         }

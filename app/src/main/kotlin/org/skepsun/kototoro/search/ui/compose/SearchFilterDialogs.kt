@@ -63,6 +63,7 @@ import org.skepsun.kototoro.filter.ui.model.UiTagGroup
 import org.skepsun.kototoro.filter.data.PersistableFilter.Companion.MAX_TITLE_LENGTH
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.SortOrder
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import java.util.Locale
 
 private const val VISIBLE_TAG_LIMIT = 8
@@ -88,7 +89,7 @@ internal fun SaveFilterNameDialog(
                 OutlinedTextField(
                     value = value,
                     onValueChange = { value = it.take(MAX_TITLE_LENGTH) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
                     singleLine = true,
                     label = { Text(text = stringResource(R.string.filter_name)) },
                     isError = hasError,
@@ -138,7 +139,7 @@ internal fun TextInputTagDialog(
             OutlinedTextField(
                 value = value,
                 onValueChange = { value = it },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
                 singleLine = true,
                 label = { Text(text = title) },
                 colors = OutlinedTextFieldDefaults.colors(
@@ -383,7 +384,7 @@ internal fun TagGroupsSection(
                     BasicTextField(
                         value = query,
                         onValueChange = { query = it },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).tvTextInputFocusEscape(),
                         singleLine = true,
                         textStyle = MaterialTheme.typography.bodySmall.copy(
                             color = MaterialTheme.colorScheme.onSurface,

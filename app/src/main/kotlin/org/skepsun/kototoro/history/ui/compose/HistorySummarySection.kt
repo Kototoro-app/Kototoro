@@ -39,6 +39,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.parsers.model.Content
@@ -78,6 +79,9 @@ fun HistoryStatsSummaryCard(
     } else {
         Color.White.copy(alpha = 0.24f)
     }
+    // On a TV the card sits above a grid row whose focused card must stay fully visible;
+    // the activity bars are decorative at 10 feet and cost more than the grid can spare.
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
 
     Surface(
         modifier = modifier
@@ -96,7 +100,10 @@ fun HistoryStatsSummaryCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                    .padding(
+                        horizontal = 18.dp,
+                        vertical = if (isTvPresentation) 10.dp else 14.dp,
+                    ),
             ) {
                 StatsCardHeader(
                     dashboard = dashboard,
@@ -115,7 +122,7 @@ fun HistoryStatsSummaryCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = textMuted,
                 )
-                if (dashboard.dailyActivity.isNotEmpty()) {
+                if (!isTvPresentation && dashboard.dailyActivity.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     CompactActivityBars(
                         activity = dashboard.dailyActivity,
@@ -123,7 +130,7 @@ fun HistoryStatsSummaryCard(
                         accentColor = textColor,
                     )
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(if (isTvPresentation) 8.dp else 12.dp))
                 StatsMetricsFooter(
                     activeDays = dashboard.activeDays,
                     sessions = dashboard.sessionCount,

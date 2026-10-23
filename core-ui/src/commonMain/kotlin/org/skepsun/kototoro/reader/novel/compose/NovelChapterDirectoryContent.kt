@@ -15,6 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
@@ -24,6 +26,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 import org.skepsun.kototoro.reader.ui.compose.design.currentReaderPanelColors
 
@@ -74,6 +79,22 @@ fun NovelChapterDirectoryContent(
         if (items.isNotEmpty()) {
             val position = if (query.isBlank()) currentPosition else 0
             if (position >= 0) listState.scrollToItem(position)
+        }
+    }
+    // A remote never scrolls the list by touch, so open the directory on the row being read:
+    // one down press then reaches the next chapter instead of walking through every header.
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val currentChapterKey = remember(items, currentPosition) {
+        (items.getOrNull(currentPosition) as? NovelChapterDirectoryItem.Chapter)?.key
+    }
+    val initialFocusRequester = remember { FocusRequester() }
+    var hasRequestedInitialFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(isTvPresentation, currentChapterKey) {
+        if (isTvPresentation && !hasRequestedInitialFocus && currentChapterKey != null) {
+            withFrameNanos { }
+            if (runCatching { initialFocusRequester.requestFocus() }.isSuccess) {
+                hasRequestedInitialFocus = true
+            }
         }
     }
 
@@ -134,9 +155,15 @@ fun NovelChapterDirectoryContent(
                             state = novelChapterReadState(item.originalIndex, currentIndex),
                             onClick = { onChapterSelected(item.originalIndex) },
                             enabled = enabled,
-                            modifier = Modifier.testTag(
-                                "novel-directory-chapter:${item.chapter.id}:${item.originalIndex}",
-                            ),
+                            modifier = Modifier
+                                .testTag("novel-directory-chapter:${item.chapter.id}:${item.originalIndex}")
+                                .then(
+                                    if (item.key == currentChapterKey) {
+                                        Modifier.focusRequester(initialFocusRequester)
+                                    } else {
+                                        Modifier
+                                    },
+                                ),
                             onTranslate = onChapterTranslate?.let { translate -> { translate(item.chapter) } },
                             isTranslated = item.chapter.isTranslated,
                             translationProgress = item.chapter.translationProgress,
@@ -175,13 +202,17 @@ private fun NovelChapterRow(
 ) {
     val colors = currentReaderPanelColors()
     val current = state == NovelChapterReadState.CURRENT
+    val shape = RoundedCornerShape(12.dp)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .semantics { selected = current }
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(shape)
             .background(if (current) colors.selectedContainer else Color.Transparent)
+            // A remote has no pointer to show where it is, so the focused chapter needs an outline.
+            // It stays before clickable: onFocusChanged only sees the focus target that follows it.
+            .tvFocusable(shape = shape, addFocusTarget = false)
             .clickable(enabled = enabled, onClick = onClick)
             .heightIn(min = 48.dp)
             .alpha(if (state == NovelChapterReadState.READ) 0.6f else 1f),
@@ -295,6 +326,7 @@ fun SharedNovelReaderSearchField(
                 modifier = Modifier
                     .weight(1f)
                     .testTag(queryTag)
+                    .tvTextInputFocusEscape()
                     .padding(horizontal = 8.dp),
                 decorationBox = { innerTextField ->
                     Box(contentAlignment = Alignment.CenterStart) {

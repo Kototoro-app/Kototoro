@@ -69,6 +69,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
@@ -125,7 +126,7 @@ internal fun SourceSearchField(
                 onValueChange = onValueChange,
                 modifier = Modifier
                     .fillMaxSize()
-                    .onFocusChanged { isFocused = it.isFocused },
+                    .onFocusChanged { isFocused = it.isFocused }.tvTextInputFocusEscape(),
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
                     color = MaterialTheme.colorScheme.onSurface,

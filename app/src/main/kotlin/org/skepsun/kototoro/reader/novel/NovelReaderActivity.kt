@@ -12,6 +12,7 @@ import android.util.Base64
 import android.view.KeyEvent
 import android.view.View
 import androidx.activity.viewModels
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ComposeFoundationFlags
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
@@ -719,6 +720,18 @@ class NovelReaderActivity :
         }
     }
 
+    /**
+     * Closes a reader panel. On TV every panel is opened from the chrome, and leaving the chrome up
+     * would keep the D-pad in the top bar: the first LEFT/RIGHT after closing the panel would move
+     * between chrome controls instead of turning the page. Chrome comes back with BACK.
+     */
+    private fun dismissReaderPanel(dismiss: () -> Unit) {
+        dismiss()
+        if (isTvPresentation) {
+            setUiVisible(false)
+        }
+    }
+
     private fun setupComposeContent() {
         val callbacks = NovelReaderChromeCallbacks(
             onNavigateBack = onBackPressedDispatcher::onBackPressed,
@@ -734,9 +747,9 @@ class NovelReaderActivity :
                 onChapterSelected(index)
             },
             onSearchResultSelected = ::jumpToNovelSearchResult,
-            onDismissSettings = composeReaderViewModel::dismissSettings,
-            onDismissChapters = composeReaderViewModel::dismissChapters,
-            onDismissTools = composeReaderViewModel::dismissTools,
+            onDismissSettings = { dismissReaderPanel(composeReaderViewModel::dismissSettings) },
+            onDismissChapters = { dismissReaderPanel(composeReaderViewModel::dismissChapters) },
+            onDismissTools = { dismissReaderPanel(composeReaderViewModel::dismissTools) },
             onShowSettings = { composeReaderViewModel.showSettings(readerSettings) },
             onShowChapters = ::showChaptersSheet,
             onShowReplaceRules = composeReaderViewModel::showReplaceRules,
@@ -744,7 +757,7 @@ class NovelReaderActivity :
             onToggleTranslation = ::toggleTranslation,
             onToggleReplaceRules = ::toggleReplaceRules,
             onDismissReplaceRules = composeReaderViewModel::dismissReplaceRules,
-            onDismissMarkings = composeReaderViewModel::dismissMarkings,
+            onDismissMarkings = { dismissReaderPanel(composeReaderViewModel::dismissMarkings) },
             onReplaceRuleToggle = ::toggleReplaceRule,
             onEditMarkingNote = ::editNovelMarkingNote,
             onDeleteMarking = ::deleteNovelMarking,
@@ -772,6 +785,15 @@ class NovelReaderActivity :
             KototoroTheme {
                 val presentationConfig = LocalUiPresentationConfig.current
                 val state by composeReaderViewModel.uiState.collectAsStateWithLifecycle()
+                BackHandler(
+                    enabled = shouldInterceptNovelReaderTvBack(
+                        presentationConfig.isTv,
+                        state.controlsVisible,
+                        hasReaderSubOverlay(),
+                    ),
+                ) {
+                    setUiVisible(false)
+                }
                 val floatingControls by settings.observeAsState(AppSettings.KEY_NOVEL_READER_CONTROLS) {
                     novelReaderControls
                 }
@@ -1221,25 +1243,35 @@ class NovelReaderActivity :
         }
     }
 
+    private fun hasReaderSubOverlay(): Boolean {
+        val uiState = composeReaderViewModel.uiState.value
+        return uiState.settingsSheetVisible ||
+            uiState.replaceRulesSheetVisible ||
+            uiState.markingsSheetVisible ||
+            uiState.chaptersSheetVisible ||
+            uiState.toolsSheetVisible ||
+            uiState.ttsControlsVisible ||
+            ttsVoiceDialogState != null ||
+            noteSelection != null ||
+            noteMarking != null ||
+            noteDetailMarking != null
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
-            val uiState = composeReaderViewModel.uiState.value
-            val hasSubOverlay = uiState.settingsSheetVisible ||
-                uiState.replaceRulesSheetVisible ||
-                uiState.markingsSheetVisible ||
-                uiState.chaptersSheetVisible ||
-                uiState.toolsSheetVisible ||
-                uiState.ttsControlsVisible ||
-                ttsVoiceDialogState != null ||
-                noteSelection != null ||
-                noteMarking != null ||
-                noteDetailMarking != null
-            if (shouldInterceptNovelReaderTvBack(isTvPresentation, isUiVisible, hasSubOverlay)) {
+            if (shouldInterceptNovelReaderTvBack(isTvPresentation, isUiVisible, hasReaderSubOverlay())) {
                 if (event.action == KeyEvent.ACTION_UP) {
                     setUiVisible(false)
                 }
                 return true
             }
+        }
+
+        if (shouldShowNovelReaderTvChrome(isTvPresentation, isUiVisible, hasReaderSubOverlay(), event.keyCode)) {
+            if (event.action == KeyEvent.ACTION_UP) {
+                setUiVisible(true)
+            }
+            return true
         }
 
         when (
@@ -1316,6 +1348,14 @@ class NovelReaderActivity :
 
     private fun toggleTranslation() {
         val enabled = !readerSettings.isTranslationEnabled
+        if (enabled && !hasTranslationConfig()) {
+            // 没配引擎时不要先把开关翻成"开"：否则状态说在翻译、屏幕上却什么都没变。
+            showReaderMessage(
+                getString(R.string.novel_reader_translation_not_configured),
+                3000L,
+            )
+            return
+        }
         readerSettings = readerSettings.copy(isTranslationEnabled = enabled)
         readerSettings.save(this)
         composeReaderViewModel.publishSettings(readerSettings)
@@ -1369,6 +1409,13 @@ class NovelReaderActivity :
         }
     }
 
+    /** 翻译需要本地模型或 API 端点二者之一，否则开关只会变成空转。 */
+    private fun hasTranslationConfig(): Boolean {
+        val hasOnnx = settings.readerTranslationOnnxModelId.isNotBlank()
+        val hasApi = settings.readerTranslationApiEndpoint.isNotBlank()
+        return hasOnnx || hasApi || settings.readerTranslationMode.name == "LOCAL_ONLY"
+    }
+
     private fun startTranslation() {
         translationJob?.cancel()
         val content = getCurrentChapterContent()
@@ -1378,13 +1425,7 @@ class NovelReaderActivity :
             return
         }
 
-        // 检查是否有可用的翻译配置
-        val mode = settings.readerTranslationMode
-        val onnxModelId = settings.readerTranslationOnnxModelId
-        val hasOnnx = onnxModelId.isNotBlank()
-        val hasApi = settings.readerTranslationApiEndpoint.isNotBlank()
-        android.util.Log.d("NovelReaderActivity", "Translation config: mode=$mode, onnxModelId='$onnxModelId', hasOnnx=$hasOnnx, hasApi=$hasApi")
-        if (!hasOnnx && !hasApi && mode.name != "LOCAL_ONLY") {
+        if (!hasTranslationConfig()) {
             showReaderMessage(
                 getString(R.string.novel_reader_translation_not_configured),
                 3000L,

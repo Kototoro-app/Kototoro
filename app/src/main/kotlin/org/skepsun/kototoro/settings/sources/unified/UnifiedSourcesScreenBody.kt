@@ -52,16 +52,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import kotlinx.coroutines.launch
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.onKeyEvent
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -131,9 +121,6 @@ fun UnifiedSourcesScreen(
     val packageListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     val selectedTab = pagerState.currentPage.coerceIn(0, UNIFIED_SOURCES_TAB_COUNT - 1)
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
-    val scope = rememberCoroutineScope()
-    val pageFocusRequesters = remember { List(UNIFIED_SOURCES_TAB_COUNT) { FocusRequester() } }
-    val filtersFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(tabReselectTrigger) {
         val trigger = tabReselectTrigger ?: return@LaunchedEffect
@@ -167,37 +154,12 @@ fun UnifiedSourcesScreen(
         onClearSourceSelection()
     }
     Scaffold(
-        modifier = modifier.onKeyEvent { event ->
-            val delta = when (event.key) {
-                Key.DirectionLeft -> -1
-                Key.DirectionRight -> 1
-                else -> 0
-            }
-            val target = pagerState.currentPage + delta
-            if (!isTvPresentation || delta == 0 || target !in 0 until UNIFIED_SOURCES_TAB_COUNT) {
-                false
-            } else {
-                if (event.type == KeyEventType.KeyDown) {
-                    scope.launch {
-                        pagerState.scrollToPage(target)
-                        withFrameNanos { }
-                        if (pagerState.currentPage == target && readyState != null) {
-                            // Loading or a concurrent tab change may detach a requester before this frame.
-                            val focused = runCatching { pageFocusRequesters[target].requestFocus() }.getOrDefault(false)
-                            if (!focused) {
-                                runCatching { filtersFocusRequester.requestFocus() }
-                            }
-                        }
-                    }
-                }
-                true
-            }
-        },
+        modifier = modifier,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             Column(
                 modifier = if (isTvPresentation) {
-                    Modifier.focusRequester(filtersFocusRequester).focusGroup()
+                    Modifier.focusGroup()
                 } else {
                     Modifier
                 },
@@ -267,7 +229,7 @@ fun UnifiedSourcesScreen(
                         ) { page ->
                             val pageModifier = Modifier.fillMaxSize().then(
                                 if (isTvPresentation) {
-                                    Modifier.focusRequester(pageFocusRequesters[page]).focusGroup()
+                                    Modifier.focusGroup()
                                 } else {
                                     Modifier
                                 },

@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -46,8 +48,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -59,6 +65,9 @@ import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputEnterAction
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
@@ -393,6 +402,22 @@ private fun SpaceEditorDialog(
     onConfirm: (SpaceContext) -> Unit,
 ) {
     var draft by remember(initial) { mutableStateOf(initial) }
+    val fieldExit = rememberTvFieldExit()
+    // The confirm button is disabled until a name and a content type exist, and a disabled button
+    // cannot take focus, so Enter would leave the field with nowhere to go. Hand focus to
+    // "select all" instead: one press then makes the form valid.
+    val canConfirm = draft.title?.isNotBlank() == true && draft.allowedContentTypes.isNotEmpty()
+    val selectAllRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val advanceToSelectAll = if (canConfirm) {
+        Modifier
+    } else {
+        Modifier.tvTextInputEnterAction {
+            keyboardController?.hide()
+            selectAllRequester.requestFocus()
+            Unit
+        }
+    }
     val allContentTypes = remember { ContentType.entries.filterNot { it == ContentType.OTHER } }
 
     SettingsAlertDialog(
@@ -431,7 +456,12 @@ private fun SpaceEditorDialog(
                     },
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { fieldExit.onDone() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(advanceToSelectAll)
+                        .then(fieldExit.fieldModifier),
                 )
 
                 // Content Types Section
@@ -476,6 +506,13 @@ private fun SpaceEditorDialog(
                                     allowedContentTypes = if (isAllSelected) emptySet() else allContentTypes.toSet(),
                                 )
                             },
+                            modifier = Modifier
+                                .focusRequester(selectAllRequester)
+                                .tvFocusable(
+                                    enabled = true,
+                                    shape = RoundedCornerShape(8.dp),
+                                    addFocusTarget = false,
+                                ),
                         ) {
                             Text(
                                 text = stringResource(if (isAllSelected) R.string.deselect_all else R.string.select_all),
@@ -704,7 +741,8 @@ private fun SpaceEditorDialog(
         confirmButton = {
             SettingsDialogActionButton(
                 text = stringResource(android.R.string.ok),
-                enabled = draft.title?.isNotBlank() == true && draft.allowedContentTypes.isNotEmpty(),
+                enabled = canConfirm,
+                modifier = fieldExit.targetModifier,
                 onClick = {
                     onConfirm(
                         draft.copy(

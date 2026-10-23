@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -49,6 +50,11 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -59,6 +65,7 @@ import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.ReaderOcrMode
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
@@ -77,6 +84,7 @@ import org.skepsun.kototoro.reader.ui.compose.design.ReaderQuickAction
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderQuickActionGrid
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderSliderRow
 import org.skepsun.kototoro.reader.ui.compose.design.currentReaderPanelColors
+import org.skepsun.kototoro.reader.ui.compose.panel.LocalReaderSheetActions
 import org.skepsun.kototoro.reader.ui.config.ImageServerOptions
 
 @Immutable
@@ -293,6 +301,24 @@ fun ReaderOptionsDetailTabs(
 ) {
     val pagerState = rememberPagerState(pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
+    // A remote cannot drag the sheet open, so choosing a tab has to reveal the page it switches to.
+    // The provider leaves this empty off TV, where the drag handle is the way up.
+    val sheetActions = LocalReaderSheetActions.current
+    val isTv = LocalUiPresentationConfig.current.isTv
+    // At the peek the tab pages sit below the fold: the first row of the selected page is clipped at
+    // the screen edge but still focusable, so DOWN would move the ring off screen. Pull the sheet up
+    // first and let the next press travel into the page.
+    val expandOnPeekDown = if (isTv) {
+        Modifier.onPreviewKeyEvent { event ->
+            val peeking = event.type == KeyEventType.KeyDown &&
+                event.key == Key.DirectionDown &&
+                !sheetActions.isExpanded()
+            if (peeking) sheetActions.expand()
+            peeking
+        }
+    } else {
+        Modifier
+    }
     val settingsButton: (@Composable () -> Unit)? = if (onOpenSettings == null) null else {
         {
             IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("reader-options-settings")) {
@@ -304,8 +330,11 @@ fun ReaderOptionsDetailTabs(
         ReaderPanelTabBar(
             labels = tabs.map { it.label },
             selectedIndex = pagerState.currentPage,
-            onSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
-            modifier = dragModifier,
+            onSelected = {
+                scope.launch { pagerState.animateScrollToPage(it) }
+                sheetActions.expand()
+            },
+            modifier = dragModifier.then(expandOnPeekDown),
             trailing = settingsButton,
         )
         HorizontalPager(
@@ -650,10 +679,13 @@ fun ReaderBackgroundSwatches(
 fun ReaderOptionsPageList(
     content: LazyListScope.() -> Unit,
 ) {
+    val isTv = LocalUiPresentationConfig.current.isTv
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        modifier = Modifier.fillMaxSize(),
+        // A scrollable list is itself a focus stop on TV: the first direction press would land on the
+        // list instead of its first row, so the ring stays hidden for one press.
+        modifier = Modifier.fillMaxSize().focusProperties { if (isTv) canFocus = false },
         content = content,
     )
 }
