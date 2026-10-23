@@ -289,6 +289,10 @@ npm run docs:build
   Windows 本地打包已接：独立 JVM/EXE、ZIP 与 per-user MSI，程序目录在 LocalAppData/Kototoro-App，
   与用户数据隔离；移动目录原生/窗口测试、MSI 全文件 SHA/目录检查已接。实际安装/升级/卸载、
   S3/签名仍待，见 README 与计划 §35、§40–54。
+  共享文案层已接：`core-ui` 的 `UiStrings`/`LocalUiStrings`/`uiString` 让共享界面按 Android 资源名取词，
+  Android 走 `R.string`（`AndroidUiStrings`），Windows 走 `prepareDesktopStrings` 由同一份
+  `app/src/main/res` 导出的目录（`DesktopUiStrings`），内容类型标题改为派生自类型名而不再各存一份，
+  重复的 `label.contentType.*` 已删除；`:core-ui:verifyUiStrings` 校验共享键与 `ContentType` 都有资源。
 - `core-net/` - 共享 HTTP 协议（KMP）：`GoogleDriveSyncApi`、嵌套 `DriveFile` 与 API 异常保持原包名。
   WebDAV 的 `WebDavBackupClient`、远端备份分类/选取/保留规则与 `RemoteNamespace` 也在 commonMain；
   multistatus/HTTP 日期解析 `parseWebDavResources` 同样在 commonMain（无 DOM，Windows 与 iOS 共用），

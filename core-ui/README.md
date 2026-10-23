@@ -9,6 +9,12 @@ Android/JVM Compose Multiplatform presentation extracted from the Android applic
   to all actions. The Material preview surface is shared as well; Android supplies its glass alternative.
 - `theme`: existing Android typography, interface geometry tokens and shape mapping. Font loading, preferences,
   palette resolution and expressive motion configuration remain platform adapters.
+- `text`: the wording Android's catalogs own, addressed by resource name (`content_type_manga`) so a shared screen
+  carries no copy of it. `UiStrings` + `LocalUiStrings` + `uiString`/`uiStringArray`; each host injects its own
+  catalog at its theme root — Android answers `R.string`, Windows answers the catalog `prepareDesktopStrings` exports
+  from the same files, so one translation serves both. Content-type titles derive their name from the type itself
+  (`source/contentTypeTitle`), and `:core-ui:verifyUiStrings` fails the build when a shared key, or a content type,
+  has no Android string.
 - `compose` / `list.ui.compose`: Android cover geometry, poster frame, spine and compact title overlay. Images,
   selection, badges and progress are slots; Android retains Coil caching, shared transitions and TV focus.
 - `source` / `explore.ui.compose`: Android source grid tile and its scale-dependent geometry. Hosts resolve
@@ -30,7 +36,8 @@ Android/JVM Compose Multiplatform presentation extracted from the Android applic
 Android keeps the existing theme entry, settings and Hilt. Desktop provides a Material3 theme and temporarily
 maps the same roles into Material 2 for screens not yet migrated. iOS UI targets are intentionally not added.
 
-Validate with `:core-ui:jvmTest`, `:app:compileDebugKotlin` and the optional `:desktop-app:test` task. The desktop
+Validate with `:core-ui:jvmTest`, `:core-ui:verifyUiStrings`, `:app:compileDebugKotlin` and the optional
+`:desktop-app:test` task. The desktop
 tests exercise shared home layout/hero scrolling, previews, source actions, poster title bounds and actual Skiko blur in both themes, plus
 real source/library/reader flows. The five tablet screenshots supplied by the user on 2026-10-04 supersede
 old repository screenshots; palettes still follow theme settings. Home section assembly, the subscription page

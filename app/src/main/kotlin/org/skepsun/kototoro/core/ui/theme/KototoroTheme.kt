@@ -29,6 +29,8 @@ import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.util.ext.getThemeColor
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.ui.compose.ContentSourceResolutionProvider
+import org.skepsun.kototoro.core.ui.text.AndroidUiStrings
+import org.skepsun.kototoro.core.ui.text.LocalUiStrings
 
 import androidx.compose.ui.unit.dp
 
@@ -63,6 +65,8 @@ fun KototoroTheme(
     val context = LocalContext.current
     val appContext = context.applicationContext
     val settings = remember(appContext) { AppSettings(appContext) }
+    // Android's catalog for the screens both hosts share (see core.ui.text.UiStrings).
+    val uiStrings = remember(appContext) { AndroidUiStrings(appContext) }
     val interfaceStyle by settings.observeAsState(AppSettings.KEY_INTERFACE_STYLE) {
         interfaceStyle
     }
@@ -138,6 +142,7 @@ fun KototoroTheme(
 
     CompositionLocalProvider(
         LocalMaterialExpressiveComponentsEnabled provides expressiveComponents,
+        LocalUiStrings provides uiStrings,
         LocalInterfaceStyle provides effectiveInterfaceStyle,
         LocalInterfaceStyleTokens provides styleTokens,
         LocalInterfaceStylePolicy provides stylePolicy,

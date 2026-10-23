@@ -62,9 +62,9 @@ internal val DesktopContentTabs: List<BrowseGroupTab> =
     listOf(BrowseGroupTab.All, BrowseGroupTab.Content, BrowseGroupTab.Novel, BrowseGroupTab.Video)
 
 internal fun BrowseGroupTab.desktopTitle(): String = when (this) {
-    BrowseGroupTab.Content -> desktopText("label.contentType.MANGA")
-    BrowseGroupTab.Novel -> desktopText("label.contentType.NOVEL")
-    BrowseGroupTab.Video -> desktopText("label.contentType.VIDEO")
+    BrowseGroupTab.Content -> DesktopSourceLabels.contentType("MANGA")
+    BrowseGroupTab.Novel -> DesktopSourceLabels.contentType("NOVEL")
+    BrowseGroupTab.Video -> DesktopSourceLabels.contentType("VIDEO")
     else -> desktopText("common.all")
 }
 

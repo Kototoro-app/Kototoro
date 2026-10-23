@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.text.LocalUiStrings
 import org.skepsun.kototoro.core.ui.theme.*
 
 /** The label is resolved per access, so a language switch relabels the buttons without a restart. */
@@ -86,7 +87,8 @@ internal fun DesktopTheme(appearance: DesktopAppearance = DesktopAppearance.SYST
                 body2 = typography.bodyMedium, button = typography.labelLarge, caption = typography.bodySmall)) {
             CompositionLocalProvider(LocalContentColor provides MaterialTheme.colors.onSurface,
                 LocalDesktopInterfaceStyle provides interfaceStyle, LocalInterfaceStyleTokens provides tokens,
-                content = content)
+                // Android's own catalog for the screens both hosts share (see DesktopUiStrings).
+                LocalUiStrings provides DesktopUiStrings, content = content)
         }
     }
 }

@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.desktop.app
 
 import org.skepsun.kototoro.core.source.SourceEcosystem
+import org.skepsun.kototoro.core.ui.source.contentTypeTitle
 
 /** User-facing names for source metadata; the identifiers themselves stay in the protocol. */
 internal object DesktopSourceLabels {
@@ -14,23 +15,8 @@ internal object DesktopSourceLabels {
         SourceEcosystem.CLOUDSTREAM -> "Cloudstream"
     }
 
-    fun contentType(name: String) = when (name) {
-        "MANGA" -> desktopText("label.contentType.MANGA")
-        "MANHWA" -> desktopText("label.contentType.MANHWA")
-        "MANHUA" -> desktopText("label.contentType.MANHUA")
-        "HENTAI_MANGA" -> desktopText("label.contentType.HENTAI_MANGA")
-        "HENTAI_NOVEL" -> desktopText("label.contentType.HENTAI_NOVEL")
-        "HENTAI_VIDEO" -> desktopText("label.contentType.HENTAI_VIDEO")
-        "COMICS" -> desktopText("label.contentType.COMICS")
-        "VIDEO" -> desktopText("label.contentType.VIDEO")
-        "NOVEL" -> desktopText("label.contentType.NOVEL")
-        "ONE_SHOT" -> desktopText("label.contentType.ONE_SHOT")
-        "DOUJINSHI" -> desktopText("label.contentType.DOUJINSHI")
-        "IMAGE_SET" -> desktopText("label.contentType.IMAGE_SET")
-        "ARTIST_CG" -> desktopText("label.contentType.ARTIST_CG")
-        "GAME_CG" -> desktopText("label.contentType.GAME_CG")
-        else -> desktopText("label.contentType.OTHER")
-    }
+    /** Android's own content-type title, so both hosts read one translation instead of two copies of the text. */
+    fun contentType(name: String) = DesktopUiStrings.contentTypeTitle(name)
 
     fun sortOrder(name: String) = when (name) {
         "UPDATED" -> desktopText("label.sort.UPDATED")

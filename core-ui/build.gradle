@@ -85,3 +85,76 @@ kotlin {
 }
 
 tasks.withType(Test).configureEach { useJUnitPlatform() }
+
+/**
+ * Guards the shared text layer: a screen both hosts render names one of Android's own string resources (`uiString`),
+ * because Android answers the name from `R.string` while Windows answers it from the catalog
+ * `:desktop-app:prepareDesktopStrings` exports. A key that is not one of Android's resources would show raw text on
+ * both hosts, so it fails here instead — together with a name only one host's catalog could answer.
+ */
+def verifyUiStrings = tasks.register('verifyUiStrings') {
+    group = 'verification'
+    description = 'Checks that every shared UI string names an existing Android string resource.'
+    def sources = files(
+        fileTree('src/commonMain/kotlin') { include '**/*.kt' },
+        fileTree(rootProject.file('app/src/main/kotlin')) { include '**/*.kt' },
+        fileTree(rootProject.file('desktop-app/src/main/kotlin')) { include '**/*.kt' },
+    )
+    def catalogs = fileTree(rootProject.file('app/src/main/res')) { include 'values*/strings*.xml', 'values*/arrays.xml' }
+    // The parser's own content types, each of which the shared title table derives a resource name from.
+    def contentTypes = rootProject.file('parser-api/src/commonMain/kotlin/org/skepsun/kototoro/parsers/model/ContentType.kt')
+    inputs.files(sources)
+    inputs.files(catalogs)
+    inputs.file(contentTypes)
+    outputs.upToDateWhen { false }
+    doLast {
+        def declared = new HashSet<String>()
+        catalogs.files.each { file ->
+            def root = new groovy.xml.XmlParser(false, false).parse(file)
+            root.children().each { node ->
+                if (node.name() in ['string', 'string-array']) declared << node.attribute('name')
+            }
+        }
+        if (declared.size() < 1000) throw new GradleException("Read only ${declared.size()} Android strings: " +
+            "the catalogs under app/src/main/res were not scanned as expected.") 
+        // `uiString("…")` and `uiStringArray("…")`: a name passed to a lookup, as a literal.
+        def lookup = ~/uiString(?:Array)?\("([^"$]+)"\)/
+        def missing = new TreeSet<String>()
+        def found = new TreeSet<String>()
+        sources.files.findAll { it.isFile() }.each { file ->
+            file.getText('UTF-8').eachLine { line ->
+                lookup.matcher(line).each { match ->
+                    def name = match[1]
+                    found << name
+                    if (!(name in declared)) missing << "${file.name}: ${name}".toString()
+                }
+            }
+        }
+        // Every content type the protocol carries must have a title, because the shared table derives its name from
+        // the type: a new type without `content_type_<name>` would show its raw identifier on both hosts.
+        def inEnum = false
+        def types = []
+        contentTypes.eachLine('UTF-8') { line ->
+            if (line.contains('enum class ContentType')) inEnum = true
+            else if (inEnum) {
+                def entry = line =~ /^\s*([A-Z][A-Z_]+)\s*[,(]/
+                if (entry.find()) types << entry.group(1)
+            }
+        }
+        if (types.size() < 10) throw new GradleException("Read only ${types.size()} content types from " +
+            "${contentTypes.name}: the enum was not scanned as expected.")
+        types.each { type ->
+            def name = 'content_type_' + type.toLowerCase()
+            if (!(name in declared)) missing << "ContentType.$type: $name".toString()
+        }
+        if (!missing.isEmpty()) {
+            throw new GradleException("Shared UI strings that are not Android string resources:\n  " +
+                missing.join('\n  '))
+        }
+        logger.lifecycle("Shared UI strings: ${found.size()} lookups and ${types.size()} content types, " +
+            "all declared by app/src/main/res.")
+    }
+}
+
+tasks.named('check').configure { dependsOn verifyUiStrings }
+
