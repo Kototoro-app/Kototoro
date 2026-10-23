@@ -2710,7 +2710,36 @@ visible = bottomChromeVisibility.visible && !(isTvPresentation && expandedPanelV
 
 - 一轮里只验证到"一个按钮"的行（本地夹具的两章都已下载，`onDownload` 为空）。两个按钮同时存在时
   "翻译 → 下载 → 停住"这条链是按代码顺序推出来的，没在设备上走一遍。
-- 从阅读器 BACK 回详情页时，第一帧没有任何焦点（`start: (empty)`），第一次按方向键才出现环。
+
+## 第四十五轮：从阅读器回到详情页，焦点不再消失（2026-10-24）
+
+第四十四轮顺手测到的问题：在详情页按 Continue 进阅读器，再 BACK 回来，**整窗没有一个焦点节点**
+（`uiautomator` 里 `focused=0`），第一次按方向键才有环。电视上这一帧就是"遥控器坏了"。
+
+原因是详情页的 Continue 按钮只在**首次**请求过焦点（`hasRequestedInitialFocus` 这个一次性开关），
+而 Compose 的窗口焦点恢复在这种场景下没有可恢复的节点（离开时焦点在不同 Activity，回来时原节点
+可能已经不在了），于是没人接手。
+
+改法在 `DetailsDock` 的阅读按钮上：加一个 `LifecycleEventEffect(ON_RESUME)`，只在**窗口当前没有
+任何焦点**时 `requestFocusFromTouch()` + `requestFocus()` 回到主操作。这样：
+
+- 首次进入详情页仍走原来的首次焦点逻辑，不受影响；
+- 从阅读器（或其他 Activity）回来时，焦点落在 Continue 上，用户一按就能继续操作；
+- 有任何焦点时完全不插手，不会抢焦点。
+
+### 设备验证（emulator-5554）
+
+| 步骤 | 结果 |
+| --- | --- |
+| 详情页 Continue → CENTER 进阅读器 | `ReaderActivity`，整页焦点 |
+| BACK 回详情页（不按任何键，直接 dump） | `MainActivity`，焦点在 Continue `[1328,54][1588,150]` |
+| 再次 BACK | 回上层页面，焦点落在导航栏 `[16,296][152,432]` |
+
+### 遗留
+
+- 只覆盖了详情页这一条"回来"路径。从设置页、搜索页等其它入口返回时是否也会丢焦点没逐个验证；
+  抓到的共同点是"整窗无焦点"，同一个 `view.findFocus() == null` 判断可以按需复制到别的入口。
+
 
 
 

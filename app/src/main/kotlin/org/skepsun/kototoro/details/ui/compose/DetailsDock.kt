@@ -70,11 +70,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.rememberChapterRowActionPrefs
@@ -1311,12 +1314,29 @@ private fun ReadDock(
     var isReadButtonFocused by remember { mutableStateOf(false) }
     var isMoreButtonFocused by remember { mutableStateOf(false) }
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val view = LocalView.current
     val readButtonFocusRequester = remember { FocusRequester() }
     var hasRequestedInitialFocus by remember { mutableStateOf(false) }
     LaunchedEffect(isTvPresentation, isEnabled) {
         if (isTvPresentation && isEnabled && !hasRequestedInitialFocus) {
             withFrameNanos { }
             hasRequestedInitialFocus = runCatching { readButtonFocusRequester.requestFocus() }.getOrDefault(false)
+        }
+    }
+    // Coming back from the reader (a different activity) restores nothing: the window ends up with
+    // no focused node at all, so the first remote press looks like it did nothing. Park focus back
+    // on the primary action instead of waiting for the user to discover that.
+    var resumeTick by remember { mutableStateOf(0) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (isTvPresentation && isEnabled && view.findFocus() == null) {
+            resumeTick++
+        }
+    }
+    LaunchedEffect(resumeTick) {
+        if (resumeTick > 0) {
+            view.requestFocusFromTouch()
+            withFrameNanos { }
+            runCatching { readButtonFocusRequester.requestFocus() }
         }
     }
     val hasBranchOptions = branches.size > 1
