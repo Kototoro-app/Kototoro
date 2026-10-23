@@ -94,6 +94,8 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
     val state by controller.state.collectAsState()
     Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        MoreDestination(desktopText("settings.suggestions"), "ic_suggestion", desktopText("more.recommendationsSummary"),
+            enabled, tag = "settings-recommendations-open") { controller.showRecommendations() }
         MoreDestination(desktopText("more.extensions"), "ic_extension", desktopText("more.extensionsSummary"), enabled) {
             controller.showExtensions()
         }
@@ -131,7 +133,7 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
                 }
             }
         }
-        DesktopBackgroundSettings(controller, state, enabled)
+        DesktopTrackerSettings(controller, state, enabled)
         DesktopAppUpdateSection(controller, state, enabled, onExitRequest)
         Divider(Modifier.padding(vertical = 12.dp))
         Text(desktopText("more.advancedTools"), fontWeight = FontWeight.SemiBold, color = Muted)
@@ -140,9 +142,10 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
 }
 
 @Composable
-private fun MoreDestination(title: String, icon: String, description: String, enabled: Boolean, onClick: () -> Unit) {
+private fun MoreDestination(title: String, icon: String, description: String, enabled: Boolean, tag: String = "nav:$title",
+    onClick: () -> Unit) {
     Surface(shape = RoundedCornerShape(16.dp)) {
-        Row(Modifier.fillMaxWidth().testTag("nav:$title").clickable(enabled = enabled, onClick = onClick)
+        Row(Modifier.fillMaxWidth().testTag(tag).clickable(enabled = enabled, onClick = onClick)
             .padding(20.dp),
             horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(painterResource("icons/$icon.svg"), null, tint = Accent, modifier = Modifier.size(24.dp))

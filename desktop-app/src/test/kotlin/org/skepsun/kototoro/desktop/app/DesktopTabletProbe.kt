@@ -428,13 +428,30 @@ internal object DesktopTabletProbe {
                 onNodeWithTag("home-quick:0").performScrollTo().performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.LIBRARY)
 
-                // Settings: Android's tracker frequency choices persist; due jobs run outside the UI queue.
+                // Settings: Android's tracker frequency is a choice dialog, and the recommendation rules live on their
+                // own screen instead of being squashed into the "more" page as one row of chips per source.
                 onNodeWithTag("nav:更多").performClick(); idle()
-                onNodeWithTag("settings-tracker-frequency:2.0").performScrollTo().performClick(); idle()
+                onNodeWithTag("settings-tracker-frequency").performScrollTo().performClick(); idle()
+                onNodeWithTag("settings-tracker-frequency:2.0").performClick(); idle()
                 check(controller.state.value.trackerSettings.frequency == 2f)
                 check((session.storage.preferences.open("desktop_background").snapshot()["tracker_freq"]
                     as? org.skepsun.kototoro.core.source.SourcePreferenceValue.Text)?.value == "2.0")
+                onNodeWithTag("settings-tracker-dialog").assertDoesNotExist()
+                onNodeWithTag("settings-recommendations-open").performScrollTo().performClick(); idle()
+                check(controller.state.value.screen == DesktopScreen.RECOMMENDATIONS)
                 onNodeWithTag("settings-suggestions-enabled").assertExists()
+                onNodeWithTag("settings-suggestions-exclude-tags").assertExists()
+                snapshot("recommendations")
+                val sourceName = controller.state.value.sources.first().source.name
+                onNodeWithTag("settings-suggestions-prefer-sources").performScrollTo().performClick(); idle()
+                onNodeWithTag("settings-suggestions-sources-dialog").assertExists()
+                onNodeWithTag("settings-suggestions-prefer:$sourceName").performClick(); idle()
+                check(sourceName in controller.state.value.suggestionSettings.preferredSources)
+                onNodeWithTag("settings-suggestions-sources-dialog-close").performClick(); idle()
+                onNodeWithTag("settings-suggestions-sources-dialog").assertDoesNotExist()
+                onNodeWithTag("settings-suggestions-prefer:$sourceName").assertDoesNotExist()
+                onNodeWithTag("nav:更多").performClick(); idle()
+                check(controller.state.value.screen == DesktopScreen.MORE)
                 check(runBlocking { controller.runDueBackgroundWork() }.isEmpty()) { "both jobs just ran manually" }
                 val later = System.currentTimeMillis() + 10 * 3_600_000L
                 check(runBlocking { controller.runDueBackgroundWork(later) } ==

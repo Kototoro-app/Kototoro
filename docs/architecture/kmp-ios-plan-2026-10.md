@@ -6526,3 +6526,53 @@ Android 的来源设置由 `ComposePreferenceAdapter` 把 androidx `PreferenceCa
 截图 `write-preferences.png` 可见“设置”节标签、单卡片三行（User-Agent、域名、域名设置=Saved）与尾部箭头。
 `:desktop-app:verifyDesktopStrings`、`:core-ui:verifyUiStrings`、`:core-ui:compileCommonMainKotlinMetadata` 通过。
 本轮没有做推荐设置页与拓展管理页，也没有跑全量回归。
+## 136. Windows 推荐设置独立成页与共享设置对话框（2026-10-23）
+
+日期：2026-10-23。§135 之后用户继续指出“推荐设置（尤其是各个源的配置，怎么能平铺呢）”，
+桌面原来把推荐规则压缩在“更多”页的一张卡片里：两个开关、两个内联标签输入框，
+外加每个已装来源一行 `FilterChip`（优先/排除），正是 Android 刻意避免的平铺布局。
+Android 侧对应 `settings/compose/SuggestionsSettingsScreen.kt`：开关行、标签行（对话框编辑）、
+来源规则（多选对话框），彼此分组。
+
+### 独立页面
+
+- 新增 `DesktopRecommendations` 与 `DesktopScreen.RECOMMENDATIONS`，入口在“更多”页第一张卡片
+  （`ic_suggestion`，testTag `settings-recommendations-open`），页面内“返回”按钮回到“更多”，
+  标题用新增的 `screens.recommendations`。
+- 三节，全部使用 §135 的共享行：**推荐**（启用推荐整行开关 + 摘要、排除成人内容、说明 InfoRow）、
+  **标签**（排除标签 / 偏好标签：值行显示逗号连接值，开单行文本对话框，保存仍走共享
+  `parseSuggestionTags`）、**来源**（偏好来源 / 排除来源：值行显示来源显示名，开多选对话框）。
+- 已装来源不再逐行出现：多选对话框一次列出全部来源，勾选即时提交且保持打开；
+  两张列表互斥（勾选偏好来源会从排除列表移除，反之亦然），与旧 chips 的语义一致。
+- 关闭推荐时除“启用推荐”外全部禁用，对应 Android 的 preference 依赖关系。
+
+### 共享设置对话框
+
+- 新增 `DesktopSettingsDialogs.kt`：`DesktopChoiceSettingsDialog`（单选，选中即提交并关闭）、
+  `DesktopMultiChoiceSettingsDialog`（多选，逐项提交、保持打开）、
+  `DesktopTextSettingsDialog`（单行文本，`onSave` 返回 false 可让对话框保持打开，`secret` 用密码遮罩）。
+  tag 形状统一为 `bodyTag`、`<optionTagPrefix>:<value>`、`<bodyTag>-close`，方便探针关闭对话框。
+- 源设置页改用同一组对话框，行为与既有 tag（`preference-dialog:<id>`、`preference:<id>:<value>`、
+  `preference-field:<id>`、`preference-save:<id>`）不变，去掉了一份私有实现。
+
+### 更新检查
+
+- “更多”页的 tracker 卡片改为 `DesktopTrackerSettings`（原文件 `DesktopBackgroundSettings.kt`
+  重命名为 `DesktopTrackerSettings.kt`）：开关行 + 频率值行，频率从一排 chips 改成单选对话框
+  （行 tag `settings-tracker-frequency`，选项 `settings-tracker-frequency:<value>`），
+  与 Android 的列表偏好一致。
+
+### 文案
+
+- 新增 `screens.recommendations`、`common.back`、`more.recommendationsSummary`、
+  `settings.suggestionsTags`、`settings.suggestionsSources`、`settings.suggestionsPreferredSources`、
+  `settings.suggestionsExcludedSources`、`settings.suggestionsInfo`、`settings.suggestionsSourcesDetail`（中英各一份）。
+- 删除随 chips 一起消失的 `settings.prefer`、`settings.exclude`、`settings.sources`。
+
+验证：`:desktop-app:compileKotlin` 通过；`DesktopAppTest` 两例（tablet 四窗口 + 源设置两进程）
+tests=2 failures=0、`DesktopSourcePreferencesTest` tests=4 failures=0（读 `build/test-results/test/*.xml`）；
+`:desktop-app:verifyDesktopStrings` 通过（删掉三个未用键后才通过，剩余键全部被页面引用）。
+tablet 探针现在走“更多”→“频率对话框”选中 2.0（断言写回 `tracker_freq` 且对话框关闭）→
+“推荐设置”→ 勾选偏好来源（断言写回 `suggestionSettings.preferredSources`）→ 关闭对话框 → 回到“更多”；
+截图 `tablet-recommendations.png` 可见三节卡片、开关行、带箭头与摘要的值行。
+本轮没有做拓展管理页，也没有跑全量回归。

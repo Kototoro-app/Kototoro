@@ -242,7 +242,10 @@ npm run docs:build
   来源浏览/搜索、详情、收藏、分页图片阅读、历史与源设置，以及可选网页/HTML/JS 调试。
   源设置按 Android 折成带标题的 section（`host:` 行置默认节、有标题 GROUP 各自成节），开关整行可点、
   选项/多选/文本/动作行显示当前值并开对话框，行组件在 `core-ui` 的 `core/ui/settings/SharedSettingsRows.kt`
-  与 Android/iOS 共用，见计划 §135。
+  与 Android/iOS 共用，见计划 §135。推荐设置另有独立页面（更多 → 推荐设置）：推荐/标签/来源三节，
+  每个已装来源的“优先/排除”改为多选对话框而不是一行 chips，标签用文本对话框；
+  更新检查的频率也改成单选对话框。单选/多选/文本三种设置对话框集中在 `DesktopSettingsDialogs.kt`，
+  源设置页共用，见计划 §136。
   索引模型共用 core-source，APK-only 明确不可安装，构造/持久化失败保留旧扩展；范围见计划 §56。
   reader-core 决定单页/双页/RTL 的可见页面、宽图独页、Fit 排版与进度锚点；键盘翻页和同分支跨章按钮
   已接入。阅读模式/方向保存于原偏好 store，历史 percent 包含页组末页，page 保留起始锚点用于恢复。

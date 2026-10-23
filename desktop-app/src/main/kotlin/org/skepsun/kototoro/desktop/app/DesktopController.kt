@@ -66,7 +66,7 @@ internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
     listOf(Locale.getDefault(Locale.Category.DISPLAY), Locale.getDefault()).distinct()
         .map { ChapterBranchLocale(it.getDisplayLanguage(it), it.getDisplayName(it)) }
 
-enum class DesktopScreen { HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS, EXTENSIONS, MORE }
+enum class DesktopScreen { HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS, RECOMMENDATIONS, EXTENSIONS, MORE }
 
 data class DesktopAppState(
     val screen: DesktopScreen = DesktopScreen.EXPLORE,
@@ -1211,6 +1211,8 @@ class DesktopController(val session: DesktopSession) {
     }
 
     fun showBackups() = navigate { mutableState.update { it.copy(screen = DesktopScreen.BACKUPS) } }
+
+    fun showRecommendations() = navigate { mutableState.update { it.copy(screen = DesktopScreen.RECOMMENDATIONS) } }
 
     internal fun exportLibraryBackup(path: Path) = action {
         backups.export(path)

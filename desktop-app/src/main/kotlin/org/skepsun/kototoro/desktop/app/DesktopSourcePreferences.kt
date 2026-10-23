@@ -1,35 +1,20 @@
 package org.skepsun.kototoro.desktop.app
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.source.SourcePreferenceKind
 import org.skepsun.kototoro.core.source.SourcePreferenceNode
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
@@ -188,89 +173,27 @@ private fun SourcePreferenceDialogHost(
     onDismiss: () -> Unit,
 ) {
     val title = node.title.ifBlank { node.key.orEmpty() }
-    val enabled = node.enabled
     val summary = node.summary.takeIf(String::isNotBlank)
+    val options = node.choices.map { it.title to it.value }
+    val bodyTag = "preference-dialog:${node.id}"
+    val optionTags = "preference:${node.id}"
     when (dialog) {
-        is SourcePreferenceDialog.Choice -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(title) },
-            text = {
-                Column(Modifier.width(420.dp).heightIn(max = 420.dp).verticalScroll(rememberScrollState())
-                    .testTag("preference-dialog:${node.id}")) {
-                    if (summary != null) Text(summary, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
-                    val selected = (node.value as? SourcePreferenceValue.Text)?.value
-                    node.choices.forEach { choice ->
-                        Row(Modifier.fillMaxWidth().clickable(enabled = enabled) {
-                            controller.updatePreference(node, SourcePreferenceValue.Text(choice.value))
-                            onDismiss()
-                        }.padding(vertical = 4.dp).testTag("preference:${node.id}:${choice.value}"),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = choice.value == selected, onClick = null, enabled = enabled)
-                            Text(choice.title, modifier = Modifier.padding(start = 8.dp))
-                        }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onDismiss) { Text(desktopText("common.close")) } },
-        )
-        is SourcePreferenceDialog.MultiChoice -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(title) },
-            text = {
-                Column(Modifier.width(420.dp).heightIn(max = 420.dp).verticalScroll(rememberScrollState())
-                    .testTag("preference-dialog:${node.id}")) {
-                    if (summary != null) Text(summary, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
-                    val values = (node.value as? SourcePreferenceValue.TextSet)?.values.orEmpty()
-                    node.choices.forEach { choice ->
-                        val checked = choice.value in values
-                        Row(Modifier.fillMaxWidth().clickable(enabled = enabled) {
-                            controller.updatePreference(node, SourcePreferenceValue.TextSet(
-                                if (checked) values - choice.value else values + choice.value))
-                        }.padding(vertical = 4.dp).testTag("preference:${node.id}:${choice.value}"),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = checked, onCheckedChange = null, enabled = enabled)
-                            Text(choice.title, modifier = Modifier.padding(start = 8.dp))
-                        }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onDismiss) { Text(desktopText("common.close")) } },
-        )
-        is SourcePreferenceDialog.Text -> SourcePreferenceTextDialog(controller, node, title, summary, enabled, onDismiss)
-    }
-}
-
-@Composable
-private fun SourcePreferenceTextDialog(
-    controller: DesktopController,
-    node: SourcePreferenceNode,
-    title: String,
-    summary: String?,
-    enabled: Boolean,
-    onDismiss: () -> Unit,
-) {
-    val current = (node.value as? SourcePreferenceValue.Text)?.value.orEmpty()
-    var text by remember(node.id, current) { mutableStateOf(current) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(Modifier.width(460.dp).testTag("preference-dialog:${node.id}"),
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (summary != null) Text(summary, color = Muted, fontSize = 12.sp)
-                OutlinedTextField(text, { text = it }, enabled = enabled, singleLine = true,
-                    visualTransformation = if (node.isSecret) PasswordVisualTransformation() else VisualTransformation.None,
-                    modifier = Modifier.fillMaxWidth().testTag("preference-field:${node.id}"))
-            }
-        },
-        confirmButton = {
-            TextButton({
+        is SourcePreferenceDialog.Choice -> DesktopChoiceSettingsDialog(title, summary, bodyTag, optionTags, options,
+            selected = (node.value as? SourcePreferenceValue.Text)?.value, enabled = node.enabled,
+            onPick = { controller.updatePreference(node, SourcePreferenceValue.Text(it)) }, onDismiss = onDismiss)
+        is SourcePreferenceDialog.MultiChoice -> DesktopMultiChoiceSettingsDialog(title, summary, bodyTag, optionTags,
+            options, selected = (node.value as? SourcePreferenceValue.TextSet)?.values.orEmpty(), enabled = node.enabled,
+            onToggle = { value, checked ->
+                val values = (node.value as? SourcePreferenceValue.TextSet)?.values.orEmpty()
+                controller.updatePreference(node, SourcePreferenceValue.TextSet(
+                    if (checked) values - value else values + value))
+            }, onDismiss = onDismiss)
+        is SourcePreferenceDialog.Text -> DesktopTextSettingsDialog(title, summary, bodyTag,
+            fieldTag = "preference-field:${node.id}", saveTag = "preference-save:${node.id}",
+            initial = (node.value as? SourcePreferenceValue.Text)?.value.orEmpty(), enabled = node.enabled,
+            secret = node.isSecret, onSave = { text ->
                 controller.updatePreference(node, SourcePreferenceValue.Text(text))
-                onDismiss()
-            }, enabled = enabled, modifier = Modifier.testTag("preference-save:${node.id}")) {
-                Text(desktopText("common.save"))
-            }
-        },
-        dismissButton = { TextButton(onDismiss) { Text(desktopText("common.cancel")) } },
-    )
+                true
+            }, onDismiss = onDismiss)
+    }
 }
