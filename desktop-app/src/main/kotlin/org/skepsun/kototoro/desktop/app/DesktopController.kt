@@ -106,6 +106,8 @@ data class DesktopAppState(
     val suggestionSettings: org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings = org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings(),
     val trackerSettings: org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings = org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings(),
     val sourceSettings: org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings = org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings(),
+    val libraryDisplay: org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay =
+        org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay(),
     /** Stored suggestions, most relevant first (Android's recommendations). */
     val suggestions: List<SourceContent> = emptyList(),
     /** True while [DesktopController.refreshSuggestions] runs in the background; the window stays usable. */
@@ -174,6 +176,7 @@ class DesktopController(val session: DesktopSession) {
     private val videoPreferences = session.storage.preferences.open("desktop_video")
     private val updatePreferences = session.storage.preferences.open("desktop_extension_updates")
     private val backgroundPreferences = session.storage.preferences.open("desktop_background")
+    private val libraryPreferences = session.storage.preferences.open("desktop_library")
     /** Background and manual runs of the same work never overlap. */
     private val backgroundMutex = Mutex()
     private val appearancePreferences = session.storage.preferences.open("desktop_appearance")
@@ -223,6 +226,9 @@ class DesktopController(val session: DesktopSession) {
                 suggestionSettings = org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings.from(saved),
                 trackerSettings = org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings.from(saved),
             sourceSettings = org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings.from(saved),
+            libraryDisplay = org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay.from(
+                libraryPreferences.snapshot(),
+            ),
             ) }
         }
         // Repositories are read in the background at start: updates are installed (when allowed) or announced.
@@ -1251,6 +1257,13 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { it.copy(sourceSettings = settings) }
         if (!backgroundPreferences.edit(SourcePreferenceEdit(changes = settings.toPreferences()))) {
             mutableState.update { it.copy(error = desktopText("settings.sourcesSaveFailed")) }
+        }
+    }
+    /** Android's display options: the shelves render either the poster grid or one work per row. */
+    internal fun libraryDisplay(display: org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay) {
+        mutableState.update { it.copy(libraryDisplay = display) }
+        if (!libraryPreferences.edit(SourcePreferenceEdit(changes = display.toPreferences()))) {
+            mutableState.update { it.copy(error = desktopText("library.displaySaveFailed")) }
         }
     }
 

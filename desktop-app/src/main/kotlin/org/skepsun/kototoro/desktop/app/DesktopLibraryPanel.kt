@@ -121,10 +121,21 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                     val newChapters = remember(entries, history) {
                         entries.associate { it.content.id to newChaptersBadge(it, history) }
                     }
+                    // Android's display options: the shelf renders the poster grid or one work per row, and the
+                    // supporting line names the source instead of repeating its raw name.
+                    val sourceTitles = remember(state.sources) {
+                        state.sources.associate { it.source.name to it.displayName }
+                    }
                     ContentGrid(entries.map { it.content }, enabled, controller.session.covers, controller::details,
                         progressOf = { progress[it.id] }, newChaptersOf = { newChapters[it.id] ?: 0 },
                         selectedIds = checkedIds.takeIf { it.isNotEmpty() },
-                        onToggleSelection = ::toggleSelection)
+                        onToggleSelection = ::toggleSelection,
+                        listMode = state.libraryDisplay.listMode,
+                        metaOf = { content ->
+                            content.authors.joinToString().ifBlank {
+                                sourceTitles[content.source.name] ?: content.source.name
+                            }
+                        })
                 }
                 else Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -153,6 +164,14 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                             DesktopLibraryOrder.entries.forEach { order ->
                                 FilterRadio(order.title, selection.order == order, enabled, "library-order:${order.name}") {
                                     update(selection.copy(order = order))
+                                }
+                            }
+                            HorizontalDivider()
+                            Text(desktopText("library.layout"), fontWeight = FontWeight.SemiBold)
+                            org.skepsun.kototoro.desktop.runtime.DesktopListMode.entries.forEach { mode ->
+                                FilterRadio(mode.label, state.libraryDisplay.listMode == mode, enabled,
+                                    "library-mode:${mode.name}") {
+                                    controller.libraryDisplay(state.libraryDisplay.copy(listMode = mode))
                                 }
                             }
                             HorizontalDivider()
@@ -264,6 +283,12 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
             onDismiss = { pickingTags = false })
     }
 }
+
+private val org.skepsun.kototoro.desktop.runtime.DesktopListMode.label: String
+    get() = when (this) {
+        org.skepsun.kototoro.desktop.runtime.DesktopListMode.GRID -> desktopText("library.layout.grid")
+        org.skepsun.kototoro.desktop.runtime.DesktopListMode.LIST -> desktopText("library.layout.list")
+    }
 
 @Composable
 private fun FilterRadio(title: String, selected: Boolean, enabled: Boolean, tag: String, onClick: () -> Unit) {

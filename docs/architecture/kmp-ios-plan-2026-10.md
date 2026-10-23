@@ -6719,3 +6719,23 @@ failures=0，说明 `nav:更多`、`nav:扩展与仓库`、`nav:下载`、`nav:�
   落盘为 `TITLE`，关掉网格与打开分组、在成人对话框里勾“收藏”并断言只有 `FAVOURITES` 命中，返回“更多”；
   随后点两次“浏览”回到来源总览，断言 `source-list-rows` 存在而 `source-list` 不存在，截图
   `tablet-source-overview-list.png` 可见语言标题 `zh` 与单行来源。
+## 142. Windows 书架显示布局（列表/网格，2026-10-23）
+
+日期：2026-10-23。Android 的每条内容列表都有显示选项（`ListMode` 六档：列表、详细列表、网格、紧凑网格、
+影视网格、紧凑影视网格），列表模式写进 `AppSettings.KEY_LIST_MODE`。Windows 的收藏/历史书架此前只有网格，
+`ContentGrid` 里写死 `LazyVerticalGrid`。本轮补上其中能由现有封面数据兑现的两档，并把选择持久化。
+
+- `desktop-runtime` 新增 `DesktopListMode { GRID, LIST }` 与 `DesktopLibraryDisplay(listMode)`，落盘键
+  `library_list_mode`，用独立的 `desktop_library` 偏好 store（与 `desktop_background`/`desktop_appearance`
+  并列，避免把显示设置混进源设置）。Android 详细列表/影视网格需要简介与横版海报，桌面书架还没有这些数据，故不移植。
+- 入口放在书架既有的“筛选与排序”抽屉里新加“布局”一节（两个单选行 `library-mode:GRID`/`library-mode:LIST`），
+  与其它组一样是组内单选、整行可点，不是平铺 chips。
+- `ContentGrid` 增加 `listMode` 与 `metaOf` 两个可选参数：`LIST` 时改渲染 `ContentRowList`（`LazyColumn`，
+  容器 tag `content-list`，网格仍是 `content-grid`），每行是 64×88 封面 + 标题 + 一行副标题 + 进度条；
+  行容器仍带 `content:<id>` 并沿用 `combinedClickable`（长按选择、单击导航），所以 §140 的批量选择在列表模式下
+  完全一致。副标题由书架传入（作者，缺失时用来源显示名），进度/新章节徽标沿用 `content-progress:<id>` 与
+  `content-new-chapters:<id>` 两个 tag。
+- 保存失败复用 `library.displaySaveFailed`，与其它设置页一样只报错、不改内存值之外的副作用。
+- 探针：在收藏页打开抽屉截图 `tablet-library-display-options.png`（可见“布局”两个单选），选“每行一个作品”后断言
+  `libraryDisplay.listMode == LIST`、`library_list_mode` 落盘为 `LIST`、`content-list` 存在而 `content-grid`
+  不存在，截图 `tablet-library-list.png`（三部作品的封面/标题/`阅读测试来源` 副标题/进度条），再切回网格断言两者互换。

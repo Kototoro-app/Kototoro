@@ -316,8 +316,16 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
     onOpen: (SourceContent) -> Unit, progressOf: (SourceContent) -> Float? = { null },
     newChaptersOf: (SourceContent) -> Int = { 0 },
     /** Null is plain browsing; a set turns each card into a selection target, as Android's list does on long press. */
-    selectedIds: Set<Long>? = null, onToggleSelection: (SourceContent) -> Unit = {}) {
+    selectedIds: Set<Long>? = null, onToggleSelection: (SourceContent) -> Unit = {},
+    /** Android's list mode: the shelves can render one work per row instead of the poster grid. */
+    listMode: org.skepsun.kototoro.desktop.runtime.DesktopListMode =
+        org.skepsun.kototoro.desktop.runtime.DesktopListMode.GRID,
+    metaOf: (SourceContent) -> String = { it.authors.joinToString().ifBlank { it.source.name } }) {
     if (contents.isEmpty()) { EmptyPanel(desktopText("browse.noWorks"), desktopText("browse.noWorksDetail")); return }
+    if (listMode == org.skepsun.kototoro.desktop.runtime.DesktopListMode.LIST) {
+        ContentRowList(contents, enabled, covers, onOpen, progressOf, newChaptersOf, selectedIds, onToggleSelection, metaOf)
+        return
+    }
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
     val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle, isDark = LocalDesktopDark.current)
     LazyVerticalGrid(columns = GridCells.Adaptive(112.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -369,6 +377,57 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
                             Modifier.align(Alignment.BottomCenter).testTag("content-progress:${content.id}"))
                     },
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Android's LIST mode: a thumbnail, the title, one supporting line and the progress bar. Rows keep the card's
+ * `content:<id>` tag and the same click/long-press semantics, so selection and navigation stay unchanged.
+ */
+@Composable
+private fun ContentRowList(contents: List<SourceContent>, enabled: Boolean, covers: DesktopCovers,
+    onOpen: (SourceContent) -> Unit, progressOf: (SourceContent) -> Float?, newChaptersOf: (SourceContent) -> Int,
+    selectedIds: Set<Long>?, onToggleSelection: (SourceContent) -> Unit, metaOf: (SourceContent) -> String) {
+    val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
+    val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle, isDark = LocalDesktopDark.current)
+    LazyColumn(Modifier.fillMaxSize().testTag("content-list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(contents, key = { it.id }) { content ->
+            val selecting = selectedIds != null
+            val isSelected = selectedIds?.contains(content.id) == true
+            val percent = progressOf(content)?.takeIf { ReadingProgress.isValid(it) }
+            val newChapters = newChaptersOf(content)
+            Surface(modifier = Modifier.fillMaxWidth().testTag("content:${content.id}")
+                .combinedClickable(enabled = enabled,
+                    onClick = { if (selecting) onToggleSelection(content) else onOpen(content) },
+                    onLongClick = { onToggleSelection(content) }),
+                shape = RoundedCornerShape(16.dp),
+                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                else MaterialTheme.colorScheme.surface) {
+                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    TabletPosterCover(content.title, CompactPosterCardStyle(64.dp, 88.dp, 10.dp),
+                        rimBorderBrush = rimBorderBrush, modifier = Modifier.width(64.dp).height(88.dp),
+                        cover = { DesktopCover(content, covers, Modifier.matchParentSize()) })
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (isSelected) Icon(painterResource("icons/ic_check.svg"), null, tint = Accent,
+                                modifier = Modifier.size(18.dp).testTag("content-selected:${content.id}"))
+                            Text(content.title, fontWeight = FontWeight.SemiBold, maxLines = 2,
+                                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            if (newChapters > 0) Text(desktopText("library.newChapters", newChapters),
+                                fontSize = 12.sp, color = Accent,
+                                modifier = Modifier.testTag("content-new-chapters:${content.id}"))
+                        }
+                        val meta = metaOf(content)
+                        if (meta.isNotBlank()) Text(meta, fontSize = 12.sp, color = Muted, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis)
+                        if (percent != null) ContentCardBottomProgressBar(percent, ReadingProgress.isCompleted(percent),
+                            Modifier.fillMaxWidth().testTag("content-progress:${content.id}"))
+                    }
+                }
             }
         }
     }

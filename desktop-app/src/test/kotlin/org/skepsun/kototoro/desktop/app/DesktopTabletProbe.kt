@@ -312,6 +312,24 @@ internal object DesktopTabletProbe {
                 check(controller.state.value.librarySelection.filterCount == 0)
                 onNodeWithTag("library-filter-close").performClick(); idle()
                 onNodeWithTag("content:${content.id}").assertExists()
+                // Android's display options: the shelf can render one work per row, and the choice is remembered.
+                onNodeWithTag("library-filters").performClick(); idle()
+                snapshot("library-display-options")
+                onNodeWithTag("library-mode:LIST").performScrollTo().performClick(); idle()
+                check(controller.state.value.libraryDisplay.listMode ==
+                    org.skepsun.kototoro.desktop.runtime.DesktopListMode.LIST)
+                onNodeWithTag("library-filter-close").performClick(); idle()
+                onNodeWithTag("content-list").assertExists()
+                onNodeWithTag("content-grid").assertDoesNotExist()
+                onNodeWithTag("content:${content.id}").assertExists()
+                check((session.storage.preferences.open("desktop_library").snapshot()["library_list_mode"]
+                    as? org.skepsun.kototoro.core.source.SourcePreferenceValue.Text)?.value == "LIST")
+                snapshot("library-list")
+                onNodeWithTag("library-filters").performClick(); idle()
+                onNodeWithTag("library-mode:GRID").performScrollTo().performClick(); idle()
+                onNodeWithTag("library-filter-close").performClick(); idle()
+                onNodeWithTag("content-grid").assertExists()
+                onNodeWithTag("content-list").assertDoesNotExist()
                 // Android edits categories on their own screen; the desktop does it in a dialog over the grid.
                 onNodeWithTag("library-categories-manage").performClick(); idle()
                 onNodeWithTag("category-dialog").assertExists()

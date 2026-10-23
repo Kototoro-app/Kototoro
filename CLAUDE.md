@@ -256,6 +256,9 @@ npm run docs:build
   来源设置另有独立页面（更多 → 来源设置）：概览节改来源排序（安装顺序/名称/语言）、来源总览的网格或列表、
   按语言分组（组前加语言标题），成人内容节选“来源与浏览/收藏/历史”三个过滤目标（来源侧滤掉 HENTAI_ 类型来源，
   书架侧作为展示规则并入筛选），设置存 `desktop_background` 的 `sources_*` 四键，见计划 §141。
+  收藏/历史的“筛选与排序”抽屉另有“布局”一节（封面网格 / 每行一个作品，对应 Android 的 ListMode），
+  选择存 `desktop_library` 的 `library_list_mode`，列表模式下 `ContentGrid` 渲染 `content-list` 行视图，
+  点击/长按语义与卡片一致，见计划 §142。
   索引模型共用 core-source，APK-only 明确不可安装，构造/持久化失败保留旧扩展；范围见计划 §56。
   reader-core 决定单页/双页/RTL 的可见页面、宽图独页、Fit 排版与进度锚点；键盘翻页和同分支跨章按钮
   已接入。阅读模式/方向保存于原偏好 store，历史 percent 包含页组末页，page 保留起始锚点用于恢复。
