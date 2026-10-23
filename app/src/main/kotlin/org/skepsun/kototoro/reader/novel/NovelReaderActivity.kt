@@ -749,7 +749,7 @@ class NovelReaderActivity :
             onSearchResultSelected = ::jumpToNovelSearchResult,
             onDismissSettings = { dismissReaderPanel(composeReaderViewModel::dismissSettings) },
             onDismissChapters = { dismissReaderPanel(composeReaderViewModel::dismissChapters) },
-            onDismissTools = { dismissReaderPanel(composeReaderViewModel::dismissTools) },
+            onDismissTools = ::onToolsPanelDismissed,
             onShowSettings = { composeReaderViewModel.showSettings(readerSettings) },
             onShowChapters = ::showChaptersSheet,
             onShowReplaceRules = composeReaderViewModel::showReplaceRules,
@@ -1241,6 +1241,17 @@ class NovelReaderActivity :
             }
             showReaderMessage(message, 1500L)
         }
+    }
+
+    /**
+     * 关闭工具/朗读弹层。朗读控制就挂在这个弹层里，如果只清可见标记而不停引擎，
+     * 弹层关掉之后仍然在念，遥控器（以及手机上）就再也没有停下来的入口了。
+     */
+    private fun onToolsPanelDismissed() {
+        if (composeReaderViewModel.uiState.value.ttsControlsVisible) {
+            onTtsStopClicked()
+        }
+        dismissReaderPanel(composeReaderViewModel::dismissTools)
     }
 
     private fun hasReaderSubOverlay(): Boolean {

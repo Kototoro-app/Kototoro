@@ -1480,3 +1480,64 @@ if (toolsPanelVisible) { ModalBottomSheet { NovelToolsPanel(state, callbacks) } 
   上一轮加给它的交接逻辑保持原样，等有场景时再验。
 - 朗读弹层是手机式 `ModalBottomSheet`：电视上它会占住 Almost 半屏且无法用方向键收起，
   更合适的电视形态应是"贴底条 + BACK 收起"，留待后续评估。
+
+## 第二十轮：BACK 关掉朗读弹层后，声音还在念（2026-10-23）
+
+第十九轮把朗读条接通了，这轮顺着"BACK 之后会怎样"往下查，抓到一个更严重的坑。
+
+### 现象
+
+朗读中（弹层可见）按 BACK：弹层收起、回到无工具栏的阅读态，但**朗读没有停**，
+而且屏幕上已经没有任何停止入口——遥控器只剩"翻页"和"退出阅读器"两条路。
+
+### 证据
+
+用音频播放器的真实状态而不是截图判断（`adb shell dumpsys audio`，只统计
+`CONTENT_TYPE_SPEECH` 且 `state:started` 的 track）：
+
+| 状态 | started 的语音 track |
+| --- | --- |
+| 阅读器空闲 | 0 |
+| 朗读中 | 1（`ye1`，pid 为本应用） |
+| 修之前，BACK 之后 | **1**，而且 piid 从 1919 变成 1935——还在往下念 |
+
+### 原因
+
+朗读控制挂在 `NovelToolsPanel` 所在的 `ModalBottomSheet` 上，弹层的 dismiss 回调是
+`dismissTools()`，它只做两件事：
+
+```kotlin
+fun dismissTools() {
+    _uiState.value = _uiState.value.copy(toolsSheetVisible = false, ttsControlsVisible = false)
+}
+```
+
+清的是"可见标记"，没有任何人调 `onTtsStopClicked()`（只有 ✕ 按钮那条路会调）。
+于是引擎继续朗读，UI 已经不存在，两端脱节。
+
+### 修法
+
+`NovelReaderActivity` 里把弹层的 dismiss 换成专用函数：
+
+```kotlin
+private fun onToolsPanelDismissed() {
+    if (composeReaderViewModel.uiState.value.ttsControlsVisible) {
+        onTtsStopClicked()
+    }
+    dismissReaderPanel(composeReaderViewModel::dismissTools)
+}
+```
+
+判据用 `ttsControlsVisible`：只有"关掉的这个弹层里正挂着朗读控制"时才停引擎，
+普通工具弹层（翻译/书签/清缓存）不受影响。手机与电视共用同一条路径——
+手机上把弹层往下拖走同样不该留一个关不掉的朗读。
+
+### 设备验证
+
+重装后重走：进入朗读（`ye1`，track=1）→ BACK（`ye2`，track=0，回到 `6fd66335f8` 的阅读态）。
+空闲态与朗读期间的基线也都各测了一次，见上表。
+
+### 教训
+
+- 弹层"收起"和"业务停止"是两件事，凡是把控制面板塞进 sheet 的播放类功能都要检查这条缝。
+- 截图只能证明"看不到了"，证明不了"停了"。`dumpsys audio` 的 started track 数是这次唯一可信的判据。
