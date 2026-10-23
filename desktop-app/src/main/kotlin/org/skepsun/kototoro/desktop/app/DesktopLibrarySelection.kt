@@ -4,6 +4,7 @@ import org.skepsun.kototoro.core.source.SourceEcosystem
 import org.skepsun.kototoro.core.source.SourceTag
 import org.skepsun.kototoro.desktop.runtime.DesktopLibraryEntry
 import org.skepsun.kototoro.desktop.runtime.DesktopLibrarySnapshot
+import org.skepsun.kototoro.list.domain.ReadingProgress
 
 /** Labels are resolved per access, so a language switch relabels the chips without a restart. */
 enum class DesktopLibraryOrder {
@@ -80,6 +81,18 @@ enum class DesktopLibraryMacro {
 
 /** Android's `resolveReadingStatus` and `FavouriteLibraryDeriver` both snap completion at 99.9%. */
 internal const val CompletedProgress = 0.999f
+
+/**
+ * Android's cover counter badge. `FavouritesCardMapper` keeps the tracking count but zeroes it once
+ * `ReadingProgress.isCompleted()` (99.999%) holds, so a read-through favourite loses the corner badge
+ * while its `tracks.chapters_new` row — and therefore the "new chapters" macro — keeps counting.
+ * History cards never show it (`HistoryCardMapper` maps `counter = 0` on that shelf).
+ */
+internal fun newChaptersBadge(entry: DesktopLibraryEntry, history: Boolean): Int = when {
+    history -> 0
+    entry.progressPercent?.let(ReadingProgress::isCompleted) == true -> 0
+    else -> entry.newChapters
+}
 
 data class DesktopLibrarySelection(
     val query: String = "",

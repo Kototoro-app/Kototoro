@@ -236,7 +236,22 @@ internal object DesktopTabletProbe {
                     session.storage.database.getTracksDao().upsert(org.skepsun.kototoro.tracker.data.TrackEntity(
                         tagged.id, 0, 2, 0, 0, org.skepsun.kototoro.tracker.data.TrackEntity.RESULT_HAS_UPDATE, null))
                 }
+                // A read-through work keeps its tracking counter but loses the cover badge (Android's mapper).
+                runBlocking {
+                    session.storage.database.getTracksDao().upsert(org.skepsun.kototoro.tracker.data.TrackEntity(
+                        finished.id, 0, 3, 0, 0, org.skepsun.kototoro.tracker.data.TrackEntity.RESULT_HAS_UPDATE, null))
+                    session.storage.database.getHistoryDao()
+                        .upsert(org.skepsun.kototoro.history.data.HistoryEntity(
+                            finished.id, 0L, 0L, 0L, 0, 0f, 1f, 0L, 1, null))
+                }
                 runBlocking { controller.library().join() }; idle()
+                // The unread counter sits top-right as Android draws it; a completed work keeps the count in the
+                // macro but drops the badge, and the history shelf never draws it at all.
+                onNodeWithTag("content-new-chapters:${tagged.id}", useUnmergedTree = true).assertExists()
+                check(onNodeWithTag("content-new-chapters:${tagged.id}", useUnmergedTree = true)
+                    .fetchSemanticsNode().config[SemanticsProperties.ContentDescription].single() ==
+                    desktopText("library.newChapters", 2))
+                onNodeWithTag("content-new-chapters:${finished.id}", useUnmergedTree = true).assertDoesNotExist()
                 onNodeWithTag("library-tags-open").performScrollTo().performClick(); idle()
                 onNodeWithTag("library-tags-dialog").assertExists()
                 snapshotTag("library-tags-dialog", "library-tag-picker")
@@ -273,7 +288,8 @@ internal object DesktopTabletProbe {
                 onNodeWithTag("library-macro:NOT_FAVORITE").assertDoesNotExist()
                 onNodeWithTag("library-macro:NEW_CHAPTERS").performScrollTo().performClick(); idle()
                 check(controller.state.value.librarySelection.macros == setOf(DesktopLibraryMacro.NEW_CHAPTERS))
-                check(shownCount() == 1)
+                // Both works carry a counter; only the read-through one loses its badge.
+                check(shownCount() == 2)
                 onNodeWithTag("content:${tagged.id}").assertExists()
                 onNodeWithTag("library-macro:NEW_CHAPTERS").performScrollTo().performClick(); idle()
                 onNodeWithTag("library-macro:NSFW").performScrollTo().performClick(); idle()
@@ -286,8 +302,11 @@ internal object DesktopTabletProbe {
                 check(shownCount() == controller.state.value.library.entries.size)
                 check(controller.state.value.librarySelection.filterCount == 2)
                 snapshot("library-filter-groups")
-                // Drop the fake track row so the feed checks below still see an empty update list.
-                runBlocking { session.storage.database.getTracksDao().delete(tagged.id) }
+                // Drop the fake track rows so the feed checks below still see an empty update list.
+                runBlocking {
+                    session.storage.database.getTracksDao().delete(tagged.id)
+                    session.storage.database.getTracksDao().delete(finished.id)
+                }
                 runBlocking { controller.library().join() }; idle()
                 onNodeWithTag("library-filter-reset").performClick(); idle()
                 check(controller.state.value.librarySelection.filterCount == 0)

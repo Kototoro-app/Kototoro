@@ -96,8 +96,11 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
             Box(Modifier.weight(1f)) {
                 if (entries.isNotEmpty()) {
                     val progress = remember(entries) { entries.associate { it.content.id to it.progressPercent } }
+                    val newChapters = remember(entries, history) {
+                        entries.associate { it.content.id to newChaptersBadge(it, history) }
+                    }
                     ContentGrid(entries.map { it.content }, enabled, controller.session.covers, controller::details,
-                        progressOf = { progress[it.id] })
+                        progressOf = { progress[it.id] }, newChaptersOf = { newChapters[it.id] ?: 0 })
                 }
                 else Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {

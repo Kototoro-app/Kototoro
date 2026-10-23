@@ -21,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -296,7 +298,8 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
 
 @Composable
 internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers: DesktopCovers,
-    onOpen: (SourceContent) -> Unit, progressOf: (SourceContent) -> Float? = { null }) {
+    onOpen: (SourceContent) -> Unit, progressOf: (SourceContent) -> Float? = { null },
+    newChaptersOf: (SourceContent) -> Int = { 0 }) {
     if (contents.isEmpty()) { EmptyPanel(desktopText("browse.noWorks"), desktopText("browse.noWorksDetail")); return }
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
     val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle, isDark = LocalDesktopDark.current)
@@ -314,6 +317,19 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
                     modifier = Modifier.fillMaxWidth().aspectRatio(96f / 136f),
                     cover = { DesktopCover(content, covers, Modifier.matchParentSize()) },
                     overlays = {
+                        // Android pins the unread counter to the top-right corner, a lone number in the
+                        // accent pill (KototoroContentCard), and the language pill to the bottom-left.
+                        val newChapters = newChaptersOf(content)
+                        if (newChapters > 0) {
+                            ContentCardBadgePill(ContentCardBadgeTone.COUNTER, isIosStyle, metrics,
+                                Modifier.align(Alignment.TopEnd).padding(end = 5.dp, top = 5.dp)
+                                    .testTag("content-new-chapters:${content.id}")
+                                    .semantics {
+                                        contentDescription = desktopText("library.newChapters", newChapters)
+                                    }) { colors ->
+                                ContentCardBadgeText(newChapters.toString(), colors.content, metrics)
+                            }
+                        }
                         val locale = content.source.locale.substringBefore('-').substringBefore('_').uppercase()
                         if (locale.isNotBlank()) ContentCardBadgePill(ContentCardBadgeTone.NEUTRAL, isIosStyle, metrics,
                             Modifier.align(Alignment.BottomStart).padding(start = 5.dp, bottom = bottomLift + 5.dp)

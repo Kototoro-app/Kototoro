@@ -6459,3 +6459,29 @@ NSFW 与 SFW 同选为空；收藏页的宏列表裁剪）；`:desktop-app:test 
 `continuous Windows reader …` 探针各自报 `UncompletedCoroutinesError: After waiting for 1m`，
 子进程 60 秒内没跑完即被判失败；把本节改动 `git stash` 后连跑三次 `parsers-*` 仍 3/3 失败，
 说明与本轮无关，是这两个探针在本机较慢环境下的既有超时（其余 170+ 用例正常）。
+
+## 134. Windows 收藏卡片补新章节角标（2026-10-23）
+
+日期：2026-10-23。承接 §133 的数据字段：Android 在收藏网格的封面上画一个右上角的新章节数字角标，
+桌面此前只在详情/订阅里看到新章数。
+
+- 卡片：`ContentGrid` 新增可选参数 `newChaptersOf: (SourceContent) -> Int`（默认 0，浏览网格不受影响），
+  在封面右上角画 `ContentCardBadgePill(ContentCardBadgeTone.COUNTER)` + 纯数字，位置/内边距（5dp）与
+  Android `KototoroContentCard` 的 top-right 角标一致；语言角标仍在左下角。
+  角标同时带 `contentDescription`（`library.newChapters` → “%d 个新章节”/“%d new chapters”），
+  testTag 为 `content-new-chapters:<id>`。
+- 显示规则集中在 `newChaptersBadge(entry, history)`：Android `FavouritesCardMapper` 用的是
+  `counter = if (progress?.isCompleted() == true) 0 else row.newChapters`，因此
+  **读完的作品不画角标**（阈值沿用共享 `ReadingProgress.isCompleted` = 99.999%，
+  与 §133 宏/阅读状态的 99.9% 阈值不同，两者各按 Android 原实现）；
+  历史页永不画（`HistoryCardMapper` 把 `counter` 固定为 0）。
+  “新章节”宏读的仍是 `tracks.chapters_new` 原值，所以读完的作品在宏里仍算“有新章节”。
+- 文案：新增 `library.newChapters`（中英各一份），仅用于角标语义，不改变 Android 数字角标的视觉。
+
+验证：`:desktop-app:test` 新增一例（未读/未开始显示、`progress = 1f` 与 0.99999f 归零、
+0.999f 仍显示、历史页恒为 0）；`:desktop-app:test --tests "*DesktopAppTest*tablet*"` 四尺寸全绿，
+探针给两本收藏各写一条 tracks 行（一本读完 + 新章 3、一本未读 + 新章 2），
+未读卡片存在 `content-new-chapters` 且语义为“2 个新章节”，读完卡片不存在该角标，
+“新章节”宏此时命中 2 本（宏读计数、角标看完成度），结束后删除两条 tracks 行；
+截图 `tablet-library-filter-groups.png` 可见 “Tagged shelf” 右上角蓝色 “2”，
+“Finished shelf” 无角标。`:desktop-app:verifyDesktopStrings` 通过。

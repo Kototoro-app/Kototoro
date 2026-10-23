@@ -100,6 +100,19 @@ class DesktopLibrarySelectionTest {
     }
 
     @Test
+    fun `the counter badge hides for read-through works and never shows on the history shelf`() {
+        val fresh = entry(11, "Fresh", "one", 5, .4f, 4, newChapters = 3)
+        // Android's FavouritesCardMapper zeroes the counter once ReadingProgress.isCompleted() holds.
+        assertEquals(3, newChaptersBadge(fresh, history = false))
+        assertEquals(2, newChaptersBadge(entry(12, "Unread", "one", 5, null, 4, newChapters = 2), history = false))
+        assertEquals(0, newChaptersBadge(fresh.copy(progressPercent = 1f), history = false))
+        assertEquals(0, newChaptersBadge(fresh.copy(progressPercent = 0.99999f), history = false))
+        // 99.9% is the reading-status/macro snap, not the badge's own 99.999% threshold.
+        assertEquals(3, newChaptersBadge(fresh.copy(progressPercent = 0.999f), history = false))
+        assertEquals(0, newChaptersBadge(fresh, history = true))
+    }
+
+    @Test
     fun `macro choices keep the favourites-only chips off the favourites shelf`() {
         assertEquals(listOf(DesktopLibraryMacro.NEW_CHAPTERS, DesktopLibraryMacro.NSFW, DesktopLibraryMacro.SFW),
             DesktopLibraryMacro.choices(history = false))
