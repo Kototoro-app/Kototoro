@@ -1807,13 +1807,9 @@ spaceUiState.switcherEnabled` 时放一个 `SpaceSwitcherRailButton`，
    另外加了展开时聚焦当前排序项的重试：Material3 默认把焦点放在第一行，在遥控器上看起来像排序自己跳了。
    做法与 TtsSpeedButton 相同（每个选项一个 FocusRequester，最多重试 20 帧）。
 
-### 验证状态（诚实记录）
+### 验证
 
-- 编译通过（c65.log，BUILD SUCCESSFUL）。
-- **尚未在设备上验证**：本轮在模拟器上花了较多时间在回到主页的导航上，
-  期间还误入电视启动器的 Play Next 面板并翻转了开关（已用截图确认恢复为 On）。
-- 已知的下一次验证路径：主页 → 顶栏 ⋮（GlassDropdownMenu）→ CENTER 展开后应看到菜单项上的环；
-  排序控件则在收藏/历史的筛选面板或排序芯片上验证。
+见文末「验证（2026-10-23 补做，全部实测）」一节——设备上已全部走通。
 
 ### 一个新观察
 
