@@ -1378,3 +1378,45 @@ Material3 组件内部加一条隐式跳转规则。
 快捷行的焦点是**恢复上次位置**的：这次 DOWN×3 直接从亮度滑条落到第 4 块 "Translate text"，
 之后 RIGHT×2 并不会"越过未聚焦的第 3 块"，而是停在最右。所以"按 RIGHT 就是右移一格"在快捷行里不成立，
 任何遥控脚本走快捷行前都必须先确认当前聚焦的是哪一块（靠截图取环，不能靠按键计数）。
+
+## 第十八轮：朗读控制条在电视上根本按不到（2026-10-23）
+
+这轮本来只想确认笔记面板搜索框的出口，顺手按了下快捷行的第 1 块 "TTS Settings"，
+结果发现一个比搜索框严重得多的问题。
+
+### 现象
+
+快捷行第 1 块 CENTER → 阅读器进入朗读态：顶栏与面板全部收起，底部浮出一条朗读控制条
+（⏮ / ⏸ / ⏭ / `1.0×` / 🎤 / ✕，见 `ng2`）。然后：
+
+| 按键 | 结果 | 截图 |
+| --- | --- | --- |
+| DOWN | 无焦点环、无任何可见变化 | `nh0` |
+| RIGHT ×5 | 同上，画面哈希与 `nh0` 前后一致 | `nh1`、`nh2` |
+| BACK | 退出朗读态，回到无顶栏的阅读态 | `ni0`（`8cdf124b52`，与基线同图） |
+
+也就是说：**朗读能开，但开起来以后遥控器就完全失控了**——暂停、下一句、倍速、换语音、关闭，
+六个按钮一个都到不了，唯一的出口是 BACK。
+
+### 根因
+
+按钮本身没问题：`NovelReaderOverlay.kt` 里的 `TtsButton`（:141）和 `TtsSpeedButton`（:156）
+都挂了 `tvFocusable(shape = CircleShape, addFocusTarget = false)`，环随时能画。
+
+问题在按键路由。`NovelReaderActivity.dispatchKeyEvent` 把 `controlsVisible = isReaderControlsVisible`
+（只表示顶栏/面板是否可见）交给 `ReaderTvKeyDispatcher`。朗读态下顶栏是收起的，
+于是 `shouldInterceptReaderTvKey(TV, controlsVisible=false, D-pad)` 成立，方向键在 :1294 的
+`isTvPresentation && !isUiVisible` 分支里被直接当成翻页（`switchPageBy(delta)`）处理，
+**根本到不了 Compose 的焦点系统**。朗读条的可见性与这套判定完全无关，
+所以它不是"焦点没找到"，而是"按键没被当成焦点按键"。
+
+### 修法（下一轮执行）
+
+1. 让 `controlsVisible` 语义扩成"有可见交互层"：`isReaderControlsVisible || uiState.ttsControlsVisible`，
+   方向键于是走 DELEGATE，进入 Compose 的焦点遍历。
+2. 朗读条出现时主动交接焦点：`LaunchedEffect(ttsControlsVisible)` 里对播放/暂停按钮
+   `requestFocus()`，逐帧重试（和第十五轮顶栏的 `backFocusRequester` 同一套写法），
+   保证环落在眼睛能看到的地方。
+3. 顺带确认：朗读态下 BACK 仍先退朗读条（当前行为已正确），不要被上面的改动带坏。
+
+在这条修好之前，"电视上能听书"只能算半成品——能开不能控。
