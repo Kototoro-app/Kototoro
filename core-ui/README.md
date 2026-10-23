@@ -33,15 +33,16 @@ Android/JVM Compose Multiplatform presentation extracted from the Android applic
   Hilt/settings/AMOLED and fallback policy; desktop resolves its own interface-style preference and canvas backdrop.
   Both use the vendored Backdrop 2.0.0 KMP module, including the original Skiko backend and existing local fixes.
 
-Android keeps the existing theme entry, settings and Hilt. Desktop provides a Material3 theme and temporarily
-maps the same roles into Material 2 for screens not yet migrated. iOS UI targets are intentionally not added.
+Android keeps the existing theme entry, settings and Hilt. Desktop provides a Material 3 theme with the same
+colour/typography/shape tokens and no Material 2 bridge: its own shells are pure Material 3 too, so shared
+components and host screens never mix two widget vocabularies. iOS UI targets are intentionally not added.
 
 Validate with `:core-ui:jvmTest`, `:core-ui:verifyUiStrings`, `:app:compileDebugKotlin` and the optional
 `:desktop-app:test` task. The desktop
 tests exercise shared home layout/hero scrolling, previews, source actions, poster title bounds and actual Skiko blur in both themes, plus
 real source/library/reader flows. The five tablet screenshots supplied by the user on 2026-10-04 supersede
 old repository screenshots; palettes still follow theme settings. Home section assembly, the subscription page
-container, inner details content and remaining desktop Material 2 screens still need migration. Shared reader
+container and inner details content still need migration. Shared reader
 chrome, settings panels, novel directory/bookmark cards and page scenes already live in this module; their
 platform playback, image loading, window and storage services stay in the hosts.
 

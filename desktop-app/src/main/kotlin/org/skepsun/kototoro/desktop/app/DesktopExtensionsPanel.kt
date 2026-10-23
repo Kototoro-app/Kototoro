@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,7 +18,7 @@ internal fun DesktopExtensionsPanel(controller: DesktopController, closing: Bool
     var query by remember { mutableStateOf("") }
     val enabled = !state.busy && !closing
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(desktopText("extensions.repositories"), style = MaterialTheme.typography.h6)
+        Text(desktopText("extensions.repositories"), style = MaterialTheme.typography.titleLarge)
         Text(desktopText("extensions.repositoryDetail"))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(address, { address = it }, label = { Text(desktopText("extensions.repositoryAddress")) },
@@ -63,7 +63,7 @@ private fun ExtensionCatalog(
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(catalog?.let { desktopText("extensions.catalogCount", it.repository.name, it.extensions.size) }
             ?: desktopText("extensions.catalog"),
-            style = MaterialTheme.typography.subtitle1)
+            style = MaterialTheme.typography.titleMedium)
         OutlinedTextField(query, onQueryChange, label = { Text(desktopText("extensions.search")) }, singleLine = true,
             enabled = catalog != null, modifier = Modifier.fillMaxWidth().testTag("extension-search"))
         val extensions = catalog?.extensions.orEmpty().filter { extension ->
@@ -105,7 +105,7 @@ private fun ExtensionCatalog(
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("${extension.name} · ${extension.versionName} · $ecosystem",
-                            style = MaterialTheme.typography.subtitle1)
+                            style = MaterialTheme.typography.titleMedium)
                         Text(extension.sources.takeIf { it.isNotEmpty() }
                             ?.joinToString { "${it.name} (${it.language})" }
                             ?: desktopText("extensions.sourcesAfterInstall"), maxLines = 2)
@@ -130,7 +130,7 @@ private fun InstalledExtensions(
     var confirm by remember { mutableStateOf<DesktopInstalledEntry?>(null) }
     val updates = state.extensionUpdates.associateBy { it.extension.packageName }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(desktopText("extensions.installedCount", state.installedEntries.size), style = MaterialTheme.typography.subtitle1)
+        Text(desktopText("extensions.installedCount", state.installedEntries.size), style = MaterialTheme.typography.titleMedium)
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Checkbox(state.autoUpdateExtensions, { controller.setAutoUpdateExtensions(it) },
                 modifier = Modifier.testTag("extension-auto-update"))
@@ -153,7 +153,7 @@ private fun InstalledExtensions(
                         Text(desktopText("extensions.entrySummary",
                             DesktopSourceLabels.ecosystem(entry.ecosystem), entry.version, entry.sources) +
                             (update?.let { " · " + desktopText("extensions.updateAvailable", it.extension.versionName) } ?: ""),
-                            style = MaterialTheme.typography.caption, maxLines = 1)
+                            style = MaterialTheme.typography.bodySmall, maxLines = 1)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (update != null) Button({ controller.applyUpdates(listOf(update)) }, enabled = enabled,
                                 modifier = Modifier.testTag("extension-update:${entry.id}")) { Text(desktopText("extensions.update")) }

@@ -3,7 +3,7 @@ package org.skepsun.kototoro.desktop.app
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -105,7 +105,8 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
                 val record = item.record
                 val active = item.status.isActive
                 val checked = item.key in selection
-                Card(Modifier.fillMaxWidth().testTag("download:${item.key}"), elevation = 0.dp) {
+                Card(Modifier.fillMaxWidth().testTag("download:${item.key}"),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)) {
                     Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Checkbox(checked = checked, onCheckedChange = { controller.toggleDownloadSelection(item.key) },
                             enabled = !closing, modifier = Modifier.testTag("download-select:${item.key}"))
@@ -121,7 +122,7 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
                                 DesktopDownloadStatus.FAILED -> desktopText("downloads.status.FAILED")
                             }, modifier = Modifier.testTag("download-status:${item.key}"))
                             Text(desktopText("downloads.pages", record.completedPages, record.pages.size))
-                            item.error?.let { Text(it, color = MaterialTheme.colors.error) }
+                            item.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 if (active) OutlinedButton({ controller.downloads.pause(item.key) }, enabled = !closing,
                                     modifier = Modifier.testTag("download-pause:${item.key}")) { Text(desktopText("downloads.pause")) }
@@ -179,9 +180,8 @@ private fun DesktopImageCacheRow(controller: DesktopController, cache: DesktopIm
                     DropdownMenuItem(onClick = {
                         menuOpen = false
                         controller.setImageBudget(choice)
-                    }, modifier = Modifier.testTag("image-cache-budget:$choice")) {
-                        Text(desktopImageBudgetLabel(choice))
-                    }
+                    }, modifier = Modifier.testTag("image-cache-budget:$choice"),
+                        text = { Text(desktopImageBudgetLabel(choice)) })
                 }
             }
         }

@@ -7,7 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,7 +48,7 @@ internal enum class DesktopReaderPanel {
 internal fun DesktopReaderSidePanel(controller: DesktopController, state: DesktopAppState,
     panel: DesktopReaderPanel, enabled: Boolean, modifier: Modifier, onClose: () -> Unit) {
     Surface(modifier.width(340.dp).fillMaxHeight().testTag("reader-panel"), shape = RoundedCornerShape(16.dp),
-        elevation = 12.dp) {
+        shadowElevation = 12.dp) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(panel.title, fontSize = 20.sp,
@@ -59,21 +59,21 @@ internal fun DesktopReaderSidePanel(controller: DesktopController, state: Deskto
             }
             if (panel == DesktopReaderPanel.BOOKMARKS) {
                 Text(desktopText("reader.bookmarksCount", state.bookmarks.size),
-                    color = MaterialTheme.colors.onSurface.copy(alpha = .7f))
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f))
                 if (state.bookmarks.isEmpty()) Text(desktopText("reader.bookmarksEmpty"), fontSize = 13.sp)
                 LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(state.bookmarks, key = { it.pageId }) { bookmark ->
                         val chapter = state.content?.chapters?.firstOrNull { it.id == bookmark.chapterId }
                         val current = state.chapter?.id == bookmark.chapterId && state.pageIndex == bookmark.page
-                        Surface(color = if (current) MaterialTheme.colors.primary.copy(alpha = .2f)
-                            else MaterialTheme.colors.surface, shape = RoundedCornerShape(10.dp)) {
+                        Surface(color = if (current) MaterialTheme.colorScheme.primary.copy(alpha = .2f)
+                            else MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(10.dp)) {
                             Column(Modifier.fillMaxWidth().testTag("reader-bookmark:${bookmark.pageId}")
                                 .clickable(enabled = enabled) { controller.openBookmark(bookmark); onClose() }
                                 .padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(chapter?.title ?: desktopText("reader.chapterMissing"), maxLines = 2,
                                     overflow = TextOverflow.Ellipsis)
                                 Text(desktopText("common.pageOf", bookmark.page + 1, (bookmark.percent * 100).toInt()),
-                                    color = MaterialTheme.colors.primary, fontSize = 12.sp)
+                                    color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                                 if (current) Text(desktopText("reader.currentPosition"), fontSize = 11.sp)
                             }
                         }
@@ -90,25 +90,25 @@ internal fun DesktopReaderSidePanel(controller: DesktopController, state: Deskto
                 }
                 OutlinedButton({ controller.reloadPage() }, enabled = enabled,
                     modifier = Modifier.testTag("reader-reload")) { Text(desktopText("reader.reload")) }
-                Divider()
+                HorizontalDivider()
                 var speed by remember(settings.autoScrollSpeed) { mutableFloatStateOf(settings.autoScrollSpeed) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(desktopText("reader.autoScrollSpeed"), fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f))
                     Text("×${"%.1f".format(org.skepsun.kototoro.reader.core.ReaderAutoScroll.speedMultiplier(speed))}",
-                        color = MaterialTheme.colors.primary)
+                        color = MaterialTheme.colorScheme.primary)
                 }
                 Slider(speed, { speed = it }, valueRange = 0f..1f, enabled = enabled,
                     onValueChangeFinished = { controller.readerSettings(settings.copy(autoScrollSpeed = speed)) },
                     modifier = Modifier.fillMaxWidth().testTag("reader-option-autoscroll-speed"))
-                Divider()
+                HorizontalDivider()
                 TapGridOptions(controller, settings, enabled)
-                Divider()
+                HorizontalDivider()
                 SuperResolutionOptions(controller, settings, enabled)
-                Divider()
+                HorizontalDivider()
                 Text(desktopText("reader.shortcuts"), fontWeight = FontWeight.SemiBold)
                 Text(desktopText("reader.shortcutsHelp"), fontSize = 13.sp,
-                    color = MaterialTheme.colors.onSurface.copy(alpha = .7f))
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f))
             }
         }
     }
@@ -141,8 +141,8 @@ private fun TapGridOptions(controller: DesktopController, settings: DesktopReade
             modifier = Modifier.testTag("reader-option-tap-disable")) { Text(AndroidStrings["disable_all"]) }
     }
     Text(desktopText("reader.tapGridHint"), fontSize = 12.sp,
-        color = MaterialTheme.colors.onSurface.copy(alpha = .7f))
-    val onSurface = MaterialTheme.colors.onSurface
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f))
+    val onSurface = MaterialTheme.colorScheme.onSurface
     ReaderTapGridConfigGrid(settings.tapGrid, AndroidStrings["tap_action"], AndroidStrings["long_tap_action"],
         { tapActionTitle(it) },
         onTap = { area -> if (enabled) selector = area to false },
@@ -266,10 +266,10 @@ private fun SuperResolutionOptions(controller: DesktopController, settings: Desk
     if (tool == null) {
         Text(if (installed) desktopText("reader.upscaleAnime4kReady")
             else desktopText("reader.upscaleAnime4kMissing"), fontSize = 12.sp,
-            color = MaterialTheme.colors.onSurface.copy(alpha = .7f))
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f))
     } else if (installed) {
         Text(desktopText("reader.upscaleToolInstalled", tool.title), fontSize = 12.sp,
-            color = MaterialTheme.colors.onSurface.copy(alpha = .7f))
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f))
     } else {
         Text(desktopText("reader.upscaleToolNeeded", tool.title), fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -287,5 +287,5 @@ private fun SuperResolutionOptions(controller: DesktopController, settings: Desk
         }
     }
     error?.let { Text(desktopText("reader.upscaleFailed", it), fontSize = 12.sp,
-        color = MaterialTheme.colors.error) }
+        color = MaterialTheme.colorScheme.error) }
 }

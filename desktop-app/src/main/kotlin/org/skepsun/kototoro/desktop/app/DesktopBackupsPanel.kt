@@ -3,7 +3,7 @@ package org.skepsun.kototoro.desktop.app
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -22,7 +22,7 @@ internal fun DesktopBackupsPanel(controller: DesktopController, closing: Boolean
     val webDav by controller.webDavUi.collectAsState()
     val enabled = !state.busy && !closing
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(desktopText("backups.title"), style = MaterialTheme.typography.h6)
+        Text(desktopText("backups.title"), style = MaterialTheme.typography.titleLarge)
         Text(desktopText("backups.exportDetail"))
         Text(desktopText("backups.excluded"))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -43,8 +43,8 @@ internal fun DesktopBackupsPanel(controller: DesktopController, closing: Boolean
             }, enabled = enabled, modifier = Modifier.testTag("backup-open")) { Text(desktopText("backups.choose")) }
         }
         preview?.let { archive ->
-            Divider()
-            Text(desktopText("backups.preview"), style = MaterialTheme.typography.h6, modifier = Modifier.testTag("backup-preview"))
+            HorizontalDivider()
+            Text(desktopText("backups.preview"), style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("backup-preview"))
             Text(desktopText("backups.file", archive.filename))
             Text(desktopText("backups.time", DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT,
                 DesktopStrings.locale).format(Date(archive.index.createdAt))))
@@ -61,7 +61,7 @@ internal fun DesktopBackupsPanel(controller: DesktopController, closing: Boolean
                     modifier = Modifier.testTag("backup-cancel")) { Text(desktopText("common.cancel")) }
             }
         }
-        Divider()
+        HorizontalDivider()
         DesktopWebDavSection(controller, webDav, enabled)
     }
 }

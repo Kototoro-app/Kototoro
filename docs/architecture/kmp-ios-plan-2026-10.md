@@ -6299,41 +6299,66 @@ SwiftUI 仅经代码阅读，尚未经过 Swift/Xcode 编译、framework 链接�
 
 日期：2026-10-23。按“先做文案抽象 LocalStrings，再逐屏迁移”的顺序，先让 core-ui 里的共享界面能取词。
 
-- core-ui 新增 	ext/UiStrings（string/ormat/rray）、LocalUiStrings（staticCompositionLocalOf，
-  默认 NameOnlyUiStrings 原样返回键名）与 uiString/uiStringArray。键就是 Android 资源名
-  （content_type_manga、eader_page_label 等），Weblate 维护的 pp/src/main/res/values…/strings.xml
+- `core-ui` 新增 `text/UiStrings`（`string`/`format`/`array`）、`LocalUiStrings`（`staticCompositionLocalOf`，
+  默认 `NameOnlyUiStrings` 原样返回键名）与 `uiString`/`uiStringArray`。键就是 Android 资源名
+  （`content_type_manga`、`reader_page_label` 等），Weblate 维护的 `app/src/main/res/values…/strings.xml`
   仍是唯一来源，不复制一份翻译。
-- Android 侧 AndroidUiStrings 用带缓存的 getIdentifier（含命名空间回退）把名字解析成字符串/数组，
-  String.format 留在各平台适配器（commonMain 没有），解析不到时返回键名，预览与测试不会崩；
-  KototoroTheme 在最外层 provide，Android 现有 stringResource 调用不受影响。
-- Windows 侧 DesktopUiStrings 转接到 AndroidStrings，也就是 prepareDesktopStrings 从同一份
-  pp/src/main/res 导出的目录（en / zh-CN），DesktopTheme 负责 provide；切换语言仍即时生效。
-- 内容类型标题改为派生：contentTypeTitle(name) 取 content_type_<小写类型名>，取不到回落类型名，
-  与 Android ContentType.titleResId 同构；桌面重复的 15 组 label.contentType.* 键删除，
-  DesktopSourceLabels.contentType 与浏览分组标签改为调用共享实现（中文显示与 Android 一致，
+- Android 侧 `AndroidUiStrings` 用带缓存的 `getIdentifier`（含命名空间回退）把名字解析成字符串/数组，
+  `String.format` 留在各平台适配器（commonMain 没有），解析不到时返回键名，预览与测试不会崩；
+  `KototoroTheme` 在最外层 provide，Android 现有 `stringResource` 调用不受影响。
+- Windows 侧 `DesktopUiStrings` 转接到 `AndroidStrings`，也就是 `prepareDesktopStrings` 从同一份
+  `app/src/main/res` 导出的目录（en / zh-CN），`DesktopTheme` 负责 provide；切换语言仍即时生效。
+- 内容类型标题改为派生：`contentTypeTitle(name)` 取 `content_type_<小写类型名>`，取不到回落类型名，
+  与 Android `ContentType.titleResId` 同构；桌面重复的 15 组 `label.contentType.*` 键删除，
+  `DesktopSourceLabels.contentType` 与浏览分组标签改为调用共享实现（中文显示与 Android 一致，
   旧的桌面译法如“画师 CG”统一成 Android 的“艺术家CG”）。
-- :core-ui:verifyUiStrings 扫描 core-ui/pp/desktop-app 源码里的 uiString("…") 字面量，解析
-  pp/src/main/res 的 strings 与 arrays，再读 parser-api 的 ContentType 枚举，要求每个类型都有
-  content_type_<lowercase>；扫不到 1000 个键或不到 10 个类型直接失败，避免空跑通过。故意写入一个
+- `:core-ui:verifyUiStrings` 扫描 `core-ui`/`app`/`desktop-app` 源码里的 `uiString("…")` 字面量，解析
+  `app/src/main/res` 的 strings 与 arrays，再读 `parser-api` 的 `ContentType` 枚举，要求每个类型都有
+  `content_type_<lowercase>`；扫不到 1000 个键或不到 10 个类型直接失败，避免空跑通过。故意写入一个
   不存在的键可以复现失败，已手工验证后删除。
 
-验证：:core-ui:compileCommonMainKotlinMetadata、:core-ui:jvmTest（新增 ContentTypeTitlesTest）、
-:core-ui:verifyUiStrings、:desktop-app:compileKotlin/compileTestKotlin/erifyDesktopStrings、
-:app:compileDebugKotlin；桌面全量 :desktop-runtime:test（90 例）与 :desktop-app:test（168 例，
-含新增 DesktopUiStringsTest 6 例）通过，真实 	ablet 探针的“漫画”“全部”标签来自 Android 目录。
+验证：`:core-ui:compileCommonMainKotlinMetadata`、`:core-ui:jvmTest`（新增 `ContentTypeTitlesTest`）、
+`:core-ui:verifyUiStrings`、`:desktop-app:compileKotlin`/`compileTestKotlin`/`verifyDesktopStrings`、
+`:app:compileDebugKotlin`；桌面全量 `:desktop-runtime:test`（90 例）与 `:desktop-app:test`（168 例，
+含新增 `DesktopUiStringsTest` 6 例）通过，真实 tablet 探针的“漫画”“全部”标签来自 Android 目录。
 
-**未做**：Android 界面仍用 stringResource，共享界面逐步迁移时再统一切到 uiString；pluralStringResource
+**未做**：Android 界面仍用 `stringResource`，共享界面逐步迁移时再统一切到 `uiString`；`pluralStringResource`
 与带格式占位符的资源尚无共享封装。
 
 ## 129. Windows 来源栏补上内容类型与来源类型筛选（2026-10-23）
 
 日期：2026-10-23。对应“打开某个源时左侧快速切换列表缺少过滤器”的反馈。
 
-- DesktopSourcePane 的 240dp 来源栏复用 DesktopSourceFilterControls（ail 前缀）：内容类型下拉与
-  来源类型菜单，与 DesktopSourceGrid 顶部是同一个 state.exploreFilter，所以侧栏收窄后，选中源的
+- `DesktopSourcePane` 的 240dp 来源栏复用 `DesktopSourceFilterControls`（`rail` 前缀）：内容类型下拉与
+  来源类型菜单，与 `DesktopSourceGrid` 顶部是同一个 `state.exploreFilter`，所以侧栏收窄后，选中源的
   作品列表沿用同一范围，对齐 Android 平板“一个范围同时管源列表与内容”的行为。
 - 栏头计数改为当前可见源数量，一个都不匹配时显示“导入 JAR 后，来源会显示在这里”。
-- 	ablet* 探针的四个窗口模式都会断言两个控件存在，并在 exploreFilter(CLOUDSTREAM + 视频) 后
-  断言该源从侧栏消失且出现空态，恢复筛选后重新出现（截图 	ablet-browse-rail-filtered.png）。
+- tablet 探针的四个窗口模式都会断言两个控件存在，并在 `exploreFilter(CLOUDSTREAM + 视频)` 后
+  断言该源从侧栏消失且出现空态，恢复筛选后重新出现（截图 `tablet-browse-rail-filtered.png`）。
 
-验证：:desktop-app:test --tests "*DesktopAppTest*tablet*" 通过（tablet / narrow / boundary / boundary-compact）。
+验证：`:desktop-app:test --tests "*DesktopAppTest*tablet*"` 通过（tablet / narrow / boundary / boundary-compact）。
+
+## 130. Windows 桌面外壳统一到 Material 3（2026-10-23）
+
+日期：2026-10-23。共享组件是 Material 3，桌面外壳之前靠 `DesktopTheme` 里的 Material 2 桥接运行：
+M2 的 `Colors` 与 `Typography.h4`–`caption` 角色被手工映射到 M3 角色，控件本身仍是 M2 的。
+
+- 删除桥接的 `MaterialTheme(colors = …)` 与 `Colors`/`Shapes`/`Typography` 映射；`DesktopTheme` 只保留
+  一个 M3 主题（`darkColorScheme`/`lightColorScheme` + `kototoroTypography` + `kototoroShapes`），
+  配色逐项搬运，不再有两套语义。
+- 23 个桌面文件的 `androidx.compose.material.*` 导入改为 `androidx.compose.material3.*`；
+  `MaterialTheme.colors`→`colorScheme`，`typography.h4/h5/h6/subtitle1/body1/body2/caption`→
+  `headlineLarge/headlineMedium/titleLarge/titleMedium/bodyLarge/bodyMedium/bodySmall`（与原桥接映射一致，
+  视觉等价），`Divider()`→`HorizontalDivider()`，`ButtonDefaults.outlinedButtonColors(backgroundColor=)`→
+  `containerColor`，`Surface(elevation=)`→`shadowElevation`，`Card(elevation=)`→`CardDefaults.cardElevation`，
+  `DropdownMenuItem(action, modifier) { text }`→`DropdownMenuItem(onClick = …, text = { … })`。
+- 筛选对话框的 M2 `buttons` 槽改成 M3 的 `confirmButton`（应用）与 `dismissButton`（恢复默认、取消），
+  三个 testTag 保留，探针仍点得到。
+- M3 没有 `Colors.isLight`，暗色分支改读新的 `LocalDesktopDark`（由外观设置决定，不再按亮度猜）。
+- 阅读器内部的局部主题从 `darkColors(…)` 换成 `darkColorScheme(…)` 并显式给 `onSurface = White`，
+  正文与面板文字颜色保持不变。
+
+验证：`:desktop-app:compileKotlin`、`:desktop-app:compileTestKotlin`、`:desktop-app:verifyDesktopStrings`
+与 `:desktop-app:test`（含四种窗口模式的 UI 探针与截图）通过。
+
+**未做**：`Slider`/`Switch`/`Checkbox` 的 M3 默认度量与 M2 略有差别，若需像素级对齐再做逐控件微调。

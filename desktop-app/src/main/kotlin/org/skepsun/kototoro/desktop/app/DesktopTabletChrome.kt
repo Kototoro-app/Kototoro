@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,7 +84,7 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
 @Composable
 private fun LanguageChoice(title: String, selected: Boolean, enabled: Boolean, tag: String, onClick: () -> Unit) {
     OutlinedButton({ onClick() }, enabled = enabled,
-        colors = ButtonDefaults.outlinedButtonColors(backgroundColor =
+        colors = ButtonDefaults.outlinedButtonColors(containerColor =
             if (selected) Accent.copy(alpha = .12f) else Color.Transparent),
         modifier = Modifier.testTag(tag)) { Text(title) }
 }
@@ -101,7 +101,7 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
         MoreDestination(desktopText("more.backups"), "ic_backup_restore", desktopText("more.backupsSummary"), enabled) { controller.showBackups() }
         Surface(shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(desktopText("more.language"), style = MaterialTheme.typography.subtitle1)
+                Text(desktopText("more.language"), style = MaterialTheme.typography.titleMedium)
                 Text(desktopText("more.languageDetail"), color = Muted, fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     LanguageChoice(desktopText("more.languageSystem"), state.language == null, enabled,
@@ -111,20 +111,20 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
                             "language:${language.tag}") { controller.language(language.tag) }
                     }
                 }
-                Text(desktopText("more.appearance"), style = MaterialTheme.typography.subtitle1)
+                Text(desktopText("more.appearance"), style = MaterialTheme.typography.titleMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     DesktopAppearance.entries.forEach { appearance ->
                         OutlinedButton({ controller.appearance(appearance) }, enabled = enabled,
-                            colors = ButtonDefaults.outlinedButtonColors(backgroundColor =
+                            colors = ButtonDefaults.outlinedButtonColors(containerColor =
                                 if (state.appearance == appearance) Accent.copy(alpha = .12f) else Color.Transparent),
                             modifier = Modifier.testTag("appearance:${appearance.name}")) { Text(appearance.title) }
                     }
                 }
-                Text(desktopText("more.interfaceStyle"), style = MaterialTheme.typography.subtitle1)
+                Text(desktopText("more.interfaceStyle"), style = MaterialTheme.typography.titleMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     DesktopInterfaceStyle.entries.forEach { style ->
                         OutlinedButton({ controller.interfaceStyle(style) }, enabled = enabled,
-                            colors = ButtonDefaults.outlinedButtonColors(backgroundColor =
+                            colors = ButtonDefaults.outlinedButtonColors(containerColor =
                                 if (state.interfaceStyle == style) Accent.copy(alpha = .12f) else Color.Transparent),
                             modifier = Modifier.testTag("interface-style:${style.name}")) { Text(style.title) }
                     }
@@ -165,7 +165,7 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
         val expanded = tabletLayoutClass(LocalDesktopWindowWidth.current.value.toInt(), true) == TabletLayoutClass.EXPANDED
         val summary: @Composable (Modifier) -> Unit = { modifier ->
             Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(content.title, style = if (expanded) MaterialTheme.typography.h4 else MaterialTheme.typography.h6)
+                Text(content.title, style = if (expanded) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.titleLarge)
                 Text(content.authors.joinToString(" · ").ifBlank { desktopText("details.authorsUnknown") }, color = Muted)
                 Text(state.sources.firstOrNull { it.source.name == content.source.name }?.displayName ?: content.source.name,
                     color = Accent, fontSize = 12.sp)
@@ -194,10 +194,10 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                     summary(Modifier.weight(1f))
                 }
                 content.description?.takeIf(String::isNotBlank)?.let {
-                    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colors.surface) {
+                    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(desktopText("details.synopsis"), style = MaterialTheme.typography.subtitle1)
-                            Text(it.replace(Regex("<[^>]*>"), ""), color = Muted, style = MaterialTheme.typography.body2)
+                            Text(desktopText("details.synopsis"), style = MaterialTheme.typography.titleMedium)
+                            Text(it.replace(Regex("<[^>]*>"), ""), color = Muted, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }
@@ -214,7 +214,7 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                         DesktopDetailsTab.BOOKMARKS -> desktopText("details.tabBookmarks", bookmarks)
                     }
                     OutlinedButton({ tab = candidate }, enabled = !state.busy,
-                        colors = ButtonDefaults.outlinedButtonColors(backgroundColor =
+                        colors = ButtonDefaults.outlinedButtonColors(containerColor =
                             if (tab == candidate) Accent.copy(alpha = .12f) else Color.Transparent),
                         modifier = Modifier.weight(1f, fill = false).testTag("details-tab:${candidate.name}")) {
                         Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -226,7 +226,7 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
             TabletDetailsPanes(Modifier.fillMaxSize().testTag("details-two-pane"),
                 summary = { paneModifier ->
                     Surface(paneModifier, shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colors.surface.copy(alpha = .92f)) { metadata(Modifier.fillMaxSize()) }
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = .92f)) { metadata(Modifier.fillMaxSize()) }
                 },
                 chapters = { paneModifier ->
                     Column(paneModifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {

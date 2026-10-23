@@ -9,10 +9,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.OutlinedButton
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,10 +59,10 @@ internal fun DesktopDetailsInfo(content: SourceContent, enabled: Boolean, modifi
     Surface(
         modifier.fillMaxWidth().testTag("details-info"),
         shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colors.surface,
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(desktopText("details.info"), style = MaterialTheme.typography.subtitle1)
+            Text(desktopText("details.info"), style = MaterialTheme.typography.titleMedium)
             status?.let { InfoRow(desktopText("details.statusLabel"), it, "details-status") }
             rating?.let { InfoRow(desktopText("details.ratingLabel"), it, "details-rating") }
             if (altTitles.isNotEmpty()) {
@@ -113,6 +113,6 @@ private fun InfoRow(label: String, value: String, tag: String) {
         modifier = Modifier.testTag(tag).semantics(mergeDescendants = true) {},
     ) {
         Text(label, color = Muted, fontSize = 12.sp)
-        Text(value, style = MaterialTheme.typography.body2)
+        Text(value, style = MaterialTheme.typography.bodyMedium)
     }
 }

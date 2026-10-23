@@ -12,7 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.*
@@ -52,7 +52,7 @@ fun DesktopStartup(error: String?) = DesktopTheme {
             if (error == null) {
                 CircularProgressIndicator()
                 Text(desktopText("app.opening"), color = Muted)
-            } else Text(desktopText("app.startFailed", error), color = MaterialTheme.colors.error, modifier = Modifier.widthIn(max = 700.dp))
+            } else Text(desktopText("app.startFailed", error), color = MaterialTheme.colorScheme.error, modifier = Modifier.widthIn(max = 700.dp))
         }
     }
 }
@@ -84,7 +84,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.EXPLORE, DesktopScreen.HOME, DesktopScreen.FEED)) Header(listState)
                     challenge?.let { pending ->
                         var windowNotice by remember(pending.id) { mutableStateOf<String?>(null) }
-                        Surface(color = MaterialTheme.colors.surface, shape = RoundedCornerShape(20.dp)) {
+                        Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(20.dp)) {
                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(desktopText("challenge.hint"))
                                 Text(pending.url, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -147,7 +147,7 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
         (it.displayName.contains(filter, true) || it.source.locale.contains(filter, true)) &&
             state.exploreFilter.accepts(it)
     }
-    Column(Modifier.width(240.dp).fillMaxHeight().background(MaterialTheme.colors.surface,
+    Column(Modifier.width(240.dp).fillMaxHeight().background(MaterialTheme.colorScheme.surface,
         RoundedCornerShape(20.dp)).padding(16.dp).testTag("source-pane"),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(desktopText("browse.mySources"), fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Ink)
@@ -157,7 +157,7 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
             }
             if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) controller.importJar(chooser.selectedFile.toPath())
         }, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text(desktopText("browse.importJar")) }
-        Divider()
+        HorizontalDivider()
         Text(desktopText("browse.sources", sources.size), fontWeight = FontWeight.SemiBold)
         DesktopSearchField(filter, { filter = it }, desktopText("browse.findSource"), modifier = Modifier.fillMaxWidth())
         DesktopSourceFilterControls(state.exploreFilter, state.sources, controller::exploreFilter, enabled, "rail")
@@ -196,16 +196,16 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.BROWSER -> desktopText("screens.browser")
         DesktopScreen.MORE -> desktopText("common.more")
     }
-    Text(title, style = MaterialTheme.typography.h5, color = Ink,
+    Text(title, style = MaterialTheme.typography.headlineMedium, color = Ink,
         modifier = Modifier.heightIn(min = 40.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
 @Composable
 private fun Notice(message: String, error: Boolean) {
-    Surface(color = MaterialTheme.colors.surface, shape = RoundedCornerShape(16.dp)) {
+    Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(16.dp)) {
         // Errors are selectable so a source failure can be copied into a report.
         SelectionContainer {
-            Text(message, color = if (error) MaterialTheme.colors.error else Accent,
+            Text(message, color = if (error) MaterialTheme.colorScheme.error else Accent,
                 modifier = Modifier.fillMaxWidth().padding(12.dp).testTag(if (error) "notice-error" else "notice-message"),
                 maxLines = if (error) 12 else 4, overflow = TextOverflow.Ellipsis)
         }
@@ -240,7 +240,7 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
                 Icon(painterResource("icons/ic_arrow_forward.svg"), contentDescription = desktopText("browse.backToSources"), tint = Ink,
                     modifier = Modifier.size(22.dp).graphicsLayer(scaleX = -1f))
             }
-            Text(state.selectedSource.displayName, style = MaterialTheme.typography.h5, color = Ink,
+            Text(state.selectedSource.displayName, style = MaterialTheme.typography.headlineMedium, color = Ink,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -266,8 +266,9 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
                     }
                     DropdownMenu(expanded && enabled, { expanded = false }) {
                         orders.forEach { order ->
-                            DropdownMenuItem({ expanded = false; controller.browseOrdered(order) },
-                                modifier = Modifier.testTag("source-sort:$order")) { Text(DesktopSourceLabels.sortOrder(order)) }
+                            DropdownMenuItem(onClick = { expanded = false; controller.browseOrdered(order) },
+                                modifier = Modifier.testTag("source-sort:$order"),
+                                text = { Text(DesktopSourceLabels.sortOrder(order)) })
                         }
                     }
                 }
@@ -298,7 +299,7 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
     onOpen: (SourceContent) -> Unit, progressOf: (SourceContent) -> Float? = { null }) {
     if (contents.isEmpty()) { EmptyPanel(desktopText("browse.noWorks"), desktopText("browse.noWorksDetail")); return }
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
-    val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle, isDark = !MaterialTheme.colors.isLight)
+    val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle, isDark = LocalDesktopDark.current)
     LazyVerticalGrid(columns = GridCells.Adaptive(112.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize().testTag("content-grid")) {
         items(contents, key = { it.id }) { content ->

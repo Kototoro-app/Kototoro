@@ -20,8 +20,8 @@ SVG，构建遇到不支持的变换会失败；没有引入另一套图标依�
 主页直接调用 Android / Windows 共用的 `HomeScreenLayout`、`HomeHeroPager`、`HomeHeroCardSurface`
 和 `HomeHeroStandardContent`，统一懒列表、宽屏居中、内容面板断点、双栏、快捷入口与 Hero 动画。
 窗口缩窄后快捷入口随页面滚动；Hero 在主页视口内裁剪，不覆盖顶部工具栏。来源数据、图片加载和
-操作回调保留桌面适配。主页分区装配、订阅页容器、详情内部及其余旧 Material 2 页面仍在迁移中，
-当前没有宣称全应用已经共用一套完整 UI；后续继续提取 Android 呈现，避免独立重写桌面页面。
+操作回调保留桌面适配。主页分区装配、订阅页容器、详情内层内容仍由桌面实现（界面栈已统一为
+Material 3），当前没有宣称全应用已经共用一套完整 UI；后续继续提取 Android 呈现，避免独立重写桌面页面。
 
 鼠标左键按住封面即可左右拖动主页历史、推荐和 Hero，以及订阅更新横栏、顶部分类/来源筛选横栏；
 快速拖动松手后继续滚动，Hero 自动吸附到页面。在历史封面上纵向拖动会滚动主页，轻点仍打开作品。
@@ -104,7 +104,9 @@ Esc 或遮罩关闭面板并回到正文。Windows 提供段落连续滚动与�
 随正文滚动，避免操作区被挤出。Android 的资源/Coil/HTML/本地化/玻璃表面和 Windows 的缓存/模型/窗口操作
 通过适配层接入，不在共享组件里获取 Context、Hilt、文件或业务仓库。
 
-共享组件使用 Material3，桌面尚未迁移的屏幕通过同一主题角色的 Material 2 桥接继续运行。
+共享组件使用 Material3；桌面外壳同为纯 Material 3，不再有 Material 2 桥接——原 M2 的
+`Colors`/`Typography.h4–caption` 角色、`Divider`、`Card`/`Surface` 的 `elevation`、
+`DropdownMenuItem` 位置参数和 `AlertDialog.buttons` 槽都已换成对应的 M3 API。
 颜色与主题偏好仍由平台解析。作品封面的边框、书脊、标题渐变，以及内容源网格卡片和尺寸规则
 已进一步从 Android 提取到 `core-ui`，两端调用同一实现。Android 保留图片缓存、共享转场、TV 焦点、
 徽标和进度适配；桌面提供自己的图片、数据和动作。最新视觉参考为用户 2026-10-04 提供的五张平板截图。

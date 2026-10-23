@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -303,9 +303,8 @@ private fun Menu(label: String, entries: List<Pair<String, Boolean>>, enabled: B
         }
         DropdownMenu(open, { open = false }) {
             entries.forEachIndexed { index, (title, selected) ->
-                DropdownMenuItem({ open = false; onSelect(index) }) {
-                    Text((if (selected) "✓ " else "   ") + title)
-                }
+                DropdownMenuItem(onClick = { open = false; onSelect(index) },
+                    text = { Text((if (selected) "✓ " else "   ") + title) })
             }
         }
     }
@@ -322,10 +321,10 @@ private fun EnhancementMenu(enhancement: MpvEnhancement, enabled: Boolean, onCha
         }
         DropdownMenu(open, { open = false }) {
             MpvEnhancementMode.entries.forEach { mode ->
-                DropdownMenuItem({ onChange(enhancement.copy(mode = mode)); if (mode != MpvEnhancementMode.FSR) open = false },
-                    modifier = Modifier.testTag("video-enhancement:${mode.name}")) {
-                    Text((if (mode == enhancement.mode) "✓ " else "   ") + mode.title)
-                }
+                DropdownMenuItem(onClick = { onChange(enhancement.copy(mode = mode))
+                    if (mode != MpvEnhancementMode.FSR) open = false },
+                    modifier = Modifier.testTag("video-enhancement:${mode.name}"),
+                    text = { Text((if (mode == enhancement.mode) "✓ " else "   ") + mode.title) })
             }
             if (enhancement.mode == MpvEnhancementMode.FSR) {
                 Column(Modifier.width(260.dp).padding(horizontal = 16.dp, vertical = 8.dp)) {

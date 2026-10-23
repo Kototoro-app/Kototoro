@@ -11,7 +11,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -273,4 +273,5 @@ private fun NovelInlineImage(controller: DesktopController, url: String, muted: 
 /** Outlined buttons follow the reading theme instead of the window theme. */
 @Composable
 private fun themedOutline(theme: DesktopNovelTheme) = ButtonDefaults.outlinedButtonColors(
-    backgroundColor = Color.Transparent, contentColor = Color(theme.text), disabledContentColor = Color(theme.muted).copy(alpha = .6f))
+    containerColor = Color.Transparent, contentColor = Color(theme.text),
+    disabledContentColor = Color(theme.muted).copy(alpha = .6f))

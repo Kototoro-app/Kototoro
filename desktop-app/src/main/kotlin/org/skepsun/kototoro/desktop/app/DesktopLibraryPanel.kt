@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,7 +94,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
         if (drawer) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .12f)).clickable { drawer = false })
             Surface(Modifier.align(Alignment.CenterEnd).width(310.dp).fillMaxHeight()
-                .testTag("library-filter-panel"), shape = RoundedCornerShape(20.dp), elevation = 12.dp) {
+                .testTag("library-filter-panel"), shape = RoundedCornerShape(20.dp), shadowElevation = 12.dp) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(desktopText("library.filterAndSort"), modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
@@ -110,14 +110,14 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                                     update(selection.copy(order = order))
                                 }
                             }
-                            Divider()
+                            HorizontalDivider()
                             Text(desktopText("library.progress"), fontWeight = FontWeight.SemiBold)
                             DesktopLibraryReading.entries.forEach { reading ->
                                 FilterRadio(reading.title, selection.reading == reading, enabled, "library-reading:${reading.name}") {
                                     update(selection.copy(reading = reading))
                                 }
                             }
-                            Divider()
+                            HorizontalDivider()
                             Text(desktopText("library.source"), fontWeight = FontWeight.SemiBold)
                             state.library.entries.map { it.content.source }.distinctBy { it.name }.forEach { source ->
                                 val title = state.sources.firstOrNull { it.source.name == source.name }?.displayName ?: source.name

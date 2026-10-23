@@ -1,7 +1,7 @@
 package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,8 +28,8 @@ internal fun DesktopWebDavSection(controller: DesktopController, ui: DesktopWebD
     val settings = ui.settings
     Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(desktopText("webdav.title"), style = MaterialTheme.typography.h6)
-            Text(desktopText("webdav.detail"), style = MaterialTheme.typography.body2)
+            Text(desktopText("webdav.title"), style = MaterialTheme.typography.titleLarge)
+            Text(desktopText("webdav.detail"), style = MaterialTheme.typography.bodyMedium)
             OutlinedTextField(
                 value = settings.serverUrl,
                 onValueChange = { controller.webDavSettings(settings.copy(serverUrl = it.trim())) },
@@ -103,7 +103,7 @@ internal fun DesktopWebDavSection(controller: DesktopController, ui: DesktopWebD
                 Button({ controller.webDavUpload() }, enabled = enabled && settings.configured,
                     modifier = Modifier.testTag("webdav-upload")) { Text(desktopText("webdav.upload")) }
             }
-            if (ui.reachable == true) Text(desktopText("webdav.reachable"), style = MaterialTheme.typography.body2)
+            if (ui.reachable == true) Text(desktopText("webdav.reachable"), style = MaterialTheme.typography.bodyMedium)
             // Only shown when a timer is configured: without one, "never uploaded" would be noise.
             if (settings.autoBackupEnabled) {
                 Text(
@@ -116,17 +116,17 @@ internal fun DesktopWebDavSection(controller: DesktopController, ui: DesktopWebD
                     } else {
                         desktopText("webdav.autoNever")
                     },
-                    style = MaterialTheme.typography.body2,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.testTag("webdav-auto-status"),
                 )
             }
-            ui.error?.let { Text(it, color = MaterialTheme.colors.error, style = MaterialTheme.typography.body2) }
+            ui.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
             when {
-                !ui.listed -> Text(desktopText("webdav.unlisted"), style = MaterialTheme.typography.body2)
-                ui.files.isEmpty() -> Text(desktopText("webdav.empty"), style = MaterialTheme.typography.body2)
+                !ui.listed -> Text(desktopText("webdav.unlisted"), style = MaterialTheme.typography.bodyMedium)
+                ui.files.isEmpty() -> Text(desktopText("webdav.empty"), style = MaterialTheme.typography.bodyMedium)
                 else -> {
                     ui.latest?.let {
-                        Text(desktopText("webdav.latest", it.name), style = MaterialTheme.typography.body2)
+                        Text(desktopText("webdav.latest", it.name), style = MaterialTheme.typography.bodyMedium)
                     }
                     ui.files.forEach { file -> DesktopWebDavRow(controller, file, enabled) }
                 }
@@ -146,7 +146,7 @@ private fun DesktopWebDavRow(controller: DesktopController, file: WebDavBackupFi
                     .format(Date(file.lastModifiedMillis)),
                 file.size / 1024,
             ),
-            style = MaterialTheme.typography.body2,
+            style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f).testTag("webdav-file:${file.name}"),
         )
         OutlinedButton({ controller.webDavRestore(file) }, enabled = enabled,

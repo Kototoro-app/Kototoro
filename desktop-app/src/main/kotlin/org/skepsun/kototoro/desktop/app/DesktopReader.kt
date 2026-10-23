@@ -4,7 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -206,10 +206,12 @@ internal fun rememberReaderPageStyle(settings: DesktopReaderSettings, appearance
 @Composable
 private fun ReaderTheme(content: @Composable () -> Unit) {
     val accent = Color(0xFFA9C7FF)
-    MaterialTheme(colors = darkColors(primary = accent, secondary = accent,
-        onPrimary = Color(0xFF003062), onSecondary = Color(0xFF003062),
-        background = Color(0xFF15191F), surface = Color(0xFF232933))) {
-        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colors.onSurface, content = content)
+    MaterialTheme(colorScheme = darkColorScheme(primary = accent, onPrimary = Color(0xFF003062),
+        secondary = accent, onSecondary = Color(0xFF003062),
+        background = Color(0xFF15191F), onBackground = Color.White,
+        surface = Color(0xFF232933), onSurface = Color.White),
+        typography = MaterialTheme.typography, shapes = MaterialTheme.shapes) {
+        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface, content = content)
     }
 }
 

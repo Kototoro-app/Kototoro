@@ -3,7 +3,7 @@ package org.skepsun.kototoro.desktop.app
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,7 +38,7 @@ internal fun DesktopFilters(controller: DesktopController, state: DesktopAppStat
         modifier = Modifier.width(580.dp).testTag("filter-dialog"), title = { Text(desktopText("filters.title")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (state.error != null) Text(state.error, color = MaterialTheme.colors.error)
+                if (state.error != null) Text(state.error, color = MaterialTheme.colorScheme.error)
                 LazyColumn(Modifier.heightIn(max = 440.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(rows, key = { it.first.id }) { (node, depth) ->
                         Box(Modifier.fillMaxWidth().padding(start = (depth * 16).dp)) {
@@ -48,15 +48,15 @@ internal fun DesktopFilters(controller: DesktopController, state: DesktopAppStat
                 }
                 if (rows.isEmpty()) Text(desktopText("filters.empty"))
             }
-        }, buttons = {
-            Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        }, confirmButton = {
+            Button({ controller.applyFilters(query, draft.map { SourceFilterChange(it.key, it.value) }) },
+                enabled = !state.busy, modifier = Modifier.testTag("filter-apply")) { Text(desktopText("common.apply")) }
+        }, dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton({ draft.clear(); draft.putAll(defaults) }, enabled = !state.busy,
                     modifier = Modifier.testTag("filter-reset")) { Text(desktopText("filters.restoreDefaults")) }
-                Spacer(Modifier.weight(1f))
                 TextButton({ controller.dismissFilters() }, enabled = !state.busy,
                     modifier = Modifier.testTag("filter-cancel")) { Text(desktopText("common.cancel")) }
-                Button({ controller.applyFilters(query, draft.map { SourceFilterChange(it.key, it.value) }) },
-                    enabled = !state.busy, modifier = Modifier.testTag("filter-apply")) { Text(desktopText("common.apply")) }
             }
         })
 }
@@ -67,7 +67,7 @@ private fun FilterControl(node: SourceFilterNode, value: SourceFilterValue?, ena
     val tag = "filter:${node.id}"
     when (node.kind) {
         SourceFilterKind.HEADER, SourceFilterKind.GROUP -> Text(node.name, fontWeight = FontWeight.SemiBold)
-        SourceFilterKind.SEPARATOR -> Divider()
+        SourceFilterKind.SEPARATOR -> HorizontalDivider()
         SourceFilterKind.CHECKBOX -> Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox((value as? SourceFilterValue.Toggle)?.value ?: false,
                 { onChange(SourceFilterValue.Toggle(it)) }, enabled = enabled, modifier = Modifier.testTag(tag))
@@ -105,10 +105,11 @@ private fun FilterControl(node: SourceFilterNode, value: SourceFilterValue?, ena
                         }
                         DropdownMenu(expanded && enabled, { expanded = false }) {
                             node.values.forEachIndexed { position, label ->
-                                DropdownMenuItem({ expanded = false
+                                DropdownMenuItem(onClick = { expanded = false
                                     onChange(if (node.kind == SourceFilterKind.SELECT) SourceFilterValue.Choice(position)
                                         else SourceFilterValue.Sort(position, sort?.ascending ?: false)) },
-                                    modifier = Modifier.testTag("$tag:option:$position")) { Text(label) }
+                                    modifier = Modifier.testTag("$tag:option:$position"),
+                                    text = { Text(label) })
                             }
                         }
                     }
@@ -123,6 +124,6 @@ private fun FilterControl(node: SourceFilterNode, value: SourceFilterValue?, ena
                 }
             }
         }
-        SourceFilterKind.UNSUPPORTED -> Text(desktopText("filters.unsupported", node.name), color = MaterialTheme.colors.onSurface.copy(alpha = .6f))
+        SourceFilterKind.UNSUPPORTED -> Text(desktopText("filters.unsupported", node.name), color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f))
     }
 }

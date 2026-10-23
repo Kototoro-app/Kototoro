@@ -10,7 +10,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,7 +75,7 @@ internal fun DesktopDetailsBookmarks(controller: DesktopController, state: Deskt
             Text(if (selecting) desktopText("details.bookmarksSelectedCount", selection.size)
             else desktopText("reader.bookmarksCount", bookmarks.size),
                 modifier = Modifier.weight(1f).testTag("details-bookmarks-count"),
-                style = MaterialTheme.typography.subtitle1, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 color = Muted)
             TextButton({
                 selecting = !selecting
@@ -127,7 +127,7 @@ internal fun DesktopDetailsBookmarks(controller: DesktopController, state: Deskt
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(bookmarks, key = { it.pageId }) { bookmark ->
                     val checked = bookmark.pageId in selection
-                    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colors.surface,
+                    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface,
                         modifier = Modifier.testTag("details-bookmark:${bookmark.pageId}")) {
                         Row(Modifier.fillMaxWidth().clickable(enabled = enabled) {
                             if (selecting) toggle(bookmark.pageId) else controller.openDetailsBookmark(bookmark)
@@ -176,7 +176,7 @@ internal fun DesktopDetailsBookmarks(controller: DesktopController, state: Deskt
 private fun BookmarkCard(controller: DesktopController, content: SourceContent, bookmark: DesktopBookmark,
     enabled: Boolean, selecting: Boolean, checked: Boolean, toggle: (Long) -> Unit) {
     val chapter = content.chapters?.firstOrNull { it.id == bookmark.chapterId }
-    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colors.surface,
+    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.testTag("details-bookmark:${bookmark.pageId}")) {
         Column(Modifier.fillMaxWidth().clickable(enabled = enabled && (selecting || chapter != null)) {
             if (selecting) toggle(bookmark.pageId) else controller.openDetailsBookmark(bookmark)

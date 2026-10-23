@@ -3,7 +3,7 @@ package org.skepsun.kototoro.desktop.app
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,7 +50,7 @@ internal fun DesktopCategoryDialog(controller: DesktopController, state: Desktop
                             onFinishEditing = { editingId = null })
                     }
                 }
-                Divider()
+                HorizontalDivider()
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(newTitle, { newTitle = it }, singleLine = true,
                         label = { Text(desktopText("library.categoryName")) },
@@ -106,7 +106,7 @@ private fun CategoryRow(controller: DesktopController, category: DesktopLibraryC
             }
             TextButton({ controller.deleteCategory(category.id) }, enabled = enabled,
                 modifier = Modifier.testTag("category-delete:${category.id}")) {
-                Text(desktopText("library.categoryDelete"), color = MaterialTheme.colors.error)
+                Text(desktopText("library.categoryDelete"), color = MaterialTheme.colorScheme.error)
             }
         }
     }

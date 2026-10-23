@@ -293,6 +293,8 @@ npm run docs:build
   Android 走 `R.string`（`AndroidUiStrings`），Windows 走 `prepareDesktopStrings` 由同一份
   `app/src/main/res` 导出的目录（`DesktopUiStrings`），内容类型标题改为派生自类型名而不再各存一份，
   重复的 `label.contentType.*` 已删除；`:core-ui:verifyUiStrings` 校验共享键与 `ContentType` 都有资源。
+  界面栈已统一为 Material 3：`DesktopTheme` 删除 Material 2 桥接，桌面 23 个外壳文件改用
+  `material3` 控件/角色，与共享组件的颜色、字体、圆角令牌一致，暗色分支读 `LocalDesktopDark`。
 - `core-net/` - 共享 HTTP 协议（KMP）：`GoogleDriveSyncApi`、嵌套 `DriveFile` 与 API 异常保持原包名。
   WebDAV 的 `WebDavBackupClient`、远端备份分类/选取/保留规则与 `RemoteNamespace` 也在 commonMain；
   multistatus/HTTP 日期解析 `parseWebDavResources` 同样在 commonMain（无 DOM，Windows 与 iOS 共用），

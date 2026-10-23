@@ -3,7 +3,7 @@ package org.skepsun.kototoro.desktop.app
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -34,7 +34,7 @@ internal fun BrowserPanel(session: DesktopSession) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(desktopText("browser.title"), style = MaterialTheme.typography.h6)
+        Text(desktopText("browser.title"), style = MaterialTheme.typography.titleLarge)
         val engine = session.browser
         if (engine == null) {
             Text(desktopText("browser.hint"))
@@ -74,6 +74,6 @@ internal fun BrowserPanel(session: DesktopSession) {
                 modifier = Modifier.testTag("browser-evaluate")) { Text(desktopText("browser.evaluate")) }
         }
         if (busy) Text(desktopText("browser.busy"), modifier = Modifier.testTag("browser-busy"))
-        Text(result, style = MaterialTheme.typography.body1, modifier = Modifier.testTag("browser-result"))
+        Text(result, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.testTag("browser-result"))
     }
 }
