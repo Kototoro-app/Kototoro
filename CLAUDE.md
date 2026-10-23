@@ -264,6 +264,8 @@ npm run docs:build
   UNSUPPORTED 时由 Session 直接 GET URL 落盘；type 3/4 爬虫站点明确跳过，见计划 §143。
   收藏/历史的选择栏另有“标为已完成”（对应 Android 的 MARK_AS_COMPLETED）：确认后每部作品的阅读位置
   移到最后一章、percent 记为 1，原进度被覆盖（与 Android 弹窗的警告一致），见计划 §144。
+  收藏的选择栏还有“置顶/取消置顶”（对应 Android 的 PIN）：写 `favourites.pinned`，置顶作品在每种
+  排序里都排最前（历史书架不受影响），卡片在右下角画 `ic_pin` 角标，见计划 §145。
   索引模型共用 core-source，APK-only 明确不可安装，构造/持久化失败保留旧扩展；范围见计划 §56。
   reader-core 决定单页/双页/RTL 的可见页面、宽图独页、Fit 排版与进度锚点；键盘翻页和同分支跨章按钮
   已接入。阅读模式/方向保存于原偏好 store，历史 percent 包含页组末页，page 保留起始锚点用于恢复。

@@ -26,6 +26,8 @@ data class SourceLibraryEntry(
     val isNsfw: Boolean = false,
     /** `tracks.chapters_new`: chapters the update checker found since the last read. */
     val newChapters: Int = 0,
+    /** `favourites.pinned`: Android's batch pin, which lifts the work to the top of every shelf order. */
+    val isPinned: Boolean = false,
 )
 
 data class SourceLibraryChapter(val title: String, val number: Float)

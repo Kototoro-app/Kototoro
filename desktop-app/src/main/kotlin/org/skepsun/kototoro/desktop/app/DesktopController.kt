@@ -610,6 +610,18 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { it.copy(message = desktopText("library.completed", marked)) }
     }
 
+    /** Android's batch pin: the flag lives on the favourites rows, so it survives a reload and leads every order. */
+    fun setLibraryPinned(ids: Collection<Long>, isPinned: Boolean) = action {
+        require(ids.isNotEmpty()) { desktopText("library.pinNone") }
+        session.library.setPinned(ids, isPinned)
+        reloadLibrarySnapshot()
+        mutableState.update {
+            val message = if (isPinned) desktopText("library.pinnedCount", ids.size)
+            else desktopText("library.unpinnedCount", ids.size)
+            it.copy(message = message)
+        }
+    }
+
     fun moveCategory(id: Long, up: Boolean) = action {
         val ids = session.library.categories().map { it.id }
         val from = ids.indexOf(id)

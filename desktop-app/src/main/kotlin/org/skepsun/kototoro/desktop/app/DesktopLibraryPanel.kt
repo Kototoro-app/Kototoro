@@ -49,11 +49,14 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
     val hideNsfw = state.sourceSettings.hidesNsfw(
         if (history) DesktopNsfwTarget.HISTORY else DesktopNsfwTarget.FAVOURITES,
     )
-    val entries = remember(state.library, selection, ecosystems, downloadedIds, hideNsfw) {
-        selection.select(state.library, ecosystems, downloadedIds, hideNsfw)
+    val entries = remember(state.library, selection, ecosystems, downloadedIds, hideNsfw, history) {
+        // Android's favourites shelf ranks pinned works first; history has no pin and keeps its own order.
+        selection.select(state.library, ecosystems, downloadedIds, hideNsfw, pinnedFirst = !history)
     }
+    val pinned = remember(entries) { entries.associate { it.content.id to it.isPinned } }
     val shownIds = remember(entries) { entries.mapTo(LinkedHashSet()) { it.content.id } }
     val checkedIds = remember(selectedIds, shownIds) { selectedIds.intersect(shownIds) }
+    val allPinned = remember(checkedIds, pinned) { checkedIds.isNotEmpty() && checkedIds.all { pinned[it] == true } }
     fun toggleSelection(content: SourceContent) {
         selectedIds = if (content.id in selectedIds) selectedIds - content.id else selectedIds + content.id
     }
@@ -77,10 +80,12 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
     }) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (checkedIds.isNotEmpty()) DesktopLibrarySelectionBar(
-                count = checkedIds.size, history = history, enabled = enabled,
+                count = checkedIds.size, history = history, allPinned = allPinned, enabled = enabled,
                 onSelectAll = { selectedIds = LinkedHashSet(shownIds) },
                 onAssignCategories = if (history) null else ({ pickingCategories = true }),
                 onMarkCompleted = { confirmingComplete = true },
+                // Android's pin is a toggle on the favourites shelf: the selected works flip as a group.
+                onTogglePin = if (history) null else ({ controller.setLibraryPinned(checkedIds, !allPinned) }),
                 onRemove = { confirmingRemove = true },
                 onCancel = { selectedIds = emptySet() },
             ) else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -130,6 +135,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                     }
                     ContentGrid(entries.map { it.content }, enabled, controller.session.covers, controller::details,
                         progressOf = { progress[it.id] }, newChaptersOf = { newChapters[it.id] ?: 0 },
+                        pinnedOf = { pinned[it.id] == true },
                         selectedIds = checkedIds.takeIf { it.isNotEmpty() },
                         onToggleSelection = ::toggleSelection,
                         listMode = state.libraryDisplay.listMode,

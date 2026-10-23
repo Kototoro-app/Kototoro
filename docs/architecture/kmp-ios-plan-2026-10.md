@@ -6781,3 +6781,31 @@ Windows 侧的 `source-tvbox`（`MacCmsSourceRuntime` + `MacCmsParser`）早就�
 - 探针（`tablet` 模式，在既有的批量选择段落里）：先确认读者留下了未完成进度 → 长按进入选择 →
   取消对话框后进度不变 → 再次确认后 `percent == 1f`、`chapterId` 等于库里最后一章、
   书架条目的 `progressPercent` 同步为 1，并截图 `tablet-library-selection-complete.png`。
+
+## 145. Windows 收藏批量置顶（2026-10-24）
+
+日期：2026-10-24。Android 收藏页的选择模式首条动作是 `PIN`（`FavoritesListScreen` 的
+`preferredSelectionInlineActions`，处理器 `listHost.togglePinned`）：置顶后作品排到书架最前，
+卡片在角标行画一枚 `ic_pin`，再点一次取消。桌面侧此前完全没有置顶入口：`favourites.pinned`
+这一列只有订阅 feed 在读（`DesktopFeedPanel` 按 `isPinned` 排序），书架既不写也不用它。
+
+- 共享存储照 Android 写同一列：`SourceLibrary.setPinned(ids, isPinned)` 就是
+  `FavouritesDao.setPinned`，作品在多个分类里时按 DAO 的 `MAX(pinned)` 语义任一行置顶即算置顶；
+  非收藏作品没有行可写，自然不受影响。
+- `SourceLibraryEntry` 增加 `isPinned`，快照从已经查出的收藏行（`memberships`）里取，不额外发查询。
+- 排序：Android 收藏读模型的排序是“置顶优先，再按所选顺序”，桌面把这条做成
+  `DesktopLibrarySelection.select(..., pinnedFirst = true)`——先按 `isPinned` 倒序，再用用户选的
+  比较器，最后用 id 稳定兜底。`pinnedFirst` 默认 `false`，所以历史书架顺序不变（Android 历史
+  DAO 的 `ORDER BY` 也不看置顶），与“历史的选择栏没有 PIN”一致。
+- 选择栏新增置顶按钮（`library-selection-pin`，仅收藏页出现），标签随所选集合切换“置顶/取消置顶”
+  （对应 Android 的 `allPinned` 判定）；动作后重载快照并提示“已置顶 N 部作品”/“已取消置顶 N 部作品”。
+- 卡片角标：网格模式在封面右下角画 `ic_pin`（`content-pinned:<id>`，primary 着色，右下是唯一
+  没被勾选/新章节/语言角标占用的位置），列表模式画在标题行；图标走既有的
+  `prepareDesktopIcons`，把 Android 的 `ic_pin.xml` 加进随包生成列表，仍是同一份矢量源。
+- 单元测试 `DesktopLibrarySelectionTest` 覆盖“置顶在每种排序里都领先、但只有 `pinnedFirst`
+  为真时才领先”（历史路径保持原序）。探针在批量选择段落续接：长按 → 置顶 → 断言快照
+  `isPinned`、`FavouritesDao.isPinned` 为真、提示文案、卡片角标存在、按钮标签变成“取消置顶”，
+  截图 `tablet-library-selection-pin.png`；再点一次取消置顶，断言角标消失、DAO 归零、提示切换。
+- 验证：`:desktop-app:compileKotlin`、`:desktop-app:compileTestKotlin`、`:desktop-app:verifyDesktopStrings`、
+  `:core-library:compileCommonMainKotlinMetadata` 通过；`DesktopLibrarySelectionTest` 9 项与
+  `DesktopAppTest` 的 tablet 探针（四个子 JVM）全部通过，`tablet.log` 以 `DESKTOP_UI_OK=tablet` 结束。

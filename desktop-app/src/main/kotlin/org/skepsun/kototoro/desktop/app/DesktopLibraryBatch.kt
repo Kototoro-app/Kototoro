@@ -38,10 +38,12 @@ import org.skepsun.kototoro.core.library.SourceLibraryCategory
 internal fun DesktopLibrarySelectionBar(
     count: Int,
     history: Boolean,
+    allPinned: Boolean,
     enabled: Boolean,
     onSelectAll: () -> Unit,
     onAssignCategories: (() -> Unit)?,
     onMarkCompleted: () -> Unit,
+    onTogglePin: (() -> Unit)?,
     onRemove: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -64,6 +66,12 @@ internal fun DesktopLibrarySelectionBar(
         TextButton({ onMarkCompleted() }, enabled = enabled,
             modifier = Modifier.testTag("library-selection-complete")) {
             Text(desktopText("library.selectionComplete"))
+        }
+        // Android offers the pin on the favourites shelf only: history has no favourites row to carry the flag.
+        if (onTogglePin != null) {
+            TextButton({ onTogglePin() }, enabled = enabled, modifier = Modifier.testTag("library-selection-pin")) {
+                Text(if (allPinned) desktopText("library.selectionUnpin") else desktopText("library.selectionPin"))
+            }
         }
         TextButton({ onRemove() }, enabled = enabled, modifier = Modifier.testTag("library-selection-remove")) {
             Text(if (history) desktopText("library.selectionRemoveHistory") else desktopText("library.selectionRemove"))

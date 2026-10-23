@@ -81,7 +81,9 @@ class SourceLibrary(
                     if (history) reading?.updatedAt ?: 0L else member.maxOfOrNull { it.updatedAt } ?: 0L,
                     reading?.updatedAt, reading?.percent,
                     reading?.let { chapters[item.id to it.chapterId] }?.let { SourceLibraryChapter(it.title, it.number) },
-                    item.id in nsfwIds, newChapters[item.id] ?: 0)
+                    item.id in nsfwIds, newChapters[item.id] ?: 0,
+                    // A work can sit in several categories; Android's DAO reads MAX(pinned), i.e. any row may pin it.
+                    isPinned = member.any { it.isPinned })
             }, categories.map { SourceLibraryCategory(it.categoryId.toLong(), it.title) })
         }
     }
@@ -258,6 +260,13 @@ class SourceLibrary(
         val categories = database.getFavouritesDao().findCategories(id)
         return database.getFavouriteCategoriesDao().findByIds(categories).isNotEmpty()
     }
+
+    /**
+     * Android's batch pin writes the flag on the favourites rows, so it survives a reload and the shelf can order by
+     * it; works that are not favourites have no row to write and are simply left alone.
+     */
+    suspend fun setPinned(ids: Collection<Long>, isPinned: Boolean) =
+        database.getFavouritesDao().setPinned(ids.toList(), isPinned)
 
     suspend fun removeFavourite(id: Long) = database.useWriterConnection { connection ->
         connection.immediateTransaction { database.getFavouritesDao().delete(id) }

@@ -315,6 +315,8 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
 internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers: DesktopCovers,
     onOpen: (SourceContent) -> Unit, progressOf: (SourceContent) -> Float? = { null },
     newChaptersOf: (SourceContent) -> Int = { 0 },
+    /** Android's pin badge: only the favourites shelf carries it, so every other grid keeps the default. */
+    pinnedOf: (SourceContent) -> Boolean = { false },
     /** Null is plain browsing; a set turns each card into a selection target, as Android's list does on long press. */
     selectedIds: Set<Long>? = null, onToggleSelection: (SourceContent) -> Unit = {},
     /** Android's list mode: the shelves can render one work per row instead of the poster grid. */
@@ -323,7 +325,8 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
     metaOf: (SourceContent) -> String = { it.authors.joinToString().ifBlank { it.source.name } }) {
     if (contents.isEmpty()) { EmptyPanel(desktopText("browse.noWorks"), desktopText("browse.noWorksDetail")); return }
     if (listMode == org.skepsun.kototoro.desktop.runtime.DesktopListMode.LIST) {
-        ContentRowList(contents, enabled, covers, onOpen, progressOf, newChaptersOf, selectedIds, onToggleSelection, metaOf)
+        ContentRowList(contents, enabled, covers, onOpen, progressOf, newChaptersOf, pinnedOf,
+            selectedIds, onToggleSelection, metaOf)
         return
     }
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
@@ -371,6 +374,14 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
                                 .testTag("content-language:${content.id}")) { colors ->
                             ContentCardBadgeText(locale, colors.content, metrics)
                         }
+                        // Android draws a pin icon among the card badges (KototoroContentCard's "pin" badge);
+                        // the bottom-right corner is the only slot the other pills leave free.
+                        if (pinnedOf(content)) Icon(painterResource("icons/ic_pin.svg"),
+                            desktopText("library.pinned"),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.align(Alignment.BottomEnd)
+                                .padding(end = 5.dp, bottom = bottomLift + 5.dp).size(18.dp)
+                                .testTag("content-pinned:${content.id}"))
                     },
                     progress = {
                         if (percent != null) ContentCardBottomProgressBar(percent, ReadingProgress.isCompleted(percent),
@@ -389,6 +400,7 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
 @Composable
 private fun ContentRowList(contents: List<SourceContent>, enabled: Boolean, covers: DesktopCovers,
     onOpen: (SourceContent) -> Unit, progressOf: (SourceContent) -> Float?, newChaptersOf: (SourceContent) -> Int,
+    pinnedOf: (SourceContent) -> Boolean,
     selectedIds: Set<Long>?, onToggleSelection: (SourceContent) -> Unit, metaOf: (SourceContent) -> String) {
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
     val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle, isDark = LocalDesktopDark.current)
@@ -415,6 +427,9 @@ private fun ContentRowList(contents: List<SourceContent>, enabled: Boolean, cove
                             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (isSelected) Icon(painterResource("icons/ic_check.svg"), null, tint = Accent,
                                 modifier = Modifier.size(18.dp).testTag("content-selected:${content.id}"))
+                            if (pinnedOf(content)) Icon(painterResource("icons/ic_pin.svg"),
+                                desktopText("library.pinned"), tint = Accent,
+                                modifier = Modifier.size(16.dp).testTag("content-pinned:${content.id}"))
                             Text(content.title, fontWeight = FontWeight.SemiBold, maxLines = 2,
                                 overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                             if (newChapters > 0) Text(desktopText("library.newChapters", newChapters),

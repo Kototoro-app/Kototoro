@@ -113,6 +113,22 @@ class DesktopLibrarySelectionTest {
     }
 
     @Test
+    fun `a pinned work leads every order but only when the shelf asks for it`() {
+        val pinned = snapshot.entries.map { if (it.content.id == 7L) it.copy(isPinned = true) else it }
+        val shelf = DesktopLibrarySnapshot(pinned)
+        // Android's favourites ranking lifts the pin above the chosen order; the tie-break stays the id.
+        assertEquals(listOf(7L, Long.MAX_VALUE, Long.MIN_VALUE),
+            DesktopLibrarySelection(order = DesktopLibraryOrder.TITLE).select(shelf, pinnedFirst = true)
+                .map { it.content.id })
+        assertEquals(listOf(7L, Long.MAX_VALUE, Long.MIN_VALUE),
+            DesktopLibrarySelection(order = DesktopLibraryOrder.PROGRESS).select(shelf, pinnedFirst = true)
+                .map { it.content.id })
+        // History has no pin, so it keeps the plain order even when the stored row carries the flag.
+        assertEquals(listOf(Long.MAX_VALUE, 7, Long.MIN_VALUE),
+            DesktopLibrarySelection(order = DesktopLibraryOrder.TITLE).select(shelf).map { it.content.id })
+    }
+
+    @Test
     fun `macro choices keep the favourites-only chips off the favourites shelf`() {
         assertEquals(listOf(DesktopLibraryMacro.NEW_CHAPTERS, DesktopLibraryMacro.NSFW, DesktopLibraryMacro.SFW),
             DesktopLibraryMacro.choices(history = false))

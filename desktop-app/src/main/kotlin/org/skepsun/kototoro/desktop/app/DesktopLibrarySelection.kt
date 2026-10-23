@@ -119,11 +119,14 @@ data class DesktopLibrarySelection(
      * [ecosystems] maps installed source names; works from uninstalled sources match no source-type tag.
      * [downloadedContentIds] are works that hold at least one stored chapter. [hideNsfw] carries Android's adult
      * filter target for this shelf: it is a display rule, so it is applied last like the other filters.
+     * [pinnedFirst] is Android's ranking of the favourites shelf: a pinned work leads every order, so it is applied
+     * before the chosen comparator and never as a filter.
      */
     fun select(snapshot: DesktopLibrarySnapshot,
         ecosystems: Map<String, SourceEcosystem> = emptyMap(),
         downloadedContentIds: Set<Long> = emptySet(),
-        hideNsfw: Boolean = false): List<DesktopLibraryEntry> {
+        hideNsfw: Boolean = false,
+        pinnedFirst: Boolean = false): List<DesktopLibraryEntry> {
         val text = query.trim()
         val entries = snapshot.entries.filter { row ->
             val content = row.content
@@ -151,6 +154,11 @@ data class DesktopLibrarySelection(
             DesktopLibraryOrder.LAST_READ -> compareByDescending { it.lastReadAt ?: 0L }
             DesktopLibraryOrder.PROGRESS -> compareByDescending { it.progressPercent ?: 0f }
         }
-        return entries.sortedWith(comparator.thenBy { it.content.id })
+        return if (pinnedFirst) {
+            entries.sortedWith(compareByDescending<DesktopLibraryEntry> { it.isPinned }
+                .then(comparator).thenBy { it.content.id })
+        } else {
+            entries.sortedWith(comparator.thenBy { it.content.id })
+        }
     }
 }

@@ -414,6 +414,23 @@ internal object DesktopTabletProbe {
                 check(completed.chapterId == stored!!.chapters!!.last().id) { "the last chapter is the new position" }
                 check(controller.state.value.message == desktopText("library.completed", 1))
                 check(controller.state.value.library.entries.first { it.content.id == content.id }.progressPercent == 1f)
+                // Android's batch pin on the favourites shelf: the flag lands on the favourites row, the card grows a
+                // pin badge, and the selected works lead every order until they are unpinned again.
+                onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
+                onNodeWithTag("library-selection-pin").performClick(); idle()
+                check(controller.state.value.library.entries.first { it.content.id == content.id }.isPinned)
+                check(runBlocking { session.storage.database.getFavouritesDao().isPinned(listOf(content.id)) } == true)
+                check(controller.state.value.message == desktopText("library.pinnedCount", 1))
+                onNodeWithTag("content-pinned:${content.id}", useUnmergedTree = true).assertExists()
+                snapshot("library-selection-pin")
+                // The button reads as a toggle, as Android's PIN action does once every selected work is pinned.
+                onNodeWithText(desktopText("library.selectionUnpin")).assertExists()
+                onNodeWithTag("library-selection-pin").performClick(); idle()
+                check(!controller.state.value.library.entries.first { it.content.id == content.id }.isPinned)
+                check(runBlocking { session.storage.database.getFavouritesDao().isPinned(listOf(content.id)) } != true)
+                check(controller.state.value.message == desktopText("library.unpinnedCount", 1))
+                onNodeWithTag("content-pinned:${content.id}", useUnmergedTree = true).assertDoesNotExist()
+                onNodeWithTag("library-selection-cancel").performClick(); idle()
                 runBlocking {
                     repeat(36) { index ->
                         session.library.addFavourite(content.copy(id = content.id + 1000 + index,
