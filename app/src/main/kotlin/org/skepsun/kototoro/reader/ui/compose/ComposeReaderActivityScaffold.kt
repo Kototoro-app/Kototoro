@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -134,6 +136,7 @@ import org.skepsun.kototoro.reader.ui.compose.design.ReaderFloatingControlButton
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderZoomControls
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
@@ -899,28 +902,68 @@ private fun ReaderProgressControl(
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 private fun ReaderAutoScrollPanel(state: ReaderAutoScrollUiState, callbacks: ReaderAutoScrollCallbacks) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+    var startSwitchHasFocus by remember { mutableStateOf(false) }
+    val startSwitchRequester = rememberTvSheetStartFocus { startSwitchHasFocus }
+    Column(
+        // A television draws this sheet in landscape, where the stack of rows is taller than the
+        // screen: without a scroll the last switches are off-screen and a remote cannot drag the
+        // sheet up. Focus inside the column brings its row into view on its own.
+        modifier = Modifier
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.reader_autoscroll), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            IconButton(onClick = callbacks.onClose) { Text("×", style = MaterialTheme.typography.titleLarge) }
+            IconButton(
+                onClick = callbacks.onClose,
+                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+            ) { Text("×", style = MaterialTheme.typography.titleLarge) }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.reader_autoscroll), modifier = Modifier.weight(1f))
-            Switch(checked = state.active, onCheckedChange = callbacks.onActiveChanged)
+            Switch(
+                checked = state.active,
+                onCheckedChange = callbacks.onActiveChanged,
+                modifier = Modifier
+                    .focusRequester(startSwitchRequester)
+                    .onFocusChanged { startSwitchHasFocus = it.isFocused }
+                    .tvFocusable(shape = CircleShape, addFocusTarget = false),
+            )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(if (state.manuallyPaused) stringResource(R.string.play) else stringResource(R.string.pause), modifier = Modifier.weight(1f))
-            Switch(checked = !state.manuallyPaused, onCheckedChange = { callbacks.onPausedChanged(!it) })
+            Switch(
+                checked = !state.manuallyPaused,
+                onCheckedChange = { callbacks.onPausedChanged(!it) },
+                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+            )
         }
         Text(text = stringResource(R.string.speed_value, autoScrollSpeedMultiplier(state.speed)))
-        Slider(value = state.speed, onValueChange = callbacks.onSpeedChanged, valueRange = 0f..1f)
+        Slider(
+            value = state.speed,
+            onValueChange = callbacks.onSpeedChanged,
+            valueRange = 0f..1f,
+            modifier = Modifier.tvSliderDpad(
+                value = state.speed,
+                valueRange = 0f..1f,
+                onValueChange = callbacks.onSpeedChanged,
+            ),
+        )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.reader_autoscroll_fab), modifier = Modifier.weight(1f))
-            Switch(checked = state.fabVisible, onCheckedChange = callbacks.onFabChanged)
+            Switch(
+                checked = state.fabVisible,
+                onCheckedChange = callbacks.onFabChanged,
+                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+            )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.reader_autoscroll_pause_on_ui), modifier = Modifier.weight(1f))
-            Switch(checked = state.pauseOnUi, onCheckedChange = callbacks.onPauseOnUiChanged)
+            Switch(
+                checked = state.pauseOnUi,
+                onCheckedChange = callbacks.onPauseOnUiChanged,
+                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+            )
         }
         if (state.showPageDelay) {
             Text(stringResource(R.string.page_switch_timer, state.pageDelaySeconds), style = MaterialTheme.typography.bodySmall)

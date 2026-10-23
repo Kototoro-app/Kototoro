@@ -2740,6 +2740,50 @@ visible = bottomChromeVisibility.visible && !(isTvPresentation && expandedPanelV
 - 只覆盖了详情页这一条"回来"路径。从设置页、搜索页等其它入口返回时是否也会丢焦点没逐个验证；
   抓到的共同点是"整窗无焦点"，同一个 `view.findFocus() == null` 判断可以按需复制到别的入口。
 
+## 第四十六轮：自动滚动面板的初始焦点落在第一个开关上，整块面板一屏放得下（2026-10-24）
+
+阅读器选项面板里的 `Automatic scroll` 磁贴打开的是一个**原生 Material3 `ModalBottomSheet`**，
+它自带一个可点击、可聚焦的拖拽把手（`content-desc="Drag handle"`，96×96 px）。在电视上这就是
+一个"看得见焦点框、按下去什么都不发生"的死站：初始焦点正好落在把手上，环又是一个和面板同色的
+暗方块，CENTER 点了也没有任何反应。
+
+两处改动：
+
+1. **初始焦点**：新增 `rememberTvSheetStartFocus(hasFocus)`（`reader/ui/compose/TvSheetFocus.kt`）。
+   对话框窗口是新窗口，开窗时没有任何焦点节点，而窗口多半还处在 touch mode（Compose 会静默丢弃
+   `requestFocus()`），所以它先 `view.requestFocusFromTouch()` 再 `requestFocus()`，并**逐帧重试**
+   直到目标控件报告自己拿到了焦点（最多 10 次，每次 70 ms），面板关上时立刻停手。它取的是
+   **当前组合的 `LocalView`**，也就是对话框自己的窗口——不能用阅读器那个 `hostView`，否则会把窗口
+   焦点抢回阅读器。
+2. **控件本身**：`Auto scroll` 开关挂上 `focusRequester` + `tvFocusable(addFocusTarget = false)`
+   （圆环），其余开关和右上角 ✕ 同样补环，速度滑条改用 `tvSliderDpad`（电视上 Slider 只认拖动，
+   方向键进去就是死站）。整块内容再加 `verticalScroll`：电视是横屏，五行控件加滑条比屏幕高，
+   最后两个开关原本在屏幕外，遥控器又没法把面板往上拖。
+3. 工具面板 `ComposeReaderToolsSheet` 用同一个原语（第一个按钮拿焦点、按钮补环）。注意这个面板
+   目前**没有入口**：`ReaderControlDestination.TOOLS` 只在它自己的关闭回调里出现，没有任何 UI
+   派发它（底部工具壳 `ReaderControlShell` 也没有调用点），所以这处只是提前把电视行为补齐。
+
+### 设备验证（emulator-5554）
+
+| 步骤 | 结果 |
+| --- | --- |
+| 选项面板 RIGHT×4 到 `Automatic scroll` → CENTER | 面板打开，焦点在第一个开关 `[1464,752][1568,848]`，蓝环可见 |
+| DOWN ×1 / ×2 / ×3 / ×4 | 依次到 `Pause` 开关、速度滑条 `[332,848][1588,936]`、`Show floating button`、`Pause when controls are visible` |
+| 滑条上 RIGHT | 速度从 `x2.5` 变 `x3.1`，环跟着滑条 |
+| 最后一个开关 CENTER | 开关由开变关，焦点不动 |
+| BACK | 面板关闭，焦点回到顶栏标题药丸 `[784,12][1136,108]` |
+| 再 BACK | 顶栏收起，焦点回到整页（阅读区） |
+
+滚动后五行控件全部落在 `[320,1080]` 内，最后一个开关的环不再被屏幕底边切掉。
+
+### 遗留
+
+- 章节面板、阅读选项面板（`ReaderPanelHost`）是应用自己的锚定面板，本来就有重试逻辑；剩下的
+  `ModalBottomSheet` 只有这两块，都覆盖了。小说阅读器的章节/选项面板（`ComposeNovelChaptersSheet`、
+  `ComposeNovelReaderOptionsSheet`）仍是旧实现，没有夹具无法验证。
+- 详情页"TV Audit Strip"在宽屏下没有 Continue 按钮，阅读入口在章节行的 ▶ 上——是设计如此（章节工具
+  模式），不是焦点问题；但如果用户找不到入口，值得在文档里说明。
+
 
 
 

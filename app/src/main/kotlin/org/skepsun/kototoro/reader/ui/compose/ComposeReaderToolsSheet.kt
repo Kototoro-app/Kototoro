@@ -19,11 +19,18 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelSection
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -37,6 +44,8 @@ internal fun ComposeReaderToolsSheet(
     modifier: Modifier = Modifier,
 ) {
     if (!visible) return
+    var firstToolHasFocus by remember { mutableStateOf(false) }
+    val firstToolRequester = rememberTvSheetStartFocus { firstToolHasFocus }
     Surface(
         shape = if (embedded) androidx.compose.foundation.shape.RoundedCornerShape(0.dp) else MaterialTheme.shapes.large,
         color = if (embedded) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -53,7 +62,16 @@ internal fun ComposeReaderToolsSheet(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
                 ) {
-                    Tool(R.drawable.ic_translate, R.string.reader_translation_action, translateActive, callbacks.onTranslation)
+                    val firstToolModifier = Modifier
+                        .focusRequester(firstToolRequester)
+                        .onFocusChanged { firstToolHasFocus = it.isFocused }
+                    Tool(
+                        R.drawable.ic_translate,
+                        R.string.reader_translation_action,
+                        translateActive,
+                        callbacks.onTranslation,
+                        firstToolModifier,
+                    )
                     Tool(R.drawable.ic_retry, R.string.reader_translation_retranslate_current_page, false, callbacks.onRetranslatePage)
                     Tool(R.drawable.ic_retry, R.string.reader_translation_retry_failed_pages, false, callbacks.onRetryFailedTranslations)
                     Tool(R.drawable.ic_retry, R.string.reader_translation_retranslate_current_chapter, false, callbacks.onRetranslateChapter)
@@ -70,10 +88,11 @@ private fun androidx.compose.foundation.layout.FlowRowScope.Tool(
     label: Int,
     active: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     TextButton(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .weight(1f)
             .heightIn(min = 48.dp)
             .background(
@@ -83,7 +102,8 @@ private fun androidx.compose.foundation.layout.FlowRowScope.Tool(
                     androidx.compose.ui.graphics.Color.Transparent
                 },
                 shape = RoundedCornerShape(18.dp),
-            ),
+            )
+            .tvFocusable(shape = RoundedCornerShape(18.dp), addFocusTarget = false),
     ) {
         val contentColor = if (isSystemInDarkTheme()) {
             androidx.compose.ui.graphics.Color.White
