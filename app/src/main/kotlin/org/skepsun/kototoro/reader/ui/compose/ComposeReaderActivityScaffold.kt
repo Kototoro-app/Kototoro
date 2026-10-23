@@ -69,6 +69,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -113,6 +114,7 @@ import androidx.core.content.ContextCompat
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_BOOKMARKS
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
@@ -495,6 +497,8 @@ internal fun ComposeReaderActivityScaffold(
     }
     val expandedPanelVisible = state.chaptersVisible || state.options.visible ||
         state.toolsVisible || state.autoScroll.visible
+    val chapterTabsFocusRequester = remember { FocusRequester() }
+    val chapterTabsRestoreScope = rememberCoroutineScope()
     LaunchedEffect(isTvPresentation, state.controlsVisible, expandedPanelVisible) {
         if (isTvPresentation && state.controlsVisible && !expandedPanelVisible) {
             // One request on the state change is not enough on a television. A sheet that closes
@@ -737,9 +741,26 @@ internal fun ComposeReaderActivityScaffold(
                                 selectedIndex = ReaderChapterPanelTabs
                                     .indexOfFirst { it.first == chapterPanelTabId }
                                     .coerceAtLeast(0),
-                                onSelected = { callbacks.chapterPanel.onTabSelected(ReaderChapterPanelTabs[it].first) },
+                                onSelected = { index ->
+                                    callbacks.chapterPanel.onTabSelected(ReaderChapterPanelTabs[index].first)
+                                    if (isTvPresentation) {
+                                        // The tab pages are a second composition inside the sheet, so
+                                        // switching one rebuilds the body and can release the ring a
+                                        // frame later; nothing is focused then and every direction
+                                        // press is lost until BACK. Put the ring back on the tab bar.
+                                        chapterTabsRestoreScope.launch {
+                                            repeat(6) {
+                                                withFrameNanos { }
+                                                if (hostView.findFocus() != null) return@launch
+                                                requestTvFocus(chapterTabsFocusRequester)
+                                                delay(70)
+                                            }
+                                        }
+                                    }
+                                },
                                 // The search and options buttons sit in the same row, past the tabs.
                                 guardLastTabRight = false,
+                                selectedFocusRequester = chapterTabsFocusRequester,
                             )
                         }
                     },

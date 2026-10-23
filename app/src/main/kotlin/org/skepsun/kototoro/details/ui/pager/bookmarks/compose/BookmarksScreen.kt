@@ -54,6 +54,7 @@ import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.artworkAwareContainerColor
@@ -92,6 +93,9 @@ private fun BookmarkCard(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(0.7f)
+            // A bookmark page is the panel body's only stop, so it needs the ring the clickable owns.
+            // onFocusChanged only sees the focus target that follows it, hence the order.
+            .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,

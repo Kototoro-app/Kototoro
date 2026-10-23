@@ -72,6 +72,9 @@ fun ReaderPanelTabBar(
     // Buttons drawn beside the tabs (settings gear, chapter options) are the row's last stop, so the
     // edge guard moves onto them; leaving it on the last tab would make those buttons unreachable.
     guardLastTabRight: Boolean = trailing == null,
+    // Hosts whose panel body is rebuilt on a tab change can lose the ring right after it switches;
+    // they pass a requester pinned to the selected tab and put the ring back themselves.
+    selectedFocusRequester: FocusRequester? = null,
 ) {
     val colors = currentReaderPanelColors()
     Row(
@@ -100,6 +103,13 @@ fun ReaderPanelTabBar(
                         modifier = Modifier
                             .clip(Capsule())
                             .background(background)
+                            .then(
+                                if (selected && selectedFocusRequester != null) {
+                                    Modifier.focusRequester(selectedFocusRequester)
+                                } else {
+                                    Modifier
+                                },
+                            )
                             // A selected tab is already filled with the accent-derived container, so the
                             // accent ring would drown in it; the content colour keeps the focus visible.
                             .tvFocusable(

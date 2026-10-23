@@ -27,6 +27,7 @@ import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.bookmarks.domain.Bookmark
 import org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
 import java.io.File
 
@@ -56,6 +57,9 @@ fun KototoroBookmarkCardThumb(
         modifier = modifier
             .fillMaxWidth()
             .padding(2.dp)
+            // The card is the list's only focus stop on a television, so the ring has to be drawn.
+            // onFocusChanged only sees the focus target that follows it, hence the order.
+            .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
             .clip(RoundedCornerShape(8.dp))
             .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surfaceVariant)
             .combinedClickable(
@@ -128,6 +132,7 @@ fun KototoroBookmarkCardNovel(
         modifier = modifier
             .fillMaxWidth()
             .padding(2.dp)
+            .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
             .clip(RoundedCornerShape(8.dp))
             .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant)
             .combinedClickable(
