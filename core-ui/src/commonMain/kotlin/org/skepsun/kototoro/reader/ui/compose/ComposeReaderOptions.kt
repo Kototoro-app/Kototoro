@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -68,6 +69,7 @@ import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.ReaderOcrMode
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvHorizontalEdgeGuard
 import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
 import org.skepsun.kototoro.reader.ui.colorfilter.ReaderColorCorrectionControls
@@ -324,7 +326,14 @@ fun ReaderOptionsDetailTabs(
     }
     val settingsButton: (@Composable () -> Unit)? = if (onOpenSettings == null) null else {
         {
-            IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("reader-options-settings")) {
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier
+                    .testTag("reader-options-settings")
+                    // Last stop of the header row: it draws its own ring and keeps the right press.
+                    .tvFocusable(shape = CircleShape, addFocusTarget = false)
+                    .tvHorizontalEdgeGuard(blockRight = true),
+            ) {
                 Icon(imageVector = ReaderPanelIcons.Settings, contentDescription = settingsDescription)
             }
         }

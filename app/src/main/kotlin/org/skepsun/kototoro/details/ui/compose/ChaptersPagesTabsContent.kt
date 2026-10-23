@@ -53,6 +53,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.details.ui.model.DetailsChapterSourceTab
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.model.toListItem
@@ -656,7 +657,10 @@ private fun ChaptersPagesToolbar(
                 onValueChange = onChapterQueryChange,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    // A text field keeps the arrow keys for the caret, so on a TV the list below was
+                    // only reachable by pressing back out of the whole panel.
+                    .tvTextInputFocusEscape(),
                 singleLine = true,
                 label = { Text(stringResource(R.string.search_chapters)) },
             )

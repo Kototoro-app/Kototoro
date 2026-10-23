@@ -136,6 +136,7 @@ import org.skepsun.kototoro.reader.ui.compose.design.ReaderFloatingControlButton
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderZoomControls
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvHorizontalEdgeGuard
 import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
@@ -308,7 +309,10 @@ private fun ReaderChapterPanelActions(
         IconButton(
             onClick = callbacks.onSearchToggle,
             enabled = state.searchEnabled,
-            modifier = Modifier.size(44.dp),
+            // Beside the tab bar, so a remote has to be able to walk here and see where it is.
+            modifier = Modifier
+                .size(44.dp)
+                .tvFocusable(shape = CircleShape, addFocusTarget = false),
         ) {
             Icon(
                 imageVector = Icons.Default.Search,
@@ -323,7 +327,11 @@ private fun ReaderChapterPanelActions(
         Box {
             IconButton(
                 onClick = { moreMenuExpanded = true },
-                modifier = Modifier.size(44.dp),
+                // Right-most control of the header row: keep the press here instead of the scrim.
+                modifier = Modifier
+                    .size(44.dp)
+                    .tvFocusable(shape = CircleShape, addFocusTarget = false)
+                    .tvHorizontalEdgeGuard(blockRight = true),
             ) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
@@ -730,6 +738,8 @@ internal fun ComposeReaderActivityScaffold(
                                     .indexOfFirst { it.first == chapterPanelTabId }
                                     .coerceAtLeast(0),
                                 onSelected = { callbacks.chapterPanel.onTabSelected(ReaderChapterPanelTabs[it].first) },
+                                // The search and options buttons sit in the same row, past the tabs.
+                                guardLastTabRight = false,
                             )
                         }
                     },

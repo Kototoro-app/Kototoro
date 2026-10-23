@@ -69,6 +69,9 @@ fun ReaderPanelTabBar(
     onSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null,
+    // Buttons drawn beside the tabs (settings gear, chapter options) are the row's last stop, so the
+    // edge guard moves onto them; leaving it on the last tab would make those buttons unreachable.
+    guardLastTabRight: Boolean = trailing == null,
 ) {
     val colors = currentReaderPanelColors()
     Row(
@@ -106,7 +109,7 @@ fun ReaderPanelTabBar(
                             )
                             .tvHorizontalEdgeGuard(
                                 blockLeft = index == 0,
-                                blockRight = index == labels.lastIndex,
+                                blockRight = guardLastTabRight && index == labels.lastIndex,
                             )
                             .selectable(selected = selected, role = Role.Tab, onClick = { onSelected(index) })
                             .heightIn(min = 36.dp)
