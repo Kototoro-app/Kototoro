@@ -19,10 +19,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -60,10 +62,14 @@ internal fun ComposeReaderOptionsPanel(
     if (!state.visible) return
     val colors = mangaReaderPanelColors(state.background, isSystemInDarkTheme(), MaterialTheme.colorScheme)
     val strings = rememberReaderOptionsStrings()
+    // The panel opens for the quick actions, so that is where the ring has to start: the host takes
+    // the focus on the very first frame the sheet has a placed row.
+    val firstActionFocusRequester = remember { FocusRequester() }
     ReaderOptionsPanelHost(
         colors = if (eInkMode) colors.forEInk() else colors,
         surfaceMode = rememberReaderPanelSurfaceMode(eInkMode),
         onDismissRequest = callbacks.onDismiss,
+        initialFocusRequester = firstActionFocusRequester,
         quickLayer = {
             ReaderMangaQuickLayer(
                 state = state,
@@ -73,6 +79,7 @@ internal fun ComposeReaderOptionsPanel(
                 actions = mangaQuickActions(translationAvailable, translationActive),
                 actionIcon = { painterResource(MangaQuickActionId.valueOf(it.id).iconResId) },
                 actionLabel = { stringResource(MangaQuickActionId.valueOf(it.id).labelResId) },
+                firstActionFocusRequester = firstActionFocusRequester,
                 onAction = { action ->
                     val handler = when (MangaQuickActionId.valueOf(action.id)) {
                         MangaQuickActionId.CHAPTERS -> callbacks.onPages

@@ -931,6 +931,10 @@ Column(
 `focusGroup()` 属于 `androidx.compose.foundation`（不是 `ui.focus`）。请求必须晚一帧：内容还没放置时
 `requestFocus()` 会失败，用 `withFrameNanos { }` 等一次组合提交。
 
+> **第四十轮修正**：把焦点请求到面板 `Column` 自身是个死胡同——它不画环，矩形又覆盖所有行，
+> 从它出发按方向键找不到任何节点。请求必须指向**具体控件**（`ReaderPanelHost(initialFocusRequester=…)`），
+> 而且只能由一处发、落地后不再重发。见下文"第四十轮"。
+
 ### SheetStuckAtPeek：电视上没有"上拉到详情"的手势
 
 面板停在 peek（只有页头高度）。手机上拉一下就能看到详情，遥控器没有这个手势，于是分页栏点了"CENTER"只换了
@@ -2352,6 +2356,73 @@ BACK 之后人直接掉到裸 chrome 上（旧构建 `m5`：面板消失，焦�
   留待和 `NovelTtsVoiceDialog` 一起做统一的小窗规格。
 - `openVideoAnnotation()` 无条件暂停播放，而"取消笔记"不会恢复播放。是否要把"取消后继续播放"做进
   这一格，取决于用户对"取消"的预期，先记录不动。
+
+## 第四十轮：漫画选项面板"请求成功、焦点却不在任何控件上"（2026-10-24）
+
+第二十九～三十二轮把漫画阅读器的顶栏走通了，但选项面板（`state.options.visible`）一直是死的：面板打开后
+屏幕上没有任何焦点环，`uiautomator` 报 `focused=none`，按 UP/DOWN/LEFT/RIGHT 得到的截图**逐字节相同**
+（`sha256 5861f872…`）。这一轮把它查到底。
+
+### 排错：三个"看起来都正常"的前置条件
+
+1. **按键路由正常。** 在 `ReaderActivity.dispatchKeyEvent` 里打点，面板打开时 `isReaderControlsVisible=true`
+   且 `shouldInterceptReaderTvKey(isTv, true, 19/20/21/22)=false` → `Action.DELEGATE`，方向键确实交给了 Compose。
+   所以不是"键被阅读器吃掉"。
+2. **视图焦点正常。** 探针打印 `requestFocusFromTouch()` 前后：`viewBefore=false → viewAfter=true`、
+   `isInTouchMode=false`，随后 `FocusRequester.requestFocus()` 返回 `granted=true`。
+3. **控件本身可聚焦。** 语义树里每个快捷格都是 `focusable=true` 且带 bounds（`[232,736][414,892]` 等）。
+
+### 根因：焦点确实落过一次，随后被面板自己抢走
+
+在快捷层外面套一层 `onFocusChanged` 打点，真相是两行相邻日志：
+
+```
+quickLayer focused=true  has=true     ← 第一个快捷格拿到了焦点
+quickLayer focused=false has=false    ← 4ms 后掉了（同帧还有一次 req granted=true）
+```
+
+面板的根 `Column` 装了 `focusGroup()` + `focusRequester()`，于是它自己也是一个焦点目标：一次
+`requestFocus(panelGroup)` 把焦点从刚拿到的格子上**取走**，落在 `Column` 上。而 `Column` 有两个致命属性：
+
+- 它不画焦点环（`tvFocusable` 只挂在真正的控件上），所以屏幕上什么都看不到；
+- 它的矩形覆盖整张面板，`Down` 的光束搜索从它出发找不到"更下方"的节点，于是方向键什么都不做。
+
+同时面板里有**三处**在请求焦点（首帧重试、`contentBottomPadding` 变化时重试、从展开态收回时恢复），
+谁最后执行谁说话，第一次请求(格子)和第三次请求(Column)相差 4ms，结果稳定地由 Column 获胜。
+
+### 改法：一个地方请求，而且请求到具体控件
+
+- `ReaderPanelHost` 新增参数 `initialFocusRequester: FocusRequester? = null`——"面板一打开应该落在哪个控件"
+  只有调用方知道。默认退回 sheet 自身的 requester（给没有专属首格的目录面板用）。
+- 请求收敛成**一条** effect：`repeat(10) { withFrameNanos{}; if (sheetHasFocus) return; requestFocus(target) }`。
+  `sheetHasFocus` 取自面板根 `Column` 的 `onFocusChanged { it.hasFocus }`，**一旦为 true 就再也不请求**，
+  于是不存在"落好的环又被抢走"。
+- 删掉按 `contentBottomPadding` 反复重试的那条 effect（它正是把环从格子上顶掉的那次请求）。
+- 漫画选项面板：`ReaderMangaQuickLayer` / `ReaderQuickActionGrid` 恢复 `firstActionFocusRequester` 参数，
+  把 requester 挂在第一格上，并作为 `initialFocusRequester` 传给宿主。
+- 收起恢复那条 effect 也改成同一个 `focusTarget`，并加 `!sheetHasFocus` 守卫。
+
+### 设备验证（emulator-5554，1920×1080）
+
+按键序列：详情页 Continue → `CENTER` 叫出顶栏 → `RIGHT ×2` 到 ⋮ → `CENTER` 打开面板。
+
+| 步骤 | 截图 | 结果 |
+| --- | --- | --- |
+| 打开面板 | `rg0` | 首帧即**环在第一个快捷格** `Chapters and…`（`[232,736][414,892]`），`uiautomator` 报 `focused=true` 且只有这一个 |
+| RIGHT | `rg1` | 环移到 `Add bookmark`（`[414,736][596,892]`） |
+| CENTER | `rg2` | 书签写入（`Bookmark added`）、面板关闭、**环回到顶栏返回箭头** `[28,12][124,108]` |
+| 重开面板 → UP | `ri0`/`ri1` | 环上到模式行，RIGHT 能在 5 个模式 chip 之间移动 |
+| 重开面板 → DOWN | `rh1` | 环下到第二行 `Manga translate…`（`[232,900][414,1056]`） |
+| BACK | `rh3` | 面板关闭、环回返回箭头，与 CENTER 后那张同一状态 |
+
+也就是说"打开面板 → 上下左右挑一格 → OK 执行 → BACK 关闭 → 环回顶栏"这条电视主链路现在完整成立。
+
+### 遗留
+
+- 快捷格标签被截断（`Chapters and …`、`Manga translate…`）：电视上 8 列等分时单格只有约 182px，
+  需要按 `isTv` 减少列数或把标签改成两行。
+- 玻璃模式下 `readerPanelScrimAlpha` 偏透明，正文透过面板，可读性差；电视应换成更实的底。
+- 面板停在 peek 时高度约 66%，中间有大片空白（模式行与快捷格之间），比重可以再收。
 
 
 

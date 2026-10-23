@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.layout
@@ -44,6 +45,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.kyant.shapes.RoundedRectangle
+import kotlinx.coroutines.delay
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.StableAnchoredSheetLayout
 import org.skepsun.kototoro.reader.ui.compose.design.ProvideReaderPanelColors
@@ -84,6 +86,17 @@ class ReaderSheetActions {
 
 val LocalReaderSheetActions = staticCompositionLocalOf { ReaderSheetActions() }
 
+/**
+ * Hands the ring to a control that the remote is expected to reach.
+ *
+ * A plain [FocusRequester.requestFocus] is enough on a desktop, but on a television it is silently
+ * dropped when the window sits in touch mode - the state it stays in after one tap on the screen or
+ * one closed sheet. The host therefore replaces this with a request that leaves touch mode first.
+ */
+val LocalTvFocusRequest = staticCompositionLocalOf<(FocusRequester) -> Boolean> {
+    { requester -> runCatching { requester.requestFocus() }.getOrDefault(false) }
+}
+
 fun readerPanelSurfaceMode(isIosStyle: Boolean, eInk: Boolean, hasBackdrop: Boolean): ReaderPanelSurfaceMode =
     when {
         eInk -> ReaderPanelSurfaceMode.EInk
@@ -110,6 +123,7 @@ fun ReaderOptionsPanelHost(
     details: @Composable (dragModifier: Modifier) -> Unit,
     modifier: Modifier = Modifier,
     openExpanded: Boolean = false,
+    initialFocusRequester: FocusRequester? = null,
 ) {
     ReaderPanelHost(
         colors = colors,
@@ -120,6 +134,7 @@ fun ReaderOptionsPanelHost(
         openExpanded = openExpanded,
         header = quickLayer,
         content = details,
+        initialFocusRequester = initialFocusRequester,
     )
 }
 
@@ -139,21 +154,41 @@ fun ReaderPanelHost(
     usePeekAnchor: Boolean = false,
     header: @Composable ColumnScope.() -> Unit = {},
     openExpanded: Boolean = false,
+    /**
+     * The control an opened panel should start on. Only the caller knows what the panel begins with,
+     * and taking the focus for the sheet as a whole would park it on a column that draws no ring and
+     * covers every row, which leaves a remote with nothing to step to.
+     */
+    initialFocusRequester: FocusRequester? = null,
     content: @Composable (dragModifier: Modifier) -> Unit,
 ) {
     val density = LocalDensity.current
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusBarInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     var headerHeightPx by remember { mutableIntStateOf(0) }
-    // A remote has no pointer, so the sheet has to take the focus it is opened for: without this
-    // the ring stays on the control behind the sheet and the whole panel is unreachable until the
-    // first direction press. The group makes the panel start on its first control, top down.
+    // A remote has no pointer, so the sheet has to take the focus it is opened for; without this the
+    // ring stays on the control behind the sheet and the whole panel is unreachable.
     val isTv = LocalUiPresentationConfig.current.isTv
+    val requestFocus = LocalTvFocusRequest.current
     val sheetFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(isTv) {
-        if (isTv) {
+    val focusTarget = initialFocusRequester ?: sheetFocusRequester
+    var sheetHasFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(isTv, focusTarget) {
+        if (!isTv) return@LaunchedEffect
+        if (initialFocusRequester == null) {
+            // Panels that never declared a start control keep the previous single attempt: retrying
+            // there could park the ring on the sheet column, which is worse than leaving it behind.
             withFrameNanos { }
-            runCatching { sheetFocusRequester.requestFocus() }
+            requestFocus(focusTarget)
+            return@LaunchedEffect
+        }
+        // A real control is targeted, and the sheet is measured, anchored and slid into place over
+        // several frames: a request issued before that control has a position is dropped. Retry until
+        // the sheet reports the focus, then stop for good - asking again would pull the ring back out.
+        repeat(10) {
+            withFrameNanos { }
+            if (sheetHasFocus) return@LaunchedEffect
+            if (!requestFocus(focusTarget)) delay(70)
         }
     }
     val peekHeight = if (usePeekAnchor && headerHeightPx > 0) {
@@ -176,9 +211,9 @@ fun ReaderPanelHost(
             // focus has to come with it: left in the detail page it would sit on a hidden control.
             var wasExpanded by remember { mutableStateOf(false) }
             LaunchedEffect(scope.isExpandedPastPeek) {
-                if (isTv && wasExpanded && !scope.isExpandedPastPeek) {
+                if (isTv && wasExpanded && !scope.isExpandedPastPeek && !sheetHasFocus) {
                     withFrameNanos { }
-                    runCatching { sheetFocusRequester.requestFocus() }
+                    requestFocus(focusTarget)
                 }
                 wasExpanded = scope.isExpandedPastPeek
             }
@@ -199,6 +234,7 @@ fun ReaderPanelHost(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
+                            .onFocusChanged { sheetHasFocus = it.hasFocus }
                             .focusRequester(sheetFocusRequester)
                             .focusGroup()
                             .testTag("reader-panel-sheet")

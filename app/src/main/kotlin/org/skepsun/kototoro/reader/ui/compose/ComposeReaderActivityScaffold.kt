@@ -73,6 +73,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -148,6 +149,7 @@ import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelTabBar
 import org.skepsun.kototoro.reader.ui.compose.design.forEInk
 import org.skepsun.kototoro.reader.ui.compose.design.mangaReaderPanelColors
 import org.skepsun.kototoro.reader.ui.compose.design.readerChapterPanelSubtitle
+import org.skepsun.kototoro.reader.ui.compose.panel.LocalTvFocusRequest
 import org.skepsun.kototoro.reader.ui.compose.panel.ReaderPanelHost
 import org.skepsun.kototoro.reader.ui.compose.panel.rememberReaderPanelSurfaceMode
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressBar
@@ -465,12 +467,36 @@ internal fun ComposeReaderActivityScaffold(
     var chapterSelectionState by remember { mutableStateOf<ChapterSelectionUiState?>(null) }
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val defaultFocusRequester = remember { FocusRequester() }
+    var topBarHasFocus by remember { mutableStateOf(false) }
+    val hostView = LocalView.current
+    // A television stays in touch mode after one tap on the screen or one closed sheet, and Compose
+    // silently drops a programmatic focus request there: the chrome would open with no ring at all
+    // and every direction press would be lost. Taking the Android focus back first makes the request
+    // land, so every panel in the reader shares this through LocalTvFocusRequest.
+    val requestTvFocus: (FocusRequester) -> Boolean = remember(hostView) {
+        { requester ->
+            // A Compose focus request is dropped while the window is in touch mode, which is the
+            // state the reader is in after any pointer input: taking the Android focus back first
+            // makes the request land.
+            hostView.requestFocusFromTouch()
+            runCatching { requester.requestFocus() }.getOrDefault(false)
+        }
+    }
     val expandedPanelVisible = state.chaptersVisible || state.options.visible ||
         state.toolsVisible || state.autoScroll.visible
     LaunchedEffect(isTvPresentation, state.controlsVisible, expandedPanelVisible) {
         if (isTvPresentation && state.controlsVisible && !expandedPanelVisible) {
-            withFrameNanos { }
-            runCatching { defaultFocusRequester.requestFocus() }
+            // One request on the state change is not enough on a television. A sheet that closes
+            // releases the focus owner a few frames after its dismissal starts, so a request
+            // issued on that same frame is dropped with it and every later direction press lands
+            // on nothing: the remote looks dead until the chrome is hidden and shown again. Retry
+            // while the top bar owns no ring yet, and stop the moment it does.
+            repeat(5) {
+                withFrameNanos { }
+                if (topBarHasFocus) return@LaunchedEffect
+                requestTvFocus(defaultFocusRequester)
+                delay(70)
+            }
         }
     }
     BackHandler { callbacks.onBackPressed() }
@@ -487,6 +513,7 @@ internal fun ComposeReaderActivityScaffold(
     CompositionLocalProvider(
         LocalLiquidGlassBackdrop provides readerBackdrop,
         LocalLiquidGlassLayerBackdrop provides readerBackdrop,
+        LocalTvFocusRequest provides requestTvFocus,
     ) {
         Box(modifier = modifier.fillMaxSize()) {
         Box(
@@ -549,6 +576,7 @@ internal fun ComposeReaderActivityScaffold(
                 onChapters = callbacks.actions.onPages,
                 onOptions = callbacks.actions.onOptions,
                 defaultFocusRequester = defaultFocusRequester,
+                onFocusChanged = { topBarHasFocus = it },
             )
         }
 
@@ -1639,25 +1667,35 @@ private fun ReaderComposeTopBar(
     onChapters: () -> Unit,
     onOptions: () -> Unit,
     defaultFocusRequester: FocusRequester? = null,
+    onFocusChanged: (Boolean) -> Unit = {},
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     // Shared with the Windows reader (core-ui `ReaderChromeTopBar`).
-    ReaderChromeTopBar(
-        title = state.title,
-        subtitle = state.subtitle,
-        chapterTitleAtBottom = state.options.chapterTitleAtBottom,
-        backDescription = stringResource(androidx.appcompat.R.string.abc_action_bar_up_description),
-        optionsDescription = stringResource(R.string.options),
-        onNavigateBack = onNavigateBack,
-        onChapters = onChapters,
-        onOptions = onOptions,
-        titleFocusRequester = defaultFocusRequester.takeIf { isTvPresentation && !state.options.chapterTitleAtBottom },
-        optionsFocusRequester = defaultFocusRequester.takeIf { isTvPresentation && state.options.chapterTitleAtBottom },
-    )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .onFocusChanged { onFocusChanged(it.hasFocus) },
+    ) {
+        ReaderChromeTopBar(
+            title = state.title,
+            subtitle = state.subtitle,
+            chapterTitleAtBottom = state.options.chapterTitleAtBottom,
+            backDescription = stringResource(androidx.appcompat.R.string.abc_action_bar_up_description),
+            optionsDescription = stringResource(R.string.options),
+            onNavigateBack = onNavigateBack,
+            onChapters = onChapters,
+            onOptions = onOptions,
+            titleFocusRequester = defaultFocusRequester.takeIf {
+                isTvPresentation && !state.options.chapterTitleAtBottom
+            },
+            optionsFocusRequester = defaultFocusRequester.takeIf {
+                isTvPresentation && state.options.chapterTitleAtBottom
+            },
+        )
+    }
 }
 
-internal fun shouldShowReaderInfoBar(
-    infoBarEnabled: Boolean,
+internal fun shouldShowReaderInfoBar(    infoBarEnabled: Boolean,
     controlsVisible: Boolean,
     isTvPresentation: Boolean = false,
 ): Boolean = infoBarEnabled && !controlsVisible && !isTvPresentation

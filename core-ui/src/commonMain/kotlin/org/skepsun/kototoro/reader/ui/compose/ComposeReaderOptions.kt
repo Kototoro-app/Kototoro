@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -261,6 +262,7 @@ fun ReaderMangaQuickLayer(
     actionIcon: @Composable (ReaderQuickAction) -> Painter,
     actionLabel: @Composable (ReaderQuickAction) -> String,
     onAction: (ReaderQuickAction) -> Unit,
+    firstActionFocusRequester: FocusRequester? = null,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -287,6 +289,7 @@ fun ReaderMangaQuickLayer(
             onClick = onAction,
             icon = actionIcon,
             label = actionLabel,
+            firstItemFocusRequester = firstActionFocusRequester,
         )
     }
 }

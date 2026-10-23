@@ -39,6 +39,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.semantics.Role
@@ -256,6 +258,7 @@ fun ReaderQuickActionGrid(
     icon: @Composable (ReaderQuickAction) -> Painter,
     label: @Composable (ReaderQuickAction) -> String,
     modifier: Modifier = Modifier,
+    firstItemFocusRequester: FocusRequester? = null,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         // Wide panels (landscape, tablets) fit more tiles per row, which keeps the quick layer
@@ -273,6 +276,15 @@ fun ReaderQuickActionGrid(
                             onClick = { onClick(action) },
                             modifier = Modifier
                                 .weight(1f)
+                                // The panel opens on the first action, not on the mode row above it:
+                                // that is the control the panel is opened for.
+                                .then(
+                                    if (flatIndex == 0 && firstItemFocusRequester != null) {
+                                        Modifier.focusRequester(firstItemFocusRequester)
+                                    } else {
+                                        Modifier
+                                    },
+                                )
                                 .tvHorizontalEdgeGuard(
                                     blockLeft = flatIndex == 0,
                                     blockRight = flatIndex == actions.lastIndex,
