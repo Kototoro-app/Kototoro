@@ -6842,3 +6842,18 @@ Windows 侧的 `source-tvbox`（`MacCmsSourceRuntime` + `MacCmsParser`）早就�
   `:desktop-app:test --tests "*DesktopAppTest*tablet*"` tests=1 failures=0（`tablet.log` 以
   `DESKTOP_UI_OK=tablet` 结束）；`:desktop-app:compileKotlin`、`:desktop-app:compileTestKotlin`、
   `:desktop-app:verifyDesktopStrings`、`:core-ui:verifyUiStrings`、`:core-library:compileCommonMainKotlinMetadata` 通过。
+
+## 147. Windows 收藏选择栏的“分享”（2026-10-24）
+
+日期：2026-10-24。承 §140、§145：Android 收藏列表的选择栏还有 SHARE（`ShareHelper`），Windows 侧的选择栏此前只有全选/分类/标为已完成/置顶/移出。Windows 没有分享面板，落到同一处的就是剪贴板。
+
+- 文本沿用 Android 的形状：单部作品是 `标题\n \npublicUrl`（Android 单链接分享的排版），多选是每部一行 `标题 - publicUrl`（Android 多选拼接的形状）。Windows 没有注册 `kototoro://` 深链，Android 文本里那段 appUrl 不再出现。
+- 链接取 `publicUrl`，为空时退回 `url`（有的源只填内链）；两者都为空的本地导入作品不产生空行，整批都没有链接时提示 `library.shareEmpty` 而不是复制一段空文本。
+- `DesktopClipboard`（`DesktopShareLinks.kt`）是唯一的剪贴板入口：AWT 在 Windows 上会与占用剪贴板的进程抢开，`setContents` 报错时内容往往已经写入，所以写完回读同一段文本才算成功；回读也拿不到才算失败。
+- 失败时不假装成功：提示 `library.shareFailed`，同页的 `DesktopShareLinksDialog` 把同一段文本以可选中文本展示（`SelectionContainer`），链接不会因为剪贴板被拒而丢失。
+- 只有收藏栏有“分享”（历史栏传 `onShare = null` 就不画），与 Android 的集合一致：历史栏的批量动作是全选/移出/保存/收藏/标为已完成。
+- 文案：`library.selectionShare`（分享 / Share）、`library.shared`（已复制 %d 个链接到剪贴板 / Copied %d links to the clipboard）、`library.shareFailed`、`library.shareEmpty`，中英各一份；`DesktopShareLinksDialog` 复用 `common.close`。
+- 单测 `DesktopShareLinksTest` 三例：单部作品的排版、多选跳过无链接作品、只填内链时退回 `url` 且全空为 empty。
+- 探针（`tablet`）：取消置顶之后选择仍只有一部作品，点“分享”直接读系统剪贴板，断言内容等于“标题 + 空行 + publicUrl”、`message` 是 `library.shared`(1)、`shareLinks` 为空（说明没有走回退对话框）；`tablet-library-selection-pin.png` 快照里能看到新增的“分享”按钮排在“移出收藏”之前。
+- 验证：`DesktopShareLinksTest` 3 项、`DesktopLibrarySelectionTest` 9 项全绿；`:desktop-app:test --tests "*DesktopAppTest*tablet*"` tests=1 failures=0，`tablet.log` 以 `DESKTOP_UI_OK=tablet` 结束；`:desktop-app:compileKotlin`、`:desktop-app:compileTestKotlin`、`:desktop-app:verifyDesktopStrings`、`:core-ui:verifyUiStrings`、`:core-library:compileCommonMainKotlinMetadata` 全部通过。
+- 环境备注：`DesktopAppTest` 的 parsers 探针（`parsers-read`）在本机超时失败，已用 `git stash` 在未改动的 HEAD 上复现，属既有环境问题（需要真实插件与联网），与本改动无关。

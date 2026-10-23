@@ -8,10 +8,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,6 +46,7 @@ internal fun DesktopLibrarySelectionBar(
     onAssignCategories: (() -> Unit)?,
     onMarkCompleted: () -> Unit,
     onTogglePin: (() -> Unit)?,
+    onShare: (() -> Unit)?,
     onRemove: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -73,6 +76,12 @@ internal fun DesktopLibrarySelectionBar(
                 Text(if (allPinned) desktopText("library.selectionUnpin") else desktopText("library.selectionPin"))
             }
         }
+        // Android's SHARE sits on the favourites shelf only; history keeps Android's own set of actions.
+        if (onShare != null) {
+            TextButton({ onShare() }, enabled = enabled, modifier = Modifier.testTag("library-selection-share")) {
+                Text(desktopText("library.selectionShare"))
+            }
+        }
         TextButton({ onRemove() }, enabled = enabled, modifier = Modifier.testTag("library-selection-remove")) {
             Text(if (history) desktopText("library.selectionRemoveHistory") else desktopText("library.selectionRemove"))
         }
@@ -80,6 +89,28 @@ internal fun DesktopLibrarySelectionBar(
             Text(desktopText("common.cancel"))
         }
     }
+}
+
+/**
+ * The fallback for a clipboard that refuses the write: the same share text, selectable, so the links are never
+ * lost just because Windows would not hand the clipboard over.
+ */
+@Composable
+internal fun DesktopShareLinksDialog(text: String, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(desktopText("library.selectionShare")) },
+        text = {
+            SelectionContainer(Modifier.testTag("library-share-dialog")) {
+                Text(text, style = MaterialTheme.typography.bodyMedium)
+            }
+        },
+        confirmButton = {
+            TextButton({ onDismiss() }, modifier = Modifier.testTag("library-share-close")) {
+                Text(desktopText("common.close"))
+            }
+        },
+    )
 }
 
 /**

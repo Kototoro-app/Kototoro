@@ -86,6 +86,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                 onMarkCompleted = { confirmingComplete = true },
                 // Android's pin is a toggle on the favourites shelf: the selected works flip as a group.
                 onTogglePin = if (history) null else ({ controller.setLibraryPinned(checkedIds, !allPinned) }),
+                onShare = if (history) null else ({ controller.shareLibrarySelection(checkedIds) }),
                 onRemove = { confirmingRemove = true },
                 onCancel = { selectedIds = emptySet() },
             ) else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -298,6 +299,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                 else selection.tags + tag)) },
             onClear = { update(selection.copy(tags = emptySet())) },
             onDismiss = { pickingTags = false })
+        state.shareLinks?.let { links -> DesktopShareLinksDialog(links, onDismiss = controller::dismissShareLinks) }
     }
 }
 

@@ -430,6 +430,18 @@ internal object DesktopTabletProbe {
                 check(runBlocking { session.storage.database.getFavouritesDao().isPinned(listOf(content.id)) } != true)
                 check(controller.state.value.message == desktopText("library.unpinnedCount", 1))
                 onNodeWithTag("content-pinned:${content.id}", useUnmergedTree = true).assertDoesNotExist()
+                // Android's SHARE on the favourites shelf: the selection's links land on the clipboard, which is
+                // where a Windows share sheet would have put them.
+                val sharedContent = controller.state.value.library.entries.first { it.content.id == content.id }.content
+                onNodeWithTag("library-selection-share").performClick(); idle()
+                val clipboard = DesktopClipboard.read()
+                check(clipboard != null && clipboard == "${sharedContent.title}\n \n${sharedContent.publicUrl}") {
+                    "share text on the clipboard was ${clipboard?.take(120)}"
+                }
+                check(controller.state.value.message == desktopText("library.shared", 1)) {
+                    "message was '${controller.state.value.message}', error '${controller.state.value.error}'"
+                }
+                check(controller.state.value.shareLinks == null)
                 onNodeWithTag("library-selection-cancel").performClick(); idle()
                 runBlocking {
                     repeat(36) { index ->

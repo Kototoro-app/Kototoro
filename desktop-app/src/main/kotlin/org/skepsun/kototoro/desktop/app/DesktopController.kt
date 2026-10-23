@@ -160,6 +160,8 @@ data class DesktopAppState(
     val busy: Boolean = false,
     val error: String? = null,
     val message: String? = null,
+    /** Share text shown when Windows refused the clipboard write; null while there is nothing to fall back to. */
+    val shareLinks: String? = null,
 ) {
     val image: Path? get() = if (screen == DesktopScreen.READER) pages.getOrNull(pageIndex)
         ?.let { readerImages[it.id]?.path } else null
@@ -611,6 +613,26 @@ class DesktopController(val session: DesktopSession) {
     }
 
     /** Android's batch pin: the flag lives on the favourites rows, so it survives a reload and leads every order. */
+    /**
+     * Android's selection "share". Windows has no share sheet, so the same text goes to the clipboard and the
+     * message reports how many links landed there; when the clipboard refuses the write the text opens in a
+     * dialog instead, so a locked session never silently loses the links.
+     */
+    fun shareLibrarySelection(ids: Collection<Long>) = action {
+        val selected = state.value.library.entries.filter { it.content.id in ids }
+        val share = desktopShareText(selected.map { it.content })
+        require(!share.isEmpty) { desktopText("library.shareEmpty") }
+        if (DesktopClipboard.write(share.text)) {
+            mutableState.update { it.copy(message = desktopText("library.shared", share.count)) }
+        } else {
+            mutableState.update { it.copy(shareLinks = share.text, message = desktopText("library.shareFailed")) }
+        }
+    }
+
+    internal fun dismissShareLinks() {
+        mutableState.update { it.copy(shareLinks = null) }
+    }
+
     fun setLibraryPinned(ids: Collection<Long>, isPinned: Boolean) = action {
         require(ids.isNotEmpty()) { desktopText("library.pinNone") }
         session.library.setPinned(ids, isPinned)
