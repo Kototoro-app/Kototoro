@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.source.*
+import org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget
+import org.skepsun.kototoro.desktop.runtime.isNsfwSource
 import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
 import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.list.ui.compose.ContentCardBadgePill
@@ -127,6 +129,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.RECOMMENDATIONS -> DesktopRecommendations(controller, listState)
                             DesktopScreen.EXTENSIONS -> DesktopExtensionsPanel(controller, closing)
                             DesktopScreen.READER_SETTINGS -> DesktopReaderSettingsPage(controller, listState)
+                            DesktopScreen.SOURCE_SETTINGS -> DesktopSourceSettingsPage(controller, listState)
                             DesktopScreen.MORE -> DesktopMorePanel(controller, !closing, onExitRequest)
                         }
                         if (state.screen == DesktopScreen.DETAILS && state.detailsOrigin != null) {
@@ -144,10 +147,13 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
     var filter by remember { mutableStateOf("") }
     // The rail lists every installed source, so it carries Android's two top-bar filters itself: the same filter also
     // narrows the works of whichever source is picked, which is how the Android tablet keeps one scope for both.
-    val sources = state.sources.filter {
+    val settings = state.sourceSettings
+    val sources = settings.sorted(state.sources.filter {
         (it.displayName.contains(filter, true) || it.source.locale.contains(filter, true)) &&
-            state.exploreFilter.accepts(it)
-    }
+            state.exploreFilter.accepts(it) &&
+            // Android's SOURCES_AND_BROWSE target: the rail is the only place Windows can hide an adult source.
+            !(settings.hidesNsfw(DesktopNsfwTarget.SOURCES) && it.isNsfwSource())
+    })
     Column(Modifier.width(240.dp).fillMaxHeight().background(MaterialTheme.colorScheme.surface,
         RoundedCornerShape(20.dp)).padding(16.dp).testTag("source-pane"),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -164,18 +170,25 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
         DesktopSourceFilterControls(state.exploreFilter, state.sources, controller::exploreFilter, enabled, "rail")
         LazyColumn(Modifier.weight(1f).testTag("source-list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(sources, key = { it.source.name }) { source ->
-                val selected = state.selectedSource?.source?.name == source.source.name
-                Surface(color = if (selected) Accent.copy(alpha = .10f) else Color.Transparent,
-                    shape = RoundedCornerShape(8.dp)) {
-                    Column(Modifier.fillMaxWidth().testTag("source:${source.source.name}")
-                        .clickable(enabled = enabled) { controller.selectSource(source) }.padding(12.dp)) {
-                        Text(source.displayName, maxLines = 2, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
-                        Text("${DesktopSourceLabels.ecosystem(source.ecosystem)} · ${source.source.locale.ifBlank { desktopText("common.multilingual") }}" +
-                            " · ${DesktopSourceLabels.contentType(source.source.contentType)}", fontSize = 12.sp, color = Muted)
-                    }
-                }
+                SourceRailTile(source, state, enabled, controller, Modifier.fillMaxWidth())
             }
             if (sources.isEmpty()) item { Text(desktopText("browse.sourcesEmpty"), fontSize = 12.sp, color = Muted) }
+        }
+    }
+}
+
+/** One rail entry, used by both layouts so a source tile behaves the same in list and grid mode. */
+@Composable
+private fun SourceRailTile(source: SourceListing, state: DesktopAppState, enabled: Boolean,
+    controller: DesktopController, modifier: Modifier) {
+    val selected = state.selectedSource?.source?.name == source.source.name
+    Surface(color = if (selected) Accent.copy(alpha = .10f) else Color.Transparent,
+        shape = RoundedCornerShape(8.dp), modifier = modifier) {
+        Column(Modifier.fillMaxWidth().testTag("source:${source.source.name}")
+            .clickable(enabled = enabled) { controller.selectSource(source) }.padding(12.dp)) {
+            Text(source.displayName, maxLines = 2, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+            Text("${DesktopSourceLabels.ecosystem(source.ecosystem)} · ${source.source.locale.ifBlank { desktopText("common.multilingual") }}" +
+                " · ${DesktopSourceLabels.contentType(source.source.contentType)}", fontSize = 12.sp, color = Muted)
         }
     }
 }
@@ -192,6 +205,7 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.BACKUPS -> desktopText("screens.backups")
         DesktopScreen.RECOMMENDATIONS -> desktopText("screens.recommendations")
         DesktopScreen.READER_SETTINGS -> desktopText("screens.readerSettings")
+        DesktopScreen.SOURCE_SETTINGS -> desktopText("screens.sourceSettings")
         DesktopScreen.EXTENSIONS -> desktopText("screens.extensions")
         DesktopScreen.DETAILS -> desktopText("screens.details")
         DesktopScreen.READER, DesktopScreen.NOVEL, DesktopScreen.VIDEO -> state.chapter?.title ?: desktopText("screens.reader")

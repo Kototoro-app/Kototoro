@@ -117,11 +117,13 @@ data class DesktopLibrarySelection(
 
     /**
      * [ecosystems] maps installed source names; works from uninstalled sources match no source-type tag.
-     * [downloadedContentIds] are works that hold at least one stored chapter.
+     * [downloadedContentIds] are works that hold at least one stored chapter. [hideNsfw] carries Android's adult
+     * filter target for this shelf: it is a display rule, so it is applied last like the other filters.
      */
     fun select(snapshot: DesktopLibrarySnapshot,
         ecosystems: Map<String, SourceEcosystem> = emptyMap(),
-        downloadedContentIds: Set<Long> = emptySet()): List<DesktopLibraryEntry> {
+        downloadedContentIds: Set<Long> = emptySet(),
+        hideNsfw: Boolean = false): List<DesktopLibraryEntry> {
         val text = query.trim()
         val entries = snapshot.entries.filter { row ->
             val content = row.content
@@ -131,6 +133,7 @@ data class DesktopLibrarySelection(
                 (tags.isEmpty() || content.tags.any { it in tags }) &&
                 (states.isEmpty() || content.state in states) &&
                 download.accepts(content.id in downloadedContentIds) &&
+                (!hideNsfw || !row.isNsfw) &&
                 macros.all { it.accepts(row) } &&
                 sourceFilter.accepts(ecosystems[content.source.name], content.source.contentType) &&
                 (text.isEmpty() || content.title.contains(text, true) ||

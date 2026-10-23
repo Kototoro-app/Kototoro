@@ -66,7 +66,7 @@ internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
     listOf(Locale.getDefault(Locale.Category.DISPLAY), Locale.getDefault()).distinct()
         .map { ChapterBranchLocale(it.getDisplayLanguage(it), it.getDisplayName(it)) }
 
-enum class DesktopScreen { HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS, RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, MORE }
+enum class DesktopScreen { HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS, RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, MORE }
 
 data class DesktopAppState(
     val screen: DesktopScreen = DesktopScreen.EXPLORE,
@@ -105,6 +105,7 @@ data class DesktopAppState(
     /** Android's suggestion and tracker settings, persisted under Android's keys. */
     val suggestionSettings: org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings = org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings(),
     val trackerSettings: org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings = org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings(),
+    val sourceSettings: org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings = org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings(),
     /** Stored suggestions, most relevant first (Android's recommendations). */
     val suggestions: List<SourceContent> = emptyList(),
     /** True while [DesktopController.refreshSuggestions] runs in the background; the window stays usable. */
@@ -221,6 +222,7 @@ class DesktopController(val session: DesktopSession) {
             mutableState.update { it.copy(
                 suggestionSettings = org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings.from(saved),
                 trackerSettings = org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings.from(saved),
+            sourceSettings = org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings.from(saved),
             ) }
         }
         // Repositories are read in the background at start: updates are installed (when allowed) or announced.
@@ -1241,6 +1243,16 @@ class DesktopController(val session: DesktopSession) {
 
     /** Android's reader settings screen; it edits the same preferences an open chapter reads. */
     fun showReaderSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.READER_SETTINGS) } }
+
+    /** Android's source settings screen: rail order, layout and the adult-content targets. */
+    fun showSourceSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SOURCE_SETTINGS) } }
+
+    internal fun sourceSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings) {
+        mutableState.update { it.copy(sourceSettings = settings) }
+        if (!backgroundPreferences.edit(SourcePreferenceEdit(changes = settings.toPreferences()))) {
+            mutableState.update { it.copy(error = desktopText("settings.sourcesSaveFailed")) }
+        }
+    }
 
     internal fun exportLibraryBackup(path: Path) = action {
         backups.export(path)

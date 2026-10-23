@@ -22,6 +22,7 @@ import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.core.source.SourceTag
 import org.skepsun.kototoro.core.ui.topbar.TopBarTabItem
 import org.skepsun.kototoro.core.ui.topbar.TopBarTabsRail
+import org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget
 import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
 
 /** Category ids are database ids (positive); the "all" tab needs one that can never collide. */
@@ -43,8 +44,12 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
     // Android's "downloaded" filter reads which works hold stored chapters; the queue owns that state.
     val downloadStates by controller.downloads.state.collectAsState()
     val downloadedIds = remember(downloadStates) { downloadStates.mapTo(HashSet()) { it.record.contentId } }
-    val entries = remember(state.library, selection, ecosystems, downloadedIds) {
-        selection.select(state.library, ecosystems, downloadedIds)
+    // Android's adult filter target per shelf: the favourites and history targets are separate switches.
+    val hideNsfw = state.sourceSettings.hidesNsfw(
+        if (history) DesktopNsfwTarget.HISTORY else DesktopNsfwTarget.FAVOURITES,
+    )
+    val entries = remember(state.library, selection, ecosystems, downloadedIds, hideNsfw) {
+        selection.select(state.library, ecosystems, downloadedIds, hideNsfw)
     }
     val shownIds = remember(entries) { entries.mapTo(LinkedHashSet()) { it.content.id } }
     val checkedIds = remember(selectedIds, shownIds) { selectedIds.intersect(shownIds) }

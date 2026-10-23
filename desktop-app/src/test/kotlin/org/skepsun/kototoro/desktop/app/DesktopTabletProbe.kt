@@ -484,6 +484,43 @@ internal object DesktopTabletProbe {
                     org.skepsun.kototoro.core.prefs.ReaderAnimation.NONE)
                 onNodeWithTag("reader-settings-back").performScrollTo().performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.MORE)
+                // Android's source settings page: order, overview layout, language groups and the adult targets were
+                // fixed values in the browse page; they are edited here through the shared dialogs.
+                onNodeWithTag("source-settings-open").performScrollTo().performClick(); idle()
+                check(controller.state.value.screen == DesktopScreen.SOURCE_SETTINGS)
+                snapshot("source-settings")
+                onNodeWithTag("source-setting-sort").performScrollTo().performClick(); idle()
+                snapshotTag("source-settings-dialog", "source-settings-sort")
+                onNodeWithTag("source-sort:TITLE").performClick(); idle()
+                check(controller.state.value.sourceSettings.sort ==
+                    org.skepsun.kototoro.desktop.runtime.DesktopSourceSort.TITLE)
+                check((session.storage.preferences.open("desktop_background").snapshot()["sources_sort"]
+                    as? org.skepsun.kototoro.core.source.SourcePreferenceValue.Text)?.value == "TITLE")
+                onNodeWithTag("source-setting-grid").performScrollTo().performClick(); idle()
+                check(!controller.state.value.sourceSettings.grid)
+                onNodeWithTag("source-setting-group-language").performScrollTo().performClick(); idle()
+                check(controller.state.value.sourceSettings.groupByLanguage)
+                onNodeWithTag("source-setting-nsfw").performScrollTo().performClick(); idle()
+                onNodeWithTag("source-nsfw-dialog").assertExists()
+                onNodeWithTag("source-nsfw:FAVOURITES").performClick(); idle()
+                check(controller.state.value.sourceSettings.hidesNsfw(
+                    org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget.FAVOURITES))
+                check(!controller.state.value.sourceSettings.hidesNsfw(
+                    org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget.HISTORY))
+                onNodeWithTag("source-nsfw-dialog-close").performClick(); idle()
+                onNodeWithTag("source-settings-back").performScrollTo().performClick(); idle()
+                check(controller.state.value.screen == DesktopScreen.MORE)
+                // The browse overview now renders the saved layout: list rows instead of the default tile grid.
+                // "浏览" first leaves the more page, then (because a source is still open) returns to the overview.
+                onNodeWithText("浏览").performClick(); idle()
+                onNodeWithText("浏览").performClick(); idle()
+                check(controller.state.value.screen == DesktopScreen.EXPLORE)
+                check(controller.state.value.selectedSource == null)
+                onNodeWithTag("source-list-rows").assertExists()
+                onNodeWithTag("source-list").assertDoesNotExist()
+                snapshot("source-overview-list")
+                onNodeWithTag("nav:更多").performClick(); idle()
+                check(controller.state.value.screen == DesktopScreen.MORE)
                 onNodeWithTag("settings-tracker-frequency").performScrollTo().performClick(); idle()
                 onNodeWithTag("settings-tracker-frequency:2.0").performClick(); idle()
                 check(controller.state.value.trackerSettings.frequency == 2f)

@@ -101,6 +101,10 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
                 { controller.showReaderSettings() }, testTag = "reader-settings-open",
                 leadingIcon = painterResource("icons/ic_read.svg"))
             SettingsRowDivider()
+            SettingsValueRow(desktopText("screens.sourceSettings"), desktopText("sources.sortSummary"), null, enabled,
+                { controller.showSourceSettings() }, testTag = "source-settings-open",
+                leadingIcon = painterResource("icons/ic_source_builtin.svg"))
+            SettingsRowDivider()
             SettingsValueRow(desktopText("settings.suggestions"), desktopText("more.recommendationsSummary"), null,
                 enabled, { controller.showRecommendations() }, testTag = "settings-recommendations-open",
                 leadingIcon = painterResource("icons/ic_suggestion.svg"))

@@ -6683,3 +6683,39 @@ failures=0，说明 `nav:更多`、`nav:扩展与仓库`、`nav:下载`、`nav:�
   要么与详情页已有的“标为已读”重复，故不在本轮硬凑。
 - 断言只走 `useUnmergedTree` 的徽标与顶栏 tag；对话框正文另挂 `library-category-pick-dialog` /
   `library-selection-dialog` 供 `snapshotTag` 截图（对话框是独立 root，`onRoot()` 会二义）。
+## 141. Windows 来源设置页（2026-10-23）
+
+日期：2026-10-23。Android 的 `SourcesSettingsScreen` 是“概览 / 远程来源 / 成人内容过滤 / 更多”四节的设置页：
+来源排序、网格模式、按语言分组、置顶顺序、显示损坏来源、成人过滤目标、18+ 隐身模式、全局标签黑名单、
+标签警告、镜像切换、链接处理、扩展安装策略。Windows 侧这些值此前要么写死（来源总览固定网格、固定安装顺序、
+永远显示全部来源），要么根本不存在，来源页只有每-source 的偏好页可编辑。本轮补上能真实生效的三项与成人过滤。
+
+- 新页面“更多 → 来源设置”（`DesktopSourceSettingsPage`，screen `SOURCE_SETTINGS`，入口 tag
+  `source-settings-open`，返回 `source-settings-back`），两节：概览（排序方式、以网格显示、按语言分组）、
+  成人内容（隐藏 18+ 内容的目标集合）。节/行/对话框沿用 §135–§140 的 `SettingsGroup`/`SettingsValueRow`/
+  `SettingsSwitchRow`/`SettingsInfoRow` 与 `DesktopChoiceSettingsDialog`/`DesktopMultiChoiceSettingsDialog`，
+  单选/多选都开对话框，没有一行平铺的 chips。
+- 设置模型 `DesktopSourceSettings`（`desktop-runtime`，与 `DesktopSuggestionSettings` 同式）落在
+  `desktop_background` 的 `sources_sort`/`sources_grid`/`sources_group_language`/`sources_nsfw_targets`
+  四键上，`from(snapshot)` 恢复、`toPreferences()` 落盘，保存失败复用 `settings.sourcesSaveFailed`。
+- 排序：安装顺序（默认）/名称/语言。Android 的“手动置顶顺序”需要拖拽编辑器，Windows 没有，故第三项用语言排序；
+  排序同时作用于来源总览与浏览栏（`DesktopSourceSettings.sorted`）。
+- 网格/列表：Android 的 `isSourcesGridMode` 切来源总览的布局。Windows 总览此前恒为 `LazyVerticalGrid`；
+  现在 `grid=false` 时改渲染 `LazyColumn` 单行（tag `source-list-rows`，网格仍是 `source-list`，既有探针的
+  `performScrollToNode` 不受影响），行内仍带 `source:<name>` 点击 tag。默认 `true`，与 Android 默认一致。
+- 按语言分组：`DesktopSourceSettings.groups` 按 `SourceListing.locale` 分组，空 locale 归一组；两种布局都在
+  组前插 `source-group:<locale>` 标题（网格用 `GridItemSpan(maxLineSpan)` 跨整行），未启用分组时不插标题。
+- 成人过滤：Android 的 `AdultContentFilterTarget` 在 Windows 只有三个能兑现的目标——来源与浏览（`SOURCES`）、
+  收藏（`FAVOURITES`）、历史（`HISTORY`）。前者在来源总览与浏览栏里滤掉 `contentType.startsWith("HENTAI_")`
+  的来源；后两者作为展示规则进入 `DesktopLibrarySelection.select(..., hideNsfw)`，与该页其它筛选一起作用于
+  可见行（全选/计数因此也看不到被隐藏的作品）。订阅与推荐各用已有的 18+ 开关，页面底部用
+  `SettingsInfoRow` 明说这一点。
+- 仍未移植：远程来源节的 JAR 优先顺序（需要拖拽编辑器）、显示损坏来源（桌面没有“可用性检查”这一概念）、
+  18+ 隐身模式（`TriStateOption`，桌面无隐身语义）、全局标签黑名单与标签警告（Android 在详情页弹警告，
+  桌面标签只做展示）、镜像切换与链接处理（`core-net` 没有 mirror/`handle_links` 后端）、扩展安装策略
+  （Windows 的 JAR 安装是显式选择文件，没有“安装时询问”这条路径）。
+- 探针：`DesktopTabletProbe` 在“更多 → 阅读设置”之后进入来源设置页，打开排序对话框（截图
+  `tablet-source-settings-sort.png`）、选“名称”并断言 `sourceSettings.sort == TITLE` 且 `sources_sort`
+  落盘为 `TITLE`，关掉网格与打开分组、在成人对话框里勾“收藏”并断言只有 `FAVOURITES` 命中，返回“更多”；
+  随后点两次“浏览”回到来源总览，断言 `source-list-rows` 存在而 `source-list` 不存在，截图
+  `tablet-source-overview-list.png` 可见语言标题 `zh` 与单行来源。
