@@ -1274,6 +1274,27 @@ final class LocalImportTests: XCTestCase {
         attach("连续条漫普通滚动跨章")
     }
 
+    /// Hitches while flinging the continuous strip across chapters, from XCTest's scrolling and deceleration signposts
+    /// (hitch time ratio, frame rate). Compare runs on one device to catch a regression; simulator numbers are only
+    /// relative to each other.
+    @MainActor
+    func testContinuousStripScrollPerformance() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_window", reuse: true)
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 30))
+        _ = revealChapter(in: app, timeout: 30)
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "chapter.", "01"))
+            .firstMatch.tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30))
+        selectReaderMode("条漫")
+        let canvas = app.scrollViews["reader.canvas"]
+        waitForChapterWindow(canvas, count: 6)
+        measure(metrics: [XCTOSSignpostMetric.scrollingAndDecelerationMetric]) {
+            canvas.swipeUp(velocity: .fast)
+            canvas.swipeDown(velocity: .fast)
+        }
+        XCTAssertTrue(app.images["reader.image"].firstMatch.exists, app.debugDescription)
+    }
+
     /// 02 is shorter than the screen, so it never becomes the first visible page: scrolling to the strip's end reads it.
     @MainActor
     func testContinuousStripEndEntersAShortNextChapter() throws {
@@ -2319,7 +2340,7 @@ final class LocalImportTests: XCTestCase {
         let item = app.descendants(matching: .any).matching(NSPredicate(
             format: "identifier BEGINSWITH %@ AND label MATCHES %@", "source.content.", "(?:已下载、)?" + fileLabel)).firstMatch
         // Reader regressions may reuse their immutable fixtures; import tests still exercise the picker every run.
-        if reuse && item.waitForExistence(timeout: 3) { item.tap(); return }
+        if reuse && revealLocalItem(item, timeout: 3) { item.tap(); return }
         let add = app.buttons["browse.importLocal"]
         XCTAssertTrue(add.waitForExistence(timeout: 10), app.debugDescription)
         add.tap()
@@ -2387,9 +2408,21 @@ final class LocalImportTests: XCTestCase {
         }
         XCTAssertTrue(pickerList.waitForNonExistence(timeout: 15), app.debugDescription)
         if !expectImport { return }
-        XCTAssertTrue(item.waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertTrue(revealLocalItem(item, timeout: 30), app.debugDescription)
         attach("\(name) 导入后")
         item.tap()
+    }
+
+    /// The local list is newest first and lazy: an older work (a fixture imported on an earlier day, or a reimport
+    /// the library recognised as that work) is only in the hierarchy once the list is scrolled to it.
+    private func revealLocalItem(_ item: XCUIElement, timeout: TimeInterval) -> Bool {
+        if item.waitForExistence(timeout: timeout) { return true }
+        let list = app.scrollViews.firstMatch
+        for _ in 0..<10 {
+            list.swipeUp()
+            if item.waitForExistence(timeout: 1) { return true }
+        }
+        return false
     }
 
     private func openFirstChapter(title: String) {
