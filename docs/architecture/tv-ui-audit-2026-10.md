@@ -1820,3 +1820,18 @@ spaceUiState.switcherEnabled` 时放一个 `SpaceSwitcherRailButton`，
 用**触摸点击**展开 ⋮ 菜单后，方向键 DOWN 不会进入弹出菜单，而是走到背后的左侧导航栏（zs2：History 被聚焦）。
 这是因为弹窗展开时焦点仍留在主窗口。遥控器用户不会用点击展开，所以这是触摸路径的差异，
 但值得记一笔：如果以后给电视加触摸/鼠标支持，这条路径需要重新检查。
+
+### 验证（2026-10-23 补做，全部实测）
+
+宿主页面选定**收藏页**（`FavoritesListScreen.kt:70`，全应用唯一直接挂 `SortOrderControl` 的常规页面）。
+
+| 步骤 | 截图 | 结果 |
+| --- | --- | --- |
+| 左侧导航 Favorites → RIGHT | `zu3` | 排序 `IconButton` 上出现环——之前该按钮完全看不见焦点 |
+| CENTER 展开 | `zu4` | 菜单标题 "Sorting order"，**焦点直接落在 "Date added"（当前生效的排序）**并带环 |
+| DOWN ×2 | `zu5` / `zu6` | 环依次走到 Progress、Title，菜单自动滚动露出 Last read/Updated |
+| UP | `zu7` | 哈希与 `zu5` 相同，反向走位对称 |
+
+结论：共享菜单项的环、触发器环、"聚焦当前值"三个改动全部在设备上成立。
+
+顺带确认收藏页工具栏的可达性：从左侧导航 RIGHT 直接进入筛选芯片行，不存在"整行够不着"的问题。
