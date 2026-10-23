@@ -2013,3 +2013,64 @@ adb 单次往返 1–2 秒，`uiautomator dump` 更慢，而 chrome 的自动隐
 - 手机侧未回归；新增样式都走 `isTvPlayerMenu()` 分支，理论上不受影响。
 - 锁屏态、DLNA 对话框、超分对话框仍未在电视上走过。
 
+## 第三十三轮：锁屏在电视上曾经是一条死路（2026-10-23）
+
+上一轮把"锁屏态没在电视上走过"记成遗留，这一轮第一件事就是走它，结果撞上整个审计里最严重的一种失败：
+**按完锁屏，遥控器就再也没有任何反馈，屏幕上也没有任何提示。**
+
+### 现象
+
+播放在走，焦点沿底栏 RIGHT ×6 走到最右的 `Lock controls`（`[1564,968][1660,1064]`），按 OK：所有 chrome
+消失，只剩视频画面和字幕，**没有任何解锁入口**（`pf`）。随后：
+
+| 按键 | 结果 | 证据 |
+| --- | --- | --- |
+| CENTER | 画面逐字节不变 | `pg` 与 `pf` 同哈希 `a7561b39b80c` |
+| DOWN | 同上 | `ph` 同哈希 |
+| BACK | **解锁**，chrome 与播放键焦点一起回来 | `pi`（1:08/3:00，环在 Play） |
+
+遥控器用户遇到的是"点一下就死机"：没有提示、没有候选目标，只能靠猜 BACK。
+
+### 两层根因
+
+1. **解锁按钮是触摸态的**：`VideoScreenLockOverlay` 只在 `unlockButtonVisible` 为真时渲染那枚 64dp 解锁按钮，
+   而这个状态只能由全屏 `Box` 的 `clickable`（`onLockedAreaClick = ::showLockedUi`）打开，且 3 秒后由
+   `hideLockUiRunnable` 自动关掉。遥控器既不能点，也不能"再点一次"。
+2. **键策略把 OK 吃掉了**：`resolveVideoPlayerTvKeyAction` 里 `DPAD_CENTER/ENTER/NUMPAD_ENTER` 在
+   `controlsVisible == false` 时返回 `SHOW_CONTROLS`，随后又被"锁屏期只放行 `PASS_TO_FOCUS`"那条规则改成
+   `CONSUME`；方向键同理。即使解锁按钮在屏幕上，按键也进不到焦点树。
+
+### 改法
+
+- `VideoScreenLockOverlay`：TV 分支不再依赖 `unlockButtonVisible`，锁屏即刻渲染常驻的 `TvUnlockButton`——
+  黑色 72% 圆角胶囊 + `LockOpen` 图标 + `video_screen_unlock`（"Unlock"，复用现有资源，不新增 Weblate 键）。
+  它挂 `FocusRequester` 并在进入时逐帧重试 6 帧请求焦点；焦点环用 `border(2.dp, primary)`（与 `PlayerIconButton`
+  同一套写法），因为 `tvFocusable` 的描边以轮廓为中心、会被 `clip` 切掉一半。全屏遮罩在 TV 上不再挂
+  `clickable`，免得焦点遍历里多出一个没有视觉的全屏节点。手机分支保持原样（点屏幕 → 3 秒窗口内点按钮）。
+- `VideoPlayerTvKeyPolicy`：把 `DPAD_CENTER/ENTER/NUMPAD_ENTER` 拆成单独分支，`screenLocked` 时归为
+  `PASS_TO_FOCUS`，把 OK 交给焦点树里的解锁按钮；UP/DOWN 与媒体键仍然 `CONSUME`。单元测试同步改写：
+  原来的 `screen lock consumes remote controls`（断言 CENTER → `CONSUME`）换成
+  `screen lock leaves confirm to the unlock target` 与 `screen lock consumes directional input` 两项。
+
+### 设备验证（emulator-5558，1920×1080）
+
+| 步骤 | 截图 | 结果 |
+| --- | --- | --- |
+| 旧构建：锁屏 | `pf` / `pg` / `ph` | 三帧同哈希，CENTER、DOWN 均无反馈 |
+| 旧构建：BACK | `pi` | 解锁并回到 chrome，焦点在 Play |
+| 新构建：锁屏 | `q5` | 屏幕中央出现 `Unlock` 胶囊，`focused="true"`，蓝色焦点环完整（1:25.083） |
+| 新构建：胶囊上 CENTER | `q6` | **解锁**，chrome 回来、焦点环落在 Play/Pause，播放未被打断（1:33 继续走） |
+| 单元测试 | `:app:testDebugUnitTest` | `VideoPlayerTvKeyPolicyTest` + `VideoPlayerTvKeyDispatcherTest` 全通过 |
+
+### 顺带确认的两条事实
+
+- 解锁后焦点有归宿：`q6` 的焦点是 `Pause`（`[56,864][152,960]`），不是悬空，也不是停在已消失的胶囊上。
+- 按键的配对是干净的：解锁这一次 OK 只做了解锁，没有顺带把播放切到暂停（1:25 → 1:33 是持续播放）。
+  这依赖 `VideoPlayerTvKeyDispatcher` 把 CENTER 记为 `PASS_TO_FOCUS` 后，按下与抬起都交给焦点树。
+
+### 遗留
+
+- 锁屏态下**方向键仍然完全无效**（`CONSUME`）：这一轮是有意保留的（锁屏的意义就是屏蔽误触），
+  代价是"锁屏后想快进/调音量"只能先解锁。若要放宽，应先确认媒体键（`MEDIA_*`）是否也该放行。
+- 手机侧未回归：手机分支的代码路径未改动，仅新增了一个 TV 专属 composable。
+

@@ -131,14 +131,30 @@ class VideoPlayerTvKeyPolicyTest {
     }
 
     @Test
-    fun `screen lock consumes remote controls`() {
-        assertEquals(
-            VideoPlayerTvKeyAction.CONSUME,
-            resolveVideoPlayerTvKeyAction(
-                keyCode = KeyEvent.KEYCODE_DPAD_CENTER,
-                controlsVisible = true,
-                screenLocked = true,
-            ),
+    fun `screen lock leaves confirm to the unlock target`() {
+        for (keyCode in listOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+            for (visible in listOf(false, true)) {
+                assertEquals(
+                    VideoPlayerTvKeyAction.PASS_TO_FOCUS,
+                    resolveVideoPlayerTvKeyAction(keyCode, controlsVisible = visible, screenLocked = true),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `screen lock consumes directional input`() {
+        val keys = listOf(
+            KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN,
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_DPAD_RIGHT,
         )
+        for (keyCode in keys) {
+            assertEquals(
+                VideoPlayerTvKeyAction.CONSUME,
+                resolveVideoPlayerTvKeyAction(keyCode, controlsVisible = true, screenLocked = true),
+            )
+        }
     }
 }
