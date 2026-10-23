@@ -17,6 +17,7 @@ import org.skepsun.kototoro.core.ui.feed.FeedContinueAction
 import org.skepsun.kototoro.core.ui.feed.FeedTimelineCard
 import org.skepsun.kototoro.core.ui.feed.UpdatedContentCarousel
 import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
+import org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget
 import org.skepsun.kototoro.list.ui.compose.ContentCardBadgePill
 import org.skepsun.kototoro.list.ui.compose.ContentCardBadgeText
 import org.skepsun.kototoro.list.ui.compose.ContentCardBadgeTone
@@ -52,12 +53,24 @@ private fun DesktopSourceFilter.acceptsFeedSource(sourceName: String, contentTyp
 internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
     val ecosystems = remember(state.sources) { state.sources.associate { it.source.name to it.ecosystem } }
     val filter = state.feedFilter
+    // Android keeps two adult targets here: FEED hides the timeline, UPDATES its tracked-with-new-chapters carousel.
+    val hideNsfwFeed = state.sourceSettings.hidesNsfw(DesktopNsfwTarget.FEED)
+    val hideNsfwUpdates = state.sourceSettings.hidesNsfw(DesktopNsfwTarget.UPDATES)
     // Android derives the visible rows in memory from the snapshot (FeedDeriver), filters included.
-    val rows = remember(state.feed, filter) {
-        FeedDeriver.derive(FeedDeriver.Input(snapshot = state.feed, sourceTags = filter.tags, groupTab = filter.tab)).visibleRows
+    val derived = remember(state.feed, filter, hideNsfwFeed) {
+        FeedDeriver.derive(
+            FeedDeriver.Input(
+                snapshot = state.feed,
+                sourceTags = filter.tags,
+                groupTab = filter.tab,
+                excludedNsfw = hideNsfwFeed,
+            ),
+        )
     }
-    val updates = remember(state.feed, state.feedContents, filter, ecosystems) {
+    val rows = derived.visibleRows
+    val updates = remember(state.feed, state.feedContents, filter, ecosystems, hideNsfwUpdates) {
         state.feed.updateRowsByOwnerId.values
+            .filter { !hideNsfwUpdates || !it.isNsfw }
             .filter { update ->
                 val content = state.feedContents[update.displayMangaId ?: update.mangaId]
                 filter.acceptsFeedSource(update.sourceName, content?.source?.contentType, ecosystems)
@@ -118,8 +131,15 @@ internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppSt
             if (rows.isEmpty()) item(key = "empty") {
                 Column(Modifier.fillMaxWidth().padding(top = 48.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(desktopText("feed.emptyTitle"), style = MaterialTheme.typography.titleMedium)
-                    Text(desktopText("feed.emptyDetail"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // Filters (including the 18+ timeline target) can hide every row while the snapshot still has some,
+                    // so the hint has to stop telling the user to run a check they just ran.
+                    if (derived.hasActiveFilters) {
+                        Text(desktopText("feed.filteredTitle"), style = MaterialTheme.typography.titleMedium)
+                        Text(desktopText("feed.filteredDetail"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        Text(desktopText("feed.emptyTitle"), style = MaterialTheme.typography.titleMedium)
+                        Text(desktopText("feed.emptyDetail"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
             var previousLabel: String? = null

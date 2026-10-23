@@ -6809,3 +6809,36 @@ Windows 侧的 `source-tvbox`（`MacCmsSourceRuntime` + `MacCmsParser`）早就�
 - 验证：`:desktop-app:compileKotlin`、`:desktop-app:compileTestKotlin`、`:desktop-app:verifyDesktopStrings`、
   `:core-library:compileCommonMainKotlinMetadata` 通过；`DesktopLibrarySelectionTest` 9 项与
   `DesktopAppTest` 的 tablet 探针（四个子 JVM）全部通过，`tablet.log` 以 `DESKTOP_UI_OK=tablet` 结束。
+
+## 146. Windows 订阅页成人过滤目标（2026-10-24）
+
+日期：2026-10-24。承 §141：Android 的 `AdultContentFilterTarget` 有七个目标（来源与浏览、历史、收藏、订阅、更新、
+推荐、书签），Windows 的来源设置当时只映射了三个能兑现的（`SOURCES`/`FAVOURITES`/`HISTORY`）。订阅页其实两种成人内容
+界面都在：`FeedCardRow.isNsfw` 的时间线与 `FeedUpdateRow.isNsfw` 的新章节轮播，所以补上 `FEED` 与 `UPDATES` 两个目标，
+并顺手修掉“筛空了还提示点检查更新”的空态文案。
+
+- `DesktopNsfwTarget` 增加 `FEED`、`UPDATES`（声明在 `HISTORY` 之后，对话框顺序与 Android 的枚举接近），
+  `DesktopSourceSettings.hidesNsfw` 与 `sources_nsfw_targets` 存储照旧——集合里多两个名字即可。
+  Android 的 `SUGGESTIONS`/`BOOKMARKS` 在 Windows 没有对应页面，继续不映射。
+- 时间线走共享派生器：`FeedDeriver.Input.excludedNsfw = hidesNsfw(FEED)`，`FeedDeriver` 自己按
+  `FeedCardRow.isNsfw` 过滤，因此筛选计数（`hasActiveFilters`）也会把这个目标算进去，语义与 Android 的
+  `_excluded_nsfw` 一致，不新增桌面私有过滤。
+- 轮播是桌面自己的投影（`updateRowsByOwnerId`），先按 `hidesNsfw(UPDATES)` 过滤 `FeedUpdateRow.isNsfw` 再排序；
+  两个目标各自独立，只关一个时另一半照常显示。
+- 空态：`FeedDeriver.Derived.hasActiveFilters` 为真时改显示 `feed.filteredTitle`/`feed.filteredDetail`
+  （“没有符合当前筛选条件的更新 / 清除订阅筛选，或关闭 More → Source settings 里的 18+ 内容隐藏”），
+  否则仍是“暂无更新记录 / 点击检查更新”。此前任何筛选（分类、来源、标签）筛空时都在误导用户再点一次检查。
+- 文案：`sources.nsfw.feed`（订阅 / Subscriptions）、`sources.nsfw.updates`（更新 / Updates）、
+  `feed.filteredTitle`、`feed.filteredDetail`，中英各一份。
+- `DesktopBackgroundSettingsTest` 新增一例：五个目标的名字顺序、`sources_nsfw_targets` 往返，
+  以及 `hidesNsfw` 只命中被勾选的两个（FAVOURITES/HISTORY 为 false）。
+- 探针（`tablet`）：来源设置对话框里勾上订阅与更新（截图 `tablet-source-nsfw-targets.png` 可见五个目标）；
+  回到订阅页把被追踪作品在库里标成 `ADULT`（`MangaDao.updateContentRating`），重新进页只重载快照、不再取源——
+  时间线与轮播同时消失、空态是筛选文案（截图 `tablet-feed-nsfw.png`）；单独关掉订阅目标后时间线回来而轮播仍隐藏，
+  再关掉更新目标轮播也回来；最后把作品改回安全并确认行重新显示且不再标记成人。
+  细节：`checkUpdates` 会用源返回的详情 `library.save` 覆盖评级，所以成人标记必须写在检查之后，
+  之后只走 `loadFeedOnIo`（重新进入订阅页）重载快照。
+- 验证：`:desktop-runtime:test --tests "*DesktopBackgroundSettingsTest*"` tests=2 failures=0；
+  `:desktop-app:test --tests "*DesktopAppTest*tablet*"` tests=1 failures=0（`tablet.log` 以
+  `DESKTOP_UI_OK=tablet` 结束）；`:desktop-app:compileKotlin`、`:desktop-app:compileTestKotlin`、
+  `:desktop-app:verifyDesktopStrings`、`:core-ui:verifyUiStrings`、`:core-library:compileCommonMainKotlinMetadata` 通过。

@@ -11,9 +11,12 @@ enum class DesktopSourceSort { DEFAULT, TITLE, LANGUAGE }
 
 /**
  * Android's `AdultContentFilterTarget` reduced to the surfaces Windows actually renders. A target hides 18+ works
- * from that shelf; the browse target hides 18+ *sources* in the rail, which is what the rail can decide.
+ * from that shelf; the browse target hides 18+ *sources* in the rail, which is what the rail can decide. FEED is the
+ * subscriptions timeline and UPDATES its tracked-with-new-chapters carousel — Android splits those over two screens,
+ * Windows shows both on one page, so each target keeps hiding only its own half. Android's SUGGESTIONS and BOOKMARKS
+ * have no Windows page yet and stay unmapped instead of pretending to hide something.
  */
-enum class DesktopNsfwTarget { SOURCES, FAVOURITES, HISTORY }
+enum class DesktopNsfwTarget { SOURCES, FAVOURITES, HISTORY, FEED, UPDATES }
 
 /** Windows counterparts of Android's source settings, stored under their own keys in `desktop_background`. */
 data class DesktopSourceSettings(

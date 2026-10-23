@@ -559,10 +559,72 @@ internal object DesktopTabletProbe {
                 onNodeWithTag("source-nsfw:FAVOURITES").performClick(); idle()
                 check(controller.state.value.sourceSettings.hidesNsfw(
                     org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget.FAVOURITES))
+                // Android also offers the subscriptions page as a target. Windows shows the timeline and the
+                // tracked-with-new-chapters carousel on one page, so each target keeps hiding only its own half.
+                onNodeWithTag("source-nsfw:FEED").performClick(); idle()
+                onNodeWithTag("source-nsfw:UPDATES").performClick(); idle()
+                check(controller.state.value.sourceSettings.hidesNsfw(
+                    org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget.FEED))
+                check(controller.state.value.sourceSettings.hidesNsfw(
+                    org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget.UPDATES))
                 check(!controller.state.value.sourceSettings.hidesNsfw(
                     org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget.HISTORY))
+                snapshotTag("source-nsfw-dialog", "source-nsfw-targets")
                 onNodeWithTag("source-nsfw-dialog-close").performClick(); idle()
                 onNodeWithTag("source-settings-back").performScrollTo().performClick(); idle()
+                check(controller.state.value.screen == DesktopScreen.MORE)
+                // An adult tracked work: Android's stored rating feeds both feed targets, one surface at a time.
+                onNodeWithTag("nav:订阅").performClick(); idle()
+                runBlocking {
+                    // Opening the update earlier marked it read; rewind the track so the carousel has something to hide.
+                    val track = requireNotNull(session.storage.database.getTracksDao().find(content.id))
+                    session.storage.database.getTracksDao().upsert(org.skepsun.kototoro.tracker.data.TrackEntity(
+                        content.id, chapters.first().id, 0, track.lastCheckTime, track.lastChapterDate,
+                        track.lastResult, null))
+                }
+                onNodeWithTag("feed-check").performClick(); idle()
+                // A check re-fetches the work and stores the source's rating, so the adult flag is written after it and
+                // only the snapshot reload (re-entering the page) runs afterwards.
+                runBlocking { session.storage.database.getMangaDao().updateContentRating(content.id, true, "ADULT") }
+                onNodeWithTag("nav:主页").performClick(); idle()
+                onNodeWithTag("nav:订阅").performClick(); idle()
+                val adultRow = requireNotNull(controller.state.value.feed.rows.firstOrNull { it.anchorMangaId == content.id })
+                check(adultRow.isNsfw) { "the stored rating marks the tracked work as adult" }
+                check(controller.state.value.feed.updateRowsByOwnerId[content.id]?.isNsfw == true)
+                onNodeWithTag("feed-row:${adultRow.logId}").assertDoesNotExist()
+                onNodeWithTag("feed-updated:${content.id}").assertDoesNotExist()
+                // Everything is filtered out, so the empty state explains the filters instead of telling the user to check.
+                onNodeWithText(desktopText("feed.filteredTitle")).assertExists()
+                snapshot("feed-nsfw")
+                // Dropping only the timeline target brings the row back while the carousel stays hidden.
+                onNodeWithTag("nav:更多").performClick(); idle()
+                onNodeWithTag("source-settings-open").performScrollTo().performClick(); idle()
+                onNodeWithTag("source-setting-nsfw").performScrollTo().performClick(); idle()
+                onNodeWithTag("source-nsfw:FEED").performClick(); idle()
+                check(!controller.state.value.sourceSettings.hidesNsfw(
+                    org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget.FEED))
+                onNodeWithTag("source-nsfw-dialog-close").performClick(); idle()
+                onNodeWithTag("source-settings-back").performScrollTo().performClick(); idle()
+                onNodeWithTag("nav:订阅").performClick(); idle()
+                onNodeWithTag("feed-row:${adultRow.logId}").assertExists()
+                onNodeWithTag("feed-updated:${content.id}").assertDoesNotExist()
+                // Dropping the updates target restores the carousel, and the work goes back to safe afterwards.
+                onNodeWithTag("nav:更多").performClick(); idle()
+                onNodeWithTag("source-settings-open").performScrollTo().performClick(); idle()
+                onNodeWithTag("source-setting-nsfw").performScrollTo().performClick(); idle()
+                onNodeWithTag("source-nsfw:UPDATES").performClick(); idle()
+                check(!controller.state.value.sourceSettings.hidesNsfw(
+                    org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget.UPDATES))
+                onNodeWithTag("source-nsfw-dialog-close").performClick(); idle()
+                onNodeWithTag("source-settings-back").performScrollTo().performClick(); idle()
+                onNodeWithTag("nav:订阅").performClick(); idle()
+                onNodeWithTag("feed-updated:${content.id}").assertExists()
+                runBlocking { session.storage.database.getMangaDao().updateContentRating(content.id, false, null) }
+                onNodeWithTag("nav:主页").performClick(); idle()
+                onNodeWithTag("nav:订阅").performClick(); idle()
+                check(controller.state.value.feed.rows.first { it.anchorMangaId == content.id }.isNsfw.not())
+                onNodeWithTag("feed-row:${adultRow.logId}").assertExists()
+                onNodeWithTag("nav:更多").performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.MORE)
                 // The browse overview now renders the saved layout: list rows instead of the default tile grid.
                 // "浏览" first leaves the more page, then (because a source is still open) returns to the overview.

@@ -117,4 +117,6 @@ private val DesktopNsfwTarget.title: String
         DesktopNsfwTarget.SOURCES -> desktopText("sources.nsfw.sources")
         DesktopNsfwTarget.FAVOURITES -> desktopText("sources.nsfw.favourites")
         DesktopNsfwTarget.HISTORY -> desktopText("sources.nsfw.history")
+        DesktopNsfwTarget.FEED -> desktopText("sources.nsfw.feed")
+        DesktopNsfwTarget.UPDATES -> desktopText("sources.nsfw.updates")
     }
