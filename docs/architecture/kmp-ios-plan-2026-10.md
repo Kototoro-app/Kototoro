@@ -6916,3 +6916,51 @@ Windows 侧此前把“分类”只挂在收藏栏（历史传 `onAssignCategori
 - 验证：`DesktopDownloadOptionsTest` 9 项全绿；`:desktop-app:test --tests "*DesktopAppTest*tablet*"`
   tests=1 failures=0（`tablet.log` 以 `DESKTOP_UI_OK=tablet` 结束，129.7s）；
   `:desktop-app:compileKotlin`、`:desktop-app:compileTestKotlin`、`:desktop-app:verifyDesktopStrings` 通过。
+
+## 150. Windows 收藏选择栏的“迁移”（2026-10-24）
+
+日期：2026-10-24。承接 §147–§149：Android 收藏列表的选择栏动作是 SELECT_ALL / SHARE / PIN / MIGRATE /
+categories / SAVE，其中 MIGRATE 走 `AppRouter.openMigration(ids)` → `MigrationListActivity`
+（选目标来源、搜索、候选列表、`MigrationConfigSheet` 的 REPLACE/COPY 与数据位开关），提交后由
+`MigrateUseCase` 逐部在单个事务里换源。Windows 侧此前完全没有入口，换源只能在 Android 上做。
+
+- 收藏选择栏新增 `library-selection-migrate`（“迁移”），排在“下载”与“移出收藏”之间。
+  只挂在收藏栏：Android 的历史栏没有 MIGRATE（`defaultSelectionActions` 不含它）。
+  按钮在选中数量不是 1 时禁用——候选作品要人眼确认“是不是同一部作品”，一次一部才不会张冠李戴；
+  Android 那种一次多部（每部各自挑候选）留给后续切片。
+- 对话框 `DesktopMigrationDialog`（`library-migrate-dialog`）：作品标题、一段说明、
+  “目标来源：<名称>”行（`library-migrate-source`，点开复用 `DesktopChoiceSettingsDialog`，
+  体 `library-migrate-source-pick`、选项 `library-migrate-source:<sourceName>`）、
+  搜索框（`library-migrate-query`，预填作品标题）与“搜索”（`library-migrate-search`）、
+  候选列表（`library-migrate-candidate:<id>`，点选高亮）、“保留原作品”复选框（`library-migrate-keep`）、
+  确认/取消（`library-migrate-confirm` / `library-migrate-dismiss`）。对话框本身不碰数据库。
+- 目标来源与候选的判定做成纯函数（`DesktopLibraryMigration.kt`）：`desktopMigrationSources` 只留同内容类型的
+  其他来源（去掉 `HENTAI_` 前缀再比，与 Android `MigrateUseCase` 的判断一致）、按来源名去重；
+  `desktopMigrationCandidates` 只留属于目标来源、id 不同、同内容类型的结果。
+- 流程由 Controller 承担：`beginMigration`（读 `SourceLibrary.find` + `state.sources`，没有可用目标来源时
+  直接报 `library.migrateNoSources`）、`migrationSource`（换来源会清空候选）、`migrationQuery`、
+  `migrationKeepOriginal`、`searchMigration`（`SourceRuntime.getList(target, 0, null, SourceFilter(query = 标题))`，
+  搜索期间 `searching` 置位、按钮禁用并显示“正在搜索…”）、`migrateContent`（对候选 `getDetails(FORCE_REFRESH)`
+  拿到目标章节，再调 `SourceLibrary.migrate`，成功提示 `library.migrated`(目标来源名) 并重载书架）。
+- 迁移语义来自共享 `SourceLibrary.migrate`（§141 之前就存在）：REPLACE = 作品从原来源挪到新来源
+  （原收藏/历史随之消失），COPY = 保留原作品、新作品另立一条收藏；“保留原作品”勾上就是 COPY，
+  与 Android 的 `MigrationMode` 同名同义。分类、进度、统计一起迁移（`MigrationDataFlag.ALL`），
+  下载与书签按 Android 的约定留在原作品上，整个换源在一个事务里完成（失败不留半成品）。
+- 与 Android 的差距：不提供 `MigrationConfigSheet` 的数据位开关（Windows 固定 ALL），不提供一次多部作品的
+  批量候选列表，也不提供“目标来源已有同名作品时合并”的进度比较预览——这些是 `MigrationListActivity` 的界面部分。
+- 文案：新增 `library.migrate`（迁移 / Migrate）、`library.migrateHint`、`library.migrateSource`、
+  `library.migrateKeep`、`library.migrateEmpty`、`library.migrateSearching`、`library.migrateNoSources`、
+  `library.migrated`，中英各一份；搜索按钮复用 `browse.search`，取消复用 `common.cancel`。
+- 单测 `DesktopMigrationRulesTest` 5 例：同内容类型筛掉自身来源、成人作品与普通作品可互相迁移（`HENTAI_` 前缀）、
+  同名来源去重、候选只留目标来源且排除自身、对话框的 `sourceLabel` / `canMigrate`。
+- 探针（`tablet`）：fixture 只装了阅读来源，所以先用 `args[2]`（离线 fixture JAR）导入第二个来源并等
+  `sources.size == 2`；回到收藏页长按该作品 → “迁移” → 断言对话框存在并截图 → 打开来源选择对话框截图并选目标来源 →
+  勾“保留原作品” → 搜索 → 断言恰好一个候选 → 点选候选截图 → 确认；随后断言对话框与选择栏都消失、
+  `state.migration == null`、提示等于 `library.migrated`(目标来源名)、原作品仍是收藏、
+  新作品以候选 id 出现在收藏快照里。收尾：`removeFavourite` 新作品、`uninstall` 第二个来源
+  （依据导入前后 `installedEntries` 的差集取条目）、断言来源回到 1 个并重载书架。
+  截图 `tablet-library-selection-migrate.png`（对话框与书架栏的“迁移”）、
+  `tablet-library-migrate-source.png`、`tablet-library-migrate-candidate.png`。
+- 验证：`DesktopMigrationRulesTest` 5 项全绿；`:desktop-app:test --tests "*DesktopAppTest*tablet*"`
+  tests=1 failures=0（`tablet.log` 以 `DESKTOP_UI_OK=tablet` 结束，142.4s）；`:desktop-app:compileKotlin`、
+  `:desktop-app:compileTestKotlin`、`:desktop-app:verifyDesktopStrings`、`:core-ui:verifyUiStrings` 通过。

@@ -90,6 +90,8 @@ data class DesktopAppState(
     val library: DesktopLibrarySnapshot = DesktopLibrarySnapshot(),
     val librarySelection: DesktopLibrarySelection = DesktopLibrarySelection(),
     val historySelection: DesktopLibrarySelection = DesktopLibrarySelection(),
+    /** Open change-source dialog (Android's MIGRATE) and the search state it carries. */
+    val migration: DesktopMigrationState? = null,
     val bookmarks: List<DesktopBookmark> = emptyList(),
     val content: SourceContent? = null,
     /** List that owns the open details; retained while reading so returning does not lose the list context. */
@@ -1213,6 +1215,72 @@ class DesktopController(val session: DesktopSession) {
             queued += queue.chapters.size
         }
         mutableState.update { it.copy(message = desktopText("downloads.batchQueued", queued)) }
+    }
+
+    /**
+     * Android's MIGRATE on the favourites shelf, for one work at a time: the dialog searches the title on another
+     * source, and only the picked candidate is refetched (with its chapters) and handed to the shared migration plan
+     * together with the work it replaces. Works are migrated singly because every candidate has to be recognised by
+     * eye, so batching them here would guess where Android shows a per-work list.
+     */
+    internal fun beginMigration(id: Long) = action {
+        val content = requireNotNull(session.library.find(id)) { desktopText("error.workNotFound") }
+        val targets = desktopMigrationSources(state.value.sources, content)
+        require(targets.isNotEmpty()) { desktopText("library.migrateNoSources") }
+        mutableState.update {
+            it.copy(migration = DesktopMigrationState(contentId = content.id, title = content.title,
+                sources = targets, sourceName = targets.first().source.name, query = content.title))
+        }
+    }
+
+    fun closeMigration() {
+        mutableState.update { it.copy(migration = null) }
+    }
+
+    fun migrationSource(name: String) {
+        mutableState.update { current ->
+            current.migration?.let { migration ->
+                current.copy(migration = migration.copy(sourceName = name, candidates = emptyList(), searched = false))
+            } ?: current
+        }
+    }
+
+    fun migrationQuery(query: String) {
+        mutableState.update { current ->
+            current.migration?.let { current.copy(migration = it.copy(query = query)) } ?: current
+        }
+    }
+
+    fun migrationKeepOriginal(keep: Boolean) {
+        mutableState.update { current ->
+            current.migration?.let { current.copy(migration = it.copy(keepOriginal = keep)) } ?: current
+        }
+    }
+
+    /** Android's candidate search: the query goes to the chosen source, and only matching works become candidates. */
+    fun searchMigration() = action {
+        val migration = requireNotNull(state.value.migration) { desktopText("error.workNotFound") }
+        val target = requireNotNull(migration.sourceName) { desktopText("library.migrateNoSources") }
+        val content = requireNotNull(session.library.find(migration.contentId)) { desktopText("error.workNotFound") }
+        mutableState.update { it.copy(migration = migration.copy(searching = true, searched = false)) }
+        val items = session.sources.getList(target, 0, null,
+            SourceFilter(query = migration.query.takeIf { it.isNotBlank() }))
+        val candidates = desktopMigrationCandidates(items, target, content)
+        mutableState.update { current ->
+            current.copy(migration = current.migration?.copy(searching = false, searched = true,
+                candidates = candidates))
+        }
+    }
+
+    /** The shared migration plan, committed with the target's refreshed details; no download or bookmark moves. */
+    fun migrateContent(target: SourceContent) = action {
+        val migration = requireNotNull(state.value.migration) { desktopText("error.workNotFound") }
+        val content = requireNotNull(session.library.find(migration.contentId)) { desktopText("error.workNotFound") }
+        val details = session.sources.getDetails(target, SourceDetailsFetchMode.FORCE_REFRESH)
+        session.library.migrate(content, details, keepOriginal = migration.keepOriginal)
+        val label = migration.sourceLabel.ifEmpty { target.source.name }
+        mutableState.update { it.copy(migration = null, message = desktopText("library.migrated", label)) }
+        reloadLibrarySnapshot()
     }
 
     /** Android's chapter long-press "read": history moves onto the chapter, leaving later chapters unread. */

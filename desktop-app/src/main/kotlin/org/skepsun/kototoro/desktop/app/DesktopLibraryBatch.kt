@@ -47,6 +47,7 @@ internal fun DesktopLibrarySelectionBar(
     onMarkCompleted: () -> Unit,
     onTogglePin: (() -> Unit)?,
     onShare: (() -> Unit)?,
+    onMigrate: (() -> Unit)?,
     onDownload: () -> Unit,
     onRemove: () -> Unit,
     onCancel: () -> Unit,
@@ -86,6 +87,14 @@ internal fun DesktopLibrarySelectionBar(
         // SAVE is on both of Android's shelves, so the batch download is offered everywhere.
         TextButton({ onDownload() }, enabled = enabled, modifier = Modifier.testTag("library-selection-download")) {
             Text(desktopText("library.selectionDownload"))
+        }
+        // MIGRATE exists on Android's favourites bar; a work has to be matched by eye, so Windows offers it for one
+        // selected work at a time and greys the button out otherwise.
+        if (onMigrate != null) {
+            TextButton({ onMigrate() }, enabled = enabled && count == 1,
+                modifier = Modifier.testTag("library-selection-migrate")) {
+                Text(desktopText("library.migrate"))
+            }
         }
         TextButton({ onRemove() }, enabled = enabled, modifier = Modifier.testTag("library-selection-remove")) {
             Text(if (history) desktopText("library.selectionRemoveHistory") else desktopText("library.selectionRemove"))

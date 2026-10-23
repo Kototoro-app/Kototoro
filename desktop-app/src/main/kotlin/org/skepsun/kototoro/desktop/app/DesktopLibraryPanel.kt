@@ -42,6 +42,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
     var confirmingRemove by remember(history) { mutableStateOf(false) }
     var confirmingComplete by remember(history) { mutableStateOf(false) }
     var downloading by remember(history) { mutableStateOf(false) }
+    var pickingMigrationSource by remember(history) { mutableStateOf(false) }
     val ecosystems = remember(state.sources) { state.sources.associate { it.source.name to it.ecosystem } }
     // Android's "downloaded" filter reads which works hold stored chapters; the queue owns that state.
     val downloadStates by controller.downloads.state.collectAsState()
@@ -90,6 +91,9 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                 // Android's pin is a toggle on the favourites shelf: the selected works flip as a group.
                 onTogglePin = if (history) null else ({ controller.setLibraryPinned(checkedIds, !allPinned) }),
                 onShare = if (history) null else ({ controller.shareLibrarySelection(checkedIds) }),
+                onMigrate = if (history) null else ({
+                    checkedIds.singleOrNull()?.let { controller.beginMigration(it) }
+                }),
                 onDownload = { downloading = true },
                 onRemove = { confirmingRemove = true },
                 onCancel = { selectedIds = emptySet() },
@@ -312,6 +316,31 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                 else selection.tags + tag)) },
             onClear = { update(selection.copy(tags = emptySet())) },
             onDismiss = { pickingTags = false })
+        val migration = state.migration
+        if (migration != null) {
+            if (pickingMigrationSource) DesktopChoiceSettingsDialog(
+                title = desktopText("library.migrate"),
+                summary = null,
+                bodyTag = "library-migrate-source-pick",
+                optionTagPrefix = MIGRATE_SOURCE_OPTION_PREFIX,
+                options = migration.sources.map { it.displayName to it.source.name },
+                selected = migration.sourceName,
+                enabled = enabled,
+                onPick = controller::migrationSource,
+                onDismiss = { pickingMigrationSource = false },
+            )
+            DesktopMigrationDialog(migration, enabled = enabled,
+                onPickSource = { pickingMigrationSource = true },
+                onQuery = controller::migrationQuery,
+                onSearch = { controller.searchMigration() },
+                onKeepOriginal = controller::migrationKeepOriginal,
+                onMigrate = { candidate ->
+                    controller.migrateContent(candidate)
+                    selectedIds = emptySet()
+                },
+                onDismiss = controller::closeMigration,
+            )
+        }
         state.shareLinks?.let { links -> DesktopShareLinksDialog(links, onDismiss = controller::dismissShareLinks) }
     }
 }

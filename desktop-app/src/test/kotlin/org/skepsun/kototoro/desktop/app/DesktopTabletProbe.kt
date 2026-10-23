@@ -472,6 +472,55 @@ internal object DesktopTabletProbe {
                     }
                 }
                 controller.downloads.forget(queued.map { it.key })
+                // Android's MIGRATE on the favourites shelf: search the work's title on another source of the same
+                // content type and move the categories, progress and stats onto the work found there. The reader
+                // fixture is the only installed source, so the probe installs the offline fixture for this block
+                // and uninstalls it afterwards; 保留原作品 (Android's COPY mode) keeps the original favourite too.
+                val readerSourceName = controller.state.value.sources.single().source.name
+                val installedBefore = controller.state.value.installedEntries.mapTo(HashSet()) { it.id }
+                runBlocking { controller.importJar(Path.of(args[2])).join() }
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.sources.size == 2 }; idle()
+                val migrateSource = controller.state.value.sources.map { it.source.name }
+                    .single { it != readerSourceName }
+                onNodeWithTag("nav:收藏").performClick(); idle()
+                val migrateIndex = controller.state.value.library.entries.indexOfFirst { it.content.id == content.id }
+                check(migrateIndex >= 0) { "the work left the favourites shelf" }
+                onNodeWithTag("content-grid").performScrollToIndex(migrateIndex); idle()
+                onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
+                onNodeWithTag("library-selection-migrate").performClick(); idle()
+                onNodeWithTag("library-migrate-dialog").assertExists()
+                snapshotTag("library-migrate-dialog", "library-selection-migrate")
+                onNodeWithTag("library-migrate-source").performClick(); idle()
+                snapshotTag("library-migrate-source-pick", "library-migrate-source")
+                onNodeWithTag("$MIGRATE_SOURCE_OPTION_PREFIX:$migrateSource").performClick(); idle()
+                onNodeWithTag("library-migrate-keep").performClick(); idle()
+                onNodeWithTag("library-migrate-search").performClick(); idle()
+                val candidate = requireNotNull(controller.state.value.migration?.candidates?.singleOrNull()) {
+                    "the target source offered no candidate"
+                }
+                onNodeWithTag("library-migrate-candidate:${candidate.id}").performClick(); idle()
+                snapshotTag("library-migrate-dialog", "library-migrate-candidate")
+                onNodeWithTag("library-migrate-confirm").performClick(); idle()
+                onNodeWithTag("library-migrate-dialog").assertDoesNotExist()
+                onNodeWithTag("library-selection-count").assertDoesNotExist()
+                check(controller.state.value.migration == null)
+                check(controller.state.value.message == desktopText("library.migrated",
+                    controller.state.value.sources.first { it.source.name == migrateSource }.displayName)) {
+                    "message was '${controller.state.value.message}', error '${controller.state.value.error}'"
+                }
+                check(runBlocking { session.library.isFavourite(content.id) }) { "the original stays a favourite" }
+                val migrated = controller.state.value.library.entries.map { it.content }
+                    .single { it.source.name == migrateSource }
+                check(runBlocking { session.library.isFavourite(migrated.id) }) {
+                    "the migrated work did not join favourites"
+                }
+                check(migrated.id == candidate.id) { "the migrated work is ${migrated.id}, not ${candidate.id}" }
+                // Cleanup: the migrated copy leaves the shelf and the second source leaves the installation.
+                runBlocking { session.library.removeFavourite(migrated.id) }
+                val importedEntry = controller.state.value.installedEntries.single { it.id !in installedBefore }
+                runBlocking { controller.uninstall(importedEntry).join() }; idle()
+                check(controller.state.value.sources.size == 1) { "the second source stayed installed" }
+                runBlocking { controller.library().join() }; idle()
                 runBlocking {
                     repeat(36) { index ->
                         session.library.addFavourite(content.copy(id = content.id + 1000 + index,
