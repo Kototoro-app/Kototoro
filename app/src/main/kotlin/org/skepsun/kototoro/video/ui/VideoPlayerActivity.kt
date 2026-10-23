@@ -327,6 +327,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var subtitleOverlayState by mutableStateOf(VideoSubtitleOverlayState())
     private var unlockButtonVisible by mutableStateOf(false)
     private var seekFeedbackState by mutableStateOf<VideoSeekFeedbackState?>(null)
+    private var seekFeedbackDismissJob: Job? = null
     private var actionDialogState by mutableStateOf<VideoActionDialogState?>(null)
     private var videoAnnotationState by mutableStateOf<VideoAnnotationState?>(null)
     private var chapterDialogState by mutableStateOf<VideoChapterDialogState?>(null)
@@ -932,6 +933,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val target = (startPosition + deltaMs).coerceIn(0L, durationMs)
         player.seekTo(target)
         showSeekFeedback(target, durationMs, target - startPosition)
+        seekFeedbackDismissJob = lifecycleScope.launch {
+            kotlinx.coroutines.delay(1000L)
+            seekFeedbackState = null
+            seekFeedbackDismissJob = null
+        }
         setUiIsVisible(true)
     }
 
@@ -983,7 +989,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             VideoPlayerAction.TogglePlayback -> videoPlayer?.let { player ->
                 if (player.isPlaying) player.pause() else player.play()
             }
-            is VideoPlayerAction.SeekTo -> videoPlayer?.seekTo(action.positionMs)
+            is VideoPlayerAction.SeekTo -> {
+                hideSeekFeedback()
+                videoPlayer?.seekTo(action.positionMs)
+            }
             VideoPlayerAction.PreviousChapter -> navigateChapter(-1)
             VideoPlayerAction.NextChapter -> navigateChapter(1)
             is VideoPlayerAction.OpenSubtitles -> {
@@ -1942,6 +1951,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         isTorrent: Boolean = url.isTorrentLocator(),
         forceHls: Boolean = false,
     ) {
+        hideSeekFeedback()
         externalTrackLoadingJob?.cancel()
         playbackHealthCheckGeneration++
         if (isTorrent) {
@@ -3916,6 +3926,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     override fun onPause() {
+        hideSeekFeedback()
         tvKeyDispatcher.reset()
         if (::enhancementView.isInitialized) enhancementView.pauseVideoSurface()
         super.onPause()
@@ -3940,6 +3951,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     override fun onDestroy() {
+        hideSeekFeedback()
         clearCloudstreamLinkResolution()
         setPlaybackKeepScreenOn(false)
         cloudstreamPlaybackInstance++
@@ -4770,6 +4782,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val manga = currentMangaContent()
             ?: return false
 
+        hideSeekFeedback()
+
         android.util.Log.d("VideoPlayer", "Chapter selected: ${chapter.title} (id=${chapter.id})")
         cloudstreamPlaybackInstance++
         cloudstreamLinkJob?.cancel()
@@ -4962,6 +4976,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     private fun showSeekFeedback(posMs: Long, durationMs: Long, seekOffsetMs: Long) {
+        seekFeedbackDismissJob?.cancel()
+        seekFeedbackDismissJob = null
         val showHours = durationMs >= 3600_000L
         val timeStr = formatTimeMs(posMs, showHours) + " / " + formatTimeMs(durationMs, showHours)
 
@@ -4981,6 +4997,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     private fun hideSeekFeedback() {
+        seekFeedbackDismissJob?.cancel()
+        seekFeedbackDismissJob = null
         seekFeedbackState = null
     }
 
