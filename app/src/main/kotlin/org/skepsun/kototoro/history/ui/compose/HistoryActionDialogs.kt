@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +25,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTakeInitialFocus
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -35,6 +38,8 @@ enum class ClearHistoryOption(val textRes: Int) {
     NOT_IN_FAVORITES(R.string.not_in_favorites),
     CLEAR_ALL(R.string.clear_all_history)
 }
+
+private val ClearHistoryRowShape = RoundedCornerShape(8.dp)
 
 @Composable
 fun ClearHistoryDialog(
@@ -56,18 +61,25 @@ fun ClearHistoryDialog(
             Text(stringResource(R.string.clear_history))
         },
         text = {
-            Column(modifier = Modifier.selectableGroup()) {
+            // selectableGroup + tvTakeInitialFocus: a dialog opens its own window, so without the
+            // request the remote lands nowhere and the first option has no visible ring.
+            Column(
+                modifier = Modifier
+                    .selectableGroup()
+                    .tvTakeInitialFocus(),
+            ) {
                 options.forEachIndexed { index, option ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .tvFocusable(shape = ClearHistoryRowShape, addFocusTarget = false)
                             .selectable(
                                 selected = (index == selectedOption),
                                 onClick = { selectedOption = index },
-                                role = Role.RadioButton
+                                role = Role.RadioButton,
                             )
                             .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(
                             selected = (index == selectedOption),
@@ -87,13 +99,17 @@ fun ClearHistoryDialog(
                 onClick = {
                     onConfirm(options[selectedOption])
                     onDismissRequest()
-                }
+                },
+                modifier = Modifier.tvFocusable(shape = ClearHistoryRowShape, addFocusTarget = false),
             ) {
                 Text(stringResource(R.string.clear))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismissRequest) {
+            TextButton(
+                onClick = onDismissRequest,
+                modifier = Modifier.tvFocusable(shape = ClearHistoryRowShape, addFocusTarget = false),
+            ) {
                 Text(stringResource(android.R.string.cancel))
             }
         }
