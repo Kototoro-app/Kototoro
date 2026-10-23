@@ -19,6 +19,28 @@ import org.skepsun.kototoro.sync.google.data.model.SyncWorkState
 class GoogleDriveSyncMergerTest {
 
     @Test
+    fun `feed sync merges seen and reading state independently in either direction`() {
+        val chapter = org.skepsun.kototoro.tracker.domain.UpdateChapter("key", 7, "Chapter", null, 1, 100)
+        fun snapshot(seen: Boolean, read: Long) = GoogleDriveSyncSnapshot(
+            feed = SyncFeedState(logs = listOf(SyncTrackLog(mangaId = 1, chapters = "Chapter", createdAt = 100,
+                isUnread = !seen, chapterMetadata = org.skepsun.kototoro.tracker.domain.encodeUpdateChapters(
+                    listOf(chapter.copy(readAt = read)))))),
+        )
+        val seen = snapshot(true, 0)
+        val read = snapshot(false, 200)
+        listOf(GoogleDriveSyncMerger.mergeSnapshots(seen, read), GoogleDriveSyncMerger.mergeSnapshots(read, seen))
+            .forEach { merged ->
+                val log = merged.feed.logs.single()
+                assertEquals(false, log.isUnread)
+                assertEquals(100, log.createdAt)
+                assertEquals(200, org.skepsun.kototoro.tracker.domain.decodeUpdateChapters(log.chapterMetadata).single().readAt)
+                val repeated = GoogleDriveSyncMerger.mergeSnapshots(merged, snapshot(false, 0))
+                assertEquals(log.chapterMetadata, repeated.feed.logs.single().chapterMetadata)
+                assertEquals(false, repeated.feed.logs.single().isUnread)
+            }
+    }
+
+    @Test
     fun `same millisecond history and favourite deletion wins in either merge order`() {
         val active = GoogleDriveSyncSnapshot(
             history = listOf(SyncHistory(1, 10, 100)),

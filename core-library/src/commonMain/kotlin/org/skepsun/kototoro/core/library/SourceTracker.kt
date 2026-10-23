@@ -6,13 +6,11 @@ import kotlinx.coroutines.CancellationException
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.source.SourceContent
-import org.skepsun.kototoro.tracker.data.TRACK_LOG_RETAINED_SIZE
 import org.skepsun.kototoro.tracker.data.TrackEntity
-import org.skepsun.kototoro.tracker.data.TrackLogEntity
 import org.skepsun.kototoro.tracker.domain.afterFailedCheck
 import org.skepsun.kototoro.tracker.domain.afterSuccessfulCheck
 import org.skepsun.kototoro.tracker.domain.compareTrackedChapters
-import org.skepsun.kototoro.tracker.domain.trackLogChapters
+import org.skepsun.kototoro.tracker.domain.recordUpdateBatch
 import org.skepsun.kototoro.tracker.domain.trackedLastChapterDate
 
 data class SourceTrackReport(val checked: Int, val withUpdates: Int, val failed: Int, val newChapters: Int)
@@ -90,7 +88,7 @@ class SourceTracker(
         val comparison = compareTrackedChapters(branchChapters, SourceChapter::id, track.lastChapterId)
         val time = now()
         library.save(details)
-        database.useWriterConnection { connection ->
+        return database.useWriterConnection { connection ->
             connection.immediateTransaction {
                 database.getTracksDao().upsert(track.afterSuccessfulCheck(
                     anchorMangaId = mangaId,
@@ -101,23 +99,14 @@ class SourceTracker(
                         chapters.lastOrNull()?.uploadDate, time),
                     now = time,
                 ))
-                if (comparison.newChapters.isNotEmpty()) {
-                    val names = trackLogChapters(comparison.newChapters.map { it.title ?: "第 ${it.number} 章" })
-                    val logs = database.getTrackLogsDao()
-                    if (logs.findDuplicate(mangaId, names, time) == null) {
-                        logs.insert(TrackLogEntity(mangaId = mangaId, chapters = names, createdAt = time, isUnread = true))
-                        logs.trim(TRACK_LOG_RETAINED_SIZE)
-                    }
-                }
+                database.recordUpdateBatch(mangaId, comparison.newChapters.mapTo(HashSet()) { it.id }, time)
             }
         }
-        return comparison.newChapters.size
     }
 
-    /** Opening an update clears its counter and unread logs, as Android's "mark as read" does. */
-    suspend fun markRead(mangaId: Long) = database.useWriterConnection { connection ->
+    /** Opening an update acknowledges the notification without completing its chapters. */
+    suspend fun markSeen(mangaId: Long) = database.useWriterConnection { connection ->
         connection.immediateTransaction {
-            database.getTracksDao().clearCounter(mangaId)
             database.getTrackLogsDao().markUnreadAsReadByOwner(mangaId)
         }
     }

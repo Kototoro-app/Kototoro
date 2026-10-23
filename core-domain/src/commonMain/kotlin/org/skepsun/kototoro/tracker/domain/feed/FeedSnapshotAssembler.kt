@@ -104,6 +104,7 @@ class FeedSnapshotAssembler(
                 overrideCoverUrl = manualOverride?.coverOverride?.takeIf { it.isNotBlank() },
                 sourceGroupFlags = 1 shl contentGroupOf(log.displaySource.orEmpty(), log.displayNsfw == true).ordinal,
                 sourceOriginFlags = 1 shl originGroupOf(log.displaySource.orEmpty()).ordinal,
+                chapterMetadata = log.chapterMetadata,
             )
         }
 

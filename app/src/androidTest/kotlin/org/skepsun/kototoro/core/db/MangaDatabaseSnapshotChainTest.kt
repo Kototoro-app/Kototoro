@@ -14,7 +14,7 @@ import org.junit.runner.RunWith
  * Validates the legacy migration chain against the schema snapshots that actually exist in app/schemas.
  *
  * [MangaDatabaseTest.migrateAll] needs 1.json and can never run: the repository only keeps snapshots for
- * versions 32-37, 39, 40, 42, 68-73, 76-80 and 82-85. This test walks the chain segment by segment between the
+ * versions 32-37, 39, 40, 42, 68-73, 76-80 and 82-86. This test walks the chain segment by segment between the
  * snapshots that do exist, through the same MigrationTestHelper validation. It also guards the :core-db
  * extraction: the migrations and MangaDatabase now live in a separate KMP module.
  */
@@ -29,7 +29,7 @@ class MangaDatabaseSnapshotChainTest {
 
 	private val migrations = getDatabaseMigrations(InstrumentationRegistry.getInstrumentation().targetContext)
 
-	private val snapshots = listOf(32, 33, 34, 35, 36, 37, 39, 40, 42, 68, 69, 70, 71, 72, 73, 76, 77, 78, 79, 80, 82, 83, 84, 85)
+	private val snapshots = listOf(32, 33, 34, 35, 36, 37, 39, 40, 42, 68, 69, 70, 71, 72, 73, 76, 77, 78, 79, 80, 82, 83, 84, 85, 86)
 
 	@Test
 	fun migrationListIsContiguousAndEndsAtCurrentVersion() {

@@ -741,17 +741,25 @@ class DesktopController(val session: DesktopSession) {
         loadFeedOnIo()
     }
 
-    /** Opening an update marks it read (counter and unread logs), then shows the work. */
-    fun openTracked(mangaId: Long) = navigate {
-        session.tracker.markRead(mangaId)
+    /** Opening a timeline entry acknowledges its reminders; the header acknowledges the work's reminders. */
+    fun openTracked(mangaId: Long, logIds: List<Long> = emptyList()) = navigate {
+        if (logIds.isEmpty()) session.tracker.markSeen(mangaId) else {
+            logIds.forEach { session.storage.database.getTrackLogsDao().markAsRead(it) }
+        }
         val content = requireNotNull(session.library.find(mangaId)) { desktopText("error.workNotFound") }
         detailsOnIo(content)
         loadFeedOnIo()
     }
 
+    fun acknowledgeTracked(mangaId: Long, logIds: List<Long>) = action {
+        val dao = session.storage.database.getTrackLogsDao()
+        logIds.forEach { id -> if (dao.find(id)?.mangaId == mangaId) dao.markAsRead(id) }
+        loadFeedOnIo()
+    }
+
     /** Android's "continue reading" on a feed entry: mark it read and resume from history. */
     fun continueTracked(mangaId: Long) = navigate {
-        session.tracker.markRead(mangaId)
+        session.tracker.markSeen(mangaId)
         val content = requireNotNull(session.library.find(mangaId)) { desktopText("error.workNotFound") }
         detailsOnIo(content)
         when (DesktopReaderKind.of(state.value.content)) {

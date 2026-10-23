@@ -139,7 +139,7 @@ class FeedDeriverTest {
     }
 
     @Test
-    fun `orders pinned first then createdAt then logId descending`() {
+    fun `timeline orders by discovery time even for pinned works`() {
         val rows = listOf(
             row(logId = 1, createdAt = 100, isPinned = false),
             row(logId = 2, createdAt = 900, isPinned = false),
@@ -149,7 +149,7 @@ class FeedDeriverTest {
 
         val derived = FeedDeriver.derive(input(rows))
 
-        assertEquals(listOf(3L, 2L, 4L, 1L), derived.visibleRows.map { it.logId })
+        assertEquals(listOf(2L, 4L, 1L, 3L), derived.visibleRows.map { it.logId })
     }
 
     @Test
@@ -298,7 +298,9 @@ class FeedDeriverTest {
 
         val derived = FeedDeriver.derive(input(listOf(logRow), listOf(pending), showAllUpdates = true))
 
-        assertEquals(listOf(-20L, 1L), derived.visibleRows.map { it.logId })
+        assertEquals(listOf(1L, -20L), derived.visibleRows.map { it.logId })
+        assertTrue(derived.visibleRows.last().isPinned)
+        assertEquals(20, derived.visibleRows.last().createdAt, "fallback uses check time, never publication time")
     }
 
     @Test

@@ -322,26 +322,38 @@ class IosLibrary {
     @Throws(Exception::class)
     suspend fun prepareUpdateDownload(event: IosTimelineEvent, sources: IosSources): IosTimelineEvent {
         require(event.isUpdate) { "Not an update event" }
-        val logId = requireNotNull(event.id.removePrefix("update-").toLongOrNull())
-        val log = checkNotNull(database.getTrackLogsDao().find(logId)) {
+        val ids = event.updateLogIds.ifEmpty { listOf(requireNotNull(event.id.removePrefix("update-").toLongOrNull())) }
+        val logs = ids.map { id -> checkNotNull(database.getTrackLogsDao().find(id)) {
             localized("更新记录已不存在，请刷新记录页。")
-        }
-        require(log.mangaId == event.content.value.id) { "Update content mismatch" }
-        val names = log.chapters.lines().filter(String::isNotBlank)
+        } }
+        require(logs.all { it.mangaId == event.content.value.id }) { "Update content mismatch" }
+        val names = logs.flatMap { it.chapters.lines().filter(String::isNotBlank) }.distinct()
         var content = storedDetails(event.content) ?: event.content
-        var chapters = resolveUpdateDownloadChapters(content, names)
+        var chapters = resolveUpdateEventChapters(content, names, event.updateChapterKeys)
         if (chapters.isEmpty()) {
             content = sources.refreshDetails(content)
-            require(content.value.id == log.mangaId && content.sourceName == event.content.sourceName) {
+            require(content.value.id == event.content.value.id && content.sourceName == event.content.sourceName) {
                 "Update details mismatch"
             }
             saveDetails(content)
-            chapters = resolveUpdateDownloadChapters(content, names)
+            chapters = resolveUpdateEventChapters(content, names, event.updateChapterKeys)
         }
         check(chapters.isNotEmpty()) {
             localized("无法匹配更新章节，请在作品详情中选择章节下载。")
         }
         return event.copy(content = content, downloadChapters = chapters)
+    }
+
+    @Throws(Exception::class)
+    suspend fun markUpdateSeen(event: IosTimelineEvent) = database.useWriterConnection { connection ->
+        connection.immediateTransaction {
+            require(event.isUpdate)
+            for (id in event.updateLogIds) {
+                val log = database.getTrackLogsDao().find(id) ?: continue
+                require(log.mangaId == event.content.value.id)
+                database.getTrackLogsDao().markAsRead(id)
+            }
+        }
     }
 
     @Throws(Exception::class)
@@ -404,8 +416,8 @@ class IosLibrary {
     }
 
     @Throws(Exception::class)
-    suspend fun markUpdateRead(content: IosSourceContent) = SourceTracker(database, records,
-        { it }, { it.chapters?.firstOrNull()?.branch }).markRead(content.value.id)
+    suspend fun markUpdatesSeen(content: IosSourceContent) = SourceTracker(database, records,
+        { it }, { it.chapters?.firstOrNull()?.branch }).markSeen(content.value.id)
 
     private val backups by lazy { IosBackupService(this) }
 

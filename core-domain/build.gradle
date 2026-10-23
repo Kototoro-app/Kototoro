@@ -32,6 +32,7 @@ kotlin {
 				api project(':core-db')
 				api libs.kotlinx.datetime
 				api "org.jetbrains.kotlinx:kotlinx-serialization-core:${libs.versions.serialization.get()}"
+				implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
 			}
 		}
 		getByName('jvmTest') {

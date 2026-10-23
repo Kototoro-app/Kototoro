@@ -91,6 +91,7 @@ fun FeedScreen(
     selectedItemIds: Set<Long> = emptySet(),
     onFeedItemLongClick: (FeedItem) -> Unit = {},
     onFeedItemContinueReading: (FeedItem) -> Unit = {},
+    onFeedDetailsViewed: (FeedItem) -> Unit = {},
     showCategoryFilterInline: Boolean = true,
     host: RetainedPagingSnapshotHost? = null,
     header: (@Composable () -> Unit)? = null,
@@ -249,6 +250,7 @@ fun FeedScreen(
                     onFeedItemClick = onFeedItemClick,
                     onFeedItemLongClick = onFeedItemLongClick,
                     onFeedItemContinueReading = onFeedItemContinueReading,
+                        onFeedDetailsViewed = onFeedDetailsViewed,
                     onUpdatedContentItemClick = onUpdatedContentItemClick,
                     onUpdatedContentMoreClick = onUpdatedContentMoreClick,
                     onCaptureNavigationSnapshot = captureNavigationSnapshot,
@@ -271,6 +273,7 @@ fun FeedScreen(
                         onFeedItemClick = onFeedItemClick,
                         onFeedItemLongClick = onFeedItemLongClick,
                         onFeedItemContinueReading = onFeedItemContinueReading,
+                        onFeedDetailsViewed = onFeedDetailsViewed,
                         onUpdatedContentItemClick = onUpdatedContentItemClick,
                         onUpdatedContentMoreClick = onUpdatedContentMoreClick,
                         onCaptureNavigationSnapshot = captureNavigationSnapshot,
@@ -292,6 +295,7 @@ fun FeedScreen(
                         onFeedItemClick = onFeedItemClick,
                         onFeedItemLongClick = onFeedItemLongClick,
                         onFeedItemContinueReading = onFeedItemContinueReading,
+                        onFeedDetailsViewed = onFeedDetailsViewed,
                         onUpdatedContentItemClick = onUpdatedContentItemClick,
                         onUpdatedContentMoreClick = onUpdatedContentMoreClick,
                         onCaptureNavigationSnapshot = captureNavigationSnapshot,
@@ -389,6 +393,7 @@ private fun FeedListItemContent(
     onFeedItemClick: (FeedItem, Rect?) -> Unit,
     onFeedItemLongClick: (FeedItem) -> Unit,
     onFeedItemContinueReading: (FeedItem) -> Unit,
+    onFeedDetailsViewed: (FeedItem) -> Unit,
     onUpdatedContentItemClick: (UpdatedContentHeaderItem, Rect?) -> Unit,
     onUpdatedContentMoreClick: (UpdatedContentHeader) -> Unit,
     onCaptureNavigationSnapshot: (ListModel) -> Unit,
@@ -410,6 +415,7 @@ private fun FeedListItemContent(
                 onFeedItemClick(item, coverBounds)
             },
             onLongClick = { onFeedItemLongClick(item) },
+            onDetailsViewed = { onFeedDetailsViewed(item) },
             onContinueReading = if (selectedItemIds.isEmpty()) {
                 { onFeedItemContinueReading(item) }
             } else {

@@ -15,6 +15,7 @@ import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
 import org.skepsun.kototoro.list.domain.ListSortOrder
+import org.skepsun.kototoro.tracker.domain.completeUpdateChapter
 import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.migration.domain.MigrationChapter
 import org.skepsun.kototoro.migration.domain.MigrationContentInput
@@ -472,6 +473,9 @@ class SourceLibrary(
                     percent = (chapterIndex + (lastVisiblePage + 1f) / pageCount) / (branch.size * parts),
                     deletedAt = 0, chaptersCount = branch.size, parentChapterId = part?.parent?.id,
                 ))
+                if (lastVisiblePage == pageCount - 1 && (part == null || part.index == part.count - 1)) {
+                    database.completeUpdateChapter(content.id, stored.id, now)
+                }
             }
         }
 

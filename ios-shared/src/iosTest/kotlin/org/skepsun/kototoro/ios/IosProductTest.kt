@@ -88,7 +88,7 @@ class IosProductTest {
     }
 
     @Test
-    fun updateChecksUseReadBranchAndClearUnreadCounter() = runBlocking {
+    fun updateChecksUseReadBranchAndKeepSeenSeparateFromReading() = runBlocking {
         withDatabase { path ->
             val library = IosLibrary(path)
             var fresh = content
@@ -106,11 +106,14 @@ class IosProductTest {
                 library.setFavourite(item, true)
                 library.recordPosition(item, IosSourceChapter(chapter), 0, 4, 0f)
                 assertEquals(0, library.checkUpdates(runtime).newChapters)
-                fresh = content.copy(chapters = listOf(chapter, otherBranch, chapter.copy(id = 333, number = 2f),
-                    otherBranch.copy(id = 444, number = 2f)))
+                fresh = content.copy(chapters = listOf(chapter, otherBranch, chapter.copy(id = 333, number = 2f, url = "/chapter/333"),
+                    otherBranch.copy(id = 444, number = 2f, url = "/chapter/444")))
                 assertEquals(1, library.checkUpdates(runtime).newChapters)
                 assertEquals(1, library.updates().single().newChapters)
-                library.markUpdateRead(item)
+                library.markUpdatesSeen(item)
+                assertEquals(1, library.updates().single().newChapters)
+                val updated = IosSourceContent(fresh)
+                library.recordPosition(updated, updated.chapters.single { it.id == "333" }, 3, 4, 0f)
                 assertTrue(library.updates().isEmpty())
             } finally { runtime.close(); library.close() }
         }

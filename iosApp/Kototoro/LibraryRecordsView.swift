@@ -264,6 +264,11 @@ private struct RecordsOverview: View {
     let filter: TimelineFilter
 
     private var updates: [IosTimelineEvent] { snapshot.timeline.filter(\.isUpdate) }
+    private var updateChapterCount: String {
+        let known = updates.reduce(0) { $0 + max(Int($1.count), 0) }
+        guard updates.contains(where: { $0.count < 0 }) else { return known.formatted() }
+        return known == 0 ? String(localized: "未知") : String(localized: "至少 \(known)")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -275,7 +280,7 @@ private struct RecordsOverview: View {
                            detail: String(localized: "\(Set(snapshot.timeline.filter { !$0.isUpdate }.map { $0.content.contentKey }).count) 部作品"))
                         .accessibilityIdentifier("records.summary.reading")
                     metric(String(localized: "更新"), symbol: "arrow.triangle.2.circlepath",
-                           value: String(localized: "\(updates.reduce(0) { $0 + Int($1.count) }) 章"),
+                           value: "\(updateChapterCount) \(String(localized: "章"))",
                            detail: String(localized: "\(Set(updates.map { $0.content.contentKey }).count) 部作品"))
                         .accessibilityIdentifier("records.summary.updates")
                     metric(String(localized: "下载"), symbol: "arrow.down.circle",
@@ -288,7 +293,7 @@ private struct RecordsOverview: View {
                     metric(String(localized: "更新作品"), symbol: "books.vertical",
                            value: Set(updates.map { $0.content.contentKey }).count.formatted(), detail: String(localized: "部作品"))
                     metric(String(localized: "新增章节"), symbol: "plus.circle",
-                           value: updates.reduce(0) { $0 + Int($1.count) }.formatted(), detail: String(localized: "章"))
+                           value: updateChapterCount, detail: String(localized: "章"))
                 }
             } else {
                 HStack(spacing: 12) {
@@ -399,6 +404,8 @@ private struct RecordsTimeline: View {
     let runtime: IosSources
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var selected: TimelineItem?
+    @EnvironmentObject private var library: LibraryModel
+    @State private var seenEvents = Set<String>()
 
     /// A reading or update event, or the chapters of one work that finished downloading on one day.
     private struct TimelineItem: Identifiable {
@@ -503,6 +510,9 @@ private struct RecordsTimeline: View {
                             LabeledContent(timeTitle(item),
                                 value: ReadingStatsFormat.date(item.timestamp).formatted(date: .abbreviated, time: .shortened))
                             if let event = item.event {
+                                if event.isUpdate {
+                                    LabeledContent("来源更新时间", value: sourceUpdateDate(event))
+                                }
                                 if event.duration > 0 {
                                     LabeledContent("阅读时长", value: ReadingStatsFormat.duration(event.duration))
                                 }
@@ -512,6 +522,21 @@ private struct RecordsTimeline: View {
                                 Text(event.detail).font(.subheadline)
                             } else if let count = item.downloadCount {
                                 LabeledContent("下载完成", value: String(localized: "\(count) 章"))
+                            }
+                        }
+                        if let event = item.event, !event.updateChapters.isEmpty {
+                            Section("更新章节") {
+                                ForEach(event.updateChapters, id: \.key) { chapter in
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(chapter.title)
+                                        Text(chapter.sourceUpdatedAt > 0
+                                             ? ReadingStatsFormat.date(chapter.sourceUpdatedAt).formatted(date: .abbreviated, time: .shortened)
+                                             : String(localized: "来源更新时间未知"))
+                                            .font(.caption).foregroundStyle(.secondary)
+                                        Text(chapter.isRead ? String(localized: "已读完") : String(localized: "待读"))
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
                             }
                         }
                         NavigationLink("打开作品") {
@@ -552,7 +577,17 @@ private struct RecordsTimeline: View {
 
     private func eventRow(_ item: TimelineItem, alignment: HorizontalAlignment, showsKind: Bool) -> some View {
         VStack(alignment: alignment, spacing: 6) {
-            Button { selected = item } label: {
+            Button {
+                selected = item
+                if let event = item.event, event.isUpdate {
+                    Task {
+                        do {
+                            try await library.library?.markUpdateSeen(event: event)
+                            seenEvents.insert(event.id)
+                        } catch { /* A later refresh can retry acknowledging this reminder. */ }
+                    }
+                }
+            } label: {
                 let cover = CoverImage(runtime: runtime, content: item.content)
                     .frame(width: 32, height: 48)
                     .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
@@ -567,8 +602,20 @@ private struct RecordsTimeline: View {
                             Label("下载 \(count) 章", systemImage: "arrow.down.circle")
                                 .font(.caption).foregroundStyle(.tint).lineLimit(1)
                         } else if let event = item.event {
-                            Text(event.isUpdate ? String(localized: "新增 \(event.count) 章节") : event.detail)
+                            if event.isUpdate && event.isUnseen && !seenEvents.contains(event.id) {
+                                Circle().fill(.red).frame(width: 6, height: 6).accessibilityLabel("未查看更新")
+                            }
+                            Text(event.isUpdate ? (event.count < 0 ? String(localized: "有章节更新")
+                                : String(localized: "新增 \(event.count) 章节")) : event.detail)
                                 .font(.caption).foregroundStyle(event.isUpdate ? Color.orange : .secondary).lineLimit(1)
+                            if event.isUpdate && event.pendingCount >= 0 {
+                                Text(event.pendingCount == 0 ? String(localized: "已读完")
+                                     : String(localized: "待读 \(event.pendingCount) 章"))
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            if event.isUpdate {
+                                Text(sourceUpdateDate(event)).font(.caption).foregroundStyle(.secondary)
+                            }
                             if !event.isUpdate && event.hasProgress {
                                 VStack(alignment: alignment, spacing: 3) {
                                     ProgressView(value: Double(min(max(event.progress, 0), 1)))
@@ -607,5 +654,16 @@ private struct RecordsTimeline: View {
         let day = ReadingStatsFormat.date(item.timestamp)
         guard Calendar.current.isDateInToday(day) || Calendar.current.isDateInYesterday(day) else { return date }
         return String(localized: "\(ReadingStatsFormat.dayTitle(item.timestamp)) · \(date)")
+    }
+
+    private func sourceUpdateDate(_ event: IosTimelineEvent) -> String {
+        guard event.publishedAt > 0 else { return String(localized: "来源更新时间未知") }
+        let from = ReadingStatsFormat.date(event.publishedFrom)
+        let until = ReadingStatsFormat.date(event.publishedAt)
+        let range = Calendar.current.isDate(from, inSameDayAs: until)
+            ? until.formatted(date: .abbreviated, time: .omitted)
+            : "\(from.formatted(date: .abbreviated, time: .omitted)) — \(until.formatted(date: .abbreviated, time: .omitted))"
+        return String(localized: "来源更新于 \(range)")
+            + (event.unknownPublishedCount > 0 ? String(localized: " · 部分时间未知") : "")
     }
 }

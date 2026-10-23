@@ -11,6 +11,8 @@ import org.skepsun.kototoro.core.source.SourceRef
 import org.skepsun.kototoro.core.source.SourceRequest
 import org.skepsun.kototoro.core.source.SourceResponse
 import org.skepsun.kototoro.core.source.SourceResult
+import org.skepsun.kototoro.tracker.data.TrackEntity
+import org.skepsun.kototoro.tracker.domain.recordUpdateBatch
 import org.skepsun.kototoro.stats.data.StatsEntity
 import org.skepsun.kototoro.stats.domain.ReadingSessionPosition
 import org.skepsun.kototoro.stats.domain.ReadingSessionSample
@@ -22,6 +24,55 @@ import kotlin.test.*
 import kotlin.time.Clock
 
 class IosStatisticsTest {
+    @Test
+    fun updateTimelineGroupsDiscoveriesAndKeepsSeenSeparateFromCompletedChapters() = withDirectory { directory ->
+        val library = IosLibrary("$directory/library.db")
+        val original = work(1)
+        val first = original.value.chapters!!.single().copy(uploadDate = 1_704_096_000_000L)
+        val second = first.copy(id = 11, title = "第二话", number = 2f, url = "/chapter/11", uploadDate = 1_704_182_400_000L)
+        val content = IosSourceContent(original.value.copy(chapters = listOf(first, second)))
+        val time = 1_704_268_800_000L
+        try {
+            library.saveDetails(content)
+            library.database.getTracksDao().upsert(TrackEntity.create(1))
+            assertEquals(1, library.database.recordUpdateBatch(1, setOf(10), time))
+            assertEquals(1, library.database.recordUpdateBatch(1, setOf(11), time + 1))
+            assertEquals(0, library.database.recordUpdateBatch(1, setOf(10, 11), time + 2))
+            val before = library.statistics.snapshot("ALL", "ALL", "", null).timeline.single { it.isUpdate }
+            assertEquals(2, before.count)
+            assertEquals(2, before.pendingCount)
+            assertEquals(2, before.updateLogIds.size)
+            assertEquals(listOf("10", "11"), before.downloadChapters.map { it.id })
+            assertTrue(before.isUnseen)
+            assertEquals(first.uploadDate, before.publishedFrom)
+            assertEquals(second.uploadDate, before.publishedAt)
+            assertEquals(0, before.unknownPublishedCount)
+            assertEquals(listOf(first.uploadDate, second.uploadDate), before.updateChapters.map { it.sourceUpdatedAt })
+            val sources = updateSource { error("Stored chapter identities should not need another request") }
+            try {
+                assertEquals(2, library.prepareUpdateDownload(before, sources).downloadChapters.size)
+                assertEquals(2, library.updates().single().newChapters)
+                assertTrue(library.statistics.snapshot("ALL", "ALL", "", null).timeline.single { it.isUpdate }.isUnseen)
+            } finally { sources.close() }
+            library.markUpdateSeen(before)
+            assertEquals(2, library.updates().single().newChapters)
+            assertFalse(library.statistics.snapshot("ALL", "ALL", "", null).timeline.single { it.isUpdate }.isUnseen)
+            library.recordPosition(content, IosSourceChapter(first), 0, 2, 0f)
+            assertEquals(2, library.updates().single().newChapters)
+            library.recordPosition(content, IosSourceChapter(first), 1, 2, 0f)
+            val partial = library.statistics.snapshot("ALL", "ALL", "", null).timeline.single { it.isUpdate }
+            assertEquals(2, partial.count)
+            assertEquals(1, partial.pendingCount)
+            assertEquals(before.timestamp, partial.timestamp)
+            library.recordPosition(content, IosSourceChapter(second), 1, 2, 0f)
+            assertTrue(library.updates().isEmpty())
+            val complete = library.statistics.snapshot("ALL", "ALL", "", null).timeline.single { it.isUpdate }
+            assertEquals(2, complete.count)
+            assertEquals(0, complete.pendingCount)
+            assertEquals(before.timestamp, complete.timestamp)
+        } finally { library.close() }
+    }
+
     @Test
     fun updateDownloadDoesNotRequireOpeningDetailsToPopulateChapters() = withDirectory { directory ->
         val library = IosLibrary("$directory/library.db")
@@ -150,7 +201,7 @@ class IosStatisticsTest {
             library.database.getStatsDao().upsert(StatsEntity(2, now, 10_000, 0))
             library.database.getTrackLogsDao().insert(TrackLogEntity(mangaId = 1, chapters = "第二话\n第三话",
                 createdAt = now, isUnread = true))
-            library.markUpdateRead(manga)
+            library.markUpdatesSeen(manga)
             val all = library.statistics.snapshot("ALL", "ALL", "", null)
             assertEquals(30_000L, all.totalDuration)
             assertEquals(1, all.timeline.count { it.isUpdate })

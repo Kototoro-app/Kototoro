@@ -34,7 +34,11 @@ class SharedMigrationTest {
             .setQueryCoroutineContext(Dispatchers.IO)
             .build()
         try {
-            // Opening validates the migrated schema against the v85 entities.
+            // Opening validates the full upgrade chain against the current entities.
+            val log = db.getTrackLogsDao().dump().single()
+            assertEquals("Chapter 1", log.chapters)
+            assertEquals("", log.chapterMetadata, "old reading state remains unknown")
+            assertTrue(log.isUnread)
             val prefs = db.getPreferencesDao().find(MANGA_ID)
             assertEquals(2, prefs?.mode)
             assertFalse(prefs!!.isChaptersReversed)
@@ -68,6 +72,7 @@ class SharedMigrationTest {
                 "INSERT INTO preferences (manga_id, mode, cf_brightness, cf_contrast, cf_invert, cf_grayscale, cf_book) " +
                     "VALUES ($MANGA_ID, 2, 0, 0, 0, 0, 0)",
             )
+            connection.execSQL("INSERT INTO track_logs(manga_id, chapters, created_at, unread) VALUES ($MANGA_ID, 'Chapter 1', 123, 1)")
             connection.execSQL("PRAGMA user_version = 84")
         }
     }

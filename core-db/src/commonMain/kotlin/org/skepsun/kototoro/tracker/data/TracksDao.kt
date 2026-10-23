@@ -56,6 +56,7 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
             SELECT manga_id
             FROM tracks
             WHERE chapters_new > 0
+                AND NOT EXISTS (SELECT 1 FROM track_logs WHERE track_logs.manga_id = tracks.manga_id)
         )
         """,
     )
@@ -96,6 +97,9 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 
     @Query("UPDATE tracks SET chapters_new = 0 WHERE manga_id = :mangaId")
     abstract suspend fun clearCounter(mangaId: Long)
+
+    @Query("UPDATE tracks SET chapters_new = :count WHERE manga_id = :mangaId AND chapters_new != :count")
+    abstract suspend fun updateCounter(mangaId: Long, count: Int)
 
     /** Recover a missing anchor from its latest unread batch, without adding overlapping historical events. */
     @Query(

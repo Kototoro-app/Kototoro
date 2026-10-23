@@ -23,6 +23,28 @@ import org.skepsun.kototoro.tracker.data.TrackLogEntity
 class MangaDatabaseDaoSmokeTest {
 
     @Test
+    fun `viewing a reminder clears unseen count while retaining pending chapters and discovery time`() = runBlocking {
+        val db = newDb()
+        try {
+            db.getMangaDao().upsert(MangaEntity(
+                id = 1, title = "Work", altTitles = null, url = "1", publicUrl = "https://example.org/1",
+                rating = 0f, isNsfw = false, contentRating = null, coverUrl = "", largeCoverUrl = null,
+                state = null, authors = null, source = "TEST",
+            ))
+            val tracks = db.getTracksDao()
+            tracks.upsert(TrackEntity(1, 32, 2, 200, 999, TrackEntity.RESULT_HAS_UPDATE, null))
+            assertEquals(1, tracks.observeUnreadWorkCount().first())
+            db.getTrackLogsDao().ensureUnreadUpdateLogs()
+            val event = db.getTrackLogsDao().dump().single()
+            assertEquals(200, event.createdAt, "publication dates cannot date a discovery event")
+            db.getTrackLogsDao().markAsRead(event.id)
+            assertEquals(0, tracks.observeUnreadWorkCount().first())
+            assertEquals(2, tracks.find(1)!!.newChapters)
+            assertEquals(1, db.getTrackLogsDao().count())
+        } finally { db.close() }
+    }
+
+    @Test
     fun `restoring a missing track uses the latest batch instead of summing overlapping history`() = runBlocking {
         val db = newDb()
         try {

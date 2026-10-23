@@ -65,7 +65,7 @@ internal fun DesktopHomePanel(controller: DesktopController, state: DesktopAppSt
     }
     val updates = remember(state.feed, state.feedContents, filter, ecosystems) {
         state.feed.updateRowsByOwnerId.values
-            .sortedByDescending { it.lastChapterDate ?: it.lastCheckTime }
+            .sortedByDescending { it.lastCheckTime }
             .mapNotNull { row -> state.feedContents[row.displayMangaId ?: row.mangaId]?.let { HomeWork(it, newChapters = row.newChapters) } }
             .filter { filter.accepts(ecosystems[it.content.source.name], it.content.source.contentType) }
     }

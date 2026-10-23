@@ -33,7 +33,16 @@ class IosBookmark internal constructor(internal val value: SourceBookmark) {
 
 data class IosUpdate(val content: IosSourceContent, val newChapters: Int, val checkedAt: Long)
 
-/** Logs retain names rather than ids; ambiguous or missing names must be selected in the directory. */
+/** New logs match stable identities; old logs can only resolve unique stored names. */
+internal fun resolveUpdateEventChapters(content: IosSourceContent, names: List<String>, keys: List<String>): List<IosSourceChapter> {
+    if (keys.isEmpty()) return resolveUpdateDownloadChapters(content, names)
+    val byKey = content.chapters.groupBy { chapter ->
+        chapter.value.let { org.skepsun.kototoro.tracker.domain.updateChapterKey(it.source.name, it.branch, it.url, it.id) }
+    }
+    if (keys.any { byKey[it]?.size != 1 }) return emptyList()
+    return keys.distinct().map { byKey.getValue(it).single() }
+}
+
 internal fun resolveUpdateDownloadChapters(content: IosSourceContent, names: List<String>): List<IosSourceChapter> {
     val chapters = content.value.chapters.orEmpty().groupBy { it.title ?: "第 ${it.number} 章" }
     return names.distinct().map { name ->
