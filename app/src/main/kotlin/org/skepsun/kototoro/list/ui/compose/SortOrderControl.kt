@@ -33,6 +33,12 @@ import org.skepsun.kototoro.list.domain.titleResId
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuText
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 
 @Composable
 internal fun SortOrderControl(
@@ -50,6 +56,17 @@ internal fun SortOrderControl(
     val descending = selected.descending == selectedOrder
     var expanded by remember { mutableStateOf(false) }
     val label = stringResource(selected.titleResId)
+    val optionFocus = remember(options) { options.associateWith { FocusRequester() } }
+    LaunchedEffect(expanded) {
+        if (!expanded) return@LaunchedEffect
+        // Material3 puts the focus on the first row; on a remote that reads as "the sort order
+        // jumped", so keep retrying until the currently applied option takes it instead.
+        val target = optionFocus[selected] ?: return@LaunchedEffect
+        repeat(SortMenuFocusAttempts) {
+            withFrameNanos { }
+            if (runCatching { target.requestFocus() }.isSuccess) return@LaunchedEffect
+        }
+    }
     val selectOrder: (ListSortOrder) -> Unit = { order ->
         onSortOrderSelected(order)
         if (compact) expanded = false
@@ -60,7 +77,9 @@ internal fun SortOrderControl(
             if (compact) {
                 IconButton(
                     onClick = { expanded = true },
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier
+                        .size(32.dp)
+                        .tvFocusable(shape = CircleShape, addFocusTarget = false),
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_sort),
@@ -88,7 +107,9 @@ internal fun SortOrderControl(
                             tint = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .tvFocusable(shape = CircleShape, addFocusTarget = false),
                     colors = AssistChipDefaults.assistChipColors(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f),
                         labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -142,6 +163,7 @@ internal fun SortOrderControl(
                                 }
                             }
                         },
+                        modifier = Modifier.focusRequester(optionFocus.getValue(option)),
                         onClick = {
                             val targetOrder = option.orderFor(descending)
                             selectOrder(targetOrder)
@@ -183,12 +205,24 @@ private fun SortDirectionControl(
             onClick = { option.ascending?.let(onSortOrderSelected) },
             enabled = option.ascending != null,
             label = { Text(stringResource(R.string.sort_order_asc)) },
+            modifier = Modifier.tvFocusable(
+                enabled = option.ascending != null,
+                shape = CircleShape,
+                addFocusTarget = false,
+            ),
         )
         FilterChip(
             selected = option.descending == selectedOrder,
             onClick = { option.descending?.let(onSortOrderSelected) },
             enabled = option.descending != null,
             label = { Text(stringResource(R.string.sort_order_desc)) },
+            modifier = Modifier.tvFocusable(
+                enabled = option.descending != null,
+                shape = CircleShape,
+                addFocusTarget = false,
+            ),
         )
     }
 }
+
+private const val SortMenuFocusAttempts = 20

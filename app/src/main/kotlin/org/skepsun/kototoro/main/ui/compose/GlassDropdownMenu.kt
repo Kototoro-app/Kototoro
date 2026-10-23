@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.LocalContentColor
@@ -65,6 +66,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassStyle
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 
 @Stable
 internal class RootGlassMenuHost {
@@ -324,6 +326,11 @@ internal fun CompactDropdownMenuItem(
             modifier = modifier
                 .height(48.dp)
                 .fillMaxWidth()
+                .tvFocusable(
+                    enabled = enabled,
+                    shape = RoundedCornerShape(12.dp),
+                    addFocusTarget = false,
+                )
                 .alpha(if (enabled) 1f else 0.38f)
                 .clickable(enabled = enabled, onClick = onClick)
                 .padding(horizontal = 12.dp),
