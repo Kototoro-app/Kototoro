@@ -1872,30 +1872,6 @@ spaceUiState.switcherEnabled` 时放一个 `SpaceSwitcherRailButton`，
 先修第 2、4 两条（都属于"看得见但不好用"）：极细状态条要么在电视上放大字号、要么随顶栏一起收起；
 顶栏标题给足宽度。第 1、3 条先记录，等有鼠标/触摸需求再动。
 
-## 第三十一轮：视频播放器与「视频笔记」对话框
-
-首次在模拟器上完整走过播放器（本地视频 `TV Audit Video`，SMPTE 测试图）。播放、进度条、底部工具条在 TV 上基本可用：CENTER 唤出/收起 chrome，RIGHT 从暂停键走到进度条并再次 RIGHT 快进，DOWN + RIGHT 到达笔记按钮，焦点环清晰。问题集中在**叠加层不是真正的 Dialog**。
-
-### 新发现
-
-- **视频笔记对话框没有初始焦点**：打开后按 DOWN 画面完全不变（两帧哈希相同），遥控器第一次按键被吞掉；再按 UP 时焦点甚至跳出对话框落到播放器进度条上，属于 TV-02 同类泄漏。根因是它只是播放器窗口里的一个 `Box`，不是独立窗口，Compose 焦点树与播放器共用。
-- **修复不能靠"聚焦输入框"**：输入框拿到焦点会拉起软键盘，在 1080p 电视上键盘盖住卡片下半部，Cancel/Save 全部看不见——从"点不动"变成"看不见"，同样不可用。
-- **卡片在 1080p 上会超出屏幕**：把焦点交给 Save 后 `verticalScroll` 自动滚动到按钮，标题行「Video Note」和关闭按钮被滚出卡片顶部。
-
-### 已修复（`c928f1919`）
-
-1. `VideoAnnotationDialog` 改为真正的 `Dialog`（`dismissOnBackPress = true`、`dismissOnClickOutside = false`、`usePlatformDefaultWidth = false`），BACK 只关闭对话框而不再退出播放器。
-2. TV 下初始焦点落在 **Save note**，遥控器第一次按键就有反应，且不拉起键盘；UP 进入输入框，DOWN 回到按钮区。
-3. 输入框获得焦点时（TV）隐藏截帧与字幕引用，卡片自动收窄到键盘上方；Enter/IME Done 收起键盘并把焦点交回 Save note。
-4. TV 截帧高度上限 220dp → 140dp，卡片不再超高滚动，标题与关闭按钮始终可见。
-
-验证帧：`bf1`（Save note 焦点环，整卡可见）→ `bf2/bf3`（UP 聚焦输入框、卡片收窄、键盘上方可见、输入文字可见）→ `bf4`（Enter 后键盘收起、焦点回 Save note、文字保留）→ `bf5`（BACK 只关对话框，播放器继续播放，焦点回到笔记按钮）→ `bh3`（标准路径 CENTER→DOWN→RIGHT→RIGHT→CENTER 重新打开对话框）。
-
-### 遗留
-
-- 对话框关闭后**紧接的第一次 CENTER** 会变成播放/暂停而不是激活焦点所在按钮（`bg1`：焦点环从笔记按钮跳到播放键、播放暂停）。用 DOWN/RIGHT 重新走一遍按钮就正常（`bh3`）。怀疑播放器在对话框消失后重新请求了播放焦点，但按键路由仍按旧焦点处理，需要在 `VideoPlayerActivity` 的 key 处理里确认。
-- 播放器 chrome 的章节面板、弹幕/字幕设置、倍速菜单、锁屏态、DLNA 对话框尚未逐个过 TV 焦点与 BACK 语义。
-
 ## 第三十轮：阅读器首次按键失灵的根因（2026-10-23）
 
 上一轮把"点按唤出的顶栏没有焦点"记成遗留问题，本轮查下去发现真正的问题更严重：
@@ -1940,3 +1916,100 @@ spaceUiState.switcherEnabled` 时放一个 `SpaceSwitcherRailButton`，
 `qemu-system-x86_64.exe` / `0xc0000005`（访问违例），和 App 无关。
 `-gpu swiftshader_indirect`（软件渲染）下复现稳定，换 `-gpu host`（本机 RTX 4070）后
 连续跑完整个验证链没有再崩。后续调试一律用 `-gpu host`。
+
+## 第三十一轮：视频播放器与「视频笔记」对话框
+
+首次在模拟器上完整走过播放器（本地视频 `TV Audit Video`，SMPTE 测试图）。播放、进度条、底部工具条在 TV 上基本可用：CENTER 唤出/收起 chrome，RIGHT 从暂停键走到进度条并再次 RIGHT 快进，DOWN + RIGHT 到达笔记按钮，焦点环清晰。问题集中在**叠加层不是真正的 Dialog**。
+
+### 新发现
+
+- **视频笔记对话框没有初始焦点**：打开后按 DOWN 画面完全不变（两帧哈希相同），遥控器第一次按键被吞掉；再按 UP 时焦点甚至跳出对话框落到播放器进度条上，属于 TV-02 同类泄漏。根因是它只是播放器窗口里的一个 `Box`，不是独立窗口，Compose 焦点树与播放器共用。
+- **修复不能靠"聚焦输入框"**：输入框拿到焦点会拉起软键盘，在 1080p 电视上键盘盖住卡片下半部，Cancel/Save 全部看不见——从"点不动"变成"看不见"，同样不可用。
+- **卡片在 1080p 上会超出屏幕**：把焦点交给 Save 后 `verticalScroll` 自动滚动到按钮，标题行「Video Note」和关闭按钮被滚出卡片顶部。
+
+### 已修复（`c928f1919`）
+
+1. `VideoAnnotationDialog` 改为真正的 `Dialog`（`dismissOnBackPress = true`、`dismissOnClickOutside = false`、`usePlatformDefaultWidth = false`），BACK 只关闭对话框而不再退出播放器。
+2. TV 下初始焦点落在 **Save note**，遥控器第一次按键就有反应，且不拉起键盘；UP 进入输入框，DOWN 回到按钮区。
+3. 输入框获得焦点时（TV）隐藏截帧与字幕引用，卡片自动收窄到键盘上方；Enter/IME Done 收起键盘并把焦点交回 Save note。
+4. TV 截帧高度上限 220dp → 140dp，卡片不再超高滚动，标题与关闭按钮始终可见。
+
+验证帧：`bf1`（Save note 焦点环，整卡可见）→ `bf2/bf3`（UP 聚焦输入框、卡片收窄、键盘上方可见、输入文字可见）→ `bf4`（Enter 后键盘收起、焦点回 Save note、文字保留）→ `bf5`（BACK 只关对话框，播放器继续播放，焦点回到笔记按钮）→ `bh3`（标准路径 CENTER→DOWN→RIGHT→RIGHT→CENTER 重新打开对话框）。
+
+### 遗留
+
+- 对话框关闭后**紧接的第一次 CENTER** 会变成播放/暂停而不是激活焦点所在按钮（`bg1`：焦点环从笔记按钮跳到播放键、播放暂停）。用 DOWN/RIGHT 重新走一遍按钮就正常（`bh3`）。怀疑播放器在对话框消失后重新请求了播放焦点，但按键路由仍按旧焦点处理，需要在 `VideoPlayerActivity` 的 key 处理里确认。
+- 播放器 chrome 的章节面板、弹幕/字幕设置、倍速菜单、锁屏态、DLNA 对话框尚未逐个过 TV 焦点与 BACK 语义。
+
+## 第三十二轮：播放器弹层的可读性
+
+上一轮遗留的"对话框关闭后第一次 CENTER 变成播放/暂停"本轮查到了根因；顺手把播放器剩下的五个弹层
+逐个走了一遍，发现它们共同的毛病不是焦点，而是**在电视上根本读不清**。
+
+### 根因：自动隐藏不区分播放与暂停
+
+`hideUiRunnable` 在 chrome 显示 3.5 秒后无条件收起界面。于是"打开弹层 → 操作超过 3.5 秒 → BACK 关闭"
+之后，chrome 已在消失边缘：焦点环所在的按钮被一起收走，紧接着的 CENTER 就被当成"唤出 chrome"消费掉
+——重新显示顶栏并把焦点归位到播放键，看起来就像这一按变成了播放/暂停。
+
+修法三条：
+
+1. `chromeMustStayForRemote()`：电视表现下**暂停时**不自动隐藏（遥控器用户暂停后还要继续操作，
+   把界面收走等于夺走操作入口）；
+2. `onIsPlayingChanged` 重新计算自动隐藏，恢复播放才重新计时；
+3. 笔记按钮的 `FocusRequester` 在对话框关闭后按帧重试归还焦点。
+
+顺带修掉 `savePlaybackProgress` 的 `.commit()`：它在主线程写盘，StrictMode 每 5 秒报一次 `diskWrite`；
+改为 `.apply()`，只在需要传播失败时保留 `commit()`。
+
+### 新发现：电视上的弹层是"玻璃面板"
+
+| 弹层 | 面板色 | 宽度 | 行高 / 字号 | 实测症状 |
+| --- | --- | --- | --- | --- |
+| 选项（12 格） | 黑 0.86 | 268–340dp | 56dp / 12sp | 背后的字幕与进度条穿过面板，两行字叠在一起 |
+| 倍速 | 黑 0.86 | 268–340dp | 12sp | 同上 |
+| 音轨 / 画质 | 黑 0.88 | 220–300dp | 12sp | 半透明，且音轨名是 `en · mp4a.40.2` 这类开发者字符串 |
+| 字幕设置 | 黑 0.90 | 300–380dp | 12–14sp | 视频色块直接压在面板文字上 |
+| 章节 | 黑 0.86 | 300–380dp | 11–14sp | 章节名 11sp，沙发上看不出是第几话 |
+| 超分设置 | 黑 0.90 | 300–380dp | 12sp | 同上 |
+
+手机近距离看 0.86 透明玻璃是"氛围"，1080p 电视三米外就是"看不清"。
+
+### 已修复
+
+1. 新增 `PlayerMenuStyle.kt`：`playerMenuContainerColor`（电视用不透明 `#16171A`，手机保持原 alpha）、
+   `playerMenuWidth`（电视 ×1.6）、`playerMenuRowMinHeight`（电视 ≥60dp）、
+   `playerMenuRowTextStyle`（电视 `bodyMedium` / `bodyLarge`）。六个弹层统一接入，手机全部走旧值。
+2. 音轨与字幕标签去噪：新增 `trackLanguageName()`（`en` → `English`、`ja` → `日本語`）与
+   `trackCodecName()`（`mp4a.40.2` → `AAC`、`ec-3` → `Dolby Digital Plus`、
+   `application/x-quicktime-tx3g` → `Timed text`，纯容器 MIME 直接丢弃）；
+   `subtitleDisplayName()` 不再重复追加语言标签。
+   `en · application/x-quicktime-tx3g · en · Embedded` 变成 `English · Timed text · Embedded`。
+
+### 验证
+
+| 步骤 | 截图 | 结果 |
+| --- | --- | --- |
+| 暂停 | `p1` | 焦点在播放键；暂停后整轮调试（数分钟）chrome 一直在，没有被 3.5 秒计时器收走 |
+| 打开选项 | `p3` | 面板不透明，`Open in external player` 一行放得下，背后字幕不再穿透 |
+| BACK + 换方向 | `p5` | 从音轨面板 BACK、RIGHT 到 ⋮ 再 CENTER，选项面板正常重新打开 |
+| 音轨 | `p4` | `English · AAC` / `日本語 · AAC`，勾选与焦点环清晰 |
+| 字幕设置 | `p6` | `English · Timed text · Embedded`；面板加宽后 5 个 tab 一屏放下 |
+| 倍速 | `pb` | 当前 `1.00x` 带勾选与焦点环，行高 60dp，连按不丢焦 |
+| 章节 | `pd` / `pe` | 面板不透明、章节名 16sp；BACK 回章节按钮，再按 CENTER 重新打开面板 |
+
+### 方法上的坑
+
+adb 单次往返 1–2 秒，`uiautomator dump` 更慢，而 chrome 的自动隐藏窗口只有 3.5 秒。中间夹着读截图、
+回看帧的时候，"遥控器按不动"多半是测试节奏造成的假象：要么先把播放暂停（chrome 常驻），要么把按键
+批量连发（间隔 300–500ms）并在每步后 dump 一次焦点。本轮两次误判都是这么来的——一次以为 CENTER
+把进度条跳到了结尾，其实是两轮工具调用之间视频自己播到了终点。
+
+### 遗留
+
+- 章节面板高度固定 72% 屏高，只有两三话时下半部全是空白（宽度已够，密度偏低）。
+- 字幕设置里的 chip 与滑杆仍按手机尺寸渲染，本轮只加宽了面板，没有逐项做 10-foot 复核。
+- 取消笔记对话框（BACK）后不会恢复播放：`openVideoAnnotation()` 无条件先暂停。
+- 手机侧未回归；新增样式都走 `isTvPlayerMenu()` 分支，理论上不受影响。
+- 锁屏态、DLNA 对话框、超分对话框仍未在电视上走过。
+

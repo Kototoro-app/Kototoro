@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -89,6 +90,7 @@ internal fun VideoChapterDialog(
     val gapPx = with(androidx.compose.ui.platform.LocalDensity.current) { 6.dp.roundToPx() }
     val marginPx = with(androidx.compose.ui.platform.LocalDensity.current) { 8.dp.roundToPx() }
     val panelHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.72f).dp
+    val (chapterMenuMinWidth, chapterMenuMaxWidth) = playerMenuWidth(phoneMin = 300.dp, phoneMax = 380.dp)
     val initialPage = state.initialPage.coerceIn(0, state.groups.lastIndex)
     val pagerState = rememberPagerState(
         initialPage = initialPage,
@@ -111,10 +113,10 @@ internal fun VideoChapterDialog(
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(min = 300.dp, max = 380.dp)
+                .widthIn(min = chapterMenuMinWidth, max = chapterMenuMaxWidth)
                 .height(panelHeight),
             shape = RoundedCornerShape(18.dp),
-            color = Color.Black.copy(alpha = 0.86f),
+            color = playerMenuContainerColor(phoneAlpha = 0.86f),
             contentColor = Color.White,
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
             shadowElevation = 12.dp,
@@ -321,7 +323,7 @@ private fun CompactGroupTabs(
             ) {
                 Text(
                     text = group.name ?: ungroupedTitle,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = playerMenuRowTextStyle(compact = true),
                     color = if (selected) Color.White else Color.White.copy(alpha = 0.68f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -339,10 +341,12 @@ private fun ChapterRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val chapterRowTextStyle = playerMenuRowTextStyle(compact = false)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
+            .heightIn(min = playerMenuRowMinHeight(44.dp))
             .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -354,7 +358,7 @@ private fun ChapterRow(
         )
         Text(
             text = chapter.title?.takeIf(String::isNotBlank) ?: chapter.url,
-            style = MaterialTheme.typography.labelLarge,
+            style = chapterRowTextStyle,
             color = Color.White,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -379,6 +383,11 @@ private fun ChapterGridItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val gridTitleTextStyle = if (isTvPlayerMenu()) {
+        playerMenuRowTextStyle(compact = true)
+    } else {
+        MaterialTheme.typography.labelSmall
+    }
     Surface(
         onClick = onClick,
         modifier = modifier
@@ -399,7 +408,7 @@ private fun ChapterGridItem(
             )
             Text(
                 text = chapter.title?.takeIf(String::isNotBlank) ?: chapter.url,
-                style = MaterialTheme.typography.labelSmall,
+                style = gridTitleTextStyle,
                 color = Color.White,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,

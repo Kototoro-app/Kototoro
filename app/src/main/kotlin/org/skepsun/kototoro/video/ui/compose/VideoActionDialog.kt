@@ -127,6 +127,7 @@ internal fun VideoActionDialog(
     val gapPx = with(androidx.compose.ui.platform.LocalDensity.current) { 6.dp.roundToPx() }
     val marginPx = with(androidx.compose.ui.platform.LocalDensity.current) { 8.dp.roundToPx() }
     val maxHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.72f).dp
+    val (menuMinWidth, menuMaxWidth) = playerMenuWidth(phoneMin = 268.dp, phoneMax = 340.dp)
     Popup(
         popupPositionProvider = PlayerMenuPositionProvider(
             targetBounds = state.anchorBounds,
@@ -140,10 +141,10 @@ internal fun VideoActionDialog(
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(min = 268.dp, max = 340.dp)
+                .widthIn(min = menuMinWidth, max = menuMaxWidth)
                 .heightIn(max = maxHeight),
             shape = RoundedCornerShape(18.dp),
-            color = Color.Black.copy(alpha = 0.86f),
+            color = playerMenuContainerColor(phoneAlpha = 0.86f),
             contentColor = Color.White,
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
             shadowElevation = 12.dp,
@@ -212,11 +213,13 @@ private fun VideoActionItem(
     onItemSelected: (VideoActionDialogItem, IntRect) -> Unit,
 ) {
     var itemBounds = IntRect.Zero
+    val minRowHeight = playerMenuRowMinHeight(if (compact) 60.dp else 56.dp)
+    val rowTextStyle = playerMenuRowTextStyle(compact)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = if (compact) 60.dp else 56.dp)
+            .heightIn(min = minRowHeight)
             .onGloballyPositioned { coordinates ->
                 val bounds = coordinates.boundsInWindow()
                 itemBounds = IntRect(
@@ -248,7 +251,7 @@ private fun VideoActionItem(
         ) {
             Text(
                 text = item.title,
-                style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
+                style = rowTextStyle,
                 color = Color.White,
                 maxLines = if (compact) 2 else 1,
                 overflow = TextOverflow.Ellipsis,

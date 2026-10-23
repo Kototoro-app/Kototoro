@@ -108,12 +108,13 @@ internal fun VideoSubtitleSettingsDialog(
         onDismissRequest = onDismissRequest,
         properties = PopupProperties(focusable = true, clippingEnabled = true),
     ) {
+        val (settingsMinWidth, settingsMaxWidth) = playerMenuWidth(phoneMin = 300.dp, phoneMax = 380.dp)
         Surface(
             modifier = Modifier
-                .widthIn(min = 300.dp, max = 380.dp)
+                .widthIn(min = settingsMinWidth, max = settingsMaxWidth)
                 .heightIn(max = maxHeight),
             shape = RoundedCornerShape(18.dp),
-            color = ComposeColor.Black.copy(alpha = 0.90f),
+            color = playerMenuContainerColor(phoneAlpha = 0.90f),
             contentColor = ComposeColor.White,
             border = BorderStroke(1.dp, ComposeColor.White.copy(alpha = 0.16f)),
             shadowElevation = 14.dp,

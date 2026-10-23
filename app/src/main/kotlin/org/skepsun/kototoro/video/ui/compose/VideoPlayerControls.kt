@@ -132,6 +132,7 @@ fun VideoPlayerControls(
     onAction: (VideoPlayerAction) -> Unit,
     onInteractionStart: () -> Unit = {},
     onInteractionEnd: () -> Unit = {},
+    noteButtonFocusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
@@ -166,6 +167,7 @@ fun VideoPlayerControls(
                 onInteractionStart = onInteractionStart,
                 onInteractionEnd = onInteractionEnd,
                 primaryFocusRequester = primaryFocusRequester,
+                noteButtonFocusRequester = noteButtonFocusRequester,
             )
         }
     }
@@ -255,6 +257,7 @@ fun VideoPlayerBottomControls(
     onInteractionStart: () -> Unit = {},
     onInteractionEnd: () -> Unit = {},
     primaryFocusRequester: FocusRequester? = null,
+    noteButtonFocusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
@@ -381,6 +384,7 @@ fun VideoPlayerBottomControls(
                             },
                             contentDescription = stringResource(R.string.video_add_note),
                             onClick = { onAction(VideoPlayerAction.AddNote) },
+                            focusRequester = noteButtonFocusRequester,
                         )
                     }
                     PlayerTextButton(

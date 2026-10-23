@@ -67,10 +67,11 @@ internal fun VideoSuperResolutionDialog(
         onDismissRequest = onDismissRequest,
         properties = PopupProperties(focusable = true, clippingEnabled = true),
     ) {
+        val (enhanceMinWidth, enhanceMaxWidth) = playerMenuWidth(phoneMin = 300.dp, phoneMax = 380.dp)
         Surface(
-            modifier = Modifier.widthIn(min = 300.dp, max = 380.dp),
+            modifier = Modifier.widthIn(min = enhanceMinWidth, max = enhanceMaxWidth),
             shape = RoundedCornerShape(18.dp),
-            color = Color.Black.copy(alpha = 0.90f),
+            color = playerMenuContainerColor(phoneAlpha = 0.90f),
             contentColor = Color.White,
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
             shadowElevation = 14.dp,

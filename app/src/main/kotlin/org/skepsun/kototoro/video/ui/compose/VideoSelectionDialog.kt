@@ -69,6 +69,9 @@ internal fun VideoSelectionDialog(
         val isTvPresentation = LocalUiPresentationConfig.current.isTv
         val initialFocusIndex = state.selectedIndex.takeIf { it in state.options.indices } ?: 0
         val itemFocusRequester = remember { FocusRequester() }
+        val (menuMinWidth, menuMaxWidth) = playerMenuWidth(phoneMin = 220.dp, phoneMax = 300.dp)
+        val rowTextStyle = playerMenuRowTextStyle(compact = false)
+        val rowMinHeight = playerMenuRowMinHeight(48.dp)
         val listState = rememberLazyListState(
             initialFirstVisibleItemIndex = if (isTvPresentation) initialFocusIndex else 0,
         )
@@ -84,10 +87,10 @@ internal fun VideoSelectionDialog(
 
         Surface(
             modifier = Modifier
-                .widthIn(min = 220.dp, max = 300.dp)
+                .widthIn(min = menuMinWidth, max = menuMaxWidth)
                 .heightIn(max = maxHeight),
             shape = RoundedCornerShape(18.dp),
-            color = Color.Black.copy(alpha = 0.88f),
+            color = playerMenuContainerColor(phoneAlpha = 0.88f),
             contentColor = Color.White,
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
             shadowElevation = 14.dp,
@@ -107,6 +110,7 @@ internal fun VideoSelectionDialog(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .heightIn(min = rowMinHeight)
                                 .then(if (isTvPresentation && isTarget) Modifier.focusRequester(itemFocusRequester) else Modifier)
                                 .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
                                 .clickable { onSelect(index) }
@@ -114,7 +118,7 @@ internal fun VideoSelectionDialog(
                         ) {
                             Text(
                                 text = label,
-                                style = MaterialTheme.typography.labelLarge,
+                                style = rowTextStyle,
                                 color = Color.White,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,

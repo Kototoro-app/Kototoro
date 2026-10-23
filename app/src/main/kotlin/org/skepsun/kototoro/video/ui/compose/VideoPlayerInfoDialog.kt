@@ -69,7 +69,7 @@ internal fun VideoPlayerInfoDialog(
         },
         confirmButton = {},
         shape = dialogShape,
-        containerColor = Color.Black.copy(alpha = 0.86f),
+        containerColor = playerMenuContainerColor(phoneAlpha = 0.86f),
         titleContentColor = Color.White,
         textContentColor = Color.White.copy(alpha = 0.82f),
         tonalElevation = 0.dp,

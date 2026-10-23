@@ -158,7 +158,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -167,6 +169,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
@@ -222,6 +225,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         private const val ENABLE_M3U8_PROXY_CACHE = false
         private const val TORRENT_VIDEO_MARKER = "kototoro:torrent"
         private const val HLS_VIDEO_MARKER = "kototoro:hls"
+
+        /** Frames spent re-asking for the player chrome focus after a dialog window closes. */
+        private const val TV_FOCUS_RESTORE_FRAME_ATTEMPTS = 6
     }
 
     private data class PlayerSettingsAction(
@@ -417,6 +423,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 updatePlaybackMenu()
                 syncComposeControlState()
                 danmakuController.onPlaybackStateChanged(isPlaying)
+                // Pausing parks the chrome on screen; resuming re-arms the auto-hide timer.
+                restartControlsAutoHide()
             }
         }
 
@@ -526,8 +534,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     private val autoHideDelayMs = 3500
     private val hideUiRunnable = Runnable {
-        // Also check at execution time: a dialog can open before Compose cancels this callback.
-        if (!keepTvControlsVisibleForDialog) setUiIsVisible(false)
+        // Check again at execution time: a dialog can open, or playback can pause, before Compose
+        // cancels this callback.
+        if (!keepTvControlsVisibleForDialog && !chromeMustStayForRemote()) setUiIsVisible(false)
     }
     private val progressUpdateIntervalMs = 1000
     private val progressUpdateRunnable = object : Runnable {
@@ -700,6 +709,22 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     if (keepControlsVisible) pauseControlsAutoHide() else restartControlsAutoHide()
                 }
             }
+            val noteButtonFocusRequester = remember { FocusRequester() }
+            val noteDialogOpen = videoAnnotationState != null
+            var noteDialogWasOpen by remember { mutableStateOf(false) }
+            LaunchedEffect(noteDialogOpen) {
+                // The dialog is its own window, so while it is open the player window does not own
+                // the remote. Hand focus back to the button that opened it for a few frames: without
+                // it the ring stays painted on a stale control and the first OK press after the
+                // dialog lands on whatever the focus tree fell back to.
+                if (!noteDialogOpen && noteDialogWasOpen) {
+                    repeat(TV_FOCUS_RESTORE_FRAME_ATTEMPTS) {
+                        withFrameNanos { }
+                        runCatching { noteButtonFocusRequester.requestFocus() }
+                    }
+                }
+                noteDialogWasOpen = noteDialogOpen
+            }
             KototoroTheme {
                 Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
                     VideoPlayerRenderLayer(
@@ -713,6 +738,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         onAction = ::onComposePlayerAction,
                         onInteractionStart = ::pauseControlsAutoHide,
                         onInteractionEnd = ::restartControlsAutoHide,
+                        noteButtonFocusRequester = noteButtonFocusRequester,
                         modifier = if (presentationConfig.isTv) {
                             Modifier.padding(horizontal = 12.dp)
                         } else {
@@ -2636,9 +2662,21 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         playerRoot.removeCallbacks(hideUiRunnable)
     }
 
+    /**
+     * A paused player keeps the chrome on TV. The remote user parks on a control (a note, a track,
+     * the speed label) while reading it, and an auto-hide tick would delete that control from the
+     * tree under the focus ring: the next OK press would then only re-show the chrome with focus
+     * re-homed on play/pause, which reads as "the remote dropped my press".
+     */
+    private fun chromeMustStayForRemote(): Boolean = tvPresentationEnabled && videoPlayer?.isPlaying != true
+
     private fun restartControlsAutoHide() {
         playerRoot.removeCallbacks(hideUiRunnable)
-        if (playerUiState == PlayerUiState.ControlsVisible && !keepTvControlsVisibleForDialog) {
+        if (
+            playerUiState == PlayerUiState.ControlsVisible &&
+            !keepTvControlsVisibleForDialog &&
+            !chromeMustStayForRemote()
+        ) {
             playerRoot.postDelayed(hideUiRunnable, autoHideDelayMs.toLong())
         }
     }
@@ -3602,8 +3640,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         } else {
             getString(R.string.video_subtitle_external)
         }
-        val language = track.languageTag?.takeIf { !it.equals(track.label, ignoreCase = true) }
-        return listOfNotNull(track.label.takeIf(String::isNotBlank), language, origin).joinToString(" · ")
+        // The label already carries the language/title; the raw language tag would only repeat it.
+        return listOfNotNull(track.label.takeIf(String::isNotBlank), origin).joinToString(" · ")
     }
 
     private fun showAudioTrackDialog() {
@@ -4440,14 +4478,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
         val pos = if (completed && dur > 0L) dur else player.positionMs
         val result = runCatching {
-            check(
-                getSharedPreferences("video_progress", MODE_PRIVATE)
+            val editor = getSharedPreferences("video_progress", MODE_PRIVATE)
                 .edit()
                 .putLong(currentUrl, pos)
                 .putLong("${currentUrl}_duration", dur)
                 .putLong("${currentUrl}_timestamp", System.currentTimeMillis())
-                .commit(),
-            )
+            // The periodic saver runs on the main thread while video is decoding; only the callers
+            // that must observe a failure pay for a synchronous commit (StrictMode: diskWrite).
+            if (propagateFailure) check(editor.commit()) else editor.apply()
         }.onFailure { e ->
             android.util.Log.e("VideoPlayer", "Failed to save progress", e)
         }
