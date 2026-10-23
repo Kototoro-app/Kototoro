@@ -214,6 +214,8 @@ internal class IosWebViewProvider(private val view: WebView) : WebViewProvider {
     fun event(name: String, payload: JsonObject): String {
         if (destroyed) return ""
         when (name) {
+            // Complete early extension hooks before Swift starts loading the destination document.
+            "willStart" -> IosWebKit.onMain { client.onPageStarted(view, payload.string("url"), null) }
             "started" -> IosWebKit.post { client.onPageStarted(view, payload.string("url"), null) }
             "finished" -> {
                 payload.string("url")?.takeIf { it.startsWith("http") }?.let { url ->

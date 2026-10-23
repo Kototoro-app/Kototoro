@@ -681,12 +681,44 @@ final class ExtensionEcosystemTests: XCTestCase {
         attach(first.exists ? "Wenku8 readable listing" : "Wenku8 unresolved challenge")
     }
 
+    /// A pending Comix browse must settle and must not leave its source preferences waiting indefinitely.
+    @MainActor
+    func testComixBrowseAndPreferencesSettle() throws {
+        app.terminate()
+        app.launchArguments += ["-sources.showAdult", "YES", "-space.kind", "", "-sources.hiddenEcosystems", "",
+                                "-sources.hiddenKinds", "", "-sources.newOnly", "NO"]
+        app.launchEnvironment["KOTOTORO_SOURCE_DIAGNOSTICS"] = "1"
+        app.launch()
+        app.mainTab("浏览").tap()
+        let field = searchField()
+        field.tap()
+        field.typeText("Comix")
+        let source = app.buttons["source.MIHON_7537715367149829912"]
+        XCTAssertTrue(source.waitForExistence(timeout: 30), app.debugDescription)
+        source.tap()
+        let content = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "source.content.")).firstMatch
+        let error = element("sources.error")
+        let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            content.exists || error.exists || self.element("source.solving").exists
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 45), .completed,
+                       "Comix browse kept spinning without content or an error")
+        XCTAssertTrue(content.exists, "Comix listing failed: \(app.debugDescription)")
+        app.buttons["browse.settings"].tap()
+        let preference = app.descendants(matching: .any)["sourceSettings.node.pref:0"]
+        XCTAssertTrue(preference.waitForExistence(timeout: 15), "Comix preferences kept loading: \(app.debugDescription)")
+        attach("Comix browse and preferences")
+    }
+
     /// A real Cloudflare-protected site (Comix, comix.to): a challenge on the listing is shown as such and cleared by
     /// the automatic hidden-browser pass, after which the listing, details and a chapter's pages load. Needs network.
     @MainActor
     func testCloudflareProtectedSourceLoads() throws {
         // Host stack traces of failed calls go to <data>/source-failures.log for this run.
         app.terminate()
+        app.launchArguments += ["-sources.showAdult", "YES", "-space.kind", "", "-sources.hiddenEcosystems", "",
+                                "-sources.hiddenKinds", "", "-sources.newOnly", "NO"]
         app.launchEnvironment["KOTOTORO_SOURCE_DIAGNOSTICS"] = "1"
         app.launch()
         app.mainTab("浏览").tap()
