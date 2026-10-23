@@ -10,6 +10,8 @@ import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kotlinx.coroutines.runBlocking
 import kotlin.time.Duration.Companion.minutes
 import org.jetbrains.skia.Image
+import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
+import org.skepsun.kototoro.explore.ui.model.SourceTag
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -63,6 +65,17 @@ internal object DesktopTabletProbe {
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.items.isNotEmpty() }; idle()
                 snapshot("browse")
                 val sourceTag = "source:${controller.state.value.sources.single().source.name}"
+                // The rail carries Android's two top-bar filters and honours them: a filter that excludes every
+                // installed source empties the rail instead of leaving the list untouched.
+                onNodeWithTag("rail-content-type").assertExists()
+                onNodeWithTag("rail-source-tags").assertExists()
+                controller.exploreFilter(DesktopSourceFilter(tags = setOf(SourceTag.CLOUDSTREAM),
+                    tab = BrowseGroupTab.Video)); idle()
+                onNodeWithTag(sourceTag).assertDoesNotExist()
+                onNodeWithText(desktopText("browse.sourcesEmpty")).assertExists()
+                snapshot("browse-rail-filtered")
+                controller.exploreFilter(DesktopSourceFilter()); idle()
+                onNodeWithTag(sourceTag).assertExists()
                 // Leaving a source returns to the browse page's source grid: the back button, or re-selecting "浏览".
                 onNodeWithTag("source-back").performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.EXPLORE && controller.state.value.selectedSource == null)

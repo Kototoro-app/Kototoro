@@ -141,6 +141,12 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
 @Composable
 internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
     var filter by remember { mutableStateOf("") }
+    // The rail lists every installed source, so it carries Android's two top-bar filters itself: the same filter also
+    // narrows the works of whichever source is picked, which is how the Android tablet keeps one scope for both.
+    val sources = state.sources.filter {
+        (it.displayName.contains(filter, true) || it.source.locale.contains(filter, true)) &&
+            state.exploreFilter.accepts(it)
+    }
     Column(Modifier.width(240.dp).fillMaxHeight().background(MaterialTheme.colors.surface,
         RoundedCornerShape(20.dp)).padding(16.dp).testTag("source-pane"),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -152,13 +158,10 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
             if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) controller.importJar(chooser.selectedFile.toPath())
         }, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text(desktopText("browse.importJar")) }
         Divider()
-        Text(desktopText("browse.sources", state.sources.size), fontWeight = FontWeight.SemiBold)
+        Text(desktopText("browse.sources", sources.size), fontWeight = FontWeight.SemiBold)
         DesktopSearchField(filter, { filter = it }, desktopText("browse.findSource"), modifier = Modifier.fillMaxWidth())
+        DesktopSourceFilterControls(state.exploreFilter, state.sources, controller::exploreFilter, enabled, "rail")
         LazyColumn(Modifier.weight(1f).testTag("source-list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val sources = state.sources.filter {
-                (it.displayName.contains(filter, true) || it.source.locale.contains(filter, true)) &&
-                    state.exploreFilter.accepts(it)
-            }
             items(sources, key = { it.source.name }) { source ->
                 val selected = state.selectedSource?.source?.name == source.source.name
                 Surface(color = if (selected) Accent.copy(alpha = .10f) else Color.Transparent,

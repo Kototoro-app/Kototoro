@@ -6294,3 +6294,46 @@ SwiftUI 仅经代码阅读，尚未经过 Swift/Xcode 编译、framework 链接�
 并截图（`tablet-library-categories.png`），`parsers-write` 验证书签多选删除的勾选、全选、删除与空态。
 
 **未做**：分类的追踪开关与备份节内的分类排序仍走原备份流程；标签检索跳转、分类封面与拖拽排序未接。
+
+## 128. 共享文案层：UiStrings 按 Android 资源名取词（2026-10-23）
+
+日期：2026-10-23。按“先做文案抽象 LocalStrings，再逐屏迁移”的顺序，先让 core-ui 里的共享界面能取词。
+
+- core-ui 新增 	ext/UiStrings（string/ormat/rray）、LocalUiStrings（staticCompositionLocalOf，
+  默认 NameOnlyUiStrings 原样返回键名）与 uiString/uiStringArray。键就是 Android 资源名
+  （content_type_manga、eader_page_label 等），Weblate 维护的 pp/src/main/res/values…/strings.xml
+  仍是唯一来源，不复制一份翻译。
+- Android 侧 AndroidUiStrings 用带缓存的 getIdentifier（含命名空间回退）把名字解析成字符串/数组，
+  String.format 留在各平台适配器（commonMain 没有），解析不到时返回键名，预览与测试不会崩；
+  KototoroTheme 在最外层 provide，Android 现有 stringResource 调用不受影响。
+- Windows 侧 DesktopUiStrings 转接到 AndroidStrings，也就是 prepareDesktopStrings 从同一份
+  pp/src/main/res 导出的目录（en / zh-CN），DesktopTheme 负责 provide；切换语言仍即时生效。
+- 内容类型标题改为派生：contentTypeTitle(name) 取 content_type_<小写类型名>，取不到回落类型名，
+  与 Android ContentType.titleResId 同构；桌面重复的 15 组 label.contentType.* 键删除，
+  DesktopSourceLabels.contentType 与浏览分组标签改为调用共享实现（中文显示与 Android 一致，
+  旧的桌面译法如“画师 CG”统一成 Android 的“艺术家CG”）。
+- :core-ui:verifyUiStrings 扫描 core-ui/pp/desktop-app 源码里的 uiString("…") 字面量，解析
+  pp/src/main/res 的 strings 与 arrays，再读 parser-api 的 ContentType 枚举，要求每个类型都有
+  content_type_<lowercase>；扫不到 1000 个键或不到 10 个类型直接失败，避免空跑通过。故意写入一个
+  不存在的键可以复现失败，已手工验证后删除。
+
+验证：:core-ui:compileCommonMainKotlinMetadata、:core-ui:jvmTest（新增 ContentTypeTitlesTest）、
+:core-ui:verifyUiStrings、:desktop-app:compileKotlin/compileTestKotlin/erifyDesktopStrings、
+:app:compileDebugKotlin；桌面全量 :desktop-runtime:test（90 例）与 :desktop-app:test（168 例，
+含新增 DesktopUiStringsTest 6 例）通过，真实 	ablet 探针的“漫画”“全部”标签来自 Android 目录。
+
+**未做**：Android 界面仍用 stringResource，共享界面逐步迁移时再统一切到 uiString；pluralStringResource
+与带格式占位符的资源尚无共享封装。
+
+## 129. Windows 来源栏补上内容类型与来源类型筛选（2026-10-23）
+
+日期：2026-10-23。对应“打开某个源时左侧快速切换列表缺少过滤器”的反馈。
+
+- DesktopSourcePane 的 240dp 来源栏复用 DesktopSourceFilterControls（ail 前缀）：内容类型下拉与
+  来源类型菜单，与 DesktopSourceGrid 顶部是同一个 state.exploreFilter，所以侧栏收窄后，选中源的
+  作品列表沿用同一范围，对齐 Android 平板“一个范围同时管源列表与内容”的行为。
+- 栏头计数改为当前可见源数量，一个都不匹配时显示“导入 JAR 后，来源会显示在这里”。
+- 	ablet* 探针的四个窗口模式都会断言两个控件存在，并在 exploreFilter(CLOUDSTREAM + 视频) 后
+  断言该源从侧栏消失且出现空态，恢复筛选后重新出现（截图 	ablet-browse-rail-filtered.png）。
+
+验证：:desktop-app:test --tests "*DesktopAppTest*tablet*" 通过（tablet / narrow / boundary / boundary-compact）。
