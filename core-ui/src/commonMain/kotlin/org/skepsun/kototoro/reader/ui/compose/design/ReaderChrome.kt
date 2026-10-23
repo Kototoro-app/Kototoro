@@ -136,6 +136,7 @@ fun ReaderChromeTopBar(
     modifier: Modifier = Modifier,
     titleFocusRequester: FocusRequester? = null,
     optionsFocusRequester: FocusRequester? = null,
+    backFocusRequester: FocusRequester? = null,
     contentColor: Color = readerChromeTextColor(),
 ) {
     Box(
@@ -153,6 +154,7 @@ fun ReaderChromeTopBar(
             IconButton(
                 onClick = onNavigateBack,
                 modifier = Modifier
+                    .then(backFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
                     .tvFocusable(shape = Capsule(), addFocusTarget = false)
                     .testTag("reader-back"),
             ) {

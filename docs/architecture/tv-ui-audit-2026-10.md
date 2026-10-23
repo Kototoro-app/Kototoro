@@ -1274,3 +1274,43 @@ TV + 顶栏隐藏 + 没有二级浮层 + **DPAD_UP** 时为真。活动在 `tvKe
 
 - `:app:assembleDebug --offline --no-daemon` 通过（c49、c50.log）。
 - `NovelReaderTvKeyPolicyTest` 通过（t10.log）；TV/阅读器面板 10 个单测类 22 项 0 失败（t9.log）。
+
+## 第十五轮：顶栏叫回来之后焦点没跟着回来（2026-10-23）
+
+上一轮补的 `shouldShowNovelReaderTvChrome` 设备端复核，第一件事就暴露了新问题：顶栏画回来了，
+遥控却还是死的。
+
+### 症状
+
+阅读态按 UP，顶栏（返回、标题胶囊、⋮、翻译、页码条）完整出现，返回箭头也画着焦点环——
+但接着 RIGHT / RIGHT / CENTER 三次按键，画面哈希一模一样，什么都没发生。
+
+原因：`NovelReaderTopChromeContent` 用 `AnimatedVisibility` 包着顶栏，顶栏是一段一直留在组合里的内容，
+重新可见时没有任何东西去 `requestFocus()`。而此时 `controlsVisible=true`，活动把方向键全部
+`shouldDelegateReaderKeyToTvControls` 交给控件——控件里却没有节点持有焦点，按键就这样掉进空气里。
+画面上那个"环"是 `tvFocusable` 的静态描边，不代表真的拿到了焦点。
+
+### 改法
+
+- `ReaderChromeTopBar` 新增 `backFocusRequester: FocusRequester? = null`，挂到返回键的 `IconButton` 上，
+  与既有的 `titleFocusRequester` / `optionsFocusRequester` 同一套写法（漫画阅读器的 scaffold 早就在用）。
+- `NovelReaderTopChromeContent` 在 TV 上记住一个 requester，`LaunchedEffect(controlsVisible)` 里顶栏一变可见就
+  逐帧重试 `requestFocus()`（最多 20 帧，顶栏是滑入动画，节点要先完成放置）。
+
+### 设备证据（emulator-5558）
+
+| 步骤 | 结果 | 哈希 |
+| --- | --- | --- |
+| 阅读态（无顶栏） | 正文 18/26、19/26，无顶栏 | `8cdf124b52` |
+| UP | 顶栏回来，环在返回箭头 | `059581300a` |
+| RIGHT ×2 → CENTER | 打开**选项面板**，焦点落在亮度滑块（白框） | `4182595d…` |
+| 目录面板 → BACK → BACK | 回到无顶栏阅读态，与上一次同一张图 | `8cdf124b52` |
+| 再 UP | 顶栏回来且焦点在返回箭头，与上一次同一张图 | `059581300a` |
+| BACK | 离开阅读器回详情页 | — |
+
+顺带确认：目录面板的 BACK 链也是"先收起 peek、再关闭"，关闭后与选项面板一样回到阅读态；
+面板里的字号 19.0sp、主题 Moss 选择都在。
+
+### 构建与测试
+
+- `:app:assembleDebug --offline --no-daemon` 通过（c51、c52.log）。
