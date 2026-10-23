@@ -2,6 +2,7 @@ package org.skepsun.kototoro.list.ui.compose
 
 import android.util.Log
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +49,9 @@ import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.compose.gridPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
+import org.skepsun.kototoro.core.ui.adaptive.tvTakeInitialFocus
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.list.domain.ListSortOrder
 
@@ -129,6 +133,7 @@ fun DisplayOptionsSheet(
                 Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .tvTakeInitialFocus()
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = 24.dp)
                             .padding(bottom = 24.dp, top = 6.dp),
@@ -227,6 +232,7 @@ fun DisplayOptionsSheet(
                         Switch(
                             checked = showExtraInfo,
                             onCheckedChange = { settings.showExtraInfoOnCards = it },
+                            modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
                         )
                     }
 
@@ -309,6 +315,11 @@ private fun GroupingSection(
             checked = enabled,
             enabled = available,
             onCheckedChange = onEnabledChange,
+            modifier = Modifier.tvFocusable(
+                enabled = available,
+                shape = CircleShape,
+                addFocusTarget = false,
+            ),
         )
     }
 }
@@ -364,7 +375,7 @@ internal fun DisplayModeChip(
                 contentDescription = null,
             )
         },
-        modifier = modifier,
+        modifier = modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
         colors = AssistChipDefaults.assistChipColors(
             containerColor = if (selected) {
                 MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f)
@@ -416,14 +427,21 @@ internal fun GridSizeSlider(
                 }
             }
         }
+        val commit: (Float) -> Unit = {
+            sliderValue = it
+            onValueChange(it.toInt().coerceIn(50, 150))
+        }
         KototoroSlider(
             value = sliderValue,
-            onValueChange = {
-                sliderValue = it
-                onValueChange(it.toInt().coerceIn(50, 150))
-            },
+            onValueChange = commit,
             valueRange = 50f..150f,
             steps = 19,
+            modifier = Modifier.tvSliderDpad(
+                value = sliderValue,
+                valueRange = 50f..150f,
+                onValueChange = commit,
+                steps = 19,
+            ),
         )
     }
 }
