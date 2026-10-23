@@ -59,3 +59,57 @@ internal fun desktopDownloadTargets(
         }
     }
 }
+
+/**
+ * One shelf work flattened for the batch scopes: its stored chapters in reading order, the chapter it was last
+ * read at and the chapters already saved. Kept free of the database so the batch rules can be tested without a
+ * library.
+ */
+internal data class DesktopShelfDownloadWork(
+    val contentId: Long,
+    val title: String,
+    val chapters: List<SourceChapter>,
+    val currentChapterId: Long?,
+    val downloaded: List<SourceChapter>,
+)
+
+/** The chapters a batch scope queues for one work, in that work's own reading order. */
+internal data class DesktopShelfDownload(
+    val work: DesktopShelfDownloadWork,
+    val chapters: List<SourceChapter>,
+)
+
+/**
+ * Android's batch SAVE per work: every selected work keeps its own progress and its own saved chapters, so the
+ * same scope means "everything I have not read yet" for each of them instead of one shared index. Works with
+ * nothing left to queue disappear, which is why an empty result means the batch has nothing to do at all.
+ *
+ * Unlike the details menu, which scopes to the branch the chapter list is filtered to, the batch keeps every
+ * branch in the caller's order: a shelf selection names works, not one translation of them.
+ */
+internal fun desktopShelfDownloadTargets(
+    works: List<DesktopShelfDownloadWork>,
+    option: DesktopDownloadOption,
+): List<DesktopShelfDownload> = works.mapNotNull { work ->
+    val current = work.currentChapterId?.let { id -> work.chapters.firstOrNull { it.id == id } }
+    val targets = desktopDownloadTargets(work.chapters, current, work.downloaded, option)
+    targets.takeIf { it.isNotEmpty() }?.let { DesktopShelfDownload(work, it) }
+}
+
+/** The scopes a shelf batch offers: the details menu's, without the per-branch entry no shared label could name. */
+internal val DesktopShelfDownloadOptions: List<DesktopDownloadOption> = buildList {
+    add(DesktopDownloadOption(DesktopDownloadScope.WHOLE))
+    add(DesktopDownloadOption(DesktopDownloadScope.UNREAD))
+    DesktopDownloadMenuOptions.forEach { add(DesktopDownloadOption(DesktopDownloadScope.FIRST, count = it)) }
+}
+
+internal fun desktopLibraryDownloadTag(option: DesktopDownloadOption): String =
+    "library-download:${option.scope}:${option.count}"
+
+internal fun desktopLibraryDownloadLabel(option: DesktopDownloadOption): String = when (option.scope) {
+    DesktopDownloadScope.WHOLE -> desktopText("library.downloadWhole")
+    DesktopDownloadScope.UNREAD -> desktopText("library.downloadUnread")
+    DesktopDownloadScope.FIRST -> desktopText("library.downloadFirst", option.count)
+    // Branches are per work, so the shelf never offers that scope; naming the broad one keeps the label total.
+    DesktopDownloadScope.BRANCH -> desktopText("library.downloadWhole")
+}

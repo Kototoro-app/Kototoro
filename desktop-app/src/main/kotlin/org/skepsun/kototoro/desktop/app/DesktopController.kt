@@ -1183,6 +1183,38 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { it.copy(message = desktopText("downloads.batchQueued", targets.size)) }
     }
 
+    /**
+     * Android's batch SAVE on the shelves: the details menu's chapter scopes applied to every selected work with
+     * its own progress and its own saved chapters. The chapter lists come from the stored rows instead of a fresh
+     * fetch, so the batch also works offline and cannot fail halfway through a source outage; works that hold no
+     * chapters (or hold them for another reader kind) simply drop out, and an empty batch is reported as such.
+     */
+    internal fun downloadLibrarySelection(ids: Collection<Long>, option: DesktopDownloadOption) = action {
+        val records = session.downloadStore.records.value
+        val works = session.library.findMany(ids, withChapters = true)
+            .filter { DesktopReaderKind.of(it) == DesktopReaderKind.PAGES }
+            .map { content ->
+                DesktopShelfDownloadWork(
+                    contentId = content.id,
+                    title = content.title,
+                    chapters = content.chapters.orEmpty(),
+                    currentChapterId = session.library.progress(content.id)?.chapterId,
+                    downloaded = records.filter { it.contentId == content.id && it.isComplete }
+                        .map { it.chapter },
+                )
+            }
+        val queues = desktopShelfDownloadTargets(works, option)
+        require(queues.isNotEmpty()) { desktopText("downloads.nothingToQueue") }
+        var queued = 0
+        for (queue in queues) {
+            queue.chapters.forEach { chapter ->
+                downloads.enqueue(queue.work.contentId, chapter, queue.work.title)
+            }
+            queued += queue.chapters.size
+        }
+        mutableState.update { it.copy(message = desktopText("downloads.batchQueued", queued)) }
+    }
+
     /** Android's chapter long-press "read": history moves onto the chapter, leaving later chapters unread. */
     fun markChapterRead(chapter: SourceChapter) = markChapterProgress(chapter, read = true)
 

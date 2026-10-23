@@ -443,6 +443,35 @@ internal object DesktopTabletProbe {
                 }
                 check(controller.state.value.shareLinks == null)
                 onNodeWithTag("library-selection-cancel").performClick(); idle()
+                // Android's SAVE on the favourites shelf: the details menu's chapter scopes offered once for the
+                // whole selection, each work keeping its own progress and its own saved chapters.
+                val beforeKeys = controller.downloads.state.value.mapTo(HashSet()) { it.key }
+                onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
+                onNodeWithTag("library-selection-download").performClick(); idle()
+                onNodeWithTag("library-download-dialog").assertExists()
+                snapshotTag("library-download-dialog", "library-selection-download")
+                onNodeWithTag("library-download:FIRST:10").performClick(); idle()
+                onNodeWithTag("library-download-dialog").assertDoesNotExist()
+                onNodeWithTag("library-selection-count").assertDoesNotExist()
+                val queued = controller.downloads.state.value.filter { it.key !in beforeKeys }
+                check(queued.isNotEmpty()) { "the batch queued nothing for ${content.id}" }
+                check(queued.size <= 10) { "first 10 queued ${queued.size} chapters" }
+                check(queued.all { it.record.contentId == content.id }) {
+                    "the batch touched other works: ${queued.map { it.record.contentId }.distinct()}"
+                }
+                check(controller.state.value.message == desktopText("downloads.batchQueued", queued.size)) {
+                    "message was '${controller.state.value.message}', error '${controller.state.value.error}'"
+                }
+                // Leave the fixture without downloads again: stop whatever is still running, then drop the records.
+                controller.downloads.pauseAll()
+                runBlocking {
+                    queued.forEach { queuedState ->
+                        controller.downloads.settle(queuedState.key)
+                        session.downloadStore.delete(queuedState.record.contentId,
+                            queuedState.record.chapter, session.storage.preferences)
+                    }
+                }
+                controller.downloads.forget(queued.map { it.key })
                 runBlocking {
                     repeat(36) { index ->
                         session.library.addFavourite(content.copy(id = content.id + 1000 + index,
@@ -702,6 +731,14 @@ internal object DesktopTabletProbe {
                 check(!runBlocking { session.library.isFavourite(content.id) }) { "the last category dropped it again" }
                 check(controller.state.value.library.entries.first { it.content.id == content.id }.categoryIds.isEmpty())
                 check(controller.state.value.historySelection.query.isEmpty())
+                // Android's history bar carries SAVE as well, so the batch download is offered on this shelf too.
+                onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
+                onNodeWithTag("library-selection-download").performClick(); idle()
+                onNodeWithTag("library-download-dialog").assertExists()
+                snapshotTag("library-download-dialog", "history-selection-download")
+                onNodeWithTag("library-download-dismiss").performClick(); idle()
+                onNodeWithTag("library-download-dialog").assertDoesNotExist()
+                onNodeWithTag("library-selection-cancel").performClick(); idle()
                 onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
                 onNodeWithTag("library-selection-remove").performClick(); idle()
                 onNodeWithTag("library-selection-dialog").assertExists()

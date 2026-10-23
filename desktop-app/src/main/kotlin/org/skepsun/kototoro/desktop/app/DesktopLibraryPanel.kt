@@ -41,6 +41,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
     var pickingCategories by remember(history) { mutableStateOf(false) }
     var confirmingRemove by remember(history) { mutableStateOf(false) }
     var confirmingComplete by remember(history) { mutableStateOf(false) }
+    var downloading by remember(history) { mutableStateOf(false) }
     val ecosystems = remember(state.sources) { state.sources.associate { it.source.name to it.ecosystem } }
     // Android's "downloaded" filter reads which works hold stored chapters; the queue owns that state.
     val downloadStates by controller.downloads.state.collectAsState()
@@ -89,6 +90,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                 // Android's pin is a toggle on the favourites shelf: the selected works flip as a group.
                 onTogglePin = if (history) null else ({ controller.setLibraryPinned(checkedIds, !allPinned) }),
                 onShare = if (history) null else ({ controller.shareLibrarySelection(checkedIds) }),
+                onDownload = { downloading = true },
                 onRemove = { confirmingRemove = true },
                 onCancel = { selectedIds = emptySet() },
             ) else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -295,6 +297,15 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                 selectedIds = emptySet()
             },
             onDismiss = { confirmingComplete = false },
+        )
+        if (downloading) DesktopLibraryDownloadDialog(
+            count = checkedIds.size, options = DesktopShelfDownloadOptions, enabled = enabled,
+            onDownload = { option ->
+                downloading = false
+                controller.downloadLibrarySelection(checkedIds, option)
+                selectedIds = emptySet()
+            },
+            onDismiss = { downloading = false },
         )
         if (pickingTags) DesktopTagPickerDialog(tagChoices, selection.tags,
             onToggle = { tag -> update(selection.copy(tags = if (tag in selection.tags) selection.tags - tag

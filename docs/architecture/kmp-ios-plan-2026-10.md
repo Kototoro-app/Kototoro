@@ -6880,3 +6880,39 @@ Windows 侧此前把“分类”只挂在收藏栏（历史传 `onAssignCategori
 - 验证：`:desktop-app:test --tests "*DesktopAppTest*tablet*"` tests=1 failures=0
   （`tablet.log` 以 `DESKTOP_UI_OK=tablet` 结束）；`:desktop-app:compileKotlin`、
   `:desktop-app:compileTestKotlin` 通过。
+
+## 149. Windows 书架选择栏的“下载”（2026-10-24）
+
+日期：2026-10-24。承接 §140、§147、§148：Android 两条书架栏的 SAVE 打开的是下载对话框
+（`showDownloadDialog(models)`：章节范围 + 章节勾选），选定后为每个选中的作品入队。Windows 侧此前只有
+详情页的批量下载菜单（`details-download-menu`，单部作品），书架选择栏没有 SAVE，多选作品要逐个进详情页。
+
+- 两个书架的选择栏都渲染 `library-selection-download`（“下载”），点开 `DesktopLibraryDownloadDialog`
+  （`library-download-dialog`）：标题复用 `details.downloadChapters`，正文是所选作品数 + 作用说明，
+  按钮是详情页那套章节范围 `DesktopShelfDownloadOptions` = 全部章节 / 未读章节 / 前 10 / 25 / 50 章
+  （标签 `library-download:<SCOPE>:<count>`，确认后清空选择）。
+- 范围计算沿用详情页的共享规则 `desktopDownloadTargets`，但按作品逐个计算：每部作品用自己的当前章节
+  （`session.library.progress` 的 chapterId）和自己的已保存章节（`DesktopDownloadStore` 里 `isComplete` 的记录），
+  所以“未读”对每部作品都是“它自己没读到的那部分”，而不是一个共享下标。容器 `DesktopShelfDownloadWork` /
+  `DesktopShelfDownload` 与纯函数 `desktopShelfDownloadTargets` 都不依赖数据库，便于单测。
+- 章节来源是本地已存章节列表（`SourceContent.chapters`，快照带 `withChapters`），不再为批量下载逐部刷新详情：
+  离线也能算，也不会因为某个来源在批量途中失败而中断整批。代价是章节列表与最后一次详情同步一致。
+- 与详情菜单的差别：详情菜单按当前筛选分支算范围，书架批量作用于**全部分支**（选择的是作品，不是某个翻译），
+  顺序沿用存储顺序；因此不像详情菜单那样提供“当前分支”一项（分支因作品而异，共享文案无法命名）。
+- 只纳入 `DesktopReaderKind.PAGES` 的作品；没有章节、或该范围下没剩下待下章节的作品直接跳过，
+  整批为空时提示 `downloads.nothingToQueue`，否则提示 `downloads.batchQueued`(总章数)。
+  下载仍走同一个串行队列 `DesktopDownloads`，不写阅读进度，与详情页批量下载一致。
+- 文案：新增 `library.selectionDownload`（下载 / Download）、`library.downloadHint`
+  （每部作品按各自进度挑选章节，已保存的章节会跳过。）、`library.downloadWhole`、`library.downloadUnread`、
+  `library.downloadFirst`，中英各一份；提示复用 `downloads.batchQueued` / `downloads.nothingToQueue`。
+- 单测 `DesktopDownloadOptionsTest` 增加 4 例（共 9 例）：每部作品按各自进度与已保存章节取范围、全保存/
+  无章节/读完的作品从批次里消失且整批为空、前 N 按作品分别计数、书架的 5 个范围标签与 tag 唯一且不含分支项。
+- 探针（`tablet`）：收藏页长按该作品 → “下载” → 断言对话框存在并截图；点“前 10 章”后断言对话框与选择栏都消失、
+  新增的队列项全部属于该作品且不超过 10 章、提示等于 `downloads.batchQueued`(新增章数)；
+  随后 `pauseAll` + 逐项 `settle`/删除记录/`forget`，让 fixture 回到无下载状态。
+  历史页再长按一次，断言“下载”同样在（历史栏对应 Android 的 SAVE），打开对话框截图后取消。
+  截图 `tablet-library-selection-download.png`（书架栏的“下载”排在“分享”与“移出收藏”之间）与
+  `tablet-history-selection-download.png`。
+- 验证：`DesktopDownloadOptionsTest` 9 项全绿；`:desktop-app:test --tests "*DesktopAppTest*tablet*"`
+  tests=1 failures=0（`tablet.log` 以 `DESKTOP_UI_OK=tablet` 结束，129.7s）；
+  `:desktop-app:compileKotlin`、`:desktop-app:compileTestKotlin`、`:desktop-app:verifyDesktopStrings` 通过。

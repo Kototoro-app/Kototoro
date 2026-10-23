@@ -47,6 +47,7 @@ internal fun DesktopLibrarySelectionBar(
     onMarkCompleted: () -> Unit,
     onTogglePin: (() -> Unit)?,
     onShare: (() -> Unit)?,
+    onDownload: () -> Unit,
     onRemove: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -81,6 +82,10 @@ internal fun DesktopLibrarySelectionBar(
             TextButton({ onShare() }, enabled = enabled, modifier = Modifier.testTag("library-selection-share")) {
                 Text(desktopText("library.selectionShare"))
             }
+        }
+        // SAVE is on both of Android's shelves, so the batch download is offered everywhere.
+        TextButton({ onDownload() }, enabled = enabled, modifier = Modifier.testTag("library-selection-download")) {
+            Text(desktopText("library.selectionDownload"))
         }
         TextButton({ onRemove() }, enabled = enabled, modifier = Modifier.testTag("library-selection-remove")) {
             Text(if (history) desktopText("library.selectionRemoveHistory") else desktopText("library.selectionRemove"))
@@ -215,6 +220,42 @@ internal fun DesktopMarkCompletedDialog(count: Int, enabled: Boolean,
         },
         dismissButton = {
             TextButton({ onDismiss() }, modifier = Modifier.testTag("library-complete-dismiss")) {
+                Text(desktopText("common.cancel"))
+            }
+        },
+    )
+}
+
+/**
+ * Android's batch SAVE sheet: the details menu's chapter scopes offered once for the whole selection, each work
+ * keeping its own progress and its own saved chapters. The dialog only names the scopes — the counts would differ
+ * per work, and the queued total is reported in the message afterwards instead of being guessed here.
+ */
+@Composable
+internal fun DesktopLibraryDownloadDialog(
+    count: Int,
+    options: List<DesktopDownloadOption>,
+    enabled: Boolean,
+    onDownload: (DesktopDownloadOption) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(desktopText("details.downloadChapters")) },
+        text = {
+            Column(Modifier.testTag("library-download-dialog"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(desktopText("library.selectionCount", count))
+                Text(desktopText("library.downloadHint"), style = MaterialTheme.typography.bodyMedium)
+                options.forEach { option ->
+                    TextButton({ onDownload(option) }, enabled = enabled,
+                        modifier = Modifier.testTag(desktopLibraryDownloadTag(option))) {
+                        Text(desktopLibraryDownloadLabel(option))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton({ onDismiss() }, modifier = Modifier.testTag("library-download-dismiss")) {
                 Text(desktopText("common.cancel"))
             }
         },
