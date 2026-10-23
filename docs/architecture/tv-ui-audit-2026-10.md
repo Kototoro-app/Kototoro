@@ -2317,4 +2317,41 @@ BACK 之后人直接掉到裸 chrome 上（旧构建 `m5`：面板消失，焦�
 - 面板宽度仍是 `playerMenuWidth(300, 380)` 的 ×1.6（实测 608dp），标签行放不下五个时靠横向滚动；
   若后面要完全避免横滚，需要把标签改成两行或图标式。
 
+## 第三十九轮：附件面板的那一格也会"先关面板再开窗"（2026-10-24）
+
+`Add note` 是选项面板里唯一一个**不能当场 setState**的条目：它要先把当前帧截成 bitmap，文本框、缩略图和
+"Episode · 时间点"都要等 `PixelCopy` 回来才拼得出来，所以 `videoAnnotationState` 是在回调里赋值的。
+第三十七轮给 `onItemSelected` 的收尾判定加了一串同步标志（`videoInfoDialogText`、`dlnaDialogState`、
+`superResolutionDialogVisible`、`selectionDialogState`），这一格没有同步标志可看，于是：
+
+1. OK 按下 → `openVideoAnnotation()` 暂停并把截图请求丢给 `PixelCopy`，此刻 `videoAnnotationState` 仍是 null；
+2. 收尾判定认为"这一格没开出任何窗口" → 面板关掉，焦点回到播放器 chrome；
+3. 几十毫秒后截图回来，笔记窗口在最上层弹出 —— 用户看到的是"面板没了、突然多了个窗"，
+   在笔记里按 BACK 也只能落回 chrome，选项面板再也回不来。
+
+### 改法
+
+新增 `videoAnnotationCapturePending`：`openVideoAnnotation()` 在电视上先把它置 true，截图回调（成功与失败
+两条路径都会走到）置回 false；`onItemSelected` 的收尾判定多一条 `&& !videoAnnotationCapturePending`。
+这样面板在"请求已发出、窗口还没建好"的空窗期保持存活，`tvPanelCoveredByWindow` 随后因为
+`videoAnnotationState != null` 把面板藏起来，笔记关掉再自动显形。手机不受影响（标志只在
+`tvPresentationEnabled` 时置位，手机仍是老行为：关面板、开笔记、BACK 回播放器）。
+
+### 设备验证（emulator-5554）
+
+| 步骤 | 截图 | 结果 |
+| --- | --- | --- |
+| ⋮ → CENTER → DOWN ×4 | `t1` | 环落在 `Add note`（`[800,534][1344,654]`，第 5 行左格） |
+| CENTER | `t2` | 首帧缩略图 + 引用字幕 + 文本框 + `Cancel`/`Save note`，环预先落在 `Save note` |
+| BACK | `t3` | 笔记关闭，**选项面板回到原位**，环仍在 `Add note` |
+
+### 遗留
+
+- 笔记窗口本身还是手机尺寸的 `Dialog`（约 840dp 宽、居中、`Save note` 在右下）。在电视上它能用——
+  有初始焦点、两个按钮都有环、X 也能聚焦——但字偏小、文本框没有 tv 高度，属于"能用不好用"那一档，
+  留待和 `NovelTtsVoiceDialog` 一起做统一的小窗规格。
+- `openVideoAnnotation()` 无条件暂停播放，而"取消笔记"不会恢复播放。是否要把"取消后继续播放"做进
+  这一格，取决于用户对"取消"的预期，先记录不动。
+
+
 

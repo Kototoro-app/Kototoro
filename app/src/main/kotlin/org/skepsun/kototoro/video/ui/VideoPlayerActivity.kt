@@ -338,6 +338,15 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var seekFeedbackDismissJob: Job? = null
     private var actionDialogState by mutableStateOf<VideoActionDialogState?>(null)
     private var videoAnnotationState by mutableStateOf<VideoAnnotationState?>(null)
+
+    /**
+     * True between the moment the note action is chosen and the captured frame arrives.
+     *
+     * The note surface needs a bitmap, so the dialog state can only be set from the capture callback.
+     * Without this flag the options panel sees "the item opened nothing" in between and closes itself,
+     * which on TV throws the remote user back to the player chrome while the note dialog is opening.
+     */
+    private var videoAnnotationCapturePending by mutableStateOf(false)
     private var chapterDialogState by mutableStateOf<VideoChapterDialogState?>(null)
     private var subtitleSettingsDialogVisible by mutableStateOf(false)
     private var submenuAnchorBounds = IntRect.Zero
@@ -778,7 +787,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                     selectionDialogState == null &&
                                     !superResolutionDialogVisible &&
                                     videoInfoDialogText == null &&
-                                    dlnaDialogState == null
+                                    dlnaDialogState == null &&
+                                    !videoAnnotationCapturePending
                                 ) {
                                     actionDialogState = null
                                 }
@@ -4281,7 +4291,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     fun openVideoAnnotation() {
         videoPlayer?.pause()
+        if (tvPresentationEnabled) {
+            videoAnnotationCapturePending = true
+        }
         captureCurrentFrame { bitmap ->
+            videoAnnotationCapturePending = false
             if (bitmap == null) {
                 showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
                 return@captureCurrentFrame
