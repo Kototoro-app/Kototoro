@@ -30,6 +30,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
     val history = state.screen == DesktopScreen.HISTORY
     val selection = if (history) state.historySelection else state.librarySelection
     var drawer by remember(history) { mutableStateOf(false) }
+    var managingCategories by remember(history) { mutableStateOf(false) }
     val ecosystems = remember(state.sources) { state.sources.associate { it.source.name to it.ecosystem } }
     val entries = remember(state.library, selection, ecosystems) { selection.select(state.library, ecosystems) }
     fun update(value: DesktopLibrarySelection) = controller.librarySelection(value)
@@ -51,6 +52,12 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                 else desktopText("library.filterWithCount", selection.filterCount))
                 }
                 TextButton({ controller.library(history) }, enabled = enabled) { Text(desktopText("common.refresh")) }
+                if (!history) {
+                    TextButton({ managingCategories = true }, enabled = enabled,
+                        modifier = Modifier.testTag("library-categories-manage")) {
+                        Text(desktopText("library.categoriesTitle"))
+                    }
+                }
             }
             // Android favourites show categories as the tabs rail under the top bar.
             if (!history && state.library.categories.isNotEmpty()) {
@@ -133,6 +140,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                 }
             }
         }
+        if (managingCategories) DesktopCategoryDialog(controller, state) { managingCategories = false }
     }
 }
 

@@ -14,6 +14,7 @@ import org.skepsun.kototoro.core.db.entity.*
 import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
+import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.migration.domain.MigrationChapter
 import org.skepsun.kototoro.migration.domain.MigrationContentInput
@@ -62,6 +63,74 @@ class SourceLibrary(
                     reading?.updatedAt, reading?.percent,
                     reading?.let { chapters[item.id to it.chapterId] }?.let { SourceLibraryChapter(it.title, it.number) })
             }, categories.map { SourceLibraryCategory(it.categoryId.toLong(), it.title) })
+        }
+    }
+
+    /** The tab rail in Android's category order; cheap enough to re-read after every edit. */
+    suspend fun categories(): List<SourceLibraryCategory> = database.getFavouriteCategoriesDao().findAll()
+        .map { SourceLibraryCategory(it.categoryId.toLong(), it.title) }
+
+    /**
+     * Android's favourites-category screen lives in the shared layer so every platform edits the same rows:
+     * creating appends to the tab rail, renaming only touches the title, and deleting takes the memberships
+     * with it (the work itself stays favourited nowhere, exactly like Android's `removeCategories`).
+     */
+    suspend fun createCategory(
+        title: String,
+        order: ListSortOrder = ListSortOrder.NEWEST,
+        track: Boolean = false,
+        onShelf: Boolean = true,
+    ): Long {
+        val name = title.trim()
+        require(name.isNotEmpty()) { "a category needs a title" }
+        val dao = database.getFavouriteCategoriesDao()
+        return dao.insert(FavouriteCategoryEntity(
+            categoryId = 0,
+            createdAt = kotlin.time.Clock.System.now().toEpochMilliseconds(),
+            sortKey = dao.getNextSortKey(),
+            title = name,
+            order = order.name,
+            track = track,
+            isVisibleInLibrary = onShelf,
+            deletedAt = 0L,
+        )).toLong()
+    }
+
+    suspend fun renameCategory(id: Long, title: String) {
+        val name = title.trim()
+        require(name.isNotEmpty()) { "a category needs a title" }
+        val dao = database.getFavouriteCategoriesDao()
+        val stored = dao.findIncludingDeleted(id) ?: return
+        dao.update(id, name, stored.order, stored.track, stored.isVisibleInLibrary)
+    }
+
+    suspend fun setCategoryTracking(id: Long, enabled: Boolean) =
+        database.getFavouriteCategoriesDao().updateTracking(id, enabled)
+
+    suspend fun setCategoryVisibility(id: Long, visible: Boolean) =
+        database.getFavouriteCategoriesDao().updateVisibility(id, visible)
+
+    suspend fun removeCategories(ids: Collection<Long>) {
+        if (ids.isEmpty()) return
+        database.useWriterConnection { connection ->
+            connection.immediateTransaction {
+                for (id in ids.distinct()) {
+                    database.getFavouritesDao().deleteAll(id)
+                    database.getFavouriteCategoriesDao().delete(id)
+                }
+                database.getChaptersDao().gc()
+            }
+        }
+    }
+
+    suspend fun reorderCategories(orderedIds: List<Long>) {
+        val dao = database.getFavouriteCategoriesDao()
+        database.useWriterConnection { connection ->
+            connection.immediateTransaction {
+                for ((index, id) in orderedIds.withIndex()) {
+                    dao.updateSortKey(id, index)
+                }
+            }
         }
     }
 

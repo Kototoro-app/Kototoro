@@ -6264,3 +6264,33 @@ SwiftUI 仅经代码阅读，尚未经过 Swift/Xcode 编译、framework 链接�
 `testCopyMangaInitializesAndPersistsInstallation`、`testExternalRepositoryLinkImportsAndInstallsMarkerlessApk` 通过。
 
 **未做**：真机验证 dock 高度与拖动手感；曾尝试把章节/缩略图/书签平铺进详情页并只保留右侧阅读按钮，因首屏章节被挤到底部而回退，未保留。
+
+## 127. Windows 书签多选删除与收藏分类管理（2026-10-23）
+
+日期：2026-10-23。继续 §59–60 的平板/详情对齐，把 Android 的书签长按多选与分类界面搬到桌面。
+
+书签多选（提交 `3839fbff9`）：
+
+- 详情书签标签新增“选择书签”态：卡片出现勾选框，批量栏提供全选/清除选择/删除所选；
+  多选时点击卡片切换选中，单条删除与“全部删除”隐藏或禁用，避免重叠的破坏性操作。
+- `DesktopController.removeBookmarks(pageIds)` 在单个 action 内按页 id 过滤本作品书签并逐条删除
+  （每条独立事务，别处已删的只跳过），随后刷新书签与原小说正文锚点，提示“已删除 N 个书签”。
+- 书签列表变化后自动清理失效选中项，删空后退出多选；选择状态以 `remember(bookmarks)` 派生的
+  稳定集合为 key，避免每次重组重启 `LaunchedEffect` 形成写入死循环。
+
+收藏分类管理：
+
+- 增删改查进入 `core-library` 的 `SourceLibrary`（`categories`/`createCategory`/`renameCategory`/
+  `removeCategories`/`reorderCategories`，另含 tracking/可见性），语义对齐 Android `FavouritesRepository`：
+  新建取 `getNextSortKey()` 并以 `NEWEST` 起排、重命名只改标题（保留排序与开关）、删除在同一事务里
+  先清该分类的收藏成员再软删分类并回收章节、调序按给定顺序写 `sort_key`。
+- 收藏页顶栏“分类管理”对话框：新建、重命名、上移/下移、删除；改动写库后重载快照，
+  标签栏、卡片归属与“全部”切片同步更新，删除正被筛选的分类会退回“全部”。
+- 分类增删改查不再局限于备份合并，Android 后续可直接复用同一入口。
+
+验证：`:desktop-runtime:test` 新增两个用例（重命名保留 order/track、调序与快照一致、
+删除连带成员并让后续收藏落到新建默认分类）通过；`:desktop-app:test` 164 个用例、
+`verifyDesktopStrings` 718 键无未使用项；真实窗口探针 `tablet` 在对话框里新建/重命名/上移/删除分类
+并截图（`tablet-library-categories.png`），`parsers-write` 验证书签多选删除的勾选、全选、删除与空态。
+
+**未做**：分类的追踪开关与备份节内的分类排序仍走原备份流程；标签检索跳转、分类封面与拖拽排序未接。

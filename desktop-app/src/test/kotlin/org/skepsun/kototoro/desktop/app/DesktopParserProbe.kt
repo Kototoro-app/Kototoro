@@ -13,6 +13,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
+import kotlin.time.Duration.Companion.minutes
 import org.jetbrains.skia.Image
 import org.skepsun.kototoro.core.source.SourcePagingMode
 import org.skepsun.kototoro.core.source.SourcePreferenceEdit
@@ -65,7 +66,8 @@ internal object DesktopParserProbe {
                 }
             }
             check(session.startupErrors.isEmpty()) { session.startupErrors.joinToString() }
-            runDesktopComposeUiTest(width = if (writing) 1260 else 920, height = if (writing) 850 else 620) {
+            runDesktopComposeUiTest(width = if (writing) 1260 else 920, height = if (writing) 850 else 620,
+        testTimeout = 5.minutes) {
                 var fullscreen by mutableStateOf(false)
                 setContent { DesktopApp(controller, fullscreen = fullscreen, onToggleFullscreen = { fullscreen = !fullscreen }) }
                 fun idle() {

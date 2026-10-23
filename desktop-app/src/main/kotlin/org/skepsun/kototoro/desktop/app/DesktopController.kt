@@ -492,6 +492,47 @@ class DesktopController(val session: DesktopSession) {
         }
     }
 
+    /**
+     * Android's favourites-category screen. Editing keeps the user on the grid: the snapshot is reloaded so
+     * the rail, the memberships of every card and the "all" slice stay consistent with the database.
+     */
+    fun createCategory(title: String) = action {
+        session.library.createCategory(title)
+        reloadLibrarySnapshot()
+        mutableState.update { it.copy(message = desktopText("library.categoryCreated")) }
+    }
+
+    fun renameCategory(id: Long, title: String) = action {
+        session.library.renameCategory(id, title)
+        reloadLibrarySnapshot()
+    }
+
+    fun deleteCategory(id: Long) = action {
+        session.library.removeCategories(listOf(id))
+        // A grid filtered by the deleted category would show nothing at all, so fall back to "all".
+        mutableState.update {
+            val selection = if (it.librarySelection.categoryId == id) it.librarySelection.copy(categoryId = null)
+            else it.librarySelection
+            it.copy(librarySelection = selection)
+        }
+        reloadLibrarySnapshot()
+        mutableState.update { it.copy(message = desktopText("library.categoryDeleted")) }
+    }
+
+    fun moveCategory(id: Long, up: Boolean) = action {
+        val ids = session.library.categories().map { it.id }
+        val from = ids.indexOf(id)
+        val to = if (up) from - 1 else from + 1
+        if (from < 0 || to !in ids.indices) return@action
+        session.library.reorderCategories(ids.toMutableList().apply { add(to, removeAt(from)) })
+        reloadLibrarySnapshot()
+    }
+
+    private suspend fun reloadLibrarySnapshot() {
+        val snapshot = session.library.snapshot(history = state.value.screen == DesktopScreen.HISTORY)
+        mutableState.update { it.copy(items = snapshot.entries.map { row -> row.content }, library = snapshot) }
+    }
+
     fun details(content: SourceContent) = navigate { detailsOnIo(content) }
 
     private suspend fun detailsOnIo(content: SourceContent) {

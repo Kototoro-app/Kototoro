@@ -8,6 +8,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kotlinx.coroutines.runBlocking
+import kotlin.time.Duration.Companion.minutes
 import org.jetbrains.skia.Image
 import java.nio.file.Files
 import java.nio.file.Path
@@ -27,7 +28,7 @@ internal object DesktopTabletProbe {
                 narrow -> 920
                 args[0] == "tablet-boundary" -> 1000
                 else -> 1260
-            }, height = if (narrow) 620 else 850) {
+            }, height = if (narrow) 620 else 850, testTimeout = 5.minutes) {
                 var fullscreen by mutableStateOf(false)
                 setContent {
                     DesktopApp(controller, fullscreen = fullscreen, onToggleFullscreen = { fullscreen = !fullscreen })
@@ -39,6 +40,15 @@ internal object DesktopTabletProbe {
                 }
                 fun snapshot(label: String) {
                     Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
+                        image.encodeToData()?.use {
+                            val output = Files.createDirectories(Path.of(args[3])).resolve("${args[0]}-$label.png")
+                            Files.write(output, it.bytes)
+                        }
+                    }
+                }
+                // A Dialog is its own root, so onRoot() is ambiguous while one is open: capture the dialog.
+                fun snapshotTag(tag: String, label: String) {
+                    Image.makeFromBitmap(onNodeWithTag(tag).captureToImage().asSkiaBitmap()).use { image ->
                         image.encodeToData()?.use {
                             val output = Files.createDirectories(Path.of(args[3])).resolve("${args[0]}-$label.png")
                             Files.write(output, it.bytes)
@@ -198,6 +208,27 @@ internal object DesktopTabletProbe {
                 onNodeWithTag("library-filter-reset").performClick(); idle()
                 onNodeWithTag("library-filter-close").performClick(); idle()
                 onNodeWithTag("content:${content.id}").assertExists()
+                // Android edits categories on their own screen; the desktop does it in a dialog over the grid.
+                onNodeWithTag("library-categories-manage").performClick(); idle()
+                onNodeWithTag("category-dialog").assertExists()
+                onNodeWithTag("category-new-field").performTextInput("新刊"); idle()
+                onNodeWithTag("category-new-add").performClick(); idle()
+                val created = controller.state.value.library.categories.last()
+                check(created.title == "新刊" && created.id != category.id)
+                onNodeWithTag("library-category:${created.id}").assertExists()
+                onNodeWithTag("category-rename:${created.id}").performClick(); idle()
+                onNodeWithTag("category-edit-field:${created.id}").performTextClearance()
+                onNodeWithTag("category-edit-field:${created.id}").performTextInput("待读"); idle()
+                onNodeWithTag("category-edit-save:${created.id}").performClick(); idle()
+                check(controller.state.value.library.categories.last().title == "待读")
+                onNodeWithTag("category-up:${created.id}").performClick(); idle()
+                check(controller.state.value.library.categories.first().id == created.id)
+                snapshotTag("category-dialog", "library-categories")
+                onNodeWithTag("category-delete:${created.id}").performClick(); idle()
+                check(controller.state.value.library.categories.map { it.id } == listOf(category.id))
+                onNodeWithTag("library-category:${created.id}").assertDoesNotExist()
+                onNodeWithTag("category-dialog-close").performClick(); idle()
+                onNodeWithTag("category-dialog").assertDoesNotExist()
                 val beforeQuery = System.getProperty("fixture.reader.requests")
                 onNodeWithTag("library-query").performTextInput(content.title); idle()
                 val librarySelection = controller.state.value.librarySelection

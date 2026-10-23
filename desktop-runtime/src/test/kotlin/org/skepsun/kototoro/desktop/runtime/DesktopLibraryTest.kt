@@ -120,6 +120,58 @@ class DesktopLibraryTest {
     }
 
     @Test
+    fun `category edits keep memberships until the category is deleted`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = library(runtime)
+            library.addFavourite(content)
+            val dao = runtime.database.getFavouriteCategoriesDao()
+            val preset = library.categories().single()
+            val created = library.createCategory("  Queue  ")
+            assertEquals("Queue", library.categories().last().title)
+            assertEquals(listOf(preset.id, created), library.categories().map { it.id })
+
+            // Renaming keeps the stored sort order and flags untouched, and refuses a blank title.
+            dao.updateTracking(preset.id, true)
+            library.renameCategory(preset.id, "Reading")
+            assertEquals("Reading", library.categories().first().title)
+            assertEquals("NEWEST", dao.find(preset.id.toInt()).order)
+            assertTrue(dao.find(preset.id.toInt()).track)
+            assertThrows(IllegalArgumentException::class.java) { runBlocking { library.renameCategory(created, " ") } }
+
+            library.reorderCategories(listOf(created, preset.id))
+            assertEquals(listOf(created, preset.id), library.categories().map { it.id })
+            library.reorderCategories(listOf(preset.id, created))
+
+            // The grid snapshots the same order the rail shows.
+            assertEquals(listOf("Reading", "Queue"), library.snapshot().categories.map { it.title })
+            assertEquals(setOf(preset.id), library.snapshot().entries.single().categoryIds.map { it.toLong() }.toSet())
+        }
+    }
+
+    @Test
+    fun `deleting a category takes its memberships and repairs the remaining rail`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = library(runtime)
+            library.addFavourite(content)
+            val preset = library.categories().single()
+            val other = library.createCategory("Queue")
+            library.removeCategories(listOf(preset.id))
+            assertFalse(library.isFavourite(content.id))
+            assertTrue(library.favourites().isEmpty())
+            assertEquals(listOf(other), library.categories().map { it.id })
+            assertEquals(other, library.snapshot().categories.single().id)
+            // A later favourite needs a default category again, so a fresh one replaces the deleted preset
+            // instead of reviving the soft-deleted row or reusing the user's own category.
+            library.addFavourite(content)
+            val member = library.snapshot().entries.single().categoryIds.map { it.toLong() }
+            assertTrue(preset.id !in member)
+            assertTrue(other !in member)
+            assertEquals("Queue", library.categories().first().title)
+            assertEquals(2, library.categories().size)
+        }
+    }
+
+    @Test
     fun `identity collision fails before modifying tags favourites or chapters`() = runBlocking<Unit> {
         DesktopRuntime.open(directory).use { runtime ->
             val library = library(runtime)

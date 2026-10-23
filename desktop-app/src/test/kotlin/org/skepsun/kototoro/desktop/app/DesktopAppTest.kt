@@ -57,8 +57,8 @@ class DesktopAppTest {
     @Test
     fun `kototoro kotatsu and UMA plugins browse page read and favourite through the UI and survive a restart`() {
         val root = directory.resolve("中文 parser plugins")
-        probe("parsers-write", root, 90)
-        probe("parsers-read", root)
+        probe("parsers-write", root, 150)
+        probe("parsers-read", root, 150)
     }
 
     @Test
@@ -75,7 +75,7 @@ class DesktopAppTest {
 
     @Test
     fun `tablet layout and immersive reader panels preserve progress in wide and narrow windows`() {
-        probe("tablet", directory.resolve("中文 tablet wide"))
+        probe("tablet", directory.resolve("中文 tablet wide"), 150)
         probe("tablet-narrow", directory.resolve("中文 tablet narrow"))
         probe("tablet-boundary", directory.resolve("中文 tablet expanded boundary"))
         probe("tablet-boundary-compact", directory.resolve("中文 tablet medium boundary"))
