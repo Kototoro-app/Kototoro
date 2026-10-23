@@ -1794,3 +1794,29 @@ spaceUiState.switcherEnabled` 时放一个 `SpaceSwitcherRailButton`，
 2. **`SortOrderControl` 还没接**：同一抽屉在有排序项的主机里会多一段排序控件（`SortOrderControl.kt`，
    是 `IconButton` + `DropdownMenu`）。下拉菜单的焦点问题本轮修过的 `TtsSpeedButton` 是同款，
    可以直接套用"展开时聚焦当前值"的做法。
+
+## 第二十八轮：下拉菜单项与排序控件的环（2026-10-23）
+
+上一轮结尾留下的 SortOrderControl 尾巴，本轮连同它依赖的共享菜单项一起补。
+
+### 改了什么
+
+1. GlassDropdownMenu.kt 的 CompactDropdownMenuItem 内部挂 	vFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)——
+   这是**所有**下拉菜单项的公共实现，改一处即覆盖全应用（TTS 语速、排序、来源筛选等）。
+2. SortOrderControl.kt：紧凑态的 IconButton、完整态的 AssistChip、升/降序两个 FilterChip 各挂环；
+   另外加了展开时聚焦当前排序项的重试：Material3 默认把焦点放在第一行，在遥控器上看起来像排序自己跳了。
+   做法与 TtsSpeedButton 相同（每个选项一个 FocusRequester，最多重试 20 帧）。
+
+### 验证状态（诚实记录）
+
+- 编译通过（c65.log，BUILD SUCCESSFUL）。
+- **尚未在设备上验证**：本轮在模拟器上花了较多时间在回到主页的导航上，
+  期间还误入电视启动器的 Play Next 面板并翻转了开关（已用截图确认恢复为 On）。
+- 已知的下一次验证路径：主页 → 顶栏 ⋮（GlassDropdownMenu）→ CENTER 展开后应看到菜单项上的环；
+  排序控件则在收藏/历史的筛选面板或排序芯片上验证。
+
+### 一个新观察
+
+用**触摸点击**展开 ⋮ 菜单后，方向键 DOWN 不会进入弹出菜单，而是走到背后的左侧导航栏（zs2：History 被聚焦）。
+这是因为弹窗展开时焦点仍留在主窗口。遥控器用户不会用点击展开，所以这是触摸路径的差异，
+但值得记一笔：如果以后给电视加触摸/鼠标支持，这条路径需要重新检查。
