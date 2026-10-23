@@ -6389,3 +6389,33 @@ M2 的 `Colors` 与 `Typography.h4`–`caption` 角色被手工映射到 M3 角�
 
 **未做**：Android 的追踪状态（`_reading_status`/`_publication_state`）与“已下载”筛选组，
 桌面侧还缺对应的持久化条件。
+
+## 132. Windows 收藏/历史补上出版状态与下载筛选组（2026-10-23）
+
+日期：2026-10-23。承接 §131：Android 的 `ListFilterCriteria.PublicationState`（`_publication_state`）
+与“已下载”仍是缺口；同时确认 `_reading_status` 在桌面已由“阅读进度”按共享历史进度近似
+（进度为空→计划中、有进度→阅读中、≥0.99→已读完，对应 Android `resolveReadingStatus` 的回退分支），
+只有追踪器写入的“重读中/搁置/弃坑”需要桌面尚未持久化的追踪状态，因此本轮先补两组。
+
+- `DesktopLibrarySelection` 新增 `states: Set<String>`（`content.state` 组内“或”）与
+  `download: DesktopLibraryDownload`（`ALL`/`DOWNLOADED`/`MISSING` 互斥单选，谓词 `accepts(onDevice)`）；
+  `filterCount` 计入状态个数与下载条件。
+- `select(...)` 新增 `downloadedContentIds: Set<Long>` 参数，由面板从 `controller.downloads.state`
+  投影（每条章下载记录的 `record.contentId`），与下载页共用同一份队列，不另建索引。
+- 抽屉新增两个区：出版状态只列出此库实际存在的状态（`DesktopContentStates` 按 Android `ContentState`
+  顺序过滤，复选框，testTag `library-state:<NAME>`）；下载为三个 `FilterRadio`
+  （`library-download:ALL|DOWNLOADED|MISSING`）。
+- `DesktopDetailsInfo.kt`：`desktopContentStatusLabel` 补齐 `UPCOMING`/`RESTRICTED`
+  （详情页状态行同步受益），并新增 `DesktopContentStates` 顺序常量。
+- 文案：`library.state`、`library.download{,.all,.only,.missing}`、`details.status.{upcoming,restricted}`
+  中英文各一份。
+
+验证：`:desktop-app:test --tests "*DesktopLibrarySelectionTest*"` 新增两例（状态组内“或”且与进度/标签
+“且”、下载三态与 `filterCount`）；`:desktop-app:test --tests "*DesktopAppTest*tablet*"` 四个窗口尺寸
+全绿，探针收藏一部状态为 `FINISHED` 的作品后勾选“已完结”只剩它、取消后恢复，“已下载”在无本地下载时
+清空网格（用例读顶栏 `library-count` 的计数，避免惰性网格的虚拟化误判），“未下载”恢复全部并计入筛选数，
+截图 `library-filter-groups.png`、`tablet-narrow-library-filter-groups.png` 等；
+`:desktop-app:verifyDesktopStrings` 通过。
+
+**未做**：追踪器专属阅读状态（`RE_READING`/`ON_HOLD`/`DROPPED`）需要桌面侧先有 scrobbling 状态持久化；
+状态/下载组的“取反”独立选项（Android 的 `Inverted`）由三态单选覆盖，不另设。

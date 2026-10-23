@@ -224,8 +224,13 @@ internal object DesktopTabletProbe {
                 val tag = ContentTag("Drama", "drama", content.source)
                 val tagged = content.copy(id = content.id + 2000, title = "Tagged shelf", url = "/tagged/shelf",
                     publicUrl = "https://fixture.invalid/tagged/shelf", tags = setOf(tag), chapters = null,
-                    sourceData = null)
+                    sourceData = null, state = "ONGOING")
+                // A second work differs only in its publication state, so the state group can narrow the grid.
+                val finished = content.copy(id = content.id + 3000, title = "Finished shelf", url = "/finished/shelf",
+                    publicUrl = "https://fixture.invalid/finished/shelf", tags = emptySet(), chapters = null,
+                    sourceData = null, state = "FINISHED")
                 runBlocking { session.library.addFavourite(tagged) }
+                runBlocking { session.library.addFavourite(finished) }
                 runBlocking { controller.library().join() }; idle()
                 onNodeWithTag("library-tags-open").performScrollTo().performClick(); idle()
                 onNodeWithTag("library-tags-dialog").assertExists()
@@ -239,6 +244,27 @@ internal object DesktopTabletProbe {
                 onNodeWithTag("content:${content.id}").assertExists()
                 onNodeWithTag("library-tag-done").performClick(); idle()
                 onNodeWithTag("library-tags-dialog").assertDoesNotExist()
+                // Android's publication-state group offers only the states the shelf holds, OR-ed inside it.
+                onNodeWithTag("library-state:FINISHED").performScrollTo().performClick(); idle()
+                check(controller.state.value.librarySelection.states == setOf("FINISHED"))
+                onNodeWithTag("content:${finished.id}").assertExists()
+                onNodeWithTag("content:${tagged.id}").assertDoesNotExist()
+                onNodeWithTag("library-state:FINISHED").performClick(); idle()
+                check(controller.state.value.librarySelection.states.isEmpty())
+                // The grid is lazy, so the header count proves the row set without depending on scroll position.
+                fun shownCount(): Int = onNodeWithTag("library-count").fetchSemanticsNode()
+                    .config[SemanticsProperties.Text].first().text.substringBefore(' ').toInt()
+                check(shownCount() == controller.state.value.library.entries.size)
+                // "Downloaded" reads the stored-chapter queue: nothing is on disk here, so the grid empties.
+                onNodeWithTag("library-download:DOWNLOADED").performScrollTo().performClick(); idle()
+                check(shownCount() == 0)
+                onNodeWithTag("library-download:MISSING").performScrollTo().performClick(); idle()
+                check(controller.state.value.librarySelection.download == DesktopLibraryDownload.MISSING)
+                check(controller.state.value.librarySelection.filterCount == 1)
+                check(shownCount() == controller.state.value.library.entries.size)
+                snapshot("library-filter-groups")
+                onNodeWithTag("library-filter-reset").performClick(); idle()
+                check(controller.state.value.librarySelection.filterCount == 0)
                 onNodeWithTag("library-filter-close").performClick(); idle()
                 onNodeWithTag("content:${content.id}").assertExists()
                 // Android edits categories on their own screen; the desktop does it in a dialog over the grid.

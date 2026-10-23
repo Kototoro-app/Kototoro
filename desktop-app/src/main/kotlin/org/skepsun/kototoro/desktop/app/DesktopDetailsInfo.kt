@@ -34,8 +34,13 @@ internal fun desktopContentStatusLabel(state: String?): String? = when (state) {
     "FINISHED" -> desktopText("details.status.finished")
     "ABANDONED" -> desktopText("details.status.abandoned")
     "PAUSED" -> desktopText("details.status.paused")
+    "UPCOMING" -> desktopText("details.status.upcoming")
+    "RESTRICTED" -> desktopText("details.status.restricted")
     else -> null
 }
+
+/** Android's `ContentState` order, so the library's publication-state filter matches the app's wording. */
+internal val DesktopContentStates = listOf("ONGOING", "FINISHED", "ABANDONED", "PAUSED", "UPCOMING", "RESTRICTED")
 
 /** The link Android's share sheet offers, minus the sheet: a desktop copies it. */
 internal fun desktopContentLink(content: SourceContent): String =

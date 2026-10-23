@@ -28,6 +28,24 @@ enum class DesktopLibraryReading {
     }
 }
 
+/** Android's `_downloaded` group, shown as radios because "on device" and "not yet" are exclusive. */
+enum class DesktopLibraryDownload {
+    ALL, DOWNLOADED, MISSING;
+
+    val title: String get() = when (this) {
+        ALL -> desktopText("library.download.all")
+        DOWNLOADED -> desktopText("library.download.only")
+        MISSING -> desktopText("library.download.missing")
+    }
+
+    /** [onDevice] is true while at least one chapter of the work is stored locally. */
+    fun accepts(onDevice: Boolean): Boolean = when (this) {
+        ALL -> true
+        DOWNLOADED -> onDevice
+        MISSING -> !onDevice
+    }
+}
+
 data class DesktopLibrarySelection(
     val query: String = "",
     val categoryId: Long? = null,
@@ -38,13 +56,22 @@ data class DesktopLibrarySelection(
     val sourceFilter: DesktopSourceFilter = DesktopSourceFilter(),
     /** Android's tag group: options inside the group are OR-ed, other groups are AND-ed. */
     val tags: Set<SourceTag> = emptySet(),
+    /** Android's `_publication_state` group: content-state names, OR-ed inside the group. */
+    val states: Set<String> = emptySet(),
+    val download: DesktopLibraryDownload = DesktopLibraryDownload.ALL,
 ) {
-    val filterCount: Int get() = sources.size + tags.size + (if (categoryId != null) 1 else 0) +
-        (if (reading != DesktopLibraryReading.ALL) 1 else 0)
+    val filterCount: Int get() = sources.size + tags.size + states.size +
+        (if (categoryId != null) 1 else 0) +
+        (if (reading != DesktopLibraryReading.ALL) 1 else 0) +
+        (if (download != DesktopLibraryDownload.ALL) 1 else 0)
 
-    /** [ecosystems] maps installed source names; works from uninstalled sources match no source-type tag. */
+    /**
+     * [ecosystems] maps installed source names; works from uninstalled sources match no source-type tag.
+     * [downloadedContentIds] are works that hold at least one stored chapter.
+     */
     fun select(snapshot: DesktopLibrarySnapshot,
-        ecosystems: Map<String, SourceEcosystem> = emptyMap()): List<DesktopLibraryEntry> {
+        ecosystems: Map<String, SourceEcosystem> = emptyMap(),
+        downloadedContentIds: Set<Long> = emptySet()): List<DesktopLibraryEntry> {
         val text = query.trim()
         val entries = snapshot.entries.filter { row ->
             val content = row.content
@@ -52,6 +79,8 @@ data class DesktopLibrarySelection(
             (categoryId == null || categoryId in row.categoryIds) &&
                 (sources.isEmpty() || content.source.name in sources) &&
                 (tags.isEmpty() || content.tags.any { it in tags }) &&
+                (states.isEmpty() || content.state in states) &&
+                download.accepts(content.id in downloadedContentIds) &&
                 sourceFilter.accepts(ecosystems[content.source.name], content.source.contentType) &&
                 (text.isEmpty() || content.title.contains(text, true) ||
                     content.altTitles.any { it.contains(text, true) } || content.authors.any { it.contains(text, true) }) &&

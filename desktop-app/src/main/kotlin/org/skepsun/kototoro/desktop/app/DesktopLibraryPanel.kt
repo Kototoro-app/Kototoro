@@ -34,12 +34,22 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
     var managingCategories by remember(history) { mutableStateOf(false) }
     var pickingTags by remember(history) { mutableStateOf(false) }
     val ecosystems = remember(state.sources) { state.sources.associate { it.source.name to it.ecosystem } }
-    val entries = remember(state.library, selection, ecosystems) { selection.select(state.library, ecosystems) }
+    // Android's "downloaded" filter reads which works hold stored chapters; the queue owns that state.
+    val downloadStates by controller.downloads.state.collectAsState()
+    val downloadedIds = remember(downloadStates) { downloadStates.mapTo(HashSet()) { it.record.contentId } }
+    val entries = remember(state.library, selection, ecosystems, downloadedIds) {
+        selection.select(state.library, ecosystems, downloadedIds)
+    }
     // Most used tags first: the drawer lists works, so the popular tags stay above the fold.
     val tagChoices = remember(state.library) {
         state.library.entries.flatMap { it.content.tags }.groupingBy { it }.eachCount().entries
             .sortedWith(compareByDescending<Map.Entry<SourceTag, Int>> { it.value }.thenBy { it.key.title })
             .map { it.key to it.value }
+    }
+    // Only states the shelf actually holds are offered, in Android's ContentState order.
+    val stateChoices = remember(state.library) {
+        val present = state.library.entries.mapNotNullTo(HashSet()) { it.content.state }
+        DesktopContentStates.filter { it in present }
     }
     fun update(value: DesktopLibrarySelection) = controller.librarySelection(value)
     Box(Modifier.fillMaxSize().onPreviewKeyEvent {
@@ -145,6 +155,30 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                                 modifier = Modifier.fillMaxWidth().testTag("library-tags-open")) {
                                 Text(if (selection.tags.isEmpty()) desktopText("library.tagsChoose")
                                 else desktopText("library.tagsSelected", selection.tags.size))
+                            }
+                            if (stateChoices.isNotEmpty()) {
+                                HorizontalDivider()
+                                Text(desktopText("library.state"), fontWeight = FontWeight.SemiBold)
+                                stateChoices.forEach { name ->
+                                    val selected = name in selection.states
+                                    Row(Modifier.fillMaxWidth().testTag("library-state:$name")
+                                        .clickable(enabled = enabled) {
+                                            update(selection.copy(states = if (selected) selection.states - name
+                                                else selection.states + name))
+                                        }, verticalAlignment = Alignment.CenterVertically) {
+                                        Checkbox(selected, onCheckedChange = null, enabled = enabled)
+                                        Text(desktopContentStatusLabel(name) ?: name,
+                                            modifier = Modifier.padding(start = 12.dp))
+                                    }
+                                }
+                            }
+                            HorizontalDivider()
+                            Text(desktopText("library.download"), fontWeight = FontWeight.SemiBold)
+                            DesktopLibraryDownload.entries.forEach { download ->
+                                FilterRadio(download.title, selection.download == download, enabled,
+                                    "library-download:${download.name}") {
+                                    update(selection.copy(download = download))
+                                }
                             }
                         }
                         VerticalScrollbar(rememberScrollbarAdapter(scroll), modifier = Modifier.align(Alignment.CenterEnd)

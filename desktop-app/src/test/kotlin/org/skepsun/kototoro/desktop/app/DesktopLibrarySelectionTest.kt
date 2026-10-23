@@ -7,9 +7,10 @@ import org.skepsun.kototoro.desktop.runtime.*
 
 class DesktopLibrarySelectionTest {
     private fun entry(id: Long, title: String, source: String, category: Long, progress: Float?, updated: Long,
-        tags: Set<SourceTag> = emptySet()) =
-        DesktopLibraryEntry(SourceContent(id, title, setOf("别名 $id"), "/$id", "/$id", 0f, null, null,
-            tags, null, setOf("Author $id"), SourceRef(source, "zh", "MANGA")), setOf(category), updated,
+        tags: Set<SourceTag> = emptySet(), state: String? = null) =
+        DesktopLibraryEntry(SourceContent(id = id, title = title, altTitles = setOf("别名 $id"), url = "/$id",
+            publicUrl = "/$id", rating = 0f, contentRating = null, coverUrl = null, tags = tags, state = state,
+            authors = setOf("Author $id"), source = SourceRef(source, "zh", "MANGA")), setOf(category), updated,
             if (progress == null) null else updated + 1, progress)
 
     private val tag = SourceTag("Drama", "drama", SourceRef("one", "zh", "MANGA"))
@@ -17,8 +18,8 @@ class DesktopLibrarySelectionTest {
 
     private val snapshot = DesktopLibrarySnapshot(listOf(
         entry(Long.MIN_VALUE, "Zeta", "one", Long.MAX_VALUE, null, 3, setOf(tag)),
-        entry(Long.MAX_VALUE, "alpha", "two", 2, .5f, 2, setOf(otherTag)),
-        entry(7, "Beta", "one", Long.MAX_VALUE, 1f, 1, setOf(tag, otherTag)),
+        entry(Long.MAX_VALUE, "alpha", "two", 2, .5f, 2, setOf(otherTag), state = "FINISHED"),
+        entry(7, "Beta", "one", Long.MAX_VALUE, 1f, 1, setOf(tag, otherTag), state = "ONGOING"),
     ))
 
     @Test
@@ -44,6 +45,31 @@ class DesktopLibrarySelectionTest {
             .select(snapshot).map { it.content.id })
         assertTrue(DesktopLibrarySelection(tags = setOf(tag), query = "alpha").select(snapshot).isEmpty())
         assertEquals(2, DesktopLibrarySelection(tags = setOf(tag, otherTag)).filterCount)
+    }
+
+    @Test
+    fun `publication states are OR-ed inside the group and skip works without a state`() {
+        assertEquals(listOf(7L), DesktopLibrarySelection(states = setOf("ONGOING"))
+            .select(snapshot).map { it.content.id })
+        assertEquals(listOf(Long.MAX_VALUE, 7L), DesktopLibrarySelection(states = setOf("ONGOING", "FINISHED"))
+            .select(snapshot).map { it.content.id })
+        assertEquals(listOf(Long.MAX_VALUE), DesktopLibrarySelection(states = setOf("FINISHED"),
+            reading = DesktopLibraryReading.READING, tags = setOf(otherTag)).select(snapshot).map { it.content.id })
+        assertTrue(DesktopLibrarySelection(states = setOf("UPCOMING")).select(snapshot).isEmpty())
+        assertEquals(2, DesktopLibrarySelection(states = setOf("ONGOING", "FINISHED")).filterCount)
+    }
+
+    @Test
+    fun `the download group is exclusive and reads the stored chapter set`() {
+        assertEquals(listOf(Long.MAX_VALUE, 7L), DesktopLibrarySelection(download = DesktopLibraryDownload.DOWNLOADED)
+            .select(snapshot, downloadedContentIds = setOf(Long.MAX_VALUE, 7L)).map { it.content.id })
+        assertEquals(listOf(Long.MIN_VALUE), DesktopLibrarySelection(download = DesktopLibraryDownload.MISSING)
+            .select(snapshot, downloadedContentIds = setOf(Long.MAX_VALUE, 7L)).map { it.content.id })
+        assertEquals(snapshot.entries.size,
+            DesktopLibrarySelection(download = DesktopLibraryDownload.MISSING).select(snapshot).size)
+        assertTrue(DesktopLibrarySelection(download = DesktopLibraryDownload.DOWNLOADED).select(snapshot).isEmpty())
+        assertEquals(1, DesktopLibrarySelection(download = DesktopLibraryDownload.DOWNLOADED).filterCount)
+        assertEquals(DesktopLibraryDownload.ALL, DesktopLibrarySelection().download)
     }
 
     @Test
