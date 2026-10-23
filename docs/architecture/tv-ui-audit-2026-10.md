@@ -3087,6 +3087,58 @@ LaunchedEffect(destination) {
 - 页卡环与面板圆角有 1–2 px 重叠（外观）。
 - 页签页只有一张卡，多页翻页、批量选择模式没有数据可测。
 
+## 第五十二轮：收藏页快捷筛选，下拉行有环、选完自动收起、焦点留在筛选栏（2026-10-24）
+
+收藏页（导航轨第 4 项）在电视上是：顶栏（标题 / 搜索 / 筛选 / ⋮）、一行页签（All favorites、
+Read later）、再一行快捷筛选（筛选图标按钮、On device、Reading ▾、Release ▾、Rating ▾、
+New chapters）。库里没有收藏数据，所以正文是空态（猫图标 + "It's kind of empty here…" +
+"No favorites yet"）。这一轮在这一屏上抓到三个连锁缺陷。
+
+第一个是**下拉菜单行没有焦点反馈**。快捷筛选的 ▾ 打开的是 M3 原生 `DropdownMenu`，行是原生
+`DropdownMenuItem`：遥控器能停上去、DOWN 也能移动，但屏上纹丝不动——dump 里焦点从
+`[479,112]` 移到 `[479,208]`，两次截图却完全一样。"停在菜单里"和"菜单根本没响应"长得一模一样，
+正是本次审计反复出现的那类死胡同。
+
+第二个是**选完不收起**。遥控器没有"点一下别处"这个动作，菜单项 `onClick` 只应用筛选、不
+`expanded = false`，于是结果被菜单挡着，而且弹出层仍然持有窗口焦点，用户只能按 BACK 把它关掉。
+
+第三个是**应用筛选后焦点掉到导航轨**。改筛选会重新查询列表，快捷筛选栏按新模型重建，被按那颗
+芯片的焦点节点消失了，Compose 把焦点交给最近的祖先——在电视上就是左侧导航轨
+`[16,584][152,720]`，再按一次 CENTER 就离开收藏页。
+
+修法分三处：
+
+- 环：`KototoroContentListScreen` 的 `QuickFilterGroupChip` 菜单行、`FavoritesFilterPanel` 的
+  chips 与菜单行统一补 `Modifier.tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)`。
+  M3 的 chip 和菜单行自己就是 `selectable`/`clickable`，`addFocusTarget = false` 让环观察同一个
+  停靠点、不再增加第二个焦点站。
+- 收起：菜单项的 `onClick` 第一句 `expanded = false`，再应用。
+- 焦点：`QuickFilterSection` 给整行挂 `focusRequester + focusGroup + onFocusChanged`，行内芯片
+  被点击时 `restoreFocusTick++`，`LaunchedEffect` 每帧重试、最多 20 帧，直到行内重新拿到焦点。
+  恢复只在"是本行触发的变化"时发生，从导航轨走进收藏页时不会把焦点抢进筛选栏。
+
+### 设备验证（emulator-5554）
+
+| 步骤 | 结果 |
+| --- | --- |
+| 导航轨 DOWN ×2 → CENTER | 进收藏页，焦点留在轨道 `[16,584][152,720]` |
+| RIGHT ×3 | 筛选图标 `[176,216][268,312]` → On device `[268,224][467,312]` → Reading ▾ `[479,224][699,312]`，圆形蓝环 |
+| CENTER | 菜单展开，首项 Plan to read `[479,112][821,208]` |
+| DOWN | 第二项 Reading `[479,208][821,304]`，**现在有蓝色圆角环**（修前无环） |
+| CENTER | 菜单立即收起，焦点在同一帧就回到 Reading 芯片 `[479,224][699,312]`，芯片转为选中态 |
+| 等 2.2 s 再 dump | 焦点仍在芯片上（修前此时已在导航轨） |
+| RIGHT | 焦点移向相邻芯片，页面没有丢焦点 |
+
+### 遗留
+
+- 空态里有一个**卡住的刷新指示器**：非 clickable 的 48 dp 圆在 `[996,560][1092,656]`，正好压在
+  "No favorites yet" 文字上（t54 / t56 / t66 / t70 都在）。它来自 `KototoroPullToRefreshBox` 的
+  `isRefreshing` 长期为 true（0 个内容源时那次"检查新章节"不结束），并且指示器被画在内容区中间
+  而不是顶部。要改的是刷新状态机，本轮没动。
+- 应用筛选后筛选栏会重排（已选芯片前移到最前），重排那一帧焦点可能落到相邻芯片，方向键第一下
+  看起来像"原地"移动。
+- Release ▾、Rating ▾、New chapters 三个下拉和"Read later"页签这一轮没走到。
+
 
 
 

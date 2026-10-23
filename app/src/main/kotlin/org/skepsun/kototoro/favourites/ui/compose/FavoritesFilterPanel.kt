@@ -24,6 +24,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -42,6 +43,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.core.ui.compose.FilterPanelGroup
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.widgets.ChipModel
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.explore.ui.model.titleRes
@@ -185,6 +187,12 @@ fun FavoritesFilterPanelContent(
 private fun QuickFilterGroup.isFacetDropdown(): Boolean =
     items.any { it.data is ListFilterOption.Tag || it.data is ListFilterOption.Source }
 
+/**
+ * Ring shape for the chips and dropdown rows of this panel. M3 chips and menu items are both rounded
+ * rectangles with a small corner radius, and neither draws anything for focus.
+ */
+private val FilterControlRingShape = RoundedCornerShape(8.dp)
+
 @Composable
 private fun QuickFilterGroupDropdown(
     group: QuickFilterGroup,
@@ -208,7 +216,9 @@ private fun QuickFilterGroupDropdown(
         FilterChip(
             selected = selectedItems.isNotEmpty(),
             onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .tvFocusable(shape = FilterControlRingShape, addFocusTarget = false),
             leadingIcon = {
                 Icon(
                     painter = painterResource(group.iconResId),
@@ -246,6 +256,8 @@ private fun QuickFilterGroupDropdown(
                         )
                     },
                     onClick = { onQuickFilterOptionClick(option) },
+                    // M3 dropdown rows only draw a pressed tint, so a remote stop would look like nothing happened.
+                    modifier = Modifier.tvFocusable(shape = FilterControlRingShape, addFocusTarget = false),
                     leadingIcon = {
                         Icon(
                             painter = painterResource(
@@ -269,6 +281,11 @@ private fun QuickFilterGroupDropdown(
                         (chip.data as? ListFilterOption)?.let(onQuickFilterOptionClick)
                     }
                 },
+                modifier = Modifier.tvFocusable(
+                    enabled = selectedItems.isNotEmpty(),
+                    shape = FilterControlRingShape,
+                    addFocusTarget = false,
+                ),
                 enabled = selectedItems.isNotEmpty(),
             )
         }
@@ -297,7 +314,9 @@ private fun SourceTagFilterDropdown(
         FilterChip(
             selected = selectedTags.isNotEmpty(),
             onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .tvFocusable(shape = FilterControlRingShape, addFocusTarget = false),
             leadingIcon = {
                 Icon(
                     painter = rememberSafePainter(R.drawable.ic_filter_menu),
@@ -331,6 +350,7 @@ private fun SourceTagFilterDropdown(
                     expanded = false
                     onTagSelected(null)
                 },
+                modifier = Modifier.tvFocusable(shape = FilterControlRingShape, addFocusTarget = false),
                 leadingIcon = {
                     if (selectedTags.isEmpty()) {
                         Icon(
@@ -349,6 +369,11 @@ private fun SourceTagFilterDropdown(
                         expanded = false
                         onTagSelected(tag)
                     },
+                    modifier = Modifier.tvFocusable(
+                        enabled = tag in enabledTags,
+                        shape = FilterControlRingShape,
+                        addFocusTarget = false,
+                    ),
                     leadingIcon = {
                         Icon(
                             painter = rememberSafePainter(tag.iconRes),
@@ -415,7 +440,9 @@ private fun CompactFilterChip(
             selected = selected,
             onClick = onClick,
             enabled = enabled,
-            modifier = Modifier.heightIn(min = 28.dp),
+            modifier = Modifier
+                .heightIn(min = 28.dp)
+                .tvFocusable(enabled = enabled, shape = FilterControlRingShape, addFocusTarget = false),
             leadingIcon = icon,
             label = {
                 Text(

@@ -48,7 +48,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -56,6 +55,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.layout.layout
@@ -118,6 +119,9 @@ private const val TvGridScaleBoost = 1.4f
 private const val MaxGridScale = 1.4f
 private val QuickFilterChipHeight = 32.dp
 private val QuickFilterChipIconSize = 16.dp
+
+/** Ring shape for the quick-filter dropdown rows; M3 menu items are full-width rectangles. */
+private val QuickFilterMenuItemShape = RoundedCornerShape(8.dp)
 internal val GridHorizontalPadding = AppLayoutTokens.compactItemHorizontalPadding
 internal val GridSpacing = 8.dp
 
@@ -889,13 +893,35 @@ fun QuickFilterSection(
         val (checked, unchecked) = quickFilter.items.partition { chip -> chip.isChecked }
         checked + quickFilter.groups + unchecked
     }
+    // Applying a quick filter re-queries the list, and the rail is rebuilt from the new model: the
+    // focus node under the pressed chip no longer exists, so Compose drops the focus to the nearest
+    // ancestor. On a TV that ancestor is the nav rail, one CENTER press away from leaving the page.
+    // Ask the rail for the focus back, but only when this rail fired the change - walking in from
+    // the nav rail must leave the focus where the user put it.
+    val rowFocusRequester = remember { FocusRequester() }
+    var rowHasFocus by remember { mutableStateOf(false) }
+    var restoreFocusTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(restoreFocusTick) {
+        if (!isTvPresentation || restoreFocusTick == 0) return@LaunchedEffect
+        repeat(20) {
+            withFrameNanos { }
+            if (rowHasFocus) return@LaunchedEffect
+            runCatching { rowFocusRequester.requestFocus() }
+        }
+    }
+    val applyQuickFilter: (ListFilterOption) -> Unit = { option ->
+        restoreFocusTick++
+        onQuickFilterOptionClick(option)
+    }
     LazyRow(
         state = listState,
         contentPadding = PaddingValues(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = modifier
             .fillMaxWidth()
-            .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
+            .focusRequester(rowFocusRequester)
+            .then(if (isTvPresentation) Modifier.focusGroup() else Modifier)
+            .onFocusChanged { rowHasFocus = it.hasFocus },
     ) {
         leadingContent?.let { content ->
             item(key = "quick_filter_leading_content", contentType = "quick_filter_leading_content") {
@@ -925,7 +951,7 @@ fun QuickFilterSection(
                     isIosStyle = isIosStyle,
                     context = context,
                     entryPoint = entryPoint,
-                    onQuickFilterOptionClick = onQuickFilterOptionClick,
+                    onQuickFilterOptionClick = applyQuickFilter,
                 )
                 return@items
             }
@@ -980,7 +1006,7 @@ fun QuickFilterSection(
                             if (option != null) {
                                 Modifier
                                     .tvFocusable(shape = chipShape, addFocusTarget = false)
-                                    .clickable { onQuickFilterOptionClick(option) }
+                                    .clickable { applyQuickFilter(option) }
                             } else {
                                 Modifier
                             },
@@ -1128,7 +1154,16 @@ private fun QuickFilterGroupChip(
                             },
                         )
                     },
-                    onClick = { onQuickFilterOptionClick(option) },
+                    onClick = {
+                        // A remote has no "tap outside" to dismiss the popup with, and a menu that
+                        // survives the choice both hides the result and keeps the focus in its own
+                        // window, so close it on every pick.
+                        expanded = false
+                        onQuickFilterOptionClick(option)
+                    },
+                    // 菜单项是 M3 原生 DropdownMenuItem：遥控器能停上去，但没有任何可见反馈，
+                    // 于是"停在菜单里"和"菜单没响应"看起来一模一样。这里补一个环。
+                    modifier = Modifier.tvFocusable(shape = QuickFilterMenuItemShape, addFocusTarget = false),
                     leadingIcon = {
                         Icon(
                             painter = painterResource(
@@ -1144,10 +1179,16 @@ private fun QuickFilterGroupChip(
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.reset_filter)) },
                 onClick = {
+                    expanded = false
                     selectedItems.forEach { chip ->
                         (chip.data as? ListFilterOption)?.let(onQuickFilterOptionClick)
                     }
                 },
+                modifier = Modifier.tvFocusable(
+                    enabled = selectedItems.isNotEmpty(),
+                    shape = QuickFilterMenuItemShape,
+                    addFocusTarget = false,
+                ),
                 leadingIcon = {
                     Icon(
                         painter = painterResource(R.drawable.ic_clear_all),
