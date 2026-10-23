@@ -564,7 +564,11 @@ internal fun ComposeReaderActivityScaffold(
         }
 
         AnimatedVisibility(
-            visible = state.controlsVisible,
+            // A panel is composed next to the chrome, not in its own window: on a television the
+            // D-pad can step off the panel onto the dimmed toolbar behind it, where the ring hides
+            // under the sheet and CENTER runs the wrong action. With the chrome gone there is no
+            // such target at all, and a direction press at the panel edge simply stays put.
+            visible = state.controlsVisible && !(isTvPresentation && expandedPanelVisible),
             // Alpha animations create an offscreen layer that clips Backdrop shadows to these bounds.
             enter = slideInVertically { -it }.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
             exit = slideOutVertically { -it }.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
@@ -611,7 +615,7 @@ internal fun ComposeReaderActivityScaffold(
         )
         val floatingControlExitOffset = with(LocalDensity.current) { 32.dp.roundToPx() }
         AnimatedVisibility(
-            visible = bottomChromeVisibility.visible,
+            visible = bottomChromeVisibility.visible && !(isTvPresentation && expandedPanelVisible),
             enter = slideInVertically { it }.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
             exit = slideOutVertically { it }.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -646,7 +650,7 @@ internal fun ComposeReaderActivityScaffold(
                             .align(Alignment.BottomCenter)
                             .navigationBarsPadding()
                             .padding(horizontal = 12.dp)
-                        .padding(bottom = ReaderFloatingControlInset),
+                            .padding(bottom = ReaderFloatingControlInset),
                     )
                 }
                 if (floatingControls.isNotEmpty()) {
