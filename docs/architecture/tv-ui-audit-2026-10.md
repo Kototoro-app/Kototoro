@@ -2512,5 +2512,104 @@ BACK 先收再关 → 环回顶栏。
   legacy 的“请求整组”回退，尚未给专属首格；三者需要各自确认一次初始焦点。
 - 手机端回归（`isTv` 为 false 的三处新分支）只做了代码级检查，没跑真机。
 
+## 第四十二轮：目录面板的焦点不再漏到面板外，页格在电视上一屏放得下（2026-10-24）
+
+第四十一轮把选项面板走通了，这一轮拿**同一套标准检查目录面板**（`ReaderPanelHost` 里那个），
+顺带把它的两个页签（`Pages` / `Bookmarks`）走了一遍。结论：面板面、首格、行内上下都成立，
+但"行右边还有什么"和"页格放不放得下"各有一个坑。
+
+### 目录面板：首格是对的，RIGHT 会漏出面板
+
+打开目录面板（`ro1`）：实体深色面、`Chapter 01` 整行落在初始焦点上（`[216,602][1704,714]`，
+`focused=1`）、行尾的书签/下载/翻译图标与 `Chapters / Pages / Bookmarks` 页签条都在。
+DOWN 换到 `Chapter 02`（`ro2`）、UP 回到第一行都正常。
+
+问题出在 RIGHT。行上按 RIGHT，焦点**跳出面板**落到面板背后顶栏的 `⋮`（`ro3`，环在右上角，
+面板仍然开着）——遥控器于是卡在暗掉的一层里，只能靠 BACK 收回。
+
+根因不是面板没锁焦，而是**行右边在面板内压根没有候选**：整行是一个焦点目标，
+行尾那三个按钮落在行的 bounds **内部**，而 Compose 的方向搜索只找"在对侧、且与当前节点不重叠"的
+节点，所以行内部的东西永远不是 RIGHT 的候选，束搜索只能一路找到面板外的顶栏。
+
+修法（`app/.../chapters/compose/ChapterItemCard.kt`）：给行的 `focusModifier` 加
+
+```kotlin
+Modifier
+    .tvFocusable(shape = RoundedCornerShape(8.dp), borderWidth = 2.dp, addFocusTarget = false)
+    .tvHorizontalEdgeGuard(blockRight = true)
+```
+
+`tvHorizontalEdgeGuard` 只在电视上生效，手机上返回原 Modifier。改后 RIGHT 停在行上（`rp0`，
+`focused=1` 仍是 `[216,602][1704,714]`），焦点不再漏。
+
+### 页签条本身是好的
+
+UP 从行回到页签条（焦点落在离行最近的 `Pages`，`[873,468][1019,564]`），LEFT / RIGHT 在三个页签间
+逐个移动（`rp4` Bookmarks→LEFT→Pages、`rp5` Pages→RIGHT→Bookmarks），到两端停住不越界（`rp6`）。
+三颗页签在 `uiautomator` 里都是 `focusable=true`，没有"看不见的死链"。
+CENTER 切页签后焦点仍停在页签上，选中态上是白色环（`rp7` 与放大裁图 `rp7-tabs`）——
+第四十一轮给页签加的 `ringColor = colors.content` 在这里同样生效。
+
+### 页格：3 列的卡片比面板还高，而且卡片根本不画环
+
+切到 `Pages` 页签，问题一次出来两个：
+
+1. 卡片比面板可视区高。页面缩略图按 `aspectRatio = 0.7`（宽/高）排，默认 3 列时每张约
+   475×680px，而面板从页签条往下只剩 510px——**任何一张卡都不可能完整显示**，
+   焦点环最多只能看到三面，滚动也永远停在"半张卡"上。
+2. `PageThumbnailCard` 没有 `tvFocusable`。`combinedClickable` 让它可聚焦，但没有任何环，
+   `uiautomator` 报 `focused=true`、屏幕上什么都没有——正是"遥控器坏了"的那一类。
+
+修法两处：
+
+```kotlin
+// PagesScreenRoot.kt：电视上至少 5 列（卡片约 278×397，一屏放得下整行）
+gridColumns = if (LocalUiPresentationConfig.current.isTv) {
+    maxOf(TV_PANEL_MIN_PAGE_COLUMNS, pagePreviewGridColumns(gridScale))
+} else {
+    pagePreviewGridColumns(gridScale)
+}
+
+// PagesScreen.kt：缩略图补环
+.tvFocusable(
+    shape = RoundedCornerShape(8.dp),
+    borderWidth = 3.dp,
+    addFocusTarget = false,
+    ringColor = Color.White,   // 缩略图是任意插画，白环在深浅页面上都看得见
+)
+```
+
+`addFocusTarget = false` 是因为后面的 `combinedClickable` 已经是焦点目标，再要一个会多一次停留。
+
+改后（`rr1`）：5 列、章标题 `Chapter 01` 在列上方，当前页卡片外围一圈白环清晰可辨；
+DOWN 到第二行（`rr2`，第 6 页），卡片完整、环四面可见、网格只滚动到刚好露出这一行。
+左右在行内逐个移动（`rr3`：第 1 列 → 第 2 列 → 第 3 列）。
+
+### 设备验证（emulator-5554，1920×1080）
+
+| 步骤 | 截图 | 结果 |
+| --- | --- | --- |
+| 打开目录面板 | `ro1` | 实体面；首格是 `Chapter 01` 整行 `[216,602][1704,714]`，`focused=1` |
+| DOWN | `ro2` | 环到 `Chapter 02`，行仍占满面板宽度 |
+| 修前 RIGHT | `ro3` | **焦点漏到面板外**顶栏 `⋮`，面板还开着 |
+| 修后 RIGHT | `rp0` | 焦点留在行上，`focused=1` 仍是同一行 |
+| UP | `rp1` | 焦点到页签条 `Pages` `[873,468][1019,564]` |
+| UP + RIGHT | `rp2` | 环到 `Bookmarks`，页签间逐个移动 |
+| LEFT / RIGHT / 端头 | `rp4` `rp5` `rp6` | `Bookmarks→Pages`、`Pages→Bookmarks`、`Bookmarks` 上再 RIGHT 不动 |
+| Pages 页签 + 裁图 | `rp7` `rp7-tabs` | 页签切换成功，选中态白环清楚（面板未丢焦点） |
+| 页格（修后） | `rr1` | 5 列，当前页卡片四周白环可辨，章标题在格上方 |
+| 页格 DOWN | `rr2` | 第 6 页卡片完整，网格只滚到刚好露出该行 |
+| 页格 RIGHT ×2 | `rr3` | 行内第 1 列 → 第 2 列 → 第 3 列 |
+
+### 遗留（本轮新增）
+
+- 章节行行尾的下载/翻译按钮**在电视上用遥控器仍然够不到**：它们落在整行的 bounds 内部，
+  方向搜索够不着。要真正修，需要把电视上的行拆成"标题区 + 每个按钮"各自的焦点目标
+  （行本身不再整体 `combinedClickable`），这是共享 `ChapterListCard` 的结构改动。
+  现在的处理是"宁可停在行上，也不漏到面板外"。
+- `Pages` 页签第一行的卡片底部正好顶到屏幕下沿，环的下边会被裁掉 1–2px（卡片 397px 高、可视 510px，
+  中间还有章标题行）。把面板头部的标题/页签条收紧，或电视上把缩略图 `aspectRatio` 再压一点可解。
+
+
 
 

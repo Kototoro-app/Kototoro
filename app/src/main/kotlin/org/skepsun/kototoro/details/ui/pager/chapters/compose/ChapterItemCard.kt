@@ -15,6 +15,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvHorizontalEdgeGuard
 import org.skepsun.kototoro.core.ui.chapters.ChapterCardData
 import org.skepsun.kototoro.core.ui.chapters.ChapterGridCard as SharedChapterGridCard
 import org.skepsun.kototoro.core.ui.chapters.ChapterListCard as SharedChapterListCard
@@ -40,7 +41,12 @@ fun ChapterListCard(
     onLongClick = onLongClick,
     focusRequester = focusRequester,
     modifier = modifier,
-    focusModifier = Modifier.tvFocusable(shape = RoundedCornerShape(8.dp), borderWidth = 2.dp, addFocusTarget = false),
+    // The row spans the whole panel width and its trailing buttons sit inside those bounds, so on a
+    // television there is nothing to its right. Without the guard RIGHT hands focus to the dimmed
+    // toolbar behind the panel while the panel stays open.
+    focusModifier = Modifier
+        .tvFocusable(shape = RoundedCornerShape(8.dp), borderWidth = 2.dp, addFocusTarget = false)
+        .tvHorizontalEdgeGuard(blockRight = true),
     actions = if (onDownload != null || onTranslate != null) {
         {
             onTranslate?.let { translate ->

@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -33,6 +34,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
 import org.skepsun.kototoro.details.ui.pager.pages.PageThumbnail
@@ -58,6 +60,15 @@ fun PageThumbnailCard(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(aspectRatio)
+            // A thumbnail is arbitrary artwork, so the ring is white rather than the accent colour:
+            // it has to read on a light page and on a dark one, and there is no container colour to
+            // derive a contrast-aware ring from.
+            .tvFocusable(
+                shape = RoundedCornerShape(8.dp),
+                borderWidth = 3.dp,
+                addFocusTarget = false,
+                ringColor = Color.White,
+            )
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
