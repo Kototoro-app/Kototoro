@@ -8,10 +8,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
@@ -24,8 +22,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -123,7 +119,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.READER -> DesktopReader(controller, state, closing, fullscreen, onToggleFullscreen)
                             DesktopScreen.NOVEL -> DesktopNovelReader(controller, state, closing, fullscreen, onToggleFullscreen)
                             DesktopScreen.VIDEO -> DesktopVideoPlayer(controller, state, closing, fullscreen, onToggleFullscreen)
-                            DesktopScreen.PREFERENCES -> Preferences(controller, state)
+                            DesktopScreen.PREFERENCES -> DesktopSourcePreferences(controller, state)
                             DesktopScreen.BROWSER -> BrowserPanel(controller.session)
                             DesktopScreen.DOWNLOADS -> DesktopDownloadsPanel(controller, closing)
                             DesktopScreen.BACKUPS -> DesktopBackupsPanel(controller, closing)
@@ -351,65 +347,6 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
 private fun Details(controller: DesktopController, state: DesktopAppState) {
     DesktopTabletDetails(controller, state)
 }
-
-@Composable
-private fun Preferences(controller: DesktopController, state: DesktopAppState) {
-    val screen = state.preferences ?: return
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        OutlinedButton({ controller.browse() }, enabled = !state.busy) { Text(desktopText("browse.backToBrowse")) }
-        // Kototoro's own rows (User-Agent) come first, as in Android's source settings.
-        screen.nodes.sortedBy { if (it.id.startsWith("host:")) 0 else 1 }
-            .forEach { node -> PreferenceNode(controller, node, !state.busy) }
-    }
-}
-
-@Composable
-private fun PreferenceNode(controller: DesktopController, node: SourcePreferenceNode, active: Boolean) {
-    if (!node.visible) return
-    val enabled = active && node.enabled
-    Surface(shape = RoundedCornerShape(10.dp)) {
-        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(node.title.ifBlank { node.key.orEmpty() }, fontWeight = FontWeight.SemiBold)
-            if (node.summary.isNotBlank()) Text(node.summary, color = Muted, fontSize = 12.sp)
-            when (node.kind) {
-                SourcePreferenceKind.TEXT -> {
-                    var text by remember(node.id, node.value) { mutableStateOf((node.value as? SourcePreferenceValue.Text)?.value.orEmpty()) }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedTextField(text, { text = it }, enabled = enabled, modifier = Modifier.weight(1f),
-                            visualTransformation = if (node.isSecret) PasswordVisualTransformation() else VisualTransformation.None)
-                        Button({ controller.updatePreference(node, SourcePreferenceValue.Text(text)) }, enabled = enabled) { Text(desktopText("common.save")) }
-                    }
-                }
-                SourcePreferenceKind.TOGGLE -> Switch((node.value as? SourcePreferenceValue.Toggle)?.value ?: false,
-                    { controller.updatePreference(node, SourcePreferenceValue.Toggle(it)) }, enabled = enabled)
-                SourcePreferenceKind.CHOICE -> node.choices.forEach { choice ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton((node.value as? SourcePreferenceValue.Text)?.value == choice.value,
-                            { controller.updatePreference(node, SourcePreferenceValue.Text(choice.value)) }, enabled = enabled,
-                            modifier = Modifier.testTag("preference:${node.id}:${choice.value}"))
-                        Text(choice.title)
-                    }
-                }
-                SourcePreferenceKind.MULTI_CHOICE -> node.choices.forEach { choice ->
-                    val values = (node.value as? SourcePreferenceValue.TextSet)?.values.orEmpty()
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(choice.value in values, { checked ->
-                            controller.updatePreference(node, SourcePreferenceValue.TextSet(
-                                if (checked) values + choice.value else values - choice.value))
-                        }, enabled = enabled)
-                        Text(choice.title)
-                    }
-                }
-                SourcePreferenceKind.GROUP -> node.children.forEach { PreferenceNode(controller, it, enabled) }
-                SourcePreferenceKind.ACTION -> OutlinedButton({ controller.updatePreference(node, SourcePreferenceValue.Action()) },
-                    enabled = enabled, modifier = Modifier.testTag("preference:${node.id}")) { Text(desktopText("preference.execute")) }
-                SourcePreferenceKind.UNSUPPORTED -> Text(desktopText("preference.unsupported"), fontSize = 12.sp, color = Muted)
-                SourcePreferenceKind.INFO -> Unit
-            }
-        }
-    }
-}
-
 @Composable
 private fun EmptyPanel(title: String, detail: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

@@ -6485,3 +6485,44 @@ NSFW 与 SFW 同选为空；收藏页的宏列表裁剪）；`:desktop-app:test 
 “新章节”宏此时命中 2 本（宏读计数、角标看完成度），结束后删除两条 tracks 行；
 截图 `tablet-library-filter-groups.png` 可见 “Tagged shelf” 右上角蓝色 “2”，
 “Finished shelf” 无角标。`:desktop-app:verifyDesktopStrings` 通过。
+## 135. Windows 源设置页分组化与共享设置行（2026-10-23）
+
+日期：2026-10-23。用户指出设置页（尤其每个源的配置）在 Windows 上是平铺的一列卡片，与 Android 不一致。
+Android 的来源设置由 `ComposePreferenceAdapter` 把 androidx `PreferenceCategory` 折成带标题的 section：
+每节一张卡片、行间一条细分割线，开关行整行可点，选项/多选/文本/动作行只显示当前值和箭头、编辑放进对话框。
+本轮先补共享行组件与源设置页，推荐设置和拓展管理随后按同一套组件迁移。
+
+### 共享设置行（core-ui）
+
+- 新增 `core/ui/settings/SharedSettingsRows.kt`：`SettingsSectionHeader`（节标签，primary/labelLarge）、
+  `SettingsGroup`（一张 20dp 圆角卡片）、`SettingsRowDivider`（左右 16dp、10% 细线）、
+  `SettingsSwitchRow`（整行 `toggleable(role = Role.Switch)`，尾部 `Switch(onCheckedChange = null)`，
+  与 Android `SettingsSwitchPreference` 一样整行可点且只暴露一个无障碍开关节点）、
+  `SettingsValueRow`（左侧标题/摘要，右侧当前值 + `ReaderPanelIcons.ArrowForward`，值最宽 260dp 后省略）、
+  `SettingsInfoRow`。行内边距 16dp/12dp，标题 `bodyLarge`+Medium、摘要 `bodySmall`/`onSurfaceVariant`。
+  只使用 `MaterialTheme.colorScheme` 角色，不引用桌面私有的 `Ink`/`Muted`，Android 与 iOS 可直接复用。
+- 文件在 `core-ui` commonMain，`:core-ui:compileCommonMainKotlinMetadata` 通过，非 JVM 目标同样可编译。
+
+### 桌面源设置页
+
+- 新文件 `DesktopSourcePreferences.kt` 取代 `DesktopApp.kt` 里的 `Preferences`/`PreferenceNode`：
+  `sourcePreferenceSections(nodes, fallbackTitle)` 把协议树折成节——Kototoro 自己的 `host:` 行
+  （User-Agent、域名）排在前面并放进以 Android “设置”串命名的默认节，带标题的 GROUP 各自成节，
+  无标题 GROUP 和嵌套 GROUP 拍平成所在节的行（与 Android 拍平 `PreferenceGroup` 一致）；
+  不可见节点丢弃，没有可见行的节不出现；被 GROUP 隔开的两段散行会产生两个同名默认节（Android 同样如此），
+  因此 section id 带序号，避免 Compose key 冲突。
+- 行渲染：TOGGLE 即时提交；CHOICE/MULTI_CHOICE/TEXT 显示当前值（多选取标签逗号连接、密文按长度打点、
+  空值不显示）并打开对话框，选中即提交并关闭（多选保持打开、逐项提交）；ACTION 整行可点提交；
+  INFO 只读；UNSUPPORTED 只读并在无摘要时显示“本平台不支持此控件”。testTag 保持 `preference:<id>`，
+  对话框内选项沿用 `preference:<id>:<value>`，新增 `preference-dialog:<id>`、`preference-field:<id>`、
+  `preference-save:<id>`。
+- 删掉不再使用的 `desktopText("preference.execute")`（动作行不再画按钮），中英两份 properties 同步删除。
+
+验证：`:desktop-app:test` 新增 `DesktopSourcePreferencesTest` 四例（host 行置顶且落默认节、无标题 GROUP
+拍平且默认节 id 唯一、嵌套 GROUP 拍平、不可见行与空节丢弃）；
+`--tests "*DesktopAppTest.Windows rendered source details reader settings and shared state survive a second process"`
+两个独立 JVM 全绿：探针改为先点 `preference:<id>` 打开对话框、断言 `preference-dialog:<id>` 存在，
+再点 `rejected`（来源拒绝提示）→ 对话框关闭 → 重新打开点 `saved`，值跨进程保持、`域名设置` 行仍在；
+截图 `write-preferences.png` 可见“设置”节标签、单卡片三行（User-Agent、域名、域名设置=Saved）与尾部箭头。
+`:desktop-app:verifyDesktopStrings`、`:core-ui:verifyUiStrings`、`:core-ui:compileCommonMainKotlinMetadata` 通过。
+本轮没有做推荐设置页与拓展管理页，也没有跑全量回归。

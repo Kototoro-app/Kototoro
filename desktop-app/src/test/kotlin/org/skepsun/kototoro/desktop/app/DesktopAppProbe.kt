@@ -201,11 +201,22 @@ object DesktopAppProbe {
                     // Kototoro's User-Agent row accompanies every HTTP source's own controls.
                     check(preferenceNodes.any { it.id == "host:user_agent" }) { "$preferenceNodes" }
                     val node = preferenceNodes.single { !it.id.startsWith("host:") }
+                    // Android's titled sections and value rows replace the flat cards: the domain row keeps its title
+                    // as a row, and a choice lives in a dialog instead of a column of radio buttons.
+                    onNodeWithText("域名设置").assertExists()
+                    onNodeWithTag("preference:${node.id}").assertExists()
                     if (mode == "write") {
+                        onNodeWithTag("preference:${node.id}").performClick()
+                        settled()
+                        onNodeWithTag("preference-dialog:${node.id}").assertExists()
                         onNodeWithTag("preference:${node.id}:rejected").performClick()
                         waitUntil(timeoutMillis = 15_000) { controller.state.value.message == "来源拒绝了这项设置" }
                         settled()
                         check(controller.state.value.message == "来源拒绝了这项设置")
+                        // Choosing a value closes the dialog, so the next pick starts from the row again.
+                        onNodeWithTag("preference-dialog:${node.id}").assertDoesNotExist()
+                        onNodeWithTag("preference:${node.id}").performClick()
+                        settled()
                         onNodeWithTag("preference:${node.id}:saved").performClick()
                         waitUntil(timeoutMillis = 15_000) {
                             controller.state.value.preferences?.nodes?.single { !it.id.startsWith("host:") }?.value == SourcePreferenceValue.Text("saved")
