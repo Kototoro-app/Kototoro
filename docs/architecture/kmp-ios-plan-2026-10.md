@@ -6739,3 +6739,26 @@ failures=0，说明 `nav:更多`、`nav:扩展与仓库`、`nav:下载`、`nav:�
 - 探针：在收藏页打开抽屉截图 `tablet-library-display-options.png`（可见“布局”两个单选），选“每行一个作品”后断言
   `libraryDisplay.listMode == LIST`、`library_list_mode` 落盘为 `LIST`、`content-list` 存在而 `content-grid`
   不存在，截图 `tablet-library-list.png`（三部作品的封面/标题/`阅读测试来源` 副标题/进度条），再切回网格断言两者互换。
+
+## 143. Windows 导入 TVBox/JSON CMS 源（2026-10-23）
+
+日期：2026-10-23。Android 的扩展页可以导入 TVBox/苹果 CMS 配置，导入后的站点作为普通来源出现在来源栏。
+Windows 侧的 `source-tvbox`（`MacCmsSourceRuntime` + `MacCmsParser`）早就存在，但桌面 Session 没有把它接进
+路由，也没有导入入口，所以 JSON 源在桌面上完全不可用。本轮把这条链路补齐。
+
+- `desktop-runtime` 的 `DesktopJsonSources` 把 Android `json_sources` 表保存的同一份配置文档写进
+  `desktop_json_sources` store 的单值 `json_sources`（`SourcePreferenceValue.Text`），按 id 去重、后者覆盖，
+  便于重复导入刷新；`errors` 暴露解析失败的条目，`reloadJsonSources()` 把它们并入 `startupErrors`。
+- `DesktopSession` 新增第 4 条路由 `MacCmsSourceRuntime::owns`（`JSON_TVBOX_` 前缀），`SourceRef` 回退与
+  `sourceListings()` 都会把导入的站点展示成 `SourceEcosystem.TVBOX` 来源；导入走共享 `TvBoxImport.importFromUrl`，
+  HTTP 由 Session 注入的 `TvBoxHttp`（OkHttp）执行。
+- TVBox 源只给出封面 URL，没有 cover 操作协议（`fetchCover` 默认抛 `SourceOperationUnsupportedException`），
+  所以 Session 的 cover provider 捕获 `SourceRemoteException(UNSUPPORTED_OPERATION)` 后改为直接 GET 该 URL，
+  按同一 SHA-256 命名写进图片目录并返回 `SourceCoverArtifact`——与 Android 让图片库直接加载 URL 的行为一致。
+- 扩展与仓库页新增“JSON 源”一节：已导入站点各占一行（标题 + API 地址，行尾“移除”），下面是“添加 JSON 源”行
+  （行尾“导入”）打开对话框，填链接与可选显示名；导入结果用页面顶部提示报告“已添加 N 个 JSON 源”和被跳过的爬虫站点。
+- 只支持 type 0/1 的 MacCMS 站点：type 3/4（`csp_`）需要 QuickJS/Android 运行时，Windows 侧拒绝并计入跳过数，
+  该限制写在卡片底部的说明行里。
+- 探针（`json-sources` 模式）：本地 `HttpServer` 提供 CMS 列表与一张 PNG 封面；断言空态 → 通过对话框导入
+  （`state.error == null`、偏好里存有该 id、来源列表出现 `TVBOX` 条目）→ 浏览两次进入来源栏点该源 →
+  列表非空且请求数 > 0 → 卡片封面（`cover:<id>`，在未合并树中）出现 → 返回扩展页移除后来源与列表同时消失。

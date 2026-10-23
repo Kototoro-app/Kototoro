@@ -290,6 +290,7 @@ dependencies {
     implementation project(':parser-host')
     implementation project(':mihon-desktop-compat')
     implementation project(':cloudstream-desktop')
+    implementation project(':source-tvbox')
     implementation project(':core-domain')
     implementation project(':reader-core')
     // Novel paging reuses the shared line splitter Android paginates with, not a Windows-only rewrite.

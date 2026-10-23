@@ -74,6 +74,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `a JSON CMS source imports from the extensions page browses and is removed again`() {
+        probe("json-sources", directory.resolve("中文 json source"), 120)
+    }
+
+    @Test
     fun `tablet layout and immersive reader panels preserve progress in wide and narrow windows`() {
         probe("tablet", directory.resolve("中文 tablet wide"), 150)
         probe("tablet-narrow", directory.resolve("中文 tablet narrow"))

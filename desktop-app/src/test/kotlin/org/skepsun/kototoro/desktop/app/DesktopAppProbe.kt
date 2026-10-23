@@ -63,6 +63,10 @@ object DesktopAppProbe {
                 DesktopTabletProbe.run(args)
                 return
             }
+            if (args[0] == "json-sources") {
+                DesktopJsonSourcesProbe.run(args)
+                return
+            }
             if (args[0].startsWith("repositories-")) {
                 DesktopRepositoriesProbe.run(args)
                 return

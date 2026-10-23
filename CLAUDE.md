@@ -259,6 +259,7 @@ npm run docs:build
   收藏/历史的“筛选与排序”抽屉另有“布局”一节（封面网格 / 每行一个作品，对应 Android 的 ListMode），
   选择存 `desktop_library` 的 `library_list_mode`，列表模式下 `ContentGrid` 渲染 `content-list` 行视图，
   点击/长按语义与卡片一致，见计划 §142。
+  扩展与仓库页可导入 TVBox/苹果 CMS 链接：配置按 Android 的同一份文档存进 desktop_json_sources 的json_sources，站点以 TVBOX 来源进入来源栏（第 4 条路由 MacCmsSourceRuntime），封面在协议返回 UNSUPPORTED 时由 Session 直接 GET URL 落盘；type 3/4 爬虫站点明确跳过，见计划 §143。
   索引模型共用 core-source，APK-only 明确不可安装，构造/持久化失败保留旧扩展；范围见计划 §56。
   reader-core 决定单页/双页/RTL 的可见页面、宽图独页、Fit 排版与进度锚点；键盘翻页和同分支跨章按钮
   已接入。阅读模式/方向保存于原偏好 store，历史 percent 包含页组末页，page 保留起始锚点用于恢复。

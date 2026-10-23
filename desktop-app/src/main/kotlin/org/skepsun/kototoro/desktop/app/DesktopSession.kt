@@ -55,6 +55,43 @@ class DesktopSession private constructor(
     internal val cloudstream = CloudstreamPluginRegistry(storage.paths.root.resolve("cache/cloudstream"),
         platform.preferenceContext(), platform.sharedHttpClient())
     private val cloudstreamRuntime = CloudstreamSourceRuntime(cloudstream, storage.images)
+    /** Android's imported JSON sources (TVBox / Apple CMS links); the shared importer skips spider sites. */
+    internal val jsonSources = org.skepsun.kototoro.desktop.runtime.DesktopJsonSources(
+        storage.preferences.open("desktop_json_sources"),
+    )
+    private val jsonClient = platform.sharedHttpClient()
+    internal val jsonHttp = org.skepsun.kototoro.tvbox.TvBoxHttp { url, headers ->
+        withContext(Dispatchers.IO) {
+            val request = okhttp3.Request.Builder().url(url).apply {
+                headers.forEach { (name, value) -> header(name, value) }
+            }.build()
+            jsonClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw java.io.IOException("HTTP ${response.code} $url")
+                response.body?.string().orEmpty()
+            }
+        }
+    }
+    @Volatile private var jsonSourceCache = jsonSources.all()
+    private val tvboxRuntime = org.skepsun.kototoro.tvbox.MacCmsSourceRuntime(jsonHttp) {
+        jsonSourceCache.map {
+            org.skepsun.kototoro.tvbox.TvBoxSource(it.id, it.name, it.config, it.iconUrl)
+        }
+    }
+
+    /** Sites the JSON runtime serves right now; the runtime reads the same list. */
+    internal fun jsonSourceList(): List<org.skepsun.kototoro.desktop.runtime.DesktopJsonSource> = jsonSourceCache
+
+    /** Re-reads the stored documents after an import or a removal; read failures stay in [startupErrors]. */
+    internal suspend fun reloadJsonSources() {
+        jsonSourceCache = jsonSources.all()
+        startupErrors.clear()
+        startupErrors += jsonSources.errors
+        tvboxRuntime.invalidate()
+    }
+
+    /** Follows the shared TVBox import rules: multi-repository links, CMS APIs and documents all land here. */
+    internal suspend fun importJsonSources(url: String, title: String?) =
+        org.skepsun.kototoro.tvbox.TvBoxImport.importFromUrl(jsonHttp, url, title)
     val sources: SourceRuntime = SourceProtocolClient(
         SourceEndpoint(
             RoutedSourceRuntime(listOf(
@@ -62,6 +99,7 @@ class DesktopSession private constructor(
                 RoutedSourceRuntime.Route(aniyomiRuntime::owns, aniyomiRuntime),
                 RoutedSourceRuntime.Route(parsers::owns, parserRuntime),
                 RoutedSourceRuntime.Route(cloudstreamRuntime::owns, cloudstreamRuntime),
+                RoutedSourceRuntime.Route(org.skepsun.kototoro.tvbox.MacCmsSourceRuntime::owns, tvboxRuntime),
             )),
             sourceDiagnostics::record,
         ),
@@ -70,6 +108,8 @@ class DesktopSession private constructor(
         registry.installed().flatMap { it.sources }.firstOrNull { it.source.name == name }?.source
             ?: parsers.sources().firstOrNull { it.source.name == name }?.source
             ?: cloudstream.sources().firstOrNull { it.name == name }?.let(CloudstreamSourceRuntime::sourceRef)
+            ?: jsonSourceCache.firstOrNull { it.id == name }
+                ?.let { SourceRef(it.id, "", org.skepsun.kototoro.tvbox.MacCmsSourceRuntime.CONTENT_TYPE) }
     }
     /** New-chapter tracking with Android's rules; details refresh through the normal source protocol. */
     val tracker = org.skepsun.kototoro.desktop.runtime.DesktopTracker(
@@ -197,7 +237,8 @@ class DesktopSession private constructor(
     fun sourceListings(): List<SourceListing> =
         registry.installed().flatMap { extension -> extension.sources.map { mihonListing(it, extension.metadata.ecosystem) } } +
             parsers.sources().map(::parserListing) +
-            cloudstream.sources().map(::cloudstreamListing)
+            cloudstream.sources().map(::cloudstreamListing) +
+            jsonSourceCache.map(::jsonListing)
     internal suspend fun chapterPages(contentId: Long, chapter: SourceChapter): List<SourcePage> =
         downloadStore.find(contentId, chapter)?.takeIf { it.isComplete }?.pages?.map { it.page }
             ?: sources.getPages(chapter, null)
@@ -218,9 +259,45 @@ class DesktopSession private constructor(
     }
     internal val covers = DesktopCovers(storage.paths.images, storage.preferences.open("desktop_covers")) {
         content, large ->
-        val challenges = browserChallenges
-        if (challenges == null) sources.fetchCover(content, large)
-        else challenges.withRequestCancellation { sources.fetchCover(content, large) }
+        try {
+            downloadRequest { sources.fetchCover(content, large) }
+        } catch (error: SourceRemoteException) {
+            // JSON/TVBox sources have no cover operation: they only name a URL, which Android also loads directly.
+            if (error.error.code == SourceErrorCode.UNSUPPORTED_OPERATION) downloadedCover(content, large) else throw error
+        }
+    }
+
+    /** Plain GET of a cover URL into the image directory, for sources whose protocol has no cover operation. */
+    private suspend fun downloadedCover(content: SourceContent, large: Boolean): SourceCoverArtifact {
+        val url = (if (large) content.largeCoverUrl ?: content.coverUrl else content.coverUrl)
+            ?.takeIf(String::isNotBlank) ?: throw SourceInvalidArgumentException()
+
+        val (bytes, type) = withContext(Dispatchers.IO) {
+            val request = okhttp3.Request.Builder().url(url).get().build()
+            jsonClient.newCall(request).execute().use { response ->
+
+                if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+                val body = response.body ?: throw IOException("Cover response has no body")
+                val mime = body.contentType()?.toString()?.substringBefore(';')
+                    ?.takeIf { it.startsWith("image/") } ?: "image/jpeg"
+                body.bytes() to mime
+            }
+        }
+
+        currentCoroutineContext().ensureActive()
+        val sha256 = imageKey(bytes)
+        val relativePath = "$sha256.img"
+        val target = storage.paths.images.resolve(relativePath)
+        withContext(Dispatchers.IO) {
+            if (!java.nio.file.Files.isRegularFile(target) ||
+                java.nio.file.Files.size(target) != bytes.size.toLong()
+            ) {
+                java.nio.file.Files.createDirectories(target.parent)
+                java.nio.file.Files.write(target, bytes)
+            }
+        }
+
+        return SourceCoverArtifact(content.source, content.id, relativePath, sha256, bytes.size.toLong(), type)
     }
     internal val browser = MihonDesktopPlatform.defaultBridgeExecutable()?.let {
         DesktopBrowser(it, storage.paths.root.resolve("compat/browser-debug"), platform::cookieBridge)
@@ -471,6 +548,11 @@ private const val CLOUDSTREAM_KEY_PREFIX = "cloudstream:"
 
 private fun cloudstreamListing(source: org.skepsun.kototoro.cloudstream.model.CloudstreamSource) =
     SourceListing(CloudstreamSourceRuntime.sourceRef(source), source.displayName, SourceEcosystem.CLOUDSTREAM, supportsLatest = false)
+
+private fun jsonListing(source: org.skepsun.kototoro.desktop.runtime.DesktopJsonSource) = SourceListing(
+    SourceRef(source.id, "", org.skepsun.kototoro.tvbox.MacCmsSourceRuntime.CONTENT_TYPE),
+    source.name, SourceEcosystem.TVBOX, supportsLatest = false,
+)
 
 private fun mihonListing(source: MihonSourceDescriptor, ecosystem: SourceEcosystem) =
     SourceListing(source.source, source.displayName, ecosystem, source.supportsLatest, source.sourceId)

@@ -40,14 +40,17 @@ import org.skepsun.kototoro.core.ui.settings.SettingsSwitchRow
  * section, rows separated by a hairline, and a control on the row instead of loose widgets stacked on the page.
  *
  * Android's "扩展管理" is a tabbed unified screen (repositories, JSON sources, APK extensions, JAR parsers). The Windows
- * host covers the repository part and the JAR/APK extensions that come from it, so the page keeps exactly those three
- * blocks — repositories, the catalog of the selected repository, the installed entries — and nothing new.
+ * host covers the repository part, the JAR/APK extensions that come from it, and the imported JSON sources it can
+ * serve (TVBox / Apple CMS links, added from this page and routed to the shared CMS runtime).
  */
 @Composable
 internal fun DesktopExtensionsPanel(controller: DesktopController, closing: Boolean) {
     val state by controller.state.collectAsState()
     var address by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
+    var adding by remember { mutableStateOf(false) }
+    var url by remember { mutableStateOf("") }
+    var title by remember { mutableStateOf("") }
     val enabled = !state.busy && !closing
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SettingsSectionHeader(desktopText("extensions.repositories"))
@@ -101,10 +104,79 @@ internal fun DesktopExtensionsPanel(controller: DesktopController, closing: Bool
                 }
             }
         }
+        // Android's unified screen also hosts the imported JSON sources; Windows serves the TVBox/Apple CMS family.
+        SettingsSectionHeader(desktopText("jsonSources.title"))
+        SettingsGroup {
+            state.jsonSources.takeIf { it.isNotEmpty() }?.forEach { source ->
+                SettingsActionRow(
+                    title = source.name,
+                    summary = source.api ?: source.id,
+                    verticalPadding = 6.dp,
+                ) {
+                    TextButton(
+                        onClick = { controller.removeJsonSource(source.id) },
+                        enabled = enabled,
+                        modifier = Modifier.testTag("json-source-remove:${source.id}"),
+                    ) { Text(desktopText("jsonSources.remove"), maxLines = 1) }
+                }
+                SettingsRowDivider()
+            }
+            SettingsActionRow(
+                title = desktopText("jsonSources.add"),
+                summary = desktopText("jsonSources.addSummary"),
+                verticalPadding = 6.dp,
+            ) {
+                TextButton(
+                    onClick = { url = ""; title = ""; adding = true },
+                    enabled = enabled,
+                    modifier = Modifier.testTag("json-source-add"),
+                ) { Text(desktopText("jsonSources.import")) }
+            }
+            SettingsRowDivider()
+            SettingsInfoRow(desktopText("jsonSources.note"), null)
+        }
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             ExtensionCatalog(controller, state, query, { query = it }, enabled, Modifier.weight(1f).fillMaxHeight())
             InstalledExtensions(controller, state, enabled, Modifier.width(380.dp).fillMaxHeight())
         }
+    }
+    if (adding) {
+        AlertDialog(
+            onDismissRequest = { adding = false },
+            modifier = Modifier.testTag("json-source-dialog"),
+            title = { Text(desktopText("jsonSources.add")) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(desktopText("jsonSources.addDetail"), style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(
+                        value = url,
+                        onValueChange = { url = it },
+                        label = { Text(desktopText("jsonSources.address")) },
+                        placeholder = { Text(desktopText("jsonSources.addressHint")) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("json-source-address"),
+                    )
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text(desktopText("jsonSources.name")) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("json-source-name"),
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { adding = false; controller.importJsonSource(url, title) },
+                    modifier = Modifier.testTag("json-source-save"),
+                ) { Text(desktopText("jsonSources.import")) }
+            },
+            dismissButton = {
+                TextButton({ adding = false }, modifier = Modifier.testTag("json-source-cancel")) {
+                    Text(desktopText("common.cancel"))
+                }
+            },
+        )
     }
 }
 

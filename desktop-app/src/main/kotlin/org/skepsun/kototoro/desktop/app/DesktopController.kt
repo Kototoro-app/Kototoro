@@ -79,6 +79,7 @@ data class DesktopAppState(
     val extensionCatalog: DesktopRepositoryCatalog? = null,
     val installedExtensions: Map<String, Long> = emptyMap(),
     val installedEntries: List<DesktopInstalledEntry> = emptyList(),
+    val jsonSources: List<org.skepsun.kototoro.desktop.runtime.DesktopJsonSource> = emptyList(),
     val extensionUpdates: List<DesktopExtensionUpdate> = emptyList(),
     val autoUpdateExtensions: Boolean = false,
     val selectedSource: SourceListing? = null,
@@ -219,6 +220,7 @@ class DesktopController(val session: DesktopSession) {
         // The saved language applies before the first screen is composed; `--lang` outranks it for this run.
         if (!DesktopStrings.isPinned) DesktopStrings.select(mutableState.value.language)
         refreshSources()
+        mutableState.update { it.copy(jsonSources = session.jsonSourceList()) }
         mutableState.update { it.copy(autoUpdateExtensions =
             (updatePreferences.snapshot()["auto_update"] as? SourcePreferenceValue.Toggle)?.value ?: false) }
         backgroundPreferences.snapshot().let { saved ->
@@ -369,6 +371,43 @@ class DesktopController(val session: DesktopSession) {
     fun showExtensions() = navigate {
         mutableState.update { it.copy(screen = DesktopScreen.EXTENSIONS, repositories = session.repositories.saved(),
             installedExtensions = installedVersions(), installedEntries = session.installedEntries()) }
+    }
+
+    /**
+     * Android's "add JSON source": one link may be a MacCMS API, a TVBox document or a multi-repository list, so the
+     * shared importer decides how many sites it holds. Spider sites and unreadable children are reported, not stored.
+     */
+    fun importJsonSource(address: String, title: String? = null) = action {
+        val url = address.trim()
+        require(url.isNotEmpty()) { desktopText("jsonSources.addressRequired") }
+        mutableState.update { it.copy(screen = DesktopScreen.EXTENSIONS) }
+        val result = session.importJsonSources(url, title?.trim()?.takeIf(String::isNotEmpty))
+        require(result.sources.isNotEmpty()) {
+            result.errors.firstOrNull() ?: desktopText("jsonSources.noneFound")
+        }
+        val stored = result.sources.map {
+            org.skepsun.kototoro.desktop.runtime.DesktopJsonSource(it.id, it.name, it.config, it.iconUrl, it.stored.api)
+        }
+        require(session.jsonSources.add(stored)) { desktopText("jsonSources.saveFailed") }
+        session.reloadJsonSources()
+        mutableState.update {
+            it.copy(sources = sourceDescriptors(), jsonSources = session.jsonSourceList(),
+                message = desktopText("jsonSources.added", result.sources.size) +
+                    if (result.skippedSpiderSites > 0) {
+                        " · " + desktopText("jsonSources.skipped", result.skippedSpiderSites)
+                    } else "",
+                error = result.errors.firstOrNull())
+        }
+    }
+
+    /** Drops an imported JSON source; the works it supplied stay in the library, as Android keeps them. */
+    fun removeJsonSource(id: String) = action {
+        require(session.jsonSources.remove(id)) { desktopText("jsonSources.saveFailed") }
+        session.reloadJsonSources()
+        mutableState.update {
+            it.copy(sources = sourceDescriptors(), jsonSources = session.jsonSourceList(),
+                message = desktopText("jsonSources.removed"))
+        }
     }
 
     fun fetchRepository(address: String) = action {
