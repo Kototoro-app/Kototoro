@@ -1,3 +1,4 @@
+import Combine
 import KototoroShared
 import SwiftUI
 import UIKit
@@ -41,22 +42,274 @@ struct ReaderStrip: UIViewControllerRepresentable {
     }
 }
 
-/// One page of the strip, hosted in its own `UIHostingController` so pages share the paged reader's page view.
-struct ReaderStripPage: View, Equatable {
-    let model: SourceReaderModel
-    let settings: ReaderSettings
-    let index: Int
-    let size: CGSize
-    /// Where the strip's tiles are resolved for: follows the scroll in steps and when it settles.
-    let viewport: CGPoint
-
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.index == rhs.index && lhs.size == rhs.size && lhs.viewport == rhs.viewport
+/// One page of the strip in plain UIKit, as Aidoku's and Suwatte's webtoon pages are an image view in a light node:
+/// the image, the tiles of a page too large to decode whole, and a spinner while it loads. The shared SwiftUI
+/// `ReaderPageTile` is hosted only for what plain views do not draw: a failure with its retry and verification
+/// buttons, and the colour adjustments (brightness, contrast, grayscale, invert, book shadow).
+@MainActor
+final class ReaderStripPageView: UIView {
+    struct Configuration: Equatable {
+        let index: Int
+        let size: CGSize
+        /// Where a tiled page resolves its tiles for: follows the scroll in steps and when it settles.
+        let viewport: CGPoint
+        let adjusted: Bool
     }
 
-    var body: some View {
-        ReaderPageTile(model: model, settings: settings, index: index, displaySize: size, viewportOffset: viewport)
-            .frame(width: size.width, height: size.height)
+    private let model: SourceReaderModel
+    private let settings: ReaderSettings
+    private weak var owner: UIViewController?
+    private let imageView = UIImageView()
+    private let tiles = ReaderStripTileView()
+    private let spinner = UIActivityIndicatorView(style: .medium)
+    private var host: UIHostingController<ReaderPageTile>?
+    private(set) var configuration: Configuration?
+    private var state: ReaderPageState?
+    private var subscription: AnyCancellable?
+    private var loadTask: Task<Void, Never>?
+    private var loadedRevision: Int?
+
+    init(model: SourceReaderModel, settings: ReaderSettings, owner: UIViewController) {
+        self.model = model
+        self.settings = settings
+        self.owner = owner
+        super.init(frame: .zero)
+        backgroundColor = .clear
+        imageView.contentMode = .scaleAspectFit
+        imageView.accessibilityIdentifier = "reader.image"
+        imageView.accessibilityTraits = .image
+        tiles.isUserInteractionEnabled = false
+        spinner.color = .gray
+        spinner.hidesWhenStopped = true
+        addSubview(imageView)
+        addSubview(tiles)
+        addSubview(spinner)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    /// The page shows its error, whose retry and verification buttons keep their taps from the reader.
+    var showsFailure: Bool {
+        guard let configuration, !isHidden else { return false }
+        return model.pageFailures[configuration.index] != nil
+    }
+
+    func configure(_ configuration: Configuration) {
+        guard configuration != self.configuration else { return }
+        let previous = self.configuration
+        self.configuration = configuration
+        if previous?.index != configuration.index { bind(configuration.index) }
+        refresh()
+        if previous?.size != configuration.size {
+            setNeedsLayout()
+            layoutIfNeeded()
+        }
+    }
+
+    /// Back to the spare pool: the page lets go of its image and tiles at once, as Aidoku's page leaves the display
+    /// range, rather than holding them while it waits to be reused.
+    func reset() {
+        subscription = nil
+        state = nil
+        configuration = nil
+        loadTask?.cancel()
+        loadTask = nil
+        loadedRevision = nil
+        imageView.image = nil
+        imageView.isAccessibilityElement = false
+        tiles.reset()
+        spinner.stopAnimating()
+        removeHost()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        imageView.frame = bounds
+        tiles.frame = bounds
+        spinner.center = CGPoint(x: bounds.midX, y: bounds.midY)
+        host?.view.frame = bounds
+    }
+
+    private func bind(_ index: Int) {
+        loadTask?.cancel()
+        loadTask = nil
+        loadedRevision = nil
+        tiles.reset()
+        let state = model.pageState(at: index)
+        self.state = state
+        subscription = state.didChange.sink { [weak self] in self?.refresh() }
+    }
+
+    private func refresh() {
+        guard let configuration, let state else { return }
+        // A page that appears, or whose scene was reloaded, asks for its image (`ReaderPageTile`'s `.task`).
+        if loadedRevision != state.revision, configuration.index >= 0 {
+            loadedRevision = state.revision
+            loadTask?.cancel()
+            let model = model, index = configuration.index
+            loadTask = Task { await model.loadImage(at: index) }
+        }
+        let viewport = state.artifact?.tiled == true ? configuration.viewport : .zero
+        if configuration.adjusted || (state.image == nil && state.failure != nil) {
+            imageView.image = nil
+            imageView.isHidden = true
+            imageView.isAccessibilityElement = false
+            tiles.reset()
+            spinner.stopAnimating()
+            showHost(ReaderPageTile(model: model, settings: settings, index: configuration.index,
+                                    displaySize: configuration.size, viewportOffset: viewport))
+            return
+        }
+        removeHost()
+        if imageView.image !== state.image { imageView.image = state.image }
+        let shown = state.image != nil
+        imageView.isHidden = !shown
+        imageView.isAccessibilityElement = shown
+        imageView.accessibilityLabel = state.description
+        if shown { spinner.stopAnimating() } else { spinner.startAnimating() }
+        if shown, let artifact = state.artifact, artifact.tiled,
+           configuration.size.width > 1, configuration.size.height > 1 {
+            let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 3
+            let visible = model.engine.visibleTiles(
+                x: Float(viewport.x), y: Float(viewport.y), index: Int32(configuration.index),
+                encodedWidth: Int32(artifact.encodedWidth), encodedHeight: Int32(artifact.encodedHeight),
+                displayScale: Float(scale), zoomScale: 1
+            )
+            tiles.isHidden = false
+            tiles.update(artifact: artifact, tiles: visible, displaySize: configuration.size)
+        } else {
+            tiles.reset()
+            tiles.isHidden = true
+        }
+    }
+
+    private func showHost(_ page: ReaderPageTile) {
+        if let host {
+            host.rootView = page
+            return
+        }
+        let host = UIHostingController(rootView: page)
+        host.safeAreaRegions = []
+        host.sizingOptions = []
+        host.view.backgroundColor = .clear
+        owner?.addChild(host)
+        host.view.frame = bounds
+        addSubview(host.view)
+        host.didMove(toParent: owner)
+        self.host = host
+    }
+
+    private func removeHost() {
+        guard let host else { return }
+        host.willMove(toParent: nil)
+        host.view.removeFromSuperview()
+        host.removeFromParent()
+        self.host = nil
+    }
+}
+
+/// The tiles of a strip page too large to decode whole, over its base image (`ReaderTiledOverlay` is the same for
+/// paged slots): the visible region decoded again at the sample size the strip needs. Tiles of the previous viewport
+/// stay drawn (coarser ones underneath) until the new set is ready.
+@MainActor
+final class ReaderStripTileView: UIView {
+    private struct DecodedTile {
+        let tile: IosReaderTile
+        let clip: UIView
+        let image: UIImageView
+    }
+
+    private var artifact: ReaderImageArtifact?
+    private var decoded: [String: DecodedTile] = [:]
+    private var signature = ""
+    private var displaySize = CGSize.zero
+    private var task: Task<Void, Never>?
+
+    private static func key(_ tile: IosReaderTile) -> String {
+        "\(tile.decodeLeft):\(tile.decodeTop):\(tile.decodeWidth):\(tile.decodeHeight):\(tile.sampleSize)"
+    }
+
+    func reset() {
+        task?.cancel()
+        task = nil
+        for tile in decoded.values { tile.clip.removeFromSuperview() }
+        decoded = [:]
+        signature = ""
+        artifact = nil
+    }
+
+    func update(artifact: ReaderImageArtifact, tiles: [IosReaderTile], displaySize: CGSize) {
+        if self.artifact != artifact {
+            reset()
+            self.artifact = artifact
+        }
+        if self.displaySize != displaySize {
+            self.displaySize = displaySize
+            for tile in decoded.values { place(tile) }
+        }
+        let signature = tiles.map(Self.key).joined(separator: "|")
+        guard signature != self.signature else { return }
+        self.signature = signature
+        task?.cancel()
+        let active = Set(tiles.map(Self.key))
+        // Bounded: a long pan leaves at most one screen of stale tiles behind.
+        if decoded.count > active.count * 2 { drop(except: active) }
+        task = Task { [weak self] in
+            for tile in tiles {
+                guard !Task.isCancelled, let self else { return }
+                let key = Self.key(tile)
+                guard self.decoded[key] == nil else { continue }
+                guard let image = try? await artifact.decodeTile(tile) else { continue }
+                guard !Task.isCancelled else { return }
+                self.insert(key: key, tile: tile, image: image)
+            }
+            guard !Task.isCancelled else { return }
+            self?.drop(except: active)
+        }
+    }
+
+    private func insert(key: String, tile: IosReaderTile, image: UIImage) {
+        let clip = UIView()
+        clip.clipsToBounds = true
+        clip.isUserInteractionEnabled = false
+        let imageView = UIImageView(image: image)
+        imageView.contentMode = .scaleToFill
+        clip.addSubview(imageView)
+        addSubview(clip)
+        let decodedTile = DecodedTile(tile: tile, clip: clip, image: imageView)
+        decoded[key] = decodedTile
+        place(decodedTile)
+        // Coarse samples first, so the finer tiles of the current viewport draw on top.
+        for (_, tile) in decoded.sorted(by: {
+            $0.value.tile.sampleSize != $1.value.tile.sampleSize
+                ? $0.value.tile.sampleSize > $1.value.tile.sampleSize : $0.key < $1.key
+        }) {
+            bringSubviewToFront(tile.clip)
+        }
+    }
+
+    private func drop(except active: Set<String>) {
+        for (key, tile) in decoded where !active.contains(key) {
+            tile.clip.removeFromSuperview()
+            decoded[key] = nil
+        }
+    }
+
+    private func place(_ decodedTile: DecodedTile) {
+        guard let artifact else { return }
+        let tile = decodedTile.tile
+        let layout = SourceImageFile.tileLayout(
+            logical: CGRect(x: Int(tile.logicalLeft), y: Int(tile.logicalTop),
+                            width: Int(tile.logicalWidth), height: Int(tile.logicalHeight)),
+            decoded: CGRect(x: Int(tile.decodeLeft), y: Int(tile.decodeTop),
+                            width: Int(tile.decodeWidth), height: Int(tile.decodeHeight)),
+            sourceSize: CGSize(width: artifact.encodedWidth, height: artifact.encodedHeight),
+            displaySize: displaySize
+        )
+        decodedTile.clip.frame = layout.frame
+        decodedTile.image.frame = CGRect(origin: CGPoint(x: layout.decodedOffset.width, y: layout.decodedOffset.height),
+                                         size: layout.decodedSize)
     }
 }
 
@@ -68,14 +321,19 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
 
     private let scrollView = ReaderStripScrollView()
     private let content = UIView()
-    private final class Cell {
-        let host: UIHostingController<ReaderStripPage>
-        var page: ReaderStripPage
-        init(host: UIHostingController<ReaderStripPage>, page: ReaderStripPage) { self.host = host; self.page = page }
-    }
     /// Page views by slot identity (chapter-local page), so a page keeps its view while the window changes around it.
-    private var cells: [String: Cell] = [:]
-    private var spare: [Cell] = []
+    private var cells: [String: ReaderStripPageView] = [:]
+    private var spare: [ReaderStripPageView] = []
+    /// The slots' scene frames (before cross-axis padding) in reading-axis order and the scene's extent, read from the
+    /// shared slots once per new slot list instead of on every scroll frame.
+    private struct StripFrame {
+        let id: String
+        let index: Int
+        let frame: CGRect
+    }
+    private var frames: [StripFrame] = []
+    private var sceneExtent = CGSize.zero
+    private var framesKey: (revision: Int, vertical: Bool)?
     private var tileViewport = CGPoint.zero
     /// A programmatic layout is moving the strip: its scroll callbacks are not the reader's motion.
     private var applying = false
@@ -145,6 +403,11 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
         singleTap.delegate = self
         for gesture in [doubleTap, singleTap] { scrollView.addGestureRecognizer(gesture) }
         model.strip = self
+    }
+
+    override func didReceiveMemoryWarning() {
+        super.didReceiveMemoryWarning()
+        model.trimDecodedImages()
     }
 
     override func viewDidLayoutSubviews() {
@@ -226,14 +489,31 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
 
     /// The scene's extent: page bounds are scene coordinates, at least the screen so a short strip does not scroll.
     private func contentSize() -> CGSize {
-        var width = view.bounds.width, height = view.bounds.height
-        for slot in model.slots {
-            for placement in slot.placements {
+        refreshFrames()
+        return CGSize(width: max(view.bounds.width, sceneExtent.width), height: max(view.bounds.height, sceneExtent.height))
+    }
+
+    private func refreshFrames() {
+        if let framesKey, framesKey.revision == model.slotRevision, framesKey.vertical == vertical { return }
+        framesKey = (model.slotRevision, vertical)
+        var result: [StripFrame] = []
+        result.reserveCapacity(model.identifiedSlots.count)
+        var width: CGFloat = 0, height: CGFloat = 0
+        for item in model.identifiedSlots {
+            let placements = item.slot.placements
+            for placement in placements {
                 width = max(width, CGFloat(placement.x + placement.width))
                 height = max(height, CGFloat(placement.y + placement.height))
             }
+            guard let placement = placements.first else { continue }
+            result.append(StripFrame(id: item.id, index: Int(placement.index), frame: CGRect(
+                x: CGFloat(placement.x), y: CGFloat(placement.y),
+                width: CGFloat(placement.width), height: CGFloat(placement.height))))
         }
-        return CGSize(width: width, height: height)
+        let vertical = vertical
+        result.sort { vertical ? $0.frame.minY < $1.frame.minY : $0.frame.minX < $1.frame.minX }
+        frames = result
+        sceneExtent = CGSize(width: width, height: height)
     }
 
     private func clampedCrossAxis(_ point: CGPoint, content: CGSize) -> CGPoint {
@@ -251,61 +531,55 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
         let extent = vertical ? bounds.height : bounds.width
         let start = (vertical ? bounds.minY : bounds.minX) - extent
         let end = (vertical ? bounds.maxY : bounds.maxX) + extent
+        refreshFrames()
+        // Strip pages do not overlap, so in reading-axis order their ends increase too: the first page in the band is
+        // found by bisection and the band's pages follow it.
+        let vertical = vertical
+        func lower(_ frame: CGRect) -> CGFloat { vertical ? frame.minY : frame.minX }
+        func upper(_ frame: CGRect) -> CGFloat { vertical ? frame.maxY : frame.maxX }
+        var low = 0, high = frames.count
+        while low < high {
+            let middle = (low + high) / 2
+            if upper(frames[middle].frame) > start { high = middle } else { low = middle + 1 }
+        }
+        let padding = crossAxisPadding
         var wanted: [String: (index: Int, frame: CGRect)] = [:]
-        for item in model.identifiedSlots {
-            guard let placement = item.slot.placements.first else { continue }
-            let frame = CGRect(x: CGFloat(placement.x) + (vertical ? crossAxisPadding : 0),
-                               y: CGFloat(placement.y) + (vertical ? 0 : crossAxisPadding),
-                               width: CGFloat(placement.width), height: CGFloat(placement.height))
-            let lower = vertical ? frame.minY : frame.minX, upper = vertical ? frame.maxY : frame.maxX
-            if upper > start && lower < end { wanted[item.id] = (Int(placement.index), frame) }
+        for entry in frames[low...] {
+            guard lower(entry.frame) < end else { break }
+            guard upper(entry.frame) > start else { continue }
+            wanted[entry.id] = (entry.index, entry.frame.offsetBy(dx: vertical ? padding : 0, dy: vertical ? 0 : padding))
         }
         for (id, cell) in cells where wanted[id] == nil {
             cells[id] = nil
             recycle(cell)
         }
+        let adjusted = settings.value.hasColorAdjustments
         for (id, entry) in wanted {
             let cell = cells[id] ?? dequeue()
             cells[id] = cell
-            if cell.host.view.frame != entry.frame { cell.host.view.frame = entry.frame }
-            cell.host.view.isHidden = false
-            let page = ReaderStripPage(model: model, settings: settings, index: entry.index, size: entry.frame.size,
-                                       viewport: tileViewport)
-            if page != cell.page {
-                cell.page = page
-                cell.host.rootView = page
-                cell.host.view.layoutIfNeeded()
-            }
+            if cell.frame != entry.frame { cell.frame = entry.frame }
+            cell.isHidden = false
+            // Only tiled pages resolve tiles for the viewport; the others keep theirs fixed so a scroll step leaves
+            // them alone.
+            let viewport = model.artifacts[entry.index]?.tiled == true ? tileViewport : .zero
+            cell.configure(.init(index: entry.index, size: entry.frame.size, viewport: viewport, adjusted: adjusted))
         }
     }
 
-    private func blankPage() -> ReaderStripPage {
-        ReaderStripPage(model: model, settings: settings, index: -1, size: .zero, viewport: .zero)
-    }
-
-    private func dequeue() -> Cell {
+    private func dequeue() -> ReaderStripPageView {
         if let cell = spare.popLast() { return cell }
-        let page = blankPage()
-        let host = UIHostingController(rootView: page)
-        host.safeAreaRegions = []
-        host.sizingOptions = []
-        host.view.backgroundColor = .clear
-        addChild(host)
-        content.addSubview(host.view)
-        host.didMove(toParent: self)
-        return Cell(host: host, page: page)
+        let cell = ReaderStripPageView(model: model, settings: settings, owner: self)
+        content.addSubview(cell)
+        return cell
     }
 
-    private func recycle(_ cell: Cell) {
-        cell.host.view.isHidden = true
-        cell.page = blankPage()
-        cell.host.rootView = cell.page
-        if spare.count < 4 {
+    private func recycle(_ cell: ReaderStripPageView) {
+        cell.isHidden = true
+        cell.reset()
+        if spare.count < 12 {
             spare.append(cell)
         } else {
-            cell.host.willMove(toParent: nil)
-            cell.host.view.removeFromSuperview()
-            cell.host.removeFromParent()
+            cell.removeFromSuperview()
         }
     }
 
@@ -338,7 +612,10 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
         let moving = scrollView.isTracking || scrollView.isDecelerating
         model.continuousPosition(x: point.x, y: point.y, velocity: moving ? velocity : .zero,
                                  dragging: scrollView.isTracking)
-        scrollView.accessibilityValue = model.readingPositionDescription
+        // A drag or fling describes where it comes to rest (`settle` reports again), not every frame on the way.
+        if !moving || UIAccessibility.isVoiceOverRunning {
+            scrollView.accessibilityValue = model.readingPositionDescription
+        }
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
@@ -377,9 +654,7 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         guard gestureRecognizer is UITapGestureRecognizer else { return true }
         let point = touch.location(in: content)
-        return !cells.values.contains { cell in
-            !cell.host.view.isHidden && cell.host.view.frame.contains(point) && model.pageFailures[cell.page.index] != nil
-        }
+        return !cells.values.contains { cell in cell.frame.contains(point) && cell.showsFailure }
     }
 
     @objc private func tapped(_ gesture: UITapGestureRecognizer) {

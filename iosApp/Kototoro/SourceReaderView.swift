@@ -9,6 +9,21 @@ struct ReaderWindowSlot: Identifiable {
     let slot: IosReaderSlot
 }
 
+/// One window position's display state. Every page of the strip is its own hosting controller: observing this rather
+/// than the whole reader model, a page renders again when its own image, artifact or failure changes, not on every
+/// page turn, slot rebuild or another page's image.
+@MainActor
+final class ReaderPageState: ObservableObject {
+    @Published fileprivate(set) var image: UIImage?
+    @Published fileprivate(set) var artifact: ReaderImageArtifact?
+    @Published fileprivate(set) var failure: SourceReaderModel.PageFailure?
+    @Published fileprivate(set) var revision = 0
+    @Published fileprivate(set) var description = ""
+    /// Sent after a change is complete (unlike `objectWillChange`), so a UIKit page reads the new state in the same
+    /// main-thread turn as the model's layout change.
+    let didChange = PassthroughSubject<Void, Never>()
+}
+
 @MainActor
 final class SourceReaderModel: ObservableObject {
     private lazy var activity = ReadingActivityRecorder(content: content)
@@ -32,12 +47,19 @@ final class SourceReaderModel: ObservableObject {
         didSet {
             windowPositions = Dictionary(window.enumerated().map { (pageIdentity($0.element), $0.offset) },
                                          uniquingKeysWith: { first, _ in first })
+            slotIdentities = [:]
+            // States are kept, not dropped with positions past the window: a page view may still hold one.
+            for (target, state) in pageStates {
+                let description = pageDescription(at: target)
+                if state.description != description { state.description = description; state.didChange.send() }
+            }
         }
     }
     /// Window positions by page identity, for the resource window's lookups.
     private var windowPositions: [String: Int] = [:]
+    /// Read on every reader body update: hash the window's few chapters, not each of its pages.
     var storageDirectories: Set<String> {
-        Set((window.map(\.chapterId) + [chapter.id]).map {
+        Set(Set(window.map(\.chapterId) + [chapter.id]).map {
             ReaderStorageMetadata.directoryID(contentID: content.id, chapterID: $0)
         })
     }
@@ -45,25 +67,42 @@ final class SourceReaderModel: ObservableObject {
     private var chapterPages: [String: [IosSourcePage]] = [:]
     private var chapterPreloads: [String: ChapterPreload] = [:]
     private var pendingWindow = false
-    @Published private(set) var images: [Int: UIImage] = [:]
-    @Published private(set) var artifacts: [Int: ReaderImageArtifact] = [:]
+    @Published private(set) var images: [Int: UIImage] = [:] { didSet { syncPageStates() } }
+    @Published private(set) var artifacts: [Int: ReaderImageArtifact] = [:] { didSet { syncPageStates() } }
     @Published private(set) var error: String?
     /// The last failure was a browser challenge (Cloudflare): the error offers the in-app browser.
     @Published private(set) var challenge: IosChallenge?
-    struct PageFailure {
+    struct PageFailure: Equatable {
         let message: String
         let challenge: IosChallenge?
     }
-    @Published private(set) var pageFailures: [Int: PageFailure] = [:]
+    @Published private(set) var pageFailures: [Int: PageFailure] = [:] { didSet { syncPageStates() } }
     @Published private(set) var isLoadingPages = false
     @Published private(set) var bookmarks: [IosBookmark] = []
     private var changingBookmark = false
     @Published private(set) var slots: [IosReaderSlot] = [] {
-        didSet { identifiedSlots = slots.map { ReaderWindowSlot(id: slotIdentity($0), slot: $0) } }
+        didSet {
+            identifiedSlots = slots.map { ReaderWindowSlot(id: cachedSlotIdentity($0), slot: $0) }
+            slotByAnchor = [:]
+            for slot in slots where slotByAnchor[Int(slot.anchor)] == nil {
+                slotByAnchor[Int(slot.anchor)] = Int(slot.index)
+            }
+            slotRevision &+= 1
+        }
     }
+    /// The first slot anchored at each window position, for the strip's per-frame reading slot.
+    private var slotByAnchor: [Int: Int] = [:]
     private(set) var identifiedSlots: [ReaderWindowSlot] = []
+    /// Changes with every new [slots], so the strip rebuilds its cached geometry only then.
+    private(set) var slotRevision = 0
+    /// Single-page slot identities by window position and segment, for the current window: an image size changes every
+    /// slot's geometry but no slot's identity, so [slots] are rebuilt without building every identity string again.
+    private var slotIdentities: [Int: String] = [:]
+    /// Display states of the window positions a page view asked for (see [pageState]); at most one per position.
+    private var pageStates: [Int: ReaderPageState] = [:]
+    private let emptyPageState = ReaderPageState()
     @Published private(set) var loaded = false
-    @Published private(set) var pageRevision = 0
+    @Published private(set) var pageRevision = 0 { didSet { syncPageStates() } }
     @Published private(set) var scrollRevision = 0
     @Published var slotIndex: Int = 0
     @Published var autoScroll = false
@@ -86,6 +125,8 @@ final class SourceReaderModel: ObservableObject {
     /// caller waits for the running one. Loads stop only when their page leaves the resource window (see
     /// [updateResources]) or the scene changes.
     private var pageLoads: [String: (serial: Int, task: Task<Void, Never>)] = [:]
+    /// The display limit each image on hand was decoded under, by page identity; absent when it was not limited.
+    private var decodedLimits: [String: ReaderDisplayLimit] = [:]
     private var loadSerial = 0
     /// One download per page, shared by the page on screen and the prefetcher (Android's `PageLoader` tasks), keyed
     /// by page identity. Finished downloads stay: the artifact on disk is decoded again when the page returns.
@@ -142,7 +183,8 @@ final class SourceReaderModel: ObservableObject {
     var currentOrigin: CGFloat { stripOrigin(of: IosReaderProgress(index: Int32(windowIndex), offset: offset)) }
     private var awaitingRestore = false
     /// The continuous viewport's first visible page and its offset, compared by identity to tell a move back.
-    private var viewAnchor: (page: IosReaderPage, offset: Float)?
+    /// [position] is where [page] was in the window then: checked first, so a move is found without a window search.
+    private var viewAnchor: (page: IosReaderPage, position: Int, offset: Float)?
     /// The paged scroll view is moving under the reader's finger (dragged or settling from a drag). Like Android's
     /// pager reports (target page while scrolling, settled page after) and Aidoku's finished page-turn gestures, only
     /// these moves report a page: its own first layout and moves the model made (taps, the slider, restores) do not.
@@ -202,6 +244,7 @@ final class SourceReaderModel: ObservableObject {
             updateResources(force: true)
         }
         if loaded && modeChanged { Task { @MainActor [weak self] in self?.publishWindow() } }
+        if layoutChanged && !cropChanged { redecodeLimitedImages() }
     }
 
     private var startAtEnd = false
@@ -293,15 +336,17 @@ final class SourceReaderModel: ObservableObject {
         guard let position = window.firstIndex(of: key), let owner = chapterByID[key.chapterId] else { return }
         let page = windowPages[position]
         let cropMargins = preferences.cropMargins
+        let displayLimit = stripDisplayLimit
         do {
             let loadedPage: ReaderLoadedPage
             if ReaderDownloads.isDownloaded(content: content, chapter: owner) {
                 loadedPage = try await ReaderDownloads.loadedPage(
                     runtime: runtime, content: content, chapter: owner,
-                    page: page, index: Int(key.index), cropMargins: cropMargins
+                    page: page, index: Int(key.index), cropMargins: cropMargins, displayLimit: displayLimit
                 )
             } else {
-                loadedPage = try await pageArtifact(key: key, page: page).loadedPage(cropMargins: cropMargins)
+                loadedPage = try await pageArtifact(key: key, page: page)
+                    .loadedPage(cropMargins: cropMargins, displayLimit: displayLimit)
             }
             // UIKit still draws the old scene while pinching/double tapping. A late image must not resize that
             // scene or evict its displayed neighbours before the compensated viewport is installed.
@@ -309,6 +354,7 @@ final class SourceReaderModel: ObservableObject {
             try Task.checkCancellation()
             // The window may have been rebuilt meanwhile: the page goes where it is now, if it is still shown.
             guard request == token, let target = window.firstIndex(of: key) else { return }
+            decodedLimits[pageIdentity(key)] = loadedPage.limited ? displayLimit : nil
             images[target] = loadedPage.image
             artifacts[target] = loadedPage.artifact
             pageFailures[target] = nil
@@ -347,7 +393,8 @@ final class SourceReaderModel: ObservableObject {
             if slots.first(where: { $0.placements.contains { Int($0.index) == windowIndex } })?
                 .placements.contains(where: { Int($0.index) == target }) == true {
                 updateResources()
-                await persist()
+                // A strip in motion saves when it settles (see `ReaderStrip.settle`), not on every page it passes.
+                if !isStripMoving { await persist() }
             }
         } catch {
             if !Task.isCancelled && request == token, let target = window.firstIndex(of: key) {
@@ -454,7 +501,7 @@ final class SourceReaderModel: ObservableObject {
             let moved = engine.setPages(pages: updated, viewportX: Float(viewportOffset.x),
                                         viewportY: Float(viewportOffset.y))
             slots = engine.slots()
-            slotIndex = Int(slots.first { $0.anchor == Int32(windowIndex) }?.index ?? 0)
+            slotIndex = slotByAnchor[windowIndex] ?? 0
             windowRevision += 1
             if let moved { moveStrip(to: moved) } else { requestScroll(to: currentOrigin) }
         } else {
@@ -641,10 +688,14 @@ final class SourceReaderModel: ObservableObject {
         }
         guard ReaderLoading.isPrefetchApplicable else { return }
         var started = 0
+        // One file check per chapter, not per planned page.
+        var downloaded: [String: Bool] = [:]
         for id in downloadWindow where started < ReaderLoading.prefetchLimit {
             guard fetches[id] == nil, let position = windowPositions[id], images[position] == nil,
-                  let owner = chapterByID[window[position].chapterId],
-                  !ReaderDownloads.isDownloaded(content: content, chapter: owner) else { continue }
+                  let owner = chapterByID[window[position].chapterId] else { continue }
+            let isDownloaded = downloaded[owner.id] ?? ReaderDownloads.isDownloaded(content: content, chapter: owner)
+            downloaded[owner.id] = isDownloaded
+            guard !isDownloaded else { continue }
             startFetch(window[position], page: windowPages[position], isPrefetch: true)
             started += 1
         }
@@ -670,6 +721,33 @@ final class SourceReaderModel: ObservableObject {
         }
     }
 
+    /// A memory warning on the strip: decoded pages more than a screen from it go, the lookahead included, and their
+    /// loads stop. Their files stay on disk and decode again when the strip plans its next window.
+    func trimDecodedImages() {
+        guard loaded, preferences.mode >= 3, !stripZoomSession.isActive else { return }
+        let vertical = stripIsVertical
+        let extent = vertical ? viewport.height : viewport.width
+        let origin = vertical ? viewportOffset.y : viewportOffset.x
+        let lower = origin - extent, upper = origin + 2 * extent
+        var keep: Set<Int> = [windowIndex]
+        for slot in slots {
+            for placement in slot.placements {
+                let start = CGFloat(vertical ? placement.y : placement.x)
+                let end = start + CGFloat(vertical ? placement.height : placement.width)
+                if end > lower && start < upper { keep.insert(Int(placement.index)) }
+            }
+        }
+        let kept = Set(keep.filter { window.indices.contains($0) }.map { pageIdentity(window[$0]) })
+        decodeWindow.formIntersection(kept)
+        for (id, load) in pageLoads where !kept.contains(id) {
+            load.task.cancel(); pageLoads[id] = nil
+        }
+        if images.keys.contains(where: { !keep.contains($0) }) { images = images.filter { keep.contains($0.key) } }
+        if artifacts.keys.contains(where: { !keep.contains($0) }) {
+            artifacts = artifacts.filter { keep.contains($0.key) }
+        }
+    }
+
     /// Android's pager composes one slot on each side of the screen (`beyondViewportPageCount = 1`); Aidoku keeps two
     /// pages ahead decoded (`Reader.pagesToPreload`). Those pages load at visible priority before they turn in.
     private func neighborPages() -> Set<Int> {
@@ -681,6 +759,29 @@ final class SourceReaderModel: ObservableObject {
             for placement in slots[position].placements { result.insert(Int(placement.index)) }
         }
         return result
+    }
+
+    /// The strip's [ReaderDisplayLimit] now: its cross-axis extent at the current zoom, in screen pixels. Paged modes
+    /// have none (a page zooms far past its fit there).
+    private var stripDisplayLimit: ReaderDisplayLimit? {
+        guard preferences.mode >= 3 else { return nil }
+        let vertical = stripIsVertical
+        let scale = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.scale ?? 3
+        let extent = (vertical ? viewport.width : viewport.height) * max(1, stripZoom) * scale
+        return ReaderDisplayLimit(pixels: max(1, Int(extent.rounded(.up))), alongWidth: vertical)
+    }
+
+    /// Pages decoded for a smaller strip (before a zoom in or a rotation, or for a strip left for a paged mode) decode
+    /// again at the size shown now. Their current image stays until the sharper one replaces it.
+    private func redecodeLimitedImages() {
+        guard loaded, !decodedLimits.isEmpty else { return }
+        let needed = stripDisplayLimit
+        for target in images.keys.sorted() where window.indices.contains(target) {
+            let key = window[target]
+            guard let decoded = decodedLimits[pageIdentity(key)] else { continue }
+            if let needed, needed.alongWidth == decoded.alongWidth, needed.pixels <= decoded.pixels { continue }
+            startLoad(key)
+        }
     }
 
     /// Leaving the reader: nothing ahead of the screen is wanted any more.
@@ -702,9 +803,33 @@ final class SourceReaderModel: ObservableObject {
         needsReplan = true
     }
 
-    func displayImage(for target: Int, segment: Int) -> UIImage? {
-        guard let base = images[target] else { return nil }
-        return segment == 1 || segment == 2 ? SourceImageFile.splitPage(base, segment: segment) : base
+    /// The display state of window position [target], kept in step with [images], [artifacts], [pageFailures],
+    /// [pageRevision] and the window.
+    func pageState(at target: Int) -> ReaderPageState {
+        guard target >= 0 else { return emptyPageState }
+        if let state = pageStates[target] { return state }
+        let state = ReaderPageState()
+        pageStates[target] = state
+        sync(state, at: target)
+        state.description = pageDescription(at: target)
+        return state
+    }
+
+    private func syncPageStates() {
+        for (target, state) in pageStates { sync(state, at: target) }
+    }
+
+    /// Assigns only what changed: each assignment re-renders that page.
+    private func sync(_ state: ReaderPageState, at target: Int) {
+        var changed = false
+        let image = images[target]
+        if state.image !== image { state.image = image; changed = true }
+        let artifact = artifacts[target]
+        if state.artifact != artifact { state.artifact = artifact; changed = true }
+        let failure = pageFailures[target]
+        if state.failure != failure { state.failure = failure; changed = true }
+        if state.revision != pageRevision { state.revision = pageRevision; changed = true }
+        if changed { state.didChange.send() }
     }
 
     func pageDescription(at target: Int) -> String {
@@ -712,6 +837,18 @@ final class SourceReaderModel: ObservableObject {
         let key = window[target]
         let chapter = chapterByID[key.chapterId]?.title ?? String(localized: "章节")
         return String(localized: "\(chapter)，第 \(key.index + 1) 页")
+    }
+
+    private func cachedSlotIdentity(_ slot: IosReaderSlot) -> String {
+        let placements = slot.placements
+        guard placements.count == 1, window.indices.contains(Int(placements[0].index)) else {
+            return slotIdentity(slot)
+        }
+        let key = Int(placements[0].index) * 4 + Int(placements[0].segment)
+        if let identity = slotIdentities[key] { return identity }
+        let identity = slotIdentity(slot)
+        slotIdentities[key] = identity
+        return identity
     }
 
     func slotIdentity(_ slot: IosReaderSlot) -> String {
@@ -770,10 +907,13 @@ final class SourceReaderModel: ObservableObject {
         let last = Int(engine.lastVisible(x: Float(viewportOffset.x), y: Float(viewportOffset.y)))
         // Motion is compared by page identity, so the coordinate shift of a rebuilt window is not a move.
         let movedBack: Bool = {
-            guard let previous = viewAnchor, let before = window.firstIndex(of: previous.page) else { return false }
+            guard let previous = viewAnchor else { return false }
+            let before = window.indices.contains(previous.position) && window[previous.position] == previous.page
+                ? previous.position : windowPositions[pageIdentity(previous.page)]
+            guard let before else { return false }
             return first < before || first == before && progress.offset < previous.offset - 0.5
         }()
-        if window.indices.contains(first) { viewAnchor = (window[first], progress.offset) }
+        if window.indices.contains(first) { viewAnchor = (window[first], first, progress.offset) }
         // The first visible page is the reading page, but pages shorter than the screen at the strip's end never
         // become first: scrolling to the end reads its last visible page, so a short next chapter is entered (and the
         // one after it loaded) and the book's last pages are recorded. A reading page ahead of the first visible one
@@ -791,7 +931,7 @@ final class SourceReaderModel: ObservableObject {
         let nextOffset = nextIndex == first ? progress.offset : 0
         if windowIndex != nextIndex { selectWindowPage(nextIndex) }
         offset = nextOffset
-        let nextSlot = Int(slots.first { $0.anchor == Int32(windowIndex) }?.index ?? 0)
+        let nextSlot = slotByAnchor[windowIndex] ?? 0
         if slotIndex != nextSlot { slotIndex = nextSlot }
         updateResources()
     }
@@ -807,6 +947,7 @@ final class SourceReaderModel: ObservableObject {
         stripZoomSession.end()
         if pendingWindow { publishWindow() }
         updateResources()
+        redecodeLimitedImages()
     }
 
     func setStripZoom(_ value: CGFloat) {
@@ -836,6 +977,10 @@ final class SourceReaderModel: ObservableObject {
     }
 
     func userScrolled() { awaitingRestore = false; autoScroll = false }
+
+    /// The continuous strip is being dragged, flung or auto-scrolled: position saves wait for it to come to rest (or
+    /// for auto-scroll's own periodic save).
+    var isStripMoving: Bool { preferences.mode >= 3 && (isUserPaging || autoScroll) }
 
     /// Restores the strip to [origin] along the reading axis. The strip moves there at once when it is shown, or
     /// when it is next laid out (`ReaderStrip` reads [restoreOrigin]); until it reports that position, the reading page
@@ -944,7 +1089,7 @@ final class SourceReaderModel: ObservableObject {
         for preload in chapterPreloads.values where preload !== adopted { preload.cancel() }
         chapterPreloads = adopted.map { [target.id: $0] } ?? [:]
         cancelLoads()
-        fetches = [:]
+        fetches = [:]; decodedLimits = [:]
         preloadedPages = Task { prepared }
         pages = []; window = []; windowPages = []; slots = []; images = [:]; artifacts = [:]; pageFailures = [:]
         chapterPages = [target.id: prepared]
@@ -1202,7 +1347,8 @@ struct SourceReaderView: View {
             if shownAgain && settings.value.mode >= 3 { model.stripAttached() }
         }
         .task(id: "\(model.windowRevision)-\(model.windowIndex)") {
-            await model.loadImage(at: model.windowIndex); await model.persist()
+            await model.loadImage(at: model.windowIndex)
+            if !model.isStripMoving { await model.persist() }
         }
         .task(id: model.autoScroll) {
             var elapsed = 0
@@ -1955,7 +2101,9 @@ private struct ReaderPageTransition: ViewModifier {
 }
 
 struct ReaderPageTile: View {
-    @ObservedObject var model: SourceReaderModel
+    /// Not observed: the page renders again for its own [page] state, not for every change of the reader.
+    let model: SourceReaderModel
+    @ObservedObject private var page: ReaderPageState
     @ObservedObject var settings: ReaderSettings
     @Environment(\.displayScale) private var displayScale
     let index: Int
@@ -1963,14 +2111,32 @@ struct ReaderPageTile: View {
     var displaySize = CGSize.zero
     var viewportOffset = CGPoint.zero
     var zoomScale: CGFloat = 1
+
+    init(model: SourceReaderModel, settings: ReaderSettings, index: Int, segment: Int = 0,
+         displaySize: CGSize = .zero, viewportOffset: CGPoint = .zero, zoomScale: CGFloat = 1) {
+        self.model = model
+        _page = ObservedObject(wrappedValue: model.pageState(at: index))
+        self.settings = settings
+        self.index = index
+        self.segment = segment
+        self.displaySize = displaySize
+        self.viewportOffset = viewportOffset
+        self.zoomScale = zoomScale
+    }
+
+    private var displayImage: UIImage? {
+        guard let base = page.image else { return nil }
+        return segment == 1 || segment == 2 ? SourceImageFile.splitPage(base, segment: segment) : base
+    }
+
     var body: some View {
         Group {
-            if let image = model.displayImage(for: index, segment: segment) {
+            if let image = displayImage {
                 ZStack(alignment: .topLeading) {
                     Image(uiImage: image).resizable().scaledToFit()
                         .frame(width: displaySize.width > 0 ? displaySize.width : nil,
                                height: displaySize.height > 0 ? displaySize.height : nil)
-                    if segment == 0, let artifact = model.artifacts[index], artifact.tiled,
+                    if segment == 0, let artifact = page.artifact, artifact.tiled,
                        displaySize.width > 1, displaySize.height > 1 {
                         let tiles = model.engine.visibleTiles(
                             x: Float(viewportOffset.x),
@@ -1991,8 +2157,8 @@ struct ReaderPageTile: View {
                 .modifier(ReaderInvert(enabled: settings.value.inverted))
                 .shadow(color: .black.opacity(settings.value.bookEffect ? 0.4 : 0), radius: 8)
                 .accessibilityIdentifier("reader.image")
-                .accessibilityLabel(model.pageDescription(at: index))
-            } else if let failure = model.pageFailures[index] {
+                .accessibilityLabel(page.description)
+            } else if let failure = page.failure {
                 VStack(spacing: 12) {
                     Text(failure.message).foregroundStyle(.red).accessibilityIdentifier("reader.pageError.\(index)")
                     if let challenge = failure.challenge {
@@ -2004,7 +2170,7 @@ struct ReaderPageTile: View {
                 }.padding()
             } else { ProgressView().tint(.gray) }
         }
-        .task(id: "\(model.pageRevision)-\(index)") { await model.loadImage(at: index) }
+        .task(id: "\(page.revision)-\(index)") { await model.loadImage(at: index) }
     }
 }
 

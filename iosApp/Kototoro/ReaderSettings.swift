@@ -60,6 +60,12 @@ struct ReaderPreferences: Codable, Equatable {
     }
 
     var readsRightToLeft: Bool { mode == 1 || mode == 4 && horizontalReversed }
+
+    /// The page view adjusts the image's colours or draws a shadow under it (the continuous strip then hosts the
+    /// SwiftUI page view instead of drawing the image itself).
+    var hasColorAdjustments: Bool {
+        inverted || grayscale || brightness != 0 || contrast != 1 || bookEffect
+    }
     var continuousForwardSign: CGFloat { mode == 4 && horizontalReversed ? -1 : 1 }
 
     /// A regular-width window covers expanded displays, including iPhone Duo; compact portrait stays single-page.

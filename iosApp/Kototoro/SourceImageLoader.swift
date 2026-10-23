@@ -65,8 +65,8 @@ struct ReaderImageArtifact: Equatable, Sendable {
         return image
     }
 
-    static func load(directory: URL, relativePath: String, sha256: String,
-                     byteSize: Int64, cropMargins: Bool = false) async throws -> ReaderLoadedPage {
+    static func load(directory: URL, relativePath: String, sha256: String, byteSize: Int64,
+                     cropMargins: Bool = false, displayLimit: ReaderDisplayLimit? = nil) async throws -> ReaderLoadedPage {
         try Task.checkCancellation()
         let decode = Task.detached(priority: .userInitiated) {
             try await withReaderStorage {
@@ -78,9 +78,20 @@ struct ReaderImageArtifact: Equatable, Sendable {
                     let dims = try SourceImageFile.dimensions(source: source)
                     let reader = IosReader()
                     let resolved = reader.decodeSize(width: Int32(dims.width), height: Int32(dims.height))
-                    let maxPixelSize = Int(max(resolved.width, resolved.height))
-                    var image = try SourceImageFile.decode(source: source, maxPixelSize: maxPixelSize)
+                    var maxPixelSize = Int(max(resolved.width, resolved.height))
                     let tiled = reader.isTiled(width: Int32(dims.width), height: Int32(dims.height))
+                    // A strip shows the page at its fitted extent: pixels past it are only memory and texture upload.
+                    // Tiled pages keep their base, as their tiles bring the detail.
+                    var limited = false
+                    if let displayLimit, !tiled {
+                        let fitted = Int(displayLimit.alongWidth ? resolved.width : resolved.height)
+                        if fitted > displayLimit.pixels {
+                            let scale = Double(displayLimit.pixels) / Double(fitted)
+                            maxPixelSize = max(1, Int((Double(maxPixelSize) * scale).rounded(.up)))
+                            limited = true
+                        }
+                    }
+                    var image = try SourceImageFile.decode(source: source, maxPixelSize: maxPixelSize)
                     if cropMargins && !tiled, let cgImage = image.cgImage, cgImage.width >= 100, cgImage.height >= 100 {
                         let sample = Int(reader.edgeSampleSize(width: Int32(cgImage.width), height: Int32(cgImage.height)))
                         if let sampled = SourceImageFile.samplePixels(image, sampleSize: sample) {
@@ -116,7 +127,8 @@ struct ReaderImageArtifact: Equatable, Sendable {
                             encodedWidth: max(1, width),
                             encodedHeight: max(1, height),
                             tiled: tiled
-                        )
+                        ),
+                        limited: limited
                     )
                 }
             }
@@ -217,6 +229,16 @@ actor ReaderTileBaseCache {
 struct ReaderLoadedPage {
     let image: UIImage
     let artifact: ReaderImageArtifact
+    /// Decoded smaller than the page's own bounded size because of a [ReaderDisplayLimit].
+    var limited = false
+}
+
+/// The most pixels a continuous strip shows of a page across its reading axis: its width on the vertical strip, its
+/// height on the horizontal one (the strip's extent times zoom and display scale). Aidoku and Suwatte downsample webtoon
+/// pages to their page width the same way.
+struct ReaderDisplayLimit: Equatable, Sendable {
+    let pixels: Int
+    let alongWidth: Bool
 }
 
 extension IosSourceImage {
@@ -234,9 +256,10 @@ extension IosSourceImage {
                                                             maxPixelSize: maxPixelSize)
     }
 
-    func loadedPage(cropMargins: Bool = false) async throws -> ReaderLoadedPage {
+    func loadedPage(cropMargins: Bool = false, displayLimit: ReaderDisplayLimit? = nil) async throws -> ReaderLoadedPage {
         let directory = try NativeSourceTransport.dataDirectory.appendingPathComponent("images", isDirectory: true)
         return try await ReaderImageArtifact.load(directory: directory, relativePath: relativePath,
-                                                  sha256: sha256, byteSize: byteSize, cropMargins: cropMargins)
+                                                  sha256: sha256, byteSize: byteSize, cropMargins: cropMargins,
+                                                  displayLimit: displayLimit)
     }
 }
