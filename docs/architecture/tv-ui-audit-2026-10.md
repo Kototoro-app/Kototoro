@@ -2880,6 +2880,72 @@ visible = bottomChromeVisibility.visible && !(isTvPresentation && expandedPanelV
   正文页没有初始焦点请求，第一次方向键可能吞掉一次；普通打开（Chapters 页签）不受影响。
 - 面板在 peek 状态下按 BACK 先展开、再按才关闭，和第四十七轮的折叠语义一致，但需要两下，暂不改。
 
+## 第四十九轮：主界面外壳与设置双栏都能走，页签补上焦点环（2026-10-24）
+
+这一轮离开阅读器，把"从主界面一路点到设置"的整条路走了一遍，并补掉第二类"能聚焦但看不见"的控件。
+
+第一，**主界面外壳是通的**。导航轨按 UP 进入 Continue 行，RIGHT 走到 hero 卡片，从卡片连按两次
+UP 落到顶栏筛选按钮 `[1708,16][1800,112]`，再 RIGHT 是 ⋮ `[1800,16][1896,112]`，在这之后 RIGHT 被
+边界守卫吃掉（⋮ 是那一行真正的最后一站）。⋮ 菜单本来就有环：菜单项走的是
+`CompactDropdownMenuItem`，它在 `clickable` 之前已经有
+`Modifier.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)`，所以菜单里每一站
+都看得见——这一点是查代码确认的，不是截图确认的。
+
+第二，**"Display options" 弹层可以整段使用**（右缘卡片图标 CENTER 打开）：List / Detailed list /
+Grid / Compact grid / Movie / Compact movie 六种布局、网格尺寸滑条（RIGHT 让 70% 变 80%，松手即生效）、
+每页行数、以及 "Show extra info on cards" 开关；内容超出一屏时能继续往下滚，最后一行露得出来；
+BACK 关掉弹层并把焦点还给触发它的那个右缘按钮 `[1800,324][1896,420]`。
+
+第三，**设置页的左右双栏在电视上成立**。左栏是分类（Appearance / Reader settings / AI / Playback /
+Content sources），CENTER 在右栏打开详情并把环放到第一行；从第一行按 UP 能回到右栏顶部的
+General / Manga / Novel 页签 `[1121,124][1520,220]`；BACK 从详情退回（落到顶栏搜索按钮），再按
+BACK 回到主界面。调试时可以直接
+`adb shell am start -n org.skepsun.kototoro.debug/org.skepsun.kototoro.settings.SettingsActivity`
+进设置，省掉从 ⋮ 菜单逐项点过去。
+
+第四，**页签"能聚焦但没环"是第四十八轮书签卡片的同一类问题**。Material3 的 `Tab` 本身是
+`selectable`，遥控器停得上去，但反馈只有一层几乎看不出的容器底色；停在上面却看不出停在哪儿，
+和"根本停不上去"对用户是同一件事。新增 `Modifier.tvTabRing()`：
+
+```kotlin
+@Composable
+fun Modifier.tvTabRing(): Modifier = tvFocusable(
+    shape = RoundedCornerShape(10.dp),
+    addFocusTarget = false,
+)
+```
+
+把它作为 `Tab(modifier = …)` 传进去——`Tab` 会把自己的 modifier 排在内部 `selectable` **之前**，
+所以环正好观察那一站，不会多出第二个焦点节点（这正是 `CompactDropdownMenuItem` 用的同一个手法）。
+上机效果：阅读设置的 Manga 页签出现蓝色圆角环，CENTER 切到 Manga 页之后环仍留在页签上，既没有掉到
+正文也没有消失。其余 7 处 `Tab(`（内容目录、首页自定义、词典、追踪源检索、scrobbler 选择、
+详情页签、章节模式页签）用同一行改法；非 TV 时 `tvFocusable` 直接返回原 modifier，是空操作。
+
+第五，**没改的一个怪癖**：设置右栏里按 RIGHT，焦点会跳到相邻的上一行，而不是行尾的开关。因为行尾开关
+不是独立焦点站，光束搜索按几何位置挑了别的行。不会丢焦点，暂时只记录。
+
+### 设备验证（emulator-5554）
+
+| 步骤 | 结果 |
+| --- | --- |
+| 导航轨 UP → RIGHT → UP×2 → RIGHT | Continue → hero 卡片 → 筛选 `[1708,16][1800,112]` → ⋮ `[1800,16][1896,112]`，再 RIGHT 被守卫吃掉 |
+| 右缘按钮 CENTER | "Display options" 弹层，布局磁贴 + 尺寸滑条 + 每页行数 + 开关都可聚焦 |
+| 弹层内滑条 RIGHT | 70% → 80%，进度条与文字同步更新 |
+| 弹层 BACK | 关闭并回到 `[1800,324][1896,420]` |
+| 设置左栏 CENTER（Reader settings） | 右栏详情打开，环在第一行 `[746,332][1896,456]` |
+| 详情第一行 UP | 回到页签 Manga `[1121,124][1520,220]`，蓝色圆角环 |
+| 页签 CENTER | 页面切到 Manga 内容，环仍在页签上 |
+| 页签 DOWN → RIGHT → DOWN | `[746,260]` → `[746,332]` → `[746,458]`，行间行走正常 |
+| 详情 BACK / BACK | 顶栏搜索按钮 → 主界面导航轨 `[16,296][152,432]` |
+
+### 遗留
+
+- 设置里 Appearance / AI / Playback / Content sources 四个子页、以及设置搜索框的输入法行为还没走。
+- "Display options" 里每页行数与 "Show extra info on cards" 开关，按下后的视觉变化没有截图留证。
+- 内容目录 / 首页自定义 / 词典 / 追踪源检索 / scrobbler 这五处新增的页签环只做了编译与同一原语的
+  上机验证，没有逐一进到页面里看。
+- 设置右栏 RIGHT 跳到相邻行的怪癖只记录未修。
+
 
 
 
