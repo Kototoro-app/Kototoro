@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.core.source.SourceTag
 import org.skepsun.kototoro.core.ui.topbar.TopBarTabItem
 import org.skepsun.kototoro.core.ui.topbar.TopBarTabsRail
 import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
@@ -31,8 +32,15 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
     val selection = if (history) state.historySelection else state.librarySelection
     var drawer by remember(history) { mutableStateOf(false) }
     var managingCategories by remember(history) { mutableStateOf(false) }
+    var pickingTags by remember(history) { mutableStateOf(false) }
     val ecosystems = remember(state.sources) { state.sources.associate { it.source.name to it.ecosystem } }
     val entries = remember(state.library, selection, ecosystems) { selection.select(state.library, ecosystems) }
+    // Most used tags first: the drawer lists works, so the popular tags stay above the fold.
+    val tagChoices = remember(state.library) {
+        state.library.entries.flatMap { it.content.tags }.groupingBy { it }.eachCount().entries
+            .sortedWith(compareByDescending<Map.Entry<SourceTag, Int>> { it.value }.thenBy { it.key.title })
+            .map { it.key to it.value }
+    }
     fun update(value: DesktopLibrarySelection) = controller.librarySelection(value)
     Box(Modifier.fillMaxSize().onPreviewKeyEvent {
         if (drawer && it.type == KeyEventType.KeyDown && it.key == Key.Escape) {
@@ -131,6 +139,13 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                                     Text(title, modifier = Modifier.padding(start = 12.dp))
                                 }
                             }
+                            HorizontalDivider()
+                            Text(desktopText("library.tags"), fontWeight = FontWeight.SemiBold)
+                            OutlinedButton({ pickingTags = true }, enabled = enabled && tagChoices.isNotEmpty(),
+                                modifier = Modifier.fillMaxWidth().testTag("library-tags-open")) {
+                                Text(if (selection.tags.isEmpty()) desktopText("library.tagsChoose")
+                                else desktopText("library.tagsSelected", selection.tags.size))
+                            }
                         }
                         VerticalScrollbar(rememberScrollbarAdapter(scroll), modifier = Modifier.align(Alignment.CenterEnd)
                             .fillMaxHeight().testTag("library-filter-scrollbar"))
@@ -141,6 +156,11 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
             }
         }
         if (managingCategories) DesktopCategoryDialog(controller, state) { managingCategories = false }
+        if (pickingTags) DesktopTagPickerDialog(tagChoices, selection.tags,
+            onToggle = { tag -> update(selection.copy(tags = if (tag in selection.tags) selection.tags - tag
+                else selection.tags + tag)) },
+            onClear = { update(selection.copy(tags = emptySet())) },
+            onDismiss = { pickingTags = false })
     }
 }
 

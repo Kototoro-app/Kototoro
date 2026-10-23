@@ -10,6 +10,7 @@ import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kotlinx.coroutines.runBlocking
 import kotlin.time.Duration.Companion.minutes
 import org.jetbrains.skia.Image
+import org.skepsun.kototoro.core.source.SourceTag as ContentTag
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import java.nio.file.Files
@@ -219,6 +220,25 @@ internal object DesktopTabletProbe {
                 check(controller.state.value.librarySelection.filterCount == 2)
                 onNodeWithTag("content:${content.id}").assertExists()
                 onNodeWithTag("library-filter-reset").performClick(); idle()
+                // Android's tag filter group: seed one tagged work, then narrow the grid down to it.
+                val tag = ContentTag("Drama", "drama", content.source)
+                val tagged = content.copy(id = content.id + 2000, title = "Tagged shelf", url = "/tagged/shelf",
+                    publicUrl = "https://fixture.invalid/tagged/shelf", tags = setOf(tag), chapters = null,
+                    sourceData = null)
+                runBlocking { session.library.addFavourite(tagged) }
+                runBlocking { controller.library().join() }; idle()
+                onNodeWithTag("library-tags-open").performScrollTo().performClick(); idle()
+                onNodeWithTag("library-tags-dialog").assertExists()
+                snapshotTag("library-tags-dialog", "library-tag-picker")
+                onNodeWithTag("library-tag:drama").performClick(); idle()
+                check(controller.state.value.librarySelection.tags == setOf(tag))
+                onNodeWithTag("content:${tagged.id}").assertExists()
+                onNodeWithTag("content:${content.id}").assertDoesNotExist()
+                onNodeWithTag("library-tag-clear").performClick(); idle()
+                check(controller.state.value.librarySelection.tags.isEmpty())
+                onNodeWithTag("content:${content.id}").assertExists()
+                onNodeWithTag("library-tag-done").performClick(); idle()
+                onNodeWithTag("library-tags-dialog").assertDoesNotExist()
                 onNodeWithTag("library-filter-close").performClick(); idle()
                 onNodeWithTag("content:${content.id}").assertExists()
                 // Android edits categories on their own screen; the desktop does it in a dialog over the grid.

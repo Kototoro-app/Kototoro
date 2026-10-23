@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.desktop.app
 
 import org.skepsun.kototoro.core.source.SourceEcosystem
+import org.skepsun.kototoro.core.source.SourceTag
 import org.skepsun.kototoro.desktop.runtime.DesktopLibraryEntry
 import org.skepsun.kototoro.desktop.runtime.DesktopLibrarySnapshot
 
@@ -35,8 +36,10 @@ data class DesktopLibrarySelection(
     val order: DesktopLibraryOrder = DesktopLibraryOrder.RECENT,
     /** Android's top bar source-type and content-type filters. */
     val sourceFilter: DesktopSourceFilter = DesktopSourceFilter(),
+    /** Android's tag group: options inside the group are OR-ed, other groups are AND-ed. */
+    val tags: Set<SourceTag> = emptySet(),
 ) {
-    val filterCount: Int get() = sources.size + (if (categoryId != null) 1 else 0) +
+    val filterCount: Int get() = sources.size + tags.size + (if (categoryId != null) 1 else 0) +
         (if (reading != DesktopLibraryReading.ALL) 1 else 0)
 
     /** [ecosystems] maps installed source names; works from uninstalled sources match no source-type tag. */
@@ -48,6 +51,7 @@ data class DesktopLibrarySelection(
             val progress = row.progressPercent
             (categoryId == null || categoryId in row.categoryIds) &&
                 (sources.isEmpty() || content.source.name in sources) &&
+                (tags.isEmpty() || content.tags.any { it in tags }) &&
                 sourceFilter.accepts(ecosystems[content.source.name], content.source.contentType) &&
                 (text.isEmpty() || content.title.contains(text, true) ||
                     content.altTitles.any { it.contains(text, true) } || content.authors.any { it.contains(text, true) }) &&

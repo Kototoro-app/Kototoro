@@ -6362,3 +6362,30 @@ M2 的 `Colors` 与 `Typography.h4`–`caption` 角色被手工映射到 M3 角�
 与 `:desktop-app:test`（含四种窗口模式的 UI 探针与截图）通过。
 
 **未做**：`Slider`/`Switch`/`Checkbox` 的 M3 默认度量与 M2 略有差别，若需像素级对齐再做逐控件微调。
+
+## 131. Windows 收藏/历史补上标签筛选组（2026-10-23）
+
+日期：2026-10-23。Android 的作品列表筛选里 `ListFilterCriteria.Tag` 是一个独立的筛选组：
+同组内多选按 SQL 的“或”展开，不同组之间“且”。桌面的收藏/历史抽屉只有排序、阅读进度与来源，
+共享库里带标签的作品无法按标签浏览。
+
+- `DesktopLibrarySelection` 新增 `tags: Set<SourceTag>`，过滤条件为
+  `tags.isEmpty() || content.tags.any { it in tags }`，与 Android 的同组语义一致；已选标签计入
+  `filterCount`，顶栏“筛选 · N”随之变化。标签身份用 `SourceTag`（title/key/source）的值相等，
+  不引入桌面专有的标签 id。
+- 抽屉新增“标签”区（`library-tags-open`），未选中时显示“选择标签”，选中后显示“标签 · N”；
+  库内没有标签时按钮禁用，避免打开空对话框。
+- 新增 `DesktopTagPicker.kt`：M3 `AlertDialog` + `DesktopSearchField` + 复选列表，按“作品数降序、
+  同数按标题”排序并显示作品数，行、搜索框、关闭、清除各有 testTag（`library-tag:<key>`、
+  `library-tag-search`、`library-tag-done`、`library-tag-clear`）。勾选立即生效并重算网格，
+  关闭只收起对话框，清除只清标签组。
+- 标签来自收藏保存时写入的标签行（`SourceLibrary.content()` 从 `tags` 表投影），列表项本身没有
+  标签的作品不参与标签筛选——这与 Android 的持久化行为一致，不是桌面端缺失。
+
+验证：`:desktop-app:test --tests "*DesktopLibrarySelectionTest*"` 覆盖同组“或”、跨组“且”、
+标签与搜索/进度的组合以及 `filterCount`；`:desktop-app:test --tests "*DesktopAppTest*tablet*"`
+在探针里收藏一部带 `Drama` 标签的作品，打开对话框截图（`library-tag-picker.png`）、勾选后
+网格只剩该作品、清除后恢复；`:desktop-app:verifyDesktopStrings` 校验新增中英文案键一致。
+
+**未做**：Android 的追踪状态（`_reading_status`/`_publication_state`）与“已下载”筛选组，
+桌面侧还缺对应的持久化条件。
