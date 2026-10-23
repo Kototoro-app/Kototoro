@@ -17,4 +17,18 @@
     <string name="video_subtitle_color_red">红</string>
     <string name="video_subtitle_color_green">绿</string>
     <string name="video_subtitle_color_blue">蓝</string>
+    <string name="video_subtitle_background">背景</string>
+    <string name="video_subtitle_background_style">背景样式</string>
+    <string name="video_subtitle_background_none">关闭</string>
+    <string name="video_subtitle_background_bar">整行条形</string>
+    <string name="video_subtitle_background_block">文字块</string>
+    <string name="video_subtitle_background_lines">逐行贴合</string>
+    <string name="video_subtitle_background_corner_radius">圆角半径</string>
+    <string name="video_subtitle_background_padding_horizontal">水平内边距</string>
+    <string name="video_subtitle_background_padding_vertical">垂直内边距</string>
+    <string name="video_subtitle_background_hint">背景只覆盖字幕文字所在区域，不再拉成整行色条。</string>
+    <string name="video_subtitle_font_family">字体</string>
+    <string name="video_subtitle_font_sans">无衬线</string>
+    <string name="video_subtitle_font_serif">衬线</string>
+    <string name="video_subtitle_font_monospace">等宽</string>
 </resources>

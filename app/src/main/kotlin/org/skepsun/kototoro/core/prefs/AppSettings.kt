@@ -1393,6 +1393,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_VIDEO_SUBTITLE_ITALIC, false)
         set(value) = prefs.edit { putBoolean(KEY_VIDEO_SUBTITLE_ITALIC, value) }
 
+    /** 0 = sans-serif, 1 = serif, 2 = monospace; maps to `SubtitleFontFamily`, unknown values use the default. */
+    var videoSubtitleFontFamily: Int
+        get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_FONT_FAMILY, 0)
+        set(value) = prefs.edit { putInt(KEY_VIDEO_SUBTITLE_FONT_FAMILY, value.coerceIn(0, 2)) }
+
     var videoSubtitleTextColor: Int
         get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_TEXT_COLOR, android.graphics.Color.WHITE)
         set(value) = prefs.edit { putInt(KEY_VIDEO_SUBTITLE_TEXT_COLOR, value) }
@@ -1408,6 +1413,26 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     var videoSubtitleBgColor: Int
         get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_BG_COLOR, 0x66000000)
         set(value) = prefs.edit { putInt(KEY_VIDEO_SUBTITLE_BG_COLOR, value) }
+
+    /**
+     * 0 = off, 1 = full-width bar, 2 = text block, 3 = per line; maps to `SubtitleBackgroundStyle`,
+     * unknown values use the default style.
+     */
+    var videoSubtitleBackgroundStyle: Int
+        get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_BG_STYLE, 3)
+        set(value) = prefs.edit { putInt(KEY_VIDEO_SUBTITLE_BG_STYLE, value.coerceIn(0, 3)) }
+
+    var videoSubtitleBackgroundCornerRadius: Int
+        get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_BG_CORNER_RADIUS, 10).coerceIn(0, 32)
+        set(value) = prefs.edit { putInt(KEY_VIDEO_SUBTITLE_BG_CORNER_RADIUS, value.coerceIn(0, 32)) }
+
+    var videoSubtitleBackgroundPaddingHorizontal: Int
+        get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_BG_PADDING_H, 12).coerceIn(0, 32)
+        set(value) = prefs.edit { putInt(KEY_VIDEO_SUBTITLE_BG_PADDING_H, value.coerceIn(0, 32)) }
+
+    var videoSubtitleBackgroundPaddingVertical: Int
+        get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_BG_PADDING_V, 6).coerceIn(0, 24)
+        set(value) = prefs.edit { putInt(KEY_VIDEO_SUBTITLE_BG_PADDING_V, value.coerceIn(0, 24)) }
 
     var videoSubtitleAlignX: Int
         get() = prefs.getSafeInt(KEY_VIDEO_SUBTITLE_ALIGN_X, 1) // 0=left, 1=center, 2=right
@@ -3210,10 +3235,15 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_VIDEO_SUBTITLE_FONT_SIZE = "video_subtitle_font_size"
         const val KEY_VIDEO_SUBTITLE_BOLD = "video_subtitle_bold"
         const val KEY_VIDEO_SUBTITLE_ITALIC = "video_subtitle_italic"
+        const val KEY_VIDEO_SUBTITLE_FONT_FAMILY = "video_subtitle_font_family"
         const val KEY_VIDEO_SUBTITLE_TEXT_COLOR = "video_subtitle_text_color"
         const val KEY_VIDEO_SUBTITLE_BORDER_COLOR = "video_subtitle_border_color"
         const val KEY_VIDEO_SUBTITLE_BORDER_SIZE = "video_subtitle_border_size"
         const val KEY_VIDEO_SUBTITLE_BG_COLOR = "video_subtitle_bg_color"
+        const val KEY_VIDEO_SUBTITLE_BG_STYLE = "video_subtitle_bg_style"
+        const val KEY_VIDEO_SUBTITLE_BG_CORNER_RADIUS = "video_subtitle_bg_corner_radius"
+        const val KEY_VIDEO_SUBTITLE_BG_PADDING_H = "video_subtitle_bg_padding_h"
+        const val KEY_VIDEO_SUBTITLE_BG_PADDING_V = "video_subtitle_bg_padding_v"
         const val KEY_VIDEO_SUBTITLE_ALIGN_X = "video_subtitle_align_x"
         const val KEY_VIDEO_SUBTITLE_POSITION = "video_subtitle_position"
         const val KEY_VIDEO_VOLUME_BOOST = "video_volume_boost"

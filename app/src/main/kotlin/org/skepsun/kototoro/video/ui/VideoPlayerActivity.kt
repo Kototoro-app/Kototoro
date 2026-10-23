@@ -177,6 +177,8 @@ import androidx.compose.material3.SnackbarResult
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerAction
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerControlState
+import org.skepsun.kototoro.video.ui.compose.SubtitleBackgroundStyle
+import org.skepsun.kototoro.video.ui.compose.SubtitleFontFamily
 import org.skepsun.kototoro.video.ui.compose.VideoGestureOverlayState
 import org.skepsun.kototoro.video.ui.compose.VideoGestureOverlays
 import org.skepsun.kototoro.video.ui.compose.VideoSubtitleOverlay
@@ -763,10 +765,17 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                 appSettings.videoSubtitleFontSize = newState.fontSizeSp
                                 appSettings.videoSubtitleBold = newState.bold
                                 appSettings.videoSubtitleItalic = newState.italic
+                                appSettings.videoSubtitleFontFamily = newState.fontFamily.prefValue
                                 appSettings.videoSubtitleTextColor = newState.textColor
                                 appSettings.videoSubtitleBorderColor = newState.borderColor
                                 appSettings.videoSubtitleBorderSize = newState.borderSize
                                 appSettings.videoSubtitleBgColor = newState.backgroundColor
+                                appSettings.videoSubtitleBackgroundStyle = newState.backgroundStyle.prefValue
+                                appSettings.videoSubtitleBackgroundCornerRadius = newState.backgroundCornerRadiusDp
+                                appSettings.videoSubtitleBackgroundPaddingHorizontal =
+                                    newState.backgroundPaddingHorizontalDp
+                                appSettings.videoSubtitleBackgroundPaddingVertical =
+                                    newState.backgroundPaddingVerticalDp
                                 appSettings.videoSubtitleAlignX = newState.alignX
                                 appSettings.videoSubtitlePosition = newState.position
                                 applySubtitleOverlayStyle()
@@ -3132,10 +3141,15 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             fontSizeSp = settings.videoSubtitleFontSize,
             bold = settings.videoSubtitleBold,
             italic = settings.videoSubtitleItalic,
+            fontFamily = SubtitleFontFamily.fromPrefValue(settings.videoSubtitleFontFamily),
             textColor = settings.videoSubtitleTextColor,
             borderColor = settings.videoSubtitleBorderColor,
             borderSize = settings.videoSubtitleBorderSize,
             backgroundColor = settings.videoSubtitleBgColor,
+            backgroundStyle = SubtitleBackgroundStyle.fromPrefValue(settings.videoSubtitleBackgroundStyle),
+            backgroundCornerRadiusDp = settings.videoSubtitleBackgroundCornerRadius,
+            backgroundPaddingHorizontalDp = settings.videoSubtitleBackgroundPaddingHorizontal,
+            backgroundPaddingVerticalDp = settings.videoSubtitleBackgroundPaddingVertical,
             alignX = settings.videoSubtitleAlignX,
             bottomPositionDp = settings.videoSubtitlePosition,
         )
@@ -3538,10 +3552,15 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             fontSizeSp = appSettings.videoSubtitleFontSize,
             bold = appSettings.videoSubtitleBold,
             italic = appSettings.videoSubtitleItalic,
+            fontFamily = SubtitleFontFamily.fromPrefValue(appSettings.videoSubtitleFontFamily),
             textColor = appSettings.videoSubtitleTextColor,
             borderColor = appSettings.videoSubtitleBorderColor,
             borderSize = appSettings.videoSubtitleBorderSize,
             backgroundColor = appSettings.videoSubtitleBgColor,
+            backgroundStyle = SubtitleBackgroundStyle.fromPrefValue(appSettings.videoSubtitleBackgroundStyle),
+            backgroundCornerRadiusDp = appSettings.videoSubtitleBackgroundCornerRadius,
+            backgroundPaddingHorizontalDp = appSettings.videoSubtitleBackgroundPaddingHorizontal,
+            backgroundPaddingVerticalDp = appSettings.videoSubtitleBackgroundPaddingVertical,
             alignX = appSettings.videoSubtitleAlignX,
             position = appSettings.videoSubtitlePosition,
             subtitleTrackOptions = if (tracks.isEmpty()) emptyList() else trackOptions.toList(),

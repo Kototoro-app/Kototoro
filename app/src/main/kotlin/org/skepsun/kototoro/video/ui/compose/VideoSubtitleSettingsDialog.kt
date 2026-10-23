@@ -43,10 +43,15 @@ internal data class VideoSubtitleSettingsDialogState(
     val fontSizeSp: Float,
     val bold: Boolean,
     val italic: Boolean,
+    val fontFamily: SubtitleFontFamily,
     val textColor: Int,
     val borderColor: Int,
     val borderSize: Float,
     val backgroundColor: Int,
+    val backgroundStyle: SubtitleBackgroundStyle,
+    val backgroundCornerRadiusDp: Int,
+    val backgroundPaddingHorizontalDp: Int,
+    val backgroundPaddingVerticalDp: Int,
     val alignX: Int,
     val position: Int,
     val subtitleTrackOptions: List<String> = emptyList(),
@@ -57,6 +62,7 @@ internal data class VideoSubtitleSettingsDialogState(
 private enum class SubtitleSettingsTab {
     Tracks,
     Typography,
+    Background,
     Layout,
     Colors,
 }
@@ -195,6 +201,27 @@ internal fun VideoSubtitleSettingsDialog(
                     }
 
                     SubtitleSettingsTab.Typography -> {
+                        Text(
+                            text = stringResource(R.string.video_subtitle_font_family),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = ComposeColor.White.copy(alpha = 0.85f),
+                            modifier = Modifier.padding(horizontal = 16.dp).padding(top = 8.dp),
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                        ) {
+                            SubtitleFontFamily.entries.forEach { family ->
+                                FilterChip(
+                                    selected = style.fontFamily == family,
+                                    onClick = { emit(style.copy(fontFamily = family)) },
+                                    label = { Text(fontFamilyLabel(family)) },
+                                    colors = playerChipColors(),
+                                )
+                            }
+                        }
                         LabeledSlider(
                             label = stringResource(R.string.video_subtitle_font_size),
                             valueText = style.fontSizeSp.toInt().toString(),
@@ -209,6 +236,64 @@ internal fun VideoSubtitleSettingsDialog(
                             valueRange = 0f..24f,
                             onValueChange = { emit(style.copy(borderSize = it)) },
                         )
+                    }
+
+                    SubtitleSettingsTab.Background -> {
+                        Text(
+                            text = stringResource(R.string.video_subtitle_background_style),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = ComposeColor.White.copy(alpha = 0.85f),
+                            modifier = Modifier.padding(horizontal = 16.dp).padding(top = 8.dp),
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                        ) {
+                            SubtitleBackgroundStyle.entries.forEach { backgroundStyle ->
+                                FilterChip(
+                                    selected = style.backgroundStyle == backgroundStyle,
+                                    onClick = { emit(style.copy(backgroundStyle = backgroundStyle)) },
+                                    label = { Text(backgroundStyleLabel(backgroundStyle)) },
+                                    colors = playerChipColors(),
+                                )
+                            }
+                        }
+                        val backgroundEnabled = style.backgroundStyle != SubtitleBackgroundStyle.NONE
+                        LabeledSlider(
+                            label = stringResource(R.string.video_subtitle_background_corner_radius),
+                            valueText = style.backgroundCornerRadiusDp.toString(),
+                            value = style.backgroundCornerRadiusDp.toFloat(),
+                            valueRange = 0f..32f,
+                            enabled = backgroundEnabled,
+                            onValueChange = { emit(style.copy(backgroundCornerRadiusDp = it.toInt())) },
+                        )
+                        LabeledSlider(
+                            label = stringResource(R.string.video_subtitle_background_padding_horizontal),
+                            valueText = style.backgroundPaddingHorizontalDp.toString(),
+                            value = style.backgroundPaddingHorizontalDp.toFloat(),
+                            valueRange = 0f..32f,
+                            enabled = backgroundEnabled,
+                            onValueChange = { emit(style.copy(backgroundPaddingHorizontalDp = it.toInt())) },
+                        )
+                        LabeledSlider(
+                            label = stringResource(R.string.video_subtitle_background_padding_vertical),
+                            valueText = style.backgroundPaddingVerticalDp.toString(),
+                            value = style.backgroundPaddingVerticalDp.toFloat(),
+                            valueRange = 0f..24f,
+                            enabled = backgroundEnabled,
+                            onValueChange = { emit(style.copy(backgroundPaddingVerticalDp = it.toInt())) },
+                        )
+                        if (backgroundEnabled) {
+                            Text(
+                                text = stringResource(R.string.video_subtitle_background_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = ComposeColor.White.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            )
+                        }
                     }
 
                     SubtitleSettingsTab.Layout -> {
@@ -358,6 +443,7 @@ private fun LabeledSlider(
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
     onValueChange: (Float) -> Unit,
+    enabled: Boolean = true,
     accent: ComposeColor = ComposeColor.White,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -365,17 +451,18 @@ private fun LabeledSlider(
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
-                color = ComposeColor.White.copy(alpha = 0.85f),
+                color = ComposeColor.White.copy(alpha = if (enabled) 0.85f else 0.4f),
             )
             Text(
                 text = valueText,
                 style = MaterialTheme.typography.bodyMedium,
-                color = ComposeColor.White,
+                color = ComposeColor.White.copy(alpha = if (enabled) 1f else 0.4f),
             )
         }
         KototoroSlider(
             value = value,
             onValueChange = onValueChange,
+            enabled = enabled,
             valueRange = valueRange,
             steps = (valueRange.endInclusive - valueRange.start).toInt() - 1,
             colors = androidx.compose.material3.SliderDefaults.colors(
@@ -400,8 +487,28 @@ private fun tabLabel(tab: SubtitleSettingsTab): String = stringResource(
     when (tab) {
         SubtitleSettingsTab.Tracks -> R.string.video_subtitle_track
         SubtitleSettingsTab.Typography -> R.string.video_subtitle_style
+        SubtitleSettingsTab.Background -> R.string.video_subtitle_background
         SubtitleSettingsTab.Layout -> R.string.video_subtitle_layout
         SubtitleSettingsTab.Colors -> R.string.video_subtitle_colors
+    },
+)
+
+@Composable
+private fun backgroundStyleLabel(style: SubtitleBackgroundStyle): String = stringResource(
+    when (style) {
+        SubtitleBackgroundStyle.NONE -> R.string.video_subtitle_background_none
+        SubtitleBackgroundStyle.BAR -> R.string.video_subtitle_background_bar
+        SubtitleBackgroundStyle.BLOCK -> R.string.video_subtitle_background_block
+        SubtitleBackgroundStyle.LINES -> R.string.video_subtitle_background_lines
+    },
+)
+
+@Composable
+private fun fontFamilyLabel(family: SubtitleFontFamily): String = stringResource(
+    when (family) {
+        SubtitleFontFamily.SANS -> R.string.video_subtitle_font_sans
+        SubtitleFontFamily.SERIF -> R.string.video_subtitle_font_serif
+        SubtitleFontFamily.MONOSPACE -> R.string.video_subtitle_font_monospace
     },
 )
 
