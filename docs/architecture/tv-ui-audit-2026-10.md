@@ -2424,5 +2424,93 @@ quickLayer focused=false has=false    ← 4ms 后掉了（同帧还有一次 req
 - 玻璃模式下 `readerPanelScrimAlpha` 偏透明，正文透过面板，可读性差；电视应换成更实的底。
 - 面板停在 peek 时高度约 66%，中间有大片空白（模式行与快捷格之间），比重可以再收。
 
+（以上三条已在第四十一轮收掉前两条，第三条并入下面新记录的遗留。）
+
+## 第四十一轮：电视选项面板换成实体面、标签不截断、实心控件的环看得见（2026-10-24）
+
+第四十轮把面板"点得动"修好了，这一轮解决"看不看得清"：面板太透明、标签被截断、以及**实心（已选中）
+控件上的焦点环与底色同色**——三件事都属于"遥控器明明在工作，用户却以为坏了"。
+
+### 电视用实体面板，玻璃只留给手持屏
+
+`readerPanelSurfaceMode(isIosStyle, eInk, hasBackdrop)` 原来只看 iOS 风格与有没有阅读器背景，电视上
+如果开了 iOS 风格就一路走玻璃，正文页的字隔着 0.62 的面纱透上来（`GLASS_VEIL_ALPHA`），10 英尺外
+根本压不住。新增第 4 个参数 `isTv`，判定顺序变成：
+
+```
+eInk → EInk
+isTv → Opaque            ← 新增
+isIosStyle && hasBackdrop → Glass
+else → Opaque
+```
+
+Android 侧唯一的调用点 `rememberReaderPanelSurfaceMode(eInk)` 补上
+`isTv = LocalUiPresentationConfig.current.isTv`，四个面板（漫画选项、漫画目录、小说目录、小说选项）
+一起生效；手机仍然保持原来的玻璃观感。EInk 排在最前，电子墨水模式不受影响。
+
+配套的遮罩也随之变实：`readerPanelScrimAlpha` 在 `Opaque` 下是 `0.42f`（玻璃是 `0.32f`）。
+
+### 快捷格标签：电视两行、字号升一级
+
+`ReaderQuickTile` 的标签原本是 `labelSmall` + `maxLines = 1`，8 列等分时单格约 182px，
+`Chapters and pages`、`Manga translation`、`Automatic scroll`、`Open in browser` 全部被省略号砍掉。
+电视下改成 `labelMedium` + `maxLines = 2`：四个标签都完整显示，格子高约 190px（+34px），
+peek 高度跟着长一点，手机保持单行小字不变。
+
+### 实心控件上的环：改用内容色而不是强调色
+
+`tvFocusable` 的默认环色是 `colorScheme.primary`。已选中的页签、选项 chip、开关 chip、图标模式行的底色
+本身就是强调色系（`selectedContainer`），蓝环画在蓝底上——**焦点在线，屏幕上却什么都没有**。
+这类控件的环改成 `colors.content`（深色主题下是近白色）：
+
+- `ReaderPanelTabBar` 的页签（`Layout / Display / Translation`）
+- `ReaderChoiceChips` 的选中 chip（如 `Default`、`Fit center`）
+- `ReaderIconChoiceBar` 的选中模式图标
+- `ReaderPanelToggleChip` 打开状态
+
+未选中时仍用强调色环，与非选中态原有的强调色描边区分开。
+
+### 设备验证（emulator-5554，1920×1080）
+
+| 步骤 | 截图 | 结果 |
+| --- | --- | --- |
+| 打开面板 | `rk0` | 面板是实体深色面（约 `#1C1B20`），正文不再透上来；环仍在第一格 |
+| 打开面板（含标签改动） | `rl3` | `Chapters and pages` / `Manga translation` / `Automatic scroll` / `Open in browser` 全部两行完整显示，底部 `Layout / Display / Translation` 页签条与齿轮露出 |
+| DOWN | `rl4` | 环到 `Manga translation`（`[232,738][414,926]`），`uiautomator` 只有这一个 `focused=true` |
+| UP ×2 | `rl5` | 环回到模式行第一个 chip |
+| DOWN ×3 | `rl6` | 垂直链路成立：模式行 → 快捷格第一行 → 第二行 → **页签条** |
+| RIGHT + CENTER | `rl7` | `Display` 页展开，环落在当前值 `Automatic` chip 上，行可读 |
+| 展开后 DOWN | `rm5` | 环进入 `Reverse chapter order for this title` 整行开关 |
+| BACK | `rl8` | 面板收回 peek，`Display` 仍为选中页签 |
+| BACK | `rl9` | 面板关闭，环回到顶栏返回箭头 |
+| 页签选中态聚焦 | `rn0` | 选中页签 `Layout` 上出现**白色**环（此前是蓝底蓝环，等于没有） |
+| 选中 chip 聚焦 | `rn1` | `Default` 页动画 chip 上是白环；未聚焦的选中 chip `Fit center` 仍是强调色描边，两者可区分 |
+
+面板这一条主链路现在是完整的：`⋮` 打开 → 首格有环 → 上下左右挑 → 页签可进 → 展开页可走 →
+BACK 先收再关 → 环回顶栏。
+
+### 一个构建陷阱：失败的构建会留下"缺类"的 APK
+
+本轮中途 `:app:assembleDebug` 失败过一次（并行改动的模块没编译过），随后重跑 **BUILD SUCCESSFUL**，
+但产出的 APK 装上去直接 `ClassNotFoundException: org.skepsun.kototoro.KototoroApp`——失败那一次已经把
+`compileDebugKotlin` 的输出目录清掉了，重跑时该任务被判 UP-TO-DATE，`dexBuilderDebug` 于是拿不到
+`app/src/debug` 的类。判据很简单：装完先确认 `KototoroApp` 在不在 dex 里——
+
+```powershell
+# 用 System.IO.Compression 打开 apk，逐个 classes*.dex 找 UTF-8 串
+# Lorg/skepsun/kototoro/KototoroApp;
+```
+
+修法是 touch 一下 `KototoroApp.kt`（debug 源集那个）再构建，强制重编。**以后看到"刚装的新包一启动就
+闪退、栈里是 ClassNotFound"，先怀疑构建产物而不是这轮的代码。**
+
+### 遗留
+
+- 面板停在 peek 时，模式行与快捷格之间仍有一段空白；两行标签后整体高度约 74%，比重还能再收。
+- “笔记”窗口仍是手机尺寸的 `Dialog`；`NovelTtsVoiceDialog` 本环境无法出现，一并待做统一小窗规格。
+- 漫画目录面板（`ComposeReaderActivityScaffold.kt` 里的 `ReaderPanelHost`）与小说两个面板还在用
+  legacy 的“请求整组”回退，尚未给专属首格；三者需要各自确认一次初始焦点。
+- 手机端回归（`isTv` 为 false 的三处新分支）只做了代码级检查，没跑真机。
+
 
 

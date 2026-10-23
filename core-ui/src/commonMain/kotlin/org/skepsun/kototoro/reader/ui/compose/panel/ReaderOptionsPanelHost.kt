@@ -97,12 +97,23 @@ val LocalTvFocusRequest = staticCompositionLocalOf<(FocusRequester) -> Boolean> 
     { requester -> runCatching { requester.requestFocus() }.getOrDefault(false) }
 }
 
-fun readerPanelSurfaceMode(isIosStyle: Boolean, eInk: Boolean, hasBackdrop: Boolean): ReaderPanelSurfaceMode =
-    when {
-        eInk -> ReaderPanelSurfaceMode.EInk
-        isIosStyle && hasBackdrop -> ReaderPanelSurfaceMode.Glass
-        else -> ReaderPanelSurfaceMode.Opaque
-    }
+/**
+ * Picks the surface a reader panel is drawn on.
+ *
+ * A television sits across the room from a moving page, and glass lets that page's own art through, so
+ * the panel takes the solid surface there and keeps the tint only for a handheld screen at arm's length.
+ */
+fun readerPanelSurfaceMode(
+    isIosStyle: Boolean,
+    eInk: Boolean,
+    hasBackdrop: Boolean,
+    isTv: Boolean = false,
+): ReaderPanelSurfaceMode = when {
+    eInk -> ReaderPanelSurfaceMode.EInk
+    isTv -> ReaderPanelSurfaceMode.Opaque
+    isIosStyle && hasBackdrop -> ReaderPanelSurfaceMode.Glass
+    else -> ReaderPanelSurfaceMode.Opaque
+}
 
 fun readerPanelScrimAlpha(mode: ReaderPanelSurfaceMode): Float = when (mode) {
     ReaderPanelSurfaceMode.Glass -> 0.32f

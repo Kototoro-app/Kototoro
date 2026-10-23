@@ -52,6 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.shapes.Capsule
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvHorizontalEdgeGuard
 import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
@@ -96,7 +97,13 @@ fun ReaderPanelTabBar(
                         modifier = Modifier
                             .clip(Capsule())
                             .background(background)
-                            .tvFocusable(shape = Capsule(), addFocusTarget = false)
+                            // A selected tab is already filled with the accent-derived container, so the
+                            // accent ring would drown in it; the content colour keeps the focus visible.
+                            .tvFocusable(
+                                shape = Capsule(),
+                                addFocusTarget = false,
+                                ringColor = if (selected) colors.content else Color.Unspecified,
+                            )
                             .tvHorizontalEdgeGuard(
                                 blockLeft = index == 0,
                                 blockRight = index == labels.lastIndex,
@@ -150,7 +157,11 @@ fun ReaderChoiceChips(
                 modifier = Modifier
                     .weight(1f)
                     .height(height)
-                    .tvFocusable(shape = ChipShape, addFocusTarget = false)
+                    .tvFocusable(
+                        shape = ChipShape,
+                        addFocusTarget = false,
+                        ringColor = if (selected) colors.content else Color.Unspecified,
+                    )
                     .selectable(selected = selected, role = Role.RadioButton, onClick = { onSelected(index) }),
             ) {
                 val text: @Composable () -> Unit = {
@@ -220,7 +231,11 @@ fun ReaderIconChoiceBar(
                         .size(width = 52.dp, height = 44.dp)
                         .clip(Capsule())
                         .background(if (selected) colors.selectedContainer else Color.Transparent)
-                        .tvFocusable(shape = Capsule(), addFocusTarget = false)
+                        .tvFocusable(
+                            shape = Capsule(),
+                            addFocusTarget = false,
+                            ringColor = if (selected) colors.content else Color.Unspecified,
+                        )
                         .selectable(selected = selected, role = Role.RadioButton, onClick = { onSelected(index) })
                         .semantics { contentDescription = options[index] },
                 ) {
@@ -310,6 +325,9 @@ fun ReaderQuickTile(
 ) {
     val colors = currentReaderPanelColors()
     val active = action.toggled == true
+    // A television shows the label at arm's length away, where one 11sp line in a narrow column
+    // truncates the action to "Chapters and ..."; the tile keeps the whole name on two lines instead.
+    val isTv = LocalUiPresentationConfig.current.isTv
     val interaction = if (action.toggled != null) {
         Modifier.toggleable(value = active, role = Role.Switch, onValueChange = { onClick() })
     } else {
@@ -340,9 +358,9 @@ fun ReaderQuickTile(
         }
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
+            style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
             color = colors.content,
-            maxLines = 1,
+            maxLines = if (isTv) 2 else 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 2.dp),
@@ -364,7 +382,11 @@ fun ReaderPanelToggleChip(
         modifier = modifier
             .clip(Capsule())
             .background(if (checked) colors.selectedContainer else colors.card)
-            .tvFocusable(shape = Capsule(), addFocusTarget = false)
+            .tvFocusable(
+                shape = Capsule(),
+                addFocusTarget = false,
+                ringColor = if (checked) colors.content else Color.Unspecified,
+            )
             .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
             .heightIn(min = 32.dp)
             .padding(horizontal = 12.dp),
