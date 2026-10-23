@@ -9,6 +9,17 @@ struct ReaderWindowSlot: Identifiable {
     let slot: IosReaderSlot
 }
 
+/// One slot as plain values (from `IosReader.slotTable`): read per scroll frame without a call into Kotlin.
+struct ReaderSlotRow {
+    let index: Int
+    let anchor: Int
+    let placementCount: Int
+    /// The first placement's scene frame, page index and segment.
+    let frame: CGRect
+    let page: Int
+    let segment: Int
+}
+
 /// One window position's display state. Every page of the strip is its own hosting controller: observing this rather
 /// than the whole reader model, a page renders again when its own image, artifact or failure changes, not on every
 /// page turn, slot rebuild or another page's image.
@@ -67,8 +78,10 @@ final class SourceReaderModel: ObservableObject {
     private var chapterPages: [String: [IosSourcePage]] = [:]
     private var chapterPreloads: [String: ChapterPreload] = [:]
     private var pendingWindow = false
-    @Published private(set) var images: [Int: UIImage] = [:] { didSet { syncPageStates() } }
-    @Published private(set) var artifacts: [Int: ReaderImageArtifact] = [:] { didSet { syncPageStates() } }
+    /// Decoded pages, artifacts and failures by window position. Not published: page views follow them through their
+    /// own `ReaderPageState`, so a page arriving does not re-render the whole reader. Anything else reads them on use.
+    private(set) var images: [Int: UIImage] = [:] { didSet { syncPageStates() } }
+    private(set) var artifacts: [Int: ReaderImageArtifact] = [:] { didSet { syncPageStates() } }
     @Published private(set) var error: String?
     /// The last failure was a browser challenge (Cloudflare): the error offers the in-app browser.
     @Published private(set) var challenge: IosChallenge?
@@ -76,20 +89,25 @@ final class SourceReaderModel: ObservableObject {
         let message: String
         let challenge: IosChallenge?
     }
-    @Published private(set) var pageFailures: [Int: PageFailure] = [:] { didSet { syncPageStates() } }
+    private(set) var pageFailures: [Int: PageFailure] = [:] { didSet { syncPageStates() } }
     @Published private(set) var isLoadingPages = false
     @Published private(set) var bookmarks: [IosBookmark] = []
     private var changingBookmark = false
     @Published private(set) var slots: [IosReaderSlot] = [] {
         didSet {
-            identifiedSlots = slots.map { ReaderWindowSlot(id: cachedSlotIdentity($0), slot: $0) }
+            if !refreshingSlots { slotsVersion = nil }
+            slotRows = slots.isEmpty ? [] : readSlotRows()
+            identifiedSlots = slots.indices.map { ReaderWindowSlot(id: cachedSlotIdentity(at: $0), slot: slots[$0]) }
             slotByAnchor = [:]
-            for slot in slots where slotByAnchor[Int(slot.anchor)] == nil {
-                slotByAnchor[Int(slot.anchor)] = Int(slot.index)
-            }
+            for row in slotRows where slotByAnchor[row.anchor] == nil { slotByAnchor[row.anchor] = row.index }
             slotRevision &+= 1
         }
     }
+    /// [slots] as plain rows, in the same order.
+    private(set) var slotRows: [ReaderSlotRow] = []
+    /// The engine layout [slots] were taken from (see [refreshSlots]).
+    private var slotsVersion: (generation: Int64, revision: Int64)?
+    private var refreshingSlots = false
     /// The first slot anchored at each window position, for the strip's per-frame reading slot.
     private var slotByAnchor: [Int: Int] = [:]
     private(set) var identifiedSlots: [ReaderWindowSlot] = []
@@ -125,6 +143,8 @@ final class SourceReaderModel: ObservableObject {
     /// caller waits for the running one. Loads stop only when their page leaves the resource window (see
     /// [updateResources]) or the scene changes.
     private var pageLoads: [String: (serial: Int, task: Task<Void, Never>)] = [:]
+    /// Pages whose size was read ahead of their decode (see [measureAhead]), by identity.
+    private var measuredPages: Set<String> = []
     /// The display limit each image on hand was decoded under, by page identity; absent when it was not limited.
     private var decodedLimits: [String: ReaderDisplayLimit] = [:]
     private var loadSerial = 0
@@ -225,7 +245,7 @@ final class SourceReaderModel: ObservableObject {
                              mode: Int32(preferences.mode), doublePage: preferences.doublePage,
                              cover: preferences.cover, fit: Int32(preferences.fit),
                              splitWide: preferences.splitWidePages, horizontalReversed: preferences.horizontalReversed)
-            slots = engine.slots()
+            refreshSlots()
             if let current = slots.first(where: { Int($0.index) == slotIndex }),
                current.placements.contains(where: { Int($0.index) == windowIndex }) {
                 slotIndex = Int(current.index)
@@ -358,34 +378,12 @@ final class SourceReaderModel: ObservableObject {
             images[target] = loadedPage.image
             artifacts[target] = loadedPage.artifact
             pageFailures[target] = nil
-            // A reading page held ahead of the first visible one (a short page at the strip's end) is what the reader
-            // is on: it, not the first visible page the scene anchors to, stays where it is on screen.
-            let held = preferences.mode >= 3 && stripPositionValid && !awaitingRestore
-                && windowIndex != Int(engine.progress(x: Float(viewportOffset.x), y: Float(viewportOffset.y)).index)
-            let heldStart = held ? readingPageStart() : nil
-            let compensated = engine.setImageSize(
-                index: Int32(target),
-                width: Int32(loadedPage.artifact.encodedWidth),
-                height: Int32(loadedPage.artifact.encodedHeight),
-                viewportX: Float(viewportOffset.x), viewportY: Float(viewportOffset.y)
-            )
-            slots = engine.slots()
-            if preferences.mode >= 3 {
-                if awaitingRestore || !stripPositionValid {
-                    // Keep the semantic target while its estimated size becomes exact, including long-page bookmarks.
-                    requestScroll(to: currentOrigin)
-                } else if let heldStart, let start = readingPageStart() {
-                    var point = viewportOffset
-                    if preferences.mode == 3 { point.y += start - heldStart } else { point.x += start - heldStart }
-                    moveStrip(to: IosReaderViewport(x: Float(point.x), y: Float(point.y)))
-                } else if let compensated {
-                    // The scene's anchored correction (Android's `snapBy(compensation.deltaY)`), applied with the new
-                    // layout in the same turn so the page being read does not move.
-                    moveStrip(to: compensated)
-                } else {
-                    strip?.layoutStrip(offset: nil, animated: false)
-                }
-            }
+            // A strip lays uncropped pages out at their encoded proportions, as their headers gave them before the
+            // decode (see [measureAhead]): a downsampled decode does not move the page again by a rounding pixel.
+            let size = preferences.mode >= 3 && !cropMargins && loadedPage.sourceWidth > 0
+                ? (loadedPage.sourceWidth, loadedPage.sourceHeight)
+                : (loadedPage.artifact.encodedWidth, loadedPage.artifact.encodedHeight)
+            applyImageSize(target: target, width: size.0, height: size.1)
             if !slots.contains(where: { Int($0.index) == slotIndex && $0.placements.contains { Int($0.index) == windowIndex } }) {
                 slotIndex = Int(slots.first { $0.placements.contains { Int($0.index) == windowIndex } }?.index ?? 0)
             }
@@ -401,6 +399,40 @@ final class SourceReaderModel: ObservableObject {
                 pageFailures[target] = PageFailure(message: SourceErrorText.describe(error),
                                                    challenge: SourceErrorText.challenge(error))
             }
+        }
+    }
+
+    /// Gives the scene page [target]'s real size and keeps the strip where the reader is (see [performLoad]).
+    private func applyImageSize(target: Int, width: Int, height: Int) {
+        // A reading page held ahead of the first visible one (a short page at the strip's end) is what the reader
+        // is on: it, not the first visible page the scene anchors to, stays where it is on screen.
+        let held = preferences.mode >= 3 && stripPositionValid && !awaitingRestore
+            && windowIndex != Int(engine.progress(x: Float(viewportOffset.x), y: Float(viewportOffset.y)).index)
+        let heldStart = held ? readingPageStart() : nil
+        let compensated = engine.setImageSize(
+            index: Int32(target), width: Int32(width), height: Int32(height),
+            viewportX: Float(viewportOffset.x), viewportY: Float(viewportOffset.y)
+        )
+        let version = slotsVersion
+        refreshSlots()
+        guard preferences.mode >= 3 else { return }
+        if awaitingRestore || !stripPositionValid {
+            // Keep the semantic target while its estimated size becomes exact, including long-page bookmarks. Also
+            // when the size was known ahead: the restore ends on a report with the reading page's image shown.
+            requestScroll(to: currentOrigin)
+        } else if let version, let slotsVersion, version == slotsVersion {
+            // The engine already had this size (measured ahead): nothing moved.
+            return
+        } else if let heldStart, let start = readingPageStart() {
+            var point = viewportOffset
+            if preferences.mode == 3 { point.y += start - heldStart } else { point.x += start - heldStart }
+            moveStrip(to: IosReaderViewport(x: Float(point.x), y: Float(point.y)))
+        } else if let compensated {
+            // The scene's anchored correction (Android's `snapBy(compensation.deltaY)`), applied with the new
+            // layout in the same turn so the page being read does not move.
+            moveStrip(to: compensated)
+        } else {
+            strip?.layoutStrip(offset: nil, animated: false)
         }
     }
 
@@ -500,7 +532,7 @@ final class SourceReaderModel: ObservableObject {
         if continuous && loaded && !previous.isEmpty && stripPositionValid && !awaitingRestore {
             let moved = engine.setPages(pages: updated, viewportX: Float(viewportOffset.x),
                                         viewportY: Float(viewportOffset.y))
-            slots = engine.slots()
+            refreshSlots()
             slotIndex = slotByAnchor[windowIndex] ?? 0
             windowRevision += 1
             if let moved { moveStrip(to: moved) } else { requestScroll(to: currentOrigin) }
@@ -620,6 +652,8 @@ final class SourceReaderModel: ObservableObject {
         guard !stripZoomSession.isActive else { needsReplan = true; return }
         preloadAdjacentChapters()
         if preferences.mode >= 3 {
+            // Low Power Mode plans Android's reduced window; switching plans again from scratch.
+            if engine.setPreloadReduction(enabled: ProcessInfo.processInfo.isLowPowerModeEnabled) { needsReplan = true }
             guard let planned = engine.resourceWindow(
                 x: Float(viewportOffset.x), y: Float(viewportOffset.y),
                 velocityX: Float(stripVelocity.x), velocityY: Float(stripVelocity.y),
@@ -627,12 +661,28 @@ final class SourceReaderModel: ObservableObject {
             ) else { return }
             let requests = planned.filter { window.indices.contains(Int($0.index)) }
                 .sorted { $0.priority < $1.priority }
+            // Decoded pages fit a byte budget, as Aidoku bounds its decoded page cache: the pages on screen always,
+            // then the planned ones by priority and nearest the screen first. Past the budget, pages only download.
+            var budget = ReaderLoading.decodedImageBudget
+            var decodeTargets: [Int] = [], downloadOnly: [Int] = []
+            let ordered = requests.filter(\.decode).sorted {
+                ($0.priority, stripDistance(Int($0.index))) < ($1.priority, stripDistance(Int($1.index)))
+            }
+            for request in ordered {
+                let target = Int(request.index), cost = decodedCost(target)
+                if request.priority > 0 && (cost > budget || !downloadOnly.isEmpty) {
+                    downloadOnly.append(target)
+                } else {
+                    budget -= cost
+                    decodeTargets.append(target)
+                }
+            }
             let unzoomed = unzoomedStripPages()
-            let decoded = requests.filter(\.decode).map { Int($0.index) } + unzoomed
-            decodeWindow = Set(decoded.map { pageIdentity(window[$0]) })
-            downloadWindow = requests.filter { !$0.decode }.map { pageIdentity(window[Int($0.index)]) }
-            // Visible and near pages load at once, nearest priority first.
-            for request in requests where request.decode { startWanted(Int(request.index)) }
+            decodeWindow = Set((decodeTargets + unzoomed).map { pageIdentity(window[$0]) })
+            downloadWindow = (downloadOnly + requests.filter { !$0.decode }.map { Int($0.index) })
+                .map { pageIdentity(window[$0]) }
+            // Visible and near pages load at once, nearest first.
+            for target in decodeTargets { startWanted(target) }
             for target in unzoomed { startWanted(target) }
         } else {
             let neighbors = neighborPages()
@@ -648,7 +698,64 @@ final class SourceReaderModel: ObservableObject {
             load.task.cancel(); pageLoads[id] = nil
         }
         prefetch()
+        measureAhead()
         evictImages()
+    }
+
+    /// The planned pages get their real size from their file's header as soon as it is on disk, before they are
+    /// decoded: the strip lays them out while they are still off screen instead of resizing as they scroll in over
+    /// estimated heights. Only uncropped strips: a cropped page's size is known after its decode.
+    private func measureAhead() {
+        guard preferences.mode >= 3, !preferences.cropMargins else { return }
+        let token = request
+        for id in decodeWindow.union(downloadWindow) where !measuredPages.contains(id) {
+            guard let position = windowPositions[id], images[position] == nil,
+                  let owner = chapterByID[window[position].chapterId] else { continue }
+            let key = window[position]
+            let size: () async -> (width: Int, height: Int)?
+            if ReaderDownloads.isDownloaded(content: content, chapter: owner) {
+                let content = content
+                size = { await ReaderDownloads.sourceSize(content: content, chapter: owner, index: Int(key.index)) }
+            } else if let fetch = fetches[id], !fetch.failed {
+                size = {
+                    guard let image = try? await fetch.task.value else { return nil }
+                    return await image.sourceSize()
+                }
+            } else {
+                continue // Not downloading yet: the next plan measures it.
+            }
+            measuredPages.insert(id)
+            Task { [weak self] in
+                guard let measured = await size() else { return }
+                guard let self, self.request == token, !self.stripZoomSession.isActive,
+                      let target = self.windowPositions[id], self.images[target] == nil else { return }
+                self.applyImageSize(target: target, width: measured.width, height: measured.height)
+            }
+        }
+    }
+
+    /// The bytes window position [target] takes decoded: its bitmap's once decoded, else its strip extent at the
+    /// screen's scale (what a display-limited decode makes), at most one 64 MB single-bitmap page.
+    private func decodedCost(_ target: Int) -> Int {
+        if let image = images[target]?.cgImage { return image.bytesPerRow * image.height }
+        guard slotRows.indices.contains(target), slotRows[target].page == target else { return 16 << 20 }
+        let frame = slotRows[target].frame, scale = screenScale
+        let bytes = Double(frame.width * scale) * Double(frame.height * scale) * 4
+        return Int(min(bytes, Double(64 << 20)))
+    }
+
+    /// How far window position [target]'s page is from the strip's screen along its axis (0 when on it).
+    private func stripDistance(_ target: Int) -> CGFloat {
+        guard slotRows.indices.contains(target), slotRows[target].page == target else { return .greatestFiniteMagnitude }
+        let vertical = stripIsVertical, frame = slotRows[target].frame
+        let lower = vertical ? viewportOffset.y : viewportOffset.x
+        let upper = lower + (vertical ? viewport.height : viewport.width)
+        let start = vertical ? frame.minY : frame.minX, end = vertical ? frame.maxY : frame.maxX
+        return max(0, start - upper, lower - end)
+    }
+
+    private var screenScale: CGFloat {
+        (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.scale ?? 3
     }
 
     /// Plans again from scratch, starting every wanted page that is neither shown nor loading.
@@ -663,11 +770,10 @@ final class SourceReaderModel: ObservableObject {
         let extent = vertical ? viewport.height : viewport.width
         let origin = vertical ? viewportOffset.y : viewportOffset.x
         let lower = origin - extent * (stripZoom - 1), upper = origin + extent * stripZoom
-        return slots.flatMap(\.placements).compactMap { placement in
-            let start = CGFloat(vertical ? placement.y : placement.x)
-            let end = start + CGFloat(vertical ? placement.height : placement.width)
-            let index = Int(placement.index)
-            return end > lower && start < upper && window.indices.contains(index) ? index : nil
+        return slotRows.compactMap { row in
+            let start = vertical ? row.frame.minY : row.frame.minX
+            let end = vertical ? row.frame.maxY : row.frame.maxX
+            return end > lower && start < upper && window.indices.contains(row.page) ? row.page : nil
         }
     }
 
@@ -708,7 +814,8 @@ final class SourceReaderModel: ObservableObject {
         var keep = Set(decodeWindow.compactMap { windowPositions[$0] })
         if preferences.mode >= 3 {
             let x = Float(viewportOffset.x), y = Float(viewportOffset.y)
-            let first = Int(engine.progress(x: x, y: y).index), last = Int(engine.lastVisible(x: x, y: y))
+            let position = engine.position(x: x, y: y)
+            let first = Int(position.index), last = Int(position.lastVisible)
             if first <= last { keep.formUnion(first...last) }
         } else {
             keep.formUnion(max(0, windowIndex - 2)...min(max(0, window.count - 1), windowIndex + 3))
@@ -730,12 +837,10 @@ final class SourceReaderModel: ObservableObject {
         let origin = vertical ? viewportOffset.y : viewportOffset.x
         let lower = origin - extent, upper = origin + 2 * extent
         var keep: Set<Int> = [windowIndex]
-        for slot in slots {
-            for placement in slot.placements {
-                let start = CGFloat(vertical ? placement.y : placement.x)
-                let end = start + CGFloat(vertical ? placement.height : placement.width)
-                if end > lower && start < upper { keep.insert(Int(placement.index)) }
-            }
+        for row in slotRows {
+            let start = vertical ? row.frame.minY : row.frame.minX
+            let end = vertical ? row.frame.maxY : row.frame.maxX
+            if end > lower && start < upper { keep.insert(row.page) }
         }
         let kept = Set(keep.filter { window.indices.contains($0) }.map { pageIdentity(window[$0]) })
         decodeWindow.formIntersection(kept)
@@ -766,8 +871,7 @@ final class SourceReaderModel: ObservableObject {
     private var stripDisplayLimit: ReaderDisplayLimit? {
         guard preferences.mode >= 3 else { return nil }
         let vertical = stripIsVertical
-        let scale = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.scale ?? 3
-        let extent = (vertical ? viewport.width : viewport.height) * max(1, stripZoom) * scale
+        let extent = (vertical ? viewport.width : viewport.height) * max(1, stripZoom) * screenScale
         return ReaderDisplayLimit(pixels: max(1, Int(extent.rounded(.up))), alongWidth: vertical)
     }
 
@@ -839,16 +943,47 @@ final class SourceReaderModel: ObservableObject {
         return String(localized: "\(chapter)，第 \(key.index + 1) 页")
     }
 
-    private func cachedSlotIdentity(_ slot: IosReaderSlot) -> String {
-        let placements = slot.placements
-        guard placements.count == 1, window.indices.contains(Int(placements[0].index)) else {
-            return slotIdentity(slot)
-        }
-        let key = Int(placements[0].index) * 4 + Int(placements[0].segment)
+    private func cachedSlotIdentity(at position: Int) -> String {
+        guard slotRows.indices.contains(position) else { return slotIdentity(slots[position]) }
+        let row = slotRows[position]
+        guard row.placementCount == 1, window.indices.contains(row.page) else { return slotIdentity(slots[position]) }
+        let key = row.page * 4 + row.segment
         if let identity = slotIdentities[key] { return identity }
-        let identity = slotIdentity(slot)
+        let identity = slotIdentity(slots[position])
         slotIdentities[key] = identity
         return identity
+    }
+
+    /// Takes the engine's slots, unless its layout is the one they were last taken from (an image size it already
+    /// had, a window that did not change the scene): every new slot list rebuilds the strip's geometry.
+    private func refreshSlots() {
+        let version = (generation: engine.layoutGeneration, revision: engine.sceneRevision)
+        if let slotsVersion, slotsVersion == version { return }
+        refreshingSlots = true
+        defer { refreshingSlots = false }
+        slotsVersion = version
+        slots = engine.slots()
+    }
+
+    /// The engine's slot table, one buffer for every slot; empty when it does not match [slots].
+    private func readSlotRows() -> [ReaderSlotRow] {
+        let data = engine.slotTable()
+        let columns = Int(IosReader.companion.SLOT_TABLE_COLUMNS)
+        let rows = data.count / (columns * MemoryLayout<Float>.size)
+        guard rows == slots.count else { return [] }
+        return data.withUnsafeBytes { raw -> [ReaderSlotRow] in
+            let values = raw.bindMemory(to: Float.self)
+            return (0..<rows).map { row in
+                let base = row * columns
+                func value(_ column: Int) -> Float { values[base + column] }
+                return ReaderSlotRow(
+                    index: Int(value(0)), anchor: Int(value(1)), placementCount: Int(value(2)),
+                    frame: CGRect(x: CGFloat(value(3)), y: CGFloat(value(4)),
+                                  width: CGFloat(value(5)), height: CGFloat(value(6))),
+                    page: Int(value(7)), segment: Int(value(8))
+                )
+            }
+        }
     }
 
     func slotIdentity(_ slot: IosReaderSlot) -> String {
@@ -902,9 +1037,10 @@ final class SourceReaderModel: ObservableObject {
             awaitingRestore = false
         }
         stripPositionValid = true
-        let progress = engine.progress(x: Float(viewportOffset.x), y: Float(viewportOffset.y))
+        // One call for the reading page, its offset and the last visible page (the engine resolves the frame once).
+        let progress = engine.position(x: Float(viewportOffset.x), y: Float(viewportOffset.y))
         let first = min(max(0, Int(progress.index)), max(0, windowPages.count - 1))
-        let last = Int(engine.lastVisible(x: Float(viewportOffset.x), y: Float(viewportOffset.y)))
+        let last = Int(progress.lastVisible)
         // Motion is compared by page identity, so the coordinate shift of a rebuilt window is not a move.
         let movedBack: Bool = {
             guard let previous = viewAnchor else { return false }
@@ -956,7 +1092,7 @@ final class SourceReaderModel: ObservableObject {
         guard zoom != stripZoom else { return }
         stripZoom = zoom
         engine.setZoom(zoom: Float(zoom))
-        slots = engine.slots()
+        refreshSlots()
         // The strip reports its compensated viewport immediately after laying out these slots. Planning here would
         // use the previous scene's offset and could evict the page that is still under the zoom anchor.
         needsReplan = true
@@ -1089,7 +1225,7 @@ final class SourceReaderModel: ObservableObject {
         for preload in chapterPreloads.values where preload !== adopted { preload.cancel() }
         chapterPreloads = adopted.map { [target.id: $0] } ?? [:]
         cancelLoads()
-        fetches = [:]; decodedLimits = [:]
+        fetches = [:]; decodedLimits = [:]; measuredPages = []
         preloadedPages = Task { prepared }
         pages = []; window = []; windowPages = []; slots = []; images = [:]; artifacts = [:]; pageFailures = [:]
         chapterPages = [target.id: prepared]
@@ -1351,7 +1487,10 @@ struct SourceReaderView: View {
             if !model.isStripMoving { await model.persist() }
         }
         .task(id: model.autoScroll) {
-            var elapsed = 0
+            // The strip moves once per screen frame by the time that frame took, not by a fixed 16 ms per sleep.
+            let clock = ReaderFrameClock()
+            defer { clock.stop() }
+            var sinceSave: CFTimeInterval = 0
             var landedOnEdge = false
             while model.autoScroll && !Task.isCancelled {
                 if scenePhase != .active || model.error != nil || model.hasVisiblePageFailure ||
@@ -1359,17 +1498,21 @@ struct SourceReaderView: View {
                     model.autoScroll = false; break
                 }
                 if !model.isReadyForAutoScroll {
-                    try? await Task.sleep(for: .milliseconds(16))
+                    _ = await clock.nextFrame()
                     continue
                 }
                 if settings.value.mode >= 3 {
-                    try? await Task.sleep(for: .milliseconds(16))
+                    // A frame after a stall (or the first one) moves no further than a few frames would have.
+                    let frame = min(await clock.nextFrame(), 0.05)
                     guard !Task.isCancelled, model.autoScroll else { break }
-                    // A window rebuilt during the sleep moves the strip: wait for its restore, not the old offset.
+                    // A window rebuilt during the wait moves the strip: wait for its restore, not the old offset.
                     guard model.isReadyForAutoScroll else { continue }
                     let current = settings.value.mode == 3 ? model.stripOffset.y : model.stripOffset.x
                     let direction = settings.value.continuousForwardSign
-                    let next = current + direction * CGFloat(model.engine.autoScrollDistance(speed: Float(settings.value.autoSpeed), elapsedMillis: 16))
+                    // The shared distance is linear in time: its one-second distance scaled to this frame.
+                    let perSecond = CGFloat(model.engine.autoScrollDistance(speed: Float(settings.value.autoSpeed),
+                                                                             elapsedMillis: 1000))
+                    let next = current + direction * perSecond * CGFloat(frame)
                     let range = model.continuousScrollRange
                     if !range.contains(next) {
                         // Land on the edge first: the strip's end reads its last visible page (and its chapter).
@@ -1379,13 +1522,13 @@ struct SourceReaderView: View {
                         }
                         // The next chapter joins the strip once its pages arrive; the scroll then simply continues.
                         if model.isLoadingNextChapter { continue }
-                        if await model.advanceChapterAutomatically() { elapsed = 0; continue }
+                        if await model.advanceChapterAutomatically() { sinceSave = 0; continue }
                         model.autoScroll = false; await model.persist(); break
                     }
                     landedOnEdge = false
                     model.scrollStrip(to: next, animated: false)
-                    elapsed += 16
-                    if elapsed >= 5000 { elapsed = 0; await model.persist() }
+                    sinceSave += frame
+                    if sinceSave >= 5 { sinceSave = 0; await model.persist() }
                     continue
                 }
                 try? await Task.sleep(for: .milliseconds(Int64(model.engine.autoScrollDelay(speed: Float(settings.value.autoSpeed)))))
@@ -2253,7 +2396,8 @@ private struct ReaderInvert: ViewModifier {
 /// and double-tap zoom about the touch, panning decelerates and bounces natively, and a zoomed page at its edge hands
 /// the drag on to the pager. Tiles follow the settled camera only, so a pan does not resample every frame.
 private struct ReaderSpread: View {
-    @ObservedObject var model: SourceReaderModel
+    /// Not observed: each page view follows its own page state (see `ReaderSpreadPages`).
+    let model: SourceReaderModel
     @ObservedObject var settings: ReaderSettings
     let slot: IosReaderSlot
     let size: CGSize
@@ -2270,22 +2414,17 @@ private struct ReaderSpread: View {
             onZoomed: { model.isPageZoomed = $0 },
             onCamera: { if camera != $0 { camera = $0 } }
         ) {
-            ZStack(alignment: .topLeading) {
-                ForEach(slot.placements.indices, id: \.self) { offset in
-                    let placement = slot.placements[offset]
-                    ReaderPageTile(
-                        model: model,
-                        settings: settings,
-                        index: Int(placement.index),
-                        segment: Int(placement.segment),
-                        displaySize: CGSize(width: CGFloat(placement.width), height: CGFloat(placement.height)),
-                        viewportOffset: camera.offset,
-                        zoomScale: camera.scale
+            ReaderSpreadPages(
+                model: model, settings: settings,
+                pages: slot.placements.map { placement in
+                    ReaderSpreadPages.Page(
+                        index: Int(placement.index), segment: Int(placement.segment),
+                        frame: CGRect(x: CGFloat(placement.x) - bounds.minX, y: CGFloat(placement.y) - bounds.minY,
+                                      width: CGFloat(placement.width), height: CGFloat(placement.height))
                     )
-                        .frame(width: CGFloat(placement.width), height: CGFloat(placement.height))
-                        .offset(x: CGFloat(placement.x) - bounds.minX, y: CGFloat(placement.y) - bounds.minY)
-                }
-            }
+                },
+                camera: camera, adjusted: settings.value.hasColorAdjustments, shadow: settings.value.bookEffect
+            )
             .frame(width: bounds.width, height: bounds.height, alignment: .topLeading)
             .environment(\.layoutDirection, .leftToRight)
         }

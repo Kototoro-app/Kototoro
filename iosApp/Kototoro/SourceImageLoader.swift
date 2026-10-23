@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import KototoroShared
 import UIKit
 
@@ -49,7 +50,12 @@ struct ReaderImageArtifact: Equatable, Sendable {
                 throw NSError(domain: "org.skepsun.kototoro.image", code: 1,
                               userInfo: [NSLocalizedDescriptionKey: String(localized: "页面区域越界")])
             }
-            return UIImage(cgImage: cropped)
+            // A crop shares the whole base's pixels, which Core Animation copies out when it draws the tile, at commit
+            // time. The tile is copied into its own bitmap here instead, off the main thread.
+            let copy = Task.detached(priority: .userInitiated) { SourceImageFile.ownBitmap(cropped) }
+            let image = await withTaskCancellationHandler { await copy.value } onCancel: { copy.cancel() }
+            try Task.checkCancellation()
+            return UIImage(cgImage: image)
         }
         // A base too large for the cache: decode just this tile.
         let decode = Task.detached(priority: .userInitiated) {
@@ -79,16 +85,22 @@ struct ReaderImageArtifact: Equatable, Sendable {
                     let reader = IosReader()
                     let resolved = reader.decodeSize(width: Int32(dims.width), height: Int32(dims.height))
                     var maxPixelSize = Int(max(resolved.width, resolved.height))
-                    let tiled = reader.isTiled(width: Int32(dims.width), height: Int32(dims.height))
-                    // A strip shows the page at its fitted extent: pixels past it are only memory and texture upload.
-                    // Tiled pages keep their base, as their tiles bring the detail.
+                    var tiled = reader.isTiled(width: Int32(dims.width), height: Int32(dims.height))
                     var limited = false
-                    if let displayLimit, !tiled {
-                        let fitted = Int(displayLimit.alongWidth ? resolved.width : resolved.height)
-                        if fitted > displayLimit.pixels {
-                            let scale = Double(displayLimit.pixels) / Double(fitted)
-                            maxPixelSize = max(1, Int((Double(maxPixelSize) * scale).rounded(.up)))
-                            limited = true
+                    if let displayLimit {
+                        // A strip shows the page at its fitted extent: pixels past it are only memory and texture
+                        // upload. At that size the page is one bitmap unless Android's planner would tile it (past
+                        // 8192 px or the 64 MB working set), not past the paged reader's 4 MP zoom ceiling: a long
+                        // strip page drawn whole is sharper and far cheaper to scroll than its tiles.
+                        let fitted = displayLimit.alongWidth ? dims.width : dims.height
+                        let scale = fitted > displayLimit.pixels ? Double(displayLimit.pixels) / Double(fitted) : 1
+                        let width = max(1, Int((Double(dims.width) * scale).rounded(.up)))
+                        let height = max(1, Int((Double(dims.height) * scale).rounded(.up)))
+                        tiled = reader.plansTiled(width: Int32(width), height: Int32(height),
+                                                  viewportWidth: Int32(width), viewportHeight: Int32(height))
+                        if !tiled {
+                            maxPixelSize = max(width, height)
+                            limited = scale < 1
                         }
                     }
                     var image = try SourceImageFile.decode(source: source, maxPixelSize: maxPixelSize)
@@ -128,7 +140,9 @@ struct ReaderImageArtifact: Equatable, Sendable {
                             encodedHeight: max(1, height),
                             tiled: tiled
                         ),
-                        limited: limited
+                        limited: limited,
+                        sourceWidth: dims.width,
+                        sourceHeight: dims.height
                     )
                 }
             }
@@ -231,6 +245,22 @@ struct ReaderLoadedPage {
     let artifact: ReaderImageArtifact
     /// Decoded smaller than the page's own bounded size because of a [ReaderDisplayLimit].
     var limited = false
+    /// The encoded size, oriented (0 when unknown).
+    var sourceWidth = 0
+    var sourceHeight = 0
+}
+
+extension ReaderImageArtifact {
+    /// A page's encoded size from its file's header alone, with no hash and no decode: enough to lay the page out
+    /// before it is decoded. Nil when the file is not readable as an image.
+    static func sourceSize(directory: URL, relativePath: String) async -> (width: Int, height: Int)? {
+        await Task.detached(priority: .utility) { () -> (width: Int, height: Int)? in
+            let url = directory.appendingPathComponent(relativePath)
+            let options = [kCGImageSourceShouldCache: false] as CFDictionary
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, options) else { return nil }
+            return try? SourceImageFile.dimensions(source: source)
+        }.value
+    }
 }
 
 /// The most pixels a continuous strip shows of a page across its reading axis: its width on the vertical strip, its
@@ -254,6 +284,14 @@ extension IosSourceImage {
         return try await ReaderImageArtifact.thumbnailImage(directory: directory, relativePath: relativePath,
                                                             sha256: sha256, byteSize: byteSize,
                                                             maxPixelSize: maxPixelSize)
+    }
+
+    /// See `ReaderImageArtifact.sourceSize`.
+    func sourceSize() async -> (width: Int, height: Int)? {
+        guard let directory = try? NativeSourceTransport.dataDirectory.appendingPathComponent("images",
+                                                                                                isDirectory: true)
+        else { return nil }
+        return await ReaderImageArtifact.sourceSize(directory: directory, relativePath: relativePath)
     }
 
     func loadedPage(cropMargins: Bool = false, displayLimit: ReaderDisplayLimit? = nil) async throws -> ReaderLoadedPage {

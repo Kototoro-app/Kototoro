@@ -64,13 +64,21 @@ enum ReaderDownloads {
                         directory: dir, relativePath: artifact.relativePath, sha256: artifact.sha256,
                         byteSize: artifact.byteSize, encodedWidth: artifact.encodedWidth,
                         encodedHeight: artifact.encodedHeight, tiled: artifact.tiled
-                    ), limited: loaded.limited)
+                    ), limited: loaded.limited, sourceWidth: loaded.sourceWidth, sourceHeight: loaded.sourceHeight)
                 }
                 return loaded
             }
         }
         return try await runtime.image(page: page).loadedPage(cropMargins: cropMargins, displayLimit: displayLimit)
     }
+    /// The encoded size of a downloaded page from its file's header (see `ReaderImageArtifact.sourceSize`).
+    static func sourceSize(content: IosSourceContent, chapter: IosSourceChapter, index: Int) async -> (width: Int, height: Int)? {
+        guard let dir = try? directory(content: content, chapter: chapter),
+              let manifest = try? await ReaderDownloadStore.shared.read(in: dir),
+              manifest.images.indices.contains(index) else { return nil }
+        return await ReaderImageArtifact.sourceSize(directory: dir, relativePath: manifest.images[index].path)
+    }
+
     static func image(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter,
                       page: IosSourcePage, index: Int, cropMargins: Bool = false) async throws -> UIImage {
         try await loadedPage(runtime: runtime, content: content, chapter: chapter, page: page,

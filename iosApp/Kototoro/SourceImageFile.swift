@@ -113,6 +113,17 @@ enum SourceImageFile {
         return UIImage(cgImage: scaled)
     }
 
+    /// [image] in a bitmap of its own (native 32-bit layout), or [image] itself when that cannot be made.
+    static func ownBitmap(_ image: CGImage) -> CGImage {
+        let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        guard let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8,
+                                      bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: bitmapInfo)
+        else { return image }
+        context.interpolationQuality = .none
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return context.makeImage() ?? image
+    }
+
     static func splitPage(_ image: UIImage, segment: Int) -> UIImage {
         guard (segment == 1 || segment == 2), let cgImage = image.cgImage, cgImage.width >= 2 else { return image }
         let halfWidth = cgImage.width / 2

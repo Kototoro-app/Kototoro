@@ -42,6 +42,52 @@ struct ReaderStrip: UIViewControllerRepresentable {
     }
 }
 
+/// The screen's frames for a loop that moves the strip (auto-scroll), as Aidoku and Suwatte drive theirs from a
+/// `CADisplayLink`: each step waits for the next frame and gets the time since the previous one, so the motion follows
+/// the display (up to 120 Hz) instead of a sleep that drifts from it.
+@MainActor
+final class ReaderFrameClock: NSObject {
+    private var link: CADisplayLink?
+    private var waiter: CheckedContinuation<CFTimeInterval, Never>?
+    private var previous: CFTimeInterval?
+
+    /// Waits for the next frame and returns the seconds since the frame the previous call returned for (0 at first).
+    func nextFrame() async -> CFTimeInterval {
+        if link == nil {
+            let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
+            link.add(to: .main, forMode: .common)
+            self.link = link
+        }
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { waiter = $0 }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.resume(0) }
+        }
+    }
+
+    func stop() {
+        link?.invalidate()
+        link = nil
+        previous = nil
+        resume(0)
+    }
+
+    @objc private func tick(_ link: CADisplayLink) {
+        guard waiter != nil else { return }
+        let now = link.targetTimestamp
+        let elapsed = previous.map { max(0, now - $0) } ?? 0
+        previous = now
+        resume(elapsed)
+    }
+
+    private func resume(_ elapsed: CFTimeInterval) {
+        let waiter = waiter
+        self.waiter = nil
+        waiter?.resume(returning: elapsed)
+    }
+}
+
 /// One page of the strip in plain UIKit, as Aidoku's and Suwatte's webtoon pages are an image view in a light node:
 /// the image, the tiles of a page too large to decode whole, and a spinner while it loads. The shared SwiftUI
 /// `ReaderPageTile` is hosted only for what plain views do not draw: a failure with its retry and verification
@@ -50,10 +96,16 @@ struct ReaderStrip: UIViewControllerRepresentable {
 final class ReaderStripPageView: UIView {
     struct Configuration: Equatable {
         let index: Int
+        /// The half of a split wide page shown (1 or 2), or 0 for the whole page.
+        var segment = 0
         let size: CGSize
         /// Where a tiled page resolves its tiles for: follows the scroll in steps and when it settles.
         let viewport: CGPoint
+        /// A paged slot's settled camera scale (tiles sample for it); the strip bakes its zoom into the size.
+        var zoomScale: CGFloat = 1
         let adjusted: Bool
+        /// The book effect's shadow under the page.
+        var shadow = false
     }
 
     private let model: SourceReaderModel
@@ -63,13 +115,21 @@ final class ReaderStripPageView: UIView {
     private let tiles = ReaderStripTileView()
     private let spinner = UIActivityIndicatorView(style: .medium)
     private var host: UIHostingController<ReaderPageTile>?
+    /// What the hosted page was built from, so a scroll step that changes nothing it shows does not rebuild it.
+    private struct HostedPage: Equatable {
+        let index: Int, segment: Int, size: CGSize, viewport: CGPoint, zoomScale: CGFloat
+    }
+    private var hostedPage: HostedPage?
     private(set) var configuration: Configuration?
     private var state: ReaderPageState?
     private var subscription: AnyCancellable?
     private var loadTask: Task<Void, Never>?
     private var loadedRevision: Int?
+    /// The split half last cut, kept so an unchanged page is not cut again on every refresh.
+    private var segmentImage: (base: UIImage, segment: Int, image: UIImage)?
 
-    init(model: SourceReaderModel, settings: ReaderSettings, owner: UIViewController) {
+    /// [owner] contains the hosted SwiftUI page when there is one; without one, the nearest view controller does.
+    init(model: SourceReaderModel, settings: ReaderSettings, owner: UIViewController?) {
         self.model = model
         self.settings = settings
         self.owner = owner
@@ -118,6 +178,7 @@ final class ReaderStripPageView: UIView {
         loadedRevision = nil
         imageView.image = nil
         imageView.isAccessibilityElement = false
+        segmentImage = nil
         tiles.reset()
         spinner.stopAnimating()
         removeHost()
@@ -125,6 +186,7 @@ final class ReaderStripPageView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        updateShadowPath()
         imageView.frame = bounds
         tiles.frame = bounds
         spinner.center = CGPoint(x: bounds.midX, y: bounds.midY)
@@ -152,29 +214,46 @@ final class ReaderStripPageView: UIView {
         }
         let viewport = state.artifact?.tiled == true ? configuration.viewport : .zero
         if configuration.adjusted || (state.image == nil && state.failure != nil) {
+            layer.shadowOpacity = 0
             imageView.image = nil
             imageView.isHidden = true
             imageView.isAccessibilityElement = false
             tiles.reset()
             spinner.stopAnimating()
-            showHost(ReaderPageTile(model: model, settings: settings, index: configuration.index,
-                                    displaySize: configuration.size, viewportOffset: viewport))
+            let hosted = HostedPage(index: configuration.index, segment: configuration.segment,
+                                    size: configuration.size, viewport: viewport, zoomScale: configuration.zoomScale)
+            if host == nil || hosted != hostedPage {
+                hostedPage = hosted
+                showHost(ReaderPageTile(model: model, settings: settings, index: configuration.index,
+                                        segment: configuration.segment, displaySize: configuration.size,
+                                        viewportOffset: viewport, zoomScale: configuration.zoomScale))
+            }
             return
         }
         removeHost()
-        if imageView.image !== state.image { imageView.image = state.image }
-        let shown = state.image != nil
+        let image = displayImage(state.image, segment: configuration.segment)
+        if imageView.image !== image { imageView.image = image }
+        let shown = image != nil
+        // The book effect as a layer shadow along an explicit path: no offscreen pass, unlike a SwiftUI shadow.
+        let shadowOpacity: Float = configuration.shadow && shown ? 0.4 : 0
+        if layer.shadowOpacity != shadowOpacity {
+            layer.shadowColor = UIColor.black.cgColor
+            layer.shadowOffset = .zero
+            layer.shadowRadius = 8
+            layer.shadowOpacity = shadowOpacity
+        }
+        updateShadowPath()
         imageView.isHidden = !shown
         imageView.isAccessibilityElement = shown
         imageView.accessibilityLabel = state.description
         if shown { spinner.stopAnimating() } else { spinner.startAnimating() }
-        if shown, let artifact = state.artifact, artifact.tiled,
+        if shown, configuration.segment == 0, let artifact = state.artifact, artifact.tiled,
            configuration.size.width > 1, configuration.size.height > 1 {
             let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 3
             let visible = model.engine.visibleTiles(
                 x: Float(viewport.x), y: Float(viewport.y), index: Int32(configuration.index),
                 encodedWidth: Int32(artifact.encodedWidth), encodedHeight: Int32(artifact.encodedHeight),
-                displayScale: Float(scale), zoomScale: 1
+                displayScale: Float(scale), zoomScale: Float(max(1, configuration.zoomScale))
             )
             tiles.isHidden = false
             tiles.update(artifact: artifact, tiles: visible, displaySize: configuration.size)
@@ -182,6 +261,27 @@ final class ReaderStripPageView: UIView {
             tiles.reset()
             tiles.isHidden = true
         }
+    }
+
+    /// The shadow follows the image as aspect-fit in the page, not the page's bounds.
+    private func updateShadowPath() {
+        guard layer.shadowOpacity > 0, let size = imageView.image?.size, size.width > 0, size.height > 0 else {
+            layer.shadowPath = nil
+            return
+        }
+        let scale = min(bounds.width / size.width, bounds.height / size.height)
+        let fitted = CGSize(width: size.width * scale, height: size.height * scale)
+        let rect = CGRect(x: (bounds.width - fitted.width) / 2, y: (bounds.height - fitted.height) / 2,
+                          width: fitted.width, height: fitted.height)
+        if layer.shadowPath?.boundingBox != rect { layer.shadowPath = UIBezierPath(rect: rect).cgPath }
+    }
+
+    private func displayImage(_ base: UIImage?, segment: Int) -> UIImage? {
+        guard let base, segment == 1 || segment == 2 else { segmentImage = nil; return base }
+        if let segmentImage, segmentImage.base === base, segmentImage.segment == segment { return segmentImage.image }
+        let image = SourceImageFile.splitPage(base, segment: segment)
+        segmentImage = (base, segment, image)
+        return image
     }
 
     private func showHost(_ page: ReaderPageTile) {
@@ -193,6 +293,7 @@ final class ReaderStripPageView: UIView {
         host.safeAreaRegions = []
         host.sizingOptions = []
         host.view.backgroundColor = .clear
+        let owner = owner ?? nearestViewController()
         owner?.addChild(host)
         host.view.frame = bounds
         addSubview(host.view)
@@ -200,12 +301,90 @@ final class ReaderStripPageView: UIView {
         self.host = host
     }
 
+    private func nearestViewController() -> UIViewController? {
+        var responder: UIResponder? = next
+        while let current = responder {
+            if let controller = current as? UIViewController { return controller }
+            responder = current.next
+        }
+        return nil
+    }
+
     private func removeHost() {
+        hostedPage = nil
         guard let host else { return }
         host.willMove(toParent: nil)
         host.view.removeFromSuperview()
         host.removeFromParent()
         self.host = nil
+    }
+}
+
+/// A paged slot's pages as the strip's UIKit page views, at their positions in the slot: the image is drawn by an image
+/// view rather than a SwiftUI page per placement, and each page re-renders for its own state only.
+struct ReaderSpreadPages: UIViewRepresentable {
+    struct Page: Equatable {
+        let index: Int
+        let segment: Int
+        let frame: CGRect
+    }
+
+    let model: SourceReaderModel
+    let settings: ReaderSettings
+    let pages: [Page]
+    let camera: ReaderPageCamera
+    let adjusted: Bool
+    let shadow: Bool
+
+    func makeUIView(context: Context) -> ReaderSpreadPagesView {
+        ReaderSpreadPagesView(model: model, settings: settings)
+    }
+
+    func updateUIView(_ view: ReaderSpreadPagesView, context: Context) {
+        view.update(pages: pages, camera: camera, adjusted: adjusted, shadow: shadow)
+    }
+
+    static func dismantleUIView(_ view: ReaderSpreadPagesView, coordinator: ()) {
+        view.release()
+    }
+}
+
+@MainActor
+final class ReaderSpreadPagesView: UIView {
+    private let model: SourceReaderModel
+    private let settings: ReaderSettings
+    private var pageViews: [ReaderStripPageView] = []
+
+    init(model: SourceReaderModel, settings: ReaderSettings) {
+        self.model = model
+        self.settings = settings
+        super.init(frame: .zero)
+        backgroundColor = .clear
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    func update(pages: [ReaderSpreadPages.Page], camera: ReaderPageCamera, adjusted: Bool, shadow: Bool) {
+        while pageViews.count < pages.count {
+            let view = ReaderStripPageView(model: model, settings: settings, owner: nil)
+            addSubview(view)
+            pageViews.append(view)
+        }
+        while pageViews.count > pages.count {
+            let view = pageViews.removeLast()
+            view.reset()
+            view.removeFromSuperview()
+        }
+        for (view, page) in zip(pageViews, pages) {
+            if view.frame != page.frame { view.frame = page.frame }
+            view.configure(.init(index: page.index, segment: page.segment, size: page.frame.size,
+                                 viewport: camera.offset, zoomScale: camera.scale, adjusted: adjusted, shadow: shadow))
+        }
+    }
+
+    func release() {
+        for view in pageViews { view.reset() }
     }
 }
 
@@ -497,18 +676,28 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
         if let framesKey, framesKey.revision == model.slotRevision, framesKey.vertical == vertical { return }
         framesKey = (model.slotRevision, vertical)
         var result: [StripFrame] = []
-        result.reserveCapacity(model.identifiedSlots.count)
+        let slots = model.identifiedSlots, rows = model.slotRows
+        result.reserveCapacity(slots.count)
         var width: CGFloat = 0, height: CGFloat = 0
-        for item in model.identifiedSlots {
-            let placements = item.slot.placements
-            for placement in placements {
-                width = max(width, CGFloat(placement.x + placement.width))
-                height = max(height, CGFloat(placement.y + placement.height))
+        if rows.count == slots.count {
+            // Plain rows (one placement per strip slot): no call into Kotlin per slot.
+            for (item, row) in zip(slots, rows) where row.placementCount > 0 {
+                width = max(width, row.frame.maxX)
+                height = max(height, row.frame.maxY)
+                result.append(StripFrame(id: item.id, index: row.page, frame: row.frame))
             }
-            guard let placement = placements.first else { continue }
-            result.append(StripFrame(id: item.id, index: Int(placement.index), frame: CGRect(
-                x: CGFloat(placement.x), y: CGFloat(placement.y),
-                width: CGFloat(placement.width), height: CGFloat(placement.height))))
+        } else {
+            for item in slots {
+                let placements = item.slot.placements
+                for placement in placements {
+                    width = max(width, CGFloat(placement.x + placement.width))
+                    height = max(height, CGFloat(placement.y + placement.height))
+                }
+                guard let placement = placements.first else { continue }
+                result.append(StripFrame(id: item.id, index: Int(placement.index), frame: CGRect(
+                    x: CGFloat(placement.x), y: CGFloat(placement.y),
+                    width: CGFloat(placement.width), height: CGFloat(placement.height))))
+            }
         }
         let vertical = vertical
         result.sort { vertical ? $0.frame.minY < $1.frame.minY : $0.frame.minX < $1.frame.minX }
@@ -553,16 +742,15 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
             cells[id] = nil
             recycle(cell)
         }
-        let adjusted = settings.value.hasColorAdjustments
+        let adjusted = settings.value.hasColorAdjustments, shadow = settings.value.bookEffect
         for (id, entry) in wanted {
             let cell = cells[id] ?? dequeue()
             cells[id] = cell
             if cell.frame != entry.frame { cell.frame = entry.frame }
             cell.isHidden = false
-            // Only tiled pages resolve tiles for the viewport; the others keep theirs fixed so a scroll step leaves
-            // them alone.
-            let viewport = model.artifacts[entry.index]?.tiled == true ? tileViewport : .zero
-            cell.configure(.init(index: entry.index, size: entry.frame.size, viewport: viewport, adjusted: adjusted))
+            // Only a tiled page resolves its tiles for the viewport (the page itself tells, once its artifact is in).
+            cell.configure(.init(index: entry.index, size: entry.frame.size, viewport: tileViewport,
+                                 adjusted: adjusted, shadow: shadow))
         }
     }
 

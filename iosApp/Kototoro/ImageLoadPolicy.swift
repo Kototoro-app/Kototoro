@@ -1,4 +1,5 @@
 import Foundation
+import MetricKit
 import KototoroShared
 import Network
 import SwiftUI
@@ -118,6 +119,11 @@ enum ReaderLoading {
     static let visiblePriority = 1
     /// `ReaderViewModel.PREFETCH_LIMIT`: pages after the visible ones offered to the prefetch queue.
     static let prefetchWindow = 10
+    /// The bytes of decoded pages a continuous strip keeps: a sixteenth of the device's memory, 160–512 MB.
+    static let decodedImageBudget: Int = {
+        let share = Double(ProcessInfo.processInfo.physicalMemory) / 16
+        return Int(min(max(share, Double(160 << 20)), Double(512 << 20)))
+    }()
 
     static var threads: Int { (UserDefaults.standard.object(forKey: threadsKey) as? Int ?? 3).clamped(1...10) }
     static var prefetchLimit: Int { (UserDefaults.standard.object(forKey: prefetchLimitKey) as? Int ?? 6).clamped(1...20) }
@@ -169,11 +175,32 @@ final class NetworkState: Sendable {
     var current: Snapshot { state.withLock { $0 } }
 }
 
+/// Scroll hitches the system measured on this device (MetricKit's daily `MXAnimationMetric`): how smooth reading is
+/// away from development builds. The latest day's ratio is kept for the reader loading settings to show.
+final class ReaderHitchMetrics: NSObject, MXMetricManagerSubscriber, @unchecked Sendable {
+    static let shared = ReaderHitchMetrics()
+    /// Milliseconds of hitches per second of scrolling, and when that day ended.
+    static let ratioKey = "reader_scroll_hitch_ratio"
+    static let dateKey = "reader_scroll_hitch_date"
+
+    func start() { MXMetricManager.shared.add(self) }
+
+    func didReceive(_ payloads: [MXMetricPayload]) {
+        guard let latest = payloads
+            .filter({ $0.animationMetrics?.scrollHitchTimeRatio != nil })
+            .max(by: { $0.timeStampEnd < $1.timeStampEnd }),
+            let ratio = latest.animationMetrics?.scrollHitchTimeRatio else { return }
+        UserDefaults.standard.set(ratio.value, forKey: Self.ratioKey)
+        UserDefaults.standard.set(latest.timeStampEnd, forKey: Self.dateKey)
+    }
+}
+
 /// Android's reader settings group for page loading.
 struct ReaderLoadingSettingsSection: View {
     @AppStorage(ReaderLoading.preloadKey) private var preload = ReaderLoading.Preload.unmetered.rawValue
     @AppStorage(ReaderLoading.threadsKey) private var threads = 3
     @AppStorage(ReaderLoading.prefetchLimitKey) private var prefetchLimit = 6
+    @AppStorage(ReaderHitchMetrics.ratioKey) private var hitchRatio = -1.0
 
     var body: some View {
         Section {
@@ -189,10 +216,21 @@ struct ReaderLoadingSettingsSection: View {
                 LabeledContent("预读页数", value: "\(prefetchLimit)")
             }
             .accessibilityIdentifier("settings.prefetchLimit")
+            LabeledContent("滚动卡顿") {
+                if hitchRatio >= 0 {
+                    Text(verbatim: hitchRatio.formatted(.number.precision(.fractionLength(1))) + " ms/s")
+                } else {
+                    Text("暂无数据")
+                }
+            }
+            .accessibilityIdentifier("settings.scrollHitches")
         } header: {
             Text("阅读器加载")
         } footer: {
-            Text("线程数为阅读时同时加载的页面数量；预读页数为提前加载的页面数量。省电模式与低数据模式下不预加载。")
+            VStack(alignment: .leading, spacing: 4) {
+                Text("线程数为阅读时同时加载的页面数量；预读页数为提前加载的页面数量。省电模式与低数据模式下不预加载。")
+                Text("滚动卡顿为系统统计的本机前一天每秒滚动中卡顿的毫秒数，5 以下为流畅。")
+            }
         }
     }
 }
