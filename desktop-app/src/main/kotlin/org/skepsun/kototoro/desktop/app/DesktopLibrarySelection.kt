@@ -46,6 +46,41 @@ enum class DesktopLibraryDownload {
     }
 }
 
+/**
+ * Android's quick-filter macro chips. Every macro is its own group there, so separate macros are AND-ed;
+ * `notFavorite`/`sfw` are Android's `Inverted` options. Android's `COMPLETED` macro is not repeated here:
+ * the reading-progress group above already filters on the same progress threshold, and Android's chip list
+ * only differs because its own reading-status filter reads scrobbling state instead of progress.
+ */
+enum class DesktopLibraryMacro {
+    NEW_CHAPTERS, FAVORITE, NOT_FAVORITE, NSFW, SFW;
+
+    val title: String get() = when (this) {
+        NEW_CHAPTERS -> desktopText("library.quick.newChapters")
+        FAVORITE -> desktopText("library.quick.favorite")
+        NOT_FAVORITE -> desktopText("library.quick.notFavorite")
+        NSFW -> desktopText("library.quick.nsfw")
+        SFW -> desktopText("library.quick.sfw")
+    }
+
+    fun accepts(entry: DesktopLibraryEntry): Boolean = when (this) {
+        NEW_CHAPTERS -> entry.newChapters > 0
+        FAVORITE -> entry.categoryIds.isNotEmpty()
+        NOT_FAVORITE -> entry.categoryIds.isEmpty()
+        NSFW -> entry.isNsfw
+        SFW -> !entry.isNsfw
+    }
+
+    companion object {
+        /** The favourites shelf holds nothing but favourites, so its chips stay off that shelf. */
+        fun choices(history: Boolean): List<DesktopLibraryMacro> =
+            if (history) entries else entries - FAVORITE - NOT_FAVORITE
+    }
+}
+
+/** Android's `resolveReadingStatus` and `FavouriteLibraryDeriver` both snap completion at 99.9%. */
+internal const val CompletedProgress = 0.999f
+
 data class DesktopLibrarySelection(
     val query: String = "",
     val categoryId: Long? = null,
@@ -59,8 +94,10 @@ data class DesktopLibrarySelection(
     /** Android's `_publication_state` group: content-state names, OR-ed inside the group. */
     val states: Set<String> = emptySet(),
     val download: DesktopLibraryDownload = DesktopLibraryDownload.ALL,
+    /** Android's macro chips; each macro is its own group, so they are AND-ed with everything else. */
+    val macros: Set<DesktopLibraryMacro> = emptySet(),
 ) {
-    val filterCount: Int get() = sources.size + tags.size + states.size +
+    val filterCount: Int get() = sources.size + tags.size + states.size + macros.size +
         (if (categoryId != null) 1 else 0) +
         (if (reading != DesktopLibraryReading.ALL) 1 else 0) +
         (if (download != DesktopLibraryDownload.ALL) 1 else 0)
@@ -81,6 +118,7 @@ data class DesktopLibrarySelection(
                 (tags.isEmpty() || content.tags.any { it in tags }) &&
                 (states.isEmpty() || content.state in states) &&
                 download.accepts(content.id in downloadedContentIds) &&
+                macros.all { it.accepts(row) } &&
                 sourceFilter.accepts(ecosystems[content.source.name], content.source.contentType) &&
                 (text.isEmpty() || content.title.contains(text, true) ||
                     content.altTitles.any { it.contains(text, true) } || content.authors.any { it.contains(text, true) }) &&
@@ -88,7 +126,7 @@ data class DesktopLibrarySelection(
                     DesktopLibraryReading.ALL -> true
                     DesktopLibraryReading.UNREAD -> progress == null || progress <= 0f
                     DesktopLibraryReading.READING -> progress != null && progress > 0f && progress < 1f
-                    DesktopLibraryReading.FINISHED -> progress != null && progress >= 1f
+                    DesktopLibraryReading.FINISHED -> progress != null && progress >= CompletedProgress
                 }
         }
         val comparator: Comparator<DesktopLibraryEntry> = when (order) {

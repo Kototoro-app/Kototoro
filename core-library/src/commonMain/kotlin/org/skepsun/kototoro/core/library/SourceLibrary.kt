@@ -49,9 +49,28 @@ class SourceLibrary(
                 .filter { membership -> membership.categoryId in categoryIds }
                 .groupBy { it.mangaId }
             val items = if (history) history(withChapters) else favourites(withChapters)
-            val progress = database.getHistoryDao().findAllByMangaIds(items.map { it.id }).associateBy { it.mangaId }
+            val ids = items.map { it.id }
+            // Room expands `IN (:ids)` into a literal list, so an empty shelf has to skip the bulk queries.
+            val progress = if (ids.isEmpty()) {
+                emptyMap()
+            } else {
+                database.getHistoryDao().findAllByMangaIds(ids).associateBy { it.mangaId }
+            }
+            // The macro filters read the same rows Android's snapshot carries: the stored nsfw flag and the
+            // update checker's new-chapter counter. Both are one bulk query, not a per-card lookup.
+            val nsfwIds: Set<Long> = if (ids.isEmpty()) {
+                emptySet()
+            } else {
+                database.getMangaDao().findEntitiesByIds(ids)
+                    .mapNotNullTo(HashSet()) { if (it.isNsfw) it.id else null }
+            }
+            val newChapters: Map<Long, Int> = if (ids.isEmpty()) {
+                emptyMap()
+            } else {
+                database.getTracksDao().findNewChapters(ids).associate { it.mangaId to it.count }
+            }
             // One lookup of just the chapters being read; works can hold thousands of chapters each.
-            val chapters = if (history) {
+            val chapters = if (history && progress.isNotEmpty()) {
                 database.getChaptersDao().findReadingByMangaIds(progress.keys)
                     .associateBy { it.mangaId to it.chapterId }
             } else emptyMap()
@@ -61,7 +80,8 @@ class SourceLibrary(
                 SourceLibraryEntry(item, member.map { it.categoryId }.toSet(),
                     if (history) reading?.updatedAt ?: 0L else member.maxOfOrNull { it.updatedAt } ?: 0L,
                     reading?.updatedAt, reading?.percent,
-                    reading?.let { chapters[item.id to it.chapterId] }?.let { SourceLibraryChapter(it.title, it.number) })
+                    reading?.let { chapters[item.id to it.chapterId] }?.let { SourceLibraryChapter(it.title, it.number) },
+                    item.id in nsfwIds, newChapters[item.id] ?: 0)
             }, categories.map { SourceLibraryCategory(it.categoryId.toLong(), it.title) })
         }
     }

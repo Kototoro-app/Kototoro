@@ -7,11 +7,12 @@ import org.skepsun.kototoro.desktop.runtime.*
 
 class DesktopLibrarySelectionTest {
     private fun entry(id: Long, title: String, source: String, category: Long, progress: Float?, updated: Long,
-        tags: Set<SourceTag> = emptySet(), state: String? = null) =
+        tags: Set<SourceTag> = emptySet(), state: String? = null, nsfw: Boolean = false, newChapters: Int = 0,
+        categories: Set<Long> = setOf(category)) =
         DesktopLibraryEntry(SourceContent(id = id, title = title, altTitles = setOf("别名 $id"), url = "/$id",
             publicUrl = "/$id", rating = 0f, contentRating = null, coverUrl = null, tags = tags, state = state,
-            authors = setOf("Author $id"), source = SourceRef(source, "zh", "MANGA")), setOf(category), updated,
-            if (progress == null) null else updated + 1, progress)
+            authors = setOf("Author $id"), source = SourceRef(source, "zh", "MANGA")), categories, updated,
+            if (progress == null) null else updated + 1, progress, isNsfw = nsfw, newChapters = newChapters)
 
     private val tag = SourceTag("Drama", "drama", SourceRef("one", "zh", "MANGA"))
     private val otherTag = SourceTag("Action", "action", SourceRef("one", "zh", "MANGA"))
@@ -70,6 +71,39 @@ class DesktopLibrarySelectionTest {
         assertTrue(DesktopLibrarySelection(download = DesktopLibraryDownload.DOWNLOADED).select(snapshot).isEmpty())
         assertEquals(1, DesktopLibrarySelection(download = DesktopLibraryDownload.DOWNLOADED).filterCount)
         assertEquals(DesktopLibraryDownload.ALL, DesktopLibrarySelection().download)
+    }
+
+    @Test
+    fun `macros read the stored nsfw flag, the update counter and the category membership`() {
+        val shelf = DesktopLibrarySnapshot(listOf(
+            entry(1, "Fresh", "one", 5, .2f, 4, nsfw = true, newChapters = 3),
+            entry(2, "Untracked", "one", 5, .4f, 3, newChapters = 0),
+            entry(3, "Loose", "one", 5, null, 2, newChapters = 1, categories = emptySet()),
+        ))
+        assertEquals(listOf(1L, 3L), DesktopLibrarySelection(macros = setOf(DesktopLibraryMacro.NEW_CHAPTERS))
+            .select(shelf).map { it.content.id })
+        assertEquals(listOf(1L), DesktopLibrarySelection(macros = setOf(DesktopLibraryMacro.NSFW))
+            .select(shelf).map { it.content.id })
+        assertEquals(listOf(2L, 3L), DesktopLibrarySelection(macros = setOf(DesktopLibraryMacro.SFW))
+            .select(shelf).map { it.content.id })
+        assertEquals(listOf(3L), DesktopLibrarySelection(macros = setOf(DesktopLibraryMacro.NOT_FAVORITE))
+            .select(shelf).map { it.content.id })
+        assertEquals(listOf(1L, 2L), DesktopLibrarySelection(macros = setOf(DesktopLibraryMacro.FAVORITE))
+            .select(shelf).map { it.content.id })
+        // Separate macros are separate groups, so they intersect; SFW and NSFW together match nothing.
+        assertEquals(listOf(1L), DesktopLibrarySelection(macros = setOf(DesktopLibraryMacro.NSFW,
+            DesktopLibraryMacro.NEW_CHAPTERS)).select(shelf).map { it.content.id })
+        assertTrue(DesktopLibrarySelection(macros = setOf(DesktopLibraryMacro.NSFW, DesktopLibraryMacro.SFW))
+            .select(shelf).isEmpty())
+        assertEquals(2, DesktopLibrarySelection(macros = setOf(DesktopLibraryMacro.NSFW,
+            DesktopLibraryMacro.NEW_CHAPTERS)).filterCount)
+    }
+
+    @Test
+    fun `macro choices keep the favourites-only chips off the favourites shelf`() {
+        assertEquals(listOf(DesktopLibraryMacro.NEW_CHAPTERS, DesktopLibraryMacro.NSFW, DesktopLibraryMacro.SFW),
+            DesktopLibraryMacro.choices(history = false))
+        assertEquals(DesktopLibraryMacro.entries, DesktopLibraryMacro.choices(history = true))
     }
 
     @Test

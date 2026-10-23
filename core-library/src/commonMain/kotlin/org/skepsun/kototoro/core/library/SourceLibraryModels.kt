@@ -22,6 +22,10 @@ data class SourceLibraryEntry(
     val progressPercent: Float?,
     /** History only: the stored chapter last read, for "continue reading" captions. */
     val lastChapter: SourceLibraryChapter? = null,
+    /** The persisted `manga.nsfw` flag, so the NSFW/SFW macro filters match Android's stored row. */
+    val isNsfw: Boolean = false,
+    /** `tracks.chapters_new`: chapters the update checker found since the last read. */
+    val newChapters: Int = 0,
 )
 
 data class SourceLibraryChapter(val title: String, val number: Float)

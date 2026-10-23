@@ -180,6 +180,19 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                                     update(selection.copy(download = download))
                                 }
                             }
+                            HorizontalDivider()
+                            Text(desktopText("library.quick"), fontWeight = FontWeight.SemiBold)
+                            DesktopLibraryMacro.choices(history).forEach { macro ->
+                                val selected = macro in selection.macros
+                                Row(Modifier.fillMaxWidth().testTag("library-macro:${macro.name}")
+                                    .clickable(enabled = enabled) {
+                                        update(selection.copy(macros = if (selected) selection.macros - macro
+                                            else selection.macros + macro))
+                                    }, verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(selected, onCheckedChange = null, enabled = enabled)
+                                    Text(macro.title, modifier = Modifier.padding(start = 12.dp))
+                                }
+                            }
                         }
                         VerticalScrollbar(rememberScrollbarAdapter(scroll), modifier = Modifier.align(Alignment.CenterEnd)
                             .fillMaxHeight().testTag("library-filter-scrollbar"))

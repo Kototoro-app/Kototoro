@@ -6419,3 +6419,43 @@ M2 的 `Colors` 与 `Typography.h4`–`caption` 角色被手工映射到 M3 角�
 
 **未做**：追踪器专属阅读状态（`RE_READING`/`ON_HOLD`/`DROPPED`）需要桌面侧先有 scrobbling 状态持久化；
 状态/下载组的“取反”独立选项（Android 的 `Inverted`）由三态单选覆盖，不另设。
+
+## 133. Windows 收藏/历史补上宏筛选组（2026-10-23）
+
+日期：2026-10-23。承接 §132：Android 的 `ListFilterCriteria.Macro` 是抽屉里最后一组还没有落地的筛选，
+其中“有新章节/NSFW/收藏（及取反）”在桌面缺失。
+
+- `SourceLibraryEntry` 新增两个来自现有数据库行的字段（都有默认值，其余构造点不变）：
+  `isNsfw`（`manga.nsfw`，与 Android 收藏快照 `FavouriteCardRow.isNsfw` 同源）与
+  `newChapters`（`tracks.chapters_new`，即更新检查器发现的未读新章数）。
+  `SourceLibrary.snapshot()` 用两条批量查询填充：`MangaDao.findEntitiesByIds` 取 nsfw 位、
+  `TracksDao.findNewChapters(ids)` 取新章数，不做逐卡查询。
+- `DesktopLibrarySelection` 新增 `macros: Set<DesktopLibraryMacro>`（`NEW_CHAPTERS`/`FAVORITE`/
+  `NOT_FAVORITE`/`NSFW`/`SFW`）。宏在 Android 是各自独立的 group（`groupKey = name`），
+  因此桌面按“全部满足”求交；`NOT_FAVORITE`/`SFW` 对应 Android 的 `Inverted` 选项。
+  `filterCount` 计入所选宏个数。
+- `DesktopLibraryMacro.choices(history)`：收藏页只给“新章节/18+/全年龄”（收藏页全是收藏，
+  收藏与非收藏无意义，与 Android 收藏快捷筛选一致）；历史页给全部五个。
+- 抽屉新增“快速筛选”区（复选框，testTag `library-macro:<NAME>`），排在下载区之后。
+- 文案：`library.quick`、`library.quick.{newChapters,favorite,notFavorite,nsfw,sfw}` 中英文各一份；
+  中文沿用 Android 资源（新章节/收藏/非收藏/18+/全年龄）。
+- 对齐修复：`DesktopLibraryReading.FINISHED` 的完成阈值从 `>= 1f` 改为共享常量 `CompletedProgress`
+  （0.999f），与 Android `resolveReadingStatus`/`FavouriteLibraryDeriver` 一致。
+- **未做**：Android 的 `COMPLETED` 宏不再单独提供——桌面的“阅读进度=已读完”读的正是同一进度
+  （Android 那边两枚芯片之所以不同，是因为它的阅读状态筛选读的是追踪器状态）；值 0.999 阈值已对齐。
+
+验证：`:desktop-app:test` 新增两例（宏分别读 nsfw 位/新章计数/分类成员，独立宏求交，
+NSFW 与 SFW 同选为空；收藏页的宏列表裁剪）；`:desktop-app:test --tests "*DesktopAppTest*tablet*"`
+四个窗口尺寸全绿，探针写入一条 `chapters_new = 2` 的 tracks 行后勾选“新章节”只剩该作品、
+取消后删除该行，收藏页不存在“收藏/非收藏”行，NSFW 清空网格、与 SFW 同选仍为空、
+只留 SFW 时恢复全部，截图 `tablet-library-filter-groups.png` 等；`:desktop-app:verifyDesktopStrings`
+与 `:core-library:compileCommonMainKotlinMetadata` 通过。相关后续：收藏卡片上的新章节角标
+（Android 有）可在本次字段基础上直接接。
+
+顺手修掉的两个既有隐患：`snapshot()` 里所有 `IN (:ids)` 批量查询（history 进度、nsfw、新章计数）
+在空书架时会拼成 `IN ()` 并抛 SQL 语法错误，现在空列表直接跳过（Room 不会为集合参数生成 `NULL`）。
+
+**本机环境注记**：本轮跑 `:desktop-app:test` 时 `parsers-*` 探针（kototoro/kotatsu/UMA 插件）与
+`continuous Windows reader …` 探针各自报 `UncompletedCoroutinesError: After waiting for 1m`，
+子进程 60 秒内没跑完即被判失败；把本节改动 `git stash` 后连跑三次 `parsers-*` 仍 3/3 失败，
+说明与本轮无关，是这两个探针在本机较慢环境下的既有超时（其余 170+ 用例正常）。

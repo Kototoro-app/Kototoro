@@ -231,6 +231,11 @@ internal object DesktopTabletProbe {
                     sourceData = null, state = "FINISHED")
                 runBlocking { session.library.addFavourite(tagged) }
                 runBlocking { session.library.addFavourite(finished) }
+                // Android's NEW_CHAPTERS chip reads the update counter the tracker keeps, so seed one row.
+                runBlocking {
+                    session.storage.database.getTracksDao().upsert(org.skepsun.kototoro.tracker.data.TrackEntity(
+                        tagged.id, 0, 2, 0, 0, org.skepsun.kototoro.tracker.data.TrackEntity.RESULT_HAS_UPDATE, null))
+                }
                 runBlocking { controller.library().join() }; idle()
                 onNodeWithTag("library-tags-open").performScrollTo().performClick(); idle()
                 onNodeWithTag("library-tags-dialog").assertExists()
@@ -262,7 +267,28 @@ internal object DesktopTabletProbe {
                 check(controller.state.value.librarySelection.download == DesktopLibraryDownload.MISSING)
                 check(controller.state.value.librarySelection.filterCount == 1)
                 check(shownCount() == controller.state.value.library.entries.size)
+                // Macros stay Android's independent groups: the favourite pair is meaningless on this shelf,
+                // NSFW matches nothing here and NSFW together with SFW intersects to an empty grid.
+                onNodeWithTag("library-macro:FAVORITE").assertDoesNotExist()
+                onNodeWithTag("library-macro:NOT_FAVORITE").assertDoesNotExist()
+                onNodeWithTag("library-macro:NEW_CHAPTERS").performScrollTo().performClick(); idle()
+                check(controller.state.value.librarySelection.macros == setOf(DesktopLibraryMacro.NEW_CHAPTERS))
+                check(shownCount() == 1)
+                onNodeWithTag("content:${tagged.id}").assertExists()
+                onNodeWithTag("library-macro:NEW_CHAPTERS").performScrollTo().performClick(); idle()
+                onNodeWithTag("library-macro:NSFW").performScrollTo().performClick(); idle()
+                check(controller.state.value.librarySelection.macros == setOf(DesktopLibraryMacro.NSFW))
+                check(shownCount() == 0)
+                onNodeWithTag("library-macro:SFW").performScrollTo().performClick(); idle()
+                check(shownCount() == 0)
+                onNodeWithTag("library-macro:NSFW").performScrollTo().performClick(); idle()
+                check(controller.state.value.librarySelection.macros == setOf(DesktopLibraryMacro.SFW))
+                check(shownCount() == controller.state.value.library.entries.size)
+                check(controller.state.value.librarySelection.filterCount == 2)
                 snapshot("library-filter-groups")
+                // Drop the fake track row so the feed checks below still see an empty update list.
+                runBlocking { session.storage.database.getTracksDao().delete(tagged.id) }
+                runBlocking { controller.library().join() }; idle()
                 onNodeWithTag("library-filter-reset").performClick(); idle()
                 check(controller.state.value.librarySelection.filterCount == 0)
                 onNodeWithTag("library-filter-close").performClick(); idle()
