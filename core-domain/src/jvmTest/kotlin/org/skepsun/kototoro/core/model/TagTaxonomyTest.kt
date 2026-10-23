@@ -58,6 +58,25 @@ class TagTaxonomyTest {
     }
 
     @Test
+    fun `a converter installed after the first lookup still relabels the cached catalog`() {
+        // The catalog is read first, exactly like a shared deriver that runs before Android's façade is touched.
+        assertEquals("轻度情色", TagTaxonomy.find("genre.ecchi")!!.chineseLabel)
+        assertTrue(TagTaxonomy.resolve("輕度情色").isEmpty())
+        val converter = TagTaxonomy.traditionalLabelConverter
+        try {
+            TagTaxonomy.traditionalLabelConverter = { it.replace('轻', '輕').replace('复', '復').replace('愤', '憤') }
+            assertEquals("輕度情色", TagTaxonomy.find("genre.ecchi")!!.traditionalChineseLabel)
+            assertEquals("genre.ecchi", TagTaxonomy.resolve("輕度情色").single().id)
+            assertEquals("genre.ecchi", TagTaxonomy.resolve("轻度情色").single().id)
+        } finally {
+            TagTaxonomy.traditionalLabelConverter = converter
+        }
+        // Restoring the converter puts the fallback labels back, so the shared test JVM never leaks Hant labels.
+        assertEquals("轻度情色", TagTaxonomy.find("genre.ecchi")!!.traditionalChineseLabel)
+        assertTrue(TagTaxonomy.resolve("輕度情色").isEmpty())
+    }
+
+    @Test
     fun `search spans ids, labels and aliases`() {
         val revenge = TagTaxonomy.find("theme.revenge")!!
         assertTrue(TagTaxonomy.search(revenge, "revenge"))

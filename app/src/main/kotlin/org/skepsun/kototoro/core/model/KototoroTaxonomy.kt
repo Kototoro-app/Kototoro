@@ -9,16 +9,27 @@ private fun Locale.usesTraditionalChinese(): Boolean =
     language == Locale.CHINESE.language &&
         (script.equals("Hant", ignoreCase = true) || country.uppercase(Locale.ROOT) in TRADITIONAL_CHINESE_REGIONS)
 
+private val TRADITIONAL_CHINESE: (String) -> String = ChineseConverter::s2t
+
+/**
+ * Android's only platform input to the shared catalog: the simplifier→traditional converter. The shared rules may
+ * read the catalog before any screen does, so [org.skepsun.kototoro.core.BaseApp] installs it at startup; the façade
+ * installs it again on first use, and a late installation rebuilds the shared label and alias index.
+ */
+internal fun installTraditionalLabels() {
+    if (TagTaxonomy.traditionalLabelConverter !== TRADITIONAL_CHINESE) {
+        TagTaxonomy.traditionalLabelConverter = TRADITIONAL_CHINESE
+    }
+}
+
 /**
  * Android's view of the shared [TagTaxonomy]: the catalog, its alias index and the matching rules live in
- * `core-domain`, and the single platform input is the simplifier→traditional converter installed here — the object
- * is the only entry point Android has to the catalog, so the converter is in place before the tags are first read.
- * Locale-aware names stay in this module because `java.util.Locale` is Android/JVM-only.
+ * `core-domain`. Locale-aware names stay in this module because `java.util.Locale` is Android/JVM-only.
  */
 object KototoroTaxonomy {
 
     init {
-        TagTaxonomy.traditionalLabelConverter = ChineseConverter::s2t
+        installTraditionalLabels()
     }
 
     val tags: List<TaxonomyTag> get() = TagTaxonomy.tags

@@ -66,7 +66,7 @@ internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
     listOf(Locale.getDefault(Locale.Category.DISPLAY), Locale.getDefault()).distinct()
         .map { ChapterBranchLocale(it.getDisplayLanguage(it), it.getDisplayName(it)) }
 
-enum class DesktopScreen { HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS, RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, MORE }
+enum class DesktopScreen { HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS, RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, MORE }
 
 data class DesktopAppState(
     val screen: DesktopScreen = DesktopScreen.EXPLORE,
@@ -1444,6 +1444,20 @@ class DesktopController(val session: DesktopSession) {
 
     /** Android's source settings screen: rail order, layout and the adult-content targets. */
     fun showSourceSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SOURCE_SETTINGS) } }
+
+    /** Android's global tag blacklist, reached from the source settings page like the Android preference. */
+    fun showTagBlacklist() = navigate { mutableState.update { it.copy(screen = DesktopScreen.TAG_BLACKLIST) } }
+
+    /** Android's "clear" action on the blacklist screen: the stored selection becomes empty, matching nothing. */
+    internal fun clearTagBlacklist() = updateTagBlacklist(emptySet())
+
+    internal fun toggleTagBlacklist(key: String) {
+        val current = mutableState.value.sourceSettings.tagBlacklist
+        updateTagBlacklist(if (key in current) current - key else current + key)
+    }
+
+    private fun updateTagBlacklist(selection: Set<String>) =
+        sourceSettings(mutableState.value.sourceSettings.copy(tagBlacklist = selection))
 
     internal fun sourceSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings) {
         mutableState.update { it.copy(sourceSettings = settings) }

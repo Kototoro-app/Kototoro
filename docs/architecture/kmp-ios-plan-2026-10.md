@@ -6998,3 +6998,46 @@ Windows 若要复现“全局标签黑名单”这类功能只能抄一份数据
   新增 `:core-domain:jvmTest` 的 `TagTaxonomyTest` 6 项（334 条唯一 ID、别名精确匹配与多目标、Futon 词表与
   安全标记、`localizedLabel` 的中英分支、默认恒等转换器下的繁中标签、`search` 的 id/标签/别名覆盖）；
   `:core-domain:compileCommonMainKotlinMetadata` 与 `:desktop-app:compileKotlin` 通过。
+
+## 152. 全局标签黑名单：共享匹配器 + Windows 页面（2026-10-24）
+
+日期：2026-10-24。§151 把目录搬进 `core-domain` 之后，Android 的“全局标签黑名单”仍是一层平台实现
+（`GlobalTagBlacklist` 自己解析 ID、自己拼 `raw:` 键、自己做精确匹配）。这一节把它下沉成共享匹配器，
+Windows 复制的是“选择界面”，不是“匹配规则”。
+
+- 新文件 `core-domain/src/commonMain/kotlin/org/skepsun/kototoro/core/model/TagTitleBlacklist.kt`：
+  `class TagTitleBlacklist(tags: Collection<String>) : TagBlacklist`。构造时把已存的选择分成两类——
+  能解析到词库的存成词库 ID（`TagTaxonomy.find` 直接命中，或 `TagTaxonomy.resolve` 的全部命中），
+  解析不到的按 `rawTagKey(title)`（`"raw:" + trim().lowercase()`）存成原始键。`containsTagTitle` 因此只需要
+  “原始键精确命中”或“`resolve(title)` 的 ID 落在选择里”，与 Android 原实现逐条对齐；`isEmpty` 让调用方
+  跳过整条过滤，`containsAnyTitle` 给一次看多个标题的场景（订阅行、更新轮播）用。
+- `app/core/model/GlobalTagBlacklist.kt` 从 80 行缩成转调：`contains(Content)`、`filter(contents)`、
+  `RAW_TAG_PREFIX`、`rawTagKey()`、`normalizeTag()` 的公开形状不变，规则全在共享类里，Android 的行为没有变化。
+- 顺手修掉 §151 留下的初始化顺序缺陷：`TaxonomyTag.traditionalChineseLabel` 现在是**每次读取**都走
+  `TagTaxonomy.traditionalLabel(chineseLabel)`，`tags`/`find`/`resolve` 共用一个 `@Volatile` 目录快照，
+  安装转换器时作废该快照。此前繁中标签在 `tags` 首次求值时被烘进对象，谁先读目录谁就决定了它——
+  `GlobalTagBlacklist` 改成直接走共享对象后，Android 上“先构造黑名单、后打开设置页”会让繁中标签永久停在简体。
+  `BaseApp.onCreate` 现在也显式 `installTraditionalLabels()`，共享规则不再依赖“某个界面先跑过”。
+- Windows 侧存储：`DesktopSourceSettings.tagBlacklist: Set<String>`，键名沿用 Android 的
+  `global_tag_blacklist`（`TextSet`，仍存 `desktop_background`），`TextSet` 里的字符串就是 Android 存的那套
+  （词库 ID 或 `raw:` 键），因此同一份导出/备份在两端读到的选择一致。空的 `tagBlacklist` 返回
+  `TagBlacklist.Empty`。
+- 消费点（都走共享规则，因此 Windows 与 Android 对同一份选择隐藏同一批作品）：
+  `DesktopLibrarySelection.select(...)` 的过滤链（收藏/历史两个书架，`DesktopLibraryPanel` 传入）；
+  `FeedDeriver.Input.tagBlacklist`（订阅时间线）；更新轮播按 `feedContents[id].tags` 过滤；
+  浏览/搜索结果网格在渲染前过滤（分页仍按源返回的原始页，与 Android 的 `ExploreRepository` 一致）；
+  主页的“最近更新”与“为你推荐”两条 rail（对应 Android 的 `UpdatesViewModel`/`SuggestionsViewModel`）。
+- 新页面 `DesktopScreen.TAG_BLACKLIST`（`DesktopTagBlacklistPage.kt`，入口在来源设置的新“标签”节，
+  行标签 `source-setting-tag-blacklist`）：顶部是已选数量与“清空”（对应 Android 的 clear action），
+  搜索框按 `TagTaxonomy.search` 过滤目录，目录按类别分组（`RAW` 组放 `knownSourceTags` 里词库不认识的名字），
+  已选区先列当前选择；“添加‘xxx’”只在查询非空、词库解析不到该文本且该 `raw:` 键尚未选中时出现。
+  芯片点击切换，长按弹出详情（键、英文标签、类别、别名）——对应 Android 长按芯片看别名。
+- 与 Android 的差距：Android 的黑名单页会把内容库里**实际出现过**的标签标题也列进目录
+  （`observeAllTagTitles()`），Windows 没有等价的“全库标签标题”查询，目录固定为词库 334 条 +
+  `knownSourceTags`；缺的名字仍可通过“添加‘xxx’”变成 `raw:` 模式，所以能力不缺，只是候选列表更静态。
+- 验证：`:core-domain:jvmTest` 的 `TagTitleBlacklistTest` 6 项与 `TagTaxonomyTest` 7 项（新增
+  “转换器晚装也会重建缓存目录”）全绿；`desktop-runtime` 新增 `DesktopSourceSettingsTest` 4 项（往返、
+  非法/空白值回退、规则命中、键名复用）绿；`DesktopLibrarySelectionTest` 新增黑名单用例（词库 ID、
+  `raw:` 精确匹配、空选择不过滤）共 10 项绿；`:desktop-app:compileKotlin`、`compileTestKotlin`、
+  `verifyDesktopStrings` 通过；平板探针新增“来源设置 → 标签黑名单 → 搜索 → 选中 → 落盘 → 长按详情 →
+  清空 → 返回”段落，`tablet.log` 以 `DESKTOP_UI_OK=tablet` 结束。

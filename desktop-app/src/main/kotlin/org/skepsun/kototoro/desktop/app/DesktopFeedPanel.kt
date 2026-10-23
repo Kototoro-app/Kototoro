@@ -56,24 +56,28 @@ internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppSt
     // Android keeps two adult targets here: FEED hides the timeline, UPDATES its tracked-with-new-chapters carousel.
     val hideNsfwFeed = state.sourceSettings.hidesNsfw(DesktopNsfwTarget.FEED)
     val hideNsfwUpdates = state.sourceSettings.hidesNsfw(DesktopNsfwTarget.UPDATES)
+    // Android's FeedViewModel and UpdatesViewModel build one GlobalTagBlacklist from the same stored selection.
+    val blacklist = remember(state.sourceSettings.tagBlacklist) { state.sourceSettings.tagBlacklistRules() }
     // Android derives the visible rows in memory from the snapshot (FeedDeriver), filters included.
-    val derived = remember(state.feed, filter, hideNsfwFeed) {
+    val derived = remember(state.feed, filter, hideNsfwFeed, blacklist) {
         FeedDeriver.derive(
             FeedDeriver.Input(
                 snapshot = state.feed,
                 sourceTags = filter.tags,
                 groupTab = filter.tab,
                 excludedNsfw = hideNsfwFeed,
+                tagBlacklist = blacklist,
             ),
         )
     }
     val rows = derived.visibleRows
-    val updates = remember(state.feed, state.feedContents, filter, ecosystems, hideNsfwUpdates) {
+    val updates = remember(state.feed, state.feedContents, filter, ecosystems, hideNsfwUpdates, blacklist) {
         state.feed.updateRowsByOwnerId.values
             .filter { !hideNsfwUpdates || !it.isNsfw }
             .filter { update ->
                 val content = state.feedContents[update.displayMangaId ?: update.mangaId]
-                filter.acceptsFeedSource(update.sourceName, content?.source?.contentType, ecosystems)
+                filter.acceptsFeedSource(update.sourceName, content?.source?.contentType, ecosystems) &&
+                    content?.tags.orEmpty().none { blacklist.containsTagTitle(it.title) }
             }
             .sortedWith(compareByDescending<FeedUpdateRow> { it.isPinned }.thenByDescending { it.lastChapterDate ?: it.lastCheckTime })
     }

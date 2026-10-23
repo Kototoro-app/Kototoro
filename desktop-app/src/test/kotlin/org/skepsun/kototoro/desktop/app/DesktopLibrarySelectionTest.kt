@@ -2,6 +2,7 @@ package org.skepsun.kototoro.desktop.app
 
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.model.TagTitleBlacklist
 import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.desktop.runtime.*
 
@@ -126,6 +127,28 @@ class DesktopLibrarySelectionTest {
         // History has no pin, so it keeps the plain order even when the stored row carries the flag.
         assertEquals(listOf(Long.MAX_VALUE, 7, Long.MIN_VALUE),
             DesktopLibrarySelection(order = DesktopLibraryOrder.TITLE).select(shelf).map { it.content.id })
+    }
+
+    @Test
+    fun `the global tag blacklist hides works exactly like Android's shared matcher`() {
+        val isekai = SourceTag("Isekai", "isekai", SourceRef("one", "zh", "MANGA"))
+        val shelf = DesktopLibrarySnapshot(listOf(
+            entry(1, "World", "one", 5, null, 3, setOf(isekai)),
+            entry(2, "Drama", "one", 5, null, 2, setOf(tag)),
+            entry(3, "Plain", "one", 5, null, 1),
+        ))
+        // A taxonomy ID resolves through the shared alias index, so "Isekai" reaches the selected ID.
+        val byId = TagTitleBlacklist(setOf("setting.other-world"))
+        assertEquals(listOf(2L, 3L), DesktopLibrarySelection().select(shelf, tagBlacklist = byId)
+            .map { it.content.id })
+        // A raw pattern matches the published title exactly; it is not a fuzzy or translated match.
+        assertEquals(listOf(1L, 3L), DesktopLibrarySelection().select(shelf,
+            tagBlacklist = TagTitleBlacklist(setOf(TagTitleBlacklist.rawTagKey("drama")))).map { it.content.id })
+        assertTrue(DesktopLibrarySelection().select(shelf,
+            tagBlacklist = TagTitleBlacklist(setOf(TagTitleBlacklist.rawTagKey("異世界")))).size == 3)
+        // An empty blacklist is indistinguishable from not passing one: it hides nothing.
+        assertEquals(shelf.entries.size, DesktopLibrarySelection().select(shelf,
+            tagBlacklist = TagTitleBlacklist(emptySet())).size)
     }
 
     @Test

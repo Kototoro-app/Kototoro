@@ -51,9 +51,12 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
     val hideNsfw = state.sourceSettings.hidesNsfw(
         if (history) DesktopNsfwTarget.HISTORY else DesktopNsfwTarget.FAVOURITES,
     )
-    val entries = remember(state.library, selection, ecosystems, downloadedIds, hideNsfw, history) {
+    // Android hands every shelf deriver the same blacklist instance; it hides works, not the shelf's own filters.
+    val blacklist = remember(state.sourceSettings.tagBlacklist) { state.sourceSettings.tagBlacklistRules() }
+    val entries = remember(state.library, selection, ecosystems, downloadedIds, hideNsfw, blacklist, history) {
         // Android's favourites shelf ranks pinned works first; history has no pin and keeps its own order.
-        selection.select(state.library, ecosystems, downloadedIds, hideNsfw, pinnedFirst = !history)
+        selection.select(state.library, ecosystems, downloadedIds, hideNsfw, pinnedFirst = !history,
+            tagBlacklist = blacklist)
     }
     val pinned = remember(entries) { entries.associate { it.content.id to it.isPinned } }
     val shownIds = remember(entries) { entries.mapTo(LinkedHashSet()) { it.content.id } }

@@ -30,6 +30,7 @@ import org.skepsun.kototoro.R
 import com.github.tvbox.osc.base.App
 import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.model.installTraditionalLabels
 import org.skepsun.kototoro.core.os.AppValidator
 import org.skepsun.kototoro.core.os.RomCompat
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -71,6 +72,8 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
         if (ACRA.isACRASenderServiceProcess()) {
             return
         }
+        // The shared tag rules can match titles before any settings screen is opened; install Android's Hant labels now.
+        installTraditionalLabels()
         // Install settings edit listeners before activities can change preferences, including offline.
         entryPoint.settingsSyncStore()
         entryPoint.settings().reconcileAfterAppUpgrade(BuildConfig.VERSION_CODE)

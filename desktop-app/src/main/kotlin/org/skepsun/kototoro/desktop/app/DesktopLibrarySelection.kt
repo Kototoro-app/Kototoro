@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.model.TagBlacklist
 import org.skepsun.kototoro.core.source.SourceEcosystem
 import org.skepsun.kototoro.core.source.SourceTag
 import org.skepsun.kototoro.desktop.runtime.DesktopLibraryEntry
@@ -120,13 +121,15 @@ data class DesktopLibrarySelection(
      * [downloadedContentIds] are works that hold at least one stored chapter. [hideNsfw] carries Android's adult
      * filter target for this shelf: it is a display rule, so it is applied last like the other filters.
      * [pinnedFirst] is Android's ranking of the favourites shelf: a pinned work leads every order, so it is applied
-     * before the chosen comparator and never as a filter.
+     * before the chosen comparator and never as a filter. [tagBlacklist] is Android's global tag blacklist, which the
+     * shelf derivers apply to a work's own tag titles before the search and the macro chips.
      */
     fun select(snapshot: DesktopLibrarySnapshot,
         ecosystems: Map<String, SourceEcosystem> = emptyMap(),
         downloadedContentIds: Set<Long> = emptySet(),
         hideNsfw: Boolean = false,
-        pinnedFirst: Boolean = false): List<DesktopLibraryEntry> {
+        pinnedFirst: Boolean = false,
+        tagBlacklist: TagBlacklist = TagBlacklist.Empty): List<DesktopLibraryEntry> {
         val text = query.trim()
         val entries = snapshot.entries.filter { row ->
             val content = row.content
@@ -137,6 +140,7 @@ data class DesktopLibrarySelection(
                 (states.isEmpty() || content.state in states) &&
                 download.accepts(content.id in downloadedContentIds) &&
                 (!hideNsfw || !row.isNsfw) &&
+                !content.tags.any { tagBlacklist.containsTagTitle(it.title) } &&
                 macros.all { it.accepts(row) } &&
                 sourceFilter.accepts(ecosystems[content.source.name], content.source.contentType) &&
                 (text.isEmpty() || content.title.contains(text, true) ||

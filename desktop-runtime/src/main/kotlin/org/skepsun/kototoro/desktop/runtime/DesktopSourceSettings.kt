@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.desktop.runtime
 
+import org.skepsun.kototoro.core.model.TagBlacklist
+import org.skepsun.kototoro.core.model.TagTitleBlacklist
 import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 
@@ -24,13 +26,23 @@ data class DesktopSourceSettings(
     val grid: Boolean = true,
     val groupByLanguage: Boolean = false,
     val nsfwTargets: Set<DesktopNsfwTarget> = emptySet(),
+    /** Android's global tag blacklist: taxonomy IDs, source aliases or `raw:` keys picked on the blacklist page. */
+    val tagBlacklist: Set<String> = emptySet(),
 ) {
     fun toPreferences(): Map<String, SourcePreferenceValue?> = mapOf(
         KEY_SORT to SourcePreferenceValue.Text(sort.name),
         KEY_GRID to SourcePreferenceValue.Toggle(grid),
         KEY_GROUP_LANGUAGE to SourcePreferenceValue.Toggle(groupByLanguage),
         KEY_NSFW_TARGETS to SourcePreferenceValue.TextSet(nsfwTargets.mapTo(LinkedHashSet()) { it.name }),
+        KEY_TAG_BLACKLIST to SourcePreferenceValue.TextSet(LinkedHashSet(tagBlacklist)),
     )
+
+    /**
+     * Android wraps the stored selection in `GlobalTagBlacklist` and hands it to each deriver; the matching rules are
+     * shared, so Windows builds the same matcher from the same strings instead of copying the semantics.
+     */
+    fun tagBlacklistRules(): TagBlacklist =
+        if (tagBlacklist.isEmpty()) TagBlacklist.Empty else TagTitleBlacklist(tagBlacklist)
 
     /** The rail order: Android's alphabetical and language orders; the default keeps the installation order. */
     fun sorted(sources: List<SourceListing>): List<SourceListing> = when (sort) {
@@ -54,6 +66,9 @@ data class DesktopSourceSettings(
         const val KEY_GROUP_LANGUAGE = "sources_group_language"
         const val KEY_NSFW_TARGETS = "sources_nsfw_targets"
 
+        /** Android stores the same selection under `global_tag_blacklist`, so a shared backup reads either. */
+        const val KEY_TAG_BLACKLIST = "global_tag_blacklist"
+
         fun from(values: Map<String, SourcePreferenceValue>) = DesktopSourceSettings(
             sort = DesktopSourceSort.entries.firstOrNull {
                 it.name == (values[KEY_SORT] as? SourcePreferenceValue.Text)?.value
@@ -62,6 +77,10 @@ data class DesktopSourceSettings(
             groupByLanguage = (values[KEY_GROUP_LANGUAGE] as? SourcePreferenceValue.Toggle)?.value ?: false,
             nsfwTargets = (values[KEY_NSFW_TARGETS] as? SourcePreferenceValue.TextSet)?.values
                 ?.mapNotNullTo(LinkedHashSet()) { name -> DesktopNsfwTarget.entries.firstOrNull { it.name == name } }
+                .orEmpty(),
+            tagBlacklist = (values[KEY_TAG_BLACKLIST] as? SourcePreferenceValue.TextSet)?.values
+                ?.filter(String::isNotBlank)
+                ?.toSet()
                 .orEmpty(),
         )
     }

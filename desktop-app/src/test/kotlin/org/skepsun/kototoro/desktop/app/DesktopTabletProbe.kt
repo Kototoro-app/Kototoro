@@ -663,6 +663,35 @@ internal object DesktopTabletProbe {
                 onNodeWithTag("source-nsfw-dialog-close").performClick(); idle()
                 onNodeWithTag("source-settings-back").performScrollTo().performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.MORE)
+                // Android's global tag blacklist has its own screen. The chips are the shared taxonomy, the search
+                // field narrows the catalogue, and the stored strings are what every shelf deriver matches.
+                onNodeWithTag("source-settings-open").performScrollTo().performClick(); idle()
+                onNodeWithTag("source-setting-tag-blacklist").performScrollTo().performClick(); idle()
+                check(controller.state.value.screen == DesktopScreen.TAG_BLACKLIST)
+                snapshot("tag-blacklist")
+                onNodeWithTag("tag-blacklist-search").performTextInput("Drama"); idle()
+                onNodeWithTag("tag-blacklist:genre.drama").performScrollTo().performClick(); idle()
+                check("genre.drama" in controller.state.value.sourceSettings.tagBlacklist)
+                check((session.storage.preferences.open("desktop_background").snapshot()["global_tag_blacklist"]
+                    as? org.skepsun.kototoro.core.source.SourcePreferenceValue.TextSet)?.values ==
+                    setOf("genre.drama"))
+                // The selected section repeats the chip; a long press shows the aliases Android shows on long press.
+                onNodeWithTag("tag-blacklist-selected:genre.drama").performScrollTo()
+                    .performTouchInput { longClick() }; idle()
+                onNodeWithTag("tag-blacklist-dialog").assertExists()
+                snapshotTag("tag-blacklist-dialog", "tag-blacklist-details")
+                onNodeWithTag("tag-blacklist-dialog-close").performClick(); idle()
+                onNodeWithTag("tag-blacklist-dialog").assertDoesNotExist()
+                // Android's "clear" action empties the selection and finishes the blacklisting.
+                onNodeWithTag("tag-blacklist-clear").performScrollTo().performClick(); idle()
+                check(controller.state.value.sourceSettings.tagBlacklist.isEmpty())
+                check((session.storage.preferences.open("desktop_background").snapshot()["global_tag_blacklist"]
+                    as? org.skepsun.kototoro.core.source.SourcePreferenceValue.TextSet)?.values.orEmpty().isEmpty())
+                snapshot("tag-blacklist-empty")
+                onNodeWithTag("tag-blacklist-back").performScrollTo().performClick(); idle()
+                check(controller.state.value.screen == DesktopScreen.SOURCE_SETTINGS)
+                onNodeWithTag("source-settings-back").performScrollTo().performClick(); idle()
+                check(controller.state.value.screen == DesktopScreen.MORE)
                 // An adult tracked work: Android's stored rating feeds both feed targets, one surface at a time.
                 onNodeWithTag("nav:订阅").performClick(); idle()
                 runBlocking {

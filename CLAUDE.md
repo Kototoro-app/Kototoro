@@ -258,6 +258,11 @@ npm run docs:build
   按语言分组（组前加语言标题），成人内容节选“来源与浏览/收藏/历史/订阅/更新”五个过滤目标（来源侧滤掉 HENTAI_ 类型来源，
   书架侧作为展示规则并入筛选，订阅页的“订阅”滤时间线行、“更新”滤新章节轮播，筛空时显示筛选空态），
   设置存 `desktop_background` 的 `sources_*` 四键，见计划 §141、§146。
+  来源设置的“标签”节是全局标签黑名单页（对应 Android 的“标签黑名单”）：搜索词库目录、按类别分组、
+  点芯片切换、长按看键/英文/类别/别名、可“清空”或把词库不认识的标题加为 `raw:` 模式；
+  选择存 `desktop_background` 的 `global_tag_blacklist`（与 Android 同键同格式，字符串是词库 ID 或 `raw:` 键），
+  匹配规则在 `core-domain` 的 `TagTitleBlacklist`，收藏/历史书架、订阅时间线、更新轮播、浏览/搜索结果、
+  主页更新与推荐都在渲染前应用它，见计划 §151、§152。
   收藏/历史的“筛选与排序”抽屉另有“布局”一节（封面网格 / 每行一个作品，对应 Android 的 ListMode），
   选择存 `desktop_library` 的 `library_list_mode`，列表模式下 `ContentGrid` 渲染 `content-list` 行视图，
   点击/长按语义与卡片一致，见计划 §142。

@@ -63,14 +63,25 @@ internal fun DesktopHomePanel(controller: DesktopController, state: DesktopAppSt
             .sortedByDescending { it.lastReadAt ?: it.updatedAt }
             .map { HomeWork(it.content, it.progressPercent) }
     }
-    val updates = remember(state.feed, state.feedContents, filter, ecosystems) {
+    // Android's SuggestionsViewModel and UpdatesViewModel both drop works whose tags are blacklisted globally.
+    val blacklist = remember(state.sourceSettings.tagBlacklist) { state.sourceSettings.tagBlacklistRules() }
+    val hidden: (SourceContent) -> Boolean = { content ->
+        content.tags.any { blacklist.containsTagTitle(it.title) }
+    }
+    val updates = remember(state.feed, state.feedContents, filter, ecosystems, blacklist) {
         state.feed.updateRowsByOwnerId.values
             .sortedByDescending { it.lastChapterDate ?: it.lastCheckTime }
-            .mapNotNull { row -> state.feedContents[row.displayMangaId ?: row.mangaId]?.let { HomeWork(it, newChapters = row.newChapters) } }
+            .mapNotNull { row ->
+                state.feedContents[row.displayMangaId ?: row.mangaId]?.let { HomeWork(it, newChapters = row.newChapters) }
+            }
             .filter { filter.accepts(ecosystems[it.content.source.name], it.content.source.contentType) }
+            .filterNot { hidden(it.content) }
     }
-    val recommendations = remember(state.suggestions, filter, ecosystems) {
-        state.suggestions.filter { filter.accepts(ecosystems[it.source.name], it.source.contentType) }.map { HomeWork(it) }
+    val recommendations = remember(state.suggestions, filter, ecosystems, blacklist) {
+        state.suggestions
+            .filter { filter.accepts(ecosystems[it.source.name], it.source.contentType) }
+            .filterNot(hidden)
+            .map { HomeWork(it) }
     }
     val hero = remember(history, updates, recommendations) {
         buildHomeHeroEntries(

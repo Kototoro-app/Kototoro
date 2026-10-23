@@ -130,6 +130,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.EXTENSIONS -> DesktopExtensionsPanel(controller, closing)
                             DesktopScreen.READER_SETTINGS -> DesktopReaderSettingsPage(controller, listState)
                             DesktopScreen.SOURCE_SETTINGS -> DesktopSourceSettingsPage(controller, listState)
+                            DesktopScreen.TAG_BLACKLIST -> DesktopTagBlacklistPage(controller, listState)
                             DesktopScreen.MORE -> DesktopMorePanel(controller, !closing, onExitRequest)
                         }
                         if (state.screen == DesktopScreen.DETAILS && state.detailsOrigin != null) {
@@ -206,6 +207,7 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.RECOMMENDATIONS -> desktopText("screens.recommendations")
         DesktopScreen.READER_SETTINGS -> desktopText("screens.readerSettings")
         DesktopScreen.SOURCE_SETTINGS -> desktopText("screens.sourceSettings")
+        DesktopScreen.TAG_BLACKLIST -> desktopText("screens.tagBlacklist")
         DesktopScreen.EXTENSIONS -> desktopText("screens.extensions")
         DesktopScreen.DETAILS -> desktopText("screens.details")
         DesktopScreen.READER, DesktopScreen.NOVEL, DesktopScreen.VIDEO -> state.chapter?.title ?: desktopText("screens.reader")
@@ -300,7 +302,13 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
                 OutlinedButton({ controller.preferences() }, enabled = enabled) { Text(desktopText("browse.sourceSettings")) }
             }
         }
-        Box(Modifier.weight(1f)) { ContentGrid(state.items, enabled, controller.session.covers, controller::details) }
+        // Android's ExploreRepository filters every browse page through the global tag blacklist; the page in the
+        // state stays untouched so paging and the "next page" button still follow what the source returned.
+        val blacklist = remember(state.sourceSettings.tagBlacklist) { state.sourceSettings.tagBlacklistRules() }
+        val visibleItems = remember(state.items, blacklist) {
+            state.items.filter { content -> content.tags.none { blacklist.containsTagTitle(it.title) } }
+        }
+        Box(Modifier.weight(1f)) { ContentGrid(visibleItems, enabled, controller.session.covers, controller::details) }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton({ controller.browse((state.offset - 1).coerceAtLeast(0)) },
                 enabled = enabled && state.offset > 0) { Text(desktopText("browse.previousPage")) }

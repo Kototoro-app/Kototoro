@@ -3,51 +3,25 @@ package org.skepsun.kototoro.core.model
 import org.skepsun.kototoro.parsers.model.Content
 import java.util.Locale
 
+/**
+ * Android's global tag blacklist: the matching rules live in the shared [TagTitleBlacklist], and this class adds the
+ * parser `Content` overload plus locale-pinned normalization for the stored keys.
+ */
 class GlobalTagBlacklist(tags: Collection<String>) : TagBlacklist {
 
-    private val taxonomyIds = HashSet<String>(tags.size)
-    private val normalizedRawTags = HashSet<String>(tags.size)
-
-    init {
-        tags.forEach { selectedTag ->
-            when {
-                selectedTag.startsWith(RAW_TAG_PREFIX) -> {
-                    normalizedRawTags += normalizeTag(selectedTag.removePrefix(RAW_TAG_PREFIX))
-                }
-
-                KototoroTaxonomy.find(selectedTag) != null -> taxonomyIds += selectedTag
-                else -> {
-                    val resolvedIds = KototoroTaxonomy.resolve(selectedTag).mapTo(LinkedHashSet(), TaxonomyTag::id)
-                    if (resolvedIds.isEmpty()) {
-                        normalizedRawTags += normalizeTag(selectedTag)
-                    } else {
-                        taxonomyIds += resolvedIds
-                    }
-                }
-            }
-        }
-        normalizedRawTags.remove("")
-    }
+    private val rules = TagTitleBlacklist(tags)
 
     val isEmpty: Boolean
-        get() = taxonomyIds.isEmpty() && normalizedRawTags.isEmpty()
+        get() = rules.isEmpty
 
-    operator fun contains(content: Content): Boolean = content.tags.any { tag ->
-        val normalizedTitle = normalizeTag(tag.title)
-        normalizedTitle in normalizedRawTags ||
-            KototoroTaxonomy.resolve(tag.title).any { it.id in taxonomyIds }
-    }
+    operator fun contains(content: Content): Boolean = content.tags.any { containsTagTitle(it.title) }
 
     /**
      * True when a single tag title is blacklisted — the per-tag half of
      * [contains] without building a `Content`. The favourites snapshot uses this to
      * apply the blacklist to its pre-resolved display tags.
      */
-    override fun containsTagTitle(title: String): Boolean {
-        val normalizedTitle = normalizeTag(title)
-        return normalizedTitle in normalizedRawTags ||
-            KototoroTaxonomy.resolve(title).any { it.id in taxonomyIds }
-    }
+    override fun containsTagTitle(title: String): Boolean = rules.containsTagTitle(title)
 
     fun filter(contents: List<Content>): List<Content> = if (isEmpty) {
         contents
@@ -56,9 +30,9 @@ class GlobalTagBlacklist(tags: Collection<String>) : TagBlacklist {
     }
 
     companion object {
-        const val RAW_TAG_PREFIX = "raw:"
+        const val RAW_TAG_PREFIX = TagTitleBlacklist.RAW_TAG_PREFIX
 
-        fun rawTagKey(title: String): String = RAW_TAG_PREFIX + normalizeTag(title)
+        fun rawTagKey(title: String): String = TagTitleBlacklist.rawTagKey(title)
 
         internal fun normalizeTag(value: String): String = value.trim().lowercase(Locale.ROOT)
     }

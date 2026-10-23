@@ -55,6 +55,15 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
                 settings.groupByLanguage, active, { update(settings.copy(groupByLanguage = it)) },
                 testTag = "source-setting-group-language")
         }
+        SettingsSectionHeader(desktopText("sources.tags"))
+        SettingsGroup {
+            // Android's `GlobalTagBlacklistScreen`, opened as its own page instead of a preference dialog.
+            SettingsValueRow(desktopText("sources.tagBlacklist"), desktopText("sources.tagBlacklistSummary"),
+                settings.tagBlacklist.size.takeIf { it > 0 }?.let { desktopText("sources.tagBlacklistCount", it) },
+                active, { controller.showTagBlacklist() }, testTag = "source-setting-tag-blacklist")
+            SettingsRowDivider()
+            SettingsInfoRow(desktopText("sources.tagBlacklistNote"), null)
+        }
         SettingsSectionHeader(desktopText("sources.adult"))
         SettingsGroup {
             SettingsValueRow(desktopText("sources.nsfwFilter"), desktopText("sources.nsfwFilterSummary"),

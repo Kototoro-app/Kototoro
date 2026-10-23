@@ -1,13 +1,15 @@
 package org.skepsun.kototoro.core.model
 
+import kotlin.concurrent.Volatile
+
 /**
  * Kototoro Taxonomy v0.1.
  *
  * Source tags remain untouched. This catalog provides stable cross-source IDs and exact alias mappings for filtering
  * and presentation. The data and its indexes are platform independent, so every platform filters with the same
  * vocabulary; only the presentation differs. The traditional Chinese labels come from
- * [TagTaxonomy.traditionalLabelConverter], which Android installs from its simplifier→traditional converter before
- * the catalog is first read — platforms without Hant localisation keep the simplified label.
+ * [TagTaxonomy.traditionalLabelConverter], which Android installs from its simplifier→traditional converter —
+ * platforms without Hant localisation keep the simplified label.
  */
 enum class TaxonomyCategory(val id: String, val englishLabel: String, val chineseLabel: String) {
     GENRE("genre", "Genre", "题材"),
@@ -44,13 +46,18 @@ data class TaxonomyTag(
     val category: TaxonomyCategory,
     val englishLabel: String,
     val chineseLabel: String,
-    /** Resolved through the platform converter when [TagTaxonomy] builds the catalog. */
-    val traditionalChineseLabel: String = chineseLabel,
     val aliases: Set<String> = emptySet(),
     val adult: Boolean = false,
     val sensitive: Boolean = category == TaxonomyCategory.WARNING,
     val deprecated: Boolean = false,
 ) {
+    /**
+     * Traditional Chinese form of [chineseLabel]. It reads the platform converter every time instead of being baked
+     * in when the catalog is parsed, so a converter installed after the first lookup still applies (the alias index
+     * is rebuilt then, see [TagTaxonomy.traditionalLabelConverter]).
+     */
+    val traditionalChineseLabel: String get() = TagTaxonomy.traditionalLabel(chineseLabel)
+
     fun localizedLabel(language: String, traditional: Boolean = false): String = when {
         traditional -> traditionalChineseLabel
         language == "zh" -> chineseLabel
@@ -60,13 +67,59 @@ data class TaxonomyTag(
 
 object TagTaxonomy {
 
-    /** Simplifier→traditional converter; a platform may install its own before the catalog is read. */
-    var traditionalLabelConverter: (String) -> String = { it }
+    /** Platforms without a Hant localisation keep the simplified label. */
+    private val IdentityConverter: (String) -> String = { it }
+
+    /**
+     * Simplifier→traditional converter; Android installs its own. The parsed catalog and its alias index are cached
+     * until the converter changes, so an installation that happens after the first lookup still replaces the cached
+     * simplified labels with traditional ones instead of leaving them in their fallback form.
+     */
+    @Volatile
+    var traditionalLabelConverter: (String) -> String = IdentityConverter
+        set(value) {
+            field = value
+            cachedCatalog = null
+        }
 
     fun traditionalLabel(chineseLabel: String): String = traditionalLabelConverter(chineseLabel)
 
-    val tags: List<TaxonomyTag> by lazy {
-        TAXONOMY_DATA.lineSequence()
+    val tags: List<TaxonomyTag> get() = catalog().tags
+
+    fun find(id: String): TaxonomyTag? = catalog().byId[id]
+
+    val knownSourceTags: List<String> by lazy {
+        FUTON_SOURCE_TAGS.lineSequence().map(String::trim).filter(String::isNotEmpty).distinct().toList()
+    }
+
+    fun resolve(rawTag: String): Set<TaxonomyTag> = catalog().let { catalog ->
+        val ids = catalog.byAlias[normalize(rawTag)].orEmpty()
+        ids.mapNotNullTo(LinkedHashSet(ids.size), catalog.byId::get)
+    }
+
+    fun search(tag: TaxonomyTag, query: String): Boolean {
+        val normalizedQuery = normalize(query)
+        return normalizedQuery.isEmpty() ||
+            normalize(tag.id).contains(normalizedQuery) ||
+            normalize(tag.englishLabel).contains(normalizedQuery) ||
+            normalize(tag.chineseLabel).contains(normalizedQuery) ||
+            normalize(tag.traditionalChineseLabel).contains(normalizedQuery) ||
+            tag.aliases.any { normalize(it).contains(normalizedQuery) }
+    }
+
+    fun normalize(value: String): String = value.trim().lowercase()
+
+    @Volatile
+    private var cachedCatalog: Catalog? = null
+
+    private fun catalog(): Catalog = cachedCatalog ?: Catalog().also { cachedCatalog = it }
+
+    /**
+     * One consistent snapshot of the data, its id index and its alias index. Building it is idempotent, so two
+     * threads that race right after a converter change both produce equivalent catalogs and either may win.
+     */
+    private class Catalog {
+        val tags: List<TaxonomyTag> = TAXONOMY_DATA.lineSequence()
             .filter(String::isNotBlank)
             .map { row ->
                 val (id, chineseLabel) = row.split('|', limit = 2)
@@ -76,18 +129,15 @@ object TagTaxonomy {
                     category = category,
                     englishLabel = id.substringAfter('.').toEnglishLabel(),
                     chineseLabel = chineseLabel,
-                    traditionalChineseLabel = traditionalLabel(chineseLabel),
                     aliases = CURATED_ALIASES.filterValues { id in it }.keys,
                     adult = id == "genre.erotica" || id == "audience.adult",
                 )
             }
             .toList()
-    }
 
-    private val tagsById: Map<String, TaxonomyTag> by lazy { tags.associateBy(TaxonomyTag::id) }
+        val byId: Map<String, TaxonomyTag> = tags.associateBy(TaxonomyTag::id)
 
-    private val idsByAlias: Map<String, Set<String>> by lazy {
-        buildMap<String, MutableSet<String>> {
+        val byAlias: Map<String, Set<String>> = buildMap<String, MutableSet<String>> {
             fun add(alias: String, id: String) {
                 getOrPut(normalize(alias), ::LinkedHashSet) += id
             }
@@ -101,33 +151,12 @@ object TagTaxonomy {
             }
             CURATED_ALIASES.forEach { (alias, ids) ->
                 ids.forEach { id ->
-                    require(id in tagsById) { "Unknown taxonomy ID in alias mapping: $id" }
+                    require(id in byId) { "Unknown taxonomy ID in alias mapping: $id" }
                     add(alias, id)
                 }
             }
         }.mapValues { it.value.toSet() }
     }
-
-    fun find(id: String): TaxonomyTag? = tagsById[id]
-
-    val knownSourceTags: List<String> by lazy {
-        FUTON_SOURCE_TAGS.lineSequence().map(String::trim).filter(String::isNotEmpty).distinct().toList()
-    }
-
-    fun resolve(rawTag: String): Set<TaxonomyTag> =
-        idsByAlias[normalize(rawTag)].orEmpty().mapNotNullTo(LinkedHashSet(), tagsById::get)
-
-    fun search(tag: TaxonomyTag, query: String): Boolean {
-        val normalizedQuery = normalize(query)
-        return normalizedQuery.isEmpty() ||
-            normalize(tag.id).contains(normalizedQuery) ||
-            normalize(tag.englishLabel).contains(normalizedQuery) ||
-            normalize(tag.chineseLabel).contains(normalizedQuery) ||
-            normalize(tag.traditionalChineseLabel).contains(normalizedQuery) ||
-            tag.aliases.any { normalize(it).contains(normalizedQuery) }
-    }
-
-    fun normalize(value: String): String = value.trim().lowercase()
 
     private fun String.toEnglishLabel(): String = split('-').joinToString(" ") { word ->
         word.replaceFirstChar { it.titlecase() }
