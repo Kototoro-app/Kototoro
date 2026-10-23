@@ -1352,3 +1352,29 @@ Material3 组件内部加一条隐式跳转规则。
 ### 构建与测试
 
 - `:app:assembleDebug --offline --no-daemon` 通过；本节结论全部来自模拟器截图（mc/md/me 系列）。
+
+## 第十七轮：笔记面板的搜索框其实早就接了出口（2026-10-23）
+
+前几轮一直把"笔记面板搜索框没接 `tvTextInputFocusEscape`"挂在待办上。这轮一查，是**过期结论**：
+`ComposeNovelMarkingsSheet` 里的搜索框是 `NovelReaderSearchField`，它转调 `core-ui` 的
+`SharedNovelReaderSearchField`，而后者在 `BasicTextField` 上已经挂了 `.tvTextInputFocusEscape()`
+（`NovelChapterDirectoryContent.kt:329`）。章节目录与笔记面板共用同一份实现，接一处等于两处都接。
+
+设备复核（emulator-5558，从阅读态起）：
+
+| 步骤 | 结果 | 截图 |
+| --- | --- | --- |
+| 面板 peek → DOWN×3 到快捷行 → LEFT 到第 3 块 "Bookmarks an…" → CENTER | 笔记面板弹出，焦点在 All (1) 筛选 chip | `nd1` |
+| DOWN | 搜索框聚焦，软键盘弹出 | `ne0` |
+| BACK | 软键盘收起，面板回到原高度 | `ne1` |
+| DOWN | 焦点离开搜索框，落到第一条书签卡片 | `ne2` |
+| UP | 焦点回到上方 | `ne3` |
+
+结论：搜索框不是焦点陷阱，不需要"再按一次 BACK 才能出去"。剩下的不是出口问题而是**进入**的顺手程度——
+搜索框与筛选 chip 之间只有一条纵向流，从书签条目回到搜索框要多按几次，属于可接受范围，不再改动。
+
+### 顺带量到的一条导航事实
+
+快捷行的焦点是**恢复上次位置**的：这次 DOWN×3 直接从亮度滑条落到第 4 块 "Translate text"，
+之后 RIGHT×2 并不会"越过未聚焦的第 3 块"，而是停在最右。所以"按 RIGHT 就是右移一格"在快捷行里不成立，
+任何遥控脚本走快捷行前都必须先确认当前聚焦的是哪一块（靠截图取环，不能靠按键计数）。
