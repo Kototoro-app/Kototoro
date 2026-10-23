@@ -2143,3 +2143,36 @@ adb 单次往返 1–2 秒，`uiautomator dump` 更慢，而 chrome 的自动隐
   视觉上像一张拼起来的卡片。收起父面板要动菜单状态机，留到后面。
 - 手机侧未回归；新增样式都走 `isTvPlayerMenu()` / `LocalUiPresentationConfig.isTv`，手机分支未改。
 
+## 第三十五轮：子面板打开时父面板不再露在下层（2026-10-24）
+
+第三十四轮遗留的第一条：`Video enhancement` 打开时 `Options` 网格仍在下面，`Reload`、`Settings` 从子面板
+四周露出来，视觉上像一张拼起来的卡片；BACK 关掉子面板后焦点还会跳回第一行 `Intro`，而不是停在用户刚才
+按的 `Video enhancement` 上。
+
+### 根因
+
+1. 两个面板都是 `Popup` 窗口。网格的 `onItemSelected` 只在"没有新弹层"时才清 `actionDialogState`
+   （`!superResolutionDialogVisible` 那一段），所以开子面板时父面板状态被保留，父面板就继续绘制。
+2. 面板不记焦点行：一旦把它从组合里摘掉，重新组合时 `LazyVerticalGrid` 从第一项开始，焦点自然回到 `Intro`。
+
+### 改法
+
+- `VideoActionDialog` 增加 `hidden` 参数，内容层走 `.alpha(0f)`：面板**保持组合**但不可见。子面板依旧是
+  独立的 focusable 窗口，遥控器的键全部落在子面板上；子面板关掉后父窗口重新拿到焦点，
+  `LazyVerticalGrid` 里上一次聚焦的那一行原样还在。
+- Activity 侧用 `tvPanelCoveredByWindow` 汇总"当前有独立弹层"（选择框、章节、字幕设置、超分、DLNA、备注、
+  详情、初始化报错），只在电视上把 `hidden` 置真；手机分支不变，仍是半透明面板叠对话框。
+
+### 设备验证（emulator-5558，1920×1080）
+
+| 步骤 | 截图 | 结果 |
+| --- | --- | --- |
+| Options → Video enhancement | `pz1` | 画面里只剩 `Video enhancement` 一张卡片，父面板的 `Reload`/`Settings` 不再露出 |
+| BACK | `pz2` | `Options` 面板整体回来，环停在 `Video enhancement` 那一行（旧构建回到第一行 `Intro`） |
+| Options → Cast to device | `pw5` | DLNA 扫描卡片同样单独显示，`Cancel` 带环 |
+
+### 顺带排除
+
+- 截图里那块浅灰矩形不是 UI：收起 chrome 后 `00:01:31.833` 那一帧里它就在画面内——是审计用的合成测试片
+  自带的色块，不是焦点或层级问题。
+

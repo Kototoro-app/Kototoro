@@ -757,6 +757,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     actionDialogState?.let { state ->
                         VideoActionDialog(
                             state = state,
+                            hidden = presentationConfig.isTv && tvPanelCoveredByWindow,
                             onDismissRequest = {
                                 actionDialogState = null
                                 closeSelectionDialog()
@@ -2656,6 +2657,19 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             actionDialogState != null || selectionDialogState != null || chapterDialogState != null ||
                 subtitleSettingsDialogVisible || superResolutionDialogVisible || dlnaDialogState != null ||
                 videoAnnotationState != null || videoInfoDialogText != null || nativeInitErrorVisible
+            )
+
+    /**
+     * On a television every menu is a focusable popup window of its own, so leaving the panel that
+     * opened a sub-surface composed paints two stacked cards: the sub-surface covers the center while
+     * the parent's other rows peek out around it. The panel state is kept, only its rendering is
+     * suppressed, so the panel comes back by itself when the sub-surface closes.
+     */
+    private val tvPanelCoveredByWindow: Boolean
+        get() = tvPresentationEnabled && (
+            selectionDialogState != null || chapterDialogState != null || subtitleSettingsDialogVisible ||
+                superResolutionDialogVisible || dlnaDialogState != null || videoAnnotationState != null ||
+                videoInfoDialogText != null || nativeInitErrorVisible
             )
 
     private fun pauseControlsAutoHide() {

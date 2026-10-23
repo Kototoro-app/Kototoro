@@ -29,6 +29,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -122,6 +123,7 @@ internal fun VideoActionDialog(
     state: VideoActionDialogState,
     onDismissRequest: () -> Unit,
     onItemSelected: (VideoActionDialogItem, IntRect) -> Unit,
+    hidden: Boolean = false,
 ) {
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val gapPx = with(androidx.compose.ui.platform.LocalDensity.current) { 6.dp.roundToPx() }
@@ -142,7 +144,11 @@ internal fun VideoActionDialog(
         Surface(
             modifier = Modifier
                 .widthIn(min = menuMinWidth, max = menuMaxWidth)
-                .heightIn(max = maxHeight),
+                .heightIn(max = maxHeight)
+                // Kept composed but invisible while a sub-surface owns its own window: dropping the
+                // panel would forget which row the user was on, so Back from the sub-surface would
+                // re-home the ring on the first row instead of the row that opened it.
+                .alpha(if (hidden) 0f else 1f),
             shape = RoundedCornerShape(18.dp),
             color = playerMenuContainerColor(phoneAlpha = 0.86f),
             contentColor = Color.White,
