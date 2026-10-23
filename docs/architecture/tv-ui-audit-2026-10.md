@@ -2970,6 +2970,61 @@ fun Modifier.tvTakeFocusWhenEmpty(key: Any?, attempts: Int = 20): Modifier
 右栏第一行 `[746,212][1896,340]`；从搜索 "reader" 选 "Reader settings" 后焦点落在
 `[746,332][1896,456]`（Reader actions 行，蓝色环可见）。
 
+## 第五十轮：设置子页、搜索框与"退回来的空栏"（2026-10-24）
+
+把设置里能打开的子页挨个走了一遍，结论是**子页本身都能用**，问题出在"退回来"的那一刻。
+
+**Appearance**：右栏分 Theme and color / Content display 两节，Interface style、Appearance mode、
+Page background、Lists、Details、Home 都能停能进；DOWN 逐行推进，行高不同的行（带两行说明的）
+不会错位。
+
+**Content sources**：左栏在这页会**滚动**——焦点走到第 4 行以后，列表整体上移让当前行留在视野里，
+所以"左栏只有一屏"不是限制。右栏 Sorting order（Manual）、Reorder、Show in grid view、
+Group sources by language（开关）、Setup wizard、Plugin Deduplication Priority Sequence 都可聚焦。
+其中 "Show in grid view" 是一条**纯告知行**（"This option has moved to Browse page search bar >
+More > Display options"），按 CENTER 什么也不会发生——它本来就是想说一句"搬走了"，不是入口；
+在电视上让它占一个焦点站会白费两次方向键，但也不会误导，暂不处理。
+
+**AI / API providers**：这一页是三个文本框（Translation API endpoint、Translation API key、
+Online translation model）+ LLM provider preset 选择行，字段都接了
+`tvTextInputFocusEscape`，遥控器能停在字段上、按 BACK 退出来，不会被输入法关住。
+
+**设置搜索框**：右栏在搜索态下会切成单栏（`useTwoPane = isTwoPane && !(searchActive && isTv)`），
+搜索框独占整行 `[136,8][1896,104]`。CENTER 进搜索后软键盘弹出并接管方向键（这时 UP/DOWN 不发生任何
+位移），BACK 先关键盘、再按才退出搜索并回到列表；输入 "appearance" 后结果行可以往下走到
+`[24,132][1896,268]`，CENTER 打开结果并进入对应子页。真机上电视通常没有软键盘，用遥控器搜索本来
+就不好用，但这里至少不会把人关死。
+
+**退回来的那一下是这轮唯一的新缺陷**：从子页 BACK 之后，右栏变成**空的一整块**，焦点落在顶栏返回键
+`[24,8][120,104]`（环是有的），此时在左栏按 RIGHT **什么都没发生**——右栏没有可聚焦的东西，光束
+搜索吞掉这次按键。用 DOWN 回到列表再 CENTER 就正常，所以是"别扭"而不是"卡死"；要彻底修好得让左栏
+记住"刚才打开的是哪一行"并在返回时把焦点还给它，涉及给每一行加 `FocusRequester`，先记在这里。
+
+### 设备验证（emulator-5554）
+
+| 步骤 | 结果 |
+| --- | --- |
+| 左栏 Appearance CENTER | 右栏 Theme and color 首行 `[746,212][1896,340]`，环可见 |
+| 右栏 DOWN / DOWN | `[746,324]` → `[746,324][1896,492]`，行间推进正常 |
+| 左栏 DOWN 到底（Content sources） | 左栏自动滚动，Playback / Content sources / Extension management / Downloads / Spaces 依次露出 |
+| Content sources CENTER | 右栏首行 Sorting order 获得焦点 |
+| Reorder 行 CENTER | 无反应（当前 0 个来源，对话框为空；该项本身是拖拽式） |
+| Show in grid view 行 | 可获得焦点，CENTER 无动作（纯告知行） |
+| AI → API providers | 三个文本框 + preset 行，字段可聚焦、BACK 可退出 |
+| 搜索图标 CENTER | 搜索框 `[136,8][1896,104]` 获得焦点，软键盘弹出 |
+| 搜索中 UP / DOWN | 无位移（软键盘接管方向键） |
+| 搜索中 BACK / BACK | 第一次关键盘，第二次退出搜索并回到列表首行 |
+| 输入 "appearance" + DOWN | 结果行 `[24,132][1896,268]` 获得焦点 |
+| 结果行 CENTER | 打开对应子页，焦点落在右栏 |
+| 子页 BACK | 焦点回到顶栏返回键，右栏空白 |
+| 空白右栏时左栏 RIGHT | 无位移（无候选，按键被吞） |
+
+### 遗留
+
+- 子页返回时焦点没有回到打开它的那一行，右栏空白状态下 RIGHT 是死键（上面已说明修法）。
+- "Show in grid view" 这类纯告知行仍占一个焦点站。
+- 设置里 Appearance 的 Interface style / Page background、AI 的模型下载等更深一层的对话框没逐个走。
+
 
 
 
