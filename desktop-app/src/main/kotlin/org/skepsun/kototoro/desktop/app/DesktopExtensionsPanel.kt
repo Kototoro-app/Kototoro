@@ -1,51 +1,109 @@
 package org.skepsun.kototoro.desktop.app
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.settings.SettingsActionRow
+import org.skepsun.kototoro.core.ui.settings.SettingsGroup
+import org.skepsun.kototoro.core.ui.settings.SettingsInfoRow
+import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
+import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
+import org.skepsun.kototoro.core.ui.settings.SettingsSwitchRow
 
+/**
+ * Extension management, drawn with the same settings vocabulary as the Android screens: one labelled card per
+ * section, rows separated by a hairline, and a control on the row instead of loose widgets stacked on the page.
+ *
+ * Android's "扩展管理" is a tabbed unified screen (repositories, JSON sources, APK extensions, JAR parsers). The Windows
+ * host covers the repository part and the JAR/APK extensions that come from it, so the page keeps exactly those three
+ * blocks — repositories, the catalog of the selected repository, the installed entries — and nothing new.
+ */
 @Composable
 internal fun DesktopExtensionsPanel(controller: DesktopController, closing: Boolean) {
     val state by controller.state.collectAsState()
     var address by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
     val enabled = !state.busy && !closing
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(desktopText("extensions.repositories"), style = MaterialTheme.typography.titleLarge)
-        Text(desktopText("extensions.repositoryDetail"))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedTextField(address, { address = it }, label = { Text(desktopText("extensions.repositoryAddress")) },
-                placeholder = { Text("https://example.com/index.pb") }, singleLine = true, enabled = enabled,
-                modifier = Modifier.weight(1f).testTag("repository-url"))
-            Button({ controller.fetchRepository(address) }, enabled = enabled && address.isNotBlank(),
-                modifier = Modifier.testTag("repository-add")) { Text(desktopText("extensions.addRepository")) }
-        }
-        if (state.repositories.isNotEmpty()) {
-            LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(state.repositories, key = { it.indexUrl }) { repo ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton({ address = repo.indexUrl; controller.fetchRepository(repo.indexUrl) }, enabled = enabled,
-                            modifier = Modifier.testTag("repository:${repo.indexUrl}")) {
-                            Text(desktopText("extensions.refreshRepository", repo.name), maxLines = 1)
-                        }
-                        TextButton({ controller.removeRepository(repo) }, enabled = enabled,
-                            modifier = Modifier.testTag("repository-remove:${repo.indexUrl}")) {
-                            Text(desktopText("extensions.removeRepository"), maxLines = 1)
-                        }
-                    }
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        SettingsSectionHeader(desktopText("extensions.repositories"))
+        SettingsGroup {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    text = desktopText("extensions.repositoryDetail"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = address,
+                        onValueChange = { address = it },
+                        label = { Text(desktopText("extensions.repositoryAddress")) },
+                        placeholder = { Text("https://example.com/index.pb") },
+                        singleLine = true,
+                        enabled = enabled,
+                        modifier = Modifier.weight(1f).testTag("repository-url"),
+                    )
+                    Button(
+                        onClick = { controller.fetchRepository(address) },
+                        enabled = enabled && address.isNotBlank(),
+                        modifier = Modifier.testTag("repository-add"),
+                    ) { Text(desktopText("extensions.addRepository")) }
+                }
+            }
+            state.repositories.forEach { repo ->
+                SettingsRowDivider()
+                SettingsActionRow(
+                    title = repo.name,
+                    summary = repo.indexUrl,
+                    verticalPadding = 6.dp,
+                ) {
+                    TextButton(
+                        onClick = { address = repo.indexUrl; controller.fetchRepository(repo.indexUrl) },
+                        enabled = enabled,
+                        modifier = Modifier.testTag("repository:${repo.indexUrl}"),
+                    ) { Text(desktopText("common.refresh"), maxLines = 1) }
+                    TextButton(
+                        onClick = { controller.removeRepository(repo) },
+                        enabled = enabled,
+                        modifier = Modifier.testTag("repository-remove:${repo.indexUrl}"),
+                    ) { Text(desktopText("extensions.removeRepository"), maxLines = 1) }
                 }
             }
         }
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             ExtensionCatalog(controller, state, query, { query = it }, enabled, Modifier.weight(1f).fillMaxHeight())
-            InstalledExtensions(controller, state, enabled, Modifier.width(360.dp).fillMaxHeight())
+            InstalledExtensions(controller, state, enabled, Modifier.width(380.dp).fillMaxHeight())
         }
     }
 }
@@ -60,58 +118,82 @@ private fun ExtensionCatalog(
     modifier: Modifier,
 ) {
     val catalog = state.extensionCatalog
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(catalog?.let { desktopText("extensions.catalogCount", it.repository.name, it.extensions.size) }
-            ?: desktopText("extensions.catalog"),
-            style = MaterialTheme.typography.titleMedium)
-        OutlinedTextField(query, onQueryChange, label = { Text(desktopText("extensions.search")) }, singleLine = true,
-            enabled = catalog != null, modifier = Modifier.fillMaxWidth().testTag("extension-search"))
-        val extensions = catalog?.extensions.orEmpty().filter { extension ->
-            query.isBlank() || extension.name.contains(query, true) || extension.packageName.contains(query, true) ||
-                extension.sources.any { it.name.contains(query, true) || it.language.contains(query, true) }
-        }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("extension-list"),
-            verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(extensions, key = { it.packageName }) { extension ->
-                val parserPlugin = requireNotNull(catalog).isParserPlugin(extension)
-                val cloudstreamPlugin = catalog.isCloudstreamPlugin(extension)
-                val installed = state.installedExtensions[extension.packageName]
-                val parserInstalled = state.installedEntries.any {
-                    it.kind == DesktopInstalledKind.PARSER && it.id == extension.packageName
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        SettingsSectionHeader(
+            catalog?.let { desktopText("extensions.catalogCount", it.repository.name, it.extensions.size) }
+                ?: desktopText("extensions.catalog"),
+        )
+        SettingsGroup(Modifier.weight(1f)) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                label = { Text(desktopText("extensions.search")) },
+                singleLine = true,
+                enabled = catalog != null,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)
+                    .testTag("extension-search"),
+            )
+            SettingsRowDivider()
+            val extensions = catalog?.extensions.orEmpty().filter { extension ->
+                query.isBlank() || extension.name.contains(query, true) ||
+                    extension.packageName.contains(query, true) ||
+                    extension.sources.any { it.name.contains(query, true) || it.language.contains(query, true) }
+            }
+            if (extensions.isEmpty()) {
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    SettingsInfoRow(desktopText("extensions.catalogEmpty"), null)
                 }
-                val anime = !parserPlugin && extension.packageName.contains(".animeextension.")
-                val compatible = parserPlugin || cloudstreamPlugin || extension.extensionLib.matches(
-                    // Mihon 1.4-1.6, Tsundoku 1.4/1.6 (checked again on install), Aniyomi generations 12-16.
-                    if (anime) Regex("1[2-6](?:\\.\\d+)*") else Regex("1\\.[456](?:\\.\\d+)*"),
-                )
-                val hasPackage = extension.resources.jarUrl.isNotBlank() || extension.resources.apkUrl.isNotBlank()
-                val ecosystem = when {
-                    cloudstreamPlugin -> "Cloudstream"
-                    parserPlugin -> desktopText("extensions.kind.parser")
-                    anime -> "Aniyomi"
-                    extension.packageName.contains(".novelextension.") -> "Tsundoku"
-                    else -> "Mihon"
-                }
-                val label = when {
-                    !hasPackage -> desktopText("extensions.noPackage")
-                    !compatible -> desktopText("extensions.unsupportedApi")
-                    parserInstalled -> desktopText("extensions.installed")
-                    installed != null && installed > extension.versionCode -> desktopText("extensions.newerLocal")
-                    installed == extension.versionCode -> desktopText("extensions.installed")
-                    installed != null -> desktopText("extensions.update")
-                    extension.resources.jarUrl.isBlank() && !parserPlugin && !cloudstreamPlugin -> desktopText("extensions.installConvert")
-                    else -> desktopText("extensions.install")
-                }
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("${extension.name} · ${extension.versionName} · $ecosystem",
-                            style = MaterialTheme.typography.titleMedium)
-                        Text(extension.sources.takeIf { it.isNotEmpty() }
-                            ?.joinToString { "${it.name} (${it.language})" }
-                            ?: desktopText("extensions.sourcesAfterInstall"), maxLines = 2)
-                        Button({ controller.installExtension(extension) }, enabled = enabled && hasPackage && compatible &&
-                            !parserInstalled && (installed == null || installed < extension.versionCode),
-                            modifier = Modifier.testTag("extension-install:${extension.packageName}")) { Text(label) }
+            } else {
+                LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("extension-list")) {
+                    itemsIndexed(extensions, key = { _, extension -> extension.packageName }) { index, extension ->
+                        if (index > 0) SettingsRowDivider()
+                        val repository = requireNotNull(catalog)
+                        val parserPlugin = repository.isParserPlugin(extension)
+                        val cloudstreamPlugin = repository.isCloudstreamPlugin(extension)
+                        val installed = state.installedExtensions[extension.packageName]
+                        val parserInstalled = state.installedEntries.any {
+                            it.kind == DesktopInstalledKind.PARSER && it.id == extension.packageName
+                        }
+                        val anime = !parserPlugin && extension.packageName.contains(".animeextension.")
+                        val compatible = parserPlugin || cloudstreamPlugin || extension.extensionLib.matches(
+                            // Mihon 1.4-1.6, Tsundoku 1.4/1.6 (checked again on install), Aniyomi generations 12-16.
+                            if (anime) Regex("1[2-6](?:\\.\\d+)*") else Regex("1\\.[456](?:\\.\\d+)*"),
+                        )
+                        val hasPackage = extension.resources.jarUrl.isNotBlank() ||
+                            extension.resources.apkUrl.isNotBlank()
+                        val ecosystem = when {
+                            cloudstreamPlugin -> "Cloudstream"
+                            parserPlugin -> desktopText("extensions.kind.parser")
+                            anime -> "Aniyomi"
+                            extension.packageName.contains(".novelextension.") -> "Tsundoku"
+                            else -> "Mihon"
+                        }
+                        val label = when {
+                            !hasPackage -> desktopText("extensions.noPackage")
+                            !compatible -> desktopText("extensions.unsupportedApi")
+                            parserInstalled -> desktopText("extensions.installed")
+                            installed != null && installed > extension.versionCode ->
+                                desktopText("extensions.newerLocal")
+                            installed == extension.versionCode -> desktopText("extensions.installed")
+                            installed != null -> desktopText("extensions.update")
+                            extension.resources.jarUrl.isBlank() && !parserPlugin && !cloudstreamPlugin ->
+                                desktopText("extensions.installConvert")
+                            else -> desktopText("extensions.install")
+                        }
+                        SettingsActionRow(
+                            title = "${extension.name} · ${extension.versionName} · $ecosystem",
+                            summary = extension.sources.takeIf { it.isNotEmpty() }
+                                ?.joinToString { "${it.name} (${it.language})" }
+                                ?: desktopText("extensions.sourcesAfterInstall"),
+                            verticalPadding = 10.dp,
+                        ) {
+                            Button(
+                                onClick = { controller.installExtension(extension) },
+                                enabled = enabled && hasPackage && compatible && !parserInstalled &&
+                                    (installed == null || installed < extension.versionCode),
+                                modifier = Modifier.testTag("extension-install:${extension.packageName}"),
+                            ) { Text(label) }
+                        }
                     }
                 }
             }
@@ -129,36 +211,71 @@ private fun InstalledExtensions(
 ) {
     var confirm by remember { mutableStateOf<DesktopInstalledEntry?>(null) }
     val updates = state.extensionUpdates.associateBy { it.extension.packageName }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(desktopText("extensions.installedCount", state.installedEntries.size), style = MaterialTheme.typography.titleMedium)
-        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Checkbox(state.autoUpdateExtensions, { controller.setAutoUpdateExtensions(it) },
-                modifier = Modifier.testTag("extension-auto-update"))
-            Text(desktopText("extensions.autoUpdate"))
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        SettingsSectionHeader(desktopText("extensions.installedCount", state.installedEntries.size))
+        SettingsGroup {
+            SettingsSwitchRow(
+                title = desktopText("extensions.autoUpdate"),
+                summary = null,
+                checked = state.autoUpdateExtensions,
+                enabled = enabled,
+                onCheckedChange = { controller.setAutoUpdateExtensions(it) },
+                testTag = "extension-auto-update",
+            )
+            SettingsRowDivider()
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = { controller.checkExtensionUpdates() },
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f).testTag("extension-check-updates"),
+                ) { Text(desktopText("extensions.checkUpdates")) }
+                Button(
+                    onClick = { controller.applyUpdates() },
+                    enabled = enabled && updates.isNotEmpty(),
+                    modifier = Modifier.weight(1f).testTag("extension-update-all"),
+                ) { Text(desktopText("extensions.updateAll", updates.size)) }
+            }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton({ controller.checkExtensionUpdates() }, enabled = enabled,
-                modifier = Modifier.weight(1f).testTag("extension-check-updates")) { Text(desktopText("extensions.checkUpdates")) }
-            Button({ controller.applyUpdates() }, enabled = enabled && updates.isNotEmpty(),
-                modifier = Modifier.weight(1f).testTag("extension-update-all")) { Text(desktopText("extensions.updateAll", updates.size)) }
-        }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("installed-list"),
-            verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(state.installedEntries, key = { "${it.kind}:${it.id}" }) { entry ->
-                val update = updates[entry.id]
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(entry.label, maxLines = 1)
-                        Text(desktopText("extensions.entrySummary",
-                            DesktopSourceLabels.ecosystem(entry.ecosystem), entry.version, entry.sources) +
-                            (update?.let { " · " + desktopText("extensions.updateAvailable", it.extension.versionName) } ?: ""),
-                            style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (update != null) Button({ controller.applyUpdates(listOf(update)) }, enabled = enabled,
-                                modifier = Modifier.testTag("extension-update:${entry.id}")) { Text(desktopText("extensions.update")) }
-                            TextButton({ confirm = entry }, enabled = enabled,
-                                modifier = Modifier.testTag("extension-uninstall:${entry.id}")) { Text(desktopText("extensions.uninstall")) }
+        SettingsGroup(Modifier.weight(1f)) {
+            if (state.installedEntries.isEmpty()) {
+                SettingsInfoRow(desktopText("extensions.installedEmpty"), null)
+            } else {
+                LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("installed-list")) {
+                    itemsIndexed(
+                        state.installedEntries,
+                        key = { _, entry -> "${entry.kind}:${entry.id}" },
+                    ) { index, entry ->
+                        if (index > 0) SettingsRowDivider()
+                        val update = updates[entry.id]
+                        SettingsActionRow(
+                            title = entry.label,
+                            summary = desktopText(
+                                "extensions.entrySummary",
+                                DesktopSourceLabels.ecosystem(entry.ecosystem),
+                                entry.version,
+                                entry.sources,
+                            ) + (
+                                update?.let {
+                                    " · " + desktopText("extensions.updateAvailable", it.extension.versionName)
+                                } ?: ""
+                                ),
+                            verticalPadding = 6.dp,
+                        ) {
+                            if (update != null) {
+                                TextButton(
+                                    onClick = { controller.applyUpdates() },
+                                    enabled = enabled,
+                                    modifier = Modifier.testTag("extension-update:${entry.id}"),
+                                ) { Text(desktopText("extensions.update")) }
+                            }
+                            TextButton(
+                                onClick = { confirm = entry },
+                                enabled = enabled,
+                                modifier = Modifier.testTag("extension-uninstall:${entry.id}"),
+                            ) { Text(desktopText("extensions.uninstall")) }
                         }
                     }
                 }
@@ -170,7 +287,9 @@ private fun InstalledExtensions(
             title = { Text(desktopText("extensions.uninstallTitle", entry.label)) },
             text = { Text(desktopText("extensions.uninstallDetail", entry.sources)) },
             confirmButton = { Button({ confirm = null; controller.uninstall(entry) },
-                modifier = Modifier.testTag("extension-uninstall-confirm")) { Text(desktopText("extensions.uninstall")) } },
+                modifier = Modifier.testTag("extension-uninstall-confirm")) {
+                Text(desktopText("extensions.uninstall"))
+            } },
             dismissButton = { TextButton({ confirm = null }) { Text(desktopText("common.cancel")) } })
     }
 }

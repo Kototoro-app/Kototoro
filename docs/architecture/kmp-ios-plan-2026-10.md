@@ -6576,3 +6576,34 @@ tablet 探针现在走“更多”→“频率对话框”选中 2.0（断言写
 “推荐设置”→ 勾选偏好来源（断言写回 `suggestionSettings.preferredSources`）→ 关闭对话框 → 回到“更多”；
 截图 `tablet-recommendations.png` 可见三节卡片、开关行、带箭头与摘要的值行。
 本轮没有做拓展管理页，也没有跑全量回归。
+## 137. Windows 扩展管理页改用共享设置节与行（2026-10-23）
+
+日期：2026-10-23。§135/§136 之后“更多 → 扩展与仓库”仍是平铺的一列：裸 `Text` 标题、全宽输入框、
+每行仓库两个 `TextButton`、目录里每个扩展一张 `Card`、已安装用 `Checkbox` + 文字。Android 的
+“扩展管理”（`extension_management` → `UnifiedSourcesScreen`）是带标题的分节 + 行内控件的设置式列表，
+因此桌面这一页也换成同一套词汇。
+
+- `core-ui` 的共享行新增 `SettingsActionRow(title, summary, verticalPadding, content)`：左侧标题/摘要与
+  其他行同排同字号，右侧由宿主放任意控件（两个按钮、一个按钮）。仓库行（刷新 / 忘记）、目录行（安装）、
+  已安装行（更新 / 卸载）都用它，行间距与内部 padding 和 `SettingsSwitchRow` 一致。
+- 页面结构：**扩展仓库**（说明 + 地址输入 + 添加按钮 + 每个仓库一行）→ **目录**（仓库名与数量作节标题，
+  搜索框、列表在同一张卡片里，行间细分割线）→ **已安装**（自动更新改整行开关，检查更新/全部更新留在
+  卡片内的动作行，已安装列表每行带更新与卸载）。空目录/空列表各显示一条 `SettingsInfoRow`。
+- 交互与 tag 不变：`repository-url`、`repository-add`、`repository:<url>`、`repository-remove:<url>`、
+  `extension-search`、`extension-list`、`extension-install:<pkg>`、`extension-auto-update`（改成开关行，
+  整行可点）、`extension-check-updates`、`extension-update-all`、`extension-update:<id>`、
+  `installed-list`、`extension-uninstall:<id>`、`extension-uninstall-confirm`，探针无需改流程。
+- 文案：仓库刷新按钮改用既有的 `common.refresh`（原来带仓库名会挤占行宽，且行标题已显示仓库名），
+  随之中英两份 properties 删掉不再使用的 `extensions.refreshRepository`；新增 `extensions.catalogEmpty`、
+  `extensions.installedEmpty`。
+
+验证：`:desktop-app:compileKotlin`、`:core-ui:compileCommonMainKotlinMetadata`、
+`:desktop-app:verifyDesktopStrings` 通过；`DesktopAppTest` 的
+“Windows repository add install update and app-owned extensions persist in another offline process”
+（两个独立 JVM）tests=1 failures=0，覆盖添加仓库、APK-only 条目可装/无包条目不可装、安装、刷新仓库出“更新”、
+再次安装升级、检查更新 + 全部更新、自动更新开关（现在点整行）、卸载，并核对请求数与旧产物清理；
+截图 `repositories-write-catalog.png` / `repositories-write-installed.png` 可见分节卡片、仓库行尾的
+“刷新 / 忘记该仓库”、目录行的安装按钮、已安装行的“卸载”与整行开关。
+
+范围：Android 的统一扩展管理还有 JSON 源与 APK 扩展的独立页签、解析器（JAR）管理、安装策略与
+推荐仓库弹窗，Windows 侧仍只有仓库 + 目录 + 已安装三块，后续按需再补。

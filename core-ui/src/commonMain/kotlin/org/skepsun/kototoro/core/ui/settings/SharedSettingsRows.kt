@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,6 +25,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 
@@ -148,6 +150,28 @@ fun SettingsInfoRow(title: String, summary: String?, modifier: Modifier = Modifi
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingsRowText(title, summary, Modifier.weight(1f))
+    }
+}
+
+/**
+ * Row whose control is not a switch or a chevron — two action buttons for an installed extension, for instance. The
+ * title and summary keep the same typography and insets as every other row, so a section can mix row kinds.
+ */
+@Composable
+fun SettingsActionRow(
+    title: String,
+    summary: String?,
+    modifier: Modifier = Modifier,
+    verticalPadding: Dp = 12.dp,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = verticalPadding),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SettingsRowText(title, summary, Modifier.weight(1f))
+        content()
     }
 }
 
