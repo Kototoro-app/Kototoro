@@ -168,6 +168,17 @@ class ReaderActivity :
     override val isReaderControlsVisible: Boolean
         get() = if (::composeReaderController.isInitialized) composeReaderController.isChromeVisible else areControlsVisible
 
+    /**
+     * Whether the chrome is on screen right now. The Compose reader starts with its chrome hidden while
+     * [areControlsVisible] starts true, so toggling off the legacy flag swallowed the first remote press.
+     */
+    private val isChromeOnScreen: Boolean
+        get() = if (::composeReaderController.isInitialized) {
+            composeReaderController.isChromeControlsVisible
+        } else {
+            areControlsVisible
+        }
+
     private lateinit var scrollTimer: ScrollTimer
     private lateinit var pageSaveHelper: PageSaveHelper
     private lateinit var controlDelegate: ReaderControlDelegate
@@ -1252,14 +1263,15 @@ class ReaderActivity :
     }
 
     override fun toggleUiVisibility() {
-        if (!areControlsVisible) {
+        val isVisible = isChromeOnScreen
+        if (!isVisible) {
             if (scrollTimer.isActive.value && settings.isReaderAutoscrollPauseOnUi && !scrollTimer.isManuallyPaused.value) {
                 scrollTimer.setManuallyPaused(true)
                 composeReaderController.updateAutoScroll { copy(visible = true) }
                 return
             }
         }
-        setUiIsVisible(!areControlsVisible)
+        setUiIsVisible(!isVisible)
     }
 
     override fun isReaderResumed(): Boolean {
