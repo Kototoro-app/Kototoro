@@ -28,6 +28,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.EInkRefreshColor
@@ -139,6 +140,7 @@ fun ReaderSettingsScreen(
             ) {
                 pageLabels.forEachIndexed { index, label ->
                     Tab(
+                        modifier = Modifier.tvTabRing(),
                         selected = pagerState.currentPage == index,
                         onClick = { coroutineScope.launch { pagerState.animateScrollToPage(index) } },
                         text = { Text(label) },

@@ -59,6 +59,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.withStyle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.local.data.LocalStorageRoot
 import org.skepsun.kototoro.local.data.StorageContentKind
@@ -114,6 +115,7 @@ internal fun ContentDirectoriesScreen(
                 ) {
                     kinds.forEachIndexed { index, kind ->
                         Tab(
+                            modifier = Modifier.tvTabRing(),
                             selected = pagerState.currentPage == index,
                             onClick = { coroutineScope.launch { pagerState.animateScrollToPage(index) } },
                             text = {

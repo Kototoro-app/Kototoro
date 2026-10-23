@@ -104,6 +104,21 @@ fun Modifier.tvFocusable(
 }
 
 /**
+ * Outline ring for a tab inside a `TabRow`, a `ScrollableTabRow` or a `SecondaryTabRow`.
+ *
+ * Material3 tabs are `selectable`, so a remote already stops on them, but the only feedback is a
+ * faint container tint that reads as nothing from a sofa, and a stop without an outline is the
+ * same dead end as a control that cannot be focused at all. Pass this as the tab's own modifier:
+ * a tab applies its modifier before the internal `selectable`, so the outline observes exactly
+ * that stop without adding a second one. No-op off TV.
+ */
+@Composable
+fun Modifier.tvTabRing(): Modifier = tvFocusable(
+    shape = RoundedCornerShape(10.dp),
+    addFocusTarget = false,
+)
+
+/**
  * Where one D-pad step from [value] lands: [direction] is -1 for left, +1 for right.
  *
  * A slider with [steps] discrete stops moves by one stop; a continuous slider moves by a twentieth

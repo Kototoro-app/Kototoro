@@ -59,6 +59,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
@@ -170,6 +171,7 @@ fun TrackingLocalSearchSheet(
                 availableSources.forEachIndexed { index, info ->
                     val sourceTitle = rememberResolvedSourceTitle(info.mangaSource)
                     Tab(
+                        modifier = Modifier.tvTabRing(),
                         selected = index == selectedIndex,
                         onClick = { onSourceSelected(info.mangaSource.name) },
                         text = {

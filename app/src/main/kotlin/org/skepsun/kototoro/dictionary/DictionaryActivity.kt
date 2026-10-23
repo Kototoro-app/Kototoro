@@ -49,6 +49,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 
@@ -156,6 +157,7 @@ private fun DictionaryScreen(
                 ScrollableTabRow(selectedTabIndex = selectedIndex) {
                     state.pages.forEachIndexed { index, page ->
                         Tab(
+                            modifier = Modifier.tvTabRing(),
                             selected = selectedIndex == index,
                             onClick = { selectedIndex = index },
                             text = {

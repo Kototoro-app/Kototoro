@@ -53,6 +53,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.details.ui.model.DetailsChapterSourceTab
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
@@ -381,6 +382,7 @@ private fun DetailsTabsRow(
     ) {
         tabs.forEachIndexed { index, tab ->
             Tab(
+                modifier = Modifier.tvTabRing(),
                 selected = selectedTabIndex == index,
                 onClick = { onTabClick(index) },
                 icon = {
@@ -413,6 +415,7 @@ private fun ChapterModeTabsRow(
     ) {
         availableModes.forEachIndexed { index, mode ->
             Tab(
+                modifier = Modifier.tvTabRing(),
                 selected = mode == selectedMode,
                 onClick = { onSelectMode(mode) },
                 text = {

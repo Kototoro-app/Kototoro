@@ -61,6 +61,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.CompactContentCoverShape
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -189,6 +190,7 @@ private fun ScrobblerTabs(viewModel: ScrobblingSelectorViewModel) {
                 scrobblers.forEachIndexed { index, scrobbler ->
                     val title = stringResource(scrobbler.scrobblerService.titleResId)
                     Tab(
+                        modifier = Modifier.tvTabRing(),
                         selected = selectedIndex == index,
                         onClick = { if (!isLoading) viewModel.setScrobblerIndex(index) },
                         text = {
