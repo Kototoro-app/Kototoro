@@ -2,9 +2,11 @@ package org.skepsun.kototoro.video.ui.compose
 
 import android.graphics.Color
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -19,15 +21,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SelectableChipColors
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
@@ -37,6 +44,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
+import org.skepsun.kototoro.core.ui.adaptive.tvTakeInitialFocus
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 
 internal data class VideoSubtitleSettingsDialogState(
@@ -98,6 +109,7 @@ internal fun VideoSubtitleSettingsDialog(
 
     val emit = { new: VideoSubtitleSettingsDialogState -> style = new; onStyleChanged(new) }
 
+    val isTv = LocalUiPresentationConfig.current.isTv
     Popup(
         popupPositionProvider = PlayerMenuPositionProvider(
             targetBounds = state.anchorBounds,
@@ -122,7 +134,8 @@ internal fun VideoSubtitleSettingsDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState())
+                    .tvTakeInitialFocus(),
             ) {
                 Text(
                     text = stringResource(R.string.video_subtitle_settings),
@@ -140,7 +153,7 @@ internal fun VideoSubtitleSettingsDialog(
                         .padding(horizontal = 16.dp),
                 ) {
                     SubtitleSettingsTab.entries.forEach { t ->
-                        FilterChip(
+                        SubtitleChip(
                             selected = tab == t,
                             onClick = { tab = t },
                             label = { Text(tabLabel(t)) },
@@ -162,13 +175,13 @@ internal fun VideoSubtitleSettingsDialog(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                     ) {
-                        FilterChip(
+                        SubtitleChip(
                             selected = style.bold,
                             onClick = { emit(style.copy(bold = !style.bold)) },
                             label = { Text("B", fontWeight = FontWeight.Bold) },
                             colors = playerChipColors(),
                         )
-                        FilterChip(
+                        SubtitleChip(
                             selected = style.italic,
                             onClick = { emit(style.copy(italic = !style.italic)) },
                             label = { Text("I", fontStyle = FontStyle.Italic) },
@@ -188,7 +201,7 @@ internal fun VideoSubtitleSettingsDialog(
                             )
                         } else {
                             state.subtitleTrackOptions.forEachIndexed { index, label ->
-                                FilterChip(
+                                SubtitleChip(
                                     selected = state.subtitleTrackSelectedIndex == index,
                                     onClick = { onSubtitleTrackSelected(index) },
                                     label = { Text(label) },
@@ -215,7 +228,7 @@ internal fun VideoSubtitleSettingsDialog(
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                         ) {
                             SubtitleFontFamily.entries.forEach { family ->
-                                FilterChip(
+                                SubtitleChip(
                                     selected = style.fontFamily == family,
                                     onClick = { emit(style.copy(fontFamily = family)) },
                                     label = { Text(fontFamilyLabel(family)) },
@@ -254,7 +267,7 @@ internal fun VideoSubtitleSettingsDialog(
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                         ) {
                             SubtitleBackgroundStyle.entries.forEach { backgroundStyle ->
-                                FilterChip(
+                                SubtitleChip(
                                     selected = style.backgroundStyle == backgroundStyle,
                                     onClick = { emit(style.copy(backgroundStyle = backgroundStyle)) },
                                     label = { Text(backgroundStyleLabel(backgroundStyle)) },
@@ -310,19 +323,19 @@ internal fun VideoSubtitleSettingsDialog(
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                         ) {
-                            FilterChip(
+                            SubtitleChip(
                                 selected = style.alignX == 0,
                                 onClick = { emit(style.copy(alignX = 0)) },
                                 label = { Text(stringResource(R.string.video_subtitle_align_left)) },
                                 colors = playerChipColors(),
                             )
-                            FilterChip(
+                            SubtitleChip(
                                 selected = style.alignX == 1,
                                 onClick = { emit(style.copy(alignX = 1)) },
                                 label = { Text(stringResource(R.string.video_subtitle_align_center)) },
                                 colors = playerChipColors(),
                             )
-                            FilterChip(
+                            SubtitleChip(
                                 selected = style.alignX == 2,
                                 onClick = { emit(style.copy(alignX = 2)) },
                                 label = { Text(stringResource(R.string.video_subtitle_align_right)) },
@@ -346,7 +359,7 @@ internal fun VideoSubtitleSettingsDialog(
                                 .padding(horizontal = 16.dp),
                         ) {
                             SubtitleColorTarget.entries.forEach { target ->
-                                FilterChip(
+                                SubtitleChip(
                                     selected = colorTarget == target,
                                     onClick = { colorTarget = target },
                                     label = { Text(colorTargetLabel(target)) },
@@ -374,7 +387,8 @@ internal fun VideoSubtitleSettingsDialog(
                                 Surface(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .heightIn(min = 28.dp)
+                                        .heightIn(min = if (isTv) 56.dp else 28.dp)
+                                        .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
                                         .clickable { colorTarget = target },
                                     shape = RoundedCornerShape(8.dp),
                                     color = ComposeColor(color),
@@ -447,6 +461,7 @@ private fun LabeledSlider(
     enabled: Boolean = true,
     accent: ComposeColor = ComposeColor.White,
 ) {
+    val steps = (valueRange.endInclusive - valueRange.start).toInt() - 1
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
@@ -463,15 +478,72 @@ private fun LabeledSlider(
         KototoroSlider(
             value = value,
             onValueChange = onValueChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .tvSliderDpad(
+                    value = value,
+                    valueRange = valueRange,
+                    onValueChange = onValueChange,
+                    steps = steps,
+                    enabled = enabled,
+                ),
             enabled = enabled,
             valueRange = valueRange,
-            steps = (valueRange.endInclusive - valueRange.start).toInt() - 1,
+            steps = steps,
             colors = androidx.compose.material3.SliderDefaults.colors(
                 thumbColor = accent,
                 activeTrackColor = accent,
                 inactiveTrackColor = ComposeColor.White.copy(alpha = 0.3f),
             ),
         )
+    }
+}
+
+/**
+ * A filter chip that a remote can actually reach.
+ *
+ * A Material3 [FilterChip] only shows a focus state layer, which on a 1080p screen from three metres
+ * away is indistinguishable from "nothing is selected". The TV branch draws the same pill by hand so
+ * it can carry a focus ring and a row height that matches the rest of the player menu; the phone
+ * keeps the stock chip.
+ */
+@Composable
+private fun SubtitleChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    colors: SelectableChipColors = playerChipColors(),
+    label: @Composable () -> Unit,
+) {
+    if (!LocalUiPresentationConfig.current.isTv) {
+        FilterChip(
+            selected = selected,
+            onClick = onClick,
+            label = label,
+            modifier = modifier,
+            colors = colors,
+        )
+        return
+    }
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        modifier = modifier
+            .heightIn(min = playerMenuRowMinHeight(32.dp))
+            .clip(shape)
+            .background(
+                color = if (selected) ComposeColor.White else ComposeColor.White.copy(alpha = 0.12f),
+                shape = shape,
+            )
+            .tvFocusable(shape = shape, addFocusTarget = false)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        CompositionLocalProvider(
+            LocalContentColor provides if (selected) ComposeColor.Black else ComposeColor.White,
+        ) {
+            label()
+        }
     }
 }
 

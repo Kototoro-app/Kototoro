@@ -2271,3 +2271,50 @@ BACK 之后人直接掉到裸 chrome 上（旧构建 `m5`：面板消失，焦�
   或者给条目加一个"会开窗"的标记，留待下一轮。
 - 手机上这些行本来就是全宽可点、控件自带交互，新增条件只影响电视分支的面板保活，手机未回归。
 
+## 第三十八轮：字幕设置面板的五个标签页（2026-10-24）
+
+顶栏的 `Subtitles` 按钮打开的面板一直没进过电视走查名单，而它是播放器里最"手机味"的一块：五个标签页
+（轨道/排版/背景/布局/颜色）全是 `FilterChip` + 滑杆，摆在一个 `Popup` 里。手机上这样没问题，遥控器上
+几乎每一层都断。
+
+### 三处断点
+
+1. **没有初始焦点**：`Popup(focusable = true)` 只保证按键进了这个窗口，没人请求焦点，所以面板一打开
+   屏幕上没有任何环，第一次按方向键才"凭空"出现一个。
+2. **`FilterChip` 只有 state layer，没有环**：被选中的标签是白底黑字，可**焦点**落在哪个 chip 上完全看不出来；
+   同时 chip 只有 32dp 高，1080p 三米外基本是几粒小药丸。
+3. **滑杆是单向死胡同**：`KototoroSlider` 包的是 Material3 `Slider`，遥控器左右键不会改值（与第三十四轮
+   超分滑杆同一个根因），字号/边框/背景圆角/四个通道全部改不动。
+
+### 改法
+
+- 面板的滚动 `Column` 挂 `tvTakeInitialFocus()`，打开即把环落在第一个标签（`Subtitle Track`）。
+- 新增本地 `SubtitleChip`：手机上直接返回原样 `FilterChip`（含 `playerChipColors()`），电视上换成一枚手绘
+  药丸——`clip` + `background` + `tvFocusable(shape, addFocusTarget = false)` + `clickable`，
+  最小高度走 `playerMenuRowMinHeight(32.dp)`（TV ≥60dp），文字颜色用 `LocalContentColor` 跟着选中态走。
+  十一个 call site 只把 `FilterChip(` 换成 `SubtitleChip(`，样式参数一个都没加。
+- `LabeledSlider` 给 `KototoroSlider` 接 `tvSliderDpad(value, valueRange, onValueChange, steps, enabled)`，
+  左右键按一步一格走，值写回同一份 `VideoSubtitleSettingsDialogState`。
+- 颜色通道的整块色片从 28dp 抬到 56dp（`heightIn(min = if (isTv) 56.dp else 28.dp)`）并补上同样的环。
+
+### 设备验证（emulator-5554，1920×1080，tier=MID）
+
+| 步骤 | 截图 | 结果 |
+| --- | --- | --- |
+| 顶栏 → Subtitles → CENTER | `s1` | 面板打开，环在第一个标签 `Subtitle Track`；标签行与轨道行都是 60dp 高的整块药丸（`[404,112][694,232]`） |
+| RIGHT ×4 | `s2` | 环走到 `Colors`，标签行自动横滚，最后一个标签从被裁掉变成完整可见 |
+| CENTER（切到 Colors） | `s3` | 同一帧里出现 `Typography`（B/I）、`Text/Border/Background`、三块色片、Alpha/Red/Green/Blue 四根滑杆；卡片实测 `[372,16][1588,1064]`，没有越出屏幕 |
+| DOWN ×6 | `s4` | 焦点依次走过 B/I、色片开关、三根滑杆，列表跟着上滚 |
+| LEFT ×3（Green 上） | `s5` | `Green 255 → 252`，滑杆带整条圆角环；下面 `Blue` 仍完整可见 |
+| BACK | — | 面板关闭，环回到顶栏的 `Subtitles` 按钮（`[1600,8][1696,104]`） |
+
+### 备注与遗留
+
+- 每个非轨道标签页都会重复出现 `Typography` 的 B/I 两个 chip，这是原有结构（样式对所有文字统一生效），
+  不是这一轮引入的；电视上只是把它们也做成了可聚焦的药丸。
+- 颜色滑杆的每步是 1（`steps = 254`），从 0 调到 255 要按 255 次遥控器。手机上可以用手指拖，
+  电视上真正好用的做法是让长按连发或者按 16 一档；留待下一轮，先把"能动"这件事做对。
+- 面板宽度仍是 `playerMenuWidth(300, 380)` 的 ×1.6（实测 608dp），标签行放不下五个时靠横向滚动；
+  若后面要完全避免横滚，需要把标签改成两行或图标式。
+
+
