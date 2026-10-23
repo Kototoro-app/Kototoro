@@ -1871,3 +1871,48 @@ spaceUiState.switcherEnabled` 时放一个 `SpaceSwitcherRailButton`，
 
 先修第 2、4 两条（都属于"看得见但不好用"）：极细状态条要么在电视上放大字号、要么随顶栏一起收起；
 顶栏标题给足宽度。第 1、3 条先记录，等有鼠标/触摸需求再动。
+
+## 第三十轮：阅读器首次按键失灵的根因（2026-10-23）
+
+上一轮把"点按唤出的顶栏没有焦点"记成遗留问题，本轮查下去发现真正的问题更严重：
+**进入阅读器后的第一次 CENTER 一定是空按**，第二次才起作用。这比"触摸唤出顶栏"影响大得多——
+遥控器用户第一次按 OK 没反应，只会以为遥控器坏了。
+
+### 根因
+
+`ReaderActivity.toggleUiVisibility()` 读的是 Activity 自己的 `areControlsVisible` 字段：
+
+- `areControlsVisible` 初始值 **true**；
+- Compose 阅读器的 `chromeState.controlsVisible` 初始值 **false**（顶栏一开始就不显示）。
+
+于是第一次 CENTER 走 `setUiIsVisible(!true)` = **隐藏**——顶栏本来就没显示，画面毫无变化；
+第二次才 `!false` = 显示。按键没丢，是算反了。
+
+修法：新增 `isChromeOnScreen`，优先读 `composeReaderController.isChromeControlsVisible`
+（真正在屏幕上的顶栏状态），只有控制器还没初始化时才回退到旧字段。
+
+### 顺带修掉的两条（都是"看得见但看不清"）
+
+1. **阅读器顶部的极细信息条**：`shouldShowReaderInfoBar()` 原本是 `infoBarEnabled && !controlsVisible`，
+   于是顶栏收起时必现一条 12sp 的 `Ch. 1/2 Pg. 4/6 33%`，还和系统状态栏的时间/电量挤在同一行。
+   电视上从沙发根本看不清，现在电视表现下直接不画（信息仍在顶栏与页码条里）。
+2. **本地存储页标题截断**：顶栏标题写死 `maxWidth = 120.dp`，1920px 的屏上也只给这么宽，
+   `Local storage` 被截成 `Local sto…`。电视表现改为 360dp。
+
+### 验证
+
+| 步骤 | 截图 | 结果 |
+| --- | --- | --- |
+| 本地存储页 | `ac0` | 标题完整显示 `Local storage`，副标题也不再被挤 |
+| 进入阅读器 | `ac3` | 顶部**没有**信息条，画面就是整页图 |
+| 单按 CENTER | `ae2` | 顶栏出现，焦点落在标题药丸（此前这一按必然是空按） |
+| DOWN | `ae3` | 焦点进入底部页码条的上一页按钮 |
+| UP + CENTER | `ae5` | 打开选项面板（阅读模式 + 书签/保存/旋转/下载等磁贴），全带焦点 |
+| BACK | `ae6` | 面板收起，回到 `ae2` 同款顶栏+药丸聚焦帧 |
+
+### 模拟器本身的坑
+
+本轮模拟器连续崩了三次，Windows 事件日志是
+`qemu-system-x86_64.exe` / `0xc0000005`（访问违例），和 App 无关。
+`-gpu swiftshader_indirect`（软件渲染）下复现稳定，换 `-gpu host`（本机 RTX 4070）后
+连续跑完整个验证链没有再崩。后续调试一律用 `-gpu host`。
