@@ -431,6 +431,7 @@ internal object DesktopTabletProbe {
                 // Settings: Android's tracker frequency is a choice dialog, and the recommendation rules live on their
                 // own screen instead of being squashed into the "more" page as one row of chips per source.
                 onNodeWithTag("nav:更多").performClick(); idle()
+                snapshot("more")
                 onNodeWithTag("settings-tracker-frequency").performScrollTo().performClick(); idle()
                 onNodeWithTag("settings-tracker-frequency:2.0").performClick(); idle()
                 check(controller.state.value.trackerSettings.frequency == 2f)

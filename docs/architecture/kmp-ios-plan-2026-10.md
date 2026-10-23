@@ -6607,3 +6607,29 @@ tablet 探针现在走“更多”→“频率对话框”选中 2.0（断言写
 
 范围：Android 的统一扩展管理还有 JSON 源与 APK 扩展的独立页签、解析器（JAR）管理、安装策略与
 推荐仓库弹窗，Windows 侧仍只有仓库 + 目录 + 已安装三块，后续按需再补。
+## 138. Windows“更多”页改为设置式分节（2026-10-23）
+
+日期：2026-10-23。§137 之后唯一还是旧样式的外壳页面是“更多”：四张图标大卡 + 一张卡里三排
+`OutlinedButton` 内联选项（语言 4 个、主题 3 个、界面风格 2 个）。Android 的“更多”（辅助功能）是
+设置列表，每项一行、当前值在箭头前，改值开对话框，因此这一页也换成同一套词汇。
+
+- `SettingsValueRow` 增加可选 `leadingIcon: Painter?`：共享行只接收平台给的画笔，Android 传
+  `canvasPainter(R.drawable.…)`、Windows 传随包的 SVG，共享模块不需要知道资源系统。
+  §135–137 的行样式不变，`leadingIcon` 默认 null。
+- 页面结构：**功能**（推荐设置、扩展与仓库、下载、备份与恢复，都带图标，`nav:<标题>` 与
+  `settings-recommendations-open` 的 tag 保持不变）→ **外观**（主题、界面风格、语言，右侧显示当前值，
+  点击开单选对话框）→ 更新检查（§136 的 tracker 卡）→ 关于与更新 → **高级工具**（浏览器调试）。
+  语言/主题/界面风格三排内联按钮改成 `DesktopChoiceSettingsDialog`，选项 tag 仍是
+  `appearance:<NAME>`、`interface-style:<NAME>`、`language:<tag>`，只是先点行再选值。
+- 删除 `LanguageChoice` 与 `MoreDestination`（体积更小的 `SettingsValueRow` 已覆盖）。
+- 文案：新增 `more.features`（功能 / Features）、`more.theme`（主题 / Theme）；顺手清掉中英两份
+  properties 里重复的 `more.language` 与 `more.languageSystem`（后者两份取值还不一致，保留短的那条）。
+
+验证：`:desktop-app:compileKotlin`、`:desktop-app:verifyDesktopStrings`、`:core-ui:verifyUiStrings`、
+`:core-ui:compileCommonMainKotlinMetadata` 通过；`DesktopAppTest` 的
+“Android styled light and dark themes render covers and persist across an offline restart”（两个 JVM，
+先写后读）tests=1 failures=0，语言/主题/界面风格对话框均被点击并落到偏好；
+“tablet layout and immersive reader panels …” 与“Windows backup preview cancel merge …” tests=2
+failures=0，说明 `nav:更多`、`nav:扩展与仓库`、`nav:下载`、`nav:备份与恢复`、`settings-recommendations-open`
+等入口未受结构改动影响；新截图 `tablet-more.png` 与 `tablet-boundary-compact-more.png` 可见分节卡片、
+带图标的功能行、右侧当前值与箭头。

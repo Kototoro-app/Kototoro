@@ -22,6 +22,10 @@ import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.ui.adaptive.*
 import org.skepsun.kototoro.core.ui.chapters.*
+import org.skepsun.kototoro.core.ui.settings.SettingsGroup
+import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
+import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
+import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
 
 /** Windows supplies destination actions and artwork to the shared Android tablet rail. */
 @Composable
@@ -80,83 +84,98 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
     }
 }
 
-/** One language row: the chosen one is tinted, as the appearance buttons are. */
-@Composable
-private fun LanguageChoice(title: String, selected: Boolean, enabled: Boolean, tag: String, onClick: () -> Unit) {
-    OutlinedButton({ onClick() }, enabled = enabled,
-        colors = ButtonDefaults.outlinedButtonColors(containerColor =
-            if (selected) Accent.copy(alpha = .12f) else Color.Transparent),
-        modifier = Modifier.testTag(tag)) { Text(title) }
-}
-
+/**
+ * Android's "更多" tab is a settings page: titled sections, one card each, and every entry a row. The Windows host keeps
+ * its own entry points (recommendations, extensions, downloads, backups, browser) but draws them the same way, with a
+ * leading icon and the current value in front of the chevron; the language/appearance/style chips become choice dialogs.
+ */
 @Composable
 internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, onExitRequest: () -> Unit = {}) {
     val state by controller.state.collectAsState()
+    var dialog by remember { mutableStateOf<DesktopMoreDialog?>(null) }
     Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        MoreDestination(desktopText("settings.suggestions"), "ic_suggestion", desktopText("more.recommendationsSummary"),
-            enabled, tag = "settings-recommendations-open") { controller.showRecommendations() }
-        MoreDestination(desktopText("more.extensions"), "ic_extension", desktopText("more.extensionsSummary"), enabled) {
-            controller.showExtensions()
+        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        SettingsSectionHeader(desktopText("more.features"))
+        SettingsGroup {
+            SettingsValueRow(desktopText("settings.suggestions"), desktopText("more.recommendationsSummary"), null,
+                enabled, { controller.showRecommendations() }, testTag = "settings-recommendations-open",
+                leadingIcon = painterResource("icons/ic_suggestion.svg"))
+            SettingsRowDivider()
+            SettingsValueRow(desktopText("more.extensions"), desktopText("more.extensionsSummary"), null, enabled,
+                { controller.showExtensions() }, testTag = "nav:${desktopText("more.extensions")}",
+                leadingIcon = painterResource("icons/ic_extension.svg"))
+            SettingsRowDivider()
+            SettingsValueRow(desktopText("more.downloads"), desktopText("more.downloadsSummary"), null, enabled,
+                { controller.showDownloads() }, testTag = "nav:${desktopText("more.downloads")}",
+                leadingIcon = painterResource("icons/ic_download.svg"))
+            SettingsRowDivider()
+            SettingsValueRow(desktopText("more.backups"), desktopText("more.backupsSummary"), null, enabled,
+                { controller.showBackups() }, testTag = "nav:${desktopText("more.backups")}",
+                leadingIcon = painterResource("icons/ic_backup_restore.svg"))
         }
-        MoreDestination(desktopText("more.downloads"), "ic_download", desktopText("more.downloadsSummary"), enabled) { controller.showDownloads() }
-        MoreDestination(desktopText("more.backups"), "ic_backup_restore", desktopText("more.backupsSummary"), enabled) { controller.showBackups() }
-        Surface(shape = RoundedCornerShape(20.dp)) {
-            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(desktopText("more.language"), style = MaterialTheme.typography.titleMedium)
-                Text(desktopText("more.languageDetail"), color = Muted, fontSize = 12.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LanguageChoice(desktopText("more.languageSystem"), state.language == null, enabled,
-                        "language:system") { controller.language(null) }
-                    DesktopLanguages.bundled.forEach { language ->
-                        LanguageChoice(language.nativeName, state.language == language.tag, enabled,
-                            "language:${language.tag}") { controller.language(language.tag) }
-                    }
-                }
-                Text(desktopText("more.appearance"), style = MaterialTheme.typography.titleMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DesktopAppearance.entries.forEach { appearance ->
-                        OutlinedButton({ controller.appearance(appearance) }, enabled = enabled,
-                            colors = ButtonDefaults.outlinedButtonColors(containerColor =
-                                if (state.appearance == appearance) Accent.copy(alpha = .12f) else Color.Transparent),
-                            modifier = Modifier.testTag("appearance:${appearance.name}")) { Text(appearance.title) }
-                    }
-                }
-                Text(desktopText("more.interfaceStyle"), style = MaterialTheme.typography.titleMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DesktopInterfaceStyle.entries.forEach { style ->
-                        OutlinedButton({ controller.interfaceStyle(style) }, enabled = enabled,
-                            colors = ButtonDefaults.outlinedButtonColors(containerColor =
-                                if (state.interfaceStyle == style) Accent.copy(alpha = .12f) else Color.Transparent),
-                            modifier = Modifier.testTag("interface-style:${style.name}")) { Text(style.title) }
-                    }
-                }
-            }
+        SettingsSectionHeader(desktopText("more.appearance"))
+        SettingsGroup {
+            SettingsValueRow(desktopText("more.theme"), null, state.appearance.title, enabled,
+                { dialog = DesktopMoreDialog.THEME }, testTag = "appearance")
+            SettingsRowDivider()
+            SettingsValueRow(desktopText("more.interfaceStyle"), null, state.interfaceStyle.title, enabled,
+                { dialog = DesktopMoreDialog.INTERFACE_STYLE }, testTag = "interface-style")
+            SettingsRowDivider()
+            SettingsValueRow(desktopText("more.language"), desktopText("more.languageDetail"),
+                state.language?.let { tag -> DesktopLanguages.bundled.firstOrNull { it.tag == tag }?.nativeName ?: tag }
+                    ?: desktopText("more.languageSystem"),
+                enabled, { dialog = DesktopMoreDialog.LANGUAGE }, testTag = "language")
         }
         DesktopTrackerSettings(controller, state, enabled)
         DesktopAppUpdateSection(controller, state, enabled, onExitRequest)
-        Divider(Modifier.padding(vertical = 12.dp))
-        Text(desktopText("more.advancedTools"), fontWeight = FontWeight.SemiBold, color = Muted)
-        MoreDestination(desktopText("more.browser"), "ic_web", desktopText("more.browserSummary"), enabled) { controller.browser() }
+        SettingsSectionHeader(desktopText("more.advancedTools"))
+        SettingsGroup {
+            SettingsValueRow(desktopText("more.browser"), desktopText("more.browserSummary"), null, enabled,
+                { controller.browser() }, testTag = "nav:${desktopText("more.browser")}",
+                leadingIcon = painterResource("icons/ic_web.svg"))
+        }
+    }
+    when (dialog) {
+        DesktopMoreDialog.THEME -> DesktopChoiceSettingsDialog(
+            title = desktopText("more.theme"),
+            summary = null,
+            bodyTag = "appearance-dialog",
+            optionTagPrefix = "appearance",
+            options = DesktopAppearance.entries.map { it.title to it.name },
+            selected = state.appearance.name,
+            enabled = enabled,
+            onPick = { name -> controller.appearance(DesktopAppearance.valueOf(name)); dialog = null },
+            onDismiss = { dialog = null },
+        )
+        DesktopMoreDialog.INTERFACE_STYLE -> DesktopChoiceSettingsDialog(
+            title = desktopText("more.interfaceStyle"),
+            summary = null,
+            bodyTag = "interface-style-dialog",
+            optionTagPrefix = "interface-style",
+            options = DesktopInterfaceStyle.entries.map { it.title to it.name },
+            selected = state.interfaceStyle.name,
+            enabled = enabled,
+            onPick = { name -> controller.interfaceStyle(DesktopInterfaceStyle.valueOf(name)); dialog = null },
+            onDismiss = { dialog = null },
+        )
+        DesktopMoreDialog.LANGUAGE -> DesktopChoiceSettingsDialog(
+            title = desktopText("more.language"),
+            summary = desktopText("more.languageDetail"),
+            bodyTag = "language-dialog",
+            optionTagPrefix = "language",
+            options = listOf(desktopText("more.languageSystem") to "system") +
+                DesktopLanguages.bundled.map { it.nativeName to it.tag },
+            selected = state.language ?: "system",
+            enabled = enabled,
+            onPick = { tag -> controller.language(tag.takeUnless { it == "system" }); dialog = null },
+            onDismiss = { dialog = null },
+        )
+        null -> Unit
     }
 }
 
-@Composable
-private fun MoreDestination(title: String, icon: String, description: String, enabled: Boolean, tag: String = "nav:$title",
-    onClick: () -> Unit) {
-    Surface(shape = RoundedCornerShape(16.dp)) {
-        Row(Modifier.fillMaxWidth().testTag(tag).clickable(enabled = enabled, onClick = onClick)
-            .padding(20.dp),
-            horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(painterResource("icons/$icon.svg"), null, tint = Accent, modifier = Modifier.size(24.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(title, fontWeight = FontWeight.SemiBold)
-                Text(description, color = Muted, fontSize = 13.sp)
-            }
-            Text("›", fontSize = 24.sp, color = Muted)
-        }
-    }
-}
+private enum class DesktopMoreDialog { THEME, INTERFACE_STYLE, LANGUAGE }
+
 
 /** Android tablet details keep artwork/metadata separate from the independently scrolling chapter list. */
 @Composable

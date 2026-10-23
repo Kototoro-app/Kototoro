@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -102,6 +103,9 @@ fun SettingsSwitchRow(
 /**
  * Row whose control lives in a dialog or runs an action: the current value sits in front of a chevron on the right.
  * Android's choice, multi-choice, text and action preferences all share this layout.
+ *
+ * [leadingIcon] is the platform's icon slot: Android hands in `canvasPainter(R.drawable.ic_…)`, the Windows host hands
+ * in a bundled vector, and neither needs the shared module to know about resources.
  */
 @Composable
 fun SettingsValueRow(
@@ -112,6 +116,7 @@ fun SettingsValueRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     testTag: String? = null,
+    leadingIcon: Painter? = null,
 ) {
     Row(
         modifier = modifier
@@ -122,6 +127,14 @@ fun SettingsValueRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (leadingIcon != null) {
+            Icon(
+                painter = leadingIcon,
+                contentDescription = null,
+                tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp),
+            )
+        }
         SettingsRowText(title, summary, Modifier.weight(1f))
         if (!value.isNullOrBlank()) {
             Text(
