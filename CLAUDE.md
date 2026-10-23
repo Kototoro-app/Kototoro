@@ -142,7 +142,8 @@ npm run docs:build
 - `core-db/` - 共享 Room 数据库（KMP）：`MangaDatabase`、实体、DAO 在 `commonMain`，85 个旧迁移在 `androidMain`；包名不变，仍是 `org.skepsun.kototoro.core.db` 等
 - `core-domain/` - 共享业务规则（KMP）：身份键、同步合并/导入、更新计数、四类列表快照与派生、书架、排序/浏览分组，
   换源写入计划/章节映射、阅读进度/历史章节恢复与标题匹配。筛选复用 `core-db/ListFilterCriteria`，
-  黑名单通过 `TagBlacklist` 消费平台词库。Android 资源、标签对象、追踪 UI 枚举、语言分支策略与
+  黑名单通过 `TagBlacklist` 消费平台词库；标签目录 `TagTaxonomy`（334 个永久 ID、别名索引与繁简标签钩子）
+  也在此模块，平台只注入简→繁转换器。Android 资源、追踪 UI 枚举、语言分支策略与
   Unicode/Locale 适配留在 `app`；收藏快照使用持久化状态名称，快照和进度的 Compose 不可变约定由
   `app/compose-stability.conf` 保持，进度模式枚举的偏好反射合约由 `app/proguard-rules.pro` 保持。
   授权、事务、仓库、扩展安装与 Hilt 仍在 `app`；Google Drive 与 WebDAV HTTP 协议进入 `core-net`。

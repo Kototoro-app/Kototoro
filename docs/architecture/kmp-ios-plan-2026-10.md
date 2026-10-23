@@ -6964,3 +6964,37 @@ categories / SAVE，其中 MIGRATE 走 `AppRouter.openMigration(ids)` → `Migra
 - 验证：`DesktopMigrationRulesTest` 5 项全绿；`:desktop-app:test --tests "*DesktopAppTest*tablet*"`
   tests=1 failures=0（`tablet.log` 以 `DESKTOP_UI_OK=tablet` 结束，142.4s）；`:desktop-app:compileKotlin`、
   `:desktop-app:compileTestKotlin`、`:desktop-app:verifyDesktopStrings`、`:core-ui:verifyUiStrings` 通过。
+
+## 151. 标签目录下沉 core-domain（2026-10-24）
+
+日期：2026-10-24。承接 §135–§150 的“先提取共享代码、再迁移界面”的顺序：Android 的内容过滤建立在一份 334 条的
+标签目录上（`KototoroTaxonomy`，848 行，含 `CURATED_ALIASES` 与 `FUTON_SOURCE_TAGS`），它此前只在 `app` 里，
+Windows 若要复现“全局标签黑名单”这类功能只能抄一份数据。这一节把目录与索引搬到 `core-domain`，平台只保留
+语言相关的薄壳。
+
+- 新文件 `core-domain/src/commonMain/kotlin/org/skepsun/kototoro/core/model/TagTaxonomy.kt`：
+  `TaxonomyCategory`（12 个类别，`RAW` 仍表示“源标签”伪类别）、`TaxonomyTag`（id/类别/中英标签/繁中标签/
+  别名/adult/sensitive/deprecated）与 `TagTaxonomy`（`tags`、`find`、`knownSourceTags`、`resolve`、`search`、
+  `normalize`）。数据行、别名表、Futon 词表逐字搬移，索引（`tagsById`、`idsByAlias`）仍是 lazy 一次构建：
+  id、短名、英文标签、简中标签、繁中标签与别名全部进同一张 `idsByAlias`，仍然是**精确匹配**（`act` 不会命中
+  `action`），一个别名可以指向多个永久 ID（`reincarnated in another world` → `narrative.reincarnation` +
+  `setting.other-world`）。
+- 唯一的平台输入是简→繁转换：`TagTaxonomy.traditionalLabelConverter` 默认恒等（不做繁简转换的平台直接得到
+  简体标签），Android 的 `KototoroTaxonomy` 对象在 `init` 里装上 `ChineseConverter::s2t`——它仍是 Android 访问
+  目录的唯一入口，所以转换器一定在 `tags` 首次求值之前就位，`resolve("輕度情色")` 与
+  `search(tag, "復仇")` 的行为与搬移前完全一致。
+- 留在 `app` 的只有 `java.util.Locale` 相关部分：`KototoroTaxonomy.kt` 从 848 行缩到 47 行的门面
+  （`tags`/`knownSourceTags`/`find`/`resolve`/`search`/`normalize` 全部转调共享对象）加上两个顶层扩展
+  `TaxonomyCategory.displayName(locale)` 与 `TaxonomyTag.displayName(locale)`，繁中判定仍在
+  `usesTraditionalChinese()`（`script == Hant` 或 country ∈ HK/MO/TW）。
+- 共享对象的本地化入口叫 `localizedLabel(language, traditional)` 而不是 `displayName`：成员函数会遮蔽同名的
+  顶层扩展，若共享类型上留一个 `displayName`，`tag.displayName(locale)` 与 `category.displayName()` 都会被解析
+  到成员并报“缺少 language 参数”；改名后 Android 侧调用点只需各补一行
+  `import org.skepsun.kototoro.core.model.displayName`。
+- 与 Android 的差距：没有。目录内容、别名、繁简标签、精确匹配规则与敏感/adult 标记都是同一份数据。
+  iOS 目标编译通过但还没有界面消费它，Windows 的消费在下一节。
+- 验证：`:app:compileDebugKotlin` 通过；Android `KototoroTaxonomyTest`（8 项，含
+  “标准标签同时有简中与繁中写法”）与 `GlobalTagBlacklistTest`（6 项）在搬移后全绿；
+  新增 `:core-domain:jvmTest` 的 `TagTaxonomyTest` 6 项（334 条唯一 ID、别名精确匹配与多目标、Futon 词表与
+  安全标记、`localizedLabel` 的中英分支、默认恒等转换器下的繁中标签、`search` 的 id/标签/别名覆盖）；
+  `:core-domain:compileCommonMainKotlinMetadata` 与 `:desktop-app:compileKotlin` 通过。
