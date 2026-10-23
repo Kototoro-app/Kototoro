@@ -2824,6 +2824,63 @@ visible = bottomChromeVisibility.visible && !(isTvPresentation && expandedPanelV
 - 选项面板的右侧齿轮（设置）、Display 页的 `Save`/`AI Super Resolution` 段还没逐个走完。
 
 
+## 第四十八轮：章节面板换页后焦点不再丢、书签卡片有环、选项面板齿轮可达（2026-10-24）
+
+这一轮把章节面板的三个页签都按遥控器走了一遍，并顺手清掉了一整类"能聚焦但看不见"的控件。
+
+第一，**换页签之后遥控器短暂失灵**。章节面板的页签内容是抽屉里第二次组合，切页签会重建
+正文，焦点宿主可能晚一帧才释放焦点：那一刻全屏没有任何 `focused=true`，四个方向键全被吞，
+只有 BACK 能救。修法是让面板自己的标签栏持有一个**钉在选中页签上的 `FocusRequester`**
+（`ReaderPanelTabBar(selectedFocusRequester = …)`），切页签后由宿主连续最多 6 帧（间隔 70ms）
+**只在 `hostView.findFocus() == null` 时**把它要回来；健康的切换完全不受影响。
+和手机一样，非 TV 走同一份代码但 `isTvPresentation` 为假时整段不执行。
+
+第二，**书签卡片是"能聚焦、没描边"的死站**。`BookmarksScreen` 的 `BookmarkCard` 和
+`KototoroBookmarkCardThumb/Novel` 只用 `combinedClickable` 建了焦点节点，没有画环；面板的
+书签页正文只有这一个可聚焦项，用户按 DOWN 之后屏幕毫无变化，看起来就是遥控器坏了。
+三处都补上 `Modifier.tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)`。
+
+这里踩到一个容易复发的坑：`tvFocusable` **必须写在 `clickable`/`combinedClickable` 之前**。
+`Modifier.onFocusChanged` 只看排在它**后面**的焦点目标，写反了不会报错、也不会画环——第一版
+就是这么写的，装上机后截图和改之前**逐字节相同**（`sha256 50fcf0c1…`，同一张图重复三次才发现
+不是截图缓存的问题）。改完顺序立刻出现蓝色圆角描边。仓里现有 `tvFocusable` 调用逐处核对过
+顺序，没有第二处写反。
+
+第三，**章节面板的 Pages 页签可以用了**：四张缩略图一格一格走，CENTER 跳到该页并收回面板、
+焦点回到顶栏药丸；UP 从第一行回到标签栏。
+
+第四，**选项面板右侧齿轮（设置）可达**：从右端"Open in browser"磁贴按 DOWN 直接落到齿轮
+`[1600,956][1696,1052]`，环是圆的，再按 RIGHT 被边界守卫吃掉（它是最右一站）；从齿轮按 LEFT
+依次经过 `Translation`/`Display`/`Layout` 三个页签，UP 从页签回到第二行磁贴。
+
+第五，试过但**撤掉**的方案：给 `ChaptersPagesTabsContent` 的分页页套
+`Modifier.focusProperties { canFocus = page == safeCurrentPage }`，想让"停在屏幕外的那一页"
+彻底不可聚焦。结果从 Bookmarks 页签按 DOWN **焦点直接消失**（`focused=0`）——方向上唯一的候选
+不可聚焦时，Compose 的光束搜索不是跳过而是终止。这条和第四十七轮"隐藏层不参与焦点"看起来是
+同一个 API，结论却相反：**整层隐藏**（快捷层被裁掉）用 `canFocus=false` 正确，**同一行里
+相邻的、尺寸相同的兄弟页**用它会把搜索打断。撤销后回到原样。
+
+### 设备验证（emulator-5554）
+
+| 步骤 | 结果 |
+| --- | --- |
+| 章节面板 Bookmarks 页签 CENTER | 页签保持聚焦 `[1023,372][1237,468]`，+0.8s 仍在 |
+| 换页签后 DOWN | 落到书签卡片 `[232,580][511,979]`，蓝色圆角描边可见 |
+| 书签卡片 CENTER | 面板收回，焦点回到顶栏药丸 `[784,12][1136,108]` |
+| Pages 页签 DOWN / LEFT / RIGHT | 卡片 `[822,604][1100,1001]` → `[527,604]` → `[232,604]`，单行 DOWN 不走 |
+| Pages 页签 UP | 回到标签栏 `[684,372][869,468]` |
+| 标题栏 ⋮ → BACK → LEFT×2 → CENTER | ⋮ `[1612,362]` → 搜索 `[1524,362]` → Bookmarks → Pages 页签，四处都能走到 |
+| 选项面板右端磁贴 DOWN | 齿轮 `[1600,956][1696,1052]`，圆形环；RIGHT 被守卫吃掉 |
+| 齿轮 LEFT×3 | Translation → Display → Layout 页签 `[691,956][846,1052]` |
+| Layout 页签 UP | 回到第二行磁贴 `[232,738][414,926]` |
+
+### 遗留
+
+- 章节面板"记住上次页签"再打开时（长按书签按钮走 `toggleChapters(DETAILS_TAB_BOOKMARKS)`），
+  正文页没有初始焦点请求，第一次方向键可能吞掉一次；普通打开（Chapters 页签）不受影响。
+- 面板在 peek 状态下按 BACK 先展开、再按才关闭，和第四十七轮的折叠语义一致，但需要两下，暂不改。
+
+
 
 
 
