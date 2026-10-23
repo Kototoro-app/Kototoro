@@ -95,6 +95,7 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.topbar.EnsureRailItemFullyVisible
 import org.skepsun.kototoro.core.ui.topbar.RailSurface
@@ -126,6 +127,11 @@ import kotlin.math.floor
 
 /** Rails, title and search pill content are shared with the Windows host; this file adds glass and menus. */
 private val glassRailSurface: RailSurface = { modifier -> TopBarControlSurface(modifier = modifier) {} }
+
+/** A phone title needs a hard cap; a TV has room to spare, so the label must not be clipped to a stub. */
+private val TopBarTitleMaxWidth = 120.dp
+private val TopBarTitleCompactMaxWidth = 160.dp
+private val TopBarTitleTvMaxWidth = 360.dp
 
 data class KototoroTopBarMenuAction(
     val titleRes: Int,
@@ -229,6 +235,7 @@ fun KototoroTopBar(
     )
     val showMoreActions = true
     val topBarTitle = titleText ?: titleRes?.let { stringResource(it) }
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     var areCompactTabsExpanded by rememberSaveable { mutableStateOf(false) }
     val isInlineTabs = compactTabsState != null && favoritesTabsPosition == FavoritesTabsPosition.INLINE_RAIL
     val hidePrimaryControlsForTabs = isInlineTabs && areCompactTabsExpanded
@@ -327,13 +334,17 @@ fun KototoroTopBar(
                             modifier = Modifier.widthIn(max = 140.dp),
                         )
                     } else {
-                        TopBarTitleBlock(topBarTitle, subtitle = subtitleText, maxWidth = 160.dp)
+                        TopBarTitleBlock(
+                            topBarTitle,
+                            subtitle = subtitleText,
+                            maxWidth = if (isTvPresentation) TopBarTitleTvMaxWidth else TopBarTitleCompactMaxWidth,
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.weight(1f))
             } else {
                 if (!topBarTitle.isNullOrBlank()) {
-                    val maxWidth = 120.dp
+                    val maxWidth = if (isTvPresentation) TopBarTitleTvMaxWidth else TopBarTitleMaxWidth
                     if (compactTabsState != null && favoritesTabsPosition == FavoritesTabsPosition.TITLE_DROPDOWN) {
                         CompactCategoryTitle(
                             title = topBarTitle,

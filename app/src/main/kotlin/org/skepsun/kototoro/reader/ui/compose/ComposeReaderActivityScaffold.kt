@@ -553,8 +553,11 @@ internal fun ComposeReaderActivityScaffold(
         }
 
         AnimatedVisibility(
-            visible = shouldShowReaderInfoBar(state.infoBar.visible, state.controlsVisible) &&
-                !infoBarEmbedded,
+            visible = shouldShowReaderInfoBar(
+                infoBarEnabled = state.infoBar.visible,
+                controlsVisible = state.controlsVisible,
+                isTvPresentation = isTvPresentation,
+            ) && !infoBarEmbedded,
             enter = fadeIn(
                 animationSpec = KototoroMotion.InfoBarEnter,
             ).whenReaderAnimationsEnabled(!state.eInkModeEnabled),
@@ -1576,7 +1579,11 @@ internal fun BoxScope.ReaderPageInfoBar(
     animationsEnabled: Boolean = true,
 ) {
     AnimatedVisibility(
-        visible = shouldShowReaderInfoBar(state.visible, controlsVisible),
+        visible = shouldShowReaderInfoBar(
+            infoBarEnabled = state.visible,
+            controlsVisible = controlsVisible,
+            isTvPresentation = LocalUiPresentationConfig.current.isTv,
+        ),
         enter = fadeIn(animationSpec = KototoroMotion.InfoBarEnter)
             .whenReaderAnimationsEnabled(animationsEnabled),
         exit = fadeOut(animationSpec = KototoroMotion.fadeFast())
@@ -1649,8 +1656,11 @@ private fun ReaderComposeTopBar(
     )
 }
 
-internal fun shouldShowReaderInfoBar(infoBarEnabled: Boolean, controlsVisible: Boolean): Boolean =
-    infoBarEnabled && !controlsVisible
+internal fun shouldShowReaderInfoBar(
+    infoBarEnabled: Boolean,
+    controlsVisible: Boolean,
+    isTvPresentation: Boolean = false,
+): Boolean = infoBarEnabled && !controlsVisible && !isTvPresentation
 
 internal fun isReaderBatteryCharging(status: Int): Boolean =
     status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
