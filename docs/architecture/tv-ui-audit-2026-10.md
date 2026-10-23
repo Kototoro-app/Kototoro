@@ -754,7 +754,7 @@ IME Done 在模拟器上不可靠之后，本轮补了一个不依赖 IME 的确
 逐个宿主贴 FocusRequester + ImeAction.Done + Enter 接管太啰嗦，本轮在 core-ui 的 TvFocus.kt
 里收成一个原语：
 
-`kotlin
+```kotlin
 val fieldExit = rememberTvFieldExit()            // 多行字段用 rememberTvFieldExit(multiline = true)
 OutlinedTextField(
     modifier = Modifier.fillMaxWidth().then(fieldExit.fieldModifier),
@@ -763,7 +763,7 @@ OutlinedTextField(
     ...
 )
 SettingsDialogActionButton(text = OK, onClick = …, modifier = fieldExit.targetModifier)
-`
+```
 
 内部只做三件事：FocusRequester 点名目标、keyboardController.hide()、Enter 预览接管；手机/平板两个
 Modifier 都是空操作。已接到**统一源管理**的两个文本对话框：
@@ -831,7 +831,7 @@ Material3 的 Slider 自带方向键处理，会消费 LEFT/RIGHT，但在这个
 
 修法是绕开滑块自己的按键处理，在它的修饰符链更外层接管预览事件：
 
-`kotlin
+```kotlin
 modifier = Modifier
     .tvFocusable(shape = RoundedRectangle(10.dp), addFocusTarget = false)
     .then(
@@ -841,7 +841,7 @@ modifier = Modifier
             Modifier
         },
     )
-`
+```
 
 预览阶段先于滑块内部的按键节点执行，事件一定先到我们手里；stepPage 把
 sliderState.value 加减一页、写回 dragValue（让页码气泡按原样式弹出），再调
