@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -18,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTakeInitialFocus
 import org.skepsun.kototoro.video.dlna.DlnaDevice
 
 internal sealed interface DlnaDeviceDialogState {
@@ -43,14 +47,26 @@ internal fun DlnaDeviceDialog(
                     if (state.devices.isEmpty()) {
                         Text(stringResource(R.string.no_dlna_devices_found))
                     } else {
-                        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 420.dp)
+                                .tvTakeInitialFocus(),
+                        ) {
                             items(state.devices, key = DlnaDevice::location) { device ->
                                 Text(
                                     text = device.name,
+                                    style = playerMenuRowTextStyle(compact = false),
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .heightIn(min = playerMenuRowMinHeight(0.dp))
+                                        .tvFocusable(
+                                            shape = RoundedCornerShape(12.dp),
+                                            addFocusTarget = false,
+                                        )
                                         .clickable { onDeviceSelected(device) }
-                                        .padding(vertical = 14.dp),
+                                        .padding(horizontal = 12.dp, vertical = 14.dp),
                                 )
                             }
                         }
@@ -60,7 +76,10 @@ internal fun DlnaDeviceDialog(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismissRequest) {
+            TextButton(
+                onClick = onDismissRequest,
+                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+            ) {
                 Text(stringResource(android.R.string.cancel))
             }
         },

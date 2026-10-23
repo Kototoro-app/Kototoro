@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -23,6 +24,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTakeInitialFocus
 
 @Composable
 internal fun VideoPlayerInfoDialog(
@@ -35,7 +38,11 @@ internal fun VideoPlayerInfoDialog(
         title = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
+                // A remote cannot scroll the read-only body, so the only reachable target is the
+                // close button; request it explicitly so the dialog opens with a visible ring.
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tvTakeInitialFocus(),
             ) {
                 Text(
                     text = stringResource(R.string.video_detail),
@@ -44,7 +51,9 @@ internal fun VideoPlayerInfoDialog(
                 )
                 IconButton(
                     onClick = onDismissRequest,
-                    modifier = Modifier.size(40.dp),
+                    modifier = Modifier
+                        .size(40.dp)
+                        .tvFocusable(shape = CircleShape, addFocusTarget = false),
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
@@ -62,7 +71,10 @@ internal fun VideoPlayerInfoDialog(
                     color = Color.White.copy(alpha = 0.82f),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 480.dp)
+                        // A 480dp body overflows a 1080p television: the card ran off the bottom edge
+                        // and the last statistics were clipped behind the screen border. The dialog
+                        // keeps an empty button row, so the body has to stay well under half the screen.
+                        .heightIn(max = if (isTvPlayerMenu()) 300.dp else 480.dp)
                         .verticalScroll(rememberScrollState()),
                 )
             }

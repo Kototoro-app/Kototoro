@@ -2074,3 +2074,72 @@ adb 单次往返 1–2 秒，`uiautomator dump` 更慢，而 chrome 的自动隐
   代价是"锁屏后想快进/调音量"只能先解锁。若要放宽，应先确认媒体键（`MEDIA_*`）是否也该放行。
 - 手机侧未回归：手机分支的代码路径未改动，仅新增了一个 TV 专属 composable。
 
+## 第三十四轮：三个从没走查过的播放器面板（2026-10-23）
+
+前两轮的遗留里一直挂着"DLNA 对话框、超分对话框仍未在电视上走过"。这一轮把 Options 网格里剩下的三个
+弹层一次走完：`Cast to device`（DLNA）、`Video enhancement`（超分）、`Video Details`。三者都是把手机形态
+直接搬到电视上，坏法各不相同，但根子只有三条。
+
+### 现象
+
+| 面板 | 旧构建截图 | 看到什么 |
+| --- | --- | --- |
+| DLNA（空列表） | `qb` | `Cancel` 是 `focused="true"`，屏幕上却没有任何环——焦点在，用户看不见 |
+| Video enhancement | `qh` | 两行开关只有一层灰色 state layer，没有环；`Switch` 自己也是一个焦点停靠点，一行两停 |
+| Video Details | `qq` | 对话框里**没有任何焦点**（dump 找不到 `focused="true"`）；卡片比屏幕还高，`FPS` 与缓存统计被切在屏幕外 |
+
+### 三层根因
+
+1. `onFocusChanged` 只看它**后面**的焦点目标。第一版把自造的 `playerTvFocusRing`（内部 `onFocusChanged` +
+   `border`）放在 `.clickable` 之后，`isFocused` 永远是 false，环一次都没画出来；屏幕上的灰色块其实是
+   Material3 ripple 的 focus state layer，很容易被误认成"已经有环了"。
+2. 一行里嵌了第二个可点击控件：`Switch(onCheckedChange = …)` 与 `RadioButton(onClick = …)` 各自是一个焦点
+   停靠点，遥控器要在同一行按两次才轮到下一行。
+3. 弹层没人请求初始焦点。DLNA 靠 `AlertDialog` 的默认行为把焦点给了 `Cancel`（但没有环），Video Details
+   干脆一个焦点都没有；超分面板的滚动 `Column`、DLNA 的设备列表都没有 `tvTakeInitialFocus()`。
+
+### 改法
+
+- 三处行统一成面板里已经在用的写法：`.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)`
+  放在 `.clickable` **之前**，环交给 `tvFocusable` 自己的 `drawOutline`（与 `VideoActionItem` 一致，不再自造
+  `border` 版本）。
+- TV 上把内嵌控件的点击回调置空：`Switch(onCheckedChange = if (isTv) null else …)`、
+  `RadioButton(onClick = if (isTv) null else …)`，整行成为唯一停靠点；行高走 `playerMenuRowMinHeight(0.dp)`
+  （TV ≥60dp），文字走 `playerMenuRowTextStyle(compact = false)`。
+- 初始焦点：超分面板的滚动 `Column`、DLNA 的设备 `LazyColumn` 各挂 `tvTakeInitialFocus()`；Video Details 的
+  标题行挂 `tvTakeInitialFocus()`，让唯一的可操作目标（关闭 X）带环开场——正文只读，遥控器无法滚动，把焦点
+  给正文等于给一个死停靠点。
+- FSR 锐度滑杆在 TV 上接 `tvSliderDpad(value, valueRange, onValueChange, steps)`：Material3 `Slider` 默认只认
+  拖拽，方向键落在它上面是另一个单向死胡同。
+- Video Details 的正文高度在 TV 上从 480dp 收到 300dp：`AlertDialog` 即使 `confirmButton = {}` 也留着按钮行
+  的高度，480dp 正文会让卡片越过 1080p 的下边缘。
+
+### 设备验证（emulator-5558，1920×1080）
+
+| 步骤 | 截图 | 结果 |
+| --- | --- | --- |
+| DLNA 扫描中 | `qo` | `Cancel` 带完整蓝环（旧构建 `qb` 无环），spinner 照常转 |
+| DLNA 空列表 | `qp` | `No DLNA devices found` + `Cancel` 仍带环，对话框收成内容高度 |
+| 超分面板打开 | `qi` | 初始焦点落在第一行 `Enable for this video`，环完整（旧构建 `qh` 只有 state layer） |
+| 超分 DOWN + OK | `qm1` | 焦点直接落到 `Remember across videos`（一行一停），OK 把它切到 ON（白轨黑芯） |
+| Video Details | `qt` | 关闭 X 带环并作为初始焦点；卡片完整收在屏幕内（旧构建 `qq` 越界） |
+| 各面板 BACK | — | 关闭后焦点回到锚点（`Options` 按钮或上一行），chrome 立刻可用 |
+
+### 顺带确认
+
+- 超分开关的点击是通的：logcat 里是 `Video enhancement toggled enabled=true`，紧跟
+  `Enhancement route bypassed shouldEnable=true allowShader=false`。也就是说 UI 修好了，但这台模拟器
+  （`tier=LOW`、`allowShaderPipeline=false`）会立刻回落直出并把开关还原成 OFF，所以展开后的算法/预设/滑杆
+  分支在这里看不到——这不是焦点问题。
+
+### 遗留
+
+- 超分面板的展开态（算法选择、Anime4K 预设、FSR 滑杆）只在代码层复核：模拟器的 shader 路由被播放策略挡掉，
+  要真验证得在支持 GLES 增强的真机上跑。
+- Video Details 的尾部（FPS、缓存统计）在电视上够不到：正文是只读 `verticalScroll`，遥控器没有滚动语义。
+  真正解决要么给正文加方向键滚动，要么把详情改成播放器菜单风格的弹层。
+- DLNA 的"有设备"分支仍只做了代码复核：模拟器网络上没有 DLNA 设备。
+- 子面板压在父面板上：`Video enhancement` 打开时 `Options` 面板仍在下面显示（`Reload`、`Settings` 露在四周），
+  视觉上像一张拼起来的卡片。收起父面板要动菜单状态机，留到后面。
+- 手机侧未回归；新增样式都走 `isTvPlayerMenu()` / `LocalUiPresentationConfig.isTv`，手机分支未改。
+

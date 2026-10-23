@@ -33,6 +33,9 @@ import kotlin.math.roundToInt
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.Anime4KPreset
 import org.skepsun.kototoro.core.prefs.VideoEnhancementAlgorithm
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
+import org.skepsun.kototoro.core.ui.adaptive.tvTakeInitialFocus
 
 internal data class VideoSuperResolutionDialogState(
     val enabled: Boolean,
@@ -80,7 +83,8 @@ internal fun VideoSuperResolutionDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = maxHeight)
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState())
+                    .tvTakeInitialFocus(),
             ) {
                 Text(
                     text = stringResource(R.string.ai_video_enhancement_settings),
@@ -160,7 +164,15 @@ private fun FsrSharpnessSection(sharpnessPercent: Int, onSharpnessChanged: (Int)
         onValueChange = { value -> onSharpnessChanged((value / 10f).roundToInt() * 10) },
         valueRange = 0f..100f,
         steps = 9,
-        modifier = Modifier.padding(horizontal = 16.dp),
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            // Material3 sliders ignore the D-pad by default; this maps LEFT/RIGHT to one step.
+            .tvSliderDpad(
+                value = sharpnessPercent.toFloat(),
+                onValueChange = { value -> onSharpnessChanged((value / 10f).roundToInt() * 10) },
+                valueRange = 0f..100f,
+                steps = 9,
+            ),
     )
 }
 
@@ -184,17 +196,28 @@ private fun SectionDivider() {
 
 @Composable
 private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    val isTv = isTvPlayerMenu()
+    val rowShape = RoundedCornerShape(12.dp)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+            .heightIn(min = playerMenuRowMinHeight(0.dp))
+            .tvFocusable(shape = rowShape, addFocusTarget = false)
             .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 8.dp, vertical = 8.dp),
     ) {
-        Text(label, modifier = Modifier.weight(1f))
+        Text(
+            text = label,
+            style = playerMenuRowTextStyle(compact = false),
+            modifier = Modifier.weight(1f),
+        )
+        // A switch with its own click handler is a second focus stop on the same row on TV; the row
+        // already owns the toggle, so the switch only reports state there.
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = if (isTv) null else onCheckedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.Black,
                 checkedTrackColor = Color.White,
@@ -208,21 +231,31 @@ private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean
 
 @Composable
 private fun SelectionRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    val isTv = isTvPlayerMenu()
+    val rowShape = RoundedCornerShape(12.dp)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+            .heightIn(min = playerMenuRowMinHeight(0.dp))
+            .tvFocusable(shape = rowShape, addFocusTarget = false)
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
         RadioButton(
             selected = selected,
-            onClick = onClick,
+            // The row owns the click; a clickable radio button would add a second focus stop to it.
+            onClick = if (isTv) null else onClick,
             colors = RadioButtonDefaults.colors(
                 selectedColor = Color.White,
                 unselectedColor = Color.White.copy(alpha = 0.66f),
             ),
         )
-        Text(label, modifier = Modifier.padding(start = 8.dp))
+        Text(
+            text = label,
+            style = playerMenuRowTextStyle(compact = false),
+            modifier = Modifier.padding(start = 8.dp),
+        )
     }
 }
