@@ -395,6 +395,25 @@ internal object DesktopTabletProbe {
                 check(controller.state.value.library.entries.any { it.content.id == content.id })
                 onNodeWithTag("library-selection-cancel").performClick(); idle()
                 check(controller.state.value.library.entries.any { it.content.id == content.id })
+                // Android's batch "mark as completed": the reading position moves to the last chapter, so the stored
+                // percent becomes the end of the work. Cancelling the prompt leaves the partial progress alone.
+                val partial = runBlocking { session.library.progress(content.id) }
+                check(partial != null && partial.percent < 1f) { "the reader left partial progress" }
+                onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
+                onNodeWithTag("library-selection-complete").performClick(); idle()
+                onNodeWithTag("library-complete-dialog").assertExists()
+                snapshotTag("library-complete-dialog", "library-selection-complete")
+                onNodeWithTag("library-complete-dismiss").performClick(); idle()
+                check(runBlocking { session.library.progress(content.id) }?.percent == partial.percent)
+                onNodeWithTag("library-selection-complete").performClick(); idle()
+                onNodeWithTag("library-complete-confirm").performClick(); idle()
+                val completed = runBlocking { session.library.progress(content.id) }
+                val stored = runBlocking { session.library.find(content.id) }
+                checkNotNull(completed)
+                check(completed.percent == 1f) { "progress lands on the work's end, was ${completed.percent}" }
+                check(completed.chapterId == stored!!.chapters!!.last().id) { "the last chapter is the new position" }
+                check(controller.state.value.message == desktopText("library.completed", 1))
+                check(controller.state.value.library.entries.first { it.content.id == content.id }.progressPercent == 1f)
                 runBlocking {
                     repeat(36) { index ->
                         session.library.addFavourite(content.copy(id = content.id + 1000 + index,

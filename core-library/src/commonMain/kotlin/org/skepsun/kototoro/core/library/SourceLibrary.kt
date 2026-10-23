@@ -248,9 +248,11 @@ class SourceLibrary(
 
     suspend fun find(id: Long): SourceContent? = database.getMangaDao().find(id)?.let { content(it.manga, it.tags) }
 
-    suspend fun findMany(ids: Collection<Long>): List<SourceContent> = ids.distinct().chunked(200).flatMap { chunk ->
-        database.getMangaDao().findWithTagsByIds(chunk).map { content(it.manga, it.tags, withChapters = false) }
-    }
+    suspend fun findMany(ids: Collection<Long>, withChapters: Boolean = false): List<SourceContent> =
+        ids.distinct().chunked(200).flatMap { chunk ->
+            database.getMangaDao().findWithTagsByIds(chunk)
+                .map { content(it.manga, it.tags, withChapters = withChapters) }
+        }
 
     suspend fun isFavourite(id: Long): Boolean {
         val categories = database.getFavouritesDao().findCategories(id)

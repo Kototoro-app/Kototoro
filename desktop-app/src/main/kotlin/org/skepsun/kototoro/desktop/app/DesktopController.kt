@@ -591,6 +591,25 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { it.copy(message = desktopText("library.historyRemoved", ids.size)) }
     }
 
+    /**
+     * Android's batch "mark as completed": the reading position of every selected work is moved onto its last chapter,
+     * so the stored progress becomes the end of the work and any earlier position is replaced. Works that hold no
+     * chapters are skipped, because there is nothing to point at.
+     */
+    fun markLibraryCompleted(ids: Collection<Long>) = action {
+        val contents = session.library.findMany(ids, withChapters = true)
+        var marked = 0
+        for (content in contents) {
+            val last = content.chapters.orEmpty().lastOrNull() ?: continue
+            // One page of the last chapter lands the shared percent exactly at the end, as the details batch mark does.
+            session.library.recordPage(content, last, page = 0, pageCount = 1)
+            marked++
+        }
+        require(marked > 0) { desktopText("library.completeNone") }
+        reloadLibrarySnapshot()
+        mutableState.update { it.copy(message = desktopText("library.completed", marked)) }
+    }
+
     fun moveCategory(id: Long, up: Boolean) = action {
         val ids = session.library.categories().map { it.id }
         val from = ids.indexOf(id)

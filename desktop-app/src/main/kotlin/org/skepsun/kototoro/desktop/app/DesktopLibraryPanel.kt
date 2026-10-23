@@ -40,6 +40,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
     var selectedIds by remember(history) { mutableStateOf(emptySet<Long>()) }
     var pickingCategories by remember(history) { mutableStateOf(false) }
     var confirmingRemove by remember(history) { mutableStateOf(false) }
+    var confirmingComplete by remember(history) { mutableStateOf(false) }
     val ecosystems = remember(state.sources) { state.sources.associate { it.source.name to it.ecosystem } }
     // Android's "downloaded" filter reads which works hold stored chapters; the queue owns that state.
     val downloadStates by controller.downloads.state.collectAsState()
@@ -79,6 +80,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                 count = checkedIds.size, history = history, enabled = enabled,
                 onSelectAll = { selectedIds = LinkedHashSet(shownIds) },
                 onAssignCategories = if (history) null else ({ pickingCategories = true }),
+                onMarkCompleted = { confirmingComplete = true },
                 onRemove = { confirmingRemove = true },
                 onCancel = { selectedIds = emptySet() },
             ) else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -275,6 +277,15 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                 selectedIds = emptySet()
             },
             onDismiss = { confirmingRemove = false },
+        )
+        if (confirmingComplete) DesktopMarkCompletedDialog(
+            count = checkedIds.size, enabled = enabled,
+            onConfirm = {
+                confirmingComplete = false
+                controller.markLibraryCompleted(checkedIds)
+                selectedIds = emptySet()
+            },
+            onDismiss = { confirmingComplete = false },
         )
         if (pickingTags) DesktopTagPickerDialog(tagChoices, selection.tags,
             onToggle = { tag -> update(selection.copy(tags = if (tag in selection.tags) selection.tags - tag

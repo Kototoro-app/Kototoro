@@ -6762,3 +6762,22 @@ Windows 侧的 `source-tvbox`（`MacCmsSourceRuntime` + `MacCmsParser`）早就�
 - 探针（`json-sources` 模式）：本地 `HttpServer` 提供 CMS 列表与一张 PNG 封面；断言空态 → 通过对话框导入
   （`state.error == null`、偏好里存有该 id、来源列表出现 `TVBOX` 条目）→ 浏览两次进入来源栏点该源 →
   列表非空且请求数 > 0 → 卡片封面（`cover:<id>`，在未合并树中）出现 → 返回扩展页移除后来源与列表同时消失。
+
+## 144. Windows 书架批量“标为已完成”（2026-10-24）
+
+日期：2026-10-24。Android 的收藏页与历史页在选择模式下提供 `MARK_AS_COMPLETED`：确认后把所选作品
+标记为读完。桌面侧此前只有详情页的按章“标为已读”与批量章节标记，书架层面没有对应动作，读完一部作品
+要逐章点或进详情。本轮补这条选择动作。
+
+- 语义对齐 Android 的 `MarkAsReadUseCase`：每个作品取章节列表的最后一章，写入历史时用一章一页的
+  合成页数（`page = 0, pageCount = 1`），共享的 `recordPage` 会把它换算成作品末尾的 `percent = 1f`，
+  因而原来的阅读位置被覆盖——这也是 Android 弹窗警告“当前进度会丢失”的原因，桌面弹窗照抄该提示。
+- `SourceLibrary.findMany` 增加 `withChapters` 参数（默认 `false`，保持既有调用方的窄投影）；
+  批量标记传 `true`，一次拿到每部作品的章节，不再逐个 `find` 发查询。
+- 选择栏新增“标为已完成”按钮（`library-selection-complete`），点开确认对话框
+  （`library-complete-dialog` / `library-complete-confirm`）；取消不改任何记录，确认后清空选择、
+  重载书架快照并提示“已将 N 部作品标为已完成”。没有章节的作品跳过；全都不可标记时报错文案。
+- 历史页同样使用这条动作（与 Android 历史页的 supportedActions 一致）。
+- 探针（`tablet` 模式，在既有的批量选择段落里）：先确认读者留下了未完成进度 → 长按进入选择 →
+  取消对话框后进度不变 → 再次确认后 `percent == 1f`、`chapterId` 等于库里最后一章、
+  书架条目的 `progressPercent` 同步为 1，并截图 `tablet-library-selection-complete.png`。

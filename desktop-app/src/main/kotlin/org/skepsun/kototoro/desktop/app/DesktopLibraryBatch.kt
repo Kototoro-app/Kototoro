@@ -41,6 +41,7 @@ internal fun DesktopLibrarySelectionBar(
     enabled: Boolean,
     onSelectAll: () -> Unit,
     onAssignCategories: (() -> Unit)?,
+    onMarkCompleted: () -> Unit,
     onRemove: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -59,6 +60,10 @@ internal fun DesktopLibrarySelectionBar(
                 modifier = Modifier.testTag("library-selection-categories")) {
                 Text(desktopText("library.selectionCategories"))
             }
+        }
+        TextButton({ onMarkCompleted() }, enabled = enabled,
+            modifier = Modifier.testTag("library-selection-complete")) {
+            Text(desktopText("library.selectionComplete"))
         }
         TextButton({ onRemove() }, enabled = enabled, modifier = Modifier.testTag("library-selection-remove")) {
             Text(if (history) desktopText("library.selectionRemoveHistory") else desktopText("library.selectionRemove"))
@@ -142,6 +147,35 @@ internal fun DesktopRemoveSelectionDialog(count: Int, history: Boolean, enabled:
         },
         dismissButton = {
             TextButton({ onDismiss() }, modifier = Modifier.testTag("library-selection-dismiss")) {
+                Text(desktopText("common.cancel"))
+            }
+        },
+    )
+}
+
+/**
+ * Android's "mark as completed" prompt. The action replaces the stored reading position with the last chapter, which is
+ * why Android warns that the current progress is lost; the desktop dialog says the same before it commits.
+ */
+@Composable
+internal fun DesktopMarkCompletedDialog(count: Int, enabled: Boolean,
+    onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(desktopText("library.selectionComplete")) },
+        text = {
+            Column(Modifier.testTag("library-complete-dialog"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(desktopText("library.selectionCount", count))
+                Text(desktopText("library.completePrompt"))
+            }
+        },
+        confirmButton = {
+            Button({ onConfirm() }, enabled = enabled, modifier = Modifier.testTag("library-complete-confirm")) {
+                Text(desktopText("library.selectionComplete"))
+            }
+        },
+        dismissButton = {
+            TextButton({ onDismiss() }, modifier = Modifier.testTag("library-complete-dismiss")) {
                 Text(desktopText("common.cancel"))
             }
         },
