@@ -1314,3 +1314,41 @@ TV + 顶栏隐藏 + 没有二级浮层 + **DPAD_UP** 时为真。活动在 `tvKe
 ### 构建与测试
 
 - `:app:assembleDebug --offline --no-daemon` 通过（c51、c52.log）。
+
+## 第十六轮：把"翻译与工具"整页走通，并重新量了一遍上下对称性（2026-10-23）
+
+上一轮只验证了顶栏与选项面板的进出门，这一轮把面板里唯一没走过的那一页——翻译与工具——用遥控按到底。
+
+### 到达路径（记录成可复用的按键序列）
+
+阅读态 → UP 叫出顶栏 → RIGHT ×2 到 ⋮ → CENTER 打开面板（焦点落在亮度滑块）→ DOWN ×4 到页签栏
+→ RIGHT ×2 到"翻译与工具" → CENTER 选中并展开 → DOWN 进入本页第一行。
+
+### 本页的焦点结论
+
+| 行 | 结果 |
+| --- | --- |
+| Translate text（开关行） | 整行有焦点环，开关本身不抢焦点 |
+| Translation Display Mode（二选一） | Translation Only / Bilingual 都可聚焦，选中项有实心填充 |
+| Start translation（FilledTonalButton） | 有焦点环，与普通行一致 |
+| Clear Translation Cache（FilledTonalButton） | 与上一行同组件同处理 |
+| Effective replacement rules（带箭头的动作行） | 行尾箭头 + 焦点环 |
+
+之前担心的"Material3 按钮自己不带焦点环"在这页不成立：`tvFocusable(addFocusTarget = false)` 包在外面
+就够了，环画在按钮的圆角矩形上，与周围行的视觉语言一致。
+
+### 上下对称性的重新测量
+
+第十三轮记的是"从快捷按钮行按 UP 会跳到全宽亮度滑条"。这次逐步量了一遍：
+
+- 向下：亮度滑条 → 字号行（− / 19.0sp / +）→ 主题色板 → 快捷按钮行 → 页签栏
+- 向上：快捷按钮行 → 主题色板 → **亮度滑条**（跳过字号行）→ 无
+
+也就是说**字号行在向上时被跳过**：它在右半边，而亮度滑条是全宽节点，光束搜索从色板往上看时滑条覆盖了
+整个 x 范围，命中更近的滑条而不是右对齐的字号行。字号行仍然可达（滑条 DOWN 一次即可），
+所以这里不再改结构——真要修得给两侧写死 `focusProperties` 链表，收益（省一次按键）不值得在
+Material3 组件内部加一条隐式跳转规则。
+
+### 构建与测试
+
+- `:app:assembleDebug --offline --no-daemon` 通过；本节结论全部来自模拟器截图（mc/md/me 系列）。
