@@ -4877,3 +4877,96 @@ Incognito mode）在电视上有两个问题：**面板右边缘贴着屏幕边*
    不知道"已经下过"，再按会重新排一次下载。要做得彻底得把"是否已下载"也传进 `ComposeReaderOptionsState`。
 3. 手机/平板没有 AVD，本轮只有编译级保证（`isTv = false` 时 `canRotate` 仍为 true）；本地内容少一格这件事
    在手机上要等一次真机或手机模拟器复核。
+
+## 第八十一轮：阅读统计页整块仪表盘在遥控器上够不到（2026-10-25）
+
+### 症状
+
+离开阅读器、沿 `设置 → 服务 → 阅读统计` 进到统计页（`nb9-stats.png`），画面本身是完整的：`Week · All`、
+`2 h 47 min`、3 活跃天 / 116 会话 / 4 作品、7 天活动格、底部 `Reading times` 被屏幕下沿切掉一半。但遥控器
+只能在这几处停下来：
+
+| 按键 | 落点 | 结果 |
+| --- | --- | --- |
+| DOWN（首次） | 返回键 `[24,8][120,104]` | 有环，正常 |
+| DOWN（再一次） | 仍停在返回键 | 死站：下面什么都够不到 |
+| RIGHT | 清除按钮 `[1800,8][1896,104]` | 有环 |
+| DOWN（从清除按钮） | `Video` 芯片 `[655,140][783,236]` | 焦点确实到了芯片，但**屏幕上只有一层几乎看不出的容器 tint**，没有环 |
+| DOWN（从芯片） | 不动 | 死站：整个 `LazyColumn` 一个可聚焦的东西都没有 |
+
+也就是说：周期切换按钮和一排类型芯片虽然能被选中，却**没有可见焦点**；仪表盘本体（汇总卡、活动热力图、
+时段分布、类型占比、作品榜）**完全不可达**——`Reading times` 那段图表和下面的作品榜只能靠触屏拖出来。
+这和第三十六轮视频详情页"只读文本块是死站"是同一类缺陷，只是这次整页都是只读内容，等于整页都够不到。
+
+此外还查出两处同一页的焦点/返回缺陷：
+
+1. `Clear statistics` 确认框（`nf4-dialog.png`）里的两个裸 `TextButton` 没有环，电视上只靠按钮位置分辨。
+2. 确认框打开时按返回（遥控器的"退出"键），**整个统计页被 pop 掉**（`mCurrentFocus` 从 `StatsActivity`
+   变成 `SettingsActivity`，`nh2-after-back.png`）——平台的返回事件绕过对话框直接落到 Activity 的任务栈，
+   只想取消这个问题的用户把整页丢了。
+
+### 改动
+
+只动 `app/.../stats/ui/StatsScreen.kt` 一个文件：
+
+- **筛选行补环**：周期按钮 `FilledTonalButton`（:213）和四个类型芯片的 `Box`（:281）各加
+  `tvFocusable(shape = RoundedCornerShape(percent = 50), addFocusTarget = false)`。芯片的环色要区分选中态
+  （:284）：选中的芯片底色就是 `primary`，用默认环色等于画在同一个颜色上——实测`All` 芯片聚焦时环完全看不见
+  （`nf1` 那一版），改成 `onPrimary` 后才出现白环（`nf3-all-chip.png`）。
+- **仪表盘变成可聚焦的滚动体**（`tvScrollableDashboard`，:931）：`LazyColumn` 自己拿焦点、带 24dp 圆角环，
+  UP/DOWN 在预览阶段按 0.8 个视口滚动（`animateScrollBy`，视口未布局时退回 480px）。到顶时把 UP 交还出去
+  （焦点爬回筛选行），到底时把 DOWN **交给作品榜第一张可见卡片**（:317 `focusTopWork()`，靠
+  `LazyListState.layoutInfo.visibleItemsInfo` 找第一张注册过 `FocusRequester` 的卡）。一旦焦点落到卡片上，
+  拦截立刻停手（`isBodyFocused` 为 false），卡片自己按普通纵向列表走。
+- **作品榜卡片补环**（:747）：可点击的 `Surface` 加 `tvFocusable(shape = RoundedCornerShape(20.dp), …)`，
+  并挂上 `FocusRequester`（:371 起，`DisposableEffect` 注册进 `cardRequesters`），这样最后一屏既有可见焦点，
+  也能被上面的交接触发。
+- **确认框**：两个 `TextButton` 加环（:167、:176）；`showClearDialog` 为真时补一个
+  `BackHandler { showClearDialog = false }`（:154），返回键只关掉问题本身。
+
+`tvFocusable` 在非电视上是 no-op，所以手机/平板除了第 4 条（返回键先关对话框）以外行为不变；第 4 条对手机
+也是正确语义（对话框本来就该被返回键取消），只是过去被平台默认行为盖掉了。
+
+### 设备验证（`kototoro_tv_api36`，1920×1080@320）
+
+| 步骤 | 证据 | 结果 |
+| --- | --- | --- |
+| 统计页首屏 | `nd0-stats-new.png` | 数据完整，无焦点环 |
+| DOWN ×2 | `nd2-down2.png` | 环落在 `Week ▾` 药丸上（此前是死站） |
+| DOWN ×3 | `nd3-down3.png` | 环变成包住整个仪表盘的圆角框 |
+| DOWN ×4 | `nd6-scroll1.png` | 内容上移：出现 `Reading times` 时段图和 `Time by content type` |
+| DOWN ×7 | `nd8-scroll3.png` | 到顶：作品榜 1–4 名（`TV Audit Manga 11` / `Strip` / `Novel` / `Video`）全部可见 |
+| 再 DOWN | `ne2-handoff.png` | 焦点交给第 2 名卡片，卡片有蓝色圆角环 |
+| DOWN/UP 走榜 | dumps：`[32,596][1888,800]` → `[32,828][1888,1032]` → 回 `[32,500][1888,704]` | 逐张卡片移动，末张 DOWN 停在原地但不丢焦点 |
+| UP ×2（从卡片） | dumps：`[655,140][783,236]` → `[24,8][120,104]` | 焦点爬回芯片行、再到返回键 |
+| RIGHT（从周期按钮） | `ne5-chip-all.png` / `ne6-chip-manga.png` | 未选中芯片（`Manga`）有蓝环 |
+| LEFT ×3 回到 `All` | `nf3-all-chip.png` | 选中芯片用 `onPrimary` 白环 |
+| CENTER（清除按钮） | `nf4-dialog.png`、`nf6-dialog-clear.png` | 确认框默认停在 `Cancel` 并有环，RIGHT 到 `Clear` 也有环 |
+| 确认框里按返回 | `ni2-dialog-dismissed.png` + `mCurrentFocus=StatsActivity` | 只关对话框，整页保留、焦点回到清除按钮 |
+| CENTER（作品卡片） | `nj1-content-stats.png` | 打开单作品统计弹窗（`TV Audit Strip`、90 天柱状图、40 min / 34 会话 / 4 页） |
+| 弹窗里按返回 | `nj2-after-back.png` | 弹窗关闭，环回到原卡片 |
+
+焦点拓扑（实测，全部连通，无死站）：
+
+```
+返回键 ──DOWN──> Week ▾ ──DOWN──> 仪表盘（可滚动） ──DOWN 到底──> 作品榜第 N 张卡
+   ^                                    |                              |
+   |                                    └──UP 到顶──> 芯片行 <-──UP──┘
+   └────────────────── UP ──────────────┘        （芯片行内 LEFT/RIGHT 横移，末个 RIGHT 到清除按钮）
+```
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL。本轮没有新增单测——改动全是焦点/返回接线，验证手段是设备截图
+（统计页的数据由既有夹具提供，逻辑未变）。
+
+### 遗留
+
+1. **单作品统计弹窗自己的焦点没走**：`nj1-content-stats.png` 里右上角那个"打开详情"图标按钮
+   （`[1450,236][1530,316]`）本轮没验证有没有环、能不能聚焦；弹窗是只读的，返回键能关（`nj2`），
+   所以没卡住用户，但"CENTER 能不能进详情"未知。
+2. **从卡片 UP 出去要按两次才到芯片行**：第一次 UP 似乎被"把上一张卡滚进来"吃掉（`up3` 与 `up2` 落点相同），
+   第二、三次才爬到 `Video` 芯片和返回键。没有定位是 `LazyColumn` 的 bring-into-view 还是 beam 搜索，
+   用户能出去，先记录。
+3. **周期下拉菜单没单独截图**：菜单项走的是第七十八轮的 `TvDropdownMenuItem`（已有环），本轮只验证了
+   周期按钮本身能聚焦、能按 CENTER，没有走进去逐项看。
+4. **本轮只改了统计页**：`app` 里还有多处裸 `AlertDialog` + `TextButton`（例如阅读器里的裁剪/笔记对话框），
+   同一个"确认框按钮没有环 + 返回键穿透"的问题很可能也在，需要下一轮批量排查。

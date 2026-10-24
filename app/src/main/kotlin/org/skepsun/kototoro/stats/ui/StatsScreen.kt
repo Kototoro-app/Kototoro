@@ -1,7 +1,9 @@
 package org.skepsun.kototoro.stats.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +19,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,19 +44,32 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.util.KototoroColors
 import org.skepsun.kototoro.core.util.ext.mangaExtra
@@ -130,18 +147,37 @@ fun StatsScreen(
     }
 
     if (showClearDialog) {
+        // Back is the only escape key a remote has, and the platform default reached the activity
+        // instead of the dialog: pressing it dropped the confirm dialog *and* the whole screen, so a
+        // user who only wanted out of the question lost their place. Closing the question first also
+        // matches what the same key does on a phone.
+        BackHandler { showClearDialog = false }
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
             title = { Text(stringResource(R.string.clear_stats)) },
             text = { Text(stringResource(R.string.clear_stats_confirm)) },
             confirmButton = {
-                TextButton(onClick = {
-                    showClearDialog = false
-                    onClearStats()
-                }) { Text(stringResource(R.string.clear)) }
+                TextButton(
+                    onClick = {
+                        showClearDialog = false
+                        onClearStats()
+                    },
+                    // A bare TextButton in an AlertDialog has no outline, so on a television the two
+                    // answers were indistinguishable apart from the dialog's own layout.
+                    modifier = Modifier.tvFocusable(
+                        shape = RoundedCornerShape(20.dp),
+                        addFocusTarget = false,
+                    ),
+                ) { Text(stringResource(R.string.clear)) }
             },
             dismissButton = {
-                TextButton(onClick = { showClearDialog = false }) {
+                TextButton(
+                    onClick = { showClearDialog = false },
+                    modifier = Modifier.tvFocusable(
+                        shape = RoundedCornerShape(20.dp),
+                        addFocusTarget = false,
+                    ),
+                ) {
                     Text(stringResource(android.R.string.cancel))
                 }
             },
@@ -169,7 +205,12 @@ private fun StatsFilters(
         Box {
             FilledTonalButton(
                 onClick = { onPeriodMenuExpandedChange(true) },
-                modifier = Modifier.height(48.dp),
+                modifier = Modifier
+                    .height(48.dp)
+                    // The tonal container already reads as a pill, so the Material state layer of a
+                    // focused button is invisible from a sofa; the ring is what tells the remote user
+                    // they are standing on the period picker.
+                    .tvFocusable(shape = RoundedCornerShape(percent = 50), addFocusTarget = false),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
                     start = 14.dp,
                     end = 10.dp,
@@ -233,6 +274,15 @@ private fun ContentKindSelector(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
+                        // A bare clickable pill shows only the faint state layer Material draws for a
+                        // focused container; the ring is the only thing a remote user can see. The
+                        // selected pill is filled with the same primary colour the ring uses, so it
+                        // needs the on-container colour instead - otherwise its ring is invisible.
+                        .tvFocusable(
+                            shape = RoundedCornerShape(percent = 50),
+                            addFocusTarget = false,
+                            ringColor = if (selected) MaterialTheme.colorScheme.onPrimary else Color.Unspecified,
+                        )
                         .height(40.dp)
                         .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
                         .clickable { onKindSelected(kind) }
@@ -261,8 +311,20 @@ private fun StatsDashboardContent(
     selectedKind: StatsContentKind,
     onContentClick: (Content) -> Unit,
 ) {
+    val listState = rememberLazyListState()
+    val cardRequesters = remember { mutableStateMapOf<Any, FocusRequester>() }
+    var bodyFocused by remember { mutableStateOf(false) }
+    val focusTopWork: () -> Boolean = {
+        val visibleCard = listState.layoutInfo.visibleItemsInfo.firstOrNull { cardRequesters.containsKey(it.key) }
+        val requester = visibleCard?.let { cardRequesters[it.key] }
+        requester != null && runCatching { requester.requestFocus() }.isSuccess
+    }
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .onFocusChanged { bodyFocused = it.isFocused }
+            .tvScrollableDashboard(listState, bodyFocused, focusTopWork),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
             start = 16.dp,
             top = 8.dp,
@@ -303,13 +365,20 @@ private fun StatsDashboardContent(
         }
         itemsIndexed(
             items = dashboard.records,
-            key = { _, record -> record.manga?.id ?: "other-${record.kind}" },
+            key = { _, record -> record.workKey() },
         ) { index, record ->
+            val workKey = record.workKey()
+            val cardRequester = remember(workKey) { FocusRequester() }
+            DisposableEffect(workKey) {
+                cardRequesters[workKey] = cardRequester
+                onDispose { cardRequesters.remove(workKey) }
+            }
             WorkStatsCard(
                 rank = index + 1,
                 record = record,
                 maxDuration = dashboard.records.firstOrNull()?.duration ?: 0L,
                 onContentClick = onContentClick,
+                focusRequester = cardRequester,
             )
         }
     }
@@ -657,6 +726,7 @@ private fun WorkStatsCard(
     record: StatsRecord,
     maxDuration: Long,
     onContentClick: (Content) -> Unit,
+    focusRequester: FocusRequester,
 ) {
     val context = LocalContext.current
     val contentColor = Color(KototoroColors.ofContent(context, record.manga))
@@ -668,10 +738,20 @@ private fun WorkStatsCard(
                 .build()
         }
     }
-    Surface(
-        modifier = Modifier
+    val content = record.manga
+    val cardModifier = if (content != null) {
+        Modifier
             .fillMaxWidth()
-            .then(record.manga?.let { content -> Modifier.clickable { onContentClick(content) } } ?: Modifier),
+            // The sheet surface is the only feedback a focused card would otherwise give, and that
+            // tint is invisible from across a room; the ring marks the row the remote can open.
+            .tvFocusable(shape = RoundedCornerShape(20.dp), addFocusTarget = false)
+            .focusRequester(focusRequester)
+            .clickable { onContentClick(content) }
+    } else {
+        Modifier.fillMaxWidth()
+    }
+    Surface(
+        modifier = cardModifier,
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
@@ -832,3 +912,59 @@ private fun formatStatsDuration(durationMs: Long): String {
         else -> stringResource(R.string.stats_duration_minutes, minutes)
     }
 }
+
+/**
+ * Makes the dashboard drivable with a remote.
+ *
+ * Everything above the top-works leaderboard is read-only, so a television had nothing below the
+ * filter row to move focus to: pressing down on a kind chip did nothing at all and the summary, the
+ * activity heatmap, the hour split and the kind breakdown stayed behind the screen edge, reachable
+ * only by touch. The list is therefore a focus target of its own, ringed, and up/down page it by most
+ * of a viewport during the preview pass. At the top the key falls through so focus climbs back to the
+ * filters; at the bottom it moves into the first visible work card instead, because the cards are the
+ * only rows that do something and a reader who scrolled all the way down is usually after one.
+ *
+ * The interception stops as soon as a card owns the ring: `isBodyFocused` is false then, and the
+ * card navigates the leaderboard like any other vertical list.
+ */
+@Composable
+private fun Modifier.tvScrollableDashboard(
+    state: LazyListState,
+    isBodyFocused: Boolean,
+    focusTopWork: () -> Boolean,
+): Modifier {
+    val scope = rememberCoroutineScope()
+    return this
+        .tvFocusable(shape = RoundedCornerShape(24.dp))
+        .onPreviewKeyEvent { event ->
+            if (event.type != KeyEventType.KeyDown || !isBodyFocused) {
+                return@onPreviewKeyEvent false
+            }
+            // The viewport size is zero until the first layout pass; fall back to a fixed nudge so an
+            // early press still moves the cards instead of doing nothing.
+            val step = when (val viewport = state.layoutInfo.viewportSize.height) {
+                0 -> STATS_SCROLL_MIN_STEP
+                else -> viewport * STATS_SCROLL_FRACTION
+            }
+            when {
+                event.key == Key.DirectionUp && state.canScrollBackward -> {
+                    scope.launch { state.animateScrollBy(-step) }
+                    true
+                }
+
+                event.key == Key.DirectionDown && state.canScrollForward -> {
+                    scope.launch { state.animateScrollBy(step) }
+                    true
+                }
+
+                event.key == Key.DirectionDown -> focusTopWork()
+
+                else -> false
+            }
+        }
+}
+
+private const val STATS_SCROLL_FRACTION = 0.8f
+private const val STATS_SCROLL_MIN_STEP = 480f
+
+private fun StatsRecord.workKey(): Any = manga?.id ?: "other-$kind"
