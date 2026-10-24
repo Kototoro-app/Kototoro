@@ -248,7 +248,8 @@ npm run docs:build
   更新检查的频率也改成单选对话框。单选/多选/文本三种设置对话框集中在 `DesktopSettingsDialogs.kt`，
   源设置页共用，见计划 §136。“更多 → 扩展与仓库”同样用这套节/行走廊（仓库、目录、已安装三块，
   仓库行尾是刷新/忘记、已安装行尾是更新/卸载，自动更新是整行开关），行内控件由共享
-  `SettingsActionRow` 承载，见计划 §137。“更多”页本身也是分节设置页（功能/外观/高级工具），
+  `SettingsActionRow` 承载（整页可滚动，目录列表按窗口高度取高，已安装行是页内 inline 行而不是嵌套滚动列表），
+  见计划 §137。“更多”页本身也是分节设置页（功能/外观/高级工具），
   功能行带随包图标（`SettingsValueRow` 的 `leadingIcon`），语言/主题/界面风格改开单选对话框，
   见计划 §138；阅读设置另有独立页面（更多 → 阅读设置），分“页面/翻页”两节编辑同一份
   `DesktopReaderSettings`（模式、方向、缩放、背景、页码、裁剪、自动跨章、动画、速度），
@@ -272,6 +273,11 @@ npm run docs:build
   （共享 `TabletPreviewContent` 的可选 `incognito` 动作）起一次“什么都不记录”的阅读会话
   （`DesktopAppState.readerIncognito` / `savesProgress`，四处自动保存都过它），
   ASK 时先弹 Android 那个“不再询问”对话框再打开阅读器，见计划 §154。
+  更多 → 阅读统计（`reading-stats-open`）对应 Android 的 `StatsScreen`：周期切换、总时长/活跃天数/会话/作品、
+  连续天数、每日活动、时段分布、类型占比、作品榜与清空确认。数据来自 `core-library` 的 `ReadingSessionTracker`——
+  阅读器各处自动保存经 `SourceLibrary.recordPage` 统一 tick，session 由 `beginReadingStop` 在进入阅读器前打开、
+  离开时 `finishReadingSession` 关闭（无痕不打开；一次阅读器打开算一个 session），读模型复用 `core-domain` 的
+  `deriveReadingStatistics`，见计划 §155。
   收藏/历史的“筛选与排序”抽屉另有“布局”一节（封面网格 / 每行一个作品，对应 Android 的 ListMode），
   选择存 `desktop_library` 的 `library_list_mode`，列表模式下 `ContentGrid` 渲染 `content-list` 行视图，
   点击/长按语义与卡片一致，见计划 §142。

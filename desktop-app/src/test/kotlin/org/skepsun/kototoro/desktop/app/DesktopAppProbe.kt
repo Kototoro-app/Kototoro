@@ -31,6 +31,10 @@ object DesktopAppProbe {
                 DesktopIncognitoProbe.run(args)
                 return
             }
+            if (args[0] == "stats") {
+                DesktopStatsProbe.run(args)
+                return
+            }
             if (args[0] == "upscale") {
                 DesktopUpscaleProbe.run(args)
                 return

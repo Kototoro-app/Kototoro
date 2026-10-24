@@ -7,6 +7,7 @@ import androidx.room.useWriterConnection
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.datetime.TimeZone
 import org.skepsun.kototoro.bookmarks.data.BookmarkEntity
 import org.skepsun.kototoro.bookmarks.domain.novelBookmarkProgress
 import org.skepsun.kototoro.core.db.MangaDatabase
@@ -22,12 +23,21 @@ import org.skepsun.kototoro.migration.domain.MigrationDataFlag
 import org.skepsun.kototoro.migration.domain.MigrationMode
 import org.skepsun.kototoro.migration.domain.MigrationPlanRules
 import org.skepsun.kototoro.migration.domain.MigrationSnapshot
+import org.skepsun.kototoro.stats.domain.ReadingStatsPeriod
+import org.skepsun.kototoro.stats.domain.ReadingStatsWindow
+import org.skepsun.kototoro.stats.domain.StatsContentKind
+import org.skepsun.kototoro.stats.domain.deriveReadingStatistics
 
 /** Platform DTO projection over the existing shared schema, with no parallel library or history database. */
 class SourceLibrary(
     private val database: MangaDatabase,
+    /** The clock the reading stop measures with; a host that has one already passes it, tests move it. */
+    private val clock: () -> Long = { kotlin.time.Clock.System.now().toEpochMilliseconds() },
     private val sourceLookup: (String) -> SourceRef?,
 ) {
+    /** Android keeps its collector in the reader view model; the library holds the open stop for the host instead. */
+    private val readingSessions = ReadingSessionTracker(clock)
+
     suspend fun favourites(withChapters: Boolean = true): List<SourceContent> = database.getFavouritesDao()
         .findAllWithActiveCategory(0, Int.MAX_VALUE).distinctBy { it.manga.id }
         .map { content(it.manga, it.tags, withChapters) }
@@ -478,8 +488,10 @@ class SourceLibrary(
      * Android records EPUB chapters; the download is what the stored chapter list holds.
      */
     suspend fun recordPage(content: SourceContent, chapter: SourceChapter, page: Int, pageCount: Int,
-        lastVisiblePage: Int = page, scroll: Float = 0f, part: SourceChapterPart? = null) =
-        database.useWriterConnection { connection ->
+        lastVisiblePage: Int = page, scroll: Float = 0f, part: SourceChapterPart? = null) {
+        // Android's StatsCollector upserts its row on every state change of an open reader; the row is written after
+        // the history transaction closes, because a second writer connection cannot be opened from inside it.
+        val stats = database.useWriterConnection { connection ->
             require(pageCount > 0 && page in 0 until pageCount)
             require(lastVisiblePage in page until pageCount)
             require(scroll.isFinite() && scroll >= 0f)
@@ -495,16 +507,86 @@ class SourceLibrary(
                 require(database.getChaptersDao().findAll(content.id).any {
                     it.chapterId == stored.id && it.branch == stored.branch && it.url == stored.url
                 }) { "Refresh details before recording a changed chapter" }
-                val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+                val now = clock()
+                val percent = (chapterIndex + (lastVisiblePage + 1f) / pageCount) / (branch.size * parts)
                 val previous = database.getHistoryDao().find(content.id)
                 database.getHistoryDao().upsert(HistoryEntity(
                     mangaId = content.id, createdAt = previous?.createdAt ?: now, updatedAt = now,
                     chapterId = chapter.id, page = page, scroll = scroll,
-                    percent = (chapterIndex + (lastVisiblePage + 1f) / pageCount) / (branch.size * parts),
+                    percent = percent,
                     deletedAt = 0, chaptersCount = branch.size, parentChapterId = part?.parent?.id,
                 ))
+                readingSessions.onPage(content.id, stored.id, page, percent, now)
             }
         }
+        stats?.let { writeReadingSession(it) }
+    }
+
+    /** Android's `StatsCollector.onPause` together with `ReadingRecordRepository.recordSession`. */
+    suspend fun beginReadingSession() = readingSessions.begin()
+
+    /** Closes the open stop, if any: the session row and the final stats row land in one transaction. */
+    suspend fun finishReadingSession() {
+        val write = readingSessions.finish() ?: return
+        writeReadingSession(write)
+    }
+
+    /** Drops the open stop without writing its session, for a reader the host stops tracking. */
+    fun abandonReadingSession() = readingSessions.abandon()
+
+    private suspend fun writeReadingSession(write: ReadingSessionWrite): Unit =
+        database.useWriterConnection { connection ->
+            connection.immediateTransaction {
+                val dao = database.getStatsDao()
+                // Android's commit keeps the larger of the two rows, so a late writer never shrinks a stop.
+                val previous = dao.find(write.stats.mangaId, write.stats.startedAt)
+                dao.upsert(write.stats.copy(
+                    duration = maxOf(write.stats.duration, previous?.duration ?: 0L),
+                    pages = maxOf(write.stats.pages, previous?.pages ?: 0),
+                ))
+                write.session?.let { database.getReadingRecordDao().insertSession(it) }
+            }
+        }
+
+    /**
+     * Android's `StatsRepository.getDashboard` without the category/kind filters Windows does not offer yet: the shared
+     * derivation over this library's session rows, legacy stats rows and the works they belong to.
+     */
+    suspend fun readingStatistics(period: ReadingStatsPeriod, zone: TimeZone,
+        now: Long = clock()): LibraryReadingStats = database.useReaderConnection { connection ->
+        connection.deferredTransaction {
+            val window = ReadingStatsWindow(period, now, zone)
+            val sessions = database.getReadingRecordDao().findOverlapping(window.from, window.now)
+            val legacy = database.getStatsDao().findOverlapping(window.from, window.now)
+            val ids = (sessions.map { it.mangaId } + legacy.map { it.mangaId }).distinct()
+            val contents = ids.chunked(200).flatMap { database.getMangaDao().findWithTagsByIds(it) }
+            val kinds = contents.associate { it.manga.id to StatsContentKind.fromType(it.manga.contentType) }
+            val snapshot = deriveReadingStatistics(sessions, legacy, kinds, window)
+            val works = contents.associate { it.manga.id to content(it.manga, it.tags, withChapters = false) }
+            LibraryReadingStats(
+                works = snapshot.works.mapNotNull { record ->
+                    works[record.contentId]?.let { work ->
+                        LibraryReadingStatsWork(work, record.kind, record.duration, record.sessions, record.units,
+                            record.lastActivityAt)
+                    }
+                },
+                dailyActivity = snapshot.dailyActivity,
+                hourlyActivity = snapshot.hourlyActivity,
+                totalDuration = snapshot.totalDuration,
+                activeDays = snapshot.activeDays,
+                currentStreak = snapshot.currentStreak,
+                sessionCount = snapshot.sessionCount,
+            )
+        }
+    }
+
+    /** Android's "clear statistics": the session rows and the legacy rows both go, history stays. */
+    suspend fun clearReadingStatistics() = database.useWriterConnection { connection ->
+        connection.immediateTransaction {
+            database.getStatsDao().clear()
+            database.getReadingRecordDao().clearAllSessions()
+        }
+    }
 
     private suspend fun saveInTransaction(content: SourceContent) {
         database.getMangaDao().find(content.id)?.manga?.let { requireSameIdentity(it, content) }

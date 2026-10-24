@@ -31,6 +31,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `a read stop shows up in the statistics screen and clearing asks first`() {
+        probe("stats", directory.resolve("中文 stats"), 150)
+    }
+
+    @Test
     fun `real Tsundoku APK installs converts and reads a novel over the live network`() {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("kototoro.dex.real.apks") != null, "no -PrealApkDirectory")
         probe("real-novel", directory.resolve("中文 real novel"), 180)

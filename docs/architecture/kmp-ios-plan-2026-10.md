@@ -7106,3 +7106,46 @@ Android 的无痕阅读有三层：全局 `incognito` 开关（不在设置界�
   （`DesktopAppTest` 的“Windows incognito reader records nothing…”）走真实界面：
   浮动预览卡点 `preview-incognito` 无痕读 → `readerIncognito` 真、历史表**没有**行，返回后普通读 → 历史行写下（证明拦住的是门而不是 fixture），
   再进来源设置把三态改到 `ENABLED`/`DISABLED` 并核对 `desktop_background` 的 `incognito_nsfw` 落盘为枚举名。
+
+## 155. Windows 阅读统计：会话采集 + 统计仪表盘（Android stats 对齐）（2026-10-24）
+
+Android 的阅读统计落在两张表：`stats`（每个作品一行，`duration`/`pages`）与 `reading_sessions`
+（每次停读一行，`start_at`/`end_at`/起止章节与页码/percent）。写入靠 ViewModel 作用域的 `StatsCollector`
+与 `ReadingRecordRepository.recordSession`（`MIN_SESSION_DURATION_MS = 5_000`：够长才落 session 行，
+否则只写 stats）；读模型早已在 `core-domain` 共享（`deriveReadingStatistics`：period 窗口、legacy 行只填
+未被 session 覆盖的区间、MANGA 用 `pages` 当 units、其余类型按 distinct 章节计）。Windows 此前没有任何写入者，
+备份与 WebDAV 只是搬运这两张表。
+
+- 采集落在 `core-library`：`ReadingStatistics.kt` 新增 `ReadingSessionTracker`（`begin`/`onPage`/`finish`/`abandon`），
+  `SourceLibrary` 注入 `clock` 后挂在 `recordPage` 上——阅读器三处自动保存（分页锚点、连续滚动、各 `flush`）
+  本来就都走这个入口，所以没有改阅读器的任何文件。`onPage` 的第一次 tick 只把作品锚上（`pages` 不变），
+  同章节同页再 tick 不计数，换页/换章 `+1`，别的作品返回 null 而不延长他人会话；`finish` 在
+  `duration < 5_000` 时只写 stats 行。
+- session 行必须由宿主显式打开：`beginReadingStop()` 在 `readOnIo`/`readNovelOnIo`/`watchOnIo` 设置阅读器屏幕
+  之前调用（`savesProgress` 为假的无痕会话不打开），`settleReadingSession` 在离开阅读器的 action 的 `finally`
+  里关闭。于是标已读/批量下载这类写历史而不读书的路径不会污染统计，无痕会话一行也不写。
+  Windows 一次阅读器打开算一个 session（Android 按章节切分），这是记录在案的差异。
+- 读模型：`readingStatistics(period, zone)` 在 reader 连接里取 `findOverlapping` 的 session 行与 legacy stats 行，
+  交给共享的 `deriveReadingStatistics`；`clearReadingStatistics()` 只清 `stats` 与 `reading_sessions`，
+  历史与收藏不动。
+- 界面 `DesktopReadingStatsPage`：更多 → 阅读统计（`reading-stats-open`）。对应 Android `StatsScreen` 的卡片：
+  摘要（总时长/活跃天数/会话/作品 + 连续天数）、每日活动条形（附活跃天数说明）、时段分布（有小时数据才画）、
+  类型占比（多于一种类型才画）、作品榜（名次 + 封面 + units/会话数）；周期行 `stats-period:<NAME>`
+  用 Android 的 `day/week/month/three_months/all_time` 标题，清空统计先弹确认。
+  页面拆成 `DesktopReadingStatsPage`（读 state 与会话）与 `DesktopReadingStatsContent`（只吃参数），
+  所以 UI 测试不需要数据库和控制器。
+- 文案：只新增一个桌面键 `more.readingStatsSummary`（入口摘要）；统计标签全部复用 Android 已翻译的
+  `reading_stats`、`stats_*`、`empty_stats_text`、`clear_stats*`，没有重复词条。
+- 顺带修复（验证时暴露的旧问题）：扩展与仓库页在 620px 高的窗口里，仓库节、JSON 来源节把目录与已安装两张列表
+  压成 0 高度，已安装行的卸载按钮既不可见也不可点，UI 探针的 `performScrollToNode` 因此在找不到节点时空转
+  （`waitForIdle` 永远等不到空闲）。页面改为整页 `verticalScroll`，目录列表按窗口高度取高度
+  （`maxHeight - 340.dp`，下限 260dp），已安装行改成页内 inline 行（不再嵌套 `LazyColumn`），
+  `installed-list` 标签移到已安装分组上。
+- 验证：`desktop-runtime` 的 `DesktopReadingStatsTest` 6 项（停读写两表 + 跨作品不串 + 未 begin 不写 +
+  不足 5 秒只写 stats + abandon 不留 session + 清空只清统计 + 三种 period 的每日长度）；`desktop-app` 的
+  `DesktopReadingStatsPageTest` 5 项（空态、摘要与榜单点击、周期行、清空确认、时长格式阈值）。
+  新探针 `stats`（`DesktopAppTest` 的“a read stop shows up in the statistics screen…”）走真实界面：
+  真读一章 → 更多 → 阅读统计 → 作品在榜且时长 > 0 → 切成 DAY（每日长度 1）→ 清空先弹框、取消保留、
+  确认后空态且历史仍在 → 返回更多。回归：`:desktop-runtime:test` 16 套 105 项全绿，`:desktop-app:test` 全绿，
+  `:desktop-app:verifyDesktopStrings`、`:core-library:compileCommonMainKotlinMetadata`、
+  `:desktop-app:compileKotlin`/`:compileTestKotlin` 通过。

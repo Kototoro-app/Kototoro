@@ -120,6 +120,11 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
             SettingsValueRow(desktopText("more.backups"), desktopText("more.backupsSummary"), null, enabled,
                 { controller.showBackups() }, testTag = "nav:${desktopText("more.backups")}",
                 leadingIcon = painterResource("icons/ic_backup_restore.svg"))
+            SettingsRowDivider()
+            // Android reaches its statistics from the "更多" tab; the desktop reader now records the same rows.
+            SettingsValueRow(AndroidStrings["reading_stats"], desktopText("more.readingStatsSummary"), null, enabled,
+                { controller.showReadingStats() }, testTag = "reading-stats-open",
+                leadingIcon = painterResource("icons/ic_history.svg"))
         }
         SettingsSectionHeader(desktopText("more.appearance"))
         SettingsGroup {

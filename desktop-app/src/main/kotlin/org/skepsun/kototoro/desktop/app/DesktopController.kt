@@ -9,7 +9,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.datetime.TimeZone
+import org.skepsun.kototoro.core.library.LibraryReadingStats
 import org.skepsun.kototoro.core.source.*
+import org.skepsun.kototoro.stats.domain.ReadingStatsPeriod
 import org.skepsun.kototoro.history.domain.recoverHistoryChapterId
 import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.reader.core.IntSize
@@ -67,7 +70,14 @@ internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
     listOf(Locale.getDefault(Locale.Category.DISPLAY), Locale.getDefault()).distinct()
         .map { ChapterBranchLocale(it.getDisplayLanguage(it), it.getDisplayName(it)) }
 
-enum class DesktopScreen { HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS, RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, MORE }
+enum class DesktopScreen {
+    HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
+    RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE,
+}
+
+/** The three screens that own an open chapter, where Android's reading statistics are counted. */
+internal val DesktopScreen.isReading: Boolean
+    get() = this == DesktopScreen.READER || this == DesktopScreen.NOVEL || this == DesktopScreen.VIDEO
 
 /**
  * What a reader entry asked for, kept while the adult-work question is open so the answer can carry on with it. Each
@@ -132,6 +142,9 @@ data class DesktopAppState(
     val sourceSettings: org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings = org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings(),
     val libraryDisplay: org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay =
         org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay(),
+    /** Android's "阅读统计" screen: the selected period and the dashboard derived for it. */
+    val readingStats: LibraryReadingStats? = null,
+    val readingStatsPeriod: ReadingStatsPeriod = ReadingStatsPeriod.WEEK,
     /** Stored suggestions, most relevant first (Android's recommendations). */
     val suggestions: List<SourceContent> = emptyList(),
     /** True while [DesktopController.refreshSuggestions] runs in the background; the window stays usable. */
@@ -1054,6 +1067,7 @@ class DesktopController(val session: DesktopSession) {
         } else if (chapter == null && selected.id == restoredId) (progress?.page ?: 0).coerceIn(blocks.indices) else 0
         val bookmarks = session.library.bookmarks(content.id)
         novelOperations.forget()
+        beginReadingStop()
         mutableState.update { it.copy(screen = DesktopScreen.NOVEL, chapter = selected, pages = emptyList(),
             readerImages = emptyMap(), bookmarks = bookmarks,
             novel = DesktopNovel(selected, blocks, body.images.associateBy { image -> image.url }, start,
@@ -1078,6 +1092,7 @@ class DesktopController(val session: DesktopSession) {
         require(streams.isNotEmpty()) { desktopText("error.noVideo") }
         val start = if (progress != null && progress.chapterId == selected.id) progress.page.toDouble() else 0.0
         videoOperations.forget()
+        beginReadingStop()
         mutableState.update { it.copy(screen = DesktopScreen.VIDEO, chapter = selected, pages = emptyList(),
             readerImages = emptyMap(), novel = null,
             video = DesktopVideo(selected, streams, 0, start, generation = (it.video?.generation ?: 0) + 1)) }
@@ -1519,6 +1534,31 @@ class DesktopController(val session: DesktopSession) {
 
     fun showRecommendations() = navigate { mutableState.update { it.copy(screen = DesktopScreen.RECOMMENDATIONS) } }
 
+    /** Android's "阅读统计" screen: the shared derivation over this library's sessions and stored works. */
+    fun showReadingStats() = navigate {
+        mutableState.update { it.copy(screen = DesktopScreen.READING_STATS) }
+        loadReadingStats()
+    }
+
+    /** Android's period menu on the statistics screen. */
+    fun readingStatsPeriod(period: ReadingStatsPeriod) = navigate {
+        mutableState.update { it.copy(readingStatsPeriod = period) }
+        loadReadingStats()
+    }
+
+    /** Android's "clear statistics" action: both tables are emptied, reading history stays. */
+    internal fun clearReadingStats() = action {
+        session.library.clearReadingStatistics()
+        loadReadingStats()
+        mutableState.update { it.copy(message = AndroidStrings["stats_cleared"]) }
+    }
+
+    private suspend fun loadReadingStats() {
+        val period = mutableState.value.readingStatsPeriod
+        val stats = session.library.readingStatistics(period, TimeZone.currentSystemDefault())
+        mutableState.update { it.copy(readingStats = stats) }
+    }
+
     /** Android's reader settings screen; it edits the same preferences an open chapter reads. */
     fun showReaderSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.READER_SETTINGS) } }
 
@@ -1763,6 +1803,8 @@ class DesktopController(val session: DesktopSession) {
         } else 0
         val restoredScroll = bookmark?.scroll?.coerceAtLeast(0)?.toFloat() ?: if (chapter == null && selected.id == restoredId)
             progress.scroll.takeIf { it.isFinite() && it >= 0f } ?: 0f else 0f
+        // Before the first page is recorded, so even the opening write belongs to the stop.
+        beginReadingStop()
         val candidate = state.value.let { it.copy(screen = DesktopScreen.READER, chapter = selected, pages = pages,
             pageIndex = index, readerImages = emptyMap(), readerGeometry = session.readerGeometry(pages), readerScroll = restoredScroll,
             readerTargetPage = index, readerTargetScroll = if (startAtEnd) Float.MAX_VALUE else restoredScroll,
@@ -2306,6 +2348,7 @@ class DesktopController(val session: DesktopSession) {
         videoOperations.cancelAndJoin()
         gate.withLock {
             mutableState.update { it.copy(busy = true, error = null, message = null) }
+            val wasReading = mutableState.value.screen.isReading
             try {
                 val challenges = session.browserChallenges
                 continuous.flush()
@@ -2319,8 +2362,25 @@ class DesktopController(val session: DesktopSession) {
                 mutableState.update { it.copy(error = diagnostic ?: error.message ?: error.javaClass.simpleName) }
             } catch (error: LinkageError) {
                 mutableState.update { it.copy(error = desktopText("error.sourceApiIncompatible", error.message ?: error.javaClass.simpleName)) }
+            } finally {
+                settleReadingSession(wasReading)
             }
         }
+    }
+
+    /**
+     * Android's reader view model owns the statistics collector; this host has no such lifetime, so the entrance of a
+     * reader screen opens the stop and leaving one closes it. An incognito reader is never counted, exactly like the
+     * progress writes it already skips.
+     */
+    private suspend fun beginReadingStop() {
+        val state = mutableState.value
+        if (state.savesProgress && !state.screen.isReading) session.library.beginReadingSession()
+    }
+
+    /** Called from the action that leaves a reader screen, so the stop lands before the next screen's work starts. */
+    private suspend fun settleReadingSession(wasReading: Boolean) {
+        if (wasReading && !mutableState.value.screen.isReading) session.library.finishReadingSession()
     }
 
     suspend fun shutdown() {
@@ -2331,6 +2391,8 @@ class DesktopController(val session: DesktopSession) {
         withContext(NonCancellable + Dispatchers.IO) {
             try { gate.withLock { continuous.flush(); novelOperations.flush(); videoOperations.flush() } }
             finally {
+                // Leaving the app is a reader stop too: Android's onPause closes the statistics session.
+                runCatching { session.library.finishReadingSession() }
                 try { webDav.close() } finally {
                     try {
                         val preview = mutableBackupPreview.value
