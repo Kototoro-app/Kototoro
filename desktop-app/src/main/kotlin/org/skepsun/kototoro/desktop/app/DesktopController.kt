@@ -2261,6 +2261,21 @@ class DesktopController(
     internal fun setIncognitoForNsfw(value: org.skepsun.kototoro.desktop.runtime.DesktopTriState) =
         sourceSettings(mutableState.value.sourceSettings.copy(incognitoForNsfw = value))
 
+    /**
+     * Android's `saveSourceOrder`: the hand-picked sequence is stored and the sort order switches to it, so saving the
+     * editor is also what makes the new order visible. Sources the rail cannot offer (disabled, uninstalled) are
+     * dropped from the sequence, otherwise they would keep a rank nothing renders.
+     */
+    internal fun saveSourceOrder(names: List<String>) {
+        val offered = sourceDescriptors().mapTo(HashSet()) { it.source.name }
+        sourceSettings(
+            mutableState.value.sourceSettings.copy(
+                sort = org.skepsun.kototoro.desktop.runtime.DesktopSourceSort.CUSTOM,
+                order = names.filter { it in offered }.distinct(),
+            ),
+        )
+    }
+
     internal fun sourceSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings) {
         mutableState.update { it.copy(sourceSettings = settings) }
         if (!backgroundPreferences.edit(SourcePreferenceEdit(changes = settings.toPreferences()))) {

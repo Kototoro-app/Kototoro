@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.extensions.resolveJarPriorityOrder
+import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.core.ui.settings.SettingsGroup
 import org.skepsun.kototoro.core.ui.settings.SettingsInfoRow
 import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
@@ -56,6 +57,13 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
         SettingsGroup {
             SettingsValueRow(desktopText("sources.sort"), desktopText("sources.sortSummary"), settings.sort.title,
                 active, { dialog = SourceSettingsDialog.SORT }, testTag = "source-setting-sort")
+            if (settings.sort == DesktopSourceSort.CUSTOM) {
+                SettingsRowDivider()
+                // Android's `SourcesSettingsScreen` only shows the reorder action while the hand-picked order is the
+                // chosen one, because that is the only order the editor can change.
+                SettingsValueRow(AndroidStrings["reorder"], desktopText("sources.reorderSummary"), null, active,
+                    { dialog = SourceSettingsDialog.REORDER }, testTag = "source-setting-reorder")
+            }
             SettingsRowDivider()
             SettingsSwitchRow(desktopText("sources.grid"), desktopText("sources.gridSummary"), settings.grid, active,
                 { update(settings.copy(grid = it)) }, testTag = "source-setting-grid")
@@ -149,6 +157,15 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
         )
         SourceSettingsDialog.JAR_PRIORITY -> DesktopJarPriorityDialog(state = state, enabled = active,
             onOrder = { controller.setJarPriorityOrder(it) }, onDismiss = { dialog = null })
+        SourceSettingsDialog.REORDER -> DesktopSourceOrderDialog(
+            sources = settings.sorted(state.enabledSources),
+            enabled = active,
+            onSave = { names ->
+                dialog = null
+                controller.saveSourceOrder(names)
+            },
+            onDismiss = { dialog = null },
+        )
         SourceSettingsDialog.INSTALL_BEHAVIOR -> DesktopInstallBehaviorDialog(
             policies = state.extensionInstallPolicies,
             enabled = active,
@@ -176,7 +193,7 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
     }
 }
 
-private enum class SourceSettingsDialog { SORT, JAR_PRIORITY, NSFW_TARGETS, INCOGNITO_NSFW, INSTALL_BEHAVIOR }
+private enum class SourceSettingsDialog { SORT, JAR_PRIORITY, NSFW_TARGETS, INCOGNITO_NSFW, INSTALL_BEHAVIOR, REORDER }
 
 /**
  * The parser plugins that `jar_priority_order` ranks, in that order; plugins the value does not name come last. A
@@ -237,8 +254,67 @@ private fun DesktopJarPriorityDialog(state: DesktopAppState, enabled: Boolean, o
     )
 }
 
-private fun List<String>.moved(from: Int, to: Int): List<String> =
+private fun <T> List<T>.moved(from: Int, to: Int): List<T> =
     toMutableList().apply { add(to, removeAt(from)) }
+
+/**
+ * Android's `ReorderDialog` for the source rail. As on Android, moving never writes: the rows are a local draft and
+ * only "保存" stores the sequence (which also switches the sort order to it, exactly like `saveSourceOrder` does).
+ * Android drags a handle and locks each move to the item's group because its editor draws the pinned/language headers;
+ * this list is flat and a mouse host has no long-press, so every row carries the two moves as buttons — the same shape
+ * the plugin priority dialog uses — and 按语言分组 re-groups the rail afterwards, leaving the stored sequence in charge
+ * of the order inside each language.
+ */
+@Composable
+private fun DesktopSourceOrderDialog(
+    sources: List<SourceListing>,
+    enabled: Boolean,
+    onSave: (List<String>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var draft by remember(sources) { mutableStateOf(sources.map { it.source.name to it.displayName }) }
+    fun move(from: Int, to: Int) {
+        if (from in draft.indices && to in draft.indices) draft = draft.moved(from, to)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.widthIn(max = 560.dp).testTag("source-order-dialog"),
+        title = { Text(AndroidStrings["reorder"]) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(desktopText("sources.reorderSummary"), style = MaterialTheme.typography.bodySmall)
+                if (draft.isEmpty()) {
+                    Text(desktopText("sources.reorderEmpty"), modifier = Modifier.testTag("source-order-empty"),
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                draft.forEachIndexed { index, (name, title) ->
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().testTag("source-order:$name")) {
+                        Text(title, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            fontSize = 14.sp)
+                        TextButton({ move(index, index - 1) }, enabled = enabled && index > 0,
+                            modifier = Modifier.testTag("source-order-up:$name")) {
+                            Text(AndroidStrings["reorder_move_up"])
+                        }
+                        TextButton({ move(index, index + 1) }, enabled = enabled && index < draft.lastIndex,
+                            modifier = Modifier.testTag("source-order-down:$name")) {
+                            Text(AndroidStrings["reorder_move_down"])
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton({ onSave(draft.map { it.first }) }, enabled = enabled && draft.isNotEmpty(),
+                modifier = Modifier.testTag("source-order-save")) { Text(desktopText("common.save")) }
+        },
+        dismissButton = {
+            TextButton(onDismiss, modifier = Modifier.testTag("source-order-cancel")) {
+                Text(desktopText("common.cancel"))
+            }
+        },
+    )
+}
 
 /** Same rendering rule as the recommendations page: nothing selected reads as no value at all. */
 private fun Set<String>.showAsList(): String? =
@@ -249,6 +325,7 @@ private val DesktopSourceSort.title: String
         DesktopSourceSort.DEFAULT -> desktopText("sources.sort.default")
         DesktopSourceSort.TITLE -> desktopText("sources.sort.title")
         DesktopSourceSort.LANGUAGE -> desktopText("sources.sort.language")
+        DesktopSourceSort.CUSTOM -> desktopText("sources.sort.custom")
     }
 
 private val DesktopNsfwTarget.title: String

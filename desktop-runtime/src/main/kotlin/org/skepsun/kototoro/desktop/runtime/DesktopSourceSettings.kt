@@ -9,10 +9,12 @@ import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.core.source.isNsfw
 
 /**
- * Android's `SourcesSortOrder` reduced to the orders Windows can honor: it has no manual reorder editor, so the
- * third option sorts by the source language instead of a stored hand-picked sequence.
+ * Android's `SourcesSortOrder` reduced to the orders Windows can honor. Android's MANUAL is [CUSTOM]: the sequence the
+ * reorder editor stores, which falls back to the installation order until the user picks one. [LANGUAGE] is a Windows
+ * addition (Android groups by language instead of sorting by it), POPULARITY and LAST_USED stay unmapped because the
+ * desktop library keeps neither a popularity count nor a per-source "last used" stamp.
  */
-enum class DesktopSourceSort { DEFAULT, TITLE, LANGUAGE }
+enum class DesktopSourceSort { DEFAULT, TITLE, LANGUAGE, CUSTOM }
 
 /**
  * Android's `TriStateOption`, stored as the constant name so a preference file written on one platform reads on the
@@ -34,6 +36,12 @@ data class DesktopSourceSettings(
     val sort: DesktopSourceSort = DesktopSourceSort.DEFAULT,
     val grid: Boolean = true,
     val groupByLanguage: Boolean = false,
+    /**
+     * Android keeps the hand-picked sequence in each source row's `sort_key`; the desktop library has no source table,
+     * so the reorder editor stores the names here instead. Names that are no longer installed are kept (a source can
+     * come back after a reinstall) and simply match nothing while sorting.
+     */
+    val order: List<String> = emptyList(),
     val nsfwTargets: Set<DesktopNsfwTarget> = emptySet(),
     /** Android's global tag blacklist: taxonomy IDs, source aliases or `raw:` keys picked on the blacklist page. */
     val tagBlacklist: Set<String> = emptySet(),
@@ -46,6 +54,7 @@ data class DesktopSourceSettings(
         KEY_SORT to SourcePreferenceValue.Text(sort.name),
         KEY_GRID to SourcePreferenceValue.Toggle(grid),
         KEY_GROUP_LANGUAGE to SourcePreferenceValue.Toggle(groupByLanguage),
+        KEY_ORDER to SourcePreferenceValue.TextSet(LinkedHashSet(order)),
         KEY_NSFW_TARGETS to SourcePreferenceValue.TextSet(nsfwTargets.mapTo(LinkedHashSet()) { it.name }),
         KEY_TAG_BLACKLIST to SourcePreferenceValue.TextSet(LinkedHashSet(tagBlacklist)),
         KEY_TAGS_WARNINGS to SourcePreferenceValue.Toggle(tagsWarnings),
@@ -62,13 +71,21 @@ data class DesktopSourceSettings(
     /** Whether a tag title earns the warning tint: the same shared list Android uses, unless the user turned it off. */
     fun isTagWarning(title: String): Boolean = tagsWarnings && TagWarnings.isWarned(title)
 
-    /** The rail order: Android's alphabetical and language orders; the default keeps the installation order. */
+    /**
+     * The rail order: Android's alphabetical and language orders, and the hand-picked sequence of the reorder editor.
+     * The default keeps the installation order, which is also what [DesktopSourceSort.CUSTOM] falls back to while the
+     * stored sequence names no installed source. `sortedBy` is stable, so unnamed sources keep the host's order.
+     */
     fun sorted(sources: List<SourceListing>): List<SourceListing> = when (sort) {
         DesktopSourceSort.DEFAULT -> sources
         DesktopSourceSort.TITLE -> sources.sortedBy { it.displayName.lowercase() }
         DesktopSourceSort.LANGUAGE -> sources.sortedWith(
             compareBy({ it.source.locale.ifBlank { "zz" } }, { it.displayName.lowercase() }),
         )
+        DesktopSourceSort.CUSTOM -> {
+            val rank = order.withIndex().associate { (index, name) -> name to index }
+            sources.sortedBy { rank[it.source.name] ?: Int.MAX_VALUE }
+        }
     }
 
     /** Android groups the rail by language; a blank locale collects under one "multilingual" header. */
@@ -94,6 +111,10 @@ data class DesktopSourceSettings(
         const val KEY_SORT = "sources_sort"
         const val KEY_GRID = "sources_grid"
         const val KEY_GROUP_LANGUAGE = "sources_group_language"
+
+        /** The reorder editor's sequence; Android has no key for it because it writes `sort_key` per source row. */
+        const val KEY_ORDER = "sources_order"
+
         const val KEY_NSFW_TARGETS = "sources_nsfw_targets"
 
         /** Android stores the same selection under `global_tag_blacklist`, so a shared backup reads either. */
@@ -111,6 +132,10 @@ data class DesktopSourceSettings(
             } ?: DesktopSourceSort.DEFAULT,
             grid = (values[KEY_GRID] as? SourcePreferenceValue.Toggle)?.value ?: true,
             groupByLanguage = (values[KEY_GROUP_LANGUAGE] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            order = (values[KEY_ORDER] as? SourcePreferenceValue.TextSet)?.values
+                ?.filter(String::isNotBlank)
+                ?.toList()
+                .orEmpty(),
             nsfwTargets = (values[KEY_NSFW_TARGETS] as? SourcePreferenceValue.TextSet)?.values
                 ?.mapNotNullTo(LinkedHashSet()) { name -> DesktopNsfwTarget.entries.firstOrNull { it.name == name } }
                 .orEmpty(),

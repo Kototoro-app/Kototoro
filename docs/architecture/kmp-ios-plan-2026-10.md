@@ -8302,3 +8302,42 @@ Android 的统一来源页把**来源挂在声明的扩展包下面**（`Unified
 - 回归：`repositories`、`kototoro kotatsu and UMA plugins through the UI`（用 `installed-list` 滚到
   `extension-uninstall:<id>`）、`a Cloudstream plugin imports browses...` 三个探针重跑通过。
 - 仍待：包内多选/批量（见上）、Android 统一页的仓库卡片分组与语言/组合筛选、`SourceSwitchDialog` 的选择模式。
+
+## 182. Windows 来源手动重排，对齐 Android 的 `ReorderDialog` 与 `SourcesSortOrder.MANUAL`（2026-10-24）
+
+Android 的“来源设置 → 概览”只在排序方式为手动（`SourcesSortOrder.MANUAL`）时多出一行“重新排序”，点开是
+`ReorderDialog`：拖动手柄或长按条目移动、跨分组禁止、**显式保存**才写盘（`saveSourceOrder` 把每个名字写进该来源行的
+`sort_key`，并把排序方式改成 MANUAL）。Windows 之前的三种顺序里没有手动这一项，`DesktopSourceSort` 的注释还明说
+“没有手动重排编辑器”，所以用户排不出自己想要的顺序。
+
+- 模型（`desktop-runtime` 的 `DesktopSourceSettings`）：`DesktopSourceSort` 追加 `CUSTOM`——不叫 `MANUAL`，因为
+  `DEFAULT` 已经是“安装顺序”这个基线；落盘仍是枚举名，键还是原来的 `sources_sort`。新增 `order: List<String>`，
+  键 `sources_order`（`TextSet`，值就是来源名）：Android 没有这个键（它把顺序写在各来源行的 `sort_key` 上），
+  Windows 的库没有来源表，只能把名字序列存进 `desktop_background`。`sorted()` 在 `CUSTOM` 下按 `order` 的下标排名，
+  未列出的来源（刚装的、名字还没进序列的）按安装顺序跟在后面；`order` 为空时就是安装顺序。已卸载但在序列里的名字
+  保留（重装后能回到原位），排序时匹配不到来源而已。
+- 控制器：`DesktopController.saveSourceOrder(names)` 复刻 `saveSourceOrder` 的“保存即切顺序”语义——先按当前可用
+  来源过滤掉禁用/已卸载的名字并去重，再一次走已有的 `internal fun sourceSettings(settings)` 落盘
+  （`desktop_background`，失败仍报 `settings.sourcesSaveFailed`）。
+- 界面（`DesktopSourceSettingsPage`）：“概览”组的 `source-setting-sort` 下面，**仅当 `settings.sort == CUSTOM`**
+  多一行 `source-setting-reorder`（Android 同样只在手动排序时显示），标题取 Android 的 `reorder`（重新排序），摘要用
+  桌面自己的 `sources.reorderSummary=逐行上移或下移调整顺序，完成后保存`：Android 的 `reorder_hint` 讲的是“拖动手柄
+  或长按条目”，桌面既没有手柄也没有长按，照抄会写错交互。
+  对话框 `DesktopSourceOrderDialog`（`source-order-dialog`、行 `source-order:<名字>`、`source-order-up:`、
+  `source-order-down:`、`source-order-save`、`source-order-cancel`，空列表 `source-order-empty`）照
+  `DesktopJarPriorityDialog` 的形状：行是本地 draft，移动不写盘，点“保存”才调 `controller.saveSourceOrder`。
+  Android 的分组内限制这里不需要——桌面列表是平的、不画置顶/语言标题，而“按语言分组”开着时来源栏会自己重新分组，
+  存下的序列决定的是每组内部的先后。
+- 刻意不映射的：Android 的 `POPULARITY` 与 `LAST_USED`。桌面库既不统计来源热度也没有“上次使用”时间戳，加进去就是
+  点了没反应的选项（§177、§180 对同类差异的处理一致）；反过来 `LANGUAGE` 是 Windows 独有（Android 用分组而非排序）。
+- 验证：`DesktopSourceOrderProbe`（`sourceorder-write` / `sourceorder-read` 两个 JVM，本地 HTTP 服务器提供 MacCMS 接口）
+  导入两个 JSON 来源“重排甲/重排乙”→ 断言默认排序下没有重排行 → 排序方式选“自定义顺序”→ 重排行出现 → 打开对话框、
+  点 `source-order-up:<第二个>` 后**断言此刻 `order` 仍为空**（移动不写盘）→ 保存 → 断言 `sort == CUSTOM`、
+  `order == [乙, 甲]`、`desktop_background` 快照里的 `sources_order` 就是这个顺序 → 回“浏览”断言来源总览的两块瓷砖
+  按行优先顺序乙在前（截图 `-settings.png` / `-dialog.png` / `-overview.png`）。read 段离线重启后断言这三项都还在，
+  且重排行仍在。单元测试补在 `DesktopSourceSettingsTest`：序列经偏好往返保序、`CUSTOM` 排名（序列含已卸载名字、
+  空序列回退安装顺序、其它排序忽略序列）。
+- 回归：`tablet layout and immersive reader panels…`（来源栏/来源网格都走同一份 `settings.sorted`）与
+  `a JSON CMS source imports from the extensions page…` 重跑通过。
+- 仍待：`setup_wizard`（Android 概览组的最后一行）、把上移/下移换成真正的拖拽、Android 统一来源页的批量选择与
+  仓库筛选分组。

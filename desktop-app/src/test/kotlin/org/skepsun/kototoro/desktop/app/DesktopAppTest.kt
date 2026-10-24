@@ -129,6 +129,13 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `the source reorder editor stores Android's manual order and the rail follows it after a restart`() {
+        val root = directory.resolve("中文 source order")
+        probe("sourceorder-write", root, 150)
+        probe("sourceorder-read", root, 120)
+    }
+
+    @Test
     fun `a parser marked broken stays installed and the show broken sources switch hides and offers it`() {
         val root = directory.resolve("中文 broken sources")
         probe("brokensource-write", root, 150)
