@@ -25,7 +25,9 @@ import org.skepsun.kototoro.reader.ui.resolveVisiblePageSelection
 import org.skepsun.kototoro.reader.ui.resolveReaderInitialPagePosition
 import org.skepsun.kototoro.reader.ui.resolveReaderRestoredState
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.reader.core.SceneReadingDirection
+import org.skepsun.kototoro.reader.ui.config.resolveSceneLayoutMode
 import org.skepsun.kototoro.reader.ui.config.resolveSceneReaderEnabled
 import org.skepsun.kototoro.reader.ui.config.resolveSceneReadingDirection
 
@@ -64,6 +66,12 @@ fun ComposeReaderScreenRoot(
     val content by viewModel.content.collectAsStateWithLifecycle()
     val widePageIds by viewModel.widePageIdsFlow.collectAsStateWithLifecycle()
     val mode by viewModel.readerMode.collectAsStateWithLifecycle()
+    // The saved mode is the user's choice; the presentation may not be able to honour its physical
+    // layout. Everything that composes or keys the scenes goes through the resolved layout instead.
+    val layoutMode = resolveSceneLayoutMode(
+        mode = mode,
+        isTv = LocalUiPresentationConfig.current.isTv,
+    )
     val isWebtoonZoomEnabled by viewModel.isWebtoonZooEnabled.collectAsStateWithLifecycle()
     val defaultWebtoonZoomOut by viewModel.defaultWebtoonZoomOut.collectAsStateWithLifecycle(initialValue = 0f)
     val isWebtoonGapsEnabled by viewModel.isWebtoonGapsEnabled.collectAsStateWithLifecycle(initialValue = false)
@@ -119,7 +127,7 @@ fun ComposeReaderScreenRoot(
         }
     }
 
-    key(mode, isDoublePage, layoutGeneration) {
+    key(layoutMode, isDoublePage, layoutGeneration) {
     if (isDoublePage) {
         // The two renderer switches are per family: which one owns this layout is decided in
         // resolveSceneReaderEnabled, not by an inline conjunction of the two preferences.
@@ -268,7 +276,7 @@ fun ComposeReaderScreenRoot(
                 modifier = readerModifier,
             )
         }
-    } else if (mode == ReaderMode.WEBTOON) {
+    } else if (layoutMode == ReaderMode.WEBTOON) {
         if (
             resolveSceneReaderEnabled(
                 mode = ReaderMode.WEBTOON,
@@ -373,7 +381,7 @@ fun ComposeReaderScreenRoot(
                 modifier = readerModifier,
             )
         }
-    } else if (mode == ReaderMode.CONTINUOUS_HORIZONTAL) {
+    } else if (layoutMode == ReaderMode.CONTINUOUS_HORIZONTAL) {
         ComposeSceneHorizontalReader(
             pages = content.pages,
             initialPage = initialPosition,
