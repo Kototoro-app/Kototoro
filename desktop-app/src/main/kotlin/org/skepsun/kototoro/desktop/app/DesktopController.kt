@@ -119,6 +119,8 @@ data class DesktopAppState(
      * ranks here; the settings page resolves the names against the installed plugins when it draws the row.
      */
     val jarPriorityOrder: String = "",
+    /** Android's `show_broken_sources`: `@Broken` parsers stay installed, this decides if the lists offer them. */
+    val showBrokenSources: Boolean = false,
     val repositories: List<DesktopRepository> = emptyList(),
     val extensionCatalog: DesktopRepositoryCatalog? = null,
     val installedExtensions: Map<String, Long> = emptyMap(),
@@ -277,7 +279,8 @@ class DesktopController(val session: DesktopSession) {
         } ?: DesktopInterfaceStyle.MATERIAL,
         language = restoredLanguage(),
         disabledSources = session.disabledSources(),
-        jarPriorityOrder = session.jarPriorityOrder()))
+        jarPriorityOrder = session.jarPriorityOrder(),
+        showBrokenSources = session.showBrokenSources()))
     val state = mutableState.asStateFlow()
     private val continuous = DesktopScrollOperations(mutableState, session, scope, gate)
     private val novelOperations = DesktopNovelOperations(mutableState, session, scope, gate)
@@ -640,6 +643,26 @@ class DesktopController(val session: DesktopSession) {
     fun setJarPriorityOrder(names: List<String>) = action {
         session.setJarPriorityOrder(names)
         mutableState.update { it.copy(jarPriorityOrder = session.jarPriorityOrder()) }
+    }
+
+    /**
+     * Android's `show_broken_sources` switch: the parsers a plugin marked `@Broken` appear in (or leave) every source
+     * list. They stay installed either way and keep their stored works, downloads and settings, so this only
+     * republishes the offered sources and drops the browse selection if it was one of the hidden ones.
+     */
+    fun setShowBrokenSources(show: Boolean) = action {
+        session.setShowBrokenSources(show)
+        val descriptors = sourceDescriptors()
+        mutableState.update { previous ->
+            val hidden = previous.selectedSource?.takeIf { selected ->
+                descriptors.none { it.source.name == selected.source.name }
+            }
+            previous.copy(showBrokenSources = session.showBrokenSources(),
+                sources = descriptors,
+                selectedSource = if (hidden != null) null else previous.selectedSource,
+                descriptor = if (hidden != null) null else previous.descriptor,
+                items = if (hidden != null) emptyList() else previous.items)
+        }
     }
 
     fun importJar(path: Path) = action {

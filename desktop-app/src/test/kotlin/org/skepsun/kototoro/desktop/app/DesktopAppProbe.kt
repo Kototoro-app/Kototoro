@@ -67,6 +67,10 @@ object DesktopAppProbe {
                 DesktopJarPriorityProbe.run(args)
                 return
             }
+            if (args[0].startsWith("brokensource-")) {
+                DesktopBrokenSourcesProbe.run(args)
+                return
+            }
             if (args[0] == "navconfig") {
                 DesktopNavigationConfigProbe.run(args)
                 return

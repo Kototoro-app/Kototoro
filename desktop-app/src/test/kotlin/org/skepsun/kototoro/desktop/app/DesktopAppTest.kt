@@ -129,6 +129,13 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `a parser marked broken stays installed and the show broken sources switch hides and offers it`() {
+        val root = directory.resolve("中文 broken sources")
+        probe("brokensource-write", root, 150)
+        probe("brokensource-read", root, 150)
+    }
+
+    @Test
     fun `shared novel directory locates grouped chapters and keeps original indices in wide and narrow windows`() {
         probe("novel-directory", directory.resolve("中文 novel directory wide"))
         probe("novel-directory-narrow", directory.resolve("中文 novel directory narrow"))

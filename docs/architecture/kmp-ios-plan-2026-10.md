@@ -8069,3 +8069,53 @@ Android 的“源”页（`UnifiedSourcesScreen`）里每个来源带一个开�
 仍待：Android 同组的“显示损坏来源”（`show_broken_sources`）与“扩展安装行为”（`extension_install_behavior`：
 询问/仅安装/安装并启用）在 Windows 还没有行；`deduplicateJarPackages`（同包多版本只留最新）在 Windows 侧还没有
 调用点——桌面的安装记录按 sha 目录天然分开，接之前要先确定“同包不同版本”在桌面上的表示。
+
+## 177. 远程来源 · 显示已损坏来源（对齐 Android `show_broken_sources`，parser host 读 `@Broken`）（2026-10-24）
+
+Android 的“显示已损坏来源”不是“加载失败的扩展”，而是扩展作者在解析器类上用 `@Broken` 主动标记的源：
+`JarExtensionLoader.scanBrokenSourceNames` 扫 DEX 里带 `@Broken` 的类、再用 `@ContentSourceParser(name)` /
+`@MangaSourceParser(name)` 得到源名，`GlobalExtensionManager` 把它塞进 `PluginContentSource(broken=…)`，
+`ContentSource.title` 变成 `"$baseTitle (${getString(source_broken)})"`，`ContentSourcesRepository` 只在
+`show_broken_sources` 打开时才把 `isBroken` 的源放进列表。插件本身照常安装、照常可调用，开关只管“要不要在UI里提供它”。
+Windows 这一轮把这个语义补齐，因为此前的 Windows 连“已损坏”这个概念都没有：`ParserPluginRegistry.build()`
+把所有枚举常量都构造成 `ContentSource`，任何一个抛异常就整个插件 `CONSTRUCTION_FAILED`，而作者主动标记的坏源
+反而完全看不出来。
+
+- parser host 侧（`ParserPluginRegistry.kt`）：`ParserSourceInfo` 新增 `broken: Boolean = false`。
+  `brokenSourceNames(path, loader)` 读 JAR 条目字节——只有含 `Lorg/skepsun/kototoro/parsers/Broken;` 或
+  `Lorg/koitharu/kotatsu/parsers/Broken;` 描述符的 class 才会被 `loadClass` 并读注解（Android 是全量扫 DEX，
+  这里先用字节预筛，几千个类的插件也只加载那几个），注解类型由宿主共享 ABI 提供（`ParserPluginClassLoader`
+  对这些包父优先），所以按 class 身份比较是稳的；单个类加载失败只跳过它，不带垮整次扫描。
+- 目录文件跟着升版：`CATALOG_VERSION = "2"`，每个源一行从 4 列变 5 列（末列 `1`/`0` 表示 `broken`）。
+  旧 v1 目录会被判为无效 → 走一次完整加载并重写，正好把标记算出来；`readCatalog` 之后注册的插件也带着这个标记，
+  不需要提前 open JAR。
+- 桌面侧：键 `show_broken_sources` 与 Android 同名，存 `desktop_extensions`（与 `disabled_sources`、
+  `jar_priority_order` 同一把 store），值是 `Toggle`，默认关。`DesktopSession.sourceListings(includeBroken = showBrokenSources())`
+  是唯一入口，所以来源栏、来源网格、筛选器、搜索建议、换源候选、来源开关对话框全都自动跟着走；
+  `pruneDisabledSources()` 显式传 `includeBroken = true`，否则关掉开关时会把坏源的“已禁用”状态当成过期名字删掉。
+- 标题：`parserListing(info)` 对坏源拼上 Android 的 `source_broken`（`Fixture Broken (已损坏)`），
+  与 Android `ContentSource.title` 同一套写法，取词走 `AndroidStrings`。
+- UI：来源设置页“远程来源”一节在插件去重顺序行与其“下次启动生效”说明之后新增整行开关
+  `source-setting-show-broken`（排在说明后面，因为它立即生效、不需要重启，紧贴说明会被读成也要重启），
+  标题/摘要直接用 Android 的 `show_broken_sources` / `show_broken_sources_summary`（“允许查看与使用被标记为已损坏的源插件”）。
+  切换后 `DesktopController.setShowBrokenSources` 重发 `sources`；如果当前浏览的正好是被藏起来的坏源，
+  清掉浏览选择（同禁用来源的处理），作品的进度、下载、设置都不动。
+- 夹具：`parser-host/src/fixtureBroken`（新 sourceSet，`fixture-broken.jar`）只有一个源 `FIXTURE_BROKEN`，
+  解析器类同时带 `@Broken("fixture: the site is offline")` 与 `@ContentSourceParser(name = "FIXTURE_BROKEN", …)`，
+  `newParser` 返回真实可调的 `BrokenFixtureParser`——这样“标记坏”与“能不能调”是两件事，能被分别断言。
+  `:desktop-app` 的测试任务补了 `dependsOn ':parser-host:fixtureBrokenJar'`。
+- 验证：`:parser-host:test --tests *ParserPluginRegistry*` 新增一条 `a parser the plugin marks broken is flagged,
+  kept callable and remembered by the catalog`（10 条全绿）：装 `fixture-broken.jar` 后 `sources()` 里
+  `FIXTURE_BROKEN.broken == true`、标题是 `Fixture Broken`、`withParser` 仍能正常取列表（0 条）；把工件换成非 JAR 的 PNG
+  后用目录重新注册，标记照样回来——目录 v2 的 `broken` 列确实生效。桌面探针 `brokensource-write`/`brokensource-read`
+  走两个 JVM：write 阶段导入夹具，断言 host 已标记、`sourceListings()` 默认不含它、`includeBroken = true` 才含，
+  进来源设置点 `source-setting-show-broken`，断言 `desktop_extensions` 里存成 `Toggle(true)`、
+  `state.sources` 里出现 `Fixture Broken (已损坏)`、再点一次又消失，截图 `brokensource-write-off.png`/`-on.png`；
+  read 阶段重开同一数据根，断言开关持久化、标题仍带“（已损坏）”、`pluginFor("FIXTURE_BROKEN")` 仍解析得到。
+- 仍待：Tsuki 自己模型里的 `isBroken`（Android 在 `PluginContentSource` 里与注解标记并列判断）在 Windows 侧
+  还没有对应实现；`extension_install_behavior`（询问/仅安装/安装并启用）仍是空的下一行。
+- 顺带修的一处共享模块编译缺口：`core-ui` 的 `TvFocus.kt` 用 `WindowInsets.isImeVisible` 判断软键盘（TV 输入框
+  左右键的放行条件），这个扩展只在 `foundation-layout` 的 Android 工件里，`commonMain` 编译 JVM/iOS 目标时是
+  未解析引用——Android 侧 `:app:compileDebugKotlin` 一直是绿的，桌面侧 `:core-ui:compileKotlinJvm` 却红了，
+  连带 `:desktop-app:*` 全部编译不了。改成共享写法 `WindowInsets.ime.getBottom(LocalDensity.current) > 0`
+  （Android 上就是同一个 ime 高度判定），`:core-ui:compileKotlinJvm` 与 `:app:compileDebugKotlin` 都重新编译通过。

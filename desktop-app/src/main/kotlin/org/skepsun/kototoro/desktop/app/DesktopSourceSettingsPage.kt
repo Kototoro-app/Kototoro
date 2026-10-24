@@ -73,7 +73,14 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
                     ?: AndroidStrings["not_specified"],
                 active, { dialog = SourceSettingsDialog.JAR_PRIORITY }, testTag = "source-setting-jar-priority")
             SettingsRowDivider()
+            // The restart note belongs to the priority order above, so it stays right under it.
             SettingsInfoRow(desktopText("sources.jarPriorityNote"), null)
+            SettingsRowDivider()
+            // Android's `show_broken_sources`: a `@Broken` parser stays installed, this decides if lists offer it.
+            // Unlike the order above it applies at once, so it sits after the restart note rather than before it.
+            SettingsSwitchRow(AndroidStrings["show_broken_sources"],
+                AndroidStrings["show_broken_sources_summary"], state.showBrokenSources, active,
+                { controller.setShowBrokenSources(it) }, testTag = "source-setting-show-broken")
         }
         SettingsSectionHeader(desktopText("sources.tags"))
         SettingsGroup {

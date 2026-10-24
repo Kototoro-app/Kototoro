@@ -12,6 +12,9 @@ import org.skepsun.kototoro.parserhost.ParserPluginRegistry
  */
 internal const val JAR_PRIORITY_ORDER_KEY = "jar_priority_order"
 
+/** Android's `show_broken_sources`, stored next to the other extension switches. */
+internal const val SHOW_BROKEN_SOURCES_KEY = "show_broken_sources"
+
 /** The saved order first, then the registry default, without duplicates — [ParserPluginRegistry] ranks the first. */
 internal fun parserPluginPriority(savedOrder: String): List<String> =
     (savedOrder.parseJarPriorityNames() + ParserPluginRegistry.DEFAULT_PRIORITY).distinctBy { it.lowercase() }

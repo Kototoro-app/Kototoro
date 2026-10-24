@@ -179,6 +179,30 @@ class ParserPluginRegistryTest {
     }
 
     @Test
+    fun `a parser the plugin marks broken is flagged, kept callable and remembered by the catalog`() = runBlocking {
+        val catalogs = root.resolve("catalogs")
+        val artifact = Files.copy(Fixtures.broken, root.resolve("broken-plugin.jar"))
+        val hash = ParserPluginInspector().inspect(artifact).sha256
+        ParserPluginRegistry(platform, catalogDirectory = catalogs).use { broken ->
+            val info = broken.load(artifact, "kototoro-parsers", hash)
+            val source = info.sources.single { it.source.name == "FIXTURE_BROKEN" }
+            assertTrue(source.broken, "the @Broken annotation was not read")
+            assertEquals("Fixture Broken", source.title)
+            // Android keeps a broken parser installed and usable; only the app's source lists hide it.
+            val size = broken.withParser("FIXTURE_BROKEN") { handle ->
+                handle.parser.getList(0, SortOrder.POPULARITY, ContentListFilter.EMPTY).size
+            }
+            assertEquals(0, size)
+        }
+        // The catalog carries the flag too: replace the artifact with a non-jar and register from the catalog alone.
+        Files.copy(Fixtures.png.inputStream(), artifact, StandardCopyOption.REPLACE_EXISTING)
+        ParserPluginRegistry(platform, catalogDirectory = catalogs).use { cached ->
+            cached.load(artifact, "kototoro-parsers", hash)
+            assertTrue(cached.sources().single { it.source.name == "FIXTURE_BROKEN" }.broken)
+        }
+    }
+
+    @Test
     fun `a closed registry refuses work`() {
         loadAll()
         registry.close()

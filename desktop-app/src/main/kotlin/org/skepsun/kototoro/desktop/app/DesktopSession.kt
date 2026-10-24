@@ -284,9 +284,9 @@ class DesktopSession private constructor(
     }
 
     /** Every installed source of every ecosystem, as the UI lists them. */
-    fun sourceListings(): List<SourceListing> =
+    fun sourceListings(includeBroken: Boolean = showBrokenSources()): List<SourceListing> =
         registry.installed().flatMap { extension -> extension.sources.map { mihonListing(it, extension.metadata.ecosystem) } } +
-            parsers.sources().map(::parserListing) +
+            parsers.sources().filter { includeBroken || !it.broken }.map(::parserListing) +
             cloudstream.sources().map(::cloudstreamListing) +
             jsonSourceCache.map(::jsonListing)
 
@@ -331,6 +331,19 @@ class DesktopSession private constructor(
     fun setJarPriorityOrder(names: List<String>) {
         installed.edit(SourcePreferenceEdit(changes = mapOf(
             JAR_PRIORITY_ORDER_KEY to SourcePreferenceValue.Text(names.joinToString(",")),
+        )))
+    }
+
+    /**
+     * Android's `show_broken_sources`: the parsers a plugin marks `@Broken` stay installed and callable, the switch
+     * only decides whether the source lists offer them. Default off, exactly like Android.
+     */
+    fun showBrokenSources(): Boolean =
+        (installed.snapshot()[SHOW_BROKEN_SOURCES_KEY] as? SourcePreferenceValue.Toggle)?.value ?: false
+
+    fun setShowBrokenSources(show: Boolean) {
+        installed.edit(SourcePreferenceEdit(changes = mapOf(
+            SHOW_BROKEN_SOURCES_KEY to SourcePreferenceValue.Toggle(show),
         )))
     }
 
@@ -502,7 +515,8 @@ class DesktopSession private constructor(
 
     /** Forgets switch entries whose source is gone with the package, so the set cannot grow across reinstalls. */
     private fun pruneDisabledSources() {
-        val known = sourceListings().mapTo(mutableSetOf()) { it.source.name }
+        // Hidden broken sources still own their switch, so the prune sees everything the plugins declare.
+        val known = sourceListings(includeBroken = true).mapTo(mutableSetOf()) { it.source.name }
         val disabled = disabledSources()
         val kept = disabled.filterTo(mutableSetOf()) { it in known }
         if (kept.size == disabled.size) return
@@ -681,8 +695,17 @@ private fun jsonListing(source: org.skepsun.kototoro.desktop.runtime.DesktopJson
 private fun mihonListing(source: MihonSourceDescriptor, ecosystem: SourceEcosystem) =
     SourceListing(source.source, source.displayName, ecosystem, source.supportsLatest, source.sourceId)
 
-private fun parserListing(info: ParserSourceInfo) = SourceListing(info.source, info.title, when (info.architecture) {
-    ParserPluginArchitecture.KOTOTORO -> SourceEcosystem.KOTOTORO
-    ParserPluginArchitecture.KOTATSU -> SourceEcosystem.KOTATSU
-    ParserPluginArchitecture.TSUKI -> SourceEcosystem.UMA
-}, supportsLatest = true)
+private fun parserListing(info: ParserSourceInfo) = SourceListing(
+    info.source,
+    // Android's `ContentSource.title`: `"$baseTitle (${getString(source_broken)})"` for a `@Broken` parser.
+    if (info.broken) "${info.title} (${AndroidStrings[SOURCE_BROKEN_STRING]})" else info.title,
+    when (info.architecture) {
+        ParserPluginArchitecture.KOTOTORO -> SourceEcosystem.KOTOTORO
+        ParserPluginArchitecture.KOTATSU -> SourceEcosystem.KOTATSU
+        ParserPluginArchitecture.TSUKI -> SourceEcosystem.UMA
+    },
+    supportsLatest = true,
+)
+
+/** Android's `R.string.source_broken`. */
+private const val SOURCE_BROKEN_STRING = "source_broken"

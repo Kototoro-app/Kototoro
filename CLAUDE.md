@@ -269,6 +269,11 @@ npm run docs:build
   `desktop_extensions`（值是 parser 插件 id 的逗号分隔列表，Android 侧是 JAR 文件名），
   `DesktopSession.open` 据此给 `ParserPluginRegistry` 排优先级，所以同名声明的来源由排在前面的插件提供；
   对话框逐行上移/下移并即时写盘，行下注明“下次启动生效”（registry 只在打开时排一次），见计划 §176。
+  同一节还有 Android 的“显示已损坏来源”（`show_broken_sources`，默认关）：Android 的“损坏”是作者用 `@Broken`
+  标记的解析器（不是加载失败），parser host 现在按字节预筛 JAR 条目、只对含该注解的类 `loadClass` 读
+  `@ContentSourceParser`/`@MangaSourceParser` 的名字，`ParserSourceInfo.broken` 随目录文件 v2 的末列缓存下来；
+  开关存 `desktop_extensions`，关着时坏源不出现在来源栏/网格/筛选器/建议/换源候选（仍安装、仍可调用，
+  标题按 Android 拼上“（已损坏）”），打开后各处直接出现，见计划 §177。
   来源设置的“标签”节是全局标签黑名单页（对应 Android 的“标签黑名单”）：搜索词库目录、按类别分组、
   点芯片切换、长按看键/英文/类别/别名、可“清空”或把词库不认识的标题加为 `raw:` 模式；
   选择存 `desktop_background` 的 `global_tag_blacklist`（与 Android 同键同格式，字符串是词库 ID 或 `raw:` 键），
