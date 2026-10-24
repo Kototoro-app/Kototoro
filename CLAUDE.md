@@ -250,9 +250,11 @@ npm run docs:build
   源设置页共用，见计划 §136、§173。“更多 → 扩展与仓库”同样用这套节/行走廊（仓库、来源、目录、已安装四块，
   仓库行尾是刷新/忘记、已安装行尾是更新/卸载，自动更新是整行开关），行内控件由共享
   `SettingsActionRow` 承载（整页可滚动，目录列表按窗口高度取高，已安装行是页内 inline 行而不是嵌套滚动列表），
-  见计划 §137。“来源”一行打开 Android 的来源开关对话框（搜索框 + 逐个来源的启用开关，`disabled_sources` 存在
-  `desktop_extensions`，`DesktopAppState.disabledSources`/`enabledSources` 把“已装”与“可用”分开，关掉的来源
-  不再出现在来源栏/来源网格/筛选器/搜索建议/换源候选，但它的收藏进度与下载都保留），见计划 §174。“更多”页本身也是分节设置页（功能/外观/高级工具），
+  见计划 §137。“来源”一行打开 Android 的来源开关对话框（搜索框 + 全部/启用/禁用三个筛选芯片 + 逐个来源的启用开关 +
+  按当前筛选结果“全部启用/全部禁用”并先弹 Android 的确认框，纯筛选逻辑在 `DesktopSourceSwitch.kt`，
+  `disabled_sources` 存在 `desktop_extensions`，`DesktopAppState.disabledSources`/`enabledSources` 把“已装”与
+  “可用”分开，关掉的来源不再出现在来源栏/来源网格/筛选器/搜索建议/换源候选，但它的收藏进度与下载都保留），
+  见计划 §174、§175。“更多”页本身也是分节设置页（功能/外观/高级工具），
   功能行带随包图标（`SettingsValueRow` 的 `leadingIcon`），语言/主题/界面风格改开单选对话框，
   见计划 §138；阅读设置另有独立页面（更多 → 阅读设置），分“页面/翻页”两节编辑同一份
   `DesktopReaderSettings`（模式、方向、缩放、背景、页码、裁剪、自动跨章、动画、速度），

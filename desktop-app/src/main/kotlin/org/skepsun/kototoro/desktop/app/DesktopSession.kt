@@ -299,9 +299,16 @@ class DesktopSession private constructor(
         (installed.snapshot()["disabled_sources"] as? SourcePreferenceValue.TextSet)?.values.orEmpty()
 
     /** Stores the switch state; enabling drops the name instead of keeping a growing "false" set. */
-    fun setSourceEnabled(name: String, enabled: Boolean) {
+    fun setSourceEnabled(name: String, enabled: Boolean) = setSourcesEnabled(listOf(name), enabled)
+
+    /**
+     * Android's `setSourcesEnabled(ids, enabled)` for the bulk buttons: one store write for the whole batch, so a
+     * "disable all in the current filter" cannot leave the list half switched when the process dies mid-way.
+     */
+    fun setSourcesEnabled(names: Collection<String>, enabled: Boolean) {
+        if (names.isEmpty()) return
         val disabled = disabledSources().toMutableSet()
-        if (enabled) disabled -= name else disabled += name
+        if (enabled) disabled -= names.toSet() else disabled += names
         installed.edit(SourcePreferenceEdit(changes = mapOf(
             "disabled_sources" to SourcePreferenceValue.TextSet(disabled),
         )))

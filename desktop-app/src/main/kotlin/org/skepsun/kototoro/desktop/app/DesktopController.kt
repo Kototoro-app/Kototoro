@@ -607,11 +607,17 @@ class DesktopController(val session: DesktopSession) {
      * downloads and its settings, and switching it back on needs no reload because the runtime stays loaded.
      * A disabled source can no longer be the one being browsed, so the browse selection is dropped with it.
      */
-    fun setSourceEnabled(name: String, enabled: Boolean) = action {
-        session.setSourceEnabled(name, enabled)
+    fun setSourceEnabled(name: String, enabled: Boolean) = setSourcesEnabled(listOf(name), enabled)
+
+    /**
+     * The dialog's bulk buttons, like Android's "enable/disable all in the current filter": one write, one state
+     * update, and the same rule for the browsed source (a source that just got switched off cannot stay selected).
+     */
+    fun setSourcesEnabled(names: Collection<String>, enabled: Boolean) = action {
+        session.setSourcesEnabled(names, enabled)
         val disabled = session.disabledSources()
         mutableState.update { previous ->
-            val hidden = previous.selectedSource?.takeIf { it.source.name == name && !enabled }
+            val hidden = previous.selectedSource?.takeIf { it.source.name in disabled }
             previous.copy(disabledSources = disabled,
                 selectedSource = if (hidden != null) null else previous.selectedSource,
                 descriptor = if (hidden != null) null else previous.descriptor,

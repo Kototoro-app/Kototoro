@@ -7987,3 +7987,37 @@ Android 的“源”页（`UnifiedSourcesScreen`）里每个来源带一个开�
 仍待：Android 的 `KEY_SOURCES_ENABLED_ALL` 总开关与扩展自带的 `lock` 来源；来源列表还没有启用/禁用筛选与批量开关；
 推荐设置里“包含禁用来源”仍无处可指（现在是硬性排除）；Android 同一页的“远程来源 JAR 优先级/显示损坏来源/扩展安装行为”
 与“镜像切换/处理链接”分组尚未在 Windows 出现。
+## 175. 来源开关对话框的启用筛选与批量启停（对齐 Android UnifiedEnabledFilter / 全选批处理）（2026-10-24）
+
+§174 只做了逐个开关。Android 的源页还有两件配套：`UnifiedEnabledFilter` 的“全部/已启用/已禁用”筛选芯片，以及
+“把当前筛选结果一次性打开或关掉”（`confirmSetFilteredSourcesEnabled`，先确认、再对筛选结果批量写）。装上几十个扩展
+之后，逐个点是点不完的，所以这一节把两者补上。
+
+- 纯逻辑在新文件 `DesktopSourceSwitch.kt`：`DesktopSourceEnabledFilter`（ALL/ENABLED/DISABLED）与
+  `filterSourceSwitchEntries(sources, query, filter, disabled)`——查询（标题或来源名、大小写不敏感、先去空白）与
+  筛选按“与”组合，顺序保持宿主自己的顺序；两者都是默认值时直接返回原列表实例，省掉一次重建。
+  `DesktopSourceSwitchTest` 增三条：默认直返原实例、筛选只列对应的那一侧、查询与筛选相乘（含大小写与前后空白）。
+- `DesktopSession.setSourcesEnabled(names, enabled)` 与 `DesktopController.setSourcesEnabled(names, enabled)`：
+  Android 的批量原语。整批一次写盘（不会中途只剩一半），一次状态刷新；单条开关改成委托给它，所以
+  “正在浏览的来源被关掉就退出浏览”那条规则对批量同样成立（`selectedSource` 落在 `disabledSources` 里就清空）。
+- 对话框：搜索框下面是三个 `FilterChip`（`source-enabled-filter:ALL/ENABLED/DISABLED`，文案取 Android 的
+  `all`/`enabled`/`disabled`），列表下面是 Android 工具栏那一对“全部启用/全部禁用”
+  （`source-switches-enable-all`/`-disable-all`，文案取 `unified_sources_enable_all`/`_disable_all`，与芯片的
+  启用/禁用区分开）；任一侧没有可改的行时按钮置灰。点按钮先弹 Android 的确认框
+  （`source-switch-batch-confirm`，标题 `unified_sources_disable_all`、正文
+  `禁用当前筛选结果中的 %1$d 个源？`、确认键 `disable`/`enable`、取消键 `common.cancel`），确认后对**当前可见行**
+  （`entries`，即搜索+筛选的结果）批量写。
+- 一处有意偏离：批量写完后把筛选切到结果所在的一侧（禁用→“已禁用”、启用→“已启用”）。Android 是让行直接从当前筛选
+  里消失，Windows 的对话框那样看起来像“点了确认之后自己清空了”，跟着结果走更像操作生效。
+- 探针（`repositories-write`）：清空查询后点“已禁用”看到空态、点“已启用”看到那一行；`全部禁用` → 确认框正文
+  “禁用当前筛选结果中的 1 个源？” → 确认后 `disabledSources` 与开关同步（筛选已切到“已禁用”，行仍在且是关的）；
+  再 `全部启用` → 确认 → `disabledSources` 清空、行回到开；最后切回“全部”继续原来那条单开关路径。
+  截图 `repositories-write-filter-enabled.png`（芯片+列表+全部启用/全部禁用）与
+  `repositories-write-batch-confirm.png`（“全部禁用 / 禁用当前筛选结果中的 1 个源？/ 取消 / 禁用”）已看过。
+
+验证：`:desktop-app:verifyDesktopStrings`（924 键不变，因为新文案全部来自 Android 的 `android-strings` 目录）、
+`:desktop-app:test --tests *SourceSwitch*`（7 条）、`--tests *SuggestionSources*`（6 条）、
+`--tests *repository*`（write+read 双进程全绿）、`--tests *CMS*`（JSON 源页面）全绿。
+
+仍待：Android 选择栏的其余动作（选中若干来源后测速/删除/切换 NSFW）在 Windows 还没有选中态；来源总览的
+“全部启用/禁用”是筛选+批量，Windows 目前只在开关对话框里提供同一能力。

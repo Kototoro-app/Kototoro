@@ -47,4 +47,43 @@ class DesktopSourceSwitchTest {
         val state = DesktopAppState(sources = listOf(alpha), disabledSources = setOf("gone"))
         assertEquals(listOf(alpha), state.enabledSources)
     }
+
+    @Test
+    fun `an unfiltered dialog returns the host list itself`() {
+        val sources = listOf(alpha, beta, gamma)
+        assertSame(sources, filterSourceSwitchEntries(sources, "  ", DesktopSourceEnabledFilter.ALL, setOf("beta")))
+    }
+
+    @Test
+    fun `the enabled filter lists only the side of the switch it names`() {
+        val sources = listOf(alpha, beta, gamma)
+        val disabled = setOf("beta")
+        assertEquals(sources, filterSourceSwitchEntries(sources, "", DesktopSourceEnabledFilter.ALL, disabled))
+        assertEquals(
+            listOf(alpha, gamma),
+            filterSourceSwitchEntries(sources, "", DesktopSourceEnabledFilter.ENABLED, disabled),
+        )
+        assertEquals(
+            listOf(beta),
+            filterSourceSwitchEntries(sources, "", DesktopSourceEnabledFilter.DISABLED, disabled),
+        )
+    }
+
+    @Test
+    fun `the query and the filter combine with and`() {
+        val sources = listOf(alpha, beta, gamma)
+        val disabled = setOf("beta")
+        assertEquals(
+            listOf(gamma),
+            filterSourceSwitchEntries(sources, "ga", DesktopSourceEnabledFilter.ENABLED, disabled),
+        )
+        assertEquals(
+            emptyList<SourceListing>(),
+            filterSourceSwitchEntries(sources, "beta", DesktopSourceEnabledFilter.ENABLED, disabled),
+        )
+        assertEquals(
+            listOf(beta),
+            filterSourceSwitchEntries(sources, " BETA ", DesktopSourceEnabledFilter.DISABLED, disabled),
+        )
+    }
 }

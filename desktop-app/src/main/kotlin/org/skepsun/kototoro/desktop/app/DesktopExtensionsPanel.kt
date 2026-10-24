@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -394,9 +395,10 @@ private fun InstalledExtensions(
 }
 
 /**
- * Android's unified source list, reduced to what Windows can honour: one switch per source. A disabled source stays
- * installed (its works, downloads and preference store are untouched) and simply leaves browsing, search, the source
- * filters, recommendations and change-source targets, exactly like Android's enabled-only source list.
+ * Android's unified source list, reduced to what Windows can honour: one switch per source, the enabled/disabled
+ * filter and the "apply to everything in the current filter" buttons. A disabled source stays installed (its works,
+ * downloads and preference store are untouched) and simply leaves browsing, search, the source filters,
+ * recommendations and change-source targets, exactly like Android's enabled-only source list.
  */
 @Composable
 private fun SourceSwitchDialog(
@@ -406,10 +408,10 @@ private fun SourceSwitchDialog(
     onDismiss: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
-    val entries = remember(state.sources, query) {
-        state.sources.filter {
-            query.isBlank() || it.displayName.contains(query, true) || it.source.name.contains(query, true)
-        }
+    var filter by remember { mutableStateOf(DesktopSourceEnabledFilter.ALL) }
+    var pendingBatch by remember { mutableStateOf<Boolean?>(null) }
+    val entries = remember(state.sources, state.disabledSources, query, filter) {
+        filterSourceSwitchEntries(state.sources, query, filter, state.disabledSources)
     }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -424,6 +426,17 @@ private fun SourceSwitchDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().testTag("source-list-query"),
                 )
+                // Android's UnifiedEnabledFilter: all / enabled / disabled, applied on top of the search.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DesktopSourceEnabledFilter.entries.forEach { option ->
+                        FilterChip(
+                            selected = option == filter,
+                            onClick = { filter = option },
+                            label = { Text(AndroidStrings[option.stringName()]) },
+                            modifier = Modifier.testTag("source-enabled-filter:${option.name}"),
+                        )
+                    }
+                }
                 if (entries.isEmpty()) {
                     Text(desktopText("sourceList.empty"), style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -446,6 +459,20 @@ private fun SourceSwitchDialog(
                         }
                     }
                 }
+                // The bulk pair also follows the filter, like Android's confirmation counts it does. Its labels are
+                // Android's toolbar pair (Enable all / Disable all), not the chips' 启用/禁用, which are filters here.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = { pendingBatch = true },
+                        enabled = enabled && entries.any { it.source.name in state.disabledSources },
+                        modifier = Modifier.testTag("source-switches-enable-all"),
+                    ) { Text(AndroidStrings["unified_sources_enable_all"]) }
+                    TextButton(
+                        onClick = { pendingBatch = false },
+                        enabled = enabled && entries.any { it.source.name !in state.disabledSources },
+                        modifier = Modifier.testTag("source-switches-disable-all"),
+                    ) { Text(AndroidStrings["unified_sources_disable_all"]) }
+                }
             }
         },
         confirmButton = {
@@ -454,4 +481,36 @@ private fun SourceSwitchDialog(
             }
         },
     )
+    pendingBatch?.let { enable ->
+        val names = entries.map { it.source.name }
+        val key = if (enable) "enable" else "disable"
+        AlertDialog(
+            onDismissRequest = { pendingBatch = null },
+            modifier = Modifier.testTag("source-switch-batch-confirm"),
+            title = { Text(AndroidStrings["unified_sources_${key}_all"]) },
+            text = { Text(AndroidStrings.format("unified_sources_${key}_all_confirmation", names.size)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        controller.setSourcesEnabled(names, enable)
+                        // Follow the batch to the side it moved the rows to: otherwise the confirmation empties the
+                        // list right after the user pressed it (Android lets the rows drop out of the filter).
+                        filter = if (enable) DesktopSourceEnabledFilter.ENABLED else DesktopSourceEnabledFilter.DISABLED
+                        pendingBatch = null
+                    },
+                    modifier = Modifier.testTag("source-switch-batch-ok"),
+                ) { Text(AndroidStrings[key]) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingBatch = null }) { Text(desktopText("common.cancel")) }
+            },
+        )
+    }
+}
+
+/** The Android string naming this filter chip (`all` / `enabled` / `disabled`). */
+private fun DesktopSourceEnabledFilter.stringName(): String = when (this) {
+    DesktopSourceEnabledFilter.ALL -> "all"
+    DesktopSourceEnabledFilter.ENABLED -> "enabled"
+    DesktopSourceEnabledFilter.DISABLED -> "disabled"
 }
