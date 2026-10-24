@@ -33,6 +33,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.prefs.rememberChapterRowActionPrefs
 import org.skepsun.kototoro.core.util.ext.findActivity
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.details.ui.DetailsViewModel
@@ -135,7 +136,7 @@ fun ChaptersScreenRoot(
             qualityProbeResult = result
         }
         viewModel.onShowMessage.observeEvent(lifecycleOwner) { messageResId ->
-            Snackbar.make(viewForSnackbar, messageResId, Snackbar.LENGTH_LONG).show()
+            viewForSnackbar.makeSnackbar(messageResId, Snackbar.LENGTH_LONG).show()
         }
         onDispose {
             onSelectionStateChange(null)
@@ -160,11 +161,7 @@ fun ChaptersScreenRoot(
         if (selectedIds.isNotEmpty() && !hasShownSelectionHint) {
             hasShownSelectionHint = true
             try {
-                Snackbar.make(
-                    viewForSnackbar,
-                    R.string.chapter_range_selection_hint,
-                    Snackbar.LENGTH_LONG,
-                ).show()
+                viewForSnackbar.makeSnackbar(R.string.chapter_range_selection_hint, Snackbar.LENGTH_LONG).show()
             } catch (e: IllegalArgumentException) {
                 e.printStackTraceDebug()
                 Toast.makeText(
@@ -230,8 +227,7 @@ fun ChaptersScreenRoot(
                         if (manga != null) {
                             LocalChaptersRemoveService.start(context, manga, deletableChapterIds)
                             try {
-                                Snackbar.make(
-                                    viewForSnackbar,
+                                viewForSnackbar.makeSnackbar(
                                     R.string.chapters_will_removed_background,
                                     Snackbar.LENGTH_LONG,
                                 ).show()

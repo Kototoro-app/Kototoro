@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.res.stringResource
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.home.ui.compose.HomeScreen
 import org.skepsun.kototoro.home.ui.compose.HomeScreenActions
 import org.skepsun.kototoro.home.ui.HomeRoute
@@ -1219,8 +1220,7 @@ internal fun SuggestionsTopLevelRouteContent(
                     override fun onMenuItemSelected(menuItem: android.view.MenuItem): Boolean = when (menuItem.itemId) {
                         org.skepsun.kototoro.R.id.action_update -> {
                             viewModel.updateSuggestions()
-                            com.google.android.material.snackbar.Snackbar.make(
-                                act.window.decorView.rootView,
+                            act.window.decorView.rootView.makeSnackbar(
                                 org.skepsun.kototoro.R.string.suggestions_updating,
                                 com.google.android.material.snackbar.Snackbar.LENGTH_LONG,
                             ).show()

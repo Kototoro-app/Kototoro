@@ -59,6 +59,7 @@ import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.prefs.DownloadFormat
 import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.core.util.ext.joinToStringWithLimit
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.download.ui.dialog.ChapterSelectOptions
 import org.skepsun.kototoro.download.ui.dialog.DownloadDialogViewModel
 import org.skepsun.kototoro.parsers.model.Content
@@ -615,8 +616,7 @@ private fun showDownloadResultSnackbar(
     isStarted: Boolean,
     onOpenDownloads: (() -> Unit)?,
 ) {
-    Snackbar.make(
-        snackbarHostView,
+    snackbarHostView.makeSnackbar(
         if (isStarted) R.string.download_started else R.string.download_added,
         Snackbar.LENGTH_LONG,
     ).apply {
