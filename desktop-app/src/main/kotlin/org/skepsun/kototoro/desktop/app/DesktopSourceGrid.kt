@@ -32,8 +32,8 @@ import org.skepsun.kototoro.explore.ui.compose.sourceQuickAccessMetrics
 internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
     var query by remember { mutableStateOf("") }
     val settings = state.sourceSettings
-    val sources = remember(state.sources, query, state.exploreFilter, settings) {
-        settings.sorted(state.sources.filter {
+    val sources = remember(state.enabledSources, query, state.exploreFilter, settings) {
+        settings.sorted(state.enabledSources.filter {
             (it.displayName.contains(query, true) || it.source.locale.contains(query, true)) &&
                 state.exploreFilter.accepts(it) &&
                 !(settings.hidesNsfw(DesktopNsfwTarget.SOURCES) && it.isNsfwSource())
@@ -46,12 +46,14 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
             org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock(desktopText("nav.browse"))
             DesktopSearchField(query, { query = it }, desktopText("sourceGrid.search"), modifier = Modifier.weight(1f),
                 enabled = enabled, tag = "source-grid-query")
-            DesktopSourceFilterControls(state.exploreFilter, state.sources, controller::exploreFilter, enabled, "explore")
+            DesktopSourceFilterControls(
+                state.exploreFilter, state.enabledSources, controller::exploreFilter, enabled, "explore",
+            )
             OutlinedButton({ controller.showExtensions() }, enabled = enabled,
                 modifier = Modifier.testTag("source-grid-extensions")) { Text(desktopText("sourceGrid.extensions")) }
         }
         Text(desktopText("sourceGrid.sources", sources.size), fontWeight = FontWeight.SemiBold)
-        if (state.sources.isEmpty()) {
+        if (state.enabledSources.isEmpty()) {
             Text(desktopText("sourceGrid.empty"), color = Muted)
         }
         if (settings.grid) {

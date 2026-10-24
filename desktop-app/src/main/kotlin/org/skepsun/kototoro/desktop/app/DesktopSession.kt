@@ -288,6 +288,24 @@ class DesktopSession private constructor(
             parsers.sources().map(::parserListing) +
             cloudstream.sources().map(::cloudstreamListing) +
             jsonSourceCache.map(::jsonListing)
+
+    /**
+     * Android's per-source switch (`SourceEntity.enabled`): a disabled source stays installed and keeps serving the
+     * works already stored from it, it is just no longer offered for browsing, search or recommendations. The names
+     * live next to the installed-extension list because they share its lifetime — uninstalling a package drops its
+     * sources, and a stale name here only means "already hidden".
+     */
+    fun disabledSources(): Set<String> =
+        (installed.snapshot()["disabled_sources"] as? SourcePreferenceValue.TextSet)?.values.orEmpty()
+
+    /** Stores the switch state; enabling drops the name instead of keeping a growing "false" set. */
+    fun setSourceEnabled(name: String, enabled: Boolean) {
+        val disabled = disabledSources().toMutableSet()
+        if (enabled) disabled -= name else disabled += name
+        installed.edit(SourcePreferenceEdit(changes = mapOf(
+            "disabled_sources" to SourcePreferenceValue.TextSet(disabled),
+        )))
+    }
     internal suspend fun chapterPages(contentId: Long, chapter: SourceChapter): List<SourcePage> =
         downloadStore.find(contentId, chapter)?.takeIf { it.isComplete }?.pages?.map { it.page }
             ?: sources.getPages(chapter, null)
@@ -450,7 +468,19 @@ class DesktopSession private constructor(
             DesktopInstalledKind.EXTENSION -> registry.unload(entry.id)
         }
         check(unloaded) { desktopText("error.extensionNotLoaded") }
+        pruneDisabledSources()
         cleanupArtifacts()
+    }
+
+    /** Forgets switch entries whose source is gone with the package, so the set cannot grow across reinstalls. */
+    private fun pruneDisabledSources() {
+        val known = sourceListings().mapTo(mutableSetOf()) { it.source.name }
+        val disabled = disabledSources()
+        val kept = disabled.filterTo(mutableSetOf()) { it in known }
+        if (kept.size == disabled.size) return
+        installed.edit(SourcePreferenceEdit(changes = mapOf(
+            "disabled_sources" to SourcePreferenceValue.TextSet(kept),
+        )))
     }
 
     /** Artifacts of earlier versions and removed extensions; the files records still point at are kept. */
@@ -499,8 +529,9 @@ class DesktopSession private constructor(
 
     private fun restoreJars() {
         for ((key, value) in installed.snapshot()) {
+            // The same store also holds plain bookkeeping keys (source switches, update flags), not just JAR records.
+            val text = (value as? SourcePreferenceValue.Text)?.value ?: continue
             try {
-                val text = (value as SourcePreferenceValue.Text).value
                 if (key.startsWith(PARSER_KEY_PREFIX)) {
                     val record = SourceProtocolJson.decodeFromString<DesktopParserRecord>(text)
                     parsers.load(Path.of(record.path), record.id, record.sha256)

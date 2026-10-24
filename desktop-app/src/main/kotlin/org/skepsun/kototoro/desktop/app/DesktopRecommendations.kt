@@ -36,7 +36,8 @@ internal fun DesktopRecommendations(controller: DesktopController, state: Deskto
     val active = !state.busy
     // Android disables the dependent preferences while recommendations are off.
     val enabled = active && settings.enabled
-    val sources = state.sources
+    // Android builds suggestions from the enabled sources only, so a switched-off source is not offered here either.
+    val sources = state.enabledSources
     val options = remember(sources) { suggestionSourceOptions(sources) }
     var dialog by remember { mutableStateOf<RecommendationDialog?>(null) }
     Column(

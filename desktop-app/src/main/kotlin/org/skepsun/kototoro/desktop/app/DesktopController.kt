@@ -112,6 +112,8 @@ data class DesktopAppState(
     /** The saved interface language tag; null follows the system language. */
     val language: String? = null,
     val sources: List<SourceListing> = emptyList(),
+    /** Sources the user turned off on the extensions page; Android keeps them installed but stops offering them. */
+    val disabledSources: Set<String> = emptySet(),
     val repositories: List<DesktopRepository> = emptyList(),
     val extensionCatalog: DesktopRepositoryCatalog? = null,
     val installedExtensions: Map<String, Long> = emptyMap(),
@@ -228,6 +230,11 @@ data class DesktopAppState(
     /** Share text shown when Windows refused the clipboard write; null while there is nothing to fall back to. */
     val shareLinks: String? = null,
 ) {
+    /** Android's `getEnabledSources()`: everything the user did not switch off, in the host's own order. */
+    val enabledSources: List<SourceListing>
+        get() = if (disabledSources.isEmpty()) sources
+        else sources.filterNot { it.source.name in disabledSources }
+
     val image: Path? get() = if (screen == DesktopScreen.READER) pages.getOrNull(pageIndex)
         ?.let { readerImages[it.id]?.path } else null
 
@@ -263,7 +270,8 @@ class DesktopController(val session: DesktopSession) {
         interfaceStyle = DesktopInterfaceStyle.entries.firstOrNull {
             it.name == (appearancePreferences.snapshot()["interface_style"] as? SourcePreferenceValue.Text)?.value
         } ?: DesktopInterfaceStyle.MATERIAL,
-        language = restoredLanguage()))
+        language = restoredLanguage(),
+        disabledSources = session.disabledSources()))
     val state = mutableState.asStateFlow()
     private val continuous = DesktopScrollOperations(mutableState, session, scope, gate)
     private val novelOperations = DesktopNovelOperations(mutableState, session, scope, gate)
@@ -580,7 +588,8 @@ class DesktopController(val session: DesktopSession) {
         val descriptors = sourceDescriptors()
         mutableState.update { previous ->
             val removed = previous.selectedSource != null && descriptors.none { it.source.name == previous.selectedSource.source.name }
-            previous.copy(sources = descriptors, installedExtensions = installedVersions(), installedEntries = session.installedEntries(),
+            previous.copy(sources = descriptors, disabledSources = session.disabledSources(),
+                installedExtensions = installedVersions(), installedEntries = session.installedEntries(),
                 extensionUpdates = previous.extensionUpdates.filterNot { it.extension.packageName == entry.id },
                 selectedSource = if (removed) null else previous.selectedSource,
                 descriptor = if (removed) null else previous.descriptor, items = if (removed) emptyList() else previous.items,
@@ -589,7 +598,26 @@ class DesktopController(val session: DesktopSession) {
     }
 
     fun refreshSources() = action {
-        mutableState.update { it.copy(sources = sourceDescriptors(), error = session.startupErrors.firstOrNull()) }
+        mutableState.update { it.copy(sources = sourceDescriptors(), disabledSources = session.disabledSources(),
+            error = session.startupErrors.firstOrNull()) }
+    }
+
+    /**
+     * Android's per-source switch. Only the offered list changes: a disabled source keeps its stored works, its
+     * downloads and its settings, and switching it back on needs no reload because the runtime stays loaded.
+     * A disabled source can no longer be the one being browsed, so the browse selection is dropped with it.
+     */
+    fun setSourceEnabled(name: String, enabled: Boolean) = action {
+        session.setSourceEnabled(name, enabled)
+        val disabled = session.disabledSources()
+        mutableState.update { previous ->
+            val hidden = previous.selectedSource?.takeIf { it.source.name == name && !enabled }
+            previous.copy(disabledSources = disabled,
+                selectedSource = if (hidden != null) null else previous.selectedSource,
+                descriptor = if (hidden != null) null else previous.descriptor,
+                items = if (hidden != null) emptyList() else previous.items,
+                screen = if (hidden != null) DesktopScreen.EXTENSIONS else previous.screen)
+        }
     }
 
     fun importJar(path: Path) = action {
@@ -935,7 +963,7 @@ class DesktopController(val session: DesktopSession) {
                 val stored = backgroundMutex.withLock { runSuggestionsOnIo() }
                 mutableState.update { it.copy(message = when {
                     stored > 0 -> desktopText("message.suggestionsGenerated", stored)
-                    state.value.sources.isEmpty() -> desktopText("message.installSourceFirst")
+                    state.value.enabledSources.isEmpty() -> desktopText("message.installSourceFirst")
                     else -> desktopText("message.noSuggestions")
                 }) }
             } catch (error: CancellationException) {
@@ -974,7 +1002,10 @@ class DesktopController(val session: DesktopSession) {
     }
 
     private suspend fun runSuggestionsOnIo(): Int {
-        val stored = session.suggestions.refresh(session.sourceListings(), state.value.suggestionSettings)
+        // A switched-off source must not answer, exactly like Android's enabled-only source list feeding the worker.
+        val disabled = state.value.disabledSources
+        val sources = session.sourceListings().filterNot { it.source.name in disabled }
+        val stored = session.suggestions.refresh(sources, state.value.suggestionSettings)
         recordRun(LAST_SUGGESTIONS_RUN)
         mutableState.update { it.copy(suggestions = session.suggestions.suggestions()) }
         return stored
@@ -1553,7 +1584,7 @@ class DesktopController(val session: DesktopSession) {
      */
     internal fun beginMigration(id: Long) = action {
         val content = requireNotNull(session.library.find(id)) { desktopText("error.workNotFound") }
-        val targets = desktopMigrationSources(state.value.sources, content)
+        val targets = desktopMigrationSources(state.value.enabledSources, content)
         require(targets.isNotEmpty()) { desktopText("library.migrateNoSources") }
         mutableState.update {
             it.copy(migration = DesktopMigrationState(contentId = content.id, title = content.title,

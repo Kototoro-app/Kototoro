@@ -7951,3 +7951,39 @@ storage 探针在真实数据根上写一个 2 KiB 的 `probe-cleaned.img` 与�
 仍待：Android 推荐设置还有三个 Windows 没有的开关——仅 WiFi（桌面没有移动网络）、包含禁用来源（Windows 来源栏
 尚无“禁用来源”概念）、通知（Windows 未接通知），它们不摆空按钮，等对应能力落地；`SuggestionsSettingsScreen`
 里“排除题材/优先题材”Android 是内联 `SettingsTextInputPreference`，Windows 仍是文本框对话框。
+## 174. Windows 扩展与仓库的来源开关对齐 Android 的来源启用/禁用（2026-10-24）
+
+Android 的“源”页（`UnifiedSourcesScreen`）里每个来源带一个开关（`SourceEntity.enabled`）：关掉的来源仍然装着、它的收藏进度与
+下载都还在，只是不再出现在浏览/搜索/推荐/换源候选里。Windows 之前只有“装/卸”关系，想暂时隐藏一个来源只能卸载整个扩展
+（一个扩展常常带好几个来源，代价太大）。这一节把开关补上，并把“已装来源”与“可用来源”在状态层分开。
+
+- 存储：开关放进扩展记录同一个 store（`desktop_extensions`）的 `disabled_sources`（`TextSet`，存来源名，与 Android 用名字
+  而不是数字 id 的口径一致，重装后仍然对得上）。同一 store 里还躺着 JAR 记录（`Text`），所以 `restoreJars()` 改成
+  `as? SourcePreferenceValue.Text ?: continue`——离线重启探针原本就撞上这个坑：启动恢复对着 `TextSet` 强转，抛异常并记一条
+  “扩展恢复失败”。`uninstall()` 之后 `pruneDisabledSources()` 把已不存在的名字清掉；其余残留名无害（过滤时只是不匹配）。
+- Session/状态：`DesktopSession.disabledSources()` / `setSourceEnabled(name, enabled)`；`DesktopAppState` 新增
+  `disabledSources` 与派生的 `enabledSources`（对应 Android 的 `getEnabledSources()`）。来源栏、宽屏来源网格、来源筛选器、
+  搜索建议、换源候选与迁移都用 `enabledSources`；而收藏/历史/订阅/更新的筛选器、主页的生态映射与标题查找继续用
+  `state.sources`——禁用来源里存着的作品仍要能被筛到、被认出来，这与 Android 只是“不给新内容”一致。
+- Controller：`setSourceEnabled` 走串行 action，写盘成功后刷新 `sources`/`disabledSources`；如果当时正在浏览被关掉的那个来源，
+  就清空 `selectedSource`/`descriptor`/`items` 并回到扩展页，避免停在一个已不可用的来源上。卸载后同样刷新。
+- UI：`更多 → 扩展与仓库` 在“仓库”与“JSON 源”之间多一行“来源”（右侧值“已启用 m/n”，`source-switches-open`），点开是
+  `SourceSwitchDialog`：标题用 Android 的计数（`来源：已启用 m/n`）、搜索框（`source-list-query`）、高 420dp 的开关列表
+  （`source-enable-list`，行 `source-enabled:<名字>`，摘要“内容类型 · 生态 · 语言”）、空态“没有匹配的来源”、底部“确定”。
+  之所以做成对话框而不是页内平铺：真实安装有几十个来源，页内一行行铺开会把下面的目录/已安装两块顶出窗口气泡
+  （第一次实现就是这样，探针的安装点击直接被挤出可视区而失败）；对话框用自己的滚动，页面高度预算不变。
+- 探针与测试：`DesktopSourceSwitchTest` 四条（空集返回原列表同一实例、关掉后离开 `enabledSources` 但留在 `sources` 且恢复原位置、
+  全关仍保留已装列表、未知名字被忽略）；`repositories-write` 增加：搜索不到时的空态、关掉开关后状态与 store 的
+  `disabled_sources`、列表里的 `Off`、再打开后清空、浏览页不再出现该来源（`source:MIHON_…` 缺失 + 宽屏空态文案）；
+  `repositories-read` 断言离线重启后开关仍是关的、来源栏仍不给它、卸载后集合清空。
+- 截图：`repositories-write-sources.png`（对话框：标题计数、搜索框、“initial / 漫画 · Mihon · zh”开关行、确定）、
+  `repositories-write-source-off.png`（0/1 且开关关闭）、`json-sources-json-sources.png`（页面里新的一行“来源 / 关掉来源不必卸载…
+  / 已启用 1/1 →”夹在仓库与 JSON 源之间）已逐张看过。
+
+验证：`:desktop-app:verifyDesktopStrings`（924 键，中文全覆盖、无未使用键）、`:desktop-app:compileTestKotlin`、
+`:desktop-app:test --tests *SourceSwitch*`（4 条）、`--tests *SuggestionSources*`（6 条）、
+`--tests *repository*`（write+read 双进程全绿）、`--tests *CMS*`（JSON 源页面探针，页面新行后的布局不受影响）全绿。
+
+仍待：Android 的 `KEY_SOURCES_ENABLED_ALL` 总开关与扩展自带的 `lock` 来源；来源列表还没有启用/禁用筛选与批量开关；
+推荐设置里“包含禁用来源”仍无处可指（现在是硬性排除）；Android 同一页的“远程来源 JAR 优先级/显示损坏来源/扩展安装行为”
+与“镜像切换/处理链接”分组尚未在 Windows 出现。

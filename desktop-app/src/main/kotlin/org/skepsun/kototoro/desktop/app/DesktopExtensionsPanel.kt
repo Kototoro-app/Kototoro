@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -37,6 +38,7 @@ import org.skepsun.kototoro.core.ui.settings.SettingsInfoRow
 import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
 import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
 import org.skepsun.kototoro.core.ui.settings.SettingsSwitchRow
+import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
 
 /**
  * Extension management, drawn with the same settings vocabulary as the Android screens: one labelled card per
@@ -54,6 +56,7 @@ internal fun DesktopExtensionsPanel(controller: DesktopController, closing: Bool
     var adding by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf("") }
     var title by remember { mutableStateOf("") }
+    var switchingSources by remember { mutableStateOf(false) }
     val enabled = !state.busy && !closing
     // Repositories, JSON sources, the catalog and the installed rows do not fit one window at once, and a fixed column
     // left the two lists with no height at all — an unreachable list is invisible to both the user and the UI tests. The
@@ -114,6 +117,17 @@ internal fun DesktopExtensionsPanel(controller: DesktopController, closing: Bool
                     }
                 }
             }
+            // Android's unified source screen, reachable from the extension manager; the row carries the counts.
+            SettingsGroup {
+                SettingsValueRow(
+                    title = desktopText("sourceList.title"),
+                    summary = desktopText("sourceList.openSummary"),
+                    value = desktopText("sourceList.count", state.enabledSources.size, state.sources.size),
+                    enabled = enabled && state.sources.isNotEmpty(),
+                    onClick = { switchingSources = true },
+                    testTag = "source-switches-open",
+                )
+            }
             // Android's unified screen also hosts the imported JSON sources; Windows serves the TVBox/Apple CMS family.
             SettingsSectionHeader(desktopText("jsonSources.title"))
             SettingsGroup {
@@ -152,6 +166,10 @@ internal fun DesktopExtensionsPanel(controller: DesktopController, closing: Bool
             }
         }
     }
+    // Android's unified screen lists the sources themselves, each with the switch that takes it out of browsing
+    // without uninstalling anything (§174). The list is a dialog rather than a page block: a real install has dozens
+    // of sources, and the catalogue row above owns the height budget the window gives this page.
+    if (switchingSources) SourceSwitchDialog(controller, state, enabled) { switchingSources = false }
     if (adding) {
         AlertDialog(
             onDismissRequest = { adding = false },
@@ -373,4 +391,67 @@ private fun InstalledExtensions(
             } },
             dismissButton = { TextButton({ confirm = null }) { Text(desktopText("common.cancel")) } })
     }
+}
+
+/**
+ * Android's unified source list, reduced to what Windows can honour: one switch per source. A disabled source stays
+ * installed (its works, downloads and preference store are untouched) and simply leaves browsing, search, the source
+ * filters, recommendations and change-source targets, exactly like Android's enabled-only source list.
+ */
+@Composable
+private fun SourceSwitchDialog(
+    controller: DesktopController,
+    state: DesktopAppState,
+    enabled: Boolean,
+    onDismiss: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    val entries = remember(state.sources, query) {
+        state.sources.filter {
+            query.isBlank() || it.displayName.contains(query, true) || it.source.name.contains(query, true)
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag("source-switch-dialog"),
+        title = { Text(desktopText("sourceList.header", state.enabledSources.size, state.sources.size)) },
+        text = {
+            Column(Modifier.width(520.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text(desktopText("sourceList.search")) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("source-list-query"),
+                )
+                if (entries.isEmpty()) {
+                    Text(desktopText("sourceList.empty"), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp).testTag("source-enable-list")) {
+                        itemsIndexed(entries, key = { _, listing -> listing.source.name }) { index, listing ->
+                            if (index > 0) SettingsRowDivider()
+                            SettingsSwitchRow(
+                                title = listing.displayName,
+                                summary = listOf(
+                                    DesktopSourceLabels.contentType(listing.source.contentType),
+                                    DesktopSourceLabels.ecosystem(listing.ecosystem),
+                                    listing.source.locale,
+                                ).joinToString(" · "),
+                                checked = listing.source.name !in state.disabledSources,
+                                enabled = enabled,
+                                onCheckedChange = { controller.setSourceEnabled(listing.source.name, it) },
+                                testTag = "source-enabled:${listing.source.name}",
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss, modifier = Modifier.testTag("source-switch-done")) {
+                Text(desktopText("common.ok"))
+            }
+        },
+    )
 }

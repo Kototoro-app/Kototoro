@@ -63,9 +63,20 @@ internal object DesktopRepositoriesProbe {
                     waitForIdle()
                     check(controller.state.value.error == null) { controller.state.value.error.orEmpty() }
                 }
+                // The installed JAR names its own source; the switch rows and the store key both use that name.
+                fun installedSourceName() = controller.state.value.sources
+                    .first { it.sourceId == 9007199254740993L }.source.name
+
                 fun snapshot(name: String) {
                     Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
                         image.encodeToData()?.use { Files.write(Path.of(args[3]).resolve("${args[0]}-$name.png"), it.bytes) }
+                    }
+                }
+                // A dialog is its own root, so the window capture above cannot be used while one is open.
+                fun snapshotTag(tag: String, name: String) {
+                    Image.makeFromBitmap(onNodeWithTag(tag).captureToImage().asSkiaBitmap()).use { image ->
+                        val file = Path.of(args[3]).resolve("${args[0]}-$name.png")
+                        image.encodeToData()?.use { Files.write(file, it.bytes) }
                     }
                 }
                 idle()
@@ -124,6 +135,29 @@ internal object DesktopRepositoriesProbe {
                     check(jars.size == 1) { "superseded artifacts kept: $jars" }
                     onNodeWithTag("extension-auto-update").performClick(); idle()
                     check(controller.state.value.autoUpdateExtensions)
+                    // Android's per-source switch: search narrows the dialog's list, and a switched-off source leaves
+                    // the rail (browsing, search, suggestions) without being uninstalled.
+                    onNodeWithTag("source-switches-open").performClick(); idle()
+                    onNodeWithTag("source-switch-dialog").assertExists()
+                    val switchTag = "source-enabled:${installedSourceName()}"
+                    onNodeWithTag("source-list-query").performTextInput("zzz-no-source"); idle()
+                    onNodeWithText("没有匹配的来源").assertExists()
+                    onNodeWithTag(switchTag).assertDoesNotExist()
+                    onNodeWithTag("source-list-query").performTextClearance(); idle()
+                    onNodeWithTag("source-enable-list").performScrollToNode(hasTestTag(switchTag))
+                    onNodeWithTag(switchTag).assertIsOn()
+                    snapshotTag("source-switch-dialog", "sources")
+                    onNodeWithTag(switchTag).performClick(); idle()
+                    check(controller.state.value.disabledSources == setOf(installedSourceName()))
+                    check(controller.state.value.enabledSources.none { it.sourceId == 9007199254740993L })
+                    val disabledRecord = session.storage.preferences.open("desktop_extensions")
+                        .snapshot()["disabled_sources"] as SourcePreferenceValue.TextSet
+                    check(disabledRecord.values == setOf(installedSourceName()))
+                    onNodeWithTag(switchTag).assertIsOff()
+                    onNodeWithTag(switchTag).performClick(); idle()
+                    check(controller.state.value.disabledSources.isEmpty())
+                    onNodeWithTag("source-switch-done").performClick(); idle()
+                    onNodeWithTag("source-switch-dialog").assertDoesNotExist()
                     Files.writeString(root.resolve("expected-version.txt"), thirdVersion.toString())
                     snapshot("installed")
                     onNodeWithTag("nav:浏览").performClick(); idle()
@@ -134,6 +168,21 @@ internal object DesktopRepositoriesProbe {
                     }
                     idle()
                     check(controller.state.value.items.isNotEmpty())
+                    // Left switched off on purpose: the rail drops it now,
+                    // and the offline run proves the store kept it.
+                    onNodeWithTag("nav:更多").performClick(); idle()
+                    onNodeWithTag("nav:扩展与仓库").performClick(); idle()
+                    onNodeWithTag("source-switches-open").performClick(); idle()
+                    val offSwitchTag = "source-enabled:${installedSourceName()}"
+                    onNodeWithTag("source-enable-list").performScrollToNode(hasTestTag(offSwitchTag))
+                    onNodeWithTag(offSwitchTag).performClick(); idle()
+                    check(controller.state.value.disabledSources == setOf(installedSourceName()))
+                    snapshotTag("source-switch-dialog", "source-off")
+                    onNodeWithTag("source-switch-done").performClick(); idle()
+                    onNodeWithTag("nav:浏览").performClick(); idle()
+                    onNodeWithTag("source:MIHON_9007199254740993").assertDoesNotExist()
+                    // The rail and the wide grid carry different empty hints; either one proves the source is gone.
+                    onNodeWithText("安装或导入扩展后，内容源会显示在这里。").assertExists()
                 } else {
                     check(controller.state.value.repositories.single().name == "测试扩展仓库")
                     check(session.registry.installed().single().metadata.versionCode == Files.readString(root.resolve("expected-version.txt")).toLong())
@@ -141,6 +190,10 @@ internal object DesktopRepositoriesProbe {
                     check(session.startupErrors.isEmpty())
                     // Automatic updates stay on; with the repository unreachable the start-up check fails quietly.
                     check(controller.state.value.autoUpdateExtensions)
+                    // The source switch survived the restart, and browsing still hides that source.
+                    check(controller.state.value.disabledSources == setOf(installedSourceName()))
+                    check(controller.state.value.enabledSources.none { it.sourceId == 9007199254740993L })
+                    onNodeWithTag("source:MIHON_9007199254740993").assertDoesNotExist()
                     snapshot("offline")
                 }
                 val recorded = session.storage.preferences.open("desktop_extensions").snapshot().getValue(metadata.packageName) as SourcePreferenceValue.Text
@@ -151,11 +204,18 @@ internal object DesktopRepositoriesProbe {
                     // Uninstall from the installed list: sources, install record and artifact all go.
                     onNodeWithTag("nav:更多").performClick(); idle()
                     onNodeWithTag("nav:扩展与仓库").performClick(); idle()
+                    // The switch stayed off in the store, and the page opens already showing the disabled source.
+                    onNodeWithTag("source-switches-open").performClick(); idle()
+                    val offSwitchTag = "source-enabled:${installedSourceName()}"
+                    onNodeWithTag("source-enable-list").performScrollToNode(hasTestTag(offSwitchTag))
+                    onNodeWithTag(offSwitchTag).assertIsOff()
+                    onNodeWithTag("source-switch-done").performClick(); idle()
                     onNodeWithTag("extension-uninstall:${metadata.packageName}").performClick(); idle()
                     onNodeWithTag("extension-uninstall-confirm").performClick(); idle()
                     check(session.registry.installed().isEmpty())
                     check(controller.state.value.sources.none { it.sourceId == 9007199254740993L })
                     check(metadata.packageName !in session.storage.preferences.open("desktop_extensions").snapshot())
+                    check(controller.state.value.disabledSources.isEmpty())
                     check(!Files.exists(Path.of(jar.path))) { "artifact kept after uninstall" }
                     // Forgetting the repository drops the index entry; no artifact is touched by it.
                     val removed = controller.state.value.repositories.single().indexUrl

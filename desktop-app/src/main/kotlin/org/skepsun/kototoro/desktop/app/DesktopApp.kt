@@ -166,7 +166,8 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
     // The rail lists every installed source, so it carries Android's two top-bar filters itself: the same filter also
     // narrows the works of whichever source is picked, which is how the Android tablet keeps one scope for both.
     val settings = state.sourceSettings
-    val sources = settings.sorted(state.sources.filter {
+    // Switching a source off on the extensions page removes it here, as Android's enabled-only source list does.
+    val sources = settings.sorted(state.enabledSources.filter {
         (it.displayName.contains(filter, true) || it.source.locale.contains(filter, true)) &&
             state.exploreFilter.accepts(it) &&
             // Android's SOURCES_AND_BROWSE target: the rail is the only place Windows can hide an adult source.
@@ -185,7 +186,9 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
         HorizontalDivider()
         Text(desktopText("browse.sources", sources.size), fontWeight = FontWeight.SemiBold)
         DesktopSearchField(filter, { filter = it }, desktopText("browse.findSource"), modifier = Modifier.fillMaxWidth())
-        DesktopSourceFilterControls(state.exploreFilter, state.sources, controller::exploreFilter, enabled, "rail")
+        DesktopSourceFilterControls(
+            state.exploreFilter, state.enabledSources, controller::exploreFilter, enabled, "rail",
+        )
         LazyColumn(Modifier.weight(1f).testTag("source-list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(sources, key = { it.source.name }) { source ->
                 SourceRailTile(source, state, enabled, controller, Modifier.fillMaxWidth())
