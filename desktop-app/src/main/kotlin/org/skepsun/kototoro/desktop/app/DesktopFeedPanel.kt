@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -91,6 +92,9 @@ internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppSt
             Button({ controller.checkUpdates() }, enabled = enabled, modifier = Modifier.testTag("feed-check")) {
                 Text(desktopText("feed.checkUpdates"))
             }
+            // Android's feed menu (R.menu.opt_feed): its "update" item is the visible button above, the other two
+            // have no room in the row and live behind the overflow.
+            FeedOverflowMenu(controller, state, enabled)
         }
         if (state.trackedCategories == 0) {
             Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.secondaryContainer,
@@ -106,7 +110,7 @@ internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppSt
         }
         val listState = rememberLazyListState()
         LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("feed-list"), state = listState) {
-            if (updates.isNotEmpty()) item(key = "updated") {
+            if (updates.isNotEmpty() && state.feedDisplay.showUpdated) item(key = "updated") {
                 UpdatedContentCarousel(
                     items = updates,
                     key = { it.ownerId },
@@ -158,6 +162,78 @@ internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppSt
             }
         }
     }
+}
+
+@Composable
+private fun FeedOverflowMenu(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
+    var open by remember { mutableStateOf(false) }
+    var confirmClear by remember { mutableStateOf(false) }
+    Box {
+        IconButton({ open = true }, enabled = enabled, modifier = Modifier.testTag("feed-menu")) {
+            Icon(painterResource("icons/ic_more_vert.svg"), contentDescription = null)
+        }
+        DropdownMenu(open, { open = false }) {
+            DropdownMenuItem(
+                onClick = {
+                    open = false
+                    controller.setShowFeedUpdated(!state.feedDisplay.showUpdated)
+                },
+                enabled = enabled,
+                modifier = Modifier.testTag("feed-menu-show-updated"),
+                text = { Text(AndroidStrings["show_updated"]) },
+                leadingIcon = {
+                    if (state.feedDisplay.showUpdated) Icon(painterResource("icons/ic_check.svg"), null)
+                    else Spacer(Modifier.size(24.dp))
+                },
+            )
+            DropdownMenuItem(
+                onClick = {
+                    open = false
+                    confirmClear = true
+                },
+                enabled = enabled,
+                modifier = Modifier.testTag("feed-menu-clear"),
+                text = { Text(AndroidStrings["clear_feed"]) },
+            )
+        }
+    }
+    if (confirmClear) FeedClearDialog(controller, enabled) { confirmClear = false }
+}
+
+/** Android's clear-feed confirmation: same title, prompt and checkbox, same "clear the counters too" default. */
+@Composable
+private fun FeedClearDialog(controller: DesktopController, enabled: Boolean, onDismiss: () -> Unit) {
+    var clearCounters by remember { mutableStateOf(true) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(painterResource("icons/ic_more_vert.svg"), null) },
+        title = { Text(AndroidStrings["clear_updates_feed"]) },
+        text = {
+            Column(Modifier.testTag("feed-clear-dialog"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(AndroidStrings["text_clear_updates_feed_prompt"])
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("feed-clear-counters")
+                    .clickable { clearCounters = !clearCounters }) {
+                    Checkbox(checked = clearCounters, onCheckedChange = { clearCounters = it })
+                    Text(AndroidStrings["clear_new_chapters_counters"])
+                }
+            }
+        },
+        confirmButton = {
+            TextButton({
+                onDismiss()
+                controller.clearFeed(clearCounters)
+            }, enabled = enabled, modifier = Modifier.testTag("feed-clear-confirm")) {
+                Text(desktopText("common.clear"))
+            }
+        },
+        dismissButton = {
+            TextButton(onDismiss, modifier = Modifier.testTag("feed-clear-cancel")) {
+                Text(desktopText("common.cancel"))
+            }
+        },
+    )
 }
 
 @Composable

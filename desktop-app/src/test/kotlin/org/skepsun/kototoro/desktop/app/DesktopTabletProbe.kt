@@ -756,6 +756,55 @@ internal object DesktopTabletProbe {
                 onNodeWithTag("nav:订阅").performClick(); idle()
                 check(controller.state.value.feed.rows.first { it.anchorMangaId == content.id }.isNsfw.not())
                 onNodeWithTag("feed-row:${adultRow.logId}").assertExists()
+                // Android's feed menu (R.menu.opt_feed) behind the overflow: "update" is the visible button, so the
+                // other two items are what it adds. Neither may be reachable from a settings page instead.
+                onNodeWithTag("feed-menu").performClick(); idle()
+                onNodeWithTag("feed-menu-show-updated").assertExists()
+                onNodeWithTag("feed-menu-clear").assertExists()
+                onNodeWithTag("feed-menu-show-updated").performClick(); idle()
+                check(!controller.state.value.feedDisplay.showUpdated)
+                check((session.storage.preferences.open("desktop_library").snapshot()["feed_header"]
+                    as? org.skepsun.kototoro.core.source.SourcePreferenceValue.Toggle)?.value == false) {
+                    "the menu item writes Android's feed_header key"
+                }
+                // Only the tracked-with-new-chapters block goes away: the timeline, the row and the badge stay.
+                onNodeWithTag("feed-updated:${content.id}").assertDoesNotExist()
+                onNodeWithTag("feed-row:${adultRow.logId}").assertExists()
+                onNodeWithTag("nav-feed-badge", useUnmergedTree = true).assertExists()
+                onNodeWithTag("feed-menu").performClick(); idle()
+                onNodeWithTag("feed-menu-show-updated").performClick(); idle()
+                check(controller.state.value.feedDisplay.showUpdated)
+                onNodeWithTag("feed-updated:${content.id}").assertExists()
+                // "Clear feed" asks first, like Android's dialog, and cancelling keeps the history.
+                onNodeWithTag("feed-menu").performClick(); idle()
+                onNodeWithTag("feed-menu-clear").performClick(); idle()
+                onNodeWithTag("feed-clear-dialog").assertExists()
+                onNodeWithTag("feed-clear-counters").assertExists()
+                snapshotTag("feed-clear-dialog", "feed-clear-dialog")
+                onNodeWithTag("feed-clear-cancel").performClick(); idle()
+                onNodeWithTag("feed-clear-dialog").assertDoesNotExist()
+                check(runBlocking { session.storage.database.getTrackLogsDao().count() } > 0) {
+                    "cancelling must keep the update history"
+                }
+                // Confirming with the default checkbox drops the history and the counters the badge counted.
+                onNodeWithTag("feed-menu").performClick(); idle()
+                onNodeWithTag("feed-menu-clear").performClick(); idle()
+                onNodeWithTag("feed-clear-confirm").performClick()
+                waitUntil(timeoutMillis = 15_000) {
+                    runBlocking { session.storage.database.getTrackLogsDao().count() } == 0
+                }
+                idle()
+                check(controller.state.value.message == desktopText("feed.cleared"))
+                check(controller.state.value.feed.rows.isEmpty()) { "the timeline is empty after clearing" }
+                check(controller.state.value.feed.updateRowsByOwnerId.isEmpty())
+                onNodeWithTag("feed-row:${adultRow.logId}").assertDoesNotExist()
+                onNodeWithTag("feed-updated:${content.id}").assertDoesNotExist()
+                onNodeWithTag("nav-feed-badge", useUnmergedTree = true).assertDoesNotExist()
+                onNodeWithText(desktopText("feed.emptyTitle")).assertExists()
+                check(runBlocking { session.storage.database.getTracksDao().find(content.id)?.newChapters } == 0) {
+                    "the counter checkbox completes the pending updates per track"
+                }
+                snapshot("feed-cleared")
                 onNodeWithTag("nav:更多").performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.MORE)
                 // The browse overview now renders the saved layout: list rows instead of the default tile grid.

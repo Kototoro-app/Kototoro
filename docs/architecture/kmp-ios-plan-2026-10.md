@@ -7843,3 +7843,36 @@ Android 的 `NavConfigSettings`（界面标题取 `main_screen_sections`）允�
 `completePendingUpdates` 目前只被 Android 调用，所以 Windows 只能靠读掉新章节清计数——下一轮补这个入口；
 `DesktopFeedPanel` 的待读行仍按置顶 + `lastCheckTime` 排，与共享 `FeedDeriver` 的发现时间排序不一致，需对齐。
 
+## 171. Windows 订阅页菜单（显示更新区 + 清空订阅）对齐 Android opt_feed（2026-10-24）
+
+Android 的订阅页把三项动作放在 `R.menu.opt_feed` 里：`update`（检查更新）、`show_updated`
+（隐藏/显示顶部“已追踪作品有新章节”区块，键 `feed_header`）、`clear_feed`（清空更新记录，弹窗再问要不要
+连同新章节计数一起清）。Windows 之前只有第一项——检查更新是个可见按钮，另外两项没有入口，所以计数只能靠
+把新章节读到末页才清掉（这正是 §170 补的 `completePendingUpdates` 在 Windows 无人调用的原因）。
+
+- 新 `desktop-runtime/.../DesktopFeedDisplay.kt`：`DesktopFeedDisplay(showUpdated)` 读写 Android 同名的
+  `feed_header`（`Toggle`，默认开），存在 `desktop_library`（与列表布局同一个 store，都是订阅/书架的显示项）；
+  `DesktopFeedDisplayTest` 覆盖默认值、false/true 往返与类型不符时回退默认。
+- `DesktopController`：`DesktopAppState.feedDisplay` 在初始化时从同一个 store 读出；
+  `setShowFeedUpdated(show)` 只改状态与 `feed_header`（写盘失败用新的 `feed.displaySaveFailed` 提示，不假装保存成功）；
+  `clearFeed(clearPendingCounters)` 复用 Android 的语义——`getTrackLogsDao().clear()` 清时间线，
+  勾选时再对每个 `tracks` 行跑共享的 `completePendingUpdates(mangaId, now)`（`clearCounter` + 待读标记），
+  最后重载订阅快照并提示 `feed.cleared`。
+- `DesktopFeedPanel`：顶栏在“检查更新”右侧加溢出菜单（`feed-menu`，`ic_more_vert`），
+  两项分别是 `feed-menu-show-updated`（开启时前置 `ic_check`，文案取 Android 的 `show_updated`）与
+  `feed-menu-clear`（`clear_feed`）；清空走确认弹窗 `feed-clear-dialog`——标题/说明/复选框文案全部是 Android 的
+  `clear_updates_feed`、`text_clear_updates_feed_prompt`、`clear_new_chapters_counters`（默认勾选，与 Android 一致），
+  取消按钮 `feed-clear-cancel`、确认 `feed-clear-confirm` 用桌面 catalog 的 `common.cancel`/`common.clear`。
+  新章节轮播额外受 `feedDisplay.showUpdated` 约束，时间线行与侧栏 `nav-feed-badge` 不受影响（与 Android 隐藏的只是
+  顶部区块一致）。两份 `desktop-strings*.properties` 各加 `feed.cleared`、`feed.displaySaveFailed`。
+
+验证：`:desktop-runtime:test`（158，含新增 3 条）、`:desktop-app:verifyDesktopStrings`、
+`:desktop-app:compileKotlin`、`:desktop-app:test --tests *tablet*` 全绿。tablet 探针在同一个已追踪作品上走完整条链路：
+菜单开着看到两项 → 关掉 `show_updated` 后 `feed-updated:*` 消失而 `feed-row:*` 与 `nav-feed-badge` 仍在、store 里
+`feed_header` 变 `Toggle(false)` → 再打开恢复 → 清空弹窗取消后日志还在 → 确认后 `track_logs` 归零、订阅行/轮播/角标
+全消失、显示空态与 `feed.cleared`，且该作品的 `chapters_new` 被 `completePendingUpdates` 归零
+（截图 `tablet-feed-clear-dialog.png`、`tablet-feed-cleared.png`）。
+
+仍待：Android 菜单的第一项（`update`）在 Windows 已经是常驻按钮，不再重复放进溢出菜单；
+`DesktopFeedPanel` 的待读行排序仍与共享 `FeedDeriver` 的发现时间不一致（§170 遗留）。
+

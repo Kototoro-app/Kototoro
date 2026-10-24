@@ -15,6 +15,7 @@ import org.skepsun.kototoro.core.library.LibraryReadingStats
 import org.skepsun.kototoro.core.dictionary.DictionaryRule
 import org.skepsun.kototoro.core.replace.ReplaceRule
 import org.skepsun.kototoro.core.source.*
+import org.skepsun.kototoro.tracker.domain.completePendingUpdates
 import org.skepsun.kototoro.stats.domain.ReadingStatsPeriod
 import org.skepsun.kototoro.stats.domain.StatsContentKind
 import org.skepsun.kototoro.history.domain.recoverHistoryChapterId
@@ -151,6 +152,9 @@ data class DesktopAppState(
     val sourceSettings: org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings = org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings(),
     val libraryDisplay: org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay =
         org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay(),
+    /** Android's "show updated" feed menu item: whether the tracked-with-new-chapters block is drawn. */
+    val feedDisplay: org.skepsun.kototoro.desktop.runtime.DesktopFeedDisplay =
+        org.skepsun.kototoro.desktop.runtime.DesktopFeedDisplay(),
     /** Android's "阅读统计" screen: the selected period and kind, and the dashboard derived for them. */
     val readingStats: LibraryReadingStats? = null,
     val readingStatsPeriod: ReadingStatsPeriod = ReadingStatsPeriod.WEEK,
@@ -306,6 +310,9 @@ class DesktopController(val session: DesktopSession) {
                 trackerSettings = org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings.from(saved),
             sourceSettings = org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings.from(saved),
             libraryDisplay = org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay.from(
+                libraryPreferences.snapshot(),
+            ),
+            feedDisplay = org.skepsun.kototoro.desktop.runtime.DesktopFeedDisplay.from(
                 libraryPreferences.snapshot(),
             ),
             ) }
@@ -1098,6 +1105,36 @@ class DesktopController(val session: DesktopSession) {
         val dao = session.storage.database.getTrackLogsDao()
         logIds.forEach { id -> if (dao.find(id)?.mangaId == mangaId) dao.markAsRead(id) }
         loadFeedOnIo()
+    }
+
+    /**
+     * Android's "show updated" menu item. The timeline keeps its rows; only the block of tracked works with new
+     * chapters above it goes away, which is what `KEY_FEED_HEADER` controls there.
+     */
+    internal fun setShowFeedUpdated(show: Boolean) {
+        val display = org.skepsun.kototoro.desktop.runtime.DesktopFeedDisplay(showUpdated = show)
+        mutableState.update { it.copy(feedDisplay = display) }
+        if (!libraryPreferences.edit(SourcePreferenceEdit(changes = display.toPreferences()))) {
+            mutableState.update { it.copy(error = desktopText("feed.displaySaveFailed")) }
+        }
+    }
+
+    /**
+     * Android's "clear feed" menu action: the update history goes away, and with it the chapter counters that the
+     * dialog can leave behind on purpose (`text_clear_updates_feed_prompt` asks whether to).
+     *
+     * Clearing the counters is what `completePendingUpdates` does per track, so a later check starts from a clean
+     * slate instead of resurrecting the reminders of chapters that are still unread.
+     */
+    fun clearFeed(clearPendingCounters: Boolean) = action {
+        val database = session.storage.database
+        database.getTrackLogsDao().clear()
+        if (clearPendingCounters) {
+            val now = System.currentTimeMillis()
+            for (mangaId in database.getTracksDao().findAllIds()) database.completePendingUpdates(mangaId, now)
+        }
+        loadFeedOnIo()
+        mutableState.update { it.copy(message = desktopText("feed.cleared")) }
     }
 
     /** Android's "continue reading" on a feed entry: mark it read and resume from history. */
