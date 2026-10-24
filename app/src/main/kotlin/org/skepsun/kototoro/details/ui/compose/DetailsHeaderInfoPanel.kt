@@ -44,6 +44,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -415,6 +417,7 @@ internal fun RatingStatusChip(
 ) {
     var expanded by remember(status, linkedTrackingItems) { mutableStateOf(false) }
     var menuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
+    val statusAnchorFocus = remember { FocusRequester() }
     val supportedStatuses = remember(linkedTrackingItems) {
         linkedTrackingItems
             .map { supportedStatusesForService(it.service).toSet() }
@@ -450,7 +453,11 @@ internal fun RatingStatusChip(
                 )
                 Row(
                     modifier = Modifier
+                        .focusRequester(statusAnchorFocus)
                         .clip(RoundedCornerShape(999.dp))
+                        // A plain clickable keeps the stop but draws no ring; on TV the chip would
+                        // be a silent stop (and the ring after a menu returns here).
+                        .tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)
                         .clickable { expanded = true }
                         .padding(horizontal = 2.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -473,6 +480,8 @@ internal fun RatingStatusChip(
             style = GlassDefaults.subtleStyle(),
             useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
             anchorBounds = menuAnchorBounds,
+            // Root-overlay menus cannot hand the ring back themselves.
+            anchorFocusRequester = statusAnchorFocus,
         ) {
             supportedStatuses.forEach { candidate ->
                 CompactDropdownMenuItem(
@@ -510,6 +519,7 @@ private fun CompactRatingChip(
     val context = LocalContext.current
     var expanded by remember { mutableStateOf(false) }
     var menuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
+    val ratingAnchorFocus = remember { FocusRequester() }
     val score = (rating.coerceIn(0f, 1f) * 10f).roundToInt()
     val contentAlpha = if (score > 0) 1f else 0.62f
     Box(
@@ -517,7 +527,9 @@ private fun CompactRatingChip(
     ) {
         Row(
             modifier = Modifier
+                .focusRequester(ratingAnchorFocus)
                 .clip(RoundedCornerShape(999.dp))
+                .tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)
                 .clickable {
                     if (enabled) {
                         expanded = true
@@ -561,6 +573,7 @@ private fun CompactRatingChip(
             style = GlassDefaults.subtleStyle(),
             useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
             anchorBounds = menuAnchorBounds,
+            anchorFocusRequester = ratingAnchorFocus,
         ) {
             (0..10).forEach { candidate ->
                 CompactDropdownMenuItem(

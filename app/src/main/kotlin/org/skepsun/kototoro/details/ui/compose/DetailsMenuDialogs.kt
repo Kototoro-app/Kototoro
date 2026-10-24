@@ -20,6 +20,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
@@ -115,13 +117,16 @@ internal fun DetailsOverflowMenu(
     val interfaceStyleTokens = LocalInterfaceStyleTokens.current
     var expanded by remember { mutableStateOf(false) }
     var menuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
+    val menuAnchorFocus = remember { FocusRequester() }
 
     Box(
         modifier = Modifier.onGloballyPositioned { menuAnchorBounds = it.boundsInRoot() },
     ) {
         DetailsChromeButton(
             onClick = { expanded = true },
-            modifier = Modifier.size(interfaceStyleTokens.topBarButtonSize),
+            modifier = Modifier
+                .focusRequester(menuAnchorFocus)
+                .size(interfaceStyleTokens.topBarButtonSize),
         ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
@@ -135,6 +140,9 @@ internal fun DetailsOverflowMenu(
             style = GlassDefaults.subtleStyle(),
             useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
             anchorBounds = menuAnchorBounds,
+            // The ⋮ draws its menu in the root overlay, which has no focus restore of
+            // its own: hand the ring back here once the menu is gone.
+            anchorFocusRequester = menuAnchorFocus,
         ) {
             if (showTranslateAction) {
                 CompactDropdownMenuItem(

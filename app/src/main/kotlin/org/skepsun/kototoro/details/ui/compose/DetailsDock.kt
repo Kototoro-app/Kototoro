@@ -1316,6 +1316,7 @@ private fun ReadDock(
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val view = LocalView.current
     val readButtonFocusRequester = remember { FocusRequester() }
+    val moreMenuAnchorFocus = remember { FocusRequester() }
     var hasRequestedInitialFocus by remember { mutableStateOf(false) }
     LaunchedEffect(isTvPresentation, isEnabled) {
         if (isTvPresentation && isEnabled && !hasRequestedInitialFocus) {
@@ -1496,6 +1497,7 @@ private fun ReadDock(
             ) {
                 Box(
                     modifier = Modifier
+                        .focusRequester(moreMenuAnchorFocus)
                         .fillMaxSize()
                         .clip(trailingButtonShape)
                         .onFocusChanged { isMoreButtonFocused = it.isFocused }
@@ -1528,6 +1530,8 @@ private fun ReadDock(
                 useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
                 anchorBounds = menuAnchorBounds,
                 openAboveAnchor = true,
+                // The root overlay has no focus restore of its own.
+                anchorFocusRequester = moreMenuAnchorFocus,
             ) {
                 if (canOpenIncognito) {
                     CompactDropdownMenuItem(
