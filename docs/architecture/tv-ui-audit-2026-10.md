@@ -4535,3 +4535,72 @@ Incognito mode）在电视上有两个问题：**面板右边缘贴着屏幕边*
 3. 点 Save 之后的真实下载链路本轮没验（本地作品会写进 storage 目录），不在电视专项范围内。
 4. 顶栏 Share 对话框（`ez0.png`）同样是手机尺寸：正文 `bodyLarge`、按钮无环、内容贴边——下一轮可并入
    "详情页里的对话框"一起收。
+
+## 第七十五轮：对话框里的"选项"在电视上没有焦点环，提示条还是手机字号（2026-10-25）
+
+这一轮接着第 74 轮的遗留 4，把详情页里的 Share 对话框走完，顺带把同一个晚上反复出现的底部提示条一起收了。
+两个问题的共同点是：**控件本身能用，但电视上既看不出焦点在哪、字也太小**。
+
+1. **对话框的选项行在电视上没有焦点环**。`AppRouterChoiceDialog` 与详情页的三个对话框都把选项写成
+   `TextButton(onClick, Modifier.fillMaxWidth()) { Text(label, Modifier.fillMaxWidth()) }`：整行确实是热区，
+   但 `TextButton` 在非触摸焦点下只有一层状态层，遥控器上下切换时屏幕上没有任何一圈表示"当前在这一项"。
+   第 74 轮的 `ga1.png`（Share 对话框）就是这样：文字左对齐、按钮铺满宽度、看不出焦点在哪。
+   这类"整行点"的选项其实最该有一条像 `SettingsAlertDialog` 那样跟着行走的圆角环。
+2. **底部提示条用的是手机阅读距离的字号**。第 71/72 轮把电视上的提示条换成了深色板
+   （`surfaceContainerHigh` / `onSurface`），但内容仍然直接交给 `Snackbar(snackbarData = data)`：
+   消息 `bodyMedium`（14sp）、操作标签 `labelLarge`、关闭 × 是纯触摸的 `IconButton`，
+   板子的最小高度也是 Material 默认值。3 米外读 14sp 的消息很吃力，× 也只能用指针点。
+
+### 原因
+
+| 位置 | 现状 | 电视上的后果 |
+| --- | --- | --- |
+| `AppRouter.kt` 的 `AppRouterChoiceDialog` | 选项是 `TextButton(Modifier.fillMaxWidth())`，标签也用 `fillMaxWidth` | 整行是按钮语汇、没有环，标签被拉到整行宽；遥控器上只有状态层 |
+| `DetailsMenuDialogs.kt` 的 `ShareOptionsDialog` / `SearchTargetDialog` / `DeleteLocalDialog` | 同上（详情页顶栏 Share 走的正是这三个，不是 `AppRouter.showShareDialog`） | 同上；三个对话框各自抄了一遍同样的 `TextButton` 模板 |
+| `KototoroSnackbarHost.kt` 电视分支 | `Snackbar(snackbarData = data)` 只换颜色 | 14sp 消息、`labelLarge` 操作标签、× 不可聚焦、板子默认最小高度 |
+
+### 改法
+
+| 位置 | 改动 |
+| --- | --- |
+| 新增 `core/ui/compose/TvDialogOptions.kt` | 抽出两个共享件：`DialogChoiceOption(label, onClick)` —— 电视上是整行 `tvFocusable(shape = 12dp 圆角, addFocusTarget = false)` + `clickable` 的 `Row`，标签用 `bodyLarge` 普通文本；手机分支返回与改前逐字相同的 `TextButton`。`DialogActionButton(label, onClick, enabled)` —— 电视上给 `TextButton` 补 `CircleShape` 环，`enabled = false` 时不加环 |
+| `core/nav/AppRouter.kt` | `AppRouterChoiceDialog` 的选项与 dismiss 按钮改用上面两个共享件（标签/作者选择对话框因此一起受益） |
+| `details/ui/compose/DetailsMenuDialogs.kt` | `DeleteLocalDialog`、`SearchTargetDialog`、`ShareOptionsDialog` 三处改用共享件；`TextButton` 导入删除 |
+| `core/ui/compose/KototoroSnackbarHost.kt` | 电视分支不再把 `snackbarData` 直接交给原版 `Snackbar`，改成自己搭内容：`heightIn(min = 72.dp)`、消息 `bodyLarge`（14sp → 16sp 一档）、操作标签 `titleSmall` 且套 `tvFocusable(10dp 圆角)`、`withDismissAction` 时右侧 × 用 `IconButton` + 圆形环、`dismissActionContentColor = onSurfaceVariant` |
+
+所有改动仍然在 `isTv`（或 `isTvPresentation`）分支后面，手机分支的 `TextButton` 模板、`Snackbar(snackbarData = data)`
+与所有默认参数保持原样。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 改前：详情页顶栏 Share | `ga1.png` | 三个全宽 `TextButton`、无环、看不出焦点（说明这一路走的是 `DetailsMenuDialogs`，不是 `AppRouter.showShareDialog`） |
+| 改后：Share 首项 | `gb1.png` | 第一项带 12dp 圆角蓝环，标签是普通 `bodyLarge` 文本 |
+| 改后：DOWN 到第二项 | `gb2-rows.png` | 环整体下移到第二行，仍包住整行 |
+| 改后：DOWN 到 Cancel | `gb3-cancel.png` | Cancel 是蓝色药丸环 |
+| 改后：焦点链 | uiautomator dump | `[568,492][1352,588]`（首项）→ 第二项 → `[1212,732][1352,828]`（Cancel），共 3 站，初始焦点落在最上方选项 |
+| 改后：提示条 | `gi0.png`、`gi0-plate.png` | 深色板（`surfaceContainerHigh`）、消息 `bodyLarge`、板高 144px = 72dp（`heightIn(min = 72.dp)` 生效） |
+| 改后：提示条文本行 | uiautomator dump | `'Please restart the application to apply these changes' [754,984][1558,1032]`，行高 48px = 24dp，正是 `bodyLarge` 的行高 |
+
+提示条的触发路径：Settings → Storage and network → "Ignore SSL errors" 开关打开 →
+`showRestartRequired()` → `snackbarHostState.showSnackbar(settings_apply_restart_required, Long)`。
+验完已把该开关关回默认。
+
+`:app:assembleDebug` BUILD SUCCESSFUL（5m 33s）。
+
+### 遗留
+
+1. **提示条的"操作按钮 + ×"变体本轮没验到**。它能出现的路径是 `DownloadDialog` 的"已加入下载 / 已开始下载"
+   （`actionLabel = downloads`、`withDismissAction = true`），但本地库里两部测试作品的所有章节都已下载完，
+   Save 不再调度下载；离线环境也没有内容源能造出别的带操作标签的提示。等有内容源时补验这两处环。
+2. 本轮截图里的提示条贴在设置页右栏底部、右边直接顶到屏幕边（左边界 720px）——这是设置页自己把 host 放在
+   右栏里，与本轮改动无关；活动级 host 在整屏界面上的位置（是否居中、左右边距）还需在首页/详情页复核一次。
+3. **电视上的 Share 仍然走系统 chooser**（`ShareCompat.IntentBuilder(...).startChooser()`）。电视基本没有接收方，
+   点了要么弹出空 chooser、要么什么也不发生；这是"手机功能原样搬上电视"的典型，需要单独决定隐藏还是改成"复制链接"。
+4. **新发现：Settings → Storage and network 的 "Mirror list URL (optional)" 文本框会吃掉 D-pad。**
+   焦点进入该 `TextField` 后 UP / DOWN / LEFT 都不离开（六次 dump 的 `focused` 一直是
+   `[778,324][1864,532]`），BACK 也不退出；TAB 会被当成输入插进框里。于是它下面的
+   `Ignore SSL errors`、`Disable connectivity check` 等项在遥控器上不可达，只能强杀应用再进来。
+   这是本轮为了触发提示条偶然撞到的，值得单独一轮按 `SettingsAlertDialog` 的 `FocusRequester` 思路修。
+5. 提示条消息没有 `maxLines`：`Modifier.weight(1f, fill = false)` 会让长消息多行铺满整板，尚未定义截断/换行策略。
