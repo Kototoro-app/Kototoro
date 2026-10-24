@@ -268,6 +268,11 @@ npm run docs:build
   书架侧作为展示规则并入筛选，订阅页的“订阅”滤时间线行、“更新”滤新章节轮播，筛空时显示筛选空态），
   设置存 `desktop_background` 的 `sources_*` 四键，见计划 §141、§146。选到“自定义顺序”时概览节会多出 Android 的
   “重新排序”行（平铺的上移/下移对话框，保存才写盘并切到该顺序，序列存 `sources_order`），见计划 §182。
+  概览节最后一行是 Android 的“设置向导”（`source-setting-wizard`）：Windows 版是简介/外观/完成三页
+  （简介与完成页直接用 Android 的 `welcome_intro_*`/`welcome_done_*` 原句，外观页把开关换成主题、界面风格、语言，
+  打开的就是“更多”页那三个单选对话框；Android 的权限页与空间页在桌面没有对应能力，整页不搬，
+  向导也不会像手机那样首次启动自动弹出，只能从这一行进入），完成页的两个跳转落到“扩展与仓库”与“图书馆备份”，
+  见计划 §183。
   概览下方的“远程来源”节是 Android `remote_sources` 分组里的“插件去重优先级顺序”（`jar_priority_order`）：
   单文件 JAR 去重规则 `JarSourcePriority.kt` 已与 Android 共享到 `core-domain`，Windows 把同一把键写进
   `desktop_extensions`（值是 parser 插件 id 的逗号分隔列表，Android 侧是 JAR 文件名），

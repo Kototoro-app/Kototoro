@@ -136,6 +136,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `the setup wizard walks the intro appearance and done pages from the source settings row`() {
+        probe("wizard", directory.resolve("中文 setup wizard"), 180)
+    }
+
+    @Test
     fun `a parser marked broken stays installed and the show broken sources switch hides and offers it`() {
         val root = directory.resolve("中文 broken sources")
         probe("brokensource-write", root, 150)

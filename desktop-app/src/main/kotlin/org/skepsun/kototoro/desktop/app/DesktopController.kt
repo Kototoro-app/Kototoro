@@ -84,7 +84,7 @@ enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
     PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES, DICTIONARY_RULES,
-    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES,
+    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -2071,6 +2071,9 @@ class DesktopController(
 
     /** Android's source settings screen: rail order, layout and the adult-content targets. */
     fun showSourceSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SOURCE_SETTINGS) } }
+
+    /** Android's setup wizard, which 来源设置 opens from its overview group. */
+    fun showSetupWizard() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SETUP_WIZARD) } }
 
     /** Android's playback settings screen: the player's backdrop, decoder mode and control-overlay opacities. */
     fun showPlaybackSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.PLAYBACK_SETTINGS) } }

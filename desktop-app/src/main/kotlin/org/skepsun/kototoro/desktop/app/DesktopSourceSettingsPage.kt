@@ -71,6 +71,11 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
             SettingsSwitchRow(desktopText("sources.groupLanguage"), desktopText("sources.groupLanguageSummary"),
                 settings.groupByLanguage, active, { update(settings.copy(groupByLanguage = it)) },
                 testTag = "source-setting-group-language")
+            SettingsRowDivider()
+            // Android closes this group with the wizard entry; on Windows it is the only way in, since nothing opens
+            // the wizard by itself on a fresh data root.
+            SettingsValueRow(AndroidStrings["setup_wizard"], desktopText("sources.wizardSummary"), null, active,
+                { controller.showSetupWizard() }, testTag = "source-setting-wizard")
         }
         SettingsSectionHeader(desktopText("sources.remote"))
         SettingsGroup {

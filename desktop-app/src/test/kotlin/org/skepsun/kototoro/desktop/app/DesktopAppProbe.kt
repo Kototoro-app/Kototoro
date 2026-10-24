@@ -67,7 +67,11 @@ object DesktopAppProbe {
                 DesktopJarPriorityProbe.run(args)
                 return
             }
-            if (args[0].startsWith("sourceorder-")) {
+            if (args[0] == "wizard") {
+            DesktopWizardProbe.run(args)
+            return
+        }
+        if (args[0].startsWith("sourceorder-")) {
                 DesktopSourceOrderProbe.run(args)
                 return
             }

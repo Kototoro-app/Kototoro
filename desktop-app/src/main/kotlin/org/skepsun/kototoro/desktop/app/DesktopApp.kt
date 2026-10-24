@@ -131,6 +131,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.EXTENSIONS -> DesktopExtensionsPanel(controller, closing)
                             DesktopScreen.READER_SETTINGS -> DesktopReaderSettingsPage(controller, listState)
                             DesktopScreen.SOURCE_SETTINGS -> DesktopSourceSettingsPage(controller, listState)
+                            DesktopScreen.SETUP_WIZARD -> DesktopSetupWizard(controller, state)
                             DesktopScreen.TAG_BLACKLIST -> DesktopTagBlacklistPage(controller, listState)
                             DesktopScreen.READING_STATS -> DesktopReadingStatsPage(controller, listState)
                             DesktopScreen.STORAGE -> DesktopStorageSettingsPage(controller, state)
@@ -229,6 +230,7 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.SERVICES -> AndroidStrings["services"]
         DesktopScreen.READER_SETTINGS -> desktopText("screens.readerSettings")
         DesktopScreen.SOURCE_SETTINGS -> desktopText("screens.sourceSettings")
+        DesktopScreen.SETUP_WIZARD -> AndroidStrings["setup_wizard"]
         DesktopScreen.TAG_BLACKLIST -> desktopText("screens.tagBlacklist")
         DesktopScreen.READING_STATS -> AndroidStrings["reading_stats"]
         DesktopScreen.STORAGE -> AndroidStrings["storage_and_network"]

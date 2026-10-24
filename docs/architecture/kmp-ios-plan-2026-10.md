@@ -8339,5 +8339,50 @@ Android 的“来源设置 → 概览”只在排序方式为手动（`SourcesSo
   空序列回退安装顺序、其它排序忽略序列）。
 - 回归：`tablet layout and immersive reader panels…`（来源栏/来源网格都走同一份 `settings.sorted`）与
   `a JSON CMS source imports from the extensions page…` 重跑通过。
-- 仍待：`setup_wizard`（Android 概览组的最后一行）、把上移/下移换成真正的拖拽、Android 统一来源页的批量选择与
-  仓库筛选分组。
+- 仍待：把上移/下移换成真正的拖拽、Android 统一来源页的批量选择与仓库筛选分组。
+
+## 183. Windows 设置向导（对齐 Android 的 `setup_wizard` / `WelcomeSheet`）（2026-10-24）
+
+Android 的“来源设置 → 概览”最后一行是“设置向导”（`setup_wizard`），首次启动时还会自己弹出一次
+（`router.showWelcomeSheet()`），内容是一个四页 pager：简介（`WelcomeIntroStep`）、权限（`WelcomePermissionsStep`）、
+外观（`WelcomeAppearanceStep`，含 `WelcomeSpacesStep`）、完成（`WelcomeDoneStep`）。Windows 之前完全没有这一行，
+侧栏也没有对应的 screen，所以这是概览组里最后一个缺口（§182 收尾时列的第一条“仍待”）。
+
+- 三页而不是四页：
+  - 简介页、完成页照搬 Android 的字符串（`welcome_intro_*`、`welcome_done_*`），所以“仓库/拓展/源”三个概念的说明、
+    免责声明、“设置完成”的正文与“如果内容源出问题”的排查清单都是原句；
+  - 外观页保留 Android 的 `interface_style` 思路，但把开关换成 Windows 真有的三项——主题、界面风格、语言，
+    每行打开的就是“更多”页那套 `DesktopChoiceSettingsDialog`（同一个 `desktop_appearance` store：`theme` /
+    `interface_style` / `language`），只挑风格的向导会漏掉最显眼的两个设置；
+  - Android 的权限页整页丢弃：桌面没有运行时授权，那一页的每一行（通知、安装未知应用、电池优化）都是 Android 独有能力；
+  - Android 的空间页也丢弃：Windows 只有一个库、没有 space 概念；
+  - **不自动弹出**：Android 首次启动会直接盖住界面，Windows 若照做，任何新建数据根的测试（以及只想先看看的用户）
+    都会先撞上一个流程页，所以向导只能从“来源设置 → 设置向导”手动进入。
+- 界面（`DesktopSetupWizard.kt`，`DesktopScreen.SETUP_WIZARD`，`controller.showSetupWizard()`，标题取 Android 的
+  `setup_wizard`）：页面顶部照桌面惯例留一个“返回”（离开向导，回来源设置），下面一行 `wizard-progress`
+  写“第 1 / 3 步”（`sources.wizardStep`），然后是按步渲染的三块内容，最底下一对动作按钮 `wizard-back`
+  （文案是新增的 `common.previous`=上一步，第一步禁用——Android 的动作条只画一个返回箭头，桌面用文字才和顶部“返回”分得开）
+  与 `wizard-next`（最后一页换成 Android 的 `done`=完成，点了回来源设置）。
+- 入口行 `source-setting-wizard` 放在概览组的最后（Android 同位置），标题用 Android 的 `setup_wizard`，
+  摘要用桌面自己的 `sources.wizardSummary`：Android 的 `setup_wizard_summary` 写的是“选择内容语言和类型，
+  这重置已启用的图源列表”，而当前 Android 的四页里并没有这一步，桌面的向导也不重置来源，照抄会写错功能。
+  同理外观页的说明用 `sources.wizardAppearanceSummary` 而不是 `welcome_appearance_summary`——后者承诺的
+  “导航转场与详情页全景动画”只有手机画得出来（和 §182 拒绝 `reorder_hint` 的拖动文案同一条规矩）。
+- 完成页的两行就是 Android 那两个跳转：`wizard-open-extensions` 进“扩展与仓库”（`EXTENSIONS`），
+  `wizard-restore-backup` 进“图书馆备份”（`BACKUPS`，摘要用 Android 的 `welcome_restore_summary`）；
+  Android 的页头摘要与卡片正文在桌面折成一行 `SettingsInfoRow(摘要, 正文)`。
+- 不持久化当前页：Android 把 `currentPage` 存在偏好里以便中途退出后回到原页，Windows 的向导每次打开都从简介开始
+  ——它只有三页、也没有自动弹出，存一个“上次停在哪”反而要让“重看一遍”多一步。
+- 验证：`DesktopWizardProbe`（`wizard` 单段，空数据根，无 fixture）走完整条路径——
+  更多 → 来源设置 → 断言概览组末尾有 `source-setting-wizard` → 点进向导 → 断言 `wizard-progress` 是第 1/3 步、
+  `wizard-back` 禁用、简介页的 Android 原句（标题与免责声明）都在 → 下一步 → 断言主题/界面风格/语言三行都在、
+  点主题选 `LIGHT` → 断言 `state.appearance` 与 `desktop_appearance` 快照里的 `theme` 都变成 `LIGHT`（向导写的是同一把键）
+  → 下一步 → 断言完成页的标题、两个跳转行与“完成”文案 → 点 `wizard-open-extensions` 落到 `EXTENSIONS`、
+  重新进向导点 `wizard-restore-backup` 落到 `BACKUPS` → 再进向导，`wizard-back` 从第 3 步退回第 2 步、
+  “完成”回来源设置。截图 `wizard-{settings,intro,appearance,done,returned}.png` 都已逐张看过：
+  入口行在概览组最后、三页排版一致、主题改成浅色后完成页确实是浅色（说明那条设置真生效了）。
+- 回归：`the source reorder editor stores Android's manual order…` 与
+  `a parser marked broken stays installed and the show broken sources switch hides and offers it` 重跑通过
+  ——两者都要在同一张来源设置页上滚动找行，新行不能把已有的行挤出可达范围。
+- 仍待：`handle_links`（Android 概览组里的“处理链接”，Windows 没有注册 `http/https` 的关联入口）、
+  把重排对话框换成真正的拖拽、Android 统一来源页的批量选择与仓库筛选分组。
