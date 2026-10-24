@@ -324,6 +324,10 @@ fun Modifier.tvTextInputEnterAction(onEnter: () -> Unit): Modifier {
  * IME Done action. The button is addressed by [FocusRequester] on purpose: a geometric focus search
  * inside a scrollable dialog cannot find the next node, while an explicit request always can.
  *
+ * When the target cannot take the focus - the usual cause is `enabled = false` on a confirm button
+ * that waits for a non-blank value - the request is skipped in favour of the dialog's linear focus
+ * order, so Done still leaves the field and lands on the next reachable control (normally Cancel).
+ *
  * On phones and tablets both modifiers are no-ops, so the field behaves exactly as before.
  */
 class TvFieldExit internal constructor(
@@ -343,10 +347,23 @@ class TvFieldExit internal constructor(
 fun rememberTvFieldExit(multiline: Boolean = false): TvFieldExit {
     val target = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     val leave: () -> Unit = {
         keyboardController?.hide()
-        target.requestFocus()
-        Unit
+        // A disabled button is not a focus target, so a form whose Save/OK waits for a
+        // non-blank value answers requestFocus() with false. Without a fallback the
+        // remote would be left standing on the field with no way out but Back, which
+        // dismisses the whole dialog. Walk the dialog's own focus order instead: the
+        // linear traversal skips the disabled button and lands on Cancel.
+        if (!target.requestFocus()) {
+            val moved = focusManager.moveFocus(FocusDirection.Next) ||
+                focusManager.moveFocus(FocusDirection.Previous)
+            if (!moved) {
+                // Nothing else is reachable; drop the ring instead of pretending the
+                // field was left, so the next D-pad press starts a fresh focus search.
+                focusManager.clearFocus()
+            }
+        }
     }
     val fieldModifier = Modifier
         .then(if (multiline) Modifier else Modifier.tvTextInputFocusEscape())
