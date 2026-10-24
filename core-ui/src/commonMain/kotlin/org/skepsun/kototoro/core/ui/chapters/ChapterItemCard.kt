@@ -14,6 +14,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,7 +71,10 @@ fun ChapterListCard(
                 item.isCurrent -> Modifier.background(
                     MaterialTheme.colorScheme.primaryContainer.copy(alpha = .45f), RoundedCornerShape(12.dp))
                 else -> Modifier
-            }),
+            })
+            // The click target is the inner row, so a disabled card has to say so here: TalkBack otherwise
+            // announces a plain row, and any test tag on the card would look enabled.
+            .semantics { if (!enabled) disabled() },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
@@ -153,7 +158,9 @@ fun ChapterGridCard(
         modifier = modifier.fillMaxWidth().alpha(if (item.isUnread) 1f else .6f)
             .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
             .then(focusModifier)
-            .combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick),
+            .combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick)
+            // A disabled card drops its click action, so the state is declared explicitly for a11y and tests.
+            .semantics { if (!enabled) disabled() },
     ) {
     Card(
         modifier = Modifier.fillMaxWidth().aspectRatio(1f),
