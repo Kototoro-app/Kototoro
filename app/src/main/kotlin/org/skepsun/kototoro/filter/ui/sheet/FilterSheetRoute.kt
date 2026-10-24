@@ -53,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.KototoroRangeSlider
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
@@ -978,6 +979,16 @@ private fun YearSection(
             onValueChange = { sliderValue = it },
             valueRange = minYear.toFloat()..maxYear.toFloat(),
             steps = (maxYear - minYear - 1).coerceAtLeast(0),
+            // 遥控器上滑杆自己不带环也不会响应左右键；这里的键步进直接落库（滑杆只在松手时提交）。
+            modifier = Modifier.tvSliderDpad(
+                value = sliderValue,
+                valueRange = minYear.toFloat()..maxYear.toFloat(),
+                onValueChange = { value ->
+                    sliderValue = value
+                    onSetYear(if (value.toInt() <= minYear) YEAR_UNKNOWN else value.toInt())
+                },
+                steps = (maxYear - minYear - 1).coerceAtLeast(0),
+            ),
             onValueChangeFinished = {
                 onSetYear(
                     if (sliderValue.toInt() <= minYear) YEAR_UNKNOWN else sliderValue.toInt(),

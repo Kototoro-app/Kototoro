@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.MaterialTheme
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.glass.resolveFallbackShadowElevation
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -311,7 +312,15 @@ internal fun FeedDisplayOptionsContent(
                 },
                 valueRange = 0f..(jumps.size - 1).toFloat(),
                 steps = jumps.size - 2,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // 遥控器上滑杆自己不带环也不会响应左右键，见 tvSliderDpad（手机上是 no-op）。
+                    .tvSliderDpad(
+                        value = limitIndex.toFloat(),
+                        valueRange = 0f..(jumps.size - 1).toFloat(),
+                        onValueChange = { index -> onFeedLimitChanged(jumps[index.roundToInt()]) },
+                        steps = jumps.size - 2,
+                    ),
             )
         }
         AnimatedVisibility(visible = showAllUpdates) {

@@ -3828,3 +3828,77 @@ fun View.makeSnackbar(@StringRes resId: Int, duration: Int = Snackbar.LENGTH_SHO
 2. 评分芯片的菜单仍需追踪账号（第五十九轮遗留）。
 3. 来源标签下拉（`useRootOverlay = false`）的 TV 回环还没实测。
 4. 行尾控件 UP/DOWN、设置非根子页宽度、输入框内清除（×）只能触摸，三条仍在。
+
+## 第六十四轮：遥控器进不去的滑杆（2026-10-24）
+
+顺着设置子页往下翻时撞见的一条：Lists 页的 `Grid size` 滑杆，`uiautomator dump` 里明明是
+`F [758,324][1884,364] SeekBar`（focused），截图上的那一行却**没有任何焦点提示**；按左右键也不动。
+
+### 原因
+
+`KototoroSlider` 只是给 M3 `Slider` 套了一层外观，没有电视接线。M3 的 `Slider` 自己吃掉方向键、
+却只对拖拽有反应，所以在电视上它是一个**单向死胡同**：焦点进去了，看不出进去了；左右键没反应；
+只有上/下还能逃出来。
+
+`core-ui` 里其实早就有对症的 `Modifier.tvSliderDpad`（`core/ui/adaptive/TvFocus.kt:186`）：
+`tvFocusable(addFocusTarget = false)` 画环 + 预览阶段拦左右键，`tvSliderStepValue` 负责步长
+（有 `steps` 的按档走，连续的走 1/20 跨度，结果总会吸附回格点，不会累积浮点漂移），手机上是 no-op。
+问题是它必须由调用点自己贴上去。
+
+全部 6 个 `KototoroSlider` 调用点里，`DisplayOptionsSheet`、`ComposeReaderActivityScaffold`、
+`VideoSubtitleSettingsDialog`、`VideoSuperResolutionDialog`、`ReaderPanelComponents`（两处）、
+`ReaderColorCorrectionControls` 都贴了；**漏的是 5 处**：
+
+- `SettingsSliderPreference`——所有设置里的滑杆（网格尺寸、切页动画强度、控件不透明度……）；
+- `DetailsDock.LabeledGridSlider`——详情页面板的网格尺寸 / 封面比例；
+- `KototoroAppTopChrome`——订阅页"可见条目数"；
+- `ReaderActionsContent`——阅读器底栏的页码滑杆；
+- `FilterSheetRoute.YearSection`——筛选里的年份。
+
+`VideoPlayerControls` 那个滑杆不算漏：它由外层容器统一在电视上 `focusable` 并自己画 `border`，
+滑杆本身写了 `canFocus = !isTvPresentation`，所以没动它。
+
+### 改法
+
+5 处各在滑杆自己的 modifier 上补一次 `Modifier.tvSliderDpad(...)`（手机 no-op），三处细节值得记：
+
+- `SettingsSliderPreference` 把原来的拖拽 lambda 提成局部 `applyValue`，拖拽和左右键共用同一份提交
+  逻辑（都写 `sliderValue` 并按 `committedValue` 去重后回调 `onValueChange`）；
+- `ReaderActionsContent` 把 `displayValue` / `applyDisplayValue` 提到 `Box` 之前算一次。那根滑杆可能是
+  反向的（`sliderReversed`），环和滑杆必须看同一个映射值，否则左右键的语义会反；
+- `FilterSheetRoute.YearSection` 的键步进**直接落库**（`onSetYear`）：这根滑杆原本只在
+  `onValueChangeFinished` 里提交，而按键永远不会触发那个回调，不补就会"值动了、筛选没变"。
+
+### 设备证据（emulator-5554，1920×1080）
+
+路径：主界面 `⋮`(1845,56) → Settings(1650,400) → Appearance(250,240) → Lists(1200,830)。
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 改前：打开 Lists | `cr7.xml` 里 `F [758,324][1884,364] SeekBar`，截图 `cr2.png` / `cr4.png` | 滑杆确实拿到焦点，屏幕上却什么都没有 |
+| 改后：同一路径 | `cs1.xml` 同一节点仍是 `F [758,324][1884,364]` | 焦点没变，只是终于画出来了 |
+| 改后截图 | `cs1-slider.png` | 轨道外出现蓝色圆角环（10dp 圆角、2dp 描边） |
+| LEFT ×3 | `cs2-crop.png` | `100%` → `90%`，滑块随之移动，环保持 |
+| DOWN | `cs3-crop.png` | 环移到下一根滑杆（"List slide animation intensity"），同时只有一根带环 |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（`--offline --no-daemon --max-workers=2
+"-Dorg.gradle.jvmargs=-Xmx3072M"`），装的是 `app-x86_64-debug.apk`。
+
+### 顺手排除的一条（别再来查）
+
+Lists 子页打开时总是停在"List layout"那一节、第一行被顶栏切掉一半。查下来不是滚动状态串页
+（`AppearanceSettingsScreen` 那个 `rememberSaveable` 的 `LazyListState` 切换页面后其实是归零的：
+Appearance 每次都从"Theme and color"开始），而是 **Compose 把上一轮的焦点还原到列表里**——
+dump 里一直是那根 `SeekBar` 带 `focused`，列表为了露出它就滚了过去。电视上"回到子页还在原处"
+本身是好行为，所以没改；真正的问题只是那根滑杆看不见，就是本轮修的这个。
+
+### 遗留
+
+1. 另外 4 处（详情面板、订阅条目数、阅读器页码、年份筛选）只做到编译通过：这台模拟器没有可用图源、
+   也没有视频，只有设置这一条路能在设备上走通。
+2. `KototoroSnackbarHost` 那条 Compose 路仍缺一张真实设备截图（第六十三轮遗留）。
+3. 评分芯片的菜单仍需追踪账号（第五十九轮遗留）。
+4. 来源标签下拉（`useRootOverlay = false`）的 TV 回环还没实测。
+5. 行尾控件 UP/DOWN、设置非根子页宽度、输入框内清除（×）只能触摸，三条仍在。
+6. 来源页选择栏的 6 个 `IconButton` 仍是裸的不带环（`ExploreSourcesScreen`），且 `"$count selected"`
+   与 `"Shortcut"` 是硬编码英文；这台模拟器图源为 0，选中态走不到，留待有图源时再改。

@@ -77,6 +77,7 @@ import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
@@ -773,6 +774,14 @@ fun SettingsSliderPreference(
     var committedValue by remember(value) { mutableStateOf(value.coerceIn(valueRange.first, valueRange.last)) }
     val steps = ((valueRange.last - valueRange.first) / step - 1).coerceAtLeast(0)
     val currentValue = sliderValue.roundToInt().coerceIn(valueRange.first, valueRange.last)
+    val applyValue: (Float) -> Unit = { newValue ->
+        sliderValue = newValue
+        val nextValue = newValue.roundToInt().coerceIn(valueRange.first, valueRange.last)
+        if (nextValue != committedValue) {
+            committedValue = nextValue
+            onValueChange(nextValue)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -821,18 +830,20 @@ fun SettingsSliderPreference(
         }
         KototoroSlider(
             value = sliderValue,
-            onValueChange = {
-                sliderValue = it
-                val nextValue = it.roundToInt().coerceIn(valueRange.first, valueRange.last)
-                if (nextValue != committedValue) {
-                    committedValue = nextValue
-                    onValueChange(nextValue)
-                }
-            },
+            onValueChange = applyValue,
             valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
             steps = steps,
             enabled = enabled,
             compactThumb = true,
+            // 电视上没有这里的遥控器接线，滑杆就是一个“焦点进去、什么都看不出、只能靠上下键逃出”的死胡同：
+            // 环与左右键按步进都由 tvSliderDpad 提供（手机上是 no-op）。
+            modifier = Modifier.tvSliderDpad(
+                value = sliderValue,
+                valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
+                onValueChange = applyValue,
+                steps = steps,
+                enabled = enabled,
+            ),
             onValueChangeFinished = {
                 if (currentValue != committedValue) {
                     committedValue = currentValue
