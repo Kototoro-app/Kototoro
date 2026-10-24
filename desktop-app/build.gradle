@@ -18,6 +18,7 @@ def desktopIcons = ['ic_bookmark', 'ic_explore_normal', 'ic_history', 'ic_downlo
     'ic_backup_restore', 'ic_web', 'ic_more_vert', 'ic_search', 'ic_heart_outline', 'ic_heart',
     'ic_play', 'ic_star_small', 'ic_tts_close', 'ic_filter_menu', 'ic_check',
     'ic_source_builtin', 'ic_source_mihon', 'ic_source_aniyomi', 'ic_source_tsundoku', 'ic_source_cloudstream',
+    'ic_source_tvbox',
     'ic_home', 'ic_feed', 'ic_updated', 'ic_suggestion', 'ic_read', 'ic_arrow_forward', 'ic_settings', 'ic_dice',
     'ic_storage', 'ic_pin']
 def desktopIconResources = layout.buildDirectory.dir('generated/android-icons')
