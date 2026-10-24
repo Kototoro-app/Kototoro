@@ -3455,3 +3455,41 @@ iOS 界面风格下，顶栏的浮层菜单走的是**根层 overlay**（`RootGl
    还没传 `anchorFocusRequester`，行为与修前一致；逐页验证工作量在下一轮。
 2. 收藏页紧凑分类标题的锚点已接线但没在设备上单独验（首页与顶栏 ⋮ 已验）。
 3. 行尾控件 UP/DOWN、设置非根子页宽度两条仍在。
+
+## 第五十七轮补记：另外三处根层菜单锚点（2026-10-24）
+
+### 改法（接线）
+
+同样的 `anchorFocusRequester` 又接了三处，写法与顶栏 ⋮ 一致——`Modifier.focusRequester(x)` 必须放在
+`IconButton` 的 `clickable`/`tvFocusable` **之前**，否则 requester 抓不到那个焦点目标：
+
+1. 选择栏（`KototoroSelectionTopBar.kt`）的溢出 ⋮；
+2. 探索来源页（`ExploreSourcesScreen.kt`）顶栏的溢出 ⋮；
+3. 搜索页更多动作按钮（`SearchInputRows.kt` 的 `MoreActionsButton`）。
+
+### 设备证据（emulator-5554，1920×1080，构建 `63a8954ce`）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 历史长按进选择栏，导航栏 → RIGHT → UP → 连续 RIGHT | `ar4.xml`、`ar4_3.xml` | 焦点沿选择栏右侧药丸走：全选 → 移除 → 收藏 → ⋮ `F [1800,16][1896,112]` |
+| 在 ⋮ 上 CENTER | `as1.xml` / `as1.png` | 菜单打开，首项 `Mark as completed` 有环（`F [1589,124][1892,220]`） |
+| BACK | `as2.xml` / `as2.png` | 环回到选择栏 ⋮（`F [1800,16][1896,112]`，截图里按钮被选中药丸包住）；修前这里落到左侧导航 |
+| 探索页顶栏 ⋮ 上 CENTER | `au1.xml` / `au1.png` | 菜单打开，首项 `Extension management` 有环（`F [1449,124][1892,220]`） |
+| BACK | `au2.xml` / `au2.png` | 环回到 ⋮（`F [1800,16][1896,112]`） |
+
+### 搜索页那一处没能验，顺带发现一个真问题
+
+搜索页当前的落屏布局（返回箭头 + 输入框 + `Advanced search`/`Filter` 药丸 + 最近查询/标签）
+里根本没有那个 ⋮——`MoreActionsButton` 属于搜索结果态，所以本轮只做到了"已接线、与顶栏 ⋮ 同一写法"，
+没有单独的设备证据。
+
+更值得记的是尝试过程中撞见的：**搜索页的遥控器到不了顶栏**。焦点在输入框时 RIGHT 只是移光标，
+UP/DOWN 被 `tvTextInputFocusEscape` 吃掉（上方没有可聚焦节点，`moveFocus` 返回 false），
+按 BACK 收起键盘后 DOWN 会跳到列表、再 UP 又回到输入框，RIGHT 仍在框内——
+返回箭头与放大镜两个按钮用方向键无法到达。这条留作下一轮的入口。
+
+### 遗留（更新）
+
+1. 详情页 dock、来源标签下拉、详情页头信息面板三处根层 overlay 菜单仍未接线。
+2. 搜索页：更多动作按钮待结果态看图；输入框到顶栏图标的遥控器通路缺失（上节）。
+3. 行尾控件 UP/DOWN、设置非根子页宽度两条仍在。
