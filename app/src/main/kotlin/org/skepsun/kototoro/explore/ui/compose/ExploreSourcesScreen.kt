@@ -448,12 +448,17 @@ fun ExploreSelectionTopBar(
                     if (hasOverflowActions) {
                         var overflowAnchorBounds by remember { mutableStateOf(Rect.Zero) }
                         var showOverflowMenu by remember { mutableStateOf(false) }
+                        // Root-overlay menu on TV: give the closing menu a target to hand the ring
+                        // back to, otherwise the focus ends up on the navigation rail.
+                        val overflowAnchorFocus = remember { FocusRequester() }
                         Box(
                             modifier = Modifier.onGloballyPositioned { overflowAnchorBounds = it.boundsInRoot() },
                         ) {
                         IconButton(
                             onClick = { showOverflowMenu = true },
-                            modifier = Modifier.size(topBarControlHeight),
+                            modifier = Modifier
+                                .focusRequester(overflowAnchorFocus)
+                                .size(topBarControlHeight),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
@@ -469,6 +474,7 @@ fun ExploreSelectionTopBar(
                             useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
                             anchorTapThrough = true,
                             anchorBounds = overflowAnchorBounds,
+                            anchorFocusRequester = overflowAnchorFocus,
                             shape = CompactTopBarPillShape,
                             style = GlassDefaults.subtleStyle(),
                         ) {

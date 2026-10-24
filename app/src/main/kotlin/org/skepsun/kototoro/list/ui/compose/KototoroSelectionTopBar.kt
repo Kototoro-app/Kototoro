@@ -31,6 +31,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -89,6 +91,9 @@ fun KototoroSelectionTopBar(
 ) {
     var showOverflowMenu by remember { mutableStateOf(false) }
     var overflowAnchorBounds by remember { mutableStateOf<Rect?>(null) }
+    // The overflow menu is a root-overlay sibling of this button on TV, so closing it needs an
+    // explicit target or the ring drops to the navigation rail.
+    val overflowAnchorFocus = remember { FocusRequester() }
 
     val allActions = supportedActions?.toList() ?: defaultSelectionActions(showRemoveOption)
     val inlineActions = preferredInlineActions
@@ -192,7 +197,9 @@ fun KototoroSelectionTopBar(
                         ) {
                             IconButton(
                                 onClick = { showOverflowMenu = true },
-                                modifier = Modifier.size(topBarControlHeight),
+                                modifier = Modifier
+                                    .focusRequester(overflowAnchorFocus)
+                                    .size(topBarControlHeight),
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.MoreVert,
@@ -208,6 +215,7 @@ fun KototoroSelectionTopBar(
                                 useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
                                 anchorTapThrough = true,
                                 anchorBounds = overflowAnchorBounds,
+                                anchorFocusRequester = overflowAnchorFocus,
                                 shape = CompactTopBarPillShape,
                                 style = GlassDefaults.subtleStyle(),
                             ) {

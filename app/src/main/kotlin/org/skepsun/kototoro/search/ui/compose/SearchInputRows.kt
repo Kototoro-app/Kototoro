@@ -416,6 +416,9 @@ private fun MoreActionsButton(
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     var anchorBounds by remember { mutableStateOf<Rect?>(null) }
+    // On TV the menu lives in the root overlay, so without this the ring would drop to the
+    // navigation rail when the menu closes instead of staying on the button that opened it.
+    val moreAnchorFocus = remember { FocusRequester() }
     val tokens = LocalInterfaceStyleTokens.current
 
     Box(
@@ -424,6 +427,7 @@ private fun MoreActionsButton(
         IconButton(
             onClick = { expanded = true },
             modifier = Modifier
+                .focusRequester(moreAnchorFocus)
                 .size(tokens.topBarButtonSize)
                 .tvFocusable(shape = CircleShape, addFocusTarget = false),
         ) {
@@ -441,6 +445,7 @@ private fun MoreActionsButton(
             style = GlassDefaults.subtleStyle(),
             useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
             anchorBounds = anchorBounds,
+            anchorFocusRequester = moreAnchorFocus,
         ) {
             if (showRandomAction) {
                 CompactDropdownMenuItem(
