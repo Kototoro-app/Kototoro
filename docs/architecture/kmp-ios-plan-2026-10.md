@@ -7802,3 +7802,44 @@ Android 的 `NavConfigSettings`（界面标题取 `main_screen_sections`）允�
   这类外观开关与 `pref_nav_*` 没搬；平板/电视变体的导航还没共用这份配置；`NavItem.DISCOVER` 仍被排除，
   Windows 也没有对应入口。
 
+## 170. 合并 origin/devel（追踪章节元数据与更新生命周期）与冲突收口（2026-10-24）
+
+远端 11 个提交（`a9a88126d`）把“发现更新”和“读掉更新”拆开：`track_logs` 增加 `chapter_metadata`
+（Room v86，`Migration85To86`），`UpdateLifecycle.kt` 新增 `recordUpdateBatch`/
+`refreshPendingUpdateCount`/`completeUpdateChapter`/`completePendingUpdates`——订阅计数只在新章节读到末页时清，
+打开作品只算“已提醒”；时间线改按发现时间排序（`FeedDeriver.FEED_ORDER` 去掉置顶优先）。
+本轮把本地 `devel`（Windows 侧 100+ 提交）与它合并，冲突按“两边意图都保留”收口：
+
+- `core-domain/build.gradle`：保留 HEAD 那行 replace-rule 说明注释，远端只加了同名依赖。
+- `core-library/SourceLibrary.recordPage`：同一个立即事务里既跑我们的阅读统计 tick
+  （`readingSessions.onPage`），也跑远端的章节完成（`lastVisiblePage == pageCount - 1` 且是分支末章时
+  `completeUpdateChapter`），事务外仍是 `stats?.let { writeReadingSession(it) }`；第一版把 lambda 写成
+  `Unit`，报 `actual type is 'Unit', but 'ReadingSessionWrite' was expected`，改成先取 `val write` 再返回。
+- `desktop-app/DesktopHomePanel`：更新轮播保持 `lastChapterDate ?: lastCheckTime` 排序（与共享
+  `UpdatesDeriver.UPDATES_ORDER` 一致），行内按远端新字段 `newChapters` 投影。
+- 两份 `desktop-strings*.properties`：并集——我们的设置/导航键 + 远端 `feed.readCompleted`、
+  `feed.pendingChapters`、`feed.updatesAvailable`、`feed.sourceTime*`、`feed.chapterDetails`，
+  单空行分隔、无重复、无 CR（977/973 行）。
+- `SharedListDerivationTest`：远端取消“置顶优先”，分类 join 后再截断的期望改成 `[1L]` 并写明原因。
+- `DesktopTabletProbe`：打开更新不再消计数，改为断言 `feed.updateRowsByOwnerId` 仍有该作品、
+  `home-update:*` 与 `nav-feed-badge` 仍在（读到末页才算完成）；快捷入口改用 `performScrollToNode`
+  经懒列表滚入，不再依赖惰性组合的偶然位置。
+- `MainNavigationRules.step`：Android 拖拽句柄传的是原始偏移（`NavConfigViewModelTest` 用 -10 断言落到表头），
+  越界一步改为钳到端点而不是不动；`move` 的越界语义不变，另加一条钳位用例。
+
+顺带修掉两条与本合并无关、却让整套测试长期变红的既有失败：
+
+- `ChapterItemCard`（共享）：列表行的点击区在内层（尾部操作按钮要留在焦点树外），`enabled = false` 时
+  卡片连“禁用”状态一起消失；现在列表行与网格卡各自声明 `disabled()`，TalkBack 与用例都能看到。
+- `SyncedExtensionFileTest`：两条用例故意在旧 JAR/APK 仍被打开时替换文件，这正是 Android 的 rename 语义；
+  Windows 的 JVM 无法 move 到被其他句柄打开的文件上（`AccessDeniedException`），按平台跳过，而不是削弱断言。
+
+验证：`:core-domain:compileCommonMainKotlinMetadata`、`:core-domain:jvmTest`（223）、`:desktop-runtime:test`、
+`:core-db:jvmTest`（12）、`:app:compileDebugKotlin`、`:desktop-app:verifyDesktopStrings`、
+`:app:testDebugUnitTest`（3149）、`:desktop-app:test`（`*tablet*`、`*reorders*`、`*SharedChapterDirectoryTest*`
+全绿；`DesktopAppTest > Android styled light and dark themes …` 仍是既有失败）。
+
+仍待：Windows 没有 Android `TrackingRepository` 那套显式“全部标为已读/清除更新”入口，
+`completePendingUpdates` 目前只被 Android 调用，所以 Windows 只能靠读掉新章节清计数——下一轮补这个入口；
+`DesktopFeedPanel` 的待读行仍按置顶 + `lastCheckTime` 排，与共享 `FeedDeriver` 的发现时间排序不一致，需对齐。
+
