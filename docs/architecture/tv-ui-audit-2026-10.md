@@ -3762,3 +3762,69 @@ BUILD SUCCESSFUL），**还没在设备上看到一条真正由 `KototoroSnackba
 3. 评分芯片的菜单仍需追踪账号（第五十九轮遗留）。
 4. 来源标签下拉（`useRootOverlay = false`）的 TV 回环还没实测。
 5. 行尾控件 UP/DOWN、设置非根子页宽度、输入框内清除（×）只能触摸，三条仍在。
+
+## 第六十三轮：View Snackbar 一次收进电视配色（2026-10-24）
+
+第六十二轮遗留的第一条：21 处 `Snackbar.make(view, …)` 在电视上依旧是贴边全宽的白条。
+
+### 方案取舍
+
+第六十二轮记的正路是把章节/缩略图两个 pane 根的 `viewForSnackbar: View` 换成 `SnackbarHostState`。
+真做下去要动 21 个调用点，其中大半根本不在 Compose 树里——`SettingsActivity`、浏览器/授权页、
+`SnackbarErrorObserver`、`ReversibleActionObserver`、`DownloadStartedObserver` 这些只有 `View`，
+拿不到 Compose 宿主；硬迁等于给每个入口再造一个不可见的宿主容器。
+
+改为在 View 侧统一染色：**控件还是 Material 的，配色改成电视那一套**，一处实现、21 处调用点只换成新函数。
+
+### 改法
+
+新增 `core/util/ext/Snackbar.kt`：
+
+```kotlin
+fun View.makeSnackbar(text: CharSequence, duration: Int = Snackbar.LENGTH_SHORT): Snackbar
+fun View.makeSnackbar(@StringRes resId: Int, duration: Int = Snackbar.LENGTH_SHORT): Snackbar
+```
+
+- 电视判定走非 Compose 的 `resolveUiPresentationConfig(context, AppSettings(applicationContext)).isTv`，
+  Activity、observer 和 Compose 里取到的 `LocalView` 都能用；非电视原样返回 `Snackbar.make(...)`，手机分支零变化。
+- 电视上套 `?attr/colorSurfaceContainerHigh` 底、`?attr/colorOnSurface` 文字、`?attr/colorPrimary` 动作色，
+  与第六十二轮的 `KototoroSnackbarHost` 是同一套色。
+- `SnackbarLayout` 的底换成 16dp 圆角的 `MaterialShapeDrawable`，再把四边外距设成 24dp：
+  于是它从贴底全宽横条变成浮起的深色圆角面板，形状也和 Compose 那条一致。
+- 21 处调用点机械替换为 `receiver.makeSnackbar(...)`（脚本扫全部 `Snackbar\.make\(`，再手工收行宽），
+  涉及 `ChaptersScreenRoot`、`PagesScreenRoot`、`DetailsActionHandler`、`DetailsReaderLauncher`、
+  `DownloadDialog`、`DownloadStartedObserver`、`ExitCallback`、`ImageActivity`、`ImageMenuProvider`、
+  `MainShellScene`、`ReversibleActionObserver`、`SnackbarErrorObserver`、`SettingsActivity`、
+  `BrowserActivity`、`CloudFlareActivity`、`SourceAuthActivity`。
+
+### 一个 Material 的坑（值得记下来）
+
+第一版只换 background drawable，设备上却**又变回亮白**：`SnackbarLayout` 自身带着 `backgroundTintList`，
+`View.setBackground()` 之后框架仍会用那个 tint（SRC_IN）把整块 drawable 重染回默认色。
+`cm2.png` 就是现场——圆角、外距都对，底却是白的、文字发灰。
+
+所以颜色必须落到 `setBackgroundTint(...)` 上，形状才是可以独立做的那一步；`applyTvPalette()` 里两条都留着。
+
+### 设备证据（emulator-5554，1920×1080）
+
+触发路径：详情页 → 章节页签 → 长按章节行 → 出现范围选择提示。
+
+| 截图 | 观察 |
+| --- | --- |
+| `cm1.png` | 只换色的版本：底部一条深色横条，仍然全宽、贴底、直角 |
+| `cm2.png` | 加上圆角外距的版本：形状对了，但底色被 tint 打回亮白（见上面的坑） |
+| `cm3.png` | 最终：深色圆角面板，底色 `rgb(41,42,45)`、文字 `rgb(199,198,202)`，纵向 938→1031、底部留 24dp |
+
+像素取样（`cm3.png`）：面板中心 `(960,1000)` = `(41,42,45)`，文字像素 = `(199,198,202)`，
+面板右缘停在 1872 附近，与 24dp 外距一致。
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（`--offline --no-daemon --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3072M"`），
+装的是 `app-x86_64-debug.apk`。
+
+### 遗留
+
+1. `KototoroSnackbarHost` 那条路仍缺一张真实设备截图：电视上现存的提示全走 View 这条路，
+   要拍到 Compose 宿主的深色配色，得找一处真正由 Compose 弹提示的场景（如书架批量操作）。
+2. 评分芯片的菜单仍需追踪账号（第五十九轮遗留）。
+3. 来源标签下拉（`useRootOverlay = false`）的 TV 回环还没实测。
+4. 行尾控件 UP/DOWN、设置非根子页宽度、输入框内清除（×）只能触摸，三条仍在。
