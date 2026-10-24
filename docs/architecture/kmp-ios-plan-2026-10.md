@@ -8220,3 +8220,51 @@ Android 的 `UnifiedSourcesScreen` 在装/导入第三方包时按 `UnifiedSourc
   改成 PowerShell 直接传 `'--tests=*xxx*'` 即可；这一轮先被这个坑绕了一圈。
 - 仍待：`setup_wizard`、`handle_links`、`SourceSwitchDialog` 的选择模式、服务设置的浏览记录与 `related_manga`、
   外部追踪、定期本地备份等（§178 列过的其余项不变）。
+
+## 180. Windows 服务设置页对齐 Android 的 `ServicesSettingsScreen`（2026-10-24）
+
+§155 起 Windows 的阅读统计一直挂在“更多”列表里，推荐设置（§173/§179）也是同一层的另一行；Android 把这两项和
+“它们到底记不记”的几个开关一起收在一个“服务”页（`ServicesSettingsScreen`）里，“更多”只列页面。本轮把这一层
+结构补上，并按 Android 的开关语义让它们真的起作用——不摆只有存储没有行为的开关。
+
+- 页面与动词：新增 `DesktopScreen.SERVICES`，`DesktopMorePanel` 里原来那两行（`settings-recommendations-open`、
+  `reading-stats-open`）换成一个 `services-open` 行（标题 `services`、摘要 `more.servicesSummary`，图标沿用推荐那只），
+  新页 `DesktopServicesPage.kt` 按 Android 的顺序画：推荐（值行，摘要按 Android 写成“启用/禁用”，即
+  `state.suggestionSettings.enabled`）、阅读统计（Android 的**分裂**行）、阅读时间估算（整行开关）。
+  Android 的 `suggestionsSummary` 与 `isStatsEnabled` 的摘要都是 `enabled`/`disabled` 两个词条，这里照抄。
+  统计页与推荐页的返回按钮同时指向 `showServices()`，不再回“更多”。
+- 共享行组件：`core-ui` 的 `SharedSettingsRows.kt` 新增 `SettingsSplitSwitchRow`——行尾是开关、行首标题区可点，
+  对应 Android 的 `SettingsSplitSwitchPreference`（点标题进统计页、点开关只切记录；Android 上这是两个不同目标，
+  所以不能用整行开关代替）。它和其余设置行共用 `SettingsRowText` 与 120dp 行高约定。
+- 存储：`desktop-runtime` 新增 `DesktopServicesSettings`（`statsEnabled`/`readingTimeEstimation`，都默认 `true`）
+  与 `DesktopServicesPreferences`（独立的 `desktop_services` store，读写形状同 §139/§160 的导航与下载设置），
+  键用 Android 的 `stats_on` 与 `reading_time`。
+- `stats_on` 的真实语义：Android 关掉后阅读仍写历史与进度，只是不再产生会话/统计行。Windows 的统计写入只有一个
+  收口点——`SourceLibrary.recordPage` 里的 `ReadingSessionTracker` 与 `writeReadingSession`——所以在
+  `core-library` 加了一个 `var statsRecording: Boolean = true`，`recordPage` 用它决定要不要 tick、`writeReadingSession`
+  第一行直接 return。这样六个 `recordPage` 调用点（详情预览、分页/连续阅读、小说、视频、滚动操作）都不必各自判断，
+  也不会出现“某个入口偷偷记账”。`DesktopController.init` 把存下来的值同时写进 `state.services` 与
+  `session.library.statsRecording`；`servicesSettings(...)` 保存后即时同步，写盘失败才报 `services.saveFailed`。
+- `reading_time` 的真实语义：Android 的 `ReadingTimeUseCase` 在 `HistoryInfo.estimatedTime` 里算这份估计，
+  但**Android 侧没有任何界面渲染它**（详情页、历史页、预览卡都没有引用 `estimatedTime`）。Windows 把同一份公式
+  摆到详情页的事实行里（`details-reading-time`，标签 `details.readingTime`，值 `%1$d h %2$d min` / `%d min`），
+  否则这个开关就没有可观察的效果；公式本身放在 `desktop-runtime` 的 `desktopReadingTime(...)`：每章 20 页、
+  每页用该作品自己的 `totalDuration / units`（没有统计或统计关着时退回 Android 的 10 秒默认），有未完进度就按
+  `1 - percent` 折算，不足 1 分钟返回 `null`（行不画）。`DesktopController.estimatedReadingTime` 在 `detailsOnIo`
+  里算一次，`DesktopAppState.detailsReadingTime` 随详情一起下发。
+- 未搬的行与理由：Android 这一页还有“浏览记录推荐”（`browse_tracking_recommendations` 与其子项
+  `browse_more_tracking_recommendations`）、“相关作品”（`related_manga`）和 Discord RPC。前两个依赖 Windows 还不存在的
+  功能（MAL/Bangumi 发现轮播、相关作品接口），Discord RPC 需要 IPC 客户端；按本项目的口径**没有行为就不出行**，
+  三个都留到后续轮次（`related_manga` 是下一步的候选），而不是先存一个什么都不管的开关。
+- 验证：新探针 `services-write`/`services-read`（`DesktopServicesProbe.kt`），两个 JVM。write 段导入夹具后走真实 UI：
+  详情页先经 `details-expand` 打开整页事实（宽窗默认是预览卡，事实在“详情”后面）并核对 `details-reading-time`
+  与公式一致；回“更多”断言 `reading-stats-open` 已不存在、`services-open` 打开服务页，三行的标题/摘要都是 Android 词条，
+  截图 `-services-page.png`；点 `services-stats-enabled` 关掉统计——`state.services`、`desktop_services` 的 `stats_on`、
+  `session.library.statsRecording` 三处同时为假，截图 `-services-page-off.png`；此时读一章：历史有了、会话数仍是 0；
+  打开开关再读一章：会话数变 1；关掉 `reading_time` 后回详情页，`detailsReadingTime` 为 `null` 且行消失；
+  最后回服务页截图 `-services-page-reading-time-off.png`。read 段重开数据根，断言两个键（`stats_on=true`、
+  `reading_time=false`）、`DesktopServicesSettings.from` 的结果、`state.services` 与 `statsRecording` 都一致。
+- 回归：`stats` 探针（“更多 → 服务 → 阅读统计”的新路径与统计页返回目标）、`suggestionpolicy` 探针（推荐入口的新路径）、
+  `tablet` 探针（宽窗详情与“更多”列表）全部重跑通过，合计约 7 分钟。
+- 仍待：`related_manga`（相关作品）、浏览记录推荐的两个轮播。其余不变（`setup_wizard`、`handle_links`、手动重排、
+  `BOOKMARKS` 的 NSFW 过滤目标、`SourceSwitchDialog` 选择模式、外部追踪、定期本地备份、`CacheLimitsSettings`）。

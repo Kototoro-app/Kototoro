@@ -127,6 +127,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.DOWNLOADS -> DesktopDownloadsPanel(controller, closing)
                             DesktopScreen.BACKUPS -> DesktopBackupsPanel(controller, closing)
                             DesktopScreen.RECOMMENDATIONS -> DesktopRecommendations(controller, listState)
+                            DesktopScreen.SERVICES -> DesktopServicesPage(controller, state)
                             DesktopScreen.EXTENSIONS -> DesktopExtensionsPanel(controller, closing)
                             DesktopScreen.READER_SETTINGS -> DesktopReaderSettingsPage(controller, listState)
                             DesktopScreen.SOURCE_SETTINGS -> DesktopSourceSettingsPage(controller, listState)
@@ -225,6 +226,7 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.DOWNLOADS -> desktopText("screens.downloads")
         DesktopScreen.BACKUPS -> desktopText("screens.backups")
         DesktopScreen.RECOMMENDATIONS -> desktopText("screens.recommendations")
+        DesktopScreen.SERVICES -> AndroidStrings["services"]
         DesktopScreen.READER_SETTINGS -> desktopText("screens.readerSettings")
         DesktopScreen.SOURCE_SETTINGS -> desktopText("screens.sourceSettings")
         DesktopScreen.TAG_BLACKLIST -> desktopText("screens.tagBlacklist")

@@ -62,7 +62,7 @@ internal fun DesktopReadingStatsPage(controller: DesktopController, state: Deskt
         kind = state.readingStatsKind,
         active = !state.busy,
         covers = controller.session.covers,
-        onBack = controller::more,
+        onBack = controller::showServices,
         onPeriod = controller::readingStatsPeriod,
         onKind = controller::readingStatsKind,
         onWork = controller::showContentStats,

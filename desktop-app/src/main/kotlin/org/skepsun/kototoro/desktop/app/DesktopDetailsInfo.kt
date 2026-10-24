@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.source.SourceContent
+import org.skepsun.kototoro.desktop.runtime.DesktopReadingTime
 import org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -52,6 +53,15 @@ internal fun desktopContentLink(content: SourceContent): String =
     content.publicUrl.takeIf(String::isNotBlank) ?: content.url
 
 /**
+ * Android's `HistoryInfo.estimatedTime` as text. Android computes the estimate but never puts it on screen; Windows
+ * shows it in the details facts instead, because otherwise the 阅读时间估算 switch would gate nothing at all.
+ */
+internal fun desktopReadingTimeText(value: DesktopReadingTime): String = when {
+    value.hours > 0 -> desktopText("details.readingTimeHoursMinutes", value.hours, value.minutes)
+    else -> desktopText("details.readingTimeMinutes", value.minutes)
+}
+
+/**
  * Android's details facts: state, rating, alternative titles, tags and a copy button. Rows the source did not
  * answer are left out instead of showing blanks. A tag the shared warn-list calls extreme keeps the chip but takes
  * the warning tint, the same signal Android's `ContentListMapper.tagTint` gives it.
@@ -62,6 +72,7 @@ internal fun DesktopDetailsInfo(
     content: SourceContent,
     enabled: Boolean,
     warnings: DesktopSourceSettings = DesktopSourceSettings(),
+    readingTime: DesktopReadingTime? = null,
     modifier: Modifier = Modifier,
 ) {
     val link = remember(content) { desktopContentLink(content) }
@@ -81,6 +92,10 @@ internal fun DesktopDetailsInfo(
             Text(desktopText("details.info"), style = MaterialTheme.typography.titleMedium)
             status?.let { InfoRow(desktopText("details.statusLabel"), it, "details-status") }
             rating?.let { InfoRow(desktopText("details.ratingLabel"), it, "details-rating") }
+            // Android's reading-time estimate, hidden while its switch is off or the work is too short to estimate.
+            readingTime?.takeUnless { it.isEmpty }?.let {
+                InfoRow(desktopText("details.readingTime"), desktopReadingTimeText(it), "details-reading-time")
+            }
             if (altTitles.isNotEmpty()) {
                 InfoRow(desktopText("details.altTitles"), altTitles.joinToString(" · "), "details-alt-titles")
             }

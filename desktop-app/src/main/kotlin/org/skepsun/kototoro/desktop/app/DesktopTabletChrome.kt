@@ -146,8 +146,9 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
                 { controller.showStorage() }, testTag = "storage-settings-open",
                 leadingIcon = painterResource("icons/ic_storage.svg"))
             SettingsRowDivider()
-            SettingsValueRow(desktopText("settings.suggestions"), desktopText("more.recommendationsSummary"), null,
-                enabled, { controller.showRecommendations() }, testTag = "settings-recommendations-open",
+            // Android groups recommendations, statistics and their switches under one 服务 page.
+            SettingsValueRow(AndroidStrings["services"], desktopText("more.servicesSummary"), null,
+                enabled, { controller.showServices() }, testTag = "services-open",
                 leadingIcon = painterResource("icons/ic_suggestion.svg"))
             SettingsRowDivider()
             SettingsValueRow(desktopText("more.extensions"), desktopText("more.extensionsSummary"), null, enabled,
@@ -166,11 +167,6 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
             SettingsValueRow(desktopText("more.backups"), desktopText("more.backupsSummary"), null, enabled,
                 { controller.showBackups() }, testTag = "nav:${desktopText("more.backups")}",
                 leadingIcon = painterResource("icons/ic_backup_restore.svg"))
-            SettingsRowDivider()
-            // Android reaches its statistics from the "更多" tab; the desktop reader now records the same rows.
-            SettingsValueRow(AndroidStrings["reading_stats"], desktopText("more.readingStatsSummary"), null, enabled,
-                { controller.showReadingStats() }, testTag = "reading-stats-open",
-                leadingIcon = painterResource("icons/ic_history.svg"))
             SettingsRowDivider()
             // Android's nav configuration lives under appearance; here it edits the rail the window shows.
             SettingsValueRow(AndroidStrings["main_screen_sections"], desktopText("navSettings.moreSummary"), null,
@@ -308,7 +304,8 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                         }
                     }
                 }
-                DesktopDetailsInfo(content, enabled = !state.busy, warnings = state.sourceSettings)
+                DesktopDetailsInfo(content, enabled = !state.busy, warnings = state.sourceSettings,
+                    readingTime = state.detailsReadingTime)
             }
         }
         var tab by remember(content.id) { mutableStateOf(DesktopDetailsTab.CHAPTERS) }

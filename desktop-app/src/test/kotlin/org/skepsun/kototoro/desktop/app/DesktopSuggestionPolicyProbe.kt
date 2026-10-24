@@ -81,6 +81,8 @@ internal object DesktopSuggestionPolicyProbe {
                 }
                 idle()
                 onNodeWithTag("nav:更多").performClick(); idle()
+                // Android files the recommendations entry under 服务, not directly under 更多.
+                onNodeWithTag("services-open").performScrollTo().performClick(); idle()
                 onNodeWithTag("settings-recommendations-open").performScrollTo().performClick(); idle()
                 // Android's three worker rows use Android's own titles and summaries, and Android disables them while
                 // recommendations themselves are off.
@@ -153,6 +155,8 @@ internal object DesktopSuggestionPolicyProbe {
                 controller.suggestionSettings(controller.state.value.suggestionSettings.copy(includeDisabledSources = true))
                 // The page reports the persisted state, so reopening it after the runs is the last look at the rows.
                 onNodeWithTag("nav:更多").performClick(); idle()
+                // Android files the recommendations entry under 服务, not directly under 更多.
+                onNodeWithTag("services-open").performScrollTo().performClick(); idle()
                 onNodeWithTag("settings-recommendations-open").performScrollTo().performClick(); idle()
                 onNodeWithTag("settings-suggestions-wifi").performScrollTo().assertExists()
                 snapshot("worker-rows-after-runs")

@@ -48,7 +48,11 @@ internal object DesktopStatsProbe {
                 onNodeWithTag("nav:更多").performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.MORE }
                 idle()
-                onNodeWithTag("reading-stats-open").performScrollTo().performClick()
+                // Android keeps the statistics entry on its 服务 page, behind the 更多 list.
+                onNodeWithTag("services-open").performScrollTo().performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.SERVICES }
+                idle()
+                onNodeWithTag("services-stats-open").performScrollTo().performClick()
                 waitUntil(timeoutMillis = 15_000) {
                     controller.state.value.screen == DesktopScreen.READING_STATS && controller.state.value.readingStats != null
                 }
@@ -122,7 +126,8 @@ internal object DesktopStatsProbe {
 
                 onNodeWithTag("stats-back").performScrollTo().performClick()
                 idle()
-                check(controller.state.value.screen == DesktopScreen.MORE)
+                // The statistics entry lives on the 服务 page, so its back button returns there.
+                check(controller.state.value.screen == DesktopScreen.SERVICES)
             }
         } finally { runBlocking { controller.shutdown() } }
         println("DESKTOP_UI_OK=${args[0]}")

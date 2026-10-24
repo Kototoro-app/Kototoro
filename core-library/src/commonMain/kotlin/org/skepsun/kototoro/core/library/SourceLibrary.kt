@@ -39,6 +39,13 @@ class SourceLibrary(
     /** Android keeps its collector in the reader view model; the library holds the open stop for the host instead. */
     private val readingSessions = ReadingSessionTracker(clock)
 
+    /**
+     * Android's `stats_on`. With statistics switched off the reader still saves history and progress, but the tracker
+     * writes no session or statistics row — Android's `StatsCollector` is simply not attached. The host keeps this in
+     * step with its own services setting; it starts on, which is Android's default.
+     */
+    var statsRecording: Boolean = true
+
     suspend fun favourites(withChapters: Boolean = true): List<SourceContent> = database.getFavouritesDao()
         .findAllWithActiveCategory(0, Int.MAX_VALUE).distinctBy { it.manga.id }
         .map { content(it.manga, it.tags, withChapters) }
@@ -517,7 +524,7 @@ class SourceLibrary(
                     percent = percent,
                     deletedAt = 0, chaptersCount = branch.size, parentChapterId = part?.parent?.id,
                 ))
-                val write = readingSessions.onPage(content.id, stored.id, page, percent, now)
+                val write = if (statsRecording) readingSessions.onPage(content.id, stored.id, page, percent, now) else null
                 if (lastVisiblePage == pageCount - 1 && (part == null || part.index == part.count - 1)) {
                     database.completeUpdateChapter(content.id, stored.id, now)
                 }
@@ -539,7 +546,9 @@ class SourceLibrary(
     /** Drops the open stop without writing its session, for a reader the host stops tracking. */
     fun abandonReadingSession() = readingSessions.abandon()
 
-    private suspend fun writeReadingSession(write: ReadingSessionWrite): Unit =
+    private suspend fun writeReadingSession(write: ReadingSessionWrite): Unit {
+        // Statistics off: the stop is dropped rather than stored, so the stats page keeps the last recorded read.
+        if (!statsRecording) return
         database.useWriterConnection { connection ->
             connection.immediateTransaction {
                 val dao = database.getStatsDao()
@@ -552,6 +561,7 @@ class SourceLibrary(
                 write.session?.let { database.getReadingRecordDao().insertSession(it) }
             }
         }
+    }
 
     /**
      * Android's `StatsRepository.getDashboard` without the category filter Windows does not offer yet: the shared

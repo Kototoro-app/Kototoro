@@ -297,7 +297,12 @@ npm run docs:build
   （共享 `TabletPreviewContent` 的可选 `incognito` 动作）起一次“什么都不记录”的阅读会话
   （`DesktopAppState.readerIncognito` / `savesProgress`，四处自动保存都过它），
   ASK 时先弹 Android 那个“不再询问”对话框再打开阅读器，见计划 §154。
-  更多 → 阅读统计（`reading-stats-open`）对应 Android 的 `StatsScreen`：周期切换、类型筛选（全部/漫画/小说/视频）、
+  更多 → 服务（`services-open`，对应 Android 的 `ServicesSettingsScreen`）收着推荐与统计两个入口及其开关：推荐行进
+  “推荐设置”，阅读统计是 Android 的分裂行（标题进统计页、行尾开关只切记录），下面还有“阅读时间估算”整行开关；
+  两个键沿用 Android 的 `stats_on`/`reading_time`（存 `desktop_services`），`stats_on` 关掉后阅读仍写历史与进度、
+  只是 `SourceLibrary.statsRecording` 让会话与统计行不再落盘，`reading_time` 决定详情页是否画“预计剩余”那一行
+  （Android 算了这份估计却没有界面渲染，Windows 把它摆进详情事实里），见计划 §180。
+  统计页（`stats-back`）对应 Android 的 `StatsScreen`：周期切换、类型筛选（全部/漫画/小说/视频）、
   总时长/活跃天数/会话/作品、连续天数、每日活动、时段分布、类型占比、作品榜与清空确认。数据来自
   `core-library` 的 `ReadingSessionTracker`——阅读器各处自动保存经 `SourceLibrary.recordPage` 统一 tick，
   session 由 `beginReadingStop` 在进入阅读器前打开、离开时 `finishReadingSession` 关闭

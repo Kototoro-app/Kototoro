@@ -48,7 +48,7 @@ internal fun DesktopRecommendations(controller: DesktopController, state: Deskto
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        OutlinedButton({ controller.more() }, enabled = active) { Text(desktopText("common.back")) }
+        OutlinedButton({ controller.showServices() }, enabled = active) { Text(desktopText("common.back")) }
         SettingsSectionHeader(desktopText("settings.suggestions"))
         SettingsGroup {
             SettingsSwitchRow(desktopText("settings.suggestionsEnabled"),

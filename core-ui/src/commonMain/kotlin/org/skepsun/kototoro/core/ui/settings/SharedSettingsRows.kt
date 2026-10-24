@@ -225,6 +225,47 @@ fun SettingsSliderRow(
     }
 }
 
+/**
+ * Android's `SettingsSplitSwitchPreference`: the title opens the screen behind the switch, the switch alone changes the
+ * stored flag. Its reading-statistics row uses exactly this shape — the title opens the statistics screen, the switch
+ * decides whether the reader records anything at all — so the two halves must stay separately clickable, each with its
+ * own test tag.
+ */
+@Composable
+fun SettingsSplitSwitchRow(
+    title: String,
+    summary: String?,
+    checked: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    testTag: String? = null,
+    switchTag: String? = null,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().padding(end = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SettingsRowText(title, summary, Modifier.weight(1f))
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            modifier = if (switchTag != null) Modifier.testTag(switchTag) else Modifier,
+        )
+    }
+}
+
 /** Read-only row: what a source reports about itself, or a control Windows cannot draw. */
 @Composable
 fun SettingsInfoRow(title: String, summary: String?, modifier: Modifier = Modifier) {

@@ -79,6 +79,10 @@ object DesktopAppProbe {
                 DesktopSuggestionPolicyProbe.run(args)
                 return
             }
+            if (args[0].startsWith("services-")) {
+                DesktopServicesProbe.run(args)
+                return
+            }
             if (args[0] == "navconfig") {
                 DesktopNavigationConfigProbe.run(args)
                 return

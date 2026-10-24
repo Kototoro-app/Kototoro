@@ -84,7 +84,7 @@ enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
     PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES, DICTIONARY_RULES,
-    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP,
+    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -157,6 +157,11 @@ data class DesktopAppState(
     val chapterBranch: String? = null,
     /** Current chapter projected from this work's history; never inherited from a different open work. */
     val detailsChapterId: Long? = null,
+    /**
+     * Android's `HistoryInfo.estimatedTime` for the open details, when `reading_time` is on and the work is long
+     * enough to estimate; null keeps the row off the page.
+     */
+    val detailsReadingTime: org.skepsun.kototoro.desktop.runtime.DesktopReadingTime? = null,
     /** Home's history row; separate from [library], which the favourites/history pages own. */
     val homeHistory: DesktopLibrarySnapshot = DesktopLibrarySnapshot(),
     /** Android's feed read model (update logs and works with pending new chapters). */
@@ -165,6 +170,9 @@ data class DesktopAppState(
     val suggestionSettings: org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings = org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings(),
     val trackerSettings: org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings = org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings(),
     val sourceSettings: org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings = org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings(),
+    /** Android's services switches that have a Windows meaning: statistics recording and the reading-time estimate. */
+    val services: org.skepsun.kototoro.desktop.runtime.DesktopServicesSettings =
+        org.skepsun.kototoro.desktop.runtime.DesktopServicesSettings(),
     val libraryDisplay: org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay =
         org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay(),
     /** Android's "show updated" feed menu item: whether the tracked-with-new-chapters block is drawn. */
@@ -283,6 +291,11 @@ class DesktopController(
     private val updatePreferences = session.storage.preferences.open("desktop_extension_updates")
     private val backgroundPreferences = session.storage.preferences.open("desktop_background")
     private val libraryPreferences = session.storage.preferences.open("desktop_library")
+    /** Android's services switches; their own store keeps `stats_on`/`reading_time` away from the other documents. */
+    internal val servicesPreferences =
+        org.skepsun.kototoro.desktop.runtime.DesktopServicesPreferences(
+            session.storage.preferences.open("desktop_services"),
+        )
     /** Background and manual runs of the same work never overlap. */
     private val backgroundMutex = Mutex()
     private val appearancePreferences = session.storage.preferences.open("desktop_appearance")
@@ -358,6 +371,11 @@ class DesktopController(
         // The proxy the SDK client already uses is what the page shows; changing it writes the same store.
         mutableState.update { it.copy(proxySettings = session.proxy.settings.value) }
         mutableState.update { it.copy(githubMirror = session.githubMirror.settings.value) }
+        // Android's `stats_on` decides whether the tracker writes anything; the library starts on, like Android.
+        servicesPreferences.settings.value.let { saved ->
+            mutableState.update { it.copy(services = saved) }
+            session.library.statsRecording = saved.statsEnabled
+        }
         // Repositories are read in the background at start: updates are installed (when allowed) or announced.
         scope.launch { runCatching { startupUpdates() } }
         // The stamped version and the saved update toggles, before the first check or the first composed screen.
@@ -1052,9 +1070,38 @@ class DesktopController(
         val bookmarks = session.library.bookmarks(details.id)
         val branch = resolvePreferredChapterBranch(details.chapters.orEmpty(), SourceChapter::branch,
             SourceChapter::id, chapterId, desktopChapterBranchLocales())
+        val readingTime = estimatedReadingTime(details, progress?.percent)
         mutableState.update { it.copy(screen = DesktopScreen.DETAILS, content = details,
             detailsOrigin = origin, detailsExpanded = false, isFavourite = favourite, chapterBranch = branch,
-            detailsChapterId = chapterId, bookmarks = bookmarks) }
+            detailsChapterId = chapterId, bookmarks = bookmarks, detailsReadingTime = readingTime) }
+    }
+
+    /**
+     * Android's `ReadingTimeUseCase` as the details page shows it: the work's measured page time (or Android's ten
+     * second default when statistics are off or the work was never read), twenty pages a chapter, minus the progress
+     * of an unfinished read. Nothing is computed when the `reading_time` switch is off.
+     */
+    private suspend fun estimatedReadingTime(
+        details: SourceContent,
+        percent: Float?,
+    ): org.skepsun.kototoro.desktop.runtime.DesktopReadingTime? {
+        val services = state.value.services
+        if (!services.readingTimeEstimation) return null
+        val chapterCount = details.chapters.orEmpty().size
+        if (chapterCount <= 0) return null
+        val stats = runCatching {
+            session.library.contentReadingStats(details.id, TimeZone.currentSystemDefault())
+        }.getOrNull()
+        val secondsPerPage = if (!services.statsEnabled || stats == null || stats.units <= 0) {
+            0
+        } else {
+            (stats.totalDuration / 1000 / stats.units).toInt()
+        }
+        return org.skepsun.kototoro.desktop.runtime.desktopReadingTime(
+            chapterCount = chapterCount,
+            percent = percent?.takeIf { it in 0f..1f },
+            secondsPerPage = secondsPerPage,
+        )
     }
 
     internal fun exploreFilter(filter: DesktopSourceFilter) {
@@ -1944,6 +1991,24 @@ class DesktopController(
     fun showBackups() = navigate { mutableState.update { it.copy(screen = DesktopScreen.BACKUPS) } }
 
     fun showRecommendations() = navigate { mutableState.update { it.copy(screen = DesktopScreen.RECOMMENDATIONS) } }
+
+    /** Android's "服务" page: the entry for recommendations and statistics that 更多 used to hold as two rows. */
+    fun showServices() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SERVICES) } }
+
+    /**
+     * Android's services switches. `stats_on` also reaches the library at once: the reader's tracker writes nothing
+     * while it is off, and what was already recorded stays on the statistics page.
+     */
+    fun servicesSettings(value: org.skepsun.kototoro.desktop.runtime.DesktopServicesSettings) {
+        val saved = servicesPreferences.save(value)
+        session.library.statsRecording = value.statsEnabled
+        mutableState.update {
+            it.copy(
+                services = value,
+                error = if (saved) it.error else desktopText("services.saveFailed"),
+            )
+        }
+    }
 
     /** Android's "阅读统计" screen: the shared derivation over this library's sessions and stored works. */
     fun showReadingStats() = navigate {

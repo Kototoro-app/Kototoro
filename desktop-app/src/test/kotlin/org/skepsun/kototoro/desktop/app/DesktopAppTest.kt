@@ -276,6 +276,13 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `services page records statistics on demand and hides the reading-time estimate`() {
+        val root = directory.resolve("中文 services")
+        probe("services-write", root, 180)
+        probe("services-read", root, 90)
+    }
+
+    @Test
     fun `production Windows window closes during startup and after import and releases storage`() {
         probe("window-early", directory.resolve("中文 early close"))
         probe("window", directory.resolve("中文 normal window"))
