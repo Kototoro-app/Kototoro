@@ -3961,3 +3961,84 @@ RIGHT ×2 从 `PAGE 1` 走到 `PAGE 3`（`cu4-half.png`）。这是第六十四�
    要么在文档里标清楚，避免下一轮又去"修"它。
 2. 阅读器在电视上现在**没有任何换空间入口**（唯一的那条把手在电视上不画，改前也是点不动的）。
    真要在阅读器里换空间，应该做成 `⋮` 选项面板里的一项，本轮未动。
+
+## 第六十六轮：详情页按 BACK 回到快选层，遥控焦点掉进面板背后的页码滑杆（2026-10-24）
+
+### 现象
+
+阅读器 `⋮` 选项面板打开后，↓ 走到标签行、CENTER 进 `Display` 详情页，页内再往下走到
+`Brightness` 滑杆（dump 焦点 `[722,384][1197,480]`），然后按 BACK 收起详情页：
+
+1. 面板滑回 peek，快选层（模式行 + 九宫格动作 + 底部标签行）重新可见；
+2. 但 dump 里**一个 `focused="true"` 节点都没有**——环凭空消失；
+3. 紧接着的一次 ↓ 把环挂到了 `SeekBar [236,1065][1684,1080]` 上，那是**面板背后**阅读器自己的
+   页码滑杆，只在屏幕最下沿露出一条 15px 的蓝色弧线（`cw8-bot.png`、`cw9-bot.png`）。
+   用户看到的是"面板回来了，但第一下按键没反应"，第二下开始遥控在面板背后翻页。
+
+### 原因
+
+`ReaderOptionsPanelHost` 里本来就有"收起后把环带回去"的意图（这个 `LaunchedEffect` 的注释写着
+"left in the detail page it would sit on a hidden control"），但两道闸门一起把它废掉了：
+
+```kotlin
+if (isTv && wasExpanded && !scope.isExpandedPastPeek && !sheetHasFocus) {
+    withFrameNanos { }
+    requestFocus(focusTarget)
+}
+```
+
+`sheetHasFocus` 是挂在面板 Column 上的 `onFocusChanged { it.hasFocus }`。临时打点实测（`System.out`）：
+
+```
+TVSC collapse-effect expanded=false was=true tv=true hasFocus=true
+TVSC settled=10 hasFocus=true        // 等十帧之后仍然是 true
+```
+
+也就是说：详情页那张滑杆被移出组合后，**Compose 仍然把面板 Column 报成 hasFocus=true**，
+而真正的焦点树上已经没有任何节点（dump 证实）。于是 `!sheetHasFocus` 这道闸门让请求**一次都没发出去**——
+这条恢复逻辑从写下来那天起就没真正生效过，不是本轮引入的回归。
+
+### 改法
+
+收起分支不再看那个不可信的标志，直接请求，且给足重试帧数（和打开面板时的处理对称）：
+
+```kotlin
+val collapsing = wasExpanded && !scope.isExpandedPastPeek
+wasExpanded = scope.isExpandedPastPeek
+if (!isTv || !collapsing) return@LaunchedEffect
+repeat(COLLAPSE_FOCUS_FRAMES) {   // 3
+    withFrameNanos { }
+    requestFocus(focusTarget)     // 面板首个动作："Chapters and pages"
+}
+```
+
+`wasExpanded` 的写回提到 `return` 之前（否则提前返回会把状态吞掉，下一次收起就不触发了）；
+打开面板那条 `repeat(10)` 里的字面量顺手提成 `FOCUS_RETRY_FRAMES`，两个常量放在文件头部。
+
+### 设备证据（emulator-5554，1920×1080）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| `⋮` 打开面板 | `cy2.xml` | 环在快选层第一项 `Chapters and pages` `[232,542][414,730]` |
+| ↓×3 → RIGHT → CENTER | `cy3.xml` | 切到 `Display` 详情页，环在 `Display` 标签 `[850,102][1012,198]` |
+| 页内 ↓×2 | `cz1.xml` | 环进详情页，落在 `[722,384][1197,480]` |
+| **BACK（改后）** | `cz2.xml`、`cz2-half.png` | 面板回到 peek，**环回到 `Chapters and pages`** |
+| BACK 后 ↓×2 | `cz3.xml` | 环走到 `Layout` 标签 `[691,956][846,1052]`，仍在面板内部；改前同一串按键落到 `[236,1065][1684,1080]` 的页码滑杆 |
+| 再 BACK | `cz4.xml` | 面板关闭，环回到阅读器顶栏标题 `[784,12][1136,108]`，不在任何隐藏控件上 |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（本轮第一次仍撞上 `:reader-core:jvmJar — Could not create ZIP`，
+等并行会话的 Gradle 结束重试即过），装的是 `app-x86_64-debug.apk`。
+
+### 顺带实测：Display 详情页本身是好的
+
+`Display` 页（`Background` 单选网格 + `Invert colors`/`Grayscale`/`Brightness`/`Contrast`/
+`Yellowish background` + `Save / Globally / This manga` + 原图/效果预览）在电视上焦点链完整：
+亮度滑杆带整条圆角环（`cw4-focus.png`、`cw5-focus.png`），←×3 让 `Brightness 100% → 70%` 并即时改变
+预览（`cw4-focus.png` 前后对比），说明第六十四轮给 `KototoroSlider` 接的 `tvSliderDpad` 在详情页里也生效。
+
+### 遗留
+
+1. 面板收起后底部标签行**仍高亮 `Display`**，可内容已经变回快选层（`cz2-half.png`）。
+   手机端 BACK 收起面板同样不重置标签选中态，所以不是电视独有的行为；但电视用户没有"点一下标签"
+   这种纠正手段，是否需要"收起即取消标签高亮"留待决定，本轮未动。
+2. 第六十五轮的两条遗留（`ReaderActionsContent` 是死代码、阅读器缺换空间入口）不变。
