@@ -71,6 +71,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `dictionary rules are seeded from the shipped asset stored toggled and reimported`() {
+        probe("dictionaryrules", directory.resolve("词典 规则"), 180)
+    }
+
+    @Test
     fun `real Tsundoku APK installs converts and reads a novel over the live network`() {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("kototoro.dex.real.apks") != null, "no -PrealApkDirectory")
         probe("real-novel", directory.resolve("中文 real novel"), 180)

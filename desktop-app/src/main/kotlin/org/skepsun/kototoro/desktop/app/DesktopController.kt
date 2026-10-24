@@ -12,6 +12,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
 import org.skepsun.kototoro.core.library.LibraryContentStats
 import org.skepsun.kototoro.core.library.LibraryReadingStats
+import org.skepsun.kototoro.core.dictionary.DictionaryRule
 import org.skepsun.kototoro.core.replace.ReplaceRule
 import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.stats.domain.ReadingStatsPeriod
@@ -78,7 +79,7 @@ internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
 enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
-    PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES,
+    PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES, DICTIONARY_RULES,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -281,6 +282,8 @@ class DesktopController(val session: DesktopSession) {
     internal val crashLogs = crashLogOperations.state
     private val replaceRuleOperations = DesktopReplaceRuleOperations(scope, session)
     internal val replaceRules = replaceRuleOperations.state
+    private val dictionaryRuleOperations = DesktopDictionaryRuleOperations(scope, session)
+    internal val dictionaryRules = dictionaryRuleOperations.state
     /** Android's WebDAV backup destination: same shared protocol, uploaded by hand or by the timer below. */
     private val webDav = DesktopWebDavOperations(session.storage, backups)
     internal val webDavUi = webDav.ui
@@ -454,6 +457,51 @@ class DesktopController(val session: DesktopSession) {
             desktopText("replaceRules.exported", target.fileName.toString())
         } else {
             desktopText("replaceRules.exportFailed")
+        }
+        mutableState.update { it.copy(message = message) }
+    }
+
+    /** Android's dictionary-rule screen, the row right below the replace rules on the reading settings page. */
+    fun showDictionaryRules() = navigate {
+        mutableState.update { it.copy(screen = DesktopScreen.DICTIONARY_RULES) }
+        dictionaryRuleOperations.open()
+    }
+
+    fun backFromDictionaryRules() = navigate { mutableState.update { it.copy(screen = DesktopScreen.READER_SETTINGS) } }
+
+    fun openDictionaryRuleEditor(rule: DictionaryRule?) = dictionaryRuleOperations.openEditor(rule)
+
+    fun closeDictionaryRuleEditor() = dictionaryRuleOperations.closeEditor()
+
+    fun saveDictionaryRule(rule: DictionaryRule) {
+        dictionaryRuleOperations.save(rule)
+        mutableState.update { it.copy(message = desktopText("dictionaryRules.saved")) }
+    }
+
+    fun deleteDictionaryRule(rule: DictionaryRule) {
+        dictionaryRuleOperations.delete(rule)
+        mutableState.update { it.copy(message = desktopText("dictionaryRules.deleted")) }
+    }
+
+    fun setDictionaryRuleEnabled(rule: DictionaryRule, enabled: Boolean) =
+        dictionaryRuleOperations.setEnabled(rule, enabled)
+
+    fun importDictionaryRules(source: Path) = action {
+        val count = dictionaryRuleOperations.import(source)
+        val message = if (count > 0) {
+            desktopText("dictionaryRules.imported", count)
+        } else {
+            desktopText("dictionaryRules.importFailed")
+        }
+        mutableState.update { it.copy(message = message) }
+    }
+
+    fun exportDictionaryRules(target: Path) = action {
+        val exported = dictionaryRuleOperations.export(target)
+        val message = if (exported) {
+            desktopText("dictionaryRules.exported", target.fileName.toString())
+        } else {
+            desktopText("dictionaryRules.exportFailed")
         }
         mutableState.update { it.copy(message = message) }
     }

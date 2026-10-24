@@ -55,6 +55,10 @@ object DesktopAppProbe {
                 DesktopReplaceRulesProbe.run(args)
                 return
             }
+            if (args[0] == "dictionaryrules") {
+                DesktopDictionaryRulesProbe.run(args)
+                return
+            }
             if (args[0] == "playback") {
                 DesktopPlaybackProbe.run(args)
                 return

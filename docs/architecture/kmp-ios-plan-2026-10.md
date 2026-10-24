@@ -7625,3 +7625,64 @@ Windows 之前完全没有代理：每个来源、封面、JSON 导入都走 com
   Windows 目前按全局启用状态应用）；词典规则（Android `dictionary_rules`，同一“小说”节里的另一行）；
   其余设置页对齐（Spaces、下载、备份周期、同步、追踪、服务、导航配置、通知、全景、内容目录、TTS 等）。
 
+## 167. 共享词典规则（排序/重编号/导入合并）+ Windows 词典规则页（对齐 Android DictionaryRulesActivity）（2026-10-24）
+- 问题：§166 的“仍待”里第二条。“阅读设置 → 小说”节的第二行 `dictionary_rules`（摘要 `dictionary_rules_summary`）
+  对应 Android 的 `DictionaryRulesActivity`：一页表格、纸质相同的五行编辑对话框，加导入/导出/添加。
+  Windows 之前完全没有入口，`dictionary_rules` 表也就没人写，词典查询（Android `DictionaryActivity`）无从谈起。
+- 共享提取（`core-domain`，包名仍是 `org.skepsun.kototoro.core.dictionary`，Android 侧 import 无需改动）：
+  - `git mv` 把 `DictionaryRuleJsonCodec`（和它的测试）从 `app` 搬到 `core-domain`，与 §166 的
+    `ReplaceRuleJsonCodec` 同一位置；JSON 形状、字段名与容错语义不变。
+  - 新 `DictionaryRuleRules.kt`：`sortDictionaryRules`（先 `sortNumber` 后 `name`，即 Android 比较器的顺序）、
+    `normalizeDictionaryRuleOrder`（按当前顺序重编号 0..n-1）、`DictionaryRulesImport`、
+    `mergeImportedDictionaryRules(existing, imported)`（按 `name` 覆盖同名、追加新名，
+    再把合并结果按导入的 `sortNumber` 排序后重编号，`importedCount` 是导入文档里的条数；空文档返回原列表 + 0）。
+  - Android `DictionaryRuleRepository` 改调这些函数：`observeAll`/`getAll`/`getEnabled` 过 `sortDictionaryRules`，
+    `saveAll` 先重编号再落库，`importFromJson` 走 `mergeImportedDictionaryRules` 后整表替换。
+    这样“导入时被同名规则顶掉的位置由导入的 `sortNumber` 决定”这条 Android 行为只有一份实现。
+- 记住的两个 Android 语义（不修，照抄）：
+  - 主键是 `name`，`save` 也按 `name` 查找，所以**在编辑器里改名字等于新增一条**，旧行留在表里；
+  - 表为空时任何读到它的路径都会重新铺随包默认规则，因此“删光所有规则”实际等于“回到随包的两条”。
+- `desktop-runtime`：新 `DesktopDictionaryRules.kt`，与 `DesktopReplaceRules` 同形——`observeAll`（IO 上先
+  `ensureDefaults()` 再转发 DAO 的 flow）、`all`/`enabled`、`saveAll`（重编号 + `deleteAll` + `upsert`，返回落库列表）、
+  `save`（同名替换否则追加）、`setEnabled`、`delete`、`importFromJson`（解码失败或空文档返回 0）、
+  `exportToJson`、`ensureDefaults`（`Mutex` 幂等，读 classpath `defaultData/dictRules.json` 铺底）。
+  Windows 不复制一份默认规则 JSON，而是让构建把 Android 的 `app/src/main/assets/defaultData/dictRules.json`
+  拷进本模块的生成资源目录（`prepareDesktopDictionaryRules`，`sourceSets.main.resources.srcDir` +
+  `processResources` 依赖），两端随包规则永远同一份文件；`desktop-app` 通过 `desktop-runtime` 依赖拿到它。
+- `desktop-app`：
+  - 新 `DesktopDictionaryRuleOperations.kt`：`DesktopDictionaryRulesUi(rules, editorOpen, editing)` 是独立 flow
+    （`controller.dictionaryRules`，理由同 §165/§166），`rules == null` 表示“还没读”，空列表才是真答案。
+  - 新 `DesktopDictionaryRulesPage.kt`：标题行是返回 / 标题 / 导入 / 导出 / 添加（Android 的 FAB 换成头部按钮，
+    同 §166 的替换规则页），下面是 `dictionary_rules_summary` 与分隔线；每行是 `SettingsActionRow`
+    （标题 `name`、摘要 `urlRule`，行内滚动省略），行尾开关只改启用状态、点行进编辑器、再右侧是删除；
+    空列表用 `dictionary_rules_empty`。编辑器对话框字段与 Android 一一对应（名称 / URL 规则 / 展示规则 / 排序 / 启用），
+    展示规则用等宽字体，`name` 与 `urlRule` 都非空才允许保存（Android 的 `confirmButton` 条件），
+    编辑现有规则时对话框里还有删除按钮（Android 的 dismiss 分支）。
+    SAF 换成 `JFileChooser`（一条 `json` 过滤器），默认文件名仍是 `kototoro-dictionary-rules.json`。
+  - 入口与导航：阅读设置页“小说”节在替换规则下方新增 `dictionary_rules` 行，进新
+    `DesktopScreen.DICTIONARY_RULES`（`DesktopApp` 页面 `when` + 标题 `when` 各加一支，导航继续落到“更多”），
+    返回回阅读设置。
+  - 顺手修掉 §166 的一个文案缺陷：桌面的 catalog 用 `java.util.String.format` 占位符（`%s`/`%d`），
+    `replaceRules.exported` 当时写成了 `{0}`，导出成功会原样显示大括号；改成 `%s`，
+    并在两个规则探针里断言消息含文件名/条数且**不含 `{`**，以后写错就会红。
+- 验证：
+  - `:core-domain:jvmTest --tests *DictionaryRule*` 7/7（新 `DictionaryRuleRulesTest` 5 项：
+    先号后名排序；重编号覆盖位置；导入同名覆盖、新名追加、位置由导入的 `sortNumber` 决定且重编号
+    （断言 `[百度汉语, 本地词典, 海词英文]`，因为被顶掉的规则号是 5）；导入保留原 `enabled`
+    （顺序 `[新, 关, 开]` → `[true, false, true]`）；空文档不改表、条数 0。加上搬过来的 codec 2 项）。
+  - `:desktop-runtime:test --tests *DesktopDictionaryRulesTest*` 6/6（真实 `DesktopRuntime.open` + `@TempDir`：
+    新数据根就有随包的两条（`sortNumber` 0/1、`urlRule` 非空）；重启后顺序/启用状态不变、`enabled()` 只给开的；
+    `observeAll` 跟着写更新且开关不动其它规则；同名保存原地替换、新名追加；导出含规则且导回幂等、坏文档返回 0 且不清表；
+    删光后随包规则重新回来（与 Android 一致）。
+  - 探针 `dictionaryrules`（`DesktopAppTest` 同名用例，`DesktopDictionaryRulesProbe`）：阅读设置 → 词典规则页
+    → 断言两条随包规则都在、空态不显示 → 添加（保存按钮先灰）一条带展示规则的本地词典 → 开关写库且
+    `enabled()` 不再给它 → 改名字（照 Android 变成 4 行）→ 导出含新名字、导入报 4 条且不重复 →
+    删除恢复 3 行 → 返回阅读设置。本机实测输出 `DESKTOP_DICTIONARY_STATE=seeded:百度汉语|海词英文`、
+    `DESKTOP_DICTIONARY_IMPORT=message:已导入 4 条词典规则 error:null`、`DESKTOP_UI_OK=dictionaryrules`。
+  - `:desktop-app:verifyDesktopStrings` 通过（8 个新键两个 catalog 都有）；`:desktop-app:compileKotlin` 通过；
+    `:app:compileDebugKotlin` 与 `:core-domain:jvmTest` 全绿（共享提取后 Android 仍能编译、原有测试不受影响）。
+- 仍待：词典查询本身（Android `DictionaryActivity` + `DictionaryLookupService`，`urlRule` 的 `{{key}}` 展开与
+  `showRule` 的 jsoup 选择器执行）还没移植，Windows 目前只能维护规则表；小说阅读器的按书规则/逐条禁用
+  （Android `NovelBookPreferences`）；其余设置页对齐（下载、备份周期、同步、追踪、服务、导航配置、通知、全景、
+  内容目录、TTS 等）。
+

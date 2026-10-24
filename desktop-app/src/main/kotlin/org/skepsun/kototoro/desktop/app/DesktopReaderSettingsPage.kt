@@ -99,6 +99,9 @@ internal fun DesktopReaderSettingsPage(controller: DesktopController, state: Des
         SettingsGroup {
             SettingsValueRow(AndroidStrings["replace_rules"], AndroidStrings["replace_rules_summary"], null, active,
                 { controller.showReplaceRules() }, testTag = "reader-setting-replace-rules")
+            SettingsRowDivider()
+            SettingsValueRow(AndroidStrings["dictionary_rules"], AndroidStrings["dictionary_rules_summary"], null,
+                active, { controller.showDictionaryRules() }, testTag = "reader-setting-dictionary-rules")
         }
     }
     val open = dialog ?: return

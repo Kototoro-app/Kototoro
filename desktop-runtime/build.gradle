@@ -53,3 +53,20 @@ tasks.named('test') {
 	def distribution = layout.buildDirectory.dir('install/desktop-runtime').get().asFile
 	systemProperty 'kototoro.desktopDistribution', distribution.absolutePath
 }
+
+// Android seeds the dictionary-rule table from `assets/defaultData/dictRules.json` on first read. The Windows runtime
+// ships the same file as a resource (and the application gets it through this module), so both hosts start with the
+// rules the release carries instead of a second copy of the JSON that would drift.
+def desktopDictionaryDefaults = layout.buildDirectory.dir('generated/dictionary-rules')
+def prepareDesktopDictionaryRules = tasks.register('prepareDesktopDictionaryRules') {
+	def source = rootProject.file('app/src/main/assets/defaultData/dictRules.json')
+	inputs.file(source)
+	outputs.dir(desktopDictionaryDefaults)
+	doLast {
+		def target = desktopDictionaryDefaults.get().file('defaultData/dictRules.json').asFile
+		target.parentFile.mkdirs()
+		target.bytes = source.bytes
+	}
+}
+sourceSets.main.resources.srcDir(desktopDictionaryDefaults)
+tasks.named('processResources').configure { dependsOn prepareDesktopDictionaryRules }

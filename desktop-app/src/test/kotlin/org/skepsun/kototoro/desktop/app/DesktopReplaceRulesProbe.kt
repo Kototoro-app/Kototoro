@@ -93,6 +93,10 @@ internal object DesktopReplaceRulesProbe {
                 runBlocking { controller.exportReplaceRules(target).join() }
                 waitUntil(timeoutMillis = 15_000) { java.nio.file.Files.exists(target) }
                 check(java.nio.file.Files.readString(target).contains("drop ads")) { "the export lost the rule" }
+                // The catalog formats like `String.format`, so a `{0}` left in the message would show up here.
+                val exportedMessage = controller.state.value.message.orEmpty()
+                check(exportedMessage.contains(target.fileName.toString())) { exportedMessage }
+                check(!exportedMessage.contains("{")) { exportedMessage }
                 runBlocking { controller.importReplaceRules(target).join() }
                 waitUntil(timeoutMillis = 15_000) {
                     controller.state.value.message?.let { it.contains("1") } == true

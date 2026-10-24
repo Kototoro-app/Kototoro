@@ -133,6 +133,9 @@ class DesktopSession private constructor(
     ) { "desktop-${ids.incrementAndGet()}" }
     /** The shared `replace_rules` table: the settings page edits it, the novel reader applies it. */
     val replaceRules = org.skepsun.kototoro.desktop.runtime.DesktopReplaceRules(storage.database)
+
+    /** Android's dictionary_rules: the online dictionaries a text selection can look the word up in. */
+    val dictionaryRules = org.skepsun.kototoro.desktop.runtime.DesktopDictionaryRules(storage.database)
     val library = DesktopLibrary(storage.database) { name ->
         registry.installed().flatMap { it.sources }.firstOrNull { it.source.name == name }?.source
             ?: parsers.sources().firstOrNull { it.source.name == name }?.source
