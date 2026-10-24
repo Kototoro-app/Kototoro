@@ -13,31 +13,31 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
-import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ReaderControl
 import org.skepsun.kototoro.core.replace.ReplaceRule
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.reader.novel.NovelReaderSettings
 import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
@@ -209,7 +209,7 @@ internal fun NovelReaderBottomChrome(
         )
     }
     if (toolsPanelVisible) {
-        ModalBottomSheet(onDismissRequest = callbacks.onDismissTools) {
+        TvModalBottomSheet(onDismissRequest = callbacks.onDismissTools) {
             NovelToolsPanel(state, callbacks)
         }
     }

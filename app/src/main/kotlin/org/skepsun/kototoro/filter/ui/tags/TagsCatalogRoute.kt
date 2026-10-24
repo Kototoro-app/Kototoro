@@ -19,7 +19,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -34,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.filter.ui.FilterCoordinator
 import org.skepsun.kototoro.filter.ui.model.TagCatalogItem
@@ -61,7 +61,7 @@ fun TagsCatalogRoute(
     ),
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
+    TvModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {

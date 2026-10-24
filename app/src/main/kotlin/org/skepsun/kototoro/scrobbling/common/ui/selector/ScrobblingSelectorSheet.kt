@@ -3,7 +3,6 @@ package org.skepsun.kototoro.scrobbling.common.ui.selector
 import android.widget.Toast
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -11,12 +10,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.fragment.app.FragmentActivity
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import dagger.hilt.android.EntryPointAccessors
-import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
+import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
@@ -87,7 +87,7 @@ fun ScrobblingSelectorSheetRoute(
     }
 
     KototoroTheme {
-        ModalBottomSheet(
+        TvModalBottomSheet(
             onDismissRequest = onDismissRequest,
             sheetState = sheetState,
             modifier = Modifier.fillMaxHeight(0.9f),

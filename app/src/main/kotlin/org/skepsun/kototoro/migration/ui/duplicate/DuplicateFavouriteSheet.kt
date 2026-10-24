@@ -18,7 +18,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,6 +37,7 @@ import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.chaptersCount
+import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.migration.ui.rememberCoverRequest
 import org.skepsun.kototoro.parsers.model.Content
@@ -61,7 +61,7 @@ fun DuplicateFavouriteSheet(
             }
         }
     }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    TvModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.padding(bottom = 16.dp)) {
             Column(Modifier.padding(horizontal = 20.dp)) {
                 Text(stringResource(R.string.duplicate_title), style = MaterialTheme.typography.titleLarge)

@@ -27,7 +27,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
@@ -59,9 +58,10 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
+import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.parsers.model.Content
@@ -95,7 +95,7 @@ fun TrackingLocalSearchSheet(
         }
     }
 
-    ModalBottomSheet(
+    TvModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
     ) {
@@ -141,7 +141,7 @@ fun TrackingLocalSearchSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                return@ModalBottomSheet
+                return@TvModalBottomSheet
             }
 
             val selectedIndex = availableSources.indexOfFirst { it.mangaSource.name == selectedSourceName }
