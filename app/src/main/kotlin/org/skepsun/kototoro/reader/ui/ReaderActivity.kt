@@ -1255,7 +1255,16 @@ class ReaderActivity :
         }.getOrNull()
         val url = chapterUrl?.takeIf { it.startsWith("http", ignoreCase = true) }
             ?: manga.publicUrl.takeIf { it.startsWith("http", ignoreCase = true) }
-        if (url != null) router.openBrowser(url, manga.source, chapter.title) else router.openBrowser(manga)
+        when {
+            url != null -> router.openBrowser(url, manga.source, chapter.title)
+            manga.url.startsWith("http", ignoreCase = true) -> router.openBrowser(manga)
+            // Local files and other non-http content have no page to show: the in-app browser would
+            // only render net::ERR_ACCESS_DENIED for a file:// path.
+            else -> composeReaderController.showMessage(
+                getString(R.string.open_in_browser_unavailable),
+                TOAST_DURATION,
+            )
+        }
     }
 
     override fun scrollBy(delta: Int, smooth: Boolean): Boolean {

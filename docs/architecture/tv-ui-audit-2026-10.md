@@ -4107,3 +4107,84 @@ setContent { KototoroTheme { Column(...) } }
 3. 这里给 `maxLines = 2` 的短笔记用了 `tvTextInputFocusEscape()`，而该 helper 的注释写的是"只给单行字段"。
    电视上放弃两行内的上下移动键、换来能走到芯片行，是刻意的取舍，记在这里避免下次被当成误用改回去。
 4. 同一批五格里还剩 `Automatic scroll`、`Rotate screen`、`Download`、`Open in browser` 没实测。
+
+## 第六十八轮：快选层剩下四格（Automatic scroll / Rotate / Download / Open in browser）（2026-10-25）
+
+四格一次走完，结论分三类：一格是真的能用（但带一个空停点，已修）、两格在电视上本来就没有意义、
+一格把用户送进了一个必然报错的窗口。
+
+### 现象
+
+1. `Automatic scroll` 打开底部面板：`×`、`Auto scroll`、`Pause`、速度滑杆、`Show floating button`、
+   `Pause when controls are visible` 六个停靠点都在，焦点下移时面板自己滚动，滑杆能用 ←/→ 步进
+   （`x3.1` → `x0.1`）。**但是**第一个开关按 ↑ 会停到面板顶部的拖拽把手 `[912,320][1008][416]` 上——
+   那是 Material3 `ModalBottomSheet` 自带的把手，遥控器按 CENTER 什么都不会发生。
+2. `Rotate screen` 按下去只弹一条 `Screen rotation has been unlocked`（`dv1-crop.png`），
+   画面一点没变——它切的是"屏幕方向锁"，电视没有可转的屏幕。
+3. `Download` 按下去面板收起、什么都没有发生：本地书没有可下载的章节。
+4. `Open in browser` 直接打开了内置浏览器，然后是一整页 Chrome 报错
+   `Webpage not available … file:///storage/emulated/0/Android/data/org.skepsun.kototoro.debug/files/manga/TV%20Audit%20Manga%2011.cbz`
+   `net::ERR_ACCESS_DENIED`（`dx2-half.png`），而且这一屏只有一个可聚焦节点（整个 WebView），
+   顶栏的关闭按钮遥控器根本够不到。
+
+### 原因
+
+- 空停点：`ModalBottomSheet` 的默认 `dragHandle = { BottomSheetDefaults.DragHandle() }`。
+  Material3 给那个把手挂了 `draggable` + 合并语义，于是它进了 Compose 的焦点树；手机上没人用方向键走过去，
+  所以在电视之外从来没人发现。同一份代码在阅读器自己的选项面板里用的是 `ReaderPanelDragHandle`
+  （纯 `pointerInput`），那份就不会被聚焦——`cy2.xml` 里同位置只有一个 `focusable=false` 的 8px 药丸，
+  对照 `do1.xml` 里那把手的 96×96 可聚焦节点，差别一眼可见。
+- 报错页：`openCurrentChapterInBrowser()` 在拿不到 http 地址时回落到 `router.openBrowser(manga)`，
+  而本地作品的 `manga.url` 正是 `file://…cbz`，内置浏览器（Chrome/WebView）不允许页面导航到别的
+  `file://` 路径，于是必然 `ERR_ACCESS_DENIED`。
+
+### 改法
+
+1. `ComposeReaderActivityScaffold` 的自动滚动面板：电视上把把手换成 12dp 空白，手机保持 Material 默认：
+
+   ```kotlin
+   dragHandle = if (isTvPresentation) {
+       { Box(modifier = Modifier.fillMaxWidth().height(12.dp)) }
+   } else {
+       { BottomSheetDefaults.DragHandle() }
+   },
+   ```
+
+2. `openCurrentChapterInBrowser()` 补齐"根本没有网页"这一支：章节与作品都不是 http 地址时
+   不再打开浏览器，改为提示 `open_in_browser_unavailable`（新增英文串，翻译仍走 Weblate）。
+   手机端同样受益——本地书在手机上按这一格原本也会掉进同一个报错页。
+
+### 设备证据（emulator-5554，1920×1080）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| `⋮` → RIGHT×4 → CENTER | `df1-half.png`、`df3.xml` | 自动滚动面板打开，焦点在 `Auto scroll` 开关；可聚焦节点为把手 / `×` / 两个开关 / `SeekBar` |
+| ↓×4 → ↓×3 | `dh4.xml`、`dj3.xml` | 焦点链走完四个开关与滑杆，面板随焦点上滚，最后一行 `Pause when controls are visible` 完整可见 |
+| 滑杆 ←×6 | `di1-crop.png` | `x3.1` → `x0.1`，滑杆带圆角环（环的下沿被屏幕底边切掉，见遗留） |
+| 开 `Auto scroll`（速度 `x4.1`、`Pause when controls are visible` 关） | `dr3.png` / `dr4.png` | 相隔 6 秒两张截图不同，背后页面从 `CH 1 / PAGE 1` 走到 `CH 1 / PAGE 4`——电视上真的在自动滚 |
+| 打开 `Pause` 开关 | `ds2.png` / `ds3.png` | 两张完全一致（同一 hash），滚动停住 |
+| 改后：重开面板 | `dt1.xml`、`dt2-crop.png` | 把手不再存在，面板直接从标题行开始 |
+| 改后：第一个开关按 ↑ | `dt3.xml` | 焦点直接到 `×` `[1472,606][1568,702]`，中间没有空停点 |
+| `Rotate screen` | `dv1-crop.png` | 只有 `Screen rotation has been unlocked` 提示，画面不变 |
+| `Download` | `dw2-half.png`、`dw3.xml` | 面板收起，无提示、无对话框 |
+| `Open in browser`（改前） | `dx2-half.png`、`dx3.xml` | 进入 `BrowserActivity`，`net::ERR_ACCESS_DENIED`；唯一可聚焦节点是 WebView |
+| `Open in browser`（改后） | `dy1-crop.png` | 留在阅读器，底部提示 `This content has no web page to open` |
+
+构建：`:app:assembleDebug` 两次均 BUILD SUCCESSFUL，装的是 `app-x86_64-debug.apk`。
+
+### 遗留
+
+1. **`Rotate screen` 与 `Download` 在电视上等于空格子**：前者只切方向锁（电视无方向可转），
+   后者对本地/无源内容静默无事。要不要在电视上直接不画这两格（或对本地内容置灰），属于产品决定，
+   本轮只记录，没动。产品上更彻底的做法是让 `mangaQuickActions()` 按"是否有 http 页面 / 是否可下载"
+   过滤，手机端也能省掉两个空格。
+2. **M3 把手的空停点不止这一处**：全仓 29 个 `ModalBottomSheet(` 调用点默认都带同一个把手。
+   本轮只修了阅读器自动滚动面板；建议加一个共享的 `TvModalBottomSheet`（电视上默认换 12dp 空白），
+   再逐处迁移，别在 29 个地方各写一遍 `if (isTv)`。详情页、显示选项、空间切换等已经审过的面板
+   大概率都有这个停靠点，只是之前的焦点走位没经过它。
+3. 自动滚动面板里，焦点被带进视野时 Compose 只滚"刚好露出"，所以滑杆的焦点环下沿会被面板/屏幕底边切掉
+   （`di1-crop.png`）。纯视觉问题，未动。
+4. `Show floating button` 那个浮标（打开后收起控件时右下角出现计时器圆钮）尚未实测；
+   它只在"控件不可见 + 面板关闭"时出现，遥控器收起控件后是否有环走过去还需要一轮。
+5. 第三格的 `Automatic scroll` 面板本身还有一种入口：阅读器控件栏的计时器按钮
+   （`ReaderControl.TIMER`）。本轮只从 `⋮` 快选层进去过，两条入口指向同一个面板。

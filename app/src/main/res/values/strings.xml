@@ -258,6 +258,7 @@
     <string name="app_update_source_unavailable">API currently unavailable</string>
     <string name="app_update_source_no_release">The selected source did not return a newer installable version. Try the other source.</string>
     <string name="open_in_browser">Open in browser</string>
+    <string name="open_in_browser_unavailable">This content has no web page to open</string>
     <string name="open_metadata_in_browser">Open metadata page in browser</string>
     <string name="open_local_source_in_browser">Open local source page in browser</string>
     <string name="open_reading_page_in_browser">Open reading page in browser</string>

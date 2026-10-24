@@ -50,6 +50,7 @@ import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -806,7 +807,17 @@ internal fun ComposeReaderActivityScaffold(
         }
 
         if (state.autoScroll.visible) {
-            ModalBottomSheet(onDismissRequest = callbacks.autoScroll.onClose) {
+            ModalBottomSheet(
+                onDismissRequest = callbacks.autoScroll.onClose,
+                // The stock drag handle carries touch drag semantics, but Compose also puts it on the
+                // focus path: on a television the remote stops on it and CENTER does nothing. Keep
+                // the sheet, drop the handle where nobody can drag anything.
+                dragHandle = if (isTvPresentation) {
+                    { Box(modifier = Modifier.fillMaxWidth().height(12.dp)) }
+                } else {
+                    { BottomSheetDefaults.DragHandle() }
+                },
+            ) {
                 ReaderAutoScrollPanel(state.autoScroll, callbacks.autoScroll)
             }
         }
