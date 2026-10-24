@@ -3215,7 +3215,12 @@ New chapters）。库里没有收藏数据，所以正文是空态（猫图标 +
   症状是 APK 装上去启动即 `ClassNotFoundException: org.skepsun.kototoro.core.BaseApp`。
   清掉 `app/build/intermediates/dex` 与 `app/build/outputs/apk/debug` 后重新打包即恢复。
 
-### 阅读器"图块挤在左半边"的排查记录（未解决）
+### 阅读器"图块挤在左半边"的排查记录（已解决，见 `tv-reader-layout.md`）
+
+> 结论：不是"图块/网格"排版，而是 `CONTINUOUS_HORIZONTAL` 在电视横屏上按**视口高度**算页宽
+> （`pageWidth = availableHeight * ratio` ≈ 144 px），四张并排才 ~30% 宽度。已在电视上把该模式改走
+> 纵向全宽单列（`resolveSceneLayoutMode`，提交 `24d28e161`），手机/平板与分页模式不受影响。
+> 完整几何推导与验证数字见 `docs/architecture/tv-reader-layout.md`。
 
 现象：从详情页进入阅读后，页面以四列小图块形式只占屏幕左侧约 45%，每格下方是省略号标题，右侧整块黑。
 
@@ -3229,6 +3234,84 @@ New chapters）。库里没有收藏数据，所以正文是空态（猫图标 +
 下一步该看的地方：`ComposeReaderActivityScaffold.kt` 的进度条/页码元素（1270-1279 附近的
 `maxIntrinsicWidth` 计算）是否会参与页面区域测量；以及阅读器页面容器是否在电视上用了
 `BoxWithConstraints` 按手机比例算出的宽度。复现时要先确认当时是"页面缩略网格"还是"实际页面渲染"，两者路径不同。
+
+以上两条排查方向都错了：问题在场景选择（走的是 `HorizontalReaderScene`），不在阅读器外壳的测量。
+
+---
+
+## 第五十四轮：浮层菜单够不着、输入框"确定"卡死（2026-10-24）
+
+这一轮从"遥控器能不能自己走到设置页"开始，撞到两个**纯遥控器死路**。两者都已修并在设备上验证。
+
+### 1. 顶栏 ⋮ 打开的浮层菜单，遥控器完全进不去
+
+复现（explore 页，触摸点开 ⋮）：
+
+- 菜单画出来了，但**没有任何焦点环**；`uiautomator dump` 里也没有 `focused="true"` 的节点。
+- 连按 DOWN 无变化；再按 DOWN + CENTER，菜单还开着，而**左侧导航从 Home 切到了 Explore**——
+  方向键一直在操作菜单背后的界面。
+- 菜单项本身是 `tvFocusable(addFocusTarget = false) + clickable`，有焦点目标，只是从没被请求过。
+
+根因在 iOS（默认）界面风格下的菜单实现：`GlassDropdownMenu` 走 `RootGlassMenuOverlay` 的**窗口内浮层**，
+而那层全屏遮罩是 `Modifier.clickable(...)`。`clickable` 自己就是一个焦点目标，于是菜单打开后焦点
+要么还停在底层页面、要么落到这块看不见的遮罩上——前者让方向键穿透到背景，后者让 OK 直接关掉菜单。
+
+修法（`main/ui/compose/GlassDropdownMenu.kt`，仅电视生效）：
+
+- 电视上遮罩改成 `pointerInput + detectTapGestures`，只处理点按、**不注册焦点目标**（电视没有手指，
+  而且 Android TV 的遥控器也没有"点遮罩关菜单"这个习惯动作，BACK 才是关菜单的键）；
+- 菜单容器挂 `tvTakeFocusWhenEmpty(request.id)`：打开后逐帧请求焦点，直到第一个菜单项拿到焦点，
+  换一个菜单（`request.id` 变化）重新来一遍。菜单是按键之后那一帧才组合出来的，单次请求会落空。
+
+设备证据（截图 + dump）：
+
+| 位置 | 修前 | 修后 |
+| --- | --- | --- |
+| ⋮ 打开的菜单 | 无焦点环，方向键改的是背景页 | 首项 `Display options` 蓝色圆角环（`t3.png`，`F [1449,124][1892,220]`） |
+| 菜单内 DOWN | 无变化 | 焦点下移到 `Language preset`（`F [1449,327][1892,423]`） |
+| CENTER 进语言预设子菜单 | — | 子菜单首项 `All` 有环（`t5.png`） |
+| 再 CENTER 进 Display options 弹层 | — | 弹层首项 `List` 有环（`t9.png`，`F [392,244][948,340]`） |
+| BACK 逐层退出 | — | 子菜单/菜单一起关，焦点回到左侧导航 `Explore`（`F [16,728][152,864]`，可见位置） |
+
+补充对照：**独立 Popup 窗口里的菜单本来就是好的**——设置 → Spaces → 自定义空间行的 ⋮（Edit / Move up /
+Move down / Delete）打开后按一次 DOWN 就聚焦 `Edit`（`F [1589,530][1864,626]`）。所以问题只出在
+"窗口内浮层"这条路径，Material3 `DropdownMenu` 的 popup 路径不用动。
+
+该浮层同时被 `SpaceSwitcher` 等共用，非电视分支仍是原来的 `clickable` 遮罩，触摸行为不变。
+
+### 2. 输入框里按"确定"，确认按钮是禁用状态时焦点原地卡死
+
+`rememberTvFieldExit`（`core-ui` 的 `TvFocus.kt`）只做一件事：收起键盘后 `target.requestFocus()`。
+目标按钮禁用时（`tvFocusable(enabled = false)` 里 `focusable(false)`，`requestFocus()` 返回 `false`），
+焦点留在输入框里，遥控器再按也没有任何反应——在"新建自定义空间"这种"名称空着 ⇒ OK 禁用"的弹窗里，
+用户会以为遥控器坏了。
+
+修法：`requestFocus()` 失败后按线性顺序走一步（`moveFocus(Next)` → `moveFocus(Previous)`），
+都走不动才 `clearFocus()`。禁用按钮从此不是终点，焦点一定落到某个可见控件上。
+
+设备证据（设置 → Spaces → Add custom space）：
+
+| 场景 | 步骤 | 结果 |
+| --- | --- | --- |
+| OK 禁用 | 名称留空，焦点在输入框，收键盘后 ENTER | 焦点落到 `Select all`（`u14.png`，`F [1201,296][1352,392]`） |
+| OK 可用 | 建好空间后再进编辑（名称已填），ENTER | 焦点落到 **OK**（`u18.png`，`F [1236,936][1352,1032]`，蓝色圆角环） |
+
+### 顺带确认的老遗留
+
+- `SettingsAlertDialog` 的初始焦点：自定义空间编辑弹窗一打开，焦点就在 Name 输入框
+  （`F [568,136][1352,264] EditText`），不再是"缺设备证据"。
+- 设置根页（第五十三轮）在设备上确认是单列满宽：`[24,946][696,1080]` 这类卡片满宽铺开，
+  右侧详情栏只在子页面出现（Spaces 子页 `[778,...]` 起）。
+
+### 遗留
+
+1. **危险确认弹窗默认聚焦"确认"按钮**：删除自定义空间的确认弹窗一出现焦点就在 `Delete`
+   （`F [1102,580][1234,676]`），误按一次 OK 就删掉了。应该让 destructive 弹窗默认落到 Cancel。
+2. **菜单关闭后焦点回到左侧导航**，而不是回到锚点 ⋮。目前落在可见控件上、不算死路，但"从哪儿来回哪儿去"更顺。
+3. 模拟器软键盘的 ✓（Done 动作键）用 CENTER / ENTER 都点不动、触摸也点不到（`screencap` 证明键盘还在原地），
+   所以上面第 2 条是用 BACK 收起键盘后按 ENTER 验证的。这是模拟器 IME 的环境限制，不是应用问题。
+4. 语言预设子菜单和主菜单的 BackHandler 是叠起来的：BACK 一次把两层一起关掉（`t6.xml` 里两个菜单都没了）。
+   目前观感可接受，未深究。
 
 
 
