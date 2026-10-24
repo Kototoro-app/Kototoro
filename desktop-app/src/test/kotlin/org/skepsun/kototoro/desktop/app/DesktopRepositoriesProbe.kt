@@ -95,6 +95,13 @@ internal object DesktopRepositoriesProbe {
                     check(session.registry.installed().isEmpty())
                     snapshot("catalog")
                     onNodeWithTag("extension-install:${metadata.packageName}").performClick(); idle()
+                    // §178: a fresh package whose kind is still "ask every time" waits for Android's install question.
+                    onNodeWithTag("install-prompt-dialog").assertExists()
+                    // Answering without the checkbox leaves the kind asking; the sources stay on, as before §178.
+                    onNodeWithTag("install-prompt-enable").performClick(); idle()
+                    check(controller.state.value.extensionInstallPolicies["MIHON"] == null) {
+                        "the dialog remembered an answer without the checkbox"
+                    }
                     check(controller.state.value.sources.any { it.sourceId == 9007199254740993L })
                     onNodeWithText("已安装").assertExists()
                     val upgradedVersion = metadata.versionCode + 1

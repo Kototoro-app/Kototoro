@@ -42,6 +42,7 @@ import org.skepsun.kototoro.desktop.runtime.DesktopCrashLogFile
 import org.skepsun.kototoro.desktop.runtime.DesktopStorageUsage
 import org.skepsun.kototoro.desktop.runtime.DesktopTriState
 import org.skepsun.kototoro.desktop.runtime.DesktopNavigationSettings
+import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
 import org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex
 import org.skepsun.kototoro.core.ui.chapters.ChapterBranchLocale
 import org.skepsun.kototoro.core.ui.chapters.chaptersOfBranch
@@ -121,6 +122,10 @@ data class DesktopAppState(
     val jarPriorityOrder: String = "",
     /** Android's `show_broken_sources`: `@Broken` parsers stay installed, this decides if the lists offer them. */
     val showBrokenSources: Boolean = false,
+    /** Android's `extension_install_policies`, keyed by `UnifiedSourceKind` name; a kind nobody set asks every time. */
+    val extensionInstallPolicies: Map<String, ExtensionInstallPolicy> = emptyMap(),
+    /** Android's `ConfirmPackageInstall`: the row waiting for "install and enable" / "install only". */
+    val installPrompt: DesktopInstallRequest? = null,
     val repositories: List<DesktopRepository> = emptyList(),
     val extensionCatalog: DesktopRepositoryCatalog? = null,
     val installedExtensions: Map<String, Long> = emptyMap(),
@@ -280,7 +285,8 @@ class DesktopController(val session: DesktopSession) {
         language = restoredLanguage(),
         disabledSources = session.disabledSources(),
         jarPriorityOrder = session.jarPriorityOrder(),
-        showBrokenSources = session.showBrokenSources()))
+        showBrokenSources = session.showBrokenSources(),
+        extensionInstallPolicies = session.extensionInstallPolicies()))
     val state = mutableState.asStateFlow()
     private val continuous = DesktopScrollOperations(mutableState, session, scope, gate)
     private val novelOperations = DesktopNovelOperations(mutableState, session, scope, gate)
@@ -665,9 +671,74 @@ class DesktopController(val session: DesktopSession) {
         }
     }
 
+    /**
+     * A package the user picked. The install policy still decides the sources' switches, but it never asks here: the
+     * user chose this file, so `ASK_EVERY_TIME` means "install it and show its sources", the question belongs to the
+     * catalogue row, which is where a repository names dozens of sources at once.
+     */
     fun importJar(path: Path) = action {
-        val extension = session.importJar(path)
+        val kind = path.installKind()
+        val policy = state.value.extensionInstallPolicies.policyFor(kind)
+        val extension = session.importJar(path, policy != ExtensionInstallPolicy.INSTALL_ONLY)
         publishInstallation(extension.label, desktopText("extensions.imported"), DesktopScreen.EXPLORE)
+    }
+
+    /**
+     * Android's `installPackage` for a catalogue row: the stored policy answers for the user, and `ASK_EVERY_TIME`
+     * puts the same question Android's `UnifiedInstallChoiceDialog` does — unless this is an update, which Android
+     * installs without asking and whose sources keep the switches they already have.
+     */
+    fun installExtension(extension: ExtensionStoreIndex.Extension) = action {
+        val catalog = requireNotNull(state.value.extensionCatalog) { desktopText("extensions.readRepositoryFirst") }
+        val kind = installKind(catalog, extension)
+        val request = DesktopInstallRequest.FromRepository(catalog, extension, kind, extension.sources.size)
+        val updating = state.value.installedExtensions.containsKey(extension.packageName)
+        val answer = state.value.extensionInstallPolicies.policyFor(kind)
+        if (!updating && answer == ExtensionInstallPolicy.ASK_EVERY_TIME) {
+            mutableState.update { it.copy(installPrompt = request) }
+            return@action
+        }
+        install(request, if (updating) null else answer == ExtensionInstallPolicy.INSTALL_AND_ENABLE)
+    }
+
+    /** The answer to the install question; "remember" stores it for the kind, like Android's dialog checkbox does. */
+    fun resolveInstallPrompt(enableSources: Boolean, remember: Boolean) {
+        val request = state.value.installPrompt ?: return
+        val policy = if (enableSources) {
+            ExtensionInstallPolicy.INSTALL_AND_ENABLE
+        } else {
+            ExtensionInstallPolicy.INSTALL_ONLY
+        }
+        if (remember) setExtensionInstallPolicy(request.kind.typeName, policy)
+        mutableState.update { it.copy(installPrompt = null) }
+        action { install(request, enableSources) }
+    }
+
+    fun dismissInstallPrompt() = mutableState.update { it.copy(installPrompt = null) }
+
+    /** Android's per-kind row in the install behavior sheet. */
+    fun setExtensionInstallPolicy(typeName: String, policy: ExtensionInstallPolicy) = action {
+        val kind = DesktopInstallKind.entries.firstOrNull { it.typeName == typeName } ?: return@action
+        session.setExtensionInstallPolicy(kind, policy)
+        mutableState.update { it.copy(extensionInstallPolicies = session.extensionInstallPolicies()) }
+    }
+
+    /** Android's "apply to all sources" row: one answer for every kind this host installs. */
+    fun setAllExtensionInstallPolicies(policy: ExtensionInstallPolicy) = action {
+        session.setAllExtensionInstallPolicies(policy)
+        mutableState.update { it.copy(extensionInstallPolicies = session.extensionInstallPolicies()) }
+    }
+
+    private suspend fun install(request: DesktopInstallRequest, enableSources: Boolean?) = when (request) {
+        is DesktopInstallRequest.FromRepository -> publishInstallation(
+            session.installExtension(request.catalog, request.extension, enableSources).label,
+            desktopText("extensions.installed"),
+        )
+        is DesktopInstallRequest.FromFile -> publishInstallation(
+            session.importJar(request.path, enableSources).label,
+            desktopText("extensions.imported"),
+            DesktopScreen.EXPLORE,
+        )
     }
 
     fun showExtensions() = navigate {
@@ -729,11 +800,6 @@ class DesktopController(val session: DesktopSession) {
                 },
                 message = desktopText("extensions.repositoryRemoved", repository.name))
         }
-    }
-
-    fun installExtension(extension: ExtensionStoreIndex.Extension) = action {
-        val catalog = requireNotNull(state.value.extensionCatalog) { desktopText("extensions.readRepositoryFirst") }
-        publishInstallation(session.installExtension(catalog, extension).label, desktopText("extensions.installed"))
     }
 
     private fun installedVersions() = session.installedVersions()

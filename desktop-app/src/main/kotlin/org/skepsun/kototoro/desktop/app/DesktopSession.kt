@@ -29,6 +29,9 @@ import org.skepsun.kototoro.desktop.runtime.DesktopLibrary
 import org.skepsun.kototoro.desktop.runtime.DesktopRepositories
 import org.skepsun.kototoro.desktop.runtime.DesktopRepositoryCatalog
 import org.skepsun.kototoro.desktop.runtime.persistRepositoryPreference
+import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
+import org.skepsun.kototoro.extensions.install.decodeExtensionInstallPolicies
+import org.skepsun.kototoro.extensions.install.encodeExtensionInstallPolicies
 import org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex
 import org.skepsun.kototoro.parserhost.ParserPluginArchitecture
 import org.skepsun.kototoro.parserhost.ParserPluginRegistry
@@ -347,6 +350,42 @@ class DesktopSession private constructor(
         )))
     }
 
+    /**
+     * Android's `extension_install_policies`: what installing a package does to the sources it brings, per kind. The
+     * entries keep Android's `"<type>=<POLICY>"` text, and a kind nobody configured is absent — that is what
+     * `AppSettings.getExtensionInstallPolicy` turns into [ExtensionInstallPolicy.ASK_EVERY_TIME].
+     */
+    fun extensionInstallPolicies(): Map<String, ExtensionInstallPolicy> =
+        decodeExtensionInstallPolicies(
+            (installed.snapshot()[EXTENSION_INSTALL_POLICIES_KEY] as? SourcePreferenceValue.TextSet)?.values,
+        )
+
+    /** Stores one kind's answer; the default drops its entry instead of keeping a growing "ask" set, as Android does. */
+    fun setExtensionInstallPolicy(kind: DesktopInstallKind, policy: ExtensionInstallPolicy) =
+        writeExtensionInstallPolicies(extensionInstallPolicies() + (kind.typeName to policy))
+
+    /** Android's "apply to all sources" segmented row: one store write for every kind this host installs. */
+    fun setAllExtensionInstallPolicies(policy: ExtensionInstallPolicy) =
+        writeExtensionInstallPolicies(DesktopInstallKind.entries.associate { it.typeName to policy })
+
+    private fun writeExtensionInstallPolicies(policies: Map<String, ExtensionInstallPolicy>) {
+        installed.edit(SourcePreferenceEdit(changes = mapOf(
+            EXTENSION_INSTALL_POLICIES_KEY to SourcePreferenceValue.TextSet(
+                encodeExtensionInstallPolicies(policies.filterValues { it != ExtensionInstallPolicy.ASK_EVERY_TIME }),
+            ),
+        )))
+    }
+
+    /**
+     * Android's `setSourcesEnabled(ids, enabled)` right after an install: `INSTALL_ONLY` takes the new sources out of
+     * browsing, `INSTALL_AND_ENABLE` leaves them in. `null` keeps the switches the package's sources already had, which
+     * is what an update wants (Android's `enableAfterInstall = null`) and what a caller that has no policy answer means.
+     */
+    private fun applyInstallPolicy(names: List<String>, enableSources: Boolean?) {
+        if (enableSources == null || names.isEmpty()) return
+        setSourcesEnabled(names, enableSources)
+    }
+
     internal suspend fun chapterPages(contentId: Long, chapter: SourceChapter): List<SourcePage> =
         downloadStore.find(contentId, chapter)?.takeIf { it.isComplete }?.pages?.map { it.page }
             ?: sources.getPages(chapter, null)
@@ -411,56 +450,72 @@ class DesktopSession private constructor(
         DesktopBrowser(it, storage.paths.root.resolve("compat/browser-debug"), platform::cookieBridge)
     }
 
-    /** Imports a Mihon extension or a parser plugin; the jar's own contents tell which. */
-    suspend fun importJar(path: Path): InstalledExtension = withContext(Dispatchers.IO) {
+    /**
+     * Imports a Mihon extension or a parser plugin; the jar's own contents tell which.
+     *
+     * [enableSources] is Android's install policy answer for the sources this package brings (see
+     * [extensionInstallPolicies]); a picked file always installs, so a caller that asks the user first passes the
+     * answer and never [org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy.ASK_EVERY_TIME] itself.
+     */
+    suspend fun importJar(path: Path, enableSources: Boolean? = null): InstalledExtension = withContext(Dispatchers.IO) {
         when (DesktopExtensionFiles.kind(path)) {
             // Mihon manga, Tsundoku novels and Aniyomi anime share the jar/APK pipeline; the manifest names the runtime.
-            DesktopExtensionKind.MIHON, DesktopExtensionKind.ANIYOMI -> installManaged(repositories.import(path))
-            DesktopExtensionKind.PARSER -> installParser(repositories.importParserPlugin(path))
-            DesktopExtensionKind.CLOUDSTREAM -> installCloudstream(repositories.importCloudstreamPlugin(path))
+            DesktopExtensionKind.MIHON, DesktopExtensionKind.ANIYOMI -> installManaged(repositories.import(path), enableSources)
+            DesktopExtensionKind.PARSER -> installParser(repositories.importParserPlugin(path), enableSources)
+            DesktopExtensionKind.CLOUDSTREAM -> installCloudstream(repositories.importCloudstreamPlugin(path), enableSources)
         }
     }
 
+    /** [enableSources]: `true` keeps the imported sources switchable, `false` adds them to `disabled_sources`. */
     internal suspend fun installExtension(
         catalog: DesktopRepositoryCatalog,
         extension: ExtensionStoreIndex.Extension,
+        enableSources: Boolean? = null,
     ): InstalledExtension = if (catalog.isParserPlugin(extension)) {
-        installParser(repositories.downloadParserPlugin(catalog, extension))
+        installParser(repositories.downloadParserPlugin(catalog, extension), enableSources)
     } else if (catalog.isCloudstreamPlugin(extension)) {
-        installCloudstream(repositories.downloadCloudstreamPlugin(extension.resources.apkUrl, extension.packageName))
+        installCloudstream(repositories.downloadCloudstreamPlugin(extension.resources.apkUrl, extension.packageName), enableSources)
     } else {
-        installManaged(repositories.download(catalog, extension))
+        installManaged(repositories.download(catalog, extension), enableSources)
     }
 
-    private suspend fun installManaged(managed: DesktopManagedJar): InstalledExtension = withContext(Dispatchers.IO) {
-        val context = currentCoroutineContext()
-        context.ensureActive()
-        val local = registry.installed().firstOrNull { it.metadata.packageName == managed.identity.packageName }
-        require(local == null || local.metadata.versionCode <= managed.identity.versionCode) { desktopText("error.olderExtension") }
-        val extension = registry.replace(managed.path, managed.identity) {
+    private suspend fun installManaged(managed: DesktopManagedJar, enableSources: Boolean?): InstalledExtension =
+        withContext(Dispatchers.IO) {
+            val context = currentCoroutineContext()
             context.ensureActive()
-            val jar = SourceHostJar(managed.path.toString(), managed.identity)
-            persistRepositoryPreference(installed, managed.identity.packageName,
-                SourcePreferenceValue.Text(SourceProtocolJson.encodeToString(jar)))
+            val local = registry.installed().firstOrNull { it.metadata.packageName == managed.identity.packageName }
+            require(local == null || local.metadata.versionCode <= managed.identity.versionCode) { desktopText("error.olderExtension") }
+            val extension = registry.replace(managed.path, managed.identity) {
+                context.ensureActive()
+                val jar = SourceHostJar(managed.path.toString(), managed.identity)
+                persistRepositoryPreference(installed, managed.identity.packageName,
+                    SourcePreferenceValue.Text(SourceProtocolJson.encodeToString(jar)))
+            }
+            val listings = extension.sources.map { mihonListing(it, extension.metadata.ecosystem) }
+            applyInstallPolicy(listings.map { it.source.name }, enableSources)
+            InstalledExtension(extension.metadata.displayName, listings)
         }
-        InstalledExtension(extension.metadata.displayName, extension.sources.map { mihonListing(it, extension.metadata.ecosystem) })
-    }
 
-    private suspend fun installParser(managed: DesktopManagedParserPlugin): InstalledExtension = withContext(Dispatchers.IO) {
-        val context = currentCoroutineContext()
-        context.ensureActive()
-        val plugin = parsers.replace(managed.path, managed.id, managed.sha256) {
+    private suspend fun installParser(managed: DesktopManagedParserPlugin, enableSources: Boolean?): InstalledExtension =
+        withContext(Dispatchers.IO) {
+            val context = currentCoroutineContext()
             context.ensureActive()
-            val record = DesktopParserRecord(managed.id, managed.path.toString(), managed.sha256)
-            persistRepositoryPreference(installed, PARSER_KEY_PREFIX + managed.id,
-                SourcePreferenceValue.Text(SourceProtocolJson.encodeToString(record)))
+            val plugin = parsers.replace(managed.path, managed.id, managed.sha256) {
+                context.ensureActive()
+                val record = DesktopParserRecord(managed.id, managed.path.toString(), managed.sha256)
+                persistRepositoryPreference(installed, PARSER_KEY_PREFIX + managed.id,
+                    SourcePreferenceValue.Text(SourceProtocolJson.encodeToString(record)))
+            }
+            val listings = plugin.sources.map(::parserListing)
+            applyInstallPolicy(listings.map { it.source.name }, enableSources)
+            InstalledExtension(desktopText("extensions.installedSummary", plugin.id, plugin.sources.size), listings)
         }
-        InstalledExtension(desktopText("extensions.installedSummary", plugin.id, plugin.sources.size),
-            plugin.sources.map(::parserListing))
-    }
 
     /** Loads the plugin, then records it; a plugin whose record cannot be written is unloaded again. */
-    internal suspend fun installCloudstream(managed: DesktopManagedCloudstreamPlugin): InstalledExtension =
+    internal suspend fun installCloudstream(
+        managed: DesktopManagedCloudstreamPlugin,
+        enableSources: Boolean?,
+    ): InstalledExtension =
         withContext(Dispatchers.IO) {
             currentCoroutineContext().ensureActive()
             val plugin = cloudstream.load(managed.path, managed.id, managed.sha256)
@@ -472,8 +527,10 @@ class DesktopSession private constructor(
                 cloudstream.unload(managed.id)
                 throw error
             }
+            val listings = plugin.sources.map(::cloudstreamListing)
+            applyInstallPolicy(listings.map { it.source.name }, enableSources)
             InstalledExtension(desktopText("extensions.installedSummary", plugin.manifest.name ?: plugin.id, plugin.sources.size),
-                plugin.sources.map(::cloudstreamListing))
+                listings)
         }
 
     /** Every installed extension and parser plugin, as the extension manager lists them. */

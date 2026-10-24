@@ -81,6 +81,13 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
             SettingsSwitchRow(AndroidStrings["show_broken_sources"],
                 AndroidStrings["show_broken_sources_summary"], state.showBrokenSources, active,
                 { controller.setShowBrokenSources(it) }, testTag = "source-setting-show-broken")
+            SettingsRowDivider()
+            // Android's `extension_install_behavior` (§178): what installing a package does to the sources it brings,
+            // per kind. It is a live setting like the switch above, so it stays after the restart note too.
+            SettingsValueRow(AndroidStrings["extension_install_behavior"],
+                AndroidStrings["extension_install_behavior_sheet_summary"],
+                state.extensionInstallPolicies.policySummary(), active,
+                { dialog = SourceSettingsDialog.INSTALL_BEHAVIOR }, testTag = "source-setting-install-behavior")
         }
         SettingsSectionHeader(desktopText("sources.tags"))
         SettingsGroup {
@@ -142,6 +149,13 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
         )
         SourceSettingsDialog.JAR_PRIORITY -> DesktopJarPriorityDialog(state = state, enabled = active,
             onOrder = { controller.setJarPriorityOrder(it) }, onDismiss = { dialog = null })
+        SourceSettingsDialog.INSTALL_BEHAVIOR -> DesktopInstallBehaviorDialog(
+            policies = state.extensionInstallPolicies,
+            enabled = active,
+            onPolicy = { typeName, policy -> controller.setExtensionInstallPolicy(typeName, policy) },
+            onAllPolicies = { controller.setAllExtensionInstallPolicies(it) },
+            onDismiss = { dialog = null },
+        )
         SourceSettingsDialog.NSFW_TARGETS -> DesktopMultiChoiceSettingsDialog(
             title = desktopText("sources.nsfwFilter"),
             summary = desktopText("sources.nsfwFilterSummary"),
@@ -162,7 +176,7 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
     }
 }
 
-private enum class SourceSettingsDialog { SORT, JAR_PRIORITY, NSFW_TARGETS, INCOGNITO_NSFW }
+private enum class SourceSettingsDialog { SORT, JAR_PRIORITY, NSFW_TARGETS, INCOGNITO_NSFW, INSTALL_BEHAVIOR }
 
 /**
  * The parser plugins that `jar_priority_order` ranks, in that order; plugins the value does not name come last. A

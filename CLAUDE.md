@@ -274,6 +274,15 @@ npm run docs:build
   `@ContentSourceParser`/`@MangaSourceParser` 的名字，`ParserSourceInfo.broken` 随目录文件 v2 的末列缓存下来；
   开关存 `desktop_extensions`，关着时坏源不出现在来源栏/网格/筛选器/建议/换源候选（仍安装、仍可调用，
   标题按 Android 拼上“（已损坏）”），打开后各处直接出现，见计划 §177。
+  同一节再有 Android 的“扩展安装行为”（`extension_install_behavior`）：策略枚举 `ExtensionInstallPolicy`
+  （询问/仅安装/安装并启用）与其编解码已从 `app` 搬到 `core-domain` 的 `commonMain`，Android 与 Windows 共用；
+  Windows 按 Android 的 `UnifiedSourceKind` 名分五类 `MIHON`/`TSUNDOKU`/`ANIYOMI`/`JAR`/`CLOUDSTREAM`
+  （`DesktopInstallKind`，仓库条目按包名标记 `.animeextension.`/`.novelextension.`/`.cs3` 与解析器插件判定，
+  文件导入只能看 jar/APK 流水线、小说 jar 记 MIHON，JSON 来源没有“装完是否启用”这一步故不在列表内），
+  值存 `desktop_extensions` 的 `extension_install_policies`（与 Android 同键，仍是 `"<type>=<POLICY>"` 文本集合、
+  `ASK_EVERY_TIME` 不落盘）；装包后按答案用 `setSourcesEnabled` 落到 `disabled_sources`，
+  目录行遇到“询问”先弹 Android 的 `UnifiedInstallChoiceDialog`（勾选记住即写该类型策略），
+  更新与文件导入不提问，见计划 §178。
   来源设置的“标签”节是全局标签黑名单页（对应 Android 的“标签黑名单”）：搜索词库目录、按类别分组、
   点芯片切换、长按看键/英文/类别/别名、可“清空”或把词库不认识的标题加为 `raw:` 模式；
   选择存 `desktop_background` 的 `global_tag_blacklist`（与 Android 同键同格式，字符串是词库 ID 或 `raw:` 键），

@@ -71,6 +71,10 @@ object DesktopAppProbe {
                 DesktopBrokenSourcesProbe.run(args)
                 return
             }
+            if (args[0].startsWith("installpolicy-")) {
+                DesktopInstallPolicyProbe.run(args)
+                return
+            }
             if (args[0] == "navconfig") {
                 DesktopNavigationConfigProbe.run(args)
                 return

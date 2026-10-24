@@ -136,6 +136,13 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `the install behavior answers the catalogue question switches new sources and persists per kind`() {
+        val root = directory.resolve("中文 install behavior")
+        probe("installpolicy-write", root, 240)
+        probe("installpolicy-read", root, 150)
+    }
+
+    @Test
     fun `shared novel directory locates grouped chapters and keeps original indices in wide and narrow windows`() {
         probe("novel-directory", directory.resolve("中文 novel directory wide"))
         probe("novel-directory-narrow", directory.resolve("中文 novel directory narrow"))

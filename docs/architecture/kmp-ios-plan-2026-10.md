@@ -8113,9 +8113,55 @@ Windows 这一轮把这个语义补齐，因为此前的 Windows 连“已损坏
   `state.sources` 里出现 `Fixture Broken (已损坏)`、再点一次又消失，截图 `brokensource-write-off.png`/`-on.png`；
   read 阶段重开同一数据根，断言开关持久化、标题仍带“（已损坏）”、`pluginFor("FIXTURE_BROKEN")` 仍解析得到。
 - 仍待：Tsuki 自己模型里的 `isBroken`（Android 在 `PluginContentSource` 里与注解标记并列判断）在 Windows 侧
-  还没有对应实现；`extension_install_behavior`（询问/仅安装/安装并启用）仍是空的下一行。
+  还没有对应实现；`extension_install_behavior`（询问/仅安装/安装并启用）已在 §178 补上。
 - 顺带修的一处共享模块编译缺口：`core-ui` 的 `TvFocus.kt` 用 `WindowInsets.isImeVisible` 判断软键盘（TV 输入框
   左右键的放行条件），这个扩展只在 `foundation-layout` 的 Android 工件里，`commonMain` 编译 JVM/iOS 目标时是
   未解析引用——Android 侧 `:app:compileDebugKotlin` 一直是绿的，桌面侧 `:core-ui:compileKotlinJvm` 却红了，
   连带 `:desktop-app:*` 全部编译不了。改成共享写法 `WindowInsets.ime.getBottom(LocalDensity.current) > 0`
   （Android 上就是同一个 ime 高度判定），`:core-ui:compileKotlinJvm` 与 `:app:compileDebugKotlin` 都重新编译通过。
+
+## 178. Windows 扩展安装行为对齐 Android 的 `extension_install_behavior`（2026-10-24）
+
+§174–§177 补完来源侧之后，“装上一个包以后，它带来的来源算不算启用”这条规则在 Windows 上还没有位置。
+Android 的 `UnifiedSourcesScreen` 在装/导入第三方包时按 `UnifiedSourceKind` 问一句，并把答案存在
+`AppSettings.KEY_EXTENSION_INSTALL_POLICIES`（`extension_install_policies`，`"<type>=<POLICY>"` 的 `Set<String>`，
+`ASK_EVERY_TIME` 不落盘）。
+
+- 共享：`ExtensionInstallPolicy` 与其编解码从 `app` 原样搬到 `core-domain` 的 `commonMain`（同包
+  `org.skepsun.kototoro.extensions.install`），`decode/encodeExtensionInstallPolicies` 由 `internal` 改成 public；
+  Android 侧只删实现、import 不变，两条测试跟着搬到 `core-domain/src/jvmTest`。契约里更厚的
+  `ExtensionInstallService` 与 `SystemPackageInstaller` 依赖 APK/系统安装，仍留在 `app`。
+- Windows 的“包类型”用 Android 自己的 `UnifiedSourceKind` 名：`MIHON`/`TSUNDOKU`/`ANIYOMI`/`JAR`/`CLOUDSTREAM`
+  （`DesktopInstallKind`）。仓库条目按包名标记分类（`.animeextension.` → Aniyomi、`.novelextension.` → Tsundoku、
+  解析器插件 → JAR、`.cs3` → Cloudstream），与目录行自己的生态标签同一份判据；文件导入只有 jar/APK 流水线可看，
+  所以小说 jar 走文件导入时记 MIHON（KDoc 里写明）。LEGADO/LNREADER/TVBOX/JS/IREADER 不在列表内：
+  Windows 的 JSON 来源是 URL 对话框，没有“装完是否启用”这一步。
+- 存储：`desktop_extensions` 的 `extension_install_policies`（与 Android 同键），值仍是那套文本集合，
+  `ASK_EVERY_TIME` 写回时删除条目；入口是 `DesktopSession.extensionInstallPolicies()` /
+  `setExtensionInstallPolicy(kind, policy)` / `setAllExtensionInstallPolicies(policy)`。
+- 生效点：`DesktopSession` 的 `installExtension`/`importJar`/`installManaged`/`installParser`/`installCloudstream`
+  多一个 `enableSources: Boolean?`（null = 不动开关），装完用既有的 `setSourcesEnabled(names, enable)` 落到
+  `disabled_sources`，与来源开关对话框是同一份数据。
+- 询问：`DesktopController.installExtension`（目录行按钮）照 Android 的 `installPackage` 先看策略，`ASK_EVERY_TIME`
+  就把待装请求放进 `DesktopAppState.installPrompt`（与无痕提示同一种“状态里存问题、回调里续做”的写法，
+  不占用 `action {}` 的 busy），对话框是 Android 的 `UnifiedInstallChoiceDialog`（标题“安装 %s”、来源条数、
+  `extension_install_remember_choice` 勾选、安装并启用/仅安装/取消）；勾选即写该类型的策略。
+  更新不询问（Android 的 `enableAfterInstall = null`），开关也保持原样。文件导入不询问：用户已经挑了这个文件，
+  `ASK_EVERY_TIME` 对它就等于“装上并显示来源”；真正值得提问的是目录行——一个仓库动辄几十个来源。
+- UI：来源设置“远程来源”节在“显示已损坏来源”之后新增整行 `source-setting-install-behavior`
+  （摘要 = 各类型答案去重后按 Android 的类型顺序拼起来，如“仅安装 · 每次询问”），打开 `install-behavior-dialog`：
+  “批量统一设置”行（对应 Android 的分段按钮）加“按源类型设置”分组，每个类型一行，点开是同一个三选一对话框
+  （`install-behavior-option:<POLICY>`）。
+- 验证：`:core-domain:jvmTest`（策略编解码两条测试随模块走）、`:desktop-app:compileTestKotlin`、
+  `:app:compileDebugKotlin`（共享枚举搬家后 Android 仍绿）。探针 `installpolicy-write`/`installpolicy-read` 两段 JVM：
+  write 断言默认集为空、`JAR=INSTALL_ONLY` 的文本集合、批量写 5 条、批量回“每次询问”清空；导入
+  `fixture-kototoro.jar` 后 `FIXTURE_KOTOTORO_ONLY` 进 `disabled_sources`，换 `INSTALL_AND_ENABLE` 再导入
+  `fixture-kotatsu.jar` 则 `FIXTURE_SHARED` 不进；仓库装包走真实目录行——取消后什么都没发生，勾选“记住”选
+  “仅安装”后包装上、该类型存成 `INSTALL_ONLY`、它带来的来源进 `disabled_sources`；设置页读回混合摘要，
+  弹窗里逐类型与批量行都改得对（批量回 ASK 时集合清空）；把同一包升一个版本号再装一次不弹问题、开关不动。
+  截图 `installpolicy-write-prompt.png`/`-sheet.png`/`-choice.png`；read 段重开数据根，断言 `JAR=INSTALL_ONLY`、
+  两个来源的开关状态、设置页摘要都还在。
+- 既有探针的连带更新：`repositories-write` 第一次点目录行现在会弹问题，探针点“安装并启用”并断言不勾选就不落盘；
+  其余经 `controller.importJar` 的探针默认答案等价于旧行为。
+- 仍待：`setup_wizard`、`handle_links`、`SourceSwitchDialog` 的选择模式、推荐设置的 `only_using_wifi`/
+  `include_disabled_sources`/通知、服务设置的浏览记录与 `related_manga`、外部追踪、定期本地备份等。

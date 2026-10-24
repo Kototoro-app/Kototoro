@@ -171,6 +171,11 @@ internal fun DesktopExtensionsPanel(controller: DesktopController, closing: Bool
     // without uninstalling anything (§174). The list is a dialog rather than a page block: a real install has dozens
     // of sources, and the catalogue row above owns the height budget the window gives this page.
     if (switchingSources) SourceSwitchDialog(controller, state, enabled) { switchingSources = false }
+    // Android's `ConfirmPackageInstall`: a row whose kind is still set to "ask every time" waits here for the answer.
+    state.installPrompt?.let { request ->
+        DesktopInstallPromptDialog(request, { enable, remember -> controller.resolveInstallPrompt(enable, remember) },
+            { controller.dismissInstallPrompt() })
+    }
     if (adding) {
         AlertDialog(
             onDismissRequest = { adding = false },
