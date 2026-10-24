@@ -40,6 +40,7 @@ import org.skepsun.kototoro.desktop.runtime.DesktopUpdateSettings
 import org.skepsun.kototoro.desktop.runtime.DesktopCrashLogFile
 import org.skepsun.kototoro.desktop.runtime.DesktopStorageUsage
 import org.skepsun.kototoro.desktop.runtime.DesktopTriState
+import org.skepsun.kototoro.desktop.runtime.DesktopNavigationSettings
 import org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex
 import org.skepsun.kototoro.core.ui.chapters.ChapterBranchLocale
 import org.skepsun.kototoro.core.ui.chapters.chaptersOfBranch
@@ -80,7 +81,7 @@ enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
     PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES, DICTIONARY_RULES,
-    DOWNLOAD_SETTINGS,
+    DOWNLOAD_SETTINGS, NAV_CONFIG,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -1793,6 +1794,17 @@ class DesktopController(val session: DesktopSession) {
     fun saveDownloadSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopDownloadSettings) = action {
         if (!session.downloadPreferences.save(settings)) {
             mutableState.update { it.copy(error = desktopText("error.downloadSettingsInMemory")) }
+        }
+    }
+
+    /** Android's nav configuration screen: the rail reads [navSettings] and always appends 更多 after it. */
+    internal val navSettings = session.navigationPreferences.settings
+
+    fun showNavigationConfig() = navigate { mutableState.update { it.copy(screen = DesktopScreen.NAV_CONFIG) } }
+
+    fun saveNavigationSettings(settings: DesktopNavigationSettings) = action {
+        if (!session.navigationPreferences.save(settings)) {
+            mutableState.update { it.copy(error = desktopText("error.navSettingsInMemory")) }
         }
     }
 

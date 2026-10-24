@@ -26,51 +26,59 @@ import org.skepsun.kototoro.core.ui.settings.SettingsGroup
 import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
 import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
 import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
+import org.skepsun.kototoro.desktop.runtime.DesktopNavItem
 
 /** Windows supplies destination actions and artwork to the shared Android tablet rail. */
 @Composable
 internal fun DesktopNavigationRail(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
-    // Android's tablet order: home, favourites, browse, history, subscriptions (then Windows' "more").
-    val destinations = listOf(TabletNavigationDestination(4, desktopText("nav.home")), TabletNavigationDestination(0, desktopText("nav.favourites")),
-        TabletNavigationDestination(1, desktopText("nav.browse")), TabletNavigationDestination(2, desktopText("nav.history")),
-        TabletNavigationDestination(5, desktopText("nav.subscriptions")), TabletNavigationDestination(3, desktopText("common.more")))
+    // The configured order from 更多 -> 导航配置, then Windows' "more" pinned last so the exit never disappears.
+    val navSettings by controller.navSettings.collectAsState()
+    val destinations = navSettings.items.map { TabletNavigationDestination(desktopNavItemId(it), desktopNavItemLabel(it)) } +
+        TabletNavigationDestination(DESKTOP_NAV_MORE_ID, desktopText("common.more"))
     val selected = when (state.screen) {
-        DesktopScreen.HOME -> 4
-        DesktopScreen.FEED -> 5
-        DesktopScreen.LIBRARY -> 0
-        DesktopScreen.EXPLORE, DesktopScreen.DETAILS, DesktopScreen.PREFERENCES -> 1
-        DesktopScreen.HISTORY -> 2
-        else -> 3
+        DesktopScreen.HOME -> desktopNavItemId(DesktopNavItem.HOME)
+        DesktopScreen.FEED -> desktopNavItemId(DesktopNavItem.SUBSCRIPTIONS)
+        DesktopScreen.LIBRARY -> desktopNavItemId(DesktopNavItem.FAVOURITES)
+        DesktopScreen.EXPLORE, DesktopScreen.DETAILS, DesktopScreen.PREFERENCES -> desktopNavItemId(DesktopNavItem.BROWSE)
+        DesktopScreen.HISTORY -> desktopNavItemId(DesktopNavItem.HISTORY)
+        else -> DESKTOP_NAV_MORE_ID
     }
     val updates = state.feed.updateRowsByOwnerId.size
     val navigate: (Int) -> Unit = { id -> when (id) {
-        4 -> controller.home()
-        5 -> controller.subscriptions()
-        0 -> controller.library()
-        1 -> controller.explore()
-        2 -> controller.library(true)
+        desktopNavItemId(DesktopNavItem.SUBSCRIPTIONS) -> controller.subscriptions()
+        desktopNavItemId(DesktopNavItem.FAVOURITES) -> controller.library()
+        desktopNavItemId(DesktopNavItem.BROWSE) -> controller.explore()
+        desktopNavItemId(DesktopNavItem.HISTORY) -> controller.library(true)
+        desktopNavItemId(DesktopNavItem.HOME) -> controller.home()
         else -> controller.more()
     } }
     // Re-selecting "browse" inside a source goes back to the source grid, like Android's tab re-tap.
     val reselect: (Int) -> Unit = { id ->
-        if (id == 1 && state.screen == DesktopScreen.EXPLORE && state.selectedSource != null) controller.exitSource()
-        else navigate(id)
+        if (id == desktopNavItemId(DesktopNavItem.BROWSE) && state.screen == DesktopScreen.EXPLORE &&
+            state.selectedSource != null) {
+            controller.exitSource()
+        } else {
+            navigate(id)
+        }
     }
     androidx.compose.material3.Surface(Modifier.width(80.dp).fillMaxHeight().testTag("tablet-navigation"),
         color = androidx.compose.material3.NavigationRailDefaults.ContainerColor, tonalElevation = 3.dp) {
         TabletNavigationRail(destinations, selected, navigate, reselect,
             icon = { id, isSelected ->
                 val resource = when (id) {
-                    4 -> "ic_home"
-                    5 -> "ic_feed"
-                    0 -> if (isSelected) "ic_heart" else "ic_heart_outline"
-                    1 -> "ic_explore_normal"
-                    2 -> "ic_history"
+                    desktopNavItemId(DesktopNavItem.HOME) -> "ic_home"
+                    desktopNavItemId(DesktopNavItem.SUBSCRIPTIONS) -> "ic_feed"
+                    desktopNavItemId(DesktopNavItem.FAVOURITES) ->
+                        if (isSelected) "ic_heart" else "ic_heart_outline"
+                    desktopNavItemId(DesktopNavItem.BROWSE) -> "ic_explore_normal"
+                    desktopNavItemId(DesktopNavItem.HISTORY) -> "ic_history"
                     else -> "ic_more_vert"
                 }
                 androidx.compose.material3.BadgedBox(badge = {
-                    if (id == 5 && updates > 0) androidx.compose.material3.Badge(Modifier.testTag("nav-feed-badge")) {
-                        androidx.compose.material3.Text(if (updates > 99) "99+" else updates.toString())
+                    if (id == desktopNavItemId(DesktopNavItem.SUBSCRIPTIONS) && updates > 0) {
+                        androidx.compose.material3.Badge(Modifier.testTag("nav-feed-badge")) {
+                            androidx.compose.material3.Text(if (updates > 99) "99+" else updates.toString())
+                        }
                     }
                 }) {
                     androidx.compose.material3.Icon(painterResource("icons/$resource.svg"), null,
@@ -83,6 +91,29 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
         )
     }
 }
+
+/** The rail id of "更多"; the configured destinations use their own stable ids so navigation never re-maps. */
+internal const val DESKTOP_NAV_MORE_ID = 3
+
+/** Stable ids for the configurable destinations, kept equal to the ids the rail has always used. */
+internal fun desktopNavItemId(item: DesktopNavItem): Int = when (item) {
+    DesktopNavItem.HOME -> 4
+    DesktopNavItem.FAVOURITES -> 0
+    DesktopNavItem.BROWSE -> 1
+    DesktopNavItem.HISTORY -> 2
+    DesktopNavItem.SUBSCRIPTIONS -> 5
+}
+
+/** The label the rail and the configuration page both draw; the same words the desktop catalog gave each tab. */
+internal fun desktopNavItemLabel(item: DesktopNavItem): String = desktopText(
+    when (item) {
+        DesktopNavItem.HOME -> "nav.home"
+        DesktopNavItem.FAVOURITES -> "nav.favourites"
+        DesktopNavItem.BROWSE -> "nav.browse"
+        DesktopNavItem.HISTORY -> "nav.history"
+        DesktopNavItem.SUBSCRIPTIONS -> "nav.subscriptions"
+    },
+)
 
 /**
  * Android's "更多" tab is a settings page: titled sections, one card each, and every entry a row. The Windows host keeps
@@ -140,6 +171,11 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
             SettingsValueRow(AndroidStrings["reading_stats"], desktopText("more.readingStatsSummary"), null, enabled,
                 { controller.showReadingStats() }, testTag = "reading-stats-open",
                 leadingIcon = painterResource("icons/ic_history.svg"))
+            SettingsRowDivider()
+            // Android's nav configuration lives under appearance; here it edits the rail the window shows.
+            SettingsValueRow(AndroidStrings["main_screen_sections"], desktopText("navSettings.moreSummary"), null,
+                enabled, { controller.showNavigationConfig() }, testTag = "nav-config-open",
+                leadingIcon = painterResource("icons/ic_settings.svg"))
         }
         SettingsSectionHeader(desktopText("more.appearance"))
         SettingsGroup {

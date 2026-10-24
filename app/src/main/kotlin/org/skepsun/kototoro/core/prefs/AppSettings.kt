@@ -410,7 +410,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     var mainNavItems: List<NavItem>
         get() {
             val rawStr = prefs.getString(KEY_NAV_MAIN, null)
-            val legacyThreeItemDefault = migratedLegacyThreeNavItems.joinToString(",") { it.name }
+            val legacyThreeItemDefault = MainNavigationRules.format(migratedLegacyThreeNavItems) { it.name }
             val isLegacyThreeItemMigrationPending = !prefs.getBoolean(
                 KEY_NAV_MAIN_LEGACY_THREE_MIGRATED,
                 false,
@@ -422,18 +422,21 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
                 } else {
                     migratedLegacyThreeNavItems
                 }
-                else -> rawStr.split(',')
-                    .mapNotNull { x -> if (x == "DOWNLOADS") NavItem.LOCAL else NavItem.entries.find(x) }
-                    .filterNot { it == NavItem.DISCOVER }
-                    .ifEmpty { defaultMainNavItems }
+                else -> MainNavigationRules.parse(
+                    raw = rawStr,
+                    // 2.0.1 stored the local library tab as DOWNLOADS; DISCOVER left this list for good.
+                    resolve = { key -> if (key == "DOWNLOADS") NavItem.LOCAL else NavItem.entries.find(key) },
+                    fallback = defaultMainNavItems,
+                    excluded = listOf(NavItem.DISCOVER),
+                )
             }
-            return items.limitMainNavigationItems().also { limitedItems ->
+            return MainNavigationRules.limit(items).also { limitedItems ->
                 val shouldPersistItems = limitedItems.size != items.size ||
                     rawStr == legacyThreeItemDefault && isLegacyThreeItemMigrationPending
                 if (shouldPersistItems || isLegacyThreeItemMigrationPending) {
                     prefs.edit {
                         if (shouldPersistItems) {
-                            putString(KEY_NAV_MAIN, limitedItems.joinToString(",") { it.name })
+                            putString(KEY_NAV_MAIN, MainNavigationRules.format(limitedItems) { it.name })
                         }
                         if (isLegacyThreeItemMigrationPending) {
                             putBoolean(KEY_NAV_MAIN_LEGACY_THREE_MIGRATED, true)
@@ -444,7 +447,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         }
         set(value) {
             prefs.edit {
-                putString(KEY_NAV_MAIN, value.limitMainNavigationItems().joinToString(",") { it.name })
+                putString(KEY_NAV_MAIN, MainNavigationRules.format(MainNavigationRules.limit(value)) { it.name })
                 putBoolean(KEY_NAV_MAIN_LEGACY_THREE_MIGRATED, true)
             }
         }

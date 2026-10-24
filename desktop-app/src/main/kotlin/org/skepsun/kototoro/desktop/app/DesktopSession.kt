@@ -18,6 +18,7 @@ import org.skepsun.kototoro.desktop.runtime.DesktopManagedCloudstreamPlugin
 import org.skepsun.kototoro.desktop.runtime.DesktopExtensionKind
 import org.skepsun.kototoro.desktop.runtime.DesktopManagedJar
 import org.skepsun.kototoro.desktop.runtime.DesktopManagedParserPlugin
+import org.skepsun.kototoro.desktop.runtime.DesktopNavigationPreferences
 import org.skepsun.kototoro.desktop.runtime.DesktopParserPlatform
 import org.skepsun.kototoro.desktop.runtime.DesktopParserRecord
 import org.skepsun.kototoro.desktop.runtime.DesktopRuntime
@@ -176,6 +177,8 @@ class DesktopSession private constructor(
     internal val downloadPreferences = DesktopDownloadPreferences(
         storage.preferences.open("desktop_download_settings"),
     )
+    /** Android's main navigation list (`nav_main`); the rail renders it and 更多 keeps the exit. */
+    internal val navigationPreferences = DesktopNavigationPreferences(storage.preferences.open("desktop_nav"))
     /** CBZ export reads the same verified blobs as the reader; no second copy of the images lives in the store. */
     internal val downloadExporter = DesktopDownloadExporter(storage.paths.images)
     /** Automatic sweep of the unreachable page blocks; the controller runs it when the queue goes idle. */

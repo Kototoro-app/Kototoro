@@ -7749,3 +7749,56 @@ Windows 之前完全没有代理：每个来源、封面、JSON 导入都走 com
 - 仍待：下载设置页还没搬的 Android 行（内容目录 / 下载格式 / 视频画质 / 小说插图 / 仅蜂窝网络 / 电池优化 与
   `downloads_settings_info`）；`isSlowdownEnabled` 的等价物（源级限速开关，现在只有全局间隔）；
   HLS 段并发仍固定 3（云端视频下载没进桌面）；元数据驻留控制与预测预取也仍未做。
+
+## 169. 主导航配置规则下沉与 Windows 导航配置页（2026-10-24）
+
+Android 的 `NavConfigSettings`（界面标题取 `main_screen_sections`）允许用户改底部导航的入口顺序、增删入口，
+并守着“最多五个、不重复、删空回首页”这几条规矩。这套规矩原本只写在 `app` 的 `AppSettings` 与
+`NavConfigViewModel` 里，Windows 侧栏是一份写死的六项列表。本轮把规则提到 `core-domain` 由两端共用，
+并给 Windows 补上同一页，让侧栏真正可配置。
+
+- `core-domain` 新增 `core/prefs/MainNavigationRules.kt`（`object`，与 Android 同包名，`AppSettings` 直接消费，
+  与 `ProgressIndicatorMode` 的做法一致）：`MAX_ITEMS = 5`；`limit`（去重 + 截断）；`move(from, to)`
+  （等价 remove-then-insert，越界或原地返回原实例）；`step(item, ±1)`；`add`（到上限或已存在时不改）；
+  `remove(item, fallback)`（删空退回 fallback）；`available`/`canAdd`；`parse(raw, resolve, fallback, excluded)`
+  （空白、未知、被排除的键一律回落 fallback，否则按存储顺序去重截断）；`format`（默认取 `name`，逗号连接）。
+  在无操作时返回**原实例**是刻意的：调用方用 `===` 判“什么都没变”，跳过写盘，也跳过 Android 那 500 ms 的防抖重建。
+- `app`：`NavItem.MAX_MAIN_NAV_ITEM_COUNT` 改为引用 `MainNavigationRules.MAX_ITEMS`，
+  `limitMainNavigationItems()` 变成一行委托（底部栏、电视侧栏与既有 `MainNavigationLimitTest` 仍走它，语义不变）；
+  `AppSettings.mainNavItems` 的读写改用 `parse`/`format`/`limit`，`DOWNLOADS → LOCAL` 与三项集的一次性迁移
+  原样保留，`DISCOVER` 仍在排除集里；`NavConfigViewModel` 的 `reorder`/`moveItem`/`addItem`/`removeItem` 与
+  `availableItems`/`canAddAction`/添加行都改调共享规则，排除集收敛成一处
+  `excludedNavItems = listOf(NavItem.DISCOVER)`。
+- `desktop-runtime` 新增 `DesktopNavigationSettings.kt`：
+  - `DesktopNavItem`（HOME/FAVOURITES/BROWSE/HISTORY/SUBSCRIPTIONS）是 Windows 自己的词表——Android 枚举带
+    `R.id`/`R.drawable` 句柄，不能直接复用；`defaultDesktopNavItems` 就是侧栏原本的顺序。
+  - `DesktopNavigationSettings` 持有 `items`，`canAdd`/`available`/`step`/`move`/`add`/`remove` 全部委托共享规则，
+    删空仍回 HOME。`DesktopNavigationPreferences` 写自己的 store `desktop_nav`，键仍是 Android 的 `nav_main`，
+    值是逗号连接的枚举名，所以手改文档也要过 `parse` 的去重/截断/未知词过滤。
+  - “更多”故意不在这份文档里：它是通往其他所有页面的唯一出口，侧栏渲染时永远追加，用户删不掉也排不到别处。
+- `desktop-app`：
+  - `DesktopSession.navigationPreferences`；`DesktopController` 增加 `navSettings`、`showNavigationConfig()`、
+    `saveNavigationSettings()` 与 `DesktopScreen.NAV_CONFIG`（写盘失败在状态栏报 `error.navSettingsInMemory`）；
+    `DesktopApp` 补页面与标题两臂，标题取 Android `main_screen_sections`。
+  - `DesktopNavigationRail` 改为按配置生成目的地，并固定追加 id 3 的“更多”。id 仍是 4/0/1/2/5，
+    `desktopNavItemId`/`desktopNavItemLabel` 一处定义，选中态、图标、订阅角标与 `nav:<标签>` 用例标签都跟着 id 走，
+    所以既有探针一行没改；配置里没有当前页面的目的地时，选中态落到“更多”。
+  - 新页 `DesktopNavigationConfigPage`：返回按钮 + 标题，每个入口一行（`SettingsActionRow` + ↑/↓/✕ 三个
+    `TextButton`，摘要写“第 n 个，共 m 个”，首/末行的越界按钮禁用），未满上限时多一行“添加”
+    （`DesktopChoiceSettingsDialog` 单选未显示的目的地，选中即追加），下方两条说明分别是“更多永远最后”
+    与 Android 的五个上限。入口是更多页功能节的 `nav-config-open`（复用 `ic_settings.svg`）。
+- 验证：
+  - `:core-domain:jvmTest --tests *MainNavigationRulesTest*` 7/7（去重截断、双向 move 与越界、两端 step、
+    上限/重复的 add、删空回落、带排除的 available、parse 的保序/未知丢弃/排除回落/空串回落/format 往返）。
+  - `:desktop-runtime:test --tests *DesktopNavigationSettingsTest*` 6/6（空 store 默认顺序；`nav_main` 单键往返；
+    手改串去重截断并忽略大小写与未知项；空白或类型不对回落默认；增删移各规则；删空回首页）。
+  - 新探针 `navconfig`（独立用例）：默认五个入口且没有“添加”行 → 删 HOME（行、存储、旁边侧栏的标签同时消失，
+    “更多”仍在）→ 添加 HOME 落到末尾 → 上移一次、再把 FAVOURITES 下移 → 断言 `desktop_nav` 的 `nav_main`
+    就是配置顺序 → 返回更多后侧栏仍是这一份顺序。
+  - 回归：`:desktop-app:test --tests *tablet* --tests *storage* --tests *playback*` 全绿（侧栏改数据驱动后
+    `nav:` 标签仍稳定）；`:app:compileDebugKotlin` 与 `:desktop-app:verifyDesktopStrings` 通过
+    （新增 8 个桌面键，两份 catalog 都有）。
+- 仍待：Windows 侧栏没有 Android 的拖拽排序（用按钮排序即可，不做 drag handle）；Android 的“标签常显/浮动导航栏”
+  这类外观开关与 `pref_nav_*` 没搬；平板/电视变体的导航还没共用这份配置；`NavItem.DISCOVER` 仍被排除，
+  Windows 也没有对应入口。
+

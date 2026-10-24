@@ -140,6 +140,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.REPLACE_RULES -> DesktopReplaceRulesPage(controller, state)
                             DesktopScreen.DICTIONARY_RULES -> DesktopDictionaryRulesPage(controller, state)
                             DesktopScreen.DOWNLOAD_SETTINGS -> DesktopDownloadSettingsPage(controller, state)
+                            DesktopScreen.NAV_CONFIG -> DesktopNavigationConfigPage(controller, state)
                             DesktopScreen.MORE -> DesktopMorePanel(controller, !closing, onExitRequest)
                         }
                         if (state.screen == DesktopScreen.DETAILS && state.detailsOrigin != null) {
@@ -232,6 +233,7 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.REPLACE_RULES -> AndroidStrings["replace_rules"]
         DesktopScreen.DICTIONARY_RULES -> AndroidStrings["dictionary_rules"]
         DesktopScreen.DOWNLOAD_SETTINGS -> AndroidStrings["downloads"]
+        DesktopScreen.NAV_CONFIG -> AndroidStrings["main_screen_sections"]
         DesktopScreen.EXTENSIONS -> desktopText("screens.extensions")
         DesktopScreen.DETAILS -> desktopText("screens.details")
         DesktopScreen.READER, DesktopScreen.NOVEL, DesktopScreen.VIDEO -> state.chapter?.title ?: desktopText("screens.reader")

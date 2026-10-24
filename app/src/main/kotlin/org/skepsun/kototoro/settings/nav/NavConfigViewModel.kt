@@ -14,13 +14,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.prefs.MAX_MAIN_NAV_ITEM_COUNT
+import org.skepsun.kototoro.core.prefs.MainNavigationRules
 import org.skepsun.kototoro.core.prefs.NavItem
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.ui.util.ActivityRecreationHandle
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.main.ui.MainActivity
-import org.skepsun.kototoro.parsers.util.move
 import org.skepsun.kototoro.settings.nav.model.NavItemAddModel
 import org.skepsun.kototoro.settings.nav.model.NavItemConfigModel
 import javax.inject.Inject
@@ -33,6 +32,9 @@ class NavConfigViewModel @Inject constructor(
 
     private val items = MutableStateFlow(settings.mainNavItems)
 
+    /** DISCOVER is a browsing destination the bar never took; it stays out of both the list and the picker. */
+    private val excludedNavItems = listOf(NavItem.DISCOVER)
+
     val configuredItems: StateFlow<List<NavItemConfigModel>> = items.map { snapshot ->
         snapshot.map {
             NavItemConfigModel(it, getUnavailabilityHint(it))
@@ -44,11 +46,11 @@ class NavConfigViewModel @Inject constructor(
     )
 
     val availableItems: StateFlow<List<NavItem>> = items.map { snapshot ->
-        NavItem.entries.filterNot { item -> item in snapshot || item == NavItem.DISCOVER }
+        MainNavigationRules.available(NavItem.entries, snapshot, excludedNavItems)
     }.stateIn(
         viewModelScope + Dispatchers.Default,
         SharingStarted.WhileSubscribed(5000),
-        NavItem.entries.filterNot { item -> item in items.value || item == NavItem.DISCOVER },
+        MainNavigationRules.available(NavItem.entries, items.value, excludedNavItems),
     )
 
     val canShowAddAction: StateFlow<Boolean> = items.map { snapshot ->
@@ -60,11 +62,11 @@ class NavConfigViewModel @Inject constructor(
     )
 
     val canAddAction: StateFlow<Boolean> = items.map { snapshot ->
-        snapshot.size < MAX_MAIN_NAV_ITEM_COUNT
+        MainNavigationRules.canAdd(snapshot)
     }.stateIn(
         viewModelScope + Dispatchers.Default,
         SharingStarted.WhileSubscribed(5000),
-        items.value.size < MAX_MAIN_NAV_ITEM_COUNT,
+        MainNavigationRules.canAdd(items.value),
     )
 
     val content: StateFlow<List<ListModel>> = items.map { snapshot ->
@@ -81,35 +83,31 @@ class NavConfigViewModel @Inject constructor(
     private var recreatePending = false
 
     fun reorder(fromPos: Int, toPos: Int) {
-        items.value = items.value.toMutableList().apply {
-            move(fromPos, toPos)
-            commit(this)
-        }
+        val updated = MainNavigationRules.move(items.value, fromPos, toPos)
+        if (updated === items.value) return
+        items.value = updated
+        commit(updated)
     }
 
     fun moveItem(item: NavItem, direction: Int) {
-        val fromIndex = items.value.indexOf(item)
-        if (fromIndex < 0 || direction == 0) return
-        val toIndex = (fromIndex + direction).coerceIn(items.value.indices)
-        if (fromIndex == toIndex) return
-        reorder(fromIndex, toIndex)
+        val updated = MainNavigationRules.step(items.value, item, direction)
+        if (updated === items.value) return
+        items.value = updated
+        commit(updated)
     }
 
     fun addItem(item: NavItem) {
-        if (items.value.size >= MAX_MAIN_NAV_ITEM_COUNT || item in items.value) return
-        items.value = items.value.plus(item).also {
-            commit(it)
-        }
+        val updated = MainNavigationRules.add(items.value, item)
+        if (updated === items.value) return
+        items.value = updated
+        commit(updated)
     }
 
     fun removeItem(item: NavItem) {
-        val newList = items.value.toMutableList()
-        newList.remove(item)
-        if (newList.isEmpty()) {
-            newList.add(NavItem.HOME)
-        }
-        items.value = newList
-        commit(newList)
+        // The list never empties: dropping the last destination brings HOME back, as the shared rules decide.
+        val updated = MainNavigationRules.remove(items.value, item, NavItem.HOME)
+        items.value = updated
+        commit(updated)
     }
 
     private fun commit(value: List<NavItem>) {
@@ -159,7 +157,7 @@ class NavConfigViewModel @Inject constructor(
             NavItemConfigModel(it, getUnavailabilityHint(it))
         }
         if (size < NavItem.entries.size) {
-            add(NavItemAddModel(size < MAX_MAIN_NAV_ITEM_COUNT))
+            add(NavItemAddModel(MainNavigationRules.canAdd(snapshot)))
         }
     }
 }
