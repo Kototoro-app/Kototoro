@@ -3653,3 +3653,55 @@ UP/DOWN 被 `tvTextInputFocusEscape` 吃掉（上方没有可聚焦节点，`mov
 2. 评分芯片的菜单仍要追踪账号才能打开（第五十九轮遗留）。
 3. 来源标签下拉（`useRootOverlay = false`）在 TV 上的回环还没实测。
 4. 行尾控件 UP/DOWN、设置非根子页宽度、输入框内清除（×）只能触摸，三条仍在。
+
+## 第六十一轮：两份一模一样的选择栏，收成一份（2026-10-24）
+
+### 原因
+
+第六十轮把分页选择栏修好之后，顺着同一段代码往下看：`BookmarksScreen.kt` 里的书签选择栏
+（详情页书签页签，长按书签进入）是**逐字复制**的同一份 `Surface + Row + 两个裸 IconButton`。
+它在电视上同时中了两个毛病——`inverseSurface` 的白药丸底色，以及按钮没有轮廓。
+
+两份代码完全同形，说明这不该靠"每个调用点各改一遍"来维持：下一份复制品还会退回同样的毛病。
+
+### 改法
+
+新建 `core/ui/compose/SelectionActionBar.kt`，把这块药丸收成一个组件：
+
+| 组件 | 作用 |
+| --- | --- |
+| `SelectionActionBar(selectedCount, onClearSelection, modifier, actions)` | 底板（TV 用 `surfaceContainerHigh`/`onSurface`，其它平台保持 `inverseSurface`/`inverseOnSurface`）、`✕ + 计数`、右侧动作槽 |
+| `SelectionBarIconButton(onClick, modifier, content)` | `IconButton` + `tvFocusable(RoundedCornerShape(12.dp), addFocusTarget = false)` |
+
+清除按钮的无障碍描述改用 `R.string.clear`，书签栏的删除也改回 `R.string.delete`（原来是写死的英文
+`"Clear"` / `"Delete"`，分页栏上一轮已经改过）。
+
+两个调用点各剩十几行：`PagesScreen.kt` 用 `SelectionActionBar` 包住"保存页面"，
+`BookmarksScreen.kt` 包住"删除"，滑入动画、对齐与 `windowInsetsPadding` 仍留在各自页面里。
+
+### 设备证据（emulator-5554，1920×1080）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 重启回到详情页，切书签页签 | `cj2.png` / `cj3.png` | 书签页签里有一条 `P.1` 书签卡片，顶栏换成书签工具栏 |
+| 长按书签卡片 | `cj4.png` | 底部弹出选择栏：**深灰底**（改前是同款白药丸），`✕ 1 … 🗑` |
+| 顶栏 RIGHT ×6 → DOWN → DOWN | `cj8.png`，dump `F [1024,888][1120,984]` | 环先落在书签卡片 `F [1008,264][1283,657]`，再下到选择栏的 ✕，蓝色圆角框 |
+| 再按 RIGHT | `cj9.png`，dump `F [1752,888][1848,984]` | 环落到右侧删除按钮，同样是蓝色圆角框 |
+| 切回缩略图页签，长按第 3 页 | `ck1.png` / `ck2.png`，dump `F [1024,888][1120,984]` | 抽成共享组件后分页栏**没有回退**：深灰底、✕ 带环、"保存页面"仍在右侧 |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（--offline --no-daemon），装的是 `app-x86_64-debug.apk`。
+
+### 一个构建环境上的坑
+
+这台机器同时开着桌面端会话，两个 Gradle 构建一起抢内存时，`:app:dexBuilderDebug` 阶段的
+daemon 会**无声消失**——日志里只有 `Gradle build daemon disappeared unexpectedly`，
+没有任何 `e:` 编译错误，很容易被误读成代码问题。改用
+`--max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3072M"` 后一次通过。
+
+### 遗留
+
+1. Material3 Snackbar（含"选择两章后长按中间章节"那条提示）在 TV 上仍是亮白底，`inverseSurface`
+   是它的默认色，需要给宿主一个电视配色。
+2. 评分芯片的菜单仍需追踪账号（第五十九轮遗留）。
+3. 来源标签下拉（`useRootOverlay = false`）的 TV 回环还没实测。
+4. 行尾控件 UP/DOWN、设置非根子页宽度、输入框内清除（×）只能触摸，三条仍在。
