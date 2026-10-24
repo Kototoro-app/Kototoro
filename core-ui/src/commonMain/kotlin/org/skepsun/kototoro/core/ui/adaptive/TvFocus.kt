@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -384,6 +385,54 @@ fun Modifier.tvTextInputEnterAction(onEnter: () -> Unit): Modifier {
 }
 
 /**
+ * "Focus the field first, type on request" for a dialog field on TV.
+ *
+ * The whole point of a dialog is that its buttons stay visible: a field that raises the keyboard the
+ * moment it takes the ring pushes `OK` off the bottom of a 1080p screen, so the viewer sees an input
+ * and no way to confirm it. This holder keeps the field read-only until the centre key asks for
+ * editing, and drops back to read-only as soon as the ring leaves, so opening the dialog a second
+ * time starts from the same quiet state.
+ *
+ * Wire it up as
+ * `readOnly = state.isReadOnly` and `modifier = Modifier.then(state.fieldModifier).then(fieldExit.fieldModifier)`.
+ * Off TV [isReadOnly] is false and [fieldModifier] is empty, so phones and tablets are unaffected.
+ */
+@Stable
+class TvTextFieldReadOnlyState internal constructor(
+    /** Feed the field's `readOnly` parameter. False everywhere but TV. */
+    val isReadOnly: Boolean,
+    /** Attach to the text field: centre starts editing, losing the ring stops it. */
+    val fieldModifier: Modifier,
+)
+
+/**
+ * @param showKeyboard what the centre key does once the field becomes editable; defaults to showing
+ * the software keyboard, which is what a read-only field needs to become a working one.
+ */
+@Composable
+fun rememberTvTextFieldReadOnlyState(
+    showKeyboard: (() -> Unit)? = null,
+): TvTextFieldReadOnlyState {
+    val isTv = LocalUiPresentationConfig.current.isTv
+    val keyboardController = LocalSoftwareKeyboardController.current
+    var editing by remember { mutableStateOf(false) }
+    val fieldModifier = if (!isTv) {
+        Modifier
+    } else {
+        Modifier
+            .tvTextInputStartEditing {
+                editing = true
+                showKeyboard?.invoke() ?: keyboardController?.show()
+            }
+            .onFocusChanged { if (!it.hasFocus) editing = false }
+    }
+    return TvTextFieldReadOnlyState(
+        isReadOnly = isTv && !editing,
+        fieldModifier = fieldModifier,
+    )
+}
+
+/**
  * Co-ordinated exit from one text field to the action that finishes the form.
  *
  * A dialog field traps a TV remote: the IME owns the D-pad while it is open, arrows only move the
@@ -410,10 +459,18 @@ class TvFieldExit internal constructor(
 /**
  * @param multiline pass true for a field that keeps its own newlines; the arrow-based escape is then
  * unnecessary, but the Done action still works.
+ * @param target an existing [FocusRequester] to leave the field onto, when the form already owns one
+ * for that control. [targetModifier] is then empty, so the caller keeps a single requester per node.
+ * Use it for a form whose confirm button is disabled until the form is valid: the caller can point
+ * the exit at whichever control is reachable right now instead of at a button that cannot take focus.
  */
 @Composable
-fun rememberTvFieldExit(multiline: Boolean = false): TvFieldExit {
-    val target = remember { FocusRequester() }
+fun rememberTvFieldExit(
+    multiline: Boolean = false,
+    target: FocusRequester? = null,
+): TvFieldExit {
+    val ownedTarget = remember { FocusRequester() }
+    val targetRequester = target ?: ownedTarget
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val leave: () -> Unit = {
@@ -423,7 +480,7 @@ fun rememberTvFieldExit(multiline: Boolean = false): TvFieldExit {
         // remote would be left standing on the field with no way out but Back, which
         // dismisses the whole dialog. Walk the dialog's own focus order instead: the
         // linear traversal skips the disabled button and lands on Cancel.
-        if (!target.requestFocus()) {
+        if (!targetRequester.requestFocus()) {
             val moved = focusManager.moveFocus(FocusDirection.Next) ||
                 focusManager.moveFocus(FocusDirection.Previous)
             if (!moved) {
@@ -442,6 +499,6 @@ fun rememberTvFieldExit(multiline: Boolean = false): TvFieldExit {
     return TvFieldExit(
         onDone = leave,
         fieldModifier = fieldModifier,
-        targetModifier = Modifier.focusRequester(target),
+        targetModifier = if (target == null) Modifier.focusRequester(ownedTarget) else Modifier,
     )
 }

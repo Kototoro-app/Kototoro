@@ -4748,3 +4748,65 @@ Incognito mode）在电视上有两个问题：**面板右边缘贴着屏幕边*
    免得把已经验证过的观感改掉。
 4. `SpacesSettingsScreen` 顺手暴露的下一个问题：`Edit custom space` 对话框的 Name 字段一打开就弹键盘（见 `ku2.png`），
    与第 77 轮同类，但那不是设置页那条共享组件，还没接 `readOnly + tvTextInputStartEditing`。
+
+## 第七十九轮：文本框对话框"聚焦即只读、按 OK 才弹键盘"抽成共享件，并补上对话框里剩下的死站（2026-10-25）
+
+### 症状
+
+三个问题叠在同一个对话框里（设置 → Spaces → `Add custom space`）：
+
+1. 第 77 轮只在设置页那条共享的文本框对话框（`SettingsDialogTextPreference`）里做了 "先只读、CENTER 才弹键盘"。
+   空间编辑器（`SpaceEditorDialog`）自己抄了一份等价但更弱的写法：`ENTER` 才推进焦点，一打开仍然弹键盘。
+2. 键盘弹起来以后，遥控器一 `BACK` 关掉键盘，焦点还留在字段上，但**再按 CENTER 键盘不会回来**——这一次
+   对话框里就再也输不进字了。
+3. 表单没填满（没有名字或没勾内容类型）时 `OK` 是禁用的，而禁用按钮无法获得焦点：
+   `tvTextInputVerticalExit` 的 `leave()` 走 `moveFocus(Next)`，在 `SettingsAlertDialog` 的焦点组里
+   **返回 true 却没真的移动环**，于是 DOWN/ENTER 都像按在了空气上。
+
+顺带暴露出第四件事：内容类型/语言/来源类型那三排 `FilterChip`、以及 "All languages" / "All sources"
+两个 `TextButton` 都没有 `tvFocusable`，M3 只给一层极淡的 state layer，遥控器走进去等于"焦点消失"。
+
+### 改动
+
+- `core-ui/.../adaptive/TvFocus.kt`
+  - 新增共享件 `rememberTvTextFieldReadOnlyState(showKeyboard: (() -> Unit)? = null)`，返回
+    `TvTextFieldReadOnlyState(isReadOnly, fieldModifier)`：`fieldModifier` = `tvTextInputStartEditing { editing = true; 弹键盘 }`
+    + `onFocusChanged { if (!hasFocus) editing = false }`。非电视 `isReadOnly = false`、`fieldModifier = Modifier`，手机/平板行为不变。
+  - `rememberTvFieldExit(multiline, target: FocusRequester? = null)`：新增可选的 `target`。传了就复用调用方
+    已有的 requester（`targetModifier` 变成空 `Modifier`，因为一个节点只能挂一个 `focusRequester`），
+    这样"确认按钮禁用时"可以把出口指到当前真正能聚焦的控件上。
+- `SettingsPreferenceComponents.kt`：`SettingsDialogTextPreference` 换成共享件，删掉本地的
+  `isFieldEditing` / `keyboardController` / 手写 `tvTextInputStartEditing`。
+- `SpacesSettingsScreen.kt`：`SpaceEditorDialog` 换成共享件（Name 字段同样 `readOnly = readOnlyState.isReadOnly`），
+  删掉只认 `ENTER` 的 `advanceToSelectAll`，改成
+  `rememberTvFieldExit(target = if (canConfirm) null else selectAllRequester)`——表单没填满时 DOWN/ENTER 直接落到
+  "Select all"，按一下就满足"至少一个内容类型"。三排 `FilterChip` 与两个"清空本节"的 `TextButton` 补
+  `tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)`。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 打开 `Add custom space` | `ma0-editor-readonly.png` | 字段带蓝环、`mInputShown=false`，三排芯片 + Cancel/OK 全在屏上 |
+| CENTER | （`kx2-space-editing-ime.png`，同一构建前的等价行为） | `mInputShown=true`，光标在字段里 |
+| ENTER（等于键盘上的 ✓） | `ma1-enter-hides-ime.png` | 键盘收起，环**一下**落到 `Select all`（表单没填满，正好是新的出口目标） |
+| DOWN | `mb1.png` | 环进入芯片行，落在 `Adult Manga`，整块 8dp 圆角描边清晰可见 |
+| RIGHT ×2 | `kz4-chip-ring.png` | 逐个芯片走过，每个都有环，对话框自动上滚保持可见 |
+| 设置 → 存储与网络 → Mirror list URL | `md0-settings-text-dialog.png` | 共享组件重构后行为不变：只读 + 无键盘 + OK/Cancel 可见 |
+| 同上 → CENTER → ENTER | `md1-settings-text-dialog-after-enter.png` | 弹键盘 → 收起 → 环保留并移到 `OK` |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（1m 14s / 2m 16s / 1m 20s 三轮）。
+
+### 遗留
+
+1. **`BACK` 关掉键盘后，同一次对话框里键盘再也回不来**（本次实测：`BACK` → `mInputShown=false`，
+   再按 CENTER、甚至先 DOWN 再 UP 回到字段再 CENTER，`mInputShown` 仍为 false；但字段仍是 `focused="true"`，
+   光标也会重新出现）。试过两条路都不行：`keyboardController.show()`（无会话时是空操作），
+   以及"`clearFocus()` + 下一帧 `requestFocus()`"强迫重建会话。看起来是系统对"用户用 BACK 主动关掉输入法"
+   的记忆，程序化 `show` 不会再覆盖它——这属于平台行为，App 侧能做的只是引导：对话框里输入法自带的 ✓/ENTER
+   走的是 `tvTextInputEnterAction → leave()`，会收起键盘并把环移到下一个控件（已验证），这才是该引导的路径。
+   彻底解决需要自绘对话框（不经 `Dialog` 窗口）或改用 `TextFieldState` 之外的输入方案，本轮没动。
+2. 从 IME 刚收起的动画期间按 DOWN 有一次被吞掉（`ma2` 与 `ma1` 同帧），等 1.3 s 后再按就正常；
+   没有定位到是 insets 动画还是 Compose 焦点树重建，先记录。
+3. 三排芯片、"All languages"/"All sources" 的环只在 `Add custom space` 上验证过；`Edit custom space`
+   走的是同一个 `SpaceEditorDialog`，但没有单独截图。

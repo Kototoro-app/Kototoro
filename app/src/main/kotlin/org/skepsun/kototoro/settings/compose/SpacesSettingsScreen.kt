@@ -51,7 +51,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -68,8 +67,8 @@ import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
+import org.skepsun.kototoro.core.ui.adaptive.rememberTvTextFieldReadOnlyState
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
-import org.skepsun.kototoro.core.ui.adaptive.tvTextInputEnterAction
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -452,22 +451,13 @@ private fun SpaceEditorDialog(
     onConfirm: (SpaceContext) -> Unit,
 ) {
     var draft by remember(initial) { mutableStateOf(initial) }
-    val fieldExit = rememberTvFieldExit()
     // The confirm button is disabled until a name and a content type exist, and a disabled button
-    // cannot take focus, so Enter would leave the field with nowhere to go. Hand focus to
-    // "select all" instead: one press then makes the form valid.
+    // cannot take focus, so leaving the field would land nowhere. Point the exit at "Select all"
+    // until the form is valid: one press there satisfies the requirement, and the ring really moves.
     val canConfirm = draft.title?.isNotBlank() == true && draft.allowedContentTypes.isNotEmpty()
     val selectAllRequester = remember { FocusRequester() }
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val advanceToSelectAll = if (canConfirm) {
-        Modifier
-    } else {
-        Modifier.tvTextInputEnterAction {
-            keyboardController?.hide()
-            selectAllRequester.requestFocus()
-            Unit
-        }
-    }
+    val fieldExit = rememberTvFieldExit(target = if (canConfirm) null else selectAllRequester)
+    val readOnlyState = rememberTvTextFieldReadOnlyState()
     val allContentTypes = remember { ContentType.entries.filterNot { it == ContentType.OTHER } }
 
     SettingsAlertDialog(
@@ -506,11 +496,12 @@ private fun SpaceEditorDialog(
                     },
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true,
+                    readOnly = readOnlyState.isReadOnly,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { fieldExit.onDone() }),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(advanceToSelectAll)
+                        .then(readOnlyState.fieldModifier)
                         .then(fieldExit.fieldModifier),
                 )
 
@@ -610,6 +601,10 @@ private fun SpaceEditorDialog(
                                     null
                                 },
                                 shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.tvFocusable(
+                                    shape = RoundedCornerShape(8.dp),
+                                    addFocusTarget = false,
+                                ),
                             )
                         }
                     }
@@ -648,7 +643,13 @@ private fun SpaceEditorDialog(
                                 }
                             }
                             if (draft.sourceLanguages.isNotEmpty()) {
-                                TextButton(onClick = { draft = draft.copy(sourceLanguages = emptySet()) }) {
+                                TextButton(
+                                    onClick = { draft = draft.copy(sourceLanguages = emptySet()) },
+                                    modifier = Modifier.tvFocusable(
+                                        shape = RoundedCornerShape(8.dp),
+                                        addFocusTarget = false,
+                                    ),
+                                ) {
                                     Text(
                                         text = stringResource(R.string.all_languages),
                                         style = MaterialTheme.typography.labelMedium,
@@ -697,6 +698,10 @@ private fun SpaceEditorDialog(
                                         null
                                     },
                                     shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.tvFocusable(
+                                        shape = RoundedCornerShape(8.dp),
+                                        addFocusTarget = false,
+                                    ),
                                 )
                             }
                         }
@@ -735,7 +740,13 @@ private fun SpaceEditorDialog(
                             }
                         }
                         if (draft.sourceKinds.isNotEmpty()) {
-                            TextButton(onClick = { draft = draft.copy(sourceKinds = emptySet()) }) {
+                            TextButton(
+                                onClick = { draft = draft.copy(sourceKinds = emptySet()) },
+                                modifier = Modifier.tvFocusable(
+                                    shape = RoundedCornerShape(8.dp),
+                                    addFocusTarget = false,
+                                ),
+                            ) {
                                 Text(
                                     text = stringResource(R.string.all_sources),
                                     style = MaterialTheme.typography.labelMedium,
@@ -782,6 +793,10 @@ private fun SpaceEditorDialog(
                                     null
                                 },
                                 shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.tvFocusable(
+                                    shape = RoundedCornerShape(8.dp),
+                                    addFocusTarget = false,
+                                ),
                             )
                         }
                     }
