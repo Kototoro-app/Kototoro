@@ -4604,3 +4604,59 @@ Incognito mode）在电视上有两个问题：**面板右边缘贴着屏幕边*
    `Ignore SSL errors`、`Disable connectivity check` 等项在遥控器上不可达，只能强杀应用再进来。
    这是本轮为了触发提示条偶然撞到的，值得单独一轮按 `SettingsAlertDialog` 的 `FocusRequester` 思路修。
 5. 提示条消息没有 `maxLines`：`Modifier.weight(1f, fill = false)` 会让长消息多行铺满整板，尚未定义截断/换行策略。
+
+## 第七十六轮：设置里的文本框把整页后半段锁死，遥控器进去就出不来（2026-10-25）
+
+接第 75 轮遗留 4。`SettingsTextInputPreference` 在电视上是**行内编辑**：整行排成
+`Row`（图标 + 标题/摘要 + `OutlinedTextField`），文本框本身就是一个焦点站。遥控器一进去就出不来，
+于是它后面的所有设置行都不可达——Storage and network 页里 `Mirror list URL (optional)` 之下的
+`HuggingFace Mirror`、`Bangumi Mirror`、`Ignore SSL errors`、`Disable connectivity check`、`Block ads in browser`
+在电视上全部够不到，只能强杀应用。
+
+### 原因
+
+| 位置 | 现状 | 电视上的后果 |
+| --- | --- | --- |
+| `SettingsTextInputPreference`（`SettingsPreferenceComponents.kt:858`） | 行内 `OutlinedTextField` + `.tvTextInputFocusEscape()` | 破坏了"一行一站"的焦点模型：字段是独立的焦岛；键盘开着时 D-pad 全部交给 IME；BACK 只关键盘不退焦点 |
+| `tvTextInputFocusEscape` 的方向搜索 | `focusManager.moveFocus(direction)` | 从滚动 pane 里的字段出发可以返回 `false`（实测 UP 回到字段后再按 DOWN/UP 连按两次，`focused` 一直是字段），键又交回光标 |
+| `rememberTvFieldExit().fieldModifier` 的顺序 | escape → enterAction | 对话框 body 是 `focusGroup`，字段是里面唯一的焦点目标。`moveFocus(Down)` 会返回 `true` 但环还在字段上（logcat：`TVESC ... KeyDown` 之后 `TVVEXIT` 收不到 KeyDown），于是 DOWN 被吞、OK 拿不到焦点。ENTER 能用只是因为它被 M3 单行字段映射成 IME Done → `onDone` |
+
+### 改法
+
+| 位置 | 改动 |
+| --- | --- |
+| `SettingsPreferenceComponents.kt` | `SettingsTextInputPreference` 开头加电视早退：`if (LocalUiPresentationConfig.current.isTv) { SettingsDialogTextPreference(...); return }`。电视上改成"带环的设置行 + 点开 `SettingsAlertDialog` 编辑"，手机分支逐字不变（行内 `OutlinedTextField` 仍在） |
+| `core-ui/.../TvFocus.kt` | 新增 `Modifier.tvTextInputVerticalExit(onExit)`：电视上把 UP/DOWN 直接当作"完成输入"，调用 `rememberTvFieldExit` 的 `leave()`（与 ENTER / IME Done 完全同一条动作，含"确认按钮禁用时退回 Cancel"的既有回退链）。它必须**排在 `tvTextInputFocusEscape` 之前**，因为 `focusGroup` 里的方向搜索可能报"已移动"而环没动，那样就会把键吞掉；多行字段不安装（需要上下移动光标） |
+
+32 个 `SettingsTextInputPreference(` 调用点（备份、下载、周期备份、代理、翻译 API、E2E、镜像 URL、存储与网络）
+因此一起变成"行 → 对话框"，`isTv` 之外的代码路径没有任何变化；电视上从"逐键即时生效"变成"OK 后提交"，
+这是有意的取舍。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 行本身可聚焦 | `ic0-row-focused.png` | `Mirror list URL (optional)` 是普通设置行：12dp 圆角蓝环、值行显示 URL、右侧 chevron，行内不再有输入框 |
+| DOWN 走过该行 | dump `ih0…ih7` | mirror URL → `HuggingFace Mirror` → `Bangumi Mirror` → `Ignore SSL errors` → `Disable connectivity check` → `Block ads in browser`（页尾）。第 75 轮遗留 4 的"后半段不可达"消失 |
+| CENTER 打开对话框 | `ic1-dialog.png` | 字段自带蓝环、初始焦点就在字段（`SettingsAlertDialog` 的 body `FocusRequester`）；IME 同时弹出，把 OK/Cancel 盖住 |
+| 输入 → BACK → DOWN | dump `[568,440][1352,584]` → `[1236,632][1352,728]`；`id2-ok-focused.png` | 环从字段移到 OK 药丸（改前永远停在字段）；这是本轮新加的显式退出 |
+| CENTER 提交 | dump + `shared_prefs` | 行立即显示新值，`github_mirror_sync_url` = 输入值，即提交链路通 |
+| OK → LEFT → CENTER | dump `[1236,632][1352,728]` → `[1080,632][1220,728]` | 环左移到 Cancel，CENTER 关窗且输入被丢弃（prefs 不变） |
+| 清空后提交 | dump + `shared_prefs` | 字段清空 → DOWN → OK，`github_mirror_sync_url` 键消失，回到默认 URL |
+| 回归：普通面板里的字段 | dump `il0…il2` | 搜索页输入后 BACK + DOWN 仍落到 Filter 芯片 `[327,88][465,184]`，与第 76 轮基线 `hc2.png` 一致，说明 escape 的既有行为没被破坏 |
+
+`:app:assembleDebug` BUILD SUCCESSFUL；验完把 `github_mirror_sync_url` 清空（键已移除），没有留下测试值。
+
+### 遗留
+
+1. `tvTextInputFocusEscape` 的根因没换掉：`moveFocus` 在滚动容器 / `focusGroup` 里可能"报移动、环不动"，
+   本轮只是让对话框字段改走显式退出。别处（筛选面板、书架搜索、同步账号）遇到同类字段时优先用
+   `rememberTvFieldExit`，不要只加 escape。
+2. 电视上 IME 一弹出就把对话框下半截（OK/Cancel）盖住，只能先 BACK 收键盘或用 IME 的 ✓。对话框窗口没有
+   `imePadding()`，也没随键盘上移。
+3. 32 个调用点里设备上只走了 Storage and network 这一处；备份 / 下载 / 代理 / 翻译 API 页沿用同一组件，
+   推断一致但未逐个验证。
+4. 电视字段只能尾部编辑（遥控器没有指针），本轮没有给对话框加"清空"动作；第 64 轮记的 Clear × 是触摸专属
+   问题在这里同样存在。
+5. 同一页里 `Mirror list URL` 的摘要仍然把默认 URL 整条打印（`Default: https://…json`），两行截断后信息密度很低，
+   电视上更适合只写"默认（jsDelivr）"之类短描述，未改。

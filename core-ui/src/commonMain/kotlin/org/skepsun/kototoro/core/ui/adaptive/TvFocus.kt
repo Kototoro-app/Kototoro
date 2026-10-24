@@ -318,6 +318,31 @@ fun Modifier.tvTextInputFocusEscape(horizontalWhenIdle: Boolean = false): Modifi
 }
 
 /**
+ * Up/down as "finish typing" for a text field that lives alone in a dialog.
+ *
+ * Inside a dialog the focus search answers from the text slot, which holds nothing but the field, so
+ * a directional move either finds no neighbour or reports a move that stays inside the field: after
+ * the keyboard is closed the remote appears stuck even though OK sits two rows below.
+ * [rememberTvFieldExit] already owns an explicit target, so the exit that Enter and the IME Done
+ * action perform is reused here, and it is installed *before* [tvTextInputFocusEscape] so the
+ * unreliable search never gets the first word. No-op off TV, and never installed on a multi-line
+ * field, which needs up/down for its own line navigation.
+ */
+@Composable
+private fun Modifier.tvTextInputVerticalExit(onExit: () -> Unit): Modifier {
+    if (!LocalUiPresentationConfig.current.isTv) return this
+    return this.onPreviewKeyEvent { event ->
+        val verticalExit = event.key == Key.DirectionUp || event.key == Key.DirectionDown
+        if (event.type == KeyEventType.KeyDown && verticalExit) {
+            onExit()
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/**
  * Enter as "finish typing" for a TV text field.
  *
  * The route between fields belongs to the IME while it is open, and Back dismisses the whole host,
@@ -389,9 +414,12 @@ fun rememberTvFieldExit(multiline: Boolean = false): TvFieldExit {
             }
         }
     }
+    // Order matters: the explicit vertical exit goes first because the focus search inside a dialog
+    // can answer "moved" while the ring stays on the field, which would swallow the key.
     val fieldModifier = Modifier
-        .then(if (multiline) Modifier else Modifier.tvTextInputFocusEscape())
+        .then(if (multiline) Modifier else Modifier.tvTextInputVerticalExit(leave))
         .tvTextInputEnterAction(leave)
+        .then(if (multiline) Modifier else Modifier.tvTextInputFocusEscape())
     return TvFieldExit(
         onDone = leave,
         fieldModifier = fieldModifier,

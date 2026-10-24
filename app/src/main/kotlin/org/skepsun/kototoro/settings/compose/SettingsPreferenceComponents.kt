@@ -865,6 +865,26 @@ fun SettingsTextInputPreference(
     enabled: Boolean = true,
     onValueChange: (String) -> Unit,
 ) {
+    // An inline field is a dead end for a remote: while it holds the focus the D-pad belongs to the
+    // caret, and the focus escape cannot always find a neighbour inside a scrolling settings pane, so
+    // every row below the field becomes unreachable (found on Settings > Storage and network, where
+    // the mirror URL field hid the whole rest of the page). On TV the same value is edited in a
+    // dialog instead, where the field hands the focus back to OK through a FocusRequester
+    // (`rememberTvFieldExit`). Phones and tablets keep the inline field exactly as before.
+    if (LocalUiPresentationConfig.current.isTv) {
+        SettingsDialogTextPreference(
+            title = title,
+            value = value,
+            summary = summary,
+            placeholder = placeholder,
+            isPassword = isPassword,
+            iconRes = iconRes,
+            enabled = enabled,
+            onValueChange = onValueChange,
+        )
+        return
+    }
+
     var currentValue by remember(value) { mutableStateOf(value) }
 
     Column(
