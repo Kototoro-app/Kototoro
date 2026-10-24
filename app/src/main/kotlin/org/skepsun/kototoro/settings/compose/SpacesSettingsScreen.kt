@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -49,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
@@ -65,6 +67,7 @@ import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputEnterAction
@@ -266,10 +269,30 @@ private fun SpaceDefinitionRow(
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
+    val isTv = LocalUiPresentationConfig.current.isTv
+    // A remote has no TAB. The row owns a focus target (tap-to-edit) and the trailing switch and
+    // overflow button are separate stops, but RIGHT from a custom space row did nothing while TAB
+    // walked switch -> menu, so enable/disable, edit, reorder and delete of a custom space were
+    // touch-only on TV. Wire the chain explicitly - row -> switch -> menu and back - and give every
+    // switch a ring, because a stop without an outline reads as nothing from a sofa.
+    val rowFocusRequester = remember { FocusRequester() }
+    val switchFocusRequester = remember { FocusRequester() }
+    val menuFocusRequester = remember { FocusRequester() }
+    val hasTrailingControls = !space.isBuiltIn
+    val trailingChain = isTv && hasTrailingControls
 
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .then(
+                if (trailingChain) {
+                    Modifier
+                        .focusRequester(rowFocusRequester)
+                        .focusProperties { right = switchFocusRequester }
+                } else {
+                    Modifier
+                },
+            )
             .clickable(enabled = !space.isBuiltIn, onClick = onEdit)
             .settingsPreferenceLayout(enabled = space.enabled || space.isBuiltIn),
         verticalAlignment = Alignment.CenterVertically,
@@ -317,9 +340,36 @@ private fun SpaceDefinitionRow(
                 checked = space.enabled,
                 onCheckedChange = onEnabledChange,
                 colors = settingsSwitchColors(),
+                modifier = if (isTv) {
+                    Modifier
+                        .focusRequester(switchFocusRequester)
+                        .then(
+                            if (trailingChain) {
+                                Modifier.focusProperties {
+                                    left = rowFocusRequester
+                                    right = menuFocusRequester
+                                }
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .tvFocusable(shape = CircleShape, addFocusTarget = false)
+                } else {
+                    Modifier
+                },
             )
             Box {
-                IconButton(onClick = { menuExpanded = true }) {
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = if (trailingChain) {
+                        Modifier
+                            .focusRequester(menuFocusRequester)
+                            .focusProperties { left = switchFocusRequester }
+                            .tvFocusable(shape = CircleShape, addFocusTarget = false)
+                    } else {
+                        Modifier
+                    },
+                ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = stringResource(R.string.more),
