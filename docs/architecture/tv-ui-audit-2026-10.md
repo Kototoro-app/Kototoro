@@ -3215,6 +3215,21 @@ New chapters）。库里没有收藏数据，所以正文是空态（猫图标 +
   症状是 APK 装上去启动即 `ClassNotFoundException: org.skepsun.kototoro.core.BaseApp`。
   清掉 `app/build/intermediates/dex` 与 `app/build/outputs/apk/debug` 后重新打包即恢复。
 
+### 阅读器"图块挤在左半边"的排查记录（未解决）
+
+现象：从详情页进入阅读后，页面以四列小图块形式只占屏幕左侧约 45%，每格下方是省略号标题，右侧整块黑。
+
+已排除：
+
+- `reader/ui/compose/` 下的所有 Kotlin 文件里没有固定宽度常量；唯一带 `widthIn` 的是
+  `ComposeReaderActivityScaffold.kt:689`（`width(IntrinsicSize.Max).widthIn(max = 200.dp)`），
+  是工具栏里的元素，与页面网格无关。
+- `SettingsAdaptiveShell` 那类"电视双栏留空"的形态在这里不成立：阅读器没有左右两栏。
+
+下一步该看的地方：`ComposeReaderActivityScaffold.kt` 的进度条/页码元素（1270-1279 附近的
+`maxIntrinsicWidth` 计算）是否会参与页面区域测量；以及阅读器页面容器是否在电视上用了
+`BoxWithConstraints` 按手机比例算出的宽度。复现时要先确认当时是"页面缩略网格"还是"实际页面渲染"，两者路径不同。
+
 
 
 
