@@ -22,7 +22,6 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,6 +51,7 @@ import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.util.LocaleComparator
 import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.toLocale
@@ -178,7 +178,7 @@ fun SourcesCatalogScreen(
                             )
                             DropdownMenu(localeMenuVisible, onDismissRequest = onLocaleDismiss) {
                                 sortedLocales.forEach { locale ->
-                                    DropdownMenuItem(
+                                    TvDropdownMenuItem(
                                         text = {
                                             Text(
                                                 locale?.toLocale()?.getDisplayName(context)

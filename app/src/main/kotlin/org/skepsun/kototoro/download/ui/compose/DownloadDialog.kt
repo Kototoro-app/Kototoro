@@ -62,6 +62,7 @@ import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.prefs.DownloadFormat
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.core.util.ext.joinToStringWithLimit
 import org.skepsun.kototoro.core.util.ext.makeSnackbar
@@ -226,7 +227,7 @@ fun DownloadDialog(
                         },
                         dropdownContent = {
                             branchOptions.branches.forEach { (branch, count) ->
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = {
                                         Text(
                                             text = buildString {
@@ -264,7 +265,7 @@ fun DownloadDialog(
                         },
                         dropdownContent = {
                             rememberDownloadCountOptions(firstOptions.maxAvailableCount).forEach { count ->
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = {
                                         Text(
                                             text = pluralStringResource(
@@ -306,7 +307,7 @@ fun DownloadDialog(
                         },
                         dropdownContent = {
                             rememberDownloadCountOptions(unreadOptions.maxAvailableCount).forEach { count ->
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = {
                                         Text(
                                             text = pluralStringResource(
@@ -324,7 +325,7 @@ fun DownloadDialog(
                                 )
                             }
                             if (unreadOptions.maxAvailableCount > 0) {
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = { Text(text = stringResource(id = R.string.download_option_all_unread)) },
                                     onClick = {
                                         viewModel.setUnreadChaptersCount(Int.MAX_VALUE)
@@ -471,7 +472,7 @@ fun DownloadDialog(
                             modifier = Modifier.padding(top = 8.dp),
                         ) {
                             availableDestinations.forEach { destination ->
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = {
                                         DestinationMenuItem(destination = destination)
                                     },

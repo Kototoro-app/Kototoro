@@ -44,7 +44,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -84,6 +83,7 @@ import org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource
 import org.skepsun.kototoro.core.model.getSummary
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
@@ -759,21 +759,21 @@ private fun UnifiedSourceRow(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false },
             ) {
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.browse_available_extensions)) },
                     onClick = {
                         menuExpanded = false
                         onBrowseSource(item)
                     },
                 )
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(if (item.isPinned) R.string.unpin else R.string.pin)) },
                     onClick = {
                         menuExpanded = false
                         onSourcePinnedChange(item.id, !item.isPinned)
                     },
                 )
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.settings)) },
                     onClick = {
                         menuExpanded = false

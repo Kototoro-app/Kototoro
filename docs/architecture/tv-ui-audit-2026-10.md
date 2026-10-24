@@ -4703,3 +4703,48 @@ Incognito mode）在电视上有两个问题：**面板右边缘贴着屏幕边*
    等于放弃 M3 `AlertDialog` 的槽位语义，本轮没做。
 3. 字段上没有"按 OK 开始编辑"的提示文案（新增字符串要走 Weblate），只能依赖电视用户"聚焦后按 OK"的习惯。
 4. 手机 / 平板路径只做了代码隔离（`isTvPresentation` 之后才有 `readOnly` 与 CENTER 处理），没有在手机 AVD 上跑一遍。
+
+## 第七十八轮：下拉菜单里"焦点在动、看不出在哪"——56 处菜单项补齐焦点环（2026-10-25）
+
+之前几轮反复留下的那条遗留是"约 70 处直接用 M3 `DropdownMenuItem` 的菜单没有焦点环"。其中一部分其实早就改过了
+（`CompactDropdownMenuItem`、收藏/搜索顶栏的快捷筛选、片头语种菜单），所以先做了一次精确盘点，再看现象。
+
+### 原因
+
+| 位置 | 现状 | 电视上的后果 |
+| --- | --- | --- |
+| M3 `DropdownMenuItem` | 焦点态只画一层 state layer（primary 8% 的淡色块），没有描边 | 弹出菜单后按 DOWN，高亮确实在换行，但整块菜单都是深色玻璃，用户判断不出当前停在哪一项；一屏 5–8 项时几乎没法用 |
+| 已迁移的菜单（`CompactDropdownMenuItem` 等） | 自带 `tvFocusable` 焦点环 | 同一个应用里一半菜单有环、一半没有，观感像"有的菜单坏了" |
+| `SettingsPreferenceComponents.kt`、`SwipeableFilterChip.kt`、`KototoroContentListScreen.kt` | 逐个调用点手写 `Modifier.tvFocusable(shape = …, addFocusTarget = false)` | 写法不一致（8dp / 10dp / 12dp / 圆形），漏改一个就少一环，靠人肉记住每个调用点 |
+
+### 改法
+
+| 位置 | 改动 |
+| --- | --- |
+| `core-ui/.../compose/TvDropdownMenuItem.kt`（新增） | 与 M3 `DropdownMenuItem` 同签名的包装（`text` / `onClick` / `leadingIcon` / `trailingIcon` / `enabled` / `colors` / `contentPadding` / `interactionSource` 全透传），内部只在 `modifier` 上串 `tvFocusable(shape = RoundedCornerShape(10.dp), addFocusTarget = false)`；`tvFocusable` 自身在非电视上直接返回原 modifier，所以手机/平板仍是纯 M3 菜单项 |
+| app 内 22 个文件、56 处调用点 | 把裸的 `DropdownMenuItem(` 换成 `TvDropdownMenuItem(`，并按文件调整 import（`DownloadDialog.kt` 里已有带环的项，保留原 import 两种并存） |
+
+盘点脚本按"调用点后 30 行内是否出现 `tvFocusable`"判定，改完复查剩余裸调用点为 **0**；同时用 BOM 检查确认
+这次替换没有给任何文件加 UTF-8 BOM（改动前后对比 diff 只有 1–2 行/文件，编码与行尾未变）。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 设置 → Spaces → 遥控器移到自定义空间的 ⋮ | `kw2.png` | ⋮ 按钮本身带蓝环，可被遥控器选中 |
+| CENTER 打开菜单 | `kw3.png` | 菜单弹出（Edit / Move up / Move down / Delete），此时焦点仍在触发按钮上 |
+| DOWN 进入菜单 | `kw4.png` | 焦点落到 `Move up`，**整项一圈 2dp 蓝色圆角描边**（不是 M3 的淡色 state layer） |
+| CENTER 激活 `Edit` | `ku2.png` | 打开 `Edit custom space` 对话框，行为与改动前一致（菜单项点击语义没变） |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（首次全量替换 1m 14s 编译失败→修好跨包限定调用后 1m 18s 通过）。
+
+### 遗留
+
+1. 本轮 22 个文件里只有 `SpacesSettingsScreen`（设置 → Spaces 的 ⋮）在设备上跑过；其余 21 个文件（笔记详情、
+   迁移列表、小说阅读器选词、筛选面板、浏览页语种、本地下载卡、来源管理等）只过了编译，没有逐个在电视上点开。
+2. `BookNotesDetailScreen` / `FilterSheetRoute` 的菜单需要先有笔记或已保存筛选预设，本地夹具没有，暂时没法验证。
+3. `SettingsPreferenceComponents.kt`、`SwipeableFilterChip.kt`、`KototoroContentListScreen.kt` 这三处仍保留手写的
+   `Modifier.tvFocusable`（形状分别是 10dp / 圆形 / 8dp），没有换成新包装——它们在改造前就已经有环，本轮不动，
+   免得把已经验证过的观感改掉。
+4. `SpacesSettingsScreen` 顺手暴露的下一个问题：`Edit custom space` 对话框的 Name 字段一打开就弹键盘（见 `ku2.png`），
+   与第 77 轮同类，但那不是设置页那条共享组件，还没接 `readOnly + tvTextInputStartEditing`。

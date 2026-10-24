@@ -34,6 +34,7 @@ import androidx.work.WorkInfo
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.CompactContentCoverShape
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.util.ext.getThemeColor
@@ -159,7 +160,7 @@ fun AppDownloadsRoute(
                             shape = MaterialTheme.shapes.extraSmall,
                         ) {
                             if (hasCancellableWorks) {
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = { Text(stringResource(android.R.string.cancel)) },
                                     onClick = {
                                         viewModel.cancelAll()
@@ -168,7 +169,7 @@ fun AppDownloadsRoute(
                                 )
                             }
                             if (hasActiveWorks) {
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = { Text(stringResource(R.string.pause)) },
                                     onClick = {
                                         viewModel.pauseAll()
@@ -177,7 +178,7 @@ fun AppDownloadsRoute(
                                 )
                             }
                             if (hasPausedWorks) {
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = { Text(stringResource(R.string.resume)) },
                                     onClick = {
                                         viewModel.resumeAll()
@@ -185,7 +186,7 @@ fun AppDownloadsRoute(
                                     }
                                 )
                             }
-                            DropdownMenuItem(
+                            TvDropdownMenuItem(
                                 text = { Text(stringResource(R.string.remove_completed)) },
                                 onClick = {
                                     viewModel.removeCompleted()

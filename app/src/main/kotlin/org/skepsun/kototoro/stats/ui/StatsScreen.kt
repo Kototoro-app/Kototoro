@@ -31,7 +31,6 @@ import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -54,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.util.KototoroColors
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
@@ -194,7 +194,7 @@ private fun StatsFilters(
                 onDismissRequest = { onPeriodMenuExpandedChange(false) },
             ) {
                 StatsPeriod.entries.forEach { option ->
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(option.titleResId)) },
                         onClick = {
                             onPeriodMenuExpandedChange(false)

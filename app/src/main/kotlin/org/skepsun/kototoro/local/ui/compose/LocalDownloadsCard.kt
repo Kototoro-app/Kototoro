@@ -31,6 +31,7 @@ import androidx.work.WorkInfo
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.flow.FlowCollector
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
@@ -527,7 +528,7 @@ private fun DownloadBatchMenu(
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             if (summary.canPause) {
-                DropdownMenuItem(
+                TvDropdownMenuItem(
                     text = { Text(stringResource(R.string.local_download_pause_all)) },
                     onClick = {
                         expanded = false
@@ -536,7 +537,7 @@ private fun DownloadBatchMenu(
                 )
             }
             if (summary.canResume) {
-                DropdownMenuItem(
+                TvDropdownMenuItem(
                     text = { Text(stringResource(R.string.local_download_resume_all)) },
                     onClick = {
                         expanded = false

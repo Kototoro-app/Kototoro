@@ -26,7 +26,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -58,6 +57,7 @@ import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.KototoroRangeSlider
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.model.titleResId
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.model.titleRes
 import org.skepsun.kototoro.core.util.AlphanumComparator
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
@@ -801,7 +801,7 @@ private fun SavedFiltersSection(
                         expanded = menuPreset == preset,
                         onDismissRequest = { menuPreset = null },
                     ) {
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = {
                                 Text(
                                     if (preset.autoEnabled) {
@@ -816,14 +816,14 @@ private fun SavedFiltersSection(
                                 onSetSavedFilterAutoEnabled(preset.id, !preset.autoEnabled)
                             },
                         )
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = { Text(LocalContext.current.getString(R.string.rename)) },
                             onClick = {
                                 menuPreset = null
                                 onRenameSavedFilter(preset)
                             },
                         )
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = { Text(LocalContext.current.getString(R.string.delete)) },
                             onClick = {
                                 menuPreset = null

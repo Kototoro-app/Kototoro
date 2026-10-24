@@ -26,8 +26,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.DropdownMenu
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
@@ -188,7 +188,7 @@ internal fun SortOrderFilterSection(
         ) {
             sortOrders.forEach { item ->
                 val selected = item == selectedSortOrder
-                DropdownMenuItem(
+                TvDropdownMenuItem(
                     text = { Text(resolveSortOrderLabel(sourceName, item)) },
                     onClick = {
                         onSortOrderChange(item)
@@ -236,7 +236,7 @@ internal fun LocaleFilterSection(
         ) {
             locales.forEach { locale ->
                 val selected = locale == selectedLocale
-                DropdownMenuItem(
+                TvDropdownMenuItem(
                     text = { Text(localeLabel(locale)) },
                     onClick = {
                         onLocaleChange(locale)
@@ -546,7 +546,7 @@ private fun TagGroupDropdown(
                 val value = textInputValue(tag)
                 val textInput = isTextInputTag(tag) || value != null
                 val selected = if (textInput) !value.isNullOrBlank() else tag in group.selected
-                DropdownMenuItem(
+                TvDropdownMenuItem(
                     text = {
                         Text(
                             text = when {

@@ -18,7 +18,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,6 +40,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.tapgrid.ReaderTapGridConfigGrid
@@ -93,14 +93,14 @@ internal fun ReaderTapGridConfigScreen(
                             expanded = menuExpanded,
                             onDismissRequest = { menuExpanded = false },
                         ) {
-                            DropdownMenuItem(
+                            TvDropdownMenuItem(
                                 text = { Text(stringResource(R.string.reset)) },
                                 onClick = {
                                     menuExpanded = false
                                     showResetConfirmation = true
                                 },
                             )
-                            DropdownMenuItem(
+                            TvDropdownMenuItem(
                                 text = { Text(stringResource(R.string.disable_all)) },
                                 onClick = {
                                     menuExpanded = false

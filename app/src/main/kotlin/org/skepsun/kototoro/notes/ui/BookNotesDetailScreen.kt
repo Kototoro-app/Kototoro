@@ -33,7 +33,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -66,6 +65,7 @@ import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview
 import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.artworkAwareContainerColor
@@ -274,28 +274,28 @@ fun BookNotesDetailScreen(
                             expanded = filterMenuExpanded,
                             onDismissRequest = { filterMenuExpanded = false },
                         ) {
-                            DropdownMenuItem(
+                            TvDropdownMenuItem(
                                 text = { Text(stringResource(R.string.book_notes_filter_all, notes.size)) },
                                 onClick = {
                                     filterMenuExpanded = false
                                     onFilterChange(NoteType.ALL)
                                 },
                             )
-                            DropdownMenuItem(
+                            TvDropdownMenuItem(
                                 text = { Text(stringResource(R.string.book_notes_filter_highlights, highlightCount)) },
                                 onClick = {
                                     filterMenuExpanded = false
                                     onFilterChange(NoteType.HIGHLIGHT)
                                 },
                             )
-                            DropdownMenuItem(
+                            TvDropdownMenuItem(
                                 text = { Text(stringResource(R.string.book_notes_filter_thoughts, thoughtCount)) },
                                 onClick = {
                                     filterMenuExpanded = false
                                     onFilterChange(NoteType.THOUGHT)
                                 },
                             )
-                            DropdownMenuItem(
+                            TvDropdownMenuItem(
                                 text = { Text(stringResource(R.string.book_notes_filter_bookmarks, bookmarkCount)) },
                                 onClick = {
                                     filterMenuExpanded = false
@@ -850,7 +850,7 @@ internal fun BookNoteCard(
                     shadowElevation = 3.dp,
                 ) {
                     if (canMakeExcerpt(item)) {
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = { Text(stringResource(R.string.book_notes_make_excerpt)) },
                             onClick = {
                                 menuExpanded = false
@@ -858,14 +858,14 @@ internal fun BookNoteCard(
                             },
                         )
                     }
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.book_notes_copy_content)) },
                         onClick = {
                             menuExpanded = false
                             onCopy()
                         },
                     )
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.delete)) },
                         onClick = {
                             menuExpanded = false

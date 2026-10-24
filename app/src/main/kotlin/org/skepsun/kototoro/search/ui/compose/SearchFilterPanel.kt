@@ -22,8 +22,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -191,7 +191,7 @@ internal fun SearchFilterPanel(
                         onDismissRequest = { headerMenuExpanded = false },
                         containerColor = MaterialTheme.colorScheme.popupMenuContainerColor(),
                     ) {
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = { Text(stringResource(R.string.refresh_filters)) },
                             leadingIcon = { Icon(painterResource(R.drawable.ic_sync), contentDescription = null) },
                             onClick = {
@@ -199,7 +199,7 @@ internal fun SearchFilterPanel(
                                 onRefreshFilters()
                             },
                         )
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = { Text(stringResource(R.string.save_filter)) },
                             leadingIcon = { Icon(painterResource(R.drawable.ic_save), contentDescription = null) },
                             enabled = isSaveEnabled,
@@ -208,7 +208,7 @@ internal fun SearchFilterPanel(
                                 pendingSaveName = ""
                             },
                         )
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = { Text(stringResource(R.string.blacklisted_tags)) },
                             leadingIcon = {
                                 Icon(painterResource(R.drawable.ic_cancel_multiple), contentDescription = null)
@@ -438,7 +438,7 @@ internal fun SearchFilterPanel(
                                 expanded = savedFilterMenuPreset == preset,
                                 onDismissRequest = { savedFilterMenuPreset = null },
                             ) {
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = {
                                         Text(
                                             if (preset.autoEnabled) {
@@ -453,14 +453,14 @@ internal fun SearchFilterPanel(
                                         onSetSavedFilterAutoEnabled(preset.id, !preset.autoEnabled)
                                     },
                                 )
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = { Text(stringResource(R.string.rename)) },
                                     onClick = {
                                         savedFilterMenuPreset = null
                                         pendingRenameFilter = preset
                                     },
                                 )
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = { Text(stringResource(R.string.delete)) },
                                     onClick = {
                                         savedFilterMenuPreset = null

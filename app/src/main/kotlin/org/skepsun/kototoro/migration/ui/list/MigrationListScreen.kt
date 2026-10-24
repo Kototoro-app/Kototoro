@@ -26,7 +26,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -58,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.migration.ui.rememberCoverRequest
 import org.skepsun.kototoro.migration.domain.MatchCandidate
@@ -311,17 +311,17 @@ private fun RowMenu(item: MigrationItemState, onSkip: () -> Unit, onMigrateNow: 
     Box {
         IconButton(onClick = { expanded = true }) { Icon(Icons.Default.MoreVert, contentDescription = null) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
+            TvDropdownMenuItem(
                 text = { Text(stringResource(R.string.migration_action_skip)) },
                 onClick = { expanded = false; onSkip() },
             )
             if (item.status == MigrationItemStatus.MATCHED) {
-                DropdownMenuItem(
+                TvDropdownMenuItem(
                     text = { Text(stringResource(R.string.migration_action_migrate_now)) },
                     onClick = { expanded = false; onMigrateNow() },
                 )
             }
-            DropdownMenuItem(
+            TvDropdownMenuItem(
                 text = { Text(stringResource(R.string.migration_action_open)) },
                 onClick = { expanded = false; onOpenOriginal() },
             )

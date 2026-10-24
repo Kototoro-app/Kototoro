@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -71,6 +70,7 @@ import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputEnterAction
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
@@ -385,7 +385,7 @@ private fun SpaceDefinitionRow(
                         MaterialTheme.colorScheme.surfaceContainer
                     },
                 ) {
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.edit)) },
                         leadingIcon = {
                             Icon(Icons.Default.Edit, contentDescription = null)
@@ -395,7 +395,7 @@ private fun SpaceDefinitionRow(
                             onEdit()
                         },
                     )
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.move_up)) },
                         leadingIcon = {
                             Icon(Icons.Default.KeyboardArrowUp, contentDescription = null)
@@ -406,7 +406,7 @@ private fun SpaceDefinitionRow(
                             onMove(-1)
                         },
                     )
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.move_down)) },
                         leadingIcon = {
                             Icon(Icons.Default.KeyboardArrowDown, contentDescription = null)
@@ -418,7 +418,7 @@ private fun SpaceDefinitionRow(
                         },
                     )
                     HorizontalDivider()
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = {
                             Text(
                                 text = stringResource(R.string.delete),
