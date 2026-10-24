@@ -281,11 +281,16 @@ npm run docs:build
   类型筛选就是把该函数吃的 `kinds` 映射按类型过滤，见计划 §155、§156。作品榜点一行先开 Android 的
   `ContentStatsDialog` 单作品统计弹窗（标题、90 天柱状图、首次阅读时间、总时长/会话/页数或章节或集数，
   只有“详情”才导航；读模型是 `SourceLibrary.contentReadingStats`），见计划 §157。
-  更多 → 代理（`proxy-settings-open`）对应 Android 的 `ProxySettingsScreen`：类型 DIRECT/HTTP/SOCKS、地址、端口、
+  更多 → 存储与网络（`storage-settings-open`）对应 Android 的存储与网络枢纽：“存储用量”节按数据根目录的顶层子项
+  分成数据库/图片/偏好与下载记录/日志/其他/可用空间，Canvas 比例条加每行大小与卷百分比，图片行还会写
+  “已保存章节保留多少”（那部分与图片目录是同一份，不重复计入），并有一行 Kototoro 占用 / 磁盘可用 / 卷容量；
+  “网络”节是代理入口。读模型在 `desktop-runtime` 的 `DesktopStorageUsage`（只读元数据、不跟随符号链接、
+  可用空间取 `usableSpace`、百分比按整卷），进页面时在 IO 线程遍历一次，见计划 §159。
+  更多 → 存储与网络 → 代理（`proxy-settings-open`）对应 Android 的 `ProxySettingsScreen`：类型 DIRECT/HTTP/SOCKS、地址、端口、
   可选用户名密码与“测试连接”，值读写 Android 同名的 `proxy_type_2`/`proxy_address`/`proxy_port`/`proxy_login`/
   `proxy_password`（类型存枚举名），compat 客户端的 `ProxySelector`/`Authenticator` 每次请求才读当前值，
   保存后清一次连接池，所以换代理不用重启应用；测试连接与 Android 一样请求 `http://neverssl.com`，成功弹
-  `connection_ok`，失败弹异常消息，见计划 §158。
+  `connection_ok`，失败弹异常消息，代理页的返回按钮回到枢纽，见计划 §158。
   收藏/历史的“筛选与排序”抽屉另有“布局”一节（封面网格 / 每行一个作品，对应 Android 的 ListMode），
   选择存 `desktop_library` 的 `library_list_mode`，列表模式下 `ContentGrid` 渲染 `content-list` 行视图，
   点击/长按语义与卡片一致，见计划 §142。

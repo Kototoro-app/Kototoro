@@ -1,0 +1,159 @@
+package org.skepsun.kototoro.desktop.app
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.settings.SettingsGroup
+import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
+import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
+import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
+import org.skepsun.kototoro.desktop.runtime.DesktopStorageCategory
+import org.skepsun.kototoro.desktop.runtime.DesktopStorageUsage
+import java.util.Locale
+
+/**
+ * Android's "storage and network" hub. The proxy page used to hang off "more" because Windows had no such hub; the
+ * figures Android opens its page with were missing entirely, although the data root holds a database, an image
+ * directory, the preference store and the source diagnostics that can each grow without the user noticing.
+ *
+ * The slices are the data root's own children, measured on entry, so the page never guesses what a cache costs.
+ */
+@Composable
+internal fun DesktopStorageSettingsPage(controller: DesktopController, state: DesktopAppState) {
+    val usage = state.storageUsage
+    val active = !state.busy
+    Column(
+        modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        OutlinedButton({ controller.more() }, enabled = active,
+            modifier = Modifier.testTag("storage-settings-back")) { Text(desktopText("common.back")) }
+        SettingsSectionHeader(AndroidStrings["storage_usage"])
+        SettingsGroup {
+            if (usage == null) {
+                Text(AndroidStrings["computing_"], style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).testTag("storage-usage-loading"))
+            } else {
+                StorageUsageBar(usage,
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                        .testTag("storage-usage-chart"))
+                Text(
+                    text = desktopText("storage.summary", desktopCacheSize(usage.usedBytes),
+                        desktopCacheSize(usage.availableBytes), desktopCacheSize(usage.volumeBytes)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f),
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp)
+                        .testTag("storage-usage-summary"),
+                )
+                val protected = state.imageCache.protectedBytes.takeIf { it > 0L }
+                // The app's own slices, largest first, then the volume's free space last as Android lists it.
+                val rows = usage.items.filter { it.category != DesktopStorageCategory.AVAILABLE }
+                    .sortedByDescending { it.bytes } +
+                    usage.items.filter { it.category == DesktopStorageCategory.AVAILABLE }
+                rows.forEachIndexed { index, item ->
+                    if (index > 0) SettingsRowDivider()
+                    val kept = protected.takeIf { item.category == DesktopStorageCategory.IMAGES }
+                    StorageUsageRow(item, storageCategoryTitle(item.category, kept))
+                }
+            }
+        }
+        SettingsSectionHeader(AndroidStrings["network"])
+        SettingsGroup {
+            // Android's row for the proxy sub-screen, with the current route where Android shows its summary.
+            val settings = state.proxySettings
+            val route = settings.address.takeIf { settings.isEnabled && it.isNotBlank() }
+                ?.let { "${it}:${settings.port}" }
+            SettingsValueRow(AndroidStrings["proxy"], route, settings.type.label, active,
+                { controller.showProxySettings() }, testTag = "proxy-settings-open",
+                leadingIcon = painterResource("icons/ic_web.svg"))
+        }
+    }
+}
+
+/** Android's donut shows the application's own data only; the bar keeps that rule and the rows carry the numbers. */
+@Composable
+private fun StorageUsageBar(usage: DesktopStorageUsage, modifier: Modifier = Modifier) {
+    val slices = usage.items.filter { it.category != DesktopStorageCategory.AVAILABLE && it.bytes > 0L }
+    val empty = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f)
+    Canvas(modifier.height(12.dp).clip(RoundedCornerShape(6.dp))) {
+        if (slices.isEmpty()) {
+            drawRect(empty)
+            return@Canvas
+        }
+        val total = slices.sumOf { it.bytes }.toFloat()
+        var left = 0f
+        for (slice in slices) {
+            val width = size.width * (slice.bytes / total)
+            drawRect(storageColor(slice.category), Offset(left, 0f), Size(width, size.height))
+            left += width
+        }
+    }
+}
+
+@Composable
+private fun StorageUsageRow(item: DesktopStorageUsage.Item, title: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+            .testTag("storage-usage:${item.category}"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(Modifier.size(10.dp).clip(CircleShape).background(storageColor(item.category)))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        }
+        Text(
+            text = "${desktopCacheSize(item.bytes)} · ${String.format(Locale.ROOT, "%.1f%%", item.percent)}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f),
+        )
+    }
+}
+
+/** Android's category labels, plus the one Windows-only note: saved chapters share the image directory. */
+private fun storageCategoryTitle(category: DesktopStorageCategory, protectedBytes: Long?): String = when (category) {
+    DesktopStorageCategory.DATABASE -> desktopText("storage.database")
+    DesktopStorageCategory.IMAGES ->
+        protectedBytes?.let { desktopText("storage.imagesProtected", desktopCacheSize(it)) }
+            ?: desktopText("storage.images")
+    DesktopStorageCategory.PREFERENCES -> desktopText("storage.preferences")
+    DesktopStorageCategory.LOGS -> desktopText("storage.logs")
+    DesktopStorageCategory.OTHER -> desktopText("storage.other")
+    DesktopStorageCategory.AVAILABLE -> AndroidStrings["available"]
+}
+
+/** Android's palette, so a slice keeps the colour it has on the phone. */
+private fun storageColor(category: DesktopStorageCategory): Color = when (category) {
+    DesktopStorageCategory.DATABASE -> Color(0xFF3F51B5)
+    DesktopStorageCategory.IMAGES -> Color(0xFF4CAF50)
+    DesktopStorageCategory.PREFERENCES -> Color(0xFF2196F3)
+    DesktopStorageCategory.LOGS -> Color(0xFFFF9800)
+    DesktopStorageCategory.OTHER -> Color(0xFF78909C)
+    DesktopStorageCategory.AVAILABLE -> Color(0xFFB0BEC5)
+}

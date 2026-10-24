@@ -49,7 +49,7 @@ internal fun DesktopProxySettingsPage(controller: DesktopController, state: Desk
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        OutlinedButton({ controller.more() }, enabled = active,
+        OutlinedButton({ controller.backToStorage() }, enabled = active,
             modifier = Modifier.testTag("proxy-settings-back")) { Text(desktopText("common.back")) }
         SettingsSectionHeader(AndroidStrings["network"])
         SettingsGroup {
@@ -150,7 +150,7 @@ internal fun DesktopProxySettingsPage(controller: DesktopController, state: Desk
 private enum class ProxySettingsDialog { TYPE, ADDRESS, PORT, LOGIN, PASSWORD }
 
 /** Android's option labels: `disabled` for DIRECT, and the protocol names for the other two. */
-private val DesktopProxyType.label: String
+internal val DesktopProxyType.label: String
     get() = when (this) {
         DesktopProxyType.DIRECT -> AndroidStrings["disabled"]
         DesktopProxyType.HTTP -> "HTTP"

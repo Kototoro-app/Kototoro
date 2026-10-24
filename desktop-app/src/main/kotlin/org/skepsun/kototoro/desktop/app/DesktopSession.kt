@@ -20,6 +20,8 @@ import org.skepsun.kototoro.desktop.runtime.DesktopManagedParserPlugin
 import org.skepsun.kototoro.desktop.runtime.DesktopParserPlatform
 import org.skepsun.kototoro.desktop.runtime.DesktopParserRecord
 import org.skepsun.kototoro.desktop.runtime.DesktopRuntime
+import org.skepsun.kototoro.desktop.runtime.DesktopStorageUsage
+import org.skepsun.kototoro.desktop.runtime.desktopStorageUsage
 import org.skepsun.kototoro.desktop.runtime.DesktopLibrary
 import org.skepsun.kototoro.desktop.runtime.DesktopRepositories
 import org.skepsun.kototoro.desktop.runtime.DesktopRepositoryCatalog
@@ -174,6 +176,10 @@ class DesktopSession private constructor(
 
     internal fun imageCacheReport(budgetMb: Int): DesktopImageCacheReport =
         DesktopImageBudget.inspect(storage.paths.images, downloadedImageBlobs(), budgetMb)
+
+    /** Android's storage page on this data root; the walk is IO, so the page never runs it on the UI thread. */
+    internal suspend fun storageUsage(): DesktopStorageUsage =
+        withContext(Dispatchers.IO) { desktopStorageUsage(storage.paths) }
 
     internal suspend fun enforceImageBudget(budgetMb: Int, clear: Boolean = false): DesktopImageCacheReport =
         DesktopImageBudget.enforce(storage.paths.images, downloadedImageBlobs(), budgetMb, clear)

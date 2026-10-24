@@ -35,6 +35,7 @@ import org.skepsun.kototoro.desktop.runtime.DesktopLibrarySnapshot
 import org.skepsun.kototoro.desktop.runtime.DesktopRepository
 import org.skepsun.kototoro.desktop.runtime.DesktopRepositoryCatalog
 import org.skepsun.kototoro.desktop.runtime.DesktopUpdateSettings
+import org.skepsun.kototoro.desktop.runtime.DesktopStorageUsage
 import org.skepsun.kototoro.desktop.runtime.DesktopTriState
 import org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex
 import org.skepsun.kototoro.core.ui.chapters.ChapterBranchLocale
@@ -74,7 +75,8 @@ internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
 
 enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
-    RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, PROXY_SETTINGS,
+    RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
+    PROXY_SETTINGS,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -202,6 +204,8 @@ data class DesktopAppState(
     val update: DesktopUpdateUi = DesktopUpdateUi(),
     /** The image cache's total size, the part saved chapters need, and its budget. */
     val imageCache: DesktopImageCacheReport = DesktopImageCacheReport(),
+    /** Android's storage page figures; null while the walk on the data root runs. */
+    val storageUsage: DesktopStorageUsage? = null,
     val busy: Boolean = false,
     val error: String? = null,
     val message: String? = null,
@@ -1607,7 +1611,27 @@ class DesktopController(val session: DesktopSession) {
     /** Android's source settings screen: rail order, layout and the adult-content targets. */
     fun showSourceSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SOURCE_SETTINGS) } }
 
-    /** Android's proxy page, reached from "more" the way Android reaches it from storage and network. */
+    /**
+     * Android's storage and network hub. The figures are measured on entry, and the image cache report comes with them
+     * because the page names the part of the images directory that saved chapters hold.
+     */
+    fun showStorage() = navigate {
+        mutableState.update { it.copy(screen = DesktopScreen.STORAGE, storageUsage = null) }
+        loadImageCacheOnIo()
+        loadStorageUsageOnIo()
+    }
+
+    /** The proxy page's back button; the figures the hub already measured stay, so no walk is repeated. */
+    fun backToStorage() = navigate {
+        mutableState.update { it.copy(screen = DesktopScreen.STORAGE, proxyTest = DesktopProxyTestState()) }
+    }
+
+    internal suspend fun loadStorageUsageOnIo() {
+        val usage = runCatching { session.storageUsage() }.getOrNull() ?: return
+        mutableState.update { it.copy(storageUsage = usage) }
+    }
+
+    /** Android's proxy page, reached from the storage hub the way Android reaches it. */
     fun showProxySettings() = navigate {
         mutableState.update { it.copy(screen = DesktopScreen.PROXY_SETTINGS, proxyTest = DesktopProxyTestState()) }
     }

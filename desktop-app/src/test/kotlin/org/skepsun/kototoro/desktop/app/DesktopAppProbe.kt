@@ -35,6 +35,10 @@ object DesktopAppProbe {
                 DesktopStatsProbe.run(args)
                 return
             }
+            if (args[0] == "storage") {
+                DesktopStorageProbe.run(args)
+                return
+            }
             if (args[0] == "proxy") {
                 DesktopProxyProbe.run(args)
                 return

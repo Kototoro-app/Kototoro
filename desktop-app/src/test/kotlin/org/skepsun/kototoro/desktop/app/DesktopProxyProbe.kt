@@ -53,6 +53,10 @@ internal object DesktopProxyProbe {
                 onNodeWithTag("nav:更多").performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.MORE }
                 idle()
+                // Android reaches the proxy page from storage and network; the hub is the only entry point now.
+                onNodeWithTag("storage-settings-open").performScrollTo().performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.STORAGE }
+                idle()
                 onNodeWithTag("proxy-settings-open").performScrollTo().performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.PROXY_SETTINGS }
                 idle()
@@ -117,9 +121,12 @@ internal object DesktopProxyProbe {
                 check(synchronized(targets) { targets.any { it.endsWith("/config.json") } }) { "$targets" }
 
                 // The import leaves for the extensions page, as Android's add-source flow does; the proxy page is one
-                // "more" visit away.
+                // "more" visit and one hub visit away.
                 onNodeWithTag("nav:更多").performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.MORE }
+                idle()
+                onNodeWithTag("storage-settings-open").performScrollTo().performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.STORAGE }
                 idle()
                 onNodeWithTag("proxy-settings-open").performScrollTo().performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.PROXY_SETTINGS }
@@ -135,7 +142,10 @@ internal object DesktopProxyProbe {
                 check(session.proxy.settings.value.type == DesktopProxyType.DIRECT)
                 onNodeWithTag("proxy-settings-back").performScrollTo().performClick()
                 idle()
-                check(controller.state.value.screen == DesktopScreen.MORE) { "the page's back button returns to more" }
+                check(controller.state.value.screen == DesktopScreen.STORAGE) { "the page's back returns to the hub" }
+                onNodeWithTag("storage-settings-back").performScrollTo().performClick()
+                idle()
+                check(controller.state.value.screen == DesktopScreen.MORE) { "the hub's back returns to more" }
                 val routed = hits.get()
                 runBlocking { controller.importJsonSource(DIRECT_CONFIG_URL).join() }
                 waitUntil(timeoutMillis = 30_000) { controller.state.value.error != null }

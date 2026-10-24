@@ -10,6 +10,9 @@ class DesktopDataPaths private constructor(val root: Path) {
     val images: Path = root.resolve("images")
     val preferences: Path = root.resolve("preferences")
 
+    /** The bounded source diagnostics; the storage page counts it as its own slice. */
+    val logs: Path = root.resolve("logs")
+
     companion object {
         /** Pure selection, with injectable environment/home for tests; does not create directories. */
         fun defaultRoot(

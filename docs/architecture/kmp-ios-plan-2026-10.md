@@ -7248,3 +7248,39 @@ Windows 之前完全没有代理：每个来源、封面、JSON 导入都走 com
   地址/端口（70000 被拒）→ 测试连接得到 `connection_ok` 且代理确实收到请求 → 用不可解析的
   `http://tvbox-import.invalid/config.json` 导入 JSON 来源成功（只能经代理）→ 切回直连后同一导入失败、
   代理未再收到请求 → 返回更多，输出 `DESKTOP_UI_OK=proxy`。
+## 159. Windows 存储与网络页（存储用量 + 代理入口，对齐 Android StorageAndNetworkSettings）（2026-10-24）
+
+- 问题：Android 的“存储与网络”把存储用量和代理放在同一个枢纽里；Windows 只有下载页里的图片缓存数字，
+  看不到数据库、偏好/下载记录、日志各占多少，也不知道数据所在磁盘还剩多少；代理页则孤零零挂在“更多 → 功能”。
+  上一节（§158）为此在注释里写了“Windows 没有那个枢纽”，这一节把这个枢纽补上。
+- `desktop-runtime`：新增 `DesktopStorageUsage.kt`。`DesktopStorageCategory` 是
+  `DATABASE/IMAGES/PREFERENCES/LOGS/OTHER/AVAILABLE`；`desktopStorageUsage(paths)` 只读元数据，
+  按数据根目录的**顶层子项**归属切片（`kototoro.db` 及其 `-wal`/`-shm` 归数据库、`images`/`preferences`/`logs`
+  各自一类、其余一律 `OTHER`），这样将来新增的目录会出现在“其他”而不是被漏掉；符号链接不跟随（指向数据根之外
+  的链接不算本卷占用）；`AVAILABLE` 取 `File.usableSpace`，`volumeBytes` 取 `File.totalSpace`，
+  百分比按整卷计算（与 Android 的行一致，所以各项之和不等于 100%）。`DesktopDataPaths` 补 `logs` 属性，
+  与既有 `root.resolve("logs")` 同义，避免再写一份字面量。
+- `desktop-app`：`DesktopSession.storageUsage()` 在 `Dispatchers.IO` 上执行遍历；`DesktopController` 新增
+  `DesktopScreen.STORAGE`、`DesktopAppState.storageUsage`、`showStorage()`（进页面时同时刷新图片缓存报告，
+  因为图片行要写“其中已保存章节保留多少”）、`refreshStorageUsage()`、`loadStorageUsageOnIo()`、
+  `backToStorage()`（代理页返回枢纽时不重新遍历）。`DesktopStorageSettingsPage`：
+  “存储用量”节是 Canvas 画的比例条 + 一行 `storage.summary`（Kototoro 占用 / 磁盘可用 / 卷容量）+
+  每个切片一行（色点、大小、百分比，`storage-usage:<CATEGORY>` 标签），图片行在有已保存章节时改用
+  `storage.imagesProtected` 文案；“网络”节是 Android 的代理行（`proxy-settings-open`，值显示
+  `disabled`/`HTTP`/`SOCKS`，已配置时摘要写 `地址:端口`）。配色沿用 Android 的调色板。
+- 导航：更多 → 功能里原来的代理行换成“存储与网络”（`storage-settings-open`，图标 `ic_storage`，
+  摘要 `storage.moreSummary`）；代理页的返回按钮改回枢纽而不是“更多”（`proxy-settings-back`）。
+  因此探针的路径从“更多 → 代理”变成“更多 → 存储与网络 → 代理”。
+- 文案：`storage.moreSummary`、`storage.database`、`storage.images`、`storage.imagesProtected`、
+  `storage.preferences`、`storage.logs`、`storage.other`、`storage.summary` 为新增桌面键（中英两本目录都加）；
+  其余复用 Android 键 `storage_usage`、`storage_and_network`、`available`、`computing_`、`network`、`proxy`、
+  `disabled`。`:desktop-app:verifyDesktopStrings` 全绿（键集、占位符、未使用键与中文硬编码四项检查）。
+- 验证：`:desktop-runtime:test` 全绿，新增 `DesktopStorageUsageTest` 3 项（按顶层子项归属且 `usedBytes`
+  不重复计数、百分比落在 0..100 且可用空间比 2 KB 图片大、空根目录只报可用空间不编造空切片、
+  符号链接不跟随）；`:desktop-app:test` 见下（新增 `storage` 探针 + 改路径后的 `proxy` 探针都全绿）。
+  探针 `storage` 先在 `images/probe/page.img` 写 3000 字节、`logs/source-errors.log` 写 100 字节，再走
+  更多 → 存储与网络：`proxy-settings-open` 在“更多”页已不存在，`storage-usage-chart`/`storage-usage-summary`/
+  `storage-usage:IMAGES`/`storage-usage:LOGS`/`storage-usage:AVAILABLE` 都在，读模型里
+  `IMAGES ≥ 3000`、`LOGS ≥ 100`、`usedBytes ≥ 3100`、`available > 0`、`volume ≥ available`；再进代理页、
+  返回枢纽、返回“更多”，输出 `DESKTOP_UI_OK=storage`。`proxy` 探针改走同一枢纽，并在最后校验
+  代理页返回枢纽、枢纽返回“更多”。

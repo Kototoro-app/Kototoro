@@ -36,6 +36,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `the storage hub shows the data root's real sizes and reaches the proxy page`() {
+        probe("storage", directory.resolve("中文 storage"), 150)
+    }
+
+    @Test
     fun `the proxy page routes the real client and its test row reports Android's result`() {
         probe("proxy", directory.resolve("中文 proxy"), 150)
     }
