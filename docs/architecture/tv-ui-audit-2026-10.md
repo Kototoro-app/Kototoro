@@ -4660,3 +4660,46 @@ Incognito mode）在电视上有两个问题：**面板右边缘贴着屏幕边*
    问题在这里同样存在。
 5. 同一页里 `Mirror list URL` 的摘要仍然把默认 URL 整条打印（`Default: https://…json`），两行截断后信息密度很低，
    电视上更适合只写"默认（jsDelivr）"之类短描述，未改。
+
+## 第七十七轮：文本框对话框一打开就弹出键盘，把 OK/Cancel 压在下面（2026-10-25）
+
+第 76 轮验证时顺手记下的细节：设置里的文本框对话框一打开，软键盘就跟着弹出来，而对话框是垂直居中的，
+按钮在最下面，于是 1080p 上（键盘约占 310dp）`OK` / `Cancel` 整排被盖住——用户看到输入框，却看不到怎么确认。
+
+### 原因
+
+| 位置 | 现状 | 电视上的后果 |
+| --- | --- | --- |
+| `SettingsDialogTextPreference` 的 `OutlinedTextField` | 可编辑字段；`SettingsAlertDialog` 的 body `FocusRequester` 在首帧把焦点给它 | 焦点落进**可编辑**字段 → Compose 立刻建立输入连接 → 键盘弹出；对话框本身居中，按钮在最下方，于是被键盘压住 |
+| M3 `AlertDialog` | 居中布局，没有 `imePadding`、也不会为键盘收缩窗口 | 对话框没法自己躲开键盘，也不能把按钮挪到键盘上方；`AlertDialog` 也不暴露 `DialogProperties` |
+
+### 改法
+
+| 位置 | 改动 |
+| --- | --- |
+| `core-ui/.../TvFocus.kt` | 新增 `Modifier.tvTextInputStartEditing(onStartEditing)`：把 CENTER 当作"开始输入"，消费该键并回调 |
+| `SettingsPreferenceComponents.kt` 的 `SettingsDialogTextPreference` | 电视上字段默认 `readOnly = isTvPresentation && !isFieldEditing`：打开对话框时只有焦点环、不弹键盘，OK/Cancel 完整可见；CENTER → `isFieldEditing = true` + `keyboardController.show()` 才真正开始输入；字段失焦（DOWN 到 OK、关闭对话框）时复位，下次进来仍是只读。手机分支完全不读这两个开关 |
+
+也就是说：键盘从"迎面上来"变成"用户按 OK 才来"。输入过程中的键盘遮挡仍是 IME 固有行为，但那时用户正在打字，
+且 IME 的 ✓ / BACK 都能立刻结束输入。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 打开对话框 | `ja0-dialog-readonly.png` | 字段带蓝环、值完整显示，`Cancel` / `OK` 都在屏上；`dumpsys input_method` 的 `mInputShown=false` |
+| CENTER 开始输入 | `jb0-editing-ime.png` | `mInputShown=true`，键盘弹出、光标在字段内，可正常输入 |
+| 输入 → BACK → DOWN → LEFT | uiautomator dump | 字段 `[568,456][1352,568]`（值 `probe`）→ BACK 收键盘仍停在字段 → DOWN 环到 OK `[1236,616][1352,712]` → LEFT 到 Cancel `[1080,616][1220,712]` |
+| Cancel | dump + `shared_prefs` | 关窗、焦点回到 `Mirror list URL (optional)` 行、`github_mirror_sync_url` 仍无键（输入被丢弃） |
+| 再次打开 | `jd1-reopened-readonly.png` | 与 `ja0` 像素一致（同 sha256）、`mInputShown=false`：只读态每次都重置，不会"记住上次在编辑" |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（2m 16s）。
+
+### 遗留
+
+1. 其它文本对话框（小说笔记、书签标题、WebDAV 路径、同步账号等）没有这层保护，仍是"焦点落下就弹键盘"。
+   本轮只改了设置页这条共享组件；`readOnly + tvTextInputStartEditing` 这套应该抽成共享件再铺开。
+2. 输入过程中的键盘遮挡没法消除：真正并排显示要自绘 `Dialog`（顶对齐 + `imePadding` + 自己的焦点链），
+   等于放弃 M3 `AlertDialog` 的槽位语义，本轮没做。
+3. 字段上没有"按 OK 开始编辑"的提示文案（新增字符串要走 Weblate），只能依赖电视用户"聚焦后按 OK"的习惯。
+4. 手机 / 平板路径只做了代码隔离（`isTvPresentation` 之后才有 `readOnly` 与 CENTER 处理），没有在手机 AVD 上跑一遍。

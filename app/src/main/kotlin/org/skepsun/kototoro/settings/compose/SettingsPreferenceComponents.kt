@@ -58,9 +58,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -79,6 +81,7 @@ import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputStartEditing
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -1007,6 +1010,12 @@ fun SettingsDialogTextPreference(
         val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
         val isTvPresentation = LocalUiPresentationConfig.current.isTv
         val fieldExit = rememberTvFieldExit()
+        val keyboardController = LocalSoftwareKeyboardController.current
+        // TV keeps the dialog's field read-only until the centre key asks for editing: an editable
+        // field opens the software keyboard the moment it takes the focus, and on a 1080p set that
+        // keyboard covers the OK/Cancel row below it. Read-only first means the dialog opens with the
+        // ring on the field and every button visible; centre starts the keyboard on purpose.
+        var isFieldEditing by remember { mutableStateOf(false) }
         SettingsAlertDialog(
             title = title,
             onDismissRequest = {
@@ -1020,8 +1029,20 @@ fun SettingsDialogTextPreference(
                         onValueChange = {
                             pendingValue = it
                         },
+                        readOnly = isTvPresentation && !isFieldEditing,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .then(
+                                if (isTvPresentation) {
+                                    Modifier.tvTextInputStartEditing {
+                                        isFieldEditing = true
+                                        keyboardController?.show()
+                                    }
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .onFocusChanged { if (!it.hasFocus) isFieldEditing = false }
                             .then(fieldExit.fieldModifier),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { fieldExit.onDone() }),

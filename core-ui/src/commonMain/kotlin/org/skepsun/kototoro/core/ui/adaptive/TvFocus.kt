@@ -343,6 +343,25 @@ private fun Modifier.tvTextInputVerticalExit(onExit: () -> Unit): Modifier {
 }
 
 /**
+ * Centre as "start typing" for a field that is only holding a focus ring.
+ *
+ * A focused editable field pulls up the software keyboard on its own. On a TV that keyboard is wide and
+ * sits at the bottom of the screen, so it covers whatever the dialog put there: the viewer sees a field
+ * and no button to confirm it with. Call sites keep such a field read-only until the centre key asks for
+ * editing, which keeps the whole dialog visible while it only carries the focus ring, and turns the
+ * keyboard into something the viewer asked for rather than something that greeted them.
+ */
+fun Modifier.tvTextInputStartEditing(onStartEditing: () -> Unit): Modifier =
+    this.onPreviewKeyEvent { event ->
+        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionCenter) {
+            onStartEditing()
+            true
+        } else {
+            false
+        }
+    }
+
+/**
  * Enter as "finish typing" for a TV text field.
  *
  * The route between fields belongs to the IME while it is open, and Back dismisses the whole host,
