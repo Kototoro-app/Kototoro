@@ -4188,3 +4188,66 @@ setContent { KototoroTheme { Column(...) } }
    它只在"控件不可见 + 面板关闭"时出现，遥控器收起控件后是否有环走过去还需要一轮。
 5. 第三格的 `Automatic scroll` 面板本身还有一种入口：阅读器控件栏的计时器按钮
    （`ReaderControl.TIMER`）。本轮只从 `⋮` 快选层进去过，两条入口指向同一个面板。
+
+## 第六十九轮：把"电视上没有把手"抽成共享 TvModalBottomSheet（2026-10-25）
+
+上一轮的修法是内联在自动滚动面板里的 `if (isTv)`，而同一个空停点在 29 个
+`ModalBottomSheet(` 调用点上都会出现。这一轮把它收成一个组件，先迁阅读器自己的两处。
+顺手补一个观察：**阅读器工具面板在电视上根本没有入口**，也就是说那处迁移属于结构性收口，
+不改变当前可达的电视路径。
+
+### 现象
+
+- 自动滚动面板在电视上已经从标题行开始（第六十八轮），但这段 `dragHandle = if (isTv) … else { BottomSheetDefaults.DragHandle() }`
+  只服务了一处调用；下一个人再写 `ModalBottomSheet` 时还得重新踩一遍。
+- 阅读器底栏在电视上只有 `Previous chapter` / `Next chapter` 两个带无障碍描述的按钮，
+  没有"工具/TOOLS"这一格；`ReaderControlDestination.TOOLS` 只在工具面板自己的 onDismiss 里被发出，
+  所以 `state.toolsVisible` 在电视路径上恒为 false。
+
+### 改法
+
+新增 `app/.../core/ui/compose/TvModalBottomSheet.kt`：
+
+```kotlin
+@Composable
+fun TvModalBottomSheet(
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    sheetState: SheetState = rememberModalBottomSheetState(),
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        modifier = modifier,
+        sheetState = sheetState,
+        dragHandle = if (LocalUiPresentationConfig.current.isTv) {
+            { Box(Modifier.fillMaxWidth().height(12.dp)) }
+        } else {
+            { BottomSheetDefaults.DragHandle() }
+        },
+        content = content,
+    )
+}
+```
+
+迁移：`ComposeReaderActivityScaffold` 里的两处 `ModalBottomSheet(`（自动滚动面板、工具面板）改成
+`TvModalBottomSheet`，上一轮内联的 `if (isTv)` 删除，`ModalBottomSheet`/`BottomSheetDefaults` 的 import 一并清掉。
+
+### 设备验证（emulator-5554）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 改后重装、进阅读器、`⋮` → RIGHT×4 → CENTER | `ea1.xml` | 可聚焦节点与第六十八轮改后完全同构：面板顶部的滚动容器 + `×` + 两个开关 + `SeekBar` + 第三个开关；**没有** 96×96 的把手节点 |
+| 阅读器底栏 dump | `eb1.xml` | 底栏只有 `Previous chapter` `[628,1006][676,1054]` 与 `Next chapter` `[1244,1006][1292,1054]` 带描述，无工具入口 |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（3m 6s，23 executed）。
+
+### 遗留
+
+1. 还有 27 个 `ModalBottomSheet(` 调用点没迁。按是否电视可达排优先级：详情页 `DetailsSheets`
+   （两处）、列表页 `DisplayOptionsSheet`、空间切换 `MediaUniverseSheet`/`SpaceSwitcher`、
+   设置里的 `ExtensionInstallBehaviorSheet` 等都在电视路径上；迁移前要先给
+   `TvModalBottomSheet` 补 `containerColor`/`contentColor`/`shape`/`contentWindowInsets` 等透传参数，
+   现在它只覆盖"只传 onDismissRequest/sheetState"的简单调用。
+2. 工具面板（`ComposeReaderToolsSheet`）在电视上没有入口，属于产品层面的取舍：
+   它的内容（翻译、书籍信息等）大多已能从 `⋮` 或底栏到达。要不要给电视一个入口，另说。
