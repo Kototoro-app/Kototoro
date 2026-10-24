@@ -36,7 +36,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +61,7 @@ import java.util.Locale
 import kotlin.math.pow
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.ui.theme.OnlineFontLoader
 import org.skepsun.kototoro.reader.novel.NovelReaderFont
@@ -220,7 +220,7 @@ fun NovelExcerptSheet(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        TextButton(
+                        TvTextButton(
                             onClick = { currentPageIndex = (currentPageIndex - 1).coerceAtLeast(0) },
                             enabled = currentPageIndex > 0,
                         ) {
@@ -230,7 +230,7 @@ fun NovelExcerptSheet(
                             text = "${currentPageIndex + 1} / $pageCount",
                             style = MaterialTheme.typography.labelMedium,
                         )
-                        TextButton(
+                        TvTextButton(
                             onClick = { currentPageIndex = (currentPageIndex + 1).coerceAtMost(pageCount - 1) },
                             enabled = currentPageIndex < pageCount - 1,
                         ) {
@@ -278,7 +278,7 @@ fun NovelExcerptSheet(
                 ) {
                     Text(stringResource(R.string.novel_excerpt_save_to_gallery))
                 }
-                TextButton(
+                TvTextButton(
                     onClick = {
                         if (onShare != null) {
                             onShare(activeData, activeConfig)

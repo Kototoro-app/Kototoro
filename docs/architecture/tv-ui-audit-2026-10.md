@@ -5070,3 +5070,69 @@ if (isTvPresentation) {
    不给 55 处 `AlertDialog` 统一包一层，剩下阅读器/播放器/备份等宿主逐一验。
 5. **32 个文件里真正上机点开验证的只有 2 个对话框**（`Appearance mode`、`Clear history`），其余 84 处
    是编译期 + 代码同构验证（同一行形态的批量替换）。
+
+## 第八十三轮：把剩下的"有焦点没轮廓"按钮扫干净，半屏面板的拖柄不再抢停（2026-10-25）
+
+### 症状
+
+第八十二轮把**对话框里**的动作按钮（86 处）换成了带环的 `TvTextButton`，留下了两条尾巴，本轮收第一条：
+
+| 统计（本轮之前） | 数量 |
+| --- | --- |
+| `TextButton(` 调用点总计 | 202 处 |
+| 其中**自己已经**带 `.tvFocusable(...)` | 24 处（第七十六～八十一轮手补的） |
+| 真·裸按钮，没有环 | **92 处 / 46 个文件** |
+
+这 92 处不是边角：`Explore` 右上角的"Extension management"、设置各页底部的文本动作、搜索筛选面板的
+"重置/应用"、迁移向导的"选择可见/清除可见"、认证页的按钮、笔记与批注面板里的动作——全是"按下 CENTER
+会做事，但屏幕上完全看不出焦点在哪"。现象与第八十二轮同一个：M3 `TextButton` 的焦点提示只有 stateLayer
+泛光，电视上看不出几何轮廓。
+
+第二条尾巴在**半屏面板**上。`ModalBottomSheet` 的 Material 拖柄本身是焦点路径上的一站，遥控器停在这个
+灰色小横杠上按 CENTER 什么都不会发生（拖拽对手柄来说是触屏动作）。全 app 15 处 `ModalBottomSheet`：
+
+- 12 处显式传了 `dragHandle = null`（或者走的是早前抽出来的 `TvModalBottomSheet`），电视上没有这一站；
+- **3 处漏了**——都在 `ComposeNovelMarkingsSheet.kt`（小说批注面板 :98、摘录 :588、:684），走默认拖柄。
+
+### 改动
+
+**92 处裸 `TextButton` → `TvTextButton`**（46 个文件）。迁移脚本按"调用的括号内是否已经有
+`.tvFocusable(`"判断，所以第七十六轮以来手补过的 24 处**一个都没动**（它们已经在画环，重复包一层只会
+得到两道环）。每次替换同时清理 `material3.TextButton` 的无用 import、按字母序插入
+`core.ui.adaptive.TvTextButton`；用 `material3.*` 通配 import 的文件（`ReorderDialog.kt`）保留通配。
+
+**`TvModalBottomSheet` 补齐透传参数**（`core/ui/compose/TvModalBottomSheet.kt`）：原来是
+`onDismissRequest / modifier / sheetState / content` 四个参数，只能接最简单的面板；小说批注那三个面板
+还要 `shape`、`containerColor`、`contentColor`、`tonalElevation`、`scrimColor`，于是把这五个按 M3 的
+默认值补齐再透传下去。三个面板改成 `TvModalBottomSheet(...)`，**只有拖柄**在电视上被换成 12dp 空白
+（非电视仍是 `BottomSheetDefaults.DragHandle()`），其余外观一个像素都没变。
+
+至此 `TextButton` 的账：202 处 = 178 处 `TvTextButton`（86 对话框 + 92 其它）+ 24 处自带
+`.tvFocusable(...)` 的 `TextButton`。**没有一个裸按钮了**。
+
+### 设备验证（`kototoro_tv_api36`，1920×1080@320）
+
+| 步骤 | 证据 | 结果 |
+| --- | --- | --- |
+| Explore 页，从导航栏按 RIGHT | `r83-8.png` | 焦点落到"Extension management"，出现**蓝色圆角环**（本轮迁移的 `TvTextButton`） |
+| 详情页 DOWN ×3 | `r83-15.png` | `Chapter 02` 行环正常（回归检查） |
+| 详情页 CENTER 进阅读器 | `r83-16.png`、`mCurrentFocus=…ReaderActivity` | 第 2 章连续模式正常渲染（回归检查） |
+| Home / History / Explore / 详情 首屏 | `r83-12` / `r83-2` / `r83-5` / `r83-13` | 布局无回归，按钮文字与位置不变 |
+| Display options 面板（`dragHandle = null` 的老面板） | `r83-4.png` | 面板顶部没有拖柄，焦点直接落在 Grid size 滑条上（与拖柄无关的老行为） |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（两轮增量，1m45s）。本轮没有新增单测——改动是"同一行
+形态的批量替换 + 一个参数补齐"，验证手段是代码盘点（202 = 178 + 24，裸按钮 0）与设备抽查。
+
+### 遗留
+
+1. **小说批注/摘录这三个面板的拖柄改动没上机**：库里没有带批注的小说，走不到那个面板；改动是
+   把调用换成早前已验证的 `TvModalBottomSheet`（同参数透传），静态核查 15 处面板已无默认拖柄。
+2. **对话框里手拼的 `RadioButton + Row` 选择行仍然没环**（第八十二轮遗留第 3 条）：`Clear history`
+   那种 4 行选项，遥控器要走 5 步才够到按钮、中间 4 步屏幕纹丝不动。
+3. **`AlertDialog` 的返回键行为按宿主 Activity 不同**（第八十二轮遗留第 4 条）：`MainActivity` 正常，
+   `StatsActivity`（第八十一轮）与共享 `SettingsAlertDialog`（第八十二轮）靠显式 `BackHandler`，
+   阅读器/播放器/备份等宿主仍未逐一验。
+4. **带触屏/鼠标的设备上，对话框打开后第一下按键前没有环**（第八十二轮遗留第 2 条）：触摸模式下
+   `requestFocus` 被丢弃，遥控器本身不受影响。
+5. **92 处里真正上机点开验证的只有 1 处**（Explore 的"Extension management"）；其余是"同一行形态
+   批量替换 + 编译期验证"。同类形态在不同容器（面板底栏、工具条、空态）里视觉一致，但没有逐屏截图。

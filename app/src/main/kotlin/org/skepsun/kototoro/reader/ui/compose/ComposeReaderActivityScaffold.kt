@@ -56,7 +56,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoreVert
@@ -116,6 +115,7 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_BOOKMARKS
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_PAGES
@@ -1754,7 +1754,7 @@ private fun ReaderMessageHost(
                     modifier = Modifier.padding(vertical = if (isTvPresentation) 14.dp else 10.dp),
                 )
                 displayedMessage?.actionLabel?.let { label ->
-                    TextButton(onClick = onAction) { Text(label) }
+                    TvTextButton(onClick = onAction) { Text(label) }
                 }
             }
         }

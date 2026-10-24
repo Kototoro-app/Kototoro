@@ -21,7 +21,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +36,7 @@ import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.chaptersCount
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.migration.ui.rememberCoverRequest
@@ -89,7 +89,7 @@ fun DuplicateFavouriteSheet(
                 }
                 Button(onClick = onAddAnyway, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.duplicate_add_anyway)) }
             }
-            TextButton(
+            TvTextButton(
                 onClick = {
                     viewModel.disableCheck()
                     onAddAnyway()

@@ -35,7 +35,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -747,7 +746,7 @@ private fun FilterSheetActions(
                 Text(text = LocalContext.current.getString(R.string.reset_filter))
             }
             if (!isEmbedded) {
-                TextButton(onClick = onDismiss) {
+                TvTextButton(onClick = onDismiss) {
                     Text(text = LocalContext.current.getString(android.R.string.ok))
                 }
             }

@@ -28,6 +28,7 @@ import androidx.paging.compose.LazyPagingItems
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
 import androidx.compose.material3.Surface
 import androidx.compose.material3.DropdownMenuItem
@@ -36,7 +37,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -859,7 +859,7 @@ private fun ListHeaderItem(
             )
         }
         if (item.buttonTextRes != 0) {
-            TextButton(onClick = {}) {
+            TvTextButton(onClick = {}) {
                 Text(stringResource(item.buttonTextRes))
             }
         }
@@ -1310,7 +1310,7 @@ private fun ErrorStateCard(
             }
         }
         if (item.secondaryButtonText != 0) {
-            TextButton(onClick = { onSecondaryAction(item.exception) }) {
+            TvTextButton(onClick = { onSecondaryAction(item.exception) }) {
                 Text(stringResource(item.secondaryButtonText))
             }
         }

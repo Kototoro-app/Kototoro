@@ -14,7 +14,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -24,6 +23,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.discover.ui.compose.DiscoverScreen
 import org.skepsun.kototoro.list.ui.compose.ContentCardUiPrefs
 import org.skepsun.kototoro.list.ui.compose.rememberContentCardUiPrefs
@@ -134,7 +134,7 @@ private fun DiscoverCategoryCalendarBar(
             ) {
                 Text(dateText)
             }
-            TextButton(onClick = onTodayClick) {
+            TvTextButton(onClick = onTodayClick) {
                 Text(stringResource(R.string.today))
             }
         }

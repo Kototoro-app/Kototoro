@@ -34,7 +34,6 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -239,7 +238,7 @@ fun TrackingLocalSearchSheet(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error,
                             )
-                            TextButton(onClick = { onSearch(currentQuery) }) {
+                            TvTextButton(onClick = { onSearch(currentQuery) }) {
                                 Text(stringResource(R.string.retry))
                             }
                         }

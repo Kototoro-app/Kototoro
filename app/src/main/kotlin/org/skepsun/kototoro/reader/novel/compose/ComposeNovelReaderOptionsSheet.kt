@@ -16,7 +16,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvVerticalEdgeGuard
 import org.skepsun.kototoro.reader.novel.NovelPageTurnAnimation
@@ -459,10 +459,10 @@ private fun NovelResetRow(onReset: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(onClick = { confirming = false }) {
+                TvTextButton(onClick = { confirming = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
-                TextButton(onClick = { confirming = false; onReset() }) {
+                TvTextButton(onClick = { confirming = false; onReset() }) {
                     Text(stringResource(R.string.reset))
                 }
             }

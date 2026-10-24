@@ -15,7 +15,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -96,7 +95,7 @@ internal fun ComposeTranslationTaskPanelContent(
             horizontalArrangement = Arrangement.End,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            TextButton(onClick = viewModel::retranslateFailedInCurrentChapter) {
+            TvTextButton(onClick = viewModel::retranslateFailedInCurrentChapter) {
                 Text(stringResource(R.string.reader_translation_retry_failed_pages))
             }
         }

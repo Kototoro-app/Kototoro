@@ -42,7 +42,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -65,6 +64,7 @@ import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview
 import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
@@ -260,7 +260,7 @@ fun BookNotesDetailScreen(
                     )
 
                     Box {
-                        TextButton(onClick = { filterMenuExpanded = true }) {
+                        TvTextButton(onClick = { filterMenuExpanded = true }) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_filter_menu),
                                 contentDescription = null,

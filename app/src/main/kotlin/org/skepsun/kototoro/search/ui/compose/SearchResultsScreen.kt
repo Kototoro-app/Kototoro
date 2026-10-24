@@ -36,7 +36,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -82,6 +81,7 @@ import org.skepsun.kototoro.core.model.UnknownContentSource
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
@@ -594,7 +594,7 @@ private fun SearchResultsProgress(
                 }
             }
             if (state.failedSources > 0) {
-                TextButton(onClick = onRetryFailed, enabled = !state.isSearching) {
+                TvTextButton(onClick = onRetryFailed, enabled = !state.isSearching) {
                     Text(stringResource(R.string.search_retry_failed_sources))
                 }
             }
@@ -946,7 +946,7 @@ private fun SearchResultsSection(
                 if (isRetrying) {
                     CircularProgressIndicator(modifier = Modifier.padding(12.dp).size(24.dp))
                 } else {
-                    TextButton(onClick = onRetryClick, enabled = !isSearching) {
+                    TvTextButton(onClick = onRetryClick, enabled = !isSearching) {
                         Text(stringResource(R.string.retry))
                     }
                 }
@@ -1013,7 +1013,7 @@ private fun SearchSupplementaryItem(
                             Text(stringResource(item.actionStringRes))
                         }
                     }
-                    TextButton(onClick = onAdjustFilters) {
+                    TvTextButton(onClick = onAdjustFilters) {
                         Text(stringResource(R.string.filter))
                     }
                 }

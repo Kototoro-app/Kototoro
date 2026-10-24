@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.explore.ui.compose
 
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
@@ -55,6 +54,7 @@ import org.skepsun.kototoro.core.model.getLocale
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.ContentSourceResolvedIcon
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
@@ -229,7 +229,7 @@ private fun SourcesQuickAccessSection(
                     )
                 }
                 if (hasMoreSources) {
-                    TextButton(
+                    TvTextButton(
                         onClick = { isExpanded = !isExpanded },
                         modifier = Modifier.align(Alignment.CenterHorizontally),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
@@ -386,7 +386,7 @@ internal fun LazyListScope.sourceQuickAccessItems(
                     .background(MaterialTheme.colorScheme.background),
                 contentAlignment = Alignment.Center,
             ) {
-                TextButton(
+                TvTextButton(
                     onClick = onToggleExpanded,
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                 ) {
@@ -442,7 +442,7 @@ private fun SourceQuickAccessHeader(
                     onRepositorySelected = onTvBoxRepositorySelected,
                 )
             }
-            TextButton(
+            TvTextButton(
                 onClick = onManageClick,
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
             ) {
@@ -463,7 +463,7 @@ private fun TVBoxRepositorySelector(
 ) {
     var expanded by rememberSaveable(selection.activeId) { mutableStateOf(false) }
     Box {
-        TextButton(
+        TvTextButton(
             onClick = { expanded = true },
             modifier = Modifier.widthIn(max = 200.dp),
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),

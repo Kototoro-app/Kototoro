@@ -17,7 +17,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +39,7 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.ui.config.ScrobblerConfigActivity
@@ -80,7 +80,7 @@ class MangaBakaAuthActivity : BaseComposeActivity() {
                     }) { Text(stringResource(R.string.mangabaka_browser_login)) }
                 }
                 Text(stringResource(R.string.mangabaka_token_hint))
-                TextButton(enabled = !loading, onClick = {
+                TvTextButton(enabled = !loading, onClick = {
                     uriHandler.openUri("https://mangabaka.org/my/settings/api-and-apps")
                 }) { Text(stringResource(R.string.mangabaka_create_token)) }
                 OutlinedTextField(
@@ -97,7 +97,7 @@ class MangaBakaAuthActivity : BaseComposeActivity() {
                     token = ""
                 }) { Text(stringResource(R.string._continue)) }
                 if (loading) CircularProgressIndicator()
-                TextButton(onClick = ::finish) { Text(stringResource(android.R.string.cancel)) }
+                TvTextButton(onClick = ::finish) { Text(stringResource(android.R.string.cancel)) }
             }
         }
     }

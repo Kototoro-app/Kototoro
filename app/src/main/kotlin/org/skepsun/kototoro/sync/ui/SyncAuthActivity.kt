@@ -17,7 +17,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -81,7 +80,7 @@ class SyncAuthActivity : BaseComposeActivity() {
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
                     )
-                    TextButton(onClick = { showHostDialog = true }) { Text(getString(R.string.settings)) }
+                    TvTextButton(onClick = { showHostDialog = true }) { Text(getString(R.string.settings)) }
                 } else {
                     OutlinedTextField(
                         value = password,
@@ -96,13 +95,13 @@ class SyncAuthActivity : BaseComposeActivity() {
                 if (loading) CircularProgressIndicator()
                 Spacer(Modifier.weight(1f))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = {
+                    TvTextButton(onClick = {
                         if (page == PAGE_EMAIL) {
                             setResult(RESULT_CANCELED)
                             finish()
                         } else page = PAGE_EMAIL
                     }) { Text(getString(if (page == PAGE_EMAIL) android.R.string.cancel else R.string.back)) }
-                    TextButton(
+                    TvTextButton(
                         enabled = !loading && if (page == PAGE_EMAIL) regexEmail.matches(email.trim()) else password.length >= PASSWORD_MIN_LENGTH,
                         onClick = {
                             if (page == PAGE_EMAIL) page = PAGE_PASSWORD

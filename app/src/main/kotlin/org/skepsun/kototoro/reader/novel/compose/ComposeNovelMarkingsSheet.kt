@@ -32,12 +32,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -57,8 +55,10 @@ import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.bookmarks.domain.Bookmark
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvTakeInitialFocus
+import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
 import org.skepsun.kototoro.reader.novel.novelReaderPalette
@@ -95,7 +95,7 @@ internal fun ComposeNovelMarkingsSheet(
     val sheetContentColor = Color(palette.textColor)
     // A remote cannot drag a half-opened sheet up, so on TV it starts where all of it is on screen.
     val isTv = LocalUiPresentationConfig.current.isTv
-    ModalBottomSheet(
+    TvModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = isTv),
         modifier = Modifier.fillMaxHeight(0.92f),
@@ -585,7 +585,7 @@ internal fun NovelNoteEditorSheet(
     var noteDraft by remember { mutableStateOf(initialNote) }
     var quoteExpanded by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(
+    TvModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = LocalUiPresentationConfig.current.isTv),
         modifier = Modifier.fillMaxHeight(0.85f),
@@ -609,7 +609,7 @@ internal fun NovelNoteEditorSheet(
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = onDismiss) {
+                    TvTextButton(onClick = onDismiss) {
                         Text(stringResource(R.string.cancel))
                     }
                     Button(
@@ -681,7 +681,7 @@ internal fun NovelNoteDetailSheet(
     onJumpToText: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    ModalBottomSheet(
+    TvModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = LocalUiPresentationConfig.current.isTv),
         modifier = Modifier.fillMaxHeight(0.75f),
@@ -790,7 +790,7 @@ internal fun NovelNoteDetailSheet(
                 }
             }
 
-            TextButton(
+            TvTextButton(
                 onClick = {
                     onDismiss()
                     onDelete()

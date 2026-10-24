@@ -11,7 +11,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -22,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 
 /** Floating, dismissible card telling the user some favourite sources look broken. */
 @Composable
@@ -45,7 +45,7 @@ fun SourceHealthBanner(
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(onClick = onOpen) { Text(stringResource(R.string.migration_title)) }
+                TvTextButton(onClick = onOpen) { Text(stringResource(R.string.migration_title)) }
                 IconButton(onClick = viewModel::dismiss) { Icon(Icons.Default.Close, contentDescription = null) }
             }
         }

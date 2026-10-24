@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.settings.sources.unified
 
-
 import android.util.Log
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -38,7 +37,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,6 +56,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
 import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionRepo
@@ -91,7 +90,7 @@ internal fun <T> UnifiedSelectionDialog(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 options.forEach { option ->
-                    TextButton(
+                    TvTextButton(
                         onClick = { onSelected(option) },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -871,7 +870,7 @@ internal fun UnifiedCombinedFilterDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End,
                         ) {
-                            TextButton(
+                            TvTextButton(
                                 onClick = onApplyPreferredLanguages,
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                             ) {

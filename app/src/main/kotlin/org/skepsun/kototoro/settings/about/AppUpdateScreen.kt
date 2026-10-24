@@ -43,7 +43,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -66,6 +65,7 @@ import org.skepsun.kototoro.core.github.AppUpdateSourceProbe
 import org.skepsun.kototoro.core.github.AppVersion
 import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeResult
 import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeState
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.widgets.SelectableTextView
 import org.skepsun.kototoro.core.util.FileSize
@@ -314,7 +314,7 @@ private fun UpdateStatusBanner(
                 modifier = Modifier.weight(1f),
             )
             if (onRetry != null) {
-                TextButton(onClick = onRetry) {
+                TvTextButton(onClick = onRetry) {
                     Text(
                         text = stringResource(R.string.retry),
                         color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
@@ -605,7 +605,7 @@ private fun MirrorSelector(
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                         }
-                        TextButton(
+                        TvTextButton(
                             onClick = onSelectFastestMirror,
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                             modifier = Modifier.height(28.dp),
@@ -783,7 +783,7 @@ private fun UpdateActionBar(
                 .height(72.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onCancel) {
+            TvTextButton(onClick = onCancel) {
                 Text(stringResource(android.R.string.cancel))
             }
             Spacer(modifier = Modifier.weight(1f))

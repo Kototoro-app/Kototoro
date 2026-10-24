@@ -19,11 +19,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.DropdownMenu
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -109,7 +109,7 @@ fun FavoritesFilterPanelContent(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = close) {
+            TvTextButton(onClick = close) {
                 Text(stringResource(R.string.done))
             }
         }
@@ -177,7 +177,7 @@ fun FavoritesFilterPanelContent(
                 .padding(top = 2.dp),
             contentAlignment = Alignment.Center,
         ) {
-            TextButton(onClick = onResetFilters) {
+            TvTextButton(onClick = onResetFilters) {
                 Text(stringResource(R.string.reset_filter))
             }
         }

@@ -25,7 +25,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
@@ -48,6 +47,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
@@ -184,7 +184,7 @@ fun ContentStatsDialog(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Spacer(modifier = Modifier.weight(1f))
-                        TextButton(onClick = onDismissRequest) {
+                        TvTextButton(onClick = onDismissRequest) {
                             Text(stringResource(android.R.string.cancel))
                         }
                         Button(onClick = onOpenDetails) {

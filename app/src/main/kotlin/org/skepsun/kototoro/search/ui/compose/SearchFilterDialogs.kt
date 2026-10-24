@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.search.ui.compose
 
-
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,6 +25,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.DropdownMenu
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
 import androidx.compose.material3.Icon
@@ -36,7 +36,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -109,10 +108,10 @@ internal fun SaveFilterNameDialog(
             }
         },
         actions = {
-            TextButton(onClick = onDismiss) {
+            TvTextButton(onClick = onDismiss) {
                 Text(text = stringResource(android.R.string.cancel))
             }
-            TextButton(
+            TvTextButton(
                 enabled = !hasError,
                 onClick = { onConfirm(trimmed) },
             ) {
@@ -150,13 +149,13 @@ internal fun TextInputTagDialog(
             )
         },
         actions = {
-            TextButton(onClick = onClear) {
+            TvTextButton(onClick = onClear) {
                 Text(text = stringResource(R.string.clear))
             }
-            TextButton(onClick = onDismissRequest) {
+            TvTextButton(onClick = onDismissRequest) {
                 Text(text = stringResource(android.R.string.cancel))
             }
-            TextButton(onClick = { onConfirm(value) }) {
+            TvTextButton(onClick = { onConfirm(value) }) {
                 Text(text = stringResource(android.R.string.ok))
             }
         },

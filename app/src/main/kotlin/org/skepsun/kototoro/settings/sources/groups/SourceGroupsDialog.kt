@@ -19,7 +19,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
 import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
@@ -176,7 +176,7 @@ fun SourceGroupsDialog(
 								) {
 									Text(text = stringResource(R.string.source_groups_export), maxLines = 1)
 								}
-								TextButton(
+								TvTextButton(
 									onClick = { viewModel.delete(group.id) },
 									enabled = !applyState.running,
 									colors = ButtonDefaults.textButtonColors(

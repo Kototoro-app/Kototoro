@@ -16,7 +16,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.getValue
@@ -134,13 +133,13 @@ class DiscoverCategoryActivity : BaseComposeActivity(), FilterCoordinator.Owner 
                 DatePickerDialog(
                     onDismissRequest = { showDatePicker = false },
                     confirmButton = {
-                        TextButton(onClick = {
+                        TvTextButton(onClick = {
                             pickerState.selectedDateMillis?.let(viewModel::applyDateFilter)
                             showDatePicker = false
                         }) { Text(getString(android.R.string.ok)) }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showDatePicker = false }) { Text(getString(android.R.string.cancel)) }
+                        TvTextButton(onClick = { showDatePicker = false }) { Text(getString(android.R.string.cancel)) }
                     },
                 ) { DatePicker(state = pickerState) }
             }

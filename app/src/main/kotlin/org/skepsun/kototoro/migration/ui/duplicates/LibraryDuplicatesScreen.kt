@@ -27,7 +27,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -183,7 +182,7 @@ private fun GroupCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = onIgnore, enabled = enabled && !ui.isMerging) {
+                TvTextButton(onClick = onIgnore, enabled = enabled && !ui.isMerging) {
                     Text(stringResource(R.string.library_duplicates_not_duplicates))
                 }
                 Spacer(Modifier.width(4.dp))

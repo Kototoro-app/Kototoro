@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.local.ui.compose
 
 import androidx.compose.foundation.layout.Box
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -294,7 +295,7 @@ private fun FeaturedTask(
             }
         }
         if (item.canPause || item.canResume) {
-            TextButton(onClick = {
+            TvTextButton(onClick = {
                 if (item.canPause) onPause(item) else onResume(item)
             }) {
                 if (item.canPause) {

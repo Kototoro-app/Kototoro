@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceType
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.FilterPanelGroup
@@ -219,10 +220,10 @@ fun SearchFilterSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(onClick = { draft = SearchFilters() }, modifier = Modifier.weight(1f)) {
+                    TvTextButton(onClick = { draft = SearchFilters() }, modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.reset_filter))
                     }
-                    TextButton(onClick = onDismissRequest) {
+                    TvTextButton(onClick = onDismissRequest) {
                         Text(stringResource(android.R.string.cancel))
                     }
                     Button(onClick = {

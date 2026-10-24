@@ -19,7 +19,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -94,7 +93,7 @@ class ColorFilterConfigActivity : BaseComposeActivity() {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
             ) {
-                TextButton(onClick = onClose) { Text(stringResource(R.string.close)) }
+                TvTextButton(onClick = onClose) { Text(stringResource(R.string.close)) }
                 Text(stringResource(R.string.color_correction), style = MaterialTheme.typography.titleLarge)
                 Button(onClick = onDone, enabled = !isLoading) { Text(stringResource(R.string.done)) }
             }

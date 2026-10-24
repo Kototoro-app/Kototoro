@@ -35,7 +35,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -124,7 +123,7 @@ fun MigrationListScreen(
                                     )
                                 }
                             }
-                            TextButton(
+                            TvTextButton(
                                 onClick = { sheetItemId = item.origin.id },
                                 modifier = Modifier.align(Alignment.End).padding(end = 16.dp),
                             ) {

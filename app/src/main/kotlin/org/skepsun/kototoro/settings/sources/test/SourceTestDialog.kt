@@ -17,7 +17,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
 
@@ -58,7 +58,7 @@ internal fun SourceTestDialog(
 		it.overall == StepStatus.FAIL && it.sourceKey !in progress.disabledKeys
 	}
 	val closeButton: @Composable () -> Unit = {
-		TextButton(
+		TvTextButton(
 			onClick = onDismiss,
 			enabled = progress.finished && failedCount > 0,
 			modifier = Modifier.alpha(if (progress.finished && failedCount == 0) 0f else 1f),
@@ -74,13 +74,13 @@ internal fun SourceTestDialog(
 		},
 		confirmButton = {
 			when {
-				!progress.finished -> TextButton(onClick = viewModel::cancel) {
+				!progress.finished -> TvTextButton(onClick = viewModel::cancel) {
 					Text(stringResource(R.string.source_test_cancel))
 				}
-				failedCount > 0 -> TextButton(onClick = viewModel::disableFailed) {
+				failedCount > 0 -> TvTextButton(onClick = viewModel::disableFailed) {
 					Text(stringResource(R.string.source_test_disable_failed))
 				}
-				else -> TextButton(onClick = onDismiss) {
+				else -> TvTextButton(onClick = onDismiss) {
 					Text(stringResource(R.string.source_test_close))
 				}
 			}
@@ -145,7 +145,7 @@ internal fun SourceTestDialog(
 						HorizontalDivider()
 					}
 				}
-				TextButton(
+				TvTextButton(
 					onClick = {
 						val intent = Intent(Intent.ACTION_SEND).apply {
 							type = "text/plain"

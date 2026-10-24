@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.main.ui.compose
 
-
 import androidx.compose.animation.AnimatedVisibility
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.MaterialTheme
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.glass.resolveFallbackShadowElevation
@@ -43,7 +43,6 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
@@ -332,7 +331,7 @@ internal fun FeedDisplayOptionsContent(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                TextButton(
+                TvTextButton(
                     onClick = onFeedRefresh,
                     modifier = Modifier.align(Alignment.End),
                 ) {

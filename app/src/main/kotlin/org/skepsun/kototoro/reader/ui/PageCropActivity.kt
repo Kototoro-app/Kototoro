@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +41,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.notes.domain.BookNotesRepository
 import org.skepsun.kototoro.core.ui.adaptive.TvFilterChip
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
@@ -113,13 +113,13 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
                         .statusBarsPadding()
                         .padding(horizontal = 8.dp),
                 ) {
-                    TextButton(onClick = ::cancelCrop) { Text(stringResource(android.R.string.cancel)) }
+                    TvTextButton(onClick = ::cancelCrop) { Text(stringResource(android.R.string.cancel)) }
                     Text(
                         text = stringResource(if (isAnnotationMode) R.string.crop_and_annotate else R.string.crop_pages),
                         color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.titleMedium,
                     )
-                    TextButton(onClick = ::saveCrop, enabled = isImageLoaded && !isCropping) {
+                    TvTextButton(onClick = ::saveCrop, enabled = isImageLoaded && !isCropping) {
                         Text(stringResource(if (isAnnotationMode) R.string.save_note else R.string.save))
                     }
                 }

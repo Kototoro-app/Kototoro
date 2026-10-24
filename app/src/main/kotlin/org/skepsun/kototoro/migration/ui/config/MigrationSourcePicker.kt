@@ -34,7 +34,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,6 +59,7 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.jsonsource.SourceTypeIdentifier
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.FastScrollTouchWidth
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
@@ -113,7 +113,7 @@ internal fun MigrationSourcePicker(
                         Text(stringResource(R.string.migration_selected_of, selected.size, entries.size),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     }
-                    TextButton(onClick = onDone) { Text(stringResource(android.R.string.ok)) }
+                    TvTextButton(onClick = onDone) { Text(stringResource(android.R.string.ok)) }
                 }
                 Text(stringResource(R.string.migration_sources_picker_hint),
                     Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
@@ -137,15 +137,18 @@ internal fun MigrationSourcePicker(
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { expanded = !expanded }) {
+                    TvTextButton(onClick = { expanded = !expanded }) {
                         val count = if (filters.activeCount > 0) " (${filters.activeCount})" else ""
                         Text(stringResource(R.string.more_filters) + count)
                     }
                     Spacer(Modifier.weight(1f))
-                    TextButton(enabled = visible.isNotEmpty(), onClick = { onPreset(SourcePreset.ALL, visibleNames) }) {
+                    TvTextButton(
+                        enabled = visible.isNotEmpty(),
+                        onClick = { onPreset(SourcePreset.ALL, visibleNames) },
+                    ) {
                         Text(stringResource(R.string.migration_select_visible))
                     }
-                    TextButton(enabled = visible.any { it.source.name in selected },
+                    TvTextButton(enabled = visible.any { it.source.name in selected },
                         onClick = { onPreset(SourcePreset.NONE, visibleNames) }) {
                         Text(stringResource(R.string.migration_clear_visible))
                     }
@@ -175,7 +178,7 @@ internal fun MigrationSourcePicker(
                     modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (filters.query.isNotEmpty() || filters.activeCount > 0) {
-                    TextButton(onClick = { filters = SourcePickerFilters(alphabetical = filters.alphabetical) }) {
+                    TvTextButton(onClick = { filters = SourcePickerFilters(alphabetical = filters.alphabetical) }) {
                         Text(stringResource(R.string.reset_filter))
                     }
                 }
@@ -188,7 +191,7 @@ internal fun MigrationSourcePicker(
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     initials.forEach { (initial, index) ->
-                        TextButton(onClick = { scope.launch { listState.scrollToItem(index) } },
+                        TvTextButton(onClick = { scope.launch { listState.scrollToItem(index) } },
                             contentPadding = PaddingValues(horizontal = 10.dp),
                             modifier = Modifier.widthIn(min = 36.dp)) {
                             Text(initial, fontWeight = FontWeight.SemiBold)
