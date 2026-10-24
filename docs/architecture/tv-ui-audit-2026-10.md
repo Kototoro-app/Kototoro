@@ -3604,3 +3604,52 @@ UP/DOWN 被 `tvTextInputFocusEscape` 吃掉（上方没有可聚焦节点，`mov
    TV 上同样没有轮廓，而且整条选择栏都是这样——下一步该给这批按钮统一加 `tvFocusable`。
 3. 来源标签下拉（`useRootOverlay = false`）在 TV 上的回环还没实测。
 4. 行尾控件 UP/DOWN、设置非根子页宽度两条仍在。
+
+## 第六十轮：两条选择栏都是图标，遥控器看不见自己在哪（2026-10-24）
+
+### 原因
+
+第五十九轮结尾留下的第二条：`ChapterSelectionActionButton` 是裸 `IconButton`，TV 上能停住但画不出轮廓。
+顺着这条线把详情页**另一条**选择栏也查了一遍——分页缩略图网格底部那条浮动的
+（`PagesScreen.kt:338`，`selectedItemIds` 非空时从底部滑入）。它问题更多：
+
+1. 同样两个裸 `IconButton`，没有轮廓；
+2. 底色是 `MaterialTheme.colorScheme.inverseSurface`——Material3 在手机上用这个给 Snackbar 做反差，
+   在电视的深色玻璃界面里却渲染成一整块**刺眼的白药丸**（`bu2.png`），看着像渲染错误；
+3. 无障碍描述写死成英文 `"Clear"` / `"Save Page"`，没走 `stringResource`。
+
+### 改法
+
+`DetailsDock.kt`：`ChapterSelectionTopBar` 的关闭 `IconButton` 与 `ChapterSelectionActionButton`
+（下载 / 翻译 / 取消翻译 / 删除 / 全选 / ⋮ 共用这一个私有组件，改一处覆盖整条栏）各挂
+`tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)`。
+
+`PagesScreen.kt`：两个 `IconButton` 同样挂环；底色按端切换——`LocalUiPresentationConfig.current.isTv` 时用
+`surfaceContainerHigh` / `onSurface`，其余平台保持 `inverseSurface` / `inverseOnSurface`；
+`contentDescription` 换成 `R.string.clear` 与 `R.string.save_page`。
+
+### 设备证据（emulator-5554，1920×1080，构建见下）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 重启后回到详情页 | `bx2.png` | 环在 `Continue` 上，界面正常 |
+| 长按分页缩略图（触摸） | `by1.png` | 选择栏滑入：**深灰底**（改前同一状态是 `bu2.png` 的纯白药丸） |
+| 缩略图网格上按 DOWN | `cc1.png`，dump `F [1752,888][1848,984]` | 环落到"保存页面"按钮，蓝色圆角框 |
+| 再按 LEFT | `cc2.png`，dump `F [1024,888][1120,984]` | 环落到"清除"（✕），两块按钮是各自独立的停点 |
+| 切到章节列表页签，长按章节行 | `ce1.png` | 顶栏换成选择栏：`✕ 1 … 文A 🗑 ⋮` |
+| 详情页顶栏一路 RIGHT | dump `F [992,50][1096,154]` → `F [1612,54][1696,150]` | 越过 `⋮` 进入 dock 选择栏的 ✕，再 RIGHT 到"翻译" |
+| 停住看轮廓 | `ch1.png` / `ch2.png` / `ch3.png` | 翻译、删除、✕ 三个按钮都画出圆角环 |
+
+改完清掉一个没人用的 `modifier` 参数后重新构建、重装复验：`ci3.png` 选择栏 ✕ 仍带环，dump
+`F [992,50][1096,154]`。
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（--offline --no-daemon），装的是 `app-x86_64-debug.apk`。
+
+### 遗留
+
+1. 选择栏滑入时底部还会弹一条 Material3 Snackbar（"Tip: select two chapters, then long-press a visible
+   chapter between them to fill the range."），在 TV 上同样是**亮白底**（`ce1.png` 底部）——
+   与本轮改的分页选择栏属同一类 `inverseSurface` 问题，下一步该给全应用的 Snackbar 一个电视配色。
+2. 评分芯片的菜单仍要追踪账号才能打开（第五十九轮遗留）。
+3. 来源标签下拉（`useRootOverlay = false`）在 TV 上的回环还没实测。
+4. 行尾控件 UP/DOWN、设置非根子页宽度、输入框内清除（×）只能触摸，三条仍在。
