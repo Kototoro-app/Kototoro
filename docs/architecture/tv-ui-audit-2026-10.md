@@ -3705,3 +3705,60 @@ daemon 会**无声消失**——日志里只有 `Gradle build daemon disappeared
 2. 评分芯片的菜单仍需追踪账号（第五十九轮遗留）。
 3. 来源标签下拉（`useRootOverlay = false`）的 TV 回环还没实测。
 4. 行尾控件 UP/DOWN、设置非根子页宽度、输入框内清除（×）只能触摸，三条仍在。
+
+## 第六十二轮：Snackbar 的白板（2026-10-24）
+
+### 原因
+
+第六十轮结尾留下的第一条：选择栏滑入时底部弹的提示是一条**亮白全宽横条**。
+
+Material3 的 `Snackbar` 默认用 `inverseSurface`——在手机上那是"与背景反色"的正确做法，在电视的深色玻璃
+底上就是一块发光的白板。应用里有 17 个 Compose 宿主都直接调 `SnackbarHost`，等于每处都继承了这个默认值。
+
+### 改法
+
+新建 `core/ui/compose/KototoroSnackbarHost.kt`：
+
+```kotlin
+@Composable
+fun KototoroSnackbarHost(hostState: SnackbarHostState, modifier: Modifier = Modifier)
+```
+
+非电视平台原样交给 `Snackbar(snackbarData = data)`；电视上用 `surfaceContainerHigh` 底、`onSurface` 文字、
+`primary` 动作色和 16dp 圆角，与选择栏药丸同一套色。
+
+把 17 处宿主换成它（`BaseComposeActivity`、`DetailsScreen` 两处、`NovelReaderActivity`、
+`VideoPlayerActivity`、`ScrobblingInfoSheetContent`、`SourcesCatalogScreen`、`SpaceSwitcherDelegate`
+和九个设置子页），顺带删掉各处已经用不上的 `androidx.compose.material3.SnackbarHost` import。
+
+### 设备证据（emulator-5554，1920×1080）
+
+| 步骤 | 截图 | 观察 |
+| --- | --- | --- |
+| 详情页 → 章节页签 → 长按章节行 | `cl1.png` → `cl2.png` | 选择栏换成顶栏（`✕ 1`、翻译、删除、`⋮`），底部弹出提示条 |
+
+**这条提示仍然是白底全宽**（`cl2.png` 底部）。顺着它查下去：它不是 Compose 的 Snackbar，而是
+`ChaptersScreenRoot.kt:163` 的
+
+```kotlin
+Snackbar.make(viewForSnackbar, R.string.chapter_range_selection_hint, Snackbar.LENGTH_LONG).show()
+```
+
+即 framework 的 View Snackbar，挂在 `LocalView.current` 上，从来不走 Compose 宿主——所以本轮换宿主对它无效。
+这也解释了它的形状：全宽、直角、没有任何圆角，和 Compose 的 Snackbar 不是同一种控件。
+
+结论：Compose 侧这轮只到「编译通过」这一步（`:app:compileDebugKotlin` 与 `:app:assembleDebug` 均
+BUILD SUCCESSFUL），**还没在设备上看到一条真正由 `KototoroSnackbarHost` 画出来的深色 snackbar**；
+这条提示要等下一轮把章节/缩略图两个 pane 根换成 Compose 宿主才会变色。
+
+### 遗留
+
+1. `Snackbar.make(view, …)` 一共 21 处（`ChaptersScreenRoot`、`PagesScreenRoot`、`DetailsActionHandler`、
+   `ReversibleActionObserver`、`SnackbarErrorObserver`、`DownloadStartedObserver`、`MainShellScene`、
+   `SettingsActivity`、浏览器/Image/授权页等）。它们在同一块电视屏幕上仍然是白条。正路是把
+   `ChaptersPagesTabsContent` 的 `viewForSnackbar: View` 参数换成 `SnackbarHostState`（它已经能拿到
+   `DetailsScreen` 的宿主），先改两个 pane 根，再逐组迁移。
+2. Compose 宿主的深色配色还缺一张设备截图，需要在迁移后补拍。
+3. 评分芯片的菜单仍需追踪账号（第五十九轮遗留）。
+4. 来源标签下拉（`useRootOverlay = false`）的 TV 回环还没实测。
+5. 行尾控件 UP/DOWN、设置非根子页宽度、输入框内清除（×）只能触摸，三条仍在。
