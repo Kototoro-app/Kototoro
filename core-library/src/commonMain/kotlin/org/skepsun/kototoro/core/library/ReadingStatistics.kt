@@ -133,3 +133,17 @@ data class LibraryReadingStats(
     val currentStreak: Int = 0,
     val sessionCount: Int = 0,
 )
+
+/**
+ * Android's `StatsContentSnapshot`: one work over its whole history, which is what the statistics screen opens when a
+ * work is picked. The day series is the last ninety days (the same window as the "all" period), so the sheet's chart
+ * draws the same shape Android's does instead of only the work's own active days.
+ */
+data class LibraryContentStats(
+    val kind: StatsContentKind = StatsContentKind.MANGA,
+    val totalDuration: Long = 0L,
+    val sessionCount: Int = 0,
+    val units: Int = 0,
+    val firstActivityAt: Long? = null,
+    val dailyActivity: List<ReadingDayStats> = emptyList(),
+)

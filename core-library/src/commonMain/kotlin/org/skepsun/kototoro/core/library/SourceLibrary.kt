@@ -583,6 +583,33 @@ class SourceLibrary(
         }
     }
 
+    /**
+     * Android's `StatsRepository.getContentSnapshot`: one work over the whole history, as its statistics sheet shows
+     * it. Picking a work on Android opens that sheet rather than its details, so the numbers and the day series here
+     * come from the same shared derivation the dashboard uses, just narrowed to a single work.
+     */
+    suspend fun contentReadingStats(contentId: Long, zone: TimeZone,
+        now: Long = clock()): LibraryContentStats = database.useReaderConnection { connection ->
+        connection.deferredTransaction {
+            val kind = StatsContentKind.fromType(database.getMangaDao().find(contentId)?.manga?.contentType)
+            val snapshot = deriveReadingStatistics(
+                database.getReadingRecordDao().findSessions(contentId),
+                database.getStatsDao().findAll(contentId),
+                mapOf(contentId to kind),
+                ReadingStatsWindow(ReadingStatsPeriod.ALL, now, zone),
+            )
+            val record = snapshot.works.singleOrNull()
+            LibraryContentStats(
+                kind = kind,
+                totalDuration = snapshot.totalDuration,
+                sessionCount = snapshot.sessionCount,
+                units = record?.units ?: 0,
+                firstActivityAt = record?.firstActivityAt,
+                dailyActivity = snapshot.dailyActivity,
+            )
+        }
+    }
+
     /** Android's "clear statistics": the session rows and the legacy rows both go, history stays. */
     suspend fun clearReadingStatistics() = database.useWriterConnection { connection ->
         connection.immediateTransaction {

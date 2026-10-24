@@ -7171,3 +7171,32 @@ Android 的统计页除了周期下拉还有一个 `StatsContentKind` 分段选�
   只筛小说 40s；筛视频为空）；`DesktopReadingStatsPageTest` 6 项（新增：四个 chip 用 Android 标签，点“小说”回报 NOVEL）；
   `stats` 探针增加真界面步骤：读一章 → 更多 → 阅读统计 → 周期切 DAY → 类型切“小说”得到空态 →
   切回“漫画”作品仍在 → 继续清空确认与返回。
+## 157. Windows 单作品统计弹窗（Android ContentStatsDialog 对齐）（2026-10-24）
+
+Android 的统计页点作品不是直接进详情，而是 `AppRouter.showStatisticSheet(manga)` 打开 `ContentStatsDialog`：
+作品标题、90 天每日时长柱状图、首次阅读时间、三块指标（总专注时长/会话数/页数或章节数或集数），
+底部「取消 / 详情」，只有「详情」才导航。Windows 之前点作品直接跳详情，本节点补齐这个中间层。
+
+- 读模型：`SourceLibrary.contentReadingStats(contentId, zone, now = clock())` 返回 `LibraryContentStats`
+  （kind、总时长、会话数、units、`firstActivityAt`、90 天 `dailyActivity`）。实现与 Android
+  `StatsRepository.getContentSnapshot` 同构：`ReadingStatsPeriod.ALL` 窗口 + 只含这一部作品的 `kinds` 映射，
+  交给共享 `deriveReadingStatistics`，所以日序列只含这部作品的时长、`units` 与首次阅读直接取派生出的作品记录。
+  作品没有统计时仍返回全零快照（kind 取 manga 行的 content type，缺行回落 MANGA），不像详情那样报错。
+- 界面：`DesktopContentStatsDialog`（标题 + Canvas 柱状图 + 首次阅读 + 三块指标 + 取消/详情），
+  柱状图照 Android `ContentStatsBarChart`：窗口装不下时按平均压缩柱子、虚线数值网格、圆角柱、粗基线，
+  颜色按内容类型（漫画 primary / 小说 tertiary / 视频 secondary），全零时显示 `empty_stats_text`。
+  指标标签复用 Android 的 `stats_total_time`/`stats_sessions`/`stats_unit_pages|chapters|episodes`，
+  首次阅读那行照 Android 只印一个相对时间（`feedDateLabel` 的桶与 Android `DateTimeAgo` 同构），不加前缀。
+- 状态与导航：`DesktopAppState.contentStats`（`DesktopContentStats(content, stats)`，null 表示关闭），
+  `showContentStats` 先立即可见再异步填数（Android 的 sheet 也是这样），`closeContentStats` 关闭；
+  进入/离开统计页（`showReadingStats`/`more`）都清空，弹窗永不属于别的页面。统计页作品行改为调用
+  `controller::showContentStats`，弹窗的「详情」先关弹窗再 `controller.details(content)`。
+- 标签：`content-stats`、`content-stats-chart`、`content-stats-first`、`content-stats-total`/`-sessions`/`-units`、
+  `content-stats-close`、`content-stats-details`。
+- 验证：`:desktop-runtime:test` 全绿（`DesktopReadingStatsTest` 8 项，新增：同一部作品两段阅读 + 另一部作品一段，
+  单作品快照 45s/2 session/1 页/首次阅读 = 第一段起点/90 天序列只含它的时长；无统计的作品返回全零快照）；
+  `:desktop-app:test` 212 项 1 失败 4 跳过（唯一失败仍是外来 TV 提交的 `SharedChapterDirectoryTest`，
+  已知非本工作流）；新增 `DesktopContentStatsDialogTest` 2 项（数值/标签/首次阅读行 + 取消与详情回调；
+  无统计时保留弹窗、空图表、无首次阅读行、单位按小说换章节）；
+  `stats` 探针增加真界面步骤：点作品行 → 弹窗出现且仍在统计页 → 图表/首次阅读/三块指标存在 →
+  关闭后回到统计页 → 继续清空确认与返回，输出 `DESKTOP_UI_OK=stats`。

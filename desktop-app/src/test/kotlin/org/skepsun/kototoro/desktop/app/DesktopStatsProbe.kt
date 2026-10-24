@@ -83,6 +83,27 @@ internal object DesktopStatsProbe {
                 }
                 idle()
 
+                // Android's per-work sheet: picking a work opens its own statistics, and the sheet stays over the
+                // statistics screen; only its "details" button navigates.
+                onNodeWithTag("stats-work:${content.id}").performScrollTo().performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.contentStats != null }
+                waitUntil(timeoutMillis = 15_000) {
+                    (controller.state.value.contentStats?.stats?.totalDuration ?: 0L) > 0L
+                }
+                idle()
+                check(controller.state.value.screen == DesktopScreen.READING_STATS) {
+                    "the work sheet is an overlay of the statistics screen"
+                }
+                onNodeWithTag("content-stats-chart").assertExists()
+                onNodeWithTag("content-stats-first").assertExists()
+                onNodeWithTag("content-stats-total").assertExists()
+                onNodeWithTag("content-stats-sessions").assertExists()
+                onNodeWithTag("content-stats-units").assertExists()
+                onNodeWithTag("content-stats-close").performClick()
+                idle()
+                check(controller.state.value.contentStats == null) { "closing the sheet leaves the statistics screen" }
+                check(controller.state.value.screen == DesktopScreen.READING_STATS)
+
                 // Clearing asks first, then empties both tables but keeps the history above.
                 onNodeWithTag("stats-clear").performScrollTo().performClick()
                 idle()

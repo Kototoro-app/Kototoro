@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
+import org.skepsun.kototoro.core.library.LibraryContentStats
 import org.skepsun.kototoro.core.library.LibraryReadingStats
 import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.stats.domain.ReadingStatsPeriod
@@ -147,6 +148,8 @@ data class DesktopAppState(
     val readingStats: LibraryReadingStats? = null,
     val readingStatsPeriod: ReadingStatsPeriod = ReadingStatsPeriod.WEEK,
     val readingStatsKind: StatsContentKind = StatsContentKind.ALL,
+    /** Android's per-work statistics sheet; null when it is closed. */
+    val contentStats: DesktopContentStats? = null,
     /** Stored suggestions, most relevant first (Android's recommendations). */
     val suggestions: List<SourceContent> = emptyList(),
     /** True while [DesktopController.refreshSuggestions] runs in the background; the window stays usable. */
@@ -1538,7 +1541,7 @@ class DesktopController(val session: DesktopSession) {
 
     /** Android's "阅读统计" screen: the shared derivation over this library's sessions and stored works. */
     fun showReadingStats() = navigate {
-        mutableState.update { it.copy(screen = DesktopScreen.READING_STATS) }
+        mutableState.update { it.copy(screen = DesktopScreen.READING_STATS, contentStats = null) }
         loadReadingStats()
     }
 
@@ -1553,6 +1556,31 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { it.copy(readingStatsKind = kind) }
         loadReadingStats()
     }
+
+    /**
+     * Android's `showStatisticSheet`: picking a work in the statistics list opens its own statistics, not its details.
+     * The sheet opens at once with empty numbers and fills in when the snapshot arrives, the way Android's sheet does.
+     */
+    fun showContentStats(content: SourceContent) {
+        mutableState.update { it.copy(contentStats = DesktopContentStats(content, LibraryContentStats())) }
+        scope.launch {
+            val stats = try {
+                session.library.contentReadingStats(content.id, TimeZone.currentSystemDefault())
+            } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                mutableState.update { it.copy(contentStats = null, error = error.message ?: error.toString()) }
+                return@launch
+            }
+            mutableState.update { state ->
+                val open = state.contentStats
+                if (open?.content?.id != content.id) state else state.copy(contentStats = open.copy(stats = stats))
+            }
+        }
+    }
+
+    /** Android's sheet closing, or its "details" button: the sheet never outlives the statistics screen. */
+    fun closeContentStats() = mutableState.update { it.copy(contentStats = null) }
 
     /** Android's "clear statistics" action: both tables are emptied, reading history stays. */
     internal fun clearReadingStats() = action {
@@ -2308,7 +2336,10 @@ class DesktopController(val session: DesktopSession) {
 
     fun browser() = navigate { mutableState.update { it.copy(screen = DesktopScreen.BROWSER) } }
 
-    fun more() = navigate { mutableState.update { it.copy(screen = DesktopScreen.MORE) } }
+    fun more() = navigate {
+        // The statistics screen's per-work sheet is an overlay of that screen, never of the "more" page.
+        mutableState.update { it.copy(screen = DesktopScreen.MORE, contentStats = null) }
+    }
 
     fun backToDetails() = action {
         closeCast(resume = false)

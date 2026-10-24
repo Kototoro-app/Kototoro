@@ -50,11 +50,12 @@ import org.skepsun.kototoro.stats.domain.StatsContentKind
  * read and merge the same `stats` and reading-session rows — but nothing on this host ever wrote them, and nothing
  * showed them. The reader now records every stop (see [DesktopController.beginReadingStop]) and this page puts the
  * shared derivation behind Android's period switch: the same total, streak, per-day activity, type breakdown and
- * "most enjoyed" list, with the works opening their details. Android draws its summary as the first card without a
- * section title, so this page does the same under the screen title.
+ * "most enjoyed" list, with the works opening their own statistics sheet (see [DesktopContentStatsDialog]) the way
+ * Android's list does. Android draws its summary as the first card without a section title, so this page does the same
+ * under the screen title.
  */
 @Composable
-internal fun DesktopReadingStatsPage(controller: DesktopController, state: DesktopAppState) =
+internal fun DesktopReadingStatsPage(controller: DesktopController, state: DesktopAppState) {
     DesktopReadingStatsContent(
         stats = state.readingStats,
         period = state.readingStatsPeriod,
@@ -64,9 +65,21 @@ internal fun DesktopReadingStatsPage(controller: DesktopController, state: Deskt
         onBack = controller::more,
         onPeriod = controller::readingStatsPeriod,
         onKind = controller::readingStatsKind,
-        onWork = controller::details,
+        onWork = controller::showContentStats,
         onClear = controller::clearReadingStats,
     )
+    // Android opens the per-work sheet over the statistics screen; its "details" button is what leaves the screen.
+    state.contentStats?.let { sheet ->
+        DesktopContentStatsDialog(
+            sheet = sheet,
+            onDismiss = controller::closeContentStats,
+            onOpenDetails = { content ->
+                controller.closeContentStats()
+                controller.details(content)
+            },
+        )
+    }
+}
 
 /**
  * The screen without the controller: the summary, the filters, the activity bars, the type breakdown and the clear

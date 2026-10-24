@@ -66,7 +66,7 @@ class DesktopReadingStatsPageTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun `the summary repeats Android's numbers and the works list opens a work`() = runDesktopComposeUiTest {
+    fun `the summary repeats Android's numbers and the works list reports the picked work`() = runDesktopComposeUiTest {
         val opened = mutableListOf<Long>()
         setContent {
             DesktopTheme {

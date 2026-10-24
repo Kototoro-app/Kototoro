@@ -278,7 +278,9 @@ npm run docs:build
   `core-library` 的 `ReadingSessionTracker`——阅读器各处自动保存经 `SourceLibrary.recordPage` 统一 tick，
   session 由 `beginReadingStop` 在进入阅读器前打开、离开时 `finishReadingSession` 关闭
   （无痕不打开；一次阅读器打开算一个 session），读模型复用 `core-domain` 的 `deriveReadingStatistics`，
-  类型筛选就是把该函数吃的 `kinds` 映射按类型过滤，见计划 §155、§156。
+  类型筛选就是把该函数吃的 `kinds` 映射按类型过滤，见计划 §155、§156。作品榜点一行先开 Android 的
+  `ContentStatsDialog` 单作品统计弹窗（标题、90 天柱状图、首次阅读时间、总时长/会话/页数或章节或集数，
+  只有“详情”才导航；读模型是 `SourceLibrary.contentReadingStats`），见计划 §157。
   收藏/历史的“筛选与排序”抽屉另有“布局”一节（封面网格 / 每行一个作品，对应 Android 的 ListMode），
   选择存 `desktop_library` 的 `library_list_mode`，列表模式下 `ContentGrid` 渲染 `content-list` 行视图，
   点击/长按语义与卡片一致，见计划 §142。

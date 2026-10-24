@@ -203,6 +203,47 @@ class DesktopReadingStatsTest {
         }
     }
 
+    @Test
+    fun `one work's own statistics match the dashboard row it stands for`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = library(runtime)
+            library.beginReadingSession()
+            now += 20_000
+            library.recordPage(content, chapters[0], 0, 10)
+            now += 10_000
+            library.recordPage(content, chapters[0], 1, 10)
+            library.finishReadingSession()
+            now += 60 * 60_000
+            library.beginReadingSession()
+            now += 15_000
+            library.recordPage(content, chapters[1], 0, 5)
+            library.finishReadingSession()
+            library.beginReadingSession()
+            now += 60_000
+            library.recordPage(other, other.chapters!!.single(), 0, 3)
+            library.finishReadingSession()
+
+            val sheet = library.contentReadingStats(content.id, TimeZone.UTC, now)
+            assertEquals(StatsContentKind.MANGA, sheet.kind)
+            assertEquals(45_000L, sheet.totalDuration)
+            assertEquals(2, sheet.sessionCount)
+            // Same page counter as the dashboard: one tick opens the row, each turned page adds one.
+            assertEquals(1, sheet.units)
+            // Android reads the first activity out of the derived record, which is the start of its first interval.
+            assertEquals(start, sheet.firstActivityAt)
+            // The "all" window: ninety days of days, only this work's two stops filled in (the other work's rows stay out).
+            assertEquals(90, sheet.dailyActivity.size)
+            assertEquals(45_000L, sheet.dailyActivity.sumOf { it.duration })
+            // A work with no rows of its own still opens a sheet, all zeros, like Android's empty snapshot.
+            val empty = library.contentReadingStats(content.id - 42, TimeZone.UTC, now)
+            assertEquals(0L, empty.totalDuration)
+            assertEquals(0, empty.sessionCount)
+            assertEquals(0, empty.units)
+            assertNull(empty.firstActivityAt)
+            assertTrue(empty.dailyActivity.all { it.duration == 0L })
+        }
+    }
+
     private fun chapter(id: Long, branch: String) = SourceChapter(id, "章节 $id", 1f, 0, "/chapter/$id", "组",
         Long.MAX_VALUE, branch, source)
 }
