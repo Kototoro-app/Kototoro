@@ -4042,3 +4042,68 @@ repeat(COLLAPSE_FOCUS_FRAMES) {   // 3
    手机端 BACK 收起面板同样不重置标签选中态，所以不是电视独有的行为；但电视用户没有"点一下标签"
    这种纠正手段，是否需要"收起即取消标签高亮"留待决定，本轮未动。
 2. 第六十五轮的两条遗留（`ReaderActionsContent` 是死代码、阅读器缺换空间入口）不变。
+
+## 第六十七轮：`Crop & note` 在电视上到不了比例芯片——这个页面根本不知道自己是电视（2026-10-25）
+
+快选层剩下五格这一轮补测，第一格 `Crop & note` 就撞出一个整屏级的断点。手机上的流程是
+"拖裁剪框 → 打字 → 点比例"；遥控器上：
+
+1. 顶栏只有 `Cancel` / `Save note` 两个停靠点，`DOWN` 直接跳过裁剪区掉进底部输入框；
+2. 输入框是 Compose 文本框，方向键被它拿去移动光标，**进去就出不来**——`BACK` 只是收起软键盘，
+   再按 `DOWN` 环仍然在这一条输入框上（`db5.xml`、`db6.xml`）；
+3. 于是四个比例芯片永远到不了，而裁剪框本身没有可聚焦节点，遥控器上就**没有任何办法改变裁剪范围**；
+4. 软键盘弹出后还正好盖住芯片行（`db4-half.png`），芯片本来也没有焦点环——它们是原样 `FilterChip`。
+
+### 原因：`setContent` 而不是 `setComposeContent`
+
+第一版只做了两件事（给输入框加 `tvTextInputFocusEscape()`、把芯片换成电视药丸），装到模拟器上
+**一点变化都没有**。顺着"helper 为什么没反应"查下去，答案在页面入口：
+
+```kotlin
+// PageCropActivity（改前）
+setContent { KototoroTheme { Column(...) } }
+```
+
+全仓 46 个 Compose Activity 都走 `BaseComposeActivity.setComposeContent { }`，只有这里自己调
+`setContent`。而 `LocalUiPresentationConfig` 正是在 `setComposeContent` 里 provide 的
+（`BaseComposeActivity` 第 105 行）。也就是说：**这个 Activity 的组合里 `isTv` 永远是默认值**，
+所有电视分支都在静默走手机路径——`tvTextInputFocusEscape()` 变成 no-op，芯片也不会换样式。
+不是某个 helper 坏了，而是这一屏从来没有进入过电视模式。
+
+### 改法
+
+- `PageCropActivity` 改用 `setComposeContent { }`（顺带去掉里面多余的 `KototoroTheme` 包裹，
+  于是也拿到应用统一的圆角、共享 Snackbar 与展示模式退出按钮）。
+- `core-ui` 新增共享 `TvFilterChip`（`core/ui/adaptive/TvFilterChip.kt`）：手机上原样返回
+  `FilterChip`；电视上换成手绘药丸——`clip` + `background` + `tvFocusable(shape, addFocusTarget = false)`
+  + `selectable`，最小高度 48dp，选中态走 `primaryContainer`/`onPrimaryContainer`，
+  未选中走 `surfaceVariant`/`onSurfaceVariant`，环用主题 `primary`。
+  与第三十八轮视频面板里那个私有 `SubtitleChip` 同一套做法，区别是这里用主题色而不是播放器配色。
+- 输入框挂 `Modifier.tvTextInputFocusEscape()`，收起键盘后 ↓ 可以走到芯片行。
+
+### 设备证据（emulator-5554，1920×1080）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 改前：顶栏 ↓ | `db2.xml`、`db3.xml` | 环从 `Cancel [16,0][156,96]` 直接落到输入框 `[24,828][1896,940]`，可聚焦节点只有 `Cancel`/`Save note`/输入框/四个芯片 |
+| 改前：↓ → BACK → ↓ | `db5.xml`、`db6.xml` | 两次 dump 都是 `EditText`：键盘收起后 `DOWN` 仍留在输入框，芯片行不可达 |
+| 改后：顶栏 ↓ | `dc2.xml` | 仍先进输入框（预期） |
+| 改后：BACK → ↓ | `dd1.xml`、`dd1-bottom.png` | 环落到 `1:1` 芯片 `[858,968][973,1064]`，芯片是 48dp 高的电视药丸，带 2dp 主色环；`Original` 选中为主色底 |
+| 改后：CENTER 在 `1:1` | `dd2-half.png` | 裁剪框从竖长（`db2-half.png` 中 `x 740..1180`、`y 124..780`）变成方形（`x 632..1290`、`y 96..780`），比例预设确实驱动 `OverlayView` |
+| 改后：↑ | `dd3.xml` | 环回到输入框 `[24,488][1896,600]`——键盘弹出时窗口 `adjustResize`，整条输入框被顶到键盘上方（`dd5-half.png`） |
+| 改后：BACK → ↑ | `dd6.xml` | 环落到 `Save note [1724,0][1904,96]` |
+| 改后：CENTER 在 `Save note` | `dd7-half.png` | 弹出 `Panel note saved`，回到阅读器原页，未崩溃 |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（只有该文件既有的三条 `getParcelableExtra`/`setFreestyleCropEnabled`
+废弃警告），装的是 `app-x86_64-debug.apk`。
+
+### 遗留
+
+1. **裁剪框仍然只能手指拖**：`UCropView` 里没有可聚焦节点，遥控器现在能做的是选比例
+   （`Original`/`1:1`/`4:3`/`16:9`，框会居中重排）。要支持遥控微调，需要给 `OverlayView` 外面包一层
+   "边框与角点可聚焦 + 方向键位移"的交互，属于新功能而不是接线，本轮未动。
+2. 键盘弹出时窗口 `adjustResize` 会把裁剪区压扁、把顶栏 `Cancel`/`Save note` 顶出屏幕（`dd5-half.png`）。
+   只在打字时出现，收起键盘即恢复；如果后面嫌丑，可以给这一屏单独设 `adjustPan`。
+3. 这里给 `maxLines = 2` 的短笔记用了 `tvTextInputFocusEscape()`，而该 helper 的注释写的是"只给单行字段"。
+   电视上放弃两行内的上下移动键、换来能走到芯片行，是刻意的取舍，记在这里避免下次被当成误用改回去。
+4. 同一批五格里还剩 `Automatic scroll`、`Rotate screen`、`Download`、`Open in browser` 没实测。
