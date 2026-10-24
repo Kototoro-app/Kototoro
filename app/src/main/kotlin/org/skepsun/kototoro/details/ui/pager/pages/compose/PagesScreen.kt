@@ -13,7 +13,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,9 +31,10 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
+import org.skepsun.kototoro.core.ui.compose.SelectionActionBar
+import org.skepsun.kototoro.core.ui.compose.SelectionBarIconButton
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
-import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
@@ -195,7 +195,6 @@ fun PagesScreen(
 ) {
     val context = LocalContext.current
     val hapticFeedback = LocalHapticFeedback.current
-    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val listState = rememberLazyGridState()
     val paneNestedScrollConnection = rememberDetailsPaneNestedScrollConnection(
         state = detailsPaneState,
@@ -343,61 +342,16 @@ fun PagesScreen(
             exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
         ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                // inverseSurface is the Material3 snackbar contrast on a phone; on the TV every
-                // other surface is dark glass, where a white pill reads as a rendering bug.
-                color = if (isTvPresentation) {
-                    MaterialTheme.colorScheme.surfaceContainerHigh
-                } else {
-                    MaterialTheme.colorScheme.inverseSurface
-                },
-                contentColor = if (isTvPresentation) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.inverseOnSurface
-                },
+            SelectionActionBar(
+                selectedCount = selectedItemIds.size,
+                onClearSelection = onClearSelection,
                 modifier = Modifier.padding(16.dp).windowInsetsPadding(WindowInsets.safeDrawing),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            onClick = onClearSelection,
-                            // A bare IconButton keeps the stop but draws no outline.
-                            modifier = Modifier.tvFocusable(
-                                shape = RoundedCornerShape(12.dp),
-                                addFocusTarget = false,
-                            ),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = stringResource(R.string.clear),
-                            )
-                        }
-                        Text(
-                            text = "${selectedItemIds.size}",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(start = 8.dp),
-                        )
-                    }
-                    Row {
-                        IconButton(
-                            onClick = { onSelectionActionClick(R.id.action_save) },
-                            modifier = Modifier.tvFocusable(
-                                shape = RoundedCornerShape(12.dp),
-                                addFocusTarget = false,
-                            ),
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_save_ok),
-                                contentDescription = stringResource(R.string.save_page),
-                            )
-                        }
-                    }
+                SelectionBarIconButton(onClick = { onSelectionActionClick(R.id.action_save) }) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_save_ok),
+                        contentDescription = stringResource(R.string.save_page),
+                    )
                 }
             }
         }
