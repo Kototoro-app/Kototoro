@@ -66,6 +66,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `replacement rules are edited previewed toggled and reimported from the reading settings page`() {
+        probe("replacerules", directory.resolve("替换 规则"), 180)
+    }
+
+    @Test
     fun `real Tsundoku APK installs converts and reads a novel over the live network`() {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("kototoro.dex.real.apks") != null, "no -PrealApkDirectory")
         probe("real-novel", directory.resolve("中文 real novel"), 180)

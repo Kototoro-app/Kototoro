@@ -1,10 +1,8 @@
 package org.skepsun.kototoro.reader.novel
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import org.skepsun.kototoro.core.replace.ReplaceRule
 import org.skepsun.kototoro.core.replace.ReplaceRuleSource
+import org.skepsun.kototoro.core.replace.applyReplaceRules
 import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -130,27 +128,12 @@ class DefaultNovelTextProcessor @Inject constructor(
         text: String,
         rules: List<ReplaceRule>,
     ): ProcessedNovelText {
-        var result = text
-        val failedRules = buildList {
-            for (rule in rules) {
-                val applied = withContext(Dispatchers.Default) {
-                    withTimeoutOrNull(
-                        if (rule.timeoutMillisecond > 0) rule.timeoutMillisecond else DEFAULT_RULE_TIMEOUT_MS,
-                    ) {
-                        runCatching { rule.apply(result) }.getOrNull()
-                    }
-                }
-                if (applied == null) {
-                    add(rule.name.ifBlank { rule.pattern })
-                } else {
-                    result = applied
-                }
-            }
-        }
+        // The per-rule timeout/skip loop lives in `core-domain` so the Windows reader fails rules the same way.
+        val applied = applyReplaceRules(text = text, rules = rules)
         return ProcessedNovelText(
-            text = result,
-            revision = revisionOf(result, rules),
-            failedRuleNames = failedRules,
+            text = applied.text,
+            revision = revisionOf(applied.text, rules),
+            failedRuleNames = applied.failedRuleNames,
         )
     }
 
@@ -163,9 +146,5 @@ class DefaultNovelTextProcessor @Inject constructor(
             digest.update(rule.order.toString().toByteArray(Charsets.UTF_8))
         }
         return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
-    }
-
-    private companion object {
-        const val DEFAULT_RULE_TIMEOUT_MS = 3000L
     }
 }

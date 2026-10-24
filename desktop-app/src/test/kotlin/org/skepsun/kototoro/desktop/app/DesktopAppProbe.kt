@@ -51,6 +51,10 @@ object DesktopAppProbe {
                 DesktopCrashLogsProbe.run(args)
                 return
             }
+            if (args[0] == "replacerules") {
+                DesktopReplaceRulesProbe.run(args)
+                return
+            }
             if (args[0] == "playback") {
                 DesktopPlaybackProbe.run(args)
                 return

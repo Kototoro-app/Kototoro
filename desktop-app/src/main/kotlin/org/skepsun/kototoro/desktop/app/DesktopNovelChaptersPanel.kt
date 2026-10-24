@@ -25,12 +25,13 @@ internal fun DesktopNovelChaptersPanel(
     onDismiss: () -> Unit,
 ) {
     val chapters = state.content?.chapters.orEmpty()
-    val currentIndex = chapters.indexOfFirst { it.id == state.novel?.chapter?.id }
-    val directory = remember(chapters) {
+    val novel = state.novel
+    val currentIndex = chapters.indexOfFirst { it.id == novel?.chapter?.id }
+    val directory = remember(chapters, novel?.chapterTitles) {
         chapters.map {
             NovelChapterDirectoryEntry(
                 id = it.id,
-                title = it.title,
+                title = novel?.titleOf(it),
                 volume = it.volume,
                 groupTitle = it.branch?.takeIf(String::isNotBlank).orEmpty(),
                 searchAliases = listOfNotNull(it.branch, it.scanlator),
@@ -61,7 +62,7 @@ internal fun DesktopNovelChaptersPanel(
                 ReaderChapterPanelHeader(
                     title = state.content?.title.orEmpty(),
                     subtitle = readerChapterPanelSubtitleText(listOf(
-                        chapters.getOrNull(currentIndex)?.title,
+                        chapters.getOrNull(currentIndex)?.let { novel?.titleOf(it) ?: it.title },
                         if (currentIndex >= 0) "${currentIndex + 1}/${chapters.size}" else null,
                     )),
                     actions = {

@@ -32,6 +32,8 @@ kotlin {
 				api project(':core-db')
 				api libs.kotlinx.datetime
 				api "org.jetbrains.kotlinx:kotlinx-serialization-core:${libs.versions.serialization.get()}"
+				// The replace-rule codec moved here from :app so Windows imports and exports the same Legado shape.
+				implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
 			}
 		}
 		getByName('jvmTest') {

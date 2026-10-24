@@ -7566,3 +7566,62 @@ Windows 之前完全没有代理：每个来源、封面、JSON 导入都走 com
   （Android 的 `CrashLogActivity` 进入即看日志，Windows 目前只从关于页进）；其余设置页对齐（Spaces、替换规则、
   下载、备份周期、同步、追踪、服务、导航配置、通知、全景、内容目录、TTS 等）。
 
+## 166. 共享替换规则引擎 + Windows 替换规则页与小说应用规则（对齐 Android ReplaceRulesSettingsScreen/NovelTextProcessor）（2026-10-24）
+
+- 问题：§165 的“仍待”里第一条设置页。Android 的替换规则是“阅读设置 → 小说 → 文本替换规则”进的一页
+  （动作组 + 按分组排列的规则行 + 带实时预览的编辑对话框），规则由 `NovelTextProcessor` 应用到小说正文与章节标题；
+  Windows 侧既没有这一页，读完同一本书也不会替换任何文本，尽管 `replace_rules` 表本来就在共享 `core-db` 里。
+- 共享层（`core-domain`，包名不变所以 Android 侧没有 import 变更）：
+  - `ReplaceRuleJsonCodec` 从 `app` 移入 `core-domain/src/commonMain`（Legado 形状的导入/导出编解码），
+    对应测试移入 `core-domain/src/jvmTest`；`core-domain` 的 commonMain 因此显式加 `kotlinx-serialization-json`。
+  - 新文件 `core/replace/ReplaceRuleRules.kt`：`normalizeReplaceRuleIds`（缺失/重复 id 重发号，从已用最大值往上）、
+    `mergeImportedReplaceRules`（同 id 覆盖、空规则跳过、返回导入条数）、`filterReplaceRulesForBook`
+    （只留 `isValid()` 且作用于正文或标题、按 `order` 排序）、`applyReplaceRules`
+    （逐条 `withContext(Dispatchers.Default)` + `withTimeoutOrNull(rule.timeoutMillisecond)`，
+    超时/抛异常的那条按 `name.ifBlank { pattern }` 记名并保留上一条的结果；编译不了的 pattern 与 Android 一样是静默 no-op）。
+  - Android 侧 `ReplaceRuleRepository` 的 `filterRulesForBook`/`saveAll`/`importFromJson`/旧 SharedPreferences 迁移
+    全部改调共享函数（`normalizeIds` 私有实现删除，行为不变）；
+    `NovelTextProcessor.processWithRules` 的循环也改为 `applyReplaceRules`，只留 Android 独有的
+    `revisionOf`（正文 + rule.id + rule.order 的 SHA-256，供缓存失效用）。
+- `desktop-runtime` 新文件 `DesktopReplaceRules`：直接读写共享 `replace_rules` 表（`getReplaceRuleDao()`），
+  提供 `observeAll`/`all`/`saveAll`/`save`/`setEnabled`/`setAllEnabled`/`delete`/`clear`/`importFromJson`/`exportToJson`，
+  另有 `forBook(scopeName, origin)` 走共享过滤。Windows 没有 Android 那份“旧版 SharedPreferences 规则”可迁移
+  （新的 Windows 数据根从未有过那些键），所以不做迁移分支。
+- `desktop-app`：
+  - 新文件 `DesktopReplaceRuleOperations.kt`：`DesktopReplaceRulesUi(rules, editorOpen, editing)` 是独立 flow
+    （`controller.replaceRules`，理由同 §165：一件事情的临时状态不进 `DesktopAppState`），
+    `rules == null` 表示“还没读”。导入/导出走 `Path`（读整串解码、写调用方选好的文件），导入失败返回 0。
+  - 新文件 `DesktopReplaceRulesPage.kt`：标题行是返回 / 标题 / 导入 / 导出 / 添加，下面是 Android 的
+    `replace_rules_summary`、全开/全关（和 Android 一样，没有可开/可关的目标时灰掉）、分隔线；
+    规则按 `group` 分组（多组或组名非空时加组标题，空组用 `replace_rule_group_default`），
+    每行是 `SettingsActionRow`（标题 `name.ifBlank { pattern }`，摘要是 Android 的
+    `模式 · 作用范围 · pattern → replacement`），行尾开关只改启用状态、点行进编辑器；空列表用
+    `replace_rule_empty`/`replace_rule_empty_summary`。编辑器对话框字段与 Android 一一对应
+    （名称/分组/pattern/replacement/范围/排除范围/顺序/超时/正则/启用/标题/正文），
+    `isValid() && (scopeTitle || scopeContent)` 才允许保存，非法时显示 `replace_rule_invalid`；
+    预览区（`replace_rule_preview*`）在对话框里就对样例文本跑一次 `candidate.apply`。
+    SAF 换成 `JFileChooser`（`FileNameExtensionFilter` 一条 `json`），默认文件名仍是 `kototoro-replace-rules.json`。
+  - 入口与导航：阅读设置页新增“小说”节（Android 的 `novel`），一行 `replace_rules`（摘要 `replace_rules_summary`）
+    进新 `DesktopScreen.REPLACE_RULES`（`DesktopApp` 页面 `when` + 标题 `when` 各加一支，导航继续落到“更多”），
+    返回回阅读设置。
+  - 应用规则：`DesktopNovelTextRules`（新文件）把共享的超时/跳过语义搬到已解析的 block 上——一条规则一次遍历
+    整章文本 block（改写的段落换成单 run、未改动的保留原样式），标题规则一次遍历整章标题列表；
+    `readNovelOnIo` 用 Android 同款 scope 值（`content.title` + `content.source.name`）取 `forBook` 再按
+    `Scope.CONTENT`/`TITLE` 拆分，`DesktopNovel.chapterTitles` 只存被规则改动过的章节标题
+    （`titleOf(chapter)` 供章节面板与阅读器顶栏取值）。
+- 验证：
+  - `:core-domain:jvmTest --tests *ReplaceRule*` 9/9（新 `ReplaceRuleRulesTest` 7 项 + 原 `ReplaceRuleJsonCodecTest` 2 项）：
+    id 重发号越过已用最大值、导入同 id 覆盖且跳过空白规则、书过滤只剩命中该书且有效的规则、
+    按顺序应用并跳过编译不了的 pattern、`isEnabled=false` 与 `disabledIds` 都不参与、纯文本规则按字面替换。
+  - `:desktop-runtime:test --tests *DesktopReplaceRulesTest*` 5/5（真实 `DesktopRuntime.open` + `@TempDir`）：
+    重启后规则仍在同一张表且按 `order` 返回、`observeAll` 跟着每次写更新、导出是 Legado 形状并原样导回、
+    坏文档导入返回 0 且不清空已有规则、`forBook` 只给出命中该书的两条。
+  - 探针 `replacerules`（`DesktopAppTest` 同名用例，`DesktopReplaceRulesProbe`）：空态 → 添加一条正则规则并在
+    预览框看到替换结果 → 保存后行出现、`isRegex`/`scopeContent` 与落库一致 → 开关写进表（重启后同值）→
+    全开 → 导出含规则、导入后仍是 1 条 → 返回阅读设置。本机实测输出 `DESKTOP_UI_OK=replacerules`。
+  - `:desktop-app:verifyDesktopStrings` 通过（11 个新键两个 catalog 都有）；`:app:compileDebugKotlin` 通过
+    （共享提取 + `NovelTextProcessor` 改调共享函数后 Android 仍能编译）。
+- 仍待：Windows 小说阅读器的“按书关闭规则/逐条禁用”（Android 的 `NovelBookPreferences` 两个键，
+  Windows 目前按全局启用状态应用）；词典规则（Android `dictionary_rules`，同一“小说”节里的另一行）；
+  其余设置页对齐（Spaces、下载、备份周期、同步、追踪、服务、导航配置、通知、全景、内容目录、TTS 等）。
+

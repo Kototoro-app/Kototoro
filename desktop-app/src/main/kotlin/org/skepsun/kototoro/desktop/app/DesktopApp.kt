@@ -137,6 +137,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.PROXY_SETTINGS -> DesktopProxySettingsPage(controller, state)
                             DesktopScreen.CHANGELOG -> DesktopChangelogPage(controller, state)
                             DesktopScreen.CRASH_LOGS -> DesktopCrashLogsPage(controller, state)
+                            DesktopScreen.REPLACE_RULES -> DesktopReplaceRulesPage(controller, state)
                             DesktopScreen.MORE -> DesktopMorePanel(controller, !closing, onExitRequest)
                         }
                         if (state.screen == DesktopScreen.DETAILS && state.detailsOrigin != null) {
@@ -226,6 +227,7 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.PROXY_SETTINGS -> AndroidStrings["proxy"]
         DesktopScreen.CHANGELOG -> AndroidStrings["changelog"]
         DesktopScreen.CRASH_LOGS -> AndroidStrings["crash_logs"]
+        DesktopScreen.REPLACE_RULES -> AndroidStrings["replace_rules"]
         DesktopScreen.EXTENSIONS -> desktopText("screens.extensions")
         DesktopScreen.DETAILS -> desktopText("screens.details")
         DesktopScreen.READER, DesktopScreen.NOVEL, DesktopScreen.VIDEO -> state.chapter?.title ?: desktopText("screens.reader")

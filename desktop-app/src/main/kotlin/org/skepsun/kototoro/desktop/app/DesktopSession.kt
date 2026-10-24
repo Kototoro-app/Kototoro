@@ -131,6 +131,8 @@ class DesktopSession private constructor(
             sourceDiagnostics::record,
         ),
     ) { "desktop-${ids.incrementAndGet()}" }
+    /** The shared `replace_rules` table: the settings page edits it, the novel reader applies it. */
+    val replaceRules = org.skepsun.kototoro.desktop.runtime.DesktopReplaceRules(storage.database)
     val library = DesktopLibrary(storage.database) { name ->
         registry.installed().flatMap { it.sources }.firstOrNull { it.source.name == name }?.source
             ?: parsers.sources().firstOrNull { it.source.name == name }?.source

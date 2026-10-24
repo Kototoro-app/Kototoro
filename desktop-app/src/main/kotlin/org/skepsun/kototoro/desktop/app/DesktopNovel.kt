@@ -24,7 +24,12 @@ data class DesktopNovel(
     /** Repeated jumps to the same block still request a scroll without replacing the chapter body. */
     val navigation: Long = 0,
     val bookmarkBlocks: Map<Long, Int> = emptyMap(),
-)
+    /** Chapter id → the title after Android's TITLE rules; a chapter the rules left alone has no entry. */
+    val chapterTitles: Map<Long, String> = emptyMap(),
+) {
+    /** The title to draw for a chapter: the rule's rewrite when there is one, the source's own title otherwise. */
+    fun titleOf(chapter: SourceChapter): String? = chapterTitles[chapter.id] ?: chapter.title
+}
 
 enum class DesktopNovelTheme(val background: Long, val text: Long, val muted: Long) {
     LIGHT(0xFFFFFFFF, 0xFF1B2635, 0xFF687385),

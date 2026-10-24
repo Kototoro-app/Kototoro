@@ -58,7 +58,7 @@ internal fun BoxScope.DesktopNovelReaderChrome(
     } ?: "$range / ${novel.blocks.size} · ${((novel.lastVisible + 1) * 100) / novel.blocks.size}%"
     val state = NovelReaderChromeState(
         workTitle = title,
-        chapterTitle = novel.chapter.title ?: desktopText("novel.chapterTitle", novel.chapter.number.toInt()),
+        chapterTitle = novel.titleOf(novel.chapter) ?: desktopText("novel.chapterTitle", novel.chapter.number.toInt()),
         controlsVisible = controlsVisible,
         progressValue = progressValue,
         progressMax = progressMax,

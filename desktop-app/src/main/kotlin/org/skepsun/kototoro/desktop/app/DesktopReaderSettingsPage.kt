@@ -94,6 +94,12 @@ internal fun DesktopReaderSettingsPage(controller: DesktopController, state: Des
             SettingsRowDivider()
             ReaderSpeedRow(controller, settings, active)
         }
+        // Android keeps the novel section (replacement rules, dictionary rules, …) on the novel half of this screen.
+        SettingsSectionHeader(AndroidStrings["novel"])
+        SettingsGroup {
+            SettingsValueRow(AndroidStrings["replace_rules"], AndroidStrings["replace_rules_summary"], null, active,
+                { controller.showReplaceRules() }, testTag = "reader-setting-replace-rules")
+        }
     }
     val open = dialog ?: return
     val enabled = active

@@ -12,6 +12,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
 import org.skepsun.kototoro.core.library.LibraryContentStats
 import org.skepsun.kototoro.core.library.LibraryReadingStats
+import org.skepsun.kototoro.core.replace.ReplaceRule
 import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.stats.domain.ReadingStatsPeriod
 import org.skepsun.kototoro.stats.domain.StatsContentKind
@@ -77,7 +78,7 @@ internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
 enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
-    PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS,
+    PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -278,6 +279,8 @@ class DesktopController(val session: DesktopSession) {
     /** Android's crash-log page: the reports the crash writer left under the data root's `logs/crash_logs`. */
     private val crashLogOperations = DesktopCrashLogOperations(scope, session)
     internal val crashLogs = crashLogOperations.state
+    private val replaceRuleOperations = DesktopReplaceRuleOperations(scope, session)
+    internal val replaceRules = replaceRuleOperations.state
     /** Android's WebDAV backup destination: same shared protocol, uploaded by hand or by the timer below. */
     private val webDav = DesktopWebDavOperations(session.storage, backups)
     internal val webDavUi = webDav.ui
@@ -402,6 +405,57 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update {
             it.copy(message = if (copied) desktopText("crashLogs.copied") else desktopText("crashLogs.copyFailed"))
         }
+    }
+
+    /** Android's replace-rule settings screen, reached from the source settings page. */
+    fun showReplaceRules() = navigate {
+        mutableState.update { it.copy(screen = DesktopScreen.REPLACE_RULES) }
+        replaceRuleOperations.open()
+    }
+
+    fun backFromReplaceRules() = navigate { mutableState.update { it.copy(screen = DesktopScreen.READER_SETTINGS) } }
+
+    fun openReplaceRuleEditor(rule: ReplaceRule?) = replaceRuleOperations.openEditor(rule)
+
+    fun closeReplaceRuleEditor() = replaceRuleOperations.closeEditor()
+
+    fun saveReplaceRule(rule: ReplaceRule) {
+        replaceRuleOperations.save(rule)
+        mutableState.update { it.copy(message = AndroidStrings["replace_rule_saved"]) }
+    }
+
+    fun deleteReplaceRule(rule: ReplaceRule) {
+        replaceRuleOperations.delete(rule)
+        mutableState.update { it.copy(message = AndroidStrings["replace_rule_deleted"]) }
+    }
+
+    fun setReplaceRuleEnabled(rule: ReplaceRule, enabled: Boolean) = replaceRuleOperations.setEnabled(rule, enabled)
+
+    /** Android's "enable/disable all": one write, because every rule changes together. */
+    fun setAllReplaceRulesEnabled(enabled: Boolean) {
+        replaceRuleOperations.setAllEnabled(enabled)
+        val message = AndroidStrings[if (enabled) "replace_rule_all_enabled" else "replace_rule_all_disabled"]
+        mutableState.update { it.copy(message = message) }
+    }
+
+    fun importReplaceRules(source: Path) = action {
+        val count = replaceRuleOperations.import(source)
+        val message = if (count > 0) {
+            AndroidStrings["replace_rule_imported"].format(count)
+        } else {
+            desktopText("replaceRules.importFailed")
+        }
+        mutableState.update { it.copy(message = message) }
+    }
+
+    fun exportReplaceRules(target: Path) = action {
+        val exported = replaceRuleOperations.export(target)
+        val message = if (exported) {
+            desktopText("replaceRules.exported", target.fileName.toString())
+        } else {
+            desktopText("replaceRules.exportFailed")
+        }
+        mutableState.update { it.copy(message = message) }
     }
 
     internal fun appearance(value: DesktopAppearance) = action {
@@ -1130,8 +1184,15 @@ class DesktopController(val session: DesktopSession) {
         val selected = chapter ?: chapters.firstOrNull { it.id == restoredId } ?: firstChapterOfBranch(chapters)
         val next = SourceChapterNavigation.adjacent(chapters, selected.id, true)?.url
         val body = session.sources.getChapterContent(selected, next) ?: error(desktopText("error.noChapterText"))
-        val blocks = DesktopNovelHtml.parse(body.html, content.publicUrl.takeIf { it.startsWith("http") }.orEmpty())
-        require(blocks.isNotEmpty()) { desktopText("error.noChapterText") }
+        val parsed = DesktopNovelHtml.parse(body.html, content.publicUrl.takeIf { it.startsWith("http") }.orEmpty())
+        require(parsed.isNotEmpty()) { desktopText("error.noChapterText") }
+        // Android's scope values for a rule are the book's title and the source name; the same two here.
+        val scopeValues = listOf(content.title, content.source.name)
+        val bookRules = session.replaceRules.forBook(content.title, content.source.name)
+        val blocks = DesktopNovelTextRules.blocks(parsed,
+            DesktopNovelTextRules.forTarget(bookRules, ReplaceRule.Scope.CONTENT, scopeValues))
+        val chapterTitles = DesktopNovelTextRules.titles(chapters.map { it.title.orEmpty() },
+            DesktopNovelTextRules.forTarget(bookRules, ReplaceRule.Scope.TITLE, scopeValues))
         val start = if (bookmark != null) {
             require(bookmark.contentId == content.id && bookmark.chapterId == selected.id)
             novelBookmarkIndex(content, selected, blocks, bookmark)
@@ -1143,6 +1204,9 @@ class DesktopController(val session: DesktopSession) {
             readerImages = emptyMap(), bookmarks = bookmarks,
             novel = DesktopNovel(selected, blocks, body.images.associateBy { image -> image.url }, start,
                 navigation = (it.novel?.navigation ?: 0) + 1,
+                chapterTitles = chapters.mapIndexedNotNull { index, value ->
+                    chapterTitles[index].takeIf { it != value.title.orEmpty() }?.let { value.id to it }
+                }.toMap(),
                 bookmarkBlocks = novelBookmarkBlocks(content, selected, blocks, bookmarks))) }
         // Opening a chapter is itself reading it: record the starting position straight away.
         novelOperations.report(selected.id, start, start)
