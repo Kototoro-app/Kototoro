@@ -1,6 +1,11 @@
 package org.skepsun.kototoro.tracker.data
 
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.tracker.domain.decodeUpdateChapters
+import org.skepsun.kototoro.tracker.domain.encodeUpdateChapters
+import org.skepsun.kototoro.tracker.domain.mergeUpdateChapters
+import org.skepsun.kototoro.tracker.domain.refreshPendingUpdateCount
+import org.skepsun.kototoro.tracker.domain.reconcileUpdateNotifications
 
 fun mergeRestoredTrackNewChapters(local: TrackEntity, remote: TrackEntity): Int {
     val newer = if (remote.isNewerThan(local)) remote else local
@@ -13,11 +18,6 @@ fun TrackEntity.isNewerThan(other: TrackEntity): Boolean {
         lastCheckTime != other.lastCheckTime -> lastCheckTime > other.lastCheckTime
         else -> lastChapterId > other.lastChapterId
     }
-}
-
-fun TrackEntity.canBeClearedBy(log: TrackLogEntity): Boolean {
-    val trackTime = maxOf(lastChapterDate, lastCheckTime)
-    return trackTime <= 0L || log.createdAt >= trackTime
 }
 
 /** A restored track merged into the local one: the newer check wins, counters and dates keep their maxima. */
@@ -45,9 +45,11 @@ suspend fun MangaDatabase.mergeRestoredTrack(remote: TrackEntity) {
     val dao = getTracksDao()
     val local = dao.find(remote.mangaId)
     dao.upsert(local?.mergeWithRestored(remote) ?: remote)
+    refreshPendingUpdateCount(remote.mangaId)
+    reconcileUpdateNotifications(remote.mangaId)
 }
 
-/** Backup restore of one feed log row: duplicates are not repeated, and a read state clears the counter. */
+/** Seen notifications and completed chapters merge independently; neither changes discovery time. */
 suspend fun MangaDatabase.mergeRestoredTrackLog(remote: TrackLogEntity) {
     val dao = getTrackLogsDao()
     val existing = dao.findDuplicate(
@@ -57,14 +59,14 @@ suspend fun MangaDatabase.mergeRestoredTrackLog(remote: TrackLogEntity) {
     )
     if (existing == null) {
         dao.insert(remote)
-    } else if (existing.isUnread && !remote.isUnread) {
-        dao.markAsRead(existing.id)
-        getTracksDao().find(existing.mangaId)
-            ?.takeIf { it.canBeClearedBy(remote) }
-            ?.let { getTracksDao().clearCounter(existing.mangaId) }
-    } else if (!existing.isUnread) {
-        getTracksDao().find(existing.mangaId)
-            ?.takeIf { it.canBeClearedBy(existing) }
-            ?.let { getTracksDao().clearCounter(existing.mangaId) }
+    } else {
+        if (!remote.isUnread) dao.markAsRead(existing.id)
+        if (existing.chapterMetadata.isNotBlank() || remote.chapterMetadata.isNotBlank()) {
+            dao.updateChapterMetadata(existing.id, encodeUpdateChapters(mergeUpdateChapters(listOf(
+                decodeUpdateChapters(existing.chapterMetadata), decodeUpdateChapters(remote.chapterMetadata),
+            ))))
+        }
     }
+    refreshPendingUpdateCount(remote.mangaId)
+    reconcileUpdateNotifications(remote.mangaId)
 }

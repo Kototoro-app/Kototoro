@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.core.ui.feed.FeedContinueAction
 import org.skepsun.kototoro.core.ui.feed.FeedTimelineCard
+import org.skepsun.kototoro.core.ui.feed.FeedUpdateDetails
 import org.skepsun.kototoro.core.ui.feed.UpdatedContentCarousel
 import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
 import org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget
@@ -29,6 +30,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.time.temporal.ChronoUnit
 
 /** Android's date buckets for the feed timeline ("just now", "today", "yesterday", "n days ago", then the date). */
@@ -79,7 +81,7 @@ internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppSt
                 filter.acceptsFeedSource(update.sourceName, content?.source?.contentType, ecosystems) &&
                     content?.tags.orEmpty().none { blacklist.containsTagTitle(it.title) }
             }
-            .sortedWith(compareByDescending<FeedUpdateRow> { it.isPinned }.thenByDescending { it.lastChapterDate ?: it.lastCheckTime })
+            .sortedWith(compareByDescending<FeedUpdateRow> { it.isPinned }.thenByDescending { it.lastCheckTime })
     }
     Column(Modifier.fillMaxSize().testTag("feed-panel"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -161,10 +163,32 @@ internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppSt
 @Composable
 private fun FeedRow(controller: DesktopController, state: DesktopAppState, row: FeedCardRow, label: String?, enabled: Boolean) {
     val content: SourceContent? = row.displayMangaId?.let(state.feedContents::get)
-    val open = { row.displayMangaId?.let { if (enabled) controller.openTracked(it) } }
+    val open = { row.displayMangaId?.let { if (enabled) controller.openTracked(it, row.logIds) } }
     FeedTimelineCard(
+        supportingContent = {
+            val format = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(DesktopStrings.locale)
+            fun date(value: Long) = Instant.ofEpochMilli(value).atZone(ZoneId.systemDefault()).format(format)
+            val dates = row.updateChapters.map { it.publishedAt }.filter { it > 0 }
+            val unknown = desktopText("feed.sourceTimeUnknown")
+            val summary = if (dates.isEmpty()) unknown else {
+                val from = date(dates.min())
+                val until = date(dates.max())
+                desktopText("feed.sourceTime", if (from == until) from else "$from — $until") +
+                    if (dates.size < row.updateChapters.size) " · " + desktopText("feed.sourceTimePartial") else ""
+            }
+            FeedUpdateDetails(summary, row.updateChapters.map { chapter ->
+                chapter.title to if (chapter.publishedAt > 0) desktopText("feed.sourceTime", date(chapter.publishedAt)) else unknown
+            }, desktopText("feed.chapterDetails"), desktopText("common.close")) {
+                controller.acknowledgeTracked(row.ownerId, row.logIds)
+            }
+        },
         title = row.overrideTitle ?: row.title,
-        chapterText = desktopText("common.newChapters", row.chapters.size),
+        chapterText = (if (row.updateCount < 0) desktopText("feed.updatesAvailable")
+            else desktopText("common.newChapters", row.updateCount)) + when {
+            row.pendingCount < 0 -> ""
+            row.pendingCount == 0 -> " · " + desktopText("feed.readCompleted")
+            else -> " · " + desktopText("feed.pendingChapters", row.pendingCount)
+        },
         isNew = row.unread,
         onClick = { open() },
         modifier = Modifier.testTag("feed-row:${row.logId}"),

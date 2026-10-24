@@ -4,6 +4,10 @@ import SwiftUI
 struct KototoroApp: App {
     @StateObject private var library = LibraryModel()
 
+    init() {
+        ReaderHitchMetrics.shared.start()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView(library: library)

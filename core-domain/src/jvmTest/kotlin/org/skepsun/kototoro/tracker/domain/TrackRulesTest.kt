@@ -11,6 +11,33 @@ class TrackRulesTest {
 	private val ids = listOf(1L, 2L, 3L, 4L)
 
 	@Test
+	fun `refreshing every chapter date does not report the list as new`() {
+		data class Chapter(val id: Long, val uploadedAt: Long)
+		val chapters = (1L..32L).map { Chapter(it, uploadedAt = 100) }
+		var track = TrackEntity(7, lastChapterId = 32, newChapters = 2, lastCheckTime = 1,
+			lastChapterDate = 100, lastResult = TrackEntity.RESULT_HAS_UPDATE, lastError = null)
+		repeat(20) { check ->
+			val refreshed = chapters.map { it.copy(uploadedAt = 200L + check) }
+			val comparison = compareTrackedChapters(refreshed, Chapter::id, track.lastChapterId)
+			assertTrue(comparison.isValid)
+			assertTrue(comparison.newChapters.isEmpty())
+			track = track.afterSuccessfulCheck(7, 32, comparison.newChapters.size, comparison.isValid,
+				lastChapterDate = refreshed.last().uploadedAt, now = 300L + check)
+			assertEquals(2, track.newChapters, "repeated date changes must not accumulate chapters")
+		}
+		val appended = chapters.map { it.copy(uploadedAt = 500) } + Chapter(33, uploadedAt = 500)
+		assertEquals(listOf(33L), compareTrackedChapters(appended, Chapter::id, track.lastChapterId)
+			.newChapters.map(Chapter::id))
+	}
+
+	@Test
+	fun `replacing the whole chapter identity set silently resets the anchor`() {
+		val comparison = compareTrackedChapters((101L..132L).toList(), { it }, lastChapterId = 32)
+		assertFalse(comparison.isValid)
+		assertTrue(comparison.newChapters.isEmpty())
+	}
+
+	@Test
 	fun `comparison follows Android's tracker cases`() {
 		assertEquals(TrackComparison(emptyList<Long>(), isValid = false), compareTrackedChapters(ids, { it }, 0L))
 		assertEquals(TrackComparison(emptyList<Long>(), isValid = true), compareTrackedChapters(ids, { it }, 4L))

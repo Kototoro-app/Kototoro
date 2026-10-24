@@ -27,11 +27,15 @@ object MainNavigationRules {
         return result
     }
 
-    /** One step up ([direction] = -1) or down ([direction] = 1); a step off either end changes nothing. */
+    /**
+     * One step up ([direction] = -1) or down ([direction] = 1). Android's drag handle reports the raw offset, so a
+     * drag past either end lands on that edge instead of doing nothing; a single step at the edge lands on itself
+     * and returns the list unchanged.
+     */
     fun <T> step(items: List<T>, item: T, direction: Int): List<T> {
         val from = items.indexOf(item)
         if (from < 0 || direction == 0) return items
-        return move(items, from, from + direction)
+        return move(items, from, (from + direction).coerceIn(0, items.lastIndex))
     }
 
     /** Appends [item] when there is room left and it is not already configured. */

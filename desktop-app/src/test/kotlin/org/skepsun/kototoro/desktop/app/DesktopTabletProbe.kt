@@ -590,10 +590,15 @@ internal object DesktopTabletProbe {
                 check(controller.state.value.content?.id == content.id)
                 runBlocking { controller.dismissDetails().join() }; idle()
                 check(controller.state.value.screen == DesktopScreen.HOME)
-                check(controller.state.value.feed.updateRowsByOwnerId.isEmpty()) { "opening an update marks it read" }
-                onNodeWithTag("home-update:${content.id}").assertDoesNotExist()
-                onNodeWithTag("nav-feed-badge", useUnmergedTree = true).assertDoesNotExist()
-                onNodeWithTag("home-quick:0").performScrollTo().performClick(); idle()
+                // Upstream separates update discovery from reading: opening a work only acknowledges its reminder logs,
+                // so the tracked counter (and the rail badge) survives until the new chapter's last page is read.
+                check(controller.state.value.feed.updateRowsByOwnerId.containsKey(content.id)) {
+                    "opening an update keeps the pending counter"
+                }
+                onNodeWithTag("home-update:${content.id}").assertExists()
+                onNodeWithTag("nav-feed-badge", useUnmergedTree = true).assertExists()
+                onNodeWithTag("home-scroll").performScrollToNode(hasTestTag("home-quick:0"))
+                onNodeWithTag("home-quick:0").performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.LIBRARY)
 
                 // Settings: Android's tracker frequency is a choice dialog, and the recommendation rules live on their
@@ -702,7 +707,8 @@ internal object DesktopTabletProbe {
                 // An adult tracked work: Android's stored rating feeds both feed targets, one surface at a time.
                 onNodeWithTag("nav:订阅").performClick(); idle()
                 runBlocking {
-                    // Opening the update earlier marked it read; rewind the track so the carousel has something to hide.
+                    // Opening no longer dismisses the counter, so rewind the track and re-check to keep the carousel
+                    // meaningful: the adult flag then has both a hidden row and a hidden update to filter.
                     val track = requireNotNull(session.storage.database.getTracksDao().find(content.id))
                     session.storage.database.getTracksDao().upsert(org.skepsun.kototoro.tracker.data.TrackEntity(
                         content.id, chapters.first().id, 0, track.lastCheckTime, track.lastChapterDate,

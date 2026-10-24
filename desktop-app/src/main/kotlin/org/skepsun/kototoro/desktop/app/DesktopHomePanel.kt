@@ -72,7 +72,9 @@ internal fun DesktopHomePanel(controller: DesktopController, state: DesktopAppSt
         state.feed.updateRowsByOwnerId.values
             .sortedByDescending { it.lastChapterDate ?: it.lastCheckTime }
             .mapNotNull { row ->
-                state.feedContents[row.displayMangaId ?: row.mangaId]?.let { HomeWork(it, newChapters = row.newChapters) }
+                state.feedContents[row.displayMangaId ?: row.mangaId]?.let { content ->
+                    HomeWork(content, newChapters = row.newChapters)
+                }
             }
             .filter { filter.accepts(ecosystems[it.content.source.name], it.content.source.contentType) }
             .filterNot { hidden(it.content) }

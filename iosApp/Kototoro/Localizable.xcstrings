@@ -7713,6 +7713,16 @@
         }
       }
     },
+    "暂无数据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No data yet"
+          }
+        }
+      }
+    },
     "暂无文字预览": {
       "localizations": {
         "en": {
@@ -9953,6 +9963,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Scroll"
+          }
+        }
+      }
+    },
+    "滚动卡顿": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scroll hitches"
+          }
+        }
+      }
+    },
+    "滚动卡顿为系统统计的本机前一天每秒滚动中卡顿的毫秒数，5 以下为流畅。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scroll hitches are the milliseconds of hitches per second of scrolling the system measured on this device over the previous day; under 5 is smooth."
           }
         }
       }

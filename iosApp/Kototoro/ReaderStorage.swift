@@ -92,9 +92,18 @@ struct ReaderStorageMetadata: Codable, Equatable, Sendable {
     let mediaKind: String
 
     var directoryID: String { Self.directoryID(contentID: contentID, chapterID: chapterID) }
+    /// Lowercase hex of the SHA-256, written from a table: `String(format: "%02x")` per byte cost most of the time.
     static func directoryID(contentID: String, chapterID: String) -> String {
-        SHA256.hash(data: Data((contentID + ":" + chapterID).utf8)).map { String(format: "%02x", $0) }.joined()
+        let digest = SHA256.hash(data: Data((contentID + ":" + chapterID).utf8))
+        var hex = [UInt8]()
+        hex.reserveCapacity(SHA256.byteCount * 2)
+        for byte in digest {
+            hex.append(hexDigits[Int(byte >> 4)])
+            hex.append(hexDigits[Int(byte & 0x0f)])
+        }
+        return String(decoding: hex, as: UTF8.self)
     }
+    private static let hexDigits = Array("0123456789abcdef".utf8)
 }
 
 /// A finished offline chapter: what it is, the request it was downloaded with (the work's and chapter's source fields,

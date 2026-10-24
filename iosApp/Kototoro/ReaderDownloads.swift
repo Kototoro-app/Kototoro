@@ -38,7 +38,8 @@ enum ReaderDownloads {
         return try await runtime.pages(chapter: chapter)
     }
     static func loadedPage(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter,
-                           page: IosSourcePage, index: Int, cropMargins: Bool = false) async throws -> ReaderLoadedPage {
+                           page: IosSourcePage, index: Int, cropMargins: Bool = false,
+                           displayLimit: ReaderDisplayLimit? = nil) async throws -> ReaderLoadedPage {
         let dir = try directory(content: content, chapter: chapter)
         let manifest = try? await ReaderDownloadStore.shared.read(in: dir)
         try Task.checkCancellation()
@@ -47,12 +48,12 @@ enum ReaderDownloads {
             do {
                 return try await ReaderImageArtifact.load(directory: dir, relativePath: record.path,
                                                          sha256: record.hash, byteSize: record.bytes,
-                                                         cropMargins: cropMargins)
+                                                         cropMargins: cropMargins, displayLimit: displayLimit)
             } catch {
                 try Task.checkCancellation()
                 // Only this page is re-fetched; keep all other verified offline files and the original request context.
                 let fetched = try await runtime.image(page: page)
-                let loaded = try await fetched.loadedPage(cropMargins: cropMargins)
+                let loaded = try await fetched.loadedPage(cropMargins: cropMargins, displayLimit: displayLimit)
                 let replacement = ImageRecord(path: fetched.relativePath, hash: fetched.sha256, bytes: fetched.byteSize)
                 if try await ReaderDownloadStore.shared.repairImage(
                     in: dir, index: index, expected: manifest, replacement: replacement,
@@ -63,13 +64,21 @@ enum ReaderDownloads {
                         directory: dir, relativePath: artifact.relativePath, sha256: artifact.sha256,
                         byteSize: artifact.byteSize, encodedWidth: artifact.encodedWidth,
                         encodedHeight: artifact.encodedHeight, tiled: artifact.tiled
-                    ))
+                    ), limited: loaded.limited, sourceWidth: loaded.sourceWidth, sourceHeight: loaded.sourceHeight)
                 }
                 return loaded
             }
         }
-        return try await runtime.image(page: page).loadedPage(cropMargins: cropMargins)
+        return try await runtime.image(page: page).loadedPage(cropMargins: cropMargins, displayLimit: displayLimit)
     }
+    /// The encoded size of a downloaded page from its file's header (see `ReaderImageArtifact.sourceSize`).
+    static func sourceSize(content: IosSourceContent, chapter: IosSourceChapter, index: Int) async -> (width: Int, height: Int)? {
+        guard let dir = try? directory(content: content, chapter: chapter),
+              let manifest = try? await ReaderDownloadStore.shared.read(in: dir),
+              manifest.images.indices.contains(index) else { return nil }
+        return await ReaderImageArtifact.sourceSize(directory: dir, relativePath: manifest.images[index].path)
+    }
+
     static func image(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter,
                       page: IosSourcePage, index: Int, cropMargins: Bool = false) async throws -> UIImage {
         try await loadedPage(runtime: runtime, content: content, chapter: chapter, page: page,

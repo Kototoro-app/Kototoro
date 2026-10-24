@@ -18,6 +18,9 @@ data class FeedItem(
     val count: Int,
     val isNew: Boolean,
     val totalChapters: Int = 0,
+    val logIds: List<Long> = listOf(id),
+    val pendingCount: Int = -1,
+    val updateChapters: List<org.skepsun.kototoro.tracker.domain.UpdateChapter> = emptyList(),
 ) : ListModel {
 
     val imageUrl: String?

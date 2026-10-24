@@ -4092,4 +4092,11 @@
     <string name="choose_cover">Choose image</string>
     <string name="remove_custom_cover">Reset cover</string>
     <string name="custom_cover_failed">Could not read this image</string>
+    <string name="update_pending_chapters">%1$d unread chapters</string>
+    <string name="update_read_completed">Read</string>
+    <string name="update_chapters_available">Chapter updates available</string>
+    <string name="update_source_time">Source updated: %1$s</string>
+    <string name="update_source_time_unknown">Source update time unknown</string>
+    <string name="update_source_time_partial">Some times unknown</string>
+    <string name="update_chapter_details">Chapter details</string>
 </resources>

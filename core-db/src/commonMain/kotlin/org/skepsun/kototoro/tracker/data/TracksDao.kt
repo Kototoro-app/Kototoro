@@ -56,6 +56,7 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
             SELECT manga_id
             FROM tracks
             WHERE chapters_new > 0
+                AND NOT EXISTS (SELECT 1 FROM track_logs WHERE track_logs.manga_id = tracks.manga_id)
         )
         """,
     )
@@ -97,6 +98,10 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
     @Query("UPDATE tracks SET chapters_new = 0 WHERE manga_id = :mangaId")
     abstract suspend fun clearCounter(mangaId: Long)
 
+    @Query("UPDATE tracks SET chapters_new = :count WHERE manga_id = :mangaId AND chapters_new != :count")
+    abstract suspend fun updateCounter(mangaId: Long, count: Int)
+
+    /** Recover a missing anchor from its latest unread batch, without adding overlapping historical events. */
     @Query(
         """
         INSERT OR IGNORE INTO tracks(
@@ -108,91 +113,34 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
             last_result,
             last_error
         )
-        SELECT manga_id,
+        SELECT log.manga_id,
             0,
-            SUM(
-                CASE
-                    WHEN chapters LIKE 'New chapters x %' THEN CAST(SUBSTR(chapters, 16) AS INTEGER)
-                    WHEN chapters = '' THEN 1
-                    ELSE LENGTH(chapters) - LENGTH(REPLACE(chapters, CHAR(10), '')) + 1
-                END
-            ),
-            MAX(created_at),
-            MAX(created_at),
+            CASE
+                WHEN log.chapters LIKE 'New chapters x %' THEN CAST(SUBSTR(log.chapters, 16) AS INTEGER)
+                WHEN log.chapters = '' THEN 1
+                ELSE LENGTH(log.chapters) - LENGTH(REPLACE(log.chapters, CHAR(10), '')) + 1
+            END,
+            log.created_at,
+            0,
             1,
             NULL
-        FROM track_logs
-        WHERE unread = 1
+        FROM track_logs AS log
+        WHERE log.unread = 1
             AND EXISTS (
-                SELECT 1
-                FROM manga
-                WHERE manga.manga_id = track_logs.manga_id
+                SELECT 1 FROM manga WHERE manga.manga_id = log.manga_id
             )
             AND NOT EXISTS (
-                SELECT 1
-                FROM tracks
-                WHERE tracks.manga_id = track_logs.manga_id
+                SELECT 1 FROM tracks WHERE tracks.manga_id = log.manga_id
             )
-        GROUP BY manga_id
+            AND log.id = (
+                SELECT latest.id FROM track_logs AS latest
+                WHERE latest.manga_id = log.manga_id AND latest.unread = 1
+                ORDER BY latest.created_at DESC, latest.id DESC
+                LIMIT 1
+            )
         """,
     )
     abstract suspend fun insertTracksFromUnreadLogs()
-
-    @Query(
-        """
-        UPDATE tracks
-        SET
-            chapters_new = MAX(
-                chapters_new,
-                (
-                    SELECT SUM(
-                        CASE
-                            WHEN track_logs.chapters LIKE 'New chapters x %' THEN CAST(SUBSTR(track_logs.chapters, 16) AS INTEGER)
-                            WHEN track_logs.chapters = '' THEN 1
-                            ELSE LENGTH(track_logs.chapters) - LENGTH(REPLACE(track_logs.chapters, CHAR(10), '')) + 1
-                        END
-                    )
-                    FROM track_logs
-                    WHERE track_logs.manga_id = tracks.manga_id
-                        AND track_logs.unread = 1
-                )
-            ),
-            last_check_time = MAX(
-                last_check_time,
-                IFNULL((
-                    SELECT MAX(created_at)
-                    FROM track_logs
-                    WHERE track_logs.manga_id = tracks.manga_id
-                        AND track_logs.unread = 1
-                ), 0)
-            ),
-            last_chapter_date = MAX(
-                last_chapter_date,
-                IFNULL((
-                    SELECT MAX(created_at)
-                    FROM track_logs
-                    WHERE track_logs.manga_id = tracks.manga_id
-                        AND track_logs.unread = 1
-                ), 0)
-            ),
-            last_result = CASE
-                WHEN (
-                    SELECT COUNT(*)
-                    FROM track_logs
-                    WHERE track_logs.manga_id = tracks.manga_id
-                        AND track_logs.unread = 1
-                ) > 0 THEN 1
-                ELSE last_result
-            END
-        WHERE EXISTS (
-            SELECT 1
-            FROM track_logs
-            WHERE track_logs.manga_id = tracks.manga_id
-                AND track_logs.unread = 1
-        )
-        """,
-    )
-    abstract suspend fun restoreCountersFromUnreadLogs()
 
     @Query("DELETE FROM tracks WHERE manga_id = :mangaId")
     abstract suspend fun delete(mangaId: Long)

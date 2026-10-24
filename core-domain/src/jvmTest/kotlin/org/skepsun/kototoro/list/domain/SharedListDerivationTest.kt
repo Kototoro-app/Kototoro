@@ -155,7 +155,9 @@ class SharedListDerivationTest {
             ),
             feedLimit = 1,
         ))
-        assertEquals(listOf(2L), result.visibleRows.map { it.logId })
+        // Both row 1 and row 2 carry category 7, so the join must happen before the limit; pinned no longer jumps the
+        // queue (FEED_ORDER is discovery time only), so the newest matching row is what the single slot shows.
+        assertEquals(listOf(1L), result.visibleRows.map { it.logId })
     }
 
     @Test

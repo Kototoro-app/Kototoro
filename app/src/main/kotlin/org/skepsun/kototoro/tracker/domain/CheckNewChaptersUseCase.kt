@@ -46,6 +46,7 @@ class CheckNewChaptersUseCase @Inject constructor(
     }
 
     suspend operator fun invoke(manga: Content, currentChapterId: Long, percent: Float) {
+        if (repository.updateReadChapter(manga.id, currentChapterId, percent)) return
         if (ReadingProgress.isCompleted(percent)) {
             markCompleted(manga)
         } else {
@@ -54,6 +55,7 @@ class CheckNewChaptersUseCase @Inject constructor(
     }
 
     suspend operator fun invoke(manga: Content, currentChapterId: Long) = mutex.withLock(manga.id) {
+        if (repository.updateReadChapter(manga.id, currentChapterId)) return@withLock
         runCatchingCancellable {
             repository.updateTracks()
             val details = getFullContent(manga)

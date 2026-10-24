@@ -946,6 +946,7 @@ internal fun FeedTopLevelRouteContent(
                     selectedFeedItemIds + item.id
                 }
             },
+            onFeedDetailsViewed = viewModel::onItemClick,
             onFeedItemContinueReading = { item ->
                 viewModel.onItemClick(item)
                 appRouter.openReader(item.toContentWithOverride())

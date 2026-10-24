@@ -63,6 +63,11 @@ data class FeedCardRow(
     /** Stable group/origin bit flags for the group tab and source-tag filters. */
     val sourceGroupFlags: Int,
     val sourceOriginFlags: Int,
+    val chapterMetadata: String = "",
+    val logIds: List<Long> = listOf(logId),
+    val pendingCount: Int = -1,
+    val updateCount: Int = chapters.size,
+    val updateChapters: List<org.skepsun.kototoro.tracker.domain.UpdateChapter> = emptyList(),
 ) {
     val hasDisplay: Boolean
         get() = displayMangaId != null

@@ -49,6 +49,19 @@ class MainNavigationRulesTest {
     }
 
     @Test
+    fun `a drag past the end clamps the item to that edge`() {
+        val items = listOf("HOME", "HISTORY", "FAVOURITES")
+        assertEquals(
+            listOf("FAVOURITES", "HOME", "HISTORY"),
+            MainNavigationRules.step(items, "FAVOURITES", direction = -10),
+        )
+        assertEquals(
+            listOf("HISTORY", "FAVOURITES", "HOME"),
+            MainNavigationRules.step(items, "HOME", direction = 10),
+        )
+    }
+
+    @Test
     fun `adding respects the cap and the existing entries`() {
         val full = listOf("HOME", "HISTORY", "FAVOURITES", "EXPLORE", "FEED")
         assertEquals(full, MainNavigationRules.add(full, "LOCAL"))

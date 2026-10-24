@@ -55,7 +55,23 @@ data class IosTimelineEvent(
     val hasProgress: Boolean = false,
     val progress: Float = 0f,
     val downloadChapters: List<IosSourceChapter> = emptyList(),
+    val updateLogIds: List<Long> = emptyList(),
+    val updateChapterKeys: List<String> = emptyList(),
+    val pendingCount: Int = -1,
+    val isUnseen: Boolean = false,
+    val publishedAt: Long = 0,
+    val publishedFrom: Long = 0,
+    val unknownPublishedCount: Int = 0,
+    val updateChapters: List<IosUpdateChapterInfo> = emptyList(),
 )
+
+class IosUpdateChapterInfo internal constructor(value: org.skepsun.kototoro.tracker.domain.UpdateChapter) {
+    val key = value.key
+    val title = value.title
+    val sourceUpdatedAt = value.publishedAt
+    val discoveredAt = value.discoveredAt
+    val isRead = value.readAt > 0
+}
 
 class IosStatsDashboard internal constructor(
     value: ReadingStatistics,
@@ -150,11 +166,18 @@ class IosStatistics internal constructor(private val owner: IosLibrary) {
                         latest?.endPercent ?: if (!work.hasTimedStats) work.progress else 0f)
                 }
             }
-            logs.forEach { log -> contents[log.mangaId]?.let { content ->
-                val names = log.chapters.lines().filter(String::isNotBlank)
-                timeline += IosTimelineEvent("update-${log.id}", content, log.createdAt, true,
-                    names.joinToString("、"), 0, names.size,
-                    downloadChapters = resolveUpdateDownloadChapters(updateContents[log.mangaId] ?: content, names))
+            org.skepsun.kototoro.tracker.domain.dailyUpdateGroups(logs, zone).forEach { group -> contents[group.mangaId]?.let { content ->
+                val full = updateContents[group.mangaId] ?: content
+                val keys = group.chapters.map { it.key }
+                timeline += IosTimelineEvent("update-${group.logs.maxBy { it.createdAt }.id}", content,
+                    group.discoveredAt, true, group.names.joinToString("、"), 0, group.count,
+                    downloadChapters = resolveUpdateEventChapters(full, group.names, keys),
+                    updateLogIds = group.logs.map { it.id }, updateChapterKeys = keys,
+                    pendingCount = group.pendingCount, isUnseen = group.isUnseen,
+                    publishedAt = group.chapters.maxOfOrNull { it.publishedAt } ?: 0,
+                    publishedFrom = group.chapters.filter { it.publishedAt > 0 }.minOfOrNull { it.publishedAt } ?: 0,
+                    unknownPublishedCount = group.chapters.count { it.publishedAt <= 0 },
+                    updateChapters = group.chapters.map(::IosUpdateChapterInfo))
             } }
             IosStatsDashboard(value, works, timeline.sortedByDescending { it.timestamp }, window.from, now)
         } }

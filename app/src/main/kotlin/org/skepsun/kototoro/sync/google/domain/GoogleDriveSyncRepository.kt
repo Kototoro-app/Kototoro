@@ -55,10 +55,9 @@ import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.stats.data.StatsEntity
 import org.skepsun.kototoro.tracker.data.TrackEntity
+import org.skepsun.kototoro.tracker.data.mergeRestoredTrack
+import org.skepsun.kototoro.tracker.data.mergeRestoredTrackLog
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
-import org.skepsun.kototoro.tracker.data.canBeClearedBy
-import org.skepsun.kototoro.tracker.data.isNewerThan
-import org.skepsun.kototoro.tracker.data.mergeRestoredTrackNewChapters
 import org.skepsun.kototoro.tracker.data.normalizeTrackFeedState
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import java.io.File
@@ -612,57 +611,12 @@ class GoogleDriveSyncRepository @Inject constructor(
     }
 
     private suspend fun MangaDatabase.mergeTrack(remote: TrackEntity) {
-        if (!getMangaDao().contains(remote.mangaId)) {
-            return
-        }
-        val dao = getTracksDao()
-        val local = dao.find(remote.mangaId)
-        if (local == null) {
-            dao.upsert(remote)
-            return
-        }
-        dao.upsert(local.mergeWith(remote))
-    }
-
-    private fun TrackEntity.mergeWith(remote: TrackEntity): TrackEntity {
-        val newer = if (remote.isNewerThan(this)) remote else this
-        val mergedLastError = when {
-            newer.lastResult == TrackEntity.RESULT_FAILED -> newer.lastError
-            lastResult == TrackEntity.RESULT_FAILED && remote.lastResult != TrackEntity.RESULT_FAILED -> remote.lastError
-            else -> null
-        }
-        return TrackEntity(
-            mangaId = mangaId,
-            lastChapterId = newer.lastChapterId,
-            newChapters = mergeRestoredTrackNewChapters(this, remote),
-            lastCheckTime = maxOf(lastCheckTime, remote.lastCheckTime),
-            lastChapterDate = maxOf(lastChapterDate, remote.lastChapterDate),
-            lastResult = newer.lastResult,
-            lastError = mergedLastError,
-        )
+        if (getMangaDao().contains(remote.mangaId)) mergeRestoredTrack(remote)
     }
 
     private suspend fun MangaDatabase.mergeTrackLog(remote: TrackLogEntity) {
-        if (!getMangaDao().contains(remote.mangaId)) {
-            return
-        }
-        val dao = getTrackLogsDao()
-        val existing = dao.findDuplicate(
-            mangaId = remote.mangaId,
-            chapters = remote.chapters,
-            createdAt = remote.createdAt,
-        )
-        if (existing == null) {
-            dao.insert(remote)
-        } else if (existing.isUnread && !remote.isUnread) {
-            dao.markAsRead(existing.id)
-            getTracksDao().find(existing.mangaId)
-                ?.takeIf { it.canBeClearedBy(remote) }
-                ?.let { getTracksDao().clearCounter(existing.mangaId) }
-        } else if (!existing.isUnread) {
-            getTracksDao().find(existing.mangaId)
-                ?.takeIf { it.canBeClearedBy(existing) }
-                ?.let { getTracksDao().clearCounter(existing.mangaId) }
+        if (getMangaDao().contains(remote.mangaId)) {
+            mergeRestoredTrackLog(remote)
         }
     }
 

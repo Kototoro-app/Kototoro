@@ -18,10 +18,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -29,6 +31,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,6 +39,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -109,6 +114,7 @@ fun FeedTimelineCard(
     continueAction: FeedContinueAction? = null,
     /** Keeps the continue button clear of a trailing fast-scroll strip. */
     continueEndInset: Dp = 0.dp,
+    supportingContent: (@Composable () -> Unit)? = null,
 ) {
     val nodeColor = if (isNew) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.66f)
     val leadingSpace = feedTimelineCardLeadingSpace(screenPadding)
@@ -181,6 +187,7 @@ fun FeedTimelineCard(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
+                    supportingContent?.invoke()
                 }
                 if (continueAction != null) {
                     Spacer(modifier = Modifier.width(8.dp))
@@ -201,6 +208,35 @@ fun FeedTimelineCard(
             )
         }
     }
+}
+
+/** Source-declared chapter dates belong beside the discovery timeline, with per-chapter detail when merged. */
+@Composable
+fun FeedUpdateDetails(
+    summary: String,
+    chapters: List<Pair<String, String>>,
+    detailsLabel: String,
+    closeLabel: String,
+    onViewed: () -> Unit = {},
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (chapters.size > 1) TextButton(onClick = { expanded = true; onViewed() }) { Text(detailsLabel) }
+    if (expanded) AlertDialog(
+        onDismissRequest = { expanded = false },
+        title = { Text(detailsLabel) },
+        text = {
+            LazyColumn(Modifier.heightIn(max = 400.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                itemsIndexed(chapters) { _, chapter ->
+                    Column {
+                        Text(chapter.first, style = MaterialTheme.typography.bodyMedium)
+                        Text(chapter.second, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { expanded = false }) { Text(closeLabel) } },
+    )
 }
 
 @Composable

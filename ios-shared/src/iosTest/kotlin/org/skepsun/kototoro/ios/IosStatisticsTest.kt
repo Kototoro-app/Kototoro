@@ -4,8 +4,15 @@ package org.skepsun.kototoro.ios
 
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.core.source.SourceChapter
+import org.skepsun.kototoro.core.source.SourceCall
 import org.skepsun.kototoro.core.source.SourceContent
+import org.skepsun.kototoro.core.source.SourceProtocolJson
 import org.skepsun.kototoro.core.source.SourceRef
+import org.skepsun.kototoro.core.source.SourceRequest
+import org.skepsun.kototoro.core.source.SourceResponse
+import org.skepsun.kototoro.core.source.SourceResult
+import org.skepsun.kototoro.tracker.data.TrackEntity
+import org.skepsun.kototoro.tracker.domain.recordUpdateBatch
 import org.skepsun.kototoro.stats.data.StatsEntity
 import org.skepsun.kototoro.stats.domain.ReadingSessionPosition
 import org.skepsun.kototoro.stats.domain.ReadingSessionSample
@@ -17,6 +24,105 @@ import kotlin.test.*
 import kotlin.time.Clock
 
 class IosStatisticsTest {
+    @Test
+    fun updateTimelineGroupsDiscoveriesAndKeepsSeenSeparateFromCompletedChapters() = withDirectory { directory ->
+        val library = IosLibrary("$directory/library.db")
+        val original = work(1)
+        val first = original.value.chapters!!.single().copy(uploadDate = 1_704_096_000_000L)
+        val second = first.copy(id = 11, title = "第二话", number = 2f, url = "/chapter/11", uploadDate = 1_704_182_400_000L)
+        val content = IosSourceContent(original.value.copy(chapters = listOf(first, second)))
+        val time = 1_704_268_800_000L
+        try {
+            library.saveDetails(content)
+            library.database.getTracksDao().upsert(TrackEntity.create(1))
+            assertEquals(1, library.database.recordUpdateBatch(1, setOf(10), time))
+            assertEquals(1, library.database.recordUpdateBatch(1, setOf(11), time + 1))
+            assertEquals(0, library.database.recordUpdateBatch(1, setOf(10, 11), time + 2))
+            val before = library.statistics.snapshot("ALL", "ALL", "", null).timeline.single { it.isUpdate }
+            assertEquals(2, before.count)
+            assertEquals(2, before.pendingCount)
+            assertEquals(2, before.updateLogIds.size)
+            assertEquals(listOf("10", "11"), before.downloadChapters.map { it.id })
+            assertTrue(before.isUnseen)
+            assertEquals(first.uploadDate, before.publishedFrom)
+            assertEquals(second.uploadDate, before.publishedAt)
+            assertEquals(0, before.unknownPublishedCount)
+            assertEquals(listOf(first.uploadDate, second.uploadDate), before.updateChapters.map { it.sourceUpdatedAt })
+            val sources = updateSource { error("Stored chapter identities should not need another request") }
+            try {
+                assertEquals(2, library.prepareUpdateDownload(before, sources).downloadChapters.size)
+                assertEquals(2, library.updates().single().newChapters)
+                assertTrue(library.statistics.snapshot("ALL", "ALL", "", null).timeline.single { it.isUpdate }.isUnseen)
+            } finally { sources.close() }
+            library.markUpdateSeen(before)
+            assertEquals(2, library.updates().single().newChapters)
+            assertFalse(library.statistics.snapshot("ALL", "ALL", "", null).timeline.single { it.isUpdate }.isUnseen)
+            library.recordPosition(content, IosSourceChapter(first), 0, 2, 0f)
+            assertEquals(2, library.updates().single().newChapters)
+            library.recordPosition(content, IosSourceChapter(first), 1, 2, 0f)
+            val partial = library.statistics.snapshot("ALL", "ALL", "", null).timeline.single { it.isUpdate }
+            assertEquals(2, partial.count)
+            assertEquals(1, partial.pendingCount)
+            assertEquals(before.timestamp, partial.timestamp)
+            library.recordPosition(content, IosSourceChapter(second), 1, 2, 0f)
+            assertTrue(library.updates().isEmpty())
+            val complete = library.statistics.snapshot("ALL", "ALL", "", null).timeline.single { it.isUpdate }
+            assertEquals(2, complete.count)
+            assertEquals(0, complete.pendingCount)
+            assertEquals(before.timestamp, complete.timestamp)
+        } finally { library.close() }
+    }
+
+    @Test
+    fun updateDownloadDoesNotRequireOpeningDetailsToPopulateChapters() = withDirectory { directory ->
+        val library = IosLibrary("$directory/library.db")
+        val original = work(1)
+        library.updateSources(listOf(IosSource(original.sourceName, "测试源", "zh", "MANGA", "extension")))
+        val updated = original.value.chapters!!.single().copy(sourceData = "opaque-download-request")
+        val older = updated.copy(id = 9, title = "旧章节", number = 0f)
+        val full = original.value.copy(chapters = listOf(older, updated))
+        var fetches = 0
+        val sources = updateSource {
+            fetches++
+            full
+        }
+        try {
+            library.saveDetails(IosSourceContent(full.copy(chapters = null)))
+            library.database.getTrackLogsDao().insert(TrackLogEntity(
+                mangaId = 1, chapters = "第一话", createdAt = Clock.System.now().toEpochMilliseconds(), isUnread = true,
+            ))
+            val before = library.statistics.snapshot("ALL", "ALL", "", null).timeline.single { it.isUpdate }
+            assertTrue(before.downloadChapters.isEmpty())
+            val prepared = library.prepareUpdateDownload(before, sources)
+            val after = library.statistics.snapshot("ALL", "ALL", "", null).timeline.single { it.isUpdate }
+            assertEquals(listOf(updated), prepared.downloadChapters.map { it.value })
+            assertEquals(after.downloadChapters.map { it.id }, prepared.downloadChapters.map { it.id })
+            assertEquals(full, library.storedDetails(before.content)?.value)
+            assertEquals(prepared.downloadChapters.map { it.id },
+                library.prepareUpdateDownload(before, sources).downloadChapters.map { it.id })
+            assertEquals(1, fetches, "A populated chapter cache must not require another source request")
+        } finally { sources.close(); library.close() }
+    }
+
+    @Test
+    fun updateDownloadRejectsAmbiguousOrMissingChapterNamesAfterRefresh() = withDirectory { directory ->
+        val library = IosLibrary("$directory/library.db")
+        val original = work(1)
+        val chapter = original.value.chapters!!.single()
+        var fetched = original.value.copy(chapters = listOf(chapter, chapter.copy(id = 11, branch = "另一分支")))
+        val sources = updateSource { fetched }
+        try {
+            library.saveDetails(IosSourceContent(original.value.copy(chapters = null)))
+            library.database.getTrackLogsDao().insert(TrackLogEntity(
+                mangaId = 1, chapters = "第一话", createdAt = Clock.System.now().toEpochMilliseconds(), isUnread = true,
+            ))
+            val event = library.statistics.snapshot("ALL", "ALL", "", null).timeline.single { it.isUpdate }
+            assertFailsWith<IllegalStateException> { library.prepareUpdateDownload(event, sources) }
+            fetched = original.value.copy(chapters = listOf(chapter.copy(title = "其他章节")))
+            assertFailsWith<IllegalStateException> { library.prepareUpdateDownload(event, sources) }
+        } finally { sources.close(); library.close() }
+    }
+
     @Test
     fun updateDownloadsRequireUniqueStoredChapterNamesAndKeepOpaqueFields() {
         val original = work(1)
@@ -95,7 +201,7 @@ class IosStatisticsTest {
             library.database.getStatsDao().upsert(StatsEntity(2, now, 10_000, 0))
             library.database.getTrackLogsDao().insert(TrackLogEntity(mangaId = 1, chapters = "第二话\n第三话",
                 createdAt = now, isUnread = true))
-            library.markUpdateRead(manga)
+            library.markUpdatesSeen(manga)
             val all = library.statistics.snapshot("ALL", "ALL", "", null)
             assertEquals(30_000L, all.totalDuration)
             assertEquals(1, all.timeline.count { it.isUpdate })
@@ -144,6 +250,17 @@ class IosStatisticsTest {
             assertFalse(removed.works.single().isHistoryVisible)
         } finally { library.close() }
     }
+
+    private fun updateSource(details: (SourceContent) -> SourceContent) = IosSources(object : IosSourceTransport {
+        override fun exchange(requestJson: String): String {
+            val request = SourceProtocolJson.decodeFromString<SourceRequest>(requestJson)
+            val call = request.call as? SourceCall.Details ?: error("Unexpected call: ${request.call}")
+            val result = SourceResult.Details(details(call.content))
+            return SourceProtocolJson.encodeToString(SourceResponse(1, request.requestId, result))
+        }
+
+        override fun close() = Unit
+    })
 
     private fun work(id: Long, type: String = "MANGA"): IosSourceContent {
         val source = SourceRef("STATISTICS_$type", "zh", type)

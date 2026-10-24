@@ -41,6 +41,7 @@ data class FeedLogRow(
     @ColumnInfo(name = "display_state") val displayState: String?,
     @ColumnInfo(name = "display_nsfw") val displayNsfw: Boolean?,
     @ColumnInfo(name = "display_rating") val displayRating: Float?,
+    @ColumnInfo(name = "chapter_metadata") val chapterMetadata: String = "",
 ) {
     /** True when the display manga exists (a dangling anchor yields a broken row). */
     val hasDisplay: Boolean

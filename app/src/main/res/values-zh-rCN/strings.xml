@@ -3909,4 +3909,11 @@ SHA-256 指纹:
     <string name="choose_cover">选择图片</string>
     <string name="remove_custom_cover">重置封面</string>
     <string name="custom_cover_failed">无法读取这张图片</string>
+    <string name="update_pending_chapters">待读 %1$d 章</string>
+    <string name="update_read_completed">已读完</string>
+    <string name="update_chapters_available">有章节更新</string>
+    <string name="update_source_time">来源更新于 %1$s</string>
+    <string name="update_source_time_unknown">来源更新时间未知</string>
+    <string name="update_source_time_partial">部分时间未知</string>
+    <string name="update_chapter_details">章节明细</string>
 </resources>

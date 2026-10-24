@@ -30,6 +30,11 @@ import org.skepsun.kototoro.core.ui.compose.rememberDeferredContentCoverBounds
 import org.skepsun.kototoro.core.ui.feed.FeedContinueAction
 import org.skepsun.kototoro.core.ui.feed.FeedCoverWidth
 import org.skepsun.kototoro.core.ui.feed.FeedTimelineCard
+import org.skepsun.kototoro.core.ui.feed.FeedUpdateDetails
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.list.ui.compose.ContentCardNsfwBadge
 import org.skepsun.kototoro.list.ui.compose.contentCardBadgeMetricsFor
@@ -46,6 +51,7 @@ fun FeedItemCard(
     timelineLabel: String? = null,
     onLongClick: (() -> Unit)? = null,
     onContinueReading: (() -> Unit)? = null,
+    onDetailsViewed: () -> Unit = {},
 ) {
     val coverBounds = rememberDeferredContentCoverBounds()
     val badgeMetrics = remember { contentCardBadgeMetricsFor(FeedCoverWidth) }
@@ -71,14 +77,22 @@ fun FeedItemCard(
             HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
         }
     }
-    val chapterText = if (item.count > 0) {
+    val batchText = if (item.count < 0) {
+        stringResource(R.string.update_chapters_available)
+    } else if (item.count > 0) {
         pluralStringResource(id = R.plurals.new_chapters, count = item.count, item.count)
     } else {
         pluralStringResource(id = R.plurals.old_chapters_in_total, count = item.totalChapters, item.totalChapters)
     }
+    val chapterText = batchText + when {
+        item.pendingCount < 0 -> ""
+        item.pendingCount == 0 -> " · " + stringResource(R.string.update_read_completed)
+        else -> " · " + stringResource(R.string.update_pending_chapters, item.pendingCount)
+    }
     val continueLabel = stringResource(R.string.continue_reading)
     val continueIcon = painterResource(id = R.drawable.ic_read)
     FeedTimelineCard(
+        supportingContent = { UpdateSourceDetails(item, onDetailsViewed) },
         title = item.title,
         chapterText = chapterText,
         isNew = item.isNew,
@@ -127,3 +141,27 @@ fun FeedItemCard(
 
 /** The shared card's trailing padding. */
 private val FeedCardEndPadding = 16.dp
+
+@Composable
+private fun UpdateSourceDetails(item: FeedItem, onViewed: () -> Unit) {
+    val locale = LocalContext.current.resources.configuration.locales[0]
+    val zone = ZoneId.systemDefault()
+    val dateFormat = remember(locale) { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale) }
+    val detailFormat = remember(locale) {
+        DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withLocale(locale)
+    }
+    fun date(value: Long) = Instant.ofEpochMilli(value).atZone(zone).format(dateFormat)
+    val known = item.updateChapters.map { it.publishedAt }.filter { it > 0 }
+    val unknown = stringResource(R.string.update_source_time_unknown)
+    val summary = if (known.isEmpty()) unknown else {
+        val from = date(known.min())
+        val until = date(known.max())
+        stringResource(R.string.update_source_time, if (from == until) from else "$from — $until") +
+            if (known.size < item.updateChapters.size) " · " + stringResource(R.string.update_source_time_partial) else ""
+    }
+    val details = item.updateChapters.map { chapter ->
+        chapter.title to if (chapter.publishedAt > 0) stringResource(R.string.update_source_time,
+            Instant.ofEpochMilli(chapter.publishedAt).atZone(zone).format(detailFormat)) else unknown
+    }
+    FeedUpdateDetails(summary, details, stringResource(R.string.update_chapter_details), stringResource(R.string.close), onViewed)
+}

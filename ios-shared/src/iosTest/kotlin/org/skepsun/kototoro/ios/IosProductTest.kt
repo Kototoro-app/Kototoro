@@ -4,6 +4,7 @@ package org.skepsun.kototoro.ios
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.core.source.*
 import platform.Foundation.*
+import kotlin.math.abs
 import kotlin.test.*
 
 class IosProductTest {
@@ -88,7 +89,7 @@ class IosProductTest {
     }
 
     @Test
-    fun updateChecksUseReadBranchAndClearUnreadCounter() = runBlocking {
+    fun updateChecksUseReadBranchAndKeepSeenSeparateFromReading() = runBlocking {
         withDatabase { path ->
             val library = IosLibrary(path)
             var fresh = content
@@ -106,11 +107,14 @@ class IosProductTest {
                 library.setFavourite(item, true)
                 library.recordPosition(item, IosSourceChapter(chapter), 0, 4, 0f)
                 assertEquals(0, library.checkUpdates(runtime).newChapters)
-                fresh = content.copy(chapters = listOf(chapter, otherBranch, chapter.copy(id = 333, number = 2f),
-                    otherBranch.copy(id = 444, number = 2f)))
+                fresh = content.copy(chapters = listOf(chapter, otherBranch, chapter.copy(id = 333, number = 2f, url = "/chapter/333"),
+                    otherBranch.copy(id = 444, number = 2f, url = "/chapter/444")))
                 assertEquals(1, library.checkUpdates(runtime).newChapters)
                 assertEquals(1, library.updates().single().newChapters)
-                library.markUpdateRead(item)
+                library.markUpdatesSeen(item)
+                assertEquals(1, library.updates().single().newChapters)
+                val updated = IosSourceContent(fresh)
+                library.recordPosition(updated, updated.chapters.single { it.id == "333" }, 3, 4, 0f)
                 assertTrue(library.updates().isEmpty())
             } finally { runtime.close(); library.close() }
         }
@@ -229,6 +233,56 @@ class IosProductTest {
         assertTrue(fling.maxOf { it.index } > window.maxOf { it.index })
         reader.configure(pages.size, 600, 800, 0, false, false, 0)
         assertNull(reader.resourceWindow(0f, 0f, 0f, 0f, false, true))
+    }
+
+    @Test
+    fun continuousUnknownPagesTakeTheChapterRatioWithoutMovingTheReadPage() {
+        val reader = IosReader()
+        val pages = (0..9).map { IosReaderPage("chapter", it) }
+        reader.setPages(pages)
+        reader.configure(pages.size, 600, 800, 3, false, false, 0)
+        fun height(index: Int) = reader.slots()[index].placements.single().height
+        // Unknown pages are a screen tall, and one decoded page is not a chapter ratio yet.
+        assertEquals(800f, height(5))
+        reader.setImageSize(0, 600, 1800)
+        assertEquals(800f, height(5))
+        // Two pages agree on 1:3: every unknown page takes it, while the page being read stays where it is.
+        val origin = reader.scrollOrigin(1, 100f)
+        val moved = assertNotNull(reader.setImageSize(1, 600, 1800, 0f, origin))
+        assertTrue(abs(height(5) - 1800f) <= 1f, "unknown page height ${height(5)}")
+        assertEquals(IosReaderProgress(1, 100f), reader.progress(moved.x, moved.y))
+        // A new scene starts the ratio over.
+        reader.reset()
+        reader.setPages(pages)
+        reader.configure(pages.size, 600, 800, 3, false, false, 0)
+        assertEquals(800f, height(5))
+    }
+
+    @Test
+    fun continuousPagesDecodeWholeUnlessAndroidsPlannerWouldTileThem() {
+        val reader = IosReader()
+        // A common long strip page: one 17 MB bitmap within the 8192 px edge.
+        assertFalse(reader.plansTiled(720, 6000, 720, 6000))
+        // Past the 8192 px edge it is tiled.
+        assertTrue(reader.plansTiled(1290, 12000, 1290, 12000))
+        assertFalse(reader.plansTiled(0, 100, 1, 1))
+    }
+
+    @Test
+    fun lowPowerModePlansAndroidsReducedContinuousWindow() {
+        val reader = IosReader()
+        val pages = (0..39).map { IosReaderPage("chapter", it) }
+        reader.setPages(pages)
+        reader.configure(pages.size, 600, 800, 3, false, false, 0)
+        repeat(pages.size) { reader.setImageSize(it, 600, 800) }
+        val origin = reader.scrollOrigin(10, 0f)
+        val full = assertNotNull(reader.resourceWindow(0f, origin, 0f, 0f, false, true))
+        assertTrue(reader.setPreloadReduction(true))
+        assertFalse(reader.setPreloadReduction(true))
+        val reduced = assertNotNull(reader.resourceWindow(0f, origin, 0f, 0f, false, true))
+        assertTrue(reduced.size < full.size, "reduced ${reduced.size} vs full ${full.size}")
+        assertTrue(reader.setPreloadReduction(false))
+        assertEquals(full.size, assertNotNull(reader.resourceWindow(0f, origin, 0f, 0f, false, true)).size)
     }
 
     @Test
