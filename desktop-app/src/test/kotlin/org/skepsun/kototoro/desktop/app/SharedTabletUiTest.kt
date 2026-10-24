@@ -58,4 +58,37 @@ class SharedTabletUiTest {
             }
         }
     }
+
+    /** Windows offers Android's session-only read from this card; Android's search preview leaves the slot empty. */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `the shared preview offers the incognito action only when the host passes it`() {
+        for (offered in listOf(false, true)) runDesktopComposeUiTest(width = 380, height = 640) {
+            val actions = mutableListOf<String>()
+            val data = TabletPreviewData(42, "作品标题", "作者", "来源", "简介",
+                listOf("标签"), null, "10 章节", "连载中",
+                listOf(TabletPreviewSection("章节", listOf(TabletPreviewChapter(7, "第七章", "#7 · 作者")))))
+            val labels = TabletPreviewLabels("关闭", "阅读", "详情", "收藏", "失败", "重试", "无痕".takeIf { offered })
+            setContent {
+                DesktopTheme(DesktopAppearance.LIGHT) {
+                    TabletPreviewSurface {
+                        TabletPreviewContent(data, labels,
+                            cover = { Box(it.background(Color.Blue)) }, icon = { ColorPainter(Color.White) },
+                            onClose = { actions.add("close") }, onRead = { actions.add("read") },
+                            onOpenDetails = { actions.add("details") }, onAddToFavorites = { actions.add("favourite") },
+                            onOpenChapter = { actions.add("chapter:$it") },
+                            onReadIncognito = if (offered) ({ actions.add("incognito") }) else null)
+                    }
+                }
+            }
+            if (offered) {
+                onNodeWithText("无痕").assertExists()
+                onNodeWithTag("preview-incognito").performScrollTo().performClick()
+                assertEquals(listOf("incognito"), actions)
+            } else {
+                onNodeWithTag("preview-incognito").assertDoesNotExist()
+                assertEquals(emptyList<String>(), actions)
+            }
+        }
+    }
 }

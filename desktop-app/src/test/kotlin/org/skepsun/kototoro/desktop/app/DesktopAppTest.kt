@@ -26,6 +26,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `Windows incognito reader records nothing while a normal read does and stores Android's adult rule`() {
+        probe("incognito", directory.resolve("中文 incognito"), 120)
+    }
+
+    @Test
     fun `real Tsundoku APK installs converts and reads a novel over the live network`() {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("kototoro.dex.real.apks") != null, "no -PrealApkDirectory")
         probe("real-novel", directory.resolve("中文 real novel"), 180)

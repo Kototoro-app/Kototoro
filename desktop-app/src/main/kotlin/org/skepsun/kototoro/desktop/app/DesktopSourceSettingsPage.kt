@@ -25,6 +25,7 @@ import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
 import org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget
 import org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings
 import org.skepsun.kototoro.desktop.runtime.DesktopSourceSort
+import org.skepsun.kototoro.desktop.runtime.DesktopTriState
 
 /**
  * Android's `SourcesSettingsScreen`. Windows kept all of it inside the browse rail — the rail simply followed the
@@ -75,6 +76,11 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
                 settings.nsfwTargets.mapTo(sortedSetOf()) { it.title }.showAsList(), active,
                 { dialog = SourceSettingsDialog.NSFW_TARGETS }, testTag = "source-setting-nsfw")
             SettingsRowDivider()
+            // Android's `incognito_nsfw`: what reading an adult work does to the history.
+            SettingsValueRow(AndroidStrings["incognito_for_nsfw"], AndroidStrings["incognito_mode_hint"],
+                settings.incognitoForNsfw.title, active, { dialog = SourceSettingsDialog.INCOGNITO_NSFW },
+                testTag = "source-setting-incognito-nsfw")
+            SettingsRowDivider()
             SettingsInfoRow(desktopText("sources.adultNote"), null)
         }
     }
@@ -90,6 +96,21 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
             onPick = { name ->
                 dialog = null
                 DesktopSourceSort.entries.firstOrNull { it.name == name }?.let { update(settings.copy(sort = it)) }
+            },
+            onDismiss = { dialog = null },
+        )
+        SourceSettingsDialog.INCOGNITO_NSFW -> DesktopChoiceSettingsDialog(
+            title = AndroidStrings["incognito_for_nsfw"],
+            summary = AndroidStrings["incognito_mode_hint"],
+            bodyTag = "source-incognito-dialog",
+            optionTagPrefix = "source-incognito",
+            options = DesktopTriState.entries.map { it.title to it.name },
+            selected = settings.incognitoForNsfw.name,
+            enabled = active,
+            onPick = { name ->
+                dialog = null
+                DesktopTriState.entries.firstOrNull { it.name == name }
+                    ?.let { update(settings.copy(incognitoForNsfw = it)) }
             },
             onDismiss = { dialog = null },
         )
@@ -113,7 +134,7 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
     }
 }
 
-private enum class SourceSettingsDialog { SORT, NSFW_TARGETS }
+private enum class SourceSettingsDialog { SORT, NSFW_TARGETS, INCOGNITO_NSFW }
 
 /** Same rendering rule as the recommendations page: nothing selected reads as no value at all. */
 private fun Set<String>.showAsList(): String? =
@@ -133,4 +154,12 @@ private val DesktopNsfwTarget.title: String
         DesktopNsfwTarget.HISTORY -> desktopText("sources.nsfw.history")
         DesktopNsfwTarget.FEED -> desktopText("sources.nsfw.feed")
         DesktopNsfwTarget.UPDATES -> desktopText("sources.nsfw.updates")
+    }
+
+/** Android's three options in its `TriStateOption` order, worded as the question about adult works. */
+private val DesktopTriState.title: String
+    get() = when (this) {
+        DesktopTriState.ENABLED -> AndroidStrings["enable"]
+        DesktopTriState.ASK -> AndroidStrings["ask_every_time"]
+        DesktopTriState.DISABLED -> AndroidStrings["disable"]
     }

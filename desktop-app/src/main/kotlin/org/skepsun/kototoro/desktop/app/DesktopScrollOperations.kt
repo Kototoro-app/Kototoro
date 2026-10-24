@@ -97,6 +97,8 @@ internal class DesktopScrollOperations(private val state: MutableStateFlow<Deskt
         val chapter = snapshot.chapter ?: return
         if (!accepts(snapshot, chapter.id) || !snapshot.readerScrollReady) return
         val content = snapshot.content ?: return
+        // Android's incognito session keeps the position on screen only.
+        if (!snapshot.savesProgress) return
         val position = Position(content.id, chapter.id, snapshot.pageIndex, snapshot.readerScroll, snapshot.readerLastVisible)
         if (position == lastSaved) return
         session.library.recordPage(content, chapter, position.first, snapshot.pages.size, position.last, position.offset)

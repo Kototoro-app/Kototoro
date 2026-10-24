@@ -3,14 +3,22 @@ package org.skepsun.kototoro.desktop.runtime
 import org.skepsun.kototoro.core.model.TagBlacklist
 import org.skepsun.kototoro.core.model.TagTitleBlacklist
 import org.skepsun.kototoro.core.model.TagWarnings
+import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
+import org.skepsun.kototoro.core.source.isNsfw
 
 /**
  * Android's `SourcesSortOrder` reduced to the orders Windows can honor: it has no manual reorder editor, so the
  * third option sorts by the source language instead of a stored hand-picked sequence.
  */
 enum class DesktopSourceSort { DEFAULT, TITLE, LANGUAGE }
+
+/**
+ * Android's `TriStateOption`, stored as the constant name so a preference file written on one platform reads on the
+ * other: ENABLED means "always", DISABLED "never", ASK keeps the question for each adult work.
+ */
+enum class DesktopTriState { ENABLED, ASK, DISABLED }
 
 /**
  * Android's `AdultContentFilterTarget` reduced to the surfaces Windows actually renders. A target hides 18+ works
@@ -31,6 +39,8 @@ data class DesktopSourceSettings(
     val tagBlacklist: Set<String> = emptySet(),
     /** Android's `tags_warnings`: tint the chips of titles the shared warn-list calls extreme. */
     val tagsWarnings: Boolean = true,
+    /** Android's `incognito_nsfw`: whether reading an adult work keeps the progress out of the history. */
+    val incognitoForNsfw: DesktopTriState = DesktopTriState.ASK,
 ) {
     fun toPreferences(): Map<String, SourcePreferenceValue?> = mapOf(
         KEY_SORT to SourcePreferenceValue.Text(sort.name),
@@ -39,6 +49,7 @@ data class DesktopSourceSettings(
         KEY_NSFW_TARGETS to SourcePreferenceValue.TextSet(nsfwTargets.mapTo(LinkedHashSet()) { it.name }),
         KEY_TAG_BLACKLIST to SourcePreferenceValue.TextSet(LinkedHashSet(tagBlacklist)),
         KEY_TAGS_WARNINGS to SourcePreferenceValue.Toggle(tagsWarnings),
+        KEY_INCOGNITO_NSFW to SourcePreferenceValue.Text(incognitoForNsfw.name),
     )
 
     /**
@@ -67,6 +78,18 @@ data class DesktopSourceSettings(
 
     fun hidesNsfw(target: DesktopNsfwTarget): Boolean = target in nsfwTargets
 
+    /**
+     * Android's `AppSettings.isIncognitoModeEnabled(isNsfw)`: the stored choice alone decides, so an adult work opens
+     * incognito without a question while everything else always records its progress. Windows has no global
+     * incognito switch (Android keeps it out of the settings screens), so only the adult rule applies here.
+     */
+    fun requiresIncognito(content: SourceContent): Boolean =
+        content.isNsfw && incognitoForNsfw == DesktopTriState.ENABLED
+
+    /** Whether opening [content] has to ask first, which is the Android default. */
+    fun asksForIncognito(content: SourceContent): Boolean =
+        content.isNsfw && incognitoForNsfw == DesktopTriState.ASK
+
     companion object {
         const val KEY_SORT = "sources_sort"
         const val KEY_GRID = "sources_grid"
@@ -78,6 +101,9 @@ data class DesktopSourceSettings(
 
         /** Android's key for the warn-list tint, kept so the same backup keeps the same look. */
         const val KEY_TAGS_WARNINGS = "tags_warnings"
+
+        /** Android's key for the adult-work incognito choice, same name and same stored constant names. */
+        const val KEY_INCOGNITO_NSFW = "incognito_nsfw"
 
         fun from(values: Map<String, SourcePreferenceValue>) = DesktopSourceSettings(
             sort = DesktopSourceSort.entries.firstOrNull {
@@ -93,6 +119,9 @@ data class DesktopSourceSettings(
                 ?.toSet()
                 .orEmpty(),
             tagsWarnings = (values[KEY_TAGS_WARNINGS] as? SourcePreferenceValue.Toggle)?.value ?: true,
+            incognitoForNsfw = DesktopTriState.entries.firstOrNull {
+                it.name == (values[KEY_INCOGNITO_NSFW] as? SourcePreferenceValue.Text)?.value
+            } ?: DesktopTriState.ASK,
         )
     }
 }

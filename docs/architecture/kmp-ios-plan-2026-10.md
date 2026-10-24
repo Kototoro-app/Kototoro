@@ -7066,3 +7066,43 @@ Android 的“高亮敏感类别”(`tags_warnings`) 不是黑名单，而是**�
 已知遗留：`ContentListMapperTrackingBatchTest` 在本机一直红——`mockk<AppSettings>` 对 final 类没有生效，
 `every { getContentListBadges() }` 会执行真实 getter 并在 `prefs`（objenesis 未初始化）上 NPE；
 本切片删掉 `ContentListMapper` 的 `context` 参数时顺手更新了它的构造调用，没有改动该 mock 本身。
+
+## 154. Windows 18+ 无痕阅读：共享 NSFW 判定 + Android 同键三态（2026-10-24）
+
+Android 的无痕阅读有三层：全局 `incognito` 开关（不在设置界面里）、`incognito_nsfw` 三态
+（`TriStateOption { ENABLED, ASK, DISABLED }`，默认 `ASK`，存枚举**名**字符串），以及阅读器里按作品类型
+自动判定 `AppSettings.isIncognitoModeEnabled(isNsfw)`。真正拦写入的是 `HistoryRepository.shouldSkip`、
+`ReadingRecordRepository.shouldSkip` 与 `ReaderViewModel` 的 `isIncognitoMode`（初始 null，非 false 前每处写入都跳过）；
+`ReaderActivity` 的 `IncognitoModeDialog`（禁用/取消/无痕 + “不再询问”）只在 ASK 时弹出，
+“不再询问”把答案写回同一个 `incognito_nsfw`。详情页的宿主栏只在 `!historyInfo.isIncognitoMode` 时给“无痕模式”。
+
+- 共享判定落在 `core-source`：`SourceContent.isNsfw` = `contentRating == "ADULT"` 或
+  `source.contentType` 以 `HENTAI_` 开头（与 Android `Content.isNsfw()` 同款），
+  `core-library` 的 `SourceLibrary.saveInTransaction` 改为调用它，不再各页自己拼字符串。
+- `DesktopSourceSettings` 新增 `incognitoForNsfw: DesktopTriState`（默认 `ASK`），键与 Android 同为
+  `incognito_nsfw`，值存枚举名（`DesktopTriState.ENABLED.name`），共享备份因此能互通；
+  读回时名字不认识（或类型不对）退回 `ASK`。同处给出 `requiresIncognito(content)`（ENABLED + 成人）与
+  `asksForIncognito(content)`（ASK + 成人），页面与控制器共用同一套判定。
+- 控制器：`DesktopAppState.readerIncognito` 是“本次会话不记录”，`savesProgress` 是它唯一的读法；
+  四处自动保存（分页锚点、连续滚动 `flush`、小说 `flush`、视频 `flush`）都先过它，显式命令
+  （标已读/未读、批量下载）不受影响。所有顶层入口（详情“阅读”、详情书签、下载页打开、订阅“继续阅读”）
+  统一走 `startReading(DesktopReadingRequest, incognito: Boolean?)`：`null` 表示按设置判定，
+  ASK 成人作品时把请求存进 `incognitoPrompt` 并停在原页面（Android 是在阅读器里弹，Windows 改成打开前问，
+  所以“取消”就留在详情），`resolveIncognitoPrompt` 按答案打开并在勾选“不再询问”时改写设置。
+  会话内的换章/换集不改这个标志，所以一次无痕读到底仍然无痕。
+- 界面：共享平板预览卡 `TabletPreviewContent` 与 `TabletPreviewLabels` 多了可选的 `incognito`/`onReadIncognito`
+  （默认 null，Android 的搜索预览卡不传就还是原样），Windows 传上它，于是 1260dp 浮动预览卡和展开后的详情页
+  信息卡都有 `preview-incognito`（对应 Android 宿主栏的“无痕模式”，任何作品都有，会话已是无痕时不显示，
+  因为此时这行没有意义）；这是本切片唯一动到 `core-ui` 的地方，仍是宿主提供文案、共享组件只画控件。
+  窗口根节点挂 `DesktopIncognitoDialog`（`incognito-dialog`，
+  标题/提示/“不再询问”/禁用·取消·无痕全部复用 Android 已翻译的 `incognito_mode`、
+  `incognito_mode_hint_nsfw`、`dont_ask_again`、`disable`、`cancel`、`incognito`）；
+  来源设置“成人”节多一行 `source-setting-incognito-nsfw`（`incognito_for_nsfw` 标题 +
+  `incognito_mode_hint` 摘要，选项用 Android 的 `enable`/`ask_every_time`/`disable`）。
+- 验证：`DesktopSourceSettingsTest` 8 项（新增“同键 + 默认 ASK + 存名字读回 + 成人规则只碰成人 +
+  未知/错类型退回 ASK”）、`SharedTabletUiTest` 2 项（共享预览卡“宿主不传就没有这行、传了就点得到”）、
+  `DesktopIncognitoTest` 6 项（对话框三答 + 不再询问勾选 + 详情按钮 +
+  `savesProgress` 只被无痕会话关闭 + 三态名与 Android 一致）；新探针 `incognito`
+  （`DesktopAppTest` 的“Windows incognito reader records nothing…”）走真实界面：
+  浮动预览卡点 `preview-incognito` 无痕读 → `readerIncognito` 真、历史表**没有**行，返回后普通读 → 历史行写下（证明拦住的是门而不是 fixture），
+  再进来源设置把三态改到 `ENABLED`/`DISABLED` 并核对 `desktop_background` 的 `incognito_nsfw` 落盘为枚举名。

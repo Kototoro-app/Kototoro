@@ -102,6 +102,8 @@ internal class DesktopNovelOperations(
         val novel = snapshot.novel ?: return
         val content = snapshot.content ?: return
         if (snapshot.screen != DesktopScreen.NOVEL) return
+        // Android's incognito session keeps the position on screen only.
+        if (!snapshot.savesProgress) return
         val position = Position(content.id, novel.chapter.id, novel.firstVisible, novel.lastVisible)
         if (position == lastSaved) return
         session.library.recordPage(content, novel.chapter, position.first, novel.blocks.size, position.last)

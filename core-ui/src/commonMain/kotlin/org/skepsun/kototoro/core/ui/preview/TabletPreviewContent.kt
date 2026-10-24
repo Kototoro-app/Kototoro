@@ -40,6 +40,7 @@ fun TabletPreviewContent(
     onRetry: () -> Unit = {},
     controlsEnabled: Boolean = true,
     favouriteEnabled: Boolean = true,
+    onReadIncognito: (() -> Unit)? = null,
 ) {
     BoxWithConstraints(modifier.fillMaxSize().testTag("tablet-preview-content")) {
         // Short windows scroll the header with the body; taller windows keep the artwork visible.
@@ -47,7 +48,7 @@ fun TabletPreviewContent(
         Column(Modifier.fillMaxSize().then(if (compact) Modifier.verticalScroll(rememberScrollState()) else Modifier)) {
             TabletPreviewHeader(data, labels, compact, cover, icon, onClose, onOpenDetails, controlsEnabled)
             TabletPreviewBody(data, labels, icon, !compact, isLoading, hasLoadError, onRetry, onRead,
-                onOpenDetails, onAddToFavorites, onOpenChapter, controlsEnabled, favouriteEnabled)
+                onOpenDetails, onAddToFavorites, onOpenChapter, controlsEnabled, favouriteEnabled, onReadIncognito)
         }
     }
 }
@@ -106,6 +107,7 @@ private fun TabletPreviewBody(
     onOpenChapter: (Long) -> Unit,
     enabled: Boolean,
     favouriteEnabled: Boolean,
+    onReadIncognito: (() -> Unit)?,
 ) {
     var descriptionExpanded by rememberSaveable(data.id) { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().then(if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
@@ -147,6 +149,10 @@ private fun TabletPreviewBody(
                 modifier = Modifier.testTag("preview-favourite")) {
                 Icon(icon(TabletPreviewIcon.FAVOURITE), labels.addToFavorites, modifier = Modifier.size(18.dp))
             }
+        }
+        if (onReadIncognito != null && labels.incognito != null) OutlinedButton(onReadIncognito, enabled = enabled,
+            modifier = Modifier.fillMaxWidth().testTag("preview-incognito")) {
+            Text(labels.incognito, fontWeight = FontWeight.SemiBold)
         }
         if (data.description.isNotBlank()) Text(data.description, style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (descriptionExpanded) Int.MAX_VALUE else 4,

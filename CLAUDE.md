@@ -266,6 +266,12 @@ npm run docs:build
   同一“标签”节还有 Android 的“高亮敏感类别”开关：警示词表（110 条，含俄语别名）在 `core-domain` 的
   `TagWarnings`，Android 的 `ContentListMapper` 与 Windows 详情页共用；命中时详情标签芯片换成 warning 色，
   开关存 `desktop_background` 的 `tags_warnings`（与 Android 同键，默认开），见计划 §153。
+  “成人”节另有 Android 的“成人漫画无痕模式”三态（启用/每次询问/禁用，默认每次询问）：键 `incognito_nsfw`
+  与 Android 同、值存枚举名，成人的判定来自 `core-source` 的 `SourceContent.isNsfw`（`ADULT` 或
+  `HENTAI_` 来源类型），与 `SourceLibrary` 写历史时同一份。预览卡与详情页的 `preview-incognito`
+  （共享 `TabletPreviewContent` 的可选 `incognito` 动作）起一次“什么都不记录”的阅读会话
+  （`DesktopAppState.readerIncognito` / `savesProgress`，四处自动保存都过它），
+  ASK 时先弹 Android 那个“不再询问”对话框再打开阅读器，见计划 §154。
   收藏/历史的“筛选与排序”抽屉另有“布局”一节（封面网格 / 每行一个作品，对应 Android 的 ListMode），
   选择存 `desktop_library` 的 `library_list_mode`，列表模式下 `ContentGrid` 渲染 `content-list` 行视图，
   点击/长按语义与卡片一致，见计划 §142。

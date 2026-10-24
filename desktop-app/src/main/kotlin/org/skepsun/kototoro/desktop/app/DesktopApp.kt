@@ -139,6 +139,12 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                     }
                 }
             }
+            // Android asks inside its reader; the question belongs to the window, not to one screen, so it overlays
+            // whichever list or details page started the read.
+            state.incognitoPrompt?.let { prompt ->
+                DesktopIncognitoDialog(prompt, !closing, controller::resolveIncognitoPrompt,
+                    controller::setIncognitoPromptDontAskAgain, controller::dismissIncognitoPrompt)
+            }
         }
     }
 }

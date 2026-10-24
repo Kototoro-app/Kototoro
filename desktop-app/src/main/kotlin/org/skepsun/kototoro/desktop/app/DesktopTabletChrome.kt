@@ -207,6 +207,11 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("preview-favourite")) {
                     Text(if (state.isFavourite) desktopText("details.unfavourite") else desktopText("details.favourite"))
                 }
+                // Android's dock item is present for every work and only hidden while the reader is already incognito.
+                if (!state.readerIncognito) {
+                    DesktopIncognitoReadingButton(!state.busy && !content.chapters.isNullOrEmpty(),
+                        { controller.readIncognito() }, Modifier.fillMaxWidth().heightIn(min = 48.dp))
+                }
             }
         }
         val metadata: @Composable (Modifier) -> Unit = { modifier ->

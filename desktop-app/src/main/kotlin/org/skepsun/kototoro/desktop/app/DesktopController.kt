@@ -30,6 +30,7 @@ import org.skepsun.kototoro.desktop.runtime.DesktopLibrarySnapshot
 import org.skepsun.kototoro.desktop.runtime.DesktopRepository
 import org.skepsun.kototoro.desktop.runtime.DesktopRepositoryCatalog
 import org.skepsun.kototoro.desktop.runtime.DesktopUpdateSettings
+import org.skepsun.kototoro.desktop.runtime.DesktopTriState
 import org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex
 import org.skepsun.kototoro.core.ui.chapters.ChapterBranchLocale
 import org.skepsun.kototoro.core.ui.chapters.chaptersOfBranch
@@ -68,6 +69,22 @@ internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
 
 enum class DesktopScreen { HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS, RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, MORE }
 
+/**
+ * What a reader entry asked for, kept while the adult-work question is open so the answer can carry on with it. Each
+ * top-level entry fills its own shape: a plain read, a bookmark jump, or a downloaded chapter.
+ */
+sealed interface DesktopReadingRequest {
+    data class Chapter(val chapter: SourceChapter?) : DesktopReadingRequest
+    data class Bookmark(val chapter: SourceChapter, val bookmark: DesktopBookmark) : DesktopReadingRequest
+    data class Download(val chapter: SourceChapter) : DesktopReadingRequest
+}
+
+/** Android's `IncognitoModeDialog` pending state: the question and the "don't ask again" checkbox. */
+data class DesktopIncognitoPrompt(
+    val request: DesktopReadingRequest,
+    val dontAskAgain: Boolean = false,
+)
+
 data class DesktopAppState(
     val screen: DesktopScreen = DesktopScreen.EXPLORE,
     val appearance: DesktopAppearance = DesktopAppearance.SYSTEM,
@@ -96,6 +113,10 @@ data class DesktopAppState(
     val content: SourceContent? = null,
     /** List that owns the open details; retained while reading so returning does not lose the list context. */
     val detailsOrigin: DesktopScreen? = null,
+    /** Android's incognito reader: while set, nothing this session reports reaches the history. */
+    val readerIncognito: Boolean = false,
+    /** The adult-work question Android shows in the reader; Windows asks before opening it. */
+    val incognitoPrompt: DesktopIncognitoPrompt? = null,
     val detailsExpanded: Boolean = false,
     /** Chapter branch (translation) shown in the details chapter list. */
     val chapterBranch: String? = null,
@@ -167,6 +188,12 @@ data class DesktopAppState(
 ) {
     val image: Path? get() = if (screen == DesktopScreen.READER) pages.getOrNull(pageIndex)
         ?.let { readerImages[it.id]?.path } else null
+
+    /**
+     * Android's incognito reader records nothing, so every automatic save asks this first. Explicit commands (mark as
+     * read/unread, batch downloads) stay user actions and are never gated.
+     */
+    val savesProgress: Boolean get() = !readerIncognito
 }
 
 /** One owned scope and immutable UI state. Source methods retain their existing cancellation/lease semantics. */
@@ -881,11 +908,7 @@ class DesktopController(val session: DesktopSession) {
         session.tracker.markRead(mangaId)
         val content = requireNotNull(session.library.find(mangaId)) { desktopText("error.workNotFound") }
         detailsOnIo(content)
-        when (DesktopReaderKind.of(state.value.content)) {
-            DesktopReaderKind.NOVEL -> readNovelOnIo()
-            DesktopReaderKind.VIDEO -> watchOnIo()
-            DesktopReaderKind.PAGES -> readOnIo()
-        }
+        startReading(DesktopReadingRequest.Chapter(null))
     }
 
     /** Android's "random" quick action: open a random favourite. */
@@ -949,11 +972,68 @@ class DesktopController(val session: DesktopSession) {
         }
     }
 
-    fun read(chapter: SourceChapter? = null) = navigate {
-        when (DesktopReaderKind.of(state.value.content)) {
-            DesktopReaderKind.NOVEL -> readNovelOnIo(chapter)
-            DesktopReaderKind.VIDEO -> watchOnIo(chapter)
-            DesktopReaderKind.PAGES -> readOnIo(chapter)
+    fun read(chapter: SourceChapter? = null) = navigate { startReading(DesktopReadingRequest.Chapter(chapter)) }
+
+    /** Android's per-session "无痕模式" action: this session records nothing, whatever the stored choice says. */
+    fun readIncognito(chapter: SourceChapter? = null) =
+        navigate { startReading(DesktopReadingRequest.Chapter(chapter), incognito = true) }
+
+    /**
+     * Answers the adult-work question. Android stores "don't ask again" as the same tri-state the settings page edits,
+     * so the two entry points cannot disagree; 取消 leaves everything as it was and stays on the details page.
+     */
+    fun resolveIncognitoPrompt(incognito: Boolean) {
+        val prompt = mutableState.value.incognitoPrompt ?: return
+        mutableState.update { it.copy(incognitoPrompt = null) }
+        if (prompt.dontAskAgain) {
+            setIncognitoForNsfw(
+                if (incognito) DesktopTriState.ENABLED else DesktopTriState.DISABLED,
+            )
+        }
+        navigate { startReading(prompt.request, incognito) }
+    }
+
+    fun dismissIncognitoPrompt() = mutableState.update { it.copy(incognitoPrompt = null) }
+
+    fun setIncognitoPromptDontAskAgain(enabled: Boolean) = mutableState.update {
+        it.copy(incognitoPrompt = it.incognitoPrompt?.copy(dontAskAgain = enabled))
+    }
+
+    /**
+     * Every top-level reader entry: Android resolves incognito inside the reader, Windows raises the same question
+     * before opening it. [incognito] forces the answer for one session; null means the stored choice decides.
+     */
+    private suspend fun startReading(request: DesktopReadingRequest, incognito: Boolean? = null) {
+        val content = requireNotNull(state.value.content) { desktopText("error.workNotFound") }
+        val settings = state.value.sourceSettings
+        val mode = incognito ?: when {
+            settings.requiresIncognito(content) -> true
+            settings.asksForIncognito(content) -> {
+                mutableState.update { it.copy(incognitoPrompt = DesktopIncognitoPrompt(request)) }
+                return
+            }
+
+            else -> false
+        }
+        // Set before opening: the reader's own opening save must already see the incognito session.
+        mutableState.update {
+            it.copy(readerIncognito = mode,
+                message = if (mode) desktopText("reader.incognito") else it.message)
+        }
+        when (request) {
+            is DesktopReadingRequest.Chapter -> when (DesktopReaderKind.of(content)) {
+                DesktopReaderKind.NOVEL -> readNovelOnIo(request.chapter)
+                DesktopReaderKind.VIDEO -> watchOnIo(request.chapter)
+                DesktopReaderKind.PAGES -> readOnIo(request.chapter)
+            }
+
+            is DesktopReadingRequest.Bookmark -> when (DesktopReaderKind.of(content)) {
+                DesktopReaderKind.NOVEL -> readNovelOnIo(request.chapter, request.bookmark)
+                DesktopReaderKind.VIDEO -> watchOnIo(request.chapter)
+                DesktopReaderKind.PAGES -> readOnIo(request.chapter, bookmark = request.bookmark)
+            }
+
+            is DesktopReadingRequest.Download -> readOnIo(request.chapter)
         }
     }
 
@@ -1463,6 +1543,10 @@ class DesktopController(val session: DesktopSession) {
     internal fun setTagsWarnings(enabled: Boolean) =
         sourceSettings(mutableState.value.sourceSettings.copy(tagsWarnings = enabled))
 
+    /** Android's `incognito_nsfw` choice, picked in the adult section or answered by "don't ask again". */
+    internal fun setIncognitoForNsfw(value: org.skepsun.kototoro.desktop.runtime.DesktopTriState) =
+        sourceSettings(mutableState.value.sourceSettings.copy(incognitoForNsfw = value))
+
     internal fun sourceSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings) {
         mutableState.update { it.copy(sourceSettings = settings) }
         if (!backgroundPreferences.edit(SourcePreferenceEdit(changes = settings.toPreferences()))) {
@@ -1650,7 +1734,7 @@ class DesktopController(val session: DesktopSession) {
         val content = requireNotNull(session.library.find(download.contentId)) { desktopText("error.localWorkMissing") }
         require(session.downloadStore.find(download.contentId, download.chapter)?.isComplete == true) { desktopText("error.downloadIncomplete") }
         mutableState.update { it.copy(content = content) }
-        readOnIo(download.chapter)
+        startReading(DesktopReadingRequest.Download(download.chapter))
     }
 
     private suspend fun readOnIo(chapter: SourceChapter? = null, startAtEnd: Boolean = false,
@@ -1722,11 +1806,7 @@ class DesktopController(val session: DesktopSession) {
         require(content.id == bookmark.contentId) { desktopText("error.bookmarkMissing") }
         val chapter = content.chapters?.firstOrNull { it.id == bookmark.chapterId }
             ?: error(desktopText("error.bookmarkChapterMissing"))
-        when (DesktopReaderKind.of(content)) {
-            DesktopReaderKind.NOVEL -> readNovelOnIo(chapter, bookmark)
-            DesktopReaderKind.VIDEO -> watchOnIo(chapter)
-            DesktopReaderKind.PAGES -> readOnIo(chapter, bookmark = bookmark)
-        }
+        startReading(DesktopReadingRequest.Bookmark(chapter, bookmark))
     }
 
     fun removeBookmark(bookmark: DesktopBookmark) = action {
@@ -2142,8 +2222,11 @@ class DesktopController(val session: DesktopSession) {
             }
         }
         val anchor = layout.anchorIndex
-        session.library.recordPage(requireNotNull(snapshot.content), requireNotNull(snapshot.chapter),
-            anchor, snapshot.pages.size, layout.indices.last())
+        // Android's incognito session keeps the position on screen only.
+        if (snapshot.savesProgress) {
+            session.library.recordPage(requireNotNull(snapshot.content), requireNotNull(snapshot.chapter),
+                anchor, snapshot.pages.size, layout.indices.last())
+        }
         return snapshot.copy(screen = DesktopScreen.READER, pageIndex = anchor, readerImages = images.toMap(), readerScroll = 0f,
                 readerScrollReady = false, readerLastVisible = layout.indices.last(),
                 readerFailedPages = snapshot.readerFailedPages - layout.indices.map { index -> snapshot.pages[index].id }.toSet())

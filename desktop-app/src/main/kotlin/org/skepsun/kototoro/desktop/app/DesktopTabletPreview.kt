@@ -40,7 +40,9 @@ internal fun DesktopTabletPreview(controller: DesktopController, state: DesktopA
     TabletPreviewContent(
         data = data,
         labels = TabletPreviewLabels(desktopText("common.close"), if (video) desktopText("details.play") else desktopText("screens.reader"), desktopText("details.info"),
-            if (state.isFavourite) desktopText("details.favourited") else desktopText("details.favourite"), desktopText("details.loadFailed"), desktopText("common.retry")),
+            if (state.isFavourite) desktopText("details.favourited") else desktopText("details.favourite"), desktopText("details.loadFailed"), desktopText("common.retry"),
+            // Android's dock item: a session that records nothing, offered until this session is incognito already.
+            incognito = if (state.readerIncognito) null else AndroidStrings["incognito"]),
         cover = { modifier -> DesktopCover(content, controller.session.covers, modifier, large = true) },
         icon = { icon -> when (icon) {
             TabletPreviewIcon.CLOSE -> painterResource("icons/ic_tts_close.svg")
@@ -52,6 +54,7 @@ internal fun DesktopTabletPreview(controller: DesktopController, state: DesktopA
         onOpenDetails = controller::expandDetails, onAddToFavorites = { controller.addFavourite() },
         onOpenChapter = { id -> content.chapters?.firstOrNull { it.id == id }?.let { controller.read(it) } },
         controlsEnabled = enabled, favouriteEnabled = !state.isFavourite,
+        onReadIncognito = if (state.readerIncognito) null else ({ controller.readIncognito() }),
     )
 }
 

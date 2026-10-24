@@ -29,6 +29,8 @@ data class TabletPreviewLabels(
     val addToFavorites: String,
     val unavailable: String,
     val retry: String,
+    /** Android's incognito entry: hosts that offer the session-only read pass a label, the others leave it null. */
+    val incognito: String? = null,
 )
 
 enum class TabletPreviewIcon { CLOSE, PLAY, FAVOURITE, RATING }

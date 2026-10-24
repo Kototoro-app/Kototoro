@@ -85,6 +85,8 @@ internal class DesktopVideoOperations(
         val video = snapshot.video ?: return
         val content = snapshot.content ?: return
         if (snapshot.screen != DesktopScreen.VIDEO || video.duration <= 0) return
+        // Android's incognito session keeps the position on screen only.
+        if (!snapshot.savesProgress) return
         val length = ceil(video.duration).toInt().coerceAtLeast(1)
         val second = video.position.toInt().coerceIn(0, length - 1)
         val position = Position(content.id, video.chapter.id, second)

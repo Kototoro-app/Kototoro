@@ -511,7 +511,7 @@ class SourceLibrary(
         val entity = MangaEntity(
             id = content.id, title = content.title, altTitles = content.altTitles.joinToString("\n"),
             url = content.url, publicUrl = content.publicUrl, rating = content.rating,
-            isNsfw = content.contentRating == "ADULT" || content.source.contentType.startsWith("HENTAI_"),
+            isNsfw = content.isNsfw,
             contentRating = content.contentRating, coverUrl = content.coverUrl.orEmpty(),
             largeCoverUrl = content.largeCoverUrl, state = content.state, authors = content.authors.joinToString("\n"),
             source = content.source.name, description = content.description,

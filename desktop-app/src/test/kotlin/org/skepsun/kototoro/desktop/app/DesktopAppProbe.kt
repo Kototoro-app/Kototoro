@@ -27,6 +27,10 @@ object DesktopAppProbe {
                 DesktopBookmarksProbe.run(args)
                 return
             }
+            if (args[0] == "incognito") {
+                DesktopIncognitoProbe.run(args)
+                return
+            }
             if (args[0] == "upscale") {
                 DesktopUpscaleProbe.run(args)
                 return
