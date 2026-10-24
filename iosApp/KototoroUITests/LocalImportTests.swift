@@ -581,6 +581,108 @@ final class LocalImportTests: XCTestCase {
     }
 
     @MainActor
+    func testContinuousStripFollowsTheThumbWithARestingEdgeGrip() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_long", reuse: true)
+        openFirstChapter(title: "fixture_reader_long")
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30))
+        selectReaderMode("条漫")
+        let canvas = app.scrollViews["reader.canvas"]
+        let frame = app.windows.firstMatch.frame
+        let page = app.images["reader.image"].firstMatch
+        var baseline: CGFloat = 0
+        let cases: [(CGFloat?, Bool)] = [
+            (nil, false), (frame.maxX - 6, false), (frame.maxX - 6, true),
+            (frame.minX + 6, false), (frame.minX + 6, true),
+        ]
+        for (gripX, gripFirst) in cases {
+            if !app.buttons["reader.more"].exists { canvas.tap() }
+            app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 1)
+            app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0)
+            hideReaderControls(canvas)
+            let before = page.frame.minY
+            let start = gripFirst ? 0.4 : 0.0
+            // Reverse twice without lifting the thumb. A resting palm must not change the scroll's distance.
+            let stops: [CGFloat] = [0.76, 0.40, 0.66, 0.32]
+            var moves: [(CGPoint, Double)] = []
+            for segment in 0..<(stops.count - 1) {
+                for step in 1...12 {
+                    let y = stops[segment] + (stops[segment + 1] - stops[segment]) * CGFloat(step) / 12
+                    moves.append((CGPoint(x: frame.width * 0.65, y: frame.height * y),
+                                  start + Double(segment * 12 + step) * 0.04))
+                }
+            }
+            // A slow final adjustment removes fling velocity from the distance comparison.
+            let final = CGPoint(x: frame.width * 0.65, y: frame.height * stops.last!)
+            moves.append((CGPoint(x: final.x, y: final.y + 1), start + 1.6))
+            moves.append((final, start + 1.7))
+            let end = start + 1.8
+            var touches = [SyntheticTouch(down: CGPoint(x: frame.width * 0.65, y: frame.height * stops[0]),
+                                          at: start, moves: moves, liftAt: end)]
+            if let gripX {
+                touches.append(SyntheticTouch(down: CGPoint(x: gripX, y: frame.height * 0.7),
+                                              at: gripFirst ? 0 : 0.2, liftAt: end))
+            }
+            let began = Date()
+            synthesizeTouches(touches)
+            var lastTop = page.frame.minY
+            var lastMovement = Date()
+            // Measure the rendered page, not the accessible progress text, which can lag a multi-touch drag.
+            let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                let top = page.frame.minY
+                if abs(top - lastTop) > 1 { lastMovement = Date(); lastTop = top }
+                return Date().timeIntervalSince(began) > end + 0.3 && Date().timeIntervalSince(lastMovement) > 0.6
+            }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 8), .completed, "\(canvas.value ?? "")")
+            let distance = before - page.frame.minY
+            if gripX == nil {
+                baseline = distance
+                XCTAssertGreaterThan(baseline, frame.height * 0.35)
+            } else {
+                XCTAssertEqual(distance, baseline, accuracy: 20,
+                               "grip x=\(gripX!), first=\(gripFirst): the strip stopped following the thumb")
+            }
+            XCTAssertTrue(waitForZoom(canvas, "100%"), "A resting grip must not zoom the strip")
+        }
+        // A single intentional edge swipe must still return to details after all of the grip sessions.
+        let window = app.windows.firstMatch
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.5)).press(forDuration: 0.1,
+            thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.5)),
+            withVelocity: .slow, thenHoldForDuration: 0.1)
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testContinuousStripScrollsAfterTheSameContactMovesSideways() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_long", reuse: true)
+        openFirstChapter(title: "fixture_reader_long")
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30))
+        selectReaderMode("条漫")
+        let canvas = app.scrollViews["reader.canvas"]
+        app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 1)
+        app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0)
+        hideReaderControls(canvas)
+        let frame = app.windows.firstMatch.frame
+        let page = app.images["reader.image"].firstMatch
+        let before = page.frame.minY
+        // The same contact first shifts horizontally, then moves vertically without lifting.
+        var moves: [(CGPoint, Double)] = [(CGPoint(x: frame.width * 0.65, y: frame.height * 0.7), 0.1)]
+        for step in 1...12 {
+            moves.append((CGPoint(x: frame.width * 0.65, y: frame.height * (0.7 - 0.03 * Double(step))),
+                          0.1 + Double(step) * 0.05))
+        }
+        let end = CGPoint(x: frame.width * 0.65, y: frame.height * 0.34)
+        moves.append((CGPoint(x: end.x, y: end.y + 1), 0.9))
+        moves.append((end, 1.0))
+        synthesizeTouches([SyntheticTouch(down: CGPoint(x: frame.width * 0.35, y: frame.height * 0.7),
+                                          at: 0, moves: moves, liftAt: 1.2)])
+        let scrolled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            before - page.frame.minY > frame.height * 0.25
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [scrolled], timeout: 8), .completed,
+                       "A horizontal contact shift prevented subsequent vertical scrolling")
+    }
+
+    @MainActor
     func testMangaBookmarkShowsItsPagePreviewAfterRestart() throws {
         importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
         app.detailsReadButton().tap()
