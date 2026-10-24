@@ -2182,17 +2182,18 @@ final class ReaderGripFilter: UIGestureRecognizer, UIGestureRecognizerDelegate {
     /// A finger the reader's gestures follow is down, so an edge touch landing now is a grip.
     var hasDrivingTouch: Bool { !live.subtracting(ignored).isEmpty }
 
-    /// The thumb is landing next to grips that went down first. Those already reached the reader's gestures, and
-    /// nothing public takes a touch back from a scroll view (ignoring it there leaves the pan on both fingers), so the
-    /// grips are only marked: pinches refuse them ([ReaderGripEdge.allowsPinch]). A swipe back pending on a left-edge
-    /// grip would hold every reader drag ([EdgeSwipeBack]); a deliberate one never has a second finger, so it fails now.
+    /// A grip that landed first already belongs to the strip's native pan. `ignore` leaves UIKit following both
+    /// fingers, so reset that pan during hit testing, before the new thumb is delivered. The old touches stay out
+    /// until they lift, and the thumb starts a fresh drag. A pending left-edge back swipe must also stop waiting.
     func releaseRestingGrips() {
         for grip in live.intersection(edges).subtracting(ignored) {
             ignored.insert(grip)
-            for case let edgeSwipe as UIScreenEdgePanGestureRecognizer in grip.gestureRecognizers ?? []
-            where edgeSwipe.state == .possible {
-                edgeSwipe.isEnabled = false
-                edgeSwipe.isEnabled = true
+            for gesture in grip.gestureRecognizers ?? [] {
+                let stripPan = (gesture.view as? ReaderStripScrollView)?.panGestureRecognizer
+                let pendingBack = gesture is UIScreenEdgePanGestureRecognizer && gesture.state == .possible
+                guard gesture === stripPan || pendingBack else { continue }
+                gesture.isEnabled = false
+                gesture.isEnabled = true
             }
         }
     }
