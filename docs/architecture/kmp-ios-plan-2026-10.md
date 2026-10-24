@@ -7041,3 +7041,28 @@ Windows 复制的是“选择界面”，不是“匹配规则”。
   `raw:` 精确匹配、空选择不过滤）共 10 项绿；`:desktop-app:compileKotlin`、`compileTestKotlin`、
   `verifyDesktopStrings` 通过；平板探针新增“来源设置 → 标签黑名单 → 搜索 → 选中 → 落盘 → 长按详情 →
   清空 → 返回”段落，`tablet.log` 以 `DESKTOP_UI_OK=tablet` 结束。
+
+## 153. 敏感类别高亮：共享警示词表 + Windows 开关（2026-10-24）
+
+Android 的“高亮敏感类别”(`tags_warnings`) 不是黑名单，而是**词表着色**：`res/raw/tags_warnlist` 里 110 条标题
+（含 `гуро` 等俄语别名）命中时，`ContentListMapper.tagTint` 给标签芯片换成 `R.color.warning`，开关只决定要不要着色。
+
+- 词表迁到 `core-domain` 的 `TagWarnings`（`TITLE_DATA` 常量 + 懒解析成 `Set`，`isWarned` 精确匹配、
+  大小写不敏感），Android 的 `ContentListMapper` 改为消费它，删掉 `res/raw/tags_warnlist` 与
+  `ContentListMapper` 里的 `Context` 依赖（构造函数也少一个参数），行为与原来逐字一致。
+- Windows 用同一个键 `tags_warnings` 存进 `desktop_background`（`DesktopSourceSettings.tagsWarnings`，默认开），
+  来源设置的“标签”节多一行整行开关 `source-setting-tags-warnings`，文案与 Android 相同。
+- 着色点：详情页信息卡的标签芯片（`DesktopDetailsInfo` 新增 `warnings` 参数），命中时用 `Warn`
+  （Android `#E65100`，暗色提到 `#FFB74D`）而非 `Accent`；芯片同时打 `DesktopWarnedTagKey` 语义位，
+  探针/UI 测试能直接读到判定结果而不必采样像素。其余列表沿用 Windows 既有的无芯片卡片，不另加着色。
+- 验证：`TagWarningsTest` 2 项（110 条、大小写/空白/俄语、非模糊）、`DesktopSourceSettingsTest` 5 项
+  （新增“默认开 + 走共享词表 + 关掉只停着色 + 读回 false”）、`DesktopTagWarningsUiTest` 2 项
+  （开/关两种设置下 `Rape`/`Гуро` 有标记、`Drama` 无）、`DesktopLibrarySelectionTest` 10 项；
+  Android `:app:compileDebugKotlin` 通过，`GlobalTagBlacklistTest` 6 + `KototoroTaxonomyTest` 8 绿
+  （`ContentListMapperTrackingBatchTest` 在本机因 mockk 无法拦截 `AppSettings` 这个 final 类的真实方法而
+  红，与本次改动无关，见下）；平板探针在标签黑名单段后追加开关往返并核对 `tags_warnings` 落盘，
+  `tablet.log` 以 `DESKTOP_UI_OK=tablet` 结束。
+
+已知遗留：`ContentListMapperTrackingBatchTest` 在本机一直红——`mockk<AppSettings>` 对 final 类没有生效，
+`every { getContentListBadges() }` 会执行真实 getter 并在 `prefs`（objenesis 未初始化）上 NPE；
+本切片删掉 `ContentListMapper` 的 `context` 参数时顺手更新了它的构造调用，没有改动该 mock 本身。

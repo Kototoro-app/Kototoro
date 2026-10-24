@@ -17,6 +17,7 @@ class DesktopSourceSettingsTest {
             groupByLanguage = true,
             nsfwTargets = setOf(DesktopNsfwTarget.FAVOURITES, DesktopNsfwTarget.UPDATES),
             tagBlacklist = setOf("genre.ecchi", "raw:drama"),
+            tagsWarnings = false,
         )
         val restored = DesktopSourceSettings.from(settings.toPreferences().filterValues { it != null }
             .mapValues { it.value!! })
@@ -47,5 +48,23 @@ class DesktopSourceSettingsTest {
     @Test
     fun `Android's key name is reused so a shared backup carries the selection`() {
         assertEquals("global_tag_blacklist", DesktopSourceSettings.KEY_TAG_BLACKLIST)
+        assertEquals("tags_warnings", DesktopSourceSettings.KEY_TAGS_WARNINGS)
+    }
+
+    @Test
+    fun `tag warnings default on and follow the shared warn list rather than a desktop copy`() {
+        val settings = DesktopSourceSettings()
+        assertTrue(settings.tagsWarnings)
+        assertTrue(settings.isTagWarning("Rape"))
+        assertTrue(settings.isTagWarning("Гуро"))
+        assertFalse(settings.isTagWarning("Drama"))
+        // Turning the setting off keeps the list but stops the tint, exactly like Android's `isTagsWarningsEnabled`.
+        val off = settings.copy(tagsWarnings = false)
+        assertFalse(off.isTagWarning("Rape"))
+        assertFalse(
+            DesktopSourceSettings.from(
+                mapOf(DesktopSourceSettings.KEY_TAGS_WARNINGS to SourcePreferenceValue.Toggle(false)),
+            ).tagsWarnings,
+        )
     }
 }

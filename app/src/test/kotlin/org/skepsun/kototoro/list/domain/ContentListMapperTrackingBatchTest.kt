@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.list.domain
 
-import android.content.Context
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -28,8 +27,8 @@ class ContentListMapperTrackingBatchTest {
         every { getContentListBadges() } returns 0
         every { isTrackerEnabled } returns false
     }
+
     private val mapper = ContentListMapper(
-        context = mockk<Context>(relaxed = true),
         settings = settings,
         trackingRepository = mockk<TrackingRepository>(relaxed = true),
         historyRepository = mockk<HistoryRepository>(relaxed = true),

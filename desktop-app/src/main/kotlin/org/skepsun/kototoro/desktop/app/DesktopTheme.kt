@@ -48,6 +48,9 @@ internal val Canvas: Color @Composable get() = MaterialTheme.colorScheme.backgro
 internal val Ink: Color @Composable get() = MaterialTheme.colorScheme.onSurface
 internal val Muted: Color @Composable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f)
 
+/** Android's `R.color.warning` (#E65100), lifted for dark surfaces so the warn-list tint stays readable. */
+internal val Warn: Color @Composable get() = if (LocalDesktopDark.current) Color(0xFFFFB74D) else Color(0xFFE65100)
+
 /** Shared Android colour scheme, typography and shapes, so desktop screens and core-ui components agree. */
 @Composable
 internal fun DesktopTheme(appearance: DesktopAppearance = DesktopAppearance.SYSTEM,

@@ -20,10 +20,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.source.SourceContent
+import org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.util.Locale
@@ -42,17 +44,26 @@ internal fun desktopContentStatusLabel(state: String?): String? = when (state) {
 /** Android's `ContentState` order, so the library's publication-state filter matches the app's wording. */
 internal val DesktopContentStates = listOf("ONGOING", "FINISHED", "ABANDONED", "PAUSED", "UPCOMING", "RESTRICTED")
 
+/** A warned tag chip says so on its semantics, so the probe can read the tint decision instead of sampling pixels. */
+internal val DesktopWarnedTagKey = SemanticsPropertyKey<Boolean>("DesktopWarnedTag")
+
 /** The link Android's share sheet offers, minus the sheet: a desktop copies it. */
 internal fun desktopContentLink(content: SourceContent): String =
     content.publicUrl.takeIf(String::isNotBlank) ?: content.url
 
 /**
  * Android's details facts: state, rating, alternative titles, tags and a copy button. Rows the source did not
- * answer are left out instead of showing blanks.
+ * answer are left out instead of showing blanks. A tag the shared warn-list calls extreme keeps the chip but takes
+ * the warning tint, the same signal Android's `ContentListMapper.tagTint` gives it.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun DesktopDetailsInfo(content: SourceContent, enabled: Boolean, modifier: Modifier = Modifier) {
+internal fun DesktopDetailsInfo(
+    content: SourceContent,
+    enabled: Boolean,
+    warnings: DesktopSourceSettings = DesktopSourceSettings(),
+    modifier: Modifier = Modifier,
+) {
     val link = remember(content) { desktopContentLink(content) }
     val status = remember(content.state) { desktopContentStatusLabel(content.state) }
     val rating = remember(content.rating) {
@@ -80,15 +91,19 @@ internal fun DesktopDetailsInfo(content: SourceContent, enabled: Boolean, modifi
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     tags.forEach { tag ->
+                        val warned = warnings.isTagWarning(tag)
+                        val tone = if (warned) Warn else Accent
                         Surface(
                             shape = RoundedCornerShape(50),
-                            color = Accent.copy(alpha = .12f),
-                            modifier = Modifier.testTag("details-tag:$tag"),
+                            color = tone.copy(alpha = .12f),
+                            modifier = Modifier
+                                .testTag("details-tag:$tag")
+                                .semantics { if (warned) this[DesktopWarnedTagKey] = true },
                         ) {
                             Text(
                                 tag,
                                 fontSize = 12.sp,
-                                color = Accent,
+                                color = tone,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                             )
                         }

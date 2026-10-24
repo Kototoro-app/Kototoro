@@ -1459,6 +1459,10 @@ class DesktopController(val session: DesktopSession) {
     private fun updateTagBlacklist(selection: Set<String>) =
         sourceSettings(mutableState.value.sourceSettings.copy(tagBlacklist = selection))
 
+    /** Android's `tags_warnings` switch: the warn-list stays, only the tint on details chips follows it. */
+    internal fun setTagsWarnings(enabled: Boolean) =
+        sourceSettings(mutableState.value.sourceSettings.copy(tagsWarnings = enabled))
+
     internal fun sourceSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings) {
         mutableState.update { it.copy(sourceSettings = settings) }
         if (!backgroundPreferences.edit(SourcePreferenceEdit(changes = settings.toPreferences()))) {

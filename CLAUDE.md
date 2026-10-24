@@ -263,6 +263,9 @@ npm run docs:build
   选择存 `desktop_background` 的 `global_tag_blacklist`（与 Android 同键同格式，字符串是词库 ID 或 `raw:` 键），
   匹配规则在 `core-domain` 的 `TagTitleBlacklist`，收藏/历史书架、订阅时间线、更新轮播、浏览/搜索结果、
   主页更新与推荐都在渲染前应用它，见计划 §151、§152。
+  同一“标签”节还有 Android 的“高亮敏感类别”开关：警示词表（110 条，含俄语别名）在 `core-domain` 的
+  `TagWarnings`，Android 的 `ContentListMapper` 与 Windows 详情页共用；命中时详情标签芯片换成 warning 色，
+  开关存 `desktop_background` 的 `tags_warnings`（与 Android 同键，默认开），见计划 §153。
   收藏/历史的“筛选与排序”抽屉另有“布局”一节（封面网格 / 每行一个作品，对应 Android 的 ListMode），
   选择存 `desktop_library` 的 `library_list_mode`，列表模式下 `ContentGrid` 渲染 `content-list` 行视图，
   点击/长按语义与卡片一致，见计划 §142。

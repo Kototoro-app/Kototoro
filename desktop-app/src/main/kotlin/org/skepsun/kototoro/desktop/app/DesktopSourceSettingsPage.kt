@@ -62,6 +62,11 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
                 settings.tagBlacklist.size.takeIf { it > 0 }?.let { desktopText("sources.tagBlacklistCount", it) },
                 active, { controller.showTagBlacklist() }, testTag = "source-setting-tag-blacklist")
             SettingsRowDivider()
+            // Android's `tags_warnings`: the same shared warn-list, only the details chip tint follows the switch.
+            SettingsSwitchRow(desktopText("sources.tagsWarnings"), desktopText("sources.tagsWarningsSummary"),
+                settings.tagsWarnings, active, { controller.setTagsWarnings(it) },
+                testTag = "source-setting-tags-warnings")
+            SettingsRowDivider()
             SettingsInfoRow(desktopText("sources.tagBlacklistNote"), null)
         }
         SettingsSectionHeader(desktopText("sources.adult"))

@@ -2,6 +2,7 @@ package org.skepsun.kototoro.desktop.runtime
 
 import org.skepsun.kototoro.core.model.TagBlacklist
 import org.skepsun.kototoro.core.model.TagTitleBlacklist
+import org.skepsun.kototoro.core.model.TagWarnings
 import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 
@@ -28,6 +29,8 @@ data class DesktopSourceSettings(
     val nsfwTargets: Set<DesktopNsfwTarget> = emptySet(),
     /** Android's global tag blacklist: taxonomy IDs, source aliases or `raw:` keys picked on the blacklist page. */
     val tagBlacklist: Set<String> = emptySet(),
+    /** Android's `tags_warnings`: tint the chips of titles the shared warn-list calls extreme. */
+    val tagsWarnings: Boolean = true,
 ) {
     fun toPreferences(): Map<String, SourcePreferenceValue?> = mapOf(
         KEY_SORT to SourcePreferenceValue.Text(sort.name),
@@ -35,6 +38,7 @@ data class DesktopSourceSettings(
         KEY_GROUP_LANGUAGE to SourcePreferenceValue.Toggle(groupByLanguage),
         KEY_NSFW_TARGETS to SourcePreferenceValue.TextSet(nsfwTargets.mapTo(LinkedHashSet()) { it.name }),
         KEY_TAG_BLACKLIST to SourcePreferenceValue.TextSet(LinkedHashSet(tagBlacklist)),
+        KEY_TAGS_WARNINGS to SourcePreferenceValue.Toggle(tagsWarnings),
     )
 
     /**
@@ -43,6 +47,9 @@ data class DesktopSourceSettings(
      */
     fun tagBlacklistRules(): TagBlacklist =
         if (tagBlacklist.isEmpty()) TagBlacklist.Empty else TagTitleBlacklist(tagBlacklist)
+
+    /** Whether a tag title earns the warning tint: the same shared list Android uses, unless the user turned it off. */
+    fun isTagWarning(title: String): Boolean = tagsWarnings && TagWarnings.isWarned(title)
 
     /** The rail order: Android's alphabetical and language orders; the default keeps the installation order. */
     fun sorted(sources: List<SourceListing>): List<SourceListing> = when (sort) {
@@ -69,6 +76,9 @@ data class DesktopSourceSettings(
         /** Android stores the same selection under `global_tag_blacklist`, so a shared backup reads either. */
         const val KEY_TAG_BLACKLIST = "global_tag_blacklist"
 
+        /** Android's key for the warn-list tint, kept so the same backup keeps the same look. */
+        const val KEY_TAGS_WARNINGS = "tags_warnings"
+
         fun from(values: Map<String, SourcePreferenceValue>) = DesktopSourceSettings(
             sort = DesktopSourceSort.entries.firstOrNull {
                 it.name == (values[KEY_SORT] as? SourcePreferenceValue.Text)?.value
@@ -82,6 +92,7 @@ data class DesktopSourceSettings(
                 ?.filter(String::isNotBlank)
                 ?.toSet()
                 .orEmpty(),
+            tagsWarnings = (values[KEY_TAGS_WARNINGS] as? SourcePreferenceValue.Toggle)?.value ?: true,
         )
     }
 }

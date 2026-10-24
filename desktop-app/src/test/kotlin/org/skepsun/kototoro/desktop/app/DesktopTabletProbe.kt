@@ -690,6 +690,13 @@ internal object DesktopTabletProbe {
                 snapshot("tag-blacklist-empty")
                 onNodeWithTag("tag-blacklist-back").performScrollTo().performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.SOURCE_SETTINGS)
+                // Android's `tags_warnings`: the shared warn-list stays, the switch only decides the details tint.
+                onNodeWithTag("source-setting-tags-warnings").performScrollTo().performClick(); idle()
+                check(!controller.state.value.sourceSettings.tagsWarnings)
+                check((session.storage.preferences.open("desktop_background").snapshot()["tags_warnings"]
+                    as? org.skepsun.kototoro.core.source.SourcePreferenceValue.Toggle)?.value == false)
+                onNodeWithTag("source-setting-tags-warnings").performScrollTo().performClick(); idle()
+                check(controller.state.value.sourceSettings.tagsWarnings)
                 onNodeWithTag("source-settings-back").performScrollTo().performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.MORE)
                 // An adult tracked work: Android's stored rating feeds both feed targets, one surface at a time.
