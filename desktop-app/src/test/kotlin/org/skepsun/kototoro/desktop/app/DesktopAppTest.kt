@@ -122,6 +122,13 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `source settings reorder the parser deduplication priority and the next start serves the shared source`() {
+        val root = directory.resolve("中文 jar priority")
+        probe("jarpriority-write", root, 150)
+        probe("jarpriority-read", root, 150)
+    }
+
+    @Test
     fun `shared novel directory locates grouped chapters and keeps original indices in wide and narrow windows`() {
         probe("novel-directory", directory.resolve("中文 novel directory wide"))
         probe("novel-directory-narrow", directory.resolve("中文 novel directory narrow"))

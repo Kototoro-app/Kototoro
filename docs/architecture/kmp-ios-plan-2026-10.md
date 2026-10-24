@@ -8021,3 +8021,51 @@ Android 的“源”页（`UnifiedSourcesScreen`）里每个来源带一个开�
 
 仍待：Android 选择栏的其余动作（选中若干来源后测速/删除/切换 NSFW）在 Windows 还没有选中态；来源总览的
 “全部启用/禁用”是筛选+批量，Windows 目前只在开关对话框里提供同一能力。
+
+## 176. 远程来源 · 插件去重优先级（对齐 Android `jar_priority_order`，规则下沉 core-domain）（2026-10-24）
+
+§174–§175 把“来源开关”补齐之后，Android 来源设置里 `remote_sources` 分组还剩三项：JAR 优先级、显示损坏来源、
+扩展安装行为。这一节做第一项，同时把它背后的纯规则从 `app` 提到共享模块。
+
+- 共享提取：`app` 的 `core/extensions/JarSourcePriority.kt` 整文件 `git mv` 到
+  `core-domain/src/commonMain/.../core/extensions/`（包名不变、去掉 `internal`），内容是 Android 的单文件 JAR
+  去重规则——`DEFAULT_JAR_PRIORITY_ORDER_VALUE`、`resolveJarPriorityOrder`、`jarPriorityComparator`、
+  `jarCandidateComparator`、`selectPreferredJarSources`、`findShadowedJarSources`、`deduplicateJarPackages`、
+  `JarDeduplicationResult` 与 `jarPackageKey`/`jarVersionCode`/`jarBaseName`。测试同样移到
+  `core-domain/src/jvmTest`（9 条，`:core-domain:jvmTest --tests *JarSourcePriority*`）。Android 的
+  `AppSettings`/`SourcesSettingsViewModel`/`GlobalExtensionManager`/`SourceGroupRepository` 只是少了一个源文件，
+  导入路径不变，`:app:compileDebugKotlin` 全绿。
+- Windows 的语义映射：Android 存的是 JAR 文件名，Windows 装的是 parser 插件，所以同一把键里放插件 id，
+  排名规则本来就一致——`ParserPluginRegistry` 的构造参数 `priority` 与 `recompute()` 正是按 `plugin.info.id`
+  排名、第一个插件独占同名来源。`DesktopSession.open` 在构造 registry 之前读一次 `jar_priority_order`，
+  新的 `parserPluginPriority(savedOrder)` 把它拼在 `ParserPluginRegistry.DEFAULT_PRIORITY` 前面（去重、大小写不敏感），
+  所以没存过值的全新安装与 Android 默认完全一样。
+- 存储：`jar_priority_order` 写 `desktop_extensions`（与 `disabled_sources` 同一把 store），值仍是 Android 的
+  逗号分隔文本，备份/复制设置含义相同。`DesktopSession.jarPriorityOrder()` / `jarPriorityNames()`
+  （`resolveJarPriorityOrder(已装插件 id, 存值)`，解析不到的旧名字会被丢掉）/ `setJarPriorityOrder(names)`
+  一次写盘；`DesktopAppState.jarPriorityOrder` 只是它的镜像。
+- UI：来源设置页在“概览”下方新增“远程来源”一节（Android `remote_sources` 分组的位置），行是
+  `source-setting-jar-priority`：标题/摘要取 Android 的 `jar_priority_order_title`/`jar_priority_order_summary`，
+  值显示解析后的插件 id（还没存过就是 Android 的 `not_specified`），下面一行说明 `sources.jarPriorityNote`。
+  点行开 `jar-priority-dialog`：Android 的说明、每个已装 parser 插件一行（`jar-priority:<id>`）、行尾“上移/下移”
+  （`jar-priority-up/down:<id>`，文案复用 `library.categoryUp/Down`），每次移动立刻写盘（同分类管理，没有确认键），
+  关闭按钮 `jar-priority-close`；没有已装插件时显示 `jar-priority-empty`。
+- 为什么注明“下次启动生效”：`recompute()` 只在 registry 打开时排一次，对话框不假装能热排，行下直接写明时机。
+- 顺带修的一处冷启动缺口：`installedEntries` 原本只在打开“扩展与仓库”后才填，所以直接进来源设置会看不到插件
+  行。`DesktopController.refreshSources()`（启动时必跑）现在也带 `installedEntries`；页面在还没有插件列表时退回
+  只显示存下来的名字，不走 `resolve` 丢掉它们。
+- 探针走两个 JVM（`jarpriority-write` / `jarpriority-read`，同一数据根，用例名含 `deduplication`）：两个 parser
+  夹具都声明 `FIXTURE_SHARED`，默认排序（两者都不在 `DEFAULT_PRIORITY` 里，退化成按 id 字母序）由
+  `fixture-kotatsu` 提供服务；write 阶段在设置页把 `fixture-kototoro` 上移到最前，断言 `desktop_extensions` 里存成
+  `"fixture-kototoro,fixture-kotatsu"` 且页面跟着变；read 阶段重开数据根，断言 `pluginFor("FIXTURE_SHARED")` 换成
+  `fixture-kototoro`，而且这正是收起来的顺序里第一个、默认排序不会选的那个。截图
+  `jarpriority-write-dialog.png`（说明 + 两行上移/下移 + 生效说明）与 `jarpriority-write-row.png`
+  （远程来源节与解析后的值）已看过。
+
+验证：`:core-domain:jvmTest --tests *JarSourcePriority*`（9 条）、`:core-domain:compileCommonMainKotlinMetadata`
+（可移植性）、`:desktop-app:test --tests *JarPriority*`（4 条）、`:desktop-app:test --tests *deduplication*`
+（write+read 双进程，`DESKTOP_JAR_PRIORITY` 两行标记）、`:desktop-app:verifyDesktopStrings`、`:app:compileDebugKotlin` 全绿。
+
+仍待：Android 同组的“显示损坏来源”（`show_broken_sources`）与“扩展安装行为”（`extension_install_behavior`：
+询问/仅安装/安装并启用）在 Windows 还没有行；`deduplicateJarPackages`（同包多版本只留最新）在 Windows 侧还没有
+调用点——桌面的安装记录按 sha 目录天然分开，接之前要先确定“同包不同版本”在桌面上的表示。

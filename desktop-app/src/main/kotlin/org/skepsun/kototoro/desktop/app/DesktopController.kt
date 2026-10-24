@@ -114,6 +114,11 @@ data class DesktopAppState(
     val sources: List<SourceListing> = emptyList(),
     /** Sources the user turned off on the extensions page; Android keeps them installed but stops offering them. */
     val disabledSources: Set<String> = emptySet(),
+    /**
+     * Android's `jar_priority_order` as stored (one comma separated list). Windows' parser plugins are what it
+     * ranks here; the settings page resolves the names against the installed plugins when it draws the row.
+     */
+    val jarPriorityOrder: String = "",
     val repositories: List<DesktopRepository> = emptyList(),
     val extensionCatalog: DesktopRepositoryCatalog? = null,
     val installedExtensions: Map<String, Long> = emptyMap(),
@@ -271,7 +276,8 @@ class DesktopController(val session: DesktopSession) {
             it.name == (appearancePreferences.snapshot()["interface_style"] as? SourcePreferenceValue.Text)?.value
         } ?: DesktopInterfaceStyle.MATERIAL,
         language = restoredLanguage(),
-        disabledSources = session.disabledSources()))
+        disabledSources = session.disabledSources(),
+        jarPriorityOrder = session.jarPriorityOrder()))
     val state = mutableState.asStateFlow()
     private val continuous = DesktopScrollOperations(mutableState, session, scope, gate)
     private val novelOperations = DesktopNovelOperations(mutableState, session, scope, gate)
@@ -599,7 +605,7 @@ class DesktopController(val session: DesktopSession) {
 
     fun refreshSources() = action {
         mutableState.update { it.copy(sources = sourceDescriptors(), disabledSources = session.disabledSources(),
-            error = session.startupErrors.firstOrNull()) }
+            installedEntries = session.installedEntries(), error = session.startupErrors.firstOrNull()) }
     }
 
     /**
@@ -624,6 +630,16 @@ class DesktopController(val session: DesktopSession) {
                 items = if (hidden != null) emptyList() else previous.items,
                 screen = if (hidden != null) DesktopScreen.EXTENSIONS else previous.screen)
         }
+    }
+
+    /**
+     * Android's "plugin deduplication priority" row: the order decides which parser plugin serves a source that two
+     * plugins both declare. The parser host reads it when it opens, so the settings page says it takes effect on the
+     * next start instead of pretending a running registry can be re-ranked.
+     */
+    fun setJarPriorityOrder(names: List<String>) = action {
+        session.setJarPriorityOrder(names)
+        mutableState.update { it.copy(jarPriorityOrder = session.jarPriorityOrder()) }
     }
 
     fun importJar(path: Path) = action {

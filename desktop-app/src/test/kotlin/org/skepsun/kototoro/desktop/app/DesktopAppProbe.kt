@@ -63,6 +63,10 @@ object DesktopAppProbe {
                 DesktopDownloadSettingsProbe.run(args)
                 return
             }
+            if (args[0].startsWith("jarpriority-")) {
+                DesktopJarPriorityProbe.run(args)
+                return
+            }
             if (args[0] == "navconfig") {
                 DesktopNavigationConfigProbe.run(args)
                 return

@@ -7,6 +7,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import org.skepsun.kototoro.core.extensions.resolveJarPriorityOrder
 import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.desktop.compat.MihonDesktopPlatform
 import org.skepsun.kototoro.cloudstream.desktop.CloudstreamPluginRegistry
@@ -313,6 +314,26 @@ class DesktopSession private constructor(
             "disabled_sources" to SourcePreferenceValue.TextSet(disabled),
         )))
     }
+
+    /**
+     * Android's deduplication order for JARs that declare the same source. On Windows the named JARs are the parser
+     * plugins, and the parser host reads the order when the session opens (Android rebuilds its source list at the
+     * same point), so a reordered list takes effect with the next start.
+     */
+    fun jarPriorityOrder(): String =
+        (installed.snapshot()[JAR_PRIORITY_ORDER_KEY] as? SourcePreferenceValue.Text)?.value.orEmpty()
+
+    /** The installed parser plugin ids in the saved order; plugins the order does not name keep the default ranking. */
+    fun jarPriorityNames(): List<String> =
+        resolveJarPriorityOrder(parsers.installed().map { it.id }, jarPriorityOrder())
+
+    /** Stores Android's comma separated order, which is also what a shared backup carries. */
+    fun setJarPriorityOrder(names: List<String>) {
+        installed.edit(SourcePreferenceEdit(changes = mapOf(
+            JAR_PRIORITY_ORDER_KEY to SourcePreferenceValue.Text(names.joinToString(",")),
+        )))
+    }
+
     internal suspend fun chapterPages(contentId: Long, chapter: SourceChapter): List<SourcePage> =
         downloadStore.find(contentId, chapter)?.takeIf { it.isComplete }?.pages?.map { it.page }
             ?: sources.getPages(chapter, null)
@@ -599,7 +620,11 @@ class DesktopSession private constructor(
                 registry = MihonJarRegistry(platform.initialize(storage.preferences))
                 // Parser plugins reuse the platform's HTTP client: one cookie store and challenge flow for all ecosystems.
                 val parserPlatform = DesktopParserPlatform(platform.sharedHttpClient(), storage.preferences)
-                parsers = ParserPluginRegistry(parserPlatform)
+                // Android's JAR priority decides which of two plugins declaring the same source serves it; read it
+                // before the registry resolves anything, like Android builds its extensions list with it.
+                val jarPriorityOrder = (storage.preferences.open("desktop_extensions").snapshot()[JAR_PRIORITY_ORDER_KEY]
+                    as? SourcePreferenceValue.Text)?.value.orEmpty()
+                parsers = ParserPluginRegistry(parserPlatform, priority = parserPluginPriority(jarPriorityOrder))
                 return DesktopSession(storage, platform, registry, parserPlatform, parsers, proxy, githubMirror).also {
                     it.restoreJars()
                     // Superseded and removed versions are deleted once nothing has them open.

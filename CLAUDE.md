@@ -264,6 +264,11 @@ npm run docs:build
   按语言分组（组前加语言标题），成人内容节选“来源与浏览/收藏/历史/订阅/更新”五个过滤目标（来源侧滤掉 HENTAI_ 类型来源，
   书架侧作为展示规则并入筛选，订阅页的“订阅”滤时间线行、“更新”滤新章节轮播，筛空时显示筛选空态），
   设置存 `desktop_background` 的 `sources_*` 四键，见计划 §141、§146。
+  概览下方的“远程来源”节是 Android `remote_sources` 分组里的“插件去重优先级顺序”（`jar_priority_order`）：
+  单文件 JAR 去重规则 `JarSourcePriority.kt` 已与 Android 共享到 `core-domain`，Windows 把同一把键写进
+  `desktop_extensions`（值是 parser 插件 id 的逗号分隔列表，Android 侧是 JAR 文件名），
+  `DesktopSession.open` 据此给 `ParserPluginRegistry` 排优先级，所以同名声明的来源由排在前面的插件提供；
+  对话框逐行上移/下移并即时写盘，行下注明“下次启动生效”（registry 只在打开时排一次），见计划 §176。
   来源设置的“标签”节是全局标签黑名单页（对应 Android 的“标签黑名单”）：搜索词库目录、按类别分组、
   点芯片切换、长按看键/英文/类别/别名、可“清空”或把词库不认识的标题加为 `raw:` 模式；
   选择存 `desktop_background` 的 `global_tag_blacklist`（与 Android 同键同格式，字符串是词库 ID 或 `raw:` 键），

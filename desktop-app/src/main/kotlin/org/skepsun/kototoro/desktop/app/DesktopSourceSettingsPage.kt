@@ -2,20 +2,28 @@ package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.core.extensions.resolveJarPriorityOrder
 import org.skepsun.kototoro.core.ui.settings.SettingsGroup
 import org.skepsun.kototoro.core.ui.settings.SettingsInfoRow
 import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
@@ -55,6 +63,17 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
             SettingsSwitchRow(desktopText("sources.groupLanguage"), desktopText("sources.groupLanguageSummary"),
                 settings.groupByLanguage, active, { update(settings.copy(groupByLanguage = it)) },
                 testTag = "source-setting-group-language")
+        }
+        SettingsSectionHeader(desktopText("sources.remote"))
+        SettingsGroup {
+            // Android's `jar_priority_order` (a reorder preference): which plugin serves a source two plugins share.
+            SettingsValueRow(AndroidStrings["jar_priority_order_title"],
+                AndroidStrings["jar_priority_order_summary"],
+                state.jarPriorityOrder.resolvedPluginNames(state).takeIf { it.isNotEmpty() }?.joinToString(", ")
+                    ?: AndroidStrings["not_specified"],
+                active, { dialog = SourceSettingsDialog.JAR_PRIORITY }, testTag = "source-setting-jar-priority")
+            SettingsRowDivider()
+            SettingsInfoRow(desktopText("sources.jarPriorityNote"), null)
         }
         SettingsSectionHeader(desktopText("sources.tags"))
         SettingsGroup {
@@ -114,6 +133,8 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
             },
             onDismiss = { dialog = null },
         )
+        SourceSettingsDialog.JAR_PRIORITY -> DesktopJarPriorityDialog(state = state, enabled = active,
+            onOrder = { controller.setJarPriorityOrder(it) }, onDismiss = { dialog = null })
         SourceSettingsDialog.NSFW_TARGETS -> DesktopMultiChoiceSettingsDialog(
             title = desktopText("sources.nsfwFilter"),
             summary = desktopText("sources.nsfwFilterSummary"),
@@ -134,7 +155,69 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
     }
 }
 
-private enum class SourceSettingsDialog { SORT, NSFW_TARGETS, INCOGNITO_NSFW }
+private enum class SourceSettingsDialog { SORT, JAR_PRIORITY, NSFW_TARGETS, INCOGNITO_NSFW }
+
+/**
+ * The parser plugins that `jar_priority_order` ranks, in that order; plugins the value does not name come last. A
+ * session that has not listed its extensions yet only knows the stored names, which are the plugin ids anyway.
+ */
+private fun String.resolvedPluginNames(state: DesktopAppState): List<String> {
+    val installed = state.installedEntries.filter { it.kind == DesktopInstalledKind.PARSER }.map { it.id }
+    return if (installed.isEmpty()) parseJarPriorityNames() else resolveJarPriorityOrder(installed, this)
+}
+
+/**
+ * Android's reorder preference for the deduplication order. The list is the installed parser plugins; each move
+ * stores immediately like the category manager does, because [org.skepsun.kototoro.parserhost.ParserPluginRegistry]
+ * applies the order when it opens — the row's note says so instead of promising a live re-rank.
+ */
+@Composable
+private fun DesktopJarPriorityDialog(state: DesktopAppState, enabled: Boolean, onOrder: (List<String>) -> Unit,
+    onDismiss: () -> Unit) {
+    val order = state.jarPriorityOrder.resolvedPluginNames(state)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.widthIn(max = 560.dp).testTag("jar-priority-dialog"),
+        title = { Text(AndroidStrings["jar_priority_order_title"]) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(AndroidStrings["jar_priority_order_summary"],
+                    style = MaterialTheme.typography.bodySmall)
+                if (order.isEmpty()) {
+                    Text(desktopText("extensions.installedEmpty"),
+                        modifier = Modifier.testTag("jar-priority-empty"),
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                order.forEachIndexed { index, name ->
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().testTag("jar-priority:$name")) {
+                        Text(name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            fontSize = 14.sp)
+                        TextButton({ onOrder(order.moved(from = index, to = index - 1)) },
+                            enabled = enabled && index > 0, modifier = Modifier.testTag("jar-priority-up:$name")) {
+                            Text(desktopText("library.categoryUp"))
+                        }
+                        TextButton({ onOrder(order.moved(from = index, to = index + 1)) },
+                            enabled = enabled && index < order.lastIndex,
+                            modifier = Modifier.testTag("jar-priority-down:$name")) {
+                            Text(desktopText("library.categoryDown"))
+                        }
+                    }
+                }
+                Text(desktopText("sources.jarPriorityNote"), modifier = Modifier.testTag("jar-priority-note"),
+                    style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = {
+            TextButton(onDismiss, modifier = Modifier.testTag("jar-priority-close")) {
+                Text(desktopText("common.close"))
+            }
+        },
+    )
+}
+
+private fun List<String>.moved(from: Int, to: Int): List<String> =
+    toMutableList().apply { add(to, removeAt(from)) }
 
 /** Same rendering rule as the recommendations page: nothing selected reads as no value at all. */
 private fun Set<String>.showAsList(): String? =
