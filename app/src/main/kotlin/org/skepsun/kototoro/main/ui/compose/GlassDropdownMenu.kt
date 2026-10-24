@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -45,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
@@ -61,12 +64,14 @@ import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.shapes.RoundedRectangle
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvTakeFocusWhenEmpty
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassStyle
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
-import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 
 @Stable
 internal class RootGlassMenuHost {
@@ -106,6 +111,19 @@ internal fun RootGlassMenuOverlay(
     val menuGapPx = with(density) { 4.dp.roundToPx() }
     var measuredMenuWidthPx by remember(request.id) { mutableStateOf(0) }
     var measuredMenuHeightPx by remember(request.id) { mutableStateOf(0) }
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val latestDismissClick by rememberUpdatedState(dismissClick)
+    // `clickable` makes its node focusable. On TV that turns the full-screen scrim into the first
+    // D-pad stop of the overlay: the ring lands on nothing visible and OK dismisses the menu instead
+    // of choosing an item, while the menu itself is never reachable. TVs have no finger, so the
+    // scrim only listens for taps there.
+    val scrimModifier = if (isTvPresentation) {
+        Modifier.pointerInput(Unit) {
+            detectTapGestures(onTap = { latestDismissClick() })
+        }
+    } else {
+        Modifier.clickable(interactionSource = null, indication = null, onClick = dismissClick)
+    }
 
     BoxWithConstraints(
         modifier = modifier
@@ -147,7 +165,7 @@ internal fun RootGlassMenuOverlay(
                             .offset { IntOffset(x, y) }
                             .width(with(density) { w.toDp() })
                             .height(with(density) { h.toDp() })
-                            .clickable(interactionSource = null, indication = null, onClick = dismissClick),
+                            .then(scrimModifier),
                     )
                 }
             }
@@ -161,13 +179,18 @@ internal fun RootGlassMenuOverlay(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clickable(interactionSource = null, indication = null, onClick = dismissClick),
+                    .then(scrimModifier),
             )
         }
         Box(
             modifier = Modifier
                 .offset { menuOffset }
                 .alpha(if (measuredMenuWidthPx > 0 && measuredMenuHeightPx > 0) 1f else 0f)
+                // The menu is composed after the key press that opened it, so a single request
+                // misses it; this keeps asking until the first item holds the focus, and starts
+                // over for the next menu. Without it the remote keeps driving the screen behind
+                // the overlay and the items never get a ring.
+                .then(if (isTvPresentation) Modifier.tvTakeFocusWhenEmpty(request.id) else Modifier)
                 .widthIn(max = maxWidth)
                 .wrapContentWidth()
                 .heightIn(max = maxHeight * 0.65f)
