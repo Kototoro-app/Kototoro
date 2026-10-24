@@ -51,6 +51,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `the changelog page lists the channel's published notes and returns to the about card`() {
+        probe("changelog", directory.resolve("中文 changelog"), 180)
+    }
+
+    @Test
     fun `real Tsundoku APK installs converts and reads a novel over the live network`() {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("kototoro.dex.real.apks") != null, "no -PrealApkDirectory")
         probe("real-novel", directory.resolve("中文 real novel"), 180)

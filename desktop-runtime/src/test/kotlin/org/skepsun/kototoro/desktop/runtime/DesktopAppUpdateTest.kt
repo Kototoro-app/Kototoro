@@ -90,6 +90,25 @@ class DesktopAppUpdateTest {
     }
 
     @Test
+    fun `the changelog lists offerable releases newest first and skips pre-releases for a stable copy`() {
+        val newest = parseReleases(RELEASES, DesktopUpdateChannel.RELEASE).single()
+        val older = newest.copy(tag = "v1.9.0", version = DesktopPackageVersion.parse("1.9.0"))
+        val beta = newest.copy(tag = "v1.11.0-beta1", version = DesktopPackageVersion.parse("1.11.0-beta1"))
+        val nightly = parseReleases(NIGHTLY_RELEASES, DesktopUpdateChannel.NIGHTLY).single()
+        val payload = listOf(older, beta, newest, nightly)
+
+        // A stable installation reads the stable versions only, highest first.
+        assertEquals(listOf("1.10.0", "1.9.0"),
+            changelogReleases(payload, DesktopUpdateChannel.RELEASE).map { it.version.text })
+        // The nightly channel keeps its own pre-releases, and still sorts them newest first.
+        assertEquals(listOf("1.11.0-beta1", "1.10.0", "1.9.0", "N20261022"),
+            changelogReleases(payload, DesktopUpdateChannel.NIGHTLY).map { it.version.text })
+        // A release with no downloadable package never reaches the page, whatever the channel.
+        val uninstallable = newest.copy(packages = emptyMap())
+        assertTrue(changelogReleases(listOf(uninstallable), DesktopUpdateChannel.RELEASE).isEmpty())
+    }
+
+    @Test
     fun `checksum files parse in the published sha256sum format`() {
         val checksums = parseChecksums(
             """

@@ -135,6 +135,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.STORAGE -> DesktopStorageSettingsPage(controller, state)
                             DesktopScreen.PLAYBACK_SETTINGS -> DesktopPlaybackSettingsPage(controller, state)
                             DesktopScreen.PROXY_SETTINGS -> DesktopProxySettingsPage(controller, state)
+                            DesktopScreen.CHANGELOG -> DesktopChangelogPage(controller, state)
                             DesktopScreen.MORE -> DesktopMorePanel(controller, !closing, onExitRequest)
                         }
                         if (state.screen == DesktopScreen.DETAILS && state.detailsOrigin != null) {
@@ -222,6 +223,7 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.STORAGE -> AndroidStrings["storage_and_network"]
         DesktopScreen.PLAYBACK_SETTINGS -> AndroidStrings["playback_settings"]
         DesktopScreen.PROXY_SETTINGS -> AndroidStrings["proxy"]
+        DesktopScreen.CHANGELOG -> AndroidStrings["changelog"]
         DesktopScreen.EXTENSIONS -> desktopText("screens.extensions")
         DesktopScreen.DETAILS -> desktopText("screens.details")
         DesktopScreen.READER, DesktopScreen.NOVEL, DesktopScreen.VIDEO -> state.chapter?.title ?: desktopText("screens.reader")

@@ -7412,3 +7412,58 @@ Windows 之前完全没有代理：每个来源、封面、JSON 导入都走 com
   “找不到 `interface-style:IOS`”——把本切片改动 stash 掉后同样失败，属界面风格/玻璃外框那条工作流。
 - 仍待：镜像清单的远程同步（`github_mirror_sync_url` + `docs/github-mirrors.json`），
   Windows 目前只用内置目录；HuggingFace/Bangumi 镜像、DoH、图片代理等其余网络项。
+
+## 163. 共享 Markdown 子集 + Windows 更新说明与更新日志页（对齐 Android AppUpdateScreen/Changelog）（2026-10-24）
+
+- 问题：Windows 的“关于与更新”卡只会说“发现新版本 2.3.1”，既没有 Android 那个“新版本 / 安装包大小 /
+  发布说明”的 `UpdateDescription`，也没有更新日志页（Android 的 `ChangelogScreen`，把
+  `appUpdateRepository.getAvailableVersions()` 拼成 `"# 版本\n\n说明"` 交给 Markwon 渲染）。
+  Windows 从来没有 Markdown 渲染器，直接搬 Markwon 又会给桌面加一个 Android 依赖。
+- `core-ui`（新包 `core/ui/markdown/`，纯共享代码，Android/iOS 也能用）：
+  - `MarkdownBlocks.kt`：`parseMarkdownBlocks(markdown)` → `Heading/Paragraph/Quote/ListItem(marker,depth)/Code(language)/Rule`，
+    `parseMarkdownInline(markdown)` → `Text(bold/italic/strikeThrough/code)` / `Link(text,url)`。
+    覆盖 GitHub release note 真正会用的子集：ATX 标题（`#` 后必须有空格，`#hashtag` 仍是正文）、
+    ``` 与 ~~~ 围栏（未闭合时吃到文末）、`---`/`***`/`___` 分隔线、`>` 引用（相邻行合并）、
+    嵌套无序列表与 `- [x]` 任务框（渲染成 ☑/☐）、有序列表保留原编号、空行分段、
+    行尾两空格或 `\` 是硬换行否则软换行、`<!-- -->` 注释丢弃。
+    行内：`**`/`__` 加粗、`*`/`_` 斜体（下划线要求两侧词边界，`snake_case` 保持字面）、`~~` 删除线、
+    反引号代码、`[文字](url "title")` 与 `![alt](url)`、`\<char>` 转义、`<br>` 当换行、其他标签丢弃、
+    未闭合标记保持字面。没有引入任何依赖（AGENTS.md/CONTRIBUTING.md 不接受为 APK 体积新增依赖）。
+  - `MarkdownText.kt`：`MarkdownText(markdown, modifier, style, onLinkClick)` 的 Compose 渲染
+    （标题四级用 titleLarge/titleMedium/titleSmall/bodyLarge，引用带左侧色条，列表项 marker 固定 18/26 dp
+    并按 depth 缩进 14 dp，代码块 monospace + 横向滚动），以及 `markdownPlainText(markdown)` 供测试/摘要用。
+    链接默认走 Compose 的 `LinkAnnotation.Url`（`LocalUriHandler` 开系统浏览器），传 `onLinkClick` 时改
+    `LinkAnnotation.Clickable`。
+- `desktop-runtime`：`DesktopAppUpdateClient.releases()` 返回本频道**所有可安装版本**（新→旧）。
+  过滤规则抽成 `List<DesktopUpdateRelease>.offerableFor(channel)`（有包且有下载地址；stable 装不了预发布），
+  `newestRelease` 与新增的 `changelogReleases(releases, channel)` 都读它——所以页面列出的说明
+  与它真会装的版本永远同一份，不会出现“说明了却不给升”。
+- `desktop-app`：
+  - 更新卡（`DesktopAppUpdateSettings.kt`）在“发现新版本”那一行右侧加 `app-update-changelog`（文案复用
+    Android 的 `changelog`），下面按 Android 的 `UpdateDescription` 补 `app-update-size`（`update.size` +
+    `desktopCacheSize`）、`app-update-published`（`update.published` + `desktopReleaseDate`，GitHub 的
+    `published_at` 转本地日期，读不出来就退回日期部分或干脆不显示），以及 `app-update-notes`——发布说明本身
+    用 `MarkdownText` 渲染（最高 220 dp 内滚动，免得长说明把开关挤下去）。
+  - 新页 `DesktopChangelogPage.kt` + `DesktopScreen.CHANGELOG`（`controller.showChangelog()`；返回键回“更多”）：
+    标题与摘要直接用 Android 的 `changelog`/`changelog_summary`，右上“重新加载”（`update.changelogReload`），
+    每版一张卡（版本号、当前版本徽标 `update.changelogCurrent`、发布日期与包大小、说明 Markdown），
+    列表用 `LazyColumn`（`key = tag`）。三态：错误 `changelog-error`、未到达/加载中 `changelog-loading`、
+    真空 `changelog-empty`——“null 就是还没到”，不会把“还没问”画成“没有说明”。
+  - `DesktopUpdateOperations`：`DesktopUpdateUi` 加 `changelog/changelogLoading/changelogError`，
+    `changelog(refresh)` 每次会话只拉一次（重进页面不重复请求，点“重新加载”才重拉），失败只落页面文案，
+    不污染更新卡自己的 `error`。
+- 验证：
+  - `:core-ui:jvmTest --tests MarkdownBlocksTest` 18 项全绿（标题/围栏/列表/任务框/引用/分隔线/软硬换行/
+    行内强调与链接/`snake_case`/未闭合标记/HTML 注释与标签/真实 GitHub release note 一段）。
+  - `:desktop-runtime:test --tests DesktopAppUpdateTest` 15 项全绿，新增
+    “changelog lists offerable releases newest first and skips pre-releases for a stable copy”：
+    stable 只列正式版且新→旧，nightly 频道保留自己的预发布并仍按版本排序，没有安装包的版本一条都不出现。
+  - 探针 `changelog`（`:desktop-app:test` 里 `DesktopAppTest` 同名用例）：先从频道直接取一次
+    `releases()`，再进“更多→关于卡→更新日志”，等页面加载完成后逐项对账——页面列出的版本顺序与频道一致、
+    最新一版在第一张卡、说明的首行文本真的出现在界面上（证明 `MarkdownText` 渲染的是发布说明本身）、
+    返回后回到“更多”、再次进入不重复请求。本机实测 `DESKTOP_CHANGELOG_STATE=releases:[v2.3.1]`、
+    输出 `DESKTOP_UI_OK=changelog`（离线时该探针断言的是页面的错误态）。
+  - 邻居回归：`storage`、`playback` 两个探针仍绿（“更多”页新增按钮后卡片布局不挤坏其他行）。
+- 已知（与本切片无关，HEAD 上就失败）：`DesktopAppTest > Android styled light and dark themes render covers
+  and persist across an offline restart` 在 `DesktopAppearanceProbe.kt:86` 报找不到 `interface-style:IOS`。
+- 仍待：更新渠道（`KEY_UPDATES_UNSTABLE`/nightly 切换）与崩溃日志行（Android `AboutSettingsScreen` 的另外两项）。

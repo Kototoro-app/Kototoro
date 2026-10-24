@@ -308,6 +308,15 @@ npm run docs:build
   取消走 `runInterruptible` 会真的断开 socket；文案全用 Android 的 `mirror_probe_*`，
   对话框选项追加 `" · 213 ms"`/`" · 超时"` 与最快的标记，探测的结果模型与目标 URL 也在 `core-net`
   共享（Android 侧的本地声明已删除、改从 `core.prefs` 导入这些类型），见计划 §162。
+  更多页“关于与更新”卡对应 Android 的 `AboutSettingsScreen`/`AppUpdateScreen`：除了检查/下载/重启安装，
+  现在也显示 Android `UpdateDescription` 那三行（新版本号、`app-update-size` 安装包大小、`app-update-published`
+  发布日期）与发布说明本身（`app-update-notes`，用 `core-ui` 新增的共享 Markdown 子集渲染），行尾
+  `app-update-changelog` 进新页“更新日志”（`DesktopScreen.CHANGELOG`，对齐 Android 的 `ChangelogScreen`）：
+  本频道所有可安装版本按新→旧一张卡一版，带当前版本徽标、日期、包大小与各版说明，每次会话只拉一次、
+  “重新加载”才重拉。Markdown 解析 `core-ui` 的 `parseMarkdownBlocks`/`parseMarkdownInline`、
+  渲染 `MarkdownText`/`markdownPlainText` 都在 `core/ui/markdown/`（纯共享、无新依赖，Android 仍用 Markwon）；
+  `desktop-runtime` 的 `DesktopAppUpdateClient.releases()` 与更新检查共用 `offerableFor(channel)`
+  过滤（有包有下载地址、stable 不列预发布），所以说明列出的版本就是它真会装的版本，见计划 §163。
   收藏/历史的“筛选与排序”抽屉另有“布局”一节（封面网格 / 每行一个作品，对应 Android 的 ListMode），
   选择存 `desktop_library` 的 `library_list_mode`，列表模式下 `ContentGrid` 渲染 `content-list` 行视图，
   点击/长按语义与卡片一致，见计划 §142。

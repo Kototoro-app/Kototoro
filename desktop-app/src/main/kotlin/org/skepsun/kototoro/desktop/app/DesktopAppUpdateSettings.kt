@@ -2,7 +2,9 @@ package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -11,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.core.ui.markdown.MarkdownText
 
 /**
  * Android's "about and update" screen for the Windows package: what this copy is, a check against the release
@@ -44,6 +47,31 @@ internal fun DesktopAppUpdateSection(
                 if (available != null) {
                     Text(desktopText("update.available", available.version.text),
                         style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("app-update-available"))
+                }
+                Spacer(Modifier.weight(1f))
+                // Android's about screen also opens the changelog from here; the page lists every published version.
+                OutlinedButton({ controller.showChangelog() }, enabled = enabled && !update.installing,
+                    modifier = Modifier.testTag("app-update-changelog")) { Text(AndroidStrings["changelog"]) }
+            }
+            // Android's UpdateDescription: the package size, then the release's own Markdown notes.
+            if (available != null) {
+                val release = available.available
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(desktopText("update.size", desktopCacheSize(available.sizeBytes)),
+                        fontSize = 12.sp, color = Muted, modifier = Modifier.testTag("app-update-size"))
+                    desktopReleaseDate(release.publishedAt)?.let { date ->
+                        Text(desktopText("update.published", date), fontSize = 12.sp, color = Muted,
+                            modifier = Modifier.testTag("app-update-published"))
+                    }
+                }
+                if (release.notes.isNotBlank()) {
+                    Surface(shape = RoundedCornerShape(12.dp), tonalElevation = 1.dp,
+                        modifier = Modifier.fillMaxWidth().testTag("app-update-notes")) {
+                        MarkdownText(release.notes,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState())
+                                .padding(12.dp))
+                    }
                 }
             }
             if (available != null && downloaded == null) {
@@ -97,4 +125,18 @@ private fun UpdateSettingSwitch(title: String, summary: String?, checked: Boolea
         }
         Switch(checked, onCheckedChange = null, enabled = enabled)
     }
+}
+
+/**
+ * GitHub's `published_at` as a plain date, in the reader's own zone. A missing or unreadable stamp yields null rather
+ * than a made-up day, and a payload that only looks like a date keeps its date part.
+ */
+internal fun desktopReleaseDate(publishedAt: String?): String? {
+    val text = publishedAt?.trim().orEmpty()
+    if (text.isEmpty()) return null
+    return runCatching { java.time.OffsetDateTime.parse(text).toLocalDate().toString() }
+        .recoverCatching {
+            java.time.Instant.parse(text).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
+        }
+        .getOrElse { text.substringBefore('T').takeIf { it.isNotEmpty() } }
 }

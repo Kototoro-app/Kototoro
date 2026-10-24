@@ -18,6 +18,7 @@ import org.skepsun.kototoro.desktop.runtime.DesktopStagedUpdate
 import org.skepsun.kototoro.desktop.runtime.DesktopUpdateException
 import org.skepsun.kototoro.desktop.runtime.DesktopUpdatePackage
 import org.skepsun.kototoro.desktop.runtime.DesktopUpdateProgress
+import org.skepsun.kototoro.desktop.runtime.DesktopUpdateRelease
 import org.skepsun.kototoro.desktop.runtime.DesktopUpdateSettings
 import org.skepsun.kototoro.desktop.runtime.DesktopUpdateInstaller
 import org.skepsun.kototoro.desktop.runtime.locateInstallLayout
@@ -40,6 +41,10 @@ data class DesktopUpdateUi(
     /** True from the moment the swap script starts until the window closes. */
     val installing: Boolean = false,
     val error: String? = null,
+    /** Android's changelog: this channel's installable releases, newest first; null until the page asks for them. */
+    val changelog: List<DesktopUpdateRelease>? = null,
+    val changelogLoading: Boolean = false,
+    val changelogError: String? = null,
 )
 
 /**
@@ -189,5 +194,33 @@ internal class DesktopUpdateOperations(
         if (!state.value.update.settings.autoCheck) return
         if (state.value.update.available != null || state.value.update.downloaded != null) return
         check(silent = true)
+    }
+
+    /**
+     * Loads Android's changelog: every installable release of this channel, newest first. One load per session is
+     * enough for a page that only reads published notes, so [refresh] is opt-in rather than part of entering it.
+     */
+    fun changelog(refresh: Boolean = false) {
+        val ui = state.value.update
+        if (ui.changelogLoading) return
+        if (!refresh && ui.changelog != null) return
+        val client = client() ?: run {
+            state.update { it.copy(update = it.update.copy(
+                changelogError = desktopText("update.versionUnknown"), changelogLoading = false)) }
+            return
+        }
+        state.update { it.copy(update = it.update.copy(changelogLoading = true, changelogError = null)) }
+        scope.launch {
+            try {
+                val releases = client.releases()
+                state.update { it.copy(update = it.update.copy(changelog = releases, changelogLoading = false)) }
+            } catch (error: CancellationException) {
+                state.update { it.copy(update = it.update.copy(changelogLoading = false)) }
+                throw error
+            } catch (error: Exception) {
+                state.update { it.copy(update = it.update.copy(changelogLoading = false,
+                    changelogError = error.message ?: error.javaClass.simpleName)) }
+            }
+        }
     }
 }

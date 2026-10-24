@@ -76,7 +76,7 @@ internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
 enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
-    PLAYBACK_SETTINGS, PROXY_SETTINGS,
+    PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -355,6 +355,16 @@ class DesktopController(val session: DesktopSession) {
     fun discardAppUpdate() = action { updates.discard() }
 
     fun appUpdateSettings(value: DesktopUpdateSettings) = updates.settings(value)
+
+    /** Android's changelog entry (about → 更新日志): loads this channel's published releases, once per session. */
+    fun showChangelog() = navigate {
+        mutableState.update { it.copy(screen = DesktopScreen.CHANGELOG) }
+        updates.changelog()
+    }
+
+    fun reloadChangelog() = updates.changelog(refresh = true)
+
+    fun backFromChangelog() = navigate { mutableState.update { it.copy(screen = DesktopScreen.MORE) } }
 
     internal fun appearance(value: DesktopAppearance) = action {
         check(appearancePreferences.edit(SourcePreferenceEdit(changes = mapOf(

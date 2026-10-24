@@ -120,6 +120,14 @@ class DesktopAppUpdateClient(
     suspend fun newest(): DesktopUpdateRelease? = newestRelease(usableReleases(), channel)
 
     /**
+     * Every release this channel may install, newest first — what the changelog page lists.
+     *
+     * Filtered exactly like [newest], so a stable copy never shows notes for a pre-release it would refuse to
+     * install, and a package that cannot be verified is never described as available.
+     */
+    suspend fun releases(): List<DesktopUpdateRelease> = changelogReleases(usableReleases(), channel)
+
+    /**
      * The releases of this channel that can actually be installed: a package with a download URL, and — once
      * published — a `.sha256` file, since a package that cannot be verified is never offered.
      */
@@ -368,10 +376,23 @@ internal fun selectUpdate(
 internal fun newestRelease(
     releases: List<DesktopUpdateRelease>,
     channel: DesktopUpdateChannel,
-): DesktopUpdateRelease? = releases
-    .filter { it.packages.isNotEmpty() && it.packages.values.any { asset -> asset.downloadUrl.isNotBlank() } }
-    .filter { channel == DesktopUpdateChannel.NIGHTLY || it.version.isStable }
-    .maxByOrNull { it.version }
+): DesktopUpdateRelease? = releases.offerableFor(channel).maxByOrNull { it.version }
+
+/** The changelog's list: every release [channel] may install, newest first. */
+internal fun changelogReleases(
+    releases: List<DesktopUpdateRelease>,
+    channel: DesktopUpdateChannel,
+): List<DesktopUpdateRelease> = releases.offerableFor(channel).sortedByDescending { it.version }
+
+/**
+ * What a [channel] is allowed to offer: a package with a download URL, and no pre-release to a stable copy. Both the
+ * update check and the changelog read this, so the notes a page shows always match the versions it would install.
+ */
+internal fun List<DesktopUpdateRelease>.offerableFor(
+    channel: DesktopUpdateChannel,
+): List<DesktopUpdateRelease> = filter { release ->
+    release.packages.isNotEmpty() && release.packages.values.any { asset -> asset.downloadUrl.isNotBlank() }
+}.filter { release -> channel == DesktopUpdateChannel.NIGHTLY || release.version.isStable }
 
 /**
  * Parses a published `.sha256` file: one `<hex>  <name>` line per asset (the `sha256sum` format CI writes). Blank
