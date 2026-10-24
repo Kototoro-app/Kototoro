@@ -10,7 +10,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -29,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.alternatives.ui.AlternativesViewModel
 import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.parsers.model.Content
 
@@ -109,7 +109,7 @@ fun AlternativesSheetRoute(
                 )
             },
             confirmButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         migrationTarget = null
                         viewModel.migrate(target)
@@ -119,7 +119,7 @@ fun AlternativesSheetRoute(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { migrationTarget = null }) {
+                TvTextButton(onClick = { migrationTarget = null }) {
                     Text(text = stringResource(android.R.string.cancel))
                 }
             },

@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.migration.ui.rememberCoverRequest
@@ -374,7 +375,7 @@ private fun MigrationDialogs(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { onConfirmMigrate(dialog.mode) }) {
+                TvTextButton(onClick = { onConfirmMigrate(dialog.mode) }) {
                     Text(
                         stringResource(
                             if (dialog.mode == MigrationMode.REPLACE) R.string.migration_migrate_n else R.string.migration_copy_n,
@@ -383,7 +384,9 @@ private fun MigrationDialogs(
                     )
                 }
             },
-            dismissButton = { TextButton(onClick = onDismissDialog) { Text(stringResource(android.R.string.cancel)) } },
+            dismissButton = {
+                TvTextButton(onClick = onDismissDialog) { Text(stringResource(android.R.string.cancel)) }
+            },
         )
         is MigrationDialog.Progress -> AlertDialog(
             onDismissRequest = {},
@@ -395,19 +398,23 @@ private fun MigrationDialogs(
                 )
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = onCancelMigrate) { Text(stringResource(android.R.string.cancel)) } },
+            dismissButton = {
+                TvTextButton(onClick = onCancelMigrate) { Text(stringResource(android.R.string.cancel)) }
+            },
         )
         is MigrationDialog.Result -> AlertDialog(
             onDismissRequest = onDismissDialog,
             title = { Text(stringResource(R.string.migration_result, dialog.succeeded, dialog.failed)) },
-            confirmButton = { TextButton(onClick = onDismissDialog) { Text(stringResource(android.R.string.ok)) } },
+            confirmButton = { TvTextButton(onClick = onDismissDialog) { Text(stringResource(android.R.string.ok)) } },
         )
         MigrationDialog.Exit -> AlertDialog(
             onDismissRequest = onDismissDialog,
             title = { Text(stringResource(R.string.migration_exit_title)) },
             text = { Text(stringResource(R.string.migration_exit_message)) },
-            confirmButton = { TextButton(onClick = onAbandon) { Text(stringResource(R.string.migration_abandon)) } },
-            dismissButton = { TextButton(onClick = onDismissDialog) { Text(stringResource(android.R.string.cancel)) } },
+            confirmButton = { TvTextButton(onClick = onAbandon) { Text(stringResource(R.string.migration_abandon)) } },
+            dismissButton = {
+                TvTextButton(onClick = onDismissDialog) { Text(stringResource(android.R.string.cancel)) }
+            },
         )
     }
 }

@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.material.checkbox.MaterialCheckBox
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.util.ext.joinToStringWithLimit
 import org.skepsun.kototoro.favourites.ui.categories.select.FavoriteDialogViewModel
 import org.skepsun.kototoro.favourites.ui.categories.select.model.ContentCategoryItem
@@ -108,12 +109,12 @@ fun FavoriteCategoryDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TvTextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.done))
             }
         },
         dismissButton = {
-            TextButton(onClick = {
+            TvTextButton(onClick = {
                 onDismiss()
                 onManageCategories()
             }) {
@@ -179,12 +180,12 @@ fun FavoriteCategoryDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TvTextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.done))
             }
         },
         dismissButton = {
-            TextButton(onClick = {
+            TvTextButton(onClick = {
                 onDismiss()
                 onManageCategories()
             }) {

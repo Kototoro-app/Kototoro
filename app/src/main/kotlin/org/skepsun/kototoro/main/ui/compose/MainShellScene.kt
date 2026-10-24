@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.res.stringResource
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.home.ui.compose.HomeScreen
 import org.skepsun.kototoro.home.ui.compose.HomeScreenActions
@@ -65,7 +66,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import org.skepsun.kototoro.core.nav.PendingContentListNavigation
 import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
 import org.skepsun.kototoro.main.ui.navigation3.toDetailsOriginOrNull
@@ -1119,7 +1119,7 @@ internal fun LocalTopLevelRouteContent(
                     Text(text = stringResource(org.skepsun.kototoro.R.string.text_delete_local_manga_batch))
                 },
                 confirmButton = {
-                    TextButton(
+                    TvTextButton(
                         onClick = {
                             pendingRemoveSelection = null
                             viewModel.delete(ids)
@@ -1129,7 +1129,7 @@ internal fun LocalTopLevelRouteContent(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { pendingRemoveSelection = null }) {
+                    TvTextButton(onClick = { pendingRemoveSelection = null }) {
                         Text(text = stringResource(android.R.string.cancel))
                     }
                 },
@@ -1915,7 +1915,7 @@ internal fun FavoritesTopLevelRouteContent(
                 }
             },
             confirmButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         val selectedCandidates = dialog.candidates.filterIndexed { index, _ ->
                             index in dialog.selectedIndices
@@ -1933,7 +1933,7 @@ internal fun FavoritesTopLevelRouteContent(
                 }
             },
             dismissButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         favoritesSelectionDialog = null
                         pendingFavoritesDialog = null

@@ -16,7 +16,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -25,6 +24,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.chapters.ChapterDirectoryLayout
 import org.skepsun.kototoro.core.ui.chapters.ChapterFilterChips
 import org.skepsun.kototoro.core.ui.chapters.ChapterSectionHeader
@@ -197,7 +197,7 @@ fun ChaptersScreen(
             title = { Text(stringResource(R.string.translate_chapter_again)) },
             text = { Text(stringResource(R.string.translate_chapter_again_summary)) },
             confirmButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         retranslationRequest.value = null
                         onItemTranslate?.invoke(retranslationTarget, true)
@@ -207,7 +207,7 @@ fun ChaptersScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { retranslationRequest.value = null }) {
+                TvTextButton(onClick = { retranslationRequest.value = null }) {
                     Text(stringResource(R.string.cancel))
                 }
             },

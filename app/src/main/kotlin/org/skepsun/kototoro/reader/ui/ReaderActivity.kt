@@ -22,7 +22,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -61,6 +60,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.nav.ReaderIntent
 import org.skepsun.kototoro.core.parser.ContentDataRepository
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -1690,13 +1690,13 @@ private fun ReaderLoadingErrorDialog(
         text = { Text(message) },
         confirmButton = {
             if (resolveActionStringId != 0) {
-                TextButton(onClick = onResolve) {
+                TvTextButton(onClick = onResolve) {
                     Text(stringResource(resolveActionStringId))
                 }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TvTextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.close))
             }
         },
@@ -1740,13 +1740,13 @@ private fun IncognitoModeDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDisabledSelected) {
+                TvTextButton(onClick = onDisabledSelected) {
                     Text(stringResource(R.string.disable))
                 }
-                TextButton(onClick = onDismissRequest) {
+                TvTextButton(onClick = onDismissRequest) {
                     Text(stringResource(android.R.string.cancel))
                 }
-                TextButton(onClick = onIncognitoModeSelected) {
+                TvTextButton(onClick = onIncognitoModeSelected) {
                     Text(stringResource(R.string.incognito))
                 }
             }

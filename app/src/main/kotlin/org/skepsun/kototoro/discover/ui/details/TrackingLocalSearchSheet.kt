@@ -60,6 +60,7 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
@@ -271,7 +272,7 @@ fun TrackingLocalSearchSheet(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                TvTextButton(onClick = {
                     onMigrateClick(target)
                     pendingMigrationTarget = null
                 }) {
@@ -279,7 +280,7 @@ fun TrackingLocalSearchSheet(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingMigrationTarget = null }) {
+                TvTextButton(onClick = { pendingMigrationTarget = null }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             },

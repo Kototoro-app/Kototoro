@@ -13,7 +13,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +31,7 @@ import org.skepsun.kototoro.core.nav.ReaderIntent
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.prefs.rememberChapterRowActionPrefs
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
@@ -449,7 +449,7 @@ private fun VideoQualityDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            TvTextButton(
                 onClick = {
                     onConfirm(options[selectedIndex])
                 },
@@ -458,7 +458,7 @@ private fun VideoQualityDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismissRequest) {
+            TvTextButton(onClick = onDismissRequest) {
                 Text(text = stringResource(android.R.string.cancel))
             }
         },

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -53,7 +54,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -308,14 +308,14 @@ internal fun FavouriteCategoriesScreen(
             title = { Text(stringResource(R.string.remove_category)) },
             text = { Text(stringResource(R.string.categories_delete_confirm)) },
             confirmButton = {
-                TextButton(onClick = {
+                TvTextButton(onClick = {
                     pendingDelete = false
                     onDelete(selectedIds)
                     onSelectionChanged(emptySet())
                 }) { Text(stringResource(R.string.remove)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = false }) {
+                TvTextButton(onClick = { pendingDelete = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             },

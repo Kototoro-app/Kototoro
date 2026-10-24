@@ -10,7 +10,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvTakeInitialFocus
 
@@ -64,7 +64,7 @@ internal fun NovelTtsVoiceDialog(state: NovelTtsVoiceDialogState) {
         confirmButton = {},
         dismissButton = {
             state.onManage?.let { onManage ->
-                TextButton(onClick = onManage) {
+                TvTextButton(onClick = onManage) {
                     Text(stringResource(R.string.tts_legado_manage_sources))
                 }
             }

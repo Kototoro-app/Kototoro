@@ -37,7 +37,6 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
@@ -63,6 +62,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.core.util.ext.isPageEbookChapter
 import org.skepsun.kototoro.bookmarks.domain.novelBookmarkProgress
@@ -1143,7 +1143,7 @@ class NovelReaderActivity :
                                     }
                                 },
                                 confirmButton = {
-                                    TextButton(
+                                    TvTextButton(
                                         enabled = novelAiQuestion.isNotBlank() && !novelAiAskLoading,
                                         onClick = { askNovelAi(target) },
                                     ) {
@@ -1151,7 +1151,7 @@ class NovelReaderActivity :
                                     }
                                 },
                                 dismissButton = {
-                                    TextButton(onClick = ::dismissNovelAiAsk) {
+                                    TvTextButton(onClick = ::dismissNovelAiAsk) {
                                         Text(getString(R.string.cancel))
                                     }
                                 },

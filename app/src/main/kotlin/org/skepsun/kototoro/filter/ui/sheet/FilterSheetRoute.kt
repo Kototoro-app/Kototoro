@@ -52,6 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.KototoroRangeSlider
@@ -222,7 +223,7 @@ fun FilterSheetRoute(
             title = { Text(context.getString(R.string.save_filter)) },
             text = { Text(context.getString(R.string.filter_overwrite_confirm, name)) },
             confirmButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         pendingOverwriteName = null
                         filter.saveCurrentFilter(name)
@@ -232,7 +233,7 @@ fun FilterSheetRoute(
                 }
             },
             dismissButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         pendingOverwriteName = null
                         pendingSaveName = name
@@ -299,7 +300,7 @@ private fun FilterNameInputDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            TvTextButton(
                 enabled = !hasError,
                 onClick = { onConfirm(trimmed) },
             ) {
@@ -307,7 +308,7 @@ private fun FilterNameInputDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TvTextButton(onClick = onDismiss) {
                 Text(context.getString(android.R.string.cancel))
             }
         },
@@ -338,16 +339,16 @@ private fun TextInputTagDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(value.trim()) }) {
+            TvTextButton(onClick = { onConfirm(value.trim()) }) {
                 Text(context.getString(android.R.string.ok))
             }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onClear) {
+                TvTextButton(onClick = onClear) {
                     Text(context.getString(R.string.clear))
                 }
-                TextButton(onClick = onDismiss) {
+                TvTextButton(onClick = onDismiss) {
                     Text(context.getString(android.R.string.cancel))
                 }
             }

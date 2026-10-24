@@ -32,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
@@ -123,18 +124,18 @@ class ColorFilterConfigActivity : BaseComposeActivity() {
             title = { Text(stringResource(R.string.apply)) },
             text = { Text(stringResource(R.string.color_correction_apply_text)) },
             confirmButton = {
-                TextButton(onClick = {
+                TvTextButton(onClick = {
                     saveDialogVisible = false
                     viewModel.save()
                 }) { Text(stringResource(R.string.this_manga)) }
             },
             dismissButton = {
                 Row {
-                    TextButton(onClick = {
+                    TvTextButton(onClick = {
                         saveDialogVisible = false
                         viewModel.saveGlobally()
                     }) { Text(stringResource(R.string.globally)) }
-                    TextButton(onClick = { saveDialogVisible = false }) {
+                    TvTextButton(onClick = { saveDialogVisible = false }) {
                         Text(stringResource(android.R.string.cancel))
                     }
                 }
@@ -149,18 +150,18 @@ class ColorFilterConfigActivity : BaseComposeActivity() {
             title = { Text(stringResource(R.string.color_correction)) },
             text = { Text(stringResource(R.string.text_unsaved_changes_prompt)) },
             confirmButton = {
-                TextButton(onClick = {
+                TvTextButton(onClick = {
                     discardDialogVisible = false
                     saveDialogVisible = true
                 }) { Text(stringResource(R.string.save)) }
             },
             dismissButton = {
                 Row {
-                    TextButton(onClick = {
+                    TvTextButton(onClick = {
                         discardDialogVisible = false
                         finishAfterTransition()
                     }) { Text(stringResource(R.string.discard)) }
-                    TextButton(onClick = { discardDialogVisible = false }) {
+                    TvTextButton(onClick = { discardDialogVisible = false }) {
                         Text(stringResource(android.R.string.cancel))
                     }
                 }

@@ -3,7 +3,6 @@ package org.skepsun.kototoro.list.ui.compose
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -18,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.FlowCollector
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.main.ui.SearchBarFilterCallback
 import org.skepsun.kototoro.list.ui.ContentListHost
 import org.skepsun.kototoro.list.ui.RetainedPagingSnapshotHost
@@ -408,7 +408,7 @@ fun AppContentListRoute(
             title = { Text(text = stringResource(org.skepsun.kototoro.R.string.mark_as_completed)) },
             text = { Text(text = stringResource(org.skepsun.kototoro.R.string.mark_as_completed_prompt)) },
             confirmButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         onMarkAsCompletedSelection?.invoke(itemsToMark)
                         pendingMarkAsCompletedItems = null
@@ -418,7 +418,7 @@ fun AppContentListRoute(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingMarkAsCompletedItems = null }) {
+                TvTextButton(onClick = { pendingMarkAsCompletedItems = null }) {
                     Text(text = stringResource(android.R.string.cancel))
                 }
             },

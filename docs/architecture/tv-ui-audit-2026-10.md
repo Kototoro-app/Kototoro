@@ -4970,3 +4970,103 @@ Incognito mode）在电视上有两个问题：**面板右边缘贴着屏幕边*
    周期按钮本身能聚焦、能按 CENTER，没有走进去逐项看。
 4. **本轮只改了统计页**：`app` 里还有多处裸 `AlertDialog` + `TextButton`（例如阅读器里的裁剪/笔记对话框），
    同一个"确认框按钮没有环 + 返回键穿透"的问题很可能也在，需要下一轮批量排查。
+
+## 第八十二轮：确认框与对话框的动作按钮批量补环，共享确认框吃下返回键（2026-10-25）
+
+### 症状
+
+上一轮遗留第 4 条要求"批量排查裸 `AlertDialog` + `TextButton`"。本轮先按"用户真会遇到的确认框"排序，
+从设置里最容易碰到的一个开始：`设置 → 外观 → Appearance mode`（`nk4-dialog.png`）。
+
+这个选择框打开后，画面上**没有任何一处焦点环**：四个选项行、`Black` 开关、右下角的 `OK` 全都是平的。
+按一下 DOWN 才在第一行 `Follow system` 上出现蓝环（`nk5-down1.png`），再按才走选项。原因不是对话框
+没抢到焦点，而是它的按钮本身没有环——同一个毛病在应用里是系统性的：
+
+| 统计 | 数量 |
+| --- | --- |
+| 裸 `TextButton(` 调用点（本轮之前） | 202 处 |
+| 其中**在 `AlertDialog(...)` 里**当确认/取消按钮用的 | 86 处 / 32 个文件 |
+| 对话框之外（sheet 底栏、工具条、空态动作） | 116 处 / 63 个文件 |
+
+M3 `TextButton` 的焦点提示只有一层 `stateLayer` 泛光，而电视上看的是**几何轮廓**——从三米外看，
+"按钮亮了一点"根本不构成"我现在停在这里"。同一个缺陷在第八十一轮里被逐个手补过（`StatsScreen` 的两个
+按钮加了 `tvFocusable`），说明修法早就有，只是没人一次性铺开。
+
+顺带查出的第二个缺陷：这些确认框上按返回（遥控器唯一的退出键），平台的默认处理会**绕过对话框**落到
+Activity 的任务栈上——第八十一轮在 `StatsActivity` 上实测过（整个统计页被 pop 掉，`nh2-after-back.png`）。
+对话框自己吃不下返回键，只想取消提问的用户把整页丢了。共享的 `SettingsAlertDialog`（设置里约 45 处
+确认/选择框都走它：外观、语言、阅读器设置、备份恢复、来源管理……）同样如此。
+
+### 改动
+
+**新增共享按钮 `core-ui/.../adaptive/TvTextButton.kt`**（86 行），签名与 M3 `TextButton` 一一对齐
+（`onClick`、`modifier`、`enabled`、`shape = ButtonDefaults.textShape`、`colors = ButtonDefaults.textButtonColors()`、
+`elevation`、`border`、`contentPadding = ButtonDefaults.TextButtonContentPadding`、`interactionSource`、
+`content: @Composable RowScope.() -> Unit`），唯一的不同是给 `textButton` 的 modifier 前面加
+`tvFocusable(enabled = enabled, shape = shape, addFocusTarget = false)`：
+
+- `addFocusTarget = false`——环**附着**在按钮自己的焦点目标上，不新增一个停留点。遥控器的按键次数和
+  手机上的可点区域都不变。
+- `shape` 跟随调用方，环的圆角就和按钮本身的圆角一致；默认 `ButtonDefaults.textShape`。
+- `tvFocusable` 在非电视上是 no-op，所以手机/平板外观与行为完全不变。
+
+**32 个文件 86 处对话按钮换成 `TvTextButton`**：`FilterSheetRoute` 7、`MigrationListScreen` 6、
+`ColorFilterConfigActivity` 6、`ReaderActivity` 5、`ComposeTranslationTaskPanel` 5、
+`DetailsSourceSheets` 4、`FavoriteDialogScreen` 4、`ErrorDetailsActivity` 4、`MainShellScene` 4、
+`Appearance` 之外的 `SettingsPreferenceComponents` 4……每次替换同时清理 `material3.TextButton` 的
+无用 import、按字母序补 `core.ui.adaptive.TvTextButton`。迁移脚本只认**位于 `AlertDialog(...)` 括号内**
+的 `TextButton(`，并且跳过本身已经带 `.tvFocusable(` 的调用——所以第八十一轮手补过的 `StatsScreen`
+和 `SettingsAlertDialog` 的 `SettingsDialogActionButton` 都没被重复包一层。
+
+**共享确认框吃下返回键**（`settings/compose/SettingsAlertDialog.kt`）：在 `AlertDialog(` 之前加
+
+```kotlin
+if (isTvPresentation) {
+    BackHandler { onDismissRequest() }
+}
+```
+
+只在电视上注册，而且注册在对话框自己的组合里——它比 Activity 的返回处理更近，所以返回键只关掉这个问题。
+不可取消的对话框（没有 `dismissButton`、`onDismissRequest` 是空实现）在电视上表现为"返回键什么都不做"，
+也比"把整页 pop 掉"好。
+
+### 设备验证（`kototoro_tv_api36`，1920×1080@320）
+
+| 步骤 | 证据 | 结果 |
+| --- | --- | --- |
+| `设置 → 外观 → Appearance mode`（**用 D-pad 打开**） | `nk12-open-by-key.png` | 打开即在 `Follow system` 上有蓝环，不用先按一下 |
+| DOWN | `nk5-down1.png` | 环移动，选项逐行走（选项行的环是既有 `tvFocusable`） |
+| 对话框上按返回 | `nk7-after-back.png`、`nk9-back-*.png` | 只关对话框：外观页还在，`mCurrentFocus=SettingsActivity` |
+| `历史 → ⋮ → Clear history` | `nk29-dialog.png` | 选项框打开，四个选项行 + `Cancel`/`Clear` 全平 |
+| DOWN ×5 | `nk30-ring.png`（裁剪 `nk30-crop.png`） | `Cancel` 出现蓝色圆角环——本轮 `TvTextButton` 的实证 |
+| RIGHT | `nk26-clear-ring.png` | `Clear` 同样有环，两个按钮的环互不重叠 |
+| 对话框上按返回 | `nk31-back.png`、`mCurrentFocus=MainActivity` | 历史页保留，没有被 pop |
+
+**一次自我否定的 A/B**：第一次看到 `nk4` 完全无环时，判断是"对话框把焦点给了 `LazyColumn` 自己
+（可滚动 ⇒ 自带焦点目标 ⇒ 不画环）"，于是加了个 `Modifier.tvListItemsTakeFocus()`
+（电视上 `focusProperties { canFocus = false }`）贴在三个选项 `LazyColumn` 上。为了确认它到底有没有用，
+又单独构建了一个**去掉该补丁**的对照包，用同样的 D-pad 路径打开同一个对话框：两张截图**字节级相同**
+（`nk16` 与 `nk12` 的 sha256 都是 `b050a3…`）。也就是说打开即有环与那个补丁无关，`nk4` 的无环另有原因：
+
+> 只要最后一次输入是**触摸**，Compose 就处在触摸模式，`FocusRequester.requestFocus()` 会被丢掉，
+> 于是下一帧没有焦点环，直到按下第一个键。本轮开头几张"什么都没有"的截图就是这么来的（我用
+> `input tap` 点的菜单）。
+
+结论：不是代码缺陷，真实遥控器（无触摸）不受影响；`tvListItemsTakeFocus` 已整体撤销，没有进入本轮提交。
+这条记进遗留，因为带触屏的遥控器/接了鼠标的电视盒会遇到。
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（1m）。
+
+### 遗留
+
+1. **116 处裸 `TextButton(`（63 个文件）仍在对话框之外**：sheet 底栏、面板工具条、空态动作。它们是同一类
+   "有焦点没轮廓"，下一轮按"共享组件优先"归并——先把同一模式的重复写法收敛成一个共享件，再逐个换。
+2. **带触屏/鼠标的输入设备上，对话框打开后第一下按键前没有环**（见上面 A/B 的说明）。要修得在
+   `SettingsAlertDialog` 的预聚焦里补一次"离开触摸模式"后的重试，属于平台信息层面的活，未做。
+3. **`Clear history` 这种对话框的选项行没有环**：4 个裸 `RadioButton + Row`（不在 `SettingsChoiceDialog`
+   里），遥控器要走 5 步才够到按钮，中间 4 步屏幕纹丝不动。同类"对话框里自己拼行的选择器"还有若干。
+4. **`AlertDialog` 的返回键行为按宿主 Activity 不同**：`MainActivity` 里的填空框可以正常关（`nk31`），
+   `StatsActivity`（第八十一轮）和 `SettingsActivity` 的共享确认框需要显式 `BackHandler`。没有证据之前
+   不给 55 处 `AlertDialog` 统一包一层，剩下阅读器/播放器/备份等宿主逐一验。
+5. **32 个文件里真正上机点开验证的只有 2 个对话框**（`Appearance mode`、`Clear history`），其余 84 处
+   是编译期 + 代码同构验证（同一行形态的批量替换）。

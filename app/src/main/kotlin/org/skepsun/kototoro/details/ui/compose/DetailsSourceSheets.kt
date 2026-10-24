@@ -28,7 +28,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +50,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.model.ContentSourceInfo
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.explore.data.SourcePreset
@@ -258,7 +258,7 @@ fun MetadataSourceSheet(
                 )
             },
             confirmButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         pendingBindTarget = null
                         onDismissRequest()
@@ -269,7 +269,7 @@ fun MetadataSourceSheet(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingBindTarget = null }) {
+                TvTextButton(onClick = { pendingBindTarget = null }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             },
@@ -596,7 +596,7 @@ fun ReadingSourceSheet(
                 )
             },
             confirmButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         pendingMigrationTarget = null
                         onDismissRequest()
@@ -607,7 +607,7 @@ fun ReadingSourceSheet(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingMigrationTarget = null }) {
+                TvTextButton(onClick = { pendingMigrationTarget = null }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             },

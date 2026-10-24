@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
@@ -126,7 +127,7 @@ class SyncAuthActivity : BaseComposeActivity() {
                         }
                     },
                     confirmButton = {
-                        TextButton(onClick = {
+                        TvTextButton(onClick = {
                             val normalized = if (hostValue.isHttpUrl()) hostValue else "http://$hostValue"
                             viewModel.syncURL.value = normalized
                             hostValue = normalized
@@ -134,7 +135,7 @@ class SyncAuthActivity : BaseComposeActivity() {
                         }) { Text(getString(android.R.string.ok)) }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showHostDialog = false }) { Text(getString(android.R.string.cancel)) }
+                        TvTextButton(onClick = { showHostDialog = false }) { Text(getString(android.R.string.cancel)) }
                     },
                 )
             }
@@ -143,7 +144,9 @@ class SyncAuthActivity : BaseComposeActivity() {
                     onDismissRequest = { errorMessage = null },
                     title = { Text(getString(R.string.error)) },
                     text = { Text(message) },
-                    confirmButton = { TextButton(onClick = { errorMessage = null }) { Text(getString(R.string.close)) } },
+                    confirmButton = {
+                        TvTextButton(onClick = { errorMessage = null }) { Text(getString(R.string.close)) }
+                    },
                 )
             }
         }

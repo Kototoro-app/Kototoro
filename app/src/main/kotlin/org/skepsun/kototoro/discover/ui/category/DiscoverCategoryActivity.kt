@@ -30,6 +30,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.filter.ui.FilterCoordinator
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.tracking.discovery.domain.isTrackingDateDrivenCategory
@@ -112,7 +113,7 @@ class DiscoverCategoryActivity : BaseComposeActivity(), FilterCoordinator.Owner 
                     text = {
                         androidx.compose.foundation.layout.Column {
                             sortOptions.forEach { option ->
-                                TextButton(onClick = {
+                                TvTextButton(onClick = {
                                     viewModel.applySortOption(option.id)?.let {
                                         categoryId = it.targetCategoryId ?: categoryId
                                         titleRes = it.nameResId

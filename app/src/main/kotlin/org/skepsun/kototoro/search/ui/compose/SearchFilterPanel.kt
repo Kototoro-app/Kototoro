@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
@@ -516,7 +517,7 @@ internal fun SearchFilterPanel(
             title = { Text(stringResource(R.string.save_filter)) },
             text = { Text(stringResource(R.string.filter_overwrite_confirm, name)) },
             confirmButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         pendingOverwriteName = null
                         onSaveFilter(name)
@@ -526,7 +527,7 @@ internal fun SearchFilterPanel(
                 }
             },
             dismissButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         pendingOverwriteName = null
                         pendingSaveName = name

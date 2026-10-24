@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.util.ext.copyToClipboard
 import org.skepsun.kototoro.reader.domain.TranslationLayerState
 import org.skepsun.kototoro.reader.ui.ReaderViewModel
@@ -172,12 +173,12 @@ private fun TranslationBenchmarkDialog(message: String, onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(onClick = { context.copyToClipboard(title, message) }) {
+            TvTextButton(onClick = { context.copyToClipboard(title, message) }) {
                 Text(stringResource(androidx.preference.R.string.copy))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+            TvTextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
         },
     )
 }
@@ -263,16 +264,16 @@ private fun TranslationTaskDetailDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onRetry) {
+            TvTextButton(onClick = onRetry) {
                 Text(stringResource(R.string.reader_translation_retry_this_page))
             }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = { context.copyToClipboard(title, message) }) {
+                TvTextButton(onClick = { context.copyToClipboard(title, message) }) {
                     Text(stringResource(androidx.preference.R.string.copy))
                 }
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+                TvTextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
             }
         },
     )

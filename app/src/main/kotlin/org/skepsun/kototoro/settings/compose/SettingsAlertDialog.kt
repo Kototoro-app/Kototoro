@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.settings.compose
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -73,6 +74,13 @@ internal fun SettingsAlertDialog(
     }
 
     ApplyDynamicArtworkBlurDialogStyle()
+    if (isTvPresentation) {
+        // A remote's only escape key is back, and on this dialog window the platform default never
+        // reached the question: pressing it took the whole screen away and left the user somewhere
+        // else entirely. Registered while the question is on screen, so it wins over the activity's
+        // own back handling and only this dialog closes. No-op off TV.
+        BackHandler { onDismissRequest() }
+    }
     AlertDialog(
         onDismissRequest = onDismissRequest,
         shape = RoundedCornerShape(tokens.dialogCornerRadius),
