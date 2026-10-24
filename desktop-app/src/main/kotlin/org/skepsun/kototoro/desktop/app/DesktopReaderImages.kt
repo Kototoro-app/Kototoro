@@ -101,6 +101,24 @@ internal class DesktopReaderImages(
             }
         }
 
+    /**
+     * Android's "clear pages cache" on this data root: the index forgets which pages it once fetched, while the blobs
+     * stay where they are. An orphaned blob only costs disk space, and the budget sweeper already reclaims the ones no
+     * saved chapter holds, so dropping the directory here would break offline reading for nothing.
+     */
+    suspend fun clearIndex(): Int = withContext(Dispatchers.IO) {
+        gate.withLock {
+            val keys = preferences.snapshot().keys
+            if (keys.isNotEmpty()) {
+                preferences.edit(SourcePreferenceEdit(changes = keys.associateWith { null }))
+            }
+            keys.size
+        }
+    }
+
+    /** How many pages the index remembers; the cleanup page shows it next to the clear action. */
+    fun size(): Int = preferences.snapshot().size
+
     /** Geometry is only a hint; the visible artifact still passes load's full integrity check. */
     suspend fun geometry(pages: List<SourcePage>, extensionRevision: String): Map<Long, IntSize> = withContext(Dispatchers.IO) {
         gate.withLock {

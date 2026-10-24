@@ -1,17 +1,23 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.skia.Image
 import org.skepsun.kototoro.core.prefs.GitHubMirrorCatalog
 import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeState
+import org.skepsun.kototoro.core.source.SourcePreferenceEdit
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.desktop.runtime.DesktopStorageCategory
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.FileTime
 
 /**
  * Android's storage and network page over the real UI and the real data root. Files are written into the image and log
@@ -34,6 +40,24 @@ internal object DesktopStorageProbe {
                 fun idle() {
                     waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy }
                     waitForIdle()
+                    check(controller.state.value.error == null) { controller.state.value.error.orEmpty() }
+                }
+                fun snapshot(label: String) {
+                    Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
+                        image.encodeToData()?.use {
+                            val output = Files.createDirectories(Path.of(args[3])).resolve("${args[0]}-$label.png")
+                            Files.write(output, it.bytes)
+                        }
+                    }
+                }
+                // A Dialog is its own root, so onRoot() is ambiguous while one is open: capture the dialog instead.
+                fun snapshotTag(tag: String, label: String) {
+                    Image.makeFromBitmap(onNodeWithTag(tag).captureToImage().asSkiaBitmap()).use { image ->
+                        image.encodeToData()?.use {
+                            val output = Files.createDirectories(Path.of(args[3])).resolve("${args[0]}-$label.png")
+                            Files.write(output, it.bytes)
+                        }
+                    }
                 }
                 idle()
                 onNodeWithTag("nav:更多").performClick()
@@ -100,6 +124,52 @@ internal object DesktopStorageProbe {
                 waitUntil(timeoutMillis = 10_000) { session.githubMirror.probeState.value == GitHubMirrorProbeState.Idle }
                 idle()
                 onNodeWithTag("github-mirror-probe-start").assertExists()
+
+                // Android's data-removal page, one press below the hub. Its rows act on this data root: the image sweep
+                // frees the unprotected blob the probe wrote, the reader index row drops the record seeded into the
+                // index store, and the feed row opens the same confirmation the feed menu shows.
+                val sweepTarget = root.images.resolve("probe-cleaned.img")
+                Files.write(sweepTarget, ByteArray(2048))
+                Files.setLastModifiedTime(sweepTarget, FileTime.fromMillis(System.currentTimeMillis() - 600_000))
+                val readerStore = session.storage.preferences.open("desktop_reader_images")
+                readerStore.edit(SourcePreferenceEdit(changes = mapOf(
+                    "probe-page" to SourcePreferenceValue.Text("{}"),
+                )))
+                onNodeWithTag("cleanup-open").performScrollTo().performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.DATA_CLEANUP }
+                idle()
+                val opened = controller.state.value
+                check(opened.readerIndexCount == 1) { "index: ${opened.readerIndexCount}" }
+                check(Files.exists(sweepTarget)) { "the sweep target is written" }
+                snapshot("data-cleanup")
+
+                onNodeWithTag("cleanup-image-cache").performClick()
+                idle()
+                check(!Files.exists(sweepTarget)) { "the cache row deletes the unprotected blob" }
+                check(controller.state.value.imageCache.usedBytes == 0L) {
+                    "cache: ${controller.state.value.imageCache}"
+                }
+
+                onNodeWithTag("cleanup-page-index").performClick()
+                idle()
+                check(controller.state.value.readerIndexCount == 0) {
+                    "index: ${controller.state.value.readerIndexCount}"
+                }
+                check(readerStore.snapshot().isEmpty()) { "store: ${readerStore.snapshot()}" }
+                check(controller.state.value.message == desktopText("cleanup.pagesCleared", 1)) {
+                    "message: ${controller.state.value.message}"
+                }
+
+                onNodeWithTag("cleanup-feed").performScrollTo().performClick()
+                onNodeWithTag("feed-clear-dialog").assertExists()
+                snapshotTag("feed-clear-dialog", "data-cleanup-feed-dialog")
+                onNodeWithTag("feed-clear-cancel").performClick()
+                idle()
+                onNodeWithTag("feed-clear-dialog").assertDoesNotExist()
+
+                onNodeWithTag("data-cleanup-back").performScrollTo().performClick()
+                idle()
+                check(controller.state.value.screen == DesktopScreen.STORAGE) { "the cleanup page returns to the hub" }
 
                 onNodeWithTag("storage-settings-back").performScrollTo().performClick()
                 idle()

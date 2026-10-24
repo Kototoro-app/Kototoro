@@ -200,6 +200,11 @@ class DesktopSession private constructor(
     internal suspend fun enforceImageBudget(budgetMb: Int, clear: Boolean = false): DesktopImageCacheReport =
         DesktopImageBudget.enforce(storage.paths.images, downloadedImageBlobs(), budgetMb, clear)
 
+    /** Android's "clear pages cache": the reader index only, see [DesktopReaderImages.clearIndex]. */
+    internal suspend fun clearReaderIndex(): Int = readerImages.clearIndex()
+
+    internal fun readerIndexCount(): Int = readerImages.size()
+
     init { startupErrors.addAll(downloadStore.errors); startupErrors.addAll(repositories.errors) }
 
     /** NCNN super-resolution of reader pages; the controller keeps [upscale] in step with the reader settings. */

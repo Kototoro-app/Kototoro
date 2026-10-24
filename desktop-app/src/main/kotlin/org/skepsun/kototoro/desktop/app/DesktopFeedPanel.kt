@@ -202,7 +202,7 @@ private fun FeedOverflowMenu(controller: DesktopController, state: DesktopAppSta
 
 /** Android's clear-feed confirmation: same title, prompt and checkbox, same "clear the counters too" default. */
 @Composable
-private fun FeedClearDialog(controller: DesktopController, enabled: Boolean, onDismiss: () -> Unit) {
+internal fun FeedClearDialog(controller: DesktopController, enabled: Boolean, onDismiss: () -> Unit) {
     var clearCounters by remember { mutableStateOf(true) }
     AlertDialog(
         onDismissRequest = onDismiss,

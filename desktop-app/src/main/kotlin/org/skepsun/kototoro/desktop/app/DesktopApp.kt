@@ -133,6 +133,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.TAG_BLACKLIST -> DesktopTagBlacklistPage(controller, listState)
                             DesktopScreen.READING_STATS -> DesktopReadingStatsPage(controller, listState)
                             DesktopScreen.STORAGE -> DesktopStorageSettingsPage(controller, state)
+                            DesktopScreen.DATA_CLEANUP -> DesktopDataCleanupPage(controller, state)
                             DesktopScreen.PLAYBACK_SETTINGS -> DesktopPlaybackSettingsPage(controller, state)
                             DesktopScreen.PROXY_SETTINGS -> DesktopProxySettingsPage(controller, state)
                             DesktopScreen.CHANGELOG -> DesktopChangelogPage(controller, state)
@@ -226,6 +227,7 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.TAG_BLACKLIST -> desktopText("screens.tagBlacklist")
         DesktopScreen.READING_STATS -> AndroidStrings["reading_stats"]
         DesktopScreen.STORAGE -> AndroidStrings["storage_and_network"]
+        DesktopScreen.DATA_CLEANUP -> AndroidStrings["data_removal"]
         DesktopScreen.PLAYBACK_SETTINGS -> AndroidStrings["playback_settings"]
         DesktopScreen.PROXY_SETTINGS -> AndroidStrings["proxy"]
         DesktopScreen.CHANGELOG -> AndroidStrings["changelog"]

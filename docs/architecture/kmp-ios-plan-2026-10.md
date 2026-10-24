@@ -7876,3 +7876,42 @@ Android 的订阅页把三项动作放在 `R.menu.opt_feed` 里：`update`（检
 仍待：Android 菜单的第一项（`update`）在 Windows 已经是常驻按钮，不再重复放进溢出菜单；
 `DesktopFeedPanel` 的待读行排序仍与共享 `FeedDeriver` 的发现时间不一致（§170 遗留）。
 
+## 172. Windows 数据清理页对齐 Android 存储与网络 → 数据清理（2026-10-24）
+
+Android 的 `StorageAndNetworkSettingsScreen` 在“存储用量”和“网络”之间还有两组：缓存限制与数据清理
+（`SettingsDestination.DataCleanupSettings`、标题 `data_removal`）。Windows 的存储与网络枢纽只有前者的用量
+与后者的代理/镜像，数据清理完全没有入口，而它列的正是这台机器上确实存在的几处可回收数据：
+图片缓存（封面与阅读页面共用同一个 images 目录）、阅读页面索引（256 条记录）、订阅更新记录。
+Android 的 `DataCleanupSettingsScreen` 有本地存储、缓存、隐私、章节四组二十来行，其中大部分（本地漫画/小说/视频、
+HTTP 缓存、搜索历史、Cookie/浏览器数据、整个数据库）在 Windows 没有对应实现，所以这一页只列真能执行的项，
+而不是摆一排点了什么都不会发生的按钮；差异写进 `DesktopDataCleanupPage` 的文件注释里。
+
+- `DesktopReaderImages.clearIndex()` / `size()`：Android 的“清除页面缓存”落在阅读器的索引上，
+  所以这里只删 `desktop_reader_images` 的记录、返回删掉的条数，blob 一个不碰——孤立 blob 只占磁盘，
+  图片预算本来就按“未被已保存章节引用”回收，直接删目录会连离线阅读一起毁掉。`DesktopSession` 暴露
+  `clearReaderIndex()` / `readerIndexCount()`，`DesktopReaderIndexTest` 覆盖“删两条、返回 2、再删返回 0”。
+- `DesktopController`：新 `DesktopScreen.DATA_CLEANUP` 与 `showDataCleanup()`（进页重读图片报告、索引条数与订阅快照，
+  因为三个数字都可能已经变了）、`backToStorage()` 复用为返回、`clearReaderPageCache()` 走 `action`
+  （失败 `cleanup.pagesClearFailed`，成功 `cleanup.pagesCleared` 并刷新计数）；`DesktopAppState.readerIndexCount`。
+- 新 `DesktopDataCleanupPage`：返回按钮 `data-cleanup-back`；“缓存”节两行对齐 Android 的 `clear_thumbs_cache`
+  （摘要 `desktopCacheSize` 即图片目录占用，动作复用下载页的 `clearImageCache()`，保留已保存章节引用的 blob）
+  与 `clear_pages_cache`（摘要 `cleanup.pageIndexRecords`，动作 `clearReaderPageCache()`）；
+  “隐私”节一行是 `clear_updates_feed`（摘要 `cleanup.items` 即订阅时间线条数），点击弹出订阅页同一份
+  `FeedClearDialog`（§171，改为 `internal` 复用），标题/说明/复选框/默认勾选与 Android 一致。
+- 存储与网络枢纽在“网络”之前加 Android 同名的 `data_removal` 节与 `cleanup-open` 行（`ic_delete_all`，
+  已加进 `desktop-app/build.gradle` 的 `desktopIcons`）；`DesktopApp` 的分发与标题映射各加一项。
+- 两份 `desktop-strings*.properties` 各加 `cleanup.pageIndexRecords`、`cleanup.items`、`cleanup.pagesCleared`、
+  `cleanup.pagesClearFailed`；其余文案直接用 Android 的 `data_removal`/`cache`/`privacy`/`clear_thumbs_cache`/
+  `clear_pages_cache`/`clear_updates_feed`。
+
+验证：`:desktop-app:verifyDesktopStrings`、`:desktop-app:compileKotlin`、`:desktop-app:compileTestKotlin`、
+`:desktop-app:test --tests *DesktopReaderIndexTest*`（1 条）、`:desktop-app:test --tests *storage*hub*` 全绿；
+storage 探针在真实数据根上写一个 2 KiB 的 `probe-cleaned.img` 与一条索引记录，进枢纽 → 数据清理：
+“清除缩略图缓存”删掉那个 blob 且 `imageCache.usedBytes` 归零，“清除页面缓存”把索引清零并给出
+`cleanup.pagesCleared`，“清除订阅更新记录”弹出订阅页那个确认框、取消后关闭，最后返回枢纽
+（截图 `storage-data-cleanup.png`、`storage-data-cleanup-feed-dialog.png`）。
+
+仍待：Android 的数据清理页其余分组仍无 Windows 实现——“删除已读章节的本地下载”需要下载 store 侧的
+“按进度判已读再删章节”规则（批量移除现在在下载页），“清除数据库”（重置整个库）与 Cookie/浏览器数据
+（compat 的 WebView2 profile）都需要各自的确认与代价说明，搜索历史在 Windows 尚无存储；
+缓存限制页（Android 的 `CacheLimitsSettings`）也还只有下载页里的图片预算一处。

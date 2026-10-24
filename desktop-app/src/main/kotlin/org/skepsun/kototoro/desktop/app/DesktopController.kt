@@ -82,7 +82,7 @@ enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
     PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES, DICTIONARY_RULES,
-    DOWNLOAD_SETTINGS, NAV_CONFIG,
+    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -220,6 +220,8 @@ data class DesktopAppState(
     val imageCache: DesktopImageCacheReport = DesktopImageCacheReport(),
     /** Android's storage page figures; null while the walk on the data root runs. */
     val storageUsage: DesktopStorageUsage? = null,
+    /** How many reader pages the on-disk index remembers; the cleanup page clears it. */
+    val readerIndexCount: Int = 0,
     val busy: Boolean = false,
     val error: String? = null,
     val message: String? = null,
@@ -1894,6 +1896,30 @@ class DesktopController(val session: DesktopSession) {
     /** The proxy page's back button; the figures the hub already measured stay, so no walk is repeated. */
     fun backToStorage() = navigate {
         mutableState.update { it.copy(screen = DesktopScreen.STORAGE, proxyTest = DesktopProxyTestState()) }
+    }
+
+    /**
+     * Android's "data removal" page, reached from the storage hub the way Android reaches it. The page names figures,
+     * so the entry re-reads them: the image report and the timeline can both have moved since the hub was opened.
+     */
+    fun showDataCleanup() = navigate {
+        mutableState.update { it.copy(screen = DesktopScreen.DATA_CLEANUP) }
+        loadImageCacheOnIo()
+        mutableState.update { it.copy(readerIndexCount = session.readerIndexCount()) }
+        loadFeedOnIo()
+    }
+
+    /** Android's "clear pages cache": the reader index forgets the pages, saved chapters keep their blobs. */
+    fun clearReaderPageCache() = action {
+        val cleared = runCatching { session.clearReaderIndex() }.getOrNull()
+        mutableState.update {
+            if (cleared == null) {
+                it.copy(error = desktopText("cleanup.pagesClearFailed"))
+            } else {
+                val message = desktopText("cleanup.pagesCleared", cleared)
+                it.copy(readerIndexCount = session.readerIndexCount(), message = message)
+            }
+        }
     }
 
     internal suspend fun loadStorageUsageOnIo() {

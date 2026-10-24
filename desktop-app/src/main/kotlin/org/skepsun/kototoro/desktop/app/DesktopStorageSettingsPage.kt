@@ -100,6 +100,13 @@ internal fun DesktopStorageSettingsPage(controller: DesktopController, state: De
                 }
             }
         }
+        SettingsSectionHeader(AndroidStrings["data_removal"])
+        SettingsGroup {
+            // Android's row for its data-removal page; the page itself lists only the stores this data root has.
+            SettingsValueRow(AndroidStrings["data_removal"], null, null, active,
+                { controller.showDataCleanup() }, testTag = "cleanup-open",
+                leadingIcon = painterResource("icons/ic_delete_all.svg"))
+        }
         SettingsSectionHeader(AndroidStrings["network"])
         SettingsGroup {
             // Android's row for the proxy sub-screen, with the current route where Android shows its summary.
