@@ -8268,3 +8268,37 @@ Android 的 `UnifiedSourcesScreen` 在装/导入第三方包时按 `UnifiedSourc
   `tablet` 探针（宽窗详情与“更多”列表）全部重跑通过，合计约 7 分钟。
 - 仍待：`related_manga`（相关作品）、浏览记录推荐的两个轮播。其余不变（`setup_wizard`、`handle_links`、手动重排、
   `BOOKMARKS` 的 NSFW 过滤目标、`SourceSwitchDialog` 选择模式、外部追踪、定期本地备份、`CacheLimitsSettings`）。
+
+## 181. Windows 已安装扩展按包展开来源，对齐 Android 的 `UnifiedPackageList`（2026-10-24）
+
+驱动原话里的“拓展管理…尤其是各个源的配置，怎么能平铺呢”，落到 Windows 上是这几页里唯一还和 Android 结构不同的一处：
+Android 的统一来源页把**来源挂在声明的扩展包下面**（`UnifiedSourcePackageHeader` + 包内 `UnifiedSourceRow`，
+点标题展开/收起，包行写版本与来源数，来源行写内容类型/语言并带自己的启用开关），而 Windows 的“更多 → 扩展与仓库”
+里“已安装”只是一行一个包、行尾“更新/卸载”，包里的来源完全看不到，只能去“来源”对话框里全局平铺找。
+
+- 模型：`DesktopInstalledEntry` 新增 `sourceNames: List<String>`（默认空），`DesktopSession.installedEntries()` 按包
+  现算：Mihon/Tsundoku/Aniyomi 扩展取 `extension.sources.map { it.source.name }`，解析器插件取
+  `plugin.sources.map { it.source.name }`，Cloudstream 取 `cloudstreamListing(it).source.name`。所以这一列永远和
+  registry 里的实际清单一致，不需要另存一份表。
+- 界面：`InstalledExtensions` 里包行末尾多一个 `TextButton`（`extension-sources:<包名或插件 id>`），文案是
+  `extensions.showSources=来源 · %d` / `extensions.hideSources=收起来源 · %d`（zh-CN 同键），只在 `sourceNames` 非空时出现；
+  展开集合是这一页自己的 `remember { mutableStateOf(emptySet<String>()) }`（Android 也不持久化展开状态）。
+  展开后每个来源一行共享的 `SettingsSplitSwitchRow`（§180 为“阅读统计”加的那个分裂行）：**标题点进该来源自己的设置页**
+  （`controller.sourceSettings(name)`，等价于原来“先选中来源再进设置”，不改选中来源之外的任何状态），
+  **行尾开关只切启用**（`controller.setSourceEnabled`，落 `desktop_extensions` 的 `disabled_sources`），摘要照旧是
+  `内容类型 · 生态 · 语言`，行左侧缩进 24dp 表示从属关系。测试标签 `extension-source-open:<来源名>` /
+  `extension-source:<来源名>`，和“来源”对话框的 `source-enabled:<来源名>` 分开。
+- 为什么不做 Android 的包内多选/批量：Android 那页还有长按选择、批量启用/禁用、安装/更新/删除的整条数据流；
+  Windows 的“来源”对话框已经提供搜索 + 全部/启用/禁用筛选 + 按筛选结果批量开关（§174）。这一轮只补“包 → 来源”
+  的层级和单个来源的入口，避免在同一个页面上叠两套批量语义。
+- 验证：扩了 `repositories` 探针的 write 段（真实 UI，服务器走本地 HTTP）：装包后 `installedEntries.single().sourceNames`
+  等于该 JAR 声明的来源名；`extension-sources:<包名>` 点开前 `extension-source:<来源名>` 不存在、点开后存在并截图
+  `-installed-sources.png`（另有 `-installed-rows.png` 只截已安装这一组，避免整窗截图被窗口下沿裁掉）；
+  点 `extension-source:<来源名>` 关掉该来源——`state.disabledSources` 立刻等于 `{来源名}`，再点回打开——集合清空；
+  点 `extension-source-open:<来源名>` 进设置页：`screen == PREFERENCES`、`selectedSource` 与 `preferences.source`
+  都是它（截图 `-installed-sources-settings.png`），再从主导航回到扩展页继续后面的更新/卸载流程。read 段在离线重启后
+  断言 `installedEntries.single().sourceNames` 仍是同一来源，证明这列不是内存里的临时值。
+  行在窗口下沿之外时点击不会命中，探针先用 `performScrollToNode` 把它滚进视口——这一点已经写进探针注释，后续加行时同样处理。
+- 回归：`repositories`、`kototoro kotatsu and UMA plugins through the UI`（用 `installed-list` 滚到
+  `extension-uninstall:<id>`）、`a Cloudstream plugin imports browses...` 三个探针重跑通过。
+- 仍待：包内多选/批量（见上）、Android 统一页的仓库卡片分组与语言/组合筛选、`SourceSwitchDialog` 的选择模式。

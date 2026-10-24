@@ -104,6 +104,35 @@ internal object DesktopRepositoriesProbe {
                     }
                     check(controller.state.value.sources.any { it.sourceId == 9007199254740993L })
                     onNodeWithText("已安装").assertExists()
+                    // §181: Android's package header expands into the sources it declares; the label opens that
+                    // source's own settings, the switch only enables or disables it.
+                    val installedName = installedSourceName()
+                    onNodeWithTag("installed-list").performScrollToNode(
+                        hasTestTag("extension-sources:${metadata.packageName}"))
+                    check(controller.state.value.installedEntries.single().sourceNames == listOf(installedName)) {
+                        controller.state.value.installedEntries.single().sourceNames.toString()
+                    }
+                    onNodeWithTag("extension-source:$installedName").assertDoesNotExist()
+                    onNodeWithTag("extension-sources:${metadata.packageName}").performClick(); idle()
+                    // The expanded rows land below the fold of this page; a click only reaches a row that is on screen.
+                    onNodeWithTag("installed-list").performScrollToNode(hasTestTag("extension-source:$installedName"))
+                    onNodeWithTag("extension-source:$installedName").assertExists()
+                    waitForIdle()
+                    snapshot("installed-sources")
+                    snapshotTag("installed-list", "installed-rows")
+                    onNodeWithTag("extension-source:$installedName").performClick(); idle()
+                    check(controller.state.value.disabledSources == setOf(installedName))
+                    onNodeWithTag("extension-source:$installedName").performClick(); idle()
+                    check(controller.state.value.disabledSources.isEmpty())
+                    onNodeWithTag("installed-list").performScrollToNode(
+                        hasTestTag("extension-source-open:$installedName"))
+                    onNodeWithTag("extension-source-open:$installedName").performClick(); idle()
+                    check(controller.state.value.screen == DesktopScreen.PREFERENCES)
+                    check(controller.state.value.selectedSource?.source?.name == installedName)
+                    check(controller.state.value.preferences?.source?.name == installedName)
+                    snapshot("installed-sources-settings")
+                    onNodeWithTag("nav:更多").performClick(); idle()
+                    onNodeWithTag("nav:扩展与仓库").performClick(); idle()
                     val upgradedVersion = metadata.versionCode + 1
                     fun versioned(version: Long) = ByteArrayOutputStream().also { output ->
                         ZipOutputStream(output).use { zip -> ZipInputStream(original.inputStream()).use { input ->
@@ -220,6 +249,8 @@ internal object DesktopRepositoriesProbe {
                     check(session.startupErrors.isEmpty())
                     // Automatic updates stay on; with the repository unreachable the start-up check fails quietly.
                     check(controller.state.value.autoUpdateExtensions)
+                    // §181: the package header still knows the sources it declares after an offline restart.
+                    check(controller.state.value.installedEntries.single().sourceNames == listOf(installedSourceName()))
                     // The source switch survived the restart, and browsing still hides that source.
                     check(controller.state.value.disabledSources == setOf(installedSourceName()))
                     check(controller.state.value.enabledSources.none { it.sourceId == 9007199254740993L })

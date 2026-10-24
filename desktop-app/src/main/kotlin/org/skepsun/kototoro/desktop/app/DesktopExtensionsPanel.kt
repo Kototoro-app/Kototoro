@@ -38,6 +38,7 @@ import org.skepsun.kototoro.core.ui.settings.SettingsGroup
 import org.skepsun.kototoro.core.ui.settings.SettingsInfoRow
 import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
 import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
+import org.skepsun.kototoro.core.ui.settings.SettingsSplitSwitchRow
 import org.skepsun.kototoro.core.ui.settings.SettingsSwitchRow
 import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
 
@@ -318,6 +319,8 @@ private fun InstalledExtensions(
     modifier: Modifier = Modifier,
 ) {
     var confirm by remember { mutableStateOf<DesktopInstalledEntry?>(null) }
+    // Android's UnifiedPackageList keeps its expanded packages in the screen's own state; the same here, keyed by id.
+    var expanded by remember { mutableStateOf(emptySet<String>()) }
     val updates = state.extensionUpdates.associateBy { it.extension.packageName }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SettingsSectionHeader(desktopText("extensions.installedCount", state.installedEntries.size))
@@ -356,6 +359,7 @@ private fun InstalledExtensions(
                 state.installedEntries.forEachIndexed { index, entry ->
                     if (index > 0) SettingsRowDivider()
                     val update = updates[entry.id]
+                    val hidden = expanded - entry.id
                     SettingsActionRow(
                         title = entry.label,
                         summary = desktopText(
@@ -370,6 +374,20 @@ private fun InstalledExtensions(
                             ),
                         verticalPadding = 6.dp,
                     ) {
+                        // Android expands the package header itself; the row here also owns update/uninstall buttons,
+                        // so its sources hang off a button with the count they would reveal.
+                        if (entry.sourceNames.isNotEmpty()) {
+                            TextButton(
+                                onClick = { expanded = if (entry.id in expanded) hidden else expanded + entry.id },
+                                enabled = enabled,
+                                modifier = Modifier.testTag("extension-sources:${entry.id}"),
+                            ) {
+                                Text(
+                                    if (entry.id in expanded) desktopText("extensions.hideSources", entry.sources)
+                                    else desktopText("extensions.showSources", entry.sources),
+                                )
+                            }
+                        }
                         if (update != null) {
                             TextButton(
                                 onClick = { controller.applyUpdates() },
@@ -382,6 +400,30 @@ private fun InstalledExtensions(
                             enabled = enabled,
                             modifier = Modifier.testTag("extension-uninstall:${entry.id}"),
                         ) { Text(desktopText("extensions.uninstall")) }
+                    }
+                    if (entry.id in expanded) {
+                        entry.sourceNames.forEach { name ->
+                            val listing = state.sources.firstOrNull { it.source.name == name }
+                            SettingsRowDivider()
+                            // Android's source row: the label opens that source's settings, the switch only enables it.
+                            SettingsSplitSwitchRow(
+                                title = listing?.displayName ?: name,
+                                summary = listing?.let {
+                                    listOf(
+                                        DesktopSourceLabels.contentType(it.source.contentType),
+                                        DesktopSourceLabels.ecosystem(it.ecosystem),
+                                        it.source.locale,
+                                    ).joinToString(" · ")
+                                },
+                                checked = name !in state.disabledSources,
+                                enabled = enabled,
+                                onClick = { controller.sourceSettings(name) },
+                                onCheckedChange = { controller.setSourceEnabled(name, it) },
+                                modifier = Modifier.padding(start = 24.dp),
+                                testTag = "extension-source-open:$name",
+                                switchTag = "extension-source:$name",
+                            )
+                        }
                     }
                 }
             }

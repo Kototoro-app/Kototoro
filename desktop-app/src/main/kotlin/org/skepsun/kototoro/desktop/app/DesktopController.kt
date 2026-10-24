@@ -2954,6 +2954,17 @@ class DesktopController(
         mutableState.update { it.copy(screen = DesktopScreen.PREFERENCES, preferences = screen) }
     }
 
+    /**
+     * Android's unified list opens a source's own settings from its row; 已安装 expands a package into its sources,
+     * so those rows need the same destination without a detour through the browse rail.
+     */
+    fun sourceSettings(name: String) = navigate {
+        val listing = state.value.sources.firstOrNull { it.source.name == name }
+        val screen = session.sources.getPreferences(name)
+        mutableState.update { it.copy(screen = DesktopScreen.PREFERENCES, preferences = screen,
+                selectedSource = listing ?: it.selectedSource) }
+    }
+
     fun updatePreference(node: SourcePreferenceNode, value: SourcePreferenceValue) = action {
         val screen = requireNotNull(state.value.preferences)
         node.actionUrl?.let { url ->

@@ -538,14 +538,17 @@ class DesktopSession private constructor(
         registry.installed().map { extension ->
             val metadata = extension.metadata
             DesktopInstalledEntry(DesktopInstalledKind.EXTENSION, metadata.packageName, metadata.displayName,
-                metadata.ecosystem, metadata.versionName, metadata.versionCode, extension.sources.size)
+                metadata.ecosystem, metadata.versionName, metadata.versionCode, extension.sources.size,
+                extension.sources.map { it.source.name })
         } + parsers.installed().map { plugin ->
             DesktopInstalledEntry(DesktopInstalledKind.PARSER, plugin.id, plugin.id,
                 plugin.sources.firstOrNull()?.let { parserListing(it).ecosystem } ?: SourceEcosystem.KOTOTORO,
-                plugin.metadata.sha256.take(8), null, plugin.sources.size)
+                plugin.metadata.sha256.take(8), null, plugin.sources.size,
+                plugin.sources.map { it.source.name })
         } + cloudstream.installed().map { plugin ->
             DesktopInstalledEntry(DesktopInstalledKind.CLOUDSTREAM, plugin.id, plugin.manifest.name ?: plugin.id,
-                SourceEcosystem.CLOUDSTREAM, "v${plugin.manifest.version}", plugin.manifest.version.toLong(), plugin.sources.size)
+                SourceEcosystem.CLOUDSTREAM, "v${plugin.manifest.version}", plugin.manifest.version.toLong(),
+                plugin.sources.size, plugin.sources.map { cloudstreamListing(it).source.name })
         }
 
     /**
@@ -714,7 +717,10 @@ class DesktopSession private constructor(
 
 enum class DesktopInstalledKind { EXTENSION, PARSER, CLOUDSTREAM }
 
-/** One installed extension (Mihon / Tsundoku / Aniyomi) or parser plugin, for the extension manager. */
+/**
+ * One installed extension (Mihon / Tsundoku / Aniyomi) or parser plugin, for the extension manager.
+ * [sourceNames] is what Android's package header expands into: the sources this package declares, in its own order.
+ */
 data class DesktopInstalledEntry(
     val kind: DesktopInstalledKind,
     val id: String,
@@ -723,6 +729,7 @@ data class DesktopInstalledEntry(
     val version: String,
     val versionCode: Long?,
     val sources: Int,
+    val sourceNames: List<String> = emptyList(),
 )
 
 data class DesktopExtensionUpdate(

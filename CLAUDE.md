@@ -248,9 +248,12 @@ npm run docs:build
   来源类型两组芯片、待定选择与清空/取消/确定，摘要只写前三个名字加 `+N`），标签用文本对话框；
   更新检查的频率也改成单选对话框。单选/多选/文本三种设置对话框集中在 `DesktopSettingsDialogs.kt`，
   源设置页共用，见计划 §136、§173。“更多 → 扩展与仓库”同样用这套节/行走廊（仓库、来源、目录、已安装四块，
-  仓库行尾是刷新/忘记、已安装行尾是更新/卸载，自动更新是整行开关），行内控件由共享
+  仓库行尾是刷新/忘记、已安装行尾是“来源 · N”/更新/卸载，自动更新是整行开关），行内控件由共享
   `SettingsActionRow` 承载（整页可滚动，目录列表按窗口高度取高，已安装行是页内 inline 行而不是嵌套滚动列表），
-  见计划 §137。“来源”一行打开 Android 的来源开关对话框（搜索框 + 全部/启用/禁用三个筛选芯片 + 逐个来源的启用开关 +
+  见计划 §137。已安装的包可以按 Android 的 `UnifiedPackageList` 展开成它声明的来源（
+  `DesktopInstalledEntry.sourceNames` 现算自 registry，包行 `extension-sources:<id>` 切换展开，
+  来源行是 `SettingsSplitSwitchRow`：标题进该来源自己的设置页 `controller.sourceSettings(name)`，
+  行尾开关只切 `disabled_sources`，摘要写内容类型 · 生态 · 语言，见计划 §181）。“来源”一行打开 Android 的来源开关对话框（搜索框 + 全部/启用/禁用三个筛选芯片 + 逐个来源的启用开关 +
   按当前筛选结果“全部启用/全部禁用”并先弹 Android 的确认框，纯筛选逻辑在 `DesktopSourceSwitch.kt`，
   `disabled_sources` 存在 `desktop_extensions`，`DesktopAppState.disabledSources`/`enabledSources` 把“已装”与
   “可用”分开，关掉的来源不再出现在来源栏/来源网格/筛选器/搜索建议/换源候选，但它的收藏进度与下载都保留），
