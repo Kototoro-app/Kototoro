@@ -4358,3 +4358,51 @@ fun TvModalBottomSheet(
 2. 提示条本身不可聚焦（瞬时信息，遥控器不该停进去），这一点是对的，别在后续"补齐焦点"时改掉。
 3. `ReaderMessageHost` 里的 `AnimatedVisibility` 在电视上仍走 fade——`whenReaderAnimationsEnabled`
    受 `eInk` 开关控制，与电视无关，属既有行为。
+
+## 第七十二轮：顶栏溢出菜单贴边 + 标签太小（2026-10-25）
+
+历史页的 `⋮` 菜单（Display options / Language preset / Clear history / Settings / Help & feedback /
+Incognito mode）在电视上有两个问题：**面板右边缘贴着屏幕边**（真机 5% overscan 会把圆角和标签末尾吃掉），
+**标签只有 14sp**。
+
+### 原因：菜单有两条渲染路径，默认走的那条不吃 offset
+
+`GlassDropdownMenu` 在 `useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS` 时并不使用
+`DropdownMenu`，而是把内容塞进 `RootGlassMenuRequest`，由 `RootGlassMenuOverlay` 自己定位。本机界面风格
+是 `ios (modern)`，所以实际走的是 overlay 这条。两个连带发现：
+
+- `RootGlassMenuRequest` **根本没有 offset 字段**，`GlassDropdownMenu(offset = …)` 在 overlay 路径上被整段丢弃；
+  定位完全由 `calculateRootGlassMenuOffset` 决定，而它把 x 钳在 `[0, W - w]`，没有任何安全边距。
+- 标签来自 `CompactDropdownMenuText`，它把 `style` 写死成 `labelLarge`，所以只改 `CompactDropdownMenuItem`
+  的 `LocalTextStyle` 不会生效（第一次改完行高变了、字一颗没变大，就是这么回事）。
+
+### 改法
+
+| 位置 | 改动 |
+| --- | --- |
+| `calculateRootGlassMenuOffset` | 增加 `edgeInsetPx: Int = 0`，x/y 都钳进 `[inset, size - inset]`；默认 0 时与旧行为完全一致 |
+| `RootGlassMenuOverlay` | 电视上传 `24.dp`，非电视传 0 |
+| `CompactDropdownMenuItem` | 行高 48dp → 电视 56dp；`LocalTextStyle` 电视供 `titleMedium` |
+| `CompactDropdownMenuText` | 电视用 `titleMedium`，非电视仍是 `labelLarge`（菜单里的分组标题也走这个函数，否则标题会比条目还小） |
+| `GlassDropdownMenu` 的 `DropdownMenu` 分支 | 电视再把 `offset.x` 减 24dp（Classic 界面风格走这条） |
+
+### 设备验证（emulator-5554）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 改前：历史页 `⋮` | `ee5-top.png` | 面板右边缘与屏幕边齐平，标签约 28px 高（14sp） |
+| 只改行高与 `LocalTextStyle` | `eg1-menu.png`/`eg2-menu.png` | 行距变宽（~64px→58dp），**文字一点没变**——定位到 `CompactDropdownMenuText` 的硬编码 |
+| 改 overlay 的 `edgeInsetPx` + 文本样式 | `eh1.png`/`eh1-small.png` | 面板右边缘内收约 24dp，标签约 44px（22sp），菜单变高后 6 项仍完整可见 |
+| 收尾（文本样式改成按电视直接取） | `ei1.png`/`ei1-menu.png` | 与上一次一致，非电视仍是 `labelLarge` |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（三次，均约 1m 42s）。
+
+### 遗留
+
+1. **Classic 界面风格的 `DropdownMenu` 分支没做设备验证**：本机界面风格是 iOS，走 overlay；那条分支只是
+   对称地加了 24dp 内推，改动小但没截图证据。要验证得先切界面风格。
+2. `RootGlassMenuRequest` 没有 offset 字段，`GlassDropdownMenu(offset = …)` 在 overlay 路径上被丢弃——
+   这是**既有**不一致（手机上也一样），本轮没动它。等哪天要统一两条路径再补。
+3. 菜单 6 项已经接近 `maxMenuHeight`（屏高 65%）上限，再多一项就得滚动；电视上滚动菜单的焦点跟随还没验证。
+4. 顶栏右上角两个按钮（筛选、`⋮`）自己也在安全边距之外（`⋮` 右边缘 = 1896，距屏边 24px = 12dp），
+   真机 overscan 会切到。这属于"整条顶栏的安全边距"问题，单独一轮处理更合适。
