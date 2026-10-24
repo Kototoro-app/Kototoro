@@ -3902,3 +3902,62 @@ dump 里一直是那根 `SeekBar` 带 `focused`，列表为了露出它就滚了
 5. 行尾控件 UP/DOWN、设置非根子页宽度、输入框内清除（×）只能触摸，三条仍在。
 6. 来源页选择栏的 6 个 `IconButton` 仍是裸的不带环（`ExploreSourcesScreen`），且 `"$count selected"`
    与 `"Shortcut"` 是硬编码英文；这台模拟器图源为 0，选中态走不到，留待有图源时再改。
+
+## 第六十五轮：贴在屏幕右缘的那条"死滑片"（2026-10-24）
+
+### 现象
+
+从主界面（Home / History / 详情页）到**阅读器正文之上**，屏幕右缘总有一块 32dp×64dp 的深色玻璃圆角片，
+被屏幕边缘切掉一半，上面只有一个内容类型图标。dump 里它是 `Current: Manga. Switch space`
+`[1856,144][1920,272]`，父节点 `clickable="true"` 但 `enabled="false"`。
+
+它是 `SpaceSwitcherDelegate` 的 **sidekick handle**（`SpaceSidekickHandle`，`SpaceSwitcher.kt`）：
+手机上是一条可横向拖出的抽屉把手，位置固定 `size(32dp,64dp)` + `offset(x = 10dp)`，本来就有一部分在屏幕外。
+电视上上一轮之前它被写成 `interactive = state.switcherEnabled && !isTv`——**点不动、拖不动、也不进焦点链**，
+却照样画。于是在电视上它只剩"一条压住画面的死装饰"，最刺眼的一处是阅读器：翻页控件一出来，它就盖在页面上。
+
+### 改法
+
+`SpaceSidekickHandle` 在电视上直接不画（`if (LocalUiPresentationConfig.current.isTv) return`），
+并把因此失效的 `isTv` / `interactive` 两个局部量和 `.tvFocusable(...)` 一并删掉；手机分支保持原样
+（`clickable(enabled = state.switcherEnabled)`，和改前的 `enabled = interactive` 等价）。
+电视的换空间入口仍是左侧导航栏顶部那颗空间按钮，不受影响。
+
+### 设备证据（emulator-5554，1920×1080）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 改前：History 右缘 | `ct2-sw.png` | 深色圆角片被屏幕右缘切掉一半，只剩图标 |
+| 改前：阅读器 | `ct8-right.png`、`ct8.xml` | 翻页控件出来后它压在正文右下角上 |
+| 改后：详情页右缘 | `cu1-right.png` | 整块干净，章节面板到边缘就是卡片圆角 |
+| 改后：阅读器 | `cu2-right.png`、`cu2.xml` | 右缘只剩阅读器自己的 `⋮`，dump 里搜不到 `Switch space` |
+| 电视换空间仍可用 | `cu8-rail.png` → `cu9-half.png` | 导航栏空间按钮带蓝色环，CENTER 打开 "Space Workbench" 面板 |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL，装的是 `app-x86_64-debug.apk`。
+（本轮第一次构建失败于 `:reader-core:jvmJar — Could not create ZIP`：另一个会话的 Gradle 正占用同一个 jar，
+ 等它跑完重试即通过，与本轮改动无关。）
+
+### 顺带实测：阅读器页码滑杆
+
+趁走到阅读器，把底栏那根页码滑杆也走了：`TV Audit Strip`（1 章 4 页）在电视上以**纵向全宽单列**连续模式打开
+（前几十轮修的连续模式形态仍然成立），CENTER 出控件后 ↓ 落到滑杆、环出现（`cu3-bar.png`），
+RIGHT ×2 从 `PAGE 1` 走到 `PAGE 3`（`cu4-half.png`）。这是第六十四轮"5 处滑杆"里唯一能上设备验证的一处，
+顺带确认它没被本轮改动影响。
+
+### 顺手排除的两条（别再来查）
+
+1. History 顶上那排筛选项在 1920 宽下排了 10 个芯片（`On device` … `Video source domain Local storage`），
+   最后两枚超出可视宽。用遥控一路 RIGHT 走过去，`LazyRow` 会自动把它们滚进视野，最后一枚拿到环且完整可见
+   （`ct5-chips.png`），不是缺陷。
+2. History 顶部"Statistics"卡 + 筛选芯片行占掉上半屏，列表在 1080 高下只剩一行多一点。
+   这是"统计卡优先"的既有设计取舍，不属于本次连续模式/焦点范围，未改。
+
+### 遗留
+
+1. `ReaderActionsContent`（`reader/ui/ReaderActionsContent.kt`）**只被它自己的 `@Preview` 引用**：
+   `grep 'ReaderActionsContent\('` 只命中第 83 行定义与第 328 行预览，没有生产调用点。
+   也就是说第六十四轮给它补的 `tvSliderDpad` 实际改的是死代码；真正阅读器底栏在
+   `ComposeReaderActivityScaffold`（那根滑杆早就有环和键步进，本轮已实测）。后续要么删掉这个组件，
+   要么在文档里标清楚，避免下一轮又去"修"它。
+2. 阅读器在电视上现在**没有任何换空间入口**（唯一的那条把手在电视上不画，改前也是点不动的）。
+   真要在阅读器里换空间，应该做成 `⋮` 选项面板里的一项，本轮未动。

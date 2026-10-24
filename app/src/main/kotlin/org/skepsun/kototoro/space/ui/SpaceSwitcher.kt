@@ -274,11 +274,10 @@ internal fun BoxScope.SpaceSidekickHandle(
     val label = activeSpace?.title ?: stringResource(presentation.labelRes)
     val description = stringResource(R.string.space_switcher_content_description, label)
     var dragDistance by remember { mutableFloatStateOf(0f) }
-    // A remote cannot drag, and this handle shows only a 32dp sliver at the screen edge, so its
-    // focus ring is half outside the panel and its DOWN key leads nowhere. The rail keeps a
-    // dedicated space button behind the same switch, so on TV the handle stays decorative.
-    val isTv = LocalUiPresentationConfig.current.isTv
-    val interactive = state.switcherEnabled && !isTv
+    // A remote cannot drag this 32dp edge sliver, and a focus ring around it would sit half outside
+    // the screen with nothing to reach from DOWN. The rail carries the real space button, so on TV
+    // the handle is not drawn at all — it used to stay on top of the reader page as a dead sliver.
+    if (LocalUiPresentationConfig.current.isTv) return
     val openDragThreshold = with(LocalDensity.current) { 36.dp.toPx() }
     val shape = if (isLeft) {
         RoundedCornerShape(topEnd = 18.dp, bottomEnd = 18.dp)
@@ -305,9 +304,8 @@ internal fun BoxScope.SpaceSidekickHandle(
                     onDragCancel = { dragDistance = 0f },
                 )
             }
-            .tvFocusable(shape = shape, enabled = interactive, addFocusTarget = false)
             .clickable(
-                enabled = interactive,
+                enabled = state.switcherEnabled,
                 role = Role.Button,
                 onClickLabel = description,
                 onClick = onOpen,
