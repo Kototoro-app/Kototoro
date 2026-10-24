@@ -3416,3 +3416,42 @@ body 里真的有可选项的弹窗。在同一份构建上补验了 Spaces 的"
 
 也就是说：有选择器的弹窗仍是"进弹窗先给选择器"，只有纯确认弹窗才落到 Cancel（第五十五轮），
 两种路径互不影响；`SettingsAlertDialog` 是真正的 Dialog 窗口，关掉时 Compose 自己会把焦点还给打开者。
+
+## 第五十七轮：菜单关掉之后，焦点回到那个 ⋮（2026-10-24）
+
+第五十四轮第 2 条留了两轮的"菜单关闭后焦点回落到侧边导航"，这轮做完。
+
+### 原因
+
+iOS 界面风格下，顶栏的浮层菜单走的是**根层 overlay**（`RootGlassMenuOverlay`）：它是锚点按钮的
+**同窗口兄弟**，不是 `DropdownMenu` 那种独立 Popup 窗口。所以菜单消失时没有任何东西负责把焦点还回去——
+最后一个菜单项随 overlay 一起被销毁，焦点搜索退回屏幕上第一个可聚焦节点，也就是左侧导航栏。
+
+### 改法（`GlassDropdownMenu.kt` + `KototoroTopBar.kt`，仅电视、按需开启）
+
+1. `GlassDropdownMenu` 与 `RootGlassMenuRequest` 新增可选参数 `anchorFocusRequester`：锚点按钮把自己的
+   `FocusRequester` 交进来。
+2. overlay 里**在菜单之后**声明一个 `DisposableEffect(request.id)`，`onDispose` 时请求锚点焦点。
+   放在最后是为了让菜单自己的 `tvTakeFocusWhenEmpty` 先随菜单一起被取消，不会把焦点再抢回去。
+3. 只在 `host.request == null`（菜单真的没了）时才回位：语言预设子菜单会用一个新 request 顶替主菜单，
+   那种情况下不该把焦点拽回锚点。
+4. 顶栏三处锚点接上：⋮（主菜单）、同一 ⋮ 上的语言预设子菜单、收藏页的紧凑分类标题。
+   其余根层 overlay 菜单保持原样，需要时传一个 requester 即可。
+
+### 设备证据（emulator-5554，1920×1080，全程按键）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 顶栏 ⋮ 上 CENTER | `aj1.xml` | 菜单打开，首项 `Display options` 有环（`F [1508,124][1892,220]`） |
+| BACK | `aj2.xml` / `aj2.png` | 环回到 ⋮（`F [1800,16][1896,112]`，截图里按钮外圈蓝环）；修前这里落到左侧导航 |
+| 再开菜单 → CENTER 选 `Display options` | `aj3.xml` / `aj3.png` | 面板打开后环在面板自己的 `History` 标签（`F [392,180][770,276]`），没被拽回锚点 |
+| 面板 BACK → 再开菜单 → `Language preset` → CENTER | `aj7.xml` | 子菜单顶替主菜单，环落在子菜单首项 `All`（`F [1435,124][1892,220]`） |
+| 子菜单 BACK | `aj8.xml` | 环同样回到 ⋮（`F [1800,16][1896,112]`） |
+| 菜单里选 `Settings` | `ak2.xml` / `ak2.png` | 设置页打开，环在 `Appearance` 行（`F [24,196][1896,328]`），没有被旧顶栏抢走 |
+
+### 遗留
+
+1. 其余根层 overlay 菜单（详情页 dock、选择栏、来源标签下拉、搜索栏、探索来源页、详情页头信息面板）
+   还没传 `anchorFocusRequester`，行为与修前一致；逐页验证工作量在下一轮。
+2. 收藏页紧凑分类标题的锚点已接线但没在设备上单独验（首页与顶栏 ⋮ 已验）。
+3. 行尾控件 UP/DOWN、设置非根子页宽度两条仍在。
