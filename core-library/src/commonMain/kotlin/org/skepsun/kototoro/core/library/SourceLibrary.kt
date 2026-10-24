@@ -549,11 +549,13 @@ class SourceLibrary(
         }
 
     /**
-     * Android's `StatsRepository.getDashboard` without the category/kind filters Windows does not offer yet: the shared
-     * derivation over this library's session rows, legacy stats rows and the works they belong to.
+     * Android's `StatsRepository.getDashboard` without the category filter Windows does not offer yet: the shared
+     * derivation over this library's session rows, legacy stats rows and the works they belong to. [kind] drops the
+     * works of the other content types before deriving, the way Android filters `contents` — the derivation only walks
+     * the ids it is given, so the daily and hourly series shrink with the same filter.
      */
-    suspend fun readingStatistics(period: ReadingStatsPeriod, zone: TimeZone,
-        now: Long = clock()): LibraryReadingStats = database.useReaderConnection { connection ->
+    suspend fun readingStatistics(period: ReadingStatsPeriod, zone: TimeZone, now: Long = clock(),
+        kind: StatsContentKind = StatsContentKind.ALL): LibraryReadingStats = database.useReaderConnection { connection ->
         connection.deferredTransaction {
             val window = ReadingStatsWindow(period, now, zone)
             val sessions = database.getReadingRecordDao().findOverlapping(window.from, window.now)
@@ -561,6 +563,7 @@ class SourceLibrary(
             val ids = (sessions.map { it.mangaId } + legacy.map { it.mangaId }).distinct()
             val contents = ids.chunked(200).flatMap { database.getMangaDao().findWithTagsByIds(it) }
             val kinds = contents.associate { it.manga.id to StatsContentKind.fromType(it.manga.contentType) }
+                .filterValues { kind == StatsContentKind.ALL || it == kind }
             val snapshot = deriveReadingStatistics(sessions, legacy, kinds, window)
             val works = contents.associate { it.manga.id to content(it.manga, it.tags, withChapters = false) }
             LibraryReadingStats(

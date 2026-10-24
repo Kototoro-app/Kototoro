@@ -13,6 +13,7 @@ import kotlinx.datetime.TimeZone
 import org.skepsun.kototoro.core.library.LibraryReadingStats
 import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.stats.domain.ReadingStatsPeriod
+import org.skepsun.kototoro.stats.domain.StatsContentKind
 import org.skepsun.kototoro.history.domain.recoverHistoryChapterId
 import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.reader.core.IntSize
@@ -142,9 +143,10 @@ data class DesktopAppState(
     val sourceSettings: org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings = org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings(),
     val libraryDisplay: org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay =
         org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay(),
-    /** Android's "阅读统计" screen: the selected period and the dashboard derived for it. */
+    /** Android's "阅读统计" screen: the selected period and kind, and the dashboard derived for them. */
     val readingStats: LibraryReadingStats? = null,
     val readingStatsPeriod: ReadingStatsPeriod = ReadingStatsPeriod.WEEK,
+    val readingStatsKind: StatsContentKind = StatsContentKind.ALL,
     /** Stored suggestions, most relevant first (Android's recommendations). */
     val suggestions: List<SourceContent> = emptyList(),
     /** True while [DesktopController.refreshSuggestions] runs in the background; the window stays usable. */
@@ -1546,6 +1548,12 @@ class DesktopController(val session: DesktopSession) {
         loadReadingStats()
     }
 
+    /** Android's kind selector next to the period menu: all works, or only manga, novels or videos. */
+    fun readingStatsKind(kind: StatsContentKind) = navigate {
+        mutableState.update { it.copy(readingStatsKind = kind) }
+        loadReadingStats()
+    }
+
     /** Android's "clear statistics" action: both tables are emptied, reading history stays. */
     internal fun clearReadingStats() = action {
         session.library.clearReadingStatistics()
@@ -1554,8 +1562,8 @@ class DesktopController(val session: DesktopSession) {
     }
 
     private suspend fun loadReadingStats() {
-        val period = mutableState.value.readingStatsPeriod
-        val stats = session.library.readingStatistics(period, TimeZone.currentSystemDefault())
+        val (period, kind) = mutableState.value.let { it.readingStatsPeriod to it.readingStatsKind }
+        val stats = session.library.readingStatistics(period, TimeZone.currentSystemDefault(), kind = kind)
         mutableState.update { it.copy(readingStats = stats) }
     }
 
@@ -2363,7 +2371,15 @@ class DesktopController(val session: DesktopSession) {
             } catch (error: LinkageError) {
                 mutableState.update { it.copy(error = desktopText("error.sourceApiIncompatible", error.message ?: error.javaClass.simpleName)) }
             } finally {
-                settleReadingSession(wasReading)
+                // Closing the reading stop must not replace the action's own failure, or crash the caller's scope, when
+                // the statistics write fails; report it the way every other action failure is reported instead.
+                try {
+                    settleReadingSession(wasReading)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    mutableState.update { it.copy(error = error.message ?: error.javaClass.simpleName) }
+                }
             }
         }
     }

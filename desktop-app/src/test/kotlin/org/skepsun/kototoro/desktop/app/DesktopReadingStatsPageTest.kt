@@ -55,7 +55,9 @@ class DesktopReadingStatsPageTest {
     fun `a library without reading time shows Android's empty state`() = runDesktopComposeUiTest {
         setContent {
             DesktopTheme {
-                DesktopReadingStatsContent(null, ReadingStatsPeriod.WEEK, true, null, {}, {}, {}, {})
+                DesktopReadingStatsContent(stats = null, period = ReadingStatsPeriod.WEEK,
+                    kind = StatsContentKind.ALL, active = true, covers = null, onBack = {}, onPeriod = {},
+                    onKind = {}, onWork = {}, onClear = {})
             }
         }
         onNodeWithTag("stats-empty").assertIsDisplayed()
@@ -68,7 +70,9 @@ class DesktopReadingStatsPageTest {
         val opened = mutableListOf<Long>()
         setContent {
             DesktopTheme {
-                DesktopReadingStatsContent(stats(), ReadingStatsPeriod.WEEK, true, null, {}, {}, { opened += it.id }, {})
+                DesktopReadingStatsContent(stats = stats(), period = ReadingStatsPeriod.WEEK,
+                    kind = StatsContentKind.ALL, active = true, covers = null, onBack = {}, onPeriod = {},
+                    onKind = {}, onWork = { opened += it.id }, onClear = {})
             }
         }
         onNodeWithTag("stats-total").assertIsDisplayed()
@@ -91,7 +95,9 @@ class DesktopReadingStatsPageTest {
         var period by mutableStateOf(ReadingStatsPeriod.WEEK)
         setContent {
             DesktopTheme {
-                DesktopReadingStatsContent(stats(), period, true, null, {}, { period = it; picked += it }, {}, {})
+                DesktopReadingStatsContent(stats = stats(), period = period, kind = StatsContentKind.ALL,
+                    active = true, covers = null, onBack = {}, onPeriod = { period = it; picked += it },
+                    onKind = {}, onWork = {}, onClear = {})
             }
         }
         onNodeWithText(AndroidStrings["day"]).assertIsDisplayed()
@@ -105,11 +111,33 @@ class DesktopReadingStatsPageTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
+    fun `the kind row offers Android's four content kinds and reports the picked one`() = runDesktopComposeUiTest {
+        val picked = mutableListOf<StatsContentKind>()
+        var kind by mutableStateOf(StatsContentKind.ALL)
+        setContent {
+            DesktopTheme {
+                DesktopReadingStatsContent(stats = stats(), period = ReadingStatsPeriod.WEEK, kind = kind,
+                    active = true, covers = null, onBack = {}, onPeriod = {},
+                    onKind = { kind = it; picked += it }, onWork = {}, onClear = {})
+            }
+        }
+        onNodeWithTag("stats-kind-filter").assertIsDisplayed()
+        // Android's four chips reuse the same translated labels as its kind breakdown.
+        onNodeWithText(AndroidStrings["stats_kind_all"]).assertIsDisplayed()
+        onNodeWithText(AndroidStrings["stats_kind_video"]).assertIsDisplayed()
+        onNodeWithTag("stats-kind-option:NOVEL").performClick()
+        assertEquals(listOf(StatsContentKind.NOVEL), picked)
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
     fun `clearing statistics asks first and reports the confirmation`() = runDesktopComposeUiTest {
         var cleared = 0
         setContent {
             DesktopTheme {
-                DesktopReadingStatsContent(stats(), ReadingStatsPeriod.WEEK, true, null, {}, {}, {}, { cleared++ })
+                DesktopReadingStatsContent(stats = stats(), period = ReadingStatsPeriod.WEEK,
+                    kind = StatsContentKind.ALL, active = true, covers = null, onBack = {}, onPeriod = {},
+                    onKind = {}, onWork = {}, onClear = { cleared++ })
             }
         }
         onNodeWithTag("stats-clear").performScrollTo().performClick()

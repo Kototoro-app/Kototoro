@@ -21,6 +21,7 @@ import java.nio.file.Path
 class DesktopReadingStatsTest {
     @TempDir lateinit var directory: Path
     private val source = SourceRef("MIHON_42", "zh", "MANGA")
+    private val novelSource = SourceRef("MIHON_43", "zh", "NOVEL")
     private val chapters = listOf(chapter(1, "A"), chapter(2, "A"))
     private val content = SourceContent(
         Long.MAX_VALUE, "统计作品", setOf("另一标题"), "/work", "https://fixture.invalid/work", .8f, null, null,
@@ -36,7 +37,7 @@ class DesktopReadingStatsTest {
     private fun library(runtime: DesktopRuntime) = SourceLibrary(
         runtime.database,
         clock = { now },
-        sourceLookup = { if (it == source.name) source else null },
+        sourceLookup = { name -> when (name) { source.name -> source; novelSource.name -> novelSource; else -> null } },
     )
 
     /** The rows the dashboard cannot distinguish from the legacy ones, read straight from their table. */
@@ -45,6 +46,10 @@ class DesktopReadingStatsTest {
             runtime.database.getReadingRecordDao().findOverlapping(0, Long.MAX_VALUE)
         }
     }
+
+    /** This week's dashboard at the test clock, optionally narrowed to one content kind like Android's chip row. */
+    private suspend fun SourceLibrary.stats(kind: StatsContentKind = StatsContentKind.ALL) =
+        readingStatistics(ReadingStatsPeriod.WEEK, TimeZone.UTC, now, kind = kind)
 
     @Test
     fun `an open reader writes Android's statistics row and reading session`() = runBlocking<Unit> {
@@ -163,6 +168,38 @@ class DesktopReadingStatsTest {
             assertEquals(1, day.dailyActivity.size)
             assertEquals(7, week.dailyActivity.size)
             assertEquals(90, library.readingStatistics(ReadingStatsPeriod.ALL, TimeZone.UTC, now).dailyActivity.size)
+        }
+    }
+
+    @Test
+    fun `the kind filter keeps only the works of the picked content kind`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = library(runtime)
+            val novel = content.copy(id = Long.MAX_VALUE - 2, title = "小说作品", source = novelSource,
+                chapters = listOf(SourceChapter(4, "第一章", 1f, 0, "/chapter/4", "组", Long.MAX_VALUE, "A",
+                    novelSource)))
+            library.beginReadingSession()
+            now += 20_000
+            library.recordPage(content, chapters[0], 0, 10)
+            library.finishReadingSession()
+            library.beginReadingSession()
+            now += 40_000
+            library.recordPage(novel, novel.chapters!!.single(), 0, 5)
+            library.finishReadingSession()
+
+            val all = library.stats()
+            assertEquals(setOf(StatsContentKind.MANGA, StatsContentKind.NOVEL), all.works.map { it.kind }.toSet())
+            assertEquals(60_000L, all.totalDuration)
+
+            // Android filters the contents before deriving, so the day/hour series and the totals follow the pick.
+            val manga = library.stats(StatsContentKind.MANGA)
+            assertEquals(listOf(content.id), manga.works.map { it.content.id })
+            assertEquals(20_000L, manga.totalDuration)
+            assertEquals(1, manga.sessionCount)
+            val novels = library.stats(StatsContentKind.NOVEL)
+            assertEquals(listOf(novel.id), novels.works.map { it.content.id })
+            assertEquals(40_000L, novels.totalDuration)
+            assertTrue(library.stats(StatsContentKind.VIDEO).works.isEmpty())
         }
     }
 

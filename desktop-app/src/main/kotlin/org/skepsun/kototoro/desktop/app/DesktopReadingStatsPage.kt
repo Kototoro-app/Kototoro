@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -57,27 +58,31 @@ internal fun DesktopReadingStatsPage(controller: DesktopController, state: Deskt
     DesktopReadingStatsContent(
         stats = state.readingStats,
         period = state.readingStatsPeriod,
+        kind = state.readingStatsKind,
         active = !state.busy,
         covers = controller.session.covers,
         onBack = controller::more,
         onPeriod = controller::readingStatsPeriod,
+        onKind = controller::readingStatsKind,
         onWork = controller::details,
         onClear = controller::clearReadingStats,
     )
 
 /**
- * The screen without the controller: the summary, the periods, the activity bars, the type breakdown and the clear
+ * The screen without the controller: the summary, the filters, the activity bars, the type breakdown and the clear
  * confirmation all read from [stats] alone, so the dashboard can be rendered against a fixed set of statistics.
  */
 @Composable
 internal fun DesktopReadingStatsContent(
     stats: LibraryReadingStats?,
     period: ReadingStatsPeriod,
+    kind: StatsContentKind,
     active: Boolean,
     /** Null draws the plate Android shows for a work without a cover; the app always has its cache. */
     covers: DesktopCovers?,
     onBack: () -> Unit,
     onPeriod: (ReadingStatsPeriod) -> Unit,
+    onKind: (StatsContentKind) -> Unit,
     onWork: (SourceContent) -> Unit,
     onClear: () -> Unit,
 ) {
@@ -89,6 +94,8 @@ internal fun DesktopReadingStatsContent(
         OutlinedButton(onBack, enabled = active, modifier = Modifier.testTag("stats-back")) {
             Text(desktopText("common.back"))
         }
+        // Android puts the period menu and the kind pills in one sideways-scrolling row; a desktop window is wide
+        // enough for two rows, and keeping each row a plain one avoids nesting a second scroll viewport in the page.
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag("stats-periods")) {
             ReadingStatsPeriod.entries.forEach { candidate ->
                 if (candidate == period) {
@@ -105,6 +112,7 @@ internal fun DesktopReadingStatsContent(
                 }
             }
         }
+        KindSelector(kind, active, onKind)
         if (stats == null || stats.works.isEmpty()) {
             Text(AndroidStrings["empty_stats_text"], color = Muted,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).testTag("stats-empty"))
@@ -176,6 +184,33 @@ private fun ReadingStatsPeriod.title(): String = AndroidStrings[when (this) {
     ReadingStatsPeriod.MONTHS_3 -> "three_months"
     ReadingStatsPeriod.ALL -> "all_time"
 }]
+
+/**
+ * Android's `ContentKindSelector`: the period menu and this pill sit in one sideways-scrolling row, a chip per content
+ * type with the selected one filled with the primary colour. Windows runs no separate manga/novel/video surfaces, so
+ * this filter and the type breakdown are where the distinction shows.
+ */
+@Composable
+private fun KindSelector(selected: StatsContentKind, active: Boolean, onKind: (StatsContentKind) -> Unit) {
+    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.testTag("stats-kind-filter")) {
+        Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            StatsContentKind.entries.forEach { candidate ->
+                val isSelected = candidate == selected
+                Box(Modifier.height(36.dp).clip(RoundedCornerShape(50))
+                    .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                    .clickable(enabled = active) { onKind(candidate) }
+                    .padding(horizontal = 13.dp).testTag("stats-kind-option:${candidate.name}"),
+                    contentAlignment = Alignment.Center) {
+                    Text(candidate.title(), style = MaterialTheme.typography.labelLarge,
+                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
 
 /** Android's `formatStatsDuration`: hours with the minutes that matter, minutes alone under an hour. */
 internal fun formatStatsDuration(durationMs: Long): String {

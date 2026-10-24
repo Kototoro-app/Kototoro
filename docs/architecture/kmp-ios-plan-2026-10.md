@@ -7149,3 +7149,25 @@ Android 的阅读统计落在两张表：`stats`（每个作品一行，`duratio
   确认后空态且历史仍在 → 返回更多。回归：`:desktop-runtime:test` 16 套 105 项全绿，`:desktop-app:test` 全绿，
   `:desktop-app:verifyDesktopStrings`、`:core-library:compileCommonMainKotlinMetadata`、
   `:desktop-app:compileKotlin`/`:compileTestKotlin` 通过。
+
+## 156. Windows 阅读统计的类型筛选（Android StatsScreen 对齐）（2026-10-24）
+
+Android 的统计页除了周期下拉还有一个 `StatsContentKind` 分段选择器（全部/漫画/小说/视频）：
+`StatsRepository.getDashboard` 先按 kind 过滤 `contents`，再把过滤后的 id 集合交给
+`deriveReadingStatistics`。§155 只做了周期。
+
+- 读模型：`SourceLibrary.readingStatistics` 增加可选参数 `kind`，实现就是把喂给派生函数的 `kinds` 映射按类型过滤
+  ——共享派生只遍历这张映射的键，所以每日/时段序列、总时长、会话数、作品数一起跟着筛，与 Android 先过滤再派生等价。
+  参数排在 `now` 之后，既有按位置传 `now` 的调用点不用改。
+- 界面：周期行下方是 Android 的 `ContentKindSelector`（胶囊底 + 四个 chip，选中填 primary，标签复用
+  `stats_kind_all`/`stats_kind_manga`/`stats_kind_novel`/`stats_kind_video`），标签
+  `stats-kind-filter` 与 `stats-kind-option:<NAME>`。Android 把周期菜单和类型芯片放在同一个横向滚动行里；
+  桌面窗口够宽，这里分成两行，同时避免在整页纵向滚动中再嵌一个横向滚动视口
+  （嵌套后 UI 测试的 `performScrollTo` 只滚最近的滚动容器，够不着另一方向的节点，点击会静默打偏）。
+  筛到空时沿用 Android 的空态；类型占比本来只在多于一种类型时出现，筛成单一类型时自动消失。
+- 状态：`DesktopAppState.readingStatsKind`（默认 `ALL`）与 `DesktopController.readingStatsKind(kind)`，
+  `loadReadingStats` 同时带周期与类型，重新进入页面时保留上次的选择。
+- 验证：`DesktopReadingStatsTest` 7 项（新增：漫画与小说各读一段，ALL 两部都在、合计 60s；只筛漫画 20s/1 session；
+  只筛小说 40s；筛视频为空）；`DesktopReadingStatsPageTest` 6 项（新增：四个 chip 用 Android 标签，点“小说”回报 NOVEL）；
+  `stats` 探针增加真界面步骤：读一章 → 更多 → 阅读统计 → 周期切 DAY → 类型切“小说”得到空态 →
+  切回“漫画”作品仍在 → 继续清空确认与返回。

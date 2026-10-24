@@ -4,6 +4,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.stats.domain.ReadingStatsPeriod
+import org.skepsun.kototoro.stats.domain.StatsContentKind
 import java.nio.file.Path
 
 /**
@@ -60,11 +61,27 @@ internal object DesktopStatsProbe {
 
                 // Android's period switch asks the library for another window, not another row.
                 onNodeWithTag("stats-period:DAY").performScrollTo().performClick()
+
                 idle()
                 check(controller.state.value.readingStatsPeriod == ReadingStatsPeriod.DAY)
                 check(requireNotNull(controller.state.value.readingStats).dailyActivity.size == 1) {
                     "a day of activity for the day period"
                 }
+
+                // Android's kind selector sits next to it: the stop was a manga page, so the novel view is empty.
+                onNodeWithTag("stats-kind-option:NOVEL").performScrollTo().performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.readingStatsKind == StatsContentKind.NOVEL }
+                idle()
+                check(requireNotNull(controller.state.value.readingStats).works.isEmpty()) {
+                    "a novel view without novels"
+                }
+                onNodeWithTag("stats-empty").performScrollTo().assertExists()
+                onNodeWithTag("stats-kind-option:MANGA").performScrollTo().performClick()
+                waitUntil(timeoutMillis = 15_000) { controller.state.value.readingStatsKind == StatsContentKind.MANGA }
+                waitUntil(timeoutMillis = 15_000) {
+                    controller.state.value.readingStats?.works?.any { it.content.id == content.id } == true
+                }
+                idle()
 
                 // Clearing asks first, then empties both tables but keeps the history above.
                 onNodeWithTag("stats-clear").performScrollTo().performClick()
