@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material3.MaterialTheme
 import kotlin.math.roundToInt
@@ -93,6 +94,11 @@ internal data class RootGlassMenuRequest(
     // there falls through to the toggle button (keeping its press gloss).
     // Defaults to false: the menu dismisses on any outside tap, as before.
     val anchorTapThrough: Boolean = false,
+    // The button that opened the menu. The root overlay is an in-window sibling of its anchor, so
+    // when it disappears nothing hands the focus back and the ring falls to the first focusable of
+    // the screen (the navigation rail) - on a remote that means losing your place in the top bar.
+    // Anchors that care pass their requester and get the ring back when the menu closes.
+    val anchorFocusRequester: FocusRequester? = null,
 )
 
 @Composable
@@ -220,6 +226,21 @@ internal fun RootGlassMenuOverlay(
                 CompactMenuContent(request.scrollState, request.content)
             }
         }
+        // Declared last so it is disposed after the menu itself: the menu's own take-focus effect is
+        // cancelled by then and cannot steal the ring back. On TV this is the only thing that puts
+        // the focus where the user left it; off TV the popup window handles it and this is a no-op.
+        if (isTvPresentation) {
+            val anchorFocusRequester = request.anchorFocusRequester
+            DisposableEffect(request.id) {
+                onDispose {
+                    // Only when the menu is really gone: a submenu that swaps the request for another
+                    // one must not pull the ring back to the anchor it is opening from.
+                    if (anchorFocusRequester != null && host.request == null) {
+                        runCatching { anchorFocusRequester.requestFocus() }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -254,6 +275,7 @@ fun GlassDropdownMenu(
     openAboveAnchor: Boolean = false,
     shape: Shape = RoundedRectangle(20.dp),
     style: GlassStyle = GlassDefaults.prominentStyle(),
+    anchorFocusRequester: FocusRequester? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val scrollState = rememberScrollState()
@@ -298,6 +320,7 @@ fun GlassDropdownMenu(
                 onDismissRequest = onDismissRequest,
                 content = content,
                 anchorTapThrough = anchorTapThrough,
+                anchorFocusRequester = anchorFocusRequester,
             )
         }
     } else {

@@ -62,6 +62,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
@@ -216,6 +218,10 @@ fun KototoroTopBar(
     var isMoreMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var isLanguagePresetMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var topBarMenuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
+    // The menus render in the root overlay, so when one closes nothing brings the ring back to the
+    // button that opened it; on a remote the user then has to walk from the rail again.
+    val moreMenuAnchorFocus = remember { FocusRequester() }
+    val languagePresetAnchorFocus = remember { FocusRequester() }
     var showDisplayOptionsSheet by rememberSaveable { mutableStateOf(false) }
     var pendingListMode by remember(showDisplayOptionsSheet) { mutableStateOf(currentListMode) }
     var pendingGridSize by remember(showDisplayOptionsSheet) { mutableIntStateOf(gridSize) }
@@ -435,6 +441,7 @@ fun KototoroTopBar(
                                             }
                                         },
                                         modifier = Modifier
+                                            .focusRequester(moreMenuAnchorFocus)
                                             .size(topBarControlHeight)
                                             .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
                                         colors = IconButtonDefaults.iconButtonColors(
@@ -467,6 +474,7 @@ fun KototoroTopBar(
                                         // menu is dismissed by tapping it again.
                                         anchorTapThrough = true,
                                         anchorBounds = topBarMenuAnchorBounds,
+                                        anchorFocusRequester = moreMenuAnchorFocus,
                                         shape = CompactTopBarPillShape,
                                         style = GlassDefaults.subtleStyle(),
                                     ) {
@@ -632,6 +640,8 @@ fun KototoroTopBar(
                                     // menu is dismissed by tapping it again.
                                     anchorTapThrough = true,
                                     anchorBounds = topBarMenuAnchorBounds,
+                                    // The language presets hang off the same ⋮ button.
+                                    anchorFocusRequester = moreMenuAnchorFocus,
                                     shape = CompactTopBarPillShape,
                                     style = GlassDefaults.subtleStyle(),
                                 ) {
@@ -856,11 +866,13 @@ private fun CompactCategoryTitle(
     val selectedTitle = state.items.firstOrNull { it.id == state.selectedItemId }?.title.orEmpty()
     var expanded by rememberSaveable { mutableStateOf(false) }
     var anchorBounds by remember { mutableStateOf<Rect?>(null) }
+    val categoryMenuAnchorFocus = remember { FocusRequester() }
 
     Box(modifier = modifier.onGloballyPositioned { anchorBounds = it.boundsInRoot() }) {
         Column(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
+                .focusRequester(categoryMenuAnchorFocus)
                 .clickable { expanded = !expanded }
                 .padding(vertical = 2.dp),
         ) {
@@ -896,6 +908,7 @@ private fun CompactCategoryTitle(
             useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
             anchorTapThrough = true,
             anchorBounds = anchorBounds,
+            anchorFocusRequester = categoryMenuAnchorFocus,
             style = GlassDefaults.subtleStyle(),
         ) {
             state.items.forEach { item ->
