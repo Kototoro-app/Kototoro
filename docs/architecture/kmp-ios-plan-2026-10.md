@@ -7514,3 +7514,55 @@ Windows 之前完全没有代理：每个来源、封面、JSON 导入都走 com
   `logs/` 下的崩溃文件，需要先写一个 writer）；之后是其余设置页对齐（Spaces、替换规则、下载、备份周期、
   同步、追踪、服务、导航配置、通知、全景、内容目录、TTS 等）。
 
+## 165. Windows 崩溃报告：writer + 关于页入口 + 崩溃日志页（对齐 Android CrashLogScreen/CrashLogDetailScreen）（2026-10-24）
+
+- 问题：§164 的“仍待”前半。Android 在 `CrashLogWriter` 里挂 `Thread.setDefaultUncaughtExceptionHandler`，
+  把未捕获异常写成 `crash_logs/crash_yyyyMMdd_HHmmss.log`，再从关于页的“崩溃日志”进列表、详情复制/分享。
+  Windows 侧进程崩了就是没了：没有处理器、没有文件、没有入口，用户拿到“闪退”只能猜。
+- `desktop-runtime` 新文件 `DesktopCrashLogs`：
+  - 目录/文件名/上限沿用 Android：`<数据根>/logs/crash_logs`、`crash_<时间戳>.log`、`MAX_FILES = 20`
+    （`isLogName` 只认这个前缀+后缀，别的文件（如 `notes.txt`）列不出来也删不掉）。这样一份日志在两端可以互看，
+    存储页的 `logs` 子项也仍然是那一格。
+  - 报告格式沿用 Android：`=== Crash Report ===` 头（`Time:`/`App Version:`/`Thread:`），平台行换成
+    `Windows: <os.name> <os.version> (<os.arch>)`、`Java: <java.version> (<java.vendor>)`、`User:`；
+  然后 `=== Stack Trace ===` + `printStackTrace`，每个 cause 前加 `=== Caused by ===`。
+  - 与 Android 刻意不同的一处：Android 按秒命名，同一秒内第二次崩溃会覆盖第一份；这里撞名时追加 `_1`、`_2`，
+    因为读不到的报告比长一点的文件名更糟（`MAX_FILES` 仍然兜底）。
+  - `write()` 在未捕获异常处理器里跑，**绝不抛**：目录建不出、磁盘满都只是一份缺失的日志（返回 null），
+    不能变成第二次崩溃。写 `<name>.part` 再 `Files.move`，避免“崩溃中崩溃”留下半个文件。
+  - `files()` 新→旧、只读每份前 8 KiB 找首行含 `Exception`/`Error` 的行作摘要；目录不存在或读不了是空列表而不是错误。
+  - `install()` 是实例方法（companion 里 `this` 是 Companion），用 AtomicBoolean 幂等，并**串上 JVM 原本的**
+    默认处理器（Android 也串）——测试框架/JUnit 自己的处理器不会被吞掉。
+- 接入点：`DesktopSession.openOnIo` 在 `DesktopRuntime.open(root)` 之后立刻 `DesktopCrashLogs.of(storage.paths, 版本).install()`。
+  数据根要等存储打开才知道，所以只能挂在这里（Android 在 Application 里挂）。此时起，图源/渲染器的未捕获异常
+  都会落盘；重启不需要重复挂（`install` 幂等）。
+- `desktop-app`：
+  - 新文件 `DesktopCrashLogOperations.kt`：`DesktopCrashLogsUi(files, loading, detail)` 是**独立 flow**
+    （`controller.crashLogs`，页面 `collectAsState()` 读），不进 `DesktopAppState`——和 `probeState` 同一个理由：
+    只是一件事的临时进度。`files == null` 表示“还没读过”，空列表才是真答案。进页面每次都重读（窗口还开着时
+    也可能新写一份报告），删除/清空后直接重读，不等下一次进页面。
+  - 新文件 `DesktopCrashLogsPage.kt`：标题 + Android 的 `crash_logs_summary`，行是 `yyyy-MM-dd HH:mm:ss` + 摘要 + 大小，
+    空态 `crashLogs.empty`，非空才给“清空”（Android 的 `clear`，同在标题行右侧）。点行开详情对话框：
+    等宽 12sp、可选中、限高 420dp 内部滚动，底部 `copy`/`delete`/关闭。Android 的列表页+详情页在这里收成
+    一页 + 对话框，理由同 §163 的更新日志：桌面宽够，少一条路由。
+  - 复制走 `DesktopClipboard.write`（回读校验）；Android 的“分享”没有桌面等价物，复制即分享，成功/失败各一条
+    `crashLogs.copied`/`crashLogs.copyFailed`。
+  - “更多”页更新卡下方、`about_group_support` 之前加一张单行 `SettingsGroup`（`app-crash-logs`，标题/摘要取
+    Android 的 `crash_logs`/`crash_logs_summary`），位置与 Android 关于页一致；新 `DesktopScreen.CRASH_LOGS`
+    （`DesktopApp` 的页面 `when`、标题 `when` 各加一支，导航栏继续落到 `else -> 3` 的“更多”），返回回“更多”。
+- 验证：
+  - `DesktopCrashLogsTest` 5 项（`@TempDir` + 假时钟）：报告含 Android 的头部/堆栈/`=== Caused by ===` 且不留 `.part`；
+    列表新→旧且摘要就是异常那一行；24 次崩溃后只剩 20 份（最旧的三份被剪掉、第 4 份还在）；目录还不存在时
+    `files()`/`clear()` 不报错，删一份后 `read` 返回 null，`clear` 返回删除数；非 `crash_*.log` 的文件既不列出也不删。
+  - 探针 `crashlogs`（`DesktopAppTest` 同名用例，`DesktopCrashLogsProbe`）：起一个线程 `error("probe crash from a thread")`
+    让它真的未捕获地死掉 → 断言 `files()` 出现 1 份且摘要就是这条消息（证明 `install()` 挂上了、格式对）；
+    再直接写第二份；进“更多”点 `app-crash-logs` → 两行都在、最新的是第二份；点行开详情（`crash-log-text`，
+    控制器侧断言文本含 “second report”）；`crash-log-delete` → 对话框关闭、列表剩 1 行、磁盘上也只剩 1 份；
+    `crash-logs-clear` → 空态出现、目录清空；返回回“更多”。本机实测
+    `DESKTOP_CRASH_STATE=files:1 name:crash_20261024_130907.log summary:java.lang.IllegalStateException: probe crash from a thread`、
+    输出 `DESKTOP_UI_OK=crashlogs`。
+  - `:desktop-runtime:test --tests *DesktopCrashLogsTest*` 5/5；`verifyDesktopStrings` 通过（4 个新键两个 catalog 都有）。
+- 仍待：Android 详情页的“分享”（桌面没有分享面板，用剪贴板代替，已记录）；崩溃时的“下次启动提示”
+  （Android 的 `CrashLogActivity` 进入即看日志，Windows 目前只从关于页进）；其余设置页对齐（Spaces、替换规则、
+  下载、备份周期、同步、追踪、服务、导航配置、通知、全景、内容目录、TTS 等）。
+

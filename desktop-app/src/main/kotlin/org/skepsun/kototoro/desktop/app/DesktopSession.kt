@@ -526,6 +526,11 @@ class DesktopSession private constructor(
             // The runtime reports catalog keys with English fallbacks; from here they follow the interface language.
             org.skepsun.kototoro.desktop.runtime.DesktopRuntimeStrings.install(DesktopStrings::localized)
             val storage = DesktopRuntime.open(root)
+            // Android installs its crash writer before the UI starts; here the data root is only known once storage is
+            // open, so the reports of a failed source or renderer land in `<root>/logs/crash_logs` from this point on.
+            org.skepsun.kototoro.desktop.runtime.DesktopCrashLogs
+                .of(storage.paths, DesktopAppVersion.load().versionName)
+                .install()
             // The proxy the settings page edits becomes the SDK client's route before any source is constructed.
             val network = storage.preferences.open("desktop_network")
             val proxy = org.skepsun.kototoro.desktop.runtime.DesktopProxy(network)

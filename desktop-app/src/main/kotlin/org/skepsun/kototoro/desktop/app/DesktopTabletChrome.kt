@@ -151,6 +151,11 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
         }
         DesktopTrackerSettings(controller, state, enabled)
         DesktopAppUpdateSection(controller, state, enabled, onExitRequest)
+        // Android keeps "crash logs" on the about screen itself, between the update card and the support links.
+        SettingsGroup {
+            SettingsValueRow(AndroidStrings["crash_logs"], AndroidStrings["crash_logs_summary"], null, enabled,
+                { controller.showCrashLogs() }, testTag = "app-crash-logs")
+        }
         // Android's about screen keeps its links in a "support" group; on Windows they sit under the update card.
         SettingsSectionHeader(AndroidStrings["about_group_support"])
         SettingsGroup {

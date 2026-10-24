@@ -35,6 +35,7 @@ import org.skepsun.kototoro.desktop.runtime.DesktopLibrarySnapshot
 import org.skepsun.kototoro.desktop.runtime.DesktopRepository
 import org.skepsun.kototoro.desktop.runtime.DesktopRepositoryCatalog
 import org.skepsun.kototoro.desktop.runtime.DesktopUpdateSettings
+import org.skepsun.kototoro.desktop.runtime.DesktopCrashLogFile
 import org.skepsun.kototoro.desktop.runtime.DesktopStorageUsage
 import org.skepsun.kototoro.desktop.runtime.DesktopTriState
 import org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex
@@ -76,7 +77,7 @@ internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
 enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
-    PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG,
+    PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -274,6 +275,9 @@ class DesktopController(val session: DesktopSession) {
     internal val backupPreview = mutableBackupPreview.asStateFlow()
     /** Android's in-app update flow: check the published releases, download, and swap the image on restart. */
     internal val updates = DesktopUpdateOperations(mutableState, session, scope)
+    /** Android's crash-log page: the reports the crash writer left under the data root's `logs/crash_logs`. */
+    private val crashLogOperations = DesktopCrashLogOperations(scope, session)
+    internal val crashLogs = crashLogOperations.state
     /** Android's WebDAV backup destination: same shared protocol, uploaded by hand or by the timer below. */
     private val webDav = DesktopWebDavOperations(session.storage, backups)
     internal val webDavUi = webDav.ui
@@ -374,6 +378,31 @@ class DesktopController(val session: DesktopSession) {
     fun reloadChangelog() = updates.changelog(refresh = true)
 
     fun backFromChangelog() = navigate { mutableState.update { it.copy(screen = DesktopScreen.MORE) } }
+
+    /** Android's "crash logs" row on the about card: the reports the crash writer left under `logs/crash_logs`. */
+    fun showCrashLogs() = navigate {
+        mutableState.update { it.copy(screen = DesktopScreen.CRASH_LOGS) }
+        crashLogOperations.open()
+    }
+
+    fun backFromCrashLogs() = navigate { mutableState.update { it.copy(screen = DesktopScreen.MORE) } }
+
+    fun reloadCrashLogs() = crashLogOperations.reload()
+
+    fun openCrashLog(log: DesktopCrashLogFile) = crashLogOperations.openDetail(log)
+
+    fun closeCrashLogDetail() = crashLogOperations.closeDetail()
+
+    fun deleteCrashLog(log: DesktopCrashLogFile) = crashLogOperations.delete(log)
+
+    fun clearCrashLogs() = crashLogOperations.clear()
+
+    fun copyCrashLog(text: String) {
+        val copied = crashLogOperations.copy(text)
+        mutableState.update {
+            it.copy(message = if (copied) desktopText("crashLogs.copied") else desktopText("crashLogs.copyFailed"))
+        }
+    }
 
     internal fun appearance(value: DesktopAppearance) = action {
         check(appearancePreferences.edit(SourcePreferenceEdit(changes = mapOf(

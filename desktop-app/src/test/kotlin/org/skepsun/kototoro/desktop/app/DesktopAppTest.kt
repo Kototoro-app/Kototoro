@@ -61,6 +61,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `a real crash writes a report the crash log page lists opens and deletes`() {
+        probe("crashlogs", directory.resolve("崩溃 日志"), 180)
+    }
+
+    @Test
     fun `real Tsundoku APK installs converts and reads a novel over the live network`() {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("kototoro.dex.real.apks") != null, "no -PrealApkDirectory")
         probe("real-novel", directory.resolve("中文 real novel"), 180)

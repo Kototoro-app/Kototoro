@@ -47,6 +47,10 @@ object DesktopAppProbe {
                 DesktopAboutProbe.run(args)
                 return
             }
+            if (args[0] == "crashlogs") {
+                DesktopCrashLogsProbe.run(args)
+                return
+            }
             if (args[0] == "playback") {
                 DesktopPlaybackProbe.run(args)
                 return
