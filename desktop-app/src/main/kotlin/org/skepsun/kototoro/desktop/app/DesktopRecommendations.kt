@@ -29,6 +29,10 @@ import org.skepsun.kototoro.suggestions.domain.parseSuggestionTags
  * avoids. The rules stay the same and read the same `DesktopSuggestionSettings`, but each group is now its own
  * section, and Android's own source picker (search, content-type and source-type filters, pending selection) is what
  * the two source rows open, so a long source list is no longer a wall of check boxes.
+ *
+ * The worker's own three switches (Wi-Fi only, include disabled sources, notifications) are the rest of that screen and
+ * use Android's strings verbatim: the JVM host enforces the unmetered constraint on its adapters, widens the candidate
+ * list past `disabled_sources`, and turns a stored run into the home rail's headline because Windows has no tray.
  */
 @Composable
 internal fun DesktopRecommendations(controller: DesktopController, state: DesktopAppState) {
@@ -54,7 +58,21 @@ internal fun DesktopRecommendations(controller: DesktopController, state: Deskto
             SettingsSwitchRow(desktopText("settings.suggestionsNsfw"), null, settings.excludeNsfw, enabled,
                 { controller.suggestionSettings(settings.copy(excludeNsfw = it)) }, testTag = "settings-suggestions-nsfw")
             SettingsRowDivider()
-            SettingsInfoRow(desktopText("settings.suggestionsInfo"), null)
+            // Android's work constraint and candidate rules, each disabled until recommendations themselves are on.
+            SettingsSwitchRow(AndroidStrings["only_using_wifi"], AndroidStrings["suggestions_wifi_only_summary"],
+                settings.wifiOnly, enabled, { controller.suggestionSettings(settings.copy(wifiOnly = it)) },
+                testTag = "settings-suggestions-wifi")
+            SettingsRowDivider()
+            SettingsSwitchRow(AndroidStrings["include_disabled_sources"],
+                AndroidStrings["suggestions_disabled_sources_summary"], settings.includeDisabledSources, enabled,
+                { controller.suggestionSettings(settings.copy(includeDisabledSources = it)) },
+                testTag = "settings-suggestions-disabled-sources")
+            SettingsRowDivider()
+            SettingsSwitchRow(AndroidStrings["notifications_enable"], AndroidStrings["suggestions_notifications_summary"],
+                settings.notifications, enabled, { controller.suggestionSettings(settings.copy(notifications = it)) },
+                testTag = "settings-suggestions-notifications")
+            SettingsRowDivider()
+            SettingsInfoRow(AndroidStrings["suggestions_info"], null)
         }
         SettingsSectionHeader(desktopText("settings.suggestionsTags"))
         SettingsGroup {

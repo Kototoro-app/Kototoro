@@ -162,9 +162,9 @@ class DesktopAppTest {
     @Test
     fun `tablet layout and immersive reader panels preserve progress in wide and narrow windows`() {
         probe("tablet", directory.resolve("中文 tablet wide"), 150)
-        probe("tablet-narrow", directory.resolve("中文 tablet narrow"))
-        probe("tablet-boundary", directory.resolve("中文 tablet expanded boundary"))
-        probe("tablet-boundary-compact", directory.resolve("中文 tablet medium boundary"))
+        probe("tablet-narrow", directory.resolve("中文 tablet narrow"), 150)
+        probe("tablet-boundary", directory.resolve("中文 tablet expanded boundary"), 150)
+        probe("tablet-boundary-compact", directory.resolve("中文 tablet medium boundary"), 150)
     }
 
     @Test
@@ -269,6 +269,13 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `recommendation worker switches gate the run on Wi-Fi widen the candidates and announce results`() {
+        val root = directory.resolve("中文 suggestion policy")
+        probe("suggestionpolicy-write", root, 120)
+        probe("suggestionpolicy-read", root, 90)
+    }
+
+    @Test
     fun `production Windows window closes during startup and after import and releases storage`() {
         probe("window-early", directory.resolve("中文 early close"))
         probe("window", directory.resolve("中文 normal window"))
@@ -279,6 +286,9 @@ class DesktopAppTest {
         val process = ProcessBuilder(Path.of(System.getProperty("java.home"), "bin/java.exe").toString(),
             "-Xms32m", "-Xmx768m",
             "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
+            // `runTest` gives a UI body 60 s by default, which a wide probe on a busy machine can cross even when
+            // nothing is wrong (`UncompletedCoroutinesError`). The wait below is the probe's real limit.
+            "-Dkotlinx.coroutines.test.default_timeout=10m",
             *System.getProperties().stringPropertyNames()
                 .filter { it == "kototoro.dex.real.apks" || it == "kototoro.desktop.cloudstream.fixture" || it == "kototoro.libmpv.dir" || it == "kototoro.desktop.anime.fixture.jar" || it == "kototoro.ncnn.dir" ||
                     it == "kototoro.desktop.locale" || it.startsWith("kototoro.real.") }

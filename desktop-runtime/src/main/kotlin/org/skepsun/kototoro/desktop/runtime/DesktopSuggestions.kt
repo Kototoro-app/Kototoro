@@ -20,6 +20,12 @@ data class DesktopSuggestionSettings(
     val tagWhitelist: Set<String> = emptySet(),
     val preferredSources: Set<String> = emptySet(),
     val excludedSources: Set<String> = emptySet(),
+    /** Android's `KEY_SUGGESTIONS_WIFI_ONLY`: the worker only runs on an unmetered network. */
+    val wifiOnly: Boolean = false,
+    /** Android's `KEY_SUGGESTIONS_DISABLED_SOURCES`: candidates come from every installed source, not only enabled. */
+    val includeDisabledSources: Boolean = false,
+    /** Android's `KEY_SUGGESTIONS_NOTIFICATIONS`: one recommended work is announced after a run stores results. */
+    val notifications: Boolean = false,
 ) {
     fun toPreferences(): Map<String, SourcePreferenceValue?> = mapOf(
         KEY_ENABLED to SourcePreferenceValue.Toggle(enabled),
@@ -28,6 +34,9 @@ data class DesktopSuggestionSettings(
         KEY_PREFERRED_TAGS to SourcePreferenceValue.Text(tagWhitelist.joinToString(", ")),
         KEY_PREFERRED_SOURCES to SourcePreferenceValue.TextSet(preferredSources),
         KEY_EXCLUDED_SOURCES to SourcePreferenceValue.TextSet(excludedSources),
+        KEY_WIFI_ONLY to SourcePreferenceValue.Toggle(wifiOnly),
+        KEY_DISABLED_SOURCES to SourcePreferenceValue.Toggle(includeDisabledSources),
+        KEY_NOTIFICATIONS to SourcePreferenceValue.Toggle(notifications),
     )
 
     companion object {
@@ -37,6 +46,9 @@ data class DesktopSuggestionSettings(
         const val KEY_PREFERRED_TAGS = "suggestions_preferred_tags"
         const val KEY_PREFERRED_SOURCES = "suggestions_preferred_sources"
         const val KEY_EXCLUDED_SOURCES = "suggestions_excluded_sources"
+        const val KEY_WIFI_ONLY = "suggestions_wifi"
+        const val KEY_DISABLED_SOURCES = "suggestions_disabled_sources"
+        const val KEY_NOTIFICATIONS = "suggestions_notifications"
 
         fun from(values: Map<String, SourcePreferenceValue>) = DesktopSuggestionSettings(
             enabled = (values[KEY_ENABLED] as? SourcePreferenceValue.Toggle)?.value ?: false,
@@ -45,6 +57,9 @@ data class DesktopSuggestionSettings(
             tagWhitelist = parseSuggestionTags((values[KEY_PREFERRED_TAGS] as? SourcePreferenceValue.Text)?.value),
             preferredSources = (values[KEY_PREFERRED_SOURCES] as? SourcePreferenceValue.TextSet)?.values.orEmpty(),
             excludedSources = (values[KEY_EXCLUDED_SOURCES] as? SourcePreferenceValue.TextSet)?.values.orEmpty(),
+            wifiOnly = (values[KEY_WIFI_ONLY] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            includeDisabledSources = (values[KEY_DISABLED_SOURCES] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            notifications = (values[KEY_NOTIFICATIONS] as? SourcePreferenceValue.Toggle)?.value ?: false,
         )
     }
 }

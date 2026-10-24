@@ -75,6 +75,10 @@ object DesktopAppProbe {
                 DesktopInstallPolicyProbe.run(args)
                 return
             }
+            if (args[0].startsWith("suggestionpolicy-")) {
+                DesktopSuggestionPolicyProbe.run(args)
+                return
+            }
             if (args[0] == "navconfig") {
                 DesktopNavigationConfigProbe.run(args)
                 return

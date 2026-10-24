@@ -42,6 +42,7 @@ import org.skepsun.kototoro.desktop.runtime.DesktopCrashLogFile
 import org.skepsun.kototoro.desktop.runtime.DesktopStorageUsage
 import org.skepsun.kototoro.desktop.runtime.DesktopTriState
 import org.skepsun.kototoro.desktop.runtime.DesktopNavigationSettings
+import org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings
 import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
 import org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex
 import org.skepsun.kototoro.core.ui.chapters.ChapterBranchLocale
@@ -239,6 +240,11 @@ data class DesktopAppState(
     val busy: Boolean = false,
     val error: String? = null,
     val message: String? = null,
+    /**
+     * Android's recommendation notification, which Windows can only show in-app: the title of the work a finished
+     * background run picked while `suggestions_notifications` is on.
+     */
+    val suggestionNotice: String? = null,
     /** Share text shown when Windows refused the clipboard write; null while there is nothing to fall back to. */
     val shareLinks: String? = null,
 ) {
@@ -258,7 +264,14 @@ data class DesktopAppState(
 }
 
 /** One owned scope and immutable UI state. Source methods retain their existing cancellation/lease semantics. */
-class DesktopController(val session: DesktopSession) {
+class DesktopController(
+    val session: DesktopSession,
+    /**
+     * Android's UNMETERED work constraint reads the platform's connectivity; Windows reads its adapters. Probes hand
+     * in a fixed answer so a run does not depend on the machine sitting on Wi-Fi.
+     */
+    private val networkAvailable: () -> Boolean = { hasUnmeteredNetwork(desktopNetworkInterfaces()) },
+) {
     private val job = SupervisorJob()
     private val scope = CoroutineScope(job + Dispatchers.IO)
     private val gate = Mutex()
@@ -1113,13 +1126,36 @@ class DesktopController(val session: DesktopSession) {
     }
 
     private suspend fun runSuggestionsOnIo(): Int {
-        // A switched-off source must not answer, exactly like Android's enabled-only source list feeding the worker.
-        val disabled = state.value.disabledSources
+        val settings = state.value.suggestionSettings
+        // Android's UNMETERED constraint: with "only using Wi-Fi" on, a mobile link is not a reason to spend data.
+        // The run is not recorded, so the next wake retries instead of waiting a whole interval.
+        if (settings.wifiOnly && !networkAvailable()) return 0
+        // A switched-off source must not answer, exactly like Android's enabled-only source list feeding the worker —
+        // unless "include disabled sources" asks for candidates from every installed source.
+        val disabled = if (settings.includeDisabledSources) emptySet() else state.value.disabledSources
         val sources = session.sourceListings().filterNot { it.source.name in disabled }
-        val stored = session.suggestions.refresh(sources, state.value.suggestionSettings)
+        val stored = session.suggestions.refresh(sources, settings)
         recordRun(LAST_SUGGESTIONS_RUN)
-        mutableState.update { it.copy(suggestions = session.suggestions.suggestions()) }
+        val items = session.suggestions.suggestions()
+        mutableState.update { it.copy(suggestions = items) }
+        if (stored > 0) announceSuggestion(settings, items)
         return stored
+    }
+
+    /**
+     * Android's `suggestion_manga` notification, which the worker posts after storing results: one recommended work,
+     * chosen at random, with its title. Windows has no tray notifications, so the headline goes to the home rail's
+     * recommendation card and stays until dismissed; the stored suggestions already carry the tags and filters the
+     * worker applied, so nothing extra is fetched here.
+     */
+    private fun announceSuggestion(settings: DesktopSuggestionSettings, items: List<SourceContent>) {
+        if (!settings.notifications) return
+        val pick = items.randomOrNull() ?: return
+        mutableState.update { it.copy(suggestionNotice = AndroidStrings.format("suggestion_manga", pick.title)) }
+    }
+
+    internal fun dismissSuggestionNotice() {
+        mutableState.update { it.copy(suggestionNotice = null) }
     }
 
     private suspend fun runTrackerOnIo(onProgress: suspend (Int, Int) -> Unit = { _, _ -> }) =

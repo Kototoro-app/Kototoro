@@ -121,7 +121,7 @@ internal fun DesktopHomePanel(controller: DesktopController, state: DesktopAppSt
                     if (history.isNotEmpty()) HistoryRail(controller, history, open)
                     if (updates.isNotEmpty()) UpdatesRail(controller, updates)
                     RecommendationsRail(controller, recommendations, state.suggestionSettings.enabled,
-                        state.suggestionsGenerating, enabled, open)
+                        state.suggestionsGenerating, enabled, open, state.suggestionNotice)
                     if (history.isEmpty() && updates.isEmpty()) Text(desktopText("home.empty"),
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -263,7 +263,7 @@ private fun QuickAccess(controller: DesktopController, enabled: Boolean, expande
 
 @Composable
 private fun RecommendationsRail(controller: DesktopController, works: List<HomeWork>, suggestionsEnabled: Boolean,
-    generating: Boolean, enabled: Boolean, open: (SourceContent) -> Unit) {
+    generating: Boolean, enabled: Boolean, open: (SourceContent) -> Unit, notice: String?) {
     val listState = rememberLazyListState()
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
     val rim = rememberCoverRimBorderBrush(isIosStyle, isDark = MaterialTheme.colorScheme.background.luminance() < .5f)
@@ -274,6 +274,20 @@ private fun RecommendationsRail(controller: DesktopController, works: List<HomeW
             configureIcon = painterResource("icons/ic_suggestion.svg"), configureLabel = desktopText("home.refreshRecommendations"),
             configureModifier = Modifier.testTag("home-recommendations-refresh"),
             onConfigureClick = { if (enabled && !generating) controller.refreshSuggestions() })
+        // Android posts this headline as a notification after the worker stores results; the desktop window shows it
+        // here instead, where the suggestions themselves are, until it is dismissed.
+        if (notice != null) {
+            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.fillMaxWidth().testTag("home-suggestion-notice")) {
+                Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(notice, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    TextButton({ controller.dismissSuggestionNotice() }, modifier = Modifier.testTag(
+                        "home-suggestion-notice-dismiss")) { Text(desktopText("common.close")) }
+                }
+            }
+        }
         if (works.isEmpty()) {
             Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow,
                 modifier = Modifier.fillMaxWidth().testTag("home-recommendations-empty")) {

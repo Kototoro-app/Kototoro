@@ -8163,5 +8163,60 @@ Android 的 `UnifiedSourcesScreen` 在装/导入第三方包时按 `UnifiedSourc
   两个来源的开关状态、设置页摘要都还在。
 - 既有探针的连带更新：`repositories-write` 第一次点目录行现在会弹问题，探针点“安装并启用”并断言不勾选就不落盘；
   其余经 `controller.importJar` 的探针默认答案等价于旧行为。
-- 仍待：`setup_wizard`、`handle_links`、`SourceSwitchDialog` 的选择模式、推荐设置的 `only_using_wifi`/
-  `include_disabled_sources`/通知、服务设置的浏览记录与 `related_manga`、外部追踪、定期本地备份等。
+- 仍待：`setup_wizard`、`handle_links`、`SourceSwitchDialog` 的选择模式、服务设置的浏览记录与 `related_manga`、
+  外部追踪、定期本地备份等（推荐设置的三个 worker 开关已在 §179 补上）。
+
+## 179. Windows 推荐设置补齐 Android 推荐 worker 的三个开关（2026-10-24）
+
+§173 把“更多 → 推荐设置”按 Android 的 `SuggestionsSettingsScreen` 搬过来时只搬了“允许推荐 / 排除 NSFW / 标签 / 来源”
+几节，页面上还有三个直接接 `SuggestionsWorker` 的开关没有位置：`only_using_wifi`（WorkManager 的 `UNMETERED` 约束）、
+`include_disabled_sources`（候选是否包含已禁用的来源）与 `notifications_enable`（生成后是否提醒）。
+本轮把这三条补上，语义按 Android 的 worker 来定，而不是按“看上去合理”来定。
+
+- 存储：`desktop-runtime` 的 `DesktopSuggestionSettings` 新增 `wifiOnly`/`includeDisabledSources`/`notifications`，
+  三个都默认 `false`，键与 Android 的 `AppSettings` 一致——`suggestions_wifi`、`suggestions_disabled_sources`、
+  `suggestions_notifications`，仍写在 `desktop_background` 这个命名 store 里。
+- Wi-Fi 约束：Android 读的是 `NetworkType.UNMETERED`，而流量计费是 `ConnectivityManager` 才有的概念，JVM 上只有网卡。
+  新文件 `DesktopConnectivity.kt` 把网卡列表折成 `hasUnmeteredNetwork(interfaces)`：`isUp`、非回环、且网卡名或
+  显示名里没有 `wwan`/`cellular`/`mobile`/`rmnet`/`modem`/`lte`/`4g`/`5g` 才算“不计流量”——有线与 Wi-Fi 都过，
+  移动宽带不过。`desktopNetworkInterfaces()` 用 `NetworkInterface.getNetworkInterfaces()` 读一次，读失败就当空列表
+  （宁可跳过也不要假装不计流量）。`DesktopController` 把这个判定做成构造参数 `networkAvailable: () -> Boolean`
+  （默认读真网卡），探针因此能逐条驱动“这台机器有没有不计流量的链路”。
+  跳过时 `runSuggestionsOnIo` 在 `recordRun(LAST_SUGGESTIONS_RUN)` **之前**返回 0：不记本轮时间，下一次到期检查会
+  重试，而不是等满一个周期——这与 WorkManager 把“约束未满足”当作“本次不跑”而不是“跑完了”是同一件事。
+  跳过也不清空已有推荐（`refresh` 本身在缺种子/候选时就是“返回 0、不动表”）。
+- 含禁用来源：开关为真时候选换成 `session.sourceListings()` 全集，否则沿用 `state.value.disabledSources` 过滤后的
+  “已启用来源”。禁用来源本来就只是“不再出现在浏览/搜索/推荐里”，它仍安装、仍可调用（§174/§175 的口径），
+  所以这里只是换一个候选集合，不需要重装或唤醒什么。
+- 通知：Windows 没有 Android 的托盘与通知渠道，于是它落在应用内——`DesktopAppState.suggestionNotice` 存一行
+  `AndroidStrings.format("suggestion_manga", 作品名)`（Android 的原词条），只有“真的存进推荐（`stored > 0`）”
+  且开关打开时才设；主页推荐轨道上方用 `secondaryContainer` 圆角条显示，右侧一个“关闭”按钮调
+  `dismissSuggestionNotice()` 清掉。开关关着时什么都不发生，与 Android 不发通知一致。
+- UI（`DesktopRecommendations.kt`）：在“排除 NSFW”行与其后的分隔线之后，按 Android 的顺序插三条整行开关
+  `settings-suggestions-wifi` / `-disabled-sources` / `-notifications`，标题与摘要直接用 Android 的
+  `only_using_wifi`+`suggestions_wifi_only_summary`、`include_disabled_sources`+`suggestions_disabled_sources_summary`、
+  `notifications_enable`+`suggestions_notifications_summary`（都由 `prepareDesktopStrings` 从 `app/src/main/res` 导出），
+  并且与 Android 的 `enabled = isEnabled` 一样，只有“允许推荐”开着时这三行才可点。页尾说明换成 Android 的
+  `suggestions_info`（自造的 `settings.suggestionsInfo` 两条译文随之删除）。另外把“允许推荐”的摘要改写了一句：
+  候选默认只来自已启用的来源、下面那个开关可以放宽——Android 原文没讲这一层，但 Windows 上“来源”是一等配置，
+  说明里不提会让人以为那个开关没有生效。
+- 验证：新探针 `suggestionpolicy-write`/`suggestionpolicy-read`（`DesktopSuggestionPolicyProbe.kt`），与 §178 一样分两个
+  JVM。write 段导入 reader 夹具、把列表里第一部作品收藏起来当 worker 的种子，然后在真实 UI 里走推荐设置页——
+  三行都在、标题与摘要都是 Android 词条、推荐关着时三行都 `assertIsNotEnabled`；打开推荐后逐个点开，
+  `suggestionSettings` 三个字段翻真、`desktop_background` 里三个键都落成 `Toggle(true)`，截图 `-worker-rows.png`。
+  接着脱离页面直接驱动 worker：`networkAvailable = { unmetered }` 置假跑一次，断言既没有标题、也没有
+  `last_suggestions_run`、推荐表仍为空；置真再跑一次，标题出现且等于某个已存作品按 `suggestion_manga` 拼出来的样子；
+  回主页滚动到 `home-suggestion-notice` 截图后点关闭，条子与状态一起消失。最后禁用唯一来源：含禁用来源开着时
+  再跑仍会出标题，把它关掉再跑就没有了，之后恢复来源与开关。read 段重开数据根，断言三个键还在、
+  `DesktopSuggestionSettings.from` 读回三个 `true`、推荐表非空。
+- 顺带修掉“宽屏探针偶发 `UncompletedCoroutinesError`”：子 JVM 里 `runDesktopComposeUiTest` 的 `testTimeout` 参数
+  并不改 `runTest` 的默认 60 秒，而这几个探针在忙起来的机器上本来就要跑一分钟上下，于是报“test body did not run to
+  completion”而不是真失败。`DesktopAppTest.probe()` 现在给子 JVM 加 `-Dkotlinx.coroutines.test.default_timeout=10m`，
+  四个 tablet 探针的父进程等待也统一成 150 秒（宽屏本来就是 150）——真正的上限仍是父进程的 `waitFor(seconds)`。
+  改完后 `tablet`/`tablet-narrow`/`tablet-boundary`/`tablet-boundary-compact` 四个探针全绿（本轮 6m36s，
+  机器同时有别的构建在跑）。
+- 探针跑法的一个坑（顺手记下）：`cmd /c "gradlew.bat :desktop-app:test --tests "*xxx*" ..."` 那对内层引号会被 cmd
+  吃掉，Gradle 收到的是“带前导空格的模式”，于是报 `No tests found for given includes`——哪怕测试明明在类里。
+  改成 PowerShell 直接传 `'--tests=*xxx*'` 即可；这一轮先被这个坑绕了一圈。
+- 仍待：`setup_wizard`、`handle_links`、`SourceSwitchDialog` 的选择模式、服务设置的浏览记录与 `related_manga`、
+  外部追踪、定期本地备份等（§178 列过的其余项不变）。
