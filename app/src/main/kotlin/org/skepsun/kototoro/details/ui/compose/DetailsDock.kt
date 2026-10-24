@@ -690,7 +690,10 @@ private fun ChapterSelectionTopBar(
             DetailsDockContainer(modernStyle = modernStyle) {
                 IconButton(
                     onClick = state.onClearSelection,
-                    modifier = Modifier.size(ModernDetailsDockChromeHeight),
+                    modifier = Modifier
+                        .size(ModernDetailsDockChromeHeight)
+                        // The selection bar is pure icons; a bare IconButton stops without a ring.
+                        .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
@@ -826,7 +829,11 @@ private fun ChapterSelectionActionButton(
 ) {
     IconButton(
         onClick = onClick,
-        modifier = Modifier.size(42.dp),
+        modifier = Modifier
+            .size(42.dp)
+            // Bare IconButtons keep the stop but draw no outline, which leaves the whole
+            // selection bar invisible to a remote.
+            .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
     ) {
         content()
     }

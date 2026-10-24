@@ -34,6 +34,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
@@ -194,6 +195,7 @@ fun PagesScreen(
 ) {
     val context = LocalContext.current
     val hapticFeedback = LocalHapticFeedback.current
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val listState = rememberLazyGridState()
     val paneNestedScrollConnection = rememberDetailsPaneNestedScrollConnection(
         state = detailsPaneState,
@@ -343,8 +345,18 @@ fun PagesScreen(
         ) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.inverseSurface,
-                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                // inverseSurface is the Material3 snackbar contrast on a phone; on the TV every
+                // other surface is dark glass, where a white pill reads as a rendering bug.
+                color = if (isTvPresentation) {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                } else {
+                    MaterialTheme.colorScheme.inverseSurface
+                },
+                contentColor = if (isTvPresentation) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.inverseOnSurface
+                },
                 modifier = Modifier.padding(16.dp).windowInsetsPadding(WindowInsets.safeDrawing),
             ) {
                 Row(
@@ -353,8 +365,18 @@ fun PagesScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onClearSelection) {
-                            Icon(imageVector = Icons.Default.Close, contentDescription = "Clear")
+                        IconButton(
+                            onClick = onClearSelection,
+                            // A bare IconButton keeps the stop but draws no outline.
+                            modifier = Modifier.tvFocusable(
+                                shape = RoundedCornerShape(12.dp),
+                                addFocusTarget = false,
+                            ),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = stringResource(R.string.clear),
+                            )
                         }
                         Text(
                             text = "${selectedItemIds.size}",
@@ -363,8 +385,17 @@ fun PagesScreen(
                         )
                     }
                     Row {
-                        IconButton(onClick = { onSelectionActionClick(R.id.action_save) }) {
-                            Icon(painter = painterResource(id = R.drawable.ic_save_ok), contentDescription = "Save Page")
+                        IconButton(
+                            onClick = { onSelectionActionClick(R.id.action_save) },
+                            modifier = Modifier.tvFocusable(
+                                shape = RoundedCornerShape(12.dp),
+                                addFocusTarget = false,
+                            ),
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_save_ok),
+                                contentDescription = stringResource(R.string.save_page),
+                            )
                         }
                     }
                 }
