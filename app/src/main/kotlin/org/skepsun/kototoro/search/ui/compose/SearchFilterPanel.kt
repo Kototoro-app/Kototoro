@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
@@ -390,7 +391,7 @@ internal fun SearchFilterPanel(
                                 FilterChip(
                                     selected = selected,
                                     onClick = { onToggleSavedFilter(preset) },
-                                    modifier = Modifier.heightIn(min = 24.dp),
+                                    modifier = Modifier.heightIn(min = 24.dp).tvChipRing(),
                                     label = {
                                         androidx.compose.material3.ProvideTextStyle(MaterialTheme.typography.labelSmall) {
                                             Text(

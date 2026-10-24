@@ -41,6 +41,7 @@ import dagger.hilt.components.SingletonComponent
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.os.OpenDocumentTreeHelper
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.util.ext.tryLaunch
 import org.skepsun.kototoro.local.data.LocalStorageManager
 import org.skepsun.kototoro.local.data.importer.ImportMode
@@ -241,7 +242,7 @@ private fun ImportTypeChip(
             selected = selected,
             onClick = onClick,
             role = Role.RadioButton,
-        ),
+        ).tvChipRing(),
     )
 }
 

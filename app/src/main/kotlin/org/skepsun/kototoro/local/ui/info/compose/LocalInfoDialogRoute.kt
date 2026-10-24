@@ -32,6 +32,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.compose.KototoroLinearProgressIndicator
 import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.core.util.ext.getQuantityStringSafe
@@ -163,6 +164,7 @@ private fun LocalInfoDialog(
                     label = {
                         Text(text = stringResource(R.string.delete_read_chapters))
                     },
+                    modifier = Modifier.tvChipRing(),
                 )
             }
         },

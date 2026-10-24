@@ -153,6 +153,21 @@ fun Modifier.tvTabRing(): Modifier = tvFocusable(
 )
 
 /**
+ * Outline ring for a chip: `AssistChip`, `FilterChip`, `SuggestionChip` or `InputChip`.
+ *
+ * Material3 chips are `clickable`, so the remote does stop on them, but the chip draws nothing for
+ * it — a container tint that reads as no change at all from a sofa. A chip applies its modifier
+ * before the internal `clickable`, so this outline observes exactly that stop and adds no second
+ * one. The default corner matches `ChipDefaults.shape`; pass the expression a call already uses
+ * when it states its own shape. No-op off TV.
+ */
+@Composable
+fun Modifier.tvChipRing(shape: Shape = RoundedCornerShape(8.dp)): Modifier = tvFocusable(
+    shape = shape,
+    addFocusTarget = false,
+)
+
+/**
  * Where one D-pad step from [value] lands: [direction] is -1 for left, +1 for right.
  *
  * A slider with [steps] discrete stops moves by one stop; a continuous slider moves by a twentieth

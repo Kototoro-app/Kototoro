@@ -48,6 +48,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.getSummary
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
@@ -175,6 +176,7 @@ fun SourcesCatalogScreen(
                                 leadingIcon = {
                                     Icon(Icons.Default.Language, null, Modifier.size(18.dp))
                                 },
+                                modifier = Modifier.tvChipRing(),
                             )
                             DropdownMenu(localeMenuVisible, onDismissRequest = onLocaleDismiss) {
                                 sortedLocales.forEach { locale ->
@@ -192,10 +194,20 @@ fun SourcesCatalogScreen(
                         }
                     }
                     if (hasNewSources) item {
-                        FilterChip(filter.isNewOnly, { onNewOnlyChange(!filter.isNewOnly) }, label = { Text(stringResource(R.string._new)) })
+                        FilterChip(
+                            filter.isNewOnly,
+                            { onNewOnlyChange(!filter.isNewOnly) },
+                            label = { Text(stringResource(R.string._new)) },
+                            modifier = Modifier.tvChipRing(),
+                        )
                     }
                     items(contentTypes, key = { it.name }) { type ->
-                        FilterChip(type in filter.types, { onContentTypeChange(type, type !in filter.types) }, label = { Text(stringResource(type.titleResId)) })
+                        FilterChip(
+                            type in filter.types,
+                            { onContentTypeChange(type, type !in filter.types) },
+                            label = { Text(stringResource(type.titleResId)) },
+                            modifier = Modifier.tvChipRing(),
+                        )
                     }
                 }
                 Box(Modifier.fillMaxWidth().height(4.dp)) {

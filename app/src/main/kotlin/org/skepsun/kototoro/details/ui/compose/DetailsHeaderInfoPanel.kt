@@ -68,6 +68,7 @@ import org.skepsun.kototoro.core.model.iconResId
 import org.skepsun.kototoro.core.model.containsAdultTagKeyword
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
@@ -365,6 +366,7 @@ internal fun TrackingSuggestionCard(
                         containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
                         labelColor = MaterialTheme.colorScheme.primary,
                     ),
+                    modifier = Modifier.tvChipRing(RoundedCornerShape(if (expressive) 999.dp else 8.dp)),
                 )
                 SuggestionChip(
                     onClick = onOpenClick,
@@ -377,6 +379,7 @@ internal fun TrackingSuggestionCard(
                         enabled = true,
                         borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                     ),
+                    modifier = Modifier.tvChipRing(RoundedCornerShape(if (expressive) 999.dp else 8.dp)),
                 )
                 SuggestionChip(
                     onClick = onIgnoreClick,
@@ -389,6 +392,7 @@ internal fun TrackingSuggestionCard(
                         enabled = true,
                         borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                     ),
+                    modifier = Modifier.tvChipRing(RoundedCornerShape(if (expressive) 999.dp else 8.dp)),
                 )
             }
         }
@@ -951,6 +955,7 @@ internal fun SourceOptionCard(
                             labelColor = MaterialTheme.colorScheme.onSurface,
                             iconContentColor = MaterialTheme.colorScheme.onSurface,
                         ),
+                        modifier = Modifier.tvChipRing(),
                     )
                     GlassDropdownMenu(
                         expanded = statusMenuExpanded,

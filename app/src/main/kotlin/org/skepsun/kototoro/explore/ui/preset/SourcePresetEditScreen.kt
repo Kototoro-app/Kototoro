@@ -32,6 +32,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -64,7 +65,12 @@ fun SourcePresetEditScreen(
             Text(stringResource(R.string.preset_languages))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 locales.forEach { locale ->
-                    FilterChip(selected = locale in selectedLocales, onClick = { onLocaleToggle(locale) }, label = { Text(locale) })
+                    FilterChip(
+                        selected = locale in selectedLocales,
+                        onClick = { onLocaleToggle(locale) },
+                        label = { Text(locale) },
+                        modifier = Modifier.tvChipRing(),
+                    )
                 }
             }
             error?.let { Text(it, color = androidx.compose.material3.MaterialTheme.colorScheme.error) }

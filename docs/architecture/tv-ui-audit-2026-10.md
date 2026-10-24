@@ -5136,3 +5136,79 @@ if (isTvPresentation) {
    `requestFocus` 被丢弃，遥控器本身不受影响。
 5. **92 处里真正上机点开验证的只有 1 处**（Explore 的"Extension management"）；其余是"同一行形态
    批量替换 + 编译期验证"。同类形态在不同容器（面板底栏、工具条、空态）里视觉一致，但没有逐屏截图。
+
+## 第八十四轮：遥控器停在芯片上什么也看不见——统一芯片焦点环（2026-10-25）
+
+### 症状
+
+第八十三轮把 `TextButton` 的账结清之后，电视上还剩一整类"有焦点没轮廓"的对照物没算：**芯片**。
+Material3 的 `AssistChip / FilterChip / SuggestionChip / InputChip` 内部都是 `clickable`，遥控器会
+老老实实停在上面，但屏幕上只有 stateLayer 的一层浅色泛光——两米外看就是"按了没反应"。
+
+本轮先在设备上抓到两组活证据（第八十三轮之后第一次上机走 Home / History）：
+
+- **History 页顶部统计卡**：从网格按 UP 越过筛选条再按一次 UP，焦点停在 `[192,140][1896,404]` 的
+  统计卡上（`uiautomator dump` 的 `focused="true"`），而 `r84-7.png` 里**整屏没有任何轮廓**；
+  在这个"看不见的焦点"上按 CENTER，页面直接跳进 `StatsActivity`（`r84-8.png`）。
+- **Home 页"Recent searches"芯片**：从 Quick access 第一张卡按 UP，焦点落到 "a" 这颗搜索历史芯片上，
+  `r84-15.png` 同样**没有环**。
+
+盘点全 app 的芯片调用：`AssistChip / FilterChip / SuggestionChip / InputChip` 加三个 Elevated 变体，
+共 **61 处调用**，其中 **42 处完全没有焦点环**（26 个文件），另外 19 处是第七十六轮以来手补过
+`.tvFocusable(...)` 的。
+
+### 改动
+
+**先抽共享件**：`core-ui` 的 `adaptive/TvFocus.kt` 新增
+`Modifier.tvChipRing(shape: Shape = RoundedCornerShape(8.dp))`，就是
+`tvFocusable(shape = shape, addFocusTarget = false)` 的一行包装。芯片自己把 modifier 放在内部
+`clickable` 之前，所以这个环观察到的正是那个停点，**不会多出一站**；默认 8dp 圆角就是
+`ChipDefaults.shape`，调用方自己声明了 `shape =` 的（expressive 下的 `if (expressive) 18.dp else 8.dp`、
+胶囊 `999.dp`、`style.chipShape`）就把那个表达式传进来。
+
+**42 处迁移（26 个文件）**。脚本按调用的括号内是否已有 `.tvFocusable(` / `.tvChipRing(` 判断，第七十六
+轮以来手补的 19 处一个都没动（重复包一层只会得到两道环）。三种插入形态：
+
+1. 已有 `modifier =` 实参的（`modifier = Modifier.height(32.dp)`、`modifier = modifier.heightIn(...)`），
+   直接在表达式后接 `.tvChipRing(...)`；
+2. 多行调用但没有 `modifier =` 的，补一行 `modifier = ...`；
+3. 单行调用（`AssistChip(onClick = {}, label = { Text(tag) })`）或首实参写在同一行的
+   （`FilterChip(selected = ...,`），按 `.editorconfig` 拆成一行一个实参。
+
+Kotlin 不允许命名实参与位置实参混用，所以**带位置实参的芯片**（`FilterChip(isNewOnly, { ... }, label = ...)`
+那种）把 `modifier =` 追加到实参列表末尾——这正是迁移脚本第一版跑出来的 9 个编译错误
+（`e: …SourcesCatalogScreen.kt`，"Mixing named and positional arguments is not allowed"，消息被 Gradle 按
+终端宽度截到 140 列，改用 UTF-16 解码 `.tmp-build.log` 才看全）。
+
+**统计卡补环**：`HistorySummarySection.kt` 的 `HistoryStatsSummaryCard` 是
+`Surface(...).clip(RoundedCornerShape(24.dp)).clickable(...)`，在 `clip` 之后、`clickable` 之前插一行
+`.tvFocusable(shape = RoundedCornerShape(24.dp), addFocusTarget = false)`——与芯片同一形态。
+
+### 设备验证（`kototoro_tv_api36`，1920×1080@320）
+
+| 步骤 | 证据 | 结果 |
+| --- | --- | --- |
+| History 页：导航栏 RIGHT → 筛选条 → UP | `r84-30.png` | 统计卡整块出现**蓝色圆角环**（本轮新增）；同一路径此前是 `r84-7.png` 的全黑无环 |
+| 同一停点再按 CENTER | `mCurrentFocus=…stats.ui.StatsActivity` | 仍然进统计页，BACK 回 `MainActivity`（无回归） |
+| History 页筛选条 | `r84-25.png` | "On device" 胶囊环正常（`QuickFilterGroupChip` 早前手补过，本轮未动） |
+| Home 页：hero → DOWN ×4 → UP | `r84-37.png` | "Recent searches" 的 "a" 芯片出现**蓝色圆角环**（本轮迁移的 `AssistChip`） |
+| 详情页工具条与来源芯片 | `r84-32.png`、`r84-33.png` | 双栏布局无回归；来源芯片之间的换源图标按钮有环 |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（增量 59s，只剩上一轮就有的警告）。本轮没有新增单测——改动
+是"一个共享修饰符 + 同一行形态的批量替换"，验证手段是代码盘点（61 = 42 + 19，裸芯片 0）与设备抽查。
+
+### 遗留
+
+1. **42 处里真正上机验证的只有 1 处**（Home 的 Recent searches）。其余是编译期 + 同构验证；芯片在
+   sheet、对话框、设置页里的视觉与 Home 一致，但没有逐屏截图。
+2. **`IconButton` 还没算**：全 app 190 处 `IconButton` 家族调用，去掉自带环/没有 `onClick` 的 55 处，还有
+   **135 处裸的（64 个文件）**——Downloads 页 9 处、章节选择条 6 处、Explore 来源页 6 处最密。下一轮先抽
+   `Modifier.tvIconButtonRing()` 再批量换。
+3. **`Clear history` 那种对话框里手拼的 `RadioButton + Row`**（第八十二/八十三轮遗留）仍未上机复核：
+   `HistoryActionDialogs.kt:75` 其实已经有 `tvFocusable(shape = ClearHistoryRowShape, addFocusTarget = false)`，
+   所以"4 个隐形单选停点"的说法要重新验，别照抄结论。
+4. **`SwipeableFilterChip`** 是自绘芯片（`main/ui/compose/SwipeableFilterChip.kt`），不在 M3 芯片清单里；
+   它的 `.tvFocusable(...)` 写在 `.clickable(...)` **之后**、`addFocusTarget` 还是默认 `true`，与"环必须在
+   `clickable` 之前 + 不加焦点节点"的规则相反。本轮没动，也没有它的实际停点证据，先记下来。
+5. 其余遗留（`AlertDialog` 返回键随宿主不同、触摸模式下首键前无环、64 处 `.clickable` 无环清单、空态整块
+   板、TV 空间切换入口）沿用第八十三轮的记录，本轮没有新证据。

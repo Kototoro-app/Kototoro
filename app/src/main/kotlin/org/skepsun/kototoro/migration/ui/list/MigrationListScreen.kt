@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.migration.ui.rememberCoverRequest
@@ -177,6 +178,7 @@ private fun FilterRow(state: MigrationListState, onFilter: (MigrationFilter) -> 
                 selected = state.filter == filter,
                 onClick = { onFilter(filter) },
                 label = { Text(stringResource(label, state.count(filter))) },
+                modifier = Modifier.tvChipRing(),
             )
         }
     }

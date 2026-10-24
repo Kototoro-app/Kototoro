@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.KototoroRangeSlider
@@ -1250,7 +1251,7 @@ private fun CompactFilterChip(
     FilterChip(
         selected = selected,
         onClick = onClick,
-        modifier = modifier.heightIn(min = 36.dp),
+        modifier = modifier.heightIn(min = 36.dp).tvChipRing(),
         label = {
             androidx.compose.material3.ProvideTextStyle(MaterialTheme.typography.labelLarge) {
                 label()

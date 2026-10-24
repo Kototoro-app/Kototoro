@@ -56,6 +56,7 @@ import org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ReaderIntent
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.core.util.ext.toExportFileName
 import org.skepsun.kototoro.details.ui.DetailsViewModel
@@ -260,6 +261,7 @@ private fun NovelNotesTabContent(
                     label = { Text(stringResource(R.string.book_notes_filter_all, notes.size), fontSize = 12.sp) },
                     shape = RoundedCornerShape(8.dp),
                     colors = FilterChipDefaults.filterChipColors(),
+                    modifier = Modifier.tvChipRing(RoundedCornerShape(8.dp)),
                 )
                 FilterChip(
                     selected = selectedFilter == NoteType.HIGHLIGHT,
@@ -269,6 +271,7 @@ private fun NovelNotesTabContent(
                     },
                     shape = RoundedCornerShape(8.dp),
                     colors = FilterChipDefaults.filterChipColors(),
+                    modifier = Modifier.tvChipRing(RoundedCornerShape(8.dp)),
                 )
                 FilterChip(
                     selected = selectedFilter == NoteType.THOUGHT,
@@ -278,6 +281,7 @@ private fun NovelNotesTabContent(
                     },
                     shape = RoundedCornerShape(8.dp),
                     colors = FilterChipDefaults.filterChipColors(),
+                    modifier = Modifier.tvChipRing(RoundedCornerShape(8.dp)),
                 )
                 FilterChip(
                     selected = selectedFilter == NoteType.BOOKMARK,
@@ -287,6 +291,7 @@ private fun NovelNotesTabContent(
                     },
                     shape = RoundedCornerShape(8.dp),
                     colors = FilterChipDefaults.filterChipColors(),
+                    modifier = Modifier.tvChipRing(RoundedCornerShape(8.dp)),
                 )
             }
 

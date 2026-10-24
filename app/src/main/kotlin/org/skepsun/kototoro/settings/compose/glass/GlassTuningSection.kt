@@ -66,6 +66,7 @@ import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
@@ -389,6 +390,7 @@ private fun GlassPresetRow(
                     onClick = { onApplyPreset(preset) },
                     label = { Text(stringResource(preset.titleRes)) },
                     colors = FilterChipDefaults.filterChipColors(),
+                    modifier = Modifier.tvChipRing(),
                 )
             }
             customPresets.forEach { preset ->
@@ -408,12 +410,14 @@ private fun GlassPresetRow(
                         )
                     },
                     colors = FilterChipDefaults.filterChipColors(),
+                    modifier = Modifier.tvChipRing(),
                 )
             }
             FilterChip(
                 selected = activePreset == null && activeCustom == null,
                 onClick = {},
                 label = { Text(stringResource(R.string.pref_glass_preset_custom)) },
+                modifier = Modifier.tvChipRing(),
             )
         }
         // Expose the active preset's per-role logic: which roles deviate from
@@ -726,6 +730,7 @@ private fun GlassParamControl(
                             onClick = { onValueChange(option.value.toFloat()) },
                             enabled = enabled,
                             label = { Text(stringResource(option.labelRes)) },
+                            modifier = Modifier.tvChipRing(),
                         )
                     }
                 }
@@ -1135,6 +1140,7 @@ private fun GlassTuningPreview() {
                     onClick = { backdrop = option },
                     label = { Text(stringResource(option.titleRes)) },
                     colors = FilterChipDefaults.filterChipColors(),
+                    modifier = Modifier.tvChipRing(),
                 )
             }
         }

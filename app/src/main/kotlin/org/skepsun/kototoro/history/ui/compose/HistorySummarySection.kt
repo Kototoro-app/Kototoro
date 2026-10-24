@@ -40,6 +40,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.parsers.model.Content
@@ -87,6 +88,9 @@ fun HistoryStatsSummaryCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
+            // A remote stops here on the way up out of the grid; without the outline the ring
+            // vanishes and CENTER opens the statistics page from what looks like nowhere.
+            .tvFocusable(shape = RoundedCornerShape(24.dp), addFocusTarget = false)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(24.dp),
         color = if (light) MaterialTheme.colorScheme.primaryContainer else Color(0xFF14161A),

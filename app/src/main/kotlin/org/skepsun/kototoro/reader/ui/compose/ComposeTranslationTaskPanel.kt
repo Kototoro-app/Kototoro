@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.util.ext.copyToClipboard
 import org.skepsun.kototoro.reader.domain.TranslationLayerState
 import org.skepsun.kototoro.reader.ui.ReaderViewModel
@@ -88,6 +89,7 @@ internal fun ComposeTranslationTaskPanelContent(
                     selected = filter == item,
                     onClick = { filter = item },
                     label = { Text(stringResource(item.label)) },
+                    modifier = Modifier.tvChipRing(),
                 )
             }
         }

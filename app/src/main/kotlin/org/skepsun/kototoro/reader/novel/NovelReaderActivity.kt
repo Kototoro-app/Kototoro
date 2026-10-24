@@ -63,6 +63,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.core.util.ext.isPageEbookChapter
 import org.skepsun.kototoro.bookmarks.domain.novelBookmarkProgress
@@ -1114,6 +1115,7 @@ class NovelReaderActivity :
                                                     },
                                                     enabled = !novelAiAskLoading,
                                                     label = { Text(getString(preset.questionRes)) },
+                                                    modifier = Modifier.tvChipRing(),
                                                 )
                                             }
                                         }

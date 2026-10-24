@@ -50,6 +50,7 @@ import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
@@ -576,6 +577,7 @@ private fun ChapterSourceTabsRow(
                         }
                     }
                 },
+                modifier = Modifier.tvChipRing(RoundedCornerShape(if (expressive) 18.dp else 8.dp)),
             )
         }
     }

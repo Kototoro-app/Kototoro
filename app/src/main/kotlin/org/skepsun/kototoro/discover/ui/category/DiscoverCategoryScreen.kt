@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.discover.ui.compose.DiscoverScreen
 import org.skepsun.kototoro.list.ui.compose.ContentCardUiPrefs
 import org.skepsun.kototoro.list.ui.compose.rememberContentCardUiPrefs
@@ -150,6 +151,7 @@ private fun DiscoverCategoryCalendarBar(
                     selected = selectedDate?.dayOfWeek?.value == day,
                     onClick = { onDayClick(day) },
                     label = { Text(stringResource(labelResId)) },
+                    modifier = Modifier.tvChipRing(),
                 )
             }
         }

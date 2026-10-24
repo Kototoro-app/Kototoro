@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.home.ui.HomeRecentItem
@@ -224,7 +225,7 @@ private fun HomeRecentSearchSection(
             queries.forEach { query ->
                 AssistChip(
                     onClick = { onQueryClick(query) },
-                    modifier = Modifier.height(32.dp),
+                    modifier = Modifier.height(32.dp).tvChipRing(chipShape),
                     shape = chipShape,
                     colors = chipColors,
                     trailingIcon = {

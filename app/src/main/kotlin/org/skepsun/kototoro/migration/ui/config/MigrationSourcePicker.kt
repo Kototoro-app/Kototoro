@@ -60,6 +60,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.jsonsource.SourceTypeIdentifier
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.FastScrollTouchWidth
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
@@ -127,13 +128,19 @@ internal fun MigrationSourcePicker(
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SourceSelectionFilter.entries.forEach { selection ->
-                        FilterChip(selected = filters.selection == selection,
+                        FilterChip(
+                            selected = filters.selection == selection,
                             onClick = { filters = filters.copy(selection = selection) },
-                            label = { Text(stringResource(selection.labelRes())) })
+                            label = { Text(stringResource(selection.labelRes())) },
+                            modifier = Modifier.tvChipRing(),
+                        )
                     }
-                    FilterChip(selected = filters.pinnedOnly,
+                    FilterChip(
+                        selected = filters.pinnedOnly,
                         onClick = { filters = filters.copy(pinnedOnly = !filters.pinnedOnly) },
-                        label = { Text(stringResource(R.string.migration_select_pinned)) })
+                        label = { Text(stringResource(R.string.migration_select_pinned)) },
+                        modifier = Modifier.tvChipRing(),
+                    )
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
@@ -182,9 +189,12 @@ internal fun MigrationSourcePicker(
                         Text(stringResource(R.string.reset_filter))
                     }
                 }
-                FilterChip(selected = filters.alphabetical,
+                FilterChip(
+                    selected = filters.alphabetical,
                     onClick = { filters = filters.copy(alphabetical = !filters.alphabetical) },
-                    label = { Text(stringResource(R.string.sort_by_name_label)) })
+                    label = { Text(stringResource(R.string.sort_by_name_label)) },
+                    modifier = Modifier.tvChipRing(),
+                )
             }
             if (filters.alphabetical && visible.isNotEmpty()) {
                 val initials = visible.mapIndexed { index, entry -> entry.initial to index }.distinctBy { it.first }
@@ -257,7 +267,11 @@ private fun <T> PickerDropdown(
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
-        AssistChip(onClick = { open = true }, label = { Text(title) })
+        AssistChip(
+            onClick = { open = true },
+            label = { Text(title) },
+            modifier = Modifier.tvChipRing(),
+        )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             options.forEach { option ->
                 TvDropdownMenuItem(text = {

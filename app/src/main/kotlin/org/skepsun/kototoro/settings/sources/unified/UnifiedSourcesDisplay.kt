@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.toLocaleOrNull
 import org.skepsun.kototoro.extensions.runtime.getExternalExtensionLanguageDisplayName
@@ -193,7 +194,7 @@ internal fun CompactActionChip(
         AssistChip(
             onClick = onClick,
             enabled = enabled,
-            modifier = modifier.defaultMinSize(minHeight = 32.dp),
+            modifier = modifier.defaultMinSize(minHeight = 32.dp).tvChipRing(style.chipShape),
             shape = style.chipShape,
             leadingIcon = leadingIcon,
             colors = AssistChipDefaults.assistChipColors(

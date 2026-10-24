@@ -63,6 +63,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
@@ -413,7 +414,11 @@ private fun TrackingDetails(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             details.tags.forEach { tag ->
-                AssistChip(onClick = {}, label = { Text(tag) })
+                AssistChip(
+                    onClick = {},
+                    label = { Text(tag) },
+                    modifier = Modifier.tvChipRing(),
+                )
             }
         }
     }
