@@ -76,7 +76,7 @@ internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
 enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
-    PROXY_SETTINGS,
+    PLAYBACK_SETTINGS, PROXY_SETTINGS,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -179,6 +179,8 @@ data class DesktopAppState(
     val cast: DesktopCast? = null,
     val castEndedAt: Pair<Long, Double>? = null,
     val videoEnhancement: org.skepsun.kototoro.desktop.player.MpvEnhancement = org.skepsun.kototoro.desktop.player.MpvEnhancement(),
+    /** Android's playback settings: the player's backdrop, decoder preference and control-overlay opacities. */
+    val videoSettings: DesktopVideoSettings = DesktopVideoSettings(),
     val readerScroll: Float = 0f,
     val readerLastVisible: Int = 0,
     val readerAtEnd: Boolean = false,
@@ -240,6 +242,7 @@ class DesktopController(val session: DesktopSession) {
     private val appearancePreferences = session.storage.preferences.open("desktop_appearance")
     private val mutableState = MutableStateFlow(DesktopAppState(readerSettings = restoredReaderSettings(),
         novelSettings = restoredNovelSettings(), videoEnhancement = restoredVideoEnhancement(),
+        videoSettings = restoredVideoSettings(),
         appearance = DesktopAppearance.entries.firstOrNull {
             it.name == (appearancePreferences.snapshot()["theme"] as? SourcePreferenceValue.Text)?.value
         } ?: DesktopAppearance.SYSTEM,
@@ -1610,6 +1613,37 @@ class DesktopController(val session: DesktopSession) {
 
     /** Android's source settings screen: rail order, layout and the adult-content targets. */
     fun showSourceSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SOURCE_SETTINGS) } }
+
+    /** Android's playback settings screen: the player's backdrop, decoder mode and control-overlay opacities. */
+    fun showPlaybackSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.PLAYBACK_SETTINGS) } }
+
+    /** Writes the playback preferences the player reads; the same four keys Android's own screen writes. */
+    fun videoSettings(settings: DesktopVideoSettings) = action {
+        val saved = videoPreferences.edit(SourcePreferenceEdit(changes = mapOf(
+            "video_background" to SourcePreferenceValue.Text(settings.background.name),
+            "video_decoder_mode" to SourcePreferenceValue.Text(settings.decoderMode.name),
+            "video_controls_alpha" to SourcePreferenceValue.Integer(settings.controlsAlpha),
+            "video_gradient_alpha" to SourcePreferenceValue.Integer(settings.gradientAlpha),
+        )))
+        mutableState.update { it.copy(videoSettings = settings) }
+        if (!saved) mutableState.update { it.copy(error = desktopText("error.videoSettingsInMemory")) }
+    }
+
+    private fun restoredVideoSettings(): DesktopVideoSettings {
+        val snapshot = videoPreferences.snapshot()
+        return DesktopVideoSettings(
+            background = DesktopReaderBackground.entries.firstOrNull {
+                it.name == (snapshot["video_background"] as? SourcePreferenceValue.Text)?.value
+            } ?: DesktopReaderBackground.DEFAULT,
+            decoderMode = DesktopVideoDecoderMode.entries.firstOrNull {
+                it.name == (snapshot["video_decoder_mode"] as? SourcePreferenceValue.Text)?.value
+            } ?: DesktopVideoDecoderMode.HARDWARE_PREFERRED,
+            controlsAlpha = ((snapshot["video_controls_alpha"] as? SourcePreferenceValue.Integer)?.value ?: 90)
+                .coerceIn(DesktopVideoSettings.CONTROLS_ALPHA_RANGE),
+            gradientAlpha = ((snapshot["video_gradient_alpha"] as? SourcePreferenceValue.Integer)?.value ?: 70)
+                .coerceIn(DesktopVideoSettings.GRADIENT_ALPHA_RANGE),
+        )
+    }
 
     /**
      * Android's storage and network hub. The figures are measured on entry, and the image cache report comes with them

@@ -39,6 +39,10 @@ object DesktopAppProbe {
                 DesktopStorageProbe.run(args)
                 return
             }
+            if (args[0] == "playback") {
+                DesktopPlaybackProbe.run(args)
+                return
+            }
             if (args[0] == "proxy") {
                 DesktopProxyProbe.run(args)
                 return

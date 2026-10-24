@@ -7284,3 +7284,45 @@ Windows 之前完全没有代理：每个来源、封面、JSON 导入都走 com
   `IMAGES ≥ 3000`、`LOGS ≥ 100`、`usedBytes ≥ 3100`、`available > 0`、`volume ≥ available`；再进代理页、
   返回枢纽、返回“更多”，输出 `DESKTOP_UI_OK=storage`。`proxy` 探针改走同一枢纽，并在最后校验
   代理页返回枢纽、枢纽返回“更多”。
+
+## 160. Windows 播放设置页（背景/解码器/控件与渐隐不透明度，对齐 Android PlaybackSettingsScreen）（2026-10-24）
+
+- 问题：Windows 播放器的背景固定深灰、控件条不透明、解码器只有“给 mpv 传 `hwdec=auto-safe`”一个默认，
+  Android 的“播放设置”里这几项都能改。这一节把该页补齐，并让播放器真正消费这份偏好。
+- `core-ui`：`SharedSettingsRows.kt` 新增共享 `SettingsSliderRow`（标题+摘要+右侧数值一行、滑条在下，
+  与 Android 的 `SettingsSliderPreference` 同构；整型值/范围/步长，`valueText` 交给宿主格式化文案）。
+  拖动只改本地 draft，**松手**才回调 `onValueChange`——Windows 的偏好 store 每次写入都落盘，
+  按像素写会每秒几十次 IO；Android 那边 `SeekBarPreference` 也是松手提交。无障碍/测试的
+  `SetProgress` 语义同样走 `onValueChangeFinished`，所以探针用它驱动。
+- `desktop-app`：`DesktopVideoSettings.kt` 新增 `DesktopVideoDecoderMode`（对齐 Android `VideoDecoderMode`：
+  HARDWARE_ONLY / HARDWARE_PREFERRED / SOFTWARE_PREFERRED）与 `DesktopVideoSettings`（背景 = 阅读背景枚举、
+  解码器、`controlsAlpha` 默认 90、`gradientAlpha` 默认 70，两个 alpha 都按 Android 存百分比整数，
+  派生 `controlsOpacity`/`gradientOpacity` 并夹在 `30..100`/`0..100`）。解码器到 mpv 的映射：
+  优选 = `hwdec=auto-safe`；仅硬件 = `auto-safe` + `hwdec-fallback=no`（解不了就失败，不悄悄退回 CPU）；
+  仅软件 = `hwdec=no`。
+- `DesktopController`：新增 `DesktopScreen.PLAYBACK_SETTINGS`、`DesktopAppState.videoSettings`、
+  `showPlaybackSettings()`、`videoSettings(settings)`（写 `video_background`/`video_decoder_mode`/
+  `video_controls_alpha`/`video_gradient_alpha` 四键——与 Android 同名，值分别存枚举名与整数）、
+  `restoredVideoSettings()`（读回并夹紧范围）。写盘失败只提示内存生效（`error.videoSettingsInMemory`）。
+- `DesktopPlaybackSettingsPage`：返回“更多”（`playback-settings-back`）；“播放”节四行：背景、解码器（单选对话框
+  `playback-background`/`playback-decoder`，选项标签带枚举名）、控件不透明度、渐隐不透明度
+  （两个 `SettingsSliderRow`，值显示 `NN%`）。背景只给 Android `video_backgrounds` 的五个值（无 AUTO）。
+  Android 这一页的第五行是 AI 设置（OCR/翻译），本端尚未移植，**不挂通向不存在页面的入口**。
+- 播放器：`DesktopVideoPlayer` 的外框与视频面都改用 `rememberVideoBackdrop(state)`（DEFAULT 保持原来的
+  深色播放器底色，其余取阅读背景色，并随应用明暗解析 AUTO）；`Controls` 拆成“渐隐 + 控件条”，
+  渐隐是从透明到 `gradientAlpha` 黑的自定义渐变，控件条背景用 `controlsAlpha` 的 panel 色，
+  于是视频能从半透明控件后透出来；建播放器时把解码器选项并入 mpv 参数（`-Dkototoro.mpv.options` 仍可覆盖），
+  运行中改解码器再 `runCatching { setProperty("hwdec", …) }` 一次（libmpv 不允许时静默，下次开窗即生效）。
+- `desktop-player`：`MpvPlayer` 原本对每个选项都 `check`，现在**只对自带默认值严格**；调用方传入的额外选项
+  （`-Dkototoro.mpv.options`、`hwdec-fallback`）在旧 libmpv 上不存在时不再让播放器创建失败。
+- 文案：新增桌面键 `video.decoder.hardwareOnly`/`hardwarePreferred`/`softwarePreferred`、`playback.moreSummary`、
+  `error.videoSettingsInMemory`（中英两本目录都加）；标题与选项标签复用 Android 键
+  `playback_settings`、`video_background`、`video_decoder_mode`、`video_controls_alpha`、`video_gradient_alpha`、
+  `video_decoder_hardware_only`/`hardware_preferred`/`software_preferred`、`system_default`、`color_light`/`dark`/`white`/`black`。
+  `:desktop-app:verifyDesktopStrings` 全绿。
+- 导航：更多 → 功能里在“阅读设置”之后新增“播放设置”（`playback-settings-open`，图标 `ic_content_video`，
+  摘要 `playback.moreSummary`；`desktop-app/build.gradle` 的 `desktopIcons` 白名单补 `ic_content_video`）。
+- 验证：`:desktop-app:test` 新增 `DesktopVideoSettingsTest` 3 项（默认值=Android 的 90/70 与优选解码、
+  两个不透明度的夹紧、三种解码器的 `hwdec` 映射）；探针 `playback` 走 更多 → 播放设置，校验四行与默认值，
+  解码器对话框选“仅软件”后状态为 SOFTWARE_PREFERRED、背景对话框没有 `AUTO` 且选“白色”后状态为 WHITE、
+  两个滑条的 `SetProgress` 分别落到 50/20（即松手提交），最后返回“更多”，输出 `DESKTOP_UI_OK=playback`。

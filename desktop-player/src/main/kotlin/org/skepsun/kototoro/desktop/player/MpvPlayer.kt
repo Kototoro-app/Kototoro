@@ -94,7 +94,13 @@ class MpvPlayer(
             defaults["ao"] = "null"
         }
         try {
-            for ((name, value) in defaults + options) check(native.mpv_set_option_string(handle, name, value), "option $name")
+            for ((name, value) in defaults + options) {
+                // A default that fails is our bug; a caller's extra option (`-Dkototoro.mpv.options`, the decoder
+                // preference's `hwdec-fallback`) may name something this libmpv build does not have, which is not.
+                val tolerated = name in options
+                val code = native.mpv_set_option_string(handle, name, value)
+                if (!tolerated) check(code, "option $name")
+            }
             check(native.mpv_initialize(handle), "initialize")
         } catch (error: Throwable) {
             native.mpv_terminate_destroy(handle)

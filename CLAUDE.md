@@ -291,6 +291,11 @@ npm run docs:build
   `proxy_password`（类型存枚举名），compat 客户端的 `ProxySelector`/`Authenticator` 每次请求才读当前值，
   保存后清一次连接池，所以换代理不用重启应用；测试连接与 Android 一样请求 `http://neverssl.com`，成功弹
   `connection_ok`，失败弹异常消息，代理页的返回按钮回到枢纽，见计划 §158。
+  更多 → 播放设置（`playback-settings-open`）对应 Android 的 `PlaybackSettingsScreen`：播放背景（Android
+  `video_backgrounds` 的五个值）、解码器（仅硬件/优先硬件/仅软件，映射到 libmpv 的 `hwdec` 与 `hwdec-fallback`）、
+  控件不透明度与渐隐不透明度（共享 `SettingsSliderRow`，拖动只改本地 draft、松手才写盘），四键用 Android 同名
+  `video_background`/`video_decoder_mode`/`video_controls_alpha`/`video_gradient_alpha`；播放器的视频面/外框取该背景，
+  控件条与其上方渐隐取这两个不透明度，见计划 §160。
   收藏/历史的“筛选与排序”抽屉另有“布局”一节（封面网格 / 每行一个作品，对应 Android 的 ListMode），
   选择存 `desktop_library` 的 `library_list_mode`，列表模式下 `ContentGrid` 渲染 `content-list` 行视图，
   点击/长按语义与卡片一致，见计划 §142。

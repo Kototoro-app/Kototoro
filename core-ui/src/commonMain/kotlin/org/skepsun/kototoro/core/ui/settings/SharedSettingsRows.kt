@@ -15,10 +15,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
@@ -29,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
+import kotlin.math.roundToInt
 
 /**
  * The settings vocabulary Android's `SettingsPreferenceComponents` draws, shared with the Windows host.
@@ -151,6 +157,70 @@ fun SettingsValueRow(
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) .6f else .25f),
             modifier = Modifier.size(16.dp),
+        )
+    }
+}
+
+/**
+ * Slider row, Android's `SettingsSliderPreference`: the title and summary on top, the current value at the right, and
+ * the track below them so a wide host window does not squeeze the slider into the chevron's slot. [valueText] renders
+ * the number ("90%"), which keeps locale formatting with the host.
+ *
+ * Dragging only moves a local draft; [onValueChange] runs once when the drag ends, so a host whose preference store
+ * writes to disk is not hit with one write per pixel. [value] and [valueRange] are integers stepped by [step]; hosts
+ * that store a fraction convert on their side.
+ */
+@Composable
+fun SettingsSliderRow(
+    title: String,
+    summary: String?,
+    value: Int,
+    valueRange: IntRange,
+    valueText: (Int) -> String,
+    enabled: Boolean,
+    onValueChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    step: Int = 1,
+    testTag: String? = null,
+    leadingIcon: Painter? = null,
+) {
+    val steps = ((valueRange.last - valueRange.first) / step - 1).coerceAtLeast(0)
+    var draft by remember(value) { mutableStateOf(value.coerceIn(valueRange.first, valueRange.last)) }
+    Column(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (leadingIcon != null) {
+                Icon(
+                    painter = leadingIcon,
+                    contentDescription = null,
+                    tint = if (enabled) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            SettingsRowText(title, summary, Modifier.weight(1f))
+            Text(
+                text = valueText(draft),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(
+            value = draft.toFloat(),
+            onValueChange = { raw ->
+                val notches = (raw - valueRange.first).div(step).roundToInt()
+                draft = (valueRange.first + notches * step).coerceIn(valueRange.first, valueRange.last)
+            },
+            onValueChangeFinished = { onValueChange(draft) },
+            valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
+            steps = steps,
+            enabled = enabled,
+            modifier = if (testTag != null) Modifier.testTag(testTag) else Modifier,
         )
     }
 }

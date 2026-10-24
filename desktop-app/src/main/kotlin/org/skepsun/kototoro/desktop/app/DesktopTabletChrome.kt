@@ -101,6 +101,11 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
                 { controller.showReaderSettings() }, testTag = "reader-settings-open",
                 leadingIcon = painterResource("icons/ic_read.svg"))
             SettingsRowDivider()
+            // Android's playback settings: the player's backdrop, decoder and overlay opacities.
+            SettingsValueRow(AndroidStrings["playback_settings"], desktopText("playback.moreSummary"), null, enabled,
+                { controller.showPlaybackSettings() }, testTag = "playback-settings-open",
+                leadingIcon = painterResource("icons/ic_content_video.svg"))
+            SettingsRowDivider()
             SettingsValueRow(desktopText("screens.sourceSettings"), desktopText("sources.sortSummary"), null, enabled,
                 { controller.showSourceSettings() }, testTag = "source-settings-open",
                 leadingIcon = painterResource("icons/ic_source_builtin.svg"))

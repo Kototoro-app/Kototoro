@@ -180,20 +180,23 @@ internal val LocalDesktopReaderPageStyle = staticCompositionLocalOf {
     DesktopReaderPageStyle(Color(0xFF15191F), null, Color.White)
 }
 
+/** Background colours of Android's reader backgrounds; the player's backdrop offers the same five as its video choice. */
+internal fun DesktopReaderBackground.color(appDark: Boolean): Color = when (this) {
+    DesktopReaderBackground.DEFAULT -> Color(0xFF15191F)
+    DesktopReaderBackground.AUTO -> if (appDark) Color(0xFF15191F) else Color(0xFFF4F2EE)
+    DesktopReaderBackground.LIGHT -> Color(0xFFF4F2EE)
+    DesktopReaderBackground.DARK -> Color(0xFF1F1F23)
+    DesktopReaderBackground.WHITE -> Color.White
+    DesktopReaderBackground.BLACK -> Color.Black
+}
+
 /** Background colours of Android's reader backgrounds; the book effect tints light ones as Android's tint does. */
 @Composable
 internal fun rememberReaderPageStyle(settings: DesktopReaderSettings, appearance: DesktopAppearance): DesktopReaderPageStyle {
     val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
     val appDark = when (appearance) { DesktopAppearance.LIGHT -> false; DesktopAppearance.DARK -> true; else -> systemDark }
     return remember(settings.background, settings.colorFilter, appDark) {
-        val base = when (settings.background) {
-            DesktopReaderBackground.DEFAULT -> Color(0xFF15191F)
-            DesktopReaderBackground.AUTO -> if (appDark) Color(0xFF15191F) else Color(0xFFF4F2EE)
-            DesktopReaderBackground.LIGHT -> Color(0xFFF4F2EE)
-            DesktopReaderBackground.DARK -> Color(0xFF1F1F23)
-            DesktopReaderBackground.WHITE -> Color.White
-            DesktopReaderBackground.BLACK -> Color.Black
-        }
+        val base = settings.background.color(appDark)
         val light = base.luminance() > .5f
         val background = if (settings.colorFilter.book && light) Color(base.red, base.green,
             base.blue * org.skepsun.kototoro.reader.domain.ReaderColorMatrix.BOOK_BLUE_FACTOR) else base

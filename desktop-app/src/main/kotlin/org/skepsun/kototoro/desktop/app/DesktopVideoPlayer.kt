@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
@@ -44,6 +45,24 @@ private val PlayerText = Color(0xFFE8EBF0)
 private val PlayerMuted = Color(0xFF9AA3B2)
 private val Speeds = listOf(0.5, 0.75, 1.0, 1.25, 1.5, 2.0)
 
+/**
+ * Android's `video_background`: the colour around the video, behind the letterbox bars and the panels. Android's default
+ * resolves to the theme background, which is what [PlayerBackground] is on this always-dark player.
+ */
+@Composable
+private fun rememberVideoBackdrop(state: DesktopAppState): Color {
+    val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val appDark = when (state.appearance) {
+        DesktopAppearance.LIGHT -> false
+        DesktopAppearance.DARK -> true
+        else -> systemDark
+    }
+    val background = state.videoSettings.background
+    return remember(background, appDark) {
+        if (background == DesktopReaderBackground.DEFAULT) PlayerBackground else background.color(appDark)
+    }
+}
+
 /** A heavyweight canvas whose native window mpv renders into; [onWindow] gets the handle each time one exists. */
 private class VideoCanvas(private val onWindow: (Long?) -> Unit) : Canvas() {
     init { background = java.awt.Color.BLACK }
@@ -71,7 +90,7 @@ internal fun DesktopVideoPlayer(controller: DesktopController, state: DesktopApp
         if (fullscreen) onToggleFullscreen?.invoke()
         controller.backToDetails()
     }
-    Column(Modifier.fillMaxSize().background(PlayerBackground).testTag("video-player")) {
+    Column(Modifier.fillMaxSize().background(rememberVideoBackdrop(state)).testTag("video-player")) {
         val found = library
         if (found == null) {
             MissingLibrary(controller, video, state, dataRoot, onRetry = { library = MpvLocator.find(dataRoot) }, onBack = back)
@@ -106,7 +125,9 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
                     // and -Dkototoro.mpv.options=key=value;key=value adds mpv options (support / troubleshooting).
                     val extra = System.getProperty("kototoro.mpv.options").orEmpty().split(';').filter { '=' in it }
                         .associate { it.substringBefore('=').trim() to it.substringAfter('=').trim() }
-                    player = MpvPlayer(library, window, diagnostics + extra)
+                    // The playback preference chooses the decoder; an operator-supplied option still wins over it.
+                    val decoder = state.videoSettings.decoderMode.mpvOptions
+                    player = MpvPlayer(library, window, diagnostics + decoder + extra)
                 } catch (error: Throwable) {
                     failure = desktopText("video.playerStartFailed", error.message ?: error.javaClass.simpleName)
                 }
@@ -122,6 +143,11 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
     }
     val mpv by (player?.state ?: idle).collectAsState()
     val title = listOfNotNull(state.content?.title, video.chapter.title).joinToString(" · ")
+    // A decoder change applies to a running player where libmpv allows it; a new window picks it up regardless.
+    LaunchedEffect(player, state.videoSettings.decoderMode) {
+        val current = player ?: return@LaunchedEffect
+        withContext(Dispatchers.IO) { runCatching { current.setProperty("hwdec", state.videoSettings.decoderMode.mpvOptions.getValue("hwdec")) } }
+    }
     LaunchedEffect(player, video.generation) {
         val current = player ?: return@LaunchedEffect
         val start = resumeAt ?: video.startSeconds
@@ -200,8 +226,9 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
             }
         }
         Row(Modifier.weight(1f).fillMaxWidth()) {
-            Box(Modifier.weight(1f).fillMaxHeight().background(Color.Black)) {
-                SwingPanel(background = Color.Black, factory = { canvas }, modifier = Modifier.fillMaxSize().testTag("video-surface"))
+            val backdrop = rememberVideoBackdrop(state)
+            Box(Modifier.weight(1f).fillMaxHeight().background(backdrop)) {
+                SwingPanel(background = backdrop, factory = { canvas }, modifier = Modifier.fillMaxSize().testTag("video-surface"))
             }
             if (episodesOpen) EpisodeList(controller, state, video, Modifier.width(300.dp).fillMaxHeight())
         }
@@ -210,7 +237,7 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
             CastControls(active, onEnd = { controller.endCast() })
         } else {
             Controls(video, mpv, failure ?: enhancementError, hasPrevious, hasNext, !closing && player != null, controller, ::control,
-                state.videoEnhancement)
+                state.videoEnhancement, state.videoSettings)
         }
     }
     if (castOpen) {
@@ -238,9 +265,38 @@ private fun EpisodeList(controller: DesktopController, state: DesktopAppState, v
 
 @Composable
 private fun Controls(video: DesktopVideo, mpv: MpvState, failure: String?, hasPrevious: Boolean, hasNext: Boolean,
-    enabled: Boolean, controller: DesktopController, control: ((MpvPlayer) -> Unit) -> Unit, enhancement: MpvEnhancement) {
+    enabled: Boolean, controller: DesktopController, control: ((MpvPlayer) -> Unit) -> Unit, enhancement: MpvEnhancement,
+    settings: DesktopVideoSettings) {
+    Column(Modifier.fillMaxWidth().testTag("video-controls")) {
+        // Android draws a black gradient out of the control bar (`bg_video_bottom_gradient`), the second opacity.
+        if (settings.gradientOpacity > 0f) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(28.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, Color.Black.copy(alpha = settings.gradientOpacity)),
+                        ),
+                    ),
+            )
+        }
+        ControlsBar(video, mpv, failure, hasPrevious, hasNext, enabled, controller, control, enhancement, settings)
+    }
+}
+
+/** The bar itself: its panel is translucent by Android's `video_controls_alpha`, so the video shows through. */
+@Composable
+private fun ControlsBar(video: DesktopVideo, mpv: MpvState, failure: String?, hasPrevious: Boolean, hasNext: Boolean,
+    enabled: Boolean, controller: DesktopController, control: ((MpvPlayer) -> Unit) -> Unit, enhancement: MpvEnhancement,
+    settings: DesktopVideoSettings) {
     var dragging by remember { mutableStateOf<Float?>(null) }
-    Column(Modifier.fillMaxWidth().background(PlayerPanel).padding(horizontal = 16.dp, vertical = 8.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(PlayerPanel.copy(alpha = settings.controlsOpacity))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
         val status = failure ?: mpv.error ?: when {
             mpv.loading -> desktopText("video.loading")
             mpv.buffering -> desktopText("video.buffering")

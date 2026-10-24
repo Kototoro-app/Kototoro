@@ -46,6 +46,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `the playback page writes the backdrop decoder and both overlay opacities`() {
+        probe("playback", directory.resolve("中文 playback"), 150)
+    }
+
+    @Test
     fun `real Tsundoku APK installs converts and reads a novel over the live network`() {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("kototoro.dex.real.apks") != null, "no -PrealApkDirectory")
         probe("real-novel", directory.resolve("中文 real novel"), 180)
