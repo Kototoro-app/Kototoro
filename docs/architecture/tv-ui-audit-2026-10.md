@@ -3493,3 +3493,52 @@ UP/DOWN 被 `tvTextInputFocusEscape` 吃掉（上方没有可聚焦节点，`mov
 1. 详情页 dock、来源标签下拉、详情页头信息面板三处根层 overlay 菜单仍未接线。
 2. 搜索页：更多动作按钮待结果态看图；输入框到顶栏图标的遥控器通路缺失（上节）。
 3. 行尾控件 UP/DOWN、设置非根子页宽度两条仍在。
+
+## 第五十八轮：搜索框里的遥控器能出来了（2026-10-24）
+
+承接上一轮末尾那条：搜索页输入框把遥控器关住了，返回箭头与放大镜两个按钮用方向键到不了。
+
+### 原因
+
+第五十五轮那套 `tvTextInputFocusEscape` 只接管 UP/DOWN——它的立场是"单行输入框还要用左右改光标"，
+所以 LEFT/RIGHT 一律放行给文本字段，而文本字段拿到方向键后只移动光标、从不交给焦点系统。
+结果：输入框夹在两个按钮中间，左右都是死路，只剩 DOWN 去列表、BACK 退出整页两条出路。
+
+### 改法（`TvFocus.kt` 加一个开关，两个搜索栏各启用一次）
+
+1. `Modifier.tvTextInputFocusEscape(horizontalWhenIdle: Boolean = false)`：多一个参数，
+   默认 false，所以其它调用点（筛选弹窗、搜索筛选面板、来源列表的输入框等）行为完全不变。
+2. 打开这个开关后，LEFT/RIGHT 在**屏幕键盘已经收起**时才换成焦点移动：键收起时没人再用左右挪光标，
+   这时让它们去相邻按钮；键盘还在时左右仍归光标，输入中不会莫名其妙跳走。
+   `horizontalWhenIdle` 借用 `WindowInsets.isImeVisible` 判断键盘状态，不需要额外的控制器。
+3. 两处电视搜索栏各加一次参数：落屏浮层 `KototoroSearchOverlay.kt`、结果页顶栏
+   `SearchResultsScreen.kt`（两处用的是同一个修饰符，代码路径一致）。
+
+### 一个绕路
+
+第一版改在 `SearchResultsScreen.kt` 上，装到设备上毫无反应——因为设备上的搜索落屏其实是
+`KototoroSearchOverlay.kt` 那个浮层（返回箭头 + 输入框 + `Advanced search`/`Filter` 药丸 + 最近查询/标签），
+`SearchResultsScreen` 的顶栏只在**搜出结果之后**才出现。两处的几何几乎一样，光看 dump 的矩形分不出来；
+是往 Row 上挂临时日志、发现一条都没打出来才定位到的。这条记在这里，免得下次再对着 `search_content`
+这个占位符找错文件（它有两个使用者）。
+
+### 设备证据（emulator-5554，1920×1080，全程按键，构建 `4a143e552`）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 搜索落屏打开、键盘在屏幕上，按 LEFT | `bd2.xml` | 环仍停在输入框 `F [124,0][1780,96]`，光标编辑没被打断 |
+| 输入 `a` 后按 BACK 收起键盘，再按 LEFT | `bd3.xml` / `bg1.png` | 环离开输入框，落到返回箭头 `F [16,0][112,96]`（修前死在这里），截图里 `←` 被白色圆环套住 |
+| 再按 RIGHT | `bd4.xml` | 环回到输入框（焦点回到输入框会重新弹键盘，这是系统行为） |
+| 再按 BACK 收键盘，按 RIGHT（查询非空） | `bd6.xml` / `bg2.png` | 环落到提交按钮 `F [1800,0][1896,96]`，蓝色圆环套在右上角放大镜上 |
+| 在提交按钮上 CENTER | `be1.png` | 搜索真的跑起来：`Loaded 17 results`，进入结果页 |
+| 结果页输入框上 BACK 收键盘，按 LEFT | `be2.xml` / `be2.png` | 环落到结果页返回箭头 `F [16,24][112,120]`，两处接线都生效 |
+
+### 遗留
+
+1. 输入框重新获得焦点会自动弹键盘，所以"返回箭头 → 输入框 → 提交按钮"这一串要再按一次 BACK；
+   想让 RIGHT 在光标位于文末时直接跳出去，需要拿到 `TextFieldValue` 的选区，本轮没动那个签名。
+2. 输入框里的清除（×）按钮仍然只能靠触摸：它在输入框内部，左右键一离开输入框就越过了它。
+3. 截图要用 `adb shell screencap -p /sdcard/x.png` + `adb pull`；PowerShell 的 `>` 重定向会把 PNG 写成不可读文本
+   （`read_image` 报 `Unsupported or malformed image data`），本轮因此重拍了一遍。
+4. 详情页 dock、来源标签下拉、详情页头信息面板三处根层 overlay 菜单仍未接线。
+5. 行尾控件 UP/DOWN、设置非根子页宽度两条仍在。
