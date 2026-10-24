@@ -7915,3 +7915,39 @@ storage 探针在真实数据根上写一个 2 KiB 的 `probe-cleaned.img` 与�
 “按进度判已读再删章节”规则（批量移除现在在下载页），“清除数据库”（重置整个库）与 Cookie/浏览器数据
 （compat 的 WebView2 profile）都需要各自的确认与代价说明，搜索历史在 Windows 尚无存储；
 缓存限制页（Android 的 `CacheLimitsSettings`）也还只有下载页里的图片预算一处。
+
+## 173. Windows 推荐设置的来源选择器对齐 Android 的 SuggestionSourcesDialog（2026-10-24）
+
+§136 把推荐设置从“更多”页拆成独立页时，两个来源偏好（优先来源/排除来源）用的是共享的多选对话框：一个把所有
+已装来源平铺成复选列表、点一下立刻写盘的弹窗。Android 的同一个偏好不是这样——`SuggestionsSettingsScreen` 里
+的 `SuggestionSourcesPreference` 摘要只显示前三个名字加 `+N`（空时显示解释文案），点开的是
+`SuggestionSourcesDialog`：搜索框、内容类型与来源类型两组 `FilterChip`（首片“全部内容/全部源”= 清空该组过滤）、
+复选列表，选择是 pending，底部“清空/取消/确定”三键，只有确定才落盘。来源一多，平铺列表既找不着也改不动，
+所以按 Android 重做。
+
+- 纯逻辑放在新文件 `DesktopSuggestionSources.kt`，不依赖 Compose：`suggestionSourceOptions()`（把
+  `SourceListing` 投影成 id/标题/内容类型/生态，保持宿主顺序）、`filterSuggestionSourceOptions()`（内容类型与
+  生态两组“空集=全部”的与运算 + 标题/id 的大小写不敏感查询，等同 Android 的
+  `filterSuggestionSourceOptions`）、`suggestionSourceSummary()`（前三个名字 + `+N` 或空提示）、
+  `availableContentTypes()`（按 Android `ContentType` 的序号排，未知类型落到末尾）与 `availableEcosystems()`。
+  `DesktopSuggestionSourcesTest` 六条覆盖空查询/两facet/交叉过滤/芯片顺序/摘要规则/身份投影。
+- `DesktopSuggestionSourcesDialog`：`OutlinedTextField` 查询（`-query`）、两条 `FilterChip` 行
+  （`-content:`/`-content-all`、`-ecosystem:`/`-ecosystem-all`，标题与“全部”文案用 Android 的
+  `content_types`/`source_types`/`all_content`/`all_sources`，`search` 作占位），`LazyColumn` 高 380dp 的复选行
+  （沿用 `settings-suggestions-prefer:`/`-exclude:` 标签），底部 `-clear`/`-cancel`/`-confirm`
+  （新增 `common.ok`，中文“确定”）。选择在确定前只在本地，所以“清空”与“取消”都能表达，这是写盘式弹窗做不到的。
+- `DesktopRecommendations`：两行改成 `summary = suggestionSourceSummary(..., AndroidStrings[...])`、
+  `value = null`（Android 把名字放摘要而不是右侧值），确定时仍保持 Android 的“两个集合互斥”规则
+  （选进优先就从排除里去掉，反之亦然）；`settings.suggestionsSourcesDetail` 因此无人使用，从两份 catalog 删除。
+- tablet 探针：打开选择器截图，输入不存在的查询确认行被过滤、清空查询后点击该行确认“仍未写盘”，
+  取消后集合仍空且弹窗关闭；再开一次点中并确定，断言状态与 `desktop_background` 的
+  `suggestions_preferred_sources` 都只含该来源；最后打开点“清空”再确定，断言集合清空。
+
+验证：`:desktop-app:verifyDesktopStrings`（918 键，中文全覆盖）、`:desktop-app:compileKotlin`、
+`:desktop-app:test --tests *DesktopSuggestionSourcesTest*`（6 条）、`:desktop-app:test --tests *tablet*` 全绿；
+截图 `tablet-recommendations-source-picker.png`（搜索框、内容类型“全部内容/漫画”、内容源类型“全部源/Mihon”、
+复选行）与 `tablet-recommendations.png`（两行摘要显示 Android 的空提示文案）已逐张看过。
+
+仍待：Android 推荐设置还有三个 Windows 没有的开关——仅 WiFi（桌面没有移动网络）、包含禁用来源（Windows 来源栏
+尚无“禁用来源”概念）、通知（Windows 未接通知），它们不摆空按钮，等对应能力落地；`SuggestionsSettingsScreen`
+里“排除题材/优先题材”Android 是内联 `SettingsTextInputPreference`，Windows 仍是文本框对话框。

@@ -832,9 +832,32 @@ internal object DesktopTabletProbe {
                 val sourceName = controller.state.value.sources.first().source.name
                 onNodeWithTag("settings-suggestions-prefer-sources").performScrollTo().performClick(); idle()
                 onNodeWithTag("settings-suggestions-sources-dialog").assertExists()
+                snapshotTag("settings-suggestions-sources-dialog", "recommendations-source-picker")
+                // Android's picker is a pending selection: the query filters the rows, cancel keeps the stored set, OK
+                // commits it and "clear" empties it.
+                val queryTag = "settings-suggestions-sources-dialog-query"
+                onNodeWithTag(queryTag).performTextInput("zzz-not-a-source"); idle()
+                onNodeWithTag("settings-suggestions-prefer:$sourceName").assertDoesNotExist()
+                onNodeWithTag(queryTag).performTextClearance(); idle()
                 onNodeWithTag("settings-suggestions-prefer:$sourceName").performClick(); idle()
+                val savedPreferred = controller.state.value.suggestionSettings.preferredSources
+                check(sourceName !in savedPreferred) { "pending, not saved" }
+                onNodeWithTag("settings-suggestions-sources-dialog-cancel").performClick(); idle()
+                check(sourceName !in controller.state.value.suggestionSettings.preferredSources) { "cancel drops it" }
+                onNodeWithTag("settings-suggestions-sources-dialog").assertDoesNotExist()
+                onNodeWithTag("settings-suggestions-prefer-sources").performClick(); idle()
+                onNodeWithTag("settings-suggestions-prefer:$sourceName").performClick()
+                onNodeWithTag("settings-suggestions-sources-dialog-confirm").performClick(); idle()
                 check(sourceName in controller.state.value.suggestionSettings.preferredSources)
-                onNodeWithTag("settings-suggestions-sources-dialog-close").performClick(); idle()
+                snapshot("recommendations-source-picked")
+                val storedPreferences = session.storage.preferences.open("desktop_background").snapshot()
+                check((storedPreferences["suggestions_preferred_sources"]
+                    as? org.skepsun.kototoro.core.source.SourcePreferenceValue.TextSet)?.values ==
+                    setOf(sourceName))
+                onNodeWithTag("settings-suggestions-prefer-sources").performClick(); idle()
+                onNodeWithTag("settings-suggestions-sources-dialog-clear").performClick()
+                onNodeWithTag("settings-suggestions-sources-dialog-confirm").performClick(); idle()
+                check(controller.state.value.suggestionSettings.preferredSources.isEmpty()) { "clear empties the set" }
                 onNodeWithTag("settings-suggestions-sources-dialog").assertDoesNotExist()
                 onNodeWithTag("settings-suggestions-prefer:$sourceName").assertDoesNotExist()
                 onNodeWithTag("nav:更多").performClick(); idle()

@@ -27,7 +27,8 @@ import org.skepsun.kototoro.suggestions.domain.parseSuggestionTags
  * Android's `SuggestionsSettingsScreen`, which the Windows host had squashed into the "more" page: a switch card, two
  * inline tag fields and one filter-chip row per installed source — the flat per-source layout Android deliberately
  * avoids. The rules stay the same and read the same `DesktopSuggestionSettings`, but each group is now its own
- * section, and the per-source picklists are dialogs instead of a chip per row.
+ * section, and Android's own source picker (search, content-type and source-type filters, pending selection) is what
+ * the two source rows open, so a long source list is no longer a wall of check boxes.
  */
 @Composable
 internal fun DesktopRecommendations(controller: DesktopController, state: DesktopAppState) {
@@ -36,7 +37,7 @@ internal fun DesktopRecommendations(controller: DesktopController, state: Deskto
     // Android disables the dependent preferences while recommendations are off.
     val enabled = active && settings.enabled
     val sources = state.sources
-    val sourceNames = remember(sources) { sources.associate { it.source.name to it.displayName } }
+    val options = remember(sources) { suggestionSourceOptions(sources) }
     var dialog by remember { mutableStateOf<RecommendationDialog?>(null) }
     Column(
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -66,35 +67,39 @@ internal fun DesktopRecommendations(controller: DesktopController, state: Deskto
         }
         SettingsSectionHeader(desktopText("settings.suggestionsSources"))
         SettingsGroup {
-            SettingsValueRow(desktopText("settings.suggestionsPreferredSources"), null,
-                settings.preferredSources.showAsList { sourceNames[it] ?: it }, enabled,
-                { dialog = RecommendationDialog.PREFERRED_SOURCES }, testTag = "settings-suggestions-prefer-sources")
+            // Android shows the chosen names in the preference summary (three, then "+N"), not in a value label.
+            val preferredEmpty = AndroidStrings["suggestions_preferred_sources_summary"]
+            val excludedEmpty = AndroidStrings["suggestions_excluded_sources_summary"]
+            SettingsValueRow(desktopText("settings.suggestionsPreferredSources"),
+                suggestionSourceSummary(settings.preferredSources, options, preferredEmpty),
+                null, enabled, { dialog = RecommendationDialog.PREFERRED_SOURCES },
+                testTag = "settings-suggestions-prefer-sources")
             SettingsRowDivider()
-            SettingsValueRow(desktopText("settings.suggestionsExcludedSources"), null,
-                settings.excludedSources.showAsList { sourceNames[it] ?: it }, enabled,
-                { dialog = RecommendationDialog.EXCLUDED_SOURCES }, testTag = "settings-suggestions-exclude-sources")
+            SettingsValueRow(desktopText("settings.suggestionsExcludedSources"),
+                suggestionSourceSummary(settings.excludedSources, options, excludedEmpty),
+                null, enabled, { dialog = RecommendationDialog.EXCLUDED_SOURCES },
+                testTag = "settings-suggestions-exclude-sources")
         }
     }
     val open = dialog ?: return
     when (open) {
         RecommendationDialog.PREFERRED_SOURCES, RecommendationDialog.EXCLUDED_SOURCES -> {
             val preferred = open == RecommendationDialog.PREFERRED_SOURCES
-            DesktopMultiChoiceSettingsDialog(
-                title = desktopText(if (preferred) "settings.suggestionsPreferredSources" else "settings.suggestionsExcludedSources"),
-                summary = desktopText("settings.suggestionsSourcesDetail"),
+            DesktopSuggestionSourcesDialog(
+                title = desktopText(if (preferred) "settings.suggestionsPreferredSources"
+                    else "settings.suggestionsExcludedSources"),
+                options = options,
+                selectedIds = if (preferred) settings.preferredSources else settings.excludedSources,
                 bodyTag = "settings-suggestions-sources-dialog",
                 optionTagPrefix = if (preferred) "settings-suggestions-prefer" else "settings-suggestions-exclude",
-                options = remember(sources) { sources.map { it.displayName to it.source.name } },
-                selected = if (preferred) settings.preferredSources else settings.excludedSources, enabled = enabled,
-                onToggle = { name, checked ->
+                onConfirm = { picked ->
                     // Android keeps the two lists disjoint: preferring a source drops it from the excluded one.
                     controller.suggestionSettings(if (preferred) {
-                        settings.copy(preferredSources = settings.preferredSources.toggle(name, checked),
-                            excludedSources = settings.excludedSources - name)
+                        settings.copy(preferredSources = picked, excludedSources = settings.excludedSources - picked)
                     } else {
-                        settings.copy(excludedSources = settings.excludedSources.toggle(name, checked),
-                            preferredSources = settings.preferredSources - name)
+                        settings.copy(excludedSources = picked, preferredSources = settings.preferredSources - picked)
                     })
+                    dialog = null
                 }, onDismiss = { dialog = null })
         }
         // The tag rows edit one comma separated list each, which the shared rule parses back into a set.
@@ -116,10 +121,8 @@ internal fun DesktopRecommendations(controller: DesktopController, state: Deskto
     }
 }
 
-/** Which settings row's dialog is open; tag rows share one text dialog and source rows one multi-choice dialog. */
+/** Which settings row's dialog is open; tag rows share one text dialog and source rows Android's source picker. */
 private enum class RecommendationDialog { EXCLUDED_TAGS, PREFERRED_TAGS, PREFERRED_SOURCES, EXCLUDED_SOURCES }
-
-private fun Set<String>.toggle(value: String, checked: Boolean) = if (checked) this - value else this + value
 
 /** A row hides the value entirely when nothing is set, like Android's empty preference summary. */
 private fun Set<String>.showAsList(label: (String) -> String = { it }): String? =
