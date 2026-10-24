@@ -3542,3 +3542,65 @@ UP/DOWN 被 `tvTextInputFocusEscape` 吃掉（上方没有可聚焦节点，`mov
    （`read_image` 报 `Unsupported or malformed image data`），本轮因此重拍了一遍。
 4. 详情页 dock、来源标签下拉、详情页头信息面板三处根层 overlay 菜单仍未接线。
 5. 行尾控件 UP/DOWN、设置非根子页宽度两条仍在。
+
+## 第五十九轮：详情页的菜单关掉之后，环知道该回哪儿（2026-10-24）
+
+### 原因
+
+第 57 轮给 iOS 风格顶栏的三个根层菜单接了"环回来"的锚点
+（`RootGlassMenuRequest.anchorFocusRequester` + `DisposableEffect` 的 `onDispose`），但当时只改了顶栏。
+详情页自己有四份根层菜单：顶栏的 `⋮`、头部的阅读状态芯片、头部评分芯片、dock 行尾的 `⌄`。
+它们都走 `useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS`，渲染在窗口层的兄弟节点里——
+
+菜单关掉时注意力回到页面，但那个兄弟节点没有焦点可以还，于是环**凭空消失**：
+遥控器再按方向键，是从一个看不见的位置重新开始找目标，等于每开一次菜单就丢一次路。
+
+顺带发现的第二个洞：状态芯片和评分芯片在 TV 上根本没有环。它们是裸 `.clickable`
+（`DetailsChromeButton` 才有 `tvFocusable`），能停住但画不出轮廓；修好"回来"之后，
+环会落在一个看不见的控件上——等于没修。所以这两处一并补上 `tvFocusable(addFocusTarget = false)`。
+
+### 改法
+
+四处锚点，写法与第 57 轮一致——`remember { FocusRequester() }` 挂到锚点控件上
+（`focusRequester` 必须排在 `clickable`/`IconButton` 之前），同一个实例交给 `anchorFocusRequester`：
+
+| 文件 | 锚点 | 菜单 |
+| --- | --- | --- |
+| `DetailsMenuDialogs.kt` | 顶栏 `⋮`（`DetailsChromeButton`） | 翻译 / 阅读记录 / NSFW / 删除 / 编辑 / 找相似 |
+| `DetailsHeaderInfoPanel.kt` | 阅读状态芯片（`Reading`） | 计划 / 在读 / 重读 / 读完 / 搁置 / 放弃 |
+| `DetailsHeaderInfoPanel.kt` | 评分芯片（`★ 0`） | 0–10 分 |
+| `DetailsDock.kt` | dock 行尾 `⌄`（`openAboveAnchor`） | 无痕 / 移出历史 / 分支 |
+
+两个芯片同时改成
+`Modifier.focusRequester(f).clip(999.dp 圆).tvFocusable(shape = 圆, addFocusTarget = false).clickable{…}`：
+`addFocusTarget = false` 是因为紧随其后的 `clickable` 已经自带了焦点目标，
+`tvFocusable` 只借 `onFocusChanged` 观察同一个目标并画轮廓，不会多出一个停点。
+
+`DetailsSourceSheets.kt:164` 与 `DetailsHeaderInfoPanel.kt:942` 虽然也是 `GlassDropdownMenu`，
+但都是 `useRootOverlay = false`（内联 `DropdownMenu`），关掉时焦点由 Compose 自己还给锚点，本轮没动。
+
+### 设备证据（emulator-5554，1920×1080，全程按键，构建见下）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 详情页顶栏 `⋮` 上 CENTER | `bl3.png` | 根层菜单展开（半透明玻璃盖在标题上），环在第一个菜单项 `F [441,140][940,236]` |
+| 按 BACK | `bl4.xml` / `bl4.png` | 环回到 `⋮` `F [848,32][944,128]`，白色圆角框套住三点 |
+| 状态芯片 `Reading` 上 CENTER | `bn2.png` | 菜单展开（计划 / 在读 / 重读 / 读完 / 搁置 / 放弃），环在第一项 |
+| 按 BACK | `bn3.xml` | 焦点回到 `F [563,298][663,394]`（芯片）——但这一版还没补轮廓，**看不见** |
+| 补轮廓后重新进详情页，焦点落到 `Reading` | `bp4.png` | 芯片有蓝色药丸轮廓，遥控器能看见自己在哪 |
+| 同一芯片 CENTER → BACK | `bq2.png` | 菜单关掉后轮廓仍在 `Reading` 上，焦点真的回来了 |
+| 按 LEFT 到评分芯片 | `bq3.png` | `★ 0` 有自己的药丸轮廓，两个芯片是各自独立的停点 |
+| dock 行尾 `⌄` 上 CENTER | `bs4.png` | 菜单向上展开（无痕 / 移出历史 / Default 1 ✓） |
+| 按 BACK | `bs5.xml` / `bs5.png` | 白色轮廓回到 `⌄` `F [1588,54][1684,150]` |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（--offline --no-daemon），装的是 `app-x86_64-debug.apk`。
+
+### 遗留
+
+1. 评分芯片的菜单这轮没走到：本地作品没有绑定追踪服务，`enabled = false` 只会弹一个
+   "需要追踪"的 Toast，菜单打不开。轮廓已经验证（`bq3.png`），锚点用的是与状态芯片完全相同的写法，
+   有追踪账号时需要补一次 BACK 回环。
+2. `ChapterSelectionActionButton`（详情页章节选择栏的图标按钮，`DetailsDock.kt`）是裸 `IconButton`，
+   TV 上同样没有轮廓，而且整条选择栏都是这样——下一步该给这批按钮统一加 `tvFocusable`。
+3. 来源标签下拉（`useRootOverlay = false`）在 TV 上的回环还没实测。
+4. 行尾控件 UP/DOWN、设置非根子页宽度两条仍在。
