@@ -456,7 +456,7 @@ fun KototoroSearchOverlay(
                                 shape = RoundedCornerShape(style.inputCornerRadius),
                             )
                             .focusRequester(focusRequester)
-                            .tvTextInputFocusEscape(),
+                            .tvTextInputFocusEscape(horizontalWhenIdle = true),
                         placeholder = {
                             Text(
                                 text = if (activeLibraryScope != null) {

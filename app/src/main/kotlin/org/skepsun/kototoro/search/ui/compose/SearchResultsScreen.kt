@@ -666,7 +666,7 @@ private fun SearchResultsTopBar(
                     modifier = Modifier
                         .weight(1f)
                         .then(searchFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
-                        .tvTextInputFocusEscape(),
+                        .tvTextInputFocusEscape(horizontalWhenIdle = true),
                     singleLine = true,
                     placeholder = { Text(stringResource(R.string.search_content)) },
                     shape = RoundedCornerShape(18.dp),

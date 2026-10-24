@@ -2,6 +2,9 @@ package org.skepsun.kototoro.core.ui.adaptive
 
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -265,14 +268,20 @@ fun Modifier.tvVerticalEdgeGuard(blockUp: Boolean = false, blockDown: Boolean = 
  * closes the keyboard (Back or the IME search/done key) and then moves on with up/down. Without this
  * modifier that second step is impossible: the field keeps the arrow keys and focus never leaves.
  *
+ * Pass [horizontalWhenIdle] for a field that sits between two toolbar buttons (a search bar): once
+ * the keyboard is closed nobody drives the caret with the horizontal arrows any more, so they move
+ * focus to the neighbouring button instead of doing nothing visible.
+ *
  * Apply it to single-line fields only: a multi-line field needs up/down for caret movement.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun Modifier.tvTextInputFocusEscape(): Modifier {
+fun Modifier.tvTextInputFocusEscape(horizontalWhenIdle: Boolean = false): Modifier {
     val isTv = LocalUiPresentationConfig.current.isTv
     if (!isTv) return this
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val imeVisible = WindowInsets.isImeVisible
     return this.onPreviewKeyEvent { event ->
         if (event.type != KeyEventType.KeyDown) {
             false
@@ -280,6 +289,18 @@ fun Modifier.tvTextInputFocusEscape(): Modifier {
             val direction = when (event.key) {
                 Key.DirectionUp -> FocusDirection.Up
                 Key.DirectionDown -> FocusDirection.Down
+                Key.DirectionLeft -> if (horizontalWhenIdle && !imeVisible) {
+                    FocusDirection.Left
+                } else {
+                    null
+                }
+
+                Key.DirectionRight -> if (horizontalWhenIdle && !imeVisible) {
+                    FocusDirection.Right
+                } else {
+                    null
+                }
+
                 else -> null
             }
             val moved = direction != null && focusManager.moveFocus(direction)
