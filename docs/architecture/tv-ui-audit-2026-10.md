@@ -4810,3 +4810,70 @@ Incognito mode）在电视上有两个问题：**面板右边缘贴着屏幕边*
    没有定位到是 insets 动画还是 Compose 焦点树重建，先记录。
 3. 三排芯片、"All languages"/"All sources" 的环只在 `Add custom space` 上验证过；`Edit custom space`
    走的是同一个 `SpaceEditorDialog`，但没有单独截图。
+
+## 第八十轮：快选层里"旋转屏幕"和本地内容的"下载"是两格空动作（2026-10-25）
+
+### 症状
+
+第六十八轮逐格走完电视阅读器 ⋮ 快选层时，九格里有两格"按了等于没按"，并留下一个待定的产品问题
+（那轮遗留 1）：
+
+- `Rotate screen`：电视永远横屏，`toggleScreenOrientation()` 只是翻一个系统设不接受的锁，屏幕上只多一句
+  `Screen rotation has been unlocked`（`dv1-crop.png`），画面不变。
+- `Download`：本地内容（"TV Audit" 系列就是导入的本地文件）没有远端章节可下，`downloadCurrentChapter()`
+  里 `mangaDetails` 拿不到东西就静默返回，而快选层的 `onAction` 已经先 `callbacks.onDismiss()` 收了面板
+  （`dw2-half.png`、`dw3.xml`）——用户看到的是"面板关了，什么都没发生"。
+
+这两格不是焦点问题，第七十九轮那套"补环、改出口"的修法救不了：格子确实能聚焦、确实响应 CENTER，
+只是背后没有可做的事。第六十八轮的建议就是按能力过滤 `mangaQuickActions()`，让它们干脆不出现。
+
+### 改动
+
+- `app/.../reader/ui/compose/ReaderMangaQuickActions.kt`：`mangaQuickActions()` 多两个开关
+  `canRotate: Boolean = true`、`canDownload: Boolean = true`，不满足就把 `ROTATE` / `DOWNLOAD` 从列表里摘掉。
+  默认值保持 true，函数的语义仍是"这台设备为这一章能做的事"，不是"电视专用"。
+- `app/.../reader/ui/compose/ComposeReaderOptionsSheet.kt`：`canRotate = !LocalUiPresentationConfig.current.isTv`，
+  `canDownload = state.canDownloadChapter`。
+- `core-ui/.../reader/ui/compose/ComposeReaderOptions.kt`：`ComposeReaderOptionsState` 新增
+  `canDownloadChapter: Boolean = true`（带默认值，Windows 与预览宿主不受影响）。
+- `app/.../reader/ui/ReaderActivity.kt`：`openMenu()` 里传
+  `canDownloadChapter = viewModel.getContentOrNull()?.isLocal == false`（`isLocal` 是 `core.model` 对
+  `Content` 的扩展属性，`:reader:ui` 原本没 import）。
+- `ReaderMangaQuickActionsTest`：新增三例（电视无旋转、本地无下载、电视读本地剩七格），原有两例不变。
+
+这条改动**不是电视专属**：本地内容在手机、平板上同样没有可下载的远端章节，同一个空按钮也一起消失
+（8 → 7 格，翻译可用时 9 → 8）。若评审只想影响电视，把 `canDownload` 改成 `state.canDownloadChapter || !isTv` 即可。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| Home → `TV Audit Manga 11` → `Continue` | `na2-reader.png`、`na3-controls.png` | 打开本地漫画第 1 章，顶栏只有 back / 标题 / `⋮` 三站 |
+| 环到 `⋮` → CENTER | `na5-quick-layer.png` | 快选层只剩七格一排：Chapters and pages / Add bookmark / Save page / Crop & note / Automatic scroll / Open in browser / Manga translation；`Rotate screen` 与 `Download` 都没画 |
+| RIGHT ×6 | `na6-last-cell.png` | 环逐格走过并停在最后一格 `Manga translation`，环完整落在面板内（格子右缘 1502，面板右缘约 1720），没有越界或裁切 |
+| `uiautomator dump` | `.tmp-na6.xml` | 文本节点正好七条，没有 `Rotate screen`、没有 `Download` |
+
+快选层七格的实际边界（`uiautomator`，1920×1080）：
+
+```
+'Chapters and pages' [236,980][410,1044]
+'Add bookmark'       [422,980][589,1012]
+'Save page'          [628,980][747,1012]
+'Crop & note'        [802,980][937,1012]
+'Automatic scroll'   [964,980][1138,1044]
+'Open in browser'    [1146,980][1320,1044]
+'Manga translation'  [1328,980][1502,1044]
+```
+
+构建与测试：`:app:assembleDebug` BUILD SUCCESSFUL（4m 19s），
+`:app:testDebugUnitTest --tests ReaderMangaQuickActionsTest` 5 项 0 失败（`app/build/test-results`）。
+
+### 遗留
+
+1. **正向分支没有设备证据**：本机夹具没配任何内容源，"TV Audit" 全是本地文件，看不到"远端章节 → `Download`
+   那格回来"的样子。逻辑由单测覆盖（默认 `canDownload = true` 时列表仍含 `DOWNLOAD`），但"远端内容在电视上
+   点 Download 真能下载"仍未过机。
+2. **已下载的远端章节没这层判断**：详情页章节行在 `item.isDownloaded` 时不画下载按钮，阅读器里的 `Download`
+   不知道"已经下过"，再按会重新排一次下载。要做得彻底得把"是否已下载"也传进 `ComposeReaderOptionsState`。
+3. 手机/平板没有 AVD，本轮只有编译级保证（`isTv = false` 时 `canRotate` 仍为 true）；本地内容少一格这件事
+   在手机上要等一次真机或手机模拟器复核。

@@ -53,6 +53,7 @@ import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.unwrap
 import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
@@ -1189,6 +1190,8 @@ class ReaderActivity :
                 mode = composeReaderController.readerMode,
                 continuousHorizontalReversed = settings.isContinuousHorizontalReversed,
                 chaptersReversed = viewModel.isChapterOrderReversed.value,
+                // A local chapter is already on the device, so its download cell has nothing to fetch.
+                canDownloadChapter = viewModel.getContentOrNull()?.isLocal == false,
                 webtoonSceneReader = settings.isExperimentalSceneReaderEnabled,
                 pagedSceneReader = settings.isExperimentalPagedSceneReaderEnabled,
                 animation = settings.readerAnimation,

@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ReaderOcrMode
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.reader.ui.colorfilter.ReaderImageComparisonPreview
 import org.skepsun.kototoro.reader.ui.colorfilter.rememberReaderColorCorrectionLabels
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChoiceChips
@@ -62,6 +63,8 @@ internal fun ComposeReaderOptionsPanel(
     if (!state.visible) return
     val colors = mangaReaderPanelColors(state.background, isSystemInDarkTheme(), MaterialTheme.colorScheme)
     val strings = rememberReaderOptionsStrings()
+    // A television is always landscape, so the rotation cell can only flip a lock the set ignores.
+    val isTv = LocalUiPresentationConfig.current.isTv
     // The panel opens for the quick actions, so that is where the ring has to start: the host takes
     // the focus on the very first frame the sheet has a placed row.
     val firstActionFocusRequester = remember { FocusRequester() }
@@ -76,7 +79,12 @@ internal fun ComposeReaderOptionsPanel(
                 callbacks = callbacks,
                 strings = strings,
                 features = AndroidReaderOptionsFeatures,
-                actions = mangaQuickActions(translationAvailable, translationActive),
+                actions = mangaQuickActions(
+                    translationAvailable = translationAvailable,
+                    translationActive = translationActive,
+                    canRotate = !isTv,
+                    canDownload = state.canDownloadChapter,
+                ),
                 actionIcon = { painterResource(MangaQuickActionId.valueOf(it.id).iconResId) },
                 actionLabel = { stringResource(MangaQuickActionId.valueOf(it.id).labelResId) },
                 firstActionFocusRequester = firstActionFocusRequester,

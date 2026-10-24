@@ -97,6 +97,11 @@ data class ComposeReaderOptionsState(
     val continuousHorizontalReversed: Boolean = false,
     /** This title's chapters are read in reverse list order (sources that list newest first). */
     val chaptersReversed: Boolean = false,
+    /**
+     * Whether the open chapter can be downloaded. False when it already comes from a local file, where
+     * a download would have nothing to fetch; the host's quick actions hide the cell in that case.
+     */
+    val canDownloadChapter: Boolean = true,
     /** Scene renderer for the webtoon mode; off by default. */
     val webtoonSceneReader: Boolean = false,
     /** Scene renderer for single/double page; off by default, matching the released behaviour. */
