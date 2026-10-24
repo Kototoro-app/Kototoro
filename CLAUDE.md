@@ -317,6 +317,13 @@ npm run docs:build
   渲染 `MarkdownText`/`markdownPlainText` 都在 `core/ui/markdown/`（纯共享、无新依赖，Android 仍用 Markwon）；
   `desktop-runtime` 的 `DesktopAppUpdateClient.releases()` 与更新检查共用 `offerableFor(channel)`
   过滤（有包有下载地址、stable 不列预发布），所以说明列出的版本就是它真会装的版本，见计划 §163。
+  同一张卡还有 Android 的 `allow_unstable_updates`（`app-update-unstable`）：稳定版可以让更新器改跟 nightly 仓库，
+  nightly 包则固定为开且禁用（换频道会丢掉旧频道找到的版本、说明与日志缓存）；频道由
+  `desktopUpdateChannel(版本戳, 开关)` 合成，更新检查/下载/更新日志共用它，开关存 `desktop_app_updates` 的
+  `app_update_unstable`。卡下方另有 Android 的 `about_group_support` 链接组（`about-link:<key>`，使用手册/源码/
+  Ko-fi/爱发电/Discord，摘要即地址，整行点开系统浏览器，打不开就提示地址）。这些地址仍取自 Android 的
+  `values/constants.xml`：`prepareDesktopStrings` 现在额外读该文件但只收 `url_*`，其余构建键与 OAuth
+  client secret 不复制进桌面 catalog，见计划 §164。
   收藏/历史的“筛选与排序”抽屉另有“布局”一节（封面网格 / 每行一个作品，对应 Android 的 ListMode），
   选择存 `desktop_library` 的 `library_list_mode`，列表模式下 `ContentGrid` 渲染 `content-list` 行视图，
   点击/长按语义与卡片一致，见计划 §142。

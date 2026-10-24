@@ -15,6 +15,7 @@ import org.skepsun.kototoro.desktop.runtime.DesktopAppUpdateClient
 import org.skepsun.kototoro.desktop.runtime.DesktopDownloadedUpdate
 import org.skepsun.kototoro.desktop.runtime.DesktopInstallLayout
 import org.skepsun.kototoro.desktop.runtime.DesktopStagedUpdate
+import org.skepsun.kototoro.desktop.runtime.DesktopUpdateChannel
 import org.skepsun.kototoro.desktop.runtime.DesktopUpdateException
 import org.skepsun.kototoro.desktop.runtime.DesktopUpdatePackage
 import org.skepsun.kototoro.desktop.runtime.DesktopUpdateProgress
@@ -45,7 +46,15 @@ data class DesktopUpdateUi(
     val changelog: List<DesktopUpdateRelease>? = null,
     val changelogLoading: Boolean = false,
     val changelogError: String? = null,
-)
+) {
+    /** The channel this copy actually follows: its own, or the nightly one when a stable copy opted in. */
+    val updateChannel: DesktopUpdateChannel
+        get() = desktopUpdateChannel(version, settings.unstable)
+
+    /** Android greys the switch out on a nightly build instead of hiding it: the value is not the user's to change. */
+    val unstableEditable: Boolean
+        get() = desktopUnstableEditable(version)
+}
 
 /**
  * Android's in-app update flow for the Windows package: check the published releases, download the package, verify
@@ -79,7 +88,18 @@ internal class DesktopUpdateOperations(
     fun layout(): DesktopInstallLayout? = installer.layout()
 
     fun settings(value: DesktopUpdateSettings) {
-        state.update { it.copy(update = it.update.copy(settings = value, error = null)) }
+        val switched = state.value.update.updateChannel != desktopUpdateChannel(state.value.update.version, value.unstable)
+        state.update { current ->
+            val update = current.update
+            // Everything the old channel said — the found release, its notes, the changelog — is another channel's
+            // answer once the switch moves, so it is dropped instead of being shown next to the new channel's check.
+            current.copy(update = if (switched) {
+                update.copy(settings = value, available = null, progress = null, changelog = null,
+                    changelogError = null, error = null)
+            } else {
+                update.copy(settings = value, error = null)
+            })
+        }
         if (!preferences.edit(SourcePreferenceEdit(changes = value.toPreferences()))) {
             state.update { it.copy(update = it.update.copy(error = desktopText("update.settingsSaveFailed"))) }
         }
@@ -88,7 +108,7 @@ internal class DesktopUpdateOperations(
     private fun client(): DesktopAppUpdateClient? {
         val version = state.value.update.version.version
         if (version.compareTo(org.skepsun.kototoro.desktop.runtime.DesktopPackageVersion.UNKNOWN) <= 0) return null
-        return DesktopAppUpdateClient(version, state.value.update.version.channel,
+        return DesktopAppUpdateClient(version, state.value.update.updateChannel,
             mirror = session.githubMirror::rewrite)
     }
 

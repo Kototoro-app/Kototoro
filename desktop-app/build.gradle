@@ -114,7 +114,7 @@ def prepareDesktopStrings = tasks.register('prepareDesktopStrings') {
     def locales = desktopLocales()
     def sources = files(locales.collect { tag ->
         def directory = androidResourceDirectoryFor(tag)
-        fileTree(new File(desktopAndroidResources, directory)) { include 'strings*.xml', 'arrays.xml' }
+        fileTree(new File(desktopAndroidResources, directory)) { include 'strings*.xml', 'arrays.xml', 'constants.xml' }
     })
     inputs.files(sources)
     inputs.property('locales', locales.join(','))
@@ -139,10 +139,13 @@ def prepareDesktopStrings = tasks.register('prepareDesktopStrings') {
             def arrays = [:]
             folders.each { folder ->
                 new File(desktopAndroidResources, folder).listFiles()
-                    .findAll { it.name ==~ /(strings.*|arrays)\.xml/ }.sort { it.name }.each { file ->
+                    .findAll { it.name ==~ /(strings.*|arrays|constants)\.xml/ }.sort { it.name }.each { file ->
                         def root = new groovy.xml.XmlParser(false, false).parse(file)
                         root.children().each { node ->
                             def name = node.attribute('name')
+                            // `constants.xml` also holds build keys and OAuth credentials; only Android's untranslatable
+                            // `url_*` addresses are copied, because the window opens the same links.
+                            if (file.name == 'constants.xml' && !name?.startsWith('url_')) return
                             if (node.name() == 'string') strings[name] = unescape(node.text())
                             else if (node.name() == 'string-array') arrays[name] = node.children().collect { unescape(it.text()) }
                         }

@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.ui.markdown.MarkdownText
+import org.skepsun.kototoro.desktop.runtime.DesktopUpdateChannel
 
 /**
  * Android's "about and update" screen for the Windows package: what this copy is, a check against the release
@@ -36,6 +37,15 @@ internal fun DesktopAppUpdateSection(
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("app-update-version"))
             if (!update.supported) {
                 Text(desktopText("update.unsupported"), color = Muted, fontSize = 12.sp)
+            }
+            // Android's allow_unstable_updates: a stable copy may follow the nightly repository; a nightly one cannot
+            // go back, so the switch is only shown as a locked "on".
+            UpdateSettingSwitch(AndroidStrings["allow_unstable_updates"],
+                AndroidStrings["allow_unstable_updates_summary"],
+                update.updateChannel == DesktopUpdateChannel.NIGHTLY,
+                enabled && update.unstableEditable && !update.installing && update.progress == null,
+                "app-update-unstable") {
+                controller.appUpdateSettings(settings.copy(unstable = it))
             }
             val available = update.available
             val downloaded = update.downloaded

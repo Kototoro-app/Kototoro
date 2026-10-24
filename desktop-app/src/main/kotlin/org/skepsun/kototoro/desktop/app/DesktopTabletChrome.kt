@@ -151,6 +151,17 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
         }
         DesktopTrackerSettings(controller, state, enabled)
         DesktopAppUpdateSection(controller, state, enabled, onExitRequest)
+        // Android's about screen keeps its links in a "support" group; on Windows they sit under the update card.
+        SettingsSectionHeader(AndroidStrings["about_group_support"])
+        SettingsGroup {
+            val links = remember { desktopAboutLinks() }
+            links.forEachIndexed { index, link ->
+                if (index > 0) SettingsRowDivider()
+                SettingsValueRow(link.title, link.url, null, enabled && link.openable,
+                    { controller.openExternalUrl(link.title, link.url) },
+                    testTag = "about-link:${link.key}")
+            }
+        }
         SettingsSectionHeader(desktopText("more.advancedTools"))
         SettingsGroup {
             SettingsValueRow(desktopText("more.browser"), desktopText("more.browserSummary"), null, enabled,

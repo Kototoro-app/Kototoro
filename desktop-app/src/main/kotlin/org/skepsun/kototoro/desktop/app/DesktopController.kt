@@ -356,6 +356,15 @@ class DesktopController(val session: DesktopSession) {
 
     fun appUpdateSettings(value: DesktopUpdateSettings) = updates.settings(value)
 
+    /**
+     * Android's support links on the about screen: the same published URLs, opened in the system browser. A copy
+     * without one (a probe on a bare JVM) reports the URL instead of pretending it opened.
+     */
+    fun openExternalUrl(title: String, url: String) {
+        if (openDesktopUrl(url)) return
+        mutableState.update { it.copy(message = desktopText("about.linkFailed", title, url)) }
+    }
+
     /** Android's changelog entry (about → 更新日志): loads this channel's published releases, once per session. */
     fun showChangelog() = navigate {
         mutableState.update { it.copy(screen = DesktopScreen.CHANGELOG) }

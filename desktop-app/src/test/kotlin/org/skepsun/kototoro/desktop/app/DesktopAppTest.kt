@@ -56,6 +56,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `the about card switches the unstable update channel and lists Android's support links`() {
+        probe("about", directory.resolve("中文 about"), 180)
+    }
+
+    @Test
     fun `real Tsundoku APK installs converts and reads a novel over the live network`() {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("kototoro.dex.real.apks") != null, "no -PrealApkDirectory")
         probe("real-novel", directory.resolve("中文 real novel"), 180)

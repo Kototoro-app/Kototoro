@@ -43,6 +43,10 @@ object DesktopAppProbe {
                 DesktopChangelogProbe.run(args)
                 return
             }
+            if (args[0] == "about") {
+                DesktopAboutProbe.run(args)
+                return
+            }
             if (args[0] == "playback") {
                 DesktopPlaybackProbe.run(args)
                 return

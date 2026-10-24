@@ -7467,3 +7467,50 @@ Windows 之前完全没有代理：每个来源、封面、JSON 导入都走 com
 - 已知（与本切片无关，HEAD 上就失败）：`DesktopAppTest > Android styled light and dark themes render covers
   and persist across an offline restart` 在 `DesktopAppearanceProbe.kt:86` 报找不到 `interface-style:IOS`。
 - 仍待：更新渠道（`KEY_UPDATES_UNSTABLE`/nightly 切换）与崩溃日志行（Android `AboutSettingsScreen` 的另外两项）。
+
+## 164. Windows 不稳定更新渠道 + “支持”链接组（对齐 Android AboutSettingsScreen 余下两项）（2026-10-24）
+
+- 问题：§163 的“仍待”前半——Android 的关于页里，`allow_unstable_updates` 决定稳定版要不要跟 nightly 仓库
+  （nightly 包本身不可回退，开关固定为开且禁用），下面还有一组 `about_group_support` 链接（使用手册/源码/
+  Ko-fi/爱发电/Discord）。Windows 的频道只来自构建时的版本戳，用户改不了，也没有任何链接入口。
+- `desktop-runtime`：`DesktopUpdateSettings` 加 `unstable`（默认 false），键 `app_update_unstable`，
+  与自动检查/自动下载/退出安装三键同存 `desktop_app_updates` 偏好库，`toPreferences()`/`from()` 往返。
+  放在应用更新的设置对象里而不是另开存储，是因为它和那三项一起决定“这个更新器要不要动手”。
+- `desktop-app`：
+  - 新文件 `DesktopAboutLinks.kt`（纯函数 + 一条数据，方便单测）：
+    `desktopUpdateChannel(stamped, unstable)`——版本戳是 nightly 就永远是 nightly（给 nightly 装正式包是降级），
+    正式版只有用户打开开关才走 nightly；`desktopUnstableEditable(stamped)`——只有正式版能改；
+    `DesktopAboutLink(key, title, url)` 与 `desktopAboutLinks()`——五行按 Android 的顺序，标题取
+    `user_manual`/`source_code`/`about_donate`/`about_donate_afdian`/`about_discord`，地址取 `url_*`；
+    `openDesktopUrl(url)` 用 `java.awt.Desktop` 开系统浏览器，没有桌面/没有浏览器时返回 false 而不是抛。
+  - `DesktopUpdateUi` 加派生 `updateChannel`（版本戳+开关合成）与 `unstableEditable`；`DesktopUpdateOperations.client()`
+    改用 `updateChannel` 建客户端，所以自动检查、手动检查、下载、更新日志全部跟着同一个频道走。
+    `settings(value)` 先比较“新旧开关是否换了频道”，换了就丢掉旧频道的答案（`available`/`progress`/`changelog`/
+    `changelogError`/`error`）再落盘——否则卡片会把别的频道的“发现新版本”和刚切过去的检查结果并排显示。
+  - 更新卡加 `app-update-unstable` 开关（Android 的 `allow_unstable_updates` 与 summary，整行可点，沿用卡内
+    `UpdateSettingSwitch`）：勾选状态按有效频道算，nightly 包与下载/安装中禁用。位置在版本行下方，与 Android
+    把开关排在“检查更新”之后一致。
+  - “更多”页在更新卡之后加 `about_group_support` 分节（新 `SettingsSectionHeader`+`SettingsGroup`），
+    五行 `about-link:<key>`，摘要就是地址本身，点一下开浏览器；地址不是 http(s) 时该行禁用。
+    `DesktopController.openExternalUrl(title, url)` 打不开时写一条 `about.linkFailed`（含地址），
+    不让“点了没反应”变成静默失败。
+- 字符串导出：`prepareDesktopStrings` 原来只读 `strings*.xml`/`arrays.xml`，而 Android 把
+  `url_github`/`url_user_manual`/`url_discord` 这类地址放在 `values/constants.xml` 里（`translatable="false"`），
+  所以桌面侧拿不到——现在额外读 `constants.xml`，但**只收 `url_*`**：同一个文件里还有构建键与
+  OAuth client secret，不能复制进明文可读的 catalog。于是五个地址仍是 Android 那一份，没有第二份抄写。
+- 验证：
+  - `DesktopAboutLinksTest` 4 项：正式版默认 RELEASE、开开关变 NIGHTLY；nightly 包无论开关都说 NIGHTLY；
+    只有正式版 `editable`；五行链接的 key 唯一、标题非空、地址是绝对 https 且 `openable`。
+  - 探针 `about`（`DesktopAppTest` 同名用例，`DesktopAboutProbe`）：进“更多”，断言卡片与更新器算出的频道一致；
+    正式版上点 `app-update-unstable` → `settings.unstable` 为真、频道变 NIGHTLY、`changelog`/`available` 被清空、
+    再从 `desktop_app_updates` 读回同一开关（证明落盘），点回去 → RELEASE；然后五行链接逐个存在且显示各自地址。
+    本机实测 `DESKTOP_ABOUT_STATE=channel:RELEASE editable:true unstable:false`、输出 `DESKTOP_UI_OK=about`。
+  - 邻居回归：`changelog`、`storage`、`playback` 三个探针仍绿（“更多”页多了整整一节，滚动与既有行不受影响）。
+  - `:desktop-runtime:test --tests DesktopAppUpdateTest` 15 项全绿；`verifyDesktopStrings` 通过（新键
+    `about.linkFailed` 两个 catalog 都有）。
+- 已知（与本切片无关，HEAD 上就失败）：`DesktopAppTest > Android styled light and dark themes render covers
+  and persist across an offline restart` 在 `DesktopAppearanceProbe.kt:86` 报找不到 `interface-style:IOS`。
+- 仍待：崩溃日志（Android `CrashLogScreen`/`CrashLogDetailScreen`，Windows 目前既没有崩溃处理器也没有
+  `logs/` 下的崩溃文件，需要先写一个 writer）；之后是其余设置页对齐（Spaces、替换规则、下载、备份周期、
+  同步、追踪、服务、导航配置、通知、全景、内容目录、TTS 等）。
+

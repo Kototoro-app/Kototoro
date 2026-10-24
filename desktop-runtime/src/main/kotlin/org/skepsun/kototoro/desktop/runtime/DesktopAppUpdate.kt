@@ -42,22 +42,30 @@ data class DesktopUpdateSettings(
     val autoDownload: Boolean = false,
     /** Applies an already downloaded package when the window closes instead of waiting for the button. */
     val installOnExit: Boolean = false,
+    /**
+     * Android's `allow_unstable_updates`: a stable copy may follow the nightly repository instead. A nightly copy is
+     * always unstable, so this value only matters for a release build.
+     */
+    val unstable: Boolean = false,
 ) {
     fun toPreferences(): Map<String, SourcePreferenceValue?> = mapOf(
         KEY_AUTO_CHECK to SourcePreferenceValue.Toggle(autoCheck),
         KEY_AUTO_DOWNLOAD to SourcePreferenceValue.Toggle(autoDownload),
         KEY_INSTALL_ON_EXIT to SourcePreferenceValue.Toggle(installOnExit),
+        KEY_UNSTABLE to SourcePreferenceValue.Toggle(unstable),
     )
 
     companion object {
         const val KEY_AUTO_CHECK = "app_update_auto_check"
         const val KEY_AUTO_DOWNLOAD = "app_update_auto_download"
         const val KEY_INSTALL_ON_EXIT = "app_update_install_on_exit"
+        const val KEY_UNSTABLE = "app_update_unstable"
 
         fun from(values: Map<String, SourcePreferenceValue>) = DesktopUpdateSettings(
             autoCheck = (values[KEY_AUTO_CHECK] as? SourcePreferenceValue.Toggle)?.value ?: true,
             autoDownload = (values[KEY_AUTO_DOWNLOAD] as? SourcePreferenceValue.Toggle)?.value ?: false,
             installOnExit = (values[KEY_INSTALL_ON_EXIT] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            unstable = (values[KEY_UNSTABLE] as? SourcePreferenceValue.Toggle)?.value ?: false,
         )
     }
 }
