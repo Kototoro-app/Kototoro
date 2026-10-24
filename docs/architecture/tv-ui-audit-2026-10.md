@@ -4307,3 +4307,54 @@ fun TvModalBottomSheet(
    这一轮只保证把手不再是空停点，面板内的控件是否可聚焦、顺序是否合理还没验证。
 3. 本轮有 4 个文件的 import 块被重新排序（原来就有 `CircleShape`、`MaterialTheme` 之类错位），
    纯格式churn，无行为变化。
+
+## 第七十一轮：阅读器提示条在电视上读不了（2026-10-25）
+
+阅读器的所有动作反馈——"旋转已解锁"、"这本书没有网页可打开"、"书签已添加"、"已保存"——都走
+`ReaderMessageHost`，而它一直是 `bodySmall` + 78% 黑底 + `start = 10.dp` 的单行小药丸。
+手机贴脸看没问题，电视三米外基本认不出字。
+
+### 现象
+
+第六十八轮两张截图正好留下对照：`dy1-pill.png` 里 "This content has no web page to open" 只有
+330px 宽、字高约 24px，嵌在几乎纯黑的窄条里；同一句话在 1080p 电视上要凑近才看得清。
+
+### 原因
+
+`ReaderMessageHost`（`ComposeReaderActivityScaffold.kt:1704`）没有任何电视分支：
+文字固定 `MaterialTheme.typography.bodySmall`（12sp），底板固定 `Color.Black.copy(alpha = 0.78f)`，
+左右内边距只有 10dp/0dp，圆角用 `MaterialTheme.shapes.small`。
+
+### 改法
+
+按 `LocalUiPresentationConfig.current.isTv` 分支：
+
+| | 手机（不变） | 电视 |
+| --- | --- | --- |
+| 文字 | `bodySmall` | `titleMedium`（22sp） |
+| 底板 | `Color.Black.copy(alpha = 0.78f)` | `surfaceContainerHigh.copy(alpha = 0.96f)`（与其余电视 chrome 同一条 surface 阶梯） |
+| 前景色 | `Color.White` | `colorScheme.onSurface` |
+| 圆角 | `MaterialTheme.shapes.small` | `RoundedCornerShape(12.dp)` |
+| 内边距 | start 10dp / vertical 10dp | start/end 20dp / vertical 14dp |
+
+### 设备验证（emulator-5554）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 重装、进阅读器、`⋮` → RIGHT×7 → CENTER（Open in browser，本地书） | `ed1.png`、`ed1-pill.png` | 提示条变成 660px 宽、字高约 44px 的深灰面板，圆角 12dp，与 `dy1-pill.png`（改前 330px / 24px 字 / 近黑底板）对照明显 |
+| 同一张全屏图 | `ed1-crop.png` | 提示条仍浮在底栏之上（`controlsVisible` 时抬 104dp），没有遮住进度条 |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（1m 55s，21 executed）。
+
+### 遗留
+
+1. **活动级 `KototoroSnackbarHost` 还没做同样的放大**。它是 `BaseComposeActivity.setComposeContent`
+   挂在每个 Activity 底部的那一个，`details/ui/DetailsErrorObserver.kt`（错误 + Try again/Details）、
+   `download/ui/compose/DownloadDialog.kt`（"Downloads"）这些**带动作按钮**的提示都走它。
+   本轮不动它是因为本机没有能触发它的电视路径（本地书没有加载错误、也没有可下载章节），
+   改了没法给证据。下一轮要做的话：电视分支把消息文字提到 `titleMedium`（`CompositionLocalProvider(LocalTextStyle …)`
+   包住 `Snackbar`，需先在设备上确认 M3 的 message 是否吃 `LocalTextStyle`），并把动作按钮的
+   `labelLarge` 一起提上来——否则 22sp 的文字配 14sp 的按钮会很怪。
+2. 提示条本身不可聚焦（瞬时信息，遥控器不该停进去），这一点是对的，别在后续"补齐焦点"时改掉。
+3. `ReaderMessageHost` 里的 `AnimatedVisibility` 在电视上仍走 fade——`whenReaderAnimationsEnabled`
+   受 `eInk` 开关控制，与电视无关，属既有行为。

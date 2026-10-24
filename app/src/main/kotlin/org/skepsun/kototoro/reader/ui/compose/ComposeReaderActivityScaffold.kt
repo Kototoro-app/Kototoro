@@ -44,6 +44,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
@@ -1723,12 +1724,34 @@ private fun ReaderMessageHost(
         exit = fadeOut().whenReaderAnimationsEnabled(animationsEnabled),
         modifier = modifier,
     ) {
-        Surface(shape = MaterialTheme.shapes.small, color = Color.Black.copy(alpha = 0.78f), contentColor = Color.White) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 10.dp)) {
+        // The reader's only feedback channel for actions like "rotation unlocked" or "saved":
+        // bodySmall on a 78% black plate is fine in the hand but unreadable from a couch, so the
+        // television gets the chrome's own surface ramp and body-sized text instead.
+        val isTvPresentation = LocalUiPresentationConfig.current.isTv
+        Surface(
+            shape = if (isTvPresentation) RoundedCornerShape(12.dp) else MaterialTheme.shapes.small,
+            color = if (isTvPresentation) {
+                MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f)
+            } else {
+                Color.Black.copy(alpha = 0.78f)
+            },
+            contentColor = if (isTvPresentation) MaterialTheme.colorScheme.onSurface else Color.White,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(
+                    start = if (isTvPresentation) 20.dp else 10.dp,
+                    end = if (isTvPresentation) 20.dp else 0.dp,
+                ),
+            ) {
                 Text(
                     text = displayedMessage?.text.orEmpty(),
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(vertical = 10.dp),
+                    style = if (isTvPresentation) {
+                        MaterialTheme.typography.titleMedium
+                    } else {
+                        MaterialTheme.typography.bodySmall
+                    },
+                    modifier = Modifier.padding(vertical = if (isTvPresentation) 14.dp else 10.dp),
                 )
                 displayedMessage?.actionLabel?.let { label ->
                     TextButton(onClick = onAction) { Text(label) }
