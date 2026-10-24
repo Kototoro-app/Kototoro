@@ -31,7 +31,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,6 +51,7 @@ import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
+import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.core.util.LocaleComparator
 import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.toLocale
@@ -127,7 +127,7 @@ fun SourcesCatalogScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val sortedLocales = remember(locales) { locales.sortedWith(compareBy(nullsFirst(LocaleComparator())) { it?.toLocale() }) }
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { KototoroSnackbarHost(snackbarHostState) },
         topBar = {
             Column {
                 TopAppBar(

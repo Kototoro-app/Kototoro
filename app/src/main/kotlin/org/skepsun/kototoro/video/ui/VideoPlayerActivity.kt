@@ -53,6 +53,7 @@ import org.skepsun.kototoro.core.parser.tvbox.TVBoxPlayback
 import org.skepsun.kototoro.core.ui.BaseComposeFullscreenActivity
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.resolveUiPresentationConfig
+import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.ReaderIntent
@@ -174,7 +175,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -885,7 +885,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     spaceSwitcherDelegate.Fab(
                         modifier = Modifier.fillMaxSize(),
                     )
-                    SnackbarHost(
+                    KototoroSnackbarHost(
                         hostState = snackbarHostState,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)

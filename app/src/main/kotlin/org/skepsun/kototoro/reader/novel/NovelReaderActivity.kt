@@ -34,7 +34,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -64,6 +63,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.core.util.ext.isPageEbookChapter
 import org.skepsun.kototoro.bookmarks.domain.novelBookmarkProgress
 import org.skepsun.kototoro.core.util.ext.isTextEbookChapter
@@ -1157,7 +1157,7 @@ class NovelReaderActivity :
                                 },
                             )
                         }
-                        SnackbarHost(
+                        KototoroSnackbarHost(
                             hostState = snackbarHostState,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
