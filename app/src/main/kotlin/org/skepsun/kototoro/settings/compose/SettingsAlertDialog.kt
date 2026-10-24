@@ -39,21 +39,35 @@ internal fun SettingsAlertDialog(
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val bodyFocusRequester = remember { FocusRequester() }
     val confirmFocusRequester = remember { FocusRequester() }
+    val dismissFocusRequester = remember { FocusRequester() }
     var bodyHasFocus by remember { mutableStateOf(false) }
+    var confirmHasFocus by remember { mutableStateOf(false) }
+    var dismissHasFocus by remember { mutableStateOf(false) }
+    val buttonsHaveFocus = confirmHasFocus || dismissHasFocus
 
     if (isTvPresentation) {
         // A dialog opens its own window, so nothing is focused unless someone asks. Without this the
         // remote either lands nowhere or keeps walking the dimmed screen behind the dialog. Prefer the
-        // body - call sites put pickers there - and fall back to the confirm action when the body has
-        // no focusable child to offer.
-        LaunchedEffect(Unit) {
+        // body - call sites put pickers there - and fall back to the buttons when the body has no
+        // focusable child to offer. The fallback goes to the dismiss action: a confirmation is a yes/no
+        // question and the key that opened the dialog must not be able to answer "yes" by accident
+        // (delete/clear dialogs put the Confirm button on that spot). Dialogs without a dismiss action
+        // still open on Confirm. The button attempts have to outlast the window's fade-in: a request
+        // that lands while the dialog is still animating in - or while the app is in touch mode - is
+        // dropped, which leaves the remote with no ring anywhere until the next key press.
+        val buttonFocusRequester = if (dismissButton != null) dismissFocusRequester else confirmFocusRequester
+        LaunchedEffect(buttonFocusRequester) {
             repeat(6) {
                 withFrameNanos { }
                 if (bodyHasFocus) return@LaunchedEffect
                 runCatching { bodyFocusRequester.requestFocus() }
             }
-            if (!bodyHasFocus) {
-                runCatching { confirmFocusRequester.requestFocus() }
+            repeat(20) {
+                withFrameNanos { }
+                if (bodyHasFocus || buttonsHaveFocus) return@LaunchedEffect
+                if (runCatching { buttonFocusRequester.requestFocus() }.getOrDefault(false)) {
+                    return@LaunchedEffect
+                }
             }
         }
     }
@@ -93,6 +107,7 @@ internal fun SettingsAlertDialog(
                     Modifier
                         .focusRequester(confirmFocusRequester)
                         .focusGroup()
+                        .onFocusChanged { confirmHasFocus = it.hasFocus }
                 } else {
                     Modifier
                 },
@@ -100,7 +115,22 @@ internal fun SettingsAlertDialog(
                 confirmButton()
             }
         },
-        dismissButton = dismissButton,
+        dismissButton = dismissButton?.let { content ->
+            {
+                Box(
+                    modifier = if (isTvPresentation) {
+                        Modifier
+                            .focusRequester(dismissFocusRequester)
+                            .focusGroup()
+                            .onFocusChanged { dismissHasFocus = it.hasFocus }
+                    } else {
+                        Modifier
+                    },
+                ) {
+                    content()
+                }
+            }
+        },
     )
 }
 
