@@ -7326,3 +7326,45 @@ Windows 之前完全没有代理：每个来源、封面、JSON 导入都走 com
   两个不透明度的夹紧、三种解码器的 `hwdec` 映射）；探针 `playback` 走 更多 → 播放设置，校验四行与默认值，
   解码器对话框选“仅软件”后状态为 SOFTWARE_PREFERRED、背景对话框没有 `AUTO` 且选“白色”后状态为 WHITE、
   两个滑条的 `SetProgress` 分别落到 50/20（即松手提交），最后返回“更多”，输出 `DESKTOP_UI_OK=playback`。
+
+## 161. GitHub 镜像下沉 core-net + Windows 存储与网络页的镜像选择（2026-10-24）
+
+- 问题：Android 的“存储与网络”里有一个 GitHub 镜像选择（28 个公共反代 + 直连），扩展仓库索引、
+  扩展 JAR、Cloudstream 列表都走它；Windows 既没有这个选择，几个下载路径也只会直连 GitHub——
+  `raw.githubusercontent.com` 与被墙的 `github.com` 发布件在受限网络里等于不可用。
+- `core-net`：`GitHubMirrorCatalog.kt` 从 `app` 迁到 `core-net/src/commonMain`（包名
+  `org.skepsun.kototoro.core.prefs` 不变，Android 侧 import 全不动），`GitHubMirrorStrategy`/
+  `GitHubMirrorEntry`/`GitHubMirrorManifest`/`builtin`/`legacyAliases`/`apply`/`rawFileUrl`/
+  `normalizeMirrors`/`syncCandidateUrls` 全部共享。只有两个平台的入口留各自宿主：
+  Android 的 `GitHubMirrorEntry.displayName(context)`（要 `R.string.github_mirror_native`）留在 `app`
+  的 `GitHubMirrorDisplay.kt`。可移植化只需把 `Map.putIfAbsent` 换成手写 `containsKey` 判断
+  （前者是 JVM 成员，metadata 编译会拒绝）。`:core-net:compileCommonMainKotlinMetadata` 通过，
+  Android 侧 `GitHubMirrorCatalogTest`(4) 与 `GitHubMirrorManifestTest`(10) 原样全绿。
+- `desktop-runtime`：新增 `DesktopGitHubMirrorSettings`（只有一个 `id`，读不到的 id **不**改写 store，
+  解析时退回直连；Android 的 `kkgithub`/`ghproxy`/`ghproxy_net`/`jsdmirror` 旧别名经
+  `builtinById` 仍解析到 `gh_proxy_com`）与 `DesktopGitHubMirror`（读写 `desktop_network` 的
+  `github_mirror`——与 Android 同键同值；`settings` 是 `StateFlow`，`rewrite(url)` 每次读当前值，
+  换镜像不用重启）。`desktop-runtime` 因此 `api project(':core-net')`。
+- 接线（都是把 URL 交给 `rewrite`，直连时是恒等函数）：
+  `DesktopAppUpdateClient(mirror=)` 改写发布件与 `.sha256`（**不改** `api.github.com` 的版本查询——
+  没有镜像代理 API，而且检查必须先知道文件名）；`DesktopSuperResolution(mirror=)` 改写模型
+  `releases/download` 候选（API 那个候选同样直连）；`DesktopRepositories(mirror=)` 改写扩展 JAR、
+  解析器插件、Cloudstream 插件与 Cloudstream 索引/列表——**不改**仓库索引地址本身
+  （它是用户输入的、要落盘的、相对 `jarUrl` 的解析基准），Cloudstream 的 raw 链接先过镜像、
+  直连时仍退回原来的 jsDelivr 改写。三个 HTTP 客户端都已是 `Redirect.NORMAL`，反代的 302 能跟。
+  `DesktopSession` 新增 `githubMirror`（与 `DesktopProxy` 共用同一个 `desktop_network` store 实例）。
+- `desktop-app`：存储与网络页“网络”节在代理行后加 GitHub 镜像行（`github-mirror-open`，图标
+  `ic_code`，摘要用 Android 的 `pref_github_mirror_summary`，右侧显示当前镜像名——直连显示
+  `github_mirror_native`，其余就是域名，不翻译）。点开是共享 `DesktopChoiceSettingsDialog`
+  （`github-mirror-dialog`，选项 `github-mirror-option:<id>`，列表 = `GitHubMirrorCatalog.builtin`，
+  直连在首位），选中即 `DesktopGitHubMirror.save` 并更新 state。没有新增桌面文案键，
+  `:desktop-app:verifyDesktopStrings` 不受影响；`desktop-app/build.gradle` 的 `desktopIcons`
+  白名单补 `ic_code`。
+- 验证：`:desktop-runtime:test` 新增 `DesktopGitHubMirrorTest` 6 项（默认直连恒等、按 Android 键
+  往返与重启读回、`gh_proxy_com` 改写发布件与 raw 文件而 API 不动、切回直连即时生效、
+  未知 id 保留值但直连 + 旧别名解析、对话框列表直连在首位且 id 唯一）；
+  探针 `storage` 扩展为在同一页打开镜像对话框：默认 `native`、列表里没有 jsDelivr、
+  选 `gh_proxy_com` 后 state、`session.githubMirror.rewrite` 与 `desktop_network` 里的
+  `github_mirror` 三处一致，输出 `DESKTOP_UI_OK=storage`。`:app:compileDebugKotlin` 通过。
+- 仍待：Android 的镜像清单远程同步（`github_mirror_sync_url` + 延迟探测）、HuggingFace/Bangumi 镜像、
+  DNS-over-HTTPS、图片代理等其余网络项。

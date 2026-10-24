@@ -47,10 +47,13 @@ class DesktopSession private constructor(
     val parsers: ParserPluginRegistry,
     /** Android's proxy settings; it routes every request of the shared SDK client. */
     val proxy: org.skepsun.kototoro.desktop.runtime.DesktopProxy,
+    /** Android's GitHub download mirror; the Windows host applies it to every GitHub download it starts. */
+    val githubMirror: org.skepsun.kototoro.desktop.runtime.DesktopGitHubMirror,
 ) : Closeable {
     private val ids = AtomicLong()
     private val installed = storage.preferences.open("desktop_extensions")
-    internal val repositories = DesktopRepositories(storage.paths.root, storage.preferences.open("desktop_repositories"))
+    internal val repositories = DesktopRepositories(storage.paths.root,
+        storage.preferences.open("desktop_repositories"), mirror = githubMirror::rewrite)
     internal val sourceDiagnostics = DesktopSourceDiagnostics(storage.paths.root)
     private val mihonRuntime = MihonSourceRuntime(registry, storage.images, platform.preferenceContext())
     private val aniyomiRuntime = AniyomiSourceRuntime(registry, storage.images, platform.preferenceContext())
@@ -197,7 +200,7 @@ class DesktopSession private constructor(
                     org.skepsun.kototoro.desktop.player.Anime4KImagePreset.valueOf(model.name.removePrefix("ANIME4K_")))
             }
         }
-    })
+    }, mirror = githubMirror::rewrite)
     @Volatile internal var upscale = org.skepsun.kototoro.desktop.runtime.DesktopUpscaleSetting()
     /** Android's "crop pages" for the open reading mode; the controller keeps it in step with the reader settings. */
     @Volatile internal var cropPages = false
@@ -524,7 +527,9 @@ class DesktopSession private constructor(
             org.skepsun.kototoro.desktop.runtime.DesktopRuntimeStrings.install(DesktopStrings::localized)
             val storage = DesktopRuntime.open(root)
             // The proxy the settings page edits becomes the SDK client's route before any source is constructed.
-            val proxy = org.skepsun.kototoro.desktop.runtime.DesktopProxy(storage.preferences.open("desktop_network"))
+            val network = storage.preferences.open("desktop_network")
+            val proxy = org.skepsun.kototoro.desktop.runtime.DesktopProxy(network)
+            val githubMirror = org.skepsun.kototoro.desktop.runtime.DesktopGitHubMirror(network)
             val platform = MihonDesktopPlatform(storage.paths.root.resolve("compat"), enableBrowserChallenges = true,
                 proxySelector = proxy.selector, proxyAuthenticator = proxy.authenticator)
             var registry: MihonJarRegistry? = null
@@ -534,7 +539,7 @@ class DesktopSession private constructor(
                 // Parser plugins reuse the platform's HTTP client: one cookie store and challenge flow for all ecosystems.
                 val parserPlatform = DesktopParserPlatform(platform.sharedHttpClient(), storage.preferences)
                 parsers = ParserPluginRegistry(parserPlatform)
-                return DesktopSession(storage, platform, registry, parserPlatform, parsers, proxy).also {
+                return DesktopSession(storage, platform, registry, parserPlatform, parsers, proxy, githubMirror).also {
                     it.restoreJars()
                     // Superseded and removed versions are deleted once nothing has them open.
                     runCatching { it.cleanupArtifacts() }

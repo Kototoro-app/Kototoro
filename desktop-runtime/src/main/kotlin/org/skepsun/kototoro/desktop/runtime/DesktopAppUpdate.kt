@@ -93,6 +93,11 @@ class DesktopAppUpdateClient(
     private val channel: DesktopUpdateChannel,
     private val repository: String = desktopUpdateRepository(channel),
     private val http: HttpClient = defaultHttpClient(),
+    /**
+     * Android's GitHub download mirror, applied to the release assets (the package and its `.sha256`). The releases API
+     * is not rewritten: no mirror proxies `api.github.com`, and the version check has to name the files first.
+     */
+    private val mirror: (String) -> String = { it },
 ) {
     /** The newest installable release, or null when the running version is up to date (or nothing is published). */
     suspend fun check(): DesktopAppUpdate? {
@@ -129,7 +134,7 @@ class DesktopAppUpdateClient(
         val url = release.checksumsUrl ?: throw DesktopUpdateException(
             DesktopRuntimeStrings.text("runtime.update.checksumMissing", "the release publishes no SHA-256 file"))
         val text = withContext(Dispatchers.IO) {
-            String(readBytes(URI(url), MAXIMUM_CHECKSUM_BYTES), Charsets.UTF_8)
+            String(readBytes(URI(mirror(url)), MAXIMUM_CHECKSUM_BYTES), Charsets.UTF_8)
         }
         return parseChecksums(text)
     }
@@ -155,7 +160,7 @@ class DesktopAppUpdateClient(
         try {
             val digest = MessageDigest.getInstance("SHA-256")
             Files.newOutputStream(partial).use { output ->
-                streamBytes(URI(asset.downloadUrl), onProgress) { buffer, length ->
+                streamBytes(URI(mirror(asset.downloadUrl)), onProgress) { buffer, length ->
                     digest.update(buffer, 0, length)
                     output.write(buffer, 0, length)
                 }

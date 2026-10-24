@@ -83,7 +83,8 @@ internal class DesktopUpdateOperations(
     private fun client(): DesktopAppUpdateClient? {
         val version = state.value.update.version.version
         if (version.compareTo(org.skepsun.kototoro.desktop.runtime.DesktopPackageVersion.UNKNOWN) <= 0) return null
-        return DesktopAppUpdateClient(version, state.value.update.version.channel)
+        return DesktopAppUpdateClient(version, state.value.update.version.channel,
+            mirror = session.githubMirror::rewrite)
     }
 
     /** Starts a check in the background; [silent] keeps a start-up check from replacing the window's own message. */

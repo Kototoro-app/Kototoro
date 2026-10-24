@@ -23,6 +23,7 @@ dependencies {
 	api project(':core-library')
 	api project(':core-source')
 	api project(':core-backup')
+	api project(':core-net')
 	api project(':source-host')
 	api project(':parser-host')
 	api project(':dex-convert')

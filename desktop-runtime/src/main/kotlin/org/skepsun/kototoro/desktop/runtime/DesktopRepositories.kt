@@ -38,7 +38,16 @@ data class DesktopRepositoryCatalog(
 data class DesktopManagedJar(val path: Path, val identity: MihonJarIdentity)
 
 /** Repository metadata and immutable app-owned artifacts; construction/execution remains in source-host. */
-class DesktopRepositories(root: Path, private val preferences: SourcePreferences) : Closeable {
+class DesktopRepositories(
+    root: Path,
+    private val preferences: SourcePreferences,
+    /**
+     * Android's GitHub download mirror, applied to the artifacts and Cloudstream lists a repository points at. The
+     * repository's own index address is never rewritten: it is what the user typed, what gets saved, and what relative
+     * package URLs resolve against.
+     */
+    private val mirror: (String) -> String = { it },
+) : Closeable {
     private val http = DesktopRepositoryHttp()
     private val artifacts = root.toAbsolutePath().normalize().resolve("extensions")
     private val inspector = MihonJarInspector()
@@ -145,7 +154,7 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
      * as an extension catalog: one entry per `.cs3`, versioned by the plugin version. Null for any other document.
      */
     private suspend fun fetchCloudstream(address: String): DesktopRepositoryCatalog? {
-        val (_, bytes) = try { bytes(repositoryUri(cloudstreamMirror(address))) } catch (error: RepositoryHttpException) {
+        val (_, bytes) = try { bytes(mirrored(cloudstreamMirror(address))) } catch (error: RepositoryHttpException) {
             if (error.status == 404) return null else throw error
         }
         val document = runCatching { kotlinx.serialization.json.Json.parseToJsonElement(bytes.decodeToString()) }.getOrNull()
@@ -162,7 +171,7 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
             else -> return null
         }
         val plugins = lists.flatMap { list ->
-            val (listActual, data) = bytes(repositoryUri(cloudstreamMirror(list)))
+            val (listActual, data) = bytes(mirrored(cloudstreamMirror(list)))
             (kotlinx.serialization.json.Json.parseToJsonElement(data.decodeToString()) as? kotlinx.serialization.json.JsonArray)
                 .orEmpty().mapNotNull { it as? kotlinx.serialization.json.JsonObject }.mapNotNull { plugin ->
                     val id = plugin.text("internalName") ?: return@mapNotNull null
@@ -211,13 +220,16 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
         actual to output.toByteArray()
     }
 
+    /** A download address through the user's GitHub mirror; the direct connection leaves it untouched. */
+    private fun mirrored(url: String): URI = repositoryUri(mirror(url))
+
     suspend fun download(catalog: DesktopRepositoryCatalog, extension: ExtensionStoreIndex.Extension): DesktopManagedJar {
         require(catalog.repository in repositories && extension in catalog.extensions) { DesktopRuntimeStrings.text("runtime.extension.refreshFirst", "refresh the repositories first") }
         require(!catalog.isParserPlugin(extension)) { DesktopRuntimeStrings.text("runtime.extension.parserInstall", "parser plugins must be installed with the parser flow") }
         // Prefer the repository's own JVM jar; an APK-only entry is downloaded and converted locally.
         val address = extension.resources.jarUrl.ifBlank { extension.resources.apkUrl }
         require(address.isNotBlank()) { DesktopRuntimeStrings.text("runtime.extension.noDownload", "this extension has no downloadable package") }
-        return http.read(repositoryUri(address), JAR_LIMIT) { _, input ->
+        return http.read(mirrored(address), JAR_LIMIT) { _, input ->
             stage(input, extension)
         }
     }
@@ -230,7 +242,7 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
         require(catalog.isParserPlugin(extension)) { DesktopRuntimeStrings.text("runtime.extension.notParser", "the repository item is not a parser plugin") }
         val address = extension.resources.jarUrl.ifBlank { extension.resources.apkUrl }
         require(address.isNotBlank()) { DesktopRuntimeStrings.text("runtime.extension.parserNoDownload", "this parser plugin has no downloadable package") }
-        return http.read(repositoryUri(address), JAR_LIMIT) { _, input ->
+        return http.read(mirrored(address), JAR_LIMIT) { _, input ->
             stageParserPlugin(input, extension.packageName)
         }
     }
@@ -247,7 +259,7 @@ class DesktopRepositories(root: Path, private val preferences: SourcePreferences
 
     /** Downloads a Cloudstream plugin from its repository URL (GitHub raw links are served through jsDelivr). */
     suspend fun downloadCloudstreamPlugin(url: String, id: String): DesktopManagedCloudstreamPlugin =
-        http.read(repositoryUri(cloudstreamMirror(url)), JAR_LIMIT) { _, input -> stageCloudstreamPlugin(input, id) }
+        http.read(mirrored(cloudstreamMirror(url)), JAR_LIMIT) { _, input -> stageCloudstreamPlugin(input, id) }
 
     private suspend fun stageCloudstreamPlugin(input: InputStream, id: String): DesktopManagedCloudstreamPlugin =
         staged(input) { temporary ->

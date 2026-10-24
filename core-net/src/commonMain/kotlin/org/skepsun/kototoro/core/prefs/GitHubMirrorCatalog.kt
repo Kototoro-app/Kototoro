@@ -1,9 +1,7 @@
 package org.skepsun.kototoro.core.prefs
 
-import android.content.Context
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import org.skepsun.kototoro.R
 
 /** How a mirror rewrites GitHub URLs. */
 @Serializable
@@ -315,11 +313,12 @@ object GitHubMirrorCatalog {
         result[NATIVE.id] = NATIVE
         for (entry in safe) {
             if (entry.strategy == GitHubMirrorStrategy.NATIVE) continue
-            result.putIfAbsent(entry.id, entry)
+            // `putIfAbsent` is a JVM member; keep the first occurrence of an id by hand so this stays common Kotlin.
+            if (!result.containsKey(entry.id)) result[entry.id] = entry
         }
         for (entry in builtin) {
             if (entry.strategy == GitHubMirrorStrategy.NATIVE) continue
-            result.putIfAbsent(entry.id, entry)
+            if (!result.containsKey(entry.id)) result[entry.id] = entry
         }
         return result.values.toList()
     }
@@ -442,19 +441,3 @@ object GitHubMirrorCatalog {
     }
 }
 
-/** Localized display label: built-ins keep array labels, remote entries fall back to [GitHubMirrorEntry.name]. */
-/**
- * Label for the mirror.
- *
- * Only the direct-connection entry has a translatable label: every other mirror
- * *is* a hostname, which must not be translated or localised. The previous
- * implementation looked the label up by position in a `string-array`, which meant
- * the list could not grow or shrink without hand-editing every locale's array in
- * exactly the same order — with ~28 public mirrors that coupling is unmaintainable.
- */
-fun GitHubMirrorEntry.displayName(context: Context): String =
-    if (id == GitHubMirrorCatalog.NATIVE.id) {
-        context.getString(R.string.github_mirror_native)
-    } else {
-        name
-    }

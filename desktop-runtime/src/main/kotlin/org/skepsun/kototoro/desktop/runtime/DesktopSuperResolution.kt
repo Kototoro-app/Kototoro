@@ -82,6 +82,8 @@ class DesktopSuperResolution(
 esources/upscale/<tool>), preferred over downloaded ones. */
     private val bundled: Path? = System.getProperty("compose.application.resources.dir")?.takeIf(String::isNotBlank)
         ?.let { Path.of(it, "upscale") },
+    /** Android's GitHub download mirror; applied to the public release link, not to the `api.github.com` lookup. */
+    private val mirror: (String) -> String = { it },
 ) {
     private val tools = root.toAbsolutePath().normalize().resolve("tools")
     private val cache = root.toAbsolutePath().normalize().resolve("cache/upscale")
@@ -213,7 +215,7 @@ esources/upscale/<tool>), preferred over downloaded ones. */
                 Json.parseToJsonElement(release.body()).jsonObject["assets"]!!.jsonArray
                     .map { it.jsonObject }.first { it["name"]!!.jsonPrimitive.content == tool.asset }["url"]!!.jsonPrimitive.content
             }.onSuccess { add(it to "application/octet-stream") }.onFailure { failures += "API: ${it.message}" }
-            add("https://github.com/${tool.repository}/releases/download/${tool.tag}/${tool.asset}" to "*/*")
+            add(mirror("https://github.com/${tool.repository}/releases/download/${tool.tag}/${tool.asset}") to "*/*")
         }
         for ((url, accept) in candidates) {
             try {

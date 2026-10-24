@@ -19,6 +19,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,10 +33,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.prefs.GitHubMirrorCatalog
+import org.skepsun.kototoro.core.prefs.GitHubMirrorEntry
+import org.skepsun.kototoro.core.prefs.GitHubMirrorStrategy
 import org.skepsun.kototoro.core.ui.settings.SettingsGroup
 import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
 import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
 import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
+import org.skepsun.kototoro.desktop.runtime.DesktopGitHubMirrorSettings
 import org.skepsun.kototoro.desktop.runtime.DesktopStorageCategory
 import org.skepsun.kototoro.desktop.runtime.DesktopStorageUsage
 import java.util.Locale
@@ -48,6 +56,7 @@ import java.util.Locale
 internal fun DesktopStorageSettingsPage(controller: DesktopController, state: DesktopAppState) {
     val usage = state.storageUsage
     val active = !state.busy
+    var mirrorDialog by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -92,9 +101,35 @@ internal fun DesktopStorageSettingsPage(controller: DesktopController, state: De
             SettingsValueRow(AndroidStrings["proxy"], route, settings.type.label, active,
                 { controller.showProxySettings() }, testTag = "proxy-settings-open",
                 leadingIcon = painterResource("icons/ic_web.svg"))
+            SettingsRowDivider()
+            // Android's GitHub mirror choice, which decides the host every GitHub download goes through.
+            SettingsValueRow(AndroidStrings["pref_github_mirror"], AndroidStrings["pref_github_mirror_summary"],
+                state.githubMirror.entry.desktopLabel, active, { mirrorDialog = true },
+                testTag = "github-mirror-open", leadingIcon = painterResource("icons/ic_code.svg"))
         }
     }
+    if (mirrorDialog) {
+        DesktopChoiceSettingsDialog(
+            title = AndroidStrings["pref_github_mirror"], summary = AndroidStrings["pref_github_mirror_summary"],
+            bodyTag = "github-mirror-dialog", optionTagPrefix = "github-mirror-option",
+            options = GitHubMirrorCatalog.builtin.map { entry -> entry.desktopLabel to entry.id },
+            selected = state.githubMirror.entry.id, enabled = active,
+            onPick = { id -> controller.updateGitHubMirror(DesktopGitHubMirrorSettings(id)) },
+            onDismiss = { mirrorDialog = false },
+        )
+    }
 }
+
+/**
+ * A mirror's label in the interface language: only the direct connection is translated, every other mirror *is* a
+ * hostname and must read the same in every locale (the rule Android's `displayName` applies).
+ */
+internal val GitHubMirrorEntry.desktopLabel: String
+    get() = if (strategy == GitHubMirrorStrategy.NATIVE) {
+        AndroidStrings["github_mirror_native"]
+    } else {
+        name
+    }
 
 /** Android's donut shows the application's own data only; the bar keeps that rule and the rows carry the numbers. */
 @Composable

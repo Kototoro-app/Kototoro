@@ -6,6 +6,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kotlinx.coroutines.runBlocking
+import org.skepsun.kototoro.core.prefs.GitHubMirrorCatalog
+import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.desktop.runtime.DesktopStorageCategory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -64,6 +66,29 @@ internal object DesktopStorageProbe {
                 onNodeWithTag("proxy-settings-back").performScrollTo().performClick()
                 idle()
                 check(controller.state.value.screen == DesktopScreen.STORAGE) { "the proxy page returns to the hub" }
+
+                // Android's GitHub mirror lives on this hub too: the dialog lists the catalog and the pick is persisted
+                // under Android's own key, which is what the download paths read.
+                onNodeWithTag("github-mirror-open").performScrollTo().assertExists()
+                check(controller.state.value.githubMirror.entry.id == GitHubMirrorCatalog.NATIVE.id) {
+                    "mirror default: ${controller.state.value.githubMirror}"
+                }
+                onNodeWithTag("github-mirror-open").performClick()
+                onNodeWithTag("github-mirror-dialog").assertExists()
+                onNodeWithTag("github-mirror-option:native").performScrollTo().assertExists()
+                onNodeWithTag("github-mirror-option:jsdelivr").assertDoesNotExist()
+                onNodeWithTag("github-mirror-option:gh_proxy_com").performScrollTo().performClick()
+                idle()
+                onNodeWithTag("github-mirror-dialog").assertDoesNotExist()
+                check(controller.state.value.githubMirror.entry.id == "gh_proxy_com") {
+                    "mirror: ${controller.state.value.githubMirror}"
+                }
+                check(session.githubMirror.rewrite("https://github.com/o/r/releases/download/v1/a.zip") ==
+                    "https://gh-proxy.com/https://github.com/o/r/releases/download/v1/a.zip") { "the rewriter follows" }
+                // The saved store is Android's key and value shape, so the choice survives a restart.
+                val stored = session.storage.preferences.open("desktop_network").snapshot()["github_mirror"]
+                check(stored?.let { it as? SourcePreferenceValue.Text }?.value == "gh_proxy_com") { "stored: $stored" }
+
                 onNodeWithTag("storage-settings-back").performScrollTo().performClick()
                 idle()
                 check(controller.state.value.screen == DesktopScreen.MORE) { "the hub's back returns to more" }

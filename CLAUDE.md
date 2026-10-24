@@ -296,6 +296,12 @@ npm run docs:build
   控件不透明度与渐隐不透明度（共享 `SettingsSliderRow`，拖动只改本地 draft、松手才写盘），四键用 Android 同名
   `video_background`/`video_decoder_mode`/`video_controls_alpha`/`video_gradient_alpha`；播放器的视频面/外框取该背景，
   控件条与其上方渐隐取这两个不透明度，见计划 §160。
+  存储与网络页的“网络”节还有 Android 的 GitHub 镜像（`github-mirror-open` → `github-mirror-dialog`）：
+  目录与该反代改写规则 `GitHubMirrorCatalog` 已下沉 `core-net`（包名不变，Android 的
+  `displayName(context)` 留在 `app`），Windows 用 `DesktopGitHubMirror` 读写 `desktop_network` 的
+  `github_mirror`（与 Android 同键，值存镜像 id），`rewrite(url)` 每次读当前值，所以换镜像即时生效；
+  应用更新下载、超分模型下载、扩展 JAR/解析器/Cloudstream 列表都过它，`api.github.com` 的版本查询
+  与仓库索引地址本身不改写，见计划 §161。
   收藏/历史的“筛选与排序”抽屉另有“布局”一节（封面网格 / 每行一个作品，对应 Android 的 ListMode），
   选择存 `desktop_library` 的 `library_list_mode`，列表模式下 `ContentGrid` 渲染 `content-list` 行视图，
   点击/长按语义与卡片一致，见计划 §142。

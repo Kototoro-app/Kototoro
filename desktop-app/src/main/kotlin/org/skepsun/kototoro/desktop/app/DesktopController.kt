@@ -156,6 +156,9 @@ data class DesktopAppState(
     val proxySettings: org.skepsun.kototoro.desktop.runtime.DesktopProxySettings =
         org.skepsun.kototoro.desktop.runtime.DesktopProxySettings(),
     val proxyTest: DesktopProxyTestState = DesktopProxyTestState(),
+    /** Android's GitHub download mirror, which the storage-and-network page edits. */
+    val githubMirror: org.skepsun.kototoro.desktop.runtime.DesktopGitHubMirrorSettings =
+        org.skepsun.kototoro.desktop.runtime.DesktopGitHubMirrorSettings(),
     /** Stored suggestions, most relevant first (Android's recommendations). */
     val suggestions: List<SourceContent> = emptyList(),
     /** True while [DesktopController.refreshSuggestions] runs in the background; the window stays usable. */
@@ -295,6 +298,7 @@ class DesktopController(val session: DesktopSession) {
         }
         // The proxy the SDK client already uses is what the page shows; changing it writes the same store.
         mutableState.update { it.copy(proxySettings = session.proxy.settings.value) }
+        mutableState.update { it.copy(githubMirror = session.githubMirror.settings.value) }
         // Repositories are read in the background at start: updates are installed (when allowed) or announced.
         scope.launch { runCatching { startupUpdates() } }
         // The stamped version and the saved update toggles, before the first check or the first composed screen.
@@ -1682,6 +1686,18 @@ class DesktopController(val session: DesktopSession) {
                 message = if (persisted) it.message else desktopText("jsonSources.saveFailed"))
         }
         session.resetHttpConnections()
+    }
+
+    /**
+     * Saves the GitHub download mirror of the storage-and-network page. The rewriter reads the live value, so the next
+     * release asset, extension package or Cloudstream list already uses the new mirror.
+     */
+    internal fun updateGitHubMirror(value: org.skepsun.kototoro.desktop.runtime.DesktopGitHubMirrorSettings) {
+        val persisted = session.githubMirror.save(value)
+        mutableState.update {
+            it.copy(githubMirror = value,
+                message = if (persisted) it.message else desktopText("jsonSources.saveFailed"))
+        }
     }
 
     /** Android's "test connection" row: the shared client asks the target through whatever the page saved. */
