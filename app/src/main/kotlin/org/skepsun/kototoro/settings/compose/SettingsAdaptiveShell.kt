@@ -57,7 +57,11 @@ fun SettingsAdaptiveShell(
 ) {
     // Settings search results are a single list: on a TV the two-pane split would squeeze them
     // into the 360dp list column and leave the detail pane empty, so search switches to one pane.
-    val useTwoPane = isTwoPane && !(searchActive && LocalUiPresentationConfig.current.isTv)
+    // The root destination has the same problem - nothing is selected yet, so the detail pane stays
+    // empty, half of a 1080p screen goes dark, and the remote can walk RIGHT into that void.
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val atRoot = destination == null || destination == SettingsDestination.Root
+    val useTwoPane = isTwoPane && !(isTvPresentation && (searchActive || atRoot))
     if (useTwoPane) {
         SettingsTwoPaneShell(
             destination = destination ?: SettingsDestination.Root,
