@@ -9,9 +9,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -57,6 +60,8 @@ import org.skepsun.kototoro.core.model.getSaveTitleResId
 import org.skepsun.kototoro.core.model.getWholeWorkOptionResId
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.prefs.DownloadFormat
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.core.util.ext.joinToStringWithLimit
 import org.skepsun.kototoro.core.util.ext.makeSnackbar
@@ -71,6 +76,16 @@ private enum class SelectedMode {
     WHOLE_MANGA, WHOLE_BRANCH, FIRST_CHAPTERS, UNREAD_CHAPTERS
 }
 
+/**
+ * A television is 540dp tall at 1080p, and this dialog's stock content is taller than that once
+ * "More options" is expanded: the surface then grows past the window, the title row leaves the
+ * screen and the rounded top edge is cut. Capping the scrolling body keeps the title and the button
+ * row pinned inside the window and leaves the overscan margin the phone layout never needed.
+ */
+private val DownloadDialogTvBodyMaxHeight = 332.dp
+
+private val DownloadDialogRowShape = RoundedCornerShape(12.dp)
+
 @Composable
 fun DownloadDialog(
     mangaList: List<Content>,
@@ -81,6 +96,7 @@ fun DownloadDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val isTv = LocalUiPresentationConfig.current.isTv
     LaunchedEffect(mangaList) {
         viewModel.initialize(mangaList)
     }
@@ -160,8 +176,15 @@ fun DownloadDialog(
         text = {
             Column(
                 modifier = Modifier
-                    .verticalScroll(rememberScrollState())
                     .fillMaxWidth()
+                    .then(
+                        if (isTv) {
+                            Modifier.heightIn(max = DownloadDialogTvBodyMaxHeight)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .verticalScroll(rememberScrollState())
             ) {
                 Text(
                     text = mangaList.joinToStringWithLimit(context, 120) { it.title },
@@ -319,19 +342,36 @@ fun DownloadDialog(
                 }
 
                 if (mangaList.size == 1) {
-                    Row(modifier = Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.padding(vertical = if (isTv) 4.dp else 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Icon(painterResource(id = R.drawable.ic_tap), contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                        Text(text = stringResource(id = R.string.chapter_selection_hint), style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            text = stringResource(
+                                id = if (isTv) R.string.chapter_selection_hint_tv else R.string.chapter_selection_hint,
+                            ),
+                            style = if (isTv) {
+                                MaterialTheme.typography.bodyMedium
+                            } else {
+                                MaterialTheme.typography.bodySmall
+                            },
+                        )
                     }
                 }
 
                 // Start Switch
+                val onStartNowChange: ((Boolean) -> Unit)? = if (isTv) null else ({ startNow = it })
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .tvFocusable(shape = DownloadDialogRowShape, addFocusTarget = false)
+                        .then(if (isTv) Modifier.clickable { startNow = !startNow } else Modifier)
+                        .padding(vertical = if (isTv) 4.dp else 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(text = stringResource(id = R.string.start_download), modifier = Modifier.weight(1f))
-                    Switch(checked = startNow, onCheckedChange = { startNow = it })
+                    Switch(checked = startNow, onCheckedChange = onStartNowChange)
                 }
 
                 // Video Quality
@@ -369,8 +409,19 @@ fun DownloadDialog(
                 }
 
                 if (contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL) {
+                    val onIncludeNovelImagesChange: ((Boolean) -> Unit)? = if (isTv) null else ({ includeNovelImages = it })
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .tvFocusable(shape = DownloadDialogRowShape, addFocusTarget = false)
+                            .then(
+                                if (isTv) {
+                                    Modifier.clickable { includeNovelImages = !includeNovelImages }
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .padding(top = 16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
@@ -386,14 +437,18 @@ fun DownloadDialog(
                         }
                         Switch(
                             checked = includeNovelImages,
-                            onCheckedChange = { includeNovelImages = it },
+                            onCheckedChange = onIncludeNovelImagesChange,
                         )
                     }
                 }
 
                 // More Options Toggle
                 Row(
-                    modifier = Modifier.fillMaxWidth().clickable { showMoreOptions = !showMoreOptions }.padding(vertical = 12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .tvFocusable(shape = DownloadDialogRowShape, addFocusTarget = false)
+                        .clickable { showMoreOptions = !showMoreOptions }
+                        .padding(vertical = if (isTv) 8.dp else 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(text = stringResource(id = R.string.more_options), modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -462,6 +517,11 @@ fun DownloadDialog(
         confirmButton = {
             Button(
                 enabled = !isOptionsLoading,
+                modifier = Modifier.tvFocusable(
+                    shape = CircleShape,
+                    addFocusTarget = false,
+                    ringColor = MaterialTheme.colorScheme.onPrimary,
+                ),
                 onClick = {
                     val chaptersMacro = when (selectedMode) {
                         SelectedMode.WHOLE_MANGA -> chaptersSelectOptions.wholeContent
@@ -492,7 +552,10 @@ fun DownloadDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
+            ) {
                 Text(text = stringResource(id = android.R.string.cancel))
             }
         }
@@ -515,6 +578,7 @@ private fun SelectableValueCard(
         OutlinedCard(
             modifier = Modifier
                 .fillMaxWidth()
+                .tvFocusable(shape = DownloadDialogRowShape, addFocusTarget = false)
                 .clickable(enabled = enabled, onClick = onClick),
         ) {
             Row(
@@ -551,14 +615,16 @@ private fun SelectableListItem(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val isTv = LocalUiPresentationConfig.current.isTv
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusable(shape = DownloadDialogRowShape, addFocusTarget = false)
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+            .padding(vertical = if (isTv) 4.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        RadioButton(selected = selected, onClick = onClick)
+        RadioButton(selected = selected, onClick = if (isTv) null else onClick)
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(text = title, style = MaterialTheme.typography.bodyLarge)
@@ -580,14 +646,26 @@ private fun SelectableDropdownItem(
     onDismissDropdown: () -> Unit = {},
     dropdownContent: @Composable ColumnScope.() -> Unit = {},
 ) {
+    val isTv = LocalUiPresentationConfig.current.isTv
+    // D-pad traversal never enters the trailing arrow, so on a television the row itself has to open
+    // the variant menu: picking "First N chapters" invites picking N right away.
+    val onRowClick: () -> Unit = if (isTv) {
+        {
+            onClick()
+            onDropdownClick()
+        }
+    } else {
+        onClick
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+            .tvFocusable(shape = DownloadDialogRowShape, addFocusTarget = false)
+            .clickable(onClick = onRowClick)
+            .padding(vertical = if (isTv) 4.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        RadioButton(selected = selected, onClick = onClick)
+        RadioButton(selected = selected, onClick = if (isTv) null else onClick)
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(text = title, style = MaterialTheme.typography.bodyLarge)
@@ -596,11 +674,19 @@ private fun SelectableDropdownItem(
             }
         }
         Box {
-            IconButton(onClick = onDropdownClick) {
+            if (isTv) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_expand_more),
                     contentDescription = null,
+                    modifier = Modifier.padding(horizontal = 12.dp),
                 )
+            } else {
+                IconButton(onClick = onDropdownClick) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_expand_more),
+                        contentDescription = null,
+                    )
+                }
             }
             DropdownMenu(
                 expanded = isDropdownExpanded,

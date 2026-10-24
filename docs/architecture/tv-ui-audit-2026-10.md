@@ -4456,5 +4456,82 @@ Incognito mode）在电视上有两个问题：**面板右边缘贴着屏幕边*
 3. **提交后的结果页按 BACK 会退回桌面**：本轮两次走到"结果页 → BACK"，两次都直接落回 Android TV 启动器
    （`logcat -b crash` 无记录，进程仍在）；而从"搜索页本身"按 BACK 是正常回 Home（`eo2.png`）。
    怀疑结果页这一层做了两次 pop 或者搜索页被 `popUpTo(root)` 打开，下一轮专门查这条回退链。
+   > **第 74 轮复核：这条不成立。** 两次干净走"结果页 → BACK"都正常回到 Home，进程与导航栈都正常
+   > （`logcat` 无 crash）；只有输入法展开时 BACK 先收键盘、再按一次才退页面。当时多半是输入法吞掉了
+   > 第一次 BACK 又叠加了上一次退出，按已实现行为更正，不再当成待查缺陷。
 4. 输入框重新获得焦点时系统输入法会自己弹出来（`mInputShown=true`），电视上没有"Enter 即收键盘"的约定，
    这是系统 IME 行为，暂按既有效果记录。
+## 第七十四轮：下载对话框在电视上溢出屏幕、章节数下拉够不着（2026-10-25）
+
+详情页右上角 ⤓ 打开的"Download manga"对话框，是这一轮的目标。用遥控器把它走完之后暴露了三个问题，
+其中两个会让人直接干不了事：
+
+1. **对话框本身比屏幕还高**。收起态就已经占满整屏（实测表面 531.5dp，上下各只剩 4dp），展开
+   "More options"之后内容超出窗口，`AlertDialog` 只能把表面夹在窗口高度上，标题行被顶到 y=0，
+   上圆角直接被切掉——第 73 轮截图 `ev6.png` 里"Download manga"贴在屏幕最上沿就是这个原因。
+2. **每一行注册了两个停靠点，而且两个都没有焦点环**。`SelectableListItem` /
+   `SelectableDropdownItem` 是"整行 `clickable` + `RadioButton(onClick = …)`"，遥控器要按两次才跨过
+   一行，屏幕上却看不出焦点在哪：`ev4` 的 dump 里行 `View [568,200][1352,328]` 与内嵌
+   `RadioButton [568,216][664,312]` 同时 `focused=true`。
+3. **章节数下拉在遥控器上打不开**。行尾的 ▾ 是个 `IconButton`，`import` 出来的焦点遍历根本不进它：
+   从第一行往下连按 6 次 UP 再按 RIGHT，焦点始终只在行与行之间跳（`.tmp-eup.xml` 六次 dump 全落在
+   行 `View` 上），所以"First N chapters / Next unread N chapters"的菜单一次也没弹出来——电视上
+   就没法选"前几章"。
+
+另外两处是顺带发现的"手机上能用、遥控器上用不了"：选中提示写的是"长按章节列表项"（遥控器没有长按），
+"Start download"这一行的文字点了没反应（只有开关本身能吃遥控器）。
+
+### 原因：对话框没有电视高度预算，行内控件还是手机的焦点模型
+
+| 位置 | 现状 | 电视上的后果 |
+| --- | --- | --- |
+| `text = { Column(Modifier.verticalScroll(...)) }` | 内容多高对话框就多高，手机屏高（800dp+）够用 | 1080p 电视只有 540dp 高，展开后内容约 568dp，表面被夹到窗口高度：实测 531.5dp、边距 4dp、标题落到边缘 |
+| `Row(clickable)` + `RadioButton(onClick)` | 两个可聚焦控件嵌套在同一个可点行里 | 一行两个停靠点（4 行 = 8 个），且 `clickable` 的 `Row` 没有环、`RadioButton` 只有状态层 |
+| 行尾 `IconButton`（▾） | 依赖指针点击 | 焦点遍历不进入，章节数/分支菜单在遥控器上不可达 |
+| `Switch(onCheckedChange = …)` + 文本行 | 开关是唯一停靠点 | 行文字不可点、无环，遥控器要精确停在 52×32dp 的开关上 |
+| `chapter_selection_hint` | "You can select chapters to download by long click on item in the chapter list." + `bodySmall` | 遥控器没有长按；12sp 在 3m 外读不清 |
+
+### 改法
+
+| 位置 | 改动 |
+| --- | --- |
+| `DownloadDialog.kt` | 新增 `DownloadDialogTvBodyMaxHeight = 332.dp` 与 `DownloadDialogRowShape = RoundedCornerShape(12.dp)`；正文 `Column` 在电视上先 `heightIn(max = 332.dp)` 再 `verticalScroll(...)`，标题行与按钮行不再被挤出窗口 |
+| 同上：选项行 | `SelectableListItem` / `SelectableDropdownItem` 整行 `tvFocusable(shape = DownloadDialogRowShape, addFocusTarget = false)` + `RadioButton(onClick = null)`（电视），一行只留一个停靠点；行内垂直 padding 电视 8dp → 4dp 抵掉环占的高度 |
+| 同上：开关行 | "Start download" 与小说版"下载图片"在电视上整行可点（`Modifier.clickable`），`Switch(onCheckedChange = null)`；手机仍是开关自己管 |
+| 同上：More options | 该行补 `tvFocusable` 圆角环，电视上垂直 padding 12dp → 8dp |
+| 同上：下拉入口 | 电视上把 ▾ 从 `IconButton` 降级成纯图标，CENTER 行时先选模式再弹变体菜单（`onClick(); onDropdownClick()`）；手机保持"行选中 / 箭头开菜单" |
+| 同上：值卡片 | `SelectableValueCard` 的 `OutlinedCard` 补焦点环（目的地 / 首选格式两处） |
+| 同上：按钮 | `Save`、`Cancel` 各补 `tvFocusable(shape = CircleShape, addFocusTarget = false)`；`Save` 是实心主按钮，环色显式用 `onPrimary` 才看得见 |
+| 同上：提示文案 | 新增 `chapter_selection_hint_tv`（"Use the download button on a chapter row to pick chapters one by one."），电视上 `bodyMedium`；手机仍用原长按文案 + `bodySmall`。新串只有英文源串，其他语言等 Weblate |
+
+所有改动都挂在 `isTv` 分支后面，手机分支的常量、字号、焦点模型、文案全部保持原样。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 改前：详情页 ⤓ → CENTER，收起态 | `ev3.png`（第 73 轮留存） | 对话框表面 y=8…1071px，上下边距 4dp、高 531.5dp，标题贴着屏幕边 |
+| 改前：展开 More options | `ev6.png`（同上） | 上圆角被切、标题滑出屏幕、作品标题整行看不见 |
+| 改前：焦点遍历 | `ev4.xml` / `.tmp-eup.xml` | 一行两个 `focused=true`（行 + `RadioButton`）；UP×6 与 RIGHT 都不经过 ▾ |
+| 改后：收起态 | `ey0.png`、`fb1.png` | 上下面距各 44dp、高 451.5dp；标题、三个选项、提示、开关、More options、Cancel/Save 全在屏内 |
+| 改后：聚焦行 | `ey0.png` | 12dp 圆角蓝环包住整行（改前只有状态层） |
+| 改后：CENTER "First 2 chapters" | `ey1.png` | 行既被选中又弹出章节数菜单（`1 chapter` / `2 chapters`，首项高亮） |
+| 改后：菜单里选 `1 chapter` | `ey2.png` | 行标题变 "First 1 chapter"，单选钮同步选中 |
+| 改后：CENTER "Start download" | `ey2.png` | 整行有环，CENTER 把开关从开切到关（`Switch(onCheckedChange = null)` 生效） |
+| 改后：展开 More options | `ey3.png` | 边距 24dp、高 491.5dp，标题固定在顶部；目的地卡片从正文视口下沿露头 |
+| 改后：DOWN 进目的地卡片 | `ey4.png` | 正文在 332dp 视口里滚动，卡片带焦点环，整个展开区一次看全 |
+| 改后：CENTER 目的地卡片 | `ey5.png` | 菜单列出两个目录（标题 + 路径），可继续用 D-pad 选 |
+| 改后：DOWN×6 到 Cancel / RIGHT 到 Save | `fb0-btns.png`、`fb1-btns.png` | Cancel 是蓝色药丸环，Save 是白色药丸环（环在实心按钮外侧，清楚可见） |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（三次：3m 9s、3m 9s、3m 6s）。
+
+### 遗留
+
+1. **332dp 是配合 1080p/320dpi（540dp 屏高）写死的常量**。720p 电视常见 360dp 高、4K 常见 640dp 高，
+   同一个常量在 720p 上会把对话框顶回屏外。要改成按屏高取值（如 `LocalConfiguration.current.screenHeightDp * 0.62f`）
+   再单独验一轮，别在只有一种 AVD 的情况下当成通用解。
+2. `DropdownMenu` 里的 `DropdownMenuItem` 在电视上只有状态层高亮、没有焦点环（本轮章节数菜单、目录菜单
+   都是这样），与第 60 轮记的同类问题一致，等统一处理。
+3. 点 Save 之后的真实下载链路本轮没验（本地作品会写进 storage 目录），不在电视专项范围内。
+4. 顶栏 Share 对话框（`ez0.png`）同样是手机尺寸：正文 `bodyLarge`、按钮无环、内容贴边——下一轮可并入
+   "详情页里的对话框"一起收。

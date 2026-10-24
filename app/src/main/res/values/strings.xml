@@ -2122,6 +2122,7 @@
     <string name="more_options">More options</string>
     <string name="destination_directory">Destination directory</string>
     <string name="chapter_selection_hint">You can select chapters to download by long click on item in the chapter list.</string>
+    <string name="chapter_selection_hint_tv">Use the download button on a chapter row to pick chapters one by one.</string>
     <string name="chapter_range_selection_hint">Tip: select two chapters, then long-press a visible chapter between them to fill the range.</string>
     <!-- For chapters -->
     <string name="chapters_all">All</string>
