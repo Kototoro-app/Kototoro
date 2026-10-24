@@ -36,6 +36,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `the proxy page routes the real client and its test row reports Android's result`() {
+        probe("proxy", directory.resolve("中文 proxy"), 150)
+    }
+
+    @Test
     fun `real Tsundoku APK installs converts and reads a novel over the live network`() {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("kototoro.dex.real.apks") != null, "no -PrealApkDirectory")
         probe("real-novel", directory.resolve("中文 real novel"), 180)

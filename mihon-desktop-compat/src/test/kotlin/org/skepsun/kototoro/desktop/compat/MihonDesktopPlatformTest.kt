@@ -30,6 +30,11 @@ class MihonDesktopPlatformTest {
     }
 
     @Test
+    fun `a proxy selector supplied at startup carries the SDK client's requests`() {
+        probe("proxy", directory.resolve("中文 proxy space"))
+    }
+
+    @Test
     fun `failure after Koin and main loop initialization releases owned global state`() {
         probe("bad-preferences", directory.resolve("failed network initialization"))
     }
@@ -73,8 +78,9 @@ class MihonDesktopPlatformTest {
             assertEquals(source, (responses[0].result as SourceResult.Sources).sources.single().name)
             assertTrue((responses[1].result as SourceResult.Descriptor).descriptor.isPreferencesSupported)
             val preferenceNodes = (responses[2].result as SourceResult.Preferences).screen.nodes
-            assertEquals(listOf("域名设置", "User-Agent"), preferenceNodes.map { it.title })
-            assertEquals("host:user_agent", preferenceNodes.last().id)
+            assertEquals("域名设置", preferenceNodes.first().title)
+            // Kototoro's own rows follow the extension's: the domain override, then the User-Agent.
+            assertEquals(listOf("host:user_agent", "host:domain"), preferenceNodes.drop(1).map { it.id })
             assertEquals("offline 1", (responses[3].result as SourceResult.ListContent).content.single().title)
             assertTrue(Files.isDirectory(root.resolve("compat/files")))
             assertTrue(Files.isDirectory(root.resolve("compat/cache")))

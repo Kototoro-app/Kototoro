@@ -2,6 +2,7 @@ package org.skepsun.kototoro.desktop.compat
 
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
+import okhttp3.Authenticator
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -11,6 +12,7 @@ import org.skepsun.kototoro.core.network.cloudflare.isMihonCloudflareChallenge
 import org.skepsun.kototoro.core.network.cloudflare.solveClearanceAndRetry
 import org.skepsun.kototoro.core.network.webview.CloudflareSolveCoordinator
 import java.io.IOException
+import java.net.ProxySelector
 
 /** Preserve the SDK interceptor identity required by extensions; handle its responses in the next stage. */
 /**
@@ -23,9 +25,30 @@ internal fun installDesktopChallengeClient(helper: NetworkHelper, challenges: De
     val matches = builder.interceptors().withIndex().filter { it.value is CloudflareInterceptor }
     check(matches.size == 1) { "Pinned SDK client must contain exactly one CloudflareInterceptor" }
     builder.interceptors().add(matches.single().index + 1, DesktopChallengeInterceptor(challenges, guardSdkHandler = true))
-    val client = builder.build()
-    // NetworkHelper is final and exposes no client setter. Keep this version-specific field adapter here;
-    // no JAR/bytecode changes, no parallel NetworkHelper, and no mutation of OkHttp's immutable client.
+    return replaceSdkClient(helper, builder.build())
+}
+
+/**
+ * Windows has no system proxy for a JVM application, so Android's proxy settings page hands its selector and credentials
+ * straight to the SDK client. Both are read on every request (see `DesktopProxy`), which is why the page needs no restart
+ * and the challenge/browser installation below still derives from this client.
+ */
+internal fun installDesktopProxyClient(
+    helper: NetworkHelper,
+    selector: ProxySelector?,
+    authenticator: Authenticator?,
+): OkHttpClient {
+    val builder = helper.client.newBuilder()
+    if (selector != null) builder.proxySelector(selector)
+    if (authenticator != null) builder.proxyAuthenticator(authenticator)
+    return replaceSdkClient(helper, builder.build())
+}
+
+/**
+ * `NetworkHelper` is final and exposes no client setter. Keep this version-specific field adapter here;
+ * no JAR/bytecode changes, no parallel NetworkHelper, and no mutation of OkHttp's immutable client.
+ */
+private fun replaceSdkClient(helper: NetworkHelper, client: OkHttpClient): OkHttpClient {
     for (name in listOf("client\$delegate", "cloudflareClient\$delegate")) {
         val field = NetworkHelper::class.java.getDeclaredField(name)
         check(field.type == Lazy::class.java && field.trySetAccessible()) { "Pinned SDK client delegate is unavailable: $name" }

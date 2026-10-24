@@ -105,6 +105,12 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
                 { controller.showSourceSettings() }, testTag = "source-settings-open",
                 leadingIcon = painterResource("icons/ic_source_builtin.svg"))
             SettingsRowDivider()
+            // Android reaches its proxy page from storage and network; Windows has no such hub, so it sits next to the
+            // source settings whose requests it routes.
+            SettingsValueRow(AndroidStrings["proxy"], AndroidStrings["network"], null, enabled,
+                { controller.showProxySettings() }, testTag = "proxy-settings-open",
+                leadingIcon = painterResource("icons/ic_web.svg"))
+            SettingsRowDivider()
             SettingsValueRow(desktopText("settings.suggestions"), desktopText("more.recommendationsSummary"), null,
                 enabled, { controller.showRecommendations() }, testTag = "settings-recommendations-open",
                 leadingIcon = painterResource("icons/ic_suggestion.svg"))

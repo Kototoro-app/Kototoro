@@ -7200,3 +7200,51 @@ Android 的统计页点作品不是直接进详情，而是 `AppRouter.showStati
   无统计时保留弹窗、空图表、无首次阅读行、单位按小说换章节）；
   `stats` 探针增加真界面步骤：点作品行 → 弹窗出现且仍在统计页 → 图表/首次阅读/三块指标存在 →
   关闭后回到统计页 → 继续清空确认与返回，输出 `DESKTOP_UI_OK=stats`。
+
+## 158. Windows 代理设置页（Android ProxySettingsScreen 对齐）（2026-10-24）
+
+Android 在“存储与网络 → 代理”里配置 DIRECT/HTTP/SOCKS 与可选认证，`ProxyProvider` 把它装到所有 OkHttp 客户端上。
+Windows 之前完全没有代理：每个来源、封面、JSON 导入都走 compat 客户端建立时的直连。本节点补上这个页面，
+并让设置真正接管共享 HTTP 客户端。
+
+- 值模型：`desktop-runtime` 的 `DesktopProxySettings`（type/address/port/login/password）读写 Android 同一组键
+  `proxy_type_2`、`proxy_address`、`proxy_port`、`proxy_login`、`proxy_password`，类型存枚举名
+  `DIRECT`/`HTTP`/`SOCKS`（与 Android 的 `Proxy.Type.name` 一致）；`portNumber` 只接受 1..65535，
+  `isConfigured` 对应 Android 的“地址非空且端口合法”（DIRECT 恒为已配置）。
+- 运行时：`DesktopProxy(preferences)` 持有 `settings` StateFlow，`save` 写入 store 后发布新值；
+  `selector` 是 `ProxySelector`，每次 `select` 才读当前值——换代理不需要重建客户端；
+  `authenticator` 只在 HTTP 且填了用户名密码时回 407 的 `Proxy-Authorization`（请求或前一个响应已有该头则不动）。
+  地址用 `InetSocketAddress.createUnresolved`，DNS 交给代理。
+- 客户端接管：`DesktopChallengeInterceptor.kt` 新增 `installDesktopProxyClient(helper, selector, authenticator)`，
+  在 SDK 客户端 `newBuilder()` 上加 `proxySelector`/`proxyAuthenticator`，复用浏览器挑战那套
+  `client$delegate`/`cloudflareClient$delegate` 私有委托替换，所以 SDK 自己持有的 `client`/`cloudflareClient`
+  以及所有已捕获过它们的来源、封面与图片请求都改走新路由；`MihonDesktopPlatform` 增加可选
+  `proxySelector`/`proxyAuthenticator` 并在挑战安装**之前**装上，`DesktopSession.open` 打开 `desktop_network`
+  命名空间后传给它。
+- 连接池：`ProxySelector.select` 只影响新连接，OkHttp 仍会复用旧路由建立的池化连接（实测：切回直连后同一客户端
+  仍命中代理）。所以 `updateProxySettings` 保存后调 `DesktopSession.resetHttpConnections()`（`evictAll()`），
+  下一次请求才真的按新路由走。
+- 界面：`DesktopProxySettingsPage`，两节与 Android 相同——“网络”（类型/地址/端口/测试连接）与
+  “认证（可选）”（用户名/密码）。类型是单选对话框（DIRECT 显示 Android 的 `disabled`，另两项是协议名），
+  地址/端口/用户名/密码是文本对话框，密码行以圆点回显、对话框密文输入；端口对话框拒绝空以外非 1..65535 的输入
+  （不关对话框），与“扫描一切输入都存下来”的 Android 行为相比只是不落库明显非法的值。
+  测试连接行照 Android：运行中显示 `loading_`、未配置时摘要为 `invalid_proxy_configuration`，
+  目标同为 `http://neverssl.com`，成功弹 `connection_ok`、失败弹异常消息，结果对话框 `proxy-test-result`。
+  标签：`proxy-settings-back`、`proxy-type`、`proxy-address`、`proxy-port`、`proxy-test`、`proxy-username`、
+  `proxy-password`、`proxy-type-dialog`/`proxy-type-option:<NAME>`、`proxy-address-field`/`-save` 等、`proxy-test-close`。
+- 导航：`DesktopScreen.PROXY_SETTINGS`、`DesktopAppState.proxySettings`/`proxyTest`
+  （`DesktopProxyTestState(running, message, success)`）、`showProxySettings`/`updateProxySettings`/
+  `testProxyConnection`/`closeProxyTest`；窗口标题与行文案复用 Android 的 `proxy`/`network`，
+  入口在“更多 → 功能”节的 `proxy-settings-open` 行（Android 从存储与网络进，Windows 没有那个枢纽）。
+- 验证：`:desktop-runtime:test` 全绿，新增 `DesktopProxyTest` 5 项（新 store 是直连；值经 Android 键往返、重开 store 仍读到；
+  空地址/空端口/0/70000/非数字都保持直连；selector 把真实 OkHttp 请求送到 loopback HTTP 代理且只命中一次，
+  切回直连并 `evictAll` 后同一客户端失败且代理未再命中；凭据回答 407 挑战，页面清空后不再带）。
+  `:mihon-desktop-compat:test` 全绿，新增探针 `proxy` 模式：`MihonDesktopPlatform(root, proxySelector = …)` 之后
+  `sharedHttpClient().proxySelector === selector`，经 loopback 代理取回 `proxied` 且只命中一次（`NETWORK_REQUESTS=0`）；
+  同时把两条偏好断言从“最后一行是 User-Agent”改成按 id 断言——`HostDomain` 的 `host:domain` 行已排在其后，
+  旧断言在提交 `205cddd4b` 之后一直是失败的。
+  `:desktop-app:test` 213 项 1 失败 4 跳过（唯一失败仍是外来 TV 提交的 `SharedChapterDirectoryTest`，
+  已知非本工作流；新增的代理探针全绿），探针 `proxy` 走真界面：更多 → 代理 → 类型 HTTP →
+  地址/端口（70000 被拒）→ 测试连接得到 `connection_ok` 且代理确实收到请求 → 用不可解析的
+  `http://tvbox-import.invalid/config.json` 导入 JSON 来源成功（只能经代理）→ 切回直连后同一导入失败、
+  代理未再收到请求 → 返回更多，输出 `DESKTOP_UI_OK=proxy`。

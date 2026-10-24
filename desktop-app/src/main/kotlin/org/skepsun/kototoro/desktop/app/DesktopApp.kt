@@ -132,6 +132,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.SOURCE_SETTINGS -> DesktopSourceSettingsPage(controller, listState)
                             DesktopScreen.TAG_BLACKLIST -> DesktopTagBlacklistPage(controller, listState)
                             DesktopScreen.READING_STATS -> DesktopReadingStatsPage(controller, listState)
+                            DesktopScreen.PROXY_SETTINGS -> DesktopProxySettingsPage(controller, state)
                             DesktopScreen.MORE -> DesktopMorePanel(controller, !closing, onExitRequest)
                         }
                         if (state.screen == DesktopScreen.DETAILS && state.detailsOrigin != null) {
@@ -216,6 +217,7 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.SOURCE_SETTINGS -> desktopText("screens.sourceSettings")
         DesktopScreen.TAG_BLACKLIST -> desktopText("screens.tagBlacklist")
         DesktopScreen.READING_STATS -> AndroidStrings["reading_stats"]
+        DesktopScreen.PROXY_SETTINGS -> AndroidStrings["proxy"]
         DesktopScreen.EXTENSIONS -> desktopText("screens.extensions")
         DesktopScreen.DETAILS -> desktopText("screens.details")
         DesktopScreen.READER, DesktopScreen.NOVEL, DesktopScreen.VIDEO -> state.chapter?.title ?: desktopText("screens.reader")

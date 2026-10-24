@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.PersistentCookieStore
 import org.koin.core.KoinApplication
 import org.koin.core.context.GlobalContext
 import org.koin.dsl.module
+import okhttp3.Authenticator
 import okhttp3.OkHttpClient
 import org.skepsun.kototoro.core.source.SourcePreferenceStore
 import org.skepsun.kototoro.source.host.FileSourcePreferenceStore
@@ -16,6 +17,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.InjektScope
 import uy.kohesive.injekt.api.KoinRegistrar
 import java.net.CookieHandler
+import java.net.ProxySelector
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
@@ -28,6 +30,12 @@ class MihonDesktopPlatform(
     private val dataDirectory: Path? = null,
     private val bridgeExecutable: File? = null,
     private val enableBrowserChallenges: Boolean = false,
+    /**
+     * Android's proxy settings reach the SDK client here: the selector and credentials are consulted per request, so the
+     * settings page changes the proxy of an already running session.
+     */
+    private val proxySelector: ProxySelector? = null,
+    private val proxyAuthenticator: Authenticator? = null,
 ) : SourceHostPreferenceUiPlatform {
     private var application: DesktopCompatibilityApplication? = null
     private var preferences: MihonPreferenceBridge? = null
@@ -103,6 +111,9 @@ class MihonDesktopPlatform(
             restoreDesktopCookies(helper.cookieStore, savedCookies)
             // Force owned client creation so shutdown can close known dispatcher/cache resources.
             client = helper.client
+            if (proxySelector != null || proxyAuthenticator != null) {
+                client = installDesktopProxyClient(helper, proxySelector, proxyAuthenticator)
+            }
             if (enableBrowserChallenges && targetBridge != null && targetBridge.isFile) {
                 val challenges = DesktopBrowserChallenges(targetBridge, absolute.resolve("browser-challenges"), ::cookieBridge)
                     .also { browserChallenges = it }

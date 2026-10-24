@@ -43,6 +43,8 @@ class DesktopSession private constructor(
     val registry: MihonJarRegistry,
     private val parserPlatform: DesktopParserPlatform,
     val parsers: ParserPluginRegistry,
+    /** Android's proxy settings; it routes every request of the shared SDK client. */
+    val proxy: org.skepsun.kototoro.desktop.runtime.DesktopProxy,
 ) : Closeable {
     private val ids = AtomicLong()
     private val installed = storage.preferences.open("desktop_extensions")
@@ -80,6 +82,26 @@ class DesktopSession private constructor(
 
     /** Sites the JSON runtime serves right now; the runtime reads the same list. */
     internal fun jsonSourceList(): List<org.skepsun.kototoro.desktop.runtime.DesktopJsonSource> = jsonSourceCache
+
+    /**
+     * A changed proxy must not reuse a connection the previous route opened, so the desktop page drops the pool right
+     * after saving. The client itself keeps working; only its idle connections go away.
+     */
+    internal fun resetHttpConnections() {
+        platform.sharedHttpClient().connectionPool.evictAll()
+    }
+
+    /**
+     * Android's proxy "test connection" row: a plain HTTP GET through the shared client, so whatever the page saved is
+     * what gets exercised (including SOCKS and credentials). Returns the round-trip latency in milliseconds.
+     */
+    internal suspend fun testProxyConnection(): Long = withContext(Dispatchers.IO) {
+        val startedAt = System.nanoTime()
+        jsonClient.newCall(okhttp3.Request.Builder().url(PROXY_TEST_URL).build()).execute().use { response ->
+            check(response.isSuccessful) { "HTTP ${response.code} ${response.message}" }
+            (System.nanoTime() - startedAt) / 1_000_000
+        }
+    }
 
     /** Re-reads the stored documents after an import or a removal; read failures stay in [startupErrors]. */
     internal suspend fun reloadJsonSources() {
@@ -495,7 +517,10 @@ class DesktopSession private constructor(
             // The runtime reports catalog keys with English fallbacks; from here they follow the interface language.
             org.skepsun.kototoro.desktop.runtime.DesktopRuntimeStrings.install(DesktopStrings::localized)
             val storage = DesktopRuntime.open(root)
-            val platform = MihonDesktopPlatform(storage.paths.root.resolve("compat"), enableBrowserChallenges = true)
+            // The proxy the settings page edits becomes the SDK client's route before any source is constructed.
+            val proxy = org.skepsun.kototoro.desktop.runtime.DesktopProxy(storage.preferences.open("desktop_network"))
+            val platform = MihonDesktopPlatform(storage.paths.root.resolve("compat"), enableBrowserChallenges = true,
+                proxySelector = proxy.selector, proxyAuthenticator = proxy.authenticator)
             var registry: MihonJarRegistry? = null
             var parsers: ParserPluginRegistry? = null
             try {
@@ -503,7 +528,7 @@ class DesktopSession private constructor(
                 // Parser plugins reuse the platform's HTTP client: one cookie store and challenge flow for all ecosystems.
                 val parserPlatform = DesktopParserPlatform(platform.sharedHttpClient(), storage.preferences)
                 parsers = ParserPluginRegistry(parserPlatform)
-                return DesktopSession(storage, platform, registry, parserPlatform, parsers).also {
+                return DesktopSession(storage, platform, registry, parserPlatform, parsers, proxy).also {
                     it.restoreJars()
                     // Superseded and removed versions are deleted once nothing has them open.
                     runCatching { it.cleanupArtifacts() }
@@ -545,6 +570,8 @@ class InstalledExtension(val label: String, val sources: List<SourceListing>)
 
 private const val PARSER_KEY_PREFIX = "parser:"
 private const val CLOUDSTREAM_KEY_PREFIX = "cloudstream:"
+/** The same plain-HTTP target Android's proxy page tests against. */
+private const val PROXY_TEST_URL = "http://neverssl.com"
 
 private fun cloudstreamListing(source: org.skepsun.kototoro.cloudstream.model.CloudstreamSource) =
     SourceListing(CloudstreamSourceRuntime.sourceRef(source), source.displayName, SourceEcosystem.CLOUDSTREAM, supportsLatest = false)

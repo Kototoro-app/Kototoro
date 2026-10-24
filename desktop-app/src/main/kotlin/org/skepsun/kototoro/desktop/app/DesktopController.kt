@@ -74,7 +74,7 @@ internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
 
 enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
-    RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE,
+    RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, PROXY_SETTINGS,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -150,6 +150,10 @@ data class DesktopAppState(
     val readingStatsKind: StatsContentKind = StatsContentKind.ALL,
     /** Android's per-work statistics sheet; null when it is closed. */
     val contentStats: DesktopContentStats? = null,
+    /** Android's proxy page: the saved connection and the state of its "test connection" row. */
+    val proxySettings: org.skepsun.kototoro.desktop.runtime.DesktopProxySettings =
+        org.skepsun.kototoro.desktop.runtime.DesktopProxySettings(),
+    val proxyTest: DesktopProxyTestState = DesktopProxyTestState(),
     /** Stored suggestions, most relevant first (Android's recommendations). */
     val suggestions: List<SourceContent> = emptyList(),
     /** True while [DesktopController.refreshSuggestions] runs in the background; the window stays usable. */
@@ -282,6 +286,8 @@ class DesktopController(val session: DesktopSession) {
             ),
             ) }
         }
+        // The proxy the SDK client already uses is what the page shows; changing it writes the same store.
+        mutableState.update { it.copy(proxySettings = session.proxy.settings.value) }
         // Repositories are read in the background at start: updates are installed (when allowed) or announced.
         scope.launch { runCatching { startupUpdates() } }
         // The stamped version and the saved update toggles, before the first check or the first composed screen.
@@ -1600,6 +1606,48 @@ class DesktopController(val session: DesktopSession) {
 
     /** Android's source settings screen: rail order, layout and the adult-content targets. */
     fun showSourceSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SOURCE_SETTINGS) } }
+
+    /** Android's proxy page, reached from "more" the way Android reaches it from storage and network. */
+    fun showProxySettings() = navigate {
+        mutableState.update { it.copy(screen = DesktopScreen.PROXY_SETTINGS, proxyTest = DesktopProxyTestState()) }
+    }
+
+    /**
+     * Saves one change of the proxy page. The value goes to the same store the SDK client's selector reads, and the
+     * connection pool is dropped so the next request really uses the new route.
+     */
+    internal fun updateProxySettings(value: org.skepsun.kototoro.desktop.runtime.DesktopProxySettings) {
+        val persisted = session.proxy.save(value)
+        mutableState.update {
+            it.copy(proxySettings = value,
+                proxyTest = DesktopProxyTestState(),
+                message = if (persisted) it.message else desktopText("jsonSources.saveFailed"))
+        }
+        session.resetHttpConnections()
+    }
+
+    /** Android's "test connection" row: the shared client asks the target through whatever the page saved. */
+    fun testProxyConnection() {
+        if (mutableState.value.proxyTest.running) return
+        mutableState.update { it.copy(proxyTest = DesktopProxyTestState(running = true)) }
+        scope.launch {
+            val result = runCatching { session.testProxyConnection() }
+            mutableState.update { state ->
+                // A page that was left meanwhile keeps no stale result.
+                if (state.screen != DesktopScreen.PROXY_SETTINGS) state
+                else state.copy(proxyTest = DesktopProxyTestState(
+                    running = false,
+                    message = result.fold(
+                        onSuccess = { AndroidStrings["connection_ok"] },
+                        onFailure = { it.message ?: it::class.simpleName.orEmpty() },
+                    ),
+                    success = result.isSuccess,
+                ))
+            }
+        }
+    }
+
+    internal fun closeProxyTest() = mutableState.update { it.copy(proxyTest = DesktopProxyTestState()) }
 
     /** Android's global tag blacklist, reached from the source settings page like the Android preference. */
     fun showTagBlacklist() = navigate { mutableState.update { it.copy(screen = DesktopScreen.TAG_BLACKLIST) } }
