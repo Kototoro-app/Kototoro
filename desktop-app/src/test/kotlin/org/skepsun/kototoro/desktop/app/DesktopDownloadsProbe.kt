@@ -6,6 +6,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.skia.Image
+import org.skepsun.kototoro.desktop.runtime.DesktopDownloadSettings
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.FileTime
@@ -22,6 +23,17 @@ internal object DesktopDownloadsProbe {
         val session = runBlocking { DesktopSession.open(Path.of(args[1])) }
         val controller = DesktopController(session)
         try {
+            // One page at a time, so the request counts asserted below describe a fixed sequence; the parallel fetch
+            // path these numbers used to hide is covered by DesktopDownloadsTest and DesktopDownloadConcurrencyTest.
+            runBlocking {
+                session.downloadPreferences.save(DesktopDownloadSettings(
+                    threads = 1,
+                    maxActiveSeries = 1,
+                    requestDelayMs = 0,
+                    retryCount = 2,
+                    retryDelayMs = 500,
+                ))
+            }
             // This probe drives the manual "reclaim" flow, so the automatic sweep (which runs as soon as the queue
             // goes idle) is switched off first and turned back on at the end to prove the toggle works.
             if (mode.endsWith("write")) controller.setAutoDownloadCleanup(false)
@@ -99,7 +111,9 @@ internal object DesktopDownloadsProbe {
                     System.setProperty("fixture.reader.failure.index", "14")
                     onNodeWithTag("download-chapter:${chapter.id}").performClick()
                     status(DesktopDownloadStatus.FAILED)
-                    check(controller.downloads.state.value.single().record.completedPages == 2)
+                    check(controller.downloads.state.value.single().record.completedPages == 2) {
+                        "record after the authored page failure: ${controller.downloads.state.value.single()}"
+                    }
                     check(runBlocking { session.library.progress(content.id) } == null)
                     onNodeWithTag("nav:更多").performClick(); idle()
                     onNodeWithTag("nav:下载").performClick()
@@ -120,7 +134,11 @@ internal object DesktopDownloadsProbe {
                     onNodeWithTag("download-resume:$key").performClick()
                     status(DesktopDownloadStatus.COMPLETE)
                     check(controller.downloads.state.value.single().record.completedPages == 5)
-                    check(System.getProperty("fixture.reader.requests") == "7")
+                    // Two pages, the authored failure twice (Android's default retry count allows two attempts), then
+                    // the attempt the pause cancels and the three the resume fetches: 2 + 2 + 1 + 3.
+                    check(System.getProperty("fixture.reader.requests") == "8") {
+                        "image requests: ${System.getProperty("fixture.reader.requests")}"
+                    }
                     check(System.getProperty("fixture.reader.page_lists") == "1")
                     check(runBlocking { session.library.progress(content.id) } == null)
                     onNodeWithTag("download-storage").performClick()

@@ -59,6 +59,10 @@ object DesktopAppProbe {
                 DesktopDictionaryRulesProbe.run(args)
                 return
             }
+            if (args[0] == "downloadsettings") {
+                DesktopDownloadSettingsProbe.run(args)
+                return
+            }
             if (args[0] == "playback") {
                 DesktopPlaybackProbe.run(args)
                 return

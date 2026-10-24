@@ -6,8 +6,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.skepsun.kototoro.core.download.DownloadPolicy
 import org.skepsun.kototoro.core.source.*
+import org.skepsun.kototoro.desktop.runtime.DesktopDownloadSettings
 import org.skepsun.kototoro.source.host.FileSourcePreferenceStore
+import java.io.IOException
+import java.util.concurrent.atomic.AtomicInteger
 
 internal enum class DesktopDownloadStatus { QUEUED, DOWNLOADING, PAUSED, COMPLETE, FAILED }
 
@@ -65,19 +69,28 @@ internal object DesktopDownloadSelection {
     fun retain(selection: Set<String>, keys: Collection<String>): Set<String> = selection intersect keys.toSet()
 }
 
-/** One serial chapter queue, owned by the Controller's scope; restart requires explicit continuation. */
+/**
+ * The chapter queue, owned by the Controller's scope; restart requires explicit continuation.
+ *
+ * Its shape follows Android's worker settings: at most `maxActiveSeries` chapters run at once, one chapter fetches up
+ * to `threads` pages at a time, requests to the same series are spaced by `requestDelayMs`, and a failed page is
+ * retried `retryCount` times `retryDelayMs` apart. The settings are read per chapter and per page, so a change on the
+ * downloads settings page applies to the next request instead of requiring a restart.
+ */
 internal class DesktopDownloads(
     private val store: DesktopDownloadStore,
     private val scope: CoroutineScope,
     private val revision: (SourceChapter) -> String,
     private val pages: suspend (SourceChapter) -> List<SourcePage>,
     private val prepare: suspend (SourcePage, String, SourceImageArtifact?) -> DesktopReaderFile,
+    private val settings: () -> DesktopDownloadSettings = { DesktopDownloadSettings() },
 ) {
     private val mutableState = MutableStateFlow(store.records.value.map {
         DesktopDownloadState(it, if (it.isComplete) DesktopDownloadStatus.COMPLETE else DesktopDownloadStatus.PAUSED)
     })
     val state = mutableState.asStateFlow()
-    private val gate = Mutex()
+    private val slots = DesktopDownloadSlots { settings().activeSeriesLimit }
+    private val pacer = DesktopRequestPacer(delayMs = { DownloadPolicy.sourceDelayMs(settings().requestDelayMs) })
     private val jobs = mutableMapOf<String, Job>()
 
     @Synchronized
@@ -89,7 +102,7 @@ internal class DesktopDownloads(
         store.save(initial)
         publish(DesktopDownloadState(initial, DesktopDownloadStatus.QUEUED))
         val job = scope.launch(start = CoroutineStart.LAZY) {
-            gate.withLock {
+            slots.withSlot {
                 var record = initial
                 try {
                     val currentRevision = revision(chapter)
@@ -99,28 +112,24 @@ internal class DesktopDownloads(
                     publish(DesktopDownloadState(record, DesktopDownloadStatus.DOWNLOADING))
                     store.save(record)
                     if (record.pages.isEmpty()) {
+                        pacer.await(contentId)
                         val requested = pages(chapter)
                         require(requested.isNotEmpty()) { desktopText("error.noPages") }
                         record = record.copy(pages = requested.map(::SourceDownloadPage))
                     }
                     store.save(record)
-                    for (index in record.pages.indices) {
-                        currentCoroutineContext().ensureActive()
-                        val item = record.pages[index]
-                        val file = prepare(item.page, record.extensionRevision, item.artifact)
-                        currentCoroutineContext().ensureActive()
-                        record = record.copy(pages = record.pages.toMutableList().also {
-                            it[index] = SourceDownloadPage(item.page, file.artifact, file.image.width, file.image.height)
-                        })
-                        store.save(record)
-                        publish(DesktopDownloadState(record, DesktopDownloadStatus.DOWNLOADING))
-                    }
+                    record = fetchPages(contentId, record, slots = settings())
                     publish(DesktopDownloadState(record, DesktopDownloadStatus.COMPLETE))
                 } catch (error: CancellationException) { throw error }
                 catch (error: Exception) {
-                    publish(DesktopDownloadState(record, DesktopDownloadStatus.FAILED, error.message ?: desktopText("downloads.failed")))
+                    // The manifest saved by fetchPages holds the pages that landed; the local copy predates them.
+                    val landed = store.find(contentId, chapter) ?: record
+                    publish(DesktopDownloadState(landed, DesktopDownloadStatus.FAILED,
+                        error.message ?: desktopText("downloads.failed")))
                 } catch (error: LinkageError) {
-                    publish(DesktopDownloadState(record, DesktopDownloadStatus.FAILED, desktopText("error.sourceApiIncompatibleShort")))
+                    val landed = store.find(contentId, chapter) ?: record
+                    publish(DesktopDownloadState(landed, DesktopDownloadStatus.FAILED,
+                        desktopText("error.sourceApiIncompatibleShort")))
                 }
             }
         }
@@ -161,6 +170,93 @@ internal class DesktopDownloads(
     fun forget(keys: Collection<String>) {
         if (keys.isEmpty()) return
         mutableState.update { list -> list.filterNot { it.key in keys } }
+    }
+
+    /**
+     * Fetches the chapter's pages with the configured page width: workers pull indices from one counter, so a slow page
+     * does not hold the ones behind it, and every successful page is written into the manifest before the next one
+     * starts. A failure cancels the siblings, saves what already landed and rethrows, which is what makes a resumed
+     * chapter refetch only the pages the reader cache cannot verify.
+     */
+    private suspend fun fetchPages(
+        contentId: Long,
+        source: SourceChapterDownload,
+        slots: DesktopDownloadSettings,
+    ): SourceChapterDownload {
+        var record = source
+        val items = record.pages.toMutableList()
+        val mutex = Mutex()
+        var failure: Throwable? = null
+        try {
+            coroutineScope {
+                val counter = AtomicInteger(0)
+                val workers = minOf(slots.threads, items.size).coerceAtLeast(1)
+                repeat(workers) {
+                    launch {
+                        while (true) {
+                            val index = counter.getAndIncrement()
+                            if (index >= items.size) break
+                            currentCoroutineContext().ensureActive()
+                            val item = items[index]
+                            pacer.await(contentId)
+                            val file = withRetries(slots) {
+                                prepare(item.page, record.extensionRevision, item.artifact)
+                            }
+                            currentCoroutineContext().ensureActive()
+                            mutex.withLock {
+                                items[index] = SourceDownloadPage(
+                                    item.page,
+                                    file.artifact,
+                                    file.image.width,
+                                    file.image.height,
+                                )
+                                record = record.copy(pages = items.toList())
+                                store.save(record)
+                                publish(DesktopDownloadState(record, DesktopDownloadStatus.DOWNLOADING))
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (error: Throwable) {
+            failure = error
+        }
+        // Saves the pages that landed even when the chapter failed or was paused; no worker is running here.
+        record = record.copy(pages = items.toList())
+        store.save(record)
+        publish(DesktopDownloadState(record, DesktopDownloadStatus.DOWNLOADING))
+        failure?.let { throw it }
+        return record
+    }
+
+    /**
+     * Android's `runFailsafe` without the interactive pause: a page that failed for a reason a second attempt can cure
+     * is retried, a cancelled page is not. The source layer wraps every exception it catches into
+     * [SourceRemoteException] with [SourceErrorCode.RUNTIME_FAILURE], so that code has to count as retryable here —
+     * otherwise a 503 on one page would abandon the whole chapter and the retry row would do nothing.
+     */
+    private suspend fun <T> withRetries(settings: DesktopDownloadSettings, block: suspend () -> T): T {
+        val attempts = DownloadPolicy.attempts(settings.retryCount)
+        var attempt = 1
+        while (true) {
+            try {
+                return block()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                if (!isRetryable(error)) throw error
+                if (attempt >= attempts) throw error
+                attempt += 1
+                delay(DownloadPolicy.retryDelayMs(settings.retryDelayMs, -1L))
+            }
+        }
+    }
+
+    /** A network error or a source that failed at runtime; a challenge, a bad argument or an unsupported call is not. */
+    private fun isRetryable(error: Throwable): Boolean = when (error) {
+        is IOException -> true
+        is SourceRemoteException -> error.error.code == SourceErrorCode.RUNTIME_FAILURE
+        else -> false
     }
 
     private fun publish(value: DesktopDownloadState) {

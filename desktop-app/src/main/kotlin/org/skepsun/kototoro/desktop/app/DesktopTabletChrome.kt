@@ -127,6 +127,11 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
                 { controller.showDownloads() }, testTag = "nav:${desktopText("more.downloads")}",
                 leadingIcon = painterResource("icons/ic_download.svg"))
             SettingsRowDivider()
+            // Android's download settings; the Windows queue reads the same numbers, so this is not a dead page.
+            SettingsValueRow(desktopText("downloadsSettings.title"), desktopText("downloadsSettings.moreSummary"), null,
+                enabled, { controller.showDownloadSettings() }, testTag = "download-settings-open",
+                leadingIcon = painterResource("icons/ic_download.svg"))
+            SettingsRowDivider()
             SettingsValueRow(desktopText("more.backups"), desktopText("more.backupsSummary"), null, enabled,
                 { controller.showBackups() }, testTag = "nav:${desktopText("more.backups")}",
                 leadingIcon = painterResource("icons/ic_backup_restore.svg"))

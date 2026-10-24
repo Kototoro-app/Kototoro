@@ -12,6 +12,7 @@ import org.skepsun.kototoro.desktop.compat.MihonDesktopPlatform
 import org.skepsun.kototoro.cloudstream.desktop.CloudstreamPluginRegistry
 import org.skepsun.kototoro.cloudstream.desktop.CloudstreamSourceRuntime
 import org.skepsun.kototoro.desktop.runtime.DesktopCloudstreamRecord
+import org.skepsun.kototoro.desktop.runtime.DesktopDownloadPreferences
 import org.skepsun.kototoro.desktop.runtime.DesktopExtensionFiles
 import org.skepsun.kototoro.desktop.runtime.DesktopManagedCloudstreamPlugin
 import org.skepsun.kototoro.desktop.runtime.DesktopExtensionKind
@@ -171,6 +172,10 @@ class DesktopSession private constructor(
         sources.fetchImage(it)
     }
     internal val downloadStore = DesktopDownloadStore(storage.preferences)
+    /** Android's download speed/retry preferences; the queue reads them per chapter and per page. */
+    internal val downloadPreferences = DesktopDownloadPreferences(
+        storage.preferences.open("desktop_download_settings"),
+    )
     /** CBZ export reads the same verified blobs as the reader; no second copy of the images lives in the store. */
     internal val downloadExporter = DesktopDownloadExporter(storage.paths.images)
     /** Automatic sweep of the unreachable page blocks; the controller runs it when the queue goes idle. */

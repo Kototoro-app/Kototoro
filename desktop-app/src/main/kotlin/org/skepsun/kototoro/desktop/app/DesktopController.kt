@@ -80,6 +80,7 @@ enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
     PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES, DICTIONARY_RULES,
+    DOWNLOAD_SETTINGS,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -261,7 +262,8 @@ class DesktopController(val session: DesktopSession) {
     private val novelOperations = DesktopNovelOperations(mutableState, session, scope, gate)
     private val videoOperations = DesktopVideoOperations(mutableState, session, scope, gate)
     internal val downloads = DesktopDownloads(session.downloadStore, scope,
-        { session.readerRevision(it.source.name) }, session::downloadPages, session::prepareDownload)
+        { session.readerRevision(it.source.name) }, session::downloadPages, session::prepareDownload,
+        { session.downloadPreferences.current() })
     private val mutableCleanup = MutableStateFlow<DesktopDownloadCleanupPlan?>(null)
     internal val cleanupPreview = mutableCleanup.asStateFlow()
     private val mutableAutoCleanup = MutableStateFlow(session.downloadMaintenance.automatic)
@@ -1781,6 +1783,18 @@ class DesktopController(val session: DesktopSession) {
 
     /** Android's playback settings screen: the player's backdrop, decoder mode and control-overlay opacities. */
     fun showPlaybackSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.PLAYBACK_SETTINGS) } }
+
+    /** Android's download settings; the queue below reads the same stored value, so a change needs no restart. */
+    internal val downloadSettings = session.downloadPreferences.settings
+
+    fun showDownloadSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.DOWNLOAD_SETTINGS) } }
+
+    /** Writes the speed/retry preferences; the next chapter and the next page read them. */
+    fun saveDownloadSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopDownloadSettings) = action {
+        if (!session.downloadPreferences.save(settings)) {
+            mutableState.update { it.copy(error = desktopText("error.downloadSettingsInMemory")) }
+        }
+    }
 
     /** Writes the playback preferences the player reads; the same four keys Android's own screen writes. */
     fun videoSettings(settings: DesktopVideoSettings) = action {

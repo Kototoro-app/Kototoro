@@ -91,7 +91,7 @@ class DesktopDownloadsBatchTest {
             val queue = DesktopDownloads(store, this, { revision }, { chapter ->
                 if (chapter == first) release.await()
                 chapterPages(chapter)
-            }, { page, hash, known -> cache.prepareDownload(page, hash, known) })
+            }, { page, hash, known -> cache.prepareDownload(page, hash, known) }, serialQueueSettings())
             val running = queue.enqueue(12, first, "作品")
             val waiting = queue.enqueue(12, second, "作品")
             assertEquals(2, DesktopDownloadBatch.pausable(queue.state.value).size)
@@ -121,7 +121,7 @@ class DesktopDownloadsBatchTest {
                 artifact(files, page)
             }
             val queue = DesktopDownloads(store, this, { revision }, { chapterPages(it) },
-                { page, hash, known -> cache.prepareDownload(page, hash, known) })
+                { page, hash, known -> cache.prepareDownload(page, hash, known) }, serialQueueSettings())
             queue.enqueue(12, first).join()
             queue.enqueue(12, second).join()
             val failed = queue.state.value.single { it.status == DesktopDownloadStatus.FAILED }
@@ -145,7 +145,7 @@ class DesktopDownloadsBatchTest {
             val store = DesktopDownloadStore(preferences)
             val cache = DesktopReaderImages(files.directory, preferences.open("cache")) { artifact(files, it) }
             val queue = DesktopDownloads(store, this, { revision }, { chapterPages(it) },
-                { page, hash, known -> cache.prepareDownload(page, hash, known) })
+                { page, hash, known -> cache.prepareDownload(page, hash, known) }, serialQueueSettings())
             queue.enqueue(12, first, "作品").join()
             queue.enqueue(12, second, "作品").join()
             assertEquals(2, store.records.value.size)

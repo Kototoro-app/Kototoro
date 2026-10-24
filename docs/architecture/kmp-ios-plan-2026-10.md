@@ -7686,3 +7686,66 @@ Windows 之前完全没有代理：每个来源、封面、JSON 导入都走 com
   （Android `NovelBookPreferences`）；其余设置页对齐（下载、备份周期、同步、追踪、服务、导航配置、通知、全景、
   内容目录、TTS 等）。
 
+
+## 168. 共享下载限速/重试规则 + Windows 下载设置页（对齐 Android DownloadsSettingsScreen）（2026-10-24）
+- 问题：§167 的“仍待”里第一条的“下载”页。Windows 下载器当初按“串行后台执行”实现：一章一页一页抓，
+  没有页级重试，也没有并发与间隔的概念，Android 那四组行（线程 / 同时下载作品数 / 请求间隔 / 重试次数与间隔）
+  在桌面既没有页面也没有消费者。线程与任务这块要“优化”，先把规则提成共享的一份，再让 Windows 引擎真的读它。
+- 共享提取（`core-domain`，包名 `org.skepsun.kototoro.core.download`）：
+  - 新 `DownloadPolicy`：线程 1..10、同时作品 1..11（11 = 不限）、请求间隔 0..5000 ms、重试 1..10 次、
+    重试间隔 0.5..10 s、`Retry-After` 上限 2 h 等默认/边界常量，加十个只做 clamp 与判断的小函数
+    （`threads`、`maxActiveSeries`、`requestDelayMs`、`retryCount`、两个 `retryDelayMs` 重载、`sourceDelayMs`、
+    `activeSeriesLimit`、`attempts`、`isRetryDelayExcessive`）。
+  - Android 的 `AppSettings` 把这五组 getter/setter 与 companion 默认值改为调用共享 policy；
+    `download/ui/worker/DownloadPolicy.kt` 变成薄适配器（保留 `HLS_SEGMENT_CONCURRENCY = 3`、
+    `MAX_WORK_RETRIES`、`shouldRetry = error is IOException`）。`runFailsafe` 的语义原样保留：
+    `attempts(retryCount) = retryCount.coerceAtLeast(1)`，即“总尝试次数等于用户填的数”，不是“重试次数 + 1”。
+- `desktop-runtime`：新 `DesktopDownloadSettings`（五个字段 + `activeSeriesLimit`/`isSeriesUnlimited`/
+  `toPreferences()`）与 `DesktopDownloadPreferences`（`settings: StateFlow`、`current()`、`save()`、`reload()`）。
+  键与 Android 同名（`downloads_threads`/`downloads_max_active_series`/`downloads_request_delay`/
+  `downloads_retry_count`/`downloads_retry_delay`），`from()` 全部过共享 clamp，所以手改 store 也写不出
+  11 线程或 20 分钟重试间隔。store 必须是 `desktop_download_settings`：`desktop_downloads` 已经被
+  `FileSourcePreferenceStore` 用去存章节清单，同名会让清单加载器把设置项当 manifest 解码。
+- `desktop-app` 引擎：
+  - 新 `DesktopDownloadConcurrency.kt`：`DesktopDownloadSlots`（每章占一个“作品位”，`maxActiveSeries` 是上限，
+    11 表示不限；被取消的等待者不吞名额）与 `DesktopRequestPacer`（按作品 key 记 `nextAllowed`，间隔 0 直接放行）。
+  - `DesktopDownloads` 增加 `settings: () -> DesktopDownloadSettings` 供应商（Controller 传
+    `session.downloadPreferences.current()`），开章与每页请求前都重读一次，改设置不用重启；页池是
+    `minOf(threads, pages)` 个 worker 从一个 `AtomicInteger` 取下标，成功一页就在 mutex 里写进清单并落盘，
+    失败或暂停仍保存已落地的页，续传只补验证不过的那些。
+  - 顺带修掉两个既有缺陷：失败章节的状态发布的是 `fetchPages` 之前的本地副本（页面全空），界面上的
+    “已完成页数”永远是 0，现在读 store 里已经落盘的那份清单；重试谓词本来只有 `IOException`，
+    而源层把扩展抛的一切异常都包成 `SourceRemoteException(RUNTIME_FAILURE)`，页级重试在 Windows 上从不触发，
+    现在 RUNTIME_FAILURE 也算可重试，`CHALLENGE_REQUIRED`/`INVALID_ARGUMENT`/`UNSUPPORTED_OPERATION`/
+    `SOURCE_UNAVAILABLE` 不重试（要人等的不该空转）。
+- Windows 的默认值取“与 Android 相同的线程/并发/重试（4 / 4 / 两次 × 2 s），请求间隔默认 0”：
+  Android 的 1600 ms 只对声明 `isSlowdownEnabled()` 的源生效（`DownloadSlowdownDispatcher`），
+  共享源契约没有这个标志，默认开就会把每个 Windows 下载都拖慢，这条写进了页面说明与 KDoc。
+- 页面：更多 → 下载设置（`download-settings-open`，`SettingsValueRow` + `ic_download.svg`）进
+  `DesktopScreen.DOWNLOAD_SETTINGS`，标题取 Android `downloads`。一页一个 `SettingsSectionHeader`
+  （`download_speed_and_retries`）+ 一个 `SettingsGroup` 的五个 `SettingsSliderRow`（1..10 线程；1..11 同时作品数，
+  11 显示 Android 的 `download_max_active_series_uncapped`；0..5000 请求间隔；1..10 重试次数；
+  500..10000 重试间隔，单位 ms），与播放设置页同规矩：拖动只改本地 draft，松手才 `saveDownloadSettings`，
+  写盘失败在状态栏报 `error.downloadSettingsInMemory`。下方 `SettingsInfoRow`（`downloadsSettings.parity`）
+  说明哪些 Android 行没搬。行文案全部取 Android 资源（`download_threads`/`download_max_active_series`/
+  `download_request_delay`/`download_retry_count`/`download_retry_delay` 与它们的 `_summary`），桌面只新增 5 个键。
+- 验证：
+  - `:core-domain:jvmTest --tests *DownloadPolicyTest*` 5/5（clamp 边界、11 = 不限、`attempts` 至少 1、
+    `Retry-After` 上限、间隔 0）。
+  - `:desktop-runtime:test --tests *DesktopDownloadSettingsTest*` 4/4（空 store 默认值；五个键在
+    `desktop_download_settings` 下往返；手改越界值被夹回；类型不对退回默认）。
+  - `:desktop-app:test` 的八个下载相关套件全绿，新增 8 项：三页 `threads = 3` 时并发峰值恰好 3 且全部落地；
+    `IOException` 页重试一次后完成；`SourceRemoteException(RUNTIME_FAILURE)` 同样重试；`CHALLENGE_REQUIRED`
+    只试一次就报错；失败章节的状态带着已落地的 2 页；超过作品上限的章停在 QUEUED；
+    `DesktopDownloadSlots`/`DesktopRequestPacer` 的四项（名额、取消不吞名额、同作品间隔 ≥ 80 ms 而另一作品立即、
+    间隔 0 关闭）。原有队列测试统一钉上 `serialQueueSettings()`（串行 + 无间隔 + 单次尝试），因为它们要数请求与页数。
+  - 探针：新 `downloadsettings`（独立用例）从更多进下载设置，断言默认 4/4/0/2/2000、五个滑杆与说明行都在，
+    拖到 7 线程 / 10 次重试 / 11（不限）作品 / 800 ms 间隔 / 1500 ms 重试间隔后断言 store 里五个键都写了、
+    `controller.downloadSettings.value` 与读回一致、不限作品数显示 Android 的“无限制”文案，再返回更多。
+    `downloads-write`/`downloads-read` 把设置钉成 `threads = 1, maxActiveSeries = 1, requestDelayMs = 0,
+    retryCount = 2, retryDelayMs = 500`：作者故障页被试两次，图片请求数从 7 变 8（7 是没有页级重试时的数）。
+  - `:desktop-app:verifyDesktopStrings` 通过（5 个新键两个 catalog 都有）；`:desktop-app:compileKotlin` 通过；
+    `:app:compileDebugKotlin` 全绿（`AppSettings` 与 Android `DownloadPolicy` 改写后仍能编译，0 error）。
+- 仍待：下载设置页还没搬的 Android 行（内容目录 / 下载格式 / 视频画质 / 小说插图 / 仅蜂窝网络 / 电池优化 与
+  `downloads_settings_info`）；`isSlowdownEnabled` 的等价物（源级限速开关，现在只有全局间隔）；
+  HLS 段并发仍固定 3（云端视频下载没进桌面）；元数据驻留控制与预测预取也仍未做。

@@ -12,6 +12,7 @@ import androidx.annotation.FloatRange
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.collection.ArraySet
 import androidx.core.content.edit
+import org.skepsun.kototoro.core.download.DownloadPolicy
 import androidx.core.os.LocaleListCompat
 import androidx.documentfile.provider.DocumentFile
 import androidx.preference.PreferenceManager
@@ -2197,24 +2198,26 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         set(value) = prefs.edit { putBoolean(KEY_DOWNLOADS_AUTO_RETRY, value) }
 
     var downloadThreads: Int
-        get() = prefs.getSafeInt(KEY_DOWNLOADS_THREADS, DOWNLOADS_THREADS_DEFAULT).coerceIn(1, 10)
-        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_THREADS, value.coerceIn(1, 10)) }
+        get() = DownloadPolicy.threads(prefs.getSafeInt(KEY_DOWNLOADS_THREADS, DOWNLOADS_THREADS_DEFAULT))
+        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_THREADS, DownloadPolicy.threads(value)) }
 
     var downloadMaxActiveSeries: Int
-        get() = prefs.getSafeInt(KEY_DOWNLOADS_MAX_ACTIVE_SERIES, DOWNLOADS_MAX_ACTIVE_SERIES_DEFAULT).coerceIn(1, UNLIMITED_SERIES)
-        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_MAX_ACTIVE_SERIES, value.coerceIn(1, UNLIMITED_SERIES)) }
+        get() = DownloadPolicy.maxActiveSeries(
+            prefs.getSafeInt(KEY_DOWNLOADS_MAX_ACTIVE_SERIES, DOWNLOADS_MAX_ACTIVE_SERIES_DEFAULT),
+        )
+        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_MAX_ACTIVE_SERIES, DownloadPolicy.maxActiveSeries(value)) }
 
     var downloadRequestDelayMs: Int
-        get() = prefs.getSafeInt(KEY_DOWNLOADS_REQUEST_DELAY, DOWNLOADS_REQUEST_DELAY_DEFAULT).coerceIn(0, 5000)
-        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_REQUEST_DELAY, value.coerceIn(0, 5000)) }
+        get() = DownloadPolicy.requestDelayMs(prefs.getSafeInt(KEY_DOWNLOADS_REQUEST_DELAY, DOWNLOADS_REQUEST_DELAY_DEFAULT))
+        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_REQUEST_DELAY, DownloadPolicy.requestDelayMs(value)) }
 
     var downloadRetryCount: Int
-        get() = prefs.getSafeInt(KEY_DOWNLOADS_RETRY_COUNT, DOWNLOADS_RETRY_COUNT_DEFAULT).coerceIn(1, 10)
-        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_RETRY_COUNT, value.coerceIn(1, 10)) }
+        get() = DownloadPolicy.retryCount(prefs.getSafeInt(KEY_DOWNLOADS_RETRY_COUNT, DOWNLOADS_RETRY_COUNT_DEFAULT))
+        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_RETRY_COUNT, DownloadPolicy.retryCount(value)) }
 
     var downloadRetryDelayMs: Int
-        get() = prefs.getSafeInt(KEY_DOWNLOADS_RETRY_DELAY, DOWNLOADS_RETRY_DELAY_DEFAULT).coerceIn(500, 10_000)
-        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_RETRY_DELAY, value.coerceIn(500, 10_000)) }
+        get() = DownloadPolicy.retryDelayMs(prefs.getSafeInt(KEY_DOWNLOADS_RETRY_DELAY, DOWNLOADS_RETRY_DELAY_DEFAULT))
+        set(value) = prefs.edit { putInt(KEY_DOWNLOADS_RETRY_DELAY, DownloadPolicy.retryDelayMs(value)) }
 
     var downloadChapterDelay: Int
         get() = prefs.getSafeInt(KEY_DOWNLOADS_CHAPTER_DELAY, 0).coerceIn(0, 10)
@@ -3167,7 +3170,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_DOWNLOADS_AUTO_RETRY = "downloads_auto_retry"
         const val KEY_DOWNLOADS_THREADS = "downloads_threads"
         const val KEY_DOWNLOADS_MAX_ACTIVE_SERIES = "downloads_max_active_series"
-        const val UNLIMITED_SERIES = 11
+        const val UNLIMITED_SERIES = DownloadPolicy.MAX_ACTIVE_SERIES_UNLIMITED
         const val KEY_DOWNLOADS_REQUEST_DELAY = "downloads_request_delay"
         const val KEY_DOWNLOADS_RETRY_COUNT = "downloads_retry_count"
         const val KEY_DOWNLOADS_RETRY_DELAY = "downloads_retry_delay"
@@ -3283,11 +3286,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val DEFAULT_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE = 90
         const val MIN_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE = 10
         const val MAX_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE = 100
-        const val DOWNLOADS_THREADS_DEFAULT = 4
-        const val DOWNLOADS_MAX_ACTIVE_SERIES_DEFAULT = 4
-        private const val DOWNLOADS_REQUEST_DELAY_DEFAULT = 1600
-        private const val DOWNLOADS_RETRY_COUNT_DEFAULT = 2
-        private const val DOWNLOADS_RETRY_DELAY_DEFAULT = 2000
+        const val DOWNLOADS_THREADS_DEFAULT = DownloadPolicy.THREADS_DEFAULT
+        const val DOWNLOADS_MAX_ACTIVE_SERIES_DEFAULT = DownloadPolicy.MAX_ACTIVE_SERIES_DEFAULT
+        private const val DOWNLOADS_REQUEST_DELAY_DEFAULT = DownloadPolicy.REQUEST_DELAY_DEFAULT_MS
+        private const val DOWNLOADS_RETRY_COUNT_DEFAULT = DownloadPolicy.RETRY_COUNT_DEFAULT
+        private const val DOWNLOADS_RETRY_DELAY_DEFAULT = DownloadPolicy.RETRY_DELAY_DEFAULT_MS
         const val KEY_WEBTOON_PULL_GESTURE = "webtoon_pull_gesture"
         const val KEY_PREFETCH_CONTENT = "prefetch_content"
         const val KEY_APP_LOCALE = "app_locale"

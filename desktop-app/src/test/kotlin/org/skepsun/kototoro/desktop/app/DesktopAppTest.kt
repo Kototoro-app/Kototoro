@@ -76,6 +76,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `download settings edit the speed and retry numbers the offline queue reads`() {
+        probe("downloadsettings", directory.resolve("下载 设置"), 180)
+    }
+
+    @Test
     fun `real Tsundoku APK installs converts and reads a novel over the live network`() {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("kototoro.dex.real.apks") != null, "no -PrealApkDirectory")
         probe("real-novel", directory.resolve("中文 real novel"), 180)
