@@ -7,6 +7,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.core.prefs.GitHubMirrorCatalog
+import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.desktop.runtime.DesktopStorageCategory
 import java.nio.file.Files
@@ -88,6 +89,17 @@ internal object DesktopStorageProbe {
                 // The saved store is Android's key and value shape, so the choice survives a restart.
                 val stored = session.storage.preferences.open("desktop_network").snapshot()["github_mirror"]
                 check(stored?.let { it as? SourcePreferenceValue.Text }?.value == "gh_proxy_com") { "stored: $stored" }
+
+                // Android's speed sweep sits next to the choice: starting it is a job the page can cancel again, and the
+                // sweep's rows are the runtime's, so the state the page shows comes from the same flow the dialog reads.
+                onNodeWithTag("github-mirror-probe").performScrollTo().assertExists()
+                onNodeWithTag("github-mirror-probe-start").performClick()
+                waitUntil(timeoutMillis = 10_000) { session.githubMirror.probeState.value is GitHubMirrorProbeState.Running }
+                idle()
+                onNodeWithTag("github-mirror-probe-cancel").performClick()
+                waitUntil(timeoutMillis = 10_000) { session.githubMirror.probeState.value == GitHubMirrorProbeState.Idle }
+                idle()
+                onNodeWithTag("github-mirror-probe-start").assertExists()
 
                 onNodeWithTag("storage-settings-back").performScrollTo().performClick()
                 idle()

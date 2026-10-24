@@ -64,8 +64,8 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.github.AppUpdateSource
 import org.skepsun.kototoro.core.github.AppUpdateSourceProbe
 import org.skepsun.kototoro.core.github.AppVersion
-import org.skepsun.kototoro.core.github.GitHubMirrorProbeResult
-import org.skepsun.kototoro.core.github.GitHubMirrorProbeState
+import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeResult
+import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.widgets.SelectableTextView
 import org.skepsun.kototoro.core.util.FileSize

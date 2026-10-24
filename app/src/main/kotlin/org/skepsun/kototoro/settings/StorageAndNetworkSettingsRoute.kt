@@ -45,13 +45,13 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.network.DoHProvider
 import org.skepsun.kototoro.core.github.GitHubMirrorCatalogMeta
-import org.skepsun.kototoro.core.github.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.github.GitHubMirrorSyncState
 import org.skepsun.kototoro.core.github.latencyLabel
 import org.skepsun.kototoro.core.github.mirrorProbeSummary
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.CloudflareStrategy
 import org.skepsun.kototoro.core.prefs.GitHubMirrorEntry
+import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.prefs.NetworkPolicy
 import org.skepsun.kototoro.core.prefs.displayName
 import org.skepsun.kototoro.core.prefs.observeAsState

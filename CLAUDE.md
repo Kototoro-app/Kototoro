@@ -301,7 +301,13 @@ npm run docs:build
   `displayName(context)` 留在 `app`），Windows 用 `DesktopGitHubMirror` 读写 `desktop_network` 的
   `github_mirror`（与 Android 同键，值存镜像 id），`rewrite(url)` 每次读当前值，所以换镜像即时生效；
   应用更新下载、超分模型下载、扩展 JAR/解析器/Cloudstream 列表都过它，`api.github.com` 的版本查询
-  与仓库索引地址本身不改写，见计划 §161。
+  与仓库索引地址本身不改写，见计划 §161。同一节还有 Android 的镜像测速（`github-mirror-probe`，
+  按钮 `github-mirror-probe-start`/`-cancel`/`-fastest`）：`DesktopGitHubMirror.probe()` 用 JDK
+  `HttpClient` 并行拉 `GitHubMirrorCatalog.PROBE_URL`（6 s 超时、响应头即通），进度/结果在
+  `probeState`/`probeResults` 两个 flow 里（页面 `collectAsState()` 直接读，`DesktopAppState` 不加字段），
+  取消走 `runInterruptible` 会真的断开 socket；文案全用 Android 的 `mirror_probe_*`，
+  对话框选项追加 `" · 213 ms"`/`" · 超时"` 与最快的标记，探测的结果模型与目标 URL 也在 `core-net`
+  共享（Android 侧的本地声明已删除、改从 `core.prefs` 导入这些类型），见计划 §162。
   收藏/历史的“筛选与排序”抽屉另有“布局”一节（封面网格 / 每行一个作品，对应 Android 的 ListMode），
   选择存 `desktop_library` 的 `library_list_mode`，列表模式下 `ContentGrid` 渲染 `content-list` 行视图，
   点击/长按语义与卡片一致，见计划 §142。

@@ -8,10 +8,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.Cache
 import org.skepsun.kototoro.core.github.GitHubMirrorCatalogMeta
 import org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository
-import org.skepsun.kototoro.core.github.GitHubMirrorProbeResult
-import org.skepsun.kototoro.core.github.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.github.GitHubMirrorSyncState
 import org.skepsun.kototoro.core.prefs.GitHubMirrorEntry
+import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeResult
+import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.computeSize
 import org.skepsun.kototoro.local.data.CacheDir

@@ -7368,3 +7368,47 @@ Windows 之前完全没有代理：每个来源、封面、JSON 导入都走 com
   `github_mirror` 三处一致，输出 `DESKTOP_UI_OK=storage`。`:app:compileDebugKotlin` 通过。
 - 仍待：Android 的镜像清单远程同步（`github_mirror_sync_url` + 延迟探测）、HuggingFace/Bangumi 镜像、
   DNS-over-HTTPS、图片代理等其余网络项。
+
+## 162. 镜像测速：探测模型共享 + Windows 存储与网络页的测速行（2026-10-24）
+
+- 问题：§161 让 Windows 能选镜像，但选哪一个只能靠猜——Android 早就有“测速”（`mirror_probe_*` 一组文案，
+  每个镜像拉一次 GitHub 上的小文件，把毫秒标在选项后面，并给最快的那条打标、支持“选用最快的”）。
+  Windows 少了这一步，用户面对 28 个反代只能逐个试。
+- `core-net`：探测的**结果模型**随目录一起共享——`GitHubMirrorProbeResult(latencyMillis, isAvailable)`、
+  `GitHubMirrorProbeState{Idle,Running(completed,total),Finished(available,total,fastestId,fastestMillis)}`
+  搬进 `GitHubMirrorCatalog.kt`（纯 Kotlin，无 JVM API），探测目标 `GitHubMirrorCatalog.PROBE_URL`
+  （`raw.githubusercontent.com/skepsun/kototoro-parsers/repo/index.min.json`）也成为共享常量。
+  Android 的 `GitHubMirrorCatalogRepository.kt` 删掉本地声明、改从 `core.prefs` 导入这两个类型
+  （`AppUpdateViewModel`/`AppUpdateScreen`/`WelcomeViewModel`/`StorageAndNetworkSettingsViewModel`/
+  `StorageAndNetworkSettingsRoute`/`AppUpdateMirrorOptionsTest` 六处只动 import，逻辑一行不改）：
+  Kotlin 不允许通过 `typealias` 访问嵌套分类器（`Alias.Finished` 解析不到），别名保旧名这条路不成立。
+  它自己的 `PROBE_URL` 常量也删掉，改用共享的那个。
+  真正**跑**探测的仍是平台代码（Android 走 OkHttp + 6 s 超时，Windows 走 JDK `HttpClient`），
+  因为客户端、Dispatcher 与取消语义都在宿主。
+- `desktop-runtime`：`DesktopGitHubMirror` 新增 `probeState`/`probeResults` 两个 `StateFlow` 与
+  `suspend fun probe(entries = options)`：整批 `async` 并行、每个请求 6 s 超时、**响应头即答案**
+  （跟到死主机的重定向到不了这一步），逐条写回结果并推进 `Running(completed,total)`；
+  6 s 超时与连接失败都记成 `isAvailable = false` 的**一行**，不会拖垮同批其他镜像（Android 的实现同理）。
+  结束时算 `available` 与 `fastestId`（可用里延迟最小的那条）。取消走 `runInterruptible` 包住阻塞的
+  `HttpClient.send`，所以页面按“取消”会真的断开 socket，而不是等到超时；`finally` 把仍是 `Running`
+  的状态收敛回 `Idle`，已答完的行保留。
+- `desktop-app`：存储与网络页“网络”节在镜像行后加 Android 的测速行（`SettingsActionRow`，
+  `github-mirror-probe`，按钮 `github-mirror-probe-start`/`github-mirror-probe-cancel`，
+  最快且未选中时多一个 `github-mirror-probe-fastest` = “选用最快的”）。摘要文案直接用 Android 的
+  `mirror_probe_action`/`mirror_probe_summary`/`mirror_probe_running`/`mirror_probe_finished`/
+  `mirror_probe_none_available`/`mirror_probe_cancel`/`mirror_probe_short_action`/`mirror_probe_select_fastest`
+  （`AndroidStrings`，带 `format` 占位符），**没有新增桌面文案键**。对话框的选项标签按 Android 的
+  `latencyLabel` 追加 `" · 213 ms"` / `" · 超时"`（`mirror_probe_timeout`），最快的那条再追加
+  `" · 最快"`（`mirror_probe_fastest_badge`）。页面用 `collectAsState()` 直接读
+  `controller.session.githubMirror` 的两个 flow（与下载队列同一条既有先例），`DesktopAppState` 不加字段；
+  控制器只负责用 `mirrorProbeJob` 起停这次扫描。
+- 验证：`DesktopGitHubMirrorTest` 由 6 项增至 10 项——环回 HTTP 服务下两个镜像都可用、`Finished(2,2,最快,≥0ms)`；
+  连 `127.0.0.1:1`（必然被拒）得到 `Finished(0,2,null,null)` 且每条都是不可用；持住响应的服务上
+  `probeState` 停在 `Running`、`cancelAndJoin` 后回到 `Idle`；空列表不进 `Running`。
+  `:desktop-runtime:test` 全绿。探针 `storage` 追加“点开始→进入 Running→点取消→回 Idle→按钮复位”，
+  输出 `DESKTOP_UI_OK=storage`。
+- 已知（与本切片无关，HEAD 上就失败）：`DesktopAppTest > Android styled light and dark themes render covers
+  and persist across an offline restart` 在 `DesktopAppearanceProbe.kt:86` 报
+  “找不到 `interface-style:IOS`”——把本切片改动 stash 掉后同样失败，属界面风格/玻璃外框那条工作流。
+- 仍待：镜像清单的远程同步（`github_mirror_sync_url` + `docs/github-mirrors.json`），
+  Windows 目前只用内置目录；HuggingFace/Bangumi 镜像、DoH、图片代理等其余网络项。

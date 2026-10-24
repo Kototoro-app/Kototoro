@@ -278,6 +278,7 @@ class DesktopController(val session: DesktopSession) {
     private val webDav = DesktopWebDavOperations(session.storage, backups)
     internal val webDavUi = webDav.ui
     private var autoBackupJob: Job? = null
+    private var mirrorProbeJob: Job? = null
 
     init {
         // The saved language applies before the first screen is composed; `--lang` outranks it for this run.
@@ -1698,6 +1699,21 @@ class DesktopController(val session: DesktopSession) {
             it.copy(githubMirror = value,
                 message = if (persisted) it.message else desktopText("jsonSources.saveFailed"))
         }
+    }
+
+    /**
+     * Android's mirror speed sweep, from the same page: every mirror fetches a tiny GitHub file and the dialog shows the
+     * milliseconds it took. Its own job so the page can cancel it; the runtime keeps the rows that already answered.
+     */
+    fun probeGitHubMirrors() {
+        if (mirrorProbeJob?.isActive == true) return
+        mirrorProbeJob = scope.launch { runCatching { session.githubMirror.probe() } }
+    }
+
+    /** Stops a running sweep; the runtime settles on its idle state and the answered rows stay visible. */
+    fun cancelGitHubMirrorProbe() {
+        mirrorProbeJob?.cancel()
+        mirrorProbeJob = null
     }
 
     /** Android's "test connection" row: the shared client asks the target through whatever the page saved. */

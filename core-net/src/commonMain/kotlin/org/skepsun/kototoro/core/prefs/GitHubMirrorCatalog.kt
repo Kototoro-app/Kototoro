@@ -48,6 +48,32 @@ data class GitHubMirrorManifest(
     val mirrors: List<GitHubMirrorEntry>,
 )
 
+/** Result of the connectivity test of one mirror: reachable (and how fast), or not. */
+data class GitHubMirrorProbeResult(
+    val latencyMillis: Long?,
+    val isAvailable: Boolean,
+)
+
+/**
+ * Progress of a mirror speed sweep. Every platform shows the same three phases, so the shape is shared and only the
+ * sweeping itself stays platform code (Android probes through OkHttp, Windows through the JDK client).
+ */
+sealed interface GitHubMirrorProbeState {
+    data object Idle : GitHubMirrorProbeState
+
+    data class Running(
+        val completed: Int,
+        val total: Int,
+    ) : GitHubMirrorProbeState
+
+    data class Finished(
+        val available: Int,
+        val total: Int,
+        val fastestId: String?,
+        val fastestMillis: Long?,
+    ) : GitHubMirrorProbeState
+}
+
 /**
  * Static catalog: the built-in mirrors (also mirrored in
  * `pref_github_mirror_entries/values`) plus the pure URL rewriting rules.
@@ -272,6 +298,9 @@ object GitHubMirrorCatalog {
 
     /** Fallback ref for the out-of-band config file when none is configured. */
     const val DEFAULT_BRANCH = "devel"
+
+    /** Tiny always-present GitHub file used to test whether a mirror can serve raw content at all. */
+    const val PROBE_URL = "https://raw.githubusercontent.com/skepsun/kototoro-parsers/repo/index.min.json"
 
     private val builtinById = builtin.associateBy { it.id }
 

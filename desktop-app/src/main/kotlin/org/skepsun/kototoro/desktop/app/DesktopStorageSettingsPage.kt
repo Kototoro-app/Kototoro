@@ -18,7 +18,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,7 +37,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.prefs.GitHubMirrorCatalog
 import org.skepsun.kototoro.core.prefs.GitHubMirrorEntry
+import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeResult
+import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.prefs.GitHubMirrorStrategy
+import org.skepsun.kototoro.core.ui.settings.SettingsActionRow
 import org.skepsun.kototoro.core.ui.settings.SettingsGroup
 import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
 import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
@@ -57,6 +62,9 @@ internal fun DesktopStorageSettingsPage(controller: DesktopController, state: De
     val usage = state.storageUsage
     val active = !state.busy
     var mirrorDialog by remember { mutableStateOf(false) }
+    // The sweep reports through the runtime, like the download queue: the page only reads it.
+    val probe by controller.session.githubMirror.probeState.collectAsState()
+    val probeResults by controller.session.githubMirror.probeResults.collectAsState()
     Column(
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -106,13 +114,34 @@ internal fun DesktopStorageSettingsPage(controller: DesktopController, state: De
             SettingsValueRow(AndroidStrings["pref_github_mirror"], AndroidStrings["pref_github_mirror_summary"],
                 state.githubMirror.entry.desktopLabel, active, { mirrorDialog = true },
                 testTag = "github-mirror-open", leadingIcon = painterResource("icons/ic_code.svg"))
+            SettingsRowDivider()
+            // Android's speed sweep next to that choice: 28 proxies, one dead host must not hide the rest.
+            SettingsActionRow(AndroidStrings["mirror_probe_action"], probe.summary, Modifier.testTag("github-mirror-probe")) {
+                if (probe.isRunning) {
+                    TextButton({ controller.cancelGitHubMirrorProbe() }, enabled = active,
+                        modifier = Modifier.testTag("github-mirror-probe-cancel")) {
+                        Text(AndroidStrings["mirror_probe_cancel"])
+                    }
+                } else {
+                    TextButton({ controller.probeGitHubMirrors() }, enabled = active,
+                        modifier = Modifier.testTag("github-mirror-probe-start")) {
+                        Text(AndroidStrings["mirror_probe_short_action"])
+                    }
+                }
+                probe.fastestId?.takeIf { it != state.githubMirror.entry.id }?.let { fastest ->
+                    TextButton({ controller.updateGitHubMirror(DesktopGitHubMirrorSettings(fastest)) },
+                        enabled = active, modifier = Modifier.testTag("github-mirror-probe-fastest")) {
+                        Text(AndroidStrings["mirror_probe_select_fastest"])
+                    }
+                }
+            }
         }
     }
     if (mirrorDialog) {
         DesktopChoiceSettingsDialog(
             title = AndroidStrings["pref_github_mirror"], summary = AndroidStrings["pref_github_mirror_summary"],
             bodyTag = "github-mirror-dialog", optionTagPrefix = "github-mirror-option",
-            options = GitHubMirrorCatalog.builtin.map { entry -> entry.desktopLabel to entry.id },
+            options = GitHubMirrorCatalog.builtin.map { entry -> entry.dialogLabel(probeResults, probe.fastestId) to entry.id },
             selected = state.githubMirror.entry.id, enabled = active,
             onPick = { id -> controller.updateGitHubMirror(DesktopGitHubMirrorSettings(id)) },
             onDismiss = { mirrorDialog = false },
@@ -130,6 +159,40 @@ internal val GitHubMirrorEntry.desktopLabel: String
     } else {
         name
     }
+
+/** Android's `latencyLabel`: the milliseconds a sweep measured, "timeout" for a host that did not answer. */
+internal val GitHubMirrorProbeResult?.desktopLatency: String
+    get() = when {
+        this == null -> ""
+        isAvailable -> " · ${latencyMillis ?: "?"} ms"
+        else -> " · ${AndroidStrings["mirror_probe_timeout"]}"
+    }
+
+/** One dialog row: the mirror's name, what the sweep measured, and the badge Android puts on the fastest mirror. */
+private fun GitHubMirrorEntry.dialogLabel(
+    results: Map<String, GitHubMirrorProbeResult>,
+    fastestId: String?,
+): String = buildString {
+    append(desktopLabel)
+    append(results[id].desktopLatency)
+    if (id == fastestId) append(" · ").append(AndroidStrings["mirror_probe_fastest_badge"])
+}
+
+/** The sweep's own words, all from Android's catalog so the two hosts read the same sentence. */
+private val GitHubMirrorProbeState.summary: String
+    get() = when (this) {
+        GitHubMirrorProbeState.Idle -> AndroidStrings["mirror_probe_summary"]
+        is GitHubMirrorProbeState.Running -> AndroidStrings.format("mirror_probe_running", completed, total)
+        is GitHubMirrorProbeState.Finished -> when {
+            available == 0 -> AndroidStrings["mirror_probe_none_available"]
+            fastestId == null -> AndroidStrings.format("mirror_probe_finished", "—", 0L, available, total)
+            else -> AndroidStrings.format("mirror_probe_finished", fastestId, fastestMillis ?: 0L, available, total)
+        }
+    }
+
+private val GitHubMirrorProbeState.isRunning: Boolean get() = this is GitHubMirrorProbeState.Running
+private val GitHubMirrorProbeState.fastestId: String?
+    get() = (this as? GitHubMirrorProbeState.Finished)?.fastestId
 
 /** Android's donut shows the application's own data only; the bar keeps that rule and the rows carry the numbers. */
 @Composable

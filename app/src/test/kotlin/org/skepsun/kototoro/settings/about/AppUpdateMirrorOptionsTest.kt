@@ -8,11 +8,11 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.github.GitHubMirrorProbeResult
-import org.skepsun.kototoro.core.github.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.github.latencyLabel
 import org.skepsun.kototoro.core.github.mirrorProbeSummary
 import org.skepsun.kototoro.core.prefs.GitHubMirrorEntry
+import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeResult
+import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.prefs.GitHubMirrorStrategy
 
 class AppUpdateMirrorOptionsTest {

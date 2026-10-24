@@ -1,5 +1,12 @@
 package org.skepsun.kototoro.desktop.runtime
 
+import com.sun.net.httpserver.HttpServer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertSame
@@ -7,9 +14,14 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.skepsun.kototoro.core.prefs.GitHubMirrorCatalog
+import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.source.SourcePreferences
 import org.skepsun.kototoro.source.host.FileSourcePreferenceStore
+import java.net.InetSocketAddress
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Android's `github_mirror` preference reaches Windows through this value: the id the storage-and-network page writes
@@ -97,7 +109,96 @@ class DesktopGitHubMirrorTest {
         assertTrue(options.any { it.id == "gh_proxy_com" })
     }
 
+    @Test
+    fun `a sweep times the mirrors that answer and names the fastest`() = runBlocking {
+        inStore { preferences ->
+            LocalServer().use { server ->
+                val mirror = DesktopGitHubMirror(preferences, probeUrl = server.url)
+                val entries = listOf(GitHubMirrorCatalog.NATIVE, GitHubMirrorCatalog.builtinById("gh_proxy_com")!!)
+                mirror.probe(entries)
+                val results = mirror.probeResults.value
+                assertEquals(entries.map { it.id }.toSet(), results.keys)
+                assertTrue(results.values.all { it.isAvailable })
+                val finished = mirror.probeState.value as GitHubMirrorProbeState.Finished
+                assertEquals(2, finished.available)
+                assertEquals(2, finished.total)
+                assertTrue(finished.fastestId in entries.map { it.id })
+                assertTrue((finished.fastestMillis ?: -1L) >= 0L)
+            }
+        }
+    }
+
+    @Test
+    fun `a host that does not answer is one unavailable row, not a failed sweep`() = runBlocking {
+        inStore { preferences ->
+            // Port 1 is refused on every platform this ships to; a refused connect is instant, not a timeout.
+            val mirror = DesktopGitHubMirror(preferences, probeUrl = "http://127.0.0.1:1/index.min.json")
+            mirror.probe(listOf(GitHubMirrorCatalog.NATIVE, GitHubMirrorCatalog.builtinById("gh_proxy_com")!!))
+            assertTrue(mirror.probeResults.value.values.all { !it.isAvailable })
+            assertEquals(GitHubMirrorProbeState.Finished(0, 2, null, null), mirror.probeState.value)
+        }
+    }
+
+    @Test
+    fun `cancelling a sweep aborts its sockets and goes idle`() = runBlocking {
+        inStore { preferences ->
+            LocalServer(holdResponses = true).use { server ->
+                val mirror = DesktopGitHubMirror(preferences, probeUrl = server.url)
+                val job = launch(Dispatchers.IO) { mirror.probe(listOf(GitHubMirrorCatalog.NATIVE)) }
+                withTimeout(5_000) {
+                    while (mirror.probeState.value !is GitHubMirrorProbeState.Running) yield()
+                }
+                job.cancelAndJoin()
+                assertEquals(GitHubMirrorProbeState.Idle, mirror.probeState.value)
+            }
+        }
+    }
+
+    @Test
+    fun `an empty mirror list leaves the sweep idle`() = runBlocking {
+        inStore { preferences ->
+            val mirror = DesktopGitHubMirror(preferences, probeUrl = "http://127.0.0.1:1/index.min.json")
+            mirror.probe(emptyList())
+            assertEquals(GitHubMirrorProbeState.Idle, mirror.probeState.value)
+            assertTrue(mirror.probeResults.value.isEmpty())
+        }
+    }
+
+    /**
+     * A loopback HTTP server standing in for the mirrors: answers at once, or — with [holdResponses] — only once the
+     * test is done, so a sweep that should be running stays running until it is cancelled.
+     */
+    private class LocalServer(holdResponses: Boolean = false) : AutoCloseable {
+        private val release = CountDownLatch(1)
+        private val server: HttpServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        private val pool = Executors.newCachedThreadPool()
+        val url: String = "http://127.0.0.1:${server.address.port}/probe"
+
+        init {
+            server.createContext("/probe") { exchange ->
+                if (holdResponses) release.await(10, TimeUnit.SECONDS)
+                runCatching { exchange.sendResponseHeaders(200, -1) }
+                exchange.close()
+            }
+            server.executor = pool
+            server.start()
+        }
+
+        override fun close() {
+            release.countDown()
+            server.stop(0)
+            pool.shutdownNow()
+        }
+    }
+
     private fun withStore(block: (SourcePreferences) -> Unit) {
+        FileSourcePreferenceStore(directory.resolve("preferences")).use { store ->
+            block(store.open("desktop_network"))
+        }
+    }
+
+    /** The same store for tests that await a sweep: suspending callers need their own open/close pair. */
+    private suspend fun inStore(block: suspend (SourcePreferences) -> Unit) {
         FileSourcePreferenceStore(directory.resolve("preferences")).use { store ->
             block(store.open("desktop_network"))
         }
