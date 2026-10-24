@@ -4406,3 +4406,55 @@ Incognito mode）在电视上有两个问题：**面板右边缘贴着屏幕边*
 3. 菜单 6 项已经接近 `maxMenuHeight`（屏高 65%）上限，再多一项就得滚动；电视上滚动菜单的焦点跟随还没验证。
 4. 顶栏右上角两个按钮（筛选、`⋮`）自己也在安全边距之外（`⋮` 右边缘 = 1896，距屏边 24px = 12dp），
    真机 overscan 会切到。这属于"整条顶栏的安全边距"问题，单独一轮处理更合适。
+
+## 第七十三轮：搜索的建议/结果货架在电视上是手机尺寸（2026-10-25）
+
+搜索是电视上最难用的入口之一，本轮顺着"顶栏搜索 → 输入 → 提交 → 结果"走了一遍。
+输入法、焦点、分区滚动都正常，唯独**所有海报卡还是手机尺寸**：108dp 宽（1920px 屏上 216px），
+一张海报只占屏宽 11%，坐在沙发上等于看邮票；分区标题是 22sp，卡片下面那行标题只有 12sp，
+两者摆在一起比例完全失衡。
+
+### 原因：搜索页把卡片尺寸写成了常量，没走图书馆那套"按宽度铺满"的逻辑
+
+| 位置 | 常量/逻辑 | 电视上的后果 |
+| --- | --- | --- |
+| `SearchResultsScreen.kt` | `SearchFixedCardWidth = 108.dp`，`fixedSearchPosterCardStyle()` 直接按这个值造 `CompactPosterCardStyle` | 提交后的结果货架（`LazyRow`）每张 108dp |
+| `KototoroSearchOverlay.kt` | `SearchSuggestionCardWidth = 108.dp`，三处 `.width(...)`（内容/本地实体/追踪实体） | 输入时的建议货架同样 108dp |
+
+图书馆/收藏用的是另一套：`resolveGridColumnCount` + `resolveGridPosterCardStyle` 先按最小列宽算列数，
+再把格子拉伸铺满可用宽度，所以电视上是大卡；搜索没有走这条路径，常量写死就一直是手机尺寸。
+
+### 改法
+
+| 位置 | 改动 |
+| --- | --- |
+| `SearchResultsScreen.kt` | 新增 `SearchTvCardWidth = 174.dp`（= 1920px 行宽 − 2×24dp 边距 − 4×16dp 间距 的 1/5，正好 5 张一行）、高度仍按 `/0.7f`、圆角 16dp；`fixedSearchPosterCardStyle(isTv)` 二选一，默认 `false` 与旧值完全一致 |
+| 同上：货架 | `contentPadding` 电视 24dp（手机 12dp）、`horizontalArrangement` 电视 16dp（手机 6dp），与卡片宽度一起凑成 5 张整行 |
+| 同上：分区头 | "N shown" 电视 `bodyLarge`（手机仍 `labelSmall`）；`Show all` 按钮文字电视 `bodyLarge`（手机仍 `labelLarge`）。两个都是 16sp，与 22sp 的分区标题终于在一个数量级上 |
+| `KototoroSearchOverlay.kt` | 新增 `TvSearchSuggestionCardWidth = 174.dp` 与 `@Composable searchSuggestionCardWidth()`，三处 `.width(...)` 改为调用它 |
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 改前：历史页顶栏搜索 → CENTER → `input text "TV"`（输入态） | `ep0-before.png` | 建议货架两张卡各 216px（108dp），左边距 24px（12dp），卡间 25px |
+| 改后：同一路径（输入态，仍是 `TV`） | `ep3-suggest-after.png` | 视觉里量到 322–324px 的封面区（卡框 348px = 174dp），左边距 24dp，卡间 16dp |
+| 改后：点搜索按钮提交，落结果页 | `ep1-results-after.png`、`eq1.png` | "History" 区的两张卡封面 312px（比改前 216px 宽 44%），"2 shown" 从 11sp 变 16sp |
+| 改后：分区头一行（`Show all` 用 `bodyLarge`） | `eq2.png`、`eq2-showall.png` | "15 shown"（16sp）与 "Show all"（16sp）字高都是 32px；改前分别是 22px / 26px |
+| 改后：DOWN 进第一张卡 | `ep2-focus-after.png` | 焦点环完整包住 348px 的大卡（不再是贴着小图的细框），下方 "Local storage / 15 shown / Show all" 一行完整可见 |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（两次：3m 19s、1m 44s，均 19 executed）。
+
+### 遗留
+
+1. **卡片标题没有跟着卡片变大**。`KototoroContentCard` 的标题字号来自 `resolveGridTitleFontSize(gridScale)`（12–16sp），
+   只吃"网格大小"偏好，不吃 `CompactPosterCardStyle.itemWidth`。所以 348px 的卡下面还是 12sp 的标题，
+   和 22sp 的分区标题放一起仍不协调。图书馆网格在电视上是同一个问题（同一份代码），
+   要改得给 `KototoroContentCard` 加一个"按卡片宽度算标题"的入口——影响手机，得单独一轮评估。
+2. `SearchResultsScreen` 里 "nothing found" 与分区错误文案仍是 `bodySmall` + 16dp 边距，电视上偏小；
+   本轮没动（这两处在电视上没截到图，本地搜索不会空）。
+3. **提交后的结果页按 BACK 会退回桌面**：本轮两次走到"结果页 → BACK"，两次都直接落回 Android TV 启动器
+   （`logcat -b crash` 无记录，进程仍在）；而从"搜索页本身"按 BACK 是正常回 Home（`eo2.png`）。
+   怀疑结果页这一层做了两次 pop 或者搜索页被 `popUpTo(root)` 打开，下一轮专门查这条回退链。
+4. 输入框重新获得焦点时系统输入法会自己弹出来（`mInputShown=true`），电视上没有"Enter 即收键盘"的约定，
+   这是系统 IME 行为，暂按既有效果记录。

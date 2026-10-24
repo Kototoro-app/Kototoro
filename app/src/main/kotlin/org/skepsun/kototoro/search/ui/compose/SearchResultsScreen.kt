@@ -127,12 +127,26 @@ private val SearchFixedCardWidth = 108.dp
 private val SearchFixedCardHeight = SearchFixedCardWidth / 0.7f
 private val SearchFixedCardCornerRadius = 14.dp
 
-private fun fixedSearchPosterCardStyle(): CompactPosterCardStyle {
-    return CompactPosterCardStyle(
-        itemWidth = SearchFixedCardWidth,
-        posterHeight = SearchFixedCardHeight,
-        cornerRadius = SearchFixedCardCornerRadius,
-    )
+// Five posters per 1920px row (24dp shelf padding + 16dp gaps). The phone-sized 108dp thumbnail reads
+// as a stamp from the couch, so the TV shelf gets its own card instead of scaling the shared style.
+private val SearchTvCardWidth = 174.dp
+private val SearchTvCardHeight = SearchTvCardWidth / 0.7f
+private val SearchTvCardCornerRadius = 16.dp
+
+private fun fixedSearchPosterCardStyle(isTv: Boolean = false): CompactPosterCardStyle {
+    return if (isTv) {
+        CompactPosterCardStyle(
+            itemWidth = SearchTvCardWidth,
+            posterHeight = SearchTvCardHeight,
+            cornerRadius = SearchTvCardCornerRadius,
+        )
+    } else {
+        CompactPosterCardStyle(
+            itemWidth = SearchFixedCardWidth,
+            posterHeight = SearchFixedCardHeight,
+            cornerRadius = SearchFixedCardCornerRadius,
+        )
+    }
 }
 
 @Immutable
@@ -239,7 +253,8 @@ fun SearchResultsRoute(
         )
     }
     val cardUiPrefs = screenPrefs.cardUiPrefs
-    val posterStyle = remember { fixedSearchPosterCardStyle() }
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val posterStyle = remember(isTvPresentation) { fixedSearchPosterCardStyle(isTvPresentation) }
 
     var query by rememberSaveable { mutableStateOf(viewModel.query) }
     var advancedTitle by rememberSaveable { mutableStateOf(viewModel.advancedQuery?.title.orEmpty()) }
@@ -259,7 +274,6 @@ fun SearchResultsRoute(
     val pinnedOnly = filters.pinnedOnly
     val hideEmpty = filters.hideEmpty
     var selectedItemsIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
-    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val searchFocusRequester = remember { FocusRequester() }
     var focusedSectionKey by rememberSaveable { mutableStateOf<String?>(null) }
     var focusedContentId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -808,7 +822,7 @@ private fun SearchResultsSection(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = if (isTvPresentation) 24.dp else 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -821,7 +835,11 @@ private fun SearchResultsSection(
             if (uniqueItems.isNotEmpty()) {
                 Text(
                     text = stringResource(R.string.search_displayed_results, uniqueItems.size),
-                    style = MaterialTheme.typography.labelSmall,
+                    style = if (isTvPresentation) {
+                        MaterialTheme.typography.bodyLarge
+                    } else {
+                        MaterialTheme.typography.labelSmall
+                    },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 8.dp),
                 )
@@ -839,7 +857,14 @@ private fun SearchResultsSection(
                     modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                 ) {
-                    Text(stringResource(R.string.show_all))
+                    Text(
+                        text = stringResource(R.string.show_all),
+                        style = if (isTvPresentation) {
+                            MaterialTheme.typography.bodyLarge
+                        } else {
+                            MaterialTheme.typography.labelLarge
+                        },
+                    )
                 }
             }
         }
@@ -848,8 +873,8 @@ private fun SearchResultsSection(
             val railAnimationFactor = rememberRailAnimationFactor()
             LazyRow(
                 state = rowState,
-                contentPadding = PaddingValues(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                contentPadding = PaddingValues(horizontal = if (isTvPresentation) 24.dp else 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (isTvPresentation) 16.dp else 6.dp),
                 modifier = Modifier
                     .then(if (isTvPresentation) Modifier.focusGroup() else Modifier)
                     .onKeyEvent { event ->
