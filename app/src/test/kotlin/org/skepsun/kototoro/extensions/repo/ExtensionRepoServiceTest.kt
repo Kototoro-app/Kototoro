@@ -327,6 +327,76 @@ class ExtensionRepoServiceTest : FunSpec({
 		}
 	}
 
+	test("fetchRepoDetails follows index_v2 and decodes Aniyomi torrent flags and sources") {
+		runBlocking {
+			// Minimized from yuzono/anime-repo: Aniyomi uses isTorrent=8 and sources=9.
+			val encoded = requireNotNull(javaClass.getResourceAsStream("/fixtures/aniyomi-index.protobuf"))
+				.use { it.readBytes() }
+			server.enqueue(
+				MockResponse().setBody(
+					"""{"index_v2":"index.pb","meta":{"name":"Legacy","website":"","signingKeyFingerprint":""}}""",
+				),
+			)
+			server.enqueue(MockResponse().setBody(okio.Buffer().write(encoded.gzip())))
+			server.enqueue(MockResponse().setBody(okio.Buffer().write(encoded)))
+
+			val baseUrl = server.url("/aniyomi").toString().removeSuffix("/")
+			val repo = service.fetchRepoDetails(baseUrl, ExternalExtensionType.ANIYOMI)
+			val extensions = service.fetchAvailableExtensionsOrThrow(repo)
+
+			repo.name shouldBe "Yūzōnō"
+			repo.baseUrl shouldBe "$baseUrl/index.pb"
+			extensions shouldHaveSize 2
+			extensions[0].name shouldBe "AnimeOnsen"
+			extensions[0].sourceIds shouldBe listOf(8542735178285060053L)
+			extensions[0].sourceNames shouldBe listOf("AnimeOnsen")
+			extensions[0].isCompatible.shouldBeTrue()
+			extensions[0].includesUniversalLanguage.shouldBeTrue()
+			extensions[1].sourceIds shouldBe listOf(5093529078954574163L)
+			extensions[1].isNsfw.shouldBeTrue()
+			server.takeRequest().path shouldBe "/aniyomi/repo.json"
+			server.takeRequest().path shouldBe "/aniyomi/index.pb"
+			server.takeRequest().path shouldBe "/aniyomi/index.pb"
+		}
+	}
+
+	test("Aniyomi legacy fallback decodes an external protobuf extension list") {
+		runBlocking {
+			val encodedList = requireNotNull(javaClass.getResourceAsStream("/fixtures/aniyomi-extensions.protobuf"))
+				.use { it.readBytes() }
+			val index = ExtensionStoreIndex(name = "Aniyomi", extensionListUrl = "lists/extensions.pb")
+			server.enqueue(MockResponse().setResponseCode(404))
+			server.enqueue(
+				MockResponse().setBody(okio.Buffer().write(
+					kotlinx.serialization.protobuf.ProtoBuf.encodeToByteArray(ExtensionStoreIndex.serializer(), index),
+				)),
+			)
+			server.enqueue(MockResponse().setBody(okio.Buffer().write(encodedList.gzip())))
+			val baseUrl = server.url("/aniyomi").toString().removeSuffix("/")
+			val repo = ExternalExtensionRepo(
+				type = ExternalExtensionType.ANIYOMI,
+				baseUrl = baseUrl,
+				name = "Aniyomi",
+				shortName = "Aniyomi",
+				website = "https://example.org",
+				signingKeyFingerprint = "key",
+				createdAt = 1L,
+				updatedAt = 1L,
+				lastSuccessAt = 1L,
+				lastError = null,
+			)
+
+			val extensions = service.fetchAvailableExtensionsOrThrow(repo)
+
+			extensions shouldHaveSize 2
+			extensions[0].sourceIds shouldBe listOf(8542735178285060053L)
+			extensions[1].sourceIds shouldBe listOf(5093529078954574163L)
+			server.takeRequest().path shouldBe "/aniyomi/index.min.json"
+			server.takeRequest().path shouldBe "/aniyomi/index.pb"
+			server.takeRequest().path shouldBe "/aniyomi/lists/extensions.pb"
+		}
+	}
+
 	test("fetchAvailableExtensions falls back from legacy json to protobuf index") {
 		runBlocking {
 			val index = ExtensionStoreIndex(

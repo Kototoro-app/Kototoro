@@ -9,13 +9,9 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.protobuf.ProtoBuf
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
-import okio.BufferedSource
-import okio.buffer
-import okio.gzip
 import org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.network.ContentHttpClient
@@ -464,22 +460,20 @@ class ExtensionRepoService @Inject constructor(
     /**
      * Fetches and decodes a repository `index.pb` protobuf index.
      *
-     * The field layout, defined by Mihon's `index.proto`, is shared verbatim by Mihon-compatible
-     * stores and the NovelSourcery (Tsundoku novel) ecosystem, so this one code path serves both
-     * repository families (see [ExtensionStoreIndex]).
+     * The shared decoder handles both Mihon/NovelSourcery and Aniyomi field layouts.
      */
     private suspend fun fetchExtensionStoreIndex(indexUrl: String): ExtensionStoreIndex {
         val bytes = httpClient.newCall(GET(applyMirror(indexUrl))).awaitSuccess().use { response ->
-            response.body.source().decompressIfGzipped().use { source -> source.readByteArray() }
+            response.body.bytes()
         }
-        return ProtoBuf.decodeFromByteArray(ExtensionStoreIndex.serializer(), bytes)
+        return decodeExtensionStoreIndex(bytes, protobuf = true)
     }
 
     private suspend fun fetchExtensionList(listUrl: String): ExtensionStoreIndex.ExtensionList {
         val bytes = httpClient.newCall(GET(applyMirror(listUrl))).awaitSuccess().use { response ->
-            response.body.source().decompressIfGzipped().use { source -> source.readByteArray() }
+            response.body.bytes()
         }
-        return ProtoBuf.decodeFromByteArray(ExtensionStoreIndex.ExtensionList.serializer(), bytes)
+        return decodeExtensionStoreList(bytes, protobuf = true)
     }
 
     private fun ExtensionStoreIndex.Extension.toAvailableExtension(
@@ -521,13 +515,6 @@ class ExtensionRepoService @Inject constructor(
             signatureHash = repo.signingKeyFingerprint,
             isCompatible = supported,
         )
-    }
-
-    private fun BufferedSource.decompressIfGzipped(): BufferedSource {
-        val isGzip = peek().use { peeked ->
-            runCatching { peeked.readShort().toInt() == GZIP_MAGIC }.getOrDefault(false)
-        }
-        return if (isGzip) gzip().buffer() else this
     }
 
     private fun isProtobufIndexUrl(url: String): Boolean {
@@ -953,7 +940,6 @@ class ExtensionRepoService @Inject constructor(
 
     private companion object {
         const val TAG = "ExtensionRepo"
-        const val GZIP_MAGIC = 0x1f8b
         const val REPO_DETAILS_TIMEOUT_MS = 15_000L
         const val CATALOG_TIMEOUT_MS = 20_000L
     }

@@ -23,6 +23,42 @@ import java.util.jar.JarOutputStream
 import java.util.jar.JarEntry
 
 class DesktopRepositoriesTest {
+    @Test
+    fun `Aniyomi root and protobuf indexes preserve sources alongside torrent entries`() = runBlocking<Unit> {
+        val bytes = requireNotNull(javaClass.getResourceAsStream("/fixtures/aniyomi-index.protobuf"))
+            .use { it.readBytes() }
+        val gzip = ByteArrayOutputStream().also { output ->
+            GZIPOutputStream(output).use { it.write(bytes) }
+        }.toByteArray()
+        serve(mapOf("/index.pb" to gzip)).use { server ->
+            withRepositories { repos ->
+                for (address in listOf(server.url, server.url + "/index.pb")) {
+                    val catalog = repos.fetch(address)
+                    assertEquals("Yūzōnō", catalog.repository.name)
+                    assertEquals(2, catalog.extensions.size)
+                    assertEquals(8542735178285060053L, catalog.extensions[0].sources.single().id)
+                    assertEquals("AnimeOnsen", catalog.extensions[0].sources.single().name)
+                    assertEquals(5093529078954574163L, catalog.extensions[1].sources.single().id)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `Aniyomi external protobuf lists use the same shared decoder`() = runBlocking<Unit> {
+        val bytes = requireNotNull(javaClass.getResourceAsStream("/fixtures/aniyomi-extensions.protobuf"))
+            .use { it.readBytes() }
+        val metadata = ExtensionStoreIndex(name = "Aniyomi", extensionListUrl = "lists/extensions.pb")
+        serve(mapOf("/index.pb" to encoded(metadata), "/lists/extensions.pb" to bytes)).use { server ->
+            withRepositories { repos ->
+                val catalog = repos.fetch(server.url + "/index.pb")
+                assertEquals(2, catalog.extensions.size)
+                assertEquals(8542735178285060053L, catalog.extensions[0].sources.single().id)
+                assertEquals(5093529078954574163L, catalog.extensions[1].sources.single().id)
+            }
+        }
+    }
+
     @TempDir lateinit var directory: Path
     private val index = ExtensionStoreIndex("测试仓库", "FIX", "key", ExtensionStoreIndex.Contact("https://fixture.invalid"),
         ExtensionStoreIndex.ExtensionList(listOf(extension())))
