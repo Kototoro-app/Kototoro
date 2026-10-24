@@ -47,7 +47,8 @@ docs/.vitepress/dist/
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
 .mindfs/
-.tmp/
+# Local scratch at the repo root: adb dumps, screenshots and one-off debug scripts
+/.tmp*
 .pi-esr-memory/
 .pi-loom/
 .pirc.json
