@@ -271,7 +271,8 @@ private fun RecommendationsRail(controller: DesktopController, works: List<HomeW
     val rim = rememberCoverRimBorderBrush(isIosStyle, isDark = MaterialTheme.colorScheme.background.luminance() < .5f)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HomeSectionHeader(desktopText("home.sectionRecommendations"), works.size, painterResource("icons/ic_arrow_forward.svg"),
-            onMoreClick = { if (enabled && !generating) controller.refreshSuggestions() },
+            // Android's home rail opens the suggestions destination; the refresh stays on the section's own action.
+            onMoreClick = { if (enabled) controller.showSuggestions() },
             titleModifier = Modifier.testTag("home-recommendations-more"),
             configureIcon = painterResource("icons/ic_suggestion.svg"), configureLabel = desktopText("home.refreshRecommendations"),
             configureModifier = Modifier.testTag("home-recommendations-refresh"),

@@ -51,6 +51,8 @@ import org.skepsun.kototoro.desktop.runtime.DesktopStorageUsage
 import org.skepsun.kototoro.desktop.runtime.DesktopTriState
 import org.skepsun.kototoro.desktop.runtime.DesktopNavigationSettings
 import org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings
+import org.skepsun.kototoro.desktop.runtime.DesktopSuggestionFilter
+import org.skepsun.kototoro.desktop.runtime.desktopSuggestionFilters
 import org.skepsun.kototoro.desktop.runtime.desktopReadChapterIds
 import org.skepsun.kototoro.desktop.runtime.desktopReadSavedChapters
 import org.skepsun.kototoro.desktop.runtime.desktopRelatedWorks
@@ -69,6 +71,9 @@ import org.skepsun.kototoro.reader.ui.tapgrid.TapGridConfig
 /** Reader-settings key prefix of the tap-grid actions (Android keeps them in its own `tap_grid` preferences). */
 private const val TAP_GRID_PREFIX = "tap_grid."
 
+/** Android's two adult quick-filter chips, which only exist while adult works may be recommended. */
+private val AdultChips = setOf<DesktopSuggestionFilter>(DesktopSuggestionFilter.Adult, DesktopSuggestionFilter.Safe)
+
 /** Lists that open details as a floating preview and get it back on dismiss. */
 private const val LAST_TRACKER_RUN = "last_tracker_run"
 private const val LAST_SUGGESTIONS_RUN = "last_suggestions_run"
@@ -85,7 +90,7 @@ private const val IMAGE_BUDGET = "image_budget_mb"
 private const val IMAGE_SWEEP_INTERVAL_MILLIS = DesktopImageBudget.SWEEP_INTERVAL_MILLIS
 
 internal val DetailsOrigins = setOf(DesktopScreen.HOME, DesktopScreen.FEED, DesktopScreen.EXPLORE, DesktopScreen.LIBRARY,
-    DesktopScreen.HISTORY, DesktopScreen.BOOKMARKS, DesktopScreen.UPDATED)
+    DesktopScreen.HISTORY, DesktopScreen.BOOKMARKS, DesktopScreen.UPDATED, DesktopScreen.SUGGESTIONS)
 
 /** The JVM's display locale, matched against branch names as Android matches its locale list. */
 internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
@@ -96,7 +101,7 @@ enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
     PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES, DICTIONARY_RULES,
-    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD, SOURCE_TEST, BOOKMARKS, UPDATED,
+    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD, SOURCE_TEST, BOOKMARKS, UPDATED, SUGGESTIONS,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -225,6 +230,11 @@ data class DesktopAppState(
     val suggestions: List<SourceContent> = emptyList(),
     /** True while [DesktopController.refreshSuggestions] runs in the background; the window stays usable. */
     val suggestionsGenerating: Boolean = false,
+    /**
+     * Android's suggestions quick filter: the chips picked on the recommendations page. They narrow the page only, so
+     * the home rail keeps showing everything the worker stored.
+     */
+    val suggestionFilters: Set<DesktopSuggestionFilter> = emptySet(),
     /** Works shown by [feed] rows, keyed by manga id, for covers and opening. */
     val feedContents: Map<Long, SourceContent> = emptyMap(),
     /** Favourite categories with update tracking; -1 until the subscriptions page loads. */
@@ -1336,7 +1346,14 @@ class DesktopController(
     }
 
     internal fun suggestionSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings) {
-        mutableState.update { it.copy(suggestionSettings = settings) }
+        mutableState.update {
+            it.copy(
+                suggestionSettings = settings,
+                // Android offers the two adult chips only while adult works may be recommended, so a switched-on
+                // filter must not keep selecting works the generator no longer stores.
+                suggestionFilters = if (settings.excludeNsfw) it.suggestionFilters - AdultChips else it.suggestionFilters,
+            )
+        }
         if (!backgroundPreferences.edit(SourcePreferenceEdit(changes = settings.toPreferences()))) {
             mutableState.update { it.copy(error = desktopText("settings.suggestionsSaveFailed")) }
         }
@@ -1361,7 +1378,10 @@ class DesktopController(
         val stored = session.suggestions.refresh(sources, settings, session.sourceNsfwOverrides())
         recordRun(LAST_SUGGESTIONS_RUN)
         val items = session.suggestions.suggestions()
-        mutableState.update { it.copy(suggestions = items) }
+        // A rebuild can stop offering a chip (a tag no longer in the list, both adult macros after the nsfw switch),
+        // and Android recomputes its quick-filter options on every reload; drop what the new list cannot filter.
+        val offered = desktopSuggestionFilters(items, includeAdultChips = !settings.excludeNsfw).toSet()
+        mutableState.update { it.copy(suggestions = items, suggestionFilters = it.suggestionFilters intersect offered) }
         if (stored > 0) announceSuggestion(settings, items)
         return stored
     }
@@ -2195,6 +2215,22 @@ class DesktopController(
     fun showBackups() = navigate { mutableState.update { it.copy(screen = DesktopScreen.BACKUPS) } }
 
     fun showRecommendations() = navigate { mutableState.update { it.copy(screen = DesktopScreen.RECOMMENDATIONS) } }
+
+    /**
+     * Android's suggestions destination (`NavItem.SUGGESTIONS`): the stored recommendations as a full list. The home
+     * rail reads the same table, so entering the page only reloads it — nothing is generated unless the page's refresh
+     * asks for it, exactly like Android's screen next to its worker.
+     */
+    fun showSuggestions() = navigate {
+        val items = session.suggestions.suggestions()
+        mutableState.update { it.copy(screen = DesktopScreen.SUGGESTIONS, suggestions = items) }
+    }
+
+    /** Android's quick filter on the suggestions list: the same chip again drops it, several chips narrow together. */
+    internal fun toggleSuggestionFilter(filter: DesktopSuggestionFilter) = mutableState.update {
+        it.copy(suggestionFilters = if (filter in it.suggestionFilters) it.suggestionFilters - filter
+        else it.suggestionFilters + filter)
+    }
 
     /** Android's "服务" page: the entry for recommendations and statistics that 更多 used to hold as two rows. */
     fun showServices() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SERVICES) } }

@@ -9031,3 +9031,68 @@ Windows 此前只有详情页里的“选择书签”面板，没有“全部书
 - 全量：`:desktop-app:test` 293 条 0 失败（4 跳过）、`:desktop-runtime:test` 191 条 0 失败（2 跳过）、
   `:core-domain:jvmTest` 261 条 0 失败、`:desktop-app:verifyDesktopStrings` 960 键 / 960 被引用、
   `:core-ui:compileCommonMainKotlinMetadata` 与 `:app:compileDebugKotlin` 通过。
+
+## 198. Windows 补上 Android 的推荐页（对齐 Android `NavItem.SUGGESTIONS` / `SuggestionsTopLevelRouteContent`）（2026-10-25）
+
+承接 §179 的推荐设置（worker 规则已对齐）：Android 在 `settings.isSuggestionsEnabled` 时提供 `NavItem.SUGGESTIONS`
+顶层页（`MainShellScene.kt` 的 `SuggestionsTopLevelRouteContent` + `SuggestionsHeaderCard` +
+`SuggestionsListQuickFilter`），Windows 此前只有首页的推荐轮播和推荐设置，没有“把整份推荐当列表看”的页面。
+本轮补上页面、快捷筛选和导航项。
+
+### 数据（共享规则）
+- `desktop-runtime` 新增 `DesktopSuggestionFilters.kt`。`DesktopSuggestionFilter` 是 Android
+  `SuggestionsListQuickFilter` 的三类芯片：`Tag(title)`、`Source(name)`、`Adult`/`Safe`（`Macro.NSFW` 与 SFW）。
+- `desktopSuggestionFilters(items, includeAdultChips, tagLimit = 5, sourceLimit = 3)` 照 Android 的顺序拼芯片：
+  先 `getTopTags(5)`，再两个宏（仅当 `!settings.isSuggestionsExcludeNsfw`，即 `includeAdultChips`），
+  最后 `getTopSources(3)`；空列表没有芯片。
+- 计数与 Android 的 SQL 不同但结论相同：Android 对 `manga_tags`/`manga.source` 分组计数，Windows 手里已是
+  `SourceContent` 列表，所以按标题分组（大小写不敏感、同一部作品重复标签只算一次、同数时按标题升序，
+  保留首次出现的写法），来源按 `source.name` 计数。标签芯片因此按标题匹配，而不是 tag 行 id——页面画的就是标题。
+- `SourceContent.acceptsSuggestionFilters(filters)` 是 Android DAO 的 AND 语义：每个芯片都必须命中，
+  空集合不过滤；`Adult`/`Safe` 走 `core-source` 的 `isNsfw`（`ADULT` 或 `HENTAI_` 前缀来源类型），
+  所以两个宏同时选中必然空列表。`desktopSuggestedContents(items, filters)` 是页面用的投影（空集合原样返回）。
+
+### 页面（`DesktopSuggestionsPage`）
+- 头部：`TopBarTitleBlock(suggestions, subtitle = suggestions_header_subtitle)`、`suggestions_header_refresh`
+  （Android 头部卡的“换一批”，走 `refreshSuggestions()`，生成中禁用）与进入推荐设置的链接。
+- 未开启推荐时页面不假装有内容，而是显示 `home.suggestionsOffDetail` + 一键开启（`enableSuggestions()`）；
+  开启但还没生成时是 `home.suggestionsDetail` + 生成按钮；生成中头部下方有进度条与 `message.generatingSuggestions`。
+- 主体是 `FlowRow` 的两个宏/标签/来源芯片（`suggestion-chip:<nsfw|sfw|tag:…|source:…>`，同一芯片再点即取消）
+  加 `ContentGrid`（沿用书架的 `library_list_mode` 网格/列表两种布局）。点卡片进详情，`DetailsOrigins`
+  与 `dismissDetails` 都加入 SUGGESTIONS，返回时仍是这张列表。
+- `DesktopAppState.suggestionFilters` 只活在内存里（Android 的 quick filter 也不持久化）。
+  `refreshSuggestions()` 的完工回调与 `suggestionSettings()` 都会按新列表/新的 nsfw 开关把已选芯片里
+  不再提供的那些丢掉，等价于 Android 每次重载列表重算可选项。
+
+### 入口与导航
+- 首页推荐轮播的“全部”从“重新生成”改成 `controller.showSuggestions()`（Android 首页推荐栏的“全部”打开顶层页），
+  轮播标题右侧的刷新按钮仍是 `refreshSuggestions()`。
+- `DesktopNavItem.SUGGESTIONS`（id 8、标签 `suggestions`、图标 `ic_suggestion`）可加入主导航；和 Android 一样
+  **总是可添加**（`NavConfigViewModel.availableItems` 不按 `isAvailable` 过滤），配置页对“已配置但当前不可用”的行
+  显示 Android 的 `suggestions_unavailable_text`（`DesktopNavItem.isAvailable(suggestionsEnabled)`）。
+  默认顺序仍是五项上限，所以入口是首页轮播或导航配置。
+- 页面自己承担“未开启”的提示，所以侧栏照旧无条件画已配置项（与 Android 底层导航条不去过滤一致）。
+
+### 与 Android 的差异
+- 列表模式复用书架的单一 `library_list_mode`：Android 的 `ListConfigSection.Suggestions` 是每页一份的列表配置，
+  Windows 没有那套每页配置表，不为这一页新起一个键。
+- 推荐页没有 Android 的 library 搜索横幅（Windows 的搜索在浏览页），也没有内容类型/来源标签筛选条——
+  Android 在这一页同样隐藏了它们，只留快捷筛选芯片。
+- 标签芯片按标题匹配（见上），Android 按 tag 行 id；对用户可见的结果一致。
+
+### 验证
+- `:desktop-runtime:test --tests=*DesktopSuggestionFiltersTest*`（新增 5 条）：芯片顺序与上限（5 标签 → 2 宏 → 3 来源）、
+  `includeAdultChips = false` 时不出现宏、同一作品重复标签只算一次且同数时稳定、
+  `acceptsSuggestionFilters` 的 AND 语义（Tag/Source/Adult/Safe、`Adult + Safe` 为空）、标题匹配忽略大小写与首尾空格。
+  `*DesktopNavigationSettingsTest*` 的“可添加项”断言加入 SUGGESTIONS，并新增一条“只有推荐项依赖开关”的断言。
+- `:desktop-app:test --tests=*DesktopSuggestionsPageTest*`（新增探针，`suggestions` 模式）：导入 fixture 来源、
+  收藏一部作品、在首页轮播里开启并生成，从“全部”进推荐页；断言头部、网格与芯片；
+  挑一个真能切分当前列表的芯片（某标签或某个宏）点选，断言第一行里命中的卡片还在、不命中的消失，
+  再点一次全部回来；`换一批` 重建后页面仍可用；`推荐设置` 进入设置页；点卡片进详情、返回同一页；
+  把导航项换进侧栏后 `nav:推荐` 能进；关掉推荐后页面显示开启提示、导航配置页的该行显示
+  `suggestions_unavailable_text`，再用页面上的按钮开启并生成。
+- `DesktopAppTest`（`navconfig` 探针）补一条：添加对话框里有 `nav-config-add-option:SUGGESTIONS`，
+  即推荐关着也仍可添加。
+- 全量：`:desktop-app:test` 294 条 0 失败（4 跳过）、`:desktop-runtime:test` 197 条 0 失败（2 跳过）、
+  `:core-domain:jvmTest` 261 条 0 失败、`:desktop-app:verifyDesktopStrings` 960 键 / 960 被引用、
+  `:core-ui:compileCommonMainKotlinMetadata` 与 `:app:compileDebugKotlin` 通过。

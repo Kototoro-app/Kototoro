@@ -32,6 +32,20 @@ enum class DesktopNavItem {
      * main list keeps it out of the bar.
      */
     UPDATED,
+
+    /**
+     * Android's `NavItem.SUGGESTIONS` (推荐). Also off by default, and — like Android — still offered while
+     * recommendations are switched off: the destination asks for them itself, and the nav configuration marks the
+     * unavailable item instead of hiding it ([isAvailable]).
+     */
+    SUGGESTIONS,
+    ;
+
+    /** Android's `NavItem.isAvailable`: the recommendations destination needs recommendations to point at. */
+    fun isAvailable(suggestionsEnabled: Boolean): Boolean = when (this) {
+        SUGGESTIONS -> suggestionsEnabled
+        else -> true
+    }
 }
 
 /** The default order, matching the rail Android's tablet shell ships and the Windows shell drew before this page. */

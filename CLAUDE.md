@@ -257,6 +257,12 @@ npm run docs:build
   头部是 Android 的 `updated_header_summary`/`updated_header_all_read`，行是“继续阅读 + 移除”，
   成人目标沿用 `sources.nsfw.updates`；点开一行只 `markSeen`（Android 的 `clearReadUpdates`），
   “移除”与“全部标为已读”走 Android 的 `completePendingUpdates`（清计数、留历史与进度），见计划 §197。
+  Android 的推荐页也已接上（`DesktopScreen.SUGGESTIONS`，导航项 `DesktopNavItem.SUGGESTIONS`，同样要经“导航配置”
+  换进侧栏；主入口是首页推荐轮播的“全部”）：芯片是 `desktop-runtime` 的 `DesktopSuggestionFilters.kt`
+  （Android `SuggestionsListQuickFilter` 的 5 个高频标签 → 两个成人宏（`isSuggestionsExcludeNsfw` 时不给）→ 3 个高频来源，
+  `acceptsSuggestionFilters` 与 Android 的 SQL 一样跨芯片取“且”，所以两个宏同时选中必然空），页面头部是
+  Android 头部卡的 `suggestions_header_subtitle` 与“换一批”，未开启推荐时页面自己给出开启提示（导航项仍总是可添加，
+  配置页对该行显示 `suggestions_unavailable_text`），点卡片进详情再返回原列表，见计划 §198。
   .pb/新版 JSON 仓库添加/列表/搜索、JAR 安装/更新/导入及身份恢复；新产物保存到应用管理的 SHA 目录。
   仓库可“忘记”（只删索引条目，已安装扩展与 JAR 保留，重新添加即恢复）。
   来源浏览/搜索、详情、收藏、分页图片阅读、历史与源设置，以及可选网页/HTML/JS 调试。

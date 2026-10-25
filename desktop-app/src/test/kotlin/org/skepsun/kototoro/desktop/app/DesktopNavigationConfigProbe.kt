@@ -74,6 +74,9 @@ internal object DesktopNavigationConfigProbe {
                 waitUntil(timeoutMillis = 15_000) {
                     onAllNodesWithTag("nav-config-add-option:HOME").fetchSemanticsNodes().isNotEmpty()
                 }
+                // Android's nav configuration offers its suggestions destination whether or not the feature is on
+                // (`availableItems` applies no availability filter), and marks the row instead.
+                onNodeWithTag("nav-config-add-option:SUGGESTIONS").assertExists()
                 onNodeWithTag("nav-config-add-option:HOME").performClick()
                 awaitItems(listOf(
                     DesktopNavItem.FAVOURITES,

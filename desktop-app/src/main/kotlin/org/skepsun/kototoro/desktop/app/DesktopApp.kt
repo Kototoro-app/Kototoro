@@ -117,6 +117,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.HOME -> DesktopHomePanel(controller, listState, !closing)
                             DesktopScreen.FEED -> DesktopFeedPanel(controller, listState, !closing)
                             DesktopScreen.UPDATED -> DesktopUpdatesPage(controller, state, !closing)
+                            DesktopScreen.SUGGESTIONS -> DesktopSuggestionsPage(controller, state, !closing)
                             DesktopScreen.EXPLORE -> Browse(controller, listState, !closing)
                             DesktopScreen.LIBRARY, DesktopScreen.HISTORY -> DesktopLibraryPanel(controller, listState, !closing)
                             DesktopScreen.DETAILS -> Details(controller, state)
@@ -225,6 +226,7 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.HOME -> desktopText("nav.home")
         DesktopScreen.FEED -> desktopText("nav.subscriptions")
         DesktopScreen.UPDATED -> AndroidStrings["updated"]
+        DesktopScreen.SUGGESTIONS -> AndroidStrings["suggestions"]
         DesktopScreen.EXPLORE -> state.selectedSource?.displayName ?: desktopText("screens.browseSource")
         DesktopScreen.LIBRARY -> desktopText("nav.favourites")
         DesktopScreen.HISTORY -> desktopText("screens.history")

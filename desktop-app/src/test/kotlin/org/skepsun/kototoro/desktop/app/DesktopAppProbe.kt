@@ -31,6 +31,10 @@ object DesktopAppProbe {
                 DesktopUpdatesProbe.run(args)
                 return
             }
+            if (args[0] == "suggestions") {
+                DesktopSuggestionsProbe.run(args)
+                return
+            }
             if (args[0] == "incognito") {
                 DesktopIncognitoProbe.run(args)
                 return
