@@ -2,6 +2,7 @@ package org.skepsun.kototoro.settings.compose
 
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -115,7 +116,7 @@ internal fun SettingsAlertDialog(
     }
     val dialogBody: @Composable () -> Unit = {
         if (isTvPresentation) {
-            TvDialogKeyboardHandling()
+            TvDialogWindowSetup()
         }
         Box(
             modifier = if (isTvPresentation) {
@@ -201,7 +202,8 @@ internal fun SettingsAlertDialog(
                     body = dialogBody,
                     buttons = dialogButtons,
                     shape = dialogShape,
-                    containerColor = colors.surfaceContainerHigh.copy(alpha = tokens.dialogContainerAlpha),
+                    containerColor = colors.surfaceContainerHighest,
+                    borderColor = colors.outlineVariant,
                     tonalElevation = tokens.dialogTonalElevation,
                     titleColor = colors.onSurface,
                     bodyColor = colors.onSurfaceVariant,
@@ -260,6 +262,18 @@ internal fun SettingsDialogActionButton(
  */
 private val TvDialogWidth = 640.dp
 
+/** Hairline edge for the card: at ten feet a border is what tells the card from the scrim. */
+private val TvDialogBorderWidth = 1.dp
+
+/**
+ * How much of the screen behind a TV dialog stays visible: 40% of it is covered.
+ *
+ * The platform default left the page at two thirds brightness, which on a dark theme put a card and
+ * its backdrop within 19 levels of each other - the dialog read as a slightly lighter smudge in the
+ * middle of the settings page.
+ */
+private const val TvDialogDimAmount = 0.6f
+
 /**
  * The dialog box itself, on TV.
  *
@@ -275,6 +289,10 @@ private val TvDialogWidth = 640.dp
  * stays centred. Body text uses `bodyLarge` rather than the phone-sized `bodyMedium`, and the action
  * labels 16 sp: this card is only ever drawn at ten-foot distance, where 14 sp is below the size the
  * rest of the TV settings list already uses.
+ *
+ * The card is opaque and carries a hairline border. Both are about the edge at ten feet: with the
+ * glass alpha the card measured 40 against a backdrop of 21, a difference no viewer reads as a card
+ * boundary, and the border is what tells card from scrim once the two tones are close.
  */
 @Composable
 private fun TvDialogCard(
@@ -284,6 +302,7 @@ private fun TvDialogCard(
     buttons: @Composable () -> Unit,
     shape: Shape,
     containerColor: Color,
+    borderColor: Color,
     tonalElevation: Dp,
     titleColor: Color,
     bodyColor: Color,
@@ -293,6 +312,7 @@ private fun TvDialogCard(
         shape = shape,
         color = containerColor,
         tonalElevation = tonalElevation,
+        border = BorderStroke(TvDialogBorderWidth, borderColor),
         modifier = Modifier.requiredWidth(TvDialogWidth),
     ) {
         Column(
@@ -323,23 +343,29 @@ private fun TvDialogCard(
 }
 
 /**
- * Keep the dialog window out of the keyboard's way.
+ * Set up the dialog window itself on TV: keep the keyboard out of its way and lay a proper scrim.
  *
  * The keyboard must not fold or pan this window: the card is moved to the top of the screen by
  * [SettingsAlertDialog] instead, and a window that also shifted itself would move the card twice.
  * The state bit keeps the request from raising a keyboard by itself - the field still decides when
  * editing starts.
  *
+ * The scrim is heavier than the platform default because of viewing distance; see
+ * [TvDialogDimAmount].
+ *
  * Must be called from inside the dialog's own composition, which is where the dialog window can be
  * found: outside it the side effect lands on the activity's window and does nothing.
  */
 @Composable
-internal fun TvDialogKeyboardHandling() {
+internal fun TvDialogWindowSetup() {
     val view = LocalView.current
     SideEffect {
-        findDialogWindow(view)?.setSoftInputMode(
-            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING or
-                WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED,
-        )
+        findDialogWindow(view)?.apply {
+            setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING or
+                    WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED,
+            )
+            setDimAmount(TvDialogDimAmount)
+        }
     }
 }
