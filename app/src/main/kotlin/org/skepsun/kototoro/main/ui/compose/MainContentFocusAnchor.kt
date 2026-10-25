@@ -63,11 +63,25 @@ val LocalMainContentFocusAnchor = staticCompositionLocalOf<MainContentFocusAncho
 @Composable
 fun rememberMainContentFocusAnchorRequester(enabled: Boolean = true): FocusRequester {
     val requester = remember { FocusRequester() }
+    PublishMainContentFocusAnchor(requester = requester, enabled = enabled)
+    return requester
+}
+
+/**
+ * Publishes an already existing [requester] into [LocalMainContentFocusAnchor], for pages whose first stop is
+ * anchored by another seam and only needs to be announced.
+ *
+ * The favourites host is such a page: it already hands the same requester to its inline category tabs through
+ * the top-bar override state, and the quick-filter row's sort control is the first stop the shell's search,
+ * filter and overflow buttons should reach. Passing `null` (a host that is not a TV) publishes nothing.
+ */
+@Composable
+fun PublishMainContentFocusAnchor(requester: FocusRequester?, enabled: Boolean = true) {
     val anchor = LocalMainContentFocusAnchor.current
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(anchor, isTvPresentation, enabled, lifecycleOwner) {
-        if (anchor == null || !isTvPresentation || !enabled) {
+    DisposableEffect(anchor, requester, isTvPresentation, enabled, lifecycleOwner) {
+        if (anchor == null || requester == null || !isTvPresentation || !enabled) {
             return@DisposableEffect onDispose { }
         }
         val observer = LifecycleEventObserver { _, event ->
@@ -88,5 +102,4 @@ fun rememberMainContentFocusAnchorRequester(enabled: Boolean = true): FocusReque
             anchor.unregister(requester)
         }
     }
-    return requester
 }

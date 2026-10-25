@@ -7021,3 +7021,65 @@ DOWN 就有地方去——缺的只是那一行。
 **同一个控件存在第二份实现时，第二份几乎必然少接某个 seam。** 这轮少的不是机制而是"读一下 state 里已有的字段"：
 `downFocusRequester` 就在 `CompactTabsTopBarOverrideState` 里，调用方也早就在传。遇到"旁边那个一模一样的
 控件好好的"，先 diff 两份实现的 modifier 链，比重新发明一个入口快，也不会把"页面锚点"和"控件锚点"混为一谈。
+
+## 第一百零七轮：收藏页也有页面锚点了（2026-10-25）
+
+### 现象
+
+收藏页（`favorites_tabs_position = INLINE_RAIL`）上，右上角的漏斗 `[1708,16][1800,112]` 与 ⋮
+`[1800,16][1896,112]` 按 DOWN 直接掉到左侧导航栏 `[16,584][152,720]`，中间那排快速筛选芯片够不着。
+这是 §106 顺手发现、当时没修的那个洞：`rememberMainContentFocusAnchorRequester` 只有首页 hero（§103 之前）
+和历史统计卡（§103）在用，收藏页从来没有向 `LocalMainContentFocusAnchor` 注册过任何东西，所以顶栏
+`contentDownFocus` 在收藏页是 `null`，`tvDownFocusLink` 等于空操作。
+
+### 根因
+
+不是缺机制，是缺"宣布"。收藏页其实早就有这个 requester：`FavoritesHostScreen.kt` 为内联分类标签建了
+`contentTopFocusRequester`，经 `CompactTabsTopBarOverrideState(downFocusRequester = …)` 交给标签，
+另一端 `FavoritesListScreen.kt:79` 把它挂在快速筛选行打头的排序控件 `SortOrderControl` 上。
+这个排序控件正是"页面第一站"，只是它从没被登记到 shell 的锚点槽里。
+
+`rememberMainContentFocusAnchorRequester()` 不能直接复用——它自己 `remember { FocusRequester() }`，
+拿到手的只会是新 requester，无法接管已有的那个。
+
+### 修法
+
+两处，都是纯增量：
+
+1. `MainContentFocusAnchor.kt`：把登记逻辑抽成 `PublishMainContentFocusAnchor(requester, enabled)`，
+   `rememberMainContentFocusAnchorRequester` 变成"新建 requester + 调用它"的一行委托。
+   语义不变（仍是 TV + 已 resumed + enabled 才登记，暂停/销毁注销），只是允许传入现成的 requester。
+2. `FavoritesHostScreen.kt`：建完 `contentTopFocusRequester` 立刻
+   `PublishMainContentFocusAnchor(requester = contentTopFocusRequester)`。非 TV 时这个 requester 是 `null`，
+   函数直接空操作；`tvDownFocusLink` 那边本来就有 `runCatching`，requester 没挂上时按键照旧不被消费。
+
+### 证据
+
+**修前**（`CA10`–`CA14`，commit `bce36324a` 的 APK）：漏斗与 ⋮ 各自按 DOWN 都落到导航栏
+`[16,584][152,720]`。
+
+**修后**（`CB10`–`CG13`）：
+
+* `CC13`/`CC14`：漏斗 `[1708,16][1800,112]` → DOWN → 排序控件 `[176,120][268,216]`，截图里那个 ≡ 按钮
+  带着蓝色环；
+* `CE10`/`CE11`：⋮ `[1800,16][1896,112]` → DOWN → 同一个排序控件；
+* 回归：历史页仍走 §103 那条路（`CG10`–`CG13`，导航栏 History → CENTER → 首张卡片
+  `[192,324][422,744]` → UP → 搜索胶囊 `[358,16][1692,112]` → RIGHT → 漏斗 → DOWN → 统计卡
+  `[192,140][1896,404]`），说明抽出来的登记逻辑对"自己创建 requester"的旧调用点没有副作用；
+* 顺带确认：收藏页从排序控件 UP 回到搜索圆钮 `[188,16][284,112]`、LEFT 才回导航栏，与 §106 一致。
+
+### 遗留
+
+1. **Explore 与 Feed 页仍然没有锚点**：`CE12` 那段误落在 Feed 页时，Feed 的搜索胶囊
+   `[312,16][1692,112]` 按 DOWN 一样掉到导航栏。这两个页面的"第一站"还没定（Feed 的订阅时间线在
+   网络不可用时是空态），要先把它们的首个可聚焦控件找出来再接。
+2. 收藏页的两套机制现在共用同一个 requester（内联标签的 DOWN 与顶栏的 DOWN），这是有意的；
+   但如果将来内联标签改成别的锚点，这两处要一起改。
+3. `PublishMainContentFocusAnchor` 目前只有收藏页一个使用点；等 Explore/Feed 接上会变成三个，
+   届时可以再看要不要把"页面第一站"的登记收敛成一个小接口。
+
+### 教训
+
+**注释里写着"anchored on X"的 requester，往往只对了一半的调用方可见。** 收藏页那份注释准确描述了
+标签 → 排序控件这一条链，但 shell 那边要的是"这个 requester 是谁"，而不是"它挂在哪儿"。
+发现两套 seam 指向同一个控件时，优先把它登记成一等公民，而不是再 `remember` 一个新的。

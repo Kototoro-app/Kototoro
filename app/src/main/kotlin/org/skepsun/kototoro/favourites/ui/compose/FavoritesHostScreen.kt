@@ -66,6 +66,7 @@ import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarTabItem
 import org.skepsun.kototoro.main.ui.compose.ContentSelectionTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
+import org.skepsun.kototoro.main.ui.compose.PublishMainContentFocusAnchor
 import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.QuickFilter
@@ -210,6 +211,9 @@ fun KototoroFavoritesHostRoute(
     // page (the list column starts at the top of the window). This requester is handed to the tabs
     // through the override state and anchored on the sort control that heads the quick-filter row.
     val contentTopFocusRequester = remember { if (isTvPresentation) FocusRequester() else null }
+    // The same stop is what the shell chrome's search, filter and overflow buttons have to reach, so it
+    // doubles as this page's main-content anchor; without it their DOWN fell to the navigation rail.
+    PublishMainContentFocusAnchor(requester = contentTopFocusRequester)
     val activeListHost = activeCategoryId?.let { categoryId -> viewModel.listHost(categoryId) }
     LaunchedEffect(activeListHost) {
         if (activeListHost != null && resolvedActiveFavouritesHostRef.value !== activeListHost) {
