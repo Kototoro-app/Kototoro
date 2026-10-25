@@ -29,6 +29,11 @@ data class DesktopReaderSettings(
      * progress dock instead, which is where a one-handed reader can reach it.
      */
     val chapterTitleAtBottom: Boolean = false,
+    /**
+     * Android's `reader_reduce_offscreen_quality` (the "reduce page preloading" switch): keep fewer pages loaded
+     * outside the viewport, so adjacent pages may take longer to appear.
+     */
+    val reducePagePreloading: Boolean = false,
     /** Paged reading from top to bottom (Android's vertical mode); single and double pages only. */
     val vertical: Boolean = false,
     /** Android's "crop pages", kept separately for the paged and the continuous (webtoon) readers. */

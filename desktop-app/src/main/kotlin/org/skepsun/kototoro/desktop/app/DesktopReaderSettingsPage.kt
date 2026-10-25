@@ -94,6 +94,12 @@ internal fun DesktopReaderSettingsPage(controller: DesktopController, state: Des
                 AndroidStrings["reader_chapter_title_at_bottom_summary"], settings.chapterTitleAtBottom, active,
                 { controller.readerSettings(settings.copy(chapterTitleAtBottom = it)) },
                 testTag = "reader-setting-chapter-title-bottom")
+            SettingsRowDivider()
+            // Android's "reduce page preloading": fewer pages are kept loaded outside the viewport.
+            SettingsSwitchRow(AndroidStrings["reader_reduce_page_preloading"],
+                AndroidStrings["reader_reduce_page_preloading_summary"], settings.reducePagePreloading, active,
+                { controller.readerSettings(settings.copy(reducePagePreloading = it)) },
+                testTag = "reader-setting-reduce-preloading")
         }
         SettingsSectionHeader(desktopText("reader.settingsTurning"))
         SettingsGroup {

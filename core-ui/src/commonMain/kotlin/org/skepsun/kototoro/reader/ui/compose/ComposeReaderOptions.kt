@@ -200,7 +200,10 @@ data class ReaderOptionsFeatures(
     val fullscreen: Boolean = true,
     val chapterTitleAtBottom: Boolean = true,
     val sceneRenderers: Boolean = true,
-    val performance: Boolean = true,
+    /** Android's "limit image memory cache": a host whose image pipeline has no such cache leaves the row out. */
+    val optimization: Boolean = true,
+    /** Android's "reduce page preloading": a host that keeps no offscreen pages either can leave the row out. */
+    val preloadReduction: Boolean = true,
     /** Hosts that apply colour correction permanently right away have no save row. */
     val saveColorFilter: Boolean = true,
     val saveColorFilterForManga: Boolean = true,
@@ -592,20 +595,25 @@ fun ReaderLayoutOptionsPage(
                 }
             }
         }
-        if (features.performance) {
+        if (features.optimization || features.preloadReduction) {
             item {
                 ReaderOptionGroup(title = strings.sectionPerformance) {
-                    ReaderOptionSwitchRow(
-                        label = strings.optimize,
-                        checked = state.optimization,
-                        onCheckedChange = callbacks.onOptimizationChanged,
-                    )
-                    ReaderOptionDivider()
-                    ReaderOptionSwitchRow(
-                        label = strings.reducePagePreloading,
-                        checked = state.preloadReduction,
-                        onCheckedChange = callbacks.onPreloadReductionChanged,
-                    )
+                    if (features.optimization) {
+                        ReaderOptionSwitchRow(
+                            label = strings.optimize,
+                            checked = state.optimization,
+                            onCheckedChange = callbacks.onOptimizationChanged,
+                        )
+                    }
+                    if (features.optimization && features.preloadReduction) ReaderOptionDivider()
+                    if (features.preloadReduction) {
+                        ReaderOptionSwitchRow(
+                            label = strings.reducePagePreloading,
+                            checked = state.preloadReduction,
+                            onCheckedChange = callbacks.onPreloadReductionChanged,
+                            modifier = Modifier.testTag("reader-options-preload-reduction"),
+                        )
+                    }
                 }
             }
         }
@@ -762,7 +770,8 @@ fun ReaderOptionsPageList(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         // A scrollable list is itself a focus stop on TV: the first direction press would land on the
         // list instead of its first row, so the ring stays hidden for one press.
-        modifier = Modifier.fillMaxSize().focusProperties { if (isTv) canFocus = false },
+        modifier = Modifier.fillMaxSize().testTag("reader-options-list")
+            .focusProperties { if (isTv) canFocus = false },
         content = content,
     )
 }

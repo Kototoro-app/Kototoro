@@ -48,7 +48,9 @@ internal val DesktopReaderOptionsFeatures = ReaderOptionsFeatures(
     splitPages = false,
     chapterTitleAtBottom = true,
     sceneRenderers = false,
-    performance = false,
+    // The Windows image pipeline keeps no page bitmap cache, but it does keep pages loaded around the viewport.
+    optimization = false,
+    preloadReduction = true,
     // Colour correction applies to every work and is saved as it changes.
     saveColorFilter = false,
     saveColorFilterForManga = false,
@@ -95,6 +97,7 @@ internal fun DesktopReaderOptionsPanel(
         onFullscreenChanged = { if (it != fullscreen) onToggleFullscreen?.invoke() },
         onPageNumbersChanged = { update(settings.copy(pageNumbers = it)) },
         onChapterTitleAtBottomChanged = { update(settings.copy(chapterTitleAtBottom = it)) },
+        onPreloadReductionChanged = { update(settings.copy(reducePagePreloading = it)) },
         onCropPagesChanged = {
             update(if (settings.mode == DesktopReaderMode.CONTINUOUS) settings.copy(cropContinuous = it)
                 else settings.copy(cropPaged = it))
@@ -158,6 +161,7 @@ internal fun DesktopReaderSettings.toOptionsState(fullscreen: Boolean) = Compose
     fullscreen = fullscreen,
     pageNumbers = pageNumbers,
     chapterTitleAtBottom = chapterTitleAtBottom,
+    preloadReduction = reducePagePreloading,
     cropPages = cropActive,
     superResolution = upscale.model != null,
     colorFilter = colorFilter.toShared(),

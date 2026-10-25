@@ -9242,3 +9242,38 @@ Windows 的可用性改进，也是一次把安卓私有控件提取成共享代
   `readerSettings.chapterTitleAtBottom` 一致。
 - 全量：`:desktop-app:test` 306 条 0 失败（4 跳过，比 §201 多出新的 1 条）；`:desktop-app:verifyDesktopStrings`
   961 键 / 961 被引用通过。
+
+## 203. Windows 阅读器补「减少页面预加载」（`reader_reduce_offscreen_quality`）（2026-10-25）
+
+### 实现
+- 共享 `ReaderOptionsFeatures` 原先只有一个 `performance` 旗标代表 Android 性能分组的两行；现在拆成
+  `optimization`（「限制图片内存缓存」，Android `reader_optimize`）与 `preloadReduction`（「减少页面预加载」，
+  Android `reader_reduce_page_preloading`）两个旗标。`AndroidReaderOptionsFeatures` 只依赖默认值，所以安卓照旧画两行。
+- `DesktopReaderSettings` 增 `reducePagePreloading`（默认 `false`，与 Android
+  `AppSettings.isReaderPreloadReductionEnabled` 同默认），读写阅读偏好 store 的 `reader_reduce_offscreen_quality`
+  （Android `KEY_READER_REDUCE_PRELOAD` 就是这把键——安卓的标签说“预加载”，存的却是视口外页）。
+- `prefetchAroundSlot` 按开关改窗口：关时 reader-core 的
+  `PagedSceneResourceWindowStrategy(lookaheadSlots = 2, prepareAdjacentSlots = true)`（当前槽 + 前后各两槽，相邻槽预呈现），
+  开时 `lookaheadSlots = 1, prepareAdjacentSlots = false`（当前槽 + 前后各一槽、只取源），并且不再在章末提前预加载下一章。
+  开关一改，若正停在阅读器就立刻 `cancelPrefetch()` 再按新窗口重排；已经加载的页留在 `readerImages` 里，不会被丢掉。
+- 阅读器侧面板用共享面板：`DesktopReaderOptionsFeatures.preloadReduction = true`，`toOptionsState` 带上该值，
+  `onPreloadReductionChanged` 写回同一份设置，共享面板这行标签 `reader-options-preload-reduction`。
+- 阅读设置页「页面」节也加了一行（紧跟在「章节标题在底部」之后），文案用 Android 的
+  `reader_reduce_page_preloading`/`_summary`，标签 `reader-setting-reduce-preloading`。
+
+### 与 Android 的差异
+- 只在分页（单页/双页）生效：连续阅读器本来就不保留视口外的页（`prefetchAroundSlot` 在 `CONTINUOUS` 直接返回），
+  没有可减的预加载，开关照存照显示但不影响连续模式。
+- Android 的「限制图片内存缓存（beta）」（`reader_optimize`）在 Windows 没有对应管线（桌面图片缓存是下载目录里的
+  blob 加图片预算的内存 LRU，不是安卓那种页面位图缓存），所以共享面板的 `optimization` 保持 `false`，那一行不出现；
+  旗标拆开就是为了让这一行能单独隐藏。
+- 共享 `ReaderOptionsPageList` 多一个 `reader-options-list` 标签，供探针在懒加载列表里滚到末尾的性能分组（安卓无影响）。
+
+### 验证
+- 新增 `DesktopPreloadReductionTest`（探针 `preload-reduction`，真实 fixture 扩展 + 真实阅读器，约 20 s）：
+  fixture 章节 5 页，默认读出的页索引恰好 `{0, 1, 2}`（当前页加后两槽）；侧面板「布局」页滚到底打开开关后
+  `readerSettings.reducePagePreloading` 为真、退出重进同一章读出的只剩 `{0, 1}`；最后在阅读设置页
+  `assertIsOn` → 点掉 → `assertIsOff`，把默认值写回，探针结束打印 `DESKTOP_UI_OK=preload-reduction` 与
+  `NETWORK_REQUESTS=0`。
+- 全量：`:desktop-app:test` 307 条 0 失败（4 跳过，比 §202 多出新的 1 条）；
+  `:desktop-app:verifyDesktopStrings` 961 键 / 961 被引用通过。

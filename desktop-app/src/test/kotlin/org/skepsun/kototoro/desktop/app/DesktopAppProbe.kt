@@ -207,6 +207,10 @@ object DesktopAppProbe {
                 DesktopReaderTitleBottomProbe.run(args)
                 return
             }
+            if (args[0] == "preload-reduction") {
+                DesktopPreloadReductionProbe.run(args)
+                return
+            }
             if (args[0].startsWith("reader-camera-")) {
                 DesktopReaderCameraProbe.run(args)
                 return

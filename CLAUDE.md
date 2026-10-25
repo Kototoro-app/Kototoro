@@ -288,6 +288,15 @@ npm run docs:build
   侧面板「布局」页的开关就是把共享面板的 `features.chapterTitleAtBottom` 打开、读写同一个值，阅读设置页「页面」节
   也有一行（文案用安卓 `reader_chapter_title_at_bottom`/`_summary`）；回归用 `DesktopReaderTitleBottomTest`
   （探针 `reader-title-bottom`：默认只有顶栏一枚、开了之后剩一枚且在画面下半，设置页点开关断言状态）。
+  安卓的「减少页面预加载」也补上了（§203）：`DesktopReaderSettings` 多一个 `reducePagePreloading`（键
+  `reader_reduce_offscreen_quality`，默认关，与安卓同默认；安卓的标签说“预加载”，存的却是视口外页），分页阅读器的
+  预取窗口在 `prefetchAroundSlot` 里按开关切换——关时 reader-core 的 `PagedSceneResourceWindowStrategy` 取前后各两槽并
+  预呈现相邻槽、章末还提前预加载下一章，开时只取前后各一槽且不预呈现、不预加载下一章，开关一改若正停在阅读器就立刻
+  取消并重排队列（已加载的页保留）；连续模式本来就不留视口外的页，所以开关只在分页生效。共享面板的
+  `ReaderOptionsFeatures.performance` 因此拆成 `optimization`/`preloadReduction` 两个旗标，安卓用默认值照旧画两行，
+  Windows 只打开后者（没有安卓那种页面位图内存缓存可关），阅读设置页「页面」节同样多一行（文案用安卓
+  `reader_reduce_page_preloading`/`_summary`）；回归用 `DesktopPreloadReductionTest`（探针 `preload-reduction`：5 页章节默认读出
+  `{0,1,2}`、侧面板打开开关后重进只剩 `{0,1}`，设置页点开关断言状态并写回默认）。
   .pb/新版 JSON 仓库添加/列表/搜索、JAR 安装/更新/导入及身份恢复；新产物保存到应用管理的 SHA 目录。
   仓库可“忘记”（只删索引条目，已安装扩展与 JAR 保留，重新添加即恢复）。
   来源浏览/搜索、详情、收藏、分页图片阅读、历史与源设置，以及可选网页/HTML/JS 调试。

@@ -3216,6 +3216,7 @@ class DesktopController(
             "background" to SourcePreferenceValue.Text(settings.background.name),
             "page_numbers" to SourcePreferenceValue.Toggle(settings.pageNumbers),
             "reader_chapter_title_bottom" to SourcePreferenceValue.Toggle(settings.chapterTitleAtBottom),
+            "reader_reduce_offscreen_quality" to SourcePreferenceValue.Toggle(settings.reducePagePreloading),
             "vertical" to SourcePreferenceValue.Toggle(settings.vertical),
             "crop_paged" to SourcePreferenceValue.Toggle(settings.cropPaged),
             "crop_continuous" to SourcePreferenceValue.Toggle(settings.cropContinuous),
@@ -3235,6 +3236,12 @@ class DesktopController(
                 colorFilter = settings.colorFilter, background = settings.background, pageNumbers = settings.pageNumbers,
                 autoScrollSpeed = settings.autoScrollSpeed, tapGrid = settings.tapGrid) != settings) {
             pageOnIo(state.value.pageIndex)
+        }
+        // The preload window follows the switch at once, so turning it on drops the pages already queued around us
+        // (the children of the old plan keep loading; the next window is the reduced one).
+        if (state.value.screen == DesktopScreen.READER && previous.reducePagePreloading != settings.reducePagePreloading) {
+            cancelPrefetch()
+            prefetchAroundSlot(state.value)
         }
         if (!saved) mutableState.update { it.copy(error = desktopText("error.readerSettingsInMemory")) }
     }
@@ -3269,6 +3276,7 @@ class DesktopController(
             } ?: DesktopReaderBackground.DEFAULT,
             (snapshot["page_numbers"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             (snapshot["reader_chapter_title_bottom"] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            (snapshot["reader_reduce_offscreen_quality"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             (snapshot["vertical"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             (snapshot["crop_paged"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             (snapshot["crop_continuous"] as? SourcePreferenceValue.Toggle)?.value ?: false,
@@ -3365,18 +3373,20 @@ class DesktopController(
     /**
      * Android's paged resource window (reader-core): the slots around the current one load in the background, two
      * ahead and two behind, nearest first, so a turn finds its pages ready. Outside the action gate: it never delays
-     * a turn, and a newer window re-plans the queue of the running worker.
+     * a turn, and a newer window re-plans the queue of the running worker. Android's "reduce page preloading" switch
+     * keeps a single slot ahead instead and stops the next chapter from being fetched while it is still far away.
      */
     private fun prefetchAroundSlot(snapshot: DesktopAppState) {
         if (snapshot.screen != DesktopScreen.READER || snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS) return
         val layout = readerLayout(snapshot)
         val frame = layout.frame ?: return
-        val window = org.skepsun.kototoro.reader.core.PagedSceneResourceWindowStrategy(lookaheadSlots = 2,
-            prepareAdjacentSlots = true).plan(org.skepsun.kototoro.reader.core.SceneResourceWindowRequest(layout.scene, frame))
+        val reduce = snapshot.readerSettings.reducePagePreloading
+        val window = org.skepsun.kototoro.reader.core.PagedSceneResourceWindowStrategy(lookaheadSlots = if (reduce) 1 else 2,
+            prepareAdjacentSlots = !reduce).plan(org.skepsun.kototoro.reader.core.SceneResourceWindowRequest(layout.scene, frame))
         prefetchPages(snapshot.chapter?.id ?: return, window.requests.sortedBy { it.priority }
             .map { layout.scene.indexOf(it.pageId) }.filter { it >= 0 && it !in layout.indices })
         val slots = layout.scene.slotCount
-        if (layout.slotIndex >= slots - 1 - NEXT_CHAPTER_LOOKAHEAD) preloadNextChapter(snapshot)
+        if (!reduce && layout.slotIndex >= slots - 1 - NEXT_CHAPTER_LOOKAHEAD) preloadNextChapter(snapshot)
     }
 
     /** Loads [indices] of the open chapter in the background, nearest first; failures stay for the reader to retry. */
