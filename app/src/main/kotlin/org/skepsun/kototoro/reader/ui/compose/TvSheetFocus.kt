@@ -17,8 +17,12 @@ import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
  * control that does nothing when clicked or is lost entirely - the remote looks broken until the
  * user presses something random. Compose also drops a programmatic request while the window is in
  * touch mode, and the sheet is measured and slid into place over several frames, so the request is
- * retried until the control reports the focus (or the retries run out, as on a screen that never
- * gets one).
+ * retried until the control reports the focus and holds it for a few frames (or the retries run out,
+ * as on a screen that never gets one).
+ *
+ * The retries wait for the sheet's window to take the focus first: a request that lands while the
+ * window is still unfocused succeeds and is then replaced by the window's own default focus, so the
+ * ring ends up on whatever happens to be first in the content.
  *
  * Apply the returned requester - before the clickable/toggleable of the control - together with
  * [org.skepsun.kototoro.core.ui.adaptive.tvFocusable] and an `onFocusChanged` that feeds
@@ -33,15 +37,33 @@ internal fun rememberTvSheetStartFocus(hasFocus: () -> Boolean): FocusRequester 
     val view = LocalView.current
     LaunchedEffect(requester) {
         if (!isTv) return@LaunchedEffect
-        repeat(10) {
+        var settledFrames = 0
+        repeat(START_FOCUS_FRAMES) {
             withFrameNanos { }
-            if (hasFocus()) return@LaunchedEffect
-            // The window is in touch mode after the tap or key that opened the sheet, and Compose
-            // silently drops a request there; taking the Android focus back first makes it land.
-            view.requestFocusFromTouch()
-            if (runCatching { requester.requestFocus() }.getOrDefault(false)) return@LaunchedEffect
-            delay(70)
+            // The sheet is a window of its own and it slides in unfocused, so a request issued before
+            // it gains the focus is accepted and then quietly replaced by the window's own default
+            // focus (the first focusable in the content - usually the close button). Measured on the
+            // auto-scroll sheet: the request reported success, the target held the ring for three
+            // frames, and the close button had it once the window finished taking focus.
+            if (!view.hasWindowFocus()) return@repeat
+            if (hasFocus()) {
+                settledFrames++
+                if (settledFrames >= START_FOCUS_SETTLED_FRAMES) return@LaunchedEffect
+            } else {
+                settledFrames = 0
+                // The window is in touch mode after the tap or key that opened the sheet, and Compose
+                // silently drops a request there; taking the Android focus back first makes it land.
+                view.requestFocusFromTouch()
+                runCatching { requester.requestFocus() }
+                delay(70)
+            }
         }
     }
     return requester
 }
+
+/** Frames to keep asking: the sheet's slide-in plus the window-focus hand-off afterwards. */
+private const val START_FOCUS_FRAMES = 40
+
+/** Consecutive frames the ring has to hold before the request counts as landed. */
+private const val START_FOCUS_SETTLED_FRAMES = 3
