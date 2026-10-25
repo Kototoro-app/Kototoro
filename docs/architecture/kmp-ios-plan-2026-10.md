@@ -8163,8 +8163,8 @@ Android 的 `UnifiedSourcesScreen` 在装/导入第三方包时按 `UnifiedSourc
   两个来源的开关状态、设置页摘要都还在。
 - 既有探针的连带更新：`repositories-write` 第一次点目录行现在会弹问题，探针点“安装并启用”并断言不勾选就不落盘；
   其余经 `controller.importJar` 的探针默认答案等价于旧行为。
-- 仍待：`setup_wizard`、`handle_links`、`SourceSwitchDialog` 的选择模式、服务设置的浏览记录与 `related_manga`、
-  外部追踪、定期本地备份等（推荐设置的三个 worker 开关已在 §179 补上）。
+- 仍待：`setup_wizard`、`handle_links`、`SourceSwitchDialog` 的选择模式、服务设置的浏览记录轮播、
+  外部追踪、定期本地备份等（推荐设置的三个 worker 开关已在 §179 补上，`related_manga` 已在 §191 补上）。
 
 ## 179. Windows 推荐设置补齐 Android 推荐 worker 的三个开关（2026-10-24）
 
@@ -8218,8 +8218,8 @@ Android 的 `UnifiedSourcesScreen` 在装/导入第三方包时按 `UnifiedSourc
 - 探针跑法的一个坑（顺手记下）：`cmd /c "gradlew.bat :desktop-app:test --tests "*xxx*" ..."` 那对内层引号会被 cmd
   吃掉，Gradle 收到的是“带前导空格的模式”，于是报 `No tests found for given includes`——哪怕测试明明在类里。
   改成 PowerShell 直接传 `'--tests=*xxx*'` 即可；这一轮先被这个坑绕了一圈。
-- 仍待：`setup_wizard`、`handle_links`、`SourceSwitchDialog` 的选择模式、服务设置的浏览记录与 `related_manga`、
-  外部追踪、定期本地备份等（§178 列过的其余项不变）。
+- 仍待：`setup_wizard`、`handle_links`、`SourceSwitchDialog` 的选择模式、服务设置的浏览记录轮播、
+  外部追踪、定期本地备份等（§178 列过的其余项不变，`related_manga` 已在 §191 补上）。
 
 ## 180. Windows 服务设置页对齐 Android 的 `ServicesSettingsScreen`（2026-10-24）
 
@@ -8266,7 +8266,7 @@ Android 的 `UnifiedSourcesScreen` 在装/导入第三方包时按 `UnifiedSourc
   `reading_time=false`）、`DesktopServicesSettings.from` 的结果、`state.services` 与 `statsRecording` 都一致。
 - 回归：`stats` 探针（“更多 → 服务 → 阅读统计”的新路径与统计页返回目标）、`suggestionpolicy` 探针（推荐入口的新路径）、
   `tablet` 探针（宽窗详情与“更多”列表）全部重跑通过，合计约 7 分钟。
-- 仍待：`related_manga`（相关作品）、浏览记录推荐的两个轮播。其余不变（`setup_wizard`、`handle_links`、手动重排、
+- 仍待：浏览记录推荐的两个轮播（`related_manga` 已在 §191 补上）。其余不变（`setup_wizard`、`handle_links`、手动重排、
   `BOOKMARKS` 的 NSFW 过滤目标、`SourceSwitchDialog` 选择模式、外部追踪、定期本地备份、`CacheLimitsSettings`）。
 
 ## 181. Windows 已安装扩展按包展开来源，对齐 Android 的 `UnifiedPackageList`（2026-10-24）
