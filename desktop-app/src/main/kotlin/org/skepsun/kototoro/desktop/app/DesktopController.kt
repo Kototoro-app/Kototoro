@@ -38,6 +38,9 @@ import org.skepsun.kototoro.backups.webdav.WebDavBackupFile
 import org.skepsun.kototoro.desktop.runtime.DesktopBackupArchive
 import org.skepsun.kototoro.desktop.runtime.DesktopLibraryBackup
 import org.skepsun.kototoro.desktop.runtime.DesktopBookmark
+import org.skepsun.kototoro.desktop.runtime.DesktopBookmarkGroup
+import org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget
+import org.skepsun.kototoro.desktop.runtime.desktopBookmarkShelf
 import org.skepsun.kototoro.desktop.runtime.DesktopLibrarySnapshot
 import org.skepsun.kototoro.desktop.runtime.DesktopRepository
 import org.skepsun.kototoro.desktop.runtime.DesktopRepositoryCatalog
@@ -81,7 +84,7 @@ private const val IMAGE_BUDGET = "image_budget_mb"
 private const val IMAGE_SWEEP_INTERVAL_MILLIS = DesktopImageBudget.SWEEP_INTERVAL_MILLIS
 
 internal val DetailsOrigins = setOf(DesktopScreen.HOME, DesktopScreen.FEED, DesktopScreen.EXPLORE, DesktopScreen.LIBRARY,
-    DesktopScreen.HISTORY)
+    DesktopScreen.HISTORY, DesktopScreen.BOOKMARKS)
 
 /** The JVM's display locale, matched against branch names as Android matches its locale list. */
 internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
@@ -92,7 +95,7 @@ enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
     PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES, DICTIONARY_RULES,
-    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD, SOURCE_TEST,
+    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD, SOURCE_TEST, BOOKMARKS,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -160,6 +163,10 @@ data class DesktopAppState(
     /** Open change-source dialog (Android's MIGRATE) and the search state it carries. */
     val migration: DesktopMigrationState? = null,
     val bookmarks: List<DesktopBookmark> = emptyList(),
+    /** The bookmarks page: every work that has saved positions, already filtered by the adult-content target. */
+    val bookmarkGroups: List<org.skepsun.kototoro.desktop.runtime.DesktopBookmarkGroup> = emptyList(),
+    /** Page ids picked on the bookmarks page; Android's multi-select on the same cards. */
+    val bookmarkShelfSelection: Set<Long> = emptySet(),
     val content: SourceContent? = null,
     /** List that owns the open details; retained while reading so returning does not lose the list context. */
     val detailsOrigin: DesktopScreen? = null,
@@ -1584,6 +1591,8 @@ class DesktopController(
         mutableState.update { it.copy(screen = origin, content = null, detailsOrigin = null,
             detailsExpanded = false, library = library, homeHistory = homeHistory, feed = feed, feedContents = feedContents,
             relatedWorks = emptyList(), relatedLoading = false) }
+        // The shelf behind the details changed while it was covered: a bookmark read or deleted in there.
+        if (origin == DesktopScreen.BOOKMARKS) reloadBookmarkShelf()
     }
 
     fun addFavourite() = action {
@@ -2914,6 +2923,80 @@ class DesktopController(
             novel = it.novel?.let { novel ->
                 novel.copy(bookmarkBlocks = novelBookmarkBlocks(content, novel.chapter, novel.blocks, bookmarks))
             }) }
+    }
+
+    /**
+     * Android's bookmarks destination (`BookmarksNavKey`). The shelf is loaded on entry, so a bookmark saved in the
+     * reader or deleted on the details page is already reflected and no observer has to be torn down on exit.
+     */
+    fun showBookmarks() = navigate {
+        mutableState.update {
+            it.copy(screen = DesktopScreen.BOOKMARKS, bookmarkShelfSelection = emptySet(), content = null,
+                detailsOrigin = null)
+        }
+        reloadBookmarkShelf()
+    }
+
+    private suspend fun reloadBookmarkShelf() {
+        val groups = session.library.bookmarkGroups()
+        val shelf = desktopBookmarkShelf(groups, state.value.sourceSettings.hidesNsfw(DesktopNsfwTarget.BOOKMARKS))
+        mutableState.update { previous ->
+            val ids = shelf.flatMapTo(HashSet()) { group -> group.bookmarks.map { it.pageId } }
+            previous.copy(bookmarkGroups = shelf,
+                // A card that was deleted elsewhere must not stay picked and reintroduce a missing id later.
+                bookmarkShelfSelection = previous.bookmarkShelfSelection.intersect(ids))
+        }
+    }
+
+    fun selectBookmarkShelf(pageId: Long) = mutableState.update { previous ->
+        val selection = if (pageId in previous.bookmarkShelfSelection) {
+            previous.bookmarkShelfSelection - pageId
+        } else {
+            previous.bookmarkShelfSelection + pageId
+        }
+        previous.copy(bookmarkShelfSelection = selection)
+    }
+
+    fun selectAllBookmarkShelf(selected: Boolean) = mutableState.update { previous ->
+        previous.copy(bookmarkShelfSelection = if (selected) {
+            previous.bookmarkGroups.flatMapTo(LinkedHashSet()) { group -> group.bookmarks.map { it.pageId } }
+        } else {
+            emptySet()
+        })
+    }
+
+    /** Drops every picked card in one transaction and reports Android's `bookmarks_removed`. */
+    fun removeSelectedBookmarkShelf() = action {
+        val pageIds = state.value.bookmarkShelfSelection
+        if (pageIds.isEmpty()) return@action
+        val removed = session.library.removeBookmarks(pageIds)
+        reloadBookmarkShelf()
+        mutableState.update {
+            it.copy(bookmarkShelfSelection = emptySet(), message = AndroidStrings["bookmarks_removed"])
+        }
+        if (removed <= 0) mutableState.update { it.copy(error = desktopText("error.bookmarkMissing")) }
+    }
+
+    /**
+     * A saved position opens the reader at itself. Android's shelf builds the intent with `.incognito()` — revisiting a
+     * saved position must not rewrite the work's progress — so Windows starts the same incognito session and says so.
+     * The chapters come from the stored row, so a work whose source is gone still reopens here.
+     */
+    fun openShelfBookmark(group: DesktopBookmarkGroup, bookmark: DesktopBookmark) = navigate {
+        require(bookmark.contentId == group.content.id) { desktopText("error.bookmarkMissing") }
+        val content = session.library.find(group.content.id)
+            ?: error(desktopText("error.workNotFound"))
+        val chapter = content.chapters?.firstOrNull { it.id == bookmark.chapterId }
+            ?: error(desktopText("error.bookmarkChapterMissing"))
+        val favourite = session.library.isFavourite(content.id)
+        val bookmarks = session.library.bookmarks(content.id)
+        val progress = session.library.progress(content.id)
+        mutableState.update {
+            it.copy(content = content, isFavourite = favourite, bookmarks = bookmarks,
+                detailsOrigin = DesktopScreen.BOOKMARKS, detailsChapterId = progress?.chapterId,
+                detailsExpanded = false, relatedWorks = emptyList(), relatedLoading = false)
+        }
+        startReading(DesktopReadingRequest.Bookmark(chapter, bookmark), incognito = true)
     }
 
     /**

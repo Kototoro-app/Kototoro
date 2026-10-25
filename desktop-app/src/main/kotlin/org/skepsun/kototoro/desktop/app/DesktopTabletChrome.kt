@@ -41,6 +41,7 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
         DesktopScreen.LIBRARY -> desktopNavItemId(DesktopNavItem.FAVOURITES)
         DesktopScreen.EXPLORE, DesktopScreen.DETAILS, DesktopScreen.PREFERENCES -> desktopNavItemId(DesktopNavItem.BROWSE)
         DesktopScreen.HISTORY -> desktopNavItemId(DesktopNavItem.HISTORY)
+        DesktopScreen.BOOKMARKS -> desktopNavItemId(DesktopNavItem.BOOKMARKS)
         else -> DESKTOP_NAV_MORE_ID
     }
     val updates = state.feed.updateRowsByOwnerId.size
@@ -50,6 +51,7 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
         desktopNavItemId(DesktopNavItem.BROWSE) -> controller.explore()
         desktopNavItemId(DesktopNavItem.HISTORY) -> controller.library(true)
         desktopNavItemId(DesktopNavItem.HOME) -> controller.home()
+        desktopNavItemId(DesktopNavItem.BOOKMARKS) -> controller.showBookmarks()
         else -> controller.more()
     } }
     // Re-selecting "browse" inside a source goes back to the source grid, like Android's tab re-tap.
@@ -72,6 +74,7 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
                         if (isSelected) "ic_heart" else "ic_heart_outline"
                     desktopNavItemId(DesktopNavItem.BROWSE) -> "ic_explore_normal"
                     desktopNavItemId(DesktopNavItem.HISTORY) -> "ic_history"
+                    desktopNavItemId(DesktopNavItem.BOOKMARKS) -> "ic_bookmark"
                     else -> "ic_more_vert"
                 }
                 androidx.compose.material3.BadgedBox(badge = {
@@ -102,18 +105,19 @@ internal fun desktopNavItemId(item: DesktopNavItem): Int = when (item) {
     DesktopNavItem.BROWSE -> 1
     DesktopNavItem.HISTORY -> 2
     DesktopNavItem.SUBSCRIPTIONS -> 5
+    DesktopNavItem.BOOKMARKS -> 6
 }
 
 /** The label the rail and the configuration page both draw; the same words the desktop catalog gave each tab. */
-internal fun desktopNavItemLabel(item: DesktopNavItem): String = desktopText(
-    when (item) {
-        DesktopNavItem.HOME -> "nav.home"
-        DesktopNavItem.FAVOURITES -> "nav.favourites"
-        DesktopNavItem.BROWSE -> "nav.browse"
-        DesktopNavItem.HISTORY -> "nav.history"
-        DesktopNavItem.SUBSCRIPTIONS -> "nav.subscriptions"
-    },
-)
+internal fun desktopNavItemLabel(item: DesktopNavItem): String = when (item) {
+    DesktopNavItem.HOME -> desktopText("nav.home")
+    DesktopNavItem.FAVOURITES -> desktopText("nav.favourites")
+    DesktopNavItem.BROWSE -> desktopText("nav.browse")
+    DesktopNavItem.HISTORY -> desktopText("nav.history")
+    DesktopNavItem.SUBSCRIPTIONS -> desktopText("nav.subscriptions")
+    // Android's `NavItem.BOOKMARKS` takes `R.string.notes` for the same destination.
+    DesktopNavItem.BOOKMARKS -> AndroidStrings["notes"]
+}
 
 /**
  * Android's "更多" tab is a settings page: titled sections, one card each, and every entry a row. The Windows host keeps

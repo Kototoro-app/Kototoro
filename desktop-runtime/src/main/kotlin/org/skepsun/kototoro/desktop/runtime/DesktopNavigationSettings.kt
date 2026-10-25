@@ -22,6 +22,9 @@ enum class DesktopNavItem {
     BROWSE,
     HISTORY,
     SUBSCRIPTIONS,
+
+    /** Android's `NavItem.BOOKMARKS` (labelled 笔记, the bookmarks page). Off by default, like on Android. */
+    BOOKMARKS,
 }
 
 /** The default order, matching the rail Android's tablet shell ships and the Windows shell drew before this page. */
@@ -42,9 +45,9 @@ data class DesktopNavigationSettings(val items: List<DesktopNavItem> = defaultDe
 
     val canAdd: Boolean get() = MainNavigationRules.canAdd(items)
 
-    /** Destinations the add dialog may offer, in [DesktopNavItem] declaration order. */
+    /** Destinations the add dialog may offer, in [DesktopNavItem] declaration order; nothing at the cap. */
     val available: List<DesktopNavItem>
-        get() = MainNavigationRules.available(DesktopNavItem.entries, items)
+        get() = if (canAdd) MainNavigationRules.available(DesktopNavItem.entries, items) else emptyList()
 
     fun step(item: DesktopNavItem, direction: Int): DesktopNavigationSettings =
         copy(items = MainNavigationRules.step(items, item, direction))

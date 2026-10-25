@@ -95,7 +95,8 @@ class DesktopNavigationSettingsTest {
             ),
         )
         assertTrue(settings.canAdd)
-        assertEquals(listOf(DesktopNavItem.SUBSCRIPTIONS), settings.available)
+        // Android offers its bookmarks destination as an option too; it is simply not part of the default order.
+        assertEquals(listOf(DesktopNavItem.SUBSCRIPTIONS, DesktopNavItem.BOOKMARKS), settings.available)
         assertEquals(
             listOf(
                 DesktopNavItem.HOME,

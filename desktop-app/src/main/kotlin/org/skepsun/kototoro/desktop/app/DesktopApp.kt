@@ -141,6 +141,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.PROXY_SETTINGS -> DesktopProxySettingsPage(controller, state)
                             DesktopScreen.CHANGELOG -> DesktopChangelogPage(controller, state)
                             DesktopScreen.CRASH_LOGS -> DesktopCrashLogsPage(controller, state)
+                            DesktopScreen.BOOKMARKS -> DesktopBookmarksPage(controller, listState, !closing)
                             DesktopScreen.REPLACE_RULES -> DesktopReplaceRulesPage(controller, state)
                             DesktopScreen.DICTIONARY_RULES -> DesktopDictionaryRulesPage(controller, state)
                             DesktopScreen.DOWNLOAD_SETTINGS -> DesktopDownloadSettingsPage(controller, state)
@@ -244,6 +245,7 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.REPLACE_RULES -> AndroidStrings["replace_rules"]
         DesktopScreen.DICTIONARY_RULES -> AndroidStrings["dictionary_rules"]
         DesktopScreen.DOWNLOAD_SETTINGS -> AndroidStrings["downloads"]
+        DesktopScreen.BOOKMARKS -> AndroidStrings["bookmarks"]
         DesktopScreen.NAV_CONFIG -> AndroidStrings["main_screen_sections"]
         DesktopScreen.EXTENSIONS -> desktopText("screens.extensions")
         DesktopScreen.DETAILS -> desktopText("screens.details")

@@ -8904,3 +8904,48 @@ Android 统一来源页的选中栏最后一个动作是删除。一个包常常
   28 个套件 / 183 个用例（不变）/ 0 失败；`:core-domain:jvmTest` 42 个套件 / 261 个用例（此前 41 / 255 +
   新的 `SourceDeletionRulesTest` 6 条）/ 0 失败；`:desktop-app:verifyDesktopStrings` 通过——桌面 catalog 增加
   1 个仅桌面使用的 `extensions.uninstallFailed`（卸载失败前缀），其余文案仍是 Android 键，共 959 键 / 959 条被引用。
+
+
+## 195. Windows 的书签页（对齐 Android `AppBookmarksRoute` / `AllBookmarksViewModel`）（2026-10-25）
+
+Android 的书签是顶层目的地（`NavItem.BOOKMARKS`，标签取 `R.string.notes`），页标题用 `R.string.bookmarks`。
+Windows 此前只有详情页里的“选择书签”面板，没有“全部书签”这一层，`disable_bookmarks_nsfw` 也因此没有落点。
+本切片补齐页面本身，并把成人过滤的第六个目标接上。
+
+### 共享规则（`core-library` / `desktop-runtime`）
+- `SourceBookmark` 末位补 `chapterTitle`（Android `Bookmark.chapter.title`，原本只有 `chapterId`），
+  `SourceLibrary.bookmarkGroups()` 用 `ChaptersDao.findByIds` 一次查出标题再回填；新增 `removeBookmarks(pageIds)`
+  在单个 `immediateTransaction` 里删。
+- `SourceBookmarkGroup`（作品 + 它的书签）与 `DesktopBookmarkShelf.kt` 的 `desktopBookmarkShelf(groups, hideNsfw)`：
+  丢掉空组、按 `hideNsfw` 滤掉成人作品、组内保持 DAO 的 `percent` 顺序，组间“最新保存的位置优先”、同值按标题。
+  Windows 这页没有 Android 的排序控件，所以顺序写成固定规则。
+- `DesktopNsfwTarget` 增加 `BOOKMARKS`（Android 的七目标里 SUGGESTIONS 不映射，因为推荐页编辑的就是
+  Android 自己的 `suggestions_exclude_nsfw`）；`DesktopNavItem` 增加 `BOOKMARKS`（`nav_main` 默认仍不含它，
+  与 Android 默认列表一致，`MainNavigationRules.MAX_ITEMS` 是 5 所以要先移掉一项才能加）。
+
+### Windows 外壳
+- `DesktopScreen.BOOKMARKS`：`showBookmarks()` 进入时 `reloadBookmarkShelf()`，选中集与现存 pageId 求交；
+  `openShelfBookmark(group, bookmark)` 用本地 `find` 取整份章节表（源没了也能重开），把 `detailsOrigin` 记成
+  `BOOKMARKS`，再 `startReading(..., incognito = true)`——Android 用 `ReaderIntent…incognito()` 打开书签，
+  免得“回到保存的位置”覆写进度；`dismissDetails` 回到 `BOOKMARKS` 时重读书架，覆盖详情里删掉书签的情况。
+- `DesktopBookmarksPage`：`bookmarks-count`（未选中显示 Android 的 `reader.bookmarksCount`，选中显示
+  `details.bookmarksSelectedCount`）、`bookmarks-select-all`/`-select-none`/`-select-delete`、空态
+  `bookmarks-empty`（`no_bookmarks_yet` + `no_bookmarks_summary`）、`bookmarks-list` 按作品分节
+  （`bookmark-group:<id>` 带数量与「更多」→ 详情，`bookmark-row:<pageId>` 带章节标题/小说摘录/位置、
+  `bookmark-check:<pageId>`）。
+- 入口三处：首页快捷卡第 4 格（`home-quick:3`，排在收藏/历史/订阅之后，所以 `home-quick:0` 仍是收藏，
+  §192 的平板探针不受影响）、主导航 `DesktopNavItem.BOOKMARKS`（`desktopNavItemId` 6、图标 `ic_bookmark`、
+  标签 `AndroidStrings["notes"]`）、来源设置成人节的第六个目标（`sources.nsfw.bookmarks`，en/zh 都补了；
+  `sources.adultNote` 改成只说推荐页有自己的开关）。
+- 两处刻意差异：Android 的 `SelectionAction.SAVE`（PageSaveHelper）在 Windows 没有对应管线，选择栏只留删除；
+  Android 画海报卡片并在卡上显示保存的那一页，Windows 用文本行（章节、位置、小说摘录），
+  只有当用户真的打开某一条时才碰来源，一页几十条书签不会各自起一次下载。长按进入选中态改为每行常驻复选框，
+  与 §192 的处理一致。
+
+### 验证
+- `:desktop-runtime:test --tests=*DesktopBookmarkShelfTest*`：4 条（最新优先、空组丢弃、成人过滤开关、组内顺序）。
+- `:desktop-app:test --tests=*DesktopBookmarksShelfTest*`：双进程探针通过——写进程存一个第 4 页书签，
+  读进程从首页快捷卡进书签页，断言分节/行/复选框存在，点行后阅读器以无痕打开同一章节同一像素位置且
+  历史行与写进程留下的一模一样，返回详情再回书签页，全选 + 删除后书架与数据库都空、显示空态。
+- `:desktop-runtime:test` 187 条 0 失败（`DesktopNavigationSettingsTest` 与 `DesktopBackgroundSettingsTest`
+  的枚举断言随新目标/新导航项一起更新）；`:desktop-app:verifyDesktopStrings` 通过，960 键 / 960 条被引用。

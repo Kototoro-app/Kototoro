@@ -42,7 +42,7 @@ class DesktopBackgroundSettingsTest {
         assertFalse(settings.hidesNsfw(DesktopNsfwTarget.FAVOURITES))
         assertFalse(settings.hidesNsfw(DesktopNsfwTarget.HISTORY))
         assertEquals(
-            listOf("SOURCES", "FAVOURITES", "HISTORY", "FEED", "UPDATES"),
+            listOf("SOURCES", "FAVOURITES", "HISTORY", "FEED", "UPDATES", "BOOKMARKS"),
             DesktopNsfwTarget.entries.map { it.name },
         )
     }

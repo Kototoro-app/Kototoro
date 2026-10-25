@@ -177,6 +177,34 @@ class SourceLibrary(
     suspend fun bookmarks(contentId: Long): List<SourceBookmark> = database.getBookmarksDao().observe(contentId)
         .first().map { it.desktopBookmark() }
 
+    /**
+     * Android's `BookmarksRepository.observeBookmarks()`: every work that has saved positions, with those positions.
+     * One joined read, so a shelf of the whole table does not ask the source for anything; works come back without
+     * chapters, which only the reader needs. Groups keep the DAO's per-work `percent` order. Chapter titles are
+     * resolved from this work's chapter table in one more read, because the sections hold works that are not open.
+     */
+    suspend fun bookmarkGroups(): List<SourceBookmarkGroup> {
+        val rows = database.getBookmarksDao().observe().first()
+        val titles = database.getChaptersDao()
+            .findByIds(rows.values.flatten().mapTo(HashSet()) { it.chapterId })
+            .associate { it.chapterId to it.title }
+        return rows.map { (row, saved) ->
+            SourceBookmarkGroup(content(row.manga, row.tags, withChapters = false),
+                saved.map { entity -> entity.desktopBookmark().copy(chapterTitle = titles[entity.chapterId].orEmpty()) })
+        }
+    }
+
+    /**
+     * Android's `removeBookmarks(ids)` for cards held across works: one transaction, by page id, so a grid can drop a
+     * whole selection without re-reading each work. Returns how many rows are gone.
+     */
+    suspend fun removeBookmarks(pageIds: Collection<Long>): Int = database.useWriterConnection { connection ->
+        connection.immediateTransaction {
+            val dao = database.getBookmarksDao()
+            pageIds.distinct().sumOf { dao.delete(it) }
+        }
+    }
+
     /** Toggle by reading position, as Android does, even if a source regenerates its page id. */
     suspend fun toggleBookmark(content: SourceContent, chapter: SourceChapter, page: SourcePage,
         index: Int, pageCount: Int, scroll: Float = 0f) {

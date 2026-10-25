@@ -250,6 +250,8 @@ private fun QuickAccess(controller: DesktopController, enabled: Boolean, expande
         HomeQuickAction(desktopText("home.quick.favourites"), icon("ic_heart"), { controller.library() }, enabled),
         HomeQuickAction(desktopText("home.quick.history"), icon("ic_history"), { controller.library(true) }, enabled),
         HomeQuickAction(desktopText("home.quick.subscriptions"), icon("ic_feed"), { controller.subscriptions() }, enabled),
+        // Android's home screen offers its bookmarks action card next to the shelves.
+        HomeQuickAction(AndroidStrings["notes"], icon("ic_bookmark"), { controller.showBookmarks() }, enabled),
         HomeQuickAction(desktopText("home.quick.downloads"), icon("ic_download"), { controller.showDownloads() }, enabled),
         HomeQuickAction(desktopText("home.quick.random"), icon("ic_dice"), { controller.randomFavourite() }, enabled),
         HomeQuickAction(desktopText("home.quick.extensions"), icon("ic_extension"), { controller.showExtensions() }, enabled),

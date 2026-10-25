@@ -340,6 +340,7 @@ private val DesktopNsfwTarget.title: String
         DesktopNsfwTarget.HISTORY -> desktopText("sources.nsfw.history")
         DesktopNsfwTarget.FEED -> desktopText("sources.nsfw.feed")
         DesktopNsfwTarget.UPDATES -> desktopText("sources.nsfw.updates")
+        DesktopNsfwTarget.BOOKMARKS -> desktopText("sources.nsfw.bookmarks")
     }
 
 /** Android's three options in its `TriStateOption` order, worded as the question about adult works. */

@@ -11,7 +11,10 @@ import kotlin.math.abs
 internal object DesktopBookmarksProbe {
     @OptIn(ExperimentalTestApi::class)
     fun run(args: Array<String>) {
-        val reading = args[0] == "bookmarks-read"
+        val mode = args[0]
+        val reading = mode.endsWith("-read")
+        // The shelf run is the same write as the plain one: it saves one position and the next process visits it.
+        val shelf = mode.startsWith("bookmarks-shelf")
         val session = runBlocking { DesktopSession.open(Path.of(args[1])) }
         val controller = DesktopController(session)
         try {
@@ -31,6 +34,55 @@ internal object DesktopBookmarksProbe {
                             !controller.state.value.busy && controller.state.value.readerLoading.isEmpty()
                     }
                     idle()
+                }
+                if (reading && shelf) {
+                    // Android reaches its bookmarks from the home action and from the rail; the home tile is the
+                    // entry that exists without editing the navigation, so it is the one clicked here.
+                    System.setProperty("fixture.reader.offline", "true")
+                    runBlocking { controller.home().join() }
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.HOME }
+                    idle()
+                    onNodeWithTag("home-scroll").performScrollToNode(hasTestTag("home-quick:3"))
+                    onNodeWithTag("home-quick:3").performClick()
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.BOOKMARKS }
+                    idle()
+                    val group = controller.state.value.bookmarkGroups.single()
+                    val bookmark = group.bookmarks.single()
+                    check(group.content.title.isNotBlank() && bookmark.chapterTitle.isNotBlank()) {
+                        "the shelf names the work and the saved chapter"
+                    }
+                    onNodeWithTag("bookmark-group:${group.content.id}").assertExists()
+                    onNodeWithTag("bookmark-row:${bookmark.pageId}").assertExists()
+                    onNodeWithTag("bookmark-check:${bookmark.pageId}", useUnmergedTree = true).assertExists()
+                    // Android opens a saved position from the shelf incognito, so revisiting it records nothing.
+                    // The write process read the chapter normally, so the row exists and must stay exactly as it was.
+                    val recorded = runBlocking { session.library.progress(group.content.id) }
+                    onNodeWithTag("bookmark-row:${bookmark.pageId}").performClick()
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.READER }
+                    ready(bookmark.page)
+                    check(controller.state.value.readerIncognito) { "Android's shelf jump is incognito" }
+                    check(controller.state.value.chapter?.id == bookmark.chapterId)
+                    check(abs(controller.state.value.readerScroll - bookmark.scroll) < 2)
+                    check(runBlocking { session.library.progress(group.content.id) } == recorded) {
+                        "the incognito shelf jump must not write the history"
+                    }
+                    runBlocking { controller.backToDetails().join() }
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.DETAILS }
+                    idle()
+                    runBlocking { controller.dismissDetails().join() }
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.BOOKMARKS }
+                    idle()
+                    // Android's selection bar: SELECT ALL then REMOVE, one message afterwards.
+                    onNodeWithTag("bookmarks-select-all").performClick()
+                    idle()
+                    check(controller.state.value.bookmarkShelfSelection == setOf(bookmark.pageId))
+                    onNodeWithTag("bookmarks-select-delete").performClick()
+                    waitUntil(timeoutMillis = 15_000) { controller.state.value.bookmarkGroups.isEmpty() }
+                    idle()
+                    check(controller.state.value.message == AndroidStrings["bookmarks_removed"])
+                    onNodeWithTag("bookmarks-empty").assertExists()
+                    check(runBlocking { session.library.bookmarkGroups() }.isEmpty())
+                    return@runDesktopComposeUiTest
                 }
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.sources.size == 1 }
                 onNodeWithTag("source:${controller.state.value.sources.single().source.name}").performClick(); idle()
@@ -69,6 +121,6 @@ internal object DesktopBookmarksProbe {
                 }
             }
         } finally { runBlocking { controller.shutdown() } }
-        println("DESKTOP_UI_OK=${args[0]}")
+        println("DESKTOP_UI_OK=$mode")
     }
 }
