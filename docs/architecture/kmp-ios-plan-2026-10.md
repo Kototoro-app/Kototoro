@@ -9214,3 +9214,31 @@ Windows 的可用性改进，也是一次把安卓私有控件提取成共享代
   设置页点该行，`assertIsOn`/`assertIsOff` 与 `readerSettings.webtoonGaps` 一致（开关与阅读器读到的是同一份状态）。
 - 全量：`:desktop-app:test` 305 条 0 失败（4 跳过，比 §200 多出新的 1 条）；`:desktop-app:verifyDesktopStrings`
   961 键 / 961 被引用通过。
+
+## 202. Windows 阅读器补「章节标题在底部」（`reader_chapter_title_bottom`）（2026-10-25）
+
+### 实现
+- `DesktopReaderSettings` 增 `chapterTitleAtBottom`（默认 `false`，与 Android `AppSettings.isReaderChapterTitleAtBottom`
+  同默认），读写阅读偏好 store 的 `reader_chapter_title_bottom`（Android `KEY_READER_CHAPTER_TITLE_BOTTOM` 同名键）。
+- `DesktopReaderChrome` 把该值传给共享 `ReaderChromeTopBar`：开着时顶栏那枚 `ReaderChapterTitleChip` 不再画；
+  同时在底部 chrome 里、进度坞上方按 `FloatingControlInset` 基线画一枚同样的共享药丸（与右侧悬浮按钮同高，
+  Android `ComposeReaderActivityScaffold` 的底部药丸就是这么摆的），点它仍开章节面板，语义标签
+  `reader-chapter-title-bottom`，所以开着时全画面只有一枚药丸。
+- 阅读器侧面板用的是共享面板：`DesktopReaderOptionsFeatures.chapterTitleAtBottom` 从 `false` 改成 `true`，
+  `toOptionsState` 带上该值，`onChapterTitleAtBottomChanged` 写回同一份设置；共享面板这行加了
+  `reader-options-chapter-title-bottom` 标签（Android 行为不变，只多一个测试锚点）。
+- 阅读设置页「页面」节也加了一行：文案用 Android 的 `reader_chapter_title_at_bottom`/`_summary`
+  （Android 阅读设置页里就是这一对），测试标签 `reader-setting-chapter-title-bottom`。
+
+### 与 Android 的差异
+- Android 把底部药丸与进度坞放进同一个 `AnimatedVisibility`；Windows 本来就把顶栏和底部 chrome 各自做动画，
+  所以药丸跟底部 chrome 一起出现/消失，控件隐藏时的 info bar 不变（仍是章节名 + 页码）。
+- 药丸宽度仍由共享组件限制（`widthIn(min = 148.dp, max = 176.dp)`），窗口再宽也不会拉长，与顶栏那枚一致。
+
+### 验证
+- 新增 `DesktopReaderTitleBottomTest`（探针 `reader-title-bottom`，真实 fixture 扩展 + 真实阅读器，7.6 s）：
+  默认 `reader-chapter-title-bottom` 不存在、`reader-chapters` 药丸的上沿在画面一半以上；打开设置后底部药丸出现、
+  `reader-chapters` 在全画面只剩一个且落在下半；最后在阅读设置页点该行，`assertIsOn`/`assertIsOff` 与
+  `readerSettings.chapterTitleAtBottom` 一致。
+- 全量：`:desktop-app:test` 306 条 0 失败（4 跳过，比 §201 多出新的 1 条）；`:desktop-app:verifyDesktopStrings`
+  961 键 / 961 被引用通过。

@@ -24,6 +24,11 @@ data class DesktopReaderSettings(
     val background: DesktopReaderBackground = DesktopReaderBackground.DEFAULT,
     /** Android's "show page numbers" overlay. */
     val pageNumbers: Boolean = false,
+    /**
+     * Android's `reader_chapter_title_bottom`: the work + chapter pill leaves the top bar and sits above the
+     * progress dock instead, which is where a one-handed reader can reach it.
+     */
+    val chapterTitleAtBottom: Boolean = false,
     /** Paged reading from top to bottom (Android's vertical mode); single and double pages only. */
     val vertical: Boolean = false,
     /** Android's "crop pages", kept separately for the paged and the continuous (webtoon) readers. */

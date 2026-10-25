@@ -568,6 +568,7 @@ fun ReaderLayoutOptionsPage(
                         label = strings.chapterTitleAtBottom,
                         checked = state.chapterTitleAtBottom,
                         onCheckedChange = callbacks.onChapterTitleAtBottomChanged,
+                        modifier = Modifier.testTag("reader-options-chapter-title-bottom"),
                     )
                 }
             }

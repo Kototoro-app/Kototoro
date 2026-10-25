@@ -88,6 +88,12 @@ internal fun DesktopReaderSettingsPage(controller: DesktopController, state: Des
                     { controller.readerSettings(settings.copy(webtoonGaps = it)) },
                     testTag = "reader-setting-webtoon-gaps")
             }
+            SettingsRowDivider()
+            // Android's "chapter title at the bottom": the pill leaves the top bar and sits over the dock.
+            SettingsSwitchRow(AndroidStrings["reader_chapter_title_at_bottom"],
+                AndroidStrings["reader_chapter_title_at_bottom_summary"], settings.chapterTitleAtBottom, active,
+                { controller.readerSettings(settings.copy(chapterTitleAtBottom = it)) },
+                testTag = "reader-setting-chapter-title-bottom")
         }
         SettingsSectionHeader(desktopText("reader.settingsTurning"))
         SettingsGroup {

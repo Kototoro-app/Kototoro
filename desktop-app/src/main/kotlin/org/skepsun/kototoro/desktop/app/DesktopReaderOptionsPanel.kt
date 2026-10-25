@@ -46,7 +46,7 @@ internal val DesktopReaderOptionsFeatures = ReaderOptionsFeatures(
     doublePageFoldable = false,
     doublePageSensitivity = false,
     splitPages = false,
-    chapterTitleAtBottom = false,
+    chapterTitleAtBottom = true,
     sceneRenderers = false,
     performance = false,
     // Colour correction applies to every work and is saved as it changes.
@@ -94,6 +94,7 @@ internal fun DesktopReaderOptionsPanel(
         onDoublePageCoverChanged = { update(settings.copy(doublePageCover = it)) },
         onFullscreenChanged = { if (it != fullscreen) onToggleFullscreen?.invoke() },
         onPageNumbersChanged = { update(settings.copy(pageNumbers = it)) },
+        onChapterTitleAtBottomChanged = { update(settings.copy(chapterTitleAtBottom = it)) },
         onCropPagesChanged = {
             update(if (settings.mode == DesktopReaderMode.CONTINUOUS) settings.copy(cropContinuous = it)
                 else settings.copy(cropPaged = it))
@@ -156,6 +157,7 @@ internal fun DesktopReaderSettings.toOptionsState(fullscreen: Boolean) = Compose
     doublePageCover = doublePageCover,
     fullscreen = fullscreen,
     pageNumbers = pageNumbers,
+    chapterTitleAtBottom = chapterTitleAtBottom,
     cropPages = cropActive,
     superResolution = upscale.model != null,
     colorFilter = colorFilter.toShared(),

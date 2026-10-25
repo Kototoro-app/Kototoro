@@ -3215,6 +3215,7 @@ class DesktopController(
             "cf_book" to SourcePreferenceValue.Toggle(settings.colorFilter.book),
             "background" to SourcePreferenceValue.Text(settings.background.name),
             "page_numbers" to SourcePreferenceValue.Toggle(settings.pageNumbers),
+            "reader_chapter_title_bottom" to SourcePreferenceValue.Toggle(settings.chapterTitleAtBottom),
             "vertical" to SourcePreferenceValue.Toggle(settings.vertical),
             "crop_paged" to SourcePreferenceValue.Toggle(settings.cropPaged),
             "crop_continuous" to SourcePreferenceValue.Toggle(settings.cropContinuous),
@@ -3267,6 +3268,7 @@ class DesktopController(
                 it.name == (snapshot["background"] as? SourcePreferenceValue.Text)?.value
             } ?: DesktopReaderBackground.DEFAULT,
             (snapshot["page_numbers"] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            (snapshot["reader_chapter_title_bottom"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             (snapshot["vertical"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             (snapshot["crop_paged"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             (snapshot["crop_continuous"] as? SourcePreferenceValue.Toggle)?.value ?: false,

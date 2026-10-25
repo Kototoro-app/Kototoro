@@ -282,6 +282,12 @@ npm run docs:build
   开时用安卓 `webtoon_pages_gap` 的 24dp，所以页与页的缝与历史锚点始终一致；阅读设置页「页面」节只在连续模式多这一行
   开关（安卓也只在设置页给这个开关，侧面板不加），文案直接用安卓的 `webtoon_gaps`/`webtoon_gaps_summary`，
   回归用 `DesktopReaderWebtoonGapsTest`（探针 `reader-webtoon-gaps`：缝 0 → 24dp → 0，并在设置页点开关断言状态）。
+  安卓的「章节标题在底部」也补上了（§202）：`DesktopReaderSettings` 多一个 `chapterTitleAtBottom`（键
+  `reader_chapter_title_bottom`，默认关，与安卓同默认），开着时阅读器顶栏不再画那枚作品/章节药丸，改在底部
+  进度坞上方同一基线画一枚（共享 `ReaderChapterTitleChip`，与安卓 `ComposeReaderActivityScaffold` 的摆放一致），
+  侧面板「布局」页的开关就是把共享面板的 `features.chapterTitleAtBottom` 打开、读写同一个值，阅读设置页「页面」节
+  也有一行（文案用安卓 `reader_chapter_title_at_bottom`/`_summary`）；回归用 `DesktopReaderTitleBottomTest`
+  （探针 `reader-title-bottom`：默认只有顶栏一枚、开了之后剩一枚且在画面下半，设置页点开关断言状态）。
   .pb/新版 JSON 仓库添加/列表/搜索、JAR 安装/更新/导入及身份恢复；新产物保存到应用管理的 SHA 目录。
   仓库可“忘记”（只删索引条目，已安装扩展与 JAR 保留，重新添加即恢复）。
   来源浏览/搜索、详情、收藏、分页图片阅读、历史与源设置，以及可选网页/HTML/JS 调试。
