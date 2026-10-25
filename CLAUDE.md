@@ -277,6 +277,11 @@ npm run docs:build
   排序的方向与「清除」跟 chip 同排（与菜单行一致，也不多占一行），值仍是原生索引
   （`Choice(index)`/`Sort(index, ascending)`），回归用 `DesktopFilterChipsTest`（3 条）与改造后的
   `DesktopFilterProbe`（断言 chip 未选中代替「未选择」文字），见计划 §200。
+  连续阅读器的「条漫分割」也补上了（§201）：`DesktopReaderSettings` 多一个 `webtoonGaps`（键 `webtoon_gaps`，默认关，
+  与安卓同默认），连续阅读器里共享场景的 `spacing` 与 `LazyColumn` 的 `spacedBy` 共用一个值——关时 0dp（原来写死 8dp）、
+  开时用安卓 `webtoon_pages_gap` 的 24dp，所以页与页的缝与历史锚点始终一致；阅读设置页「页面」节只在连续模式多这一行
+  开关（安卓也只在设置页给这个开关，侧面板不加），文案直接用安卓的 `webtoon_gaps`/`webtoon_gaps_summary`，
+  回归用 `DesktopReaderWebtoonGapsTest`（探针 `reader-webtoon-gaps`：缝 0 → 24dp → 0，并在设置页点开关断言状态）。
   .pb/新版 JSON 仓库添加/列表/搜索、JAR 安装/更新/导入及身份恢复；新产物保存到应用管理的 SHA 目录。
   仓库可“忘记”（只删索引条目，已安装扩展与 JAR 保留，重新添加即恢复）。
   来源浏览/搜索、详情、收藏、分页图片阅读、历史与源设置，以及可选网页/HTML/JS 调试。

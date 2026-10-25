@@ -199,6 +199,10 @@ object DesktopAppProbe {
                 DesktopReaderGestureProbe.run(args)
                 return
             }
+            if (args[0] == "reader-webtoon-gaps") {
+                DesktopWebtoonGapsProbe.run(args)
+                return
+            }
             if (args[0].startsWith("reader-camera-")) {
                 DesktopReaderCameraProbe.run(args)
                 return

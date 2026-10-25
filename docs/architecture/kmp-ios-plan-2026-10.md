@@ -9184,3 +9184,33 @@ Windows 的可用性改进，也是一次把安卓私有控件提取成共享代
 - `:app:compileDebugKotlin`（安卓委托共享 chip 后）、`:core-ui:compileCommonMainKotlinMetadata`、
   `:desktop-app:verifyDesktopStrings` 通过。
 - 全量：`:desktop-app:test` 304 条 0 失败（4 跳过，比 §199 多出新的 3 条 chip 用例）。
+
+## 201. Windows 连续阅读器补「条漫分割」（`webtoon_gaps`）（2026-10-25）
+
+安卓阅读设置里的「条漫分割」（`AppSettings.KEY_WEBTOON_GAPS`，默认关）在 Windows 一直没有对应能力：连续阅读器把
+页间距写死成 8dp，阅读偏好里也没有这个键，想把条漫的页与页分开只能改代码。这一刀把开关补齐，
+并把「页间距」收敛成一个值。
+
+### 实现
+- `DesktopReaderSettings` 新增 `webtoonGaps`（默认 false，与安卓同默认）；`DesktopController.readerSettings` 把它
+  写进阅读偏好 store 的 `webtoon_gaps`，`restoredReaderSettings` 读回。它与 `crop_paged`/`crop_continuous` 同段，
+  切换只改页间空白，不重载已经加载的页面（只有 `cropActive`/`upscale` 才 `cancelPrefetch()`）。
+- 连续阅读器（`DesktopScrollReader`）里同一个 `gap` 同时喂给共享 `DesktopScrollLayout`（`VerticalReaderScene` 的
+  `spacing`）和 `LazyColumn` 的 `Arrangement.spacedBy`：关时 0dp（原来是写死的 8dp），开时
+  `WEBTOON_PAGE_GAP_DP = 24`（安卓 `R.dimen.webtoon_pages_gap` 的值）。两处必须同值，否则历史锚点与实际画面会错位。
+- 阅读设置页（更多 → 阅读设置）的「页面」节在连续模式下多一行开关，tag `reader-setting-webtoon-gaps`，
+  文案直接用安卓的 `webtoon_gaps`/`webtoon_gaps_summary`（`prepareDesktopStrings` 早就把这个键导出了）。
+
+### 与 Android 的差异
+- 默认页间距从 8dp 变成 0dp（安卓默认就是页与页相接），这是这一刀唯一会改变既有观感的地方。
+- 安卓的阅读设置一直显示这个开关（它在条漫分组里），Windows 沿用设置页「只显示当前模式用得到的开关」的既有约定
+  （与「双页封面页」只在分页模式出现一致），所以只有切到连续阅读才看得到它。
+- 阅读器侧面板不加这一项：安卓也只在设置页给这个开关；设置页与侧面板改的是同一份 `DesktopReaderSettings`，
+  阅读中改也是即时生效。
+
+### 验证
+- 新增 `DesktopReaderWebtoonGapsTest`（探针 `reader-webtoon-gaps`，真实 fixture 扩展 + 真实连续阅读器）：默认两页
+  之间量到的缝为 0px；打开开关后缝等于 24dp（按当前 density 折算，容差 1.5px）；关回去又变回 0px；最后回到阅读
+  设置页点该行，`assertIsOn`/`assertIsOff` 与 `readerSettings.webtoonGaps` 一致（开关与阅读器读到的是同一份状态）。
+- 全量：`:desktop-app:test` 305 条 0 失败（4 跳过，比 §200 多出新的 1 条）；`:desktop-app:verifyDesktopStrings`
+  961 键 / 961 被引用通过。

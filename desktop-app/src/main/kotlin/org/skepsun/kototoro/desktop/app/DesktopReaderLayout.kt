@@ -7,6 +7,9 @@ import java.nio.file.Path
 
 enum class DesktopReaderMode { SINGLE, DOUBLE, CONTINUOUS }
 
+/** Android's `R.dimen.webtoon_pages_gap`, the gap "gaps in webtoon mode" puts between continuous pages. */
+internal const val WEBTOON_PAGE_GAP_DP = 24
+
 data class DesktopReaderSettings(
     val mode: DesktopReaderMode = DesktopReaderMode.SINGLE,
     val rightToLeft: Boolean = false,
@@ -26,6 +29,12 @@ data class DesktopReaderSettings(
     /** Android's "crop pages", kept separately for the paged and the continuous (webtoon) readers. */
     val cropPaged: Boolean = false,
     val cropContinuous: Boolean = false,
+    /**
+     * Android's `webtoon_gaps`: whether the continuous (webtoon) reader leaves
+     * [WEBTOON_PAGE_GAP_DP] between pages instead of stacking them flush. Android's
+     * `webtoon_pages_gap` dimension is 24dp and the switch is off by default.
+     */
+    val webtoonGaps: Boolean = false,
     /** Android's auto-scroll speed (0..1, shared timing in reader-core `ReaderAutoScroll`). */
     val autoScrollSpeed: Float = org.skepsun.kototoro.reader.core.ReaderAutoScroll.DEFAULT_SPEED,
     /** Android's reader actions: what a click (and a long press / right click) in each tap-grid area does. */

@@ -46,7 +46,10 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
         val gutter = with(density) { 16.dp.roundToPx() }
         val width = (constraints.maxWidth - gutter).coerceAtLeast(1)
         val height = with(density) { viewportHeight.roundToPx() }.coerceAtLeast(1)
-        val spacing = with(density) { 8.dp.roundToPx() }
+        // Android's `webtoon_gaps`: pages stack flush by default and gain the webtoon gap when the switch is on. The
+        // scene spacing and the list arrangement must stay the same value, or the anchors drift from what is drawn.
+        val gap = if (state.readerSettings.webtoonGaps) WEBTOON_PAGE_GAP_DP.dp else 0.dp
+        val spacing = with(density) { gap.roundToPx() }
         val layout = remember(state.pages, state.readerImages, state.readerGeometry, width, height, spacing) {
             DesktopScrollLayout(state.pages, state.readerImages, width, height, spacing, state.readerGeometry)
         }
@@ -225,7 +228,7 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
                     }
                 }) {
                 LazyColumn(state = list, userScrollEnabled = !closing && restored,
-                    verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()
+                    verticalArrangement = Arrangement.spacedBy(gap), modifier = Modifier.fillMaxSize()
                         .padding(end = 16.dp).testTag("reader-scroll-list")) {
                     itemsIndexed(state.pages, key = { _, page -> page.id }) { index, page ->
                         val item = Modifier.fillMaxWidth().height(with(density) {

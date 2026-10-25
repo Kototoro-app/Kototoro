@@ -80,6 +80,13 @@ internal fun DesktopReaderSettingsPage(controller: DesktopController, state: Des
                 SettingsSwitchRow(desktopText("reader.setting.doubleCover"), null, settings.doublePageCover, active,
                     { controller.readerSettings(settings.copy(doublePageCover = it)) },
                     testTag = "reader-setting-double-cover")
+            } else {
+                // Android's "gaps in webtoon mode" only has a meaning where pages stack vertically.
+                SettingsRowDivider()
+                SettingsSwitchRow(AndroidStrings["webtoon_gaps"], AndroidStrings["webtoon_gaps_summary"],
+                    settings.webtoonGaps, active,
+                    { controller.readerSettings(settings.copy(webtoonGaps = it)) },
+                    testTag = "reader-setting-webtoon-gaps")
             }
         }
         SettingsSectionHeader(desktopText("reader.settingsTurning"))

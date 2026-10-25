@@ -3218,6 +3218,7 @@ class DesktopController(
             "vertical" to SourcePreferenceValue.Toggle(settings.vertical),
             "crop_paged" to SourcePreferenceValue.Toggle(settings.cropPaged),
             "crop_continuous" to SourcePreferenceValue.Toggle(settings.cropContinuous),
+            "webtoon_gaps" to SourcePreferenceValue.Toggle(settings.webtoonGaps),
             "as_speed" to SourcePreferenceValue.FloatBits(settings.autoScrollSpeed.toRawBits()),
             "double_cover" to SourcePreferenceValue.Toggle(settings.doublePageCover),
         ) + tapGridPreferences(settings.tapGrid)))
@@ -3269,6 +3270,7 @@ class DesktopController(
             (snapshot["vertical"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             (snapshot["crop_paged"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             (snapshot["crop_continuous"] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            (snapshot["webtoon_gaps"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             (snapshot["as_speed"] as? SourcePreferenceValue.FloatBits)?.bits?.let(Float::fromBits)?.coerceIn(0f, 1f)
                 ?: org.skepsun.kototoro.reader.core.ReaderAutoScroll.DEFAULT_SPEED,
             (snapshot["double_cover"] as? SourcePreferenceValue.Toggle)?.value ?: false,
