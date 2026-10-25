@@ -6464,3 +6464,97 @@ if (hasFocus()) { /* 连中三帧才算落地 */ } else { requestFocusFromTouch(
 3. `Open in browser` 在本地源上是无声 no-op，电视上要不要给个可见提示待定；网络源在模拟器上无法测。
 4. `ComposeReaderToolsSheet` 用的同一个 helper，但默认电视 dock 没有 TOOLS 入口，本轮没能在设备上打开它。
 5. `Manga translation` 在本地页上没有可见产物，翻译链路本身还没审。
+
+## 第九十九轮：标签栏「能按到」不等于「看得出」（2026-10-25）
+
+### 起念
+
+第九十八轮末尾还留着一句旧笔记：章节面板标签行的焦点环被近白色的选区指示条吃掉，等于看不见。
+电视上「按不到」的那批控件已经修得差不多，剩下的坏味道换了一种样子——**能按到，但看不出自己按到了哪里**。
+这一轮就把「标签栏」这一类控件在真机上逐个按一遍：章节面板的 Chapters/Pages/Bookmarks、
+收藏页的 All favorites/Read later，顺便把章节行的行内操作也走一遍。
+
+### 现场
+
+**一、章节面板标签行：旧笔记不成立。**（1920×1080，`E12`/`E15`，两张图都看过）
+
+| 按键 | 焦点落点 | 画面 |
+| --- | --- | --- |
+| 打开面板 | 当前章节行 `[216,506][1624,618]` | — |
+| UP | Pages 药丸 `[873,372][1019,468]` | 蓝色 2 dp 圆角环，清楚（`E12`） |
+| LEFT | Chapters 药丸 `[684,372][869,468]` | 白色描边环，落在深色药丸上仍可辨（`E15`） |
+
+选中的 Chapters 是「深色药丸 + 近白文字」，环是白色，但两者反差足够，
+旧笔记里「看不见」的印象来自更早的另一种指示条样式，本轮的图更正它。
+
+**二、章节行里那三个图标：只有最后一个该能按。**（`F15`/`F24`）
+
+Chapter 01 行尾看着有三个图标，右侧能聚焦的只有 `[1616,514][1712,610]`（译）；
+Chapter 02 只有两个图标，RIGHT 落在 `[1616,626][1712,722]`，LEFT 直接回行体 `[216,618][1624,730]`。
+读代码才明白：左边两个不是按钮，是行内的**状态标记**（已收藏、已下载，见
+`core-ui/.../core/chapters/ChapterItemCard.kt` 的 `isBookmarked`/`isDownloaded` 分支），
+真正的操作按钮是 `details/.../ChapterItemCard.kt` 传进去的 trailing actions。
+行体注释也写明了「trailing actions 是独立焦点停靠点」，所以这是设计而不是漏改。
+
+**三、收藏页标签行：焦点几乎不可见。**（`M10`/`L23`，同一块区域裁剪放大成 `M10_crop`/`L23_crop`）
+
+焦点落在未选中的 `Read later`（dump：`[411,128][585,224]` focused=true，`M10`）时，
+裁剪图上只多出一层约 10% 白的淡淡色块，沙发距离等于没有；
+焦点落在选中的 `All favorites`（`L23`）时，那层淡色和蓝字、蓝下划线混在一起，谁也看不出环在哪。
+代码侧的原因很干净：`core-ui/src/commonMain/.../core/ui/topbar/TabletTopBar.kt` 的 `TopBarTabsRail`，
+每个 tab 只有
+
+```kotlin
+Box(modifier = itemModifier(item).height(tokens.minimumTouchTarget).clickable { onItemSelected(item.id) })
+```
+
+整条链上没有 `tvFocusable`，于是电视上唯一的反馈就是 Material 给 clickable 的 state layer。
+a11y 一直报告 focused=true——**它只说明焦点停在那儿，不说明画出来了**，这正是本轮最容易踩空的地方。
+
+### 改法
+
+在 `TopBarTabsRail` 的 tab 上、`.clickable` 之前补一环（顺序按 `tvFocusable` 的文档：必须在
+它要观察的焦点目标之前）：
+
+```kotlin
+itemModifier(item)
+    .height(tokens.minimumTouchTarget)
+    .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
+    .clickable { onItemSelected(item.id) }
+    .padding(horizontal = 10.dp)
+```
+
+`addFocusTarget = false` 是因为下面的 `clickable` 自己已经是焦点目标，这里只借它的焦点状态画环；
+`tvFocusable` 在非 TV 演示配置下原样返回 `this`，所以手机/平板的组合链没有任何变化。
+这条 rail 是全应用共用件（`CompactTopBarTabsRail` → 收藏页及带紧凑顶栏标签的页面），改一处，各页一致。
+
+### 量出来的差别
+
+| | 改前 | 改后 |
+| --- | --- | --- |
+| 焦点在未选中的 Read later | 淡白色块，几乎不可见（`M10_crop`） | 蓝色 2 dp 圆角环（`Q11_crop`） |
+| 焦点在选中的 All favorites | 与蓝字/下划线糊成一片（`L23_crop`） | 蓝色 2 dp 圆角环，与下划线分离（`Q10_crop`） |
+| 选区 vs 焦点 | 只能读出选区（下划线） | 选区下划线在 All favorites，环在 Read later，两个信息分开读 |
+
+dump 复核：`Q10` 焦点 `[210,128][407,224]`、`Q11` 焦点 `[411,128][585,224]`，
+环落在各自 tab 内部不越界（tab 高 48 dp，环内缩半个描边，不会被 LazyRow 裁掉）。
+
+构建：`:app:assembleDebug` `BUILD SUCCESSFUL in 1m 11s`，安装 `Success`，同一台模拟器复测。
+
+### 顺带发现（未修，留给后面的轮次）
+
+1. `InlineCompactTopBarTabsRail`（`app/.../KototoroTopBar.kt:1012` 一带）是同一类 `.clickable` 无环，
+   但它属于 MINIMAL 顶栏样式；电视用户切到该样式会复现同样的死站，需要在真机切样式后再补。
+2. 收藏页从标签行按 DOWN **进不到下面的筛选芯片行**（`L20`/`L21`/`L22`：DOWN 停在 tab 不动，
+   `[411,128][585,224]` 原地）；要进芯片只能从左侧导航栏 RIGHT。空态下芯片行下方没有可聚焦内容，
+   但这不该影响「tab → 紧邻的 chip 行」这一步，需要带焦点树日志单独核。
+3. 同一页在纯方向键操作里曾自己从 All favorites 翻到 Read later（`H19`，只发生过一次，`K20`–`K28`
+   复跑六次未再现）；收藏页内容确实是 `HorizontalPager`（`FavoritesHostScreen.kt` 的 `rememberPagerState`），
+   怀疑是某一下 RIGHT 没被焦点消费、被 pager 吃掉，需带日志复现后再动。
+
+### 教训
+
+「按不到的控件」修完之后，验收标准要往前挪一格：**按得到、也看得出**。
+a11y 的 `focused="true"` 只能证明焦点停靠成功，证明不了屏幕上有东西；
+这一轮两个「疑似缺陷」里，一个（章节面板标签环）是旧笔记过期，一个（收藏页标签环）是真的，
+两者的区别只有把同一区域裁剪放大逐像素比才看得出来。

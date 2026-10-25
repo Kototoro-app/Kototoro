@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -49,8 +50,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
-import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.gestures.mouseDragScroll
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import kotlin.math.floor
 
 /*
@@ -266,6 +268,10 @@ fun TopBarTabsRail(
                 Box(
                     modifier = itemModifier(item)
                         .height(tokens.minimumTouchTarget)
+                        // A remote stops on the click below anyway; the only feedback was the state
+                        // layer Material draws for it, which from a sofa is no change at all. Draw
+                        // the ring the rest of the TV UI uses, on the same node, before that click.
+                        .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
                         .clickable { onItemSelected(item.id) }
                         .padding(horizontal = 10.dp),
                     contentAlignment = Alignment.Center,
