@@ -7389,3 +7389,60 @@ is closed nobody drives the caret with the horizontal arrows any more"——元�
 
 **"能聚焦"和"能走到"是两件事。** 那两个按钮在 a11y 里一直是 `clickable=true`、也能被 pointer 点，看起来
 一切正常；只有连续按 RIGHT 并对比截图 hash，才知道遥控器根本进不去。
+
+## 第一百一十三轮：Find chapter 搜索条在 TV 上会抢键盘，下键进不去章节目录（2026-10-25）
+
+### 现象
+
+详情页右侧目录的 🔍（a11y 名字是 **Find chapter**，`[1698,54][1782,150]`）按 CENTER 会展开一条搜索框
+`[1008,182][1864,310]`。用遥控器 DOWN 进去，**键盘立刻弹出来**；此后按 DOWN 只有光标反应，下面的 Chapter 01/02
+永远到不了——`down1`/`down2` 两次 dump 焦点都还在 `android.widget.EditText`，`GA11`/`GB10` 两张截图里键盘一直占着
+下半屏。唯一出路是 BACK（收键盘）→ UP（回 Continue）→ 再想办法绕，或者连续 BACK 把整个面板关掉。
+
+### 根因
+
+字段原来只挂了 `.tvTextInputFocusEscape()`。这个修饰符的文档写得很清楚："While the on-screen IME is open it owns
+the D-pad"——它处理的是**键盘收起之后**的上下键；而这里字段一拿到焦点就自己把键盘拉起来（它是可编辑的
+`OutlinedTextField`），于是那条 escape 从来没有机会执行，DOWN 一直被 IME/光标吃掉。
+
+第一百零九轮已经在对话框里解决过同一类问题（`rememberTvTextFieldReadOnlyState`：字段先只读，CENTER 才开始编辑），
+只是详情页这条搜索条还没接上。
+
+### 修法
+
+`ChaptersPagesToolbar` 里的搜索框按第一百零九轮的写法接上：
+
+* `val tvEditing = rememberTvTextFieldReadOnlyState()` + `readOnly = tvEditing.isReadOnly`：
+  拿到焦点时只显示焦点框，不再自作主张弹键盘；CENTER 才进编辑态并弹键盘；焦点离开自动退回只读；
+* `modifier = ... .then(tvEditing.fieldModifier) .tvTextInputFocusEscape()`：只读态下上下键可以真正移动焦点，
+  键盘开着时仍归光标。
+
+手机上 `isReadOnly=false`、`fieldModifier` 为空，行为一字不改。
+
+### 证据
+
+* 修前：DOWN 进字段 → 键盘弹出；`down1`/`down2` 焦点不动（`GA11` sha `82975929`、`GB10` sha `b3dcdaa6` 两张
+  都带键盘、列表在键盘上方可见但走不到）；
+* 修后 `HC10`（sha `aa8cee89`）：字段有蓝色焦点框、**没有键盘**，整个面板（含 Chapter 01/02）都在屏内；
+* DOWN → `Chapter 01` `[992,368][1800,480]`；UP → 回到字段（焦点框仍在，键盘依旧不出）；
+* CENTER → 进编辑态弹键盘，`input text 02` 后 `HD11`（sha `ff58d05e`）里查询是 "02"、下面列表只剩 `Chapter 02`
+  ——搜索本身工作正常；
+* BACK 收键盘（焦点仍在字段、值仍是 "02"）→ DOWN → 落到过滤后的 `Chapter 02` 行（a11y `txt=Chapter 02`）；
+* 删掉查询后 DOWN 又落到 `Chapter 01`，说明过滤解除、列表按预期恢复。
+
+### 顺带核查：阅读来源面板的 Filter 面板
+
+第一百一十二轮留下的"结果区没看到"这条，这轮把 Filter 面板整个走完了：CENTER 打开后焦点落在 **Manage**
+`[1689,434][1844,530]`（有环），DOWN 依次是第二个 Manage（Language preset）、Source Type 一排芯片、Type 三枚芯片
+（Manga 选中）、**Pinned sources only**（关）、**Hide empty sources**（关）、**Reset filter**；再 RIGHT 到
+**Cancel** `[1539,952][1679,1048]` 与 **Apply** `[1695,952][1868,1048]`，三者都在屏内、都能落到（`ED10` sha
+`b33edfa2`、`FB10`）；BACK 关闭后焦点回到筛选按钮。
+
+两个开关都是关的，说明 "No visible results" 那句提示与开关状态不符——更可能的原因是**这部作品本来就只在本地源**
+（"TV Audit Manga 11" 是仓库里种下的本地漫画），在线源没有同名条目可换。这条留给后续用真实在线作品复核，
+不再当作本轮缺陷。
+
+### 教训
+
+**"已经加过 escape"不等于"按键走得到"。** `tvTextInputFocusEscape()` 只在键盘关闭时生效，而让键盘自动弹出的正是
+字段自己；只要字段一拿到焦点就把屏幕交给 IME，escape 就是死代码。判断标准只有一个：连按方向键，焦点真的动了没有。
