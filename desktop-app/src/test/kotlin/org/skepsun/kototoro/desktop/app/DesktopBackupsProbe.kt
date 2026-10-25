@@ -62,6 +62,10 @@ internal object DesktopBackupsProbe {
                 onNodeWithTag("webdav-trim-local").performScrollTo().assertExists()
                 onNodeWithTag("webdav-local-count").performScrollTo().assertExists()
                 onNodeWithTag("webdav-local-status").performScrollTo().assertExists()
+                // Android keeps "auto restore on startup" in the same section, off and dormant until a server is saved.
+                onNodeWithTag("webdav-auto-restore").performScrollTo().assertExists()
+                onNodeWithTag("webdav-auto-restore").assertIsNotEnabled()
+                check(!controller.webDavUi.value.settings.autoRestore)
                 check(controller.webDavUi.value.settings.keepLocalCopy)
                 // The read phase reopens a root whose write phase already left a copy behind.
                 check(controller.webDavUi.value.localFiles.all {
@@ -89,6 +93,13 @@ internal object DesktopBackupsProbe {
                     onNodeWithTag("webdav-local-status").performScrollTo()
                     waitForIdle()
                     snapshot("local-copy-filled")
+                    // A saved destination is what enables the auto-restore switch; it starts off, like Android.
+                    controller.webDavSettings(DesktopWebDavSettings(serverUrl = "https://fixture.invalid/dav"))
+                    onNodeWithTag("webdav-auto-restore").performScrollTo()
+                    waitForIdle()
+                    onNodeWithTag("webdav-auto-restore").assertIsEnabled()
+                    onNodeWithTag("webdav-auto-restore").assertIsOff()
+                    snapshot("auto-restore")
                     // Back to the factory settings so the rest of the probe runs without a timer behind it.
                     controller.webDavSettings(DesktopWebDavSettings())
                     idle()

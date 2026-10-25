@@ -36,6 +36,11 @@ internal data class DesktopWebDavSettings(
     val trimLocal: Boolean = true,
     /** Android's `backup_periodic_count`: how many local copies the trim keeps. */
     val localCount: Int = 10,
+    /**
+     * Android's `backup_periodic_webdav_auto_restore`: on the first start of each day, merge the newest remote backup
+     * once and push the merged snapshot back. Off by default, like Android.
+     */
+    val autoRestore: Boolean = false,
 ) {
     val configured: Boolean get() = serverUrl.isNotBlank()
 
@@ -55,6 +60,7 @@ internal data class DesktopWebDavSettings(
         KEY_KEEP_LOCAL to SourcePreferenceValue.Toggle(keepLocalCopy),
         KEY_TRIM_LOCAL to SourcePreferenceValue.Toggle(trimLocal),
         KEY_LOCAL_COUNT to SourcePreferenceValue.Integer(localCount),
+        KEY_AUTO_RESTORE to SourcePreferenceValue.Toggle(autoRestore),
     )
 
     companion object {
@@ -67,6 +73,7 @@ internal data class DesktopWebDavSettings(
         const val KEY_KEEP_LOCAL = "webdav_keep_local_copy"
         const val KEY_TRIM_LOCAL = "webdav_trim_local_copy"
         const val KEY_LOCAL_COUNT = "webdav_local_max_count"
+        const val KEY_AUTO_RESTORE = "webdav_auto_restore"
 
         fun from(values: Map<String, SourcePreferenceValue>) = DesktopWebDavSettings(
             serverUrl = (values[KEY_SERVER] as? SourcePreferenceValue.Text)?.value.orEmpty(),
@@ -79,6 +86,7 @@ internal data class DesktopWebDavSettings(
             trimLocal = (values[KEY_TRIM_LOCAL] as? SourcePreferenceValue.Toggle)?.value ?: true,
             localCount = ((values[KEY_LOCAL_COUNT] as? SourcePreferenceValue.Integer)?.value ?: 10)
                 .coerceIn(1, 32),
+            autoRestore = (values[KEY_AUTO_RESTORE] as? SourcePreferenceValue.Toggle)?.value ?: false,
         )
     }
 }

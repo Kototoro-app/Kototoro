@@ -41,6 +41,8 @@ internal data class DesktopWebDavUi(
     val lastLocalMillis: Long = 0L,
     /** The directory the local copies live in, so the page can show where they are. */
     val localDirectory: Path? = null,
+    /** The day of the last automatic restore check, in epoch millis; `0` means no check since this field was added. */
+    val lastAutoRestoreCheckMillis: Long = 0L,
 ) {
     val latest: WebDavBackupFile? get() = WebDavBackupCatalog.latest(files)
 }
@@ -56,6 +58,26 @@ internal enum class DesktopAutoBackup {
     /** Written to the local directory only: Android's periodical backup without a WebDAV destination. */
     Saved,
     Failed,
+}
+
+/**
+ * What one pass of Android's "auto restore on startup" did. Android runs it once per calendar day, so every answer
+ * other than [Failed] settles that day: a start that found nothing must not query the server again until tomorrow.
+ */
+internal sealed interface DesktopAutoRestore {
+    /** The switch is off or the destination is incomplete: nothing was requested. */
+    data object Disabled : DesktopAutoRestore
+
+    /** Already checked today; the server was not contacted. */
+    data object NotDue : DesktopAutoRestore
+
+    /** The server has no compatible backup to merge; the day counts as checked. */
+    data object Nothing : DesktopAutoRestore
+
+    /** [merged] rows came over from [name], and the merged snapshot went back up as [uploaded]. */
+    data class Restored(val name: String, val merged: Int, val uploaded: String) : DesktopAutoRestore
+    /** Listing or restoring failed; the day stays unchecked so the next start tries again. */
+    data object Failed : DesktopAutoRestore
 }
 
 /**
@@ -110,6 +132,8 @@ internal class DesktopWebDavOperations(
             settings = DesktopWebDavSettings.from(values),
             lastUploadMillis = (values[KEY_LAST_UPLOAD] as? SourcePreferenceValue.Text)?.value?.toLongOrNull() ?: 0L,
             lastLocalMillis = (values[KEY_LAST_LOCAL] as? SourcePreferenceValue.Text)?.value?.toLongOrNull() ?: 0L,
+            lastAutoRestoreCheckMillis =
+                (values[KEY_LAST_AUTO_RESTORE_CHECK] as? SourcePreferenceValue.Text)?.value?.toLongOrNull() ?: 0L,
         )
         refreshLocal()
     }
@@ -233,6 +257,59 @@ internal class DesktopWebDavOperations(
         }
     }
 
+    /**
+     * Android's `WebDavAutoRestoreRunner`: once per calendar day, list the server, merge the newest compatible backup
+     * and push the merged snapshot back so the next device sees the union.
+     *
+     * A day is settled whenever the check itself finished — finding no backup counts as checked, exactly like
+     * Android, so a machine that is offline for a week does not hit the server on every start. A failure is *not*
+     * settled, because the switch exists to reconcile with the server and a transient error should be retried.
+     */
+    suspend fun autoRestore(): DesktopAutoRestore {
+        val settings = mutableUi.value.settings
+        if (!settings.autoRestore || !settings.configured) return DesktopAutoRestore.Disabled
+        val now = clock()
+        if (isSameDay(mutableUi.value.lastAutoRestoreCheckMillis, now)) return DesktopAutoRestore.NotDue
+        return try {
+            val files = refresh()
+            val candidate = WebDavBackupCatalog.latest(files.filter { it.namespace == RemoteNamespace.V3 })
+            if (candidate == null) {
+                rememberAutoRestoreCheck(now)
+                return DesktopAutoRestore.Nothing
+            }
+            val merged = restoreRemote(candidate)
+            // Android uploads the merged snapshot right after the restore, so the other devices can merge the union.
+            val uploaded = uploadLock.withLock { uploadLocked() }.name
+            rememberAutoRestoreCheck(now)
+            DesktopAutoRestore.Restored(name = candidate.name, merged = merged, uploaded = uploaded)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            mutableUi.value = mutableUi.value.copy(error = desktopWebDavError(error))
+            DesktopAutoRestore.Failed
+        }
+    }
+
+    /** Merges [file] through the same archive/merge flow the page uses, so the two cannot drift apart. */
+    private suspend fun restoreRemote(file: WebDavBackupFile): Int {
+        val path = download(file)
+        return try {
+            backups.preview(path).use { backups.restore(it) }
+        } finally {
+            Files.deleteIfExists(path)
+        }
+    }
+
+    /** Marks today as checked; Android persists it so a restart later the same day stays quiet. */
+    private fun rememberAutoRestoreCheck(now: Long) {
+        preferences.edit(
+            SourcePreferenceEdit(
+                changes = mapOf(KEY_LAST_AUTO_RESTORE_CHECK to SourcePreferenceValue.Text(now.toString())),
+            ),
+        )
+        mutableUi.value = mutableUi.value.copy(lastAutoRestoreCheckMillis = now)
+    }
+
     private suspend fun uploadLocked(): WebDavUploadResult {
         val settings = mutableUi.value.settings
         require(settings.configured) { desktopText("webdav.notConfigured") }
@@ -320,6 +397,19 @@ private const val KEY_LAST_UPLOAD = "webdav_last_upload_millis"
 
 /** Epoch millis of the last local copy; Android shows it as "last successful backup" on the periodical page. */
 private const val KEY_LAST_LOCAL = "webdav_last_local_backup_millis"
+
+/** Epoch millis of the last automatic restore check, which Android's runner compares as a calendar day. */
+private const val KEY_LAST_AUTO_RESTORE_CHECK = "webdav_last_auto_restore_check_millis"
+
+/**
+ * Android compares the two instants as `yyyy-MM-dd` in the device zone, so "today" is the user's day rather than a
+ * rolling 24 hours: a start at 23:59 and one at 00:01 are two different days.
+ */
+private fun isSameDay(previous: Long, now: Long): Boolean {
+    if (previous <= 0L) return false
+    val format = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    return format.format(Date(previous)) == format.format(Date(now))
+}
 
 /** A server's own message is the useful part ("401 Unauthorized"); the exception name is the last resort. */
 private fun desktopWebDavError(error: Exception): String =

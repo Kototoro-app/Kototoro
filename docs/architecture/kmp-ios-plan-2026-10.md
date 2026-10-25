@@ -8552,3 +8552,43 @@ Android 的 `PeriodicalBackupService` 不是这样——它把导出写进临时
 - 仍未做：Android 的 SAF 自选输出目录（Windows 固定用数据根 `backups`，页面给了“打开”按钮）、
   WebDAV 自动恢复（`backup_periodic_webdav_auto_restore`）、把本地副本直接列进恢复区的卡片
   （现在走既有“选择恢复文件”，文件选择器本来就认 `.bk.zip`）。
+
+## 188. WebDAV 启动时自动恢复（对齐 Android 的 `webdav_auto_restore` / `WebDavAutoRestoreRunner`）（2026-10-25）
+
+Android 在备份页和定期备份页都摆着“启动时自动恢复”（`backup_periodic_webdav_auto_restore`，默认关）：
+每天首次启动时由 `WebDavAutoRestoreService` + `WebDavAutoRestoreRunner` 列出远端、
+只取 V3 命名空间里最新的那份、下载后按合并方式恢复一次，恢复完立刻把合并后的快照传回服务器，
+再把“今天已经查过”的时间（`backup_periodic_webdav_last_auto_restore_check`）写盘。
+判定细节：开关关或 WebDAV 配置不全直接跳过；`yyyy-MM-dd` 相同就跳过；列表为空/没有可用备份算“查过了”；
+抛异常不算（下次启动还会再试）。
+
+Windows 侧没有开机广播和前台服务，所以“启动时”是应用打开会话的那一刻：
+
+- `DesktopWebDavSettings` 增 `autoRestore`（键 `webdav_auto_restore`，默认 false，与 Android 同语义），
+  页面在云同步卡的本地副本开关之上加 `启动时自动恢复` 一行（`webdav_auto_restore` 与
+  `webdav_auto_restore_summary` 直接用 Android 原句），只有服务器地址填好才可点，标签 `webdav-auto-restore`。
+- `DesktopWebDavOperations.autoRestore()` 返回 `DesktopAutoRestore`：`Disabled`/`NotDue`/`Nothing`/
+  `Restored(name, merged, uploaded)`/`Failed`。查过的时间存 `webdav_last_auto_restore_check_millis`，
+  日期比较与 Android 一样按本地日历日（23:59 与次日 00:01 算两天），失败不落盘。
+- 恢复复用 `DesktopLibraryBackup.preview()`/`restore()`（和手动恢复、远端预览同一条路），下载走既有 staging
+  目录并在用完后删除；随后 `uploadLocked()` 把合并后的快照传回，所以另一台设备能合并到这次的并集。
+- 控制器 `startAutoRestore()` 是 one-shot：`init` 里 `webDav.restore()` 之后跑一次，`webDavSettings()` 保存后
+  再跑一次（用户刚打开开关就生效，不必等下次启动），成功时把 `items`/`content` 清空让界面重读，
+  并提示 `webdav.autoRestoredAndUploaded`（新增桌面文案，base 与 `_zh-CN` 同时写）；失败只留在
+  `webDavUi.error` 里，由页面自己显示。
+
+验证：
+
+- `DesktopWebDavAutoRestoreTest` 5 个用例：最新备份被合并并把合并快照传回（`puts == 1`）、当天再调返回
+  `NotDue` 且零请求、次日再合并再上传；“空服务器也算查过”（`Nothing` + 当天不再请求）；
+  “失败的检查不算今天”（`Failed` 且时间仍是 0，把服务器修好后同一天能重试成功）；
+  “开关需要完整目的地与显式同意”（关着或服务器为空时 `Disabled` 且 `requests == 0`）；
+  “查过的时间能跨进程”（重开同一数据根仍是 `NotDue` 且不再请求）。
+- 真实窗口探针 `backups-write`/`backups-read`：断言 `webdav-auto-restore` 行存在、没填服务器时是禁用的、
+  填上服务器后变为可用且默认仍是关（截图 `backups-write-auto-restore.png`：
+  `启动时自动恢复 / 应用每天首次启动时合并恢复 WebDAV 上最新备份一次，恢复完成后立即把合并后的快照上传回 WebDAV。`）。
+- 回归：`DesktopWebDavTest` 10、`DesktopWebDavAutoBackupTest` 8、`DesktopWebDavRoundTripTest` 1 全绿；
+  `:desktop-app:verifyDesktopStrings` 通过。
+
+与 Android 不同的地方：没有系统级启动触发（只在打开应用时检查），也没有 TeleCloud/Telegram 目的地；
+上传是“每次成功恢复后都传一次”（Android 只在写入器世代为权威快照时上传），对本机是幂等的。

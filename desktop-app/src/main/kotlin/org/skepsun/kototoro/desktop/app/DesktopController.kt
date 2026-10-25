@@ -353,6 +353,7 @@ class DesktopController(
     private val webDav = DesktopWebDavOperations(session.storage, backups)
     internal val webDavUi = webDav.ui
     private var autoBackupJob: Job? = null
+    private var autoRestoreJob: Job? = null
     private var mirrorProbeJob: Job? = null
 
     init {
@@ -390,6 +391,7 @@ class DesktopController(
         webDav.restore()
         // Only starts a loop when the saved destination has an interval; otherwise it returns immediately.
         startAutoBackup()
+        startAutoRestore()
         // Sweeps unreachable page blocks at start and whenever the queue goes idle, so the metadata half of
         // the download storage does not grow for weeks just because nobody clicked "reclaim".
         scope.launch(DesktopDispatchers.background) {
@@ -2385,6 +2387,35 @@ class DesktopController(
         webDav.settings(value)
         // The interval lives in the settings, so a changed value must take effect without a restart.
         startAutoBackup()
+        // Turning "auto restore on startup" on is a user asking for it now, not only on the next start.
+        startAutoRestore()
+    }
+
+    /**
+     * Android's auto restore runs from a foreground service started at boot, which Windows has no equivalent of, so
+     * the check happens when the app opens the session. It is a one-shot job: the calendar-day guard lives in the
+     * operations, and a failed attempt is allowed to be retried on the next start.
+     */
+    private fun startAutoRestore() {
+        autoRestoreJob?.cancel()
+        autoRestoreJob = scope.launch {
+            when (val result = webDav.autoRestore()) {
+                is DesktopAutoRestore.Restored -> {
+                    // The merge wrote rows straight into the library, so the same reload the manual restore uses.
+                    mutableState.update {
+                        it.copy(
+                            items = emptyList(),
+                            content = null,
+                            message = desktopText("webdav.autoRestoredAndUploaded", result.name, result.merged),
+                        )
+                    }
+                }
+                // A failed check already left its message in `webDavUi.error`, where the page shows it.
+                DesktopAutoRestore.Failed, DesktopAutoRestore.Disabled,
+                DesktopAutoRestore.NotDue, DesktopAutoRestore.Nothing,
+                -> Unit
+            }
+        }
     }
 
     /**

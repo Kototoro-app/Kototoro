@@ -108,6 +108,16 @@ internal fun DesktopWebDavSection(controller: DesktopController, ui: DesktopWebD
                     modifier = Modifier.testTag("webdav-upload")) { Text(desktopText("webdav.upload")) }
             }
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            // Android's boot service has no Windows twin, so "on startup" is this check, run when the app opens and
+            // again whenever the page saves the destination; it stays off until a complete destination is saved.
+            SettingsSwitchRow(
+                title = AndroidStrings["webdav_auto_restore"],
+                summary = AndroidStrings["webdav_auto_restore_summary"],
+                checked = settings.autoRestore,
+                enabled = enabled && settings.configured,
+                onCheckedChange = { controller.webDavSettings(settings.copy(autoRestore = it)) },
+                testTag = "webdav-auto-restore",
+            )
             // Android's periodical page keeps the local copy beside the upload, with its own retention count.
             SettingsSwitchRow(
                 title = AndroidStrings["webdav_keep_local_copy"],
