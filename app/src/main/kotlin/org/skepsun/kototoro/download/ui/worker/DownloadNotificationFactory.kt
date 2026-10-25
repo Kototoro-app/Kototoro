@@ -36,6 +36,7 @@ import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.download.domain.DownloadState
 import org.skepsun.kototoro.download.ui.list.DownloadsActivity
+import org.skepsun.kototoro.download.ui.list.formatDownloadSize
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.format
 import org.skepsun.kototoro.parsers.util.format
@@ -154,8 +155,11 @@ class DownloadNotificationFactory @AssistedInject constructor(
                 builder.setProgress(0, 0, false)
                 builder.setSubText(context.getString(state.taskKind.actionTitleResId))
                 builder.setContentText(
-                    context.getString(
-                        if (state.isPartial) R.string.download_partial else state.taskKind.completedStatusResId,
+                    withByteProgress(
+                        context.getString(
+                            if (state.isPartial) R.string.download_partial else state.taskKind.completedStatusResId,
+                        ),
+                        state,
                     ),
                 )
                 builder.setContentIntent(
@@ -188,11 +192,14 @@ class DownloadNotificationFactory @AssistedInject constructor(
             state.isPaused -> { // paused (with error or manually)
                 builder.setSubText(context.getString(state.taskKind.actionTitleResId))
                 builder.setProgress(state.max, state.progress, false)
-                val percent = if (state.percent >= 0) {
-                    context.getString(R.string.percent_string_pattern, (state.percent * 100).format())
-                } else {
-                    null
-                }
+                val percent = withByteProgress(
+                    if (state.percent >= 0) {
+                        context.getString(R.string.percent_string_pattern, (state.percent * 100).format())
+                    } else {
+                        null
+                    },
+                    state,
+                )
                 if (state.errorMessage != null) {
                     builder.setContentText(
                         context.getString(
@@ -243,8 +250,10 @@ class DownloadNotificationFactory @AssistedInject constructor(
 
             else -> {
                 builder.setSubText(context.getString(state.taskKind.activeStatusResId))
-                builder.setProgress(state.max, state.progress, false)
-                builder.setContentText(getProgressString(state.percent, state.eta, state.isStuck))
+                builder.setProgress(state.max, state.progress, state.isIndeterminate)
+                builder.setContentText(
+                    withByteProgress(getProgressString(state.percent, state.eta, state.isStuck), state),
+                )
                 builder.setCategory(NotificationCompat.CATEGORY_PROGRESS)
                 builder.setStyle(null)
                 builder.setOngoing(true)
@@ -258,6 +267,11 @@ class DownloadNotificationFactory @AssistedInject constructor(
     private suspend fun resolveDisplayContent(state: DownloadState?): Content? {
         val displayMangaId = state?.displayMangaId ?: return null
         return contentDataRepository.findDisplayContentById(displayMangaId, withChapters = false)
+    }
+
+    private fun withByteProgress(text: CharSequence?, state: DownloadState): CharSequence? {
+        val size = formatDownloadSize(state.byteProgress, state.currentChapterTitle) ?: return text
+        return if (text.isNullOrBlank()) size else context.getString(R.string.download_summary_pattern, size, text)
     }
 
     private fun getProgressString(percent: Float, eta: Long, isStuck: Boolean): CharSequence? {

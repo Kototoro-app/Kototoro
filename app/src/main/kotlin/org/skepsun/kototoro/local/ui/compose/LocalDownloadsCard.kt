@@ -36,6 +36,7 @@ import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.calculateTimeAgo
 import org.skepsun.kototoro.download.ui.list.DownloadItemModel
+import org.skepsun.kototoro.download.ui.list.formatDownloadSize
 import org.skepsun.kototoro.download.ui.list.DownloadsViewModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.local.ui.LocalDownloadStorageStats
@@ -268,6 +269,7 @@ private fun FeaturedTask(
                 style = MaterialTheme.typography.bodySmall,
             )
             val details = buildList {
+                formatDownloadSize(item.byteProgress, item.currentChapterTitle)?.let { add(it) }
                 when {
                     item.isStuck -> add(stringResource(R.string.stuck))
                     item.hasEta -> item.getEtaString()?.toString()?.let { add(it) }
@@ -375,6 +377,15 @@ private fun ActiveTaskRow(
                 style = MaterialTheme.typography.labelSmall,
                 color = if (item.workState == WorkInfo.State.FAILED) colors.error else colors.onSurfaceVariant,
             )
+            formatDownloadSize(item.byteProgress, item.currentChapterTitle)?.let { size ->
+                Text(
+                    text = size,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         if (item.canPause || item.canResume) {
             IconButton(

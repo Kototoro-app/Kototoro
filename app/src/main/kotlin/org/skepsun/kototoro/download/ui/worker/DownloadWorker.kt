@@ -97,6 +97,7 @@ import org.skepsun.kototoro.core.util.ext.writeAllCancellable
 import org.skepsun.kototoro.core.util.progress.RealtimeEtaEstimator
 import org.skepsun.kototoro.core.model.unwrap
 import org.skepsun.kototoro.download.domain.DownloadProgress
+import org.skepsun.kototoro.download.domain.DownloadByteProgress
 import org.skepsun.kototoro.download.domain.DownloadState
 import org.skepsun.kototoro.download.domain.FailedChapterImage
 import org.skepsun.kototoro.download.domain.NovelFailedImageStore
@@ -2137,12 +2138,14 @@ class DownloadWorker @AssistedInject constructor(
             }
             publishState(
                 currentState.copy(
-                    isIndeterminate = false,
+                    isIndeterminate = true,
                     totalChapters = totalChapters,
                     currentChapter = iterationIndex,
-                    totalPages = 1,
+                    totalPages = 0,
                     currentPage = 0,
                     downloadedChapters = downloaded,
+                    byteProgress = null,
+                    currentChapterTitle = chapter.value.title?.takeIf { totalChapters > 1 },
                 ),
             )
             val target = resolveVideoTarget(repo, chapter.value, task) ?: continue
@@ -2166,15 +2169,16 @@ class DownloadWorker @AssistedInject constructor(
                     downloaded += 1
                     continue
                 }
-                val progress: suspend (Int, Int) -> Unit = { cur, total ->
+                val progress: suspend (Int, Int, DownloadByteProgress) -> Unit = { cur, total, bytes ->
                     publishState(
                         currentState.copy(
-                            isIndeterminate = false,
+                            isIndeterminate = total <= 0,
                             totalChapters = totalChapters,
                             currentChapter = iterationIndex,
                             totalPages = total,
-                            currentPage = cur.coerceAtLeast(0),
+                            currentPage = cur - 1,
                             downloadedChapters = downloaded,
+                            byteProgress = bytes,
                         ),
                     )
                 }
@@ -2240,7 +2244,7 @@ class DownloadWorker @AssistedInject constructor(
                 torrentStream?.let { torrentStreamService.release(it.streamUrl) }
             }
         }
-        publishState(currentState.copy(isIndeterminate = true, eta = -1L, isStuck = false))
+        publishState(currentState.copy(isCompleted = true, isIndeterminate = false, eta = -1L, isStuck = false))
     }
 
     private suspend fun resolveVideoTarget(
@@ -2298,7 +2302,7 @@ class DownloadWorker @AssistedInject constructor(
         url: String,
         headers: Map<String, String>?,
         outputFile: UniFile,
-        onProgress: suspend (Int, Int) -> Unit,
+        onProgress: suspend (Int, Int, DownloadByteProgress) -> Unit,
     ) {
         val resumeAt = outputFile.length().coerceAtLeast(0L)
         val request = PageLoader.createPageRequest(url, source, headers)
@@ -2327,7 +2331,7 @@ class DownloadWorker @AssistedInject constructor(
             val append = resumeAt > 0L && resp.code == 206
             val totalBytes = body.contentLength().takeIf { it > 0 }?.let { length ->
                 if (append) length + resumeAt else length
-            } ?: -1L
+            }
             body.use {
                 if (resumeAt > 0L && !append) {
                     // The server ignored Range (200) or returned a full representation. Do not
@@ -2335,25 +2339,12 @@ class DownloadWorker @AssistedInject constructor(
                     outputFile.openOutputStream(false).use { it.flush() }
                 }
                 outputFile.openOutputStream(append).sink().buffer().use { sink ->
-                    val sourceStream = body.source()
-                    val buffer = okio.Buffer()
-                    var written = if (append) resumeAt else 0L
-                    var lastNotify = 0L
-                    while (true) {
-                        val read = sourceStream.read(buffer, 64 * 1024)
-                        if (read == -1L) break
-                        sink.write(buffer, read)
-                        written += read
-                        if (totalBytes > 0) {
-                            if (written - lastNotify >= 256 * 1024) {
-                                lastNotify = written
-                                val percent = ((written * 100) / totalBytes).toInt().coerceIn(0, 100)
-                                onProgress(percent, 100)
-                            }
-                        }
-                    }
-                    if (totalBytes > 0) {
-                        onProgress(100, 100)
+                    copyVideoWithProgress(body.source(), sink, if (append) resumeAt else 0L, totalBytes) { bytes ->
+                        val size = bytes.totalBytes?.takeIf { it > 0 }
+                        val percent = size?.let {
+                            (bytes.downloadedBytes.toDouble() * 100 / it).toInt().coerceIn(0, 100)
+                        } ?: 0
+                        onProgress(percent, if (size != null) 100 else 0, bytes)
                     }
                 }
             }
@@ -2400,7 +2391,7 @@ class DownloadWorker @AssistedInject constructor(
             android.util.Log.d("DownloadWorker", "Local track file not found or empty: $url")
         }
         // Normal HTTP URL — download via network
-        downloadDirectVideo(source, url, headers, outputFile) { _, _ -> }
+        downloadDirectVideo(source, url, headers, outputFile) { _, _, _ -> }
     }
 
     private suspend fun downloadHls(
@@ -2408,7 +2399,7 @@ class DownloadWorker @AssistedInject constructor(
         url: String,
         headers: Map<String, String>?,
         outputFile: UniFile,
-        onProgress: suspend (Int, Int) -> Unit,
+        onProgress: suspend (Int, Int, DownloadByteProgress) -> Unit,
     ) {
         val masterText = fetchText(source, url, headers)
         val mediaUrl = resolveHlsMediaPlaylist(url, masterText)
@@ -2448,6 +2439,7 @@ class DownloadWorker @AssistedInject constructor(
         var writtenTotal = if (resumeIndex > 0) outputFile.length().coerceAtLeast(0L) else 0L
         outputFile.openOutputStream(resumeIndex > 0).sink().buffer().use { sink ->
             val total = segments.size.coerceAtLeast(1)
+            onProgress(resumeIndex, total, DownloadByteProgress.forSegments(writtenTotal, resumeIndex, total))
             val remaining = segments.withIndex().drop(resumeIndex)
             remaining.chunked(DownloadPolicy.HLS_SEGMENT_CONCURRENCY).forEach { batch ->
                 val downloaded = coroutineScope {
@@ -2484,7 +2476,11 @@ class DownloadWorker @AssistedInject constructor(
                             "HLS progress[${indexed.index}/$total] written=$writtenTotal out=${outputFile.length()}",
                         )
                     }
-                    onProgress(indexed.index + 1, total)
+                    onProgress(
+                        indexed.index + 1,
+                        total,
+                        DownloadByteProgress.forSegments(writtenTotal, indexed.index + 1, total),
+                    )
                     sink.flush()
                     stateFile?.openOutputStream(false)?.bufferedWriter()?.use { state ->
                         state.write(mediaUrl)
@@ -2781,7 +2777,12 @@ class DownloadWorker @AssistedInject constructor(
             etaEstimator.onProgressChanged(state.progress, state.max)
         } else {
             etaEstimator.reset()
-            notificationThrottler.reset()
+            // Unknown-length videos still publish byte updates; keep those updates throttled.
+            if (previousState.byteProgress == null || state.byteProgress == null ||
+                previousState.isIndeterminate != state.isIndeterminate || previousState.isPaused != state.isPaused
+            ) {
+                notificationThrottler.reset()
+            }
         }
         val notification = notificationFactory.create(state)
         if (state.isFinalState) {

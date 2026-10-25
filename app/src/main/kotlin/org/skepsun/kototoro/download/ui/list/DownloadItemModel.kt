@@ -9,6 +9,7 @@ import androidx.core.text.color
 import androidx.work.WorkInfo
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.core.util.ext.getThemeColor
+import org.skepsun.kototoro.download.domain.DownloadByteProgress
 import org.skepsun.kototoro.download.ui.list.chapters.DownloadChapter
 import org.skepsun.kototoro.download.ui.worker.DownloadTaskKind
 import org.skepsun.kototoro.list.ui.ListModelDiffCallback
@@ -36,6 +37,8 @@ data class DownloadItemModel(
     val isPartial: Boolean = false,
     val isExpanded: Boolean,
     val chapters: StateFlow<List<DownloadChapter>?>,
+    val byteProgress: DownloadByteProgress? = null,
+    val currentChapterTitle: String? = null,
 ) : ListModel, Comparable<DownloadItemModel> {
 
     val percent: Float
