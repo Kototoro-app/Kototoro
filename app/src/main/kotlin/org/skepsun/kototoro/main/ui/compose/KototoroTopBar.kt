@@ -301,7 +301,9 @@ fun KototoroTopBar(
                 if (!topBarTitle.isNullOrBlank() && !hidePrimaryControlsForTabs) {
                     Text(
                         text = topBarTitle,
-                        modifier = Modifier.widthIn(max = 72.dp),
+                        // A television has room for the whole name next to the tabs; 72 dp clipped
+                        // "Favorites" into "Favo…" while the row had hundreds of pixels to spare.
+                        modifier = Modifier.widthIn(max = if (isTvPresentation) 200.dp else 72.dp),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -1026,6 +1028,11 @@ private fun InlineCompactTopBarTabsRail(
                 Box(
                     modifier = Modifier
                         .height(tokens.minimumTouchTarget)
+                        // A remote stops on the click below anyway, and the only feedback was the state
+                        // layer Material draws for it, which from a sofa is no change at all. Same
+                        // treatment as the shared TopBarTabsRail: ring on this node, before the click.
+                        .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
+                        .tvDownFocusLink(state.downFocusRequester)
                         .clickable {
                             restoreRequest += 1
                             state.onItemSelected(item.id)

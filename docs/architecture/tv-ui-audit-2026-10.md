@@ -6942,3 +6942,82 @@ contentDescription（这次是 `Filter`/`More`），比在源码里按位置猜�
 这一轮是「一处传了 requester、一处没传」。两次都没有新机制要发明——机制早就在
 `GlassDropdownMenu`/`tvDownFocusLink` 里躺着了，缺的是把第二个调用点对齐。看到相邻控件行为不一致时，
 先找那个被传/没传的参数，比读十个组件的实现快。
+
+## 第一百零六轮：内联分类标签条也有环和 DOWN 出口了（2026-10-25）
+
+### 现象
+
+收藏页的"收藏分类位置"设成"内联标签条"（`FavoritesTabsPosition.INLINE_RAIL`）时，顶栏里那排分类标签
+（"All favorites" / "Read later"）有两个问题：遥控器能停上去（它们是 `.clickable`），但**屏幕上一动不动**；
+而且按 DOWN 直接掉到左侧导航栏，中间的筛选行完全够不着。
+
+顺带发现名字被截成 "Favo…"：`KototoroTopBar.kt` 里标题写死 `Modifier.widthIn(max = 72.dp)`，
+而同一行里给标签条的是 `weight(1f, fill = true)`，把剩下的空间全吃掉了。
+
+复现路径：设置 › 外观 › 界面与行为 › "收藏分类位置" → 内联标签条；回到收藏页。
+
+### 根因
+
+同一条标签条在仓库里有两份实现：
+
+* `core-ui` 的共享 `TopBarTabsRail`（非内联那种用）早就写好了
+  `height` → `tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)` →
+  `tvDownFocusLink(downFocusRequester)` → `clickable` → `padding`，
+  并且由 `CompactTopBarTabsRail` 把 `state.downFocusRequester` 递进去；
+* app 侧私有的 `InlineCompactTopBarTabsRail` 是另写的 `LazyRow`，item 只有
+  `Box(Modifier.height(...).clickable { … }.padding(...))`，**既没有环，也没有读 `state.downFocusRequester`**。
+
+关键在于这个 seam 其实早就铺好了：收藏页在 `FavoritesHostScreen.kt:212` 建了 `contentTopFocusRequester`，
+`:263` 交给 `CompactTabsTopBarOverrideState(downFocusRequester = …)`，另一端
+`FavoritesListScreen.kt:79` 把它挂在快速筛选行打头的排序控件上。也就是说，只要内联那份读一下 state，
+DOWN 就有地方去——缺的只是那一行。
+
+### 修法
+
+只改 `app/src/main/kotlin/org/skepsun/kototoro/main/ui/compose/KototoroTopBar.kt`（+8/−1）：
+
+1. `InlineCompactTopBarTabsRail` 的 item 换成与共享 rail 完全相同的链：
+   `.height(tokens.minimumTouchTarget)`
+   → `.tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)`
+   → `.tvDownFocusLink(state.downFocusRequester)` → `.clickable { … }` → `.padding(horizontal = 5.dp)`。
+   `tvFocusable` 只在 TV 上生效，且 `addFocusTarget = false`，只是"观察已有的可点停靠点"，不多造一个焦点目标。
+2. 标题宽度上限：`widthIn(max = if (isTvPresentation) 200.dp else 72.dp)`——只有电视放宽，
+   手机/平板保持原来的 72 dp。
+
+### 证据
+
+**修前**（`AZ10`–`AZ13`）：目标顺序是 导航栏 → RIGHT → 排序控件 `[176,120][268,216]` → UP → 搜索按钮
+`[188,16][284,112]` → RIGHT → "All favorites" `[466,16][620,112]` → RIGHT → "Read later" `[622,16][756,112]`。
+`AZ12` 的 a11y 焦点确实在 "Read later" 上，但截图里整条顶栏**没有任何环**；`AZ13` 按 DOWN 落到
+导航栏 `[16,584][152,720]`；标题是 "Favo…"。
+
+**修后**：
+
+* `BD11`："All favorites" 带着蓝色圆角环，标题完整写着 "Favorites"；
+* `BD12`：`tab1 [513,16][667,112]` → DOWN → 排序控件 `[176,120][268,216]`（修前是导航栏）；
+* `BE11`/`BE12`：`tab2 [669,16][803,112]` → DOWN → 同一个排序控件；
+* `BE13`：从这个排序控件 CENTER 打开排序弹窗，焦点落在 "Date added" 且带环；`BF10` BACK 之后焦点
+  回到排序控件本身；
+* `BF12`：CENTER 在 "Read later" 上真的翻了页（选中色与空态文案都变了），焦点留在标签上。
+
+标签位置从 `[466…]`/`[622…]` 右移到 `[513…]`/`[669…]`，就是标题不再被截断的直接结果。
+
+### 遗留
+
+1. 第一版修错了：把 `LocalMainContentFocusAnchor` 的 requester 当成 DOWN 目标传进去
+   （`downFocusLink = contentDownFocus`），编译通过、环也画上了，但 DOWN 仍然掉到导航栏（`BB14`）。
+   原因是**收藏页没有注册页面锚点**——`rememberMainContentFocusAnchorRequester` 目前只有首页 hero 和
+   历史统计卡在用（§103），所以 `contentDownFocus` 在收藏页是 `null`，链子等于空操作。
+   这也顺带确认了：收藏页的上漏斗/⋮ 按 DOWN 依旧会掉到导航栏，属于 §104 那条 seam 的一个未覆盖面。
+2. 第一版还用了 `tvTabRing()`（给 chip 用的 10 dp 圆角），而共享 rail 用的是
+   `tvFocusable(RoundedCornerShape(8.dp), …)`；最后跟随共享实现，免得同一个 rail 两种圆角。
+3. `favorites_tabs_position` 是跨端设置，本次只让 TV 放宽标题宽度；手机/平板的 72 dp 与"内联标签条"
+   表现未在手机 AVD 上复核（按约定不动手机端行为）。
+4. 这台 AVD 的收藏库是空的，所以"切到 Read later"只验证了翻页与选中态，没有验证有内容时的网格定位。
+5. 该 AVD 的设置现在停在"内联标签条"（非默认值），后续轮次对比前先确认这一点。
+
+### 教训
+
+**同一个控件存在第二份实现时，第二份几乎必然少接某个 seam。** 这轮少的不是机制而是"读一下 state 里已有的字段"：
+`downFocusRequester` 就在 `CompactTabsTopBarOverrideState` 里，调用方也早就在传。遇到"旁边那个一模一样的
+控件好好的"，先 diff 两份实现的 modifier 链，比重新发明一个入口快，也不会把"页面锚点"和"控件锚点"混为一谈。
