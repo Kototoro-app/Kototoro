@@ -188,6 +188,21 @@ class DesktopSession private constructor(
     /** Automatic sweep of the unreachable page blocks; the controller runs it when the queue goes idle. */
     internal val downloadMaintenance = DesktopDownloadMaintenance(downloadStore, storage.preferences,
         storage.preferences.open("desktop_download_maintenance"))
+    /** The data cleanup page's own switch; Android keeps `chapters_clear_auto` in its default preferences. */
+    private val cleanupPreferences = storage.preferences.open("desktop_cleanup")
+
+    /**
+     * Android's `AppSettings.KEY_CHAPTERS_CLEAR_AUTO`: drop the downloaded chapters a work has already read whenever the
+     * app starts. Off by default, like Android.
+     */
+    fun chaptersClearAuto(): Boolean =
+        (cleanupPreferences.snapshot()[CHAPTERS_CLEAR_AUTO_KEY] as? SourcePreferenceValue.Toggle)?.value ?: false
+
+    fun setChaptersClearAuto(clear: Boolean) {
+        cleanupPreferences.edit(SourcePreferenceEdit(changes = mapOf(
+            CHAPTERS_CLEAR_AUTO_KEY to SourcePreferenceValue.Toggle(clear),
+        )))
+    }
 
     /** Blobs a saved chapter still needs; the image budget never evicts these, offline reading would break. */
     internal fun downloadedImageBlobs(): Set<String> = downloadStore.records.value

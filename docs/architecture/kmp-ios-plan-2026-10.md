@@ -8636,3 +8636,56 @@ Windows 之前这一行只读（显示数据根 `backups`，带一个“打开�
 与 Android 不同的地方：Android 用 SAF，Windows 用系统文件夹选择器（只能是本机路径，没有 URI 授权）；
 Android 的“备份频率”下拉（6 小时/1 天/…/1 个月）在 Windows 仍是“自动备份间隔（小时）”数字输入，
 两者量纲不同但语义相同（0 = 关），这次没有改动。
+
+
+## 190. 数据清理页的“章节”分组：删除已读章节 + 自动删除（对齐 Android 的 `delete_read_chapters` / `chapters_clear_auto`）（2026-10-25）
+
+Android 的数据清理页（`DataCleanupSettingsScreen`）最后还有一个“章节”分组，两行：一行动作
+`delete_read_chapters`（摘要 `delete_read_chapters_summary`，确认框 `delete_read_chapters_prompt`），
+一行开关 `delete_read_chapters_auto`（摘要 `runs_on_app_start`，键 `AppSettings.KEY_CHAPTERS_CLEAR_AUTO`，
+默认关）。Android 的“已读”不是逐章标记，而是**相对历史记录**：`DeleteReadChaptersUseCase` 取该作品的历史
+章节，按话号排序、限定同一分支（`branch`），把“当前章节之前”的所有章节算作已读，再与真正存下来的章节取交集，
+删掉交集——历史不在列表里、没有历史行、或者交集为空时什么都不做。Windows 之前这两行都没有，
+清理页注释里写的是“章节那行就是下载页的批量移除”，但用户没法一键清掉已读的本地下载。
+
+本切片把 Android 的这两行补上：
+
+- `desktop-runtime` 新增 `DesktopChapterCleanup.kt`，三个纯函数就是 Android 那套规则的可测内核：
+  `desktopReadChapterIds(chapters, currentChapterId)`（当前章节之前的同分支章节；当前章节不在列表里 → 空集）、
+  `desktopChapterCandidates(saved, downloaded)`（库里恢复的章节表 ∪ 已下载章节，按 id 去重，对应 Android 的
+  `(localChapters + dbChapters).distinctBy { it.id }`）、
+  `desktopReadSavedChapters(saved, downloaded, currentChapterId)`（把交集窄到“真的存了”的章节，
+  来源列表里提到但没下载的章节永远不会被当成删除目标）。
+- `DesktopController.cleanupReadChapters()` 按 `downloadStore.records` 的 `contentId` 分组，逐部作品读历史
+  （`session.library.progress`）与章节表（`session.library.find(...)?.chapters`），算出已读的已保存章节，
+  然后走下载页批量移除同一条序列（`downloads.pause` → `settle` → `downloadStore.delete` → `forget`），
+  最后把选择集裁到还存在的行为，并报 `cleanup.readChaptersDeleted`。图片文件不在这里删：
+  这些清单引用过的页面块变成“无引用的元数据”，由图片预算在下一轮清理里回收（和批量移除完全一样的手递手）。
+- 自动开关：`DesktopSession.chaptersClearAuto()` / `setChaptersClearAuto()` 读写新的 `desktop_cleanup`
+  store 的 `chapters_clear_auto`（与 Android 同键、同 `Toggle` 语义、默认关）；`DesktopAppState.chaptersClearAuto`
+  供页面渲染，控制器 `setChaptersClearAuto` 只是记住，**不会立刻扫一遍**——Android 的开关也是等下次启动。
+  会话打开时（`init` 里 `startAutoRestore()` 之后）如果开关是开的，就跑一次 `runCleanupReadChapters(announceEmpty = false)`：
+  没有可删的章节时不弹任何提示，有的话留下 `cleanup.readChaptersDeleted` 消息。
+- 页面 `DesktopDataCleanupPage` 加 Android 的“章节”分组：动作行（`cleanup-read-chapters`，
+  没有已保存章节时禁用——Android 也是这个规则）、开关行（`cleanup-read-chapters-auto`），
+  确认框用 Android 的 `delete_read_chapters` / `delete_read_chapters_prompt`（`cleanup-read-chapters-dialog`、
+  `-confirm`、`-cancel`），零删除时用 Android 的 `no_chapters_deleted`。
+- 文案：新增 `cleanup.readChaptersDeleted`（base 与 `_zh-CN`）；其余标题/摘要/提示/开关摘要/空结果都取 Android 原句
+  （`AndroidStrings`）。
+
+验证：
+
+- `desktop-runtime` 的 `DesktopChapterCleanupTest` 5 个用例：话号乱序也能按顺序判定、当前章节与其后的章节保留、
+  另一个分支独立、当前章节不在列表里（或列表为空）算零已读、下载章节补进候选且不重复。
+- `desktop-app` 的 `DesktopReadChaptersCleanupTest` 2 个用例：写 4 章真记录进 `DesktopDownloadStore`，
+  历史停在第 3 章时只删第 1、2 章（重开 store 证明清单真的没了，第 3、4 章还在）；
+  历史 id 对不上时一章不删。
+- 真实窗口探针 `DesktopStorageProbe`：在数据清理页断言 `cleanup-read-chapters` 在没有保存章节时是禁用的、
+  自动开关默认关、点击后 `state.chaptersClearAuto` 变真且 `desktop_cleanup` 里存的是
+  `chapters_clear_auto=true`（截图 `storage-data-cleanup-chapters.png`：`章节 / 删除已读章节 /
+  自动删除已读章节 [开]`）。
+
+与 Android 不同的地方：Android 在删除后用数据库体积差报“释放了多少字节”，Windows 拿不到可靠的数字
+（页面块要等图片预算回收才真正落盘），所以只报删掉的章数；Android 的自动删除挂在 WorkManager/启动服务上，
+Windows 是会话打开时同步跑一次；章节表只取库里恢复的那份（离线优先），没有 Android 那种“表里没有就现拉远端章节列表”
+的回退，所以一部从没在桌面端打开过详情的作品不会被这一步判定。

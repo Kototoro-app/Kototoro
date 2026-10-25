@@ -2,6 +2,7 @@ package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
@@ -166,6 +167,17 @@ internal object DesktopStorageProbe {
                 onNodeWithTag("feed-clear-cancel").performClick()
                 idle()
                 onNodeWithTag("feed-clear-dialog").assertDoesNotExist()
+
+                // Android's chapter group: nothing is saved in this data root, so the action row is greyed out (there is
+                // nothing to delete) while the switch that arms the same sweep at every start still works and persists.
+                onNodeWithTag("cleanup-read-chapters").performScrollTo().assertIsNotEnabled()
+                check(!controller.state.value.chaptersClearAuto) { "the switch starts off, like Android" }
+                onNodeWithTag("cleanup-read-chapters-auto").performScrollTo().performClick()
+                idle()
+                check(controller.state.value.chaptersClearAuto) { "the switch turns on" }
+                val armed = session.storage.preferences.open("desktop_cleanup").snapshot()["chapters_clear_auto"]
+                check((armed as? SourcePreferenceValue.Toggle)?.value == true) { "stored: $armed" }
+                snapshot("data-cleanup-chapters")
 
                 onNodeWithTag("data-cleanup-back").performScrollTo().performClick()
                 idle()

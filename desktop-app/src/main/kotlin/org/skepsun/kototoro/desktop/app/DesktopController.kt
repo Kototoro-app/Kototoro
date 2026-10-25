@@ -43,6 +43,8 @@ import org.skepsun.kototoro.desktop.runtime.DesktopStorageUsage
 import org.skepsun.kototoro.desktop.runtime.DesktopTriState
 import org.skepsun.kototoro.desktop.runtime.DesktopNavigationSettings
 import org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings
+import org.skepsun.kototoro.desktop.runtime.desktopReadChapterIds
+import org.skepsun.kototoro.desktop.runtime.desktopReadSavedChapters
 import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
 import org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex
 import org.skepsun.kototoro.core.ui.chapters.ChapterBranchLocale
@@ -123,6 +125,8 @@ data class DesktopAppState(
     val jarPriorityOrder: String = "",
     /** Android's `show_broken_sources`: `@Broken` parsers stay installed, this decides if the lists offer them. */
     val showBrokenSources: Boolean = false,
+    /** Android's `chapters_clear_auto`: sweep the chapters the history already passed at every app start. */
+    val chaptersClearAuto: Boolean = false,
     /** Android's `extension_install_policies`, keyed by `UnifiedSourceKind` name; a kind nobody set asks every time. */
     val extensionInstallPolicies: Map<String, ExtensionInstallPolicy> = emptyMap(),
     /** Android's `ConfirmPackageInstall`: the row waiting for "install and enable" / "install only". */
@@ -312,6 +316,7 @@ class DesktopController(
         disabledSources = session.disabledSources(),
         jarPriorityOrder = session.jarPriorityOrder(),
         showBrokenSources = session.showBrokenSources(),
+        chaptersClearAuto = session.chaptersClearAuto(),
         extensionInstallPolicies = session.extensionInstallPolicies()))
     val state = mutableState.asStateFlow()
     private val continuous = DesktopScrollOperations(mutableState, session, scope, gate)
@@ -392,6 +397,9 @@ class DesktopController(
         // Only starts a loop when the saved destination has an interval; otherwise it returns immediately.
         startAutoBackup()
         startAutoRestore()
+        // Android's `chapters_clear_auto` runs the read-chapter sweep whenever the app is opened; the saved chapters are
+        // already restored at this point, so the first sweep sees them.
+        if (session.chaptersClearAuto()) runCleanupReadChapters(announceEmpty = false)
         // Sweeps unreachable page blocks at start and whenever the queue goes idle, so the metadata half of
         // the download storage does not grow for weeks just because nobody clicked "reclaim".
         scope.launch(DesktopDispatchers.background) {
@@ -689,6 +697,16 @@ class DesktopController(
     fun setJarPriorityOrder(names: List<String>) = action {
         session.setJarPriorityOrder(names)
         mutableState.update { it.copy(jarPriorityOrder = session.jarPriorityOrder()) }
+    }
+
+    /**
+     * Android's `chapters_clear_auto` switch: the sweep itself is [cleanupReadChapters], this only remembers whether the
+     * app should run it on every start. Turning it on does not sweep immediately — Android also waits for the next
+     * launch, and a user who wants it now has the action row right above.
+     */
+    fun setChaptersClearAuto(clear: Boolean) = action {
+        session.setChaptersClearAuto(clear)
+        mutableState.update { it.copy(chaptersClearAuto = session.chaptersClearAuto()) }
     }
 
     /**
@@ -2227,6 +2245,46 @@ class DesktopController(
             } else {
                 val message = desktopText("cleanup.pagesCleared", cleared)
                 it.copy(readerIndexCount = session.readerIndexCount(), message = message)
+            }
+        }
+    }
+
+    /**
+     * Android's `delete_read_chapters`: for every work with saved chapters, drop the ones the reading history has
+     * already passed. "Read" is history-relative (see [desktopReadChapterIds]), so a work whose history row is gone
+     * keeps everything, and the deletion removes the chapter records only — the page blobs they referenced turn into
+     * unreferenced metadata that the image budget reclaims on its next sweep, the same hand-off the download page's
+     * batch removal uses.
+     */
+    fun cleanupReadChapters() = runCleanupReadChapters(announceEmpty = true)
+
+    private fun runCleanupReadChapters(announceEmpty: Boolean) = action {
+        var removed = 0
+        val forgotten = mutableListOf<String>()
+        for ((contentId, records) in session.downloadStore.records.value.groupBy { it.contentId }) {
+            val currentChapterId = runCatching { session.library.progress(contentId)?.chapterId }.getOrNull()
+                ?: continue
+            val saved = runCatching { session.library.find(contentId)?.chapters }.getOrNull().orEmpty()
+            val read = desktopReadSavedChapters(saved, records.map { it.chapter }, currentChapterId)
+            for (chapter in read) {
+                val key = DesktopDownloadStore.key(contentId, chapter)
+                downloads.pause(key)
+                downloads.settle(key)
+                if (session.downloadStore.delete(contentId, chapter, session.storage.preferences)) {
+                    removed++
+                    forgotten += key
+                }
+            }
+        }
+        if (forgotten.isNotEmpty()) {
+            downloads.forget(forgotten)
+            mutableDownloadSelection.update { DesktopDownloadSelection.retain(it, downloads.state.value.map { row -> row.key }) }
+        }
+        mutableState.update {
+            when {
+                removed > 0 -> it.copy(message = desktopText("cleanup.readChaptersDeleted", removed))
+                announceEmpty -> it.copy(message = AndroidStrings["no_chapters_deleted"])
+                else -> it
             }
         }
     }

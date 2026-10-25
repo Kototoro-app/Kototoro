@@ -340,8 +340,12 @@ npm run docs:build
   （`DesktopScreen.DATA_CLEANUP`）：只列这台机器真能执行的项——“缓存”节的清除缩略图/图片缓存复用下载页的
   `clearImageCache()`（保留已保存章节引用的 blob）、清除页面缓存走新的 `DesktopReaderImages.clearIndex()`
   （只删 `desktop_reader_images` 记录，blob 交图片预算回收），“隐私”节的清除更新记录复用订阅页的确认弹窗
-  （§171）；本地漫画/小说/视频缓存、HTTP 缓存、搜索历史、Cookie/浏览器数据与整个数据库在 Windows 没有实现，
-  不出行，见计划 §172。
+  （§171）；“章节”节是 Android 的“删除已读章节/自动删除已读章节”：已读由历史决定（`desktop-runtime` 的
+  `desktopReadChapterIds`/`desktopChapterCandidates`/`desktopReadSavedChapters`，同分支、按话号取当前章节之前的
+  章节再与已保存章节取交集），删除走下载页批量移除那条序列（`pause`/`settle`/`store.delete`/`forget`，
+  blob 交图片预算回收，没有已保存章节时该行禁用），自动开关存 `desktop_cleanup` 的 `chapters_clear_auto`
+  （与 Android 同键，开时每次会话打开跑一次、零删除不弹提示）；本地漫画/小说/视频缓存、HTTP 缓存、搜索历史、
+  Cookie/浏览器数据与整个数据库在 Windows 没有实现，不出行，见计划 §172、§190。
   更多 → 存储与网络 → 代理（`proxy-settings-open`）对应 Android 的 `ProxySettingsScreen`：类型 DIRECT/HTTP/SOCKS、地址、端口、
   可选用户名密码与“测试连接”，值读写 Android 同名的 `proxy_type_2`/`proxy_address`/`proxy_port`/`proxy_login`/
   `proxy_password`（类型存枚举名），compat 客户端的 `ProxySelector`/`Authenticator` 每次请求才读当前值，
