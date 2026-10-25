@@ -49,6 +49,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.dictionary.DictionaryRule
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 
 @AndroidEntryPoint
@@ -121,15 +122,15 @@ private fun DictionaryRulesScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.dictionary_rules)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, modifier = Modifier.tvIconButtonRing()) {
                         Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 actions = {
-                    IconButton(onClick = onImport) {
+                    IconButton(onClick = onImport, modifier = Modifier.tvIconButtonRing()) {
                         Icon(Icons.Outlined.FileUpload, contentDescription = stringResource(R.string.import_button))
                     }
-                    IconButton(onClick = onExport) {
+                    IconButton(onClick = onExport, modifier = Modifier.tvIconButtonRing()) {
                         Icon(Icons.Outlined.FileDownload, contentDescription = stringResource(R.string.export))
                     }
                 },
@@ -190,7 +191,7 @@ private fun DictionaryRulesScreen(
                                 checked = rule.enabled,
                                 onCheckedChange = { onToggle(rule, it) },
                             )
-                            IconButton(onClick = { onDelete(rule) }) {
+                            IconButton(onClick = { onDelete(rule) }, modifier = Modifier.tvIconButtonRing()) {
                                 Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.delete))
                             }
                         }

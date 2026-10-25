@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
@@ -144,7 +145,7 @@ fun KototoroSelectionTopBar(
         TopBarControlSurface {
             IconButton(
                 onClick = onClearSelection,
-                modifier = Modifier.size(topBarControlHeight),
+                modifier = Modifier.size(topBarControlHeight).tvIconButtonRing(),
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
@@ -198,8 +199,8 @@ fun KototoroSelectionTopBar(
                             IconButton(
                                 onClick = { showOverflowMenu = true },
                                 modifier = Modifier
-                                    .focusRequester(overflowAnchorFocus)
-                                    .size(topBarControlHeight),
+                                        .focusRequester(overflowAnchorFocus)
+                                        .size(topBarControlHeight).tvIconButtonRing(),
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.MoreVert,
@@ -258,7 +259,7 @@ private fun SelectionActionIconButton(
 ) {
     IconButton(
         onClick = onClick,
-        modifier = Modifier.size(buttonSize),
+        modifier = Modifier.size(buttonSize).tvIconButtonRing(),
     ) {
         when (action) {
             SelectionAction.SELECT_ALL -> {

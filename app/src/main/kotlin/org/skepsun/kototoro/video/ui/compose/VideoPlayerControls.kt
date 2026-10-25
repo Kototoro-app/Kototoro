@@ -80,6 +80,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
@@ -457,9 +458,9 @@ private fun PlayerIconButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
-            .size(if (isTvPresentation) 48.dp else 36.dp)
-            .then(focusModifier)
-            .semantics { this.contentDescription = contentDescription },
+                .size(if (isTvPresentation) 48.dp else 36.dp)
+                .then(focusModifier)
+                .semantics { this.contentDescription = contentDescription }.tvIconButtonRing(),
         content = icon,
     )
 }

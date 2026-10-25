@@ -51,6 +51,7 @@ import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingColor
 import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingStyle
@@ -144,7 +145,7 @@ internal fun NovelTextSelectionActions(
                     Box {
                         IconButton(
                             onClick = { moreMenuExpanded = true },
-                            modifier = Modifier.size(36.dp),
+                            modifier = Modifier.size(36.dp).tvIconButtonRing(),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
@@ -427,7 +428,7 @@ private fun NovelThoughtCard(
                     )
                     IconButton(
                         onClick = onEdit,
-                        modifier = Modifier.size(22.dp),
+                        modifier = Modifier.size(22.dp).tvIconButtonRing(),
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.ic_edit),

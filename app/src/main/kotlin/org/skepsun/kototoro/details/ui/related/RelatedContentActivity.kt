@@ -10,10 +10,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.ui.Modifier
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.list.ui.compose.AppContentListRoute
 
 @AndroidEntryPoint
@@ -29,7 +31,7 @@ class RelatedContentActivity : BaseComposeActivity() {
                     TopAppBar(
                         title = { Text(getString(R.string.related_manga)) },
                         navigationIcon = {
-                            IconButton(onClick = ::finishAfterTransition) {
+                            IconButton(onClick = ::finishAfterTransition, modifier = Modifier.tvIconButtonRing()) {
                                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null)
                             }
                         },

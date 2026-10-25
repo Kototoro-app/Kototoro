@@ -49,6 +49,7 @@ import org.skepsun.kototoro.core.model.getSummary
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
@@ -144,7 +145,7 @@ fun SourcesCatalogScreen(
                         } else Text(stringResource(R.string.remote_sources))
                     },
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
+                        IconButton(onClick = onBack, modifier = Modifier.tvIconButtonRing()) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = stringResource(R.string.back),
@@ -152,7 +153,10 @@ fun SourcesCatalogScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = if (searchVisible) onSearchClose else onSearchClick) {
+                        IconButton(
+                            onClick = if (searchVisible) onSearchClose else onSearchClick,
+                            modifier = Modifier.tvIconButtonRing(),
+                        ) {
                             Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search))
                         }
                     },

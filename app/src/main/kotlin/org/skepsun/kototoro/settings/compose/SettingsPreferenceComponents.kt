@@ -78,6 +78,7 @@ import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvTextFieldReadOnlyState
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
@@ -409,7 +410,7 @@ fun SettingsSwitchPreference(
             }
         }
         if (onLockClick != null) {
-            IconButton(onClick = onLockClick) {
+            IconButton(onClick = onLockClick, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     painter = painterResource(if (locked) R.drawable.ic_lock else R.drawable.ic_lock_open),
                     contentDescription = stringResource(if (locked) R.string.source_lock_locked else R.string.source_lock_unlocked),
@@ -495,7 +496,7 @@ fun <T> SettingsChoicePreference(
         }
         Spacer(modifier = Modifier.width(8.dp))
         if (onSettingsClick != null) {
-            IconButton(onClick = onSettingsClick, enabled = enabled) {
+            IconButton(onClick = onSettingsClick, enabled = enabled, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     imageVector = settingsIcon,
                     contentDescription = settingsContentDescription,
@@ -504,7 +505,7 @@ fun <T> SettingsChoicePreference(
             }
         }
         if (onSecondarySettingsClick != null) {
-            IconButton(onClick = onSecondarySettingsClick, enabled = enabled) {
+            IconButton(onClick = onSecondarySettingsClick, enabled = enabled, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     imageVector = secondarySettingsIcon,
                     contentDescription = secondarySettingsContentDescription,
@@ -1036,7 +1037,10 @@ fun SettingsDialogTextPreference(
                         placeholder = placeholder?.let { { Text(text = it) } },
                         trailingIcon = if (suggestions.isNotEmpty() && !isTvPresentation) {
                             {
-                                IconButton(onClick = { isSuggestionsExpanded = !isSuggestionsExpanded }) {
+                                IconButton(
+                                    onClick = { isSuggestionsExpanded = !isSuggestionsExpanded },
+                                    modifier = Modifier.tvIconButtonRing(),
+                                ) {
                                     Icon(
                                         imageVector = if (isSuggestionsExpanded) {
                                             Icons.Filled.KeyboardArrowUp
@@ -1205,13 +1209,14 @@ fun SettingsReorderPreference(
                                 )
                                 IconButton(
                                     onClick = {
-                                        if (index > 0) {
-                                            pendingValue = pendingValue.toMutableList().apply {
-                                                add(index - 1, removeAt(index))
+                                            if (index > 0) {
+                                                pendingValue = pendingValue.toMutableList().apply {
+                                                    add(index - 1, removeAt(index))
+                                                }
                                             }
-                                        }
-                                    },
+                                        },
                                     enabled = index > 0,
+                                    modifier = Modifier.tvIconButtonRing(),
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.KeyboardArrowUp,
@@ -1220,13 +1225,14 @@ fun SettingsReorderPreference(
                                 }
                                 IconButton(
                                     onClick = {
-                                        if (index < pendingValue.lastIndex) {
-                                            pendingValue = pendingValue.toMutableList().apply {
-                                                add(index + 1, removeAt(index))
+                                            if (index < pendingValue.lastIndex) {
+                                                pendingValue = pendingValue.toMutableList().apply {
+                                                    add(index + 1, removeAt(index))
+                                                }
                                             }
-                                        }
-                                    },
+                                        },
                                     enabled = index < pendingValue.lastIndex,
+                                    modifier = Modifier.tvIconButtonRing(),
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.KeyboardArrowDown,

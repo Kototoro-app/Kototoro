@@ -29,6 +29,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.details.ui.pager.pages.compose.PagesScreen
@@ -73,7 +74,7 @@ class PageImagePickActivity : BaseComposeActivity() {
                             Text(pageDetails?.toContent()?.title ?: getString(R.string.pick_manga_page))
                         },
                         navigationIcon = {
-                            IconButton(onClick = ::finishAfterTransition) {
+                            IconButton(onClick = ::finishAfterTransition, modifier = Modifier.tvIconButtonRing()) {
                                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null)
                             }
                         },

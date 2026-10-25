@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.chaptersCount
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.migration.domain.MatchCandidate
 import org.skepsun.kototoro.migration.ui.migrationTitle
@@ -82,7 +83,11 @@ fun MigrationCandidatesSheet(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { search() }),
                 trailingIcon = {
-                    IconButton(onClick = { search() }, enabled = query.isNotBlank()) {
+                    IconButton(
+                        onClick = { search() },
+                        enabled = query.isNotBlank(),
+                        modifier = Modifier.tvIconButtonRing(),
+                    ) {
                         Icon(Icons.Default.Search, contentDescription = stringResource(R.string.migration_action_search))
                     }
                 },
@@ -154,7 +159,7 @@ internal fun MigrationCandidateRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        IconButton(onClick = { onOpen(content) }) {
+        IconButton(onClick = { onOpen(content) }, modifier = Modifier.tvIconButtonRing()) {
             Icon(painterResource(R.drawable.ic_info_outline), contentDescription = stringResource(R.string.details))
         }
     }

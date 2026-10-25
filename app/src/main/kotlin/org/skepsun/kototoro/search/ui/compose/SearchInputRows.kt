@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.ListMode
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
@@ -193,7 +194,7 @@ internal fun SearchInputRow(
             },
         )
         if (value.isNotEmpty()) {
-            IconButton(onClick = { onValueChange("") }) {
+            IconButton(onClick = { onValueChange("") }, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     imageVector = Icons.Default.Clear,
                     contentDescription = stringResource(R.string.clear),

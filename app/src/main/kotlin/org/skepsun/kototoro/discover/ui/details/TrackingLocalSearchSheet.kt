@@ -60,6 +60,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
@@ -116,7 +117,7 @@ fun TrackingLocalSearchSheet(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (currentQuery.isNotEmpty()) {
-                        IconButton(onClick = { currentQuery = "" }) {
+                        IconButton(onClick = { currentQuery = "" }, modifier = Modifier.tvIconButtonRing()) {
                             Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
                         }
                     }

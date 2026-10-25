@@ -53,6 +53,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.KototoroRangeSlider
@@ -706,7 +707,7 @@ private fun FilterSheetHeader(
                 fontWeight = FontWeight.Bold,
             )
             if (!isEmbedded) {
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = onDismiss, modifier = Modifier.tvIconButtonRing()) {
                     Icon(
                         imageVector = Icons.Outlined.Close,
                         contentDescription = null,
@@ -788,7 +789,7 @@ private fun SavedFiltersSection(
                         trailingIcon = {
                             IconButton(
                                 onClick = { menuPreset = preset },
-                                modifier = Modifier.size(18.dp),
+                                modifier = Modifier.size(18.dp).tvIconButtonRing(),
                             ) {
                                 Icon(
                                     imageVector = Icons.Outlined.MoreVert,
@@ -1122,7 +1123,7 @@ private fun TagGroupBlock(
             if (canExpand) {
                 IconButton(
                     onClick = { onOpenTagCatalog(group.title, excludeMode) },
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(18.dp).tvIconButtonRing(),
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.MoreVert,

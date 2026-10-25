@@ -48,6 +48,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
@@ -236,7 +237,7 @@ fun ContentStatsSheetContent(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            IconButton(onClick = onOpenDetails) {
+            IconButton(onClick = onOpenDetails, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     painter = painterResource(R.drawable.ic_open_external),
                     contentDescription = stringResource(R.string.details),

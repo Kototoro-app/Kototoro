@@ -5212,3 +5212,51 @@ Kotlin 不允许命名实参与位置实参混用，所以**带位置实参的�
    `clickable` 之前 + 不加焦点节点"的规则相反。本轮没动，也没有它的实际停点证据，先记下来。
 5. 其余遗留（`AlertDialog` 返回键随宿主不同、触摸模式下首键前无环、64 处 `.clickable` 无环清单、空态整块
    板、TV 空间切换入口）沿用第八十三轮的记录，本轮没有新证据。
+
+## 第八十五轮：遥控器停在图标按钮上同样什么也看不见——图标按钮焦点环（2026-10-25）
+
+### 症状
+
+第八十四轮把芯片和统计卡的焦点环补齐之后，同一类“隐形停点”还留在**图标按钮**上：`IconButton(` 家族
+（含 `FilledIconButton`/`FilledTonalIconButton`/`OutlinedIconButton` 与三种 toggle 变体）在 Material3 里也是一圈 `clickable`，
+遥控器停在上面时只有 stateLayer 那层泛光，沙发上看就是“什么都没选中”。全 app 190 处调用里 55 处已经手补过环，
+剩下 **135 处裸的，散在 64 个文件**：Downloads 页排头 9 处、章节选择条 6 处、Explore 来源页 6 处、设置偏好行 6 处。
+
+### 改动
+
+1. **新增 `Modifier.tvIconButtonRing()`**（`core-ui` 的 `adaptive/TvFocus.kt`，紧挨 `tvChipRing`）：
+   `tvFocusable(shape = CircleShape, addFocusTarget = false)`。圆形是 M3 图标按钮自己的形状；dock、选择栏
+   这类方形槽位由调用方传自己的圆角。和芯片一样它只观察那个停点，不新增焦点节点。
+2. **135 处调用迁移**：裸的 `IconButton(...)` 加上 `modifier = Modifier.tvIconButtonRing()`；
+   已经有 `modifier =` 的只把 `.tvIconButtonRing()` 续在值末尾，不再重排整个调用。
+3. 迁移脚本的排版规则（第一版踩过）：带 lambda 实参的多行调用如果整体重排，lambda 体还停在
+   原来的缩进上，看起来像“`onClick = {` 下面的代码浮出去了”；改成重排时把每个实参的续行
+   按实参自己右移的 4 格一起移，单行调用在加上新实参后仍然 ≤ 120 列就保持一行。
+
+### 设备验证（`kototoro_tv_api36`，1920×1080@320）
+
+| 界面 | 证据 | 结果 |
+| --- | --- | --- |
+| 设置页顶栏返回箭头 | `r85-2.png` | `[24,8][120,104]` 出现蓝色圆环 |
+| 设置页顶栏搜索 | `r85-3.png` | `[1800,8][1896,104]` 出现蓝色圆环 |
+| 阅读器顶栏返回 | `r85-11.png` | `[28,12][124,108]` 出现蓝色圆环 |
+| 阅读器顶栏溢出 ⋮ | `r85-10.png` | `[1796,12][1892,108]` 出现蓝色圆环 |
+| 阅读器页码条上一页 | `r85-13.png` | 96dp 圆按钮 `[604,982][700,1078]` 出现圆环，没有把胶囊条撑破 |
+| 收藏页排序/筛选图标按钮 | `r85-16.png` | `[176,216][268,312]` 出现圆环，紧贴 "On device" 芯片行但不压边 |
+
+六处都是“先 dump 拿到 `focused="true"` 的 bounds，再按同一路径截图”，`uiautomator` 的焦点框和截图上的
+蓝色环一一对应；`:app:assembleDebug` BUILD SUCCESSFUL（2m41s）。数量核对：190 处调用全部带环、裸的 0，
+新增行没有一行超过 120 列。
+
+### 遗留
+
+1. **默认圆形不一定配所有槽位**：`DetailsDock`、选择栏这类圆角方槽本来就该传
+   `RoundedCornerShape(12.dp)`（手补的 55 处里就是这么写的），批量迁移一律用默认圆形，视觉上要逐个看一遍。
+2. **135 处只上机验了 5 处**：Downloads 页选择栏（6 个图标一排）、章节选择条（6 个）、
+   Scrobbling 选择对话框（4 个）这类**紧排一行**的地方最容易看出环互相压边，还没截图。
+3. **对话框/弹层里的图标按钮**（`ScrobblingSelectorDialog`、`ImportDialog`、`ContentStatsDialog`）除了环，
+   还要看“弹层打开时焦点落在哪”——那是第八十三轮 `tvTakeInitialFocus` 的活儿，本轮没验。
+4. `SwipeableFilterChip`（自绘芯片）仍然把 `.tvFocusable(...)` 写在 `.clickable(...)` **之后**且
+   `addFocusTarget` 是默认 `true`，与“环在 `clickable` 之前 + 不加焦点节点”的规则相反；没有上机证据前不改。
+5. `Clear history` 那 4 个手拼单选行其实已经有 `tvFocusable(shape = ClearHistoryRowShape, addFocusTarget = false)`，
+   “4 个隐形停点”的旧结论要重新验。

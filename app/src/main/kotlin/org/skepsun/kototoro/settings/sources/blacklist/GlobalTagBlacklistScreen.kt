@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.displayName
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
 import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
@@ -92,7 +93,7 @@ fun GlobalTagBlacklistScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.blacklisted_tags)) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
+                    IconButton(onClick = onNavigateUp, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.back),
@@ -133,10 +134,13 @@ fun GlobalTagBlacklistScreen(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
-                        IconButton(onClick = {
-                            queryValue = TextFieldValue("")
-                            onQueryChange("")
-                        }) {
+                        IconButton(
+                            onClick = {
+                                queryValue = TextFieldValue("")
+                                onQueryChange("")
+                            },
+                            modifier = Modifier.tvIconButtonRing(),
+                        ) {
                             Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                         }
                     }

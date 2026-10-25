@@ -65,6 +65,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
@@ -145,7 +146,7 @@ fun BookNotesDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.back),
@@ -186,10 +187,13 @@ fun BookNotesDetailScreen(
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         trailingIcon = {
-                            IconButton(onClick = {
-                                searchBarVisible = false
-                                onBookSearchQueryChange("")
-                            }) {
+                            IconButton(
+                                onClick = {
+                                    searchBarVisible = false
+                                    onBookSearchQueryChange("")
+                                },
+                                modifier = Modifier.tvIconButtonRing(),
+                            ) {
                                 Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
                             }
                         },
@@ -832,7 +836,7 @@ internal fun BookNoteCard(
             Box {
                 IconButton(
                     onClick = { menuExpanded = true },
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(24.dp).tvIconButtonRing(),
                 ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,

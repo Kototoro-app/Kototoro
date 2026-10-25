@@ -39,6 +39,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 
 /** Frames spent claiming the lock overlay focus, which is the only focus target while locked. */
 private const val LOCK_FOCUS_FRAME_ATTEMPTS = 6
@@ -72,7 +73,10 @@ internal fun VideoScreenLockOverlay(
             } else {
                 IconButton(
                     onClick = onUnlockClick,
-                    modifier = Modifier.size(64.dp).background(Color.Black.copy(alpha = 0.58f), CircleShape),
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(Color.Black.copy(alpha = 0.58f), CircleShape)
+                        .tvIconButtonRing(),
                 ) {
                     Icon(
                         imageVector = Icons.Filled.LockOpen,

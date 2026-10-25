@@ -57,6 +57,7 @@ import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ReaderIntent
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.core.util.ext.toExportFileName
 import org.skepsun.kototoro.details.ui.DetailsViewModel
@@ -300,7 +301,7 @@ private fun NovelNotesTabContent(
                     searchVisible = !searchVisible
                     if (!searchVisible) searchQuery = ""
                 },
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(32.dp).tvIconButtonRing(),
             ) {
                 Icon(
                     imageVector = Icons.Default.Search,
@@ -313,7 +314,7 @@ private fun NovelNotesTabContent(
             if (notes.isNotEmpty()) {
                 IconButton(
                     onClick = { exportSheetVisible = true },
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(32.dp).tvIconButtonRing(),
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_share),
@@ -339,7 +340,7 @@ private fun NovelNotesTabContent(
                 shape = RoundedCornerShape(12.dp),
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
+                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.tvIconButtonRing()) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = stringResource(R.string.clear),

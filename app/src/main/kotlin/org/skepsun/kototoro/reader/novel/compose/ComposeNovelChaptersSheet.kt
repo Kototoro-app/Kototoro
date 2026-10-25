@@ -57,6 +57,7 @@ import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.prefs.rememberChapterRowActionPrefs
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
@@ -162,7 +163,7 @@ internal fun ComposeNovelChaptersSheet(
                         },
                     )
                     Box {
-                        IconButton(onClick = { moreMenuExpanded = true }) {
+                        IconButton(onClick = { moreMenuExpanded = true }, modifier = Modifier.tvIconButtonRing()) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
                                 contentDescription = stringResource(R.string.more),

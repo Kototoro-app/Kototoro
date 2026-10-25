@@ -82,6 +82,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource
 import org.skepsun.kototoro.core.model.getSummary
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
@@ -600,7 +601,7 @@ private fun UnifiedSourcePackageHeader(
         // so it does not double as a group toggle.
         IconButton(
             onClick = onToggleCollapse,
-            modifier = Modifier.size(40.dp),
+            modifier = Modifier.size(40.dp).tvIconButtonRing(),
         ) {
             Icon(
                 painter = painterResource(R.drawable.ic_expand_more),
@@ -747,7 +748,7 @@ private fun UnifiedSourceRow(
         Box {
             IconButton(
                 onClick = { menuExpanded = true },
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(40.dp).tvIconButtonRing(),
             ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_more_vert),

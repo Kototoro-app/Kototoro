@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.NavItem
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.theme.ArtworkSurfaceRole
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
@@ -329,7 +330,7 @@ private fun NavConfigPreferenceRow(
                 modifier = Modifier.size(22.dp),
             )
         }
-        IconButton(onClick = onRemove) {
+        IconButton(onClick = onRemove, modifier = Modifier.tvIconButtonRing()) {
             Icon(
                 imageVector = Icons.Default.Delete,
                 contentDescription = stringResource(R.string.remove),

@@ -41,6 +41,7 @@ import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.external.ExternalContentSource
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
@@ -357,7 +358,7 @@ fun ExploreSelectionTopBar(
         TopBarControlSurface {
             IconButton(
                 onClick = onClearSelection,
-                modifier = Modifier.size(topBarControlHeight),
+                modifier = Modifier.size(topBarControlHeight).tvIconButtonRing(),
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
@@ -399,7 +400,7 @@ fun ExploreSelectionTopBar(
                     if (canPin) {
                         IconButton(
                             onClick = onPin,
-                            modifier = Modifier.size(topBarControlHeight),
+                            modifier = Modifier.size(topBarControlHeight).tvIconButtonRing(),
                         ) {
                             Icon(
                                 painterResource(id = R.drawable.ic_pin),
@@ -411,7 +412,7 @@ fun ExploreSelectionTopBar(
                     if (canUnpin) {
                         IconButton(
                             onClick = onUnpin,
-                            modifier = Modifier.size(topBarControlHeight),
+                            modifier = Modifier.size(topBarControlHeight).tvIconButtonRing(),
                         ) {
                             Icon(
                                 painterResource(id = R.drawable.ic_unpin),
@@ -423,7 +424,7 @@ fun ExploreSelectionTopBar(
                     if (canDisable) {
                         IconButton(
                             onClick = onDisable,
-                            modifier = Modifier.size(topBarControlHeight),
+                            modifier = Modifier.size(topBarControlHeight).tvIconButtonRing(),
                         ) {
                             Icon(
                                 painterResource(id = R.drawable.ic_eye_off),
@@ -434,7 +435,7 @@ fun ExploreSelectionTopBar(
                     }
                     IconButton(
                         onClick = onToggleEmptyAvailability,
-                        modifier = Modifier.size(topBarControlHeight),
+                        modifier = Modifier.size(topBarControlHeight).tvIconButtonRing(),
                     ) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_source_empty),
@@ -457,8 +458,8 @@ fun ExploreSelectionTopBar(
                         IconButton(
                             onClick = { showOverflowMenu = true },
                             modifier = Modifier
-                                .focusRequester(overflowAnchorFocus)
-                                .size(topBarControlHeight),
+                                    .focusRequester(overflowAnchorFocus)
+                                    .size(topBarControlHeight).tvIconButtonRing(),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,

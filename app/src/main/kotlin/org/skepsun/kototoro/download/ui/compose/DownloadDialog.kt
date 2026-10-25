@@ -62,6 +62,7 @@ import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.prefs.DownloadFormat
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.core.util.ext.joinToStringWithLimit
@@ -682,7 +683,7 @@ private fun SelectableDropdownItem(
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
             } else {
-                IconButton(onClick = onDropdownClick) {
+                IconButton(onClick = onDropdownClick, modifier = Modifier.tvIconButtonRing()) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_expand_more),
                         contentDescription = null,

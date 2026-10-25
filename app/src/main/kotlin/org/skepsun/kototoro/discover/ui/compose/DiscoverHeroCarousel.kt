@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.discover.ui.compose
 
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
 
 import android.os.Build
@@ -387,7 +388,7 @@ fun DiscoverHeroCarousel(
                                 DiscoverHeroOverlaySurface {
                                     IconButton(
                                         onClick = onOpenSchedule,
-                                        modifier = Modifier.size(40.dp),
+                                        modifier = Modifier.size(40.dp).tvIconButtonRing(),
                                     ) {
                                     Icon(
                                         imageVector = Icons.Filled.DateRange,

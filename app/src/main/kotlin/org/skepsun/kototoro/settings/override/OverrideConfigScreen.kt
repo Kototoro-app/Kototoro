@@ -51,6 +51,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,7 +78,7 @@ internal fun OverrideConfigScreen(
             TopAppBar(
                 title = { Text(text = stringResource(R.string.change_cover)) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
+                    IconButton(onClick = onNavigateUp, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = stringResource(R.string.close),
@@ -166,6 +167,7 @@ internal fun OverrideConfigScreen(
                         IconButton(
                             enabled = isDataReady && !isLoading,
                             onClick = { name = "" },
+                            modifier = Modifier.tvIconButtonRing(),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Clear,

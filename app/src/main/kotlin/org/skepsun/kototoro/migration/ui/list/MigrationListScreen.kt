@@ -58,6 +58,7 @@ import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.migration.ui.migrationTitle
 import org.skepsun.kototoro.migration.ui.rememberCoverRequest
@@ -311,7 +312,10 @@ private fun DeltaBadge(delta: Int) {
 private fun RowMenu(item: MigrationItemState, onSkip: () -> Unit, onMigrateNow: () -> Unit, onOpenOriginal: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { expanded = true }) { Icon(Icons.Default.MoreVert, contentDescription = null) }
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.tvIconButtonRing(),
+        ) { Icon(Icons.Default.MoreVert, contentDescription = null) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             TvDropdownMenuItem(
                 text = { Text(stringResource(R.string.migration_action_skip)) },

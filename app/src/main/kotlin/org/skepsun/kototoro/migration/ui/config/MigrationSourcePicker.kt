@@ -61,6 +61,7 @@ import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.jsonsource.SourceTypeIdentifier
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.FastScrollTouchWidth
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
@@ -104,7 +105,7 @@ internal fun MigrationSourcePicker(
             Column(Modifier.heightIn(max = panelHeight * 0.58f).verticalScroll(rememberScrollState())) {
                 SheetDragHandle(Modifier.align(Alignment.CenterHorizontally))
                 Row(Modifier.padding(start = 4.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onDone) {
+                    IconButton(onClick = onDone, modifier = Modifier.tvIconButtonRing()) {
                         Icon(painterResource(R.drawable.ic_arrow_forward), stringResource(R.string.back),
                             Modifier.rotate(180f))
                     }

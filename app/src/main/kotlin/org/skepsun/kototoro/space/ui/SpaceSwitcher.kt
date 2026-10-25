@@ -95,6 +95,7 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
@@ -633,8 +634,8 @@ private fun SpaceSidekickCardContent(
                 onClick = onResume,
                 enabled = enabled,
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(48.dp),
+                        .align(Alignment.BottomEnd)
+                        .size(48.dp).tvIconButtonRing(),
             ) {
                 Surface(
                     modifier = Modifier.size(42.dp),
@@ -942,7 +943,7 @@ private fun SpaceRow(
             }
         }
         if (resumeItem?.canResume == true) {
-            IconButton(onClick = onResume, enabled = enabled) {
+            IconButton(onClick = onResume, enabled = enabled, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     painter = painterResource(presentation.resumeIconRes),
                     contentDescription = stringResource(

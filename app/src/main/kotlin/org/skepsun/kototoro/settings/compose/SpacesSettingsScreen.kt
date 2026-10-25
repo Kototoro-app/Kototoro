@@ -69,6 +69,7 @@ import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvTextFieldReadOnlyState
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -486,7 +487,10 @@ private fun SpaceEditorDialog(
                     },
                     trailingIcon = {
                         if (!draft.title.isNullOrEmpty()) {
-                            IconButton(onClick = { draft = draft.copy(title = "") }) {
+                            IconButton(
+                                onClick = { draft = draft.copy(title = "") },
+                                modifier = Modifier.tvIconButtonRing(),
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Clear,
                                     contentDescription = stringResource(android.R.string.cancel),

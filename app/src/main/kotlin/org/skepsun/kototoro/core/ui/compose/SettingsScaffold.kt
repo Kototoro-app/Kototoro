@@ -17,6 +17,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,7 +34,7 @@ fun SettingsScaffold(
                 title = { Text(text = title) },
                 navigationIcon = {
                     if (onNavigateUp != null) {
-                        IconButton(onClick = onNavigateUp) {
+                        IconButton(onClick = onNavigateUp, modifier = Modifier.tvIconButtonRing()) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Navigate back"

@@ -59,6 +59,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.withStyle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.local.data.LocalStorageRoot
@@ -97,7 +98,7 @@ internal fun ContentDirectoriesScreen(
                     ),
                     title = { Text(stringResource(R.string.local_content_directories)) },
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
+                        IconButton(onClick = onBack, modifier = Modifier.tvIconButtonRing()) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = stringResource(R.string.back),
@@ -342,7 +343,7 @@ private fun DirectoryConfigCard(
                         Box(modifier = Modifier.weight(1f))
                     }
                     if (!item.isAppPrivate) {
-                        IconButton(onClick = onRemove, modifier = Modifier.size(40.dp)) {
+                        IconButton(onClick = onRemove, modifier = Modifier.size(40.dp).tvIconButtonRing()) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = stringResource(R.string.remove),

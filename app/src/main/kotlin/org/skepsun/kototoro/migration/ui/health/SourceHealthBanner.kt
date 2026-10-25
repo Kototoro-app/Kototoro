@@ -22,6 +22,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 
 /** Floating, dismissible card telling the user some favourite sources look broken. */
 @Composable
@@ -46,7 +47,10 @@ fun SourceHealthBanner(
                     modifier = Modifier.weight(1f),
                 )
                 TvTextButton(onClick = onOpen) { Text(stringResource(R.string.migration_title)) }
-                IconButton(onClick = viewModel::dismiss) { Icon(Icons.Default.Close, contentDescription = null) }
+                IconButton(
+                    onClick = viewModel::dismiss,
+                    modifier = Modifier.tvIconButtonRing(),
+                ) { Icon(Icons.Default.Close, contentDescription = null) }
             }
         }
     }

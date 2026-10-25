@@ -57,6 +57,7 @@ import org.skepsun.kototoro.bookmarks.domain.Bookmark
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTakeInitialFocus
 import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -225,7 +226,7 @@ internal fun ComposeNovelNotesContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = onDismiss, modifier = Modifier.tvIconButtonRing()) {
                     Icon(imageVector = Icons.Default.Close, contentDescription = stringResource(R.string.close))
                 }
             }
@@ -549,13 +550,13 @@ private fun NovelMarkingCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                     )
                 }
-                IconButton(onClick = onEdit) {
+                IconButton(onClick = onEdit, modifier = Modifier.tvIconButtonRing()) {
                     Icon(
                         painter = painterResource(R.drawable.ic_edit),
                         contentDescription = stringResource(R.string.novel_marking_edit_note),
                     )
                 }
-                IconButton(onClick = onDelete) {
+                IconButton(onClick = onDelete, modifier = Modifier.tvIconButtonRing()) {
                     Icon(
                         painter = painterResource(R.drawable.ic_delete),
                         contentDescription = stringResource(R.string.novel_marking_delete),
@@ -703,7 +704,7 @@ internal fun NovelNoteDetailSheet(
                     text = stringResource(R.string.novel_marking_detail_title),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 )
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = onDismiss, modifier = Modifier.tvIconButtonRing()) {
                     Icon(imageVector = Icons.Default.Close, contentDescription = stringResource(R.string.close))
                 }
             }

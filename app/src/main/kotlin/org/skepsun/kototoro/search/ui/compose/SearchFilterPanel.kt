@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
@@ -180,7 +181,7 @@ internal fun SearchFilterPanel(
                     Text(stringResource(R.string.clear))
                 }
                 Box {
-                    IconButton(onClick = { headerMenuExpanded = true }) {
+                    IconButton(onClick = { headerMenuExpanded = true }, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
                             contentDescription = stringResource(R.string.more),
@@ -221,7 +222,7 @@ internal fun SearchFilterPanel(
                     }
                 }
                 if (onClose != null) {
-                    IconButton(onClick = onClose) {
+                    IconButton(onClick = onClose, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = stringResource(R.string.close),
@@ -404,7 +405,7 @@ internal fun SearchFilterPanel(
                                     trailingIcon = {
                                         IconButton(
                                             onClick = { savedFilterMenuPreset = preset },
-                                            modifier = Modifier.size(18.dp),
+                                            modifier = Modifier.size(18.dp).tvIconButtonRing(),
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.MoreVert,

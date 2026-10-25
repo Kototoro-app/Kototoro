@@ -30,6 +30,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.filter.ui.FilterCoordinator
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.tracking.discovery.domain.isTrackingDateDrivenCategory
@@ -65,18 +66,21 @@ class DiscoverCategoryActivity : BaseComposeActivity(), FilterCoordinator.Owner 
                     TopAppBar(
                         title = { Text(if (titleRes != 0) getString(titleRes) else getString(R.string.app_name)) },
                         navigationIcon = {
-                            IconButton(onClick = ::finishAfterTransition) {
+                            IconButton(onClick = ::finishAfterTransition, modifier = Modifier.tvIconButtonRing()) {
                                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null)
                             }
                         },
                         actions = {
                             if (sortOptions.size > 1) {
-                                IconButton(onClick = { showSort = true }) {
+                                IconButton(onClick = { showSort = true }, modifier = Modifier.tvIconButtonRing()) {
                                     Icon(Icons.Outlined.Sort, contentDescription = getString(R.string.sort_by))
                                 }
                             }
                             if (!isTrackingDateDrivenCategory(categoryId)) {
-                                IconButton(onClick = { router.showFilterSheet() }) {
+                                IconButton(
+                                    onClick = { router.showFilterSheet() },
+                                    modifier = Modifier.tvIconButtonRing(),
+                                ) {
                                     Icon(Icons.Outlined.FilterList, contentDescription = getString(R.string.filter))
                                 }
                             }

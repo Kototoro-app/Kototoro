@@ -27,6 +27,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.DropdownMenu
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
 import androidx.compose.material3.Icon
@@ -526,7 +527,7 @@ private fun TagGroupDropdown(
     Box {
         IconButton(
             onClick = { expanded = !expanded },
-            modifier = Modifier.size(32.dp),
+            modifier = Modifier.size(32.dp).tvIconButtonRing(),
         ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,

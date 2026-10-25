@@ -7,6 +7,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -617,7 +618,10 @@ private fun CategoryRow(
                 }
             }
             if (actionsEnabled) {
-                IconButton(onClick = onEdit) { Icon(painterResource(R.drawable.ic_edit), stringResource(R.string.edit)) }
+                IconButton(
+                    onClick = onEdit,
+                    modifier = Modifier.tvIconButtonRing(),
+                ) { Icon(painterResource(R.drawable.ic_edit), stringResource(R.string.edit)) }
                 Box(
                     modifier = Modifier
                         .size(48.dp)
@@ -655,7 +659,7 @@ private fun AllCategoriesRow(
             )
         }
         if (item.isActionsEnabled) {
-            IconButton(onClick = onVisibilityChanged) {
+            IconButton(onClick = onVisibilityChanged, modifier = Modifier.tvIconButtonRing()) {
                 Icon(painterResource(if (item.isVisible) R.drawable.ic_eye else R.drawable.ic_eye_off), stringResource(R.string.show_all))
             }
         }

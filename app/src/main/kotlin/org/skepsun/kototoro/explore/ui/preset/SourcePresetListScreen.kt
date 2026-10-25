@@ -36,6 +36,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.toLocale
@@ -112,8 +113,14 @@ private fun PresetRow(
             Text(preset.title)
             Text(if (languages.isEmpty()) count else "${languages.joinToString()} — $count")
         }
-        IconButton(onClick = { onEdit(preset) }) { Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit)) }
-        IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete)) }
+        IconButton(
+            onClick = { onEdit(preset) },
+            modifier = Modifier.tvIconButtonRing(),
+        ) { Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit)) }
+        IconButton(
+            onClick = onDelete,
+            modifier = Modifier.tvIconButtonRing(),
+        ) { Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete)) }
     }
 }
 

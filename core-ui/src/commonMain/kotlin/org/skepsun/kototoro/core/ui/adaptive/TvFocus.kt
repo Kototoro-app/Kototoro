@@ -5,6 +5,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -163,6 +164,22 @@ fun Modifier.tvTabRing(): Modifier = tvFocusable(
  */
 @Composable
 fun Modifier.tvChipRing(shape: Shape = RoundedCornerShape(8.dp)): Modifier = tvFocusable(
+    shape = shape,
+    addFocusTarget = false,
+)
+
+/**
+ * Outline ring for an icon button: `IconButton`, `FilledIconButton`, `FilledTonalIconButton`,
+ * `OutlinedIconButton` and their toggle variants.
+ *
+ * The same dead end as a chip, with less to look at: the button is clickable, so the remote stops on
+ * it, and Material3 answers with a state layer that is invisible at sofa distance. The button
+ * applies its modifier before the internal `clickable`, so this observes exactly that stop and adds
+ * no second one. The default circle matches the M3 icon button shape; a dock or a selection bar
+ * passes its own rounded square. No-op off TV.
+ */
+@Composable
+fun Modifier.tvIconButtonRing(shape: Shape = CircleShape): Modifier = tvFocusable(
     shape = shape,
     addFocusTarget = false,
 )

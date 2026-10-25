@@ -49,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
@@ -102,12 +103,12 @@ private fun DictionaryScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.dictionary_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, modifier = Modifier.tvIconButtonRing()) {
                         Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 actions = {
-                    IconButton(onClick = onManageRules) {
+                    IconButton(onClick = onManageRules, modifier = Modifier.tvIconButtonRing()) {
                         Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.dictionary_manage_rules))
                     }
                 },

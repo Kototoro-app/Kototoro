@@ -82,6 +82,7 @@ import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
@@ -845,7 +846,7 @@ private fun SearchResultsSection(
                 )
             }
             if (section.titleResId == R.string.favourites) {
-                IconButton(onClick = onSectionClick) {
+                IconButton(onClick = onSectionClick, modifier = Modifier.tvIconButtonRing()) {
                     Icon(
                         painterResource(R.drawable.ic_arrow_forward),
                         contentDescription = stringResource(R.string.favourites),

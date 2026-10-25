@@ -35,6 +35,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 
 /**
  * Full Compose crash log list screen replacing:
@@ -54,7 +55,7 @@ fun CrashLogScreen(
             TopAppBar(
                 title = { Text(text = "Crash Logs") }, // TODO: use stringResource when ResourceManager is wired
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
+                    IconButton(onClick = onNavigateUp, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Navigate back",
@@ -63,7 +64,7 @@ fun CrashLogScreen(
                 },
                 actions = {
                     if (logFiles.isNotEmpty()) {
-                        IconButton(onClick = onClearAll) {
+                        IconButton(onClick = onClearAll, modifier = Modifier.tvIconButtonRing()) {
                             Icon(
                                 imageVector = Icons.Outlined.Delete,
                                 contentDescription = "Clear all crash logs",

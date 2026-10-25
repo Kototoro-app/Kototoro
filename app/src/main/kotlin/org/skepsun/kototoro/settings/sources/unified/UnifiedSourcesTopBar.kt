@@ -61,6 +61,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import androidx.compose.ui.graphics.Color
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import androidx.compose.ui.res.stringResource
@@ -93,7 +94,7 @@ private fun ToolbarSearchIconButton(
     Box(contentAlignment = Alignment.TopEnd) {
         IconButton(
             onClick = onClick,
-            modifier = Modifier.size(40.dp),
+            modifier = Modifier.size(40.dp).tvIconButtonRing(),
         ) {
             Icon(
                 Icons.Filled.Search,
@@ -127,7 +128,7 @@ private fun ToolbarFilterIconButton(
     Box(contentAlignment = Alignment.TopEnd) {
         IconButton(
             onClick = onClick,
-            modifier = Modifier.size(40.dp),
+            modifier = Modifier.size(40.dp).tvIconButtonRing(),
         ) {
             Icon(
                 painter = rememberSafePainter(iconRes),
@@ -260,7 +261,7 @@ fun UnifiedSourcesActionCapsule(
                 IconButton(
                     onClick = { menuExpanded = true },
                     enabled = hasMenu,
-                    modifier = Modifier.size(tokens.topBarButtonSize - 4.dp),
+                    modifier = Modifier.size(tokens.topBarButtonSize - 4.dp).tvIconButtonRing(),
                 ) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,

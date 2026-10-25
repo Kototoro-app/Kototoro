@@ -18,6 +18,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 
 @Composable
 fun ChapterSelectionBar(
@@ -30,7 +31,7 @@ fun ChapterSelectionBar(
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = state.onClearSelection) {
+        IconButton(onClick = state.onClearSelection, modifier = Modifier.tvIconButtonRing()) {
             Icon(
                 imageVector = Icons.Filled.Close,
                 contentDescription = stringResource(R.string.close),
@@ -42,7 +43,7 @@ fun ChapterSelectionBar(
             modifier = Modifier.weight(1f),
         )
         if (state.canSelectAll) {
-            IconButton(onClick = state.onSelectAll) {
+            IconButton(onClick = state.onSelectAll, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     painter = painterResource(R.drawable.ic_select_all),
                     contentDescription = stringResource(R.string.select_all),
@@ -50,7 +51,7 @@ fun ChapterSelectionBar(
             }
         }
         if (state.canDownload) {
-            IconButton(onClick = state.onDownload) {
+            IconButton(onClick = state.onDownload, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     painter = painterResource(R.drawable.ic_download),
                     contentDescription = stringResource(R.string.download),
@@ -58,7 +59,7 @@ fun ChapterSelectionBar(
             }
         }
         if (state.canDelete) {
-            IconButton(onClick = state.onDelete) {
+            IconButton(onClick = state.onDelete, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     imageVector = Icons.Filled.Delete,
                     contentDescription = stringResource(R.string.delete),
@@ -66,7 +67,7 @@ fun ChapterSelectionBar(
             }
         }
         if (state.canBookmark) {
-            IconButton(onClick = state.onBookmark) {
+            IconButton(onClick = state.onBookmark, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     painter = painterResource(R.drawable.ic_bookmark),
                     contentDescription = stringResource(
@@ -76,7 +77,7 @@ fun ChapterSelectionBar(
             }
         }
         if (state.canMarkCurrent) {
-            IconButton(onClick = state.onMarkCurrent) {
+            IconButton(onClick = state.onMarkCurrent, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     imageVector = Icons.Filled.PlayArrow,
                     contentDescription = stringResource(R.string.mark_as_current),

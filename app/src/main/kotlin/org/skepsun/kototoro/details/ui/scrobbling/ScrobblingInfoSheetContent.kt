@@ -64,6 +64,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
@@ -220,13 +221,13 @@ private fun ScrobblingTopBar(
     TopAppBar(
         title = { Text(stringResource(R.string.tracking)) },
         navigationIcon = {
-            IconButton(onClick = onDismissRequest) {
+            IconButton(onClick = onDismissRequest, modifier = Modifier.tvIconButtonRing()) {
                 Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
             }
         },
         actions = {
             Box {
-                IconButton(onClick = { isMenuExpanded = true }) {
+                IconButton(onClick = { isMenuExpanded = true }, modifier = Modifier.tvIconButtonRing()) {
                     Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.open_in_browser))
                 }
                 DropdownMenu(
@@ -287,7 +288,7 @@ private fun ScrobblingHeader(
             )
             IconButton(
                 onClick = onOpenCover,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().tvIconButtonRing(),
             ) { }
             Box(
                 modifier = Modifier

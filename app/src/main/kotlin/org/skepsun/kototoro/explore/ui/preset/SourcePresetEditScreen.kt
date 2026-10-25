@@ -33,6 +33,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -52,8 +53,15 @@ fun SourcePresetEditScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.edit_preset)) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
-                actions = { IconButton(enabled = !isLoading && title.isNotBlank(), onClick = onSave) { Icon(Icons.Default.Check, null) } },
+                navigationIcon = { IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.tvIconButtonRing(),
+                ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
+                actions = { IconButton(
+                    enabled = !isLoading && title.isNotBlank(),
+                    onClick = onSave,
+                    modifier = Modifier.tvIconButtonRing(),
+                ) { Icon(Icons.Default.Check, null) } },
             )
         },
     ) { padding ->

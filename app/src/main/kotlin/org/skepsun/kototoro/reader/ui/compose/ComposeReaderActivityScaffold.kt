@@ -116,6 +116,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_BOOKMARKS
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_PAGES
@@ -869,7 +870,7 @@ internal fun ComposeReaderActivityScaffold(
             ) {
                 IconButton(
                     onClick = callbacks.autoScroll.onOpen,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().tvIconButtonRing(),
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_timer_run),

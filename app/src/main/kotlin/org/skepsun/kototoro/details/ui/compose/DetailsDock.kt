@@ -64,6 +64,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -865,7 +866,7 @@ private fun PageGridSizeControlsRow(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f),
             ),
         ) {
-            IconButton(onClick = onBackClick) {
+            IconButton(onClick = onBackClick, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.back),
@@ -973,8 +974,8 @@ private fun ExpandedPaneUtilityDock(
                 onClick = onSearchClick,
                 enabled = isSearchEnabled,
                 modifier = Modifier
-                    .width(42.dp)
-                    .height(42.dp),
+                        .width(42.dp)
+                        .height(42.dp).tvIconButtonRing(),
             ) {
                 Icon(
                     imageVector = Icons.Default.Search,
@@ -990,8 +991,8 @@ private fun ExpandedPaneUtilityDock(
                 IconButton(
                     onClick = { expanded = true },
                     modifier = Modifier
-                        .width(42.dp)
-                        .height(42.dp),
+                            .width(42.dp)
+                            .height(42.dp).tvIconButtonRing(),
                 ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
