@@ -89,6 +89,15 @@ class ReaderSheetActions {
      * into a no-op.
      */
     var isExpanded: () -> Boolean = { true }
+
+    /**
+     * Puts the ring on the first row of the detail page and reports whether that row took it.
+     *
+     * Revealing the sheet alone is not enough for a remote: the header is what held the ring, and it
+     * stops being focusable the moment the sheet passes its peek, so the press that expanded the
+     * sheet would leave nothing focused at all. The row therefore has to be asked for by name.
+     */
+    var focusDetailRow: () -> Boolean = { false }
 }
 
 val LocalReaderSheetActions = staticCompositionLocalOf { ReaderSheetActions() }

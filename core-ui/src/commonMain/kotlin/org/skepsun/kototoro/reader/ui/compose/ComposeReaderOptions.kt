@@ -33,16 +33,20 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -62,6 +66,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.prefs.ReaderBackground
@@ -70,6 +75,7 @@ import org.skepsun.kototoro.core.prefs.ReaderOcrMode
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvHorizontalEdgeGuard
+import org.skepsun.kototoro.core.ui.adaptive.tvVerticalEdgeGuard
 import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
 import org.skepsun.kototoro.reader.ui.colorfilter.ReaderColorCorrectionControls
@@ -88,6 +94,7 @@ import org.skepsun.kototoro.reader.ui.compose.design.ReaderQuickActionGrid
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderSliderRow
 import org.skepsun.kototoro.reader.ui.compose.design.currentReaderPanelColors
 import org.skepsun.kototoro.reader.ui.compose.panel.LocalReaderSheetActions
+import org.skepsun.kototoro.reader.ui.compose.panel.LocalTvFocusRequest
 import org.skepsun.kototoro.reader.ui.config.ImageServerOptions
 
 @Immutable
@@ -254,6 +261,9 @@ data class ReaderOptionsStrings(
     }
 }
 
+/** How many frames a reveal waits for the detail row to be placed before leaving the ring behind. */
+private const val PEEK_REVEAL_FRAMES = 8
+
 /** One page of the detail tabs. */
 @Immutable
 class ReaderOptionsTab(val label: String, val content: @Composable () -> Unit)
@@ -278,6 +288,25 @@ fun ReaderMangaQuickLayer(
             .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
     ) {
         val modes = features.modes
+        val isTv = LocalUiPresentationConfig.current.isTv
+        val sheetActions = LocalReaderSheetActions.current
+        // The peek ends right below this grid, so DOWN from here has nowhere visible left to go: the
+        // detail page underneath is clipped at the screen edge. Reveal the sheet on that press and hand
+        // the page its ring, because the header that held the ring stops being focusable on the way up.
+        var revealPending by remember { mutableStateOf(false) }
+        LaunchedEffect(revealPending) {
+            if (!revealPending) return@LaunchedEffect
+            sheetActions.expand()
+            repeat(PEEK_REVEAL_FRAMES) {
+                withFrameNanos { }
+                if (sheetActions.focusDetailRow()) {
+                    revealPending = false
+                    return@LaunchedEffect
+                }
+                delay(60)
+            }
+            revealPending = false
+        }
         ReaderIconChoiceBar(
             options = modes.map(strings::mode),
             selectedIndex = modes.indexOf(state.mode),
@@ -289,15 +318,35 @@ fun ReaderMangaQuickLayer(
                     modifier = Modifier.size(22.dp),
                 )
             },
-            modifier = Modifier.testTag("reader-options-modes"),
+            // This is the top row of the options sheet's peek: the detail page sits under it, clipped
+            // to a sliver at the screen edge while the sheet is collapsed, so an UP press from here
+            // moves the ring onto a control nobody can see and the next press finds no candidate at
+            // all. Keep the press on the row that is drawn.
+            modifier = Modifier
+                .testTag("reader-options-modes")
+                .tvVerticalEdgeGuard(blockUp = true),
         )
-        ReaderQuickActionGrid(
-            actions = actions,
-            onClick = onAction,
-            icon = actionIcon,
-            label = actionLabel,
-            firstItemFocusRequester = firstActionFocusRequester,
-        )
+        Box(
+            modifier = if (!isTv) {
+                Modifier
+            } else {
+                Modifier.onPreviewKeyEvent { event ->
+                    val leavingPeek = event.type == KeyEventType.KeyDown &&
+                        event.key == Key.DirectionDown &&
+                        !sheetActions.isExpanded()
+                    if (leavingPeek) revealPending = true
+                    leavingPeek
+                }
+            },
+        ) {
+            ReaderQuickActionGrid(
+                actions = actions,
+                onClick = onAction,
+                icon = actionIcon,
+                label = actionLabel,
+                firstItemFocusRequester = firstActionFocusRequester,
+            )
+        }
     }
 }
 
@@ -315,9 +364,10 @@ fun ReaderOptionsDetailTabs(
     // The provider leaves this empty off TV, where the drag handle is the way up.
     val sheetActions = LocalReaderSheetActions.current
     val isTv = LocalUiPresentationConfig.current.isTv
-    // At the peek the tab pages sit below the fold: the first row of the selected page is clipped at
-    // the screen edge but still focusable, so DOWN would move the ring off screen. Pull the sheet up
-    // first and let the next press travel into the page.
+    // At the peek this row sits below the fold and is clipped to a sliver at the screen edge, so a
+    // remote that steps into it lights nothing up. Two ways out: a press that arrives while the row is
+    // already focused reveals the sheet, and the reveal the host starts from the quick layer asks this
+    // row for the ring by name, because the header that held it stops being focusable on the way up.
     val expandOnPeekDown = if (isTv) {
         Modifier.onPreviewKeyEvent { event ->
             val peeking = event.type == KeyEventType.KeyDown &&
@@ -328,6 +378,13 @@ fun ReaderOptionsDetailTabs(
         }
     } else {
         Modifier
+    }
+    val tabBarFocusRequester = remember { FocusRequester() }
+    val requestFocus = LocalTvFocusRequest.current
+    SideEffect {
+        sheetActions.focusDetailRow = {
+            isTv && requestFocus(tabBarFocusRequester)
+        }
     }
     val settingsButton: (@Composable () -> Unit)? = if (onOpenSettings == null) null else {
         {
@@ -351,7 +408,9 @@ fun ReaderOptionsDetailTabs(
                 scope.launch { pagerState.animateScrollToPage(it) }
                 sheetActions.expand()
             },
-            modifier = dragModifier.then(expandOnPeekDown),
+            modifier = dragModifier
+                .then(expandOnPeekDown)
+                .focusRequester(tabBarFocusRequester),
             trailing = settingsButton,
         )
         HorizontalPager(
