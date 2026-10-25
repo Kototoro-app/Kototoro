@@ -5673,3 +5673,108 @@ DOWN / ENTER / 焦点离开都会把 `editing` 清掉，只有 BACK 不会——
    （下载画质、自定义空间名称）同时受益；自定义空间名称那条没有单独在设备上复验。
 3. 第八十九轮遗留仍在：对话框宽度仍是手机尺寸；重命名/备注/截图命名等其它文本对话框没有"清空"；
    手机端普通文本字段也没有清空入口。
+
+## 第九十一轮：再进编辑态以后，对话框不再上移（2026-10-25）
+
+### 起念
+
+第九十轮的"遗留 1"：走过一次 BACK 循环（键盘被关掉）再进编辑态，对话框不再上移，按钮行落到键盘
+后面；而同一个对话框第一次进编辑态是会上移的（`r90-13.png`，字段 `[568,456]` → `[568,216]`）。
+同一段代码、同一个手势，结果却取决于此前发生过什么——这不是布局参数的问题，是"谁在移动这个东西"
+的问题。这一轮把它查到底。
+
+### 两条平台路先被排除（探针证据）
+
+先假设是对话框窗口的 IME 处理没生效，试了两条"正统"的路，都被设备事实否掉：
+
+| 尝试 | 期望 | 实测 |
+| --- | --- | --- |
+| 给对话框窗口 `setSoftInputMode(SOFT_INPUT_ADJUST_RESIZE)` | 窗口被键盘顶小，居中盒子跟着上移 | 6 次里 1 次"恰好"上移，其余 5 次纹丝不动；`dumpsys window windows` 里 `softInputMode` 确实改了 |
+| `decorFitsSystemWindows = false` + `Box(imePadding())` | Compose 读到 IME inset 自己让位 | 对话框窗口里 `WindowInsets.ime.getBottom()` **恒为 0**（`TVIME inset=0`），盒子 `TVIME box=1120 x 1080` 也没被窗口缩小 |
+
+第二轮把对话框换成 `BasicAlertDialog` + `SOFT_INPUT_ADJUST_RESIZE`、`decorFitsSystemWindows=false` 的
+全屏窗口，仍然量到 `box=1120 x 1080`、`inset=0`。结论：**对话框窗口既不折叠、也不上报 IME inset**，
+`adjust=resize` 与 `imePadding()` 在这条路上都是死码。顺手确认了一件有用的事：全屏宿主下窗口高度
+就是 1080 px，卡片贴顶有位置可用。
+
+那 6 次里的那 1 次上移，是窗口首次创建时的布局竞态，不是可控行为——所以修法不能依赖它。
+
+### 修法：把"要不要上移"交给编辑状态，不再问窗口
+
+对话框内容已经在第九十轮统一成了"一份槽位、两个宿主"，于是只要宿主知道"字段正在编辑"，就能自己
+决定卡片停在哪：
+
+1. `TvTextFieldReadOnlyState` 多暴露一个 `isEditing`（`TvFocus.kt`）。它和既有的 `isReadOnly` 同源
+   （同一个 `editing` 状态），本来就是键盘开关的真身，只是之前没有花名。
+2. `SettingsAlertDialog` 加参数 `bodyEditing: Boolean = false`；`SettingsDialogTextPreference` 把
+   `readOnlyState.isEditing` 传进去（这一行也是唯一的调用点）。
+3. TV 宿主在编辑开始后把卡片**贴顶**（`Alignment.TopCenter` + 32 dp），并且**粘住**：键盘收起、
+   BACK 关掉键盘、焦点离开字段，卡片都不再滑回屏幕中央（`dockedToTop` 只置真不清）。
+
+```kotlin
+var dockedToTop by remember { mutableStateOf(false) }
+if (bodyEditing) {
+    dockedToTop = true
+}
+Box(
+    modifier = Modifier.fillMaxSize().padding(top = if (dockedToTop) 32.dp else 0.dp),
+    contentAlignment = if (dockedToTop) Alignment.TopCenter else Alignment.Center,
+) { TvDialogCard(...) }
+```
+
+粘性是有意的：换一次键盘就上下滑一次，比"一开始就贴顶"更晃眼。重开对话框时这层 `remember` 会跟着
+对话框一起销毁，所以下一次打开仍是居中。
+
+同时把 `TvDialogKeyboardHandling()` 从"申请 resize"改成"申请**别动**"
+（`SOFT_INPUT_ADJUST_NOTHING or SOFT_INPUT_STATE_UNCHANGED`）：卡片的位置现在由 Compose 负责，
+窗口再自己平移或缩放就会变成移动两次。
+
+手机端走另一条分支（原样 `AlertDialog`），`bodyEditing` 的默认值 `false` 让它完全不受影响。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+同一部机器、同一个对话框（Downloads → Default download video quality），全程遥控器操作：
+
+| 步骤 | 字段 bounds | `mInputShown` | 证据 |
+| --- | --- | --- | --- |
+| 打开对话框（居中） | `[552,472][1368,584]` | false | `r91-3.png` |
+| CENTER 进编辑 | `[552,216][1368,328]` | true | `r91-4.png`，卡片贴顶，Cancel / Clear / OK 全在键盘之上 |
+| BACK 关掉键盘 | `[552,216][1368,328]` | false | `r91-5.png`，卡片留在顶部，按钮仍可见 |
+| 再 CENTER（第九十轮的路径） | `[552,216][1368,328]` | true | `r91-6.png`，键盘回来，卡片不动 |
+| 打字 | `'1080p, 720p, 480p'` → `'1080p, 720p, 480pX'` | true | dump |
+| BACK → DOWN | 焦点到 `OK` `[1252,376][1368,472]` | false | `OK` 在键盘位之上（旧版这里是 632～728） |
+| CENTER 提交 | 对话框关闭 | — | 落盘 `downloads_video_quality=1080p, 720p, 480pX` |
+| 重开对话框 | `[552,472][1368,584]` | false | 回到居中（贴顶是这次打开内部的状态） |
+| Clear → OK | — | — | 落盘回落到默认 `1080p, 720p, 480p`（空串归一化） |
+
+三次"进编辑态"（首次、BACK 之后、清空之后再进）量到的字段位置完全一致，都是 `y=216`；改前同一台
+机器 6 次里 5 次是 `y=472`（即键盘压在卡片上）。第九十轮的"遗留 1"到此消失。
+
+### 顺带核对：不是本轮引入的两个观感问题
+
+对话框背后的设置页**没有压暗**、行的高亮环还留在对话框外面、卡片因为半透明能透出背后的行文字——
+这三样在第九十轮那张 `r90-14.png`（旧宿主、M3 `AlertDialog`）里一模一样，属于既有观感，不是这次换
+宿主带进来的。记在这里，留给"对话框遮罩与对比度"那一轮统一处理。
+
+### 教训
+
+**同一个手势两种结果，先问"它依赖什么状态没被记录"。** 第九十轮记下的是"再进编辑态不上移"，
+真正的差别只有"这个对话框此前编辑过没有"；一旦把这件事写进状态，就不再需要去猜窗口在什么时机
+重排。
+
+**窗口的行为不要指望两遍。** `adjust=resize` 改了参数却什么都不做、`decorFitsSystemWindows=false`
+之后 IME inset 仍是 0——参数生效不等于行为生效。对话框里的键盘问题，最后是靠 Compose 自己摆位置
+解决的：窗口只负责"别动"。
+
+**"粘住"比"精准跟随"更好用。** 键盘开了又关、焦点进进出出，如果每次都按当前状态重算位置，画面就
+一直在动；一次到底、重开才复位，反而更安静。
+
+### 遗留
+
+1. 对话框宽度仍是手机尺寸（`max 560.dp`，1920 px 屏上只占 925 px）；按钮行右对齐、标题左对齐，宽屏
+   下还可以再讲究。
+2. 对话框没有遮罩（背后的页面不压暗），半透明卡片会透出正文——与第九十轮一致，未处理。
+3. `SettingsDialogTextPreference` 之外的文本对话框（重命名、备注、截图命名）既不经过
+   `SettingsAlertDialog`，也没有"清空"，`bodyEditing` 这套贴顶逻辑对它们不生效；它们目前在 TV 上仍
+   是行内文本框或纯手机对话框。
+4. 自定义空间名称那条输入路径没有在设备上重复验证（共用同一 holder，理论上同样受益）。
