@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.extensions.SelectedSourcesNsfwAction
 import org.skepsun.kototoro.core.ui.settings.SettingsActionRow
 import org.skepsun.kototoro.core.ui.settings.SettingsGroup
 import org.skepsun.kototoro.core.ui.settings.SettingsInfoRow
@@ -462,6 +465,7 @@ private fun InstalledExtensions(
  * downloads and preference store are untouched) and simply leaves browsing, search, the source filters,
  * recommendations and change-source targets, exactly like Android's enabled-only source list.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SourceSwitchDialog(
     controller: DesktopController,
@@ -472,6 +476,8 @@ private fun SourceSwitchDialog(
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf(DesktopSourceEnabledFilter.ALL) }
     var pendingBatch by remember { mutableStateOf<Boolean?>(null) }
+    // Android's `SetSelectedSourcesNsfw` dialog: only a mixed selection needs it, a uniform one toggles immediately.
+    var pendingNsfw by remember { mutableStateOf(false) }
     // Android's `selectedSourceIds` with its own lifetime: a tap on a source in selection mode joins or leaves the set,
     // an empty set ends the mode, and the rows are switches again — exactly Android's `isSelectionMode`.
     var selected by remember { mutableStateOf(emptySet<String>()) }
@@ -486,6 +492,12 @@ private fun SourceSwitchDialog(
         controller.setSourcesEnabled(names, enable)
         selected = emptySet()
         filter = if (enable) DesktopSourceEnabledFilter.ENABLED else DesktopSourceEnabledFilter.DISABLED
+    }
+    // Android's NSFW chip writes the per-source override and ends the mode without touching the enabled filter, because
+    // an adult flag does not move a row out of any side of the list.
+    fun applyNsfwSelection(isNsfw: Boolean, names: Set<String>) {
+        controller.setSourcesNsfw(names, isNsfw)
+        selected = emptySet()
     }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -579,9 +591,13 @@ private fun SourceSwitchDialog(
                     }
                 }
                 if (selecting) {
-                    // Android's `onEnableSelectedSources`/`onDisableSelectedSources`/`onTestSelectedSources`: one write
-                    // for the whole selection, and the mode ends with it.
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Android's `onEnableSelectedSources`/`onDisableSelectedSources`/`onToggleSelectedSourcesNsfw`/
+                    // `onTestSelectedSources`: one write for the whole selection, and the mode ends with it.
+                    val nsfwAction = selectedSourcesNsfwAction(selected, state.sources, state.sourceNsfwOverrides)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
                         TextButton(
                             onClick = { applySelection(true, selected) },
                             enabled = enabled,
@@ -592,6 +608,18 @@ private fun SourceSwitchDialog(
                             enabled = enabled,
                             modifier = Modifier.testTag("source-selection-disable"),
                         ) { Text(AndroidStrings["disable"]) }
+                        TextButton(
+                            onClick = {
+                                when (nsfwAction) {
+                                    SelectedSourcesNsfwAction.SET_NSFW -> applyNsfwSelection(true, selected)
+                                    SelectedSourcesNsfwAction.SET_SFW -> applyNsfwSelection(false, selected)
+                                    SelectedSourcesNsfwAction.CHOOSE -> pendingNsfw = true
+                                    SelectedSourcesNsfwAction.NONE -> Unit
+                                }
+                            },
+                            enabled = enabled && nsfwAction != SelectedSourcesNsfwAction.NONE,
+                            modifier = Modifier.testTag("source-selection-nsfw"),
+                        ) { Text(AndroidStrings[selectedSourcesNsfwLabel(nsfwAction)]) }
                         TextButton(
                             onClick = {
                                 val names = selected.toList()
@@ -657,6 +685,30 @@ private fun SourceSwitchDialog(
             },
             dismissButton = {
                 TextButton(onClick = { pendingBatch = null }) { Text(desktopText("common.cancel")) }
+            },
+        )
+    }
+    if (pendingNsfw) {
+        // Android's `SetSelectedSourcesNsfw`: only a mixed selection asks, and the answer applies to all of it.
+        val names = selected
+        AlertDialog(
+            onDismissRequest = { pendingNsfw = false },
+            modifier = Modifier.testTag("source-switch-nsfw-dialog"),
+            title = { Text(AndroidStrings["unified_sources_set_nsfw_title"]) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = { pendingNsfw = false; applyNsfwSelection(true, names) },
+                        modifier = Modifier.testTag("source-switch-nsfw-mark"),
+                    ) { Text(AndroidStrings["unified_sources_mark_as_nsfw"]) }
+                    TextButton(
+                        onClick = { pendingNsfw = false; applyNsfwSelection(false, names) },
+                        modifier = Modifier.testTag("source-switch-nsfw-unmark"),
+                    ) { Text(AndroidStrings["unified_sources_mark_as_sfw"]) }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { pendingNsfw = false }) { Text(desktopText("common.cancel")) }
             },
         )
     }

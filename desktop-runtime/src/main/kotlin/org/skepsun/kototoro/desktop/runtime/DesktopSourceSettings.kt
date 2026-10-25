@@ -1,8 +1,10 @@
 package org.skepsun.kototoro.desktop.runtime
 
+import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
 import org.skepsun.kototoro.core.model.TagBlacklist
 import org.skepsun.kototoro.core.model.TagTitleBlacklist
 import org.skepsun.kototoro.core.model.TagWarnings
+import org.skepsun.kototoro.core.source.CONTENT_TYPE_HENTAI_PREFIX
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
@@ -151,5 +153,21 @@ data class DesktopSourceSettings(
     }
 }
 
-/** Android marks adult sources by content type; a rail entry carries the same signal. */
-fun SourceListing.isNsfwSource(): Boolean = source.contentType.startsWith("HENTAI_")
+/** Android's `source_nsfw_overrides` / `source_sfw_overrides`, kept in the same store as `disabled_sources`. */
+const val KEY_SOURCE_NSFW_OVERRIDES = "source_nsfw_overrides"
+const val KEY_SOURCE_SFW_OVERRIDES = "source_sfw_overrides"
+
+/** The stored adult-flag overrides, edited through the rule shared with Android (`SourceNsfwOverrideSet`). */
+fun desktopSourceNsfwOverrides(values: Map<String, SourcePreferenceValue>): SourceNsfwOverrideSet =
+    SourceNsfwOverrideSet(
+        nsfw = (values[KEY_SOURCE_NSFW_OVERRIDES] as? SourcePreferenceValue.TextSet)?.values.orEmpty(),
+        sfw = (values[KEY_SOURCE_SFW_OVERRIDES] as? SourcePreferenceValue.TextSet)?.values.orEmpty(),
+    )
+
+/**
+ * Whether the source is adult. The host already folds each ecosystem's own metadata into the content type — an
+ * extension that declares itself NSFW is listed as `HENTAI_*`, exactly what Android's `ContentSource.isNsfw()` falls
+ * back to — and the user may force the flag either way from the source settings, so the override wins.
+ */
+fun SourceListing.isNsfwSource(overrides: SourceNsfwOverrideSet = SourceNsfwOverrideSet()): Boolean =
+    overrides.resolve(source.name) ?: source.contentType.startsWith(CONTENT_TYPE_HENTAI_PREFIX)

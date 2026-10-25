@@ -1,6 +1,10 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.extensions.SelectedSourcesNsfwAction
+import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
+import org.skepsun.kototoro.core.extensions.resolveSelectedSourcesNsfwAction
 import org.skepsun.kototoro.core.source.SourceListing
+import org.skepsun.kototoro.desktop.runtime.isNsfwSource
 
 /** Android's `UnifiedEnabledFilter`: which side of the per-source switch a row has to be on to be listed. */
 enum class DesktopSourceEnabledFilter { ALL, ENABLED, DISABLED }
@@ -51,3 +55,26 @@ fun toggleVisibleSourceSelection(selected: Set<String>, entries: List<SourceList
 /** Whether the 全选 chip reads 取消全选: an empty list is not "all selected". */
 fun everyVisibleSourceSelected(selected: Set<String>, entries: List<SourceListing>): Boolean =
     entries.isNotEmpty() && entries.all { it.source.name in selected }
+
+/**
+ * Android's NSFW chip: one button that means 标记为 NSFW / 取消 NSFW / 设置 NSFW depending on the selection. The counts
+ * come from the same effective flag the rail and the adult-content targets use, so a source the user already forced
+ * one way is counted on that side rather than by its content type.
+ */
+fun selectedSourcesNsfwAction(
+    selected: Set<String>,
+    sources: List<SourceListing>,
+    overrides: SourceNsfwOverrideSet,
+): SelectedSourcesNsfwAction {
+    val chosen = sources.filter { it.source.name in selected }
+    return resolveSelectedSourcesNsfwAction(chosen.count { it.isNsfwSource(overrides) }, chosen.size)
+}
+
+/** Which Android string the chip shows for [action]; NONE never renders, so it borrows the mark label. */
+fun selectedSourcesNsfwLabel(action: SelectedSourcesNsfwAction): String = when (action) {
+    SelectedSourcesNsfwAction.SET_NSFW -> "unified_sources_mark_nsfw"
+    SelectedSourcesNsfwAction.SET_SFW -> "unified_sources_unmark_nsfw"
+    SelectedSourcesNsfwAction.CHOOSE -> "unified_sources_set_nsfw"
+    SelectedSourcesNsfwAction.NONE -> "unified_sources_mark_nsfw"
+}
+

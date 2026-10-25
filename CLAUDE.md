@@ -263,8 +263,12 @@ npm run docs:build
   `disabled_sources` 存在 `desktop_extensions`，`DesktopAppState.disabledSources`/`enabledSources` 把“已装”与
   “可用”分开，关掉的来源不再出现在来源栏/来源网格/筛选器/搜索建议/换源候选，但它的收藏进度与下载都保留），
   见计划 §174、§175。对话框里另有 Android 的选中态（`UnifiedSourceSelectionBar`）：Android 用长按进入，Windows 让
-  “全选”兼作入口，进入后行变整行复选、`已选 N` 配启用/禁用/测试，测试走 `startSourceTest(选中的名字)` 只跑选中的来源
-  （Android 的 `testSources(ids)`），删除与 NSFW 切换仍待，见计划 §192。“更多”页本身也是分节设置页（功能/外观/高级工具），
+  “全选”兼作入口，进入后行变整行复选、`已选 N` 配启用/禁用/NSFW/测试，测试走 `startSourceTest(选中的名字)` 只跑选中的来源
+  （Android 的 `testSources(ids)`），删除仍待，见计划 §192。选择栏的 NSFW 芯片走 Android 的每来源成人标记覆盖：规则
+  （`SelectedSourcesNsfwAction`/`SourceNsfwOverrideSet`/`changedNsfwSources`）已下沉 `core-domain`，Android 的
+  `AppSettings.setSourceNsfwOverride` 与统一来源页也改吃它；Windows 把两个集合写进 `desktop_extensions` 的
+  `source_nsfw_overrides`/`source_sfw_overrides`（与 Android 同键），`isNsfwSource(overrides)` 先看覆盖再看内容类型的
+  `HENTAI_` 前缀，来源栏/网格的成人过滤与推荐生成共用这份有效标记，混选时弹 Android 的“为所选源设置NSFW”，见计划 §193。“更多”页本身也是分节设置页（功能/外观/高级工具），
   功能行带随包图标（`SettingsValueRow` 的 `leadingIcon`），语言/主题/界面风格改开单选对话框，
   见计划 §138；阅读设置另有独立页面（更多 → 阅读设置），分“页面/翻页”两节编辑同一份
   `DesktopReaderSettings`（模式、方向、缩放、背景、页码、裁剪、自动跨章、动画、速度），

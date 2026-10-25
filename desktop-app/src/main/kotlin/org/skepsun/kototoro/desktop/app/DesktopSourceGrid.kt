@@ -32,11 +32,11 @@ import org.skepsun.kototoro.explore.ui.compose.sourceQuickAccessMetrics
 internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
     var query by remember { mutableStateOf("") }
     val settings = state.sourceSettings
-    val sources = remember(state.enabledSources, query, state.exploreFilter, settings) {
+    val sources = remember(state.enabledSources, query, state.exploreFilter, settings, state.sourceNsfwOverrides) {
         settings.sorted(state.enabledSources.filter {
             (it.displayName.contains(query, true) || it.source.locale.contains(query, true)) &&
                 state.exploreFilter.accepts(it) &&
-                !(settings.hidesNsfw(DesktopNsfwTarget.SOURCES) && it.isNsfwSource())
+                !(settings.hidesNsfw(DesktopNsfwTarget.SOURCES) && it.isNsfwSource(state.sourceNsfwOverrides))
         })
     }
     val groups = remember(sources, settings) { settings.groups(sources) }

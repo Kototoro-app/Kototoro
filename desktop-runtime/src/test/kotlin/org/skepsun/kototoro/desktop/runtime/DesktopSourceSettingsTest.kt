@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
 import org.skepsun.kototoro.core.model.TagBlacklist
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.core.source.SourceEcosystem
@@ -158,4 +159,38 @@ class DesktopSourceSettingsTest {
                 DesktopSourceSettings.KEY_INCOGNITO_NSFW to SourcePreferenceValue.Toggle(true),
             )).incognitoForNsfw)
     }
+
+    @Test
+    fun `the source adult flag comes from the content type unless the user forced it`() {
+        assertTrue(hentaiListing().isNsfwSource())
+        assertFalse(plainListing().isNsfwSource())
+        // The host folds each extension's own metadata into the content type, so a declared-NSFW extension is already
+        // a HENTAI_ source here; the override is the only extra input the picker has.
+        assertFalse(hentaiListing().isNsfwSource(SourceNsfwOverrideSet(sfw = setOf("HENTAI_SOURCE"))))
+        assertTrue(plainListing().isNsfwSource(SourceNsfwOverrideSet(nsfw = setOf("PLAIN_SOURCE"))))
+    }
+
+    @Test
+    fun `the stored overrides use android's keys and survive a blank store`() {
+        assertEquals("source_nsfw_overrides", KEY_SOURCE_NSFW_OVERRIDES)
+        assertEquals("source_sfw_overrides", KEY_SOURCE_SFW_OVERRIDES)
+        assertEquals(SourceNsfwOverrideSet(), desktopSourceNsfwOverrides(emptyMap()))
+        val restored = desktopSourceNsfwOverrides(mapOf(
+            KEY_SOURCE_NSFW_OVERRIDES to SourcePreferenceValue.TextSet(linkedSetOf("PLAIN_SOURCE")),
+            KEY_SOURCE_SFW_OVERRIDES to SourcePreferenceValue.TextSet(linkedSetOf("HENTAI_SOURCE")),
+        ))
+        assertEquals(setOf("PLAIN_SOURCE"), restored.nsfw)
+        assertEquals(setOf("HENTAI_SOURCE"), restored.sfw)
+        // A value of the wrong type is ignored rather than cancelling the whole read.
+        assertEquals(setOf("PLAIN_SOURCE"), desktopSourceNsfwOverrides(mapOf(
+            KEY_SOURCE_NSFW_OVERRIDES to SourcePreferenceValue.TextSet(linkedSetOf("PLAIN_SOURCE")),
+            KEY_SOURCE_SFW_OVERRIDES to SourcePreferenceValue.Text("HENTAI_SOURCE"),
+        )).nsfw)
+    }
+
+    private fun plainListing() = SourceListing(SourceRef("PLAIN_SOURCE", "en", "MANGA"), "Plain",
+        SourceEcosystem.MIHON, true)
+
+    private fun hentaiListing() = SourceListing(SourceRef("HENTAI_SOURCE", "en", "HENTAI_MANGA"), "Adult",
+        SourceEcosystem.MIHON, true)
 }

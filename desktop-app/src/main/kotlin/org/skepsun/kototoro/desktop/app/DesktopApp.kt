@@ -174,7 +174,7 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
         (it.displayName.contains(filter, true) || it.source.locale.contains(filter, true)) &&
             state.exploreFilter.accepts(it) &&
             // Android's SOURCES_AND_BROWSE target: the rail is the only place Windows can hide an adult source.
-            !(settings.hidesNsfw(DesktopNsfwTarget.SOURCES) && it.isNsfwSource())
+            !(settings.hidesNsfw(DesktopNsfwTarget.SOURCES) && it.isNsfwSource(state.sourceNsfwOverrides))
     })
     Column(Modifier.width(240.dp).fillMaxHeight().background(MaterialTheme.colorScheme.surface,
         RoundedCornerShape(20.dp)).padding(16.dp).testTag("source-pane"),

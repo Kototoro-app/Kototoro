@@ -8787,9 +8787,9 @@ Android 长按来源卡进入选中模式，整条工具栏换成 `已选 N` / �
   再 `startSourceTest(names)`：`DesktopController.startSourceTest` 现在收一个可选的名字集合，对应 Android 的
   `testSources(selectedSourceIds)`（默认仍只跑已启用来源）；池子取 `state.sources`（已装）而不是 `enabledSources`，
   所以选中里可以有被关掉的来源，与 Android 选中列表一致。
-- 删除与“切换 NSFW”这一片没做：Android 的删除要先按安装包折叠成 `UnifiedSelectedSourceDeletePlan`（选中若干来源 →
-  删掉声明它们的那个包），NSFW 需要一层每来源的覆盖开关（Windows 现在的 `isNsfwSource()` 是从 `contentType` 推
-  `HENTAI_`，没有可写的偏好），两者都留待下一片。
+- 删除这一片没做：Android 的删除要先按安装包折叠成 `UnifiedSelectedSourceDeletePlan`（选中若干来源 →
+  删掉声明它们的那个包），留待下一片；NSFW 芯片原计划也在这里，后来单独成 §193（每来源的成人标记覆盖 +
+  选中栏那颗芯片），所以本节只覆盖启用/禁用/测试选中来源三项。
 - 探针（`DesktopRepositoriesProbe` 的 write 阶段）：`全选` → 出现 `source-selected:<name>` 与 `已选 1`
   （截图 `repositories-write-selection.png`），再点该行即退出模式且什么都没写；`全选` → `禁用` →
   `disabledSources` 恰为那一个、选中行消失、筛选跟到“已禁用”且开关是关的；`全选` → `启用` → `disabledSources` 清空；
@@ -8801,3 +8801,61 @@ Android 长按来源卡进入选中模式，整条工具栏换成 `已选 N` / �
 - `:desktop-app:test`：51 个套件 / 282 个用例（此前 278 + 新增 4）/ 0 失败；`:desktop-runtime:test`
   28 个套件 / 181 个用例 / 0 失败；`:desktop-app:verifyDesktopStrings` 通过（文案全用 Android 键，
   桌面 catalog 未增删，仍是 958 键）。
+## 193. 每来源的成人标记覆盖：共享规则 + 选中栏 NSFW 芯片（对齐 Android `SourceNsfwOverrides` / `setSourcesNsfw`）（2026-10-25）
+
+§192 的选中栏里 Android 还有一颗 NSFW 芯片，它既是 Android 唯一能改写“这个来源算不算成人”的入口，也决定
+`AdultContentFilterTarget` 那七个过滤目标在哪里生效。Windows 之前把成人判定写死成 `isNsfwSource()` 里看
+`contentType` 前缀 `HENTAI_`，没有任何可写的偏好，所以这一片先把 Android 的规则下沉到 `core-domain`，再给
+Windows 补上存储、状态、芯片与对话框。
+
+- 共享规则 `core/extensions/SourceNsfwRules.kt`（`core-domain` 的 `commonMain`）：
+  - `SelectedSourcesNsfwAction { NONE, SET_NSFW, SET_SFW, CHOOSE }` 与
+    `resolveSelectedSourcesNsfwAction(nsfwCount, selectedCount)` 逐条照 Android 的 `ContentSource`/选中栏判定：
+    选中为空是 `NONE`、没一个成人是 `SET_NSFW`、全是成人是 `SET_SFW`（`nsfwCount >= selectedCount` 也算，
+    所以计数偏大不会漏判）、其余 `CHOOSE`。
+  - `SourceNsfwOverrideSet(nsfw, sfw)` 加 `resolve(name)`（先查 `sfw` 再查 `nsfw`，都查不到才 `null` —— SFW 优先，
+    与 Android 的 `SourceNsfwOverrides.resolve` 一致）、`withOverride(names, isNsfw)`（`true` 进 `nsfw` 出 `sfw`、
+    `false` 反过来、`null` 从两边摘掉，空白名字丢弃）与 `changedNsfwSources(names, isNsfw, isNsfwNow)`
+    （Android `UnifiedSourcesViewModel.setSourcesNsfw` 只写真正变了的 id）。
+  - 名字叫 `SourceNsfwOverrideSet` 而不是 `SourceNsfwOverrides`，因为 Android 还有一个同名的进程级持有对象
+    （`core/model/SourceNsfwOverrides.kt` 的 `update`/`resolve`），两者在 `AppSettings.kt` 里会撞 import。
+- Android 侧改吃这份共享规则：`AppSettings.setSourceNsfwOverride` 现在把两个集合读成 `SourceNsfwOverrideSet`、
+  用 `withOverride` 算出新值再写两个键（行为不变，只是规则不再有两份），`UnifiedSourcesScreen.kt` 里本地的
+  enum 与 `resolveSelectedSourcesNsfwAction` 删掉后从 `core.extensions` 导入。`SourceNsfwOverridesTest`（8 条，含新增两条）
+  顺手钉住“共享集合驱动 app 读到的持有对象”和“只持久化真正变了的来源”。
+- Windows 存储沿用 Android 的键与同一份 store：`desktop-runtime` 的 `KEY_SOURCE_NSFW_OVERRIDES = "source_nsfw_overrides"`、
+  `KEY_SOURCE_SFW_OVERRIDES = "source_sfw_overrides"` 与 `desktopSourceNsfwOverrides(values)` 负责解码，
+  `DesktopSession.sourceNsfwOverrides()` 读 `desktop_extensions`、`setSourcesNsfw(names, isNsfw)` 一次 `edit` 写两个集合
+  （同 `disabled_sources` 的写法，崩溃也不会让一个名字同时落在两边）。`DesktopAppState.sourceNsfwOverrides` 在
+  `open`/`refreshSources` 时填充，`DesktopController.setSourcesNsfw` 先用 `changedNsfwSources` 与当前有效标记比对，
+  空集合直接返回，写完再读一次 store 刷新状态。
+- `isNsfwSource(overrides)` 取代原来只看内容类型的版本：覆盖优先，其次 `contentType` 的 `HENTAI_` 前缀。
+  host 侧本来就把各生态自己的元数据折进了内容类型（`MihonJarRegistry` 对 `metadata.isNsfw` 的包直接写
+  `HENTAI_$kind`），所以“扩展自己声明成人”这一层在 Windows 上不缺，缺的只有用户覆盖。消费方：来源栏
+  （`DesktopApp.kt`）与来源网格（`DesktopSourceGrid.kt`）的 `SOURCES` 目标、以及推荐生成
+  （`DesktopSuggestions.refresh(sources, settings, nsfwOverrides)`，`excludeNsfw` 现在看的是同一份有效标记）。
+- 选中栏芯片（`source-selection-nsfw`）夹在“禁用”和“测试源”之间，位置与 Android 相同：文案由
+  `selectedSourcesNsfwLabel(action)` 给出 Android 的 `unified_sources_mark_nsfw` / `unified_sources_unmark_nsfw` /
+  `unified_sources_set_nsfw`；`SET_NSFW`/`SET_SFW` 直接写并退出选中模式（不清筛选，成人标记不会让行换边），
+  `CHOOSE` 弹 Android 的 `unified_sources_set_nsfw_title` 对话框，两行选项 `unified_sources_mark_as_nsfw` /
+  `unified_sources_mark_as_sfw` 加取消。动作行从 `Row` 换成 `FlowRow`，窄窗口下按钮换行而不是被裁掉。
+- 探针（`DesktopRepositoriesProbe`）：安装的那个来源是普通漫画，所以选中后芯片读“标记NSFW”，点一下把
+  `sourceNsfwOverrides.nsfw` 写成它、`sfw` 为空且退出模式；再选中时同一颗芯片变成“取消NSFW”，点一下换成
+  `sfw = {name}`；第三次点回“标记NSFW”并留在那个状态（截图 `repositories-write-nsfw-marked.png`），
+  并核对 store 里的 `source_nsfw_overrides` 恰为该名字。离线进程再起来时 `sourceNsfwOverrides.nsfw` 仍是它，
+  且 `isNsfwSource(...)` 对该来源返回 true。
+- 仍未对齐：选中栏的“删除”（Android 要先按安装包折叠成 `UnifiedSelectedSourceDeletePlan`）；`BOOKMARKS` /
+  `SUGGESTIONS` 两个 NSFW 目标（桌面还没有对应页面）；Mihon 真实的相关推荐 API（与本节无关，见 §191）。
+
+验证：
+
+- `:core-domain:jvmTest --tests=*SourceNsfwRules*`：新增 7 条全绿（动作表、空集、双向覆盖、SFW 优先、批量搬移、
+  空白批次、`changedNsfwSources`）。
+- `:app:compileDebugKotlin` 与 `:app:testDebugUnitTest --tests=*SourceNsfwOverridesTest`：编译通过、8 条全绿，
+  证明共享化没有改变 Android 行为。
+- `:desktop-app:test --tests=*DesktopSourceSwitchTest*` 14 条、`:desktop-runtime:test --tests=*DesktopSourceSettingsTest*`
+  12 条全绿（含“覆盖优先于内容类型”“存的是 Android 的键、坏类型只丢那一项”“芯片动作随有效标记变化”）。
+- `:desktop-app:test --tests=*repository*`：离线双进程探针通过，`DESKTOP_UI_OK=write` 与离线断言均成立。
+- 全量基线：`:desktop-app:test` 51 个套件 / 285 个用例（此前 282 + 新增 3）/ 0 失败；`:desktop-runtime:test`
+  28 个套件 / 183 个用例（此前 181 + 新增 2）/ 0 失败；`:core-domain:jvmTest` 41 个套件 / 255 个用例 / 0 失败；
+  `:desktop-app:verifyDesktopStrings` 通过（文案全用 Android 键，桌面 catalog 未增删，仍是 958 键）。

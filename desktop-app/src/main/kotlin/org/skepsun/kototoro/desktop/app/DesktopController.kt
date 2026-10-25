@@ -12,6 +12,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
 import org.skepsun.kototoro.core.library.LibraryContentStats
 import org.skepsun.kototoro.core.library.LibraryReadingStats
+import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
+import org.skepsun.kototoro.core.extensions.changedNsfwSources
 import org.skepsun.kototoro.core.dictionary.DictionaryRule
 import org.skepsun.kototoro.details.domain.RelatedCandidate
 import org.skepsun.kototoro.details.domain.RelatedContentRules
@@ -48,6 +50,7 @@ import org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings
 import org.skepsun.kototoro.desktop.runtime.desktopReadChapterIds
 import org.skepsun.kototoro.desktop.runtime.desktopReadSavedChapters
 import org.skepsun.kototoro.desktop.runtime.desktopRelatedWorks
+import org.skepsun.kototoro.desktop.runtime.isNsfwSource
 import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
 import org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex
 import org.skepsun.kototoro.core.ui.chapters.ChapterBranchLocale
@@ -121,6 +124,11 @@ data class DesktopAppState(
     val sources: List<SourceListing> = emptyList(),
     /** Sources the user turned off on the extensions page; Android keeps them installed but stops offering them. */
     val disabledSources: Set<String> = emptySet(),
+    /**
+     * Android's `source_nsfw_overrides` / `source_sfw_overrides`: sources the user forced adult or SFW from the
+     * selection bar, so the adult-content targets and the suggestion filter see the same flag Android does.
+     */
+    val sourceNsfwOverrides: SourceNsfwOverrideSet = SourceNsfwOverrideSet(),
     /**
      * Android's `jar_priority_order` as stored (one comma separated list). Windows' parser plugins are what it
      * ranks here; the settings page resolves the names against the installed plugins when it draws the row.
@@ -324,6 +332,7 @@ class DesktopController(
         } ?: DesktopInterfaceStyle.MATERIAL,
         language = restoredLanguage(),
         disabledSources = session.disabledSources(),
+        sourceNsfwOverrides = session.sourceNsfwOverrides(),
         jarPriorityOrder = session.jarPriorityOrder(),
         showBrokenSources = session.showBrokenSources(),
         chaptersClearAuto = session.chaptersClearAuto(),
@@ -674,6 +683,7 @@ class DesktopController(
 
     fun refreshSources() = action {
         mutableState.update { it.copy(sources = sourceDescriptors(), disabledSources = session.disabledSources(),
+            sourceNsfwOverrides = session.sourceNsfwOverrides(),
             installedEntries = session.installedEntries(), error = session.startupErrors.firstOrNull()) }
     }
 
@@ -699,6 +709,21 @@ class DesktopController(
                 items = if (hidden != null) emptyList() else previous.items,
                 screen = if (hidden != null) DesktopScreen.EXTENSIONS else previous.screen)
         }
+    }
+
+    /**
+     * Android's `setSourcesNsfw(ids, isNsfw)` from the selection bar's NSFW chip. Only the sources whose flag actually
+     * changes are stored (`changedNsfwSources`), so marking a mixed selection does not rewrite the ones that agree;
+     * the rail, the adult-content targets and the suggestion filter read the new flag from the same two sets.
+     */
+    fun setSourcesNsfw(names: Collection<String>, isNsfw: Boolean) = action {
+        val overrides = session.sourceNsfwOverrides()
+        val changed = changedNsfwSources(names, isNsfw) { name ->
+            state.value.sources.firstOrNull { it.source.name == name }?.isNsfwSource(overrides) == true
+        }
+        if (changed.isEmpty()) return@action
+        session.setSourcesNsfw(changed, isNsfw)
+        mutableState.update { it.copy(sourceNsfwOverrides = session.sourceNsfwOverrides()) }
     }
 
     /**
@@ -1283,7 +1308,7 @@ class DesktopController(
         // unless "include disabled sources" asks for candidates from every installed source.
         val disabled = if (settings.includeDisabledSources) emptySet() else state.value.disabledSources
         val sources = session.sourceListings().filterNot { it.source.name in disabled }
-        val stored = session.suggestions.refresh(sources, settings)
+        val stored = session.suggestions.refresh(sources, settings, session.sourceNsfwOverrides())
         recordRun(LAST_SUGGESTIONS_RUN)
         val items = session.suggestions.suggestions()
         mutableState.update { it.copy(suggestions = items) }

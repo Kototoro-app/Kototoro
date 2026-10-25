@@ -11,6 +11,7 @@ import kotlinx.serialization.protobuf.ProtoBuf
 import org.jetbrains.skia.Image
 import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.source.host.SourceHostJar
+import org.skepsun.kototoro.desktop.runtime.isNsfwSource
 import org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex
 import org.skepsun.kototoro.source.host.MihonJarInspector
 import java.io.ByteArrayOutputStream
@@ -226,6 +227,28 @@ internal object DesktopRepositoriesProbe {
                     onNodeWithTag("source-enable-list").performScrollToNode(hasTestTag(switchTag))
                     onNodeWithTag(switchTag).assertIsOn()
                     snapshotTag("source-switch-dialog", "sources")
+                    // §193: the selection bar's NSFW chip. The only installed source is a plain MANGA, so the chip
+                    // reads 标记为 NSFW; one click forces the flag (Android's `setSourcesNsfw`) and ends the mode.
+                    onNodeWithTag("source-selection-all").performClick(); idle()
+                    onNodeWithText("标记NSFW").assertExists()
+                    onNodeWithTag("source-selection-nsfw").performClick(); idle()
+                    check(controller.state.value.sourceNsfwOverrides.nsfw == setOf(installedSourceName()))
+                    check(controller.state.value.sourceNsfwOverrides.sfw.isEmpty())
+                    onNodeWithTag("source-selected:${installedSourceName()}").assertDoesNotExist()
+                    // Now every selectable row reads as adult, so the same chip offers 取消 NSFW.
+                    onNodeWithTag("source-selection-all").performClick(); idle()
+                    onNodeWithText("取消NSFW").assertExists()
+                    snapshotTag("source-switch-dialog", "nsfw-marked")
+                    onNodeWithTag("source-selection-nsfw").performClick(); idle()
+                    check(controller.state.value.sourceNsfwOverrides.nsfw.isEmpty())
+                    check(controller.state.value.sourceNsfwOverrides.sfw == setOf(installedSourceName()))
+                    // Mark it again and leave it that way: the offline run proves the override survived a restart.
+                    onNodeWithTag("source-selection-all").performClick(); idle()
+                    onNodeWithTag("source-selection-nsfw").performClick(); idle()
+                    check(controller.state.value.sourceNsfwOverrides.nsfw == setOf(installedSourceName()))
+                    val nsfwRecord = session.storage.preferences.open("desktop_extensions")
+                        .snapshot()["source_nsfw_overrides"] as SourcePreferenceValue.TextSet
+                    check(nsfwRecord.values == setOf(installedSourceName()))
                     onNodeWithTag(switchTag).performClick(); idle()
                     check(controller.state.value.disabledSources == setOf(installedSourceName()))
                     check(controller.state.value.enabledSources.none { it.sourceId == 9007199254740993L })
@@ -275,6 +298,10 @@ internal object DesktopRepositoriesProbe {
                     check(controller.state.value.disabledSources == setOf(installedSourceName()))
                     check(controller.state.value.enabledSources.none { it.sourceId == 9007199254740993L })
                     onNodeWithTag("source:MIHON_9007199254740993").assertDoesNotExist()
+                    // §193: the adult flag forced in the previous run still applies to the source.
+                    check(controller.state.value.sourceNsfwOverrides.nsfw == setOf(installedSourceName()))
+                    check(controller.state.value.sources.single { it.sourceId == 9007199254740993L }
+                        .isNsfwSource(controller.state.value.sourceNsfwOverrides))
                     snapshot("offline")
                 }
                 val recorded = session.storage.preferences.open("desktop_extensions").snapshot().getValue(metadata.packageName) as SourcePreferenceValue.Text

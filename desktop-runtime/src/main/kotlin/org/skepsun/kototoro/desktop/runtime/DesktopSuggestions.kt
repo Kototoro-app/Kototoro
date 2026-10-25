@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.runtime
 
+import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
 import org.skepsun.kototoro.core.library.SourceSuggestionPreferences
 import org.skepsun.kototoro.core.library.SourceSuggestions
 import org.skepsun.kototoro.core.source.SourceContent
@@ -100,11 +101,15 @@ class DesktopSuggestions(
     suspend fun suggestions(limit: Int = limits.maxResults): List<SourceContent> = library.suggestions(limit)
 
     /** Rebuilds the suggestions; returns how many were stored (0 without reading history or installed sources). */
-    suspend fun refresh(sources: List<SourceListing>, settings: DesktopSuggestionSettings = DesktopSuggestionSettings()): Int {
+    suspend fun refresh(
+        sources: List<SourceListing>,
+        settings: DesktopSuggestionSettings = DesktopSuggestionSettings(),
+        nsfwOverrides: SourceNsfwOverrideSet = SourceNsfwOverrideSet(),
+    ): Int {
         val seed = (library.history().take(limits.seedItems) + library.favourites().take(limits.seedItems))
             .distinctBy { it.id }
         val candidates = sourceOrder(sources.filterNot {
-            it.source.name in settings.excludedSources || (settings.excludeNsfw && it.isNsfw())
+            it.source.name in settings.excludedSources || (settings.excludeNsfw && it.isNsfwSource(nsfwOverrides))
         })
         if (seed.isEmpty() || candidates.isEmpty()) return 0
         val result = SourceSuggestions(runtime, matcher, limits, shuffle).generate(seed, candidates.map { it.source },
@@ -114,4 +119,3 @@ class DesktopSuggestions(
     }
 }
 
-private fun SourceListing.isNsfw() = source.contentType.startsWith("HENTAI_")

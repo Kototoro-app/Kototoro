@@ -7,6 +7,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
 import org.skepsun.kototoro.core.extensions.resolveJarPriorityOrder
 import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.desktop.compat.MihonDesktopPlatform
@@ -14,6 +15,9 @@ import org.skepsun.kototoro.cloudstream.desktop.CloudstreamPluginRegistry
 import org.skepsun.kototoro.cloudstream.desktop.CloudstreamSourceRuntime
 import org.skepsun.kototoro.desktop.runtime.DesktopCloudstreamRecord
 import org.skepsun.kototoro.desktop.runtime.DesktopDownloadPreferences
+import org.skepsun.kototoro.desktop.runtime.KEY_SOURCE_NSFW_OVERRIDES
+import org.skepsun.kototoro.desktop.runtime.KEY_SOURCE_SFW_OVERRIDES
+import org.skepsun.kototoro.desktop.runtime.desktopSourceNsfwOverrides
 import org.skepsun.kototoro.desktop.runtime.DesktopExtensionFiles
 import org.skepsun.kototoro.desktop.runtime.DesktopManagedCloudstreamPlugin
 import org.skepsun.kototoro.desktop.runtime.DesktopExtensionKind
@@ -330,6 +334,25 @@ class DesktopSession private constructor(
         if (enabled) disabled -= names.toSet() else disabled += names
         installed.edit(SourcePreferenceEdit(changes = mapOf(
             "disabled_sources" to SourcePreferenceValue.TextSet(disabled),
+        )))
+    }
+
+    /**
+     * Android's `source_nsfw_overrides` / `source_sfw_overrides`: the two sets the user edits from the source selection
+     * bar's NSFW chip, kept in the same store as `disabled_sources` because they describe the same installed source.
+     */
+    fun sourceNsfwOverrides(): SourceNsfwOverrideSet = desktopSourceNsfwOverrides(installed.snapshot())
+
+    /**
+     * Android's `setSourcesNsfw(ids, isNsfw)` for the selection bar: the caller already dropped the sources whose flag
+     * does not change, and both sets are written in one edit so a crash cannot leave a name in both.
+     */
+    fun setSourcesNsfw(names: Collection<String>, isNsfw: Boolean) {
+        if (names.isEmpty()) return
+        val updated = sourceNsfwOverrides().withOverride(names, isNsfw)
+        installed.edit(SourcePreferenceEdit(changes = mapOf(
+            KEY_SOURCE_NSFW_OVERRIDES to SourcePreferenceValue.TextSet(LinkedHashSet(updated.nsfw)),
+            KEY_SOURCE_SFW_OVERRIDES to SourcePreferenceValue.TextSet(LinkedHashSet(updated.sfw)),
         )))
     }
 

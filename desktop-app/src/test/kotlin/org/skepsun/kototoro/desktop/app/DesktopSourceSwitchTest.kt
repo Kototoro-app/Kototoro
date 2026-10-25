@@ -3,6 +3,8 @@ package org.skepsun.kototoro.desktop.app
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.extensions.SelectedSourcesNsfwAction
+import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
 import org.skepsun.kototoro.core.source.SourceEcosystem
 import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.core.source.SourceRef
@@ -13,12 +15,13 @@ import org.skepsun.kototoro.core.source.SourceRef
  * ask [DesktopAppState.enabledSources].
  */
 class DesktopSourceSwitchTest {
-    private fun listing(name: String) =
-        SourceListing(SourceRef(name, "zh", "MANGA"), name.uppercase(), SourceEcosystem.MIHON, true)
+    private fun listing(name: String, contentType: String = "MANGA") =
+        SourceListing(SourceRef(name, "zh", contentType), name.uppercase(), SourceEcosystem.MIHON, true)
 
     private val alpha = listing("alpha")
     private val beta = listing("beta")
     private val gamma = listing("gamma")
+    private val hentai = listing("hentai", "HENTAI_MANGA")
 
     @Test
     fun `nothing disabled keeps the host's own list untouched`() {
@@ -121,5 +124,43 @@ class DesktopSourceSwitchTest {
         assertEquals(true, everyVisibleSourceSelected(setOf("alpha", "beta"), sources))
         // A selection that also holds a row the filter hid still reads 取消全选, because 全选 only speaks for the list.
         assertEquals(true, everyVisibleSourceSelected(setOf("alpha", "beta", "gamma"), sources))
+    }
+
+    @Test
+    fun `the nsfw chip reads the effective flag of the selection`() {
+        val sources = listOf(alpha, hentai, beta)
+        // Nothing adult picked: marking is the only thing the chip can mean.
+        assertEquals(SelectedSourcesNsfwAction.SET_NSFW,
+            selectedSourcesNsfwAction(setOf("alpha", "beta"), sources, SourceNsfwOverrideSet()))
+        // Everything adult: the chip offers to clear the flag instead.
+        assertEquals(SelectedSourcesNsfwAction.SET_SFW,
+            selectedSourcesNsfwAction(setOf("hentai"), sources, SourceNsfwOverrideSet()))
+        // A mixed selection asks which way to go.
+        assertEquals(SelectedSourcesNsfwAction.CHOOSE,
+            selectedSourcesNsfwAction(setOf("alpha", "hentai"), sources, SourceNsfwOverrideSet()))
+        assertEquals(SelectedSourcesNsfwAction.NONE,
+            selectedSourcesNsfwAction(emptySet(), sources, SourceNsfwOverrideSet()))
+    }
+
+    @Test
+    fun `a forced flag counts on the side the override put it`() {
+        val sources = listOf(alpha, hentai, beta)
+        // Both rows are adult as far as the content type says, but alpha was forced SFW, so the pair is still mixed.
+        assertEquals(SelectedSourcesNsfwAction.CHOOSE, selectedSourcesNsfwAction(setOf("alpha", "hentai"), sources,
+            SourceNsfwOverrideSet(sfw = setOf("alpha"))))
+        // A manga forced adult joins the adult row, so the chip clears the flag for both.
+        assertEquals(SelectedSourcesNsfwAction.SET_SFW, selectedSourcesNsfwAction(setOf("alpha", "hentai"), sources,
+            SourceNsfwOverrideSet(nsfw = setOf("alpha"))))
+        // And the other way around: an adult row forced SFW joins the plain one, so the chip marks both.
+        assertEquals(SelectedSourcesNsfwAction.SET_NSFW, selectedSourcesNsfwAction(setOf("alpha", "hentai"), sources,
+            SourceNsfwOverrideSet(sfw = setOf("hentai"))))
+    }
+
+    @Test
+    fun `each nsfw action names android's string`() {
+        assertEquals("unified_sources_mark_nsfw", selectedSourcesNsfwLabel(SelectedSourcesNsfwAction.SET_NSFW))
+        assertEquals("unified_sources_unmark_nsfw", selectedSourcesNsfwLabel(SelectedSourcesNsfwAction.SET_SFW))
+        assertEquals("unified_sources_set_nsfw", selectedSourcesNsfwLabel(SelectedSourcesNsfwAction.CHOOSE))
+        assertEquals("unified_sources_mark_nsfw", selectedSourcesNsfwLabel(SelectedSourcesNsfwAction.NONE))
     }
 }
