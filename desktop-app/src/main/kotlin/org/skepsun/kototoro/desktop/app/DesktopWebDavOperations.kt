@@ -19,6 +19,7 @@ import org.skepsun.kototoro.desktop.runtime.DESKTOP_BACKUP_DATA_VERSION
 import org.skepsun.kototoro.desktop.runtime.DesktopLibraryBackup
 import org.skepsun.kototoro.desktop.runtime.DesktopLocalBackups
 import org.skepsun.kototoro.desktop.runtime.DesktopRuntime
+import org.skepsun.kototoro.desktop.runtime.desktopBackupDirectory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.text.SimpleDateFormat
@@ -115,9 +116,16 @@ internal class DesktopWebDavOperations(
 
     /**
      * Android's local periodical copies: the same export the upload sends is written here first, so a server that
-     * refuses the file still leaves a restorable backup on this machine.
+     * refuses the file still leaves a restorable backup on this machine. The directory is Android's
+     * `periodicalBackupDirectory` — the one the page picked, or the data root's `backups` when it picked none or the
+     * picked one stopped being usable — so it is resolved per call instead of being frozen at construction.
      */
-    private val localBackups = DesktopLocalBackups(storage.paths.backups, clock)
+    private fun localBackups(settings: DesktopWebDavSettings) =
+        DesktopLocalBackups(localDirectory(settings), clock)
+
+    /** Where the copies of [settings] go; the page shows this path, so both sides resolve it the same way. */
+    private fun localDirectory(settings: DesktopWebDavSettings): Path =
+        desktopBackupDirectory(settings.outputDirectory, storage.paths.backups)
 
     private val mutableUi = MutableStateFlow(DesktopWebDavUi())
     val ui = mutableUi.asStateFlow()
@@ -140,8 +148,9 @@ internal class DesktopWebDavOperations(
 
     /** Re-reads the local copies; cheap, because retention only ever keeps a handful of files. */
     fun refreshLocal() {
-        val files = runCatching { localBackups.list() }.getOrDefault(emptyList())
-        mutableUi.value = mutableUi.value.copy(localFiles = files, localDirectory = storage.paths.backups)
+        val directory = localDirectory(mutableUi.value.settings)
+        val files = runCatching { DesktopLocalBackups(directory, clock).list() }.getOrDefault(emptyList())
+        mutableUi.value = mutableUi.value.copy(localFiles = files, localDirectory = directory)
     }
 
     fun settings(value: DesktopWebDavSettings) {
@@ -150,6 +159,8 @@ internal class DesktopWebDavOperations(
             settings = value,
             error = if (saved) null else desktopText("webdav.settingsSaveFailed"),
         )
+        // A new output directory is a different set of local copies, so the row must not keep the old listing.
+        refreshLocal()
     }
 
     /** Sends a `PROPFIND` with depth 0 so "reachable" means the directory answers, not that a download works. */
@@ -250,7 +261,7 @@ internal class DesktopWebDavOperations(
             Files.deleteIfExists(file)
             backups.export(file)
             check(keepLocal(settings, file, now) != null) {
-                desktopText("webdav.localFailed", storage.paths.backups)
+                desktopText("webdav.localFailed", localDirectory(settings))
             }
         } finally {
             Files.deleteIfExists(file)
@@ -339,14 +350,15 @@ internal class DesktopWebDavOperations(
     /** The local copy of [file], when the page asks for one; a failing disk keeps the upload going, like Android's. */
     private fun keepLocal(settings: DesktopWebDavSettings, file: Path, now: Long): String? {
         if (!settings.keepLocalCopy) return null
-        val kept = runCatching { localBackups.keep(file, now) }.getOrNull()
+        val copies = localBackups(settings)
+        val kept = runCatching { copies.keep(file, now) }.getOrNull()
         if (kept != null) {
             preferences.edit(
                 SourcePreferenceEdit(changes = mapOf(KEY_LAST_LOCAL to SourcePreferenceValue.Text(now.toString()))),
             )
             mutableUi.value = mutableUi.value.copy(lastLocalMillis = now)
         }
-        if (settings.trimLocal) runCatching { localBackups.trim(settings.localCount) }
+        if (settings.trimLocal) runCatching { copies.trim(settings.localCount) }
         refreshLocal()
         return kept?.fileName?.toString()
     }

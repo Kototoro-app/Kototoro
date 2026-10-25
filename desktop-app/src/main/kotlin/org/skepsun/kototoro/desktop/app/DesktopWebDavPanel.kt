@@ -19,6 +19,7 @@ import org.skepsun.kototoro.core.ui.settings.SettingsSliderRow
 import org.skepsun.kototoro.core.ui.settings.SettingsSwitchRow
 import java.text.DateFormat
 import java.util.Date
+import javax.swing.JFileChooser
 
 /**
  * Android's WebDAV backup destination on the backups page: where the files live, a connection test, the library upload,
@@ -148,11 +149,31 @@ internal fun DesktopWebDavSection(controller: DesktopController, ui: DesktopWebD
                         testTag = "webdav-local-count",
                     )
                 }
+                // Android's "backups output directory": the row shows where the copies land and can change it, which a
+                // phone does through the SAF picker. An empty value is the data root's own `backups` folder.
                 SettingsActionRow(
-                    title = desktopText("webdav.localOpen"),
+                    title = AndroidStrings["backups_output_directory"],
                     summary = ui.localDirectory?.toString().orEmpty(),
                     modifier = Modifier.testTag("webdav-local-open"),
                 ) {
+                    TextButton(onClick = {
+                        val chooser = JFileChooser().apply {
+                            fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+                            dialogTitle = AndroidStrings["backups_output_directory"]
+                            ui.localDirectory?.let { selectedFile = it.toFile() }
+                        }
+                        if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
+                            controller.webDavOutputDirectory(chooser.selectedFile.toPath())
+                        }
+                    }, enabled = enabled, modifier = Modifier.testTag("webdav-local-choose")) {
+                        Text(desktopText("webdav.choose"))
+                    }
+                    if (settings.outputDirectory.isNotBlank()) {
+                        TextButton(onClick = { controller.webDavOutputDirectory(null) }, enabled = enabled,
+                            modifier = Modifier.testTag("webdav-local-reset")) {
+                            Text(desktopText("webdav.outputReset"))
+                        }
+                    }
                     TextButton(onClick = { controller.webDavOpenLocalDirectory() }, enabled = enabled) {
                         Text(desktopText("webdav.open"))
                     }

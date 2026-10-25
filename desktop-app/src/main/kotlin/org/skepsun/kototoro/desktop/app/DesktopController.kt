@@ -2460,9 +2460,22 @@ class DesktopController(
         startAutoBackup()
     }
 
-    /** Android's periodical page points at its output directory; on Windows that is the data root's `backups`. */
+    /**
+     * Android's `backup_periodical_directory`: the folder the local copies go in, `null` for the data root's `backups`.
+     * Android refuses a tree it cannot write, so a path that is not a directory is rejected here too instead of being
+     * saved and silently ignored by every backup.
+     */
+    internal fun webDavOutputDirectory(directory: Path?) {
+        if (directory != null && !Files.isDirectory(directory)) {
+            mutableState.update { it.copy(message = desktopText("webdav.outputInvalid", directory)) }
+            return
+        }
+        webDavSettings(webDavUi.value.settings.copy(outputDirectory = directory?.toString().orEmpty()))
+    }
+
+    /** Android's periodical page points at its output directory; on Windows that is the folder the copies live in. */
     internal fun webDavOpenLocalDirectory() {
-        val directory = session.storage.paths.backups
+        val directory = webDavUi.value.localDirectory ?: session.storage.paths.backups
         runCatching {
             Files.createDirectories(directory)
             java.awt.Desktop.getDesktop().open(directory.toFile())

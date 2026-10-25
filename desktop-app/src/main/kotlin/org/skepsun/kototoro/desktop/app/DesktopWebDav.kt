@@ -41,6 +41,12 @@ internal data class DesktopWebDavSettings(
      * once and push the merged snapshot back. Off by default, like Android.
      */
     val autoRestore: Boolean = false,
+    /**
+     * Android's `periodicalBackupDirectory`: where the local copies go. Empty means the data root's `backups` folder,
+     * which is what a fresh install uses; a path that stopped being a writable directory falls back to it too, the same
+     * way Android falls back when the user revokes the SAF tree.
+     */
+    val outputDirectory: String = "",
 ) {
     val configured: Boolean get() = serverUrl.isNotBlank()
 
@@ -61,6 +67,7 @@ internal data class DesktopWebDavSettings(
         KEY_TRIM_LOCAL to SourcePreferenceValue.Toggle(trimLocal),
         KEY_LOCAL_COUNT to SourcePreferenceValue.Integer(localCount),
         KEY_AUTO_RESTORE to SourcePreferenceValue.Toggle(autoRestore),
+        KEY_OUTPUT_DIRECTORY to SourcePreferenceValue.Text(outputDirectory),
     )
 
     companion object {
@@ -75,6 +82,9 @@ internal data class DesktopWebDavSettings(
         const val KEY_LOCAL_COUNT = "webdav_local_max_count"
         const val KEY_AUTO_RESTORE = "webdav_auto_restore"
 
+        /** Android's `backup_periodic_directory`; the local copies live here, empty means the data root's `backups`. */
+        const val KEY_OUTPUT_DIRECTORY = "backup_output_directory"
+
         fun from(values: Map<String, SourcePreferenceValue>) = DesktopWebDavSettings(
             serverUrl = (values[KEY_SERVER] as? SourcePreferenceValue.Text)?.value.orEmpty(),
             remotePath = (values[KEY_PATH] as? SourcePreferenceValue.Text)?.value.orEmpty(),
@@ -87,6 +97,7 @@ internal data class DesktopWebDavSettings(
             localCount = ((values[KEY_LOCAL_COUNT] as? SourcePreferenceValue.Integer)?.value ?: 10)
                 .coerceIn(1, 32),
             autoRestore = (values[KEY_AUTO_RESTORE] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            outputDirectory = (values[KEY_OUTPUT_DIRECTORY] as? SourcePreferenceValue.Text)?.value.orEmpty(),
         )
     }
 }

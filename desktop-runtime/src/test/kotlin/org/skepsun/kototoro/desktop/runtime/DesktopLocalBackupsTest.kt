@@ -121,4 +121,25 @@ class DesktopLocalBackupsTest {
             paths.filter { it.fileName.toString().endsWith(".part") }.map { it.fileName.toString() }.toList()
         })
     }
+
+    @Test
+    fun `the chosen output directory wins while it is usable`() {
+        val chosen = Files.createDirectories(root.resolve("chosen"))
+
+        assertEquals(chosen, desktopBackupDirectory(chosen.toString(), directory))
+    }
+
+    @Test
+    fun `an unset, missing or unreadable output directory falls back to the data root`() {
+        // Android falls back to the app's own directory when the SAF tree is gone, so a revoked folder cannot stop
+        // every backup; the same rule here, because the alternative is a backup that silently never happens.
+        assertEquals(directory, desktopBackupDirectory("", directory))
+        assertEquals(directory, desktopBackupDirectory("   ", directory))
+        assertEquals(directory, desktopBackupDirectory(root.resolve("gone").toString(), directory))
+
+        // A plain file is not a directory either, and neither is a path the JVM refuses to name.
+        val file = Files.writeString(root.resolve("not-a-directory"), "x")
+        assertEquals(directory, desktopBackupDirectory(file.toString(), directory))
+        assertEquals(directory, desktopBackupDirectory("bad\u0000path", directory))
+    }
 }

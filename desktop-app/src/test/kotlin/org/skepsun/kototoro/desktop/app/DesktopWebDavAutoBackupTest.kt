@@ -19,6 +19,7 @@ import org.skepsun.kototoro.core.source.SourceRef
 import org.skepsun.kototoro.desktop.runtime.DesktopLibrary
 import org.skepsun.kototoro.desktop.runtime.DesktopLibraryBackup
 import org.skepsun.kototoro.desktop.runtime.DesktopRuntime
+import org.skepsun.kototoro.desktop.runtime.desktopBackupFileName
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
@@ -135,6 +136,62 @@ class DesktopWebDavAutoBackupTest {
             assertEquals(DesktopAutoBackup.Saved, operations.autoBackup())
             assertEquals(2, operations.ui.value.localFiles.size)
             assertEquals(0, requests.get())
+        } finally {
+            engine.close()
+            runtime.close()
+        }
+    }
+
+    @Test
+    fun `the copies land in the chosen output directory and follow it when it changes`() = runBlocking {
+        val runtime = DesktopRuntime.open(root.resolve("output-directory"))
+        val engine = engine()
+        DesktopLibrary(runtime.database) { source }.addFavourite(content)
+        val chosen = Files.createDirectories(root.resolve("chosen"))
+        try {
+            val operations = operations(runtime, engine)
+            operations.settings(
+                DesktopWebDavSettings(intervalHours = 1, keepLocalCopy = true, outputDirectory = chosen.toString()),
+            )
+            assertEquals(DesktopAutoBackup.Saved, operations.autoBackup())
+
+            // Android's output directory is part of the settings, so the row and the copy must agree on it.
+            assertEquals(chosen, operations.ui.value.localDirectory)
+            assertEquals(listOf(desktopBackupFileName(clock.get() * 1000L)), operations.ui.value.localFiles.map {
+                it.fileName.toString()
+            })
+            assertTrue(operations.ui.value.localFiles.single().parent == chosen)
+            assertTrue(Files.exists(runtime.paths.backups.resolve(desktopBackupFileName(clock.get() * 1000L))).not())
+
+            // Pointing the setting somewhere else moves the next copy there, and the row no longer lists the old one.
+            val other = Files.createDirectories(root.resolve("other"))
+            operations.settings(
+                DesktopWebDavSettings(
+                    intervalHours = 1,
+                    keepLocalCopy = true,
+                    outputDirectory = other.toString(),
+                ),
+            )
+            assertEquals(other, operations.ui.value.localDirectory)
+            assertEquals(emptyList<Path>(), operations.ui.value.localFiles)
+            clock.addAndGet((hour(1) / 1000).toInt())
+            assertEquals(DesktopAutoBackup.Saved, operations.autoBackup())
+            assertEquals(listOf(desktopBackupFileName(clock.get() * 1000L)), operations.ui.value.localFiles.map {
+                it.fileName.toString()
+            })
+            assertTrue(operations.ui.value.localFiles.single().parent == other)
+
+            // A directory that disappeared falls back to the data root, exactly as a revoked SAF tree does on Android.
+            Files.delete(operations.ui.value.localFiles.single())
+            Files.delete(other)
+            operations.settings(
+                DesktopWebDavSettings(
+                    intervalHours = 1,
+                    keepLocalCopy = true,
+                    outputDirectory = other.toString(),
+                ),
+            )
+            assertEquals(runtime.paths.backups, operations.ui.value.localDirectory)
         } finally {
             engine.close()
             runtime.close()

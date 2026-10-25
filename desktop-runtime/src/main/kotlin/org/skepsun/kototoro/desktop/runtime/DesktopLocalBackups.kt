@@ -49,6 +49,26 @@ fun desktopBackupTimestamp(name: String): Long? {
 }
 
 /**
+ * The directory the periodical copies belong in: [chosen] when the user picked one and it is still a writable
+ * directory, [fallback] otherwise.
+ *
+ * Android's `periodicalBackupDirectory` is a tree URI and behaves the same way: a tree that was never resolved, or that
+ * the user revoked, makes the backup service fall back to the app's own backup directory instead of failing every
+ * backup. A blank [chosen] is the "not configured" case and uses [fallback] directly, so the default is the data root's
+ * `backups` folder without anyone having to spell it out.
+ */
+fun desktopBackupDirectory(chosen: String, fallback: Path): Path {
+    if (chosen.isBlank()) return fallback
+    val path = try {
+        Path.of(chosen)
+    } catch (_: Exception) {
+        // InvalidPathException and friends: a stored path the JVM cannot even name is the unset case, not a crash.
+        return fallback
+    }
+    return if (Files.isDirectory(path) && Files.isWritable(path)) path else fallback
+}
+
+/**
  * Android's local periodical backups on Windows: the library export written to the data root's `backups` directory
  * before the WebDAV upload, so a server that refuses the file still leaves a restorable copy on this machine.
  *

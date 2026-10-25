@@ -8592,3 +8592,47 @@ Windows 侧没有开机广播和前台服务，所以“启动时”是应用打
 
 与 Android 不同的地方：没有系统级启动触发（只在打开应用时检查），也没有 TeleCloud/Telegram 目的地；
 上传是“每次成功恢复后都传一次”（Android 只在写入器世代为权威快照时上传），对本机是幂等的。
+
+## 189. 备份输出目录可自选（对齐 Android 的 `backups_output_directory` / `periodicalBackupDirectory`）（2026-10-25）
+
+Android 备份页第一组第一行就是“备份文件保存目录”：`AppSettings.periodicalBackupDirectory` 存一个 SAF
+tree URI，`BackupUtils` 在 tree 解析不出来或 `canWrite()` 为 false 时**回落到应用自己的备份目录**，
+页面把回落前的状态显示成 `invalid_value_message` 而不是让每次备份都失败。
+
+Windows 之前这一行只读（显示数据根 `backups`，带一个“打开”按钮），用户在桌面端没有等价操作：
+想把备份放到 OneDrive/网盘目录、或放到另一块磁盘上，只能手动搬文件。
+本切片把它变成 Android 那样的可选目录：
+
+- 设置里新增 `DesktopWebDavSettings.outputDirectory`（键 `backup_output_directory`，空 = 数据根 `backups`），
+  和已有的本地副本开关/保留份数写在同一个 `desktop_webdav` store 里。
+- `desktop-runtime` 新增顶层函数 `desktopBackupDirectory(chosen, fallback)`：`chosen` 非空且仍是可写目录时用它，
+  否则（空、路径名非法、不存在、不是目录、不可写）返回 `fallback`——就是 Android 的回落规则，
+  所以用户把目录删掉/拔掉移动盘之后备份不会静默消失，而是回到数据根继续写。
+- `DesktopWebDavOperations` 不再在构造时固定 `DesktopLocalBackups`，改为每次按当前设置解析
+  （`localBackups(settings)` / `localDirectory(settings)`）：本地副本、纯本地定时备份的报错文案、
+  页面显示的目录都走同一个解析，`settings()` 保存后重读列表，切换到新目录时旧目录的条目立刻不再列出。
+- 页面把原来的只读行换成 Android 的 `backups_output_directory`（标题直接用 Android 原句 “备份文件保存目录”），
+  行尾三个动作：`选择…`（`JFileChooser` 只能选目录，与仓库导出/恢复用同一套 Swing 选择器）、
+  `恢复默认`（只在自定义目录时出现）、`打开`（仍然打开当前这个目录）。
+- 控制器 `webDavOutputDirectory(Path?)` 像 Android 那样拒绝不是一个目录的路径（提示
+  `webdav.outputInvalid`，设置保持不变），`webDavOpenLocalDirectory()` 改为打开当前目录而不是数据根。
+- 文案：新增 `webdav.choose`、`webdav.outputReset`、`webdav.outputInvalid`（base 与 `_zh-CN` 同时写），
+  删掉被替换的 `webdav.localOpen`；`:desktop-app:verifyDesktopStrings` 仍然要求无缺失、无未使用键。
+
+验证：
+
+- `DesktopLocalBackupsTest` 新增 2 个用例（共 9 个）：可用的自选目录胜出；空串、纯空格、已删除目录、
+  普通文件、JVM 拒绝命名的路径都回落到数据根。
+- `DesktopWebDavAutoBackupTest` 新增 1 个用例（共 9 个）：`outputDirectory` 指向自选目录时纯本地定时备份
+  真的写进那个目录（数据根里没有同名文件，`localDirectory` 与列表一致）；把设置改到另一个目录后
+  列表换成新目录（旧的条目不再出现）且下一次备份写进新目录；把那个目录删掉后 `localDirectory` 回到数据根。
+- 真实窗口探针 `backups-write`/`backups-read`：断言 `webdav-local-open` 行存在、选择后摘要与
+  `webdavUi.localDirectory` 都变成所选目录、`webdav-local-choose`/`webdav-local-reset` 都在、
+  传一个文件路径会被拒绝（设置不变且有提示）、`恢复默认` 之后回到数据根（截图
+  `backups-write-output-directory.png`：`备份文件保存目录 / …\chosen-backups   选择…  恢复默认  打开`）。
+- 回归：`DesktopWebDavTest` 10、`DesktopWebDavAutoBackupTest` 9、`DesktopWebDavAutoRestoreTest` 5、
+  `DesktopWebDavRoundTripTest` 1、`DesktopLocalBackupsTest` 9 全绿；`:desktop-app:verifyDesktopStrings` 通过。
+
+与 Android 不同的地方：Android 用 SAF，Windows 用系统文件夹选择器（只能是本机路径，没有 URI 授权）；
+Android 的“备份频率”下拉（6 小时/1 天/…/1 个月）在 Windows 仍是“自动备份间隔（小时）”数字输入，
+两者量纲不同但语义相同（0 = 关），这次没有改动。

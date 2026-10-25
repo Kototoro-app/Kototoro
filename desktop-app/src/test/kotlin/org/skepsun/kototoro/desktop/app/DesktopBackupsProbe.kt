@@ -93,6 +93,29 @@ internal object DesktopBackupsProbe {
                     onNodeWithTag("webdav-local-status").performScrollTo()
                     waitForIdle()
                     snapshot("local-copy-filled")
+                    // Android's "backups output directory": the row shows where the copies go and can point elsewhere.
+                    val chosen = Files.createDirectories(root.resolveSibling("chosen-backups"))
+                    controller.webDavOutputDirectory(chosen)
+                    idle()
+                    check(controller.webDavUi.value.settings.outputDirectory == chosen.toString())
+                    check(controller.webDavUi.value.localDirectory == chosen)
+                    // A folder nobody has backed up into yet: the row follows the setting instead of the old listing.
+                    check(controller.webDavUi.value.localFiles.isEmpty())
+                    onNodeWithTag("webdav-local-open").performScrollTo()
+                    onNodeWithTag("webdav-local-choose").assertExists()
+                    onNodeWithTag("webdav-local-reset").assertExists()
+                    waitForIdle()
+                    snapshot("output-directory")
+                    // A file is not a directory: Android refuses the tree too, so the previous folder stays in force.
+                    controller.webDavOutputDirectory(chosen.resolve("library-backup.zip"))
+                    waitForIdle()
+                    check(controller.webDavUi.value.settings.outputDirectory == chosen.toString())
+                    check(controller.state.value.message.orEmpty().isNotEmpty())
+                    // "Use default" puts the data root's own folder back.
+                    controller.webDavOutputDirectory(null)
+                    idle()
+                    check(controller.webDavUi.value.settings.outputDirectory.isEmpty())
+                    check(controller.webDavUi.value.localDirectory == session.storage.paths.backups)
                     // A saved destination is what enables the auto-restore switch; it starts off, like Android.
                     controller.webDavSettings(DesktopWebDavSettings(serverUrl = "https://fixture.invalid/dav"))
                     onNodeWithTag("webdav-auto-restore").performScrollTo()
