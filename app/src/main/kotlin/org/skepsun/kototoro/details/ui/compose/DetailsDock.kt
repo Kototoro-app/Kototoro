@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,6 +51,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,7 +68,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
-import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -103,6 +104,8 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+
+private val DockActionButtonSize = 42.dp
 
 @Composable
 internal fun DetailsPaneActionsRow(
@@ -1170,11 +1173,6 @@ internal fun DetailsDockActionButton(
     spacingAfter: androidx.compose.ui.unit.Dp = if (modernStyle) 0.dp else 4.dp,
     onClick: () -> Unit,
 ) {
-    val containerColor by animateColorAsState(
-        targetValue = Color.Transparent,
-        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
-        label = "detailsDockSelectionColor",
-    )
     val contentColor by animateColorAsState(
         targetValue = when {
             modernStyle && isSelected -> MaterialTheme.colorScheme.primary
@@ -1185,18 +1183,20 @@ internal fun DetailsDockActionButton(
         animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
         label = "detailsDockSelectionContentColor",
     )
-    Surface(
-        modifier = Modifier.padding(end = spacingAfter),
-        shape = RoundedCornerShape(if (modernStyle) 18.dp else 16.dp),
-        color = containerColor,
-        tonalElevation = 0.dp,
-    ) {
+    val shape = RoundedCornerShape(if (modernStyle) 18.dp else 16.dp)
+    // A tab only gets a 42 dp slot in the dock, but Material3 pulls every icon button out to its
+    // 48 dp touch target, so the button overflowed its slot and the dock clipped it back: the focus
+    // outline is drawn on the button's own edge and therefore fell entirely outside that clip, which
+    // is why these three tabs never showed a ring on the remote. Capping the minimum keeps the
+    // button - and its ring - exactly on the slot the dock lays out.
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides DockActionButtonSize) {
         IconButton(
             onClick = onClick,
             modifier = Modifier
-                .width(42.dp)
-                .height(42.dp)
-                .tvFocusable(shape = RoundedCornerShape(16.dp), addFocusTarget = false),
+                .padding(end = spacingAfter)
+                .width(DockActionButtonSize)
+                .height(DockActionButtonSize)
+                .tvIconButtonRing(shape),
         ) {
             Icon(
                 painter = rememberSafePainter(iconRes),
