@@ -5560,3 +5560,116 @@ dismissButton = {
 3. 手机端的尾随 `×` 只服务带 suggestions 的字段，普通文本字段在手机上也没有清空入口——本轮按
    "只改 TV"的边界没有动它，作为产品决定记在这里。
 4. 第七十六轮遗留（BACK-关掉 IME 后不能再唤起）未复验。
+
+## 第九十轮：BACK 关掉软键盘以后，这个文本框再也调不出来（2026-10-25）
+
+### 起念
+
+第七十六轮把设置里的行内文本框换成对话框编辑时，留下一句"BACK 关掉 IME 后不能再唤起"；第八十九轮
+结尾也把它记成"未复验"。这轮先复验——它还在，而且是个彻底的死站：对话框开着、环还在字段上，
+遥控器按 CENTER 却什么都不会发生。
+
+### 复现（改前的设备事实）
+
+| 手势 | `dumpsys input_method` | 界面 |
+| --- | --- | --- |
+| 打开"Default download video quality"对话框 | `mInputShown=false` | 字段 `[568,456][1352,568]`，环在字段上 |
+| CENTER（进编辑） | `mInputShown=true` | 软键盘升起 |
+| BACK | `mInputShown=false` | **对话框还在**，字段仍是焦点，值没变 |
+| CENTER、再 CENTER | 两次都是 `mInputShown=false` | 键盘不再出现（`r90-1.png`），值也没动 |
+
+焦点从头到尾没离开过字段：`onFocusChanged` 没有触发，`editing` 还是 `true`，`readOnly` 还是 `false`。
+平台把这条输入连接记成"用户自己关掉的"，此后 `show()` 一律被吞。
+
+顺带撞出一个路由事实：**软键盘开着的时候 CENTER 根本到不了字段的预览处理器**。它落在 IME 窗口上，
+把 IME 里默认高亮的 `q` 键打了进去（字段值当场变成 `1080p, 720p, 480pq`），而
+`tvTextInputStartEditing` 的日志根本没响。
+
+### 代码事实
+
+旧实现只有三行，状态机少了一个出口（`core-ui/.../adaptive/TvFocus.kt`，`rememberTvTextFieldReadOnlyState`）：
+
+```kotlin
+.tvTextInputStartEditing {
+    editing = true
+    showKeyboard?.invoke() ?: keyboardController?.show()
+}
+.onFocusChanged { if (!it.hasFocus) editing = false }
+```
+
+DOWN / ENTER / 焦点离开都会把 `editing` 清掉，只有 BACK 不会——它既不移动焦点，也不属于这套状态机。
+
+两条看起来更"正统"的路先被排除了：
+
+1. **`WindowInsets.ime`**：在对话框窗口里读数一直是 0。探针打了三轮日志，`imeVisible=false`
+   贯穿全流程，而同一时刻 `dumpsys input_method` 明明是 `mInputShown=true`——对话框窗口把 IME 的
+   inset 自己吃掉了。所以"键盘在不在"这件事不能靠 inset 判断（`tvTextInputFocusEscape` 里同样的
+   读法在列表页有效，在对话框里不一定）。
+2. **自己截 BACK**：App 侧接不到。键盘升起时按键先发给 IME 窗口，`SettingsAlertDialog` 的
+   `BackHandler { onDismissRequest() }` 在 BACK 时根本没触发（否则对话框会跟着关掉），这就是反证。
+
+### 修法
+
+用"能到达"本身当状态信息：**CENTER 能到达字段，就意味着屏幕上没有键盘**（有键盘时按键归 IME 窗口）。
+于是 `editing` 还是 true 却收到 CENTER，只可能是一种情况——键盘被 BACK 关掉了。这时把 `editing`
+退回 `false`（字段回到只读、光标消失），下一次 CENTER 走原来的"只读 → 编辑"路径，Compose 重建输入
+会话，键盘自己回来：
+
+```kotlin
+.tvTextInputStartEditing {
+    if (editing) {
+        // 按键能到字段 = 屏幕上没有键盘 = BACK 关掉了它；退回只读，下一次 CENTER 重建输入会话
+        editing = false
+    } else {
+        editing = true
+        showKeyboard?.invoke() ?: keyboardController?.show()
+    }
+}
+```
+
+试过又否决的两个变体：
+
+- `focusManager.clearFocus()` + `requestFocus()` 复位焦点：键盘确实能回来，但中间有一帧没有焦点，
+  设置页左上角的返回键被点亮，屏幕上出现**两个环**（`r90-7.png`）。焦点本来就不该在这条路上动。
+- 退回只读时再叫一次 `keyboardController.hide()`：键盘已经没了，这是一次多余的 IME 事务，去掉之后
+  行为完全一致。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 观察 | 证据 | 数字 |
+| --- | --- | --- |
+| 改前：BACK 之后 CENTER 无效 | `r90-1.png` + 逐次 dump | BACK 之后连续两次 CENTER 都是 `mInputShown=false`，字段 bounds 不动 |
+| 改后：BACK 之后第一次 CENTER 回到只读 | `r90-14.png` + dump | `mInputShown=false`，环仍在字段、光标消失、三个按钮可见 |
+| 改后：第二次 CENTER 键盘回来 | `r90-15.png` + dump | `mInputShown=true`，键盘升起 |
+| 打字正常 | `input text 'X'` | 字段 `'1080p, 720p, 480p'` → `'1080p, 720p, 480pX'` |
+| 离开字段的行内退出没坏 | BACK → DOWN | 焦点从字段移到 `OK` |
+| 提交正常 | CENTER on `OK` | 对话框关闭，落盘 `1080p, 720p, 480pX` |
+| 清空路径没坏 | DOWN → LEFT → CENTER → RIGHT → CENTER | 字段 `''`，落盘回落到 `1080p, 720p, 480p`（`DownloadsSettingsRoute.kt:150-158` 的空串归一化） |
+| 复原 | `run-as … cat shared_prefs` | 模拟器存值回到默认 `1080p, 720p, 480p` |
+
+最后两行同时证明：BACK 循环之后的字段和原来一样能打字、能提交、能用 Clear 清空——只是在"键盘被
+关掉"与"能重新调出"之间多了一次确认性的 CENTER。
+
+### 教训
+
+**平台把"用户关掉的输入连接"和"从没开过"当两回事。** `show()` 只在前一种情况之外有效，复位它的
+唯一药是重建输入会话（`readOnly` 翻转），不是再喊一次 `show()`。凡是"焦点不动、界面不动"的退出
+方式（BACK 是典型），都要问一句："这套状态机有没有对应它的出口？"
+
+**"能到达"本身是状态信息。** 按键路由已经替我们证明了"键盘不在屏幕上"；比起去问 insets
+（对话框窗口里读不到）或去截 BACK（被 IME 吃掉），用可达性反推状态更省事也更可靠。同样的思路可以
+套到别的"某个键只会在某状态下到达这里"的场合。
+
+**先打探针再改代码。** 三行日志确认 `imeVisible` 恒为 `false`，才敢把 insets 那条路整条划掉；
+否则很容易写出"逻辑正确、读数恒假"的补丁。
+
+### 遗留
+
+1. **走过 BACK 循环以后，再进编辑态对话框不再上移**，按钮行落在键盘后面（`r90-15.png`）；而从
+   对话框里第一次进编辑态是会上移的（`r90-13.png`，字段从 `[568,456]` 抬到 `[568,216]`，240 px = 120 dp）。
+   这不是死站（BACK 一按按钮就回来），但它和第八十九轮 `r89-11.png` 的"对话框整体上移、三个按钮
+   全在键盘之上"冲突，怀疑是对话框窗口的 IME inset 只在首次升起时生效一次。留待下一轮。
+2. 这一轮只动共享 holder（`core-ui` 的 `rememberTvTextFieldReadOnlyState`），两个调用点
+   （下载画质、自定义空间名称）同时受益；自定义空间名称那条没有单独在设备上复验。
+3. 第八十九轮遗留仍在：对话框宽度仍是手机尺寸；重命名/备注/截图命名等其它文本对话框没有"清空"；
+   手机端普通文本字段也没有清空入口。
