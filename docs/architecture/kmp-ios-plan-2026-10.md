@@ -8982,3 +8982,52 @@ Windows 此前只有详情页里的“选择书签”面板，没有“全部书
 - 全量：`:desktop-app:test` 292 条 0 失败、`:desktop-runtime:test` 187 条 0 失败、`:core-domain:jvmTest` 261 条 0 失败、
   `:desktop-app:verifyDesktopStrings` 960 键 / 960 被引用、`:core-ui:compileCommonMainKotlinMetadata` 与
   `:app:compileDebugKotlin` 通过。
+
+## 197. Windows 补上 Android 的更新页（2026-10-25）
+
+目标里的“补全功能”继续推进。Android 的 `NavItem.UPDATED`（`UpdatedTopLevelRouteContent` + `UpdatesViewModel`）
+在 Windows 一直没有对应页面：订阅页只把新章节画成轮播，轮播的“全部”还是死链（`onMoreClick = null`）。
+本轮把这一页接上，并把入口、清计数语义和导航项一起对齐。
+
+### 数据（共享规则）
+- `FeedUpdateRow` 是“每条追踪一行”的投影（v84 已无实体图谱），所以页面必须先按作品折起来：
+  `desktop-runtime` 新增 `DesktopUpdates.kt`，`desktopUpdateGroups(rows, hideNsfw, acceptsSource)` 以
+  `displayMangaId ?: mangaId` 为键，章节数相加（负数按 0）、`lastChapterDate` 取最大、代表行取 `lastCheckTime`
+  最新的那条（标题/封面/来源/成人标记都来自它），`ownerIds` 保留每条追踪以备“标为已读”。
+- 排序：置顶优先，随后新章节日期倒序、检查时间倒序、标题。`lastChapterDate` 缺失的作品不编造日期，排在最后
+  （Android 那边同样用 `updated_long_ago` 兜底）。
+- 成人目标沿用订阅轮播的 `sources.nsfw.updates`；来源/内容类型筛选与标签黑名单走订阅页同一套
+  `acceptsFeedSource`（从 `private` 改成 `internal` 复用）与 `TagTitleBlacklist`。
+- `desktopUpdatesSummary` 给出头部那句“N 部有更新 · M 个新章节”（`updated_header_summary`）。
+
+### 页面（`DesktopUpdatesPage`）
+- 头部：标题 `updated`、副标题是上面那句摘要、来源筛选条、检查更新按钮、`updated_header_all_read`
+  （无更新时禁用）。
+- 行：封面、标题（置顶画 `ic_pin`）、`来源 · N 个新章节`、日期（没有日期用 `updated_long_ago`）、
+  “继续阅读”与“移除”；点行本身进详情（Android 的 `openTracked`）。
+- 追踪关着时（`trackedCategories == 0`）显示订阅页同一块“追踪未开启”提示与一键开启；空态用 Android 的
+  `updated_header_up_to_date` 与其副标题。
+- “移除”和“全部标为已读”是 Android 的同一个动作 `UpdatesViewModel.remove` → `TrackingRepository.clearUpdates`
+  → `core-domain` 的 `completePendingUpdates`：清章节计数与待读标记，历史、进度与时间线日志都不动。
+  点开一行仍只是 `markSeen`（Android 的 `clearReadUpdates`）——Android 要等新章节真的读到末页才清计数，
+  探针也按这条断言，免得把“点开”写成“已读”。
+
+### 入口与导航
+- 轮播“全部”调 `controller.showUpdates()`；共享 `UpdatedContentCarousel` 只新增一个可选 `moreModifier`
+  （桌面给按钮挂 `feed-updated-more`，Android 不传，行为不变）。
+- `DesktopNavItem.UPDATED`（id 7、标签 `updated`、图标 `ic_updated`）可加入主导航。默认顺序仍是 Android 的
+  五项上限，所以和 Android 一样要靠“导航配置”把它换进去——订阅页轮播才是主要入口。
+- 详情页的返回起点 `DetailsOrigins` 与 `dismissDetails` 的刷新条件都加入 UPDATED：从更新页进详情再返回，
+  仍在更新页且计数是最新的。
+
+### 验证
+- `:desktop-runtime:test --tests=*DesktopUpdatesTest*`（新增 4 条）：两部作品两条追踪的折叠（`ownerIds`、
+  章节数相加、代表行的来源、日期取最大、按日期倒序）、负数计数按 0 计、置顶优先且成人过滤生效、
+  来源过滤先于折叠并影响摘要。`*DesktopNavigationSettingsTest*` 的“可添加项”断言随新导航项更新。
+- `:desktop-app:test --tests=*DesktopUpdatesPageTest*`（新增探针，`updates` 模式）：导入 fixture 来源、收藏一部作品、
+  直接写一条 `chapters_new = 2` 的 tracks 行，从订阅轮播的“全部”进更新页，断言标题句、行与章节数；
+  点行进详情且计数仍为 2，返回仍在更新页；行“移除”后计数归零、进度不变、出现空态；
+  再种 3 章用“全部标为已读”清空；“继续阅读”打开阅读器并加载出页面。
+- 全量：`:desktop-app:test` 293 条 0 失败（4 跳过）、`:desktop-runtime:test` 191 条 0 失败（2 跳过）、
+  `:core-domain:jvmTest` 261 条 0 失败、`:desktop-app:verifyDesktopStrings` 960 键 / 960 被引用、
+  `:core-ui:compileCommonMainKotlinMetadata` 与 `:app:compileDebugKotlin` 通过。

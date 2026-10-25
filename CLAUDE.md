@@ -251,6 +251,12 @@ npm run docs:build
   区分（`noteScrollInput`/`notePressedInput`，面板根节点在 initial pass 上观察 `Scroll`/`Press`），只有按下的拖动才让
   嵌套滚动挪面板，所以滚轮永远滚列表、拖标题仍收起；回归用 `StableSheetWheelScrollTest` 与 `DesktopChapterPanelScrollTest`
   （真实阅读器章节面板里的滚轮步），见计划 §196。
+  Android 的更新页也已接上（`DesktopScreen.UPDATED`，导航项 `DesktopNavItem.UPDATED`，默认不在五项上限里，
+  和书签页一样可从“导航配置”换进去；主入口是订阅页轮播的“全部”）：折叠规则在 `desktop-runtime` 的
+  `DesktopUpdates.kt`（按 `displayMangaId ?: mangaId` 归并、章节数相加、`lastChapterDate` 取最大、置顶优先），
+  头部是 Android 的 `updated_header_summary`/`updated_header_all_read`，行是“继续阅读 + 移除”，
+  成人目标沿用 `sources.nsfw.updates`；点开一行只 `markSeen`（Android 的 `clearReadUpdates`），
+  “移除”与“全部标为已读”走 Android 的 `completePendingUpdates`（清计数、留历史与进度），见计划 §197。
   .pb/新版 JSON 仓库添加/列表/搜索、JAR 安装/更新/导入及身份恢复；新产物保存到应用管理的 SHA 目录。
   仓库可“忘记”（只删索引条目，已安装扩展与 JAR 保留，重新添加即恢复）。
   来源浏览/搜索、详情、收藏、分页图片阅读、历史与源设置，以及可选网页/HTML/JS 调试。

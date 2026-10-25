@@ -42,6 +42,7 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
         DesktopScreen.EXPLORE, DesktopScreen.DETAILS, DesktopScreen.PREFERENCES -> desktopNavItemId(DesktopNavItem.BROWSE)
         DesktopScreen.HISTORY -> desktopNavItemId(DesktopNavItem.HISTORY)
         DesktopScreen.BOOKMARKS -> desktopNavItemId(DesktopNavItem.BOOKMARKS)
+        DesktopScreen.UPDATED -> desktopNavItemId(DesktopNavItem.UPDATED)
         else -> DESKTOP_NAV_MORE_ID
     }
     val updates = state.feed.updateRowsByOwnerId.size
@@ -52,6 +53,7 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
         desktopNavItemId(DesktopNavItem.HISTORY) -> controller.library(true)
         desktopNavItemId(DesktopNavItem.HOME) -> controller.home()
         desktopNavItemId(DesktopNavItem.BOOKMARKS) -> controller.showBookmarks()
+        desktopNavItemId(DesktopNavItem.UPDATED) -> controller.showUpdates()
         else -> controller.more()
     } }
     // Re-selecting "browse" inside a source goes back to the source grid, like Android's tab re-tap.
@@ -75,6 +77,7 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
                     desktopNavItemId(DesktopNavItem.BROWSE) -> "ic_explore_normal"
                     desktopNavItemId(DesktopNavItem.HISTORY) -> "ic_history"
                     desktopNavItemId(DesktopNavItem.BOOKMARKS) -> "ic_bookmark"
+                    desktopNavItemId(DesktopNavItem.UPDATED) -> "ic_updated"
                     else -> "ic_more_vert"
                 }
                 androidx.compose.material3.BadgedBox(badge = {
@@ -106,6 +109,7 @@ internal fun desktopNavItemId(item: DesktopNavItem): Int = when (item) {
     DesktopNavItem.HISTORY -> 2
     DesktopNavItem.SUBSCRIPTIONS -> 5
     DesktopNavItem.BOOKMARKS -> 6
+    DesktopNavItem.UPDATED -> 7
 }
 
 /** The label the rail and the configuration page both draw; the same words the desktop catalog gave each tab. */
@@ -117,6 +121,8 @@ internal fun desktopNavItemLabel(item: DesktopNavItem): String = when (item) {
     DesktopNavItem.SUBSCRIPTIONS -> desktopText("nav.subscriptions")
     // Android's `NavItem.BOOKMARKS` takes `R.string.notes` for the same destination.
     DesktopNavItem.BOOKMARKS -> AndroidStrings["notes"]
+    // Android's `NavItem.UPDATED` label is `R.string.updated`.
+    DesktopNavItem.UPDATED -> AndroidStrings["updated"]
 }
 
 /**

@@ -310,6 +310,8 @@ fun <T> UpdatedContentCarousel(
     cover: @Composable BoxScope.(item: T, card: UpdatedCarouselCardScope) -> Unit,
     badges: @Composable BoxScope.(item: T, card: UpdatedCarouselCardScope) -> Unit,
     modifier: Modifier = Modifier,
+    /** Lets a host tag the header's more button; Android draws it untagged. */
+    moreModifier: Modifier = Modifier,
     screenPadding: Dp = 16.dp,
     gridScale: Float = 1f,
     cardModifier: (T) -> Modifier = { Modifier },
@@ -329,7 +331,8 @@ fun <T> UpdatedContentCarousel(
             Text(headerTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface)
             if (onMoreClick != null) {
-                TextButton(onClick = onMoreClick, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
+                TextButton(onClick = onMoreClick, modifier = moreModifier,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
                     Text(moreLabel, style = MaterialTheme.typography.labelMedium)
                 }
             }

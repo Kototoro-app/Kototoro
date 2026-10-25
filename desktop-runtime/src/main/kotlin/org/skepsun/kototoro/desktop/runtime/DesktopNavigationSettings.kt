@@ -25,6 +25,13 @@ enum class DesktopNavItem {
 
     /** Android's `NavItem.BOOKMARKS` (labelled 笔记, the bookmarks page). Off by default, like on Android. */
     BOOKMARKS,
+
+    /**
+     * Android's `NavItem.UPDATED`: the tracked works with new chapters. Off by default because the rail is already at
+     * [MainNavigationRules.MAX_ITEMS] and the subscriptions page links to it anyway, exactly like Android's default
+     * main list keeps it out of the bar.
+     */
+    UPDATED,
 }
 
 /** The default order, matching the rail Android's tablet shell ships and the Windows shell drew before this page. */

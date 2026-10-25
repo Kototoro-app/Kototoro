@@ -27,6 +27,10 @@ object DesktopAppProbe {
                 DesktopBookmarksProbe.run(args)
                 return
             }
+            if (args[0] == "updates") {
+                DesktopUpdatesProbe.run(args)
+                return
+            }
             if (args[0] == "incognito") {
                 DesktopIncognitoProbe.run(args)
                 return

@@ -40,6 +40,7 @@ import org.skepsun.kototoro.desktop.runtime.DesktopLibraryBackup
 import org.skepsun.kototoro.desktop.runtime.DesktopBookmark
 import org.skepsun.kototoro.desktop.runtime.DesktopBookmarkGroup
 import org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget
+import org.skepsun.kototoro.desktop.runtime.DesktopUpdateGroup
 import org.skepsun.kototoro.desktop.runtime.desktopBookmarkShelf
 import org.skepsun.kototoro.desktop.runtime.DesktopLibrarySnapshot
 import org.skepsun.kototoro.desktop.runtime.DesktopRepository
@@ -84,7 +85,7 @@ private const val IMAGE_BUDGET = "image_budget_mb"
 private const val IMAGE_SWEEP_INTERVAL_MILLIS = DesktopImageBudget.SWEEP_INTERVAL_MILLIS
 
 internal val DetailsOrigins = setOf(DesktopScreen.HOME, DesktopScreen.FEED, DesktopScreen.EXPLORE, DesktopScreen.LIBRARY,
-    DesktopScreen.HISTORY, DesktopScreen.BOOKMARKS)
+    DesktopScreen.HISTORY, DesktopScreen.BOOKMARKS, DesktopScreen.UPDATED)
 
 /** The JVM's display locale, matched against branch names as Android matches its locale list. */
 internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
@@ -95,7 +96,7 @@ enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
     PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES, DICTIONARY_RULES,
-    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD, SOURCE_TEST, BOOKMARKS,
+    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD, SOURCE_TEST, BOOKMARKS, UPDATED,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -1457,6 +1458,27 @@ class DesktopController(
     /** Android's subscriptions page: tracked works with new chapters and the update log timeline. */
     fun subscriptions() = navigate { loadFeedOnIo(DesktopScreen.FEED) }
 
+    /**
+     * Android's updates destination (`UpdatesNavKey`): the tracked works the last check found new chapters for. It sits
+     * beside the subscriptions page instead of replacing it — Android draws the same carousel there too, behind its
+     * "show updated" switch — and reads the snapshot the subscriptions page already reloaded.
+     */
+    fun showUpdates() = navigate { loadFeedOnIo(DesktopScreen.UPDATED) }
+
+    /**
+     * The updates page's "mark all read" (the header) and "remove" (a row), which on Android is one action:
+     * `UpdatesViewModel.remove` → `TrackingRepository.clearUpdates` → `completePendingUpdates` per work. It drains the
+     * tracks' new-chapter counters and leaves history, progress and the timeline's log rows alone, so a later check
+     * starts from the chapter the counter stopped at instead of resurrecting reminders for chapters already opened.
+     */
+    fun markUpdatesRead(groups: List<DesktopUpdateGroup>) = action {
+        val database = session.storage.database
+        val owners = groups.flatMapTo(LinkedHashSet()) { it.ownerIds }
+        val now = System.currentTimeMillis()
+        for (ownerId in owners) database.completePendingUpdates(ownerId, now)
+        loadFeedOnIo()
+    }
+
     private suspend fun loadFeedOnIo(screen: DesktopScreen? = null) {
         val feed = session.feed.observe(session.storage.database).first()
         val tracked = session.tracker.trackedCategoryCount()
@@ -1582,9 +1604,10 @@ class DesktopController(
         val library = if (origin == DesktopScreen.LIBRARY || origin == DesktopScreen.HISTORY) {
             session.library.snapshot(origin == DesktopScreen.HISTORY)
         } else state.value.library
-        // Reading from home or the feed changes their rows (history, cleared counters).
+        // Reading from home, the feed or the updates page changes their rows (history, cleared counters).
         val homeHistory = if (origin == DesktopScreen.HOME) session.library.snapshot(history = true) else state.value.homeHistory
-        val feed = if (origin == DesktopScreen.HOME || origin == DesktopScreen.FEED) {
+        val feed = if (origin == DesktopScreen.HOME || origin == DesktopScreen.FEED ||
+            origin == DesktopScreen.UPDATED) {
             session.feed.observe(session.storage.database).first()
         } else state.value.feed
         val feedContents = if (feed !== state.value.feed) feedContentsOnIo(feed) else state.value.feedContents
