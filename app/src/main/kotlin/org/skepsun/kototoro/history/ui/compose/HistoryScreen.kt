@@ -30,11 +30,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
+import org.skepsun.kototoro.main.ui.compose.rememberMainContentFocusAnchorRequester
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.list.ui.ContentListViewModel
 import org.skepsun.kototoro.list.ui.compose.KototoroContentListScreen
@@ -201,15 +203,24 @@ private fun HistoryHeader(
         }
         // While searching, the stats card only pushes the matches down.
         val showStats = isStatsEnabled && libraryQuery.isEmpty()
+        // TV: whichever summary card is on screen is this page's first stop, so it is what DOWN from the
+        // top bar's search controls lands on. Without it that DOWN falls out of the page and lands on the
+        // navigation rail instead.
+        val firstStopRequester = rememberMainContentFocusAnchorRequester(enabled = showStats)
         if (showStats && statsSummary != null && statsSummary.hasAnyActivity()) {
             HistoryStatsSummaryCard(
                 dashboard = statsSummary,
                 onClick = onStatsClick,
-                modifier = Modifier.padding(horizontal = AppLayoutTokens.screenHorizontalPadding),
+                modifier = Modifier
+                    .padding(horizontal = AppLayoutTokens.screenHorizontalPadding)
+                    .focusRequester(firstStopRequester),
             )
             Spacer(modifier = Modifier.height(10.dp))
         } else if (showStats) {
-            HistoryStatsPlaceholderCard(onClick = onStatsClick)
+            HistoryStatsPlaceholderCard(
+                onClick = onStatsClick,
+                modifier = Modifier.focusRequester(firstStopRequester),
+            )
             Spacer(modifier = Modifier.height(6.dp))
         }
 
