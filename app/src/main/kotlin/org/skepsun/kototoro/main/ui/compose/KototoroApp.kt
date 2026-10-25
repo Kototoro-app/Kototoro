@@ -755,6 +755,10 @@ fun KototoroApp(
         .orEmpty()
     val shouldReserveChromeInsets = shouldShowChrome || (isImmersiveRoute && isDetailsChromeTransitionPending)
     var isChromeVisible by rememberSaveable { mutableStateOf(shouldShowChrome && !isImmersiveRoute) }
+    // TV: scrolling the page collapses the bar by translating it up and fading it out. Its focus targets stay
+    // alive, so UP from the content can land on a pill that is off-screen: no ring, and CENTER still fires.
+    // Track focus inside the chrome and keep the bar at its rest place while it holds focus.
+    var isChromeFocused by remember { mutableStateOf(false) }
     var pendingChromeRestoreFromDetails by rememberSaveable { mutableStateOf(isImmersiveRoute) }
     val shouldHideChromeForEnteringDetails =
         isDetailsChromeTransitionPending && heroTransitionPhase == HeroTransitionPhase.EnteringDetails
@@ -845,8 +849,9 @@ fun KototoroApp(
     val shouldUseMaterialTopBarScroll = shouldShowChrome && !hasSelectionTopChrome
     val isChromeOffsetFromCurrentDestination =
         offsetDestinationRoute == currentDestinationRoute && offsetDestinationOwnerKey == currentTopBarOwnerKey
+    val shouldRevealChromeForFocus = presentationConfig.isTv && isChromeFocused
     val effectiveTopBarOffset = if (isChromeOffsetFromCurrentDestination && shouldUseMaterialTopBarScroll) {
-        topAppBarState.heightOffset
+        if (shouldRevealChromeForFocus) 0f else topAppBarState.heightOffset
     } else {
         0f
     }
@@ -861,7 +866,7 @@ fun KototoroApp(
         !isDetailsChromeTransitionPending &&
         topTabsOverrideState != null &&
         isChromeVisible
-    val effectiveChromeAlphaTarget = if (shouldKeepTabsVisible) {
+    val effectiveChromeAlphaTarget = if (shouldKeepTabsVisible || shouldRevealChromeForFocus) {
         1f
     } else {
         scrollAlpha
@@ -1172,6 +1177,7 @@ fun KototoroApp(
                         visibleStartInsetDp = visibleStartInsetDp,
                         effectiveTopBarOffset = effectiveTopBarOffset,
                         chromeAlpha = chromeAlpha,
+                        onChromeFocusChanged = { focused -> isChromeFocused = focused },
                         onTopBarHeightMeasured = { newHeight ->
                             if (topBarHeightPx != newHeight) {
                                 topBarHeightPx = newHeight

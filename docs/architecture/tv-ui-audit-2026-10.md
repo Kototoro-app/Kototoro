@@ -6758,3 +6758,57 @@ val LocalMainContentFocusAnchor = staticCompositionLocalOf<MainContentFocusAncho
 `CompositionLocalProvider` 横在两者之上，于是加一格槽位、两行注册，比改五个签名更接近问题的形状。
 另外，凡是「注册一个指针给别人按」的东西，都必须同时回答「这个指针什么时候失效」；这一轮花在
 `ON_RESUME`/`ON_PAUSE` 上的几行代码，比注册那行更值钱——`Y52` 就是它没漏的证明。
+## 第一百零二轮：焦点落在「看不见的」顶栏上时，把它拉回来（2026-10-25）
+
+**现象**：历史页往下滚，顶栏按 `topAppBarState.heightOffset` 被真的移出窗口、并配合 `chromeAlpha` 淡出；
+但它的焦点目标还活在焦点树里。从统计卡 `[192,140][1896,404]` 按 UP，落点是一个**窗口外**的搜索胶囊：
+a11y dump 报 `NOTHING`（不可见节点被裁掉），截图与「全屏没焦点」时一模一样（`K34` 与 `J22` 同形），
+可 CENTER 依然会把搜索页打开（后来在 `J31` 量到 `EditText [124,0][1780,96]`）。
+用户拿到的是「按了没反应、其实已经点进去了」，比根本没焦点更糟。
+
+**根因**：隐藏用的是**位移**——`MainTopChrome` 的 `topChromeModifier` 上有
+`.offset { IntOffset(0, effectiveTopBarOffset.toInt()) }`（`KototoroAppTopChrome.kt`），既没有移除，
+也没有 `canFocus = false`。Compose 的焦点搜索只看几何关系，被移出窗口的节点在 2D 搜索里仍然是
+「上方最近的一个候选」，于是 UP 会稳稳落到一个屏幕外的东西上。
+
+**修法**：让顶栏自己报告「焦点在我这儿」，外壳据此把顶栏按回原位。
+1. `MainTopChrome` 的 `topChromeModifier` 加 `.onFocusChanged { focusState -> onChromeFocusChanged(focusState.hasFocus) }`，
+   新参数 `onChromeFocusChanged: (Boolean) -> Unit = {}`；`hasFocus` 是「本节点或任一子节点有焦点」，
+   所以胶囊、筛选、⋮ 谁被点亮都会报。
+2. `KototoroApp` 里 `var isChromeFocused by remember { mutableStateOf(false) }`，与 `presentationConfig.isTv`
+   合成 `shouldRevealChromeForFocus`，然后**两处**生效：`effectiveTopBarOffset` 在它有焦点时取 `0f`
+   （不是 `topAppBarState.heightOffset`），`effectiveChromeAlphaTarget` 在它有焦点时取 `1f`。
+3. 没有去改 `topAppBarState.heightOffset` 本身：滚动状态是页面的真相，焦点只是「临时让人看见」，
+   焦点一走，偏移与透明度就自动回到滚动该有的样子。整套判断都在 `presentationConfig.isTv` 后面，
+   手机/平板的行为一个字节都没动。
+
+**证据**（模拟器 1920×1080 @320，`P` 系列为最终构建 `102d`）：
+- 隐藏态：历史页滚到列表末尾，焦点 `[192,660][422,1080]`（`P12`），顶栏整体不可见。
+- UP 回到统计卡 `[192,140][1896,404]`（`P23`）；再 UP：`P24` 顶栏滑回，标题「History」与搜索胶囊
+  `[358,16][1692,112]` **带蓝色焦点环**出现在原位，a11y 也重新给出它的 bounds。
+- 回归：首页 hero `[216,144][1096,624]` → UP → 胶囊 `[332,16][1692,112]` → DOWN → 回到 hero（`R10`–`R12`）；
+  收藏页胶囊 `[399,16][1692,112]` → DOWN → 标签栏 `[411,128][585,224]`（`S20`–`S22`，与第一百轮
+  `Y51`→`Y52` 同一结果）。第一百零一轮的槽位没被这轮的位移覆盖打坏。
+
+**假线索（记下来）**：本轮第一次量同一场景（构建 `102b`，`K` 系列）时，UP 之后依旧 `NOTHING`、顶栏也没回来。
+为分清「回调没触发」还是「`isTv` 不是真」，临时加了一行 `Log.d("TvChromeProbe", ...)` 探针（`102c`）：
+探针打出 `tv=true`、`chromeFocus=true`，同一条路径随后连续复现两次成功；去掉探针重建（`102d`）仍然成功。
+那次失败没能复现，最可能是紧接「详情页 BACK」之后的一次过渡态——那一刻 `isChromeVisible` 还是 `false`，
+`scrollAlpha` 因此是 0，只把偏移归零依然看不见东西。所以修法补了第 2 步后半句：
+`effectiveChromeAlphaTarget` 也吃 `shouldRevealChromeForFocus`，让「焦点在顶栏」同时压过位移与透明度
+两条隐藏路径，而不是只压一条。
+
+**遗留**
+1. 回程还没有对偶：顶栏被拉回来并持有焦点后，DOWN 回内容区仍走 2D 搜索；历史页没有锚点，
+   于是落到导航栏（`L30` 量到 `[16,440][152,576]`）。第一百零一轮的槽位只管「内容 → 顶栏」，
+   反向要等历史/探索等页各自注册第一站。
+2. 「详情页 BACK 之后的一瞬」这个过渡态值得单独量一次：本轮的修法能兜住「焦点已进顶栏」的情形，
+   兜不住「顶栏该出现却没出现」本身。
+
+### 教训
+
+**能聚焦的东西，要么看得见，要么就别让它被聚焦。** 顶栏的隐藏是动画（位移 + 透明度），
+隐藏态下它仍是焦点树里合法的落点，于是遥控器的 UP 等于一次「盲点」。遮住它的不是焦点系统，
+而是「顶栏总在最上层」这条空间直觉——而这条直觉在 2D 焦点搜索里根本不存在。
+把「我在被聚焦」这一条信息交回给隐藏方自己（一行 `.onFocusChanged`），比在内容区一张张画面去补 UP 链接
+更省、也更不容易漏；同时要记得：隐藏有两条路径（位移、透明度），兜底也得两条都压住。

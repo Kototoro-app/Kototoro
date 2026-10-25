@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -65,6 +66,7 @@ internal fun BoxScope.MainTopChrome(
     visibleStartInsetDp: androidx.compose.ui.unit.Dp,
     effectiveTopBarOffset: Float,
     chromeAlpha: Float,
+    onChromeFocusChanged: (Boolean) -> Unit = {},
     onTopBarHeightMeasured: (Int) -> Unit,
     query: String,
     titleRes: Int?,
@@ -132,6 +134,7 @@ internal fun BoxScope.MainTopChrome(
         )
         .padding(start = visibleStartInsetDp)
         .offset { androidx.compose.ui.unit.IntOffset(0, effectiveTopBarOffset.toInt()) }
+        .onFocusChanged { focusState -> onChromeFocusChanged(focusState.hasFocus) }
         .graphicsLayer { alpha = chromeAlpha }
         .onGloballyPositioned { coords -> onTopBarHeightMeasured(coords.size.height) }
 
