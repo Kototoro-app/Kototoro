@@ -25,6 +25,7 @@ import org.skepsun.kototoro.stats.domain.StatsContentKind
 import org.skepsun.kototoro.history.domain.recoverHistoryChapterId
 import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.reader.core.IntSize
+import org.skepsun.kototoro.reader.core.ReaderModeDetection
 import java.nio.file.Files
 import java.nio.file.Path
 import org.skepsun.kototoro.desktop.runtime.DesktopNovelHtml
@@ -88,6 +89,11 @@ private const val AUTO_BACKUP_RETRY_MILLIS = 10L * 60 * 1000
 private const val IMAGE_BUDGET = "image_budget_mb"
 /** A sweep lists and stats the whole image directory, so the periodic loop runs it at most this often. */
 private const val IMAGE_SWEEP_INTERVAL_MILLIS = DesktopImageBudget.SWEEP_INTERVAL_MILLIS
+/**
+ * Android stores the reader mode of every work in the `mode` column of its `preferences` table. The desktop reader
+ * prefs keep the same map as `"<contentId>=<mode>"` entries of one string set.
+ */
+private const val READER_MODES = "reader_modes"
 
 internal val DetailsOrigins = setOf(DesktopScreen.HOME, DesktopScreen.FEED, DesktopScreen.EXPLORE, DesktopScreen.LIBRARY,
     DesktopScreen.HISTORY, DesktopScreen.BOOKMARKS, DesktopScreen.UPDATED, DesktopScreen.SUGGESTIONS)
@@ -2918,6 +2924,8 @@ class DesktopController(
         }
             ?: session.chapterPages(content.id, selected)
         require(pages.isNotEmpty()) { desktopText("error.noPages") }
+        val settings = state.value.readerSettings
+        val mode = resolvedReaderMode(settings, content.id, pages)
         val bookmarkedIndex = bookmark?.let { saved ->
             require(saved.contentId == content.id && saved.chapterId == selected.id)
             pages.indexOfFirst { it.id == saved.pageId }.takeIf { it >= 0 }
@@ -2933,6 +2941,7 @@ class DesktopController(
         beginReadingStop()
         val candidate = state.value.let { it.copy(screen = DesktopScreen.READER, chapter = selected, pages = pages,
             pageIndex = index, readerImages = emptyMap(), readerGeometry = session.readerGeometry(pages), readerScroll = restoredScroll,
+            readerSettings = settings.copy(mode = mode),
             readerTargetPage = index, readerTargetScroll = if (startAtEnd) Float.MAX_VALUE else restoredScroll,
             readerLastVisible = index, readerAtEnd = false, readerNavigation = it.readerNavigation + 1, readerScrollReady = false,
             readerVisiblePages = emptyList(), readerLoading = emptySet(), readerFailedPages = emptyMap(),
@@ -2944,6 +2953,48 @@ class DesktopController(
         mutableState.value = loaded
         prefetchAroundSlot(loaded)
     }
+
+    /**
+     * Android's `DetectReaderModeUseCase`: a mode remembered for this work wins; otherwise, while autodetect is on, the
+     * page at 30% of the chapter decides whether the work is a webtoon. Android caches that verdict too, so a later
+     * manual choice for the same work is what the next open uses.
+     */
+    private suspend fun resolvedReaderMode(
+        settings: DesktopReaderSettings,
+        contentId: Long,
+        pages: List<SourcePage>,
+    ): DesktopReaderMode {
+        rememberedReaderMode(contentId)?.let { return it }
+        val mode = settings.mode
+        if (!settings.readerModeDetection || mode.isContinuous) return mode
+        val probe = pages.getOrNull(ReaderModeDetection.probePageIndex(pages.size)) ?: return mode
+        // The page is fetched exactly as the reader would fetch it, so the check costs one image and warms the index.
+        val image = runCatching { session.readerImage(probe) }.getOrNull() ?: return mode
+        val resolved = if (ReaderModeDetection.isWebtoonPage(image.width, image.height)) {
+            DesktopReaderMode.CONTINUOUS
+        } else {
+            mode
+        }
+        rememberReaderMode(contentId, resolved)
+        return resolved
+    }
+
+    private fun rememberedReaderMode(contentId: Long): DesktopReaderMode? {
+        val key = contentId.toString() + "="
+        val value = rememberedReaderModes().firstOrNull { it.startsWith(key) }?.substring(key.length) ?: return null
+        return DesktopReaderMode.entries.firstOrNull { it.name == value }
+    }
+
+    private suspend fun rememberReaderMode(contentId: Long, mode: DesktopReaderMode) {
+        val key = contentId.toString() + "="
+        val modes = rememberedReaderModes().filterNot { it.startsWith(key) } + (key + mode.name)
+        readerPreferences.edit(SourcePreferenceEdit(changes = mapOf(
+            READER_MODES to SourcePreferenceValue.TextSet(modes.toSet()),
+        )))
+    }
+
+    private fun rememberedReaderModes(): List<String> =
+        (readerPreferences.snapshot()[READER_MODES] as? SourcePreferenceValue.TextSet)?.values?.sorted().orEmpty()
 
     fun page(index: Int) = action { pageOnIo(index) }
 
@@ -3223,11 +3274,16 @@ class DesktopController(
             "webtoon_gaps" to SourcePreferenceValue.Toggle(settings.webtoonGaps),
             "reader_continuous_horizontal_reversed" to
                 SourcePreferenceValue.Toggle(settings.continuousHorizontalReversed),
+            "reader_mode_detect" to SourcePreferenceValue.Toggle(settings.readerModeDetection),
             "as_speed" to SourcePreferenceValue.FloatBits(settings.autoScrollSpeed.toRawBits()),
             "double_cover" to SourcePreferenceValue.Toggle(settings.doublePageCover),
         ) + tapGridPreferences(settings.tapGrid)))
         session.upscale = settings.upscale
         session.cropPages = settings.cropActive
+        // Android's ReaderViewModel.switchMode saves the mode for the work being read, so a manual choice sticks.
+        if (state.value.screen == DesktopScreen.READER && previous.mode != settings.mode) {
+            state.value.content?.let { rememberReaderMode(it.id, settings.mode) }
+        }
         // Loaded pages were made for the previous super-resolution or crop choice; they are loaded (from cache) again.
         val reload = previous.upscale != settings.upscale || previous.cropActive != settings.cropActive
         if (reload) cancelPrefetch()
@@ -3289,6 +3345,8 @@ class DesktopController(
             restoredTapGrid(snapshot),
             // Android's own key for the horizontal strip's reading direction.
             (snapshot["reader_continuous_horizontal_reversed"] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            // Android's autodetect switch; AppSettings.isReaderModeDetectionEnabled defaults it to on.
+            (snapshot["reader_mode_detect"] as? SourcePreferenceValue.Toggle)?.value ?: true,
         ).also { session.upscale = it.upscale; session.cropPages = it.cropActive }
     }
 
@@ -3536,12 +3594,19 @@ class DesktopController(
 
     fun backToDetails() = action {
         closeCast(resume = false)
-        mutableState.update { it.copy(screen = DesktopScreen.DETAILS, detailsChapterId = when (it.screen) {
-            DesktopScreen.READER -> it.chapter?.id
-            DesktopScreen.NOVEL -> it.novel?.chapter?.id
-            DesktopScreen.VIDEO -> it.video?.chapter?.id
-            else -> it.detailsChapterId
-        }) }
+        mutableState.update { it.copy(screen = DesktopScreen.DETAILS,
+            // A detected or remembered mode belongs to the work that was open; the next one starts from the preference.
+            readerSettings = if (it.screen == DesktopScreen.READER) {
+                it.readerSettings.copy(mode = restoredReaderSettings().mode)
+            } else {
+                it.readerSettings
+            },
+            detailsChapterId = when (it.screen) {
+                DesktopScreen.READER -> it.chapter?.id
+                DesktopScreen.NOVEL -> it.novel?.chapter?.id
+                DesktopScreen.VIDEO -> it.video?.chapter?.id
+                else -> it.detailsChapterId
+            }) }
     }
 
     private fun sourceDescriptors() = session.sourceListings()

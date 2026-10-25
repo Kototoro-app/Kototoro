@@ -58,6 +58,12 @@ internal fun DesktopReaderSettingsPage(controller: DesktopController, state: Des
             SettingsValueRow(desktopText("reader.setting.mode"), null, modeTitle(settings.mode), active,
                 { dialog = ReaderSettingsDialog.MODE }, testTag = "reader-setting-mode")
             SettingsRowDivider()
+            // Android's "autodetect reader mode": a tall 30%-page opens the work as a webtoon strip.
+            SettingsSwitchRow(AndroidStrings["detect_reader_mode"], AndroidStrings["detect_reader_mode_summary"],
+                settings.readerModeDetection, active,
+                { controller.readerSettings(settings.copy(readerModeDetection = it)) },
+                testTag = "reader-setting-detect-mode")
+            SettingsRowDivider()
             SettingsValueRow(desktopText("reader.setting.direction"), null, settings.directionTitle, active,
                 { dialog = ReaderSettingsDialog.DIRECTION }, testTag = "reader-setting-direction")
             SettingsRowDivider()

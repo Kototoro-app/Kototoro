@@ -74,6 +74,12 @@ data class DesktopReaderSettings(
      * says how pages are laid out, this says which way they are read.
      */
     val continuousHorizontalReversed: Boolean = false,
+    /**
+     * Android's `reader_mode_detect` ("autodetect reader mode", on by default): a content whose page at 30% of the
+     * chapter is far taller than wide opens in the continuous strip instead of the chosen paged mode. The verdict,
+     * like a manually picked mode, is remembered per content.
+     */
+    val readerModeDetection: Boolean = true,
 ) {
     /** Whether pages are cropped in the current reading mode. */
     val cropActive: Boolean get() = if (mode.isContinuous) cropContinuous else cropPaged

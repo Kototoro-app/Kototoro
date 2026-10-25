@@ -21,7 +21,9 @@ internal object DesktopProbes {
             "-Dkotlinx.coroutines.test.default_timeout=10m",
             *System.getProperties().stringPropertyNames()
                 .filter { it == "kototoro.dex.real.apks" || it == "kototoro.desktop.cloudstream.fixture" || it == "kototoro.libmpv.dir" || it == "kototoro.desktop.anime.fixture.jar" || it == "kototoro.ncnn.dir" ||
-                    it == "kototoro.desktop.locale" || it.startsWith("kototoro.real.") }
+                    it == "kototoro.desktop.locale" || it.startsWith("kototoro.real.") ||
+                    // The fixture sources read fixture.* switches (tall pages, delays, authored failures).
+                    it.startsWith("fixture.") }
                 .map { "-D$it=${System.getProperty(it)}" }.toTypedArray(),
             "-cp", System.getProperty("kototoro.desktop.test.classpath"),
             DesktopAppProbe::class.java.name, mode, root.toString(),

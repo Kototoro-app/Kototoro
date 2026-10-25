@@ -309,6 +309,17 @@ npm run docs:build
   与该模式专属的「反向」开关（`reader-options-horizontal-reversed`），阅读设置页的模式对话框自动多一项、间隙行只在
   竖条出现；回归用 `DesktopHorizontalStripTest`（探针 `reader-horizontal-strip`：一页一行、顶边齐平、按 400x600
   适配窗口高度，滚轮推走条带，反向开关让下一页跑到左边，关章后模式/方向/像素位一起恢复）。
+  安卓的「自动检测阅读模式」也补上了（§205）：判定 `(pages.size * 0.3).roundToInt()` 处的页、`width * 1.8f < height`
+  已下沉 reader-core 的 `ReaderModeDetection`（`probePageIndex`/`isWebtoonPage`/`MIN_WEBTOON_RATIO`，含 `jvmTest`），
+  安卓 `DetectReaderModeUseCase` 改为调用它、只保留取 URL 与 `BitmapFactory`；Windows 的 `DesktopReaderSettings` 多一个
+  `readerModeDetection`（键 `reader_mode_detect`，默认开，与安卓同默认），阅读设置页「页面」节紧跟「阅读模式」一行
+  （文案用安卓 `detect_reader_mode`/`_summary`）。打开章时先解析模式：每作品记忆优先，没有记忆且开关打开、当前不是连续
+  模式时才用 `session.readerImage(30% 页)` 判条漫（判为条漫即 `CONTINUOUS`，正反两向都写记忆），结果放进本次的
+  `readerSettings`；记忆存阅读偏好 store 的 `reader_modes`（`"<contentId>=<MODE>"` 字符串集合），手动换模式时也在阅读器里
+  写一条（对应安卓 `saveReaderMode`），所以下次打开仍是那个模式；离开阅读器时把偏好里的模式换回来，检测结果只跟那部作品走；
+  回归用 `DesktopModeDetectTest`（探针 `reader-mode-detect`，fixture 新增 `fixture.reader.probe.tall` 把第 2 页变 400x2400：
+  关开关仍是分页、开开关出条带、再关开关仍是条带，且离开后偏好里的模式未变）。
+  `DesktopProbes` 的白名单同时开始透传 `fixture.*`；`:reader-core:jvmTest` 的隔离守卫也补上 `reader.image` 包。
   .pb/新版 JSON 仓库添加/列表/搜索、JAR 安装/更新/导入及身份恢复；新产物保存到应用管理的 SHA 目录。
   仓库可“忘记”（只删索引条目，已安装扩展与 JAR 保留，重新添加即恢复）。
   来源浏览/搜索、详情、收藏、分页图片阅读、历史与源设置，以及可选网页/HTML/JS 调试。

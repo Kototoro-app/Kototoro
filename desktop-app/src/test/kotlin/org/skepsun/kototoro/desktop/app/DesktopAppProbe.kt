@@ -215,6 +215,10 @@ object DesktopAppProbe {
                 DesktopPreloadReductionProbe.run(args)
                 return
             }
+            if (args[0] == "reader-mode-detect") {
+                DesktopModeDetectProbe.run(args)
+                return
+            }
             if (args[0].startsWith("reader-camera-")) {
                 DesktopReaderCameraProbe.run(args)
                 return

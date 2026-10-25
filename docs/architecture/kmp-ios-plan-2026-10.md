@@ -9315,3 +9315,50 @@ Windows 的可用性改进，也是一次把安卓私有控件提取成共享代
   `-reversed.png` 也留在 `build/reports/desktop-smoke` 里供肉眼核对。
 - 全量：`:desktop-app:test` 308 条 0 失败（4 跳过，比 §203 多出新的 1 条）；
   `:desktop-app:verifyDesktopStrings` 961 键 / 961 被引用通过（无新桌面文案键）。
+
+## 205. Windows 补「自动检测阅读模式」与每作品阅读模式记忆（`reader_mode_detect`）（2026-10-25）
+
+### 实现
+- 安卓 `DetectReaderModeUseCase` 的判定抽到 reader-core 的 `ReaderModeDetection`（纯 Kotlin，三个成员）：
+  `probePageIndex(pageCount) = (pageCount * 0.3).roundToInt()`（读 30% 处那一页，跳过卷首彩页/封面）、
+  `isWebtoonPage(width, height) = width * MIN_WEBTOON_RATIO < height`（`MIN_WEBTOON_RATIO = 1.8f`，严格小于），
+  以及 `MIN_WEBTOON_RATIO` 常量本身。安卓侧因此删掉自己的 `(pages.size * 0.3).roundToInt()` 与私有
+  `MIN_WEBTOON_RATIO`，只留“取 URL → 读 `BitmapFactory` 尺寸”这一步（Android `Size`/`BitmapFactory` 绑定），
+  `jvmTest` 的 `ReaderModeDetectionTest` 覆盖 0..40 页的索引范围与 1.8 边界（400x720 不算条漫）。
+- 顺带修 `ReaderCoreIsolationGuardTest`：`412540695` 把共享解码规划搬进 reader-core 的
+  `org.skepsun.kototoro.reader.image` 之后，文本扫描仍把除 `reader.core` 之外的 `org.skepsun.kototoro.*`
+  都算应用层泄漏，`:reader-core:jvmTest` 因此一直红在 10 个 package 声明上；允许列表与正则的前瞻各加 `reader.image`。
+- Windows 侧 `DesktopReaderSettings` 增 `readerModeDetection`（键 `reader_mode_detect`，默认 `true`，与
+  `AppSettings.isReaderModeDetectionEnabled` 同默认），阅读设置页「页面」节紧跟「阅读模式」一行（标签
+  `reader-setting-detect-mode`，文案直接用安卓 `detect_reader_mode`/`detect_reader_mode_summary`）。
+- `readOnIo` 在取到页列表后先解析本次要用的模式：先看**每作品记忆**，没有记忆且开关打开、当前不是连续模式时，
+  用 `session.readerImage(30% 页)` 取尺寸判定（失败/取不到就退回当前模式），判为条漫则用 `CONTINUOUS`，
+  与安卓一样把结论写进记忆（正反两向都写），再把这个模式放进 `readerSettings` 交给分页/条带两条装载路径。
+- 每作品记忆对应安卓 `ContentDataRepository.saveReaderMode` 写 `preferences.mode` 的那一列：Windows 没有
+  Room 侧的 `MangaPrefsEntity` 读者，所以在阅读偏好 store 里加一份 `reader_modes` 字符串集合
+  （`"<contentId>=<MODE>"`），`rememberedReaderMode`/`rememberReaderMode` 读写它；用户手动换模式时
+  `readerSettings()` 在正停在阅读器且模式变了的条件下也写这条（对应安卓 `ReaderViewModel.switchMode` 的
+  `saveReaderMode`），所以换过的模式下次打开仍是它。
+- 记忆中读出的模式只属于那一部作品：`backToDetails()` 离开阅读器时把 `readerSettings.mode` 换回偏好里的值
+  （`restoredReaderSettings().mode`，手动改过的模式已在偏好里，所以这一换是空操作），下一部作品仍从偏好起步。
+
+### 与 Android 的差异
+- 安卓的模式 id（STANDARD/REVERSED/VERTICAL/WEBTOON/CONTINUOUS_HORIZONTAL）与 Windows 的
+  `DesktopReaderMode`（SINGLE/DOUBLE/CONTINUOUS/CONTINUOUS_HORIZONTAL）不是一一对应，所以记忆不写
+  `MangaPrefsEntity.mode`，而是桌面自己的 `reader_modes`；判为条漫时安卓返回 WEBTOON、Windows 返回
+  `CONTINUOUS`（竖条），语义一致。
+- 检测只看“是不是条漫”：安卓的默认模式若已是 WEBTOON 就跳过检测，Windows 的判定同理是“连续模式跳过”
+  （`mode.isContinuous`），因为两种连续模式都已经是在读条带。
+- 探针页会真的下载一次（和安卓一样是多读一张图）；下载逻辑走 `session.readerImage`，因此顺带写进阅读图片索引。
+
+### 验证
+- 新增 `DesktopModeDetectTest`（探针 `reader-mode-detect`，真实 fixture 扩展 + 真实阅读器）：fixture 加
+  `fixture.reader.probe.tall`（第 2 页变 400x2400，五页章节的 30% 正好是它）；关掉开关 → 打开作品没有
+  `reader-scroll-list`（仍是分页）；打开开关 → 出现条带（检测生效）；再关掉开关 → 仍是条带（记忆生效，且离开
+  阅读器后偏好里的模式仍是分页，说明记忆没漏成全局默认）；最后在阅读设置页 `assertIsOff` → 点成 `assertIsOn`，
+  把默认值写回。
+- `DesktopProbes` 的白名单原本只透传 `kototoro.*`，现在也透传 `fixture.*`（fixture 源就是靠这些开关改行为的）；
+  探针用的 `fixture.reader.probe.tall` 在 `finally` 里还原，否则同一测试 JVM 里后面的探针会读到条漫页
+  （§203 的预加载窗口断言会因此看到条带）。
+- `:reader-core:jvmTest` 全绿（新增 3 条）；`:app:compileDebugKotlin` 通过；全量 `:desktop-app:test` 与
+  `:desktop-app:verifyDesktopStrings` 见下。
