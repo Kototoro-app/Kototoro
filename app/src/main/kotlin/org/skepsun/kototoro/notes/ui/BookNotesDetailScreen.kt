@@ -4,6 +4,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,8 +25,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -33,18 +33,15 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -67,6 +64,10 @@ import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview
 import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
+import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.artworkAwareContainerColor
 import org.skepsun.kototoro.core.util.ext.toFileNameSafe
@@ -76,9 +77,9 @@ import org.skepsun.kototoro.notes.domain.NoteType
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingColor
 import org.skepsun.kototoro.reader.novel.compose.NovelExcerptData
 import org.skepsun.kototoro.reader.novel.compose.NovelExcerptSheet
-import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingColor
 
 @Composable
 fun BookNotesDetailScreen(
@@ -145,7 +146,7 @@ fun BookNotesDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.back),
@@ -186,10 +187,13 @@ fun BookNotesDetailScreen(
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         trailingIcon = {
-                            IconButton(onClick = {
-                                searchBarVisible = false
-                                onBookSearchQueryChange("")
-                            }) {
+                            IconButton(
+                                onClick = {
+                                    searchBarVisible = false
+                                    onBookSearchQueryChange("")
+                                },
+                                modifier = Modifier.tvIconButtonRing(),
+                            ) {
                                 Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
                             }
                         },
@@ -260,7 +264,7 @@ fun BookNotesDetailScreen(
                     )
 
                     Box {
-                        TextButton(onClick = { filterMenuExpanded = true }) {
+                        TvTextButton(onClick = { filterMenuExpanded = true }) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_filter_menu),
                                 contentDescription = null,
@@ -274,28 +278,28 @@ fun BookNotesDetailScreen(
                             expanded = filterMenuExpanded,
                             onDismissRequest = { filterMenuExpanded = false },
                         ) {
-                            DropdownMenuItem(
+                            TvDropdownMenuItem(
                                 text = { Text(stringResource(R.string.book_notes_filter_all, notes.size)) },
                                 onClick = {
                                     filterMenuExpanded = false
                                     onFilterChange(NoteType.ALL)
                                 },
                             )
-                            DropdownMenuItem(
+                            TvDropdownMenuItem(
                                 text = { Text(stringResource(R.string.book_notes_filter_highlights, highlightCount)) },
                                 onClick = {
                                     filterMenuExpanded = false
                                     onFilterChange(NoteType.HIGHLIGHT)
                                 },
                             )
-                            DropdownMenuItem(
+                            TvDropdownMenuItem(
                                 text = { Text(stringResource(R.string.book_notes_filter_thoughts, thoughtCount)) },
                                 onClick = {
                                     filterMenuExpanded = false
                                     onFilterChange(NoteType.THOUGHT)
                                 },
                             )
-                            DropdownMenuItem(
+                            TvDropdownMenuItem(
                                 text = { Text(stringResource(R.string.book_notes_filter_bookmarks, bookmarkCount)) },
                                 onClick = {
                                     filterMenuExpanded = false
@@ -832,7 +836,7 @@ internal fun BookNoteCard(
             Box {
                 IconButton(
                     onClick = { menuExpanded = true },
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(24.dp).tvIconButtonRing(),
                 ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
@@ -850,7 +854,7 @@ internal fun BookNoteCard(
                     shadowElevation = 3.dp,
                 ) {
                     if (canMakeExcerpt(item)) {
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = { Text(stringResource(R.string.book_notes_make_excerpt)) },
                             onClick = {
                                 menuExpanded = false
@@ -858,14 +862,14 @@ internal fun BookNoteCard(
                             },
                         )
                     }
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.book_notes_copy_content)) },
                         onClick = {
                             menuExpanded = false
                             onCopy()
                         },
                     )
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.delete)) },
                         onClick = {
                             menuExpanded = false
@@ -888,7 +892,7 @@ internal fun BookNotesExportBottomSheet(
     onShareMarkdown: () -> Unit,
     onSaveMarkdown: () -> Unit,
 ) {
-    ModalBottomSheet(
+    TvModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {

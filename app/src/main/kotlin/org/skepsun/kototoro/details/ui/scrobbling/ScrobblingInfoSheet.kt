@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -15,15 +14,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.fragment.app.FragmentActivity
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.fragment.app.FragmentActivity
 import dagger.hilt.EntryPoint
-import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.details.ui.DetailsViewModel
@@ -61,7 +61,7 @@ fun ScrobblingInfoSheetRoute(
     }
 
     KototoroTheme {
-        ModalBottomSheet(
+        TvModalBottomSheet(
             onDismissRequest = onDismissRequest,
             sheetState = sheetState,
             modifier = Modifier.fillMaxHeight(0.9f),

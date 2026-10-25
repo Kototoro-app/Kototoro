@@ -48,6 +48,7 @@ import coil3.request.crossfade
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.alternatives.ui.ContentAlternativeModel
 import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.list.ui.model.ButtonFooter
@@ -191,6 +192,7 @@ private fun AlternativeItem(
                             modifier = Modifier.size(18.dp),
                         )
                     },
+                    modifier = Modifier.tvChipRing(),
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(

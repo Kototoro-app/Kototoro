@@ -42,7 +42,9 @@ import kotlin.math.roundToInt
 internal fun DesktopReaderSettingsPage(controller: DesktopController, state: DesktopAppState) {
     val settings = state.readerSettings
     val active = !state.busy
-    val continuous = settings.mode == DesktopReaderMode.CONTINUOUS
+    val continuous = settings.mode.isContinuous
+    // Android's "gaps in webtoon mode" only has a meaning where pages stack vertically.
+    val webtoon = settings.mode.isVerticalStrip
     var dialog by remember { mutableStateOf<ReaderSettingsDialog?>(null) }
     Column(
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -55,6 +57,12 @@ internal fun DesktopReaderSettingsPage(controller: DesktopController, state: Des
         SettingsGroup {
             SettingsValueRow(desktopText("reader.setting.mode"), null, modeTitle(settings.mode), active,
                 { dialog = ReaderSettingsDialog.MODE }, testTag = "reader-setting-mode")
+            SettingsRowDivider()
+            // Android's "autodetect reader mode": a tall 30%-page opens the work as a webtoon strip.
+            SettingsSwitchRow(AndroidStrings["detect_reader_mode"], AndroidStrings["detect_reader_mode_summary"],
+                settings.readerModeDetection, active,
+                { controller.readerSettings(settings.copy(readerModeDetection = it)) },
+                testTag = "reader-setting-detect-mode")
             SettingsRowDivider()
             SettingsValueRow(desktopText("reader.setting.direction"), null, settings.directionTitle, active,
                 { dialog = ReaderSettingsDialog.DIRECTION }, testTag = "reader-setting-direction")
@@ -80,7 +88,26 @@ internal fun DesktopReaderSettingsPage(controller: DesktopController, state: Des
                 SettingsSwitchRow(desktopText("reader.setting.doubleCover"), null, settings.doublePageCover, active,
                     { controller.readerSettings(settings.copy(doublePageCover = it)) },
                     testTag = "reader-setting-double-cover")
+            } else if (webtoon) {
+                // Android's "gaps in webtoon mode" only has a meaning where pages stack vertically.
+                SettingsRowDivider()
+                SettingsSwitchRow(AndroidStrings["webtoon_gaps"], AndroidStrings["webtoon_gaps_summary"],
+                    settings.webtoonGaps, active,
+                    { controller.readerSettings(settings.copy(webtoonGaps = it)) },
+                    testTag = "reader-setting-webtoon-gaps")
             }
+            SettingsRowDivider()
+            // Android's "chapter title at the bottom": the pill leaves the top bar and sits over the dock.
+            SettingsSwitchRow(AndroidStrings["reader_chapter_title_at_bottom"],
+                AndroidStrings["reader_chapter_title_at_bottom_summary"], settings.chapterTitleAtBottom, active,
+                { controller.readerSettings(settings.copy(chapterTitleAtBottom = it)) },
+                testTag = "reader-setting-chapter-title-bottom")
+            SettingsRowDivider()
+            // Android's "reduce page preloading": fewer pages are kept loaded outside the viewport.
+            SettingsSwitchRow(AndroidStrings["reader_reduce_page_preloading"],
+                AndroidStrings["reader_reduce_page_preloading_summary"], settings.reducePagePreloading, active,
+                { controller.readerSettings(settings.copy(reducePagePreloading = it)) },
+                testTag = "reader-setting-reduce-preloading")
         }
         SettingsSectionHeader(desktopText("reader.settingsTurning"))
         SettingsGroup {

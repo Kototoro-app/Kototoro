@@ -272,6 +272,37 @@ class DesktopLibraryBackupTest {
         }
     }
 
+    @Test
+    fun `an Android export with non-finite progress restores instead of failing the whole preview`() = runBlocking<Unit> {
+        // Android writes its backup with allowSpecialFloatingPointValues, so a history row whose progress was never
+        // computed reaches the file as NaN or Infinity. The reader has to take that the way the writer meant it: the
+        // progress is unknown, the row is not.
+        val dirty = history(7, 200)
+            .replace("\"scroll\":118", "\"scroll\":Infinity")
+            .replace("\"percent\":0.6", "\"percent\":NaN")
+        val bookmarks = """[{"manga":${manga(7)},"bookmarks":[{"manga_id":7,"chapter_id":-22,"page_id":1,"page":2,
+            |"scroll":3,"percent":NaN,"created_at":30}]}]""".trimMargin()
+        val statistics = """[{"manga_id":7,"started_at":100,"duration":60,"pages":2,"session":{"end_at":160,
+            |"start_chapter_id":-22,"start_page":0,"start_scroll":0,"end_chapter_id":-22,"end_page":2,"end_scroll":0,
+            |"start_percent":NaN,"end_percent":Infinity}}]""".trimMargin()
+        val file = zip("index" to index, "categories" to categories, "favourites" to favourite(7),
+            "history" to dirty, "bookmarks" to bookmarks, "statistics" to statistics)
+        DesktopRuntime.open(directory.resolve("db")).use { runtime ->
+            val backups = DesktopLibraryBackup(runtime.database)
+            backups.preview(file).use { backups.restore(it) }
+            val progress = runtime.database.getHistoryDao().find(7)
+            assertEquals(0f, progress?.scroll)
+            assertEquals(-1f, progress?.percent)
+            val bookmark = runtime.database.getBookmarksDao().find(7, 1)
+            assertEquals(-1f, bookmark?.percent)
+            // The row also omits image_url the way a pre-snapshot writer leaves it out.
+            assertEquals("", bookmark?.imageUrl)
+            val session = runtime.database.getReadingRecordDao().findAtStart(7, 100)
+            assertEquals(0f, session?.startPercent)
+            assertEquals(0f, session?.endPercent)
+        }
+    }
+
     private fun manga(id: Long, name: String = source.name) =
         """{"id":$id,"title":"Android 内容","url":"/work","public_url":"https://fixture.invalid/work","cover_url":"","source":"$name","future_field":"ignored"}"""
 

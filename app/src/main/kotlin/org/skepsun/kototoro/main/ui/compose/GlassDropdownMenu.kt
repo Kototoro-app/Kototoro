@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material3.MaterialTheme
 import kotlin.math.roundToInt
@@ -93,6 +94,11 @@ internal data class RootGlassMenuRequest(
     // there falls through to the toggle button (keeping its press gloss).
     // Defaults to false: the menu dismisses on any outside tap, as before.
     val anchorTapThrough: Boolean = false,
+    // The button that opened the menu. The root overlay is an in-window sibling of its anchor, so
+    // when it disappears nothing hands the focus back and the ring falls to the first focusable of
+    // the screen (the navigation rail) - on a remote that means losing your place in the top bar.
+    // Anchors that care pass their requester and get the ring back when the menu closes.
+    val anchorFocusRequester: FocusRequester? = null,
 )
 
 @Composable
@@ -139,6 +145,11 @@ internal fun RootGlassMenuOverlay(
             anchorBounds = request.anchorBounds,
             gapPx = menuGapPx,
             openAboveAnchor = request.openAboveAnchor,
+            edgeInsetPx = if (isTvPresentation) {
+                with(density) { TV_MENU_EDGE_INSET_DP.dp.roundToPx() }
+            } else {
+                0
+            },
         )
         // Dismiss layer. Most menus use one full-screen surface that dismisses
         // on any outside tap. With anchorTapThrough we instead carve a "hole"
@@ -220,6 +231,21 @@ internal fun RootGlassMenuOverlay(
                 CompactMenuContent(request.scrollState, request.content)
             }
         }
+        // Declared last so it is disposed after the menu itself: the menu's own take-focus effect is
+        // cancelled by then and cannot steal the ring back. On TV this is the only thing that puts
+        // the focus where the user left it; off TV the popup window handles it and this is a no-op.
+        if (isTvPresentation) {
+            val anchorFocusRequester = request.anchorFocusRequester
+            DisposableEffect(request.id) {
+                onDispose {
+                    // Only when the menu is really gone: a submenu that swaps the request for another
+                    // one must not pull the ring back to the anchor it is opening from.
+                    if (anchorFocusRequester != null && host.request == null) {
+                        runCatching { anchorFocusRequester.requestFocus() }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -229,15 +255,22 @@ internal fun calculateRootGlassMenuOffset(
     anchorBounds: Rect,
     gapPx: Int,
     openAboveAnchor: Boolean,
+    edgeInsetPx: Int = 0,
 ): IntOffset {
-    val x = (anchorBounds.right.toInt() - menuSize.width)
-        .coerceIn(0, (rootSize.width - menuSize.width).coerceAtLeast(0))
+    // A television cuts roughly 5% off each edge as overscan, so a menu pinned to x = 0 or to the
+    // right edge loses its plate border and the end of its labels. Keep the whole panel between the
+    // insets instead; off TV the inset is zero and this is the old clamp.
+    val maxX = (rootSize.width - menuSize.width - edgeInsetPx).coerceAtLeast(0)
+    val minX = edgeInsetPx.coerceAtMost(maxX)
+    val x = (anchorBounds.right.toInt() - menuSize.width).coerceIn(minX, maxX)
     val preferredY = if (openAboveAnchor) {
         anchorBounds.top.toInt() - menuSize.height - gapPx
     } else {
         anchorBounds.bottom.toInt() + gapPx
     }
-    val y = preferredY.coerceIn(0, (rootSize.height - menuSize.height).coerceAtLeast(0))
+    val maxY = (rootSize.height - menuSize.height - edgeInsetPx).coerceAtLeast(0)
+    val minY = edgeInsetPx.coerceAtMost(maxY)
+    val y = preferredY.coerceIn(minY, maxY)
     return IntOffset(x, y)
 }
 
@@ -254,6 +287,7 @@ fun GlassDropdownMenu(
     openAboveAnchor: Boolean = false,
     shape: Shape = RoundedRectangle(20.dp),
     style: GlassStyle = GlassDefaults.prominentStyle(),
+    anchorFocusRequester: FocusRequester? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val scrollState = rememberScrollState()
@@ -298,17 +332,27 @@ fun GlassDropdownMenu(
                 onDismissRequest = onDismissRequest,
                 content = content,
                 anchorTapThrough = anchorTapThrough,
+                anchorFocusRequester = anchorFocusRequester,
             )
         }
     } else {
+        // A popup window is clamped to the screen, so a menu anchored near the right edge ends up
+        // glued to it — and a television eats roughly 5% of each edge as overscan, which would clip
+        // the plate and its labels. Nudging the window inwards keeps the whole menu inside the
+        // safe area; menus anchored mid-screen just move a little, which is invisible.
+        val tvOffset = if (LocalUiPresentationConfig.current.isTv) {
+            DpOffset(offset.x - TV_MENU_EDGE_INSET_DP.dp, offset.y)
+        } else {
+            offset
+        }
         DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
         modifier = modifier,
         offset = if (alignToAnchorEnd) {
-            offset
+            tvOffset
         } else {
-            offset
+            tvOffset
         },
         shape = shape,
         containerColor = Color.Transparent,
@@ -344,10 +388,17 @@ internal fun CompactDropdownMenuItem(
     leadingIcon: (@Composable (() -> Unit))? = null,
     trailingIcon: (@Composable (() -> Unit))? = null,
 ) {
-    CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.labelLarge) {
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    CompositionLocalProvider(
+        LocalTextStyle provides if (isTvPresentation) {
+            MaterialTheme.typography.titleMedium
+        } else {
+            MaterialTheme.typography.labelLarge
+        },
+    ) {
         Row(
             modifier = modifier
-                .height(48.dp)
+                .height(if (isTvPresentation) TV_MENU_ITEM_HEIGHT_DP.dp else 48.dp)
                 .fillMaxWidth()
                 .tvFocusable(
                     enabled = enabled,
@@ -401,7 +452,13 @@ internal fun CompactDropdownMenuText(
     Text(
         text = text,
         modifier = modifier,
-        style = MaterialTheme.typography.labelLarge,
+        // Item and header labels share this helper, so the TV scale lives here as well; heads-up
+        // section labels inside a menu would otherwise stay phone-sized next to body-sized items.
+        style = if (LocalUiPresentationConfig.current.isTv) {
+            MaterialTheme.typography.titleMedium
+        } else {
+            MaterialTheme.typography.labelLarge
+        },
     )
 }
 
@@ -417,3 +474,9 @@ internal fun CompactDropdownMenuDivider(
             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f)),
     )
 }
+
+/** Keeps the visible plate out of a television's overscan band. */
+private const val TV_MENU_EDGE_INSET_DP = 24
+
+/** Menu rows grow on TV so a label stays readable from across the room. */
+private const val TV_MENU_ITEM_HEIGHT_DP = 56

@@ -18,7 +18,6 @@ import androidx.compose.material3.Icon
 import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
@@ -142,16 +142,16 @@ fun DetailsBindingCard(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                TextButton(onClick = onPrimaryAction) {
+                TvTextButton(onClick = onPrimaryAction) {
                     Text(primaryActionLabel)
                 }
                 if (secondaryActionLabel != null && onSecondaryAction != null) {
-                    TextButton(onClick = onSecondaryAction) {
+                    TvTextButton(onClick = onSecondaryAction) {
                         Text(secondaryActionLabel)
                     }
                 }
                 if (tertiaryActionLabel != null && onTertiaryAction != null) {
-                    TextButton(onClick = onTertiaryAction) {
+                    TvTextButton(onClick = onTertiaryAction) {
                         Text(tertiaryActionLabel)
                     }
                 }

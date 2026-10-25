@@ -12,7 +12,11 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
 import org.skepsun.kototoro.core.library.LibraryContentStats
 import org.skepsun.kototoro.core.library.LibraryReadingStats
+import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
+import org.skepsun.kototoro.core.extensions.changedNsfwSources
 import org.skepsun.kototoro.core.dictionary.DictionaryRule
+import org.skepsun.kototoro.details.domain.RelatedCandidate
+import org.skepsun.kototoro.details.domain.RelatedContentRules
 import org.skepsun.kototoro.core.replace.ReplaceRule
 import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.tracker.domain.completePendingUpdates
@@ -21,6 +25,7 @@ import org.skepsun.kototoro.stats.domain.StatsContentKind
 import org.skepsun.kototoro.history.domain.recoverHistoryChapterId
 import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.reader.core.IntSize
+import org.skepsun.kototoro.reader.core.ReaderModeDetection
 import java.nio.file.Files
 import java.nio.file.Path
 import org.skepsun.kototoro.desktop.runtime.DesktopNovelHtml
@@ -34,6 +39,10 @@ import org.skepsun.kototoro.backups.webdav.WebDavBackupFile
 import org.skepsun.kototoro.desktop.runtime.DesktopBackupArchive
 import org.skepsun.kototoro.desktop.runtime.DesktopLibraryBackup
 import org.skepsun.kototoro.desktop.runtime.DesktopBookmark
+import org.skepsun.kototoro.desktop.runtime.DesktopBookmarkGroup
+import org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget
+import org.skepsun.kototoro.desktop.runtime.DesktopUpdateGroup
+import org.skepsun.kototoro.desktop.runtime.desktopBookmarkShelf
 import org.skepsun.kototoro.desktop.runtime.DesktopLibrarySnapshot
 import org.skepsun.kototoro.desktop.runtime.DesktopRepository
 import org.skepsun.kototoro.desktop.runtime.DesktopRepositoryCatalog
@@ -42,6 +51,14 @@ import org.skepsun.kototoro.desktop.runtime.DesktopCrashLogFile
 import org.skepsun.kototoro.desktop.runtime.DesktopStorageUsage
 import org.skepsun.kototoro.desktop.runtime.DesktopTriState
 import org.skepsun.kototoro.desktop.runtime.DesktopNavigationSettings
+import org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings
+import org.skepsun.kototoro.desktop.runtime.DesktopSuggestionFilter
+import org.skepsun.kototoro.desktop.runtime.desktopSuggestionFilters
+import org.skepsun.kototoro.desktop.runtime.desktopReadChapterIds
+import org.skepsun.kototoro.desktop.runtime.desktopReadSavedChapters
+import org.skepsun.kototoro.desktop.runtime.desktopRelatedWorks
+import org.skepsun.kototoro.desktop.runtime.isNsfwSource
+import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
 import org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex
 import org.skepsun.kototoro.core.ui.chapters.ChapterBranchLocale
 import org.skepsun.kototoro.core.ui.chapters.chaptersOfBranch
@@ -54,6 +71,9 @@ import org.skepsun.kototoro.reader.ui.tapgrid.TapGridConfig
 
 /** Reader-settings key prefix of the tap-grid actions (Android keeps them in its own `tap_grid` preferences). */
 private const val TAP_GRID_PREFIX = "tap_grid."
+
+/** Android's two adult quick-filter chips, which only exist while adult works may be recommended. */
+private val AdultChips = setOf<DesktopSuggestionFilter>(DesktopSuggestionFilter.Adult, DesktopSuggestionFilter.Safe)
 
 /** Lists that open details as a floating preview and get it back on dismiss. */
 private const val LAST_TRACKER_RUN = "last_tracker_run"
@@ -69,9 +89,14 @@ private const val AUTO_BACKUP_RETRY_MILLIS = 10L * 60 * 1000
 private const val IMAGE_BUDGET = "image_budget_mb"
 /** A sweep lists and stats the whole image directory, so the periodic loop runs it at most this often. */
 private const val IMAGE_SWEEP_INTERVAL_MILLIS = DesktopImageBudget.SWEEP_INTERVAL_MILLIS
+/**
+ * Android stores the reader mode of every work in the `mode` column of its `preferences` table. The desktop reader
+ * prefs keep the same map as `"<contentId>=<mode>"` entries of one string set.
+ */
+private const val READER_MODES = "reader_modes"
 
 internal val DetailsOrigins = setOf(DesktopScreen.HOME, DesktopScreen.FEED, DesktopScreen.EXPLORE, DesktopScreen.LIBRARY,
-    DesktopScreen.HISTORY)
+    DesktopScreen.HISTORY, DesktopScreen.BOOKMARKS, DesktopScreen.UPDATED, DesktopScreen.SUGGESTIONS)
 
 /** The JVM's display locale, matched against branch names as Android matches its locale list. */
 internal fun desktopChapterBranchLocales(): List<ChapterBranchLocale> =
@@ -82,7 +107,7 @@ enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
     PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES, DICTIONARY_RULES,
-    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP,
+    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD, SOURCE_TEST, BOOKMARKS, UPDATED, SUGGESTIONS,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -112,6 +137,26 @@ data class DesktopAppState(
     /** The saved interface language tag; null follows the system language. */
     val language: String? = null,
     val sources: List<SourceListing> = emptyList(),
+    /** Sources the user turned off on the extensions page; Android keeps them installed but stops offering them. */
+    val disabledSources: Set<String> = emptySet(),
+    /**
+     * Android's `source_nsfw_overrides` / `source_sfw_overrides`: sources the user forced adult or SFW from the
+     * selection bar, so the adult-content targets and the suggestion filter see the same flag Android does.
+     */
+    val sourceNsfwOverrides: SourceNsfwOverrideSet = SourceNsfwOverrideSet(),
+    /**
+     * Android's `jar_priority_order` as stored (one comma separated list). Windows' parser plugins are what it
+     * ranks here; the settings page resolves the names against the installed plugins when it draws the row.
+     */
+    val jarPriorityOrder: String = "",
+    /** Android's `show_broken_sources`: `@Broken` parsers stay installed, this decides if the lists offer them. */
+    val showBrokenSources: Boolean = false,
+    /** Android's `chapters_clear_auto`: sweep the chapters the history already passed at every app start. */
+    val chaptersClearAuto: Boolean = false,
+    /** Android's `extension_install_policies`, keyed by `UnifiedSourceKind` name; a kind nobody set asks every time. */
+    val extensionInstallPolicies: Map<String, ExtensionInstallPolicy> = emptyMap(),
+    /** Android's `ConfirmPackageInstall`: the row waiting for "install and enable" / "install only". */
+    val installPrompt: DesktopInstallRequest? = null,
     val repositories: List<DesktopRepository> = emptyList(),
     val extensionCatalog: DesktopRepositoryCatalog? = null,
     val installedExtensions: Map<String, Long> = emptyMap(),
@@ -130,6 +175,10 @@ data class DesktopAppState(
     /** Open change-source dialog (Android's MIGRATE) and the search state it carries. */
     val migration: DesktopMigrationState? = null,
     val bookmarks: List<DesktopBookmark> = emptyList(),
+    /** The bookmarks page: every work that has saved positions, already filtered by the adult-content target. */
+    val bookmarkGroups: List<org.skepsun.kototoro.desktop.runtime.DesktopBookmarkGroup> = emptyList(),
+    /** Page ids picked on the bookmarks page; Android's multi-select on the same cards. */
+    val bookmarkShelfSelection: Set<Long> = emptySet(),
     val content: SourceContent? = null,
     /** List that owns the open details; retained while reading so returning does not lose the list context. */
     val detailsOrigin: DesktopScreen? = null,
@@ -142,6 +191,18 @@ data class DesktopAppState(
     val chapterBranch: String? = null,
     /** Current chapter projected from this work's history; never inherited from a different open work. */
     val detailsChapterId: Long? = null,
+    /**
+     * Android's `HistoryInfo.estimatedTime` for the open details, when `reading_time` is on and the work is long
+     * enough to estimate; null keeps the row off the page.
+     */
+    val detailsReadingTime: org.skepsun.kototoro.desktop.runtime.DesktopReadingTime? = null,
+    /**
+     * Android's related works for the open details: what the source answered, or the search fallback the Mihon host
+     * needs. Empty while the rail loads or when `related_manga` is off, which keeps the section off the page.
+     */
+    val relatedWorks: List<SourceContent> = emptyList(),
+    /** True while [DesktopController.details] asks the source for [relatedWorks] in the background. */
+    val relatedLoading: Boolean = false,
     /** Home's history row; separate from [library], which the favourites/history pages own. */
     val homeHistory: DesktopLibrarySnapshot = DesktopLibrarySnapshot(),
     /** Android's feed read model (update logs and works with pending new chapters). */
@@ -150,6 +211,9 @@ data class DesktopAppState(
     val suggestionSettings: org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings = org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings(),
     val trackerSettings: org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings = org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings(),
     val sourceSettings: org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings = org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings(),
+    /** Android's services switches that have a Windows meaning: statistics recording and the reading-time estimate. */
+    val services: org.skepsun.kototoro.desktop.runtime.DesktopServicesSettings =
+        org.skepsun.kototoro.desktop.runtime.DesktopServicesSettings(),
     val libraryDisplay: org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay =
         org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay(),
     /** Android's "show updated" feed menu item: whether the tracked-with-new-chapters block is drawn. */
@@ -172,6 +236,11 @@ data class DesktopAppState(
     val suggestions: List<SourceContent> = emptyList(),
     /** True while [DesktopController.refreshSuggestions] runs in the background; the window stays usable. */
     val suggestionsGenerating: Boolean = false,
+    /**
+     * Android's suggestions quick filter: the chips picked on the recommendations page. They narrow the page only, so
+     * the home rail keeps showing everything the worker stored.
+     */
+    val suggestionFilters: Set<DesktopSuggestionFilter> = emptySet(),
     /** Works shown by [feed] rows, keyed by manga id, for covers and opening. */
     val feedContents: Map<Long, SourceContent> = emptyMap(),
     /** Favourite categories with update tracking; -1 until the subscriptions page loads. */
@@ -207,6 +276,10 @@ data class DesktopAppState(
     val offset: Int = 0,
     /** Source offsets of the batches visited so far; offset-paged sources continue after the items already shown. */
     val pageOffsets: List<Int> = listOf(0),
+    /** Items the last batch returned: an appended batch continues after exactly these, not after every row shown. */
+    val browsePageSize: Int = 0,
+    /** The source answered with an empty batch, so Android's endless list stops asking and says there is no more. */
+    val browseExhausted: Boolean = false,
     val query: String = "",
     val browseOrder: String? = null,
     val dynamicFilters: SourceDynamicFilters? = null,
@@ -225,9 +298,19 @@ data class DesktopAppState(
     val busy: Boolean = false,
     val error: String? = null,
     val message: String? = null,
+    /**
+     * Android's recommendation notification, which Windows can only show in-app: the title of the work a finished
+     * background run picked while `suggestions_notifications` is on.
+     */
+    val suggestionNotice: String? = null,
     /** Share text shown when Windows refused the clipboard write; null while there is nothing to fall back to. */
     val shareLinks: String? = null,
 ) {
+    /** Android's `getEnabledSources()`: everything the user did not switch off, in the host's own order. */
+    val enabledSources: List<SourceListing>
+        get() = if (disabledSources.isEmpty()) sources
+        else sources.filterNot { it.source.name in disabledSources }
+
     val image: Path? get() = if (screen == DesktopScreen.READER) pages.getOrNull(pageIndex)
         ?.let { readerImages[it.id]?.path } else null
 
@@ -239,7 +322,14 @@ data class DesktopAppState(
 }
 
 /** One owned scope and immutable UI state. Source methods retain their existing cancellation/lease semantics. */
-class DesktopController(val session: DesktopSession) {
+class DesktopController(
+    val session: DesktopSession,
+    /**
+     * Android's UNMETERED work constraint reads the platform's connectivity; Windows reads its adapters. Probes hand
+     * in a fixed answer so a run does not depend on the machine sitting on Wi-Fi.
+     */
+    private val networkAvailable: () -> Boolean = { hasUnmeteredNetwork(desktopNetworkInterfaces()) },
+) {
     private val job = SupervisorJob()
     private val scope = CoroutineScope(job + Dispatchers.IO)
     private val gate = Mutex()
@@ -251,6 +341,11 @@ class DesktopController(val session: DesktopSession) {
     private val updatePreferences = session.storage.preferences.open("desktop_extension_updates")
     private val backgroundPreferences = session.storage.preferences.open("desktop_background")
     private val libraryPreferences = session.storage.preferences.open("desktop_library")
+    /** Android's services switches; their own store keeps `stats_on`/`reading_time` away from the other documents. */
+    internal val servicesPreferences =
+        org.skepsun.kototoro.desktop.runtime.DesktopServicesPreferences(
+            session.storage.preferences.open("desktop_services"),
+        )
     /** Background and manual runs of the same work never overlap. */
     private val backgroundMutex = Mutex()
     private val appearancePreferences = session.storage.preferences.open("desktop_appearance")
@@ -263,7 +358,13 @@ class DesktopController(val session: DesktopSession) {
         interfaceStyle = DesktopInterfaceStyle.entries.firstOrNull {
             it.name == (appearancePreferences.snapshot()["interface_style"] as? SourcePreferenceValue.Text)?.value
         } ?: DesktopInterfaceStyle.MATERIAL,
-        language = restoredLanguage()))
+        language = restoredLanguage(),
+        disabledSources = session.disabledSources(),
+        sourceNsfwOverrides = session.sourceNsfwOverrides(),
+        jarPriorityOrder = session.jarPriorityOrder(),
+        showBrokenSources = session.showBrokenSources(),
+        chaptersClearAuto = session.chaptersClearAuto(),
+        extensionInstallPolicies = session.extensionInstallPolicies()))
     val state = mutableState.asStateFlow()
     private val continuous = DesktopScrollOperations(mutableState, session, scope, gate)
     private val novelOperations = DesktopNovelOperations(mutableState, session, scope, gate)
@@ -293,11 +394,21 @@ class DesktopController(val session: DesktopSession) {
     internal val replaceRules = replaceRuleOperations.state
     private val dictionaryRuleOperations = DesktopDictionaryRuleOperations(scope, session)
     internal val dictionaryRules = dictionaryRuleOperations.state
+    /** Android's `SourceTester`: the run behind 扩展与仓库 → 测试来源, kept out of `DesktopAppState` (§184). */
+    internal val sourceTester = DesktopSourceTester(
+        sources = session.sources,
+        loadCover = { content -> session.covers.load(content, refresh = true) },
+        probeUrl = session::probeUrl,
+    )
+    private var sourceTestJob: Job? = null
     /** Android's WebDAV backup destination: same shared protocol, uploaded by hand or by the timer below. */
     private val webDav = DesktopWebDavOperations(session.storage, backups)
     internal val webDavUi = webDav.ui
     private var autoBackupJob: Job? = null
+    private var autoRestoreJob: Job? = null
     private var mirrorProbeJob: Job? = null
+    /** The related-works request of the open details; a new details cancels the old one. */
+    private var relatedJob: Job? = null
 
     init {
         // The saved language applies before the first screen is composed; `--lang` outranks it for this run.
@@ -322,6 +433,11 @@ class DesktopController(val session: DesktopSession) {
         // The proxy the SDK client already uses is what the page shows; changing it writes the same store.
         mutableState.update { it.copy(proxySettings = session.proxy.settings.value) }
         mutableState.update { it.copy(githubMirror = session.githubMirror.settings.value) }
+        // Android's `stats_on` decides whether the tracker writes anything; the library starts on, like Android.
+        servicesPreferences.settings.value.let { saved ->
+            mutableState.update { it.copy(services = saved) }
+            session.library.statsRecording = saved.statsEnabled
+        }
         // Repositories are read in the background at start: updates are installed (when allowed) or announced.
         scope.launch { runCatching { startupUpdates() } }
         // The stamped version and the saved update toggles, before the first check or the first composed screen.
@@ -329,6 +445,10 @@ class DesktopController(val session: DesktopSession) {
         webDav.restore()
         // Only starts a loop when the saved destination has an interval; otherwise it returns immediately.
         startAutoBackup()
+        startAutoRestore()
+        // Android's `chapters_clear_auto` runs the read-chapter sweep whenever the app is opened; the saved chapters are
+        // already restored at this point, so the first sweep sees them.
+        if (session.chaptersClearAuto()) runCleanupReadChapters(announceEmpty = false)
         // Sweeps unreachable page blocks at start and whenever the queue goes idle, so the metadata half of
         // the download storage does not grow for weeks just because nobody clicked "reclaim".
         scope.launch(DesktopDispatchers.background) {
@@ -580,7 +700,8 @@ class DesktopController(val session: DesktopSession) {
         val descriptors = sourceDescriptors()
         mutableState.update { previous ->
             val removed = previous.selectedSource != null && descriptors.none { it.source.name == previous.selectedSource.source.name }
-            previous.copy(sources = descriptors, installedExtensions = installedVersions(), installedEntries = session.installedEntries(),
+            previous.copy(sources = descriptors, disabledSources = session.disabledSources(),
+                installedExtensions = installedVersions(), installedEntries = session.installedEntries(),
                 extensionUpdates = previous.extensionUpdates.filterNot { it.extension.packageName == entry.id },
                 selectedSource = if (removed) null else previous.selectedSource,
                 descriptor = if (removed) null else previous.descriptor, items = if (removed) emptyList() else previous.items,
@@ -588,13 +709,201 @@ class DesktopController(val session: DesktopSession) {
         }
     }
 
-    fun refreshSources() = action {
-        mutableState.update { it.copy(sources = sourceDescriptors(), error = session.startupErrors.firstOrNull()) }
+    /**
+     * Android's selection-bar 删除: the plan folds a selection of sources into the packages that declare them, and this
+     * removes those packages in one operation. A package that fails is reported and the rest still go, so one broken
+     * artifact cannot pin the selection forever.
+     */
+    fun uninstallPackages(packageIds: Collection<String>) = action {
+        val targets = state.value.installedEntries.filter { it.id in packageIds }
+        if (targets.isNotEmpty()) {
+            val failures = ArrayList<String>(0)
+            for (entry in targets) {
+                try {
+                    session.uninstall(entry)
+                } catch (error: kotlinx.coroutines.CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    failures += "${entry.label}：${error.message ?: error.javaClass.simpleName}"
+                }
+            }
+            val descriptors = sourceDescriptors()
+            mutableState.update { previous ->
+                val selected = previous.selectedSource
+                val removed = selected != null && descriptors.none { it.source.name == selected.source.name }
+                previous.copy(
+                    sources = descriptors,
+                    disabledSources = session.disabledSources(),
+                    sourceNsfwOverrides = session.sourceNsfwOverrides(),
+                    installedExtensions = installedVersions(),
+                    installedEntries = session.installedEntries(),
+                    extensionUpdates = previous.extensionUpdates.filterNot { it.extension.packageName in packageIds },
+                    selectedSource = if (removed) null else previous.selectedSource,
+                    descriptor = if (removed) null else previous.descriptor,
+                    items = if (removed) emptyList() else previous.items,
+                    message = if (failures.isEmpty()) {
+                        desktopText("extensions.uninstalled", targets.joinToString(", ") { it.label })
+                    } else {
+                        desktopText("extensions.uninstallFailed") + failures.joinToString("\n")
+                    },
+                )
+            }
+        }
     }
 
+    fun refreshSources() = action {
+        mutableState.update { it.copy(sources = sourceDescriptors(), disabledSources = session.disabledSources(),
+            sourceNsfwOverrides = session.sourceNsfwOverrides(),
+            installedEntries = session.installedEntries(), error = session.startupErrors.firstOrNull()) }
+    }
+
+    /**
+     * Android's per-source switch. Only the offered list changes: a disabled source keeps its stored works, its
+     * downloads and its settings, and switching it back on needs no reload because the runtime stays loaded.
+     * A disabled source can no longer be the one being browsed, so the browse selection is dropped with it.
+     */
+    fun setSourceEnabled(name: String, enabled: Boolean) = setSourcesEnabled(listOf(name), enabled)
+
+    /**
+     * The dialog's bulk buttons, like Android's "enable/disable all in the current filter": one write, one state
+     * update, and the same rule for the browsed source (a source that just got switched off cannot stay selected).
+     */
+    fun setSourcesEnabled(names: Collection<String>, enabled: Boolean) = action {
+        session.setSourcesEnabled(names, enabled)
+        val disabled = session.disabledSources()
+        mutableState.update { previous ->
+            val hidden = previous.selectedSource?.takeIf { it.source.name in disabled }
+            previous.copy(disabledSources = disabled,
+                selectedSource = if (hidden != null) null else previous.selectedSource,
+                descriptor = if (hidden != null) null else previous.descriptor,
+                items = if (hidden != null) emptyList() else previous.items,
+                screen = if (hidden != null) DesktopScreen.EXTENSIONS else previous.screen)
+        }
+    }
+
+    /**
+     * Android's `setSourcesNsfw(ids, isNsfw)` from the selection bar's NSFW chip. Only the sources whose flag actually
+     * changes are stored (`changedNsfwSources`), so marking a mixed selection does not rewrite the ones that agree;
+     * the rail, the adult-content targets and the suggestion filter read the new flag from the same two sets.
+     */
+    fun setSourcesNsfw(names: Collection<String>, isNsfw: Boolean) = action {
+        val overrides = session.sourceNsfwOverrides()
+        val changed = changedNsfwSources(names, isNsfw) { name ->
+            state.value.sources.firstOrNull { it.source.name == name }?.isNsfwSource(overrides) == true
+        }
+        if (changed.isEmpty()) return@action
+        session.setSourcesNsfw(changed, isNsfw)
+        mutableState.update { it.copy(sourceNsfwOverrides = session.sourceNsfwOverrides()) }
+    }
+
+    /**
+     * Android's "plugin deduplication priority" row: the order decides which parser plugin serves a source that two
+     * plugins both declare. The parser host reads it when it opens, so the settings page says it takes effect on the
+     * next start instead of pretending a running registry can be re-ranked.
+     */
+    fun setJarPriorityOrder(names: List<String>) = action {
+        session.setJarPriorityOrder(names)
+        mutableState.update { it.copy(jarPriorityOrder = session.jarPriorityOrder()) }
+    }
+
+    /**
+     * Android's `chapters_clear_auto` switch: the sweep itself is [cleanupReadChapters], this only remembers whether the
+     * app should run it on every start. Turning it on does not sweep immediately — Android also waits for the next
+     * launch, and a user who wants it now has the action row right above.
+     */
+    fun setChaptersClearAuto(clear: Boolean) = action {
+        session.setChaptersClearAuto(clear)
+        mutableState.update { it.copy(chaptersClearAuto = session.chaptersClearAuto()) }
+    }
+
+    /**
+     * Android's `show_broken_sources` switch: the parsers a plugin marked `@Broken` appear in (or leave) every source
+     * list. They stay installed either way and keep their stored works, downloads and settings, so this only
+     * republishes the offered sources and drops the browse selection if it was one of the hidden ones.
+     */
+    fun setShowBrokenSources(show: Boolean) = action {
+        session.setShowBrokenSources(show)
+        val descriptors = sourceDescriptors()
+        mutableState.update { previous ->
+            val hidden = previous.selectedSource?.takeIf { selected ->
+                descriptors.none { it.source.name == selected.source.name }
+            }
+            previous.copy(showBrokenSources = session.showBrokenSources(),
+                sources = descriptors,
+                selectedSource = if (hidden != null) null else previous.selectedSource,
+                descriptor = if (hidden != null) null else previous.descriptor,
+                items = if (hidden != null) emptyList() else previous.items)
+        }
+    }
+
+    /**
+     * A package the user picked. The install policy still decides the sources' switches, but it never asks here: the
+     * user chose this file, so `ASK_EVERY_TIME` means "install it and show its sources", the question belongs to the
+     * catalogue row, which is where a repository names dozens of sources at once.
+     */
     fun importJar(path: Path) = action {
-        val extension = session.importJar(path)
+        val kind = path.installKind()
+        val policy = state.value.extensionInstallPolicies.policyFor(kind)
+        val extension = session.importJar(path, policy != ExtensionInstallPolicy.INSTALL_ONLY)
         publishInstallation(extension.label, desktopText("extensions.imported"), DesktopScreen.EXPLORE)
+    }
+
+    /**
+     * Android's `installPackage` for a catalogue row: the stored policy answers for the user, and `ASK_EVERY_TIME`
+     * puts the same question Android's `UnifiedInstallChoiceDialog` does — unless this is an update, which Android
+     * installs without asking and whose sources keep the switches they already have.
+     */
+    fun installExtension(extension: ExtensionStoreIndex.Extension) = action {
+        val catalog = requireNotNull(state.value.extensionCatalog) { desktopText("extensions.readRepositoryFirst") }
+        val kind = installKind(catalog, extension)
+        val request = DesktopInstallRequest.FromRepository(catalog, extension, kind, extension.sources.size)
+        val updating = state.value.installedExtensions.containsKey(extension.packageName)
+        val answer = state.value.extensionInstallPolicies.policyFor(kind)
+        if (!updating && answer == ExtensionInstallPolicy.ASK_EVERY_TIME) {
+            mutableState.update { it.copy(installPrompt = request) }
+            return@action
+        }
+        install(request, if (updating) null else answer == ExtensionInstallPolicy.INSTALL_AND_ENABLE)
+    }
+
+    /** The answer to the install question; "remember" stores it for the kind, like Android's dialog checkbox does. */
+    fun resolveInstallPrompt(enableSources: Boolean, remember: Boolean) {
+        val request = state.value.installPrompt ?: return
+        val policy = if (enableSources) {
+            ExtensionInstallPolicy.INSTALL_AND_ENABLE
+        } else {
+            ExtensionInstallPolicy.INSTALL_ONLY
+        }
+        if (remember) setExtensionInstallPolicy(request.kind.typeName, policy)
+        mutableState.update { it.copy(installPrompt = null) }
+        action { install(request, enableSources) }
+    }
+
+    fun dismissInstallPrompt() = mutableState.update { it.copy(installPrompt = null) }
+
+    /** Android's per-kind row in the install behavior sheet. */
+    fun setExtensionInstallPolicy(typeName: String, policy: ExtensionInstallPolicy) = action {
+        val kind = DesktopInstallKind.entries.firstOrNull { it.typeName == typeName } ?: return@action
+        session.setExtensionInstallPolicy(kind, policy)
+        mutableState.update { it.copy(extensionInstallPolicies = session.extensionInstallPolicies()) }
+    }
+
+    /** Android's "apply to all sources" row: one answer for every kind this host installs. */
+    fun setAllExtensionInstallPolicies(policy: ExtensionInstallPolicy) = action {
+        session.setAllExtensionInstallPolicies(policy)
+        mutableState.update { it.copy(extensionInstallPolicies = session.extensionInstallPolicies()) }
+    }
+
+    private suspend fun install(request: DesktopInstallRequest, enableSources: Boolean?) = when (request) {
+        is DesktopInstallRequest.FromRepository -> publishInstallation(
+            session.installExtension(request.catalog, request.extension, enableSources).label,
+            desktopText("extensions.installed"),
+        )
+        is DesktopInstallRequest.FromFile -> publishInstallation(
+            session.importJar(request.path, enableSources).label,
+            desktopText("extensions.imported"),
+            DesktopScreen.EXPLORE,
+        )
     }
 
     fun showExtensions() = navigate {
@@ -658,11 +967,6 @@ class DesktopController(val session: DesktopSession) {
         }
     }
 
-    fun installExtension(extension: ExtensionStoreIndex.Extension) = action {
-        val catalog = requireNotNull(state.value.extensionCatalog) { desktopText("extensions.readRepositoryFirst") }
-        publishInstallation(session.installExtension(catalog, extension).label, desktopText("extensions.installed"))
-    }
-
     private fun installedVersions() = session.installedVersions()
 
     private fun publishInstallation(label: String, message: String,
@@ -683,11 +987,28 @@ class DesktopController(val session: DesktopSession) {
         val descriptor = session.sources.describe(source.source.name)
         mutableState.update { it.copy(screen = DesktopScreen.EXPLORE, selectedSource = source,
             descriptor = descriptor, items = emptyList(), offset = 0, pageOffsets = listOf(0), query = "", content = null,
-            browseOrder = null, dynamicFilters = null, appliedFilters = emptyList(), filterDialogOpen = false) }
+            browseOrder = null, browsePageSize = 0, browseExhausted = false,
+            dynamicFilters = null, appliedFilters = emptyList(), filterDialogOpen = false) }
         browseOnIo(0, "")
     }
 
     fun browse(offset: Int = 0, query: String = state.value.query) = navigate { browseOnIo(offset, query) }
+
+    /**
+     * Android's endless browse list: the next batch is appended to the rows already shown instead of replacing them.
+     * Called from the grid's end-of-list footer, so it queues behind whatever action is running instead of dropping the
+     * request, and it stays a no-op once the source said there is nothing left.
+     */
+    fun browseNextPage(): Job? {
+        val snapshot = state.value
+        if (snapshot.selectedSource == null || snapshot.browseExhausted) return null
+        return action { browseOnIo(state.value.offset + 1, state.value.query, append = true) }
+    }
+
+    /** The manual "next batch" button: same append path as the scroll trigger, so both keep the shown rows. */
+    fun browseMore() = navigate {
+        if (!state.value.browseExhausted) browseOnIo(state.value.offset + 1, state.value.query, append = true)
+    }
 
     fun explore() = navigate {
         if (state.value.selectedSource == null) mutableState.update {
@@ -699,6 +1020,7 @@ class DesktopController(val session: DesktopSession) {
     fun exitSource() = navigate {
         mutableState.update { it.copy(screen = DesktopScreen.EXPLORE, selectedSource = null, descriptor = null,
             items = emptyList(), offset = 0, pageOffsets = listOf(0), query = "", content = null, browseOrder = null,
+            browsePageSize = 0, browseExhausted = false,
             dynamicFilters = null, appliedFilters = emptyList(), filterDialogOpen = false) }
     }
 
@@ -736,7 +1058,7 @@ class DesktopController(val session: DesktopSession) {
     }
 
     private suspend fun browseOnIo(offset: Int, query: String, order: String? = state.value.browseOrder,
-        changes: List<SourceFilterChange> = state.value.appliedFilters) {
+        changes: List<SourceFilterChange> = state.value.appliedFilters, append: Boolean = false) {
         val source = requireNotNull(state.value.selectedSource) { desktopText("extensions.selectSourceFirst") }
         val filter = if (query.isNotBlank() || changes.isNotEmpty()) {
             SourceFilter(query = query.takeIf { it.isNotBlank() }, dynamicFilters = changes)
@@ -745,13 +1067,26 @@ class DesktopController(val session: DesktopSession) {
         val previous = state.value
         val offsets = if (offset == 0) listOf(0) else previous.pageOffsets
         val requestOffset = if (previous.descriptor?.pagingMode == SourcePagingMode.OFFSET) {
-            offsets.getOrNull(offset) ?: (offsets.last() + previous.items.size)
+            offsets.getOrNull(offset)
+                ?: (offsets.last() + (previous.browsePageSize.takeIf { it > 0 } ?: previous.items.size))
         } else offset
         val items = session.sources.getList(source.source.name, requestOffset, order, filter)
+        // A source that ignores the offset would repeat the batch it already sent; appending those rows would
+        // duplicate grid keys and loop forever, so a batch with nothing new is the end of the list.
+        val fresh = if (append) {
+            items.filter { item -> previous.items.none { it.id == item.id && it.source.name == item.source.name } }
+        } else items
         // Commit the query and controls only when the source has returned a successful result.
-        mutableState.update { it.copy(screen = DesktopScreen.EXPLORE, items = items, offset = offset,
-            pageOffsets = if (offset < offsets.size) offsets else offsets + requestOffset,
-            query = query, browseOrder = order, appliedFilters = changes) }
+        mutableState.update {
+            val endsHere = fresh.isEmpty()
+            it.copy(screen = DesktopScreen.EXPLORE,
+                items = if (append) previous.items + fresh else items,
+                // An empty batch adds no page: the batch counter keeps pointing at the rows on screen.
+                offset = if (append && endsHere) previous.offset else offset,
+                pageOffsets = if ((append && endsHere) || offset < offsets.size) offsets else offsets + requestOffset,
+                browsePageSize = items.size, browseExhausted = endsHere,
+                query = query, browseOrder = order, appliedFilters = changes)
+        }
     }
 
     fun library(history: Boolean = false) = navigate {
@@ -900,9 +1235,101 @@ class DesktopController(val session: DesktopSession) {
         val bookmarks = session.library.bookmarks(details.id)
         val branch = resolvePreferredChapterBranch(details.chapters.orEmpty(), SourceChapter::branch,
             SourceChapter::id, chapterId, desktopChapterBranchLocales())
+        val readingTime = estimatedReadingTime(details, progress?.percent)
         mutableState.update { it.copy(screen = DesktopScreen.DETAILS, content = details,
             detailsOrigin = origin, detailsExpanded = false, isFavourite = favourite, chapterBranch = branch,
-            detailsChapterId = chapterId, bookmarks = bookmarks) }
+            detailsChapterId = chapterId, bookmarks = bookmarks, detailsReadingTime = readingTime) }
+        loadRelatedWorks(details)
+    }
+
+    /**
+     * Android's `RelatedContentUseCase` for the open details, off the operation gate: a related request or its search
+     * fallback takes as long as the source does, and the page must stay usable while it runs. The rail is cleared first
+     * so a previous work's list cannot be mistaken for this one's.
+     */
+    private fun loadRelatedWorks(content: SourceContent) {
+        relatedJob?.cancel()
+        if (!state.value.services.relatedContent) {
+            mutableState.update { it.copy(relatedWorks = emptyList(), relatedLoading = false) }
+            return
+        }
+        mutableState.update { it.copy(relatedWorks = emptyList(), relatedLoading = true) }
+        relatedJob = scope.launch {
+            val works = relatedWorksOnIo(content)
+            mutableState.update {
+                // A newer details may have opened while this ran; only write back for the work still on screen.
+                if (it.content?.id != content.id || it.content.source.name != content.source.name) it
+                else it.copy(relatedWorks = works, relatedLoading = false)
+            }
+        }
+    }
+
+    /** The source's own related list when the host can answer, Android's title search when it cannot. */
+    private suspend fun relatedWorksOnIo(seed: SourceContent): List<SourceContent> {
+        val related = relatedAttempt { session.sources.getRelated(seed) }.orEmpty()
+        val candidates = related.takeIf { it.isNotEmpty() } ?: relatedSearchOnIo(seed)
+        return desktopRelatedWorks(seed, candidates)
+    }
+
+    /**
+     * `RelatedContentSearchFallback` over the shared source search: the work's titles, the results that name the work,
+     * and the narrowest result set (Android's rule). A Mihon extension has no related API on this host, so this is the
+     * only route to related works for most Windows sources.
+     */
+    private suspend fun relatedSearchOnIo(seed: SourceContent): List<SourceContent> {
+        val queries = RelatedContentRules.searchQueries(seed.title, seed.altTitles)
+        if (queries.isEmpty()) {
+            return emptyList()
+        }
+        val sets = queries.mapNotNull { query ->
+            relatedAttempt {
+                session.sources.getList(seed.source.name, 0, null, SourceFilter(query = query))
+                    .filter { candidate ->
+                        RelatedContentRules.isSearchCandidate(
+                            query,
+                            RelatedCandidate(candidate.title, candidate.altTitles),
+                        )
+                    }
+            }?.takeIf { it.isNotEmpty() }
+        }
+        return RelatedContentRules.smallestResult(sets)
+    }
+
+    /** A related request that failed (unsupported, offline, damaged source) means "nothing to show", not an error. */
+    private suspend fun <T> relatedAttempt(block: suspend () -> T): T? = try {
+        block()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        null
+    }
+
+    /**
+     * Android's `ReadingTimeUseCase` as the details page shows it: the work's measured page time (or Android's ten
+     * second default when statistics are off or the work was never read), twenty pages a chapter, minus the progress
+     * of an unfinished read. Nothing is computed when the `reading_time` switch is off.
+     */
+    private suspend fun estimatedReadingTime(
+        details: SourceContent,
+        percent: Float?,
+    ): org.skepsun.kototoro.desktop.runtime.DesktopReadingTime? {
+        val services = state.value.services
+        if (!services.readingTimeEstimation) return null
+        val chapterCount = details.chapters.orEmpty().size
+        if (chapterCount <= 0) return null
+        val stats = runCatching {
+            session.library.contentReadingStats(details.id, TimeZone.currentSystemDefault())
+        }.getOrNull()
+        val secondsPerPage = if (!services.statsEnabled || stats == null || stats.units <= 0) {
+            0
+        } else {
+            (stats.totalDuration / 1000 / stats.units).toInt()
+        }
+        return org.skepsun.kototoro.desktop.runtime.desktopReadingTime(
+            chapterCount = chapterCount,
+            percent = percent?.takeIf { it in 0f..1f },
+            secondsPerPage = secondsPerPage,
+        )
     }
 
     internal fun exploreFilter(filter: DesktopSourceFilter) {
@@ -935,7 +1362,7 @@ class DesktopController(val session: DesktopSession) {
                 val stored = backgroundMutex.withLock { runSuggestionsOnIo() }
                 mutableState.update { it.copy(message = when {
                     stored > 0 -> desktopText("message.suggestionsGenerated", stored)
-                    state.value.sources.isEmpty() -> desktopText("message.installSourceFirst")
+                    state.value.enabledSources.isEmpty() -> desktopText("message.installSourceFirst")
                     else -> desktopText("message.noSuggestions")
                 }) }
             } catch (error: CancellationException) {
@@ -960,7 +1387,14 @@ class DesktopController(val session: DesktopSession) {
     }
 
     internal fun suggestionSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings) {
-        mutableState.update { it.copy(suggestionSettings = settings) }
+        mutableState.update {
+            it.copy(
+                suggestionSettings = settings,
+                // Android offers the two adult chips only while adult works may be recommended, so a switched-on
+                // filter must not keep selecting works the generator no longer stores.
+                suggestionFilters = if (settings.excludeNsfw) it.suggestionFilters - AdultChips else it.suggestionFilters,
+            )
+        }
         if (!backgroundPreferences.edit(SourcePreferenceEdit(changes = settings.toPreferences()))) {
             mutableState.update { it.copy(error = desktopText("settings.suggestionsSaveFailed")) }
         }
@@ -974,10 +1408,39 @@ class DesktopController(val session: DesktopSession) {
     }
 
     private suspend fun runSuggestionsOnIo(): Int {
-        val stored = session.suggestions.refresh(session.sourceListings(), state.value.suggestionSettings)
+        val settings = state.value.suggestionSettings
+        // Android's UNMETERED constraint: with "only using Wi-Fi" on, a mobile link is not a reason to spend data.
+        // The run is not recorded, so the next wake retries instead of waiting a whole interval.
+        if (settings.wifiOnly && !networkAvailable()) return 0
+        // A switched-off source must not answer, exactly like Android's enabled-only source list feeding the worker —
+        // unless "include disabled sources" asks for candidates from every installed source.
+        val disabled = if (settings.includeDisabledSources) emptySet() else state.value.disabledSources
+        val sources = session.sourceListings().filterNot { it.source.name in disabled }
+        val stored = session.suggestions.refresh(sources, settings, session.sourceNsfwOverrides())
         recordRun(LAST_SUGGESTIONS_RUN)
-        mutableState.update { it.copy(suggestions = session.suggestions.suggestions()) }
+        val items = session.suggestions.suggestions()
+        // A rebuild can stop offering a chip (a tag no longer in the list, both adult macros after the nsfw switch),
+        // and Android recomputes its quick-filter options on every reload; drop what the new list cannot filter.
+        val offered = desktopSuggestionFilters(items, includeAdultChips = !settings.excludeNsfw).toSet()
+        mutableState.update { it.copy(suggestions = items, suggestionFilters = it.suggestionFilters intersect offered) }
+        if (stored > 0) announceSuggestion(settings, items)
         return stored
+    }
+
+    /**
+     * Android's `suggestion_manga` notification, which the worker posts after storing results: one recommended work,
+     * chosen at random, with its title. Windows has no tray notifications, so the headline goes to the home rail's
+     * recommendation card and stays until dismissed; the stored suggestions already carry the tags and filters the
+     * worker applied, so nothing extra is fetched here.
+     */
+    private fun announceSuggestion(settings: DesktopSuggestionSettings, items: List<SourceContent>) {
+        if (!settings.notifications) return
+        val pick = items.randomOrNull() ?: return
+        mutableState.update { it.copy(suggestionNotice = AndroidStrings.format("suggestion_manga", pick.title)) }
+    }
+
+    internal fun dismissSuggestionNotice() {
+        mutableState.update { it.copy(suggestionNotice = null) }
     }
 
     private suspend fun runTrackerOnIo(onProgress: suspend (Int, Int) -> Unit = { _, _ -> }) =
@@ -1055,6 +1518,27 @@ class DesktopController(val session: DesktopSession) {
 
     /** Android's subscriptions page: tracked works with new chapters and the update log timeline. */
     fun subscriptions() = navigate { loadFeedOnIo(DesktopScreen.FEED) }
+
+    /**
+     * Android's updates destination (`UpdatesNavKey`): the tracked works the last check found new chapters for. It sits
+     * beside the subscriptions page instead of replacing it — Android draws the same carousel there too, behind its
+     * "show updated" switch — and reads the snapshot the subscriptions page already reloaded.
+     */
+    fun showUpdates() = navigate { loadFeedOnIo(DesktopScreen.UPDATED) }
+
+    /**
+     * The updates page's "mark all read" (the header) and "remove" (a row), which on Android is one action:
+     * `UpdatesViewModel.remove` → `TrackingRepository.clearUpdates` → `completePendingUpdates` per work. It drains the
+     * tracks' new-chapter counters and leaves history, progress and the timeline's log rows alone, so a later check
+     * starts from the chapter the counter stopped at instead of resurrecting reminders for chapters already opened.
+     */
+    fun markUpdatesRead(groups: List<DesktopUpdateGroup>) = action {
+        val database = session.storage.database
+        val owners = groups.flatMapTo(LinkedHashSet()) { it.ownerIds }
+        val now = System.currentTimeMillis()
+        for (ownerId in owners) database.completePendingUpdates(ownerId, now)
+        loadFeedOnIo()
+    }
 
     private suspend fun loadFeedOnIo(screen: DesktopScreen? = null) {
         val feed = session.feed.observe(session.storage.database).first()
@@ -1175,18 +1659,24 @@ class DesktopController(val session: DesktopSession) {
     }
 
     internal fun dismissDetails() = navigate {
+        // Closing the page ends its related search too; nothing on screen would show the answer.
+        relatedJob?.cancel()
         val origin = state.value.detailsOrigin ?: DesktopScreen.EXPLORE
         val library = if (origin == DesktopScreen.LIBRARY || origin == DesktopScreen.HISTORY) {
             session.library.snapshot(origin == DesktopScreen.HISTORY)
         } else state.value.library
-        // Reading from home or the feed changes their rows (history, cleared counters).
+        // Reading from home, the feed or the updates page changes their rows (history, cleared counters).
         val homeHistory = if (origin == DesktopScreen.HOME) session.library.snapshot(history = true) else state.value.homeHistory
-        val feed = if (origin == DesktopScreen.HOME || origin == DesktopScreen.FEED) {
+        val feed = if (origin == DesktopScreen.HOME || origin == DesktopScreen.FEED ||
+            origin == DesktopScreen.UPDATED) {
             session.feed.observe(session.storage.database).first()
         } else state.value.feed
         val feedContents = if (feed !== state.value.feed) feedContentsOnIo(feed) else state.value.feedContents
         mutableState.update { it.copy(screen = origin, content = null, detailsOrigin = null,
-            detailsExpanded = false, library = library, homeHistory = homeHistory, feed = feed, feedContents = feedContents) }
+            detailsExpanded = false, library = library, homeHistory = homeHistory, feed = feed, feedContents = feedContents,
+            relatedWorks = emptyList(), relatedLoading = false) }
+        // The shelf behind the details changed while it was covered: a bookmark read or deleted in there.
+        if (origin == DesktopScreen.BOOKMARKS) reloadBookmarkShelf()
     }
 
     fun addFavourite() = action {
@@ -1553,7 +2043,7 @@ class DesktopController(val session: DesktopSession) {
      */
     internal fun beginMigration(id: Long) = action {
         val content = requireNotNull(session.library.find(id)) { desktopText("error.workNotFound") }
-        val targets = desktopMigrationSources(state.value.sources, content)
+        val targets = desktopMigrationSources(state.value.enabledSources, content)
         require(targets.isNotEmpty()) { desktopText("library.migrateNoSources") }
         mutableState.update {
             it.copy(migration = DesktopMigrationState(contentId = content.id, title = content.title,
@@ -1767,6 +2257,46 @@ class DesktopController(val session: DesktopSession) {
 
     fun showRecommendations() = navigate { mutableState.update { it.copy(screen = DesktopScreen.RECOMMENDATIONS) } }
 
+    /**
+     * Android's suggestions destination (`NavItem.SUGGESTIONS`): the stored recommendations as a full list. The home
+     * rail reads the same table, so entering the page only reloads it — nothing is generated unless the page's refresh
+     * asks for it, exactly like Android's screen next to its worker.
+     */
+    fun showSuggestions() = navigate {
+        val items = session.suggestions.suggestions()
+        mutableState.update { it.copy(screen = DesktopScreen.SUGGESTIONS, suggestions = items) }
+    }
+
+    /** Android's quick filter on the suggestions list: the same chip again drops it, several chips narrow together. */
+    internal fun toggleSuggestionFilter(filter: DesktopSuggestionFilter) = mutableState.update {
+        it.copy(suggestionFilters = if (filter in it.suggestionFilters) it.suggestionFilters - filter
+        else it.suggestionFilters + filter)
+    }
+
+    /** Android's "服务" page: the entry for recommendations and statistics that 更多 used to hold as two rows. */
+    fun showServices() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SERVICES) } }
+
+    /**
+     * Android's services switches. `stats_on` also reaches the library at once: the reader's tracker writes nothing
+     * while it is off, and what was already recorded stays on the statistics page.
+     */
+    fun servicesSettings(value: org.skepsun.kototoro.desktop.runtime.DesktopServicesSettings) {
+        val previous = state.value.services
+        val saved = servicesPreferences.save(value)
+        session.library.statsRecording = value.statsEnabled
+        mutableState.update {
+            it.copy(
+                services = value,
+                error = if (saved) it.error else desktopText("services.saveFailed"),
+            )
+        }
+        // `related_manga` is read when details opens, so an open page follows the switch instead of waiting for a reopen.
+        if (previous.relatedContent != value.relatedContent) {
+            state.value.content?.let(::loadRelatedWorks)
+                ?: mutableState.update { it.copy(relatedWorks = emptyList(), relatedLoading = false) }
+        }
+    }
+
     /** Android's "阅读统计" screen: the shared derivation over this library's sessions and stored works. */
     fun showReadingStats() = navigate {
         mutableState.update { it.copy(screen = DesktopScreen.READING_STATS, contentStats = null) }
@@ -1828,6 +2358,67 @@ class DesktopController(val session: DesktopSession) {
 
     /** Android's source settings screen: rail order, layout and the adult-content targets. */
     fun showSourceSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SOURCE_SETTINGS) } }
+
+    /** Android's setup wizard, which 来源设置 opens from its overview group. */
+    fun showSetupWizard() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SETUP_WIZARD) } }
+
+    /**
+     * Android's "test all sources" page, reached from 扩展与仓库. Entering it forgets the previous run so a second visit
+     * starts clean instead of showing verdicts from a source that has since been uninstalled.
+     */
+    fun showSourceTest() = navigate {
+        sourceTester.reset()
+        mutableState.update { it.copy(screen = DesktopScreen.SOURCE_TEST) }
+    }
+
+    /**
+     * Starts a run over the sources the browse rail offers (Android tests the enabled ones, which is
+     * [DesktopAppState.enabledSources]), or over exactly the names [sources] lists when the switch dialog's selection
+     * asked for a few of them — Android's `testSources(selectedSourceIds)`. A selection can include sources the user
+     * switched off, so the pool is the installed list, not the offered one. It is *not* an [action]: the run can take
+     * minutes and must stay cancellable from its own page while the rest of the window keeps rendering, so its
+     * progress lives in [DesktopSourceTester.progress] and the page collects it directly, the way the GitHub mirror
+     * sweep works.
+     */
+    fun startSourceTest(sources: Collection<String>? = null) {
+        if (sourceTestJob?.isActive == true) return
+        val state = mutableState.value
+        val names = sources?.toSet()
+        val chosen = if (names == null) state.enabledSources else state.sources.filter { it.source.name in names }
+        val targets = chosen.map { SourceTestTarget(it.source.name, it.displayName) }
+        if (targets.isEmpty()) return
+        sourceTestJob = scope.launch { sourceTester.testAll(targets) }
+    }
+
+    fun cancelSourceTest() {
+        sourceTestJob?.cancel()
+    }
+
+    /** Android's "export": the run as JSON on the clipboard, with the dialog fallback when the clipboard refuses. */
+    fun copySourceTestResults() {
+        val text = sourceTester.progress.value.toExportJson()
+        if (DesktopClipboard.write(text)) {
+            mutableState.update { it.copy(message = desktopText("sourceTest.copied")) }
+        } else {
+            mutableState.update { it.copy(message = desktopText("sourceTest.copyFailed")) }
+        }
+    }
+
+    /** Android's `disableFailed`: the FAIL rows join `disabled_sources`, so they leave the rail until re-enabled. */
+    fun disableFailedSources() = action {
+        val failed = sourceTester.progress.value.failedSources.map { it.sourceName }
+        require(failed.isNotEmpty()) { desktopText("sourceTest.nothingFailed") }
+        session.setSourcesEnabled(failed, false)
+        val disabled = session.disabledSources()
+        mutableState.update { previous ->
+            val hidden = previous.selectedSource?.takeIf { it.source.name in disabled }
+            previous.copy(disabledSources = disabled,
+                selectedSource = if (hidden != null) null else previous.selectedSource,
+                descriptor = if (hidden != null) null else previous.descriptor,
+                items = if (hidden != null) emptyList() else previous.items,
+                message = desktopText("sourceTest.disabledFailed", failed.size))
+        }
+    }
 
     /** Android's playback settings screen: the player's backdrop, decoder mode and control-overlay opacities. */
     fun showPlaybackSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.PLAYBACK_SETTINGS) } }
@@ -1918,6 +2509,46 @@ class DesktopController(val session: DesktopSession) {
             } else {
                 val message = desktopText("cleanup.pagesCleared", cleared)
                 it.copy(readerIndexCount = session.readerIndexCount(), message = message)
+            }
+        }
+    }
+
+    /**
+     * Android's `delete_read_chapters`: for every work with saved chapters, drop the ones the reading history has
+     * already passed. "Read" is history-relative (see [desktopReadChapterIds]), so a work whose history row is gone
+     * keeps everything, and the deletion removes the chapter records only — the page blobs they referenced turn into
+     * unreferenced metadata that the image budget reclaims on its next sweep, the same hand-off the download page's
+     * batch removal uses.
+     */
+    fun cleanupReadChapters() = runCleanupReadChapters(announceEmpty = true)
+
+    private fun runCleanupReadChapters(announceEmpty: Boolean) = action {
+        var removed = 0
+        val forgotten = mutableListOf<String>()
+        for ((contentId, records) in session.downloadStore.records.value.groupBy { it.contentId }) {
+            val currentChapterId = runCatching { session.library.progress(contentId)?.chapterId }.getOrNull()
+                ?: continue
+            val saved = runCatching { session.library.find(contentId)?.chapters }.getOrNull().orEmpty()
+            val read = desktopReadSavedChapters(saved, records.map { it.chapter }, currentChapterId)
+            for (chapter in read) {
+                val key = DesktopDownloadStore.key(contentId, chapter)
+                downloads.pause(key)
+                downloads.settle(key)
+                if (session.downloadStore.delete(contentId, chapter, session.storage.preferences)) {
+                    removed++
+                    forgotten += key
+                }
+            }
+        }
+        if (forgotten.isNotEmpty()) {
+            downloads.forget(forgotten)
+            mutableDownloadSelection.update { DesktopDownloadSelection.retain(it, downloads.state.value.map { row -> row.key }) }
+        }
+        mutableState.update {
+            when {
+                removed > 0 -> it.copy(message = desktopText("cleanup.readChaptersDeleted", removed))
+                announceEmpty -> it.copy(message = AndroidStrings["no_chapters_deleted"])
+                else -> it
             }
         }
     }
@@ -2018,6 +2649,21 @@ class DesktopController(val session: DesktopSession) {
     internal fun setIncognitoForNsfw(value: org.skepsun.kototoro.desktop.runtime.DesktopTriState) =
         sourceSettings(mutableState.value.sourceSettings.copy(incognitoForNsfw = value))
 
+    /**
+     * Android's `saveSourceOrder`: the hand-picked sequence is stored and the sort order switches to it, so saving the
+     * editor is also what makes the new order visible. Sources the rail cannot offer (disabled, uninstalled) are
+     * dropped from the sequence, otherwise they would keep a rank nothing renders.
+     */
+    internal fun saveSourceOrder(names: List<String>) {
+        val offered = sourceDescriptors().mapTo(HashSet()) { it.source.name }
+        sourceSettings(
+            mutableState.value.sourceSettings.copy(
+                sort = org.skepsun.kototoro.desktop.runtime.DesktopSourceSort.CUSTOM,
+                order = names.filter { it in offered }.distinct(),
+            ),
+        )
+    }
+
     internal fun sourceSettings(settings: org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings) {
         mutableState.update { it.copy(sourceSettings = settings) }
         if (!backgroundPreferences.edit(SourcePreferenceEdit(changes = settings.toPreferences()))) {
@@ -2063,6 +2709,35 @@ class DesktopController(val session: DesktopSession) {
         webDav.settings(value)
         // The interval lives in the settings, so a changed value must take effect without a restart.
         startAutoBackup()
+        // Turning "auto restore on startup" on is a user asking for it now, not only on the next start.
+        startAutoRestore()
+    }
+
+    /**
+     * Android's auto restore runs from a foreground service started at boot, which Windows has no equivalent of, so
+     * the check happens when the app opens the session. It is a one-shot job: the calendar-day guard lives in the
+     * operations, and a failed attempt is allowed to be retried on the next start.
+     */
+    private fun startAutoRestore() {
+        autoRestoreJob?.cancel()
+        autoRestoreJob = scope.launch {
+            when (val result = webDav.autoRestore()) {
+                is DesktopAutoRestore.Restored -> {
+                    // The merge wrote rows straight into the library, so the same reload the manual restore uses.
+                    mutableState.update {
+                        it.copy(
+                            items = emptyList(),
+                            content = null,
+                            message = desktopText("webdav.autoRestoredAndUploaded", result.name, result.merged),
+                        )
+                    }
+                }
+                // A failed check already left its message in `webDavUi.error`, where the page shows it.
+                DesktopAutoRestore.Failed, DesktopAutoRestore.Disabled,
+                DesktopAutoRestore.NotDue, DesktopAutoRestore.Nothing,
+                -> Unit
+            }
+        }
     }
 
     /**
@@ -2095,14 +2770,40 @@ class DesktopController(val session: DesktopSession) {
 
     internal fun webDavUpload() = action {
         val result = webDav.upload()
-        val message = if (result.removed.isEmpty()) {
+        val uploaded = if (result.removed.isEmpty()) {
             desktopText("webdav.uploaded", result.name, result.size / 1024)
         } else {
             desktopText("webdav.uploadedTrimmed", result.name, result.size / 1024, result.removed.size)
         }
+        // Android reports the kept copy separately, because the upload is what the button promised.
+        val message = if (result.local != null) "$uploaded ${desktopText("webdav.localKept", result.local)}" else uploaded
         mutableState.update { it.copy(message = message) }
         // A manual upload moves the timer's baseline, so a sleeping loop must be recomputed against it.
         startAutoBackup()
+    }
+
+    /**
+     * Android's `backup_periodical_directory`: the folder the local copies go in, `null` for the data root's `backups`.
+     * Android refuses a tree it cannot write, so a path that is not a directory is rejected here too instead of being
+     * saved and silently ignored by every backup.
+     */
+    internal fun webDavOutputDirectory(directory: Path?) {
+        if (directory != null && !Files.isDirectory(directory)) {
+            mutableState.update { it.copy(message = desktopText("webdav.outputInvalid", directory)) }
+            return
+        }
+        webDavSettings(webDavUi.value.settings.copy(outputDirectory = directory?.toString().orEmpty()))
+    }
+
+    /** Android's periodical page points at its output directory; on Windows that is the folder the copies live in. */
+    internal fun webDavOpenLocalDirectory() {
+        val directory = webDavUi.value.localDirectory ?: session.storage.paths.backups
+        runCatching {
+            Files.createDirectories(directory)
+            java.awt.Desktop.getDesktop().open(directory.toFile())
+        }.onFailure {
+            mutableState.update { state -> state.copy(message = desktopText("webdav.localOpenFailed", directory)) }
+        }
     }
 
     /** The remote file is downloaded, then previewed through the same archive/merge flow a local file uses. */
@@ -2223,6 +2924,8 @@ class DesktopController(val session: DesktopSession) {
         }
             ?: session.chapterPages(content.id, selected)
         require(pages.isNotEmpty()) { desktopText("error.noPages") }
+        val settings = state.value.readerSettings
+        val mode = resolvedReaderMode(settings, content.id, pages)
         val bookmarkedIndex = bookmark?.let { saved ->
             require(saved.contentId == content.id && saved.chapterId == selected.id)
             pages.indexOfFirst { it.id == saved.pageId }.takeIf { it >= 0 }
@@ -2238,17 +2941,60 @@ class DesktopController(val session: DesktopSession) {
         beginReadingStop()
         val candidate = state.value.let { it.copy(screen = DesktopScreen.READER, chapter = selected, pages = pages,
             pageIndex = index, readerImages = emptyMap(), readerGeometry = session.readerGeometry(pages), readerScroll = restoredScroll,
+            readerSettings = settings.copy(mode = mode),
             readerTargetPage = index, readerTargetScroll = if (startAtEnd) Float.MAX_VALUE else restoredScroll,
             readerLastVisible = index, readerAtEnd = false, readerNavigation = it.readerNavigation + 1, readerScrollReady = false,
             readerVisiblePages = emptyList(), readerLoading = emptySet(), readerFailedPages = emptyMap(),
             bookmarks = session.library.bookmarks(content.id)) }
-        val loaded = if (candidate.readerSettings.mode == DesktopReaderMode.CONTINUOUS) {
+        val loaded = if (candidate.readerSettings.mode.isContinuous) {
             val image = session.readerImage(pages[index])
             candidate.copy(readerImages = mapOf(pages[index].id to image))
         } else loadPagedOnIo(candidate, index)
         mutableState.value = loaded
         prefetchAroundSlot(loaded)
     }
+
+    /**
+     * Android's `DetectReaderModeUseCase`: a mode remembered for this work wins; otherwise, while autodetect is on, the
+     * page at 30% of the chapter decides whether the work is a webtoon. Android caches that verdict too, so a later
+     * manual choice for the same work is what the next open uses.
+     */
+    private suspend fun resolvedReaderMode(
+        settings: DesktopReaderSettings,
+        contentId: Long,
+        pages: List<SourcePage>,
+    ): DesktopReaderMode {
+        rememberedReaderMode(contentId)?.let { return it }
+        val mode = settings.mode
+        if (!settings.readerModeDetection || mode.isContinuous) return mode
+        val probe = pages.getOrNull(ReaderModeDetection.probePageIndex(pages.size)) ?: return mode
+        // The page is fetched exactly as the reader would fetch it, so the check costs one image and warms the index.
+        val image = runCatching { session.readerImage(probe) }.getOrNull() ?: return mode
+        val resolved = if (ReaderModeDetection.isWebtoonPage(image.width, image.height)) {
+            DesktopReaderMode.CONTINUOUS
+        } else {
+            mode
+        }
+        rememberReaderMode(contentId, resolved)
+        return resolved
+    }
+
+    private fun rememberedReaderMode(contentId: Long): DesktopReaderMode? {
+        val key = contentId.toString() + "="
+        val value = rememberedReaderModes().firstOrNull { it.startsWith(key) }?.substring(key.length) ?: return null
+        return DesktopReaderMode.entries.firstOrNull { it.name == value }
+    }
+
+    private suspend fun rememberReaderMode(contentId: Long, mode: DesktopReaderMode) {
+        val key = contentId.toString() + "="
+        val modes = rememberedReaderModes().filterNot { it.startsWith(key) } + (key + mode.name)
+        readerPreferences.edit(SourcePreferenceEdit(changes = mapOf(
+            READER_MODES to SourcePreferenceValue.TextSet(modes.toSet()),
+        )))
+    }
+
+    private fun rememberedReaderModes(): List<String> =
+        (readerPreferences.snapshot()[READER_MODES] as? SourcePreferenceValue.TextSet)?.values?.sorted().orEmpty()
 
     fun page(index: Int) = action { pageOnIo(index) }
 
@@ -2257,7 +3003,7 @@ class DesktopController(val session: DesktopSession) {
         if (snapshot.screen != DesktopScreen.READER) return@action
         val content = requireNotNull(snapshot.content)
         val chapter = requireNotNull(snapshot.chapter)
-        if (snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS && !snapshot.readerScrollReady) return@action
+        if (snapshot.readerSettings.mode.isContinuous && !snapshot.readerScrollReady) return@action
         session.library.toggleBookmark(content, chapter, snapshot.pages[snapshot.pageIndex], snapshot.pageIndex,
             snapshot.pages.size, snapshot.readerScroll)
         val bookmarks = session.library.bookmarks(content.id)
@@ -2325,6 +3071,80 @@ class DesktopController(val session: DesktopSession) {
     }
 
     /**
+     * Android's bookmarks destination (`BookmarksNavKey`). The shelf is loaded on entry, so a bookmark saved in the
+     * reader or deleted on the details page is already reflected and no observer has to be torn down on exit.
+     */
+    fun showBookmarks() = navigate {
+        mutableState.update {
+            it.copy(screen = DesktopScreen.BOOKMARKS, bookmarkShelfSelection = emptySet(), content = null,
+                detailsOrigin = null)
+        }
+        reloadBookmarkShelf()
+    }
+
+    private suspend fun reloadBookmarkShelf() {
+        val groups = session.library.bookmarkGroups()
+        val shelf = desktopBookmarkShelf(groups, state.value.sourceSettings.hidesNsfw(DesktopNsfwTarget.BOOKMARKS))
+        mutableState.update { previous ->
+            val ids = shelf.flatMapTo(HashSet()) { group -> group.bookmarks.map { it.pageId } }
+            previous.copy(bookmarkGroups = shelf,
+                // A card that was deleted elsewhere must not stay picked and reintroduce a missing id later.
+                bookmarkShelfSelection = previous.bookmarkShelfSelection.intersect(ids))
+        }
+    }
+
+    fun selectBookmarkShelf(pageId: Long) = mutableState.update { previous ->
+        val selection = if (pageId in previous.bookmarkShelfSelection) {
+            previous.bookmarkShelfSelection - pageId
+        } else {
+            previous.bookmarkShelfSelection + pageId
+        }
+        previous.copy(bookmarkShelfSelection = selection)
+    }
+
+    fun selectAllBookmarkShelf(selected: Boolean) = mutableState.update { previous ->
+        previous.copy(bookmarkShelfSelection = if (selected) {
+            previous.bookmarkGroups.flatMapTo(LinkedHashSet()) { group -> group.bookmarks.map { it.pageId } }
+        } else {
+            emptySet()
+        })
+    }
+
+    /** Drops every picked card in one transaction and reports Android's `bookmarks_removed`. */
+    fun removeSelectedBookmarkShelf() = action {
+        val pageIds = state.value.bookmarkShelfSelection
+        if (pageIds.isEmpty()) return@action
+        val removed = session.library.removeBookmarks(pageIds)
+        reloadBookmarkShelf()
+        mutableState.update {
+            it.copy(bookmarkShelfSelection = emptySet(), message = AndroidStrings["bookmarks_removed"])
+        }
+        if (removed <= 0) mutableState.update { it.copy(error = desktopText("error.bookmarkMissing")) }
+    }
+
+    /**
+     * A saved position opens the reader at itself. Android's shelf builds the intent with `.incognito()` — revisiting a
+     * saved position must not rewrite the work's progress — so Windows starts the same incognito session and says so.
+     * The chapters come from the stored row, so a work whose source is gone still reopens here.
+     */
+    fun openShelfBookmark(group: DesktopBookmarkGroup, bookmark: DesktopBookmark) = navigate {
+        require(bookmark.contentId == group.content.id) { desktopText("error.bookmarkMissing") }
+        val content = session.library.find(group.content.id)
+            ?: error(desktopText("error.workNotFound"))
+        val chapter = content.chapters?.firstOrNull { it.id == bookmark.chapterId }
+            ?: error(desktopText("error.bookmarkChapterMissing"))
+        val favourite = session.library.isFavourite(content.id)
+        val bookmarks = session.library.bookmarks(content.id)
+        val progress = session.library.progress(content.id)
+        mutableState.update {
+            it.copy(content = content, isFavourite = favourite, bookmarks = bookmarks,
+                detailsOrigin = DesktopScreen.BOOKMARKS, detailsChapterId = progress?.chapterId,
+                detailsExpanded = false, relatedWorks = emptyList(), relatedLoading = false)
+        }
+        startReading(DesktopReadingRequest.Bookmark(chapter, bookmark), incognito = true)
+    }
+
+    /**
      * Android's chapter bookmark command in the details batch bar. Removing takes every bookmark of the
      * selected chapters; adding only touches chapters that hold none, so a saved page is never widened.
      */
@@ -2351,7 +3171,7 @@ class DesktopController(val session: DesktopSession) {
 
     fun turnPage(forward: Boolean) = action {
         val snapshot = state.value
-        val continuousMode = snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS
+        val continuousMode = snapshot.readerSettings.mode.isContinuous
         val boundary = if (continuousMode) snapshot.readerScrollReady &&
             (if (forward) snapshot.readerAtEnd else snapshot.pageIndex == 0 && snapshot.readerScroll == 0f)
             else readerLayout(snapshot).turnIndex(forward) == null
@@ -2372,14 +3192,14 @@ class DesktopController(val session: DesktopSession) {
         val snapshot = state.value
         if (snapshot.screen != DesktopScreen.READER || snapshot.chapter?.id != chapterId ||
             snapshot.readerNavigation != navigation || !snapshot.readerSettings.automaticChapter ||
-            snapshot.readerSettings.mode != DesktopReaderMode.CONTINUOUS || !snapshot.readerScrollReady) return@action
+            !snapshot.readerSettings.mode.isContinuous || !snapshot.readerScrollReady) return@action
         val boundary = if (forward) snapshot.readerAtEnd else snapshot.pageIndex == 0 && snapshot.readerScroll == 0f
         if (boundary) snapshot.adjacentChapter(forward)?.let { readOnIo(it, startAtEnd = !forward) }
     }
 
     fun reloadPage(): Job {
         val snapshot = state.value
-        return if (snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS && snapshot.chapter != null) {
+        return if (snapshot.readerSettings.mode.isContinuous && snapshot.chapter != null) {
             continuous.load(snapshot.chapter.id, snapshot.readerVisiblePages.ifEmpty { listOf(snapshot.pageIndex) }, true)
         } else action { pageOnIo(state.value.pageIndex, refresh = true) }
     }
@@ -2446,14 +3266,24 @@ class DesktopController(val session: DesktopSession) {
             "cf_book" to SourcePreferenceValue.Toggle(settings.colorFilter.book),
             "background" to SourcePreferenceValue.Text(settings.background.name),
             "page_numbers" to SourcePreferenceValue.Toggle(settings.pageNumbers),
+            "reader_chapter_title_bottom" to SourcePreferenceValue.Toggle(settings.chapterTitleAtBottom),
+            "reader_reduce_offscreen_quality" to SourcePreferenceValue.Toggle(settings.reducePagePreloading),
             "vertical" to SourcePreferenceValue.Toggle(settings.vertical),
             "crop_paged" to SourcePreferenceValue.Toggle(settings.cropPaged),
             "crop_continuous" to SourcePreferenceValue.Toggle(settings.cropContinuous),
+            "webtoon_gaps" to SourcePreferenceValue.Toggle(settings.webtoonGaps),
+            "reader_continuous_horizontal_reversed" to
+                SourcePreferenceValue.Toggle(settings.continuousHorizontalReversed),
+            "reader_mode_detect" to SourcePreferenceValue.Toggle(settings.readerModeDetection),
             "as_speed" to SourcePreferenceValue.FloatBits(settings.autoScrollSpeed.toRawBits()),
             "double_cover" to SourcePreferenceValue.Toggle(settings.doublePageCover),
         ) + tapGridPreferences(settings.tapGrid)))
         session.upscale = settings.upscale
         session.cropPages = settings.cropActive
+        // Android's ReaderViewModel.switchMode saves the mode for the work being read, so a manual choice sticks.
+        if (state.value.screen == DesktopScreen.READER && previous.mode != settings.mode) {
+            state.value.content?.let { rememberReaderMode(it.id, settings.mode) }
+        }
         // Loaded pages were made for the previous super-resolution or crop choice; they are loaded (from cache) again.
         val reload = previous.upscale != settings.upscale || previous.cropActive != settings.cropActive
         if (reload) cancelPrefetch()
@@ -2464,6 +3294,12 @@ class DesktopController(val session: DesktopSession) {
                 colorFilter = settings.colorFilter, background = settings.background, pageNumbers = settings.pageNumbers,
                 autoScrollSpeed = settings.autoScrollSpeed, tapGrid = settings.tapGrid) != settings) {
             pageOnIo(state.value.pageIndex)
+        }
+        // The preload window follows the switch at once, so turning it on drops the pages already queued around us
+        // (the children of the old plan keep loading; the next window is the reduced one).
+        if (state.value.screen == DesktopScreen.READER && previous.reducePagePreloading != settings.reducePagePreloading) {
+            cancelPrefetch()
+            prefetchAroundSlot(state.value)
         }
         if (!saved) mutableState.update { it.copy(error = desktopText("error.readerSettingsInMemory")) }
     }
@@ -2497,13 +3333,20 @@ class DesktopController(val session: DesktopSession) {
                 it.name == (snapshot["background"] as? SourcePreferenceValue.Text)?.value
             } ?: DesktopReaderBackground.DEFAULT,
             (snapshot["page_numbers"] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            (snapshot["reader_chapter_title_bottom"] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            (snapshot["reader_reduce_offscreen_quality"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             (snapshot["vertical"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             (snapshot["crop_paged"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             (snapshot["crop_continuous"] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            (snapshot["webtoon_gaps"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             (snapshot["as_speed"] as? SourcePreferenceValue.FloatBits)?.bits?.let(Float::fromBits)?.coerceIn(0f, 1f)
                 ?: org.skepsun.kototoro.reader.core.ReaderAutoScroll.DEFAULT_SPEED,
             (snapshot["double_cover"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             restoredTapGrid(snapshot),
+            // Android's own key for the horizontal strip's reading direction.
+            (snapshot["reader_continuous_horizontal_reversed"] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            // Android's autodetect switch; AppSettings.isReaderModeDetectionEnabled defaults it to on.
+            (snapshot["reader_mode_detect"] as? SourcePreferenceValue.Toggle)?.value ?: true,
         ).also { session.upscale = it.upscale; session.cropPages = it.cropActive }
     }
 
@@ -2556,7 +3399,7 @@ class DesktopController(val session: DesktopSession) {
     private suspend fun pageOnIo(index: Int, refresh: Boolean = false) {
         val snapshot = state.value
         if (index !in snapshot.pages.indices) return
-        if (snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS) {
+        if (snapshot.readerSettings.mode.isContinuous) {
             mutableState.update { it.copy(readerTargetPage = index, readerTargetScroll = 0f,
                 readerNavigation = it.readerNavigation + 1, readerScrollReady = false, readerAtEnd = false) }
             return
@@ -2592,18 +3435,20 @@ class DesktopController(val session: DesktopSession) {
     /**
      * Android's paged resource window (reader-core): the slots around the current one load in the background, two
      * ahead and two behind, nearest first, so a turn finds its pages ready. Outside the action gate: it never delays
-     * a turn, and a newer window re-plans the queue of the running worker.
+     * a turn, and a newer window re-plans the queue of the running worker. Android's "reduce page preloading" switch
+     * keeps a single slot ahead instead and stops the next chapter from being fetched while it is still far away.
      */
     private fun prefetchAroundSlot(snapshot: DesktopAppState) {
-        if (snapshot.screen != DesktopScreen.READER || snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS) return
+        if (snapshot.screen != DesktopScreen.READER || snapshot.readerSettings.mode.isContinuous) return
         val layout = readerLayout(snapshot)
         val frame = layout.frame ?: return
-        val window = org.skepsun.kototoro.reader.core.PagedSceneResourceWindowStrategy(lookaheadSlots = 2,
-            prepareAdjacentSlots = true).plan(org.skepsun.kototoro.reader.core.SceneResourceWindowRequest(layout.scene, frame))
+        val reduce = snapshot.readerSettings.reducePagePreloading
+        val window = org.skepsun.kototoro.reader.core.PagedSceneResourceWindowStrategy(lookaheadSlots = if (reduce) 1 else 2,
+            prepareAdjacentSlots = !reduce).plan(org.skepsun.kototoro.reader.core.SceneResourceWindowRequest(layout.scene, frame))
         prefetchPages(snapshot.chapter?.id ?: return, window.requests.sortedBy { it.priority }
             .map { layout.scene.indexOf(it.pageId) }.filter { it >= 0 && it !in layout.indices })
         val slots = layout.scene.slotCount
-        if (layout.slotIndex >= slots - 1 - NEXT_CHAPTER_LOOKAHEAD) preloadNextChapter(snapshot)
+        if (!reduce && layout.slotIndex >= slots - 1 - NEXT_CHAPTER_LOOKAHEAD) preloadNextChapter(snapshot)
     }
 
     /** Loads [indices] of the open chapter in the background, nearest first; failures stay for the reader to retry. */
@@ -2711,6 +3556,17 @@ class DesktopController(val session: DesktopSession) {
         mutableState.update { it.copy(screen = DesktopScreen.PREFERENCES, preferences = screen) }
     }
 
+    /**
+     * Android's unified list opens a source's own settings from its row; 已安装 expands a package into its sources,
+     * so those rows need the same destination without a detour through the browse rail.
+     */
+    fun sourceSettings(name: String) = navigate {
+        val listing = state.value.sources.firstOrNull { it.source.name == name }
+        val screen = session.sources.getPreferences(name)
+        mutableState.update { it.copy(screen = DesktopScreen.PREFERENCES, preferences = screen,
+                selectedSource = listing ?: it.selectedSource) }
+    }
+
     fun updatePreference(node: SourcePreferenceNode, value: SourcePreferenceValue) = action {
         val screen = requireNotNull(state.value.preferences)
         node.actionUrl?.let { url ->
@@ -2738,12 +3594,19 @@ class DesktopController(val session: DesktopSession) {
 
     fun backToDetails() = action {
         closeCast(resume = false)
-        mutableState.update { it.copy(screen = DesktopScreen.DETAILS, detailsChapterId = when (it.screen) {
-            DesktopScreen.READER -> it.chapter?.id
-            DesktopScreen.NOVEL -> it.novel?.chapter?.id
-            DesktopScreen.VIDEO -> it.video?.chapter?.id
-            else -> it.detailsChapterId
-        }) }
+        mutableState.update { it.copy(screen = DesktopScreen.DETAILS,
+            // A detected or remembered mode belongs to the work that was open; the next one starts from the preference.
+            readerSettings = if (it.screen == DesktopScreen.READER) {
+                it.readerSettings.copy(mode = restoredReaderSettings().mode)
+            } else {
+                it.readerSettings
+            },
+            detailsChapterId = when (it.screen) {
+                DesktopScreen.READER -> it.chapter?.id
+                DesktopScreen.NOVEL -> it.novel?.chapter?.id
+                DesktopScreen.VIDEO -> it.video?.chapter?.id
+                else -> it.detailsChapterId
+            }) }
     }
 
     private fun sourceDescriptors() = session.sourceListings()

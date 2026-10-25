@@ -45,6 +45,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.adaptive.tvTakeInitialFocus
@@ -520,7 +521,7 @@ private fun SubtitleChip(
             selected = selected,
             onClick = onClick,
             label = label,
-            modifier = modifier,
+            modifier = modifier.tvChipRing(),
             colors = colors,
         )
         return

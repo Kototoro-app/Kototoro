@@ -138,6 +138,17 @@ private val SearchOverlayCollapsedHeight = 56.dp
 private val SearchOverlayCollapsedHorizontalPadding = 10.dp
 private val SearchSuggestionCardWidth = 108.dp
 
+// TV suggestion shelves match the results screen: five 174dp posters per 1920px row instead of
+// phone-sized thumbnails that read as stamps from the couch.
+private val TvSearchSuggestionCardWidth = 174.dp
+
+@Composable
+private fun searchSuggestionCardWidth(): Dp = if (LocalUiPresentationConfig.current.isTv) {
+    TvSearchSuggestionCardWidth
+} else {
+    SearchSuggestionCardWidth
+}
+
 private data class SearchOverlayStyle(
     val collapsedCornerRadius: Dp,
     val inputHeight: Dp,
@@ -456,7 +467,7 @@ fun KototoroSearchOverlay(
                                 shape = RoundedCornerShape(style.inputCornerRadius),
                             )
                             .focusRequester(focusRequester)
-                            .tvTextInputFocusEscape(),
+                            .tvTextInputFocusEscape(horizontalWhenIdle = true),
                         placeholder = {
                             Text(
                                 text = if (activeLibraryScope != null) {
@@ -1306,7 +1317,7 @@ private fun TrackingEntitySuggestionCard(
     val typeTitle = stringResource(entity.entityType.titleResId())
     Surface(
         modifier = Modifier
-            .width(SearchSuggestionCardWidth)
+            .width(searchSuggestionCardWidth())
             .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(style.cardCornerRadius),
@@ -1390,7 +1401,7 @@ private fun ContentSuggestionCard(
 
     Surface(
         modifier = Modifier
-            .width(SearchSuggestionCardWidth)
+            .width(searchSuggestionCardWidth())
             .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(style.cardCornerRadius),
@@ -1451,7 +1462,7 @@ private fun LocalEntitySuggestionCard(
 
     Surface(
         modifier = Modifier
-            .width(SearchSuggestionCardWidth)
+            .width(searchSuggestionCardWidth())
             .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(style.cardCornerRadius),

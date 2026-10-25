@@ -32,8 +32,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.WorkInfo
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.CompactContentCoverShape
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.util.ext.getThemeColor
@@ -92,46 +94,61 @@ fun AppDownloadsRoute(
                 TopAppBar(
                     title = { Text(text = selectionIds.size.toString()) },
                     navigationIcon = {
-                        IconButton(onClick = { selectionIds = emptySet() }) {
+                        IconButton(onClick = { selectionIds = emptySet() }, modifier = Modifier.tvIconButtonRing()) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close")
                         }
                     },
                     actions = {
-                        IconButton(onClick = {
-                            hapticFeedback.performSelectionHapticFeedback()
-                            selectionIds = viewModel.allIds()
-                        }) {
+                        IconButton(
+                            onClick = {
+                                hapticFeedback.performSelectionHapticFeedback()
+                                selectionIds = viewModel.allIds()
+                            },
+                            modifier = Modifier.tvIconButtonRing(),
+                        ) {
                             Icon(Icons.Default.CheckCircle, contentDescription = "Select All")
                         }
                         if (canPause) {
-                            IconButton(onClick = {
-                                viewModel.pause(selectionIds)
-                                selectionIds = emptySet()
-                            }) {
+                            IconButton(
+                                onClick = {
+                                    viewModel.pause(selectionIds)
+                                    selectionIds = emptySet()
+                                },
+                                modifier = Modifier.tvIconButtonRing(),
+                            ) {
                                 Icon(painterResource(R.drawable.ic_pause), contentDescription = "Pause")
                             }
                         }
                         if (canResume) {
-                            IconButton(onClick = {
-                                viewModel.resume(selectionIds)
-                                selectionIds = emptySet()
-                            }) {
+                            IconButton(
+                                onClick = {
+                                    viewModel.resume(selectionIds)
+                                    selectionIds = emptySet()
+                                },
+                                modifier = Modifier.tvIconButtonRing(),
+                            ) {
                                 Icon(Icons.Default.PlayArrow, contentDescription = "Resume")
                             }
                         }
                         if (canCancel) {
-                            IconButton(onClick = {
-                                viewModel.cancel(selectionIds)
-                                selectionIds = emptySet()
-                            }) {
+                            IconButton(
+                                onClick = {
+                                    viewModel.cancel(selectionIds)
+                                    selectionIds = emptySet()
+                                },
+                                modifier = Modifier.tvIconButtonRing(),
+                            ) {
                                 Icon(Icons.Default.Close, contentDescription = "Cancel")
                             }
                         }
                         if (canRemove) {
-                            IconButton(onClick = {
-                                viewModel.remove(selectionIds)
-                                selectionIds = emptySet()
-                            }) {
+                            IconButton(
+                                onClick = {
+                                    viewModel.remove(selectionIds)
+                                    selectionIds = emptySet()
+                                },
+                                modifier = Modifier.tvIconButtonRing(),
+                            ) {
                                 Icon(Icons.Default.Delete, contentDescription = "Remove")
                             }
                         }
@@ -145,13 +162,16 @@ fun AppDownloadsRoute(
                     title = { Text(stringResource(R.string.downloads)) },
                     navigationIcon = {
                         val context = LocalContext.current
-                        IconButton(onClick = { (context as? android.app.Activity)?.finish() }) {
+                        IconButton(
+                            onClick = { (context as? android.app.Activity)?.finish() },
+                            modifier = Modifier.tvIconButtonRing(),
+                        ) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     actions = {
                         var showMenu by remember { mutableStateOf(false) }
-                        IconButton(onClick = { showMenu = true }) {
+                        IconButton(onClick = { showMenu = true }, modifier = Modifier.tvIconButtonRing()) {
                             Icon(Icons.Default.MoreVert, contentDescription = "More")
                         }
                         DropdownMenu(
@@ -160,7 +180,7 @@ fun AppDownloadsRoute(
                             shape = MaterialTheme.shapes.extraSmall,
                         ) {
                             if (hasCancellableWorks) {
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = { Text(stringResource(android.R.string.cancel)) },
                                     onClick = {
                                         viewModel.cancelAll()
@@ -169,7 +189,7 @@ fun AppDownloadsRoute(
                                 )
                             }
                             if (hasActiveWorks) {
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = { Text(stringResource(R.string.pause)) },
                                     onClick = {
                                         viewModel.pauseAll()
@@ -178,7 +198,7 @@ fun AppDownloadsRoute(
                                 )
                             }
                             if (hasPausedWorks) {
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = { Text(stringResource(R.string.resume)) },
                                     onClick = {
                                         viewModel.resumeAll()
@@ -186,7 +206,7 @@ fun AppDownloadsRoute(
                                     }
                                 )
                             }
-                            DropdownMenuItem(
+                            TvDropdownMenuItem(
                                 text = { Text(stringResource(R.string.remove_completed)) },
                                 onClick = {
                                     viewModel.removeCompleted()
@@ -332,7 +352,7 @@ fun DownloadItemRow(
 
                         val chapters = item.chapters.collectAsStateWithLifecycle().value
                         if (!chapters.isNullOrEmpty()) {
-                            IconButton(onClick = onExpandClick, modifier = Modifier.size(32.dp)) {
+                            IconButton(onClick = onExpandClick, modifier = Modifier.size(32.dp).tvIconButtonRing()) {
                                 Icon(
                                     imageVector = if (item.isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                                     contentDescription = stringResource(if (item.isExpanded) R.string.collapse else R.string.expand)

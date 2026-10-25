@@ -210,6 +210,8 @@ internal fun modeTitle(mode: DesktopReaderMode): String = when (mode) {
     DesktopReaderMode.SINGLE -> desktopText("reader.mode.single")
     DesktopReaderMode.DOUBLE -> desktopText("reader.mode.double")
     DesktopReaderMode.CONTINUOUS -> desktopText("reader.mode.continuous")
+    // Android names this mode in its own catalog, and the reader options panel draws the same label.
+    DesktopReaderMode.CONTINUOUS_HORIZONTAL -> AndroidStrings["continuous_horizontal"]
 }
 
 /**

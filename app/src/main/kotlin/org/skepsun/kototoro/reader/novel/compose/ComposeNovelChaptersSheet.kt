@@ -29,7 +29,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -57,6 +56,8 @@ import org.skepsun.kototoro.bookmarks.domain.Bookmark
 import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.prefs.rememberChapterRowActionPrefs
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
@@ -162,7 +163,7 @@ internal fun ComposeNovelChaptersSheet(
                         },
                     )
                     Box {
-                        IconButton(onClick = { moreMenuExpanded = true }) {
+                        IconButton(onClick = { moreMenuExpanded = true }, modifier = Modifier.tvIconButtonRing()) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
                                 contentDescription = stringResource(R.string.more),
@@ -333,7 +334,7 @@ internal fun ComposeNovelChaptersContent(
             title = { Text(stringResource(R.string.translate_chapter_again)) },
             text = { Text(stringResource(R.string.translate_chapter_again_summary)) },
             confirmButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         retranslationRequest.value = null
                         onTranslateChapter?.invoke(target, true)
@@ -343,7 +344,7 @@ internal fun ComposeNovelChaptersContent(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { retranslationRequest.value = null }) {
+                TvTextButton(onClick = { retranslationRequest.value = null }) {
                     Text(stringResource(R.string.cancel))
                 }
             },

@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.main.ui.compose.rememberMainContentFocusAnchorRequester
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -107,7 +108,9 @@ internal fun HomeHeroSection(
     if (entries.isEmpty()) return
     val pagerState = rememberPagerState(pageCount = { entries.size })
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
-    val heroFocusRequester = remember { FocusRequester() }
+    // TV: the hero card is the first stop of the page, so it is published to the top bar. The bar is an
+    // overlay sibling of the content and cannot search its way down into the page on its own.
+    val heroFocusRequester = rememberMainContentFocusAnchorRequester()
     val initialFocusPage = remember { pagerState.currentPage }
     var initialFocusAttempted by rememberSaveable { mutableStateOf(false) }
     val selectedIndex by remember(entries, pagerState) {

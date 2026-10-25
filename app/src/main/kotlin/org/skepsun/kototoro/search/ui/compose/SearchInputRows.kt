@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.ListMode
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
@@ -193,7 +194,7 @@ internal fun SearchInputRow(
             },
         )
         if (value.isNotEmpty()) {
-            IconButton(onClick = { onValueChange("") }) {
+            IconButton(onClick = { onValueChange("") }, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     imageVector = Icons.Default.Clear,
                     contentDescription = stringResource(R.string.clear),
@@ -416,6 +417,9 @@ private fun MoreActionsButton(
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     var anchorBounds by remember { mutableStateOf<Rect?>(null) }
+    // On TV the menu lives in the root overlay, so without this the ring would drop to the
+    // navigation rail when the menu closes instead of staying on the button that opened it.
+    val moreAnchorFocus = remember { FocusRequester() }
     val tokens = LocalInterfaceStyleTokens.current
 
     Box(
@@ -424,6 +428,7 @@ private fun MoreActionsButton(
         IconButton(
             onClick = { expanded = true },
             modifier = Modifier
+                .focusRequester(moreAnchorFocus)
                 .size(tokens.topBarButtonSize)
                 .tvFocusable(shape = CircleShape, addFocusTarget = false),
         ) {
@@ -441,6 +446,7 @@ private fun MoreActionsButton(
             style = GlassDefaults.subtleStyle(),
             useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
             anchorBounds = anchorBounds,
+            anchorFocusRequester = moreAnchorFocus,
         ) {
             if (showRandomAction) {
                 CompactDropdownMenuItem(

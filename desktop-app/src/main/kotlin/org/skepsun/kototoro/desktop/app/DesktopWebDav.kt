@@ -30,11 +30,31 @@ internal data class DesktopWebDavSettings(
     val maxCount: Int = 3,
     /** Hours between automatic uploads; `0` leaves the timer off and the page purely manual. */
     val intervalHours: Int = 0,
+    /** Android's `backup_periodic_webdav_keep_local_copy`: write the export next to the library before uploading. */
+    val keepLocalCopy: Boolean = true,
+    /** Android's `backup_periodic_trim`: retire local copies past [localCount] after each backup. */
+    val trimLocal: Boolean = true,
+    /** Android's `backup_periodic_count`: how many local copies the trim keeps. */
+    val localCount: Int = 10,
+    /**
+     * Android's `backup_periodic_webdav_auto_restore`: on the first start of each day, merge the newest remote backup
+     * once and push the merged snapshot back. Off by default, like Android.
+     */
+    val autoRestore: Boolean = false,
+    /**
+     * Android's `periodicalBackupDirectory`: where the local copies go. Empty means the data root's `backups` folder,
+     * which is what a fresh install uses; a path that stopped being a writable directory falls back to it too, the same
+     * way Android falls back when the user revokes the SAF tree.
+     */
+    val outputDirectory: String = "",
 ) {
     val configured: Boolean get() = serverUrl.isNotBlank()
 
-    /** The timer only runs for a destination it could actually reach, so a half-filled form stays quiet. */
-    val autoBackupEnabled: Boolean get() = intervalHours > 0 && configured
+    /**
+     * The timer runs for either destination, like Android's periodical worker: a complete server, or the local
+     * directory when "keep a local copy" is on. A half-filled form with the local copy off stays quiet.
+     */
+    val autoBackupEnabled: Boolean get() = intervalHours > 0 && (configured || keepLocalCopy)
 
     fun toPreferences(): Map<String, SourcePreferenceValue?> = mapOf(
         KEY_SERVER to SourcePreferenceValue.Text(serverUrl),
@@ -43,6 +63,11 @@ internal data class DesktopWebDavSettings(
         KEY_PASSWORD to SourcePreferenceValue.Text(password),
         KEY_MAX_COUNT to SourcePreferenceValue.Integer(maxCount),
         KEY_INTERVAL to SourcePreferenceValue.Integer(intervalHours),
+        KEY_KEEP_LOCAL to SourcePreferenceValue.Toggle(keepLocalCopy),
+        KEY_TRIM_LOCAL to SourcePreferenceValue.Toggle(trimLocal),
+        KEY_LOCAL_COUNT to SourcePreferenceValue.Integer(localCount),
+        KEY_AUTO_RESTORE to SourcePreferenceValue.Toggle(autoRestore),
+        KEY_OUTPUT_DIRECTORY to SourcePreferenceValue.Text(outputDirectory),
     )
 
     companion object {
@@ -52,6 +77,13 @@ internal data class DesktopWebDavSettings(
         const val KEY_PASSWORD = "webdav_password"
         const val KEY_MAX_COUNT = "webdav_remote_max_count"
         const val KEY_INTERVAL = "webdav_auto_interval_hours"
+        const val KEY_KEEP_LOCAL = "webdav_keep_local_copy"
+        const val KEY_TRIM_LOCAL = "webdav_trim_local_copy"
+        const val KEY_LOCAL_COUNT = "webdav_local_max_count"
+        const val KEY_AUTO_RESTORE = "webdav_auto_restore"
+
+        /** Android's `backup_periodic_directory`; the local copies live here, empty means the data root's `backups`. */
+        const val KEY_OUTPUT_DIRECTORY = "backup_output_directory"
 
         fun from(values: Map<String, SourcePreferenceValue>) = DesktopWebDavSettings(
             serverUrl = (values[KEY_SERVER] as? SourcePreferenceValue.Text)?.value.orEmpty(),
@@ -60,6 +92,12 @@ internal data class DesktopWebDavSettings(
             password = (values[KEY_PASSWORD] as? SourcePreferenceValue.Text)?.value.orEmpty(),
             maxCount = (values[KEY_MAX_COUNT] as? SourcePreferenceValue.Integer)?.value ?: 3,
             intervalHours = ((values[KEY_INTERVAL] as? SourcePreferenceValue.Integer)?.value ?: 0).coerceAtLeast(0),
+            keepLocalCopy = (values[KEY_KEEP_LOCAL] as? SourcePreferenceValue.Toggle)?.value ?: true,
+            trimLocal = (values[KEY_TRIM_LOCAL] as? SourcePreferenceValue.Toggle)?.value ?: true,
+            localCount = ((values[KEY_LOCAL_COUNT] as? SourcePreferenceValue.Integer)?.value ?: 10)
+                .coerceIn(1, 32),
+            autoRestore = (values[KEY_AUTO_RESTORE] as? SourcePreferenceValue.Toggle)?.value ?: false,
+            outputDirectory = (values[KEY_OUTPUT_DIRECTORY] as? SourcePreferenceValue.Text)?.value.orEmpty(),
         )
     }
 }

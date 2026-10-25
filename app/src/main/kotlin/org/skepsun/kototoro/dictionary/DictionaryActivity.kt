@@ -31,7 +31,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +48,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTabRing
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
@@ -102,12 +103,12 @@ private fun DictionaryScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.dictionary_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, modifier = Modifier.tvIconButtonRing()) {
                         Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 actions = {
-                    IconButton(onClick = onManageRules) {
+                    IconButton(onClick = onManageRules, modifier = Modifier.tvIconButtonRing()) {
                         Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.dictionary_manage_rules))
                     }
                 },
@@ -224,7 +225,7 @@ private fun DictionaryPage(
         page.result != null -> {
             val result = page.result
             Column(modifier = Modifier.fillMaxSize()) {
-                TextButton(
+                TvTextButton(
                     onClick = { onOpenBrowser(result.url) },
                     contentPadding = PaddingValues(horizontal = 16.dp),
                 ) {

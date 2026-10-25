@@ -585,6 +585,13 @@ class DetailsViewModel @Inject constructor(
         key = AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID,
         valueProducer = { settings.activeSourcePresetId },
     )
+    // The reading-source filter panel shows the global tag blacklist row; a count of zero reads as
+    // "not enabled", so the row has to be fed the real number instead of the panel's default.
+    val globalTagBlacklistCount: StateFlow<Int> = settings.observeAsStateFlow(
+        scope = viewModelScope + Dispatchers.IO,
+        key = AppSettings.KEY_GLOBAL_TAG_BLACKLIST,
+        valueProducer = { settings.globalTagBlacklist.size },
+    )
     val chaptersPaneControlsUiState: StateFlow<ChaptersPaneControlsUiState> = extCombine(
         isChaptersReversed,
         isChaptersInGridView,

@@ -44,6 +44,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -66,6 +68,7 @@ import org.skepsun.kototoro.core.model.iconResId
 import org.skepsun.kototoro.core.model.containsAdultTagKeyword
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
@@ -92,6 +95,7 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import java.util.Locale
@@ -210,6 +214,14 @@ internal fun DetailsSourceSummaryRow(
     }
 }
 
+/**
+ * Padding between a TV source segment's outline and the pill that contains it.
+ *
+ * The outline is drawn inside its own node, so a ring drawn on the bare segment would collide with
+ * the pill's own 1 dp border and lose its outer corners to the pill's clip.
+ */
+private val TvSummarySegmentRingInset = 3.dp
+
 @Composable
 private fun SourceSummarySegment(
     label: String,
@@ -221,28 +233,54 @@ private fun SourceSummarySegment(
     modifier: Modifier = Modifier,
 ) {
     val hasResolvedSource = displayModel != null
-    Row(
-        modifier = modifier
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val segmentShape = RoundedCornerShape(999.dp)
+    // Icon and label are two separate hit targets for a finger. A remote walked them as two stops
+    // inside one pill instead: the outline shrank to a 20 dp circle over the icon and then to the
+    // text, so the metadata/reading strip of a work became four stops that flicker in place and a
+    // CENTER press had to guess which half it was on. On TV the whole segment is the stop, the
+    // outline wraps icon + label, and CENTER runs the name action (the source sheet); opening the
+    // source page itself stays a touch-only shortcut. Two stops remain, one per role.
+    val rowModifier = if (isTvPresentation) {
+        modifier
             .background(color.copy(alpha = if (hasResolvedSource) 0.18f else 0.10f))
-            .padding(start = 6.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+            .padding(TvSummarySegmentRingInset)
+            .tvFocusable(shape = segmentShape, addFocusTarget = false)
+            .clickable(onClick = onNameClick)
+            .padding(start = 6.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+    } else {
+        modifier
+            .background(color.copy(alpha = if (hasResolvedSource) 0.18f else 0.10f))
+            .padding(start = 6.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+    }
+    Row(
+        modifier = rowModifier,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)
-                .clickable(onClick = if (hasResolvedSource) onIconClick else onNameClick)
-                .padding(3.dp),
+            modifier = if (isTvPresentation) {
+                Modifier.padding(3.dp)
+            } else {
+                Modifier
+                    .clip(segmentShape)
+                    .tvFocusable(shape = segmentShape, addFocusTarget = false)
+                    .clickable(onClick = if (hasResolvedSource) onIconClick else onNameClick)
+                    .padding(3.dp)
+            },
             contentAlignment = Alignment.Center,
         ) {
             SourceSummaryIcon(displayModel = displayModel)
         }
         Text(
             text = label.ifBlank { fallbackLabel },
-            modifier = Modifier
-                .tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)
-                .clickable(onClick = onNameClick),
+            modifier = if (isTvPresentation) {
+                Modifier
+            } else {
+                Modifier
+                    .tvFocusable(shape = segmentShape, addFocusTarget = false)
+                    .clickable(onClick = onNameClick)
+            },
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (hasResolvedSource) 1f else 0.68f),
             maxLines = 1,
@@ -363,6 +401,7 @@ internal fun TrackingSuggestionCard(
                         containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
                         labelColor = MaterialTheme.colorScheme.primary,
                     ),
+                    modifier = Modifier.tvChipRing(RoundedCornerShape(if (expressive) 999.dp else 8.dp)),
                 )
                 SuggestionChip(
                     onClick = onOpenClick,
@@ -375,6 +414,7 @@ internal fun TrackingSuggestionCard(
                         enabled = true,
                         borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                     ),
+                    modifier = Modifier.tvChipRing(RoundedCornerShape(if (expressive) 999.dp else 8.dp)),
                 )
                 SuggestionChip(
                     onClick = onIgnoreClick,
@@ -387,6 +427,7 @@ internal fun TrackingSuggestionCard(
                         enabled = true,
                         borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                     ),
+                    modifier = Modifier.tvChipRing(RoundedCornerShape(if (expressive) 999.dp else 8.dp)),
                 )
             }
         }
@@ -415,6 +456,7 @@ internal fun RatingStatusChip(
 ) {
     var expanded by remember(status, linkedTrackingItems) { mutableStateOf(false) }
     var menuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
+    val statusAnchorFocus = remember { FocusRequester() }
     val supportedStatuses = remember(linkedTrackingItems) {
         linkedTrackingItems
             .map { supportedStatusesForService(it.service).toSet() }
@@ -450,7 +492,11 @@ internal fun RatingStatusChip(
                 )
                 Row(
                     modifier = Modifier
+                        .focusRequester(statusAnchorFocus)
                         .clip(RoundedCornerShape(999.dp))
+                        // A plain clickable keeps the stop but draws no ring; on TV the chip would
+                        // be a silent stop (and the ring after a menu returns here).
+                        .tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)
                         .clickable { expanded = true }
                         .padding(horizontal = 2.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -473,6 +519,8 @@ internal fun RatingStatusChip(
             style = GlassDefaults.subtleStyle(),
             useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
             anchorBounds = menuAnchorBounds,
+            // Root-overlay menus cannot hand the ring back themselves.
+            anchorFocusRequester = statusAnchorFocus,
         ) {
             supportedStatuses.forEach { candidate ->
                 CompactDropdownMenuItem(
@@ -510,6 +558,7 @@ private fun CompactRatingChip(
     val context = LocalContext.current
     var expanded by remember { mutableStateOf(false) }
     var menuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
+    val ratingAnchorFocus = remember { FocusRequester() }
     val score = (rating.coerceIn(0f, 1f) * 10f).roundToInt()
     val contentAlpha = if (score > 0) 1f else 0.62f
     Box(
@@ -517,7 +566,9 @@ private fun CompactRatingChip(
     ) {
         Row(
             modifier = Modifier
+                .focusRequester(ratingAnchorFocus)
                 .clip(RoundedCornerShape(999.dp))
+                .tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)
                 .clickable {
                     if (enabled) {
                         expanded = true
@@ -561,6 +612,7 @@ private fun CompactRatingChip(
             style = GlassDefaults.subtleStyle(),
             useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
             anchorBounds = menuAnchorBounds,
+            anchorFocusRequester = ratingAnchorFocus,
         ) {
             (0..10).forEach { candidate ->
                 CompactDropdownMenuItem(
@@ -783,6 +835,10 @@ internal fun SourceOptionCard(
     Surface(
         modifier = modifier
             .width(112.dp)
+            .tvFocusable(
+                shape = RoundedCornerShape(if (expressive) 20.dp else 12.dp),
+                addFocusTarget = false,
+            )
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
@@ -938,6 +994,7 @@ internal fun SourceOptionCard(
                             labelColor = MaterialTheme.colorScheme.onSurface,
                             iconContentColor = MaterialTheme.colorScheme.onSurface,
                         ),
+                        modifier = Modifier.tvChipRing(),
                     )
                     GlassDropdownMenu(
                         expanded = statusMenuExpanded,

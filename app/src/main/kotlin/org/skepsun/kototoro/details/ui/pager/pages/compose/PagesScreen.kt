@@ -13,7 +13,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +31,8 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
+import org.skepsun.kototoro.core.ui.compose.SelectionActionBar
+import org.skepsun.kototoro.core.ui.compose.SelectionBarIconButton
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
@@ -341,32 +342,16 @@ fun PagesScreen(
             exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
         ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.inverseSurface,
-                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+            SelectionActionBar(
+                selectedCount = selectedItemIds.size,
+                onClearSelection = onClearSelection,
                 modifier = Modifier.padding(16.dp).windowInsetsPadding(WindowInsets.safeDrawing),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onClearSelection) {
-                            Icon(imageVector = Icons.Default.Close, contentDescription = "Clear")
-                        }
-                        Text(
-                            text = "${selectedItemIds.size}",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(start = 8.dp),
-                        )
-                    }
-                    Row {
-                        IconButton(onClick = { onSelectionActionClick(R.id.action_save) }) {
-                            Icon(painter = painterResource(id = R.drawable.ic_save_ok), contentDescription = "Save Page")
-                        }
-                    }
+                SelectionBarIconButton(onClick = { onSelectionActionClick(R.id.action_save) }) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_save_ok),
+                        contentDescription = stringResource(R.string.save_page),
+                    )
                 }
             }
         }

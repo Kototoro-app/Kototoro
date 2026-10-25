@@ -1,6 +1,6 @@
 package org.skepsun.kototoro.core.extensions
 
-internal const val DEFAULT_JAR_PRIORITY_ORDER_VALUE =
+const val DEFAULT_JAR_PRIORITY_ORDER_VALUE =
     "kototoro-parsers,kotatsu-parsers-redo,uma,kotatsu-parsers"
 
 /**
@@ -9,7 +9,7 @@ internal const val DEFAULT_JAR_PRIORITY_ORDER_VALUE =
  */
 private val JAR_VERSION_SUFFIX = Regex("""^(.*?)[._-]v?(\d+(?:[._]\d+)*)$""")
 
-internal fun resolveJarPriorityOrder(
+fun resolveJarPriorityOrder(
     installedJarNames: List<String>,
     savedOrder: String,
 ): List<String> {
@@ -28,7 +28,7 @@ internal fun resolveJarPriorityOrder(
     return ordered
 }
 
-internal fun jarPriorityComparator(priorityOrder: String): Comparator<String> {
+fun jarPriorityComparator(priorityOrder: String): Comparator<String> {
     val priorities = jarPriorityRanks(priorityOrder)
     return compareBy<String> { priorities[it.jarBaseName().lowercase()] ?: Int.MAX_VALUE }
         .thenBy { it.jarBaseName().lowercase() }
@@ -40,7 +40,7 @@ internal fun jarPriorityComparator(priorityOrder: String): Comparator<String> {
  * Version comparison is limited to JARs of the same package, so two unrelated JARs never get ordered
  * by a number that happens to appear in their name.
  */
-internal fun <T> jarCandidateComparator(
+fun <T> jarCandidateComparator(
     priorityOrder: String,
     jarName: (T) -> String,
 ): Comparator<T> {
@@ -59,7 +59,7 @@ internal fun <T> jarCandidateComparator(
         .thenBy { jarName(it).jarBaseName().lowercase() }
 }
 
-internal fun <T> selectPreferredJarSources(
+fun <T> selectPreferredJarSources(
     sources: List<T>,
     priorityOrder: String,
     sourceName: (T) -> String,
@@ -76,7 +76,7 @@ internal fun <T> selectPreferredJarSources(
  * Returns, for every JAR whose source lost deduplication, a map of `sourceName -> winningJarName`.
  * Keys are the losing JAR names. Sources that win are not included.
  */
-internal fun <T> findShadowedJarSources(
+fun <T> findShadowedJarSources(
     sources: List<T>,
     priorityOrder: String,
     sourceName: (T) -> String,
@@ -101,7 +101,7 @@ internal fun <T> findShadowedJarSources(
  * Two JARs of the same package hold the same classes and the same sources, so loading both only
  * produces duplicate plugins where every source of one of them looks shadowed.
  */
-internal fun <T> deduplicateJarPackages(
+fun <T> deduplicateJarPackages(
     plugins: List<T>,
     jarName: (T) -> String,
 ): JarDeduplicationResult<T> {
@@ -120,7 +120,7 @@ internal fun <T> deduplicateJarPackages(
     )
 }
 
-internal data class JarDeduplicationResult<T>(
+data class JarDeduplicationResult<T>(
     val kept: List<T>,
     val dropped: List<T>,
 )
@@ -130,14 +130,14 @@ internal data class JarDeduplicationResult<T>(
  * marker, so `org.skepsun.kototoro.parsers.jar` and `org.skepsun.kototoro.parsers.v703.jar` share a
  * key while `org.skepsun.kototoro.parsers.extra.jar` keeps its own.
  */
-internal fun String.jarPackageKey(): String = jarIdentity(this).key
+fun String.jarPackageKey(): String = jarIdentity(this).key
 
 /**
  * Version encoded from the trailing version marker of a JAR file name, `0` when the name has none.
  */
-internal fun String.jarVersionCode(): Long = jarIdentity(this).version
+fun String.jarVersionCode(): Long = jarIdentity(this).version
 
-internal fun String.jarBaseName(): String =
+fun String.jarBaseName(): String =
     if (endsWith(".jar", ignoreCase = true)) dropLast(4) else this
 
 private fun jarPriorityRanks(priorityOrder: String): Map<String, Int> {

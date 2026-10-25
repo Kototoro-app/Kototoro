@@ -27,6 +27,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
 import org.skepsun.kototoro.core.network.webview.CF_CLEARANCE_COOKIE
 import org.skepsun.kototoro.core.parser.ParserContentRepository
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.parsers.config.ConfigKey
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
@@ -211,7 +212,7 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
         if (isFinishing || isDestroyed || !browserWebView.isAttachedToWindow) {
             return
         }
-        Snackbar.make(browserWebView, message, Snackbar.LENGTH_LONG).show()
+        browserWebView.makeSnackbar(message, Snackbar.LENGTH_LONG).show()
     }
 
     private fun startClearancePolling() {

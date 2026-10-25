@@ -33,6 +33,7 @@ import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.parsers.model.ContentType
 
@@ -350,6 +351,7 @@ private fun <T> SuggestionSourceFilterRow(
                 selected = selectedOptions.isEmpty(),
                 onClick = onAllClick,
                 label = { Text(allLabel) },
+                modifier = Modifier.tvChipRing(),
             )
         }
         items(options, key = optionKey) { option ->
@@ -357,6 +359,7 @@ private fun <T> SuggestionSourceFilterRow(
                 selected = option in selectedOptions,
                 onClick = { onOptionClick(option) },
                 label = { Text(optionLabel(option)) },
+                modifier = Modifier.tvChipRing(),
             )
         }
     }

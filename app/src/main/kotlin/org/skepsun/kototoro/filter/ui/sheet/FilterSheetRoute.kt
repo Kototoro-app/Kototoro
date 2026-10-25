@@ -3,14 +3,11 @@ package org.skepsun.kototoro.filter.ui.sheet
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,8 +23,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,7 +31,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,10 +47,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
+import org.skepsun.kototoro.core.ui.chips.ChoiceChip
+import org.skepsun.kototoro.core.ui.chips.ChoiceChipFlow
 import org.skepsun.kototoro.core.ui.compose.KototoroRangeSlider
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.model.titleResId
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.model.titleRes
 import org.skepsun.kototoro.core.util.AlphanumComparator
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
@@ -221,7 +222,7 @@ fun FilterSheetRoute(
             title = { Text(context.getString(R.string.save_filter)) },
             text = { Text(context.getString(R.string.filter_overwrite_confirm, name)) },
             confirmButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         pendingOverwriteName = null
                         filter.saveCurrentFilter(name)
@@ -231,7 +232,7 @@ fun FilterSheetRoute(
                 }
             },
             dismissButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         pendingOverwriteName = null
                         pendingSaveName = name
@@ -298,7 +299,7 @@ private fun FilterNameInputDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            TvTextButton(
                 enabled = !hasError,
                 onClick = { onConfirm(trimmed) },
             ) {
@@ -306,7 +307,7 @@ private fun FilterNameInputDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TvTextButton(onClick = onDismiss) {
                 Text(context.getString(android.R.string.cancel))
             }
         },
@@ -337,16 +338,16 @@ private fun TextInputTagDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(value.trim()) }) {
+            TvTextButton(onClick = { onConfirm(value.trim()) }) {
                 Text(context.getString(android.R.string.ok))
             }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onClear) {
+                TvTextButton(onClick = onClear) {
                     Text(context.getString(R.string.clear))
                 }
-                TextButton(onClick = onDismiss) {
+                TvTextButton(onClick = onDismiss) {
                     Text(context.getString(android.R.string.cancel))
                 }
             }
@@ -704,7 +705,7 @@ private fun FilterSheetHeader(
                 fontWeight = FontWeight.Bold,
             )
             if (!isEmbedded) {
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = onDismiss, modifier = Modifier.tvIconButtonRing()) {
                     Icon(
                         imageVector = Icons.Outlined.Close,
                         contentDescription = null,
@@ -745,7 +746,7 @@ private fun FilterSheetActions(
                 Text(text = LocalContext.current.getString(R.string.reset_filter))
             }
             if (!isEmbedded) {
-                TextButton(onClick = onDismiss) {
+                TvTextButton(onClick = onDismiss) {
                     Text(text = LocalContext.current.getString(android.R.string.ok))
                 }
             }
@@ -786,7 +787,7 @@ private fun SavedFiltersSection(
                         trailingIcon = {
                             IconButton(
                                 onClick = { menuPreset = preset },
-                                modifier = Modifier.size(18.dp),
+                                modifier = Modifier.size(18.dp).tvIconButtonRing(),
                             ) {
                                 Icon(
                                     imageVector = Icons.Outlined.MoreVert,
@@ -800,7 +801,7 @@ private fun SavedFiltersSection(
                         expanded = menuPreset == preset,
                         onDismissRequest = { menuPreset = null },
                     ) {
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = {
                                 Text(
                                     if (preset.autoEnabled) {
@@ -815,14 +816,14 @@ private fun SavedFiltersSection(
                                 onSetSavedFilterAutoEnabled(preset.id, !preset.autoEnabled)
                             },
                         )
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = { Text(LocalContext.current.getString(R.string.rename)) },
                             onClick = {
                                 menuPreset = null
                                 onRenameSavedFilter(preset)
                             },
                         )
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = { Text(LocalContext.current.getString(R.string.delete)) },
                             onClick = {
                                 menuPreset = null
@@ -978,6 +979,16 @@ private fun YearSection(
             onValueChange = { sliderValue = it },
             valueRange = minYear.toFloat()..maxYear.toFloat(),
             steps = (maxYear - minYear - 1).coerceAtLeast(0),
+            // 遥控器上滑杆自己不带环也不会响应左右键；这里的键步进直接落库（滑杆只在松手时提交）。
+            modifier = Modifier.tvSliderDpad(
+                value = sliderValue,
+                valueRange = minYear.toFloat()..maxYear.toFloat(),
+                onValueChange = { value ->
+                    sliderValue = value
+                    onSetYear(if (value.toInt() <= minYear) YEAR_UNKNOWN else value.toInt())
+                },
+                steps = (maxYear - minYear - 1).coerceAtLeast(0),
+            ),
             onValueChangeFinished = {
                 onSetYear(
                     if (sliderValue.toInt() <= minYear) YEAR_UNKNOWN else sliderValue.toInt(),
@@ -1110,7 +1121,7 @@ private fun TagGroupBlock(
             if (canExpand) {
                 IconButton(
                     onClick = { onOpenTagCatalog(group.title, excludeMode) },
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(18.dp).tvIconButtonRing(),
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.MoreVert,
@@ -1215,17 +1226,12 @@ private fun FilterSection(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CompactFilterChipFlow(
     content: @Composable () -> Unit,
 ) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        content()
-    }
+    // Shared with the Windows filter dialog: a short option set is chips there too.
+    ChoiceChipFlow { content() }
 }
 
 @Composable
@@ -1236,15 +1242,11 @@ private fun CompactFilterChip(
     modifier: Modifier = Modifier,
     trailingIcon: (@Composable () -> Unit)? = null,
 ) {
-    FilterChip(
+    ChoiceChip(
         selected = selected,
         onClick = onClick,
-        modifier = modifier.heightIn(min = 36.dp),
-        label = {
-            androidx.compose.material3.ProvideTextStyle(MaterialTheme.typography.labelLarge) {
-                label()
-            }
-        },
+        modifier = modifier.tvChipRing(),
         trailingIcon = trailingIcon,
+        label = label,
     )
 }

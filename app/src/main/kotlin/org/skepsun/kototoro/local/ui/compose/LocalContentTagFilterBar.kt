@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.parsers.model.ContentTag
 
 @Composable
@@ -50,6 +51,7 @@ fun LocalContentTagFilterBar(
                 label = {
                     Text(text = tag.title)
                 },
+                modifier = Modifier.tvChipRing(),
             )
         }
     }

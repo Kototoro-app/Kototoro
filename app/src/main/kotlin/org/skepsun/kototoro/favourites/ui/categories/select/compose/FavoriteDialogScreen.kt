@@ -16,7 +16,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.material.checkbox.MaterialCheckBox
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.util.ext.joinToStringWithLimit
 import org.skepsun.kototoro.favourites.ui.categories.select.FavoriteDialogViewModel
 import org.skepsun.kototoro.favourites.ui.categories.select.model.ContentCategoryItem
@@ -108,12 +108,12 @@ fun FavoriteCategoryDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TvTextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.done))
             }
         },
         dismissButton = {
-            TextButton(onClick = {
+            TvTextButton(onClick = {
                 onDismiss()
                 onManageCategories()
             }) {
@@ -179,12 +179,12 @@ fun FavoriteCategoryDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TvTextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.done))
             }
         },
         dismissButton = {
-            TextButton(onClick = {
+            TvTextButton(onClick = {
                 onDismiss()
                 onManageCategories()
             }) {
@@ -332,7 +332,7 @@ private fun ShowAllCategoriesButton(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Center,
     ) {
-        TextButton(onClick = onClick) {
+        TvTextButton(onClick = onClick) {
             Text(stringResource(R.string.show_all_categories))
         }
     }

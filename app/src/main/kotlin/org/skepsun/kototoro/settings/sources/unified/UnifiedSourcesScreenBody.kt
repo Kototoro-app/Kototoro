@@ -57,6 +57,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -639,7 +641,7 @@ internal fun CompactFilterChip(
         FilterChip(
             selected = selected,
             onClick = onClick,
-            modifier = modifier.defaultMinSize(minHeight = 32.dp),
+            modifier = modifier.defaultMinSize(minHeight = 32.dp).tvChipRing(style.chipShape),
             shape = style.chipShape,
             leadingIcon = leadingIcon,
             trailingIcon = trailingBadge,
@@ -748,7 +750,7 @@ private fun UnifiedSourceSelectionBar(
         item(key = "clear_selection") {
             IconButton(
                 onClick = onClearSelection,
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(40.dp).tvIconButtonRing(),
             ) {
                 Icon(
                     imageVector = Icons.Filled.Close,

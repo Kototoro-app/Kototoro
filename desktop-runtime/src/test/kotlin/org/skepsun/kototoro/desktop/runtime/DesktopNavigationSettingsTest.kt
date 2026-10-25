@@ -95,7 +95,17 @@ class DesktopNavigationSettingsTest {
             ),
         )
         assertTrue(settings.canAdd)
-        assertEquals(listOf(DesktopNavItem.SUBSCRIPTIONS), settings.available)
+        // Android offers its bookmarks, updates and suggestions destinations as options too; none is in the default
+        // order. Suggestions stay offered while recommendations are off, as Android's nav configuration does.
+        assertEquals(
+            listOf(
+                DesktopNavItem.SUBSCRIPTIONS,
+                DesktopNavItem.BOOKMARKS,
+                DesktopNavItem.UPDATED,
+                DesktopNavItem.SUGGESTIONS,
+            ),
+            settings.available,
+        )
         assertEquals(
             listOf(
                 DesktopNavItem.HOME,
@@ -129,5 +139,14 @@ class DesktopNavigationSettingsTest {
     fun `removing the last destination brings home back`() {
         val settings = DesktopNavigationSettings(items = listOf(DesktopNavItem.HISTORY))
         assertEquals(listOf(DesktopNavItem.HOME), settings.remove(DesktopNavItem.HISTORY).items)
+    }
+
+    @Test
+    fun `only the suggestions destination depends on a setting`() {
+        assertFalse(DesktopNavItem.SUGGESTIONS.isAvailable(suggestionsEnabled = false))
+        assertTrue(DesktopNavItem.SUGGESTIONS.isAvailable(suggestionsEnabled = true))
+        DesktopNavItem.entries.filterNot { it == DesktopNavItem.SUGGESTIONS }.forEach {
+            assertTrue(it.isAvailable(suggestionsEnabled = false), "$it is always available")
+        }
     }
 }

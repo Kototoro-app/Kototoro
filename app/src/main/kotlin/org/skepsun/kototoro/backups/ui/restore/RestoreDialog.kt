@@ -14,7 +14,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,6 +26,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.data.BackupRepository
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 
 @Composable
 fun RestoreDialogRoute(
@@ -85,7 +85,7 @@ fun RestoreDialogRoute(
             }
         },
         confirmButton = {
-            TextButton(
+            TvTextButton(
                 enabled = !loading && entries.any { it.isChecked },
                 onClick = {
                     if (RestoreService.start(context, uri, viewModel.getCheckedSections(), restoreMode)) {
@@ -97,7 +97,7 @@ fun RestoreDialogRoute(
             ) { Text(stringResource(R.string.restore)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) }
+            TvTextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) }
         },
     )
 }

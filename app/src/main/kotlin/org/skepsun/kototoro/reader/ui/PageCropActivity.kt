@@ -5,7 +5,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
-import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
@@ -17,10 +16,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -44,11 +41,13 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.notes.domain.BookNotesRepository
+import org.skepsun.kototoro.core.ui.adaptive.TvFilterChip
+import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import java.io.File
 import javax.inject.Inject
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
-import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 @AndroidEntryPoint
 class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImageListener {
@@ -97,90 +96,95 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
         }
         selectedRatio = originalRatio
 
-        setContent {
-            KototoroTheme {
-                Column(
+        // setComposeContent (not setContent) is what publishes LocalUiPresentationConfig: without it
+        // every TV helper in this screen silently takes the phone branch, so the remote cannot leave
+        // the note field and the ratio chips never grow a focus ring.
+        setComposeContent {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black),
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 8.dp),
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(horizontal = 8.dp),
-                    ) {
-                        TextButton(onClick = ::cancelCrop) { Text(stringResource(android.R.string.cancel)) }
-                        Text(
-                            text = stringResource(if (isAnnotationMode) R.string.crop_and_annotate else R.string.crop_pages),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        TextButton(onClick = ::saveCrop, enabled = isImageLoaded && !isCropping) {
-                            Text(stringResource(if (isAnnotationMode) R.string.save_note else R.string.save))
-                        }
-                    }
-                    AndroidView(
-                        factory = { context ->
-                            UCropView(context, null).also { cropView ->
-                                cropImageView = cropView.cropImageView
-                                overlayView = cropView.overlayView
-                                overlayView.setFreestyleCropEnabled(true)
-                                cropImageView.setTransformImageListener(this@PageCropActivity)
-                                cropImageView.setImageToWrapCropBoundsAnimDuration(WRAP_ANIM_DURATION_MS)
-                                cropImageView.setMaxScaleMultiplier(MAX_SCALE_MULTIPLIER)
-                                // uCrop sizes the crop frame from the first layout only. When the window is still
-                                // settling (e.g. launched during a rotation), re-apply the ratio at the final size.
-                                cropView.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
-                                    val resized = r - l != oldR - oldL || b - t != oldB - oldT
-                                    if (resized && isImageLoaded) cropView.post { applyAspectRatio(selectedRatio) }
-                                }
-                                runCatching { cropImageView.setImageUri(sourceUri, destinationUri) }
-                                    .onFailure { cancelCrop() }
-                            }
-                        },
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                    TvTextButton(onClick = ::cancelCrop) { Text(stringResource(android.R.string.cancel)) }
+                    Text(
+                        text = stringResource(if (isAnnotationMode) R.string.crop_and_annotate else R.string.crop_pages),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.titleMedium,
                     )
-                    if (isAnnotationMode) {
-                        androidx.compose.material3.OutlinedTextField(
-                            value = noteText,
-                            onValueChange = { noteText = it },
-                            placeholder = {
-                                Text(
-                                    stringResource(R.string.manga_note_hint),
-                                    color = Color.White.copy(alpha = 0.6f),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            },
-                            maxLines = 2,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = Color.White.copy(alpha = 0.35f),
-                                focusedContainerColor = Color(0x33000000),
-                                unfocusedContainerColor = Color(0x22000000),
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                        )
+                    TvTextButton(onClick = ::saveCrop, enabled = isImageLoaded && !isCropping) {
+                        Text(stringResource(if (isAnnotationMode) R.string.save_note else R.string.save))
                     }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                }
+                AndroidView(
+                    factory = { context ->
+                        UCropView(context, null).also { cropView ->
+                            cropImageView = cropView.cropImageView
+                            overlayView = cropView.overlayView
+                            overlayView.setFreestyleCropEnabled(true)
+                            cropImageView.setTransformImageListener(this@PageCropActivity)
+                            cropImageView.setImageToWrapCropBoundsAnimDuration(WRAP_ANIM_DURATION_MS)
+                            cropImageView.setMaxScaleMultiplier(MAX_SCALE_MULTIPLIER)
+                            // uCrop sizes the crop frame from the first layout only. When the window is still
+                            // settling (e.g. launched during a rotation), re-apply the ratio at the final size.
+                            cropView.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
+                                val resized = r - l != oldR - oldL || b - t != oldB - oldT
+                                if (resized && isImageLoaded) cropView.post { applyAspectRatio(selectedRatio) }
+                            }
+                            runCatching { cropImageView.setImageUri(sourceUri, destinationUri) }
+                                .onFailure { cancelCrop() }
+                        }
+                    },
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+                if (isAnnotationMode) {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = noteText,
+                        onValueChange = { noteText = it },
+                        placeholder = {
+                            Text(
+                                stringResource(R.string.manga_note_hint),
+                                color = Color.White.copy(alpha = 0.6f),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        },
+                        maxLines = 2,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.35f),
+                            focusedContainerColor = Color(0x33000000),
+                            unfocusedContainerColor = Color(0x22000000),
+                        ),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(8.dp),
-                    ) {
-                        RatioChip(stringResource(com.yalantis.ucrop.R.string.ucrop_label_original), originalRatio)
-                        RatioChip("1:1", 1f)
-                        RatioChip("4:3", 4f / 3f)
-                        RatioChip("16:9", 16f / 9f)
-                    }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            // The note is the one thing a remote has to type here, and a Compose field
+                            // keeps the arrow keys for its caret: without this the field is a dead end
+                            // and the ratio chips below it can never be reached.
+                            .tvTextInputFocusEscape(),
+                    )
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(8.dp),
+                ) {
+                    RatioChip(stringResource(com.yalantis.ucrop.R.string.ucrop_label_original), originalRatio)
+                    RatioChip("1:1", 1f)
+                    RatioChip("4:3", 4f / 3f)
+                    RatioChip("16:9", 16f / 9f)
                 }
             }
         }
@@ -188,10 +192,12 @@ class PageCropActivity : BaseComposeActivity(), TransformImageView.TransformImag
 
     @androidx.compose.runtime.Composable
     private fun RatioChip(label: String, ratio: Float) {
-        FilterChip(
+        // On TV the crop frame itself cannot be dragged by a remote, so these presets are the only
+        // way to change it and they have to be both reachable and visibly focused.
+        TvFilterChip(
             selected = selectedRatio == ratio,
             onClick = { applyAspectRatio(ratio) },
-            label = { Text(label) },
+            label = label,
         )
     }
 

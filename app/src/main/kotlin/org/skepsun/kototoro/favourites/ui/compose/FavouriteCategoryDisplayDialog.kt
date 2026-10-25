@@ -15,7 +15,6 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -25,6 +24,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.favourites.domain.orderCategoriesForPicker
 import org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel.CategoryVisibilityState
 
@@ -74,7 +74,7 @@ internal fun FavouriteCategoryDisplayDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismissRequest) {
+            TvTextButton(onClick = onDismissRequest) {
                 Text(stringResource(R.string.done))
             }
         },
@@ -82,7 +82,7 @@ internal fun FavouriteCategoryDisplayDialog(
             null
         } else {
             {
-                TextButton(onClick = onShowAll) {
+                TvTextButton(onClick = onShowAll) {
                     Text(stringResource(R.string.show_all_categories))
                 }
             }

@@ -13,8 +13,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.backups.webdav.WebDavBackupFile
+import org.skepsun.kototoro.core.ui.settings.SettingsActionRow
+import org.skepsun.kototoro.core.ui.settings.SettingsInfoRow
+import org.skepsun.kototoro.core.ui.settings.SettingsSliderRow
+import org.skepsun.kototoro.core.ui.settings.SettingsSwitchRow
 import java.text.DateFormat
 import java.util.Date
+import javax.swing.JFileChooser
 
 /**
  * Android's WebDAV backup destination on the backups page: where the files live, a connection test, the library upload,
@@ -103,9 +108,95 @@ internal fun DesktopWebDavSection(controller: DesktopController, ui: DesktopWebD
                 Button({ controller.webDavUpload() }, enabled = enabled && settings.configured,
                     modifier = Modifier.testTag("webdav-upload")) { Text(desktopText("webdav.upload")) }
             }
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            // Android's boot service has no Windows twin, so "on startup" is this check, run when the app opens and
+            // again whenever the page saves the destination; it stays off until a complete destination is saved.
+            SettingsSwitchRow(
+                title = AndroidStrings["webdav_auto_restore"],
+                summary = AndroidStrings["webdav_auto_restore_summary"],
+                checked = settings.autoRestore,
+                enabled = enabled && settings.configured,
+                onCheckedChange = { controller.webDavSettings(settings.copy(autoRestore = it)) },
+                testTag = "webdav-auto-restore",
+            )
+            // Android's periodical page keeps the local copy beside the upload, with its own retention count.
+            SettingsSwitchRow(
+                title = AndroidStrings["webdav_keep_local_copy"],
+                summary = AndroidStrings["webdav_keep_local_copy_summary"],
+                checked = settings.keepLocalCopy,
+                enabled = enabled,
+                onCheckedChange = { controller.webDavSettings(settings.copy(keepLocalCopy = it)) },
+                testTag = "webdav-keep-local",
+            )
+            if (settings.keepLocalCopy) {
+                SettingsSwitchRow(
+                    title = AndroidStrings["delete_old_backups"],
+                    summary = AndroidStrings["delete_old_backups_summary"],
+                    checked = settings.trimLocal,
+                    enabled = enabled,
+                    onCheckedChange = { controller.webDavSettings(settings.copy(trimLocal = it)) },
+                    testTag = "webdav-trim-local",
+                )
+                if (settings.trimLocal) {
+                    SettingsSliderRow(
+                        title = AndroidStrings["max_backups_count"],
+                        summary = null,
+                        value = settings.localCount,
+                        valueRange = 1..32,
+                        valueText = Int::toString,
+                        enabled = enabled,
+                        onValueChange = { controller.webDavSettings(settings.copy(localCount = it)) },
+                        testTag = "webdav-local-count",
+                    )
+                }
+                // Android's "backups output directory": the row shows where the copies land and can change it, which a
+                // phone does through the SAF picker. An empty value is the data root's own `backups` folder.
+                SettingsActionRow(
+                    title = AndroidStrings["backups_output_directory"],
+                    summary = ui.localDirectory?.toString().orEmpty(),
+                    modifier = Modifier.testTag("webdav-local-open"),
+                ) {
+                    TextButton(onClick = {
+                        val chooser = JFileChooser().apply {
+                            fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+                            dialogTitle = AndroidStrings["backups_output_directory"]
+                            ui.localDirectory?.let { selectedFile = it.toFile() }
+                        }
+                        if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
+                            controller.webDavOutputDirectory(chooser.selectedFile.toPath())
+                        }
+                    }, enabled = enabled, modifier = Modifier.testTag("webdav-local-choose")) {
+                        Text(desktopText("webdav.choose"))
+                    }
+                    if (settings.outputDirectory.isNotBlank()) {
+                        TextButton(onClick = { controller.webDavOutputDirectory(null) }, enabled = enabled,
+                            modifier = Modifier.testTag("webdav-local-reset")) {
+                            Text(desktopText("webdav.outputReset"))
+                        }
+                    }
+                    TextButton(onClick = { controller.webDavOpenLocalDirectory() }, enabled = enabled) {
+                        Text(desktopText("webdav.open"))
+                    }
+                }
+                SettingsInfoRow(
+                    title = if (ui.lastLocalMillis > 0L) {
+                        AndroidStrings.format(
+                            "last_successful_backup",
+                            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, DesktopStrings.locale)
+                                .format(Date(ui.lastLocalMillis)),
+                        )
+                    } else {
+                        desktopText("webdav.localNever")
+                    },
+                    summary = ui.localFiles.firstOrNull()?.fileName?.toString()?.let { newest ->
+                        desktopText("webdav.localSummary", ui.localFiles.size, newest)
+                    },
+                    modifier = Modifier.testTag("webdav-local-status"),
+                )
+            }
             if (ui.reachable == true) Text(desktopText("webdav.reachable"), style = MaterialTheme.typography.bodyMedium)
-            // Only shown when a timer is configured: without one, "never uploaded" would be noise.
-            if (settings.autoBackupEnabled) {
+            // Only shown for a timer that uploads: a local-only timer reports itself in the local row below.
+            if (settings.autoBackupEnabled && settings.configured) {
                 Text(
                     if (ui.lastUploadMillis > 0L) {
                         desktopText(

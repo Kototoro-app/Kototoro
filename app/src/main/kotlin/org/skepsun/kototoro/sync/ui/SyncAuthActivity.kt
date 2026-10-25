@@ -17,7 +17,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -30,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
@@ -80,7 +80,7 @@ class SyncAuthActivity : BaseComposeActivity() {
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().tvTextInputFocusEscape(),
                     )
-                    TextButton(onClick = { showHostDialog = true }) { Text(getString(R.string.settings)) }
+                    TvTextButton(onClick = { showHostDialog = true }) { Text(getString(R.string.settings)) }
                 } else {
                     OutlinedTextField(
                         value = password,
@@ -95,13 +95,13 @@ class SyncAuthActivity : BaseComposeActivity() {
                 if (loading) CircularProgressIndicator()
                 Spacer(Modifier.weight(1f))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = {
+                    TvTextButton(onClick = {
                         if (page == PAGE_EMAIL) {
                             setResult(RESULT_CANCELED)
                             finish()
                         } else page = PAGE_EMAIL
                     }) { Text(getString(if (page == PAGE_EMAIL) android.R.string.cancel else R.string.back)) }
-                    TextButton(
+                    TvTextButton(
                         enabled = !loading && if (page == PAGE_EMAIL) regexEmail.matches(email.trim()) else password.length >= PASSWORD_MIN_LENGTH,
                         onClick = {
                             if (page == PAGE_EMAIL) page = PAGE_PASSWORD
@@ -126,7 +126,7 @@ class SyncAuthActivity : BaseComposeActivity() {
                         }
                     },
                     confirmButton = {
-                        TextButton(onClick = {
+                        TvTextButton(onClick = {
                             val normalized = if (hostValue.isHttpUrl()) hostValue else "http://$hostValue"
                             viewModel.syncURL.value = normalized
                             hostValue = normalized
@@ -134,7 +134,7 @@ class SyncAuthActivity : BaseComposeActivity() {
                         }) { Text(getString(android.R.string.ok)) }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showHostDialog = false }) { Text(getString(android.R.string.cancel)) }
+                        TvTextButton(onClick = { showHostDialog = false }) { Text(getString(android.R.string.cancel)) }
                     },
                 )
             }
@@ -143,7 +143,9 @@ class SyncAuthActivity : BaseComposeActivity() {
                     onDismissRequest = { errorMessage = null },
                     title = { Text(getString(R.string.error)) },
                     text = { Text(message) },
-                    confirmButton = { TextButton(onClick = { errorMessage = null }) { Text(getString(R.string.close)) } },
+                    confirmButton = {
+                        TvTextButton(onClick = { errorMessage = null }) { Text(getString(R.string.close)) }
+                    },
                 )
             }
         }

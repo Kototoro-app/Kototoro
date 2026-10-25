@@ -49,8 +49,11 @@ internal fun feedDateLabel(createdAt: Long, now: Instant = Instant.now(), zone: 
 }
 
 /** A row passes the page's source-type and content-type filters through its recorded source. */
-private fun DesktopSourceFilter.acceptsFeedSource(sourceName: String, contentType: String?, ecosystems: Map<String, org.skepsun.kototoro.core.source.SourceEcosystem>) =
-    accepts(ecosystems[sourceName], contentType)
+internal fun DesktopSourceFilter.acceptsFeedSource(
+    sourceName: String,
+    contentType: String?,
+    ecosystems: Map<String, org.skepsun.kototoro.core.source.SourceEcosystem>,
+) = accepts(ecosystems[sourceName], contentType)
 
 @Composable
 internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
@@ -120,7 +123,10 @@ internal fun DesktopFeedPanel(controller: DesktopController, state: DesktopAppSt
                     headerTitle = desktopText("feed.updatesTitle"),
                     moreLabel = desktopText("common.all"),
                     onItemClick = { controller.openTracked(it.displayMangaId ?: it.mangaId) },
-                    onMoreClick = null,
+                    // Android's carousel header "all" opens the updates destination, so the carousel here leads to the
+                    // same page instead of being a dead end.
+                    onMoreClick = { controller.showUpdates() },
+                    moreModifier = Modifier.testTag("feed-updated-more"),
                     screenPadding = 0.dp,
                     cardModifier = { Modifier.testTag("feed-updated:${it.ownerId}") },
                     cover = { update, _ ->

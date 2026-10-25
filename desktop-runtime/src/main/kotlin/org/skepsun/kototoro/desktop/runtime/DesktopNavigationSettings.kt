@@ -22,6 +22,30 @@ enum class DesktopNavItem {
     BROWSE,
     HISTORY,
     SUBSCRIPTIONS,
+
+    /** Android's `NavItem.BOOKMARKS` (labelled 笔记, the bookmarks page). Off by default, like on Android. */
+    BOOKMARKS,
+
+    /**
+     * Android's `NavItem.UPDATED`: the tracked works with new chapters. Off by default because the rail is already at
+     * [MainNavigationRules.MAX_ITEMS] and the subscriptions page links to it anyway, exactly like Android's default
+     * main list keeps it out of the bar.
+     */
+    UPDATED,
+
+    /**
+     * Android's `NavItem.SUGGESTIONS` (推荐). Also off by default, and — like Android — still offered while
+     * recommendations are switched off: the destination asks for them itself, and the nav configuration marks the
+     * unavailable item instead of hiding it ([isAvailable]).
+     */
+    SUGGESTIONS,
+    ;
+
+    /** Android's `NavItem.isAvailable`: the recommendations destination needs recommendations to point at. */
+    fun isAvailable(suggestionsEnabled: Boolean): Boolean = when (this) {
+        SUGGESTIONS -> suggestionsEnabled
+        else -> true
+    }
 }
 
 /** The default order, matching the rail Android's tablet shell ships and the Windows shell drew before this page. */
@@ -42,9 +66,9 @@ data class DesktopNavigationSettings(val items: List<DesktopNavItem> = defaultDe
 
     val canAdd: Boolean get() = MainNavigationRules.canAdd(items)
 
-    /** Destinations the add dialog may offer, in [DesktopNavItem] declaration order. */
+    /** Destinations the add dialog may offer, in [DesktopNavItem] declaration order; nothing at the cap. */
     val available: List<DesktopNavItem>
-        get() = MainNavigationRules.available(DesktopNavItem.entries, items)
+        get() = if (canAdd) MainNavigationRules.available(DesktopNavItem.entries, items) else emptyList()
 
     fun step(item: DesktopNavItem, direction: Int): DesktopNavigationSettings =
         copy(items = MainNavigationRules.step(items, item, direction))

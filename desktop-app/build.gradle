@@ -645,7 +645,8 @@ tasks.withType(Test).configureEach {
     providers.gradleProperty('mpvOptions').orNull?.with { systemProperty 'kototoro.real.mpvoptions', it }
     providers.gradleProperty('ncnnDirectory').orNull?.with { systemProperty 'kototoro.ncnn.dir', it }
     if (libmpvDirectory != null) systemProperty 'kototoro.libmpv.dir', libmpvDirectory
-    dependsOn ':parser-host:fixtureKototoroJar', ':parser-host:fixtureKotatsuJar', ':parser-host:fixtureTsukiJar'
+    dependsOn ':parser-host:fixtureKototoroJar', ':parser-host:fixtureKotatsuJar', ':parser-host:fixtureTsukiJar',
+        ':parser-host:fixtureBrokenJar'
     inputs.file(project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/offline-desktop-fixture.jar'))
     inputs.file(project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/interactive-desktop-fixture.jar'))
     inputs.file(project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/reader-desktop-fixture.jar'))

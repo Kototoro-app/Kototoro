@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.migration.ui.rememberCoverRequest
 import org.skepsun.kototoro.migration.ui.duplicates.readingLabel
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
@@ -49,7 +50,6 @@ import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import coil3.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
-import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.PaddingValues
@@ -103,7 +103,7 @@ fun MigrationSourcesScreen(
                 item { GroupHeader(stringResource(R.string.migration_health_disabled)) }
                 items(state.disabled, key = { it.source.name }) { health ->
                     SourceRow(health, onClick = { picking = health }) {
-                        TextButton(onClick = { onEnable(health) }) { Text(stringResource(R.string.enable)) }
+                        TvTextButton(onClick = { onEnable(health) }) { Text(stringResource(R.string.enable)) }
                     }
                 }
             }
@@ -289,7 +289,7 @@ private fun SourceContentPicker(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    TextButton(onClick = { selected = if (allSelected) emptySet() else source.contentIds.toSet() }) {
+                    TvTextButton(onClick = { selected = if (allSelected) emptySet() else source.contentIds.toSet() }) {
                         Text(stringResource(if (allSelected) R.string.migration_select_none else R.string.migration_select_all))
                     }
                 }

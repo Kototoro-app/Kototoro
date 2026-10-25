@@ -48,7 +48,7 @@ class DesktopSourcePreferencesTest {
     }
 
     @Test
-    fun `nested groups flatten into the section that owns them`() {
+    fun `nested groups keep their title as a label row inside the owning section`() {
         val sections = sourcePreferenceSections(listOf(
             node("group:outer", SourcePreferenceKind.GROUP, title = "Outer", children = listOf(
                 node("source:a", SourcePreferenceKind.TOGGLE),
@@ -56,7 +56,28 @@ class DesktopSourcePreferencesTest {
                     children = listOf(node("source:b", SourcePreferenceKind.TEXT))))),
         ), "Settings")
         assertEquals(listOf("Outer"), sections.map { it.title })
+        // Android's ComposePreferenceAdapter emits a group-label row before a nested group's preferences.
+        val entries = sections.single().entries
+        assertEquals(listOf("source:a", "label:group:inner", "source:b"), entries.map { it.id })
+        assertEquals(listOf("Inner"), entries.filterIsInstance<SourcePreferenceEntry.Label>().map { it.title })
         assertEquals(listOf("source:a", "source:b"), sections.single().rows.map { it.id })
+    }
+
+    @Test
+    fun `an untitled nested group only contributes its rows`() {
+        val sections = sourcePreferenceSections(listOf(
+            node("group:outer", SourcePreferenceKind.GROUP, title = "Outer", children = listOf(
+                node("group:blank", SourcePreferenceKind.GROUP, children = listOf(
+                    node("source:a", SourcePreferenceKind.TOGGLE))),
+                node("group:inner", SourcePreferenceKind.GROUP, title = "Inner", children = listOf(
+                    node("group:deeper", SourcePreferenceKind.GROUP, title = "Deeper", children = listOf(
+                        node("source:b", SourcePreferenceKind.CHOICE))))),
+            )),
+        ), "Settings")
+        assertEquals(
+            listOf("source:a", "label:group:inner", "label:group:deeper", "source:b"),
+            sections.single().entries.map { it.id },
+        )
     }
 
     @Test

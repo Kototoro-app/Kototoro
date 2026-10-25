@@ -17,7 +17,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +24,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
 
 @Composable
@@ -88,7 +88,7 @@ fun TrackingBottomBar(
                         modifier = Modifier.padding(start = 6.dp),
                     )
                 }
-                TextButton(onClick = onManageBinding) {
+                TvTextButton(onClick = onManageBinding) {
                     Text(stringResource(R.string.discover_manage_binding))
                 }
             } else if (hasLinkedContent) {
@@ -106,7 +106,7 @@ fun TrackingBottomBar(
                         modifier = Modifier.padding(start = 6.dp),
                     )
                 }
-                TextButton(onClick = onManageBinding) {
+                TvTextButton(onClick = onManageBinding) {
                     Text(stringResource(R.string.discover_manage_binding))
                 }
             } else {
@@ -127,7 +127,7 @@ fun TrackingBottomBar(
             }
 
             if (canTranslate) {
-                TextButton(
+                TvTextButton(
                     onClick = onToggleTranslation,
                     enabled = !isTranslating,
                     colors = ButtonDefaults.textButtonColors(
@@ -146,7 +146,7 @@ fun TrackingBottomBar(
             }
 
             if (hasExternalUrl) {
-                TextButton(onClick = onOpenExternal) {
+                TvTextButton(onClick = onOpenExternal) {
                     Icon(
                         painter = painterResource(R.drawable.ic_open_external),
                         contentDescription = stringResource(R.string.open_in_browser),

@@ -12,6 +12,7 @@ import androidx.core.view.MenuProvider
 import com.google.android.material.snackbar.Snackbar
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.isZipUri
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.core.util.ext.tryLaunch
 
 class ImageMenuProvider(
@@ -62,7 +63,7 @@ class ImageMenuProvider(
             }?.substringBeforeLast('.')?.plus(".png")
         }
         if (name == null || !saveLauncher.tryLaunch(name)) {
-            Snackbar.make(snackbarHost, R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
+            snackbarHost.makeSnackbar(R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
         }
     }
 }

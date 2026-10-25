@@ -22,7 +22,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,7 +31,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -50,7 +48,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.list.domain.titleResId
@@ -87,7 +88,7 @@ internal fun FavouritesCategoryEditScreen(
                 modifier = Modifier.statusBarsPadding(),
                 title = { Text(stringResource(if (isEditing) R.string.edit_category else R.string.create_category)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, modifier = Modifier.tvIconButtonRing()) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
@@ -145,7 +146,7 @@ internal fun FavouritesCategoryEditScreen(
                     onDismissRequest = { sortMenuExpanded = false },
                 ) {
                     sortOrders.forEach { order ->
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = { Text(stringResource(order.titleResId)) },
                             onClick = {
                                 sortMenuExpanded = false
@@ -235,11 +236,11 @@ private fun CoverEditor(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row {
-                TextButton(onClick = onPickCover, enabled = enabled) {
+                TvTextButton(onClick = onPickCover, enabled = enabled) {
                     Text(stringResource(R.string.choose_cover))
                 }
                 if (canRemoveCover) {
-                    TextButton(onClick = onRemoveCover, enabled = enabled) {
+                    TvTextButton(onClick = onRemoveCover, enabled = enabled) {
                         Text(stringResource(R.string.remove_custom_cover))
                     }
                 }

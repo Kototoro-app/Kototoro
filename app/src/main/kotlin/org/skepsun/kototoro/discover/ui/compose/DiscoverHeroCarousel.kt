@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.discover.ui.compose
 
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
 
 import android.os.Build
@@ -35,7 +36,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -97,6 +97,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.ui.compose.logHeroTransition
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
@@ -387,7 +388,7 @@ fun DiscoverHeroCarousel(
                                 DiscoverHeroOverlaySurface {
                                     IconButton(
                                         onClick = onOpenSchedule,
-                                        modifier = Modifier.size(40.dp),
+                                        modifier = Modifier.size(40.dp).tvIconButtonRing(),
                                     ) {
                                     Icon(
                                         imageVector = Icons.Filled.DateRange,
@@ -440,7 +441,7 @@ fun DiscoverHeroCarousel(
                                 style = GlassDefaults.subtleStyle(),
                             ) {
                                 availableServices.forEach { candidate ->
-                                    DropdownMenuItem(
+                                    TvDropdownMenuItem(
                                         text = { Text(stringResource(candidate.titleResId)) },
                                         leadingIcon = {
                                             Icon(

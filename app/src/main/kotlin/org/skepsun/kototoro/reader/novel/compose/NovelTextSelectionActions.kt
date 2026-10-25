@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,6 +51,8 @@ import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingColor
 import org.skepsun.kototoro.reader.novel.annotation.NovelMarkingStyle
 import java.text.SimpleDateFormat
@@ -144,7 +145,7 @@ internal fun NovelTextSelectionActions(
                     Box {
                         IconButton(
                             onClick = { moreMenuExpanded = true },
-                            modifier = Modifier.size(36.dp),
+                            modifier = Modifier.size(36.dp).tvIconButtonRing(),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
@@ -158,7 +159,7 @@ internal fun NovelTextSelectionActions(
                             onDismissRequest = { moreMenuExpanded = false },
                         ) {
                             novelOverflowActions().forEach { action ->
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = { Text(actionLabel(action)) },
                                     onClick = {
                                         moreMenuExpanded = false
@@ -427,7 +428,7 @@ private fun NovelThoughtCard(
                     )
                     IconButton(
                         onClick = onEdit,
-                        modifier = Modifier.size(22.dp),
+                        modifier = Modifier.size(22.dp).tvIconButtonRing(),
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.ic_edit),

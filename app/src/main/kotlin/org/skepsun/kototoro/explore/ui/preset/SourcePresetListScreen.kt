@@ -21,7 +21,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,6 +35,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.toLocale
@@ -76,8 +77,17 @@ fun SourcePresetListScreen(
             onDismissRequest = { pendingDelete = null },
             title = { Text(preset.title) },
             text = { Text(stringResource(R.string.remove)) },
-            confirmButton = { TextButton(onClick = { onDelete(preset); pendingDelete = null }) { Text(stringResource(R.string.remove)) } },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text(stringResource(android.R.string.cancel)) } },
+            confirmButton = {
+                TvTextButton(
+                    onClick = {
+                        onDelete(preset)
+                        pendingDelete = null
+                    },
+                ) { Text(stringResource(R.string.remove)) }
+            },
+            dismissButton = {
+                TvTextButton(onClick = { pendingDelete = null }) { Text(stringResource(android.R.string.cancel)) }
+            },
         )
     }
 }
@@ -103,8 +113,14 @@ private fun PresetRow(
             Text(preset.title)
             Text(if (languages.isEmpty()) count else "${languages.joinToString()} — $count")
         }
-        IconButton(onClick = { onEdit(preset) }) { Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit)) }
-        IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete)) }
+        IconButton(
+            onClick = { onEdit(preset) },
+            modifier = Modifier.tvIconButtonRing(),
+        ) { Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit)) }
+        IconButton(
+            onClick = onDelete,
+            modifier = Modifier.tvIconButtonRing(),
+        ) { Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete)) }
     }
 }
 

@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.main.ui.compose
 
-
 import androidx.compose.animation.AnimatedVisibility
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Arrangement
@@ -18,12 +17,15 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.MaterialTheme
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.glass.resolveFallbackShadowElevation
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -42,7 +44,6 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
@@ -65,6 +66,7 @@ internal fun BoxScope.MainTopChrome(
     visibleStartInsetDp: androidx.compose.ui.unit.Dp,
     effectiveTopBarOffset: Float,
     chromeAlpha: Float,
+    onChromeFocusChanged: (Boolean) -> Unit = {},
     onTopBarHeightMeasured: (Int) -> Unit,
     query: String,
     titleRes: Int?,
@@ -132,6 +134,7 @@ internal fun BoxScope.MainTopChrome(
         )
         .padding(start = visibleStartInsetDp)
         .offset { androidx.compose.ui.unit.IntOffset(0, effectiveTopBarOffset.toInt()) }
+        .onFocusChanged { focusState -> onChromeFocusChanged(focusState.hasFocus) }
         .graphicsLayer { alpha = chromeAlpha }
         .onGloballyPositioned { coords -> onTopBarHeightMeasured(coords.size.height) }
 
@@ -311,7 +314,15 @@ internal fun FeedDisplayOptionsContent(
                 },
                 valueRange = 0f..(jumps.size - 1).toFloat(),
                 steps = jumps.size - 2,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // 遥控器上滑杆自己不带环也不会响应左右键，见 tvSliderDpad（手机上是 no-op）。
+                    .tvSliderDpad(
+                        value = limitIndex.toFloat(),
+                        valueRange = 0f..(jumps.size - 1).toFloat(),
+                        onValueChange = { index -> onFeedLimitChanged(jumps[index.roundToInt()]) },
+                        steps = jumps.size - 2,
+                    ),
             )
         }
         AnimatedVisibility(visible = showAllUpdates) {
@@ -323,7 +334,7 @@ internal fun FeedDisplayOptionsContent(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                TextButton(
+                TvTextButton(
                     onClick = onFeedRefresh,
                     modifier = Modifier.align(Alignment.End),
                 ) {

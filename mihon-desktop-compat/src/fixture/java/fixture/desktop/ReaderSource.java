@@ -51,9 +51,12 @@ public final class ReaderSource extends HttpSource {
                         java.nio.file.Files.readAllBytes(java.nio.file.Path.of(supplied)),
                         MediaType.get("image/webp"))).build();
             }
-            int width = position == 2 ? 900 : 400;
+            // `fixture.reader.probe.tall` makes the page at 30% of the chapter (index 2 of five) a webtoon page, which
+            // is what the autodetect probe measures.
+            boolean tallProbe = position == 2 && Boolean.getBoolean("fixture.reader.probe.tall");
+            int width = tallProbe ? 400 : position == 2 ? 900 : 400;
             boolean tall = position == 0 && Boolean.getBoolean("fixture.reader.tall");
-            int height = tall ? 24000 : position == 2 ? 300 : 600;
+            int height = tallProbe ? 2400 : tall ? 24000 : position == 2 ? 300 : 600;
             Color[] colors = {new Color(0xD84949), new Color(0x3575B5), new Color(0xDAAE30),
                 new Color(0x339467), new Color(0x8950A8)};
             BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);

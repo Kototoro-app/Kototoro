@@ -1,0 +1,10 @@
+@file:OptIn(InternalParsersApi::class)
+
+package org.skepsun.kototoro.parsers
+
+import org.skepsun.kototoro.parsers.model.ContentParserSource
+import org.skepsun.kototoro.parsers.site.fixture.BrokenFixtureParser
+
+/** Entry point the host detects the Kototoro architecture by (`ContentParserFactoryKt.newParser`). */
+fun newParser(source: ContentParserSource, context: ContentLoaderContext): ContentParser =
+    BrokenFixtureParser(context, source)

@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 
 class ExitCallback(
     private val activity: MainActivity,
@@ -46,7 +47,7 @@ class ExitCallback(
 
     private suspend fun resetExitConfirmation() {
         isDisabledByTimeout.value = true
-        val snackbar = Snackbar.make(snackbarHost, R.string.confirm_exit, Snackbar.LENGTH_INDEFINITE)
+        val snackbar = snackbarHost.makeSnackbar(R.string.confirm_exit, Snackbar.LENGTH_INDEFINITE)
         snackbar.show()
         delay(2000)
         snackbar.dismiss()

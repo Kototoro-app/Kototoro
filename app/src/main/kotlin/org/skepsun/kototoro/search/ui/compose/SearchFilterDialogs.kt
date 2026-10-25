@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.search.ui.compose
 
-
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,8 +25,11 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.DropdownMenu
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
@@ -36,7 +38,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -109,10 +110,10 @@ internal fun SaveFilterNameDialog(
             }
         },
         actions = {
-            TextButton(onClick = onDismiss) {
+            TvTextButton(onClick = onDismiss) {
                 Text(text = stringResource(android.R.string.cancel))
             }
-            TextButton(
+            TvTextButton(
                 enabled = !hasError,
                 onClick = { onConfirm(trimmed) },
             ) {
@@ -150,13 +151,13 @@ internal fun TextInputTagDialog(
             )
         },
         actions = {
-            TextButton(onClick = onClear) {
+            TvTextButton(onClick = onClear) {
                 Text(text = stringResource(R.string.clear))
             }
-            TextButton(onClick = onDismissRequest) {
+            TvTextButton(onClick = onDismissRequest) {
                 Text(text = stringResource(android.R.string.cancel))
             }
-            TextButton(onClick = { onConfirm(value) }) {
+            TvTextButton(onClick = { onConfirm(value) }) {
                 Text(text = stringResource(android.R.string.ok))
             }
         },
@@ -188,7 +189,7 @@ internal fun SortOrderFilterSection(
         ) {
             sortOrders.forEach { item ->
                 val selected = item == selectedSortOrder
-                DropdownMenuItem(
+                TvDropdownMenuItem(
                     text = { Text(resolveSortOrderLabel(sourceName, item)) },
                     onClick = {
                         onSortOrderChange(item)
@@ -236,7 +237,7 @@ internal fun LocaleFilterSection(
         ) {
             locales.forEach { locale ->
                 val selected = locale == selectedLocale
-                DropdownMenuItem(
+                TvDropdownMenuItem(
                     text = { Text(localeLabel(locale)) },
                     onClick = {
                         onLocaleChange(locale)
@@ -526,7 +527,7 @@ private fun TagGroupDropdown(
     Box {
         IconButton(
             onClick = { expanded = !expanded },
-            modifier = Modifier.size(32.dp),
+            modifier = Modifier.size(32.dp).tvIconButtonRing(),
         ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
@@ -546,7 +547,7 @@ private fun TagGroupDropdown(
                 val value = textInputValue(tag)
                 val textInput = isTextInputTag(tag) || value != null
                 val selected = if (textInput) !value.isNullOrBlank() else tag in group.selected
-                DropdownMenuItem(
+                TvDropdownMenuItem(
                     text = {
                         Text(
                             text = when {
@@ -670,7 +671,7 @@ internal fun SearchPanelChip(
         FilterChip(
             selected = selected,
             onClick = onClick,
-            modifier = modifier.heightIn(min = 24.dp),
+            modifier = modifier.heightIn(min = 24.dp).tvChipRing(RoundedCornerShape(8.dp)),
             shape = RoundedCornerShape(8.dp),
             label = {
                 androidx.compose.material3.ProvideTextStyle(

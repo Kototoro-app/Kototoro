@@ -5,10 +5,12 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.extensions.SelectedSourcesNsfwAction
+import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
+import org.skepsun.kototoro.core.extensions.changedNsfwSources
+import org.skepsun.kototoro.core.extensions.resolveSelectedSourcesNsfwAction
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentType
-import org.skepsun.kototoro.settings.sources.unified.SelectedSourcesNsfwAction
-import org.skepsun.kototoro.settings.sources.unified.resolveSelectedSourcesNsfwAction
 
 class SourceNsfwOverridesTest {
 
@@ -74,6 +76,34 @@ class SourceNsfwOverridesTest {
 		assertEquals(SelectedSourcesNsfwAction.SET_SFW, resolveSelectedSourcesNsfwAction(4, 3))
 		assertEquals(SelectedSourcesNsfwAction.CHOOSE, resolveSelectedSourcesNsfwAction(1, 3))
 		assertEquals(SelectedSourcesNsfwAction.CHOOSE, resolveSelectedSourcesNsfwAction(2, 5))
+	}
+
+	/**
+	 * The stored sets are edited through the rule shared with Windows (`SourceNsfwOverrideSet`) now, so this pins that
+	 * the app-side holder still sees exactly what that rule produced.
+	 */
+	@Test
+	fun `shared override set drives the holder the app reads`() {
+		val shared = SourceNsfwOverrideSet()
+			.withOverride(listOf("TEST"), true)
+			.withOverride(listOf("HENTAI_SOURCE"), false)
+		SourceNsfwOverrides.update(shared.nsfw, shared.sfw)
+
+		try {
+			assertTrue(TestContentSource.isNsfw())
+			assertFalse(hentaiSource("HENTAI_SOURCE").isNsfw())
+			assertNull(SourceNsfwOverrides.resolve("UNKNOWN_SOURCE"))
+		} finally {
+			SourceNsfwOverrides.update(emptySet(), emptySet())
+		}
+	}
+
+	@Test
+	fun `only the sources whose flag changes are persisted`() {
+		val flags = mapOf("TEST" to false, "HENTAI_SOURCE" to true)
+
+		assertEquals(setOf("TEST"), changedNsfwSources(flags.keys, true) { flags.getValue(it) })
+		assertEquals(setOf("HENTAI_SOURCE"), changedNsfwSources(flags.keys, false) { flags.getValue(it) })
 	}
 
 	private fun hentaiSource(name: String): ContentSource = object : ContentSource {

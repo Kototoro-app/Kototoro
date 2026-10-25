@@ -28,6 +28,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.image.AvifAnimationDeviceProfile
 import org.skepsun.kototoro.core.image.AvifAnimationPolicy
 import org.skepsun.kototoro.core.extensions.DEFAULT_JAR_PRIORITY_ORDER_VALUE
+import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
 import org.skepsun.kototoro.core.github.AppUpdateSource
 import org.skepsun.kototoro.core.model.SourceNsfwOverrides
 import org.skepsun.kototoro.reader.core.ZoomMode
@@ -766,29 +767,12 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         if (names.isEmpty()) {
             return
         }
-        val nsfwSet = prefs.getStringSet(KEY_SOURCE_NSFW_OVERRIDES, emptySet()).orEmpty().toMutableSet()
-        val sfwSet = prefs.getStringSet(KEY_SOURCE_SFW_OVERRIDES, emptySet()).orEmpty().toMutableSet()
-        when (isNsfw) {
-            true -> {
-                nsfwSet.addAll(names)
-                sfwSet.removeAll(names)
-            }
-
-            false -> {
-                sfwSet.addAll(names)
-                nsfwSet.removeAll(names)
-            }
-
-            null -> {
-                nsfwSet.removeAll(names)
-                sfwSet.removeAll(names)
-            }
-        }
+        val updated = SourceNsfwOverrideSet(sourceNsfwOverrides, sourceSfwOverrides).withOverride(names, isNsfw)
         prefs.edit {
-            putStringSet(KEY_SOURCE_NSFW_OVERRIDES, nsfwSet)
-            putStringSet(KEY_SOURCE_SFW_OVERRIDES, sfwSet)
+            putStringSet(KEY_SOURCE_NSFW_OVERRIDES, updated.nsfw)
+            putStringSet(KEY_SOURCE_SFW_OVERRIDES, updated.sfw)
         }
-        SourceNsfwOverrides.update(nsfwSet, sfwSet)
+        SourceNsfwOverrides.update(updated.nsfw, updated.sfw)
     }
 
     var globalTagBlacklist: Set<String>

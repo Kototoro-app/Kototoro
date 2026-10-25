@@ -22,7 +22,6 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,7 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,8 +48,12 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.getSummary
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
+import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.util.LocaleComparator
 import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.toLocale
@@ -127,7 +129,7 @@ fun SourcesCatalogScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val sortedLocales = remember(locales) { locales.sortedWith(compareBy(nullsFirst(LocaleComparator())) { it?.toLocale() }) }
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { KototoroSnackbarHost(snackbarHostState) },
         topBar = {
             Column {
                 TopAppBar(
@@ -143,7 +145,7 @@ fun SourcesCatalogScreen(
                         } else Text(stringResource(R.string.remote_sources))
                     },
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
+                        IconButton(onClick = onBack, modifier = Modifier.tvIconButtonRing()) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = stringResource(R.string.back),
@@ -151,7 +153,10 @@ fun SourcesCatalogScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = if (searchVisible) onSearchClose else onSearchClick) {
+                        IconButton(
+                            onClick = if (searchVisible) onSearchClose else onSearchClick,
+                            modifier = Modifier.tvIconButtonRing(),
+                        ) {
                             Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search))
                         }
                     },
@@ -175,10 +180,11 @@ fun SourcesCatalogScreen(
                                 leadingIcon = {
                                     Icon(Icons.Default.Language, null, Modifier.size(18.dp))
                                 },
+                                modifier = Modifier.tvChipRing(),
                             )
                             DropdownMenu(localeMenuVisible, onDismissRequest = onLocaleDismiss) {
                                 sortedLocales.forEach { locale ->
-                                    DropdownMenuItem(
+                                    TvDropdownMenuItem(
                                         text = {
                                             Text(
                                                 locale?.toLocale()?.getDisplayName(context)
@@ -192,10 +198,20 @@ fun SourcesCatalogScreen(
                         }
                     }
                     if (hasNewSources) item {
-                        FilterChip(filter.isNewOnly, { onNewOnlyChange(!filter.isNewOnly) }, label = { Text(stringResource(R.string._new)) })
+                        FilterChip(
+                            filter.isNewOnly,
+                            { onNewOnlyChange(!filter.isNewOnly) },
+                            label = { Text(stringResource(R.string._new)) },
+                            modifier = Modifier.tvChipRing(),
+                        )
                     }
                     items(contentTypes, key = { it.name }) { type ->
-                        FilterChip(type in filter.types, { onContentTypeChange(type, type !in filter.types) }, label = { Text(stringResource(type.titleResId)) })
+                        FilterChip(
+                            type in filter.types,
+                            { onContentTypeChange(type, type !in filter.types) },
+                            label = { Text(stringResource(type.titleResId)) },
+                            modifier = Modifier.tvChipRing(),
+                        )
                     }
                 }
                 Box(Modifier.fillMaxWidth().height(4.dp)) {

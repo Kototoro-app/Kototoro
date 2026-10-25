@@ -2,10 +2,15 @@ package org.skepsun.kototoro.core.ui.adaptive
 
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,13 +26,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
@@ -118,12 +126,22 @@ fun Modifier.tvFocusable(
                 Modifier.drawWithContent {
                     drawContent()
                     if (isFocused) {
-                        val outline = shape.createOutline(size, layoutDirection, this)
-                        drawOutline(
-                            outline = outline,
-                            color = resolvedRingColor,
-                            style = Stroke(width = borderWidth.toPx()),
+                        // A stroke is centred on the outline, so half of it would land outside the
+                        // node and be cut by a tight container (a 44 dp icon inside a 47 dp pill).
+                        // Shrink the outline by one stroke so the whole ring stays inside the node.
+                        val strokeWidth = borderWidth.toPx()
+                        val outlineSize = Size(
+                            width = (size.width - strokeWidth).coerceAtLeast(1f),
+                            height = (size.height - strokeWidth).coerceAtLeast(1f),
                         )
+                        val outline = shape.createOutline(outlineSize, layoutDirection, this)
+                        translate(left = strokeWidth / 2f, top = strokeWidth / 2f) {
+                            drawOutline(
+                                outline = outline,
+                                color = resolvedRingColor,
+                                style = Stroke(width = strokeWidth),
+                            )
+                        }
                     }
                 }
             } else {
@@ -144,6 +162,37 @@ fun Modifier.tvFocusable(
 @Composable
 fun Modifier.tvTabRing(): Modifier = tvFocusable(
     shape = RoundedCornerShape(10.dp),
+    addFocusTarget = false,
+)
+
+/**
+ * Outline ring for a chip: `AssistChip`, `FilterChip`, `SuggestionChip` or `InputChip`.
+ *
+ * Material3 chips are `clickable`, so the remote does stop on them, but the chip draws nothing for
+ * it — a container tint that reads as no change at all from a sofa. A chip applies its modifier
+ * before the internal `clickable`, so this outline observes exactly that stop and adds no second
+ * one. The default corner matches `ChipDefaults.shape`; pass the expression a call already uses
+ * when it states its own shape. No-op off TV.
+ */
+@Composable
+fun Modifier.tvChipRing(shape: Shape = RoundedCornerShape(8.dp)): Modifier = tvFocusable(
+    shape = shape,
+    addFocusTarget = false,
+)
+
+/**
+ * Outline ring for an icon button: `IconButton`, `FilledIconButton`, `FilledTonalIconButton`,
+ * `OutlinedIconButton` and their toggle variants.
+ *
+ * The same dead end as a chip, with less to look at: the button is clickable, so the remote stops on
+ * it, and Material3 answers with a state layer that is invisible at sofa distance. The button
+ * applies its modifier before the internal `clickable`, so this observes exactly that stop and adds
+ * no second one. The default circle matches the M3 icon button shape; a dock or a selection bar
+ * passes its own rounded square. No-op off TV.
+ */
+@Composable
+fun Modifier.tvIconButtonRing(shape: Shape = CircleShape): Modifier = tvFocusable(
+    shape = shape,
     addFocusTarget = false,
 )
 
@@ -253,6 +302,30 @@ fun Modifier.tvVerticalEdgeGuard(blockUp: Boolean = false, blockDown: Boolean = 
 }
 
 /**
+ * Hands DOWN from a top-bar stop to the first stop of the page below it.
+ *
+ * The top bar is drawn as an overlay *sibling* of the page content (the content scrolls under the
+ * bar), and that content column starts at the very top of the window. Compose's 2D search only
+ * descends into a sibling that lies entirely in the pressed direction, so a column that spans the
+ * focused item is skipped, subtree included: DOWN from the category tabs (or from the search pill)
+ * finds no candidate and the remote reads as dead, while UP from the content back into the bar
+ * still works. Hosts that own both sides of the seam pass a [FocusRequester] anchored on their
+ * first content stop and the press moves there directly.
+ *
+ * The key is left unconsumed when the target is not attached yet (the page has not composed its
+ * header), so the default search still runs and nothing is swallowed.
+ */
+@Composable
+fun Modifier.tvDownFocusLink(target: FocusRequester?): Modifier {
+    if (target == null) return this
+    return onPreviewKeyEvent { event ->
+        event.type == KeyEventType.KeyDown &&
+            event.key == Key.DirectionDown &&
+            runCatching { target.requestFocus() }.isSuccess
+    }
+}
+
+/**
  * Lets a remote leave a focused text field instead of trapping the D-pad inside it.
  *
  * Compose text fields keep the hardware arrow keys for caret movement, so on a TV the up/down
@@ -265,14 +338,22 @@ fun Modifier.tvVerticalEdgeGuard(blockUp: Boolean = false, blockDown: Boolean = 
  * closes the keyboard (Back or the IME search/done key) and then moves on with up/down. Without this
  * modifier that second step is impossible: the field keeps the arrow keys and focus never leaves.
  *
+ * Pass [horizontalWhenIdle] for a field that sits between two toolbar buttons (a search bar): once
+ * the keyboard is closed nobody drives the caret with the horizontal arrows any more, so they move
+ * focus to the neighbouring button instead of doing nothing visible.
+ *
  * Apply it to single-line fields only: a multi-line field needs up/down for caret movement.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun Modifier.tvTextInputFocusEscape(): Modifier {
+fun Modifier.tvTextInputFocusEscape(horizontalWhenIdle: Boolean = false): Modifier {
     val isTv = LocalUiPresentationConfig.current.isTv
     if (!isTv) return this
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    // `WindowInsets.isImeVisible` only exists in the Android artifact; the common build reads the same ime inset.
+    val density = LocalDensity.current
+    val imeVisible = WindowInsets.ime.getBottom(density) > 0
     return this.onPreviewKeyEvent { event ->
         if (event.type != KeyEventType.KeyDown) {
             false
@@ -280,6 +361,18 @@ fun Modifier.tvTextInputFocusEscape(): Modifier {
             val direction = when (event.key) {
                 Key.DirectionUp -> FocusDirection.Up
                 Key.DirectionDown -> FocusDirection.Down
+                Key.DirectionLeft -> if (horizontalWhenIdle && !imeVisible) {
+                    FocusDirection.Left
+                } else {
+                    null
+                }
+
+                Key.DirectionRight -> if (horizontalWhenIdle && !imeVisible) {
+                    FocusDirection.Right
+                } else {
+                    null
+                }
+
                 else -> null
             }
             val moved = direction != null && focusManager.moveFocus(direction)
@@ -292,6 +385,50 @@ fun Modifier.tvTextInputFocusEscape(): Modifier {
         }
     }
 }
+
+/**
+ * Up/down as "finish typing" for a text field that lives alone in a dialog.
+ *
+ * Inside a dialog the focus search answers from the text slot, which holds nothing but the field, so
+ * a directional move either finds no neighbour or reports a move that stays inside the field: after
+ * the keyboard is closed the remote appears stuck even though OK sits two rows below.
+ * [rememberTvFieldExit] already owns an explicit target, so the exit that Enter and the IME Done
+ * action perform is reused here, and it is installed *before* [tvTextInputFocusEscape] so the
+ * unreliable search never gets the first word. No-op off TV, and never installed on a multi-line
+ * field, which needs up/down for its own line navigation.
+ */
+@Composable
+private fun Modifier.tvTextInputVerticalExit(onExit: () -> Unit): Modifier {
+    if (!LocalUiPresentationConfig.current.isTv) return this
+    return this.onPreviewKeyEvent { event ->
+        val verticalExit = event.key == Key.DirectionUp || event.key == Key.DirectionDown
+        if (event.type == KeyEventType.KeyDown && verticalExit) {
+            onExit()
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/**
+ * Centre as "start typing" for a field that is only holding a focus ring.
+ *
+ * A focused editable field pulls up the software keyboard on its own. On a TV that keyboard is wide and
+ * sits at the bottom of the screen, so it covers whatever the dialog put there: the viewer sees a field
+ * and no button to confirm it with. Call sites keep such a field read-only until the centre key asks for
+ * editing, which keeps the whole dialog visible while it only carries the focus ring, and turns the
+ * keyboard into something the viewer asked for rather than something that greeted them.
+ */
+fun Modifier.tvTextInputStartEditing(onStartEditing: () -> Unit): Modifier =
+    this.onPreviewKeyEvent { event ->
+        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionCenter) {
+            onStartEditing()
+            true
+        } else {
+            false
+        }
+    }
 
 /**
  * Enter as "finish typing" for a TV text field.
@@ -313,6 +450,90 @@ fun Modifier.tvTextInputEnterAction(onEnter: () -> Unit): Modifier {
             false
         }
     }
+}
+
+/**
+ * "Focus the field first, type on request" for a dialog field on TV.
+ *
+ * The whole point of a dialog is that its buttons stay visible: a field that raises the keyboard the
+ * moment it takes the ring pushes `OK` off the bottom of a 1080p screen, so the viewer sees an input
+ * and no way to confirm it. This holder keeps the field read-only until the centre key asks for
+ * editing, and drops back to read-only as soon as the ring leaves, so opening the dialog a second
+ * time starts from the same quiet state.
+ *
+ * Back is the one way out of editing that does not move the ring: the platform closes the keyboard
+ * and the field keeps its editing state, and from then on it ignores `show()` because the viewer is
+ * the one who closed that input connection. The way out is that a centre press can only reach the
+ * field while no keyboard is on screen - the platform hands the keys to the keyboard otherwise - so a
+ * press that arrives while still editing means exactly that. Such a press re-arms the field: the
+ * read-only state is composed for a frame and editing is turned back on in the next one, which
+ * rebuilds the input session the platform had retired, and the keyboard returns on that same press.
+ * (Dropping to read-only and waiting for the viewer to press again also worked, but it cost a press
+ * that visibly did nothing.)
+ *
+ * Wire it up as
+ * `readOnly = state.isReadOnly` and `modifier = Modifier.then(state.fieldModifier).then(fieldExit.fieldModifier)`.
+ * Off TV [isReadOnly] is false and [fieldModifier] is empty, so phones and tablets are unaffected.
+ */
+@Stable
+class TvTextFieldReadOnlyState internal constructor(
+    /** Feed the field's `readOnly` parameter. False everywhere but TV. */
+    val isReadOnly: Boolean,
+    /** Attach to the text field: centre starts editing, losing the ring stops it. */
+    val fieldModifier: Modifier,
+    /** True while editing is on, so the dialog around the field can make room for the keyboard. */
+    val isEditing: Boolean = false,
+)
+
+/**
+ * @param showKeyboard what the centre key does once the field becomes editable; defaults to showing
+ * the software keyboard, which is what a read-only field needs to become a working one.
+ */
+@Composable
+fun rememberTvTextFieldReadOnlyState(
+    showKeyboard: (() -> Unit)? = null,
+): TvTextFieldReadOnlyState {
+    val isTv = LocalUiPresentationConfig.current.isTv
+    val keyboardController = LocalSoftwareKeyboardController.current
+    var editing by remember { mutableStateOf(false) }
+    // Counts re-arms of the input session; see the effect below.
+    var rearm by remember { mutableStateOf(0) }
+    if (isTv) {
+        // A re-arm renders the field read-only for one frame and editable again on the next, which is
+        // what makes the platform build a new input session - the retired one ignores show().
+        LaunchedEffect(rearm) {
+            if (rearm > 0) {
+                withFrameNanos { }
+                editing = true
+                showKeyboard?.invoke() ?: keyboardController?.show()
+            }
+        }
+    }
+    val fieldModifier = if (!isTv) {
+        Modifier
+    } else {
+        Modifier
+            .tvTextInputStartEditing {
+                if (editing) {
+                    // Still editing, yet the centre key reached this field: while a keyboard is on
+                    // screen the platform hands the keys to it, so reaching this handler at all
+                    // means the keyboard is gone. Back closes it without moving the ring, and the
+                    // input session it closed stays retired - show() on it is a no-op. Re-arm: go
+                    // read-only for a frame, then editable again in the next one.
+                    editing = false
+                    rearm++
+                } else {
+                    editing = true
+                    showKeyboard?.invoke() ?: keyboardController?.show()
+                }
+            }
+            .onFocusChanged { if (!it.hasFocus) editing = false }
+    }
+    return TvTextFieldReadOnlyState(
+        isReadOnly = isTv && !editing,
+        fieldModifier = fieldModifier,
+        isEditing = isTv && editing,
+    )
 }
 
 /**
@@ -342,10 +563,18 @@ class TvFieldExit internal constructor(
 /**
  * @param multiline pass true for a field that keeps its own newlines; the arrow-based escape is then
  * unnecessary, but the Done action still works.
+ * @param target an existing [FocusRequester] to leave the field onto, when the form already owns one
+ * for that control. [targetModifier] is then empty, so the caller keeps a single requester per node.
+ * Use it for a form whose confirm button is disabled until the form is valid: the caller can point
+ * the exit at whichever control is reachable right now instead of at a button that cannot take focus.
  */
 @Composable
-fun rememberTvFieldExit(multiline: Boolean = false): TvFieldExit {
-    val target = remember { FocusRequester() }
+fun rememberTvFieldExit(
+    multiline: Boolean = false,
+    target: FocusRequester? = null,
+): TvFieldExit {
+    val ownedTarget = remember { FocusRequester() }
+    val targetRequester = target ?: ownedTarget
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val leave: () -> Unit = {
@@ -355,7 +584,7 @@ fun rememberTvFieldExit(multiline: Boolean = false): TvFieldExit {
         // remote would be left standing on the field with no way out but Back, which
         // dismisses the whole dialog. Walk the dialog's own focus order instead: the
         // linear traversal skips the disabled button and lands on Cancel.
-        if (!target.requestFocus()) {
+        if (!targetRequester.requestFocus()) {
             val moved = focusManager.moveFocus(FocusDirection.Next) ||
                 focusManager.moveFocus(FocusDirection.Previous)
             if (!moved) {
@@ -365,12 +594,15 @@ fun rememberTvFieldExit(multiline: Boolean = false): TvFieldExit {
             }
         }
     }
+    // Order matters: the explicit vertical exit goes first because the focus search inside a dialog
+    // can answer "moved" while the ring stays on the field, which would swallow the key.
     val fieldModifier = Modifier
-        .then(if (multiline) Modifier else Modifier.tvTextInputFocusEscape())
+        .then(if (multiline) Modifier else Modifier.tvTextInputVerticalExit(leave))
         .tvTextInputEnterAction(leave)
+        .then(if (multiline) Modifier else Modifier.tvTextInputFocusEscape())
     return TvFieldExit(
         onDone = leave,
         fieldModifier = fieldModifier,
-        targetModifier = Modifier.focusRequester(target),
+        targetModifier = if (target == null) Modifier.focusRequester(ownedTarget) else Modifier,
     )
 }

@@ -41,6 +41,9 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
         DesktopScreen.LIBRARY -> desktopNavItemId(DesktopNavItem.FAVOURITES)
         DesktopScreen.EXPLORE, DesktopScreen.DETAILS, DesktopScreen.PREFERENCES -> desktopNavItemId(DesktopNavItem.BROWSE)
         DesktopScreen.HISTORY -> desktopNavItemId(DesktopNavItem.HISTORY)
+        DesktopScreen.BOOKMARKS -> desktopNavItemId(DesktopNavItem.BOOKMARKS)
+        DesktopScreen.UPDATED -> desktopNavItemId(DesktopNavItem.UPDATED)
+        DesktopScreen.SUGGESTIONS -> desktopNavItemId(DesktopNavItem.SUGGESTIONS)
         else -> DESKTOP_NAV_MORE_ID
     }
     val updates = state.feed.updateRowsByOwnerId.size
@@ -50,6 +53,9 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
         desktopNavItemId(DesktopNavItem.BROWSE) -> controller.explore()
         desktopNavItemId(DesktopNavItem.HISTORY) -> controller.library(true)
         desktopNavItemId(DesktopNavItem.HOME) -> controller.home()
+        desktopNavItemId(DesktopNavItem.BOOKMARKS) -> controller.showBookmarks()
+        desktopNavItemId(DesktopNavItem.UPDATED) -> controller.showUpdates()
+        desktopNavItemId(DesktopNavItem.SUGGESTIONS) -> controller.showSuggestions()
         else -> controller.more()
     } }
     // Re-selecting "browse" inside a source goes back to the source grid, like Android's tab re-tap.
@@ -72,6 +78,9 @@ internal fun DesktopNavigationRail(controller: DesktopController, state: Desktop
                         if (isSelected) "ic_heart" else "ic_heart_outline"
                     desktopNavItemId(DesktopNavItem.BROWSE) -> "ic_explore_normal"
                     desktopNavItemId(DesktopNavItem.HISTORY) -> "ic_history"
+                    desktopNavItemId(DesktopNavItem.BOOKMARKS) -> "ic_bookmark"
+                    desktopNavItemId(DesktopNavItem.UPDATED) -> "ic_updated"
+                    desktopNavItemId(DesktopNavItem.SUGGESTIONS) -> "ic_suggestion"
                     else -> "ic_more_vert"
                 }
                 androidx.compose.material3.BadgedBox(badge = {
@@ -102,18 +111,25 @@ internal fun desktopNavItemId(item: DesktopNavItem): Int = when (item) {
     DesktopNavItem.BROWSE -> 1
     DesktopNavItem.HISTORY -> 2
     DesktopNavItem.SUBSCRIPTIONS -> 5
+    DesktopNavItem.BOOKMARKS -> 6
+    DesktopNavItem.UPDATED -> 7
+    DesktopNavItem.SUGGESTIONS -> 8
 }
 
 /** The label the rail and the configuration page both draw; the same words the desktop catalog gave each tab. */
-internal fun desktopNavItemLabel(item: DesktopNavItem): String = desktopText(
-    when (item) {
-        DesktopNavItem.HOME -> "nav.home"
-        DesktopNavItem.FAVOURITES -> "nav.favourites"
-        DesktopNavItem.BROWSE -> "nav.browse"
-        DesktopNavItem.HISTORY -> "nav.history"
-        DesktopNavItem.SUBSCRIPTIONS -> "nav.subscriptions"
-    },
-)
+internal fun desktopNavItemLabel(item: DesktopNavItem): String = when (item) {
+    DesktopNavItem.HOME -> desktopText("nav.home")
+    DesktopNavItem.FAVOURITES -> desktopText("nav.favourites")
+    DesktopNavItem.BROWSE -> desktopText("nav.browse")
+    DesktopNavItem.HISTORY -> desktopText("nav.history")
+    DesktopNavItem.SUBSCRIPTIONS -> desktopText("nav.subscriptions")
+    // Android's `NavItem.BOOKMARKS` takes `R.string.notes` for the same destination.
+    DesktopNavItem.BOOKMARKS -> AndroidStrings["notes"]
+    // Android's `NavItem.UPDATED` label is `R.string.updated`.
+    DesktopNavItem.UPDATED -> AndroidStrings["updated"]
+    // Android's `NavItem.SUGGESTIONS` label is `R.string.suggestions`.
+    DesktopNavItem.SUGGESTIONS -> AndroidStrings["suggestions"]
+}
 
 /**
  * Android's "更多" tab is a settings page: titled sections, one card each, and every entry a row. The Windows host keeps
@@ -146,8 +162,9 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
                 { controller.showStorage() }, testTag = "storage-settings-open",
                 leadingIcon = painterResource("icons/ic_storage.svg"))
             SettingsRowDivider()
-            SettingsValueRow(desktopText("settings.suggestions"), desktopText("more.recommendationsSummary"), null,
-                enabled, { controller.showRecommendations() }, testTag = "settings-recommendations-open",
+            // Android groups recommendations, statistics and their switches under one 服务 page.
+            SettingsValueRow(AndroidStrings["services"], desktopText("more.servicesSummary"), null,
+                enabled, { controller.showServices() }, testTag = "services-open",
                 leadingIcon = painterResource("icons/ic_suggestion.svg"))
             SettingsRowDivider()
             SettingsValueRow(desktopText("more.extensions"), desktopText("more.extensionsSummary"), null, enabled,
@@ -166,11 +183,6 @@ internal fun DesktopMorePanel(controller: DesktopController, enabled: Boolean, o
             SettingsValueRow(desktopText("more.backups"), desktopText("more.backupsSummary"), null, enabled,
                 { controller.showBackups() }, testTag = "nav:${desktopText("more.backups")}",
                 leadingIcon = painterResource("icons/ic_backup_restore.svg"))
-            SettingsRowDivider()
-            // Android reaches its statistics from the "更多" tab; the desktop reader now records the same rows.
-            SettingsValueRow(AndroidStrings["reading_stats"], desktopText("more.readingStatsSummary"), null, enabled,
-                { controller.showReadingStats() }, testTag = "reading-stats-open",
-                leadingIcon = painterResource("icons/ic_history.svg"))
             SettingsRowDivider()
             // Android's nav configuration lives under appearance; here it edits the rail the window shows.
             SettingsValueRow(AndroidStrings["main_screen_sections"], desktopText("navSettings.moreSummary"), null,
@@ -308,7 +320,9 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                         }
                     }
                 }
-                DesktopDetailsInfo(content, enabled = !state.busy, warnings = state.sourceSettings)
+                DesktopDetailsInfo(content, enabled = !state.busy, warnings = state.sourceSettings,
+                    readingTime = state.detailsReadingTime)
+                DesktopDetailsRelated(controller, state)
             }
         }
         var tab by remember(content.id) { mutableStateOf(DesktopDetailsTab.CHAPTERS) }

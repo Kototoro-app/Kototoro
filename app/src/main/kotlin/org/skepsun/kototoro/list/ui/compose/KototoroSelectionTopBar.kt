@@ -31,6 +31,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -40,6 +42,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
@@ -89,6 +92,9 @@ fun KototoroSelectionTopBar(
 ) {
     var showOverflowMenu by remember { mutableStateOf(false) }
     var overflowAnchorBounds by remember { mutableStateOf<Rect?>(null) }
+    // The overflow menu is a root-overlay sibling of this button on TV, so closing it needs an
+    // explicit target or the ring drops to the navigation rail.
+    val overflowAnchorFocus = remember { FocusRequester() }
 
     val allActions = supportedActions?.toList() ?: defaultSelectionActions(showRemoveOption)
     val inlineActions = preferredInlineActions
@@ -139,7 +145,7 @@ fun KototoroSelectionTopBar(
         TopBarControlSurface {
             IconButton(
                 onClick = onClearSelection,
-                modifier = Modifier.size(topBarControlHeight),
+                modifier = Modifier.size(topBarControlHeight).tvIconButtonRing(),
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
@@ -192,7 +198,9 @@ fun KototoroSelectionTopBar(
                         ) {
                             IconButton(
                                 onClick = { showOverflowMenu = true },
-                                modifier = Modifier.size(topBarControlHeight),
+                                modifier = Modifier
+                                    .focusRequester(overflowAnchorFocus)
+                                    .size(topBarControlHeight).tvIconButtonRing(),
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.MoreVert,
@@ -208,6 +216,7 @@ fun KototoroSelectionTopBar(
                                 useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
                                 anchorTapThrough = true,
                                 anchorBounds = overflowAnchorBounds,
+                                anchorFocusRequester = overflowAnchorFocus,
                                 shape = CompactTopBarPillShape,
                                 style = GlassDefaults.subtleStyle(),
                             ) {
@@ -250,7 +259,7 @@ private fun SelectionActionIconButton(
 ) {
     IconButton(
         onClick = onClick,
-        modifier = Modifier.size(buttonSize),
+        modifier = Modifier.size(buttonSize).tvIconButtonRing(),
     ) {
         when (action) {
             SelectionAction.SELECT_ALL -> {

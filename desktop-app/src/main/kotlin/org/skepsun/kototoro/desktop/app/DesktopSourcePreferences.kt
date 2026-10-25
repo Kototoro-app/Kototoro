@@ -19,6 +19,7 @@ import org.skepsun.kototoro.core.source.SourcePreferenceKind
 import org.skepsun.kototoro.core.source.SourcePreferenceNode
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.core.ui.settings.SettingsGroup
+import org.skepsun.kototoro.core.ui.settings.SettingsGroupLabelRow
 import org.skepsun.kototoro.core.ui.settings.SettingsInfoRow
 import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
 import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
@@ -28,13 +29,32 @@ import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
 /**
  * Android's per-source settings screen (`settings/compose/SourceSettingsScreen.kt` with `ComposePreferenceAdapter`):
  * each androidx `PreferenceCategory` becomes a titled section drawing one card of rows, a `TwoStatePreference` a
- * switch row, and every other preference a value row that opens a dialog. The Windows host receives the same tree as
- * `SourcePreferenceNode`s over the source protocol, so this file only folds that tree into sections and hands the rows
- * to the shared components in `core-ui` instead of drawing a flat column of cards.
+ * switch row, every other preference a value row that opens a dialog, and a group nested in another group a label row
+ * — Android's `SourceSettingsGroupLabelRowUiState`. The Windows host receives the same tree as `SourcePreferenceNode`s
+ * over the source protocol, so this file only folds that tree into sections and hands the rows to the shared
+ * components in `core-ui` instead of drawing a flat column of cards.
  */
 
-/** One titled section of a source's settings; [rows] are the visible leaves of the protocol tree. */
-internal data class SourcePreferenceSection(val id: String, val title: String, val rows: List<SourcePreferenceNode>)
+/** One entry of a section: either a source's own preference or the label of a group nested inside another group. */
+internal sealed interface SourcePreferenceEntry {
+    val id: String
+
+    data class Row(val node: SourcePreferenceNode) : SourcePreferenceEntry {
+        override val id: String get() = node.id
+    }
+
+    data class Label(override val id: String, val title: String) : SourcePreferenceEntry
+}
+
+/** One titled section of a source's settings; [entries] are the visible leaves plus nested group labels. */
+internal data class SourcePreferenceSection(
+    val id: String,
+    val title: String,
+    val entries: List<SourcePreferenceEntry>,
+) {
+    /** The leaf nodes of this section, in drawing order; dialog hosts look a row up by id. */
+    val rows: List<SourcePreferenceNode> get() = entries.filterIsInstance<SourcePreferenceEntry.Row>().map { it.node }
+}
 
 private const val HOST_NODE_PREFIX = "host:"
 
@@ -42,14 +62,16 @@ private const val HOST_NODE_PREFIX = "host:"
  * Folds the protocol tree into the sections Android builds from androidx Preferences: Kototoro's own `host:` rows
  * (User-Agent, domain) lead a section titled with Android's "settings" string, then every titled GROUP starts a
  * section of its own. An untitled GROUP joins the section being built, exactly as Android flattens a `PreferenceGroup`
- * into the rows around it. Invisible nodes drop out and a section without rows disappears.
+ * into the rows around it, but a GROUP nested inside another one keeps its title as a label row — Android's
+ * `SourceSettingsGroupLabelRowUiState` — so a source whose settings nest "Account → Advanced" does not lose that
+ * structure in one flat card. Invisible nodes drop out and a section without rows disappears.
  */
 internal fun sourcePreferenceSections(
     nodes: List<SourcePreferenceNode>,
     fallbackTitle: String,
 ): List<SourcePreferenceSection> {
     val sections = mutableListOf<SourcePreferenceSection>()
-    val loose = mutableListOf<SourcePreferenceNode>()
+    val loose = mutableListOf<SourcePreferenceEntry>()
     var defaultSections = 0
     fun flushLoose() {
         if (loose.isEmpty()) return
@@ -62,21 +84,31 @@ internal fun sourcePreferenceSections(
     for (node in ordered) {
         if (node.kind == SourcePreferenceKind.GROUP && node.title.isNotBlank()) {
             flushLoose()
-            val rows = node.children.flatMap(::leafRows)
-            if (rows.isNotEmpty()) sections += SourcePreferenceSection("section:${node.id}", node.title, rows)
+            val entries = node.children.flatMap(::groupEntries)
+            if (entries.isNotEmpty()) sections += SourcePreferenceSection("section:${node.id}", node.title, entries)
         } else {
-            loose += leafRows(node)
+            loose += groupEntries(node)
         }
     }
     flushLoose()
     return sections
 }
 
-/** A GROUP carries no value of its own, so nested groups flatten into their visible leaves. */
-private fun leafRows(node: SourcePreferenceNode): List<SourcePreferenceNode> = when {
+/**
+ * A GROUP carries no value of its own, so it contributes its visible children; a nested GROUP keeps a label row first,
+ * which is how Android draws a group inside a category.
+ */
+private fun groupEntries(node: SourcePreferenceNode): List<SourcePreferenceEntry> = when {
     !node.visible -> emptyList()
-    node.kind == SourcePreferenceKind.GROUP -> node.children.flatMap(::leafRows)
-    else -> listOf(node)
+    node.kind != SourcePreferenceKind.GROUP -> listOf(SourcePreferenceEntry.Row(node))
+    else -> {
+        val children = node.children.flatMap(::groupEntries)
+        val label = node.title.takeIf(String::isNotBlank)
+            ?.takeIf { children.isNotEmpty() }
+            ?.let { listOf(SourcePreferenceEntry.Label("label:${node.id}", it)) }
+            .orEmpty()
+        label + children
+    }
 }
 
 @Composable
@@ -95,9 +127,17 @@ internal fun DesktopSourcePreferences(controller: DesktopController, state: Desk
         sections.forEach { section ->
             SettingsSectionHeader(section.title)
             SettingsGroup {
-                section.rows.forEachIndexed { index, node ->
-                    if (index > 0) SettingsRowDivider()
-                    SourcePreferenceRow(controller, node, enabled) { dialog = it }
+                section.entries.forEachIndexed { index, entry ->
+                    // A label groups the rows under it, so the card keeps its divider rhythm only between two rows.
+                    if (index > 0 && entry is SourcePreferenceEntry.Row &&
+                        section.entries[index - 1] is SourcePreferenceEntry.Row
+                    ) {
+                        SettingsRowDivider()
+                    }
+                    when (entry) {
+                        is SourcePreferenceEntry.Label -> SettingsGroupLabelRow(entry.title)
+                        is SourcePreferenceEntry.Row -> SourcePreferenceRow(controller, entry.node, enabled) { dialog = it }
+                    }
                 }
             }
         }
@@ -138,7 +178,7 @@ private fun SourcePreferenceRow(
             onClick = { controller.updatePreference(node, SourcePreferenceValue.Action()) }, testTag = tag)
         SourcePreferenceKind.INFO -> SettingsInfoRow(title, summary)
         SourcePreferenceKind.UNSUPPORTED -> SettingsInfoRow(title, summary ?: desktopText("preference.unsupported"))
-        // sourcePreferenceSections hands out leaves only; a group reaching here has nothing of its own to draw.
+        // sourcePreferenceSections never hands out a GROUP node: its title became a label entry, its children rows.
         SourcePreferenceKind.GROUP -> Unit
     }
 }

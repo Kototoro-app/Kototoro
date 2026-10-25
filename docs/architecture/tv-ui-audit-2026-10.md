@@ -3313,9 +3313,4366 @@ Move down / Delete）打开后按一次 DOWN 就聚焦 `Edit`（`F [1589,530][18
 4. 语言预设子菜单和主菜单的 BackHandler 是叠起来的：BACK 一次把两层一起关掉（`t6.xml` 里两个菜单都没了）。
    目前观感可接受，未深究。
 
+## 第五十五轮：危险确认弹窗默认落在 Cancel（2026-10-24）
 
+上一轮遗留的第 1 条：删除自定义空间的确认弹窗一出现，焦点就在 `Delete` 上（`F [1102,580][1234,676]`）。
+这条不是"焦点没归宿"，而是"归宿错了"——用户按一次 OK 打开弹窗，再按一次 OK 就把空间连导航状态一起删了。
 
+### 根因
 
+`SettingsAlertDialog` 的电视初始焦点逻辑无条件回退到 **confirm** 槽：body 上没有可聚焦子项时
+`confirmFocusRequester.requestFocus()`。所有"删除 / 清空 / 覆盖"确认弹窗的 Confirm 都在这个槽里，
+于是"按键打开 → 按键回答"就成了默认答案。
 
+### 改法（`SettingsAlertDialog.kt`，仅电视）
 
+1. body 仍然优先（调用点把选择器放在 body 里，弹窗要给选择器焦点）；
+2. body 无可聚焦子项时，**弹窗有 dismiss 槽就回退到 dismiss**（Cancel），没有 dismiss 的弹窗才回退到 Confirm；
+3. 回退不再只请求一次，改成按帧重试最多 20 次，并且任一按钮**真的拿到焦点**（`onFocusChanged`）就停。
 
+第 3 条是这轮调试里挖出来的：单次请求在两种情况下会被静默丢掉——弹窗窗口还在淡入、
+以及应用正处于触摸模式（触摸点击打开的弹窗）。丢掉之后屏幕上没有任何环，第一次按键才"凭空"出现焦点。
+
+### 设备证据（emulator-5554，1920×1080）
+
+| 场景 | 修前 | 修后 |
+| --- | --- | --- |
+| 遥控器打开删除确认 | 环在 `Delete`（`F [1102,580][1234,676]`，第五十四轮记录，本轮 `z3.xml` 复现） | **环在 `Cancel`**（`ab3.png`，`F [946,580][1086,676]`，蓝色圆角环） |
+| 焦点上按一次 CENTER | 空间被删除 | **只是取消**：弹窗关闭，自定义空间 `z` 仍在列表里（`aa5.xml`） |
+| 编辑弹窗（body 有输入框） | 焦点在 Name 输入框 | 不变，仍在 Name 输入框（`ac9.xml`，`F [568,136][1352,264] EditText`） |
+| 触摸点击打开删除确认 | — | 无环（触摸模式下 Compose 丢弃 `requestFocus`，`requestFocus()` 连续 26 次返回 false） |
+
+最后一行是这轮最花时间的排查点：一开始以为是改坏了，后来用一次性的 `Log.i` 打点确认——同样的代码在
+遥控器路径上第一次请求就成功（日志无输出），在触摸路径上 26 次全失败。电视用户的按键一定来自遥控器，
+所以这不是缺陷；但它解释了"为什么点开弹窗看不见环"，也让那 20 次重试有了意义（淡入期同样会丢）。
+
+### 顺带发现（未修，记入遗留）
+
+自定义空间行（`SpaceDefinitionRow`）的行尾开关与 ⋮ **用方向键够不到**：焦点停在整行上，RIGHT 不动
+（`z9.xml` 里焦点仍是整行 `[746,786][1896,914]`），只有 TAB 键才能依次走到 `Switch`（`aa1.xml`，
+`F [1664,802][1768,898]`）和 `⋮`（`aa2.xml`，`F [1768,802][1864,898]`）。遥控器上没有 TAB，
+所以"启用/停用空间、编辑、排序、删除"这几个动作目前在电视上只能靠触摸完成——而本轮验证删除弹窗，
+正是因为走了 TAB 这条非常规路径。改法方向：行挂 `focusGroup`，或给行与行尾控件互相绑
+`focusProperties { right = ... }` / `{ left = ... }`，下一轮做。
+
+### 遗留
+
+1. 上面这条"行尾控件够不到"，优先级高于本轮修掉的焦点问题（它直接挡功能）。
+2. 菜单关闭后焦点仍回落到左侧导航而不是锚点 ⋮（第五十四轮第 2 条，未动）。
+3. 只验了"有 dismiss 槽"的弹窗；`dismissButton == null` 的单按钮弹窗回退目标没变（仍是 Confirm），
+   仅重试次数变了，缺少设备证据（本机没有能稳定触发的单按钮弹窗）。
+4. 浮层菜单"触摸打开后没有焦点"（`w3.png`）与本轮的触摸模式结论一致，按遥控器路径不算缺陷，
+   但若以后给电视加鼠标支持要一起处理。
+
+## 第五十六轮：空间行的行尾开关与 ⋮ 用遥控器够得到（2026-10-24）
+
+上一轮顺带发现的那条，这轮修掉：自定义空间行是"整行可点（进编辑）+ 行尾开关 + 行尾 ⋮"三层焦点，
+但方向键从行上按 RIGHT 停在原地（`z9.xml`），只有 TAB 能依次走到开关（`aa1.xml`）和 ⋮（`aa2.xml`）。
+遥控器没有 TAB，于是"停用空间 / 编辑 / 排序 / 删除"在电视上只能触摸完成——上一轮验证删除弹窗
+就是靠 TAB 绕过去的。
+
+### 改法（`SpacesSettingsScreen.kt` 的 `SpaceDefinitionRow`，仅电视、仅自定义空间）
+
+1. 行、开关、⋮ 各挂一个 `FocusRequester`，用 `focusProperties` 显式连成一条链：
+   行 `right →` 开关；开关 `left →` 行、`right →` ⋮；⋮ `left →` 开关。
+2. 开关与 ⋮ 补 `tvFocusable(CircleShape, addFocusTarget = false)` 的焦点环——够得到但看不见环
+   等于还是死的。
+3. 内置空间行（Manga/Novel/Anime）只有行本身与"Built in"标签，没有开关也没有 ⋮，仍是普通行。
+
+### 设备证据（emulator-5554，1920×1080）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 焦点在自定义空间行，按 RIGHT | `ae2.png` / `ae2.xml` | 焦点进开关 `F [1664,802][1768,898]`，开关外圈出现蓝色环（修前：停在整行 `[746,786][1896,914]`） |
+| 再按 RIGHT | `ae3.png` / `ae3.xml` | 焦点到 ⋮ `F [1768,802][1864,898]`，圆形蓝环 |
+| 在 ⋮ 上 CENTER | `ae6.xml` | 弹出 Edit / Move up / Move down / Delete，首项 `Edit` 有环（`F [1589,400][1864,496]`） |
+| LEFT、LEFT | `ae4.xml`、`ae5.xml` | 依次回到开关、回到整行，链是双向的 |
+| 在开关上 CENTER | `af1.png` | 空间被停用：开关变灰、行文字变淡（功能真的走通，不只是焦点） |
+| 再 CENTER 一次 | `af2.png` | 恢复启用，设备留在干净状态 |
+
+### 说明
+
+这轮同时纠正了一个误读：截图里"TV"那一行带开关和 ⋮，看着像内置空间，其实它是早期测试时建的
+**自定义**空间（内置的 Manga/Novel/Anime 行尾是"Built in"标签，没有开关）；所以内置行本来就不在
+这条链的范围内，`focusProperties` 只对自定义行生效即可。
+
+### 遗留
+
+1. 菜单关闭后焦点仍回落到左侧导航而不是锚点 ⋮（第五十四轮第 2 条，两轮未动）。
+2. 行内方向键：焦点在开关/⋮ 上按 UP、DOWN 时靠几何搜索在行之间跳，没有显式绑定；
+   目前实测能上下走，但没有逐行验证到列表两端。
+3. 设置的非根子页（右侧详情栏）宽度只在 Spaces 页对过，其余子页还没系统走一遍。
+
+### 顺带回归：第五十五轮那套弹窗焦点规则没把"选择器类"弹窗改坏
+
+第五十五轮把"body 没有可聚焦子项时回退到 Cancel"写进了 `SettingsAlertDialog`，风险最大的正是
+body 里真的有可选项的弹窗。在同一份构建上补验了 Spaces 的"Space button position"单选弹窗：
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 焦点在该行，按 CENTER | `ah4.png` / `ah4.xml` | 弹窗打开，环在**第一个选项 `Top right`**（`F [568,317][1352,413]`），不在底部 OK |
+| DOWN | `ah5.xml` | 环移到 `Center right`（`F [568,415][1352,511]`），body 内上下可走 |
+| BACK | `ah6.xml` | 弹窗关闭，环回到打开它的那一行（`F [746,324][1896,448]`），没有落到侧边导航 |
+
+也就是说：有选择器的弹窗仍是"进弹窗先给选择器"，只有纯确认弹窗才落到 Cancel（第五十五轮），
+两种路径互不影响；`SettingsAlertDialog` 是真正的 Dialog 窗口，关掉时 Compose 自己会把焦点还给打开者。
+
+## 第五十七轮：菜单关掉之后，焦点回到那个 ⋮（2026-10-24）
+
+第五十四轮第 2 条留了两轮的"菜单关闭后焦点回落到侧边导航"，这轮做完。
+
+### 原因
+
+iOS 界面风格下，顶栏的浮层菜单走的是**根层 overlay**（`RootGlassMenuOverlay`）：它是锚点按钮的
+**同窗口兄弟**，不是 `DropdownMenu` 那种独立 Popup 窗口。所以菜单消失时没有任何东西负责把焦点还回去——
+最后一个菜单项随 overlay 一起被销毁，焦点搜索退回屏幕上第一个可聚焦节点，也就是左侧导航栏。
+
+### 改法（`GlassDropdownMenu.kt` + `KototoroTopBar.kt`，仅电视、按需开启）
+
+1. `GlassDropdownMenu` 与 `RootGlassMenuRequest` 新增可选参数 `anchorFocusRequester`：锚点按钮把自己的
+   `FocusRequester` 交进来。
+2. overlay 里**在菜单之后**声明一个 `DisposableEffect(request.id)`，`onDispose` 时请求锚点焦点。
+   放在最后是为了让菜单自己的 `tvTakeFocusWhenEmpty` 先随菜单一起被取消，不会把焦点再抢回去。
+3. 只在 `host.request == null`（菜单真的没了）时才回位：语言预设子菜单会用一个新 request 顶替主菜单，
+   那种情况下不该把焦点拽回锚点。
+4. 顶栏三处锚点接上：⋮（主菜单）、同一 ⋮ 上的语言预设子菜单、收藏页的紧凑分类标题。
+   其余根层 overlay 菜单保持原样，需要时传一个 requester 即可。
+
+### 设备证据（emulator-5554，1920×1080，全程按键）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 顶栏 ⋮ 上 CENTER | `aj1.xml` | 菜单打开，首项 `Display options` 有环（`F [1508,124][1892,220]`） |
+| BACK | `aj2.xml` / `aj2.png` | 环回到 ⋮（`F [1800,16][1896,112]`，截图里按钮外圈蓝环）；修前这里落到左侧导航 |
+| 再开菜单 → CENTER 选 `Display options` | `aj3.xml` / `aj3.png` | 面板打开后环在面板自己的 `History` 标签（`F [392,180][770,276]`），没被拽回锚点 |
+| 面板 BACK → 再开菜单 → `Language preset` → CENTER | `aj7.xml` | 子菜单顶替主菜单，环落在子菜单首项 `All`（`F [1435,124][1892,220]`） |
+| 子菜单 BACK | `aj8.xml` | 环同样回到 ⋮（`F [1800,16][1896,112]`） |
+| 菜单里选 `Settings` | `ak2.xml` / `ak2.png` | 设置页打开，环在 `Appearance` 行（`F [24,196][1896,328]`），没有被旧顶栏抢走 |
+
+### 遗留
+
+1. 其余根层 overlay 菜单（详情页 dock、选择栏、来源标签下拉、搜索栏、探索来源页、详情页头信息面板）
+   还没传 `anchorFocusRequester`，行为与修前一致；逐页验证工作量在下一轮。
+2. 收藏页紧凑分类标题的锚点已接线但没在设备上单独验（首页与顶栏 ⋮ 已验）。
+3. 行尾控件 UP/DOWN、设置非根子页宽度两条仍在。
+
+## 第五十七轮补记：另外三处根层菜单锚点（2026-10-24）
+
+### 改法（接线）
+
+同样的 `anchorFocusRequester` 又接了三处，写法与顶栏 ⋮ 一致——`Modifier.focusRequester(x)` 必须放在
+`IconButton` 的 `clickable`/`tvFocusable` **之前**，否则 requester 抓不到那个焦点目标：
+
+1. 选择栏（`KototoroSelectionTopBar.kt`）的溢出 ⋮；
+2. 探索来源页（`ExploreSourcesScreen.kt`）顶栏的溢出 ⋮；
+3. 搜索页更多动作按钮（`SearchInputRows.kt` 的 `MoreActionsButton`）。
+
+### 设备证据（emulator-5554，1920×1080，构建 `63a8954ce`）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 历史长按进选择栏，导航栏 → RIGHT → UP → 连续 RIGHT | `ar4.xml`、`ar4_3.xml` | 焦点沿选择栏右侧药丸走：全选 → 移除 → 收藏 → ⋮ `F [1800,16][1896,112]` |
+| 在 ⋮ 上 CENTER | `as1.xml` / `as1.png` | 菜单打开，首项 `Mark as completed` 有环（`F [1589,124][1892,220]`） |
+| BACK | `as2.xml` / `as2.png` | 环回到选择栏 ⋮（`F [1800,16][1896,112]`，截图里按钮被选中药丸包住）；修前这里落到左侧导航 |
+| 探索页顶栏 ⋮ 上 CENTER | `au1.xml` / `au1.png` | 菜单打开，首项 `Extension management` 有环（`F [1449,124][1892,220]`） |
+| BACK | `au2.xml` / `au2.png` | 环回到 ⋮（`F [1800,16][1896,112]`） |
+
+### 搜索页那一处没能验，顺带发现一个真问题
+
+搜索页当前的落屏布局（返回箭头 + 输入框 + `Advanced search`/`Filter` 药丸 + 最近查询/标签）
+里根本没有那个 ⋮——`MoreActionsButton` 属于搜索结果态，所以本轮只做到了"已接线、与顶栏 ⋮ 同一写法"，
+没有单独的设备证据。
+
+更值得记的是尝试过程中撞见的：**搜索页的遥控器到不了顶栏**。焦点在输入框时 RIGHT 只是移光标，
+UP/DOWN 被 `tvTextInputFocusEscape` 吃掉（上方没有可聚焦节点，`moveFocus` 返回 false），
+按 BACK 收起键盘后 DOWN 会跳到列表、再 UP 又回到输入框，RIGHT 仍在框内——
+返回箭头与放大镜两个按钮用方向键无法到达。这条留作下一轮的入口。
+
+### 遗留（更新）
+
+1. 详情页 dock、来源标签下拉、详情页头信息面板三处根层 overlay 菜单仍未接线。
+2. 搜索页：更多动作按钮待结果态看图；输入框到顶栏图标的遥控器通路缺失（上节）。
+3. 行尾控件 UP/DOWN、设置非根子页宽度两条仍在。
+
+## 第五十八轮：搜索框里的遥控器能出来了（2026-10-24）
+
+承接上一轮末尾那条：搜索页输入框把遥控器关住了，返回箭头与放大镜两个按钮用方向键到不了。
+
+### 原因
+
+第五十五轮那套 `tvTextInputFocusEscape` 只接管 UP/DOWN——它的立场是"单行输入框还要用左右改光标"，
+所以 LEFT/RIGHT 一律放行给文本字段，而文本字段拿到方向键后只移动光标、从不交给焦点系统。
+结果：输入框夹在两个按钮中间，左右都是死路，只剩 DOWN 去列表、BACK 退出整页两条出路。
+
+### 改法（`TvFocus.kt` 加一个开关，两个搜索栏各启用一次）
+
+1. `Modifier.tvTextInputFocusEscape(horizontalWhenIdle: Boolean = false)`：多一个参数，
+   默认 false，所以其它调用点（筛选弹窗、搜索筛选面板、来源列表的输入框等）行为完全不变。
+2. 打开这个开关后，LEFT/RIGHT 在**屏幕键盘已经收起**时才换成焦点移动：键收起时没人再用左右挪光标，
+   这时让它们去相邻按钮；键盘还在时左右仍归光标，输入中不会莫名其妙跳走。
+   `horizontalWhenIdle` 借用 `WindowInsets.isImeVisible` 判断键盘状态，不需要额外的控制器。
+3. 两处电视搜索栏各加一次参数：落屏浮层 `KototoroSearchOverlay.kt`、结果页顶栏
+   `SearchResultsScreen.kt`（两处用的是同一个修饰符，代码路径一致）。
+
+### 一个绕路
+
+第一版改在 `SearchResultsScreen.kt` 上，装到设备上毫无反应——因为设备上的搜索落屏其实是
+`KototoroSearchOverlay.kt` 那个浮层（返回箭头 + 输入框 + `Advanced search`/`Filter` 药丸 + 最近查询/标签），
+`SearchResultsScreen` 的顶栏只在**搜出结果之后**才出现。两处的几何几乎一样，光看 dump 的矩形分不出来；
+是往 Row 上挂临时日志、发现一条都没打出来才定位到的。这条记在这里，免得下次再对着 `search_content`
+这个占位符找错文件（它有两个使用者）。
+
+### 设备证据（emulator-5554，1920×1080，全程按键，构建 `4a143e552`）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 搜索落屏打开、键盘在屏幕上，按 LEFT | `bd2.xml` | 环仍停在输入框 `F [124,0][1780,96]`，光标编辑没被打断 |
+| 输入 `a` 后按 BACK 收起键盘，再按 LEFT | `bd3.xml` / `bg1.png` | 环离开输入框，落到返回箭头 `F [16,0][112,96]`（修前死在这里），截图里 `←` 被白色圆环套住 |
+| 再按 RIGHT | `bd4.xml` | 环回到输入框（焦点回到输入框会重新弹键盘，这是系统行为） |
+| 再按 BACK 收键盘，按 RIGHT（查询非空） | `bd6.xml` / `bg2.png` | 环落到提交按钮 `F [1800,0][1896,96]`，蓝色圆环套在右上角放大镜上 |
+| 在提交按钮上 CENTER | `be1.png` | 搜索真的跑起来：`Loaded 17 results`，进入结果页 |
+| 结果页输入框上 BACK 收键盘，按 LEFT | `be2.xml` / `be2.png` | 环落到结果页返回箭头 `F [16,24][112,120]`，两处接线都生效 |
+
+### 遗留
+
+1. 输入框重新获得焦点会自动弹键盘，所以"返回箭头 → 输入框 → 提交按钮"这一串要再按一次 BACK；
+   想让 RIGHT 在光标位于文末时直接跳出去，需要拿到 `TextFieldValue` 的选区，本轮没动那个签名。
+2. 输入框里的清除（×）按钮仍然只能靠触摸：它在输入框内部，左右键一离开输入框就越过了它。
+3. 截图要用 `adb shell screencap -p /sdcard/x.png` + `adb pull`；PowerShell 的 `>` 重定向会把 PNG 写成不可读文本
+   （`read_image` 报 `Unsupported or malformed image data`），本轮因此重拍了一遍。
+4. 详情页 dock、来源标签下拉、详情页头信息面板三处根层 overlay 菜单仍未接线。
+5. 行尾控件 UP/DOWN、设置非根子页宽度两条仍在。
+
+## 第五十九轮：详情页的菜单关掉之后，环知道该回哪儿（2026-10-24）
+
+### 原因
+
+第 57 轮给 iOS 风格顶栏的三个根层菜单接了"环回来"的锚点
+（`RootGlassMenuRequest.anchorFocusRequester` + `DisposableEffect` 的 `onDispose`），但当时只改了顶栏。
+详情页自己有四份根层菜单：顶栏的 `⋮`、头部的阅读状态芯片、头部评分芯片、dock 行尾的 `⌄`。
+它们都走 `useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS`，渲染在窗口层的兄弟节点里——
+
+菜单关掉时注意力回到页面，但那个兄弟节点没有焦点可以还，于是环**凭空消失**：
+遥控器再按方向键，是从一个看不见的位置重新开始找目标，等于每开一次菜单就丢一次路。
+
+顺带发现的第二个洞：状态芯片和评分芯片在 TV 上根本没有环。它们是裸 `.clickable`
+（`DetailsChromeButton` 才有 `tvFocusable`），能停住但画不出轮廓；修好"回来"之后，
+环会落在一个看不见的控件上——等于没修。所以这两处一并补上 `tvFocusable(addFocusTarget = false)`。
+
+### 改法
+
+四处锚点，写法与第 57 轮一致——`remember { FocusRequester() }` 挂到锚点控件上
+（`focusRequester` 必须排在 `clickable`/`IconButton` 之前），同一个实例交给 `anchorFocusRequester`：
+
+| 文件 | 锚点 | 菜单 |
+| --- | --- | --- |
+| `DetailsMenuDialogs.kt` | 顶栏 `⋮`（`DetailsChromeButton`） | 翻译 / 阅读记录 / NSFW / 删除 / 编辑 / 找相似 |
+| `DetailsHeaderInfoPanel.kt` | 阅读状态芯片（`Reading`） | 计划 / 在读 / 重读 / 读完 / 搁置 / 放弃 |
+| `DetailsHeaderInfoPanel.kt` | 评分芯片（`★ 0`） | 0–10 分 |
+| `DetailsDock.kt` | dock 行尾 `⌄`（`openAboveAnchor`） | 无痕 / 移出历史 / 分支 |
+
+两个芯片同时改成
+`Modifier.focusRequester(f).clip(999.dp 圆).tvFocusable(shape = 圆, addFocusTarget = false).clickable{…}`：
+`addFocusTarget = false` 是因为紧随其后的 `clickable` 已经自带了焦点目标，
+`tvFocusable` 只借 `onFocusChanged` 观察同一个目标并画轮廓，不会多出一个停点。
+
+`DetailsSourceSheets.kt:164` 与 `DetailsHeaderInfoPanel.kt:942` 虽然也是 `GlassDropdownMenu`，
+但都是 `useRootOverlay = false`（内联 `DropdownMenu`），关掉时焦点由 Compose 自己还给锚点，本轮没动。
+
+### 设备证据（emulator-5554，1920×1080，全程按键，构建见下）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 详情页顶栏 `⋮` 上 CENTER | `bl3.png` | 根层菜单展开（半透明玻璃盖在标题上），环在第一个菜单项 `F [441,140][940,236]` |
+| 按 BACK | `bl4.xml` / `bl4.png` | 环回到 `⋮` `F [848,32][944,128]`，白色圆角框套住三点 |
+| 状态芯片 `Reading` 上 CENTER | `bn2.png` | 菜单展开（计划 / 在读 / 重读 / 读完 / 搁置 / 放弃），环在第一项 |
+| 按 BACK | `bn3.xml` | 焦点回到 `F [563,298][663,394]`（芯片）——但这一版还没补轮廓，**看不见** |
+| 补轮廓后重新进详情页，焦点落到 `Reading` | `bp4.png` | 芯片有蓝色药丸轮廓，遥控器能看见自己在哪 |
+| 同一芯片 CENTER → BACK | `bq2.png` | 菜单关掉后轮廓仍在 `Reading` 上，焦点真的回来了 |
+| 按 LEFT 到评分芯片 | `bq3.png` | `★ 0` 有自己的药丸轮廓，两个芯片是各自独立的停点 |
+| dock 行尾 `⌄` 上 CENTER | `bs4.png` | 菜单向上展开（无痕 / 移出历史 / Default 1 ✓） |
+| 按 BACK | `bs5.xml` / `bs5.png` | 白色轮廓回到 `⌄` `F [1588,54][1684,150]` |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（--offline --no-daemon），装的是 `app-x86_64-debug.apk`。
+
+### 遗留
+
+1. 评分芯片的菜单这轮没走到：本地作品没有绑定追踪服务，`enabled = false` 只会弹一个
+   "需要追踪"的 Toast，菜单打不开。轮廓已经验证（`bq3.png`），锚点用的是与状态芯片完全相同的写法，
+   有追踪账号时需要补一次 BACK 回环。
+2. `ChapterSelectionActionButton`（详情页章节选择栏的图标按钮，`DetailsDock.kt`）是裸 `IconButton`，
+   TV 上同样没有轮廓，而且整条选择栏都是这样——下一步该给这批按钮统一加 `tvFocusable`。
+3. 来源标签下拉（`useRootOverlay = false`）在 TV 上的回环还没实测。
+4. 行尾控件 UP/DOWN、设置非根子页宽度两条仍在。
+
+## 第六十轮：两条选择栏都是图标，遥控器看不见自己在哪（2026-10-24）
+
+### 原因
+
+第五十九轮结尾留下的第二条：`ChapterSelectionActionButton` 是裸 `IconButton`，TV 上能停住但画不出轮廓。
+顺着这条线把详情页**另一条**选择栏也查了一遍——分页缩略图网格底部那条浮动的
+（`PagesScreen.kt:338`，`selectedItemIds` 非空时从底部滑入）。它问题更多：
+
+1. 同样两个裸 `IconButton`，没有轮廓；
+2. 底色是 `MaterialTheme.colorScheme.inverseSurface`——Material3 在手机上用这个给 Snackbar 做反差，
+   在电视的深色玻璃界面里却渲染成一整块**刺眼的白药丸**（`bu2.png`），看着像渲染错误；
+3. 无障碍描述写死成英文 `"Clear"` / `"Save Page"`，没走 `stringResource`。
+
+### 改法
+
+`DetailsDock.kt`：`ChapterSelectionTopBar` 的关闭 `IconButton` 与 `ChapterSelectionActionButton`
+（下载 / 翻译 / 取消翻译 / 删除 / 全选 / ⋮ 共用这一个私有组件，改一处覆盖整条栏）各挂
+`tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)`。
+
+`PagesScreen.kt`：两个 `IconButton` 同样挂环；底色按端切换——`LocalUiPresentationConfig.current.isTv` 时用
+`surfaceContainerHigh` / `onSurface`，其余平台保持 `inverseSurface` / `inverseOnSurface`；
+`contentDescription` 换成 `R.string.clear` 与 `R.string.save_page`。
+
+### 设备证据（emulator-5554，1920×1080，构建见下）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 重启后回到详情页 | `bx2.png` | 环在 `Continue` 上，界面正常 |
+| 长按分页缩略图（触摸） | `by1.png` | 选择栏滑入：**深灰底**（改前同一状态是 `bu2.png` 的纯白药丸） |
+| 缩略图网格上按 DOWN | `cc1.png`，dump `F [1752,888][1848,984]` | 环落到"保存页面"按钮，蓝色圆角框 |
+| 再按 LEFT | `cc2.png`，dump `F [1024,888][1120,984]` | 环落到"清除"（✕），两块按钮是各自独立的停点 |
+| 切到章节列表页签，长按章节行 | `ce1.png` | 顶栏换成选择栏：`✕ 1 … 文A 🗑 ⋮` |
+| 详情页顶栏一路 RIGHT | dump `F [992,50][1096,154]` → `F [1612,54][1696,150]` | 越过 `⋮` 进入 dock 选择栏的 ✕，再 RIGHT 到"翻译" |
+| 停住看轮廓 | `ch1.png` / `ch2.png` / `ch3.png` | 翻译、删除、✕ 三个按钮都画出圆角环 |
+
+改完清掉一个没人用的 `modifier` 参数后重新构建、重装复验：`ci3.png` 选择栏 ✕ 仍带环，dump
+`F [992,50][1096,154]`。
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（--offline --no-daemon），装的是 `app-x86_64-debug.apk`。
+
+### 遗留
+
+1. 选择栏滑入时底部还会弹一条 Material3 Snackbar（"Tip: select two chapters, then long-press a visible
+   chapter between them to fill the range."），在 TV 上同样是**亮白底**（`ce1.png` 底部）——
+   与本轮改的分页选择栏属同一类 `inverseSurface` 问题，下一步该给全应用的 Snackbar 一个电视配色。
+2. 评分芯片的菜单仍要追踪账号才能打开（第五十九轮遗留）。
+3. 来源标签下拉（`useRootOverlay = false`）在 TV 上的回环还没实测。
+4. 行尾控件 UP/DOWN、设置非根子页宽度、输入框内清除（×）只能触摸，三条仍在。
+
+## 第六十一轮：两份一模一样的选择栏，收成一份（2026-10-24）
+
+### 原因
+
+第六十轮把分页选择栏修好之后，顺着同一段代码往下看：`BookmarksScreen.kt` 里的书签选择栏
+（详情页书签页签，长按书签进入）是**逐字复制**的同一份 `Surface + Row + 两个裸 IconButton`。
+它在电视上同时中了两个毛病——`inverseSurface` 的白药丸底色，以及按钮没有轮廓。
+
+两份代码完全同形，说明这不该靠"每个调用点各改一遍"来维持：下一份复制品还会退回同样的毛病。
+
+### 改法
+
+新建 `core/ui/compose/SelectionActionBar.kt`，把这块药丸收成一个组件：
+
+| 组件 | 作用 |
+| --- | --- |
+| `SelectionActionBar(selectedCount, onClearSelection, modifier, actions)` | 底板（TV 用 `surfaceContainerHigh`/`onSurface`，其它平台保持 `inverseSurface`/`inverseOnSurface`）、`✕ + 计数`、右侧动作槽 |
+| `SelectionBarIconButton(onClick, modifier, content)` | `IconButton` + `tvFocusable(RoundedCornerShape(12.dp), addFocusTarget = false)` |
+
+清除按钮的无障碍描述改用 `R.string.clear`，书签栏的删除也改回 `R.string.delete`（原来是写死的英文
+`"Clear"` / `"Delete"`，分页栏上一轮已经改过）。
+
+两个调用点各剩十几行：`PagesScreen.kt` 用 `SelectionActionBar` 包住"保存页面"，
+`BookmarksScreen.kt` 包住"删除"，滑入动画、对齐与 `windowInsetsPadding` 仍留在各自页面里。
+
+### 设备证据（emulator-5554，1920×1080）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 重启回到详情页，切书签页签 | `cj2.png` / `cj3.png` | 书签页签里有一条 `P.1` 书签卡片，顶栏换成书签工具栏 |
+| 长按书签卡片 | `cj4.png` | 底部弹出选择栏：**深灰底**（改前是同款白药丸），`✕ 1 … 🗑` |
+| 顶栏 RIGHT ×6 → DOWN → DOWN | `cj8.png`，dump `F [1024,888][1120,984]` | 环先落在书签卡片 `F [1008,264][1283,657]`，再下到选择栏的 ✕，蓝色圆角框 |
+| 再按 RIGHT | `cj9.png`，dump `F [1752,888][1848,984]` | 环落到右侧删除按钮，同样是蓝色圆角框 |
+| 切回缩略图页签，长按第 3 页 | `ck1.png` / `ck2.png`，dump `F [1024,888][1120,984]` | 抽成共享组件后分页栏**没有回退**：深灰底、✕ 带环、"保存页面"仍在右侧 |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（--offline --no-daemon），装的是 `app-x86_64-debug.apk`。
+
+### 一个构建环境上的坑
+
+这台机器同时开着桌面端会话，两个 Gradle 构建一起抢内存时，`:app:dexBuilderDebug` 阶段的
+daemon 会**无声消失**——日志里只有 `Gradle build daemon disappeared unexpectedly`，
+没有任何 `e:` 编译错误，很容易被误读成代码问题。改用
+`--max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3072M"` 后一次通过。
+
+### 遗留
+
+1. Material3 Snackbar（含"选择两章后长按中间章节"那条提示）在 TV 上仍是亮白底，`inverseSurface`
+   是它的默认色，需要给宿主一个电视配色。
+2. 评分芯片的菜单仍需追踪账号（第五十九轮遗留）。
+3. 来源标签下拉（`useRootOverlay = false`）的 TV 回环还没实测。
+4. 行尾控件 UP/DOWN、设置非根子页宽度、输入框内清除（×）只能触摸，三条仍在。
+
+## 第六十二轮：Snackbar 的白板（2026-10-24）
+
+### 原因
+
+第六十轮结尾留下的第一条：选择栏滑入时底部弹的提示是一条**亮白全宽横条**。
+
+Material3 的 `Snackbar` 默认用 `inverseSurface`——在手机上那是"与背景反色"的正确做法，在电视的深色玻璃
+底上就是一块发光的白板。应用里有 17 个 Compose 宿主都直接调 `SnackbarHost`，等于每处都继承了这个默认值。
+
+### 改法
+
+新建 `core/ui/compose/KototoroSnackbarHost.kt`：
+
+```kotlin
+@Composable
+fun KototoroSnackbarHost(hostState: SnackbarHostState, modifier: Modifier = Modifier)
+```
+
+非电视平台原样交给 `Snackbar(snackbarData = data)`；电视上用 `surfaceContainerHigh` 底、`onSurface` 文字、
+`primary` 动作色和 16dp 圆角，与选择栏药丸同一套色。
+
+把 17 处宿主换成它（`BaseComposeActivity`、`DetailsScreen` 两处、`NovelReaderActivity`、
+`VideoPlayerActivity`、`ScrobblingInfoSheetContent`、`SourcesCatalogScreen`、`SpaceSwitcherDelegate`
+和九个设置子页），顺带删掉各处已经用不上的 `androidx.compose.material3.SnackbarHost` import。
+
+### 设备证据（emulator-5554，1920×1080）
+
+| 步骤 | 截图 | 观察 |
+| --- | --- | --- |
+| 详情页 → 章节页签 → 长按章节行 | `cl1.png` → `cl2.png` | 选择栏换成顶栏（`✕ 1`、翻译、删除、`⋮`），底部弹出提示条 |
+
+**这条提示仍然是白底全宽**（`cl2.png` 底部）。顺着它查下去：它不是 Compose 的 Snackbar，而是
+`ChaptersScreenRoot.kt:163` 的
+
+```kotlin
+Snackbar.make(viewForSnackbar, R.string.chapter_range_selection_hint, Snackbar.LENGTH_LONG).show()
+```
+
+即 framework 的 View Snackbar，挂在 `LocalView.current` 上，从来不走 Compose 宿主——所以本轮换宿主对它无效。
+这也解释了它的形状：全宽、直角、没有任何圆角，和 Compose 的 Snackbar 不是同一种控件。
+
+结论：Compose 侧这轮只到「编译通过」这一步（`:app:compileDebugKotlin` 与 `:app:assembleDebug` 均
+BUILD SUCCESSFUL），**还没在设备上看到一条真正由 `KototoroSnackbarHost` 画出来的深色 snackbar**；
+这条提示要等下一轮把章节/缩略图两个 pane 根换成 Compose 宿主才会变色。
+
+### 遗留
+
+1. `Snackbar.make(view, …)` 一共 21 处（`ChaptersScreenRoot`、`PagesScreenRoot`、`DetailsActionHandler`、
+   `ReversibleActionObserver`、`SnackbarErrorObserver`、`DownloadStartedObserver`、`MainShellScene`、
+   `SettingsActivity`、浏览器/Image/授权页等）。它们在同一块电视屏幕上仍然是白条。正路是把
+   `ChaptersPagesTabsContent` 的 `viewForSnackbar: View` 参数换成 `SnackbarHostState`（它已经能拿到
+   `DetailsScreen` 的宿主），先改两个 pane 根，再逐组迁移。
+2. Compose 宿主的深色配色还缺一张设备截图，需要在迁移后补拍。
+3. 评分芯片的菜单仍需追踪账号（第五十九轮遗留）。
+4. 来源标签下拉（`useRootOverlay = false`）的 TV 回环还没实测。
+5. 行尾控件 UP/DOWN、设置非根子页宽度、输入框内清除（×）只能触摸，三条仍在。
+
+## 第六十三轮：View Snackbar 一次收进电视配色（2026-10-24）
+
+第六十二轮遗留的第一条：21 处 `Snackbar.make(view, …)` 在电视上依旧是贴边全宽的白条。
+
+### 方案取舍
+
+第六十二轮记的正路是把章节/缩略图两个 pane 根的 `viewForSnackbar: View` 换成 `SnackbarHostState`。
+真做下去要动 21 个调用点，其中大半根本不在 Compose 树里——`SettingsActivity`、浏览器/授权页、
+`SnackbarErrorObserver`、`ReversibleActionObserver`、`DownloadStartedObserver` 这些只有 `View`，
+拿不到 Compose 宿主；硬迁等于给每个入口再造一个不可见的宿主容器。
+
+改为在 View 侧统一染色：**控件还是 Material 的，配色改成电视那一套**，一处实现、21 处调用点只换成新函数。
+
+### 改法
+
+新增 `core/util/ext/Snackbar.kt`：
+
+```kotlin
+fun View.makeSnackbar(text: CharSequence, duration: Int = Snackbar.LENGTH_SHORT): Snackbar
+fun View.makeSnackbar(@StringRes resId: Int, duration: Int = Snackbar.LENGTH_SHORT): Snackbar
+```
+
+- 电视判定走非 Compose 的 `resolveUiPresentationConfig(context, AppSettings(applicationContext)).isTv`，
+  Activity、observer 和 Compose 里取到的 `LocalView` 都能用；非电视原样返回 `Snackbar.make(...)`，手机分支零变化。
+- 电视上套 `?attr/colorSurfaceContainerHigh` 底、`?attr/colorOnSurface` 文字、`?attr/colorPrimary` 动作色，
+  与第六十二轮的 `KototoroSnackbarHost` 是同一套色。
+- `SnackbarLayout` 的底换成 16dp 圆角的 `MaterialShapeDrawable`，再把四边外距设成 24dp：
+  于是它从贴底全宽横条变成浮起的深色圆角面板，形状也和 Compose 那条一致。
+- 21 处调用点机械替换为 `receiver.makeSnackbar(...)`（脚本扫全部 `Snackbar\.make\(`，再手工收行宽），
+  涉及 `ChaptersScreenRoot`、`PagesScreenRoot`、`DetailsActionHandler`、`DetailsReaderLauncher`、
+  `DownloadDialog`、`DownloadStartedObserver`、`ExitCallback`、`ImageActivity`、`ImageMenuProvider`、
+  `MainShellScene`、`ReversibleActionObserver`、`SnackbarErrorObserver`、`SettingsActivity`、
+  `BrowserActivity`、`CloudFlareActivity`、`SourceAuthActivity`。
+
+### 一个 Material 的坑（值得记下来）
+
+第一版只换 background drawable，设备上却**又变回亮白**：`SnackbarLayout` 自身带着 `backgroundTintList`，
+`View.setBackground()` 之后框架仍会用那个 tint（SRC_IN）把整块 drawable 重染回默认色。
+`cm2.png` 就是现场——圆角、外距都对，底却是白的、文字发灰。
+
+所以颜色必须落到 `setBackgroundTint(...)` 上，形状才是可以独立做的那一步；`applyTvPalette()` 里两条都留着。
+
+### 设备证据（emulator-5554，1920×1080）
+
+触发路径：详情页 → 章节页签 → 长按章节行 → 出现范围选择提示。
+
+| 截图 | 观察 |
+| --- | --- |
+| `cm1.png` | 只换色的版本：底部一条深色横条，仍然全宽、贴底、直角 |
+| `cm2.png` | 加上圆角外距的版本：形状对了，但底色被 tint 打回亮白（见上面的坑） |
+| `cm3.png` | 最终：深色圆角面板，底色 `rgb(41,42,45)`、文字 `rgb(199,198,202)`，纵向 938→1031、底部留 24dp |
+
+像素取样（`cm3.png`）：面板中心 `(960,1000)` = `(41,42,45)`，文字像素 = `(199,198,202)`，
+面板右缘停在 1872 附近，与 24dp 外距一致。
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（`--offline --no-daemon --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3072M"`），
+装的是 `app-x86_64-debug.apk`。
+
+### 遗留
+
+1. `KototoroSnackbarHost` 那条路仍缺一张真实设备截图：电视上现存的提示全走 View 这条路，
+   要拍到 Compose 宿主的深色配色，得找一处真正由 Compose 弹提示的场景（如书架批量操作）。
+2. 评分芯片的菜单仍需追踪账号（第五十九轮遗留）。
+3. 来源标签下拉（`useRootOverlay = false`）的 TV 回环还没实测。
+4. 行尾控件 UP/DOWN、设置非根子页宽度、输入框内清除（×）只能触摸，三条仍在。
+
+## 第六十四轮：遥控器进不去的滑杆（2026-10-24）
+
+顺着设置子页往下翻时撞见的一条：Lists 页的 `Grid size` 滑杆，`uiautomator dump` 里明明是
+`F [758,324][1884,364] SeekBar`（focused），截图上的那一行却**没有任何焦点提示**；按左右键也不动。
+
+### 原因
+
+`KototoroSlider` 只是给 M3 `Slider` 套了一层外观，没有电视接线。M3 的 `Slider` 自己吃掉方向键、
+却只对拖拽有反应，所以在电视上它是一个**单向死胡同**：焦点进去了，看不出进去了；左右键没反应；
+只有上/下还能逃出来。
+
+`core-ui` 里其实早就有对症的 `Modifier.tvSliderDpad`（`core/ui/adaptive/TvFocus.kt:186`）：
+`tvFocusable(addFocusTarget = false)` 画环 + 预览阶段拦左右键，`tvSliderStepValue` 负责步长
+（有 `steps` 的按档走，连续的走 1/20 跨度，结果总会吸附回格点，不会累积浮点漂移），手机上是 no-op。
+问题是它必须由调用点自己贴上去。
+
+全部 6 个 `KototoroSlider` 调用点里，`DisplayOptionsSheet`、`ComposeReaderActivityScaffold`、
+`VideoSubtitleSettingsDialog`、`VideoSuperResolutionDialog`、`ReaderPanelComponents`（两处）、
+`ReaderColorCorrectionControls` 都贴了；**漏的是 5 处**：
+
+- `SettingsSliderPreference`——所有设置里的滑杆（网格尺寸、切页动画强度、控件不透明度……）；
+- `DetailsDock.LabeledGridSlider`——详情页面板的网格尺寸 / 封面比例；
+- `KototoroAppTopChrome`——订阅页"可见条目数"；
+- `ReaderActionsContent`——阅读器底栏的页码滑杆；
+- `FilterSheetRoute.YearSection`——筛选里的年份。
+
+`VideoPlayerControls` 那个滑杆不算漏：它由外层容器统一在电视上 `focusable` 并自己画 `border`，
+滑杆本身写了 `canFocus = !isTvPresentation`，所以没动它。
+
+### 改法
+
+5 处各在滑杆自己的 modifier 上补一次 `Modifier.tvSliderDpad(...)`（手机 no-op），三处细节值得记：
+
+- `SettingsSliderPreference` 把原来的拖拽 lambda 提成局部 `applyValue`，拖拽和左右键共用同一份提交
+  逻辑（都写 `sliderValue` 并按 `committedValue` 去重后回调 `onValueChange`）；
+- `ReaderActionsContent` 把 `displayValue` / `applyDisplayValue` 提到 `Box` 之前算一次。那根滑杆可能是
+  反向的（`sliderReversed`），环和滑杆必须看同一个映射值，否则左右键的语义会反；
+- `FilterSheetRoute.YearSection` 的键步进**直接落库**（`onSetYear`）：这根滑杆原本只在
+  `onValueChangeFinished` 里提交，而按键永远不会触发那个回调，不补就会"值动了、筛选没变"。
+
+### 设备证据（emulator-5554，1920×1080）
+
+路径：主界面 `⋮`(1845,56) → Settings(1650,400) → Appearance(250,240) → Lists(1200,830)。
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 改前：打开 Lists | `cr7.xml` 里 `F [758,324][1884,364] SeekBar`，截图 `cr2.png` / `cr4.png` | 滑杆确实拿到焦点，屏幕上却什么都没有 |
+| 改后：同一路径 | `cs1.xml` 同一节点仍是 `F [758,324][1884,364]` | 焦点没变，只是终于画出来了 |
+| 改后截图 | `cs1-slider.png` | 轨道外出现蓝色圆角环（10dp 圆角、2dp 描边） |
+| LEFT ×3 | `cs2-crop.png` | `100%` → `90%`，滑块随之移动，环保持 |
+| DOWN | `cs3-crop.png` | 环移到下一根滑杆（"List slide animation intensity"），同时只有一根带环 |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（`--offline --no-daemon --max-workers=2
+"-Dorg.gradle.jvmargs=-Xmx3072M"`），装的是 `app-x86_64-debug.apk`。
+
+### 顺手排除的一条（别再来查）
+
+Lists 子页打开时总是停在"List layout"那一节、第一行被顶栏切掉一半。查下来不是滚动状态串页
+（`AppearanceSettingsScreen` 那个 `rememberSaveable` 的 `LazyListState` 切换页面后其实是归零的：
+Appearance 每次都从"Theme and color"开始），而是 **Compose 把上一轮的焦点还原到列表里**——
+dump 里一直是那根 `SeekBar` 带 `focused`，列表为了露出它就滚了过去。电视上"回到子页还在原处"
+本身是好行为，所以没改；真正的问题只是那根滑杆看不见，就是本轮修的这个。
+
+### 遗留
+
+1. 另外 4 处（详情面板、订阅条目数、阅读器页码、年份筛选）只做到编译通过：这台模拟器没有可用图源、
+   也没有视频，只有设置这一条路能在设备上走通。
+2. `KototoroSnackbarHost` 那条 Compose 路仍缺一张真实设备截图（第六十三轮遗留）。
+3. 评分芯片的菜单仍需追踪账号（第五十九轮遗留）。
+4. 来源标签下拉（`useRootOverlay = false`）的 TV 回环还没实测。
+5. 行尾控件 UP/DOWN、设置非根子页宽度、输入框内清除（×）只能触摸，三条仍在。
+6. 来源页选择栏的 6 个 `IconButton` 仍是裸的不带环（`ExploreSourcesScreen`），且 `"$count selected"`
+   与 `"Shortcut"` 是硬编码英文；这台模拟器图源为 0，选中态走不到，留待有图源时再改。
+
+## 第六十五轮：贴在屏幕右缘的那条"死滑片"（2026-10-24）
+
+### 现象
+
+从主界面（Home / History / 详情页）到**阅读器正文之上**，屏幕右缘总有一块 32dp×64dp 的深色玻璃圆角片，
+被屏幕边缘切掉一半，上面只有一个内容类型图标。dump 里它是 `Current: Manga. Switch space`
+`[1856,144][1920,272]`，父节点 `clickable="true"` 但 `enabled="false"`。
+
+它是 `SpaceSwitcherDelegate` 的 **sidekick handle**（`SpaceSidekickHandle`，`SpaceSwitcher.kt`）：
+手机上是一条可横向拖出的抽屉把手，位置固定 `size(32dp,64dp)` + `offset(x = 10dp)`，本来就有一部分在屏幕外。
+电视上上一轮之前它被写成 `interactive = state.switcherEnabled && !isTv`——**点不动、拖不动、也不进焦点链**，
+却照样画。于是在电视上它只剩"一条压住画面的死装饰"，最刺眼的一处是阅读器：翻页控件一出来，它就盖在页面上。
+
+### 改法
+
+`SpaceSidekickHandle` 在电视上直接不画（`if (LocalUiPresentationConfig.current.isTv) return`），
+并把因此失效的 `isTv` / `interactive` 两个局部量和 `.tvFocusable(...)` 一并删掉；手机分支保持原样
+（`clickable(enabled = state.switcherEnabled)`，和改前的 `enabled = interactive` 等价）。
+电视的换空间入口仍是左侧导航栏顶部那颗空间按钮，不受影响。
+
+### 设备证据（emulator-5554，1920×1080）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 改前：History 右缘 | `ct2-sw.png` | 深色圆角片被屏幕右缘切掉一半，只剩图标 |
+| 改前：阅读器 | `ct8-right.png`、`ct8.xml` | 翻页控件出来后它压在正文右下角上 |
+| 改后：详情页右缘 | `cu1-right.png` | 整块干净，章节面板到边缘就是卡片圆角 |
+| 改后：阅读器 | `cu2-right.png`、`cu2.xml` | 右缘只剩阅读器自己的 `⋮`，dump 里搜不到 `Switch space` |
+| 电视换空间仍可用 | `cu8-rail.png` → `cu9-half.png` | 导航栏空间按钮带蓝色环，CENTER 打开 "Space Workbench" 面板 |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL，装的是 `app-x86_64-debug.apk`。
+（本轮第一次构建失败于 `:reader-core:jvmJar — Could not create ZIP`：另一个会话的 Gradle 正占用同一个 jar，
+ 等它跑完重试即通过，与本轮改动无关。）
+
+### 顺带实测：阅读器页码滑杆
+
+趁走到阅读器，把底栏那根页码滑杆也走了：`TV Audit Strip`（1 章 4 页）在电视上以**纵向全宽单列**连续模式打开
+（前几十轮修的连续模式形态仍然成立），CENTER 出控件后 ↓ 落到滑杆、环出现（`cu3-bar.png`），
+RIGHT ×2 从 `PAGE 1` 走到 `PAGE 3`（`cu4-half.png`）。这是第六十四轮"5 处滑杆"里唯一能上设备验证的一处，
+顺带确认它没被本轮改动影响。
+
+### 顺手排除的两条（别再来查）
+
+1. History 顶上那排筛选项在 1920 宽下排了 10 个芯片（`On device` … `Video source domain Local storage`），
+   最后两枚超出可视宽。用遥控一路 RIGHT 走过去，`LazyRow` 会自动把它们滚进视野，最后一枚拿到环且完整可见
+   （`ct5-chips.png`），不是缺陷。
+2. History 顶部"Statistics"卡 + 筛选芯片行占掉上半屏，列表在 1080 高下只剩一行多一点。
+   这是"统计卡优先"的既有设计取舍，不属于本次连续模式/焦点范围，未改。
+
+### 遗留
+
+1. `ReaderActionsContent`（`reader/ui/ReaderActionsContent.kt`）**只被它自己的 `@Preview` 引用**：
+   `grep 'ReaderActionsContent\('` 只命中第 83 行定义与第 328 行预览，没有生产调用点。
+   也就是说第六十四轮给它补的 `tvSliderDpad` 实际改的是死代码；真正阅读器底栏在
+   `ComposeReaderActivityScaffold`（那根滑杆早就有环和键步进，本轮已实测）。后续要么删掉这个组件，
+   要么在文档里标清楚，避免下一轮又去"修"它。
+2. 阅读器在电视上现在**没有任何换空间入口**（唯一的那条把手在电视上不画，改前也是点不动的）。
+   真要在阅读器里换空间，应该做成 `⋮` 选项面板里的一项，本轮未动。
+
+## 第六十六轮：详情页按 BACK 回到快选层，遥控焦点掉进面板背后的页码滑杆（2026-10-24）
+
+### 现象
+
+阅读器 `⋮` 选项面板打开后，↓ 走到标签行、CENTER 进 `Display` 详情页，页内再往下走到
+`Brightness` 滑杆（dump 焦点 `[722,384][1197,480]`），然后按 BACK 收起详情页：
+
+1. 面板滑回 peek，快选层（模式行 + 九宫格动作 + 底部标签行）重新可见；
+2. 但 dump 里**一个 `focused="true"` 节点都没有**——环凭空消失；
+3. 紧接着的一次 ↓ 把环挂到了 `SeekBar [236,1065][1684,1080]` 上，那是**面板背后**阅读器自己的
+   页码滑杆，只在屏幕最下沿露出一条 15px 的蓝色弧线（`cw8-bot.png`、`cw9-bot.png`）。
+   用户看到的是"面板回来了，但第一下按键没反应"，第二下开始遥控在面板背后翻页。
+
+### 原因
+
+`ReaderOptionsPanelHost` 里本来就有"收起后把环带回去"的意图（这个 `LaunchedEffect` 的注释写着
+"left in the detail page it would sit on a hidden control"），但两道闸门一起把它废掉了：
+
+```kotlin
+if (isTv && wasExpanded && !scope.isExpandedPastPeek && !sheetHasFocus) {
+    withFrameNanos { }
+    requestFocus(focusTarget)
+}
+```
+
+`sheetHasFocus` 是挂在面板 Column 上的 `onFocusChanged { it.hasFocus }`。临时打点实测（`System.out`）：
+
+```
+TVSC collapse-effect expanded=false was=true tv=true hasFocus=true
+TVSC settled=10 hasFocus=true        // 等十帧之后仍然是 true
+```
+
+也就是说：详情页那张滑杆被移出组合后，**Compose 仍然把面板 Column 报成 hasFocus=true**，
+而真正的焦点树上已经没有任何节点（dump 证实）。于是 `!sheetHasFocus` 这道闸门让请求**一次都没发出去**——
+这条恢复逻辑从写下来那天起就没真正生效过，不是本轮引入的回归。
+
+### 改法
+
+收起分支不再看那个不可信的标志，直接请求，且给足重试帧数（和打开面板时的处理对称）：
+
+```kotlin
+val collapsing = wasExpanded && !scope.isExpandedPastPeek
+wasExpanded = scope.isExpandedPastPeek
+if (!isTv || !collapsing) return@LaunchedEffect
+repeat(COLLAPSE_FOCUS_FRAMES) {   // 3
+    withFrameNanos { }
+    requestFocus(focusTarget)     // 面板首个动作："Chapters and pages"
+}
+```
+
+`wasExpanded` 的写回提到 `return` 之前（否则提前返回会把状态吞掉，下一次收起就不触发了）；
+打开面板那条 `repeat(10)` 里的字面量顺手提成 `FOCUS_RETRY_FRAMES`，两个常量放在文件头部。
+
+### 设备证据（emulator-5554，1920×1080）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| `⋮` 打开面板 | `cy2.xml` | 环在快选层第一项 `Chapters and pages` `[232,542][414,730]` |
+| ↓×3 → RIGHT → CENTER | `cy3.xml` | 切到 `Display` 详情页，环在 `Display` 标签 `[850,102][1012,198]` |
+| 页内 ↓×2 | `cz1.xml` | 环进详情页，落在 `[722,384][1197,480]` |
+| **BACK（改后）** | `cz2.xml`、`cz2-half.png` | 面板回到 peek，**环回到 `Chapters and pages`** |
+| BACK 后 ↓×2 | `cz3.xml` | 环走到 `Layout` 标签 `[691,956][846,1052]`，仍在面板内部；改前同一串按键落到 `[236,1065][1684,1080]` 的页码滑杆 |
+| 再 BACK | `cz4.xml` | 面板关闭，环回到阅读器顶栏标题 `[784,12][1136,108]`，不在任何隐藏控件上 |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（本轮第一次仍撞上 `:reader-core:jvmJar — Could not create ZIP`，
+等并行会话的 Gradle 结束重试即过），装的是 `app-x86_64-debug.apk`。
+
+### 顺带实测：Display 详情页本身是好的
+
+`Display` 页（`Background` 单选网格 + `Invert colors`/`Grayscale`/`Brightness`/`Contrast`/
+`Yellowish background` + `Save / Globally / This manga` + 原图/效果预览）在电视上焦点链完整：
+亮度滑杆带整条圆角环（`cw4-focus.png`、`cw5-focus.png`），←×3 让 `Brightness 100% → 70%` 并即时改变
+预览（`cw4-focus.png` 前后对比），说明第六十四轮给 `KototoroSlider` 接的 `tvSliderDpad` 在详情页里也生效。
+
+### 遗留
+
+1. 面板收起后底部标签行**仍高亮 `Display`**，可内容已经变回快选层（`cz2-half.png`）。
+   手机端 BACK 收起面板同样不重置标签选中态，所以不是电视独有的行为；但电视用户没有"点一下标签"
+   这种纠正手段，是否需要"收起即取消标签高亮"留待决定，本轮未动。
+2. 第六十五轮的两条遗留（`ReaderActionsContent` 是死代码、阅读器缺换空间入口）不变。
+
+## 第六十七轮：`Crop & note` 在电视上到不了比例芯片——这个页面根本不知道自己是电视（2026-10-25）
+
+快选层剩下五格这一轮补测，第一格 `Crop & note` 就撞出一个整屏级的断点。手机上的流程是
+"拖裁剪框 → 打字 → 点比例"；遥控器上：
+
+1. 顶栏只有 `Cancel` / `Save note` 两个停靠点，`DOWN` 直接跳过裁剪区掉进底部输入框；
+2. 输入框是 Compose 文本框，方向键被它拿去移动光标，**进去就出不来**——`BACK` 只是收起软键盘，
+   再按 `DOWN` 环仍然在这一条输入框上（`db5.xml`、`db6.xml`）；
+3. 于是四个比例芯片永远到不了，而裁剪框本身没有可聚焦节点，遥控器上就**没有任何办法改变裁剪范围**；
+4. 软键盘弹出后还正好盖住芯片行（`db4-half.png`），芯片本来也没有焦点环——它们是原样 `FilterChip`。
+
+### 原因：`setContent` 而不是 `setComposeContent`
+
+第一版只做了两件事（给输入框加 `tvTextInputFocusEscape()`、把芯片换成电视药丸），装到模拟器上
+**一点变化都没有**。顺着"helper 为什么没反应"查下去，答案在页面入口：
+
+```kotlin
+// PageCropActivity（改前）
+setContent { KototoroTheme { Column(...) } }
+```
+
+全仓 46 个 Compose Activity 都走 `BaseComposeActivity.setComposeContent { }`，只有这里自己调
+`setContent`。而 `LocalUiPresentationConfig` 正是在 `setComposeContent` 里 provide 的
+（`BaseComposeActivity` 第 105 行）。也就是说：**这个 Activity 的组合里 `isTv` 永远是默认值**，
+所有电视分支都在静默走手机路径——`tvTextInputFocusEscape()` 变成 no-op，芯片也不会换样式。
+不是某个 helper 坏了，而是这一屏从来没有进入过电视模式。
+
+### 改法
+
+- `PageCropActivity` 改用 `setComposeContent { }`（顺带去掉里面多余的 `KototoroTheme` 包裹，
+  于是也拿到应用统一的圆角、共享 Snackbar 与展示模式退出按钮）。
+- `core-ui` 新增共享 `TvFilterChip`（`core/ui/adaptive/TvFilterChip.kt`）：手机上原样返回
+  `FilterChip`；电视上换成手绘药丸——`clip` + `background` + `tvFocusable(shape, addFocusTarget = false)`
+  + `selectable`，最小高度 48dp，选中态走 `primaryContainer`/`onPrimaryContainer`，
+  未选中走 `surfaceVariant`/`onSurfaceVariant`，环用主题 `primary`。
+  与第三十八轮视频面板里那个私有 `SubtitleChip` 同一套做法，区别是这里用主题色而不是播放器配色。
+- 输入框挂 `Modifier.tvTextInputFocusEscape()`，收起键盘后 ↓ 可以走到芯片行。
+
+### 设备证据（emulator-5554，1920×1080）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| 改前：顶栏 ↓ | `db2.xml`、`db3.xml` | 环从 `Cancel [16,0][156,96]` 直接落到输入框 `[24,828][1896,940]`，可聚焦节点只有 `Cancel`/`Save note`/输入框/四个芯片 |
+| 改前：↓ → BACK → ↓ | `db5.xml`、`db6.xml` | 两次 dump 都是 `EditText`：键盘收起后 `DOWN` 仍留在输入框，芯片行不可达 |
+| 改后：顶栏 ↓ | `dc2.xml` | 仍先进输入框（预期） |
+| 改后：BACK → ↓ | `dd1.xml`、`dd1-bottom.png` | 环落到 `1:1` 芯片 `[858,968][973,1064]`，芯片是 48dp 高的电视药丸，带 2dp 主色环；`Original` 选中为主色底 |
+| 改后：CENTER 在 `1:1` | `dd2-half.png` | 裁剪框从竖长（`db2-half.png` 中 `x 740..1180`、`y 124..780`）变成方形（`x 632..1290`、`y 96..780`），比例预设确实驱动 `OverlayView` |
+| 改后：↑ | `dd3.xml` | 环回到输入框 `[24,488][1896,600]`——键盘弹出时窗口 `adjustResize`，整条输入框被顶到键盘上方（`dd5-half.png`） |
+| 改后：BACK → ↑ | `dd6.xml` | 环落到 `Save note [1724,0][1904,96]` |
+| 改后：CENTER 在 `Save note` | `dd7-half.png` | 弹出 `Panel note saved`，回到阅读器原页，未崩溃 |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（只有该文件既有的三条 `getParcelableExtra`/`setFreestyleCropEnabled`
+废弃警告），装的是 `app-x86_64-debug.apk`。
+
+### 遗留
+
+1. **裁剪框仍然只能手指拖**：`UCropView` 里没有可聚焦节点，遥控器现在能做的是选比例
+   （`Original`/`1:1`/`4:3`/`16:9`，框会居中重排）。要支持遥控微调，需要给 `OverlayView` 外面包一层
+   "边框与角点可聚焦 + 方向键位移"的交互，属于新功能而不是接线，本轮未动。
+2. 键盘弹出时窗口 `adjustResize` 会把裁剪区压扁、把顶栏 `Cancel`/`Save note` 顶出屏幕（`dd5-half.png`）。
+   只在打字时出现，收起键盘即恢复；如果后面嫌丑，可以给这一屏单独设 `adjustPan`。
+3. 这里给 `maxLines = 2` 的短笔记用了 `tvTextInputFocusEscape()`，而该 helper 的注释写的是"只给单行字段"。
+   电视上放弃两行内的上下移动键、换来能走到芯片行，是刻意的取舍，记在这里避免下次被当成误用改回去。
+4. 同一批五格里还剩 `Automatic scroll`、`Rotate screen`、`Download`、`Open in browser` 没实测。
+
+## 第六十八轮：快选层剩下四格（Automatic scroll / Rotate / Download / Open in browser）（2026-10-25）
+
+四格一次走完，结论分三类：一格是真的能用（但带一个空停点，已修）、两格在电视上本来就没有意义、
+一格把用户送进了一个必然报错的窗口。
+
+### 现象
+
+1. `Automatic scroll` 打开底部面板：`×`、`Auto scroll`、`Pause`、速度滑杆、`Show floating button`、
+   `Pause when controls are visible` 六个停靠点都在，焦点下移时面板自己滚动，滑杆能用 ←/→ 步进
+   （`x3.1` → `x0.1`）。**但是**第一个开关按 ↑ 会停到面板顶部的拖拽把手 `[912,320][1008][416]` 上——
+   那是 Material3 `ModalBottomSheet` 自带的把手，遥控器按 CENTER 什么都不会发生。
+2. `Rotate screen` 按下去只弹一条 `Screen rotation has been unlocked`（`dv1-crop.png`），
+   画面一点没变——它切的是"屏幕方向锁"，电视没有可转的屏幕。
+3. `Download` 按下去面板收起、什么都没有发生：本地书没有可下载的章节。
+4. `Open in browser` 直接打开了内置浏览器，然后是一整页 Chrome 报错
+   `Webpage not available … file:///storage/emulated/0/Android/data/org.skepsun.kototoro.debug/files/manga/TV%20Audit%20Manga%2011.cbz`
+   `net::ERR_ACCESS_DENIED`（`dx2-half.png`），而且这一屏只有一个可聚焦节点（整个 WebView），
+   顶栏的关闭按钮遥控器根本够不到。
+
+### 原因
+
+- 空停点：`ModalBottomSheet` 的默认 `dragHandle = { BottomSheetDefaults.DragHandle() }`。
+  Material3 给那个把手挂了 `draggable` + 合并语义，于是它进了 Compose 的焦点树；手机上没人用方向键走过去，
+  所以在电视之外从来没人发现。同一份代码在阅读器自己的选项面板里用的是 `ReaderPanelDragHandle`
+  （纯 `pointerInput`），那份就不会被聚焦——`cy2.xml` 里同位置只有一个 `focusable=false` 的 8px 药丸，
+  对照 `do1.xml` 里那把手的 96×96 可聚焦节点，差别一眼可见。
+- 报错页：`openCurrentChapterInBrowser()` 在拿不到 http 地址时回落到 `router.openBrowser(manga)`，
+  而本地作品的 `manga.url` 正是 `file://…cbz`，内置浏览器（Chrome/WebView）不允许页面导航到别的
+  `file://` 路径，于是必然 `ERR_ACCESS_DENIED`。
+
+### 改法
+
+1. `ComposeReaderActivityScaffold` 的自动滚动面板：电视上把把手换成 12dp 空白，手机保持 Material 默认：
+
+   ```kotlin
+   dragHandle = if (isTvPresentation) {
+       { Box(modifier = Modifier.fillMaxWidth().height(12.dp)) }
+   } else {
+       { BottomSheetDefaults.DragHandle() }
+   },
+   ```
+
+2. `openCurrentChapterInBrowser()` 补齐"根本没有网页"这一支：章节与作品都不是 http 地址时
+   不再打开浏览器，改为提示 `open_in_browser_unavailable`（新增英文串，翻译仍走 Weblate）。
+   手机端同样受益——本地书在手机上按这一格原本也会掉进同一个报错页。
+
+### 设备证据（emulator-5554，1920×1080）
+
+| 步骤 | 截图 / dump | 观察 |
+| --- | --- | --- |
+| `⋮` → RIGHT×4 → CENTER | `df1-half.png`、`df3.xml` | 自动滚动面板打开，焦点在 `Auto scroll` 开关；可聚焦节点为把手 / `×` / 两个开关 / `SeekBar` |
+| ↓×4 → ↓×3 | `dh4.xml`、`dj3.xml` | 焦点链走完四个开关与滑杆，面板随焦点上滚，最后一行 `Pause when controls are visible` 完整可见 |
+| 滑杆 ←×6 | `di1-crop.png` | `x3.1` → `x0.1`，滑杆带圆角环（环的下沿被屏幕底边切掉，见遗留） |
+| 开 `Auto scroll`（速度 `x4.1`、`Pause when controls are visible` 关） | `dr3.png` / `dr4.png` | 相隔 6 秒两张截图不同，背后页面从 `CH 1 / PAGE 1` 走到 `CH 1 / PAGE 4`——电视上真的在自动滚 |
+| 打开 `Pause` 开关 | `ds2.png` / `ds3.png` | 两张完全一致（同一 hash），滚动停住 |
+| 改后：重开面板 | `dt1.xml`、`dt2-crop.png` | 把手不再存在，面板直接从标题行开始 |
+| 改后：第一个开关按 ↑ | `dt3.xml` | 焦点直接到 `×` `[1472,606][1568,702]`，中间没有空停点 |
+| `Rotate screen` | `dv1-crop.png` | 只有 `Screen rotation has been unlocked` 提示，画面不变 |
+| `Download` | `dw2-half.png`、`dw3.xml` | 面板收起，无提示、无对话框 |
+| `Open in browser`（改前） | `dx2-half.png`、`dx3.xml` | 进入 `BrowserActivity`，`net::ERR_ACCESS_DENIED`；唯一可聚焦节点是 WebView |
+| `Open in browser`（改后） | `dy1-crop.png` | 留在阅读器，底部提示 `This content has no web page to open` |
+
+构建：`:app:assembleDebug` 两次均 BUILD SUCCESSFUL，装的是 `app-x86_64-debug.apk`。
+
+### 遗留
+
+1. **`Rotate screen` 与 `Download` 在电视上等于空格子**：前者只切方向锁（电视无方向可转），
+   后者对本地/无源内容静默无事。要不要在电视上直接不画这两格（或对本地内容置灰），属于产品决定，
+   本轮只记录，没动。产品上更彻底的做法是让 `mangaQuickActions()` 按"是否有 http 页面 / 是否可下载"
+   过滤，手机端也能省掉两个空格。
+2. **M3 把手的空停点不止这一处**：全仓 29 个 `ModalBottomSheet(` 调用点默认都带同一个把手。
+   本轮只修了阅读器自动滚动面板；建议加一个共享的 `TvModalBottomSheet`（电视上默认换 12dp 空白），
+   再逐处迁移，别在 29 个地方各写一遍 `if (isTv)`。详情页、显示选项、空间切换等已经审过的面板
+   大概率都有这个停靠点，只是之前的焦点走位没经过它。
+3. 自动滚动面板里，焦点被带进视野时 Compose 只滚"刚好露出"，所以滑杆的焦点环下沿会被面板/屏幕底边切掉
+   （`di1-crop.png`）。纯视觉问题，未动。
+4. `Show floating button` 那个浮标（打开后收起控件时右下角出现计时器圆钮）尚未实测；
+   它只在"控件不可见 + 面板关闭"时出现，遥控器收起控件后是否有环走过去还需要一轮。
+5. 第三格的 `Automatic scroll` 面板本身还有一种入口：阅读器控件栏的计时器按钮
+   （`ReaderControl.TIMER`）。本轮只从 `⋮` 快选层进去过，两条入口指向同一个面板。
+
+## 第六十九轮：把"电视上没有把手"抽成共享 TvModalBottomSheet（2026-10-25）
+
+上一轮的修法是内联在自动滚动面板里的 `if (isTv)`，而同一个空停点在 29 个
+`ModalBottomSheet(` 调用点上都会出现。这一轮把它收成一个组件，先迁阅读器自己的两处。
+顺手补一个观察：**阅读器工具面板在电视上根本没有入口**，也就是说那处迁移属于结构性收口，
+不改变当前可达的电视路径。
+
+### 现象
+
+- 自动滚动面板在电视上已经从标题行开始（第六十八轮），但这段 `dragHandle = if (isTv) … else { BottomSheetDefaults.DragHandle() }`
+  只服务了一处调用；下一个人再写 `ModalBottomSheet` 时还得重新踩一遍。
+- 阅读器底栏在电视上只有 `Previous chapter` / `Next chapter` 两个带无障碍描述的按钮，
+  没有"工具/TOOLS"这一格；`ReaderControlDestination.TOOLS` 只在工具面板自己的 onDismiss 里被发出，
+  所以 `state.toolsVisible` 在电视路径上恒为 false。
+
+### 改法
+
+新增 `app/.../core/ui/compose/TvModalBottomSheet.kt`：
+
+```kotlin
+@Composable
+fun TvModalBottomSheet(
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    sheetState: SheetState = rememberModalBottomSheetState(),
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        modifier = modifier,
+        sheetState = sheetState,
+        dragHandle = if (LocalUiPresentationConfig.current.isTv) {
+            { Box(Modifier.fillMaxWidth().height(12.dp)) }
+        } else {
+            { BottomSheetDefaults.DragHandle() }
+        },
+        content = content,
+    )
+}
+```
+
+迁移：`ComposeReaderActivityScaffold` 里的两处 `ModalBottomSheet(`（自动滚动面板、工具面板）改成
+`TvModalBottomSheet`，上一轮内联的 `if (isTv)` 删除，`ModalBottomSheet`/`BottomSheetDefaults` 的 import 一并清掉。
+
+### 设备验证（emulator-5554）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 改后重装、进阅读器、`⋮` → RIGHT×4 → CENTER | `ea1.xml` | 可聚焦节点与第六十八轮改后完全同构：面板顶部的滚动容器 + `×` + 两个开关 + `SeekBar` + 第三个开关；**没有** 96×96 的把手节点 |
+| 阅读器底栏 dump | `eb1.xml` | 底栏只有 `Previous chapter` `[628,1006][676,1054]` 与 `Next chapter` `[1244,1006][1292,1054]` 带描述，无工具入口 |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（3m 6s，23 executed）。
+
+### 遗留
+
+1. 还有 27 个 `ModalBottomSheet(` 调用点没迁。按是否电视可达排优先级：详情页 `DetailsSheets`
+   （两处）、列表页 `DisplayOptionsSheet`、空间切换 `MediaUniverseSheet`/`SpaceSwitcher`、
+   设置里的 `ExtensionInstallBehaviorSheet` 等都在电视路径上；迁移前要先给
+   `TvModalBottomSheet` 补 `containerColor`/`contentColor`/`shape`/`contentWindowInsets` 等透传参数，
+   现在它只覆盖"只传 onDismissRequest/sheetState"的简单调用。
+2. 工具面板（`ComposeReaderToolsSheet`）在电视上没有入口，属于产品层面的取舍：
+   它的内容（翻译、书籍信息等）大多已能从 `⋮` 或底栏到达。要不要给电视一个入口，另说。
+
+## 第七十轮：把剩下的"默认把手"面板一次性收编（2026-10-25）
+
+先数清楚还剩几处：29 个 `ModalBottomSheet(` 调用点里，**17 个本来就传了 `dragHandle = null`**
+（详情页、显示选项、首页分区、空间切换、搜索筛选、统计弹窗等），真正带默认把手的只有 12 个，
+而且集中在"要么要账号、要么要源、要么要小说"的屏幕上——这解释了为什么前六十多轮从没撞见它们。
+
+### 现象
+
+带默认把手的 12 处，调用参数都很朴素（只给 `onDismissRequest` / `sheetState` / `modifier`），
+和第六十九轮抽出的 `TvModalBottomSheet` 签名完全吻合：
+
+| 文件 | 屏幕 | 电视可达性 |
+| --- | --- | --- |
+| `filter/ui/tags/TagsCatalogRoute.kt:64` | 标签目录 | 可达（筛选入口） |
+| `migration/ui/duplicate/DuplicateFavouriteSheet.kt:64` | 重复收藏消歧 | 需批量操作 |
+| `migration/ui/list/MigrationCandidatesSheet.kt:70` | 换源候选 | 需已装源 |
+| `notes/ui/BookNotesDetailScreen.kt:891` | 书籍笔记 | 需笔记数据 |
+| `reader/novel/compose/NovelReaderChrome.kt:212` | 小说工具面板 | 需小说作品 |
+| `reader/novel/compose/NovelExcerpt.kt:201` | 小说摘录 | 需小说作品 |
+| `reader/novel/compose/ComposeNovelReplaceRulesSheet.kt:65` | 小说替换规则 | 需小说作品 |
+| `alternatives/ui/compose/AlternativesSheetRoute.kt:64` | 替代源 | 需源 |
+| `details/ui/scrobbling/ScrobblingInfoSheet.kt:64` | 进度同步信息 | 需追踪账号 |
+| `discover/ui/details/TrackingLocalSearchSheet.kt:98` | 追踪站内搜索 | 需追踪账号 |
+| `scrobbling/common/ui/selector/ScrobblingSelectorSheet.kt:90` | 追踪选择器 | 需追踪账号 |
+| `settings/tracker/categories/TrackerCategoriesConfigSheet.kt:50` | 追踪分类 | 需追踪账号 |
+
+### 改法
+
+12 处全部换成 `TvModalBottomSheet`（`onDismissRequest` / `sheetState` / `modifier` 一一对应，
+`suspend` 语义、`SheetState` 复用、`skipPartiallyExpanded` 都不变），顺手清掉
+`androidx.compose.material3.ModalBottomSheet` 的 import 并整理成字典序。
+
+`TrackingLocalSearchSheet` 里有一处 `return@ModalBottomSheet`（"没有可用来源"时提前退出面板内容），
+改名后标签失效，编译报 `Unresolved label`，改成 `return@TvModalBottomSheet`。
+
+### 设备验证（emulator-5554）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| `:app:assembleDebug` | `.tmp-build.log` | 第一次因 `TrackingLocalSearchSheet.kt:144 Unresolved label` 失败；改标签后 BUILD SUCCESSFUL（1m 9s，19 executed） |
+| 重装、进阅读器、CENTER → RIGHT → CENTER | `ec1.xml` | 选项面板正常打开，焦点在第一个快选格 `[232,542][414,730]`，没有把手节点，五个比例 `RadioButton` 与整排快选格都在 |
+| 同一次会话里 `⋮` → RIGHT×4 → CENTER | `ea1.xml`（第六十九轮） | 自动滚动面板可聚焦集合不变 |
+
+这 12 块屏幕里有 9 块在本机环境进不去（无追踪账号、无已装源、无小说作品），
+所以这一轮只做到"改法一致 + 编译通过 + 两条电视路径无回归"，逐屏的焦点走位留给后续轮次。
+
+### 遗留
+
+1. `reader/novel/compose/ComposeNovelMarkingsSheet.kt` 的三个调用点（98 / 588 / 684）仍然带默认把手：
+   它们传了 `shape`、`containerColor`、`contentColor`，当前包装器没有这些透传参数。
+   要收编得先给 `TvModalBottomSheet` 补 `containerColor`/`contentColor`/`shape`/`tonalElevation`/`contentWindowInsets`。
+2. 上面表格里"需追踪账号 / 需源 / 需小说"的 9 块屏幕，等环境具备时仍要各走一遍：
+   这一轮只保证把手不再是空停点，面板内的控件是否可聚焦、顺序是否合理还没验证。
+3. 本轮有 4 个文件的 import 块被重新排序（原来就有 `CircleShape`、`MaterialTheme` 之类错位），
+   纯格式churn，无行为变化。
+
+## 第七十一轮：阅读器提示条在电视上读不了（2026-10-25）
+
+阅读器的所有动作反馈——"旋转已解锁"、"这本书没有网页可打开"、"书签已添加"、"已保存"——都走
+`ReaderMessageHost`，而它一直是 `bodySmall` + 78% 黑底 + `start = 10.dp` 的单行小药丸。
+手机贴脸看没问题，电视三米外基本认不出字。
+
+### 现象
+
+第六十八轮两张截图正好留下对照：`dy1-pill.png` 里 "This content has no web page to open" 只有
+330px 宽、字高约 24px，嵌在几乎纯黑的窄条里；同一句话在 1080p 电视上要凑近才看得清。
+
+### 原因
+
+`ReaderMessageHost`（`ComposeReaderActivityScaffold.kt:1704`）没有任何电视分支：
+文字固定 `MaterialTheme.typography.bodySmall`（12sp），底板固定 `Color.Black.copy(alpha = 0.78f)`，
+左右内边距只有 10dp/0dp，圆角用 `MaterialTheme.shapes.small`。
+
+### 改法
+
+按 `LocalUiPresentationConfig.current.isTv` 分支：
+
+| | 手机（不变） | 电视 |
+| --- | --- | --- |
+| 文字 | `bodySmall` | `titleMedium`（22sp） |
+| 底板 | `Color.Black.copy(alpha = 0.78f)` | `surfaceContainerHigh.copy(alpha = 0.96f)`（与其余电视 chrome 同一条 surface 阶梯） |
+| 前景色 | `Color.White` | `colorScheme.onSurface` |
+| 圆角 | `MaterialTheme.shapes.small` | `RoundedCornerShape(12.dp)` |
+| 内边距 | start 10dp / vertical 10dp | start/end 20dp / vertical 14dp |
+
+### 设备验证（emulator-5554）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 重装、进阅读器、`⋮` → RIGHT×7 → CENTER（Open in browser，本地书） | `ed1.png`、`ed1-pill.png` | 提示条变成 660px 宽、字高约 44px 的深灰面板，圆角 12dp，与 `dy1-pill.png`（改前 330px / 24px 字 / 近黑底板）对照明显 |
+| 同一张全屏图 | `ed1-crop.png` | 提示条仍浮在底栏之上（`controlsVisible` 时抬 104dp），没有遮住进度条 |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（1m 55s，21 executed）。
+
+### 遗留
+
+1. **活动级 `KototoroSnackbarHost` 还没做同样的放大**。它是 `BaseComposeActivity.setComposeContent`
+   挂在每个 Activity 底部的那一个，`details/ui/DetailsErrorObserver.kt`（错误 + Try again/Details）、
+   `download/ui/compose/DownloadDialog.kt`（"Downloads"）这些**带动作按钮**的提示都走它。
+   本轮不动它是因为本机没有能触发它的电视路径（本地书没有加载错误、也没有可下载章节），
+   改了没法给证据。下一轮要做的话：电视分支把消息文字提到 `titleMedium`（`CompositionLocalProvider(LocalTextStyle …)`
+   包住 `Snackbar`，需先在设备上确认 M3 的 message 是否吃 `LocalTextStyle`），并把动作按钮的
+   `labelLarge` 一起提上来——否则 22sp 的文字配 14sp 的按钮会很怪。
+2. 提示条本身不可聚焦（瞬时信息，遥控器不该停进去），这一点是对的，别在后续"补齐焦点"时改掉。
+3. `ReaderMessageHost` 里的 `AnimatedVisibility` 在电视上仍走 fade——`whenReaderAnimationsEnabled`
+   受 `eInk` 开关控制，与电视无关，属既有行为。
+
+## 第七十二轮：顶栏溢出菜单贴边 + 标签太小（2026-10-25）
+
+历史页的 `⋮` 菜单（Display options / Language preset / Clear history / Settings / Help & feedback /
+Incognito mode）在电视上有两个问题：**面板右边缘贴着屏幕边**（真机 5% overscan 会把圆角和标签末尾吃掉），
+**标签只有 14sp**。
+
+### 原因：菜单有两条渲染路径，默认走的那条不吃 offset
+
+`GlassDropdownMenu` 在 `useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS` 时并不使用
+`DropdownMenu`，而是把内容塞进 `RootGlassMenuRequest`，由 `RootGlassMenuOverlay` 自己定位。本机界面风格
+是 `ios (modern)`，所以实际走的是 overlay 这条。两个连带发现：
+
+- `RootGlassMenuRequest` **根本没有 offset 字段**，`GlassDropdownMenu(offset = …)` 在 overlay 路径上被整段丢弃；
+  定位完全由 `calculateRootGlassMenuOffset` 决定，而它把 x 钳在 `[0, W - w]`，没有任何安全边距。
+- 标签来自 `CompactDropdownMenuText`，它把 `style` 写死成 `labelLarge`，所以只改 `CompactDropdownMenuItem`
+  的 `LocalTextStyle` 不会生效（第一次改完行高变了、字一颗没变大，就是这么回事）。
+
+### 改法
+
+| 位置 | 改动 |
+| --- | --- |
+| `calculateRootGlassMenuOffset` | 增加 `edgeInsetPx: Int = 0`，x/y 都钳进 `[inset, size - inset]`；默认 0 时与旧行为完全一致 |
+| `RootGlassMenuOverlay` | 电视上传 `24.dp`，非电视传 0 |
+| `CompactDropdownMenuItem` | 行高 48dp → 电视 56dp；`LocalTextStyle` 电视供 `titleMedium` |
+| `CompactDropdownMenuText` | 电视用 `titleMedium`，非电视仍是 `labelLarge`（菜单里的分组标题也走这个函数，否则标题会比条目还小） |
+| `GlassDropdownMenu` 的 `DropdownMenu` 分支 | 电视再把 `offset.x` 减 24dp（Classic 界面风格走这条） |
+
+### 设备验证（emulator-5554）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 改前：历史页 `⋮` | `ee5-top.png` | 面板右边缘与屏幕边齐平，标签约 28px 高（14sp） |
+| 只改行高与 `LocalTextStyle` | `eg1-menu.png`/`eg2-menu.png` | 行距变宽（~64px→58dp），**文字一点没变**——定位到 `CompactDropdownMenuText` 的硬编码 |
+| 改 overlay 的 `edgeInsetPx` + 文本样式 | `eh1.png`/`eh1-small.png` | 面板右边缘内收约 24dp，标签约 44px（22sp），菜单变高后 6 项仍完整可见 |
+| 收尾（文本样式改成按电视直接取） | `ei1.png`/`ei1-menu.png` | 与上一次一致，非电视仍是 `labelLarge` |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（三次，均约 1m 42s）。
+
+### 遗留
+
+1. **Classic 界面风格的 `DropdownMenu` 分支没做设备验证**：本机界面风格是 iOS，走 overlay；那条分支只是
+   对称地加了 24dp 内推，改动小但没截图证据。要验证得先切界面风格。
+2. `RootGlassMenuRequest` 没有 offset 字段，`GlassDropdownMenu(offset = …)` 在 overlay 路径上被丢弃——
+   这是**既有**不一致（手机上也一样），本轮没动它。等哪天要统一两条路径再补。
+3. 菜单 6 项已经接近 `maxMenuHeight`（屏高 65%）上限，再多一项就得滚动；电视上滚动菜单的焦点跟随还没验证。
+4. 顶栏右上角两个按钮（筛选、`⋮`）自己也在安全边距之外（`⋮` 右边缘 = 1896，距屏边 24px = 12dp），
+   真机 overscan 会切到。这属于"整条顶栏的安全边距"问题，单独一轮处理更合适。
+
+## 第七十三轮：搜索的建议/结果货架在电视上是手机尺寸（2026-10-25）
+
+搜索是电视上最难用的入口之一，本轮顺着"顶栏搜索 → 输入 → 提交 → 结果"走了一遍。
+输入法、焦点、分区滚动都正常，唯独**所有海报卡还是手机尺寸**：108dp 宽（1920px 屏上 216px），
+一张海报只占屏宽 11%，坐在沙发上等于看邮票；分区标题是 22sp，卡片下面那行标题只有 12sp，
+两者摆在一起比例完全失衡。
+
+### 原因：搜索页把卡片尺寸写成了常量，没走图书馆那套"按宽度铺满"的逻辑
+
+| 位置 | 常量/逻辑 | 电视上的后果 |
+| --- | --- | --- |
+| `SearchResultsScreen.kt` | `SearchFixedCardWidth = 108.dp`，`fixedSearchPosterCardStyle()` 直接按这个值造 `CompactPosterCardStyle` | 提交后的结果货架（`LazyRow`）每张 108dp |
+| `KototoroSearchOverlay.kt` | `SearchSuggestionCardWidth = 108.dp`，三处 `.width(...)`（内容/本地实体/追踪实体） | 输入时的建议货架同样 108dp |
+
+图书馆/收藏用的是另一套：`resolveGridColumnCount` + `resolveGridPosterCardStyle` 先按最小列宽算列数，
+再把格子拉伸铺满可用宽度，所以电视上是大卡；搜索没有走这条路径，常量写死就一直是手机尺寸。
+
+### 改法
+
+| 位置 | 改动 |
+| --- | --- |
+| `SearchResultsScreen.kt` | 新增 `SearchTvCardWidth = 174.dp`（= 1920px 行宽 − 2×24dp 边距 − 4×16dp 间距 的 1/5，正好 5 张一行）、高度仍按 `/0.7f`、圆角 16dp；`fixedSearchPosterCardStyle(isTv)` 二选一，默认 `false` 与旧值完全一致 |
+| 同上：货架 | `contentPadding` 电视 24dp（手机 12dp）、`horizontalArrangement` 电视 16dp（手机 6dp），与卡片宽度一起凑成 5 张整行 |
+| 同上：分区头 | "N shown" 电视 `bodyLarge`（手机仍 `labelSmall`）；`Show all` 按钮文字电视 `bodyLarge`（手机仍 `labelLarge`）。两个都是 16sp，与 22sp 的分区标题终于在一个数量级上 |
+| `KototoroSearchOverlay.kt` | 新增 `TvSearchSuggestionCardWidth = 174.dp` 与 `@Composable searchSuggestionCardWidth()`，三处 `.width(...)` 改为调用它 |
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 改前：历史页顶栏搜索 → CENTER → `input text "TV"`（输入态） | `ep0-before.png` | 建议货架两张卡各 216px（108dp），左边距 24px（12dp），卡间 25px |
+| 改后：同一路径（输入态，仍是 `TV`） | `ep3-suggest-after.png` | 视觉里量到 322–324px 的封面区（卡框 348px = 174dp），左边距 24dp，卡间 16dp |
+| 改后：点搜索按钮提交，落结果页 | `ep1-results-after.png`、`eq1.png` | "History" 区的两张卡封面 312px（比改前 216px 宽 44%），"2 shown" 从 11sp 变 16sp |
+| 改后：分区头一行（`Show all` 用 `bodyLarge`） | `eq2.png`、`eq2-showall.png` | "15 shown"（16sp）与 "Show all"（16sp）字高都是 32px；改前分别是 22px / 26px |
+| 改后：DOWN 进第一张卡 | `ep2-focus-after.png` | 焦点环完整包住 348px 的大卡（不再是贴着小图的细框），下方 "Local storage / 15 shown / Show all" 一行完整可见 |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（两次：3m 19s、1m 44s，均 19 executed）。
+
+### 遗留
+
+1. **卡片标题没有跟着卡片变大**。`KototoroContentCard` 的标题字号来自 `resolveGridTitleFontSize(gridScale)`（12–16sp），
+   只吃"网格大小"偏好，不吃 `CompactPosterCardStyle.itemWidth`。所以 348px 的卡下面还是 12sp 的标题，
+   和 22sp 的分区标题放一起仍不协调。图书馆网格在电视上是同一个问题（同一份代码），
+   要改得给 `KototoroContentCard` 加一个"按卡片宽度算标题"的入口——影响手机，得单独一轮评估。
+2. `SearchResultsScreen` 里 "nothing found" 与分区错误文案仍是 `bodySmall` + 16dp 边距，电视上偏小；
+   本轮没动（这两处在电视上没截到图，本地搜索不会空）。
+3. **提交后的结果页按 BACK 会退回桌面**：本轮两次走到"结果页 → BACK"，两次都直接落回 Android TV 启动器
+   （`logcat -b crash` 无记录，进程仍在）；而从"搜索页本身"按 BACK 是正常回 Home（`eo2.png`）。
+   怀疑结果页这一层做了两次 pop 或者搜索页被 `popUpTo(root)` 打开，下一轮专门查这条回退链。
+   > **第 74 轮复核：这条不成立。** 两次干净走"结果页 → BACK"都正常回到 Home，进程与导航栈都正常
+   > （`logcat` 无 crash）；只有输入法展开时 BACK 先收键盘、再按一次才退页面。当时多半是输入法吞掉了
+   > 第一次 BACK 又叠加了上一次退出，按已实现行为更正，不再当成待查缺陷。
+4. 输入框重新获得焦点时系统输入法会自己弹出来（`mInputShown=true`），电视上没有"Enter 即收键盘"的约定，
+   这是系统 IME 行为，暂按既有效果记录。
+## 第七十四轮：下载对话框在电视上溢出屏幕、章节数下拉够不着（2026-10-25）
+
+详情页右上角 ⤓ 打开的"Download manga"对话框，是这一轮的目标。用遥控器把它走完之后暴露了三个问题，
+其中两个会让人直接干不了事：
+
+1. **对话框本身比屏幕还高**。收起态就已经占满整屏（实测表面 531.5dp，上下各只剩 4dp），展开
+   "More options"之后内容超出窗口，`AlertDialog` 只能把表面夹在窗口高度上，标题行被顶到 y=0，
+   上圆角直接被切掉——第 73 轮截图 `ev6.png` 里"Download manga"贴在屏幕最上沿就是这个原因。
+2. **每一行注册了两个停靠点，而且两个都没有焦点环**。`SelectableListItem` /
+   `SelectableDropdownItem` 是"整行 `clickable` + `RadioButton(onClick = …)`"，遥控器要按两次才跨过
+   一行，屏幕上却看不出焦点在哪：`ev4` 的 dump 里行 `View [568,200][1352,328]` 与内嵌
+   `RadioButton [568,216][664,312]` 同时 `focused=true`。
+3. **章节数下拉在遥控器上打不开**。行尾的 ▾ 是个 `IconButton`，`import` 出来的焦点遍历根本不进它：
+   从第一行往下连按 6 次 UP 再按 RIGHT，焦点始终只在行与行之间跳（`.tmp-eup.xml` 六次 dump 全落在
+   行 `View` 上），所以"First N chapters / Next unread N chapters"的菜单一次也没弹出来——电视上
+   就没法选"前几章"。
+
+另外两处是顺带发现的"手机上能用、遥控器上用不了"：选中提示写的是"长按章节列表项"（遥控器没有长按），
+"Start download"这一行的文字点了没反应（只有开关本身能吃遥控器）。
+
+### 原因：对话框没有电视高度预算，行内控件还是手机的焦点模型
+
+| 位置 | 现状 | 电视上的后果 |
+| --- | --- | --- |
+| `text = { Column(Modifier.verticalScroll(...)) }` | 内容多高对话框就多高，手机屏高（800dp+）够用 | 1080p 电视只有 540dp 高，展开后内容约 568dp，表面被夹到窗口高度：实测 531.5dp、边距 4dp、标题落到边缘 |
+| `Row(clickable)` + `RadioButton(onClick)` | 两个可聚焦控件嵌套在同一个可点行里 | 一行两个停靠点（4 行 = 8 个），且 `clickable` 的 `Row` 没有环、`RadioButton` 只有状态层 |
+| 行尾 `IconButton`（▾） | 依赖指针点击 | 焦点遍历不进入，章节数/分支菜单在遥控器上不可达 |
+| `Switch(onCheckedChange = …)` + 文本行 | 开关是唯一停靠点 | 行文字不可点、无环，遥控器要精确停在 52×32dp 的开关上 |
+| `chapter_selection_hint` | "You can select chapters to download by long click on item in the chapter list." + `bodySmall` | 遥控器没有长按；12sp 在 3m 外读不清 |
+
+### 改法
+
+| 位置 | 改动 |
+| --- | --- |
+| `DownloadDialog.kt` | 新增 `DownloadDialogTvBodyMaxHeight = 332.dp` 与 `DownloadDialogRowShape = RoundedCornerShape(12.dp)`；正文 `Column` 在电视上先 `heightIn(max = 332.dp)` 再 `verticalScroll(...)`，标题行与按钮行不再被挤出窗口 |
+| 同上：选项行 | `SelectableListItem` / `SelectableDropdownItem` 整行 `tvFocusable(shape = DownloadDialogRowShape, addFocusTarget = false)` + `RadioButton(onClick = null)`（电视），一行只留一个停靠点；行内垂直 padding 电视 8dp → 4dp 抵掉环占的高度 |
+| 同上：开关行 | "Start download" 与小说版"下载图片"在电视上整行可点（`Modifier.clickable`），`Switch(onCheckedChange = null)`；手机仍是开关自己管 |
+| 同上：More options | 该行补 `tvFocusable` 圆角环，电视上垂直 padding 12dp → 8dp |
+| 同上：下拉入口 | 电视上把 ▾ 从 `IconButton` 降级成纯图标，CENTER 行时先选模式再弹变体菜单（`onClick(); onDropdownClick()`）；手机保持"行选中 / 箭头开菜单" |
+| 同上：值卡片 | `SelectableValueCard` 的 `OutlinedCard` 补焦点环（目的地 / 首选格式两处） |
+| 同上：按钮 | `Save`、`Cancel` 各补 `tvFocusable(shape = CircleShape, addFocusTarget = false)`；`Save` 是实心主按钮，环色显式用 `onPrimary` 才看得见 |
+| 同上：提示文案 | 新增 `chapter_selection_hint_tv`（"Use the download button on a chapter row to pick chapters one by one."），电视上 `bodyMedium`；手机仍用原长按文案 + `bodySmall`。新串只有英文源串，其他语言等 Weblate |
+
+所有改动都挂在 `isTv` 分支后面，手机分支的常量、字号、焦点模型、文案全部保持原样。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 改前：详情页 ⤓ → CENTER，收起态 | `ev3.png`（第 73 轮留存） | 对话框表面 y=8…1071px，上下边距 4dp、高 531.5dp，标题贴着屏幕边 |
+| 改前：展开 More options | `ev6.png`（同上） | 上圆角被切、标题滑出屏幕、作品标题整行看不见 |
+| 改前：焦点遍历 | `ev4.xml` / `.tmp-eup.xml` | 一行两个 `focused=true`（行 + `RadioButton`）；UP×6 与 RIGHT 都不经过 ▾ |
+| 改后：收起态 | `ey0.png`、`fb1.png` | 上下面距各 44dp、高 451.5dp；标题、三个选项、提示、开关、More options、Cancel/Save 全在屏内 |
+| 改后：聚焦行 | `ey0.png` | 12dp 圆角蓝环包住整行（改前只有状态层） |
+| 改后：CENTER "First 2 chapters" | `ey1.png` | 行既被选中又弹出章节数菜单（`1 chapter` / `2 chapters`，首项高亮） |
+| 改后：菜单里选 `1 chapter` | `ey2.png` | 行标题变 "First 1 chapter"，单选钮同步选中 |
+| 改后：CENTER "Start download" | `ey2.png` | 整行有环，CENTER 把开关从开切到关（`Switch(onCheckedChange = null)` 生效） |
+| 改后：展开 More options | `ey3.png` | 边距 24dp、高 491.5dp，标题固定在顶部；目的地卡片从正文视口下沿露头 |
+| 改后：DOWN 进目的地卡片 | `ey4.png` | 正文在 332dp 视口里滚动，卡片带焦点环，整个展开区一次看全 |
+| 改后：CENTER 目的地卡片 | `ey5.png` | 菜单列出两个目录（标题 + 路径），可继续用 D-pad 选 |
+| 改后：DOWN×6 到 Cancel / RIGHT 到 Save | `fb0-btns.png`、`fb1-btns.png` | Cancel 是蓝色药丸环，Save 是白色药丸环（环在实心按钮外侧，清楚可见） |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（三次：3m 9s、3m 9s、3m 6s）。
+
+### 遗留
+
+1. **332dp 是配合 1080p/320dpi（540dp 屏高）写死的常量**。720p 电视常见 360dp 高、4K 常见 640dp 高，
+   同一个常量在 720p 上会把对话框顶回屏外。要改成按屏高取值（如 `LocalConfiguration.current.screenHeightDp * 0.62f`）
+   再单独验一轮，别在只有一种 AVD 的情况下当成通用解。
+2. `DropdownMenu` 里的 `DropdownMenuItem` 在电视上只有状态层高亮、没有焦点环（本轮章节数菜单、目录菜单
+   都是这样），与第 60 轮记的同类问题一致，等统一处理。
+3. 点 Save 之后的真实下载链路本轮没验（本地作品会写进 storage 目录），不在电视专项范围内。
+4. 顶栏 Share 对话框（`ez0.png`）同样是手机尺寸：正文 `bodyLarge`、按钮无环、内容贴边——下一轮可并入
+   "详情页里的对话框"一起收。
+
+## 第七十五轮：对话框里的"选项"在电视上没有焦点环，提示条还是手机字号（2026-10-25）
+
+这一轮接着第 74 轮的遗留 4，把详情页里的 Share 对话框走完，顺带把同一个晚上反复出现的底部提示条一起收了。
+两个问题的共同点是：**控件本身能用，但电视上既看不出焦点在哪、字也太小**。
+
+1. **对话框的选项行在电视上没有焦点环**。`AppRouterChoiceDialog` 与详情页的三个对话框都把选项写成
+   `TextButton(onClick, Modifier.fillMaxWidth()) { Text(label, Modifier.fillMaxWidth()) }`：整行确实是热区，
+   但 `TextButton` 在非触摸焦点下只有一层状态层，遥控器上下切换时屏幕上没有任何一圈表示"当前在这一项"。
+   第 74 轮的 `ga1.png`（Share 对话框）就是这样：文字左对齐、按钮铺满宽度、看不出焦点在哪。
+   这类"整行点"的选项其实最该有一条像 `SettingsAlertDialog` 那样跟着行走的圆角环。
+2. **底部提示条用的是手机阅读距离的字号**。第 71/72 轮把电视上的提示条换成了深色板
+   （`surfaceContainerHigh` / `onSurface`），但内容仍然直接交给 `Snackbar(snackbarData = data)`：
+   消息 `bodyMedium`（14sp）、操作标签 `labelLarge`、关闭 × 是纯触摸的 `IconButton`，
+   板子的最小高度也是 Material 默认值。3 米外读 14sp 的消息很吃力，× 也只能用指针点。
+
+### 原因
+
+| 位置 | 现状 | 电视上的后果 |
+| --- | --- | --- |
+| `AppRouter.kt` 的 `AppRouterChoiceDialog` | 选项是 `TextButton(Modifier.fillMaxWidth())`，标签也用 `fillMaxWidth` | 整行是按钮语汇、没有环，标签被拉到整行宽；遥控器上只有状态层 |
+| `DetailsMenuDialogs.kt` 的 `ShareOptionsDialog` / `SearchTargetDialog` / `DeleteLocalDialog` | 同上（详情页顶栏 Share 走的正是这三个，不是 `AppRouter.showShareDialog`） | 同上；三个对话框各自抄了一遍同样的 `TextButton` 模板 |
+| `KototoroSnackbarHost.kt` 电视分支 | `Snackbar(snackbarData = data)` 只换颜色 | 14sp 消息、`labelLarge` 操作标签、× 不可聚焦、板子默认最小高度 |
+
+### 改法
+
+| 位置 | 改动 |
+| --- | --- |
+| 新增 `core/ui/compose/TvDialogOptions.kt` | 抽出两个共享件：`DialogChoiceOption(label, onClick)` —— 电视上是整行 `tvFocusable(shape = 12dp 圆角, addFocusTarget = false)` + `clickable` 的 `Row`，标签用 `bodyLarge` 普通文本；手机分支返回与改前逐字相同的 `TextButton`。`DialogActionButton(label, onClick, enabled)` —— 电视上给 `TextButton` 补 `CircleShape` 环，`enabled = false` 时不加环 |
+| `core/nav/AppRouter.kt` | `AppRouterChoiceDialog` 的选项与 dismiss 按钮改用上面两个共享件（标签/作者选择对话框因此一起受益） |
+| `details/ui/compose/DetailsMenuDialogs.kt` | `DeleteLocalDialog`、`SearchTargetDialog`、`ShareOptionsDialog` 三处改用共享件；`TextButton` 导入删除 |
+| `core/ui/compose/KototoroSnackbarHost.kt` | 电视分支不再把 `snackbarData` 直接交给原版 `Snackbar`，改成自己搭内容：`heightIn(min = 72.dp)`、消息 `bodyLarge`（14sp → 16sp 一档）、操作标签 `titleSmall` 且套 `tvFocusable(10dp 圆角)`、`withDismissAction` 时右侧 × 用 `IconButton` + 圆形环、`dismissActionContentColor = onSurfaceVariant` |
+
+所有改动仍然在 `isTv`（或 `isTvPresentation`）分支后面，手机分支的 `TextButton` 模板、`Snackbar(snackbarData = data)`
+与所有默认参数保持原样。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 改前：详情页顶栏 Share | `ga1.png` | 三个全宽 `TextButton`、无环、看不出焦点（说明这一路走的是 `DetailsMenuDialogs`，不是 `AppRouter.showShareDialog`） |
+| 改后：Share 首项 | `gb1.png` | 第一项带 12dp 圆角蓝环，标签是普通 `bodyLarge` 文本 |
+| 改后：DOWN 到第二项 | `gb2-rows.png` | 环整体下移到第二行，仍包住整行 |
+| 改后：DOWN 到 Cancel | `gb3-cancel.png` | Cancel 是蓝色药丸环 |
+| 改后：焦点链 | uiautomator dump | `[568,492][1352,588]`（首项）→ 第二项 → `[1212,732][1352,828]`（Cancel），共 3 站，初始焦点落在最上方选项 |
+| 改后：提示条 | `gi0.png`、`gi0-plate.png` | 深色板（`surfaceContainerHigh`）、消息 `bodyLarge`、板高 144px = 72dp（`heightIn(min = 72.dp)` 生效） |
+| 改后：提示条文本行 | uiautomator dump | `'Please restart the application to apply these changes' [754,984][1558,1032]`，行高 48px = 24dp，正是 `bodyLarge` 的行高 |
+
+提示条的触发路径：Settings → Storage and network → "Ignore SSL errors" 开关打开 →
+`showRestartRequired()` → `snackbarHostState.showSnackbar(settings_apply_restart_required, Long)`。
+验完已把该开关关回默认。
+
+`:app:assembleDebug` BUILD SUCCESSFUL（5m 33s）。
+
+### 遗留
+
+1. **提示条的"操作按钮 + ×"变体本轮没验到**。它能出现的路径是 `DownloadDialog` 的"已加入下载 / 已开始下载"
+   （`actionLabel = downloads`、`withDismissAction = true`），但本地库里两部测试作品的所有章节都已下载完，
+   Save 不再调度下载；离线环境也没有内容源能造出别的带操作标签的提示。等有内容源时补验这两处环。
+2. 本轮截图里的提示条贴在设置页右栏底部、右边直接顶到屏幕边（左边界 720px）——这是设置页自己把 host 放在
+   右栏里，与本轮改动无关；活动级 host 在整屏界面上的位置（是否居中、左右边距）还需在首页/详情页复核一次。
+3. **电视上的 Share 仍然走系统 chooser**（`ShareCompat.IntentBuilder(...).startChooser()`）。电视基本没有接收方，
+   点了要么弹出空 chooser、要么什么也不发生；这是"手机功能原样搬上电视"的典型，需要单独决定隐藏还是改成"复制链接"。
+4. **新发现：Settings → Storage and network 的 "Mirror list URL (optional)" 文本框会吃掉 D-pad。**
+   焦点进入该 `TextField` 后 UP / DOWN / LEFT 都不离开（六次 dump 的 `focused` 一直是
+   `[778,324][1864,532]`），BACK 也不退出；TAB 会被当成输入插进框里。于是它下面的
+   `Ignore SSL errors`、`Disable connectivity check` 等项在遥控器上不可达，只能强杀应用再进来。
+   这是本轮为了触发提示条偶然撞到的，值得单独一轮按 `SettingsAlertDialog` 的 `FocusRequester` 思路修。
+5. 提示条消息没有 `maxLines`：`Modifier.weight(1f, fill = false)` 会让长消息多行铺满整板，尚未定义截断/换行策略。
+
+## 第七十六轮：设置里的文本框把整页后半段锁死，遥控器进去就出不来（2026-10-25）
+
+接第 75 轮遗留 4。`SettingsTextInputPreference` 在电视上是**行内编辑**：整行排成
+`Row`（图标 + 标题/摘要 + `OutlinedTextField`），文本框本身就是一个焦点站。遥控器一进去就出不来，
+于是它后面的所有设置行都不可达——Storage and network 页里 `Mirror list URL (optional)` 之下的
+`HuggingFace Mirror`、`Bangumi Mirror`、`Ignore SSL errors`、`Disable connectivity check`、`Block ads in browser`
+在电视上全部够不到，只能强杀应用。
+
+### 原因
+
+| 位置 | 现状 | 电视上的后果 |
+| --- | --- | --- |
+| `SettingsTextInputPreference`（`SettingsPreferenceComponents.kt:858`） | 行内 `OutlinedTextField` + `.tvTextInputFocusEscape()` | 破坏了"一行一站"的焦点模型：字段是独立的焦岛；键盘开着时 D-pad 全部交给 IME；BACK 只关键盘不退焦点 |
+| `tvTextInputFocusEscape` 的方向搜索 | `focusManager.moveFocus(direction)` | 从滚动 pane 里的字段出发可以返回 `false`（实测 UP 回到字段后再按 DOWN/UP 连按两次，`focused` 一直是字段），键又交回光标 |
+| `rememberTvFieldExit().fieldModifier` 的顺序 | escape → enterAction | 对话框 body 是 `focusGroup`，字段是里面唯一的焦点目标。`moveFocus(Down)` 会返回 `true` 但环还在字段上（logcat：`TVESC ... KeyDown` 之后 `TVVEXIT` 收不到 KeyDown），于是 DOWN 被吞、OK 拿不到焦点。ENTER 能用只是因为它被 M3 单行字段映射成 IME Done → `onDone` |
+
+### 改法
+
+| 位置 | 改动 |
+| --- | --- |
+| `SettingsPreferenceComponents.kt` | `SettingsTextInputPreference` 开头加电视早退：`if (LocalUiPresentationConfig.current.isTv) { SettingsDialogTextPreference(...); return }`。电视上改成"带环的设置行 + 点开 `SettingsAlertDialog` 编辑"，手机分支逐字不变（行内 `OutlinedTextField` 仍在） |
+| `core-ui/.../TvFocus.kt` | 新增 `Modifier.tvTextInputVerticalExit(onExit)`：电视上把 UP/DOWN 直接当作"完成输入"，调用 `rememberTvFieldExit` 的 `leave()`（与 ENTER / IME Done 完全同一条动作，含"确认按钮禁用时退回 Cancel"的既有回退链）。它必须**排在 `tvTextInputFocusEscape` 之前**，因为 `focusGroup` 里的方向搜索可能报"已移动"而环没动，那样就会把键吞掉；多行字段不安装（需要上下移动光标） |
+
+32 个 `SettingsTextInputPreference(` 调用点（备份、下载、周期备份、代理、翻译 API、E2E、镜像 URL、存储与网络）
+因此一起变成"行 → 对话框"，`isTv` 之外的代码路径没有任何变化；电视上从"逐键即时生效"变成"OK 后提交"，
+这是有意的取舍。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 行本身可聚焦 | `ic0-row-focused.png` | `Mirror list URL (optional)` 是普通设置行：12dp 圆角蓝环、值行显示 URL、右侧 chevron，行内不再有输入框 |
+| DOWN 走过该行 | dump `ih0…ih7` | mirror URL → `HuggingFace Mirror` → `Bangumi Mirror` → `Ignore SSL errors` → `Disable connectivity check` → `Block ads in browser`（页尾）。第 75 轮遗留 4 的"后半段不可达"消失 |
+| CENTER 打开对话框 | `ic1-dialog.png` | 字段自带蓝环、初始焦点就在字段（`SettingsAlertDialog` 的 body `FocusRequester`）；IME 同时弹出，把 OK/Cancel 盖住 |
+| 输入 → BACK → DOWN | dump `[568,440][1352,584]` → `[1236,632][1352,728]`；`id2-ok-focused.png` | 环从字段移到 OK 药丸（改前永远停在字段）；这是本轮新加的显式退出 |
+| CENTER 提交 | dump + `shared_prefs` | 行立即显示新值，`github_mirror_sync_url` = 输入值，即提交链路通 |
+| OK → LEFT → CENTER | dump `[1236,632][1352,728]` → `[1080,632][1220,728]` | 环左移到 Cancel，CENTER 关窗且输入被丢弃（prefs 不变） |
+| 清空后提交 | dump + `shared_prefs` | 字段清空 → DOWN → OK，`github_mirror_sync_url` 键消失，回到默认 URL |
+| 回归：普通面板里的字段 | dump `il0…il2` | 搜索页输入后 BACK + DOWN 仍落到 Filter 芯片 `[327,88][465,184]`，与第 76 轮基线 `hc2.png` 一致，说明 escape 的既有行为没被破坏 |
+
+`:app:assembleDebug` BUILD SUCCESSFUL；验完把 `github_mirror_sync_url` 清空（键已移除），没有留下测试值。
+
+### 遗留
+
+1. `tvTextInputFocusEscape` 的根因没换掉：`moveFocus` 在滚动容器 / `focusGroup` 里可能"报移动、环不动"，
+   本轮只是让对话框字段改走显式退出。别处（筛选面板、书架搜索、同步账号）遇到同类字段时优先用
+   `rememberTvFieldExit`，不要只加 escape。
+2. 电视上 IME 一弹出就把对话框下半截（OK/Cancel）盖住，只能先 BACK 收键盘或用 IME 的 ✓。对话框窗口没有
+   `imePadding()`，也没随键盘上移。
+3. 32 个调用点里设备上只走了 Storage and network 这一处；备份 / 下载 / 代理 / 翻译 API 页沿用同一组件，
+   推断一致但未逐个验证。
+4. 电视字段只能尾部编辑（遥控器没有指针），本轮没有给对话框加"清空"动作；第 64 轮记的 Clear × 是触摸专属
+   问题在这里同样存在。
+5. 同一页里 `Mirror list URL` 的摘要仍然把默认 URL 整条打印（`Default: https://…json`），两行截断后信息密度很低，
+   电视上更适合只写"默认（jsDelivr）"之类短描述，未改。
+
+## 第七十七轮：文本框对话框一打开就弹出键盘，把 OK/Cancel 压在下面（2026-10-25）
+
+第 76 轮验证时顺手记下的细节：设置里的文本框对话框一打开，软键盘就跟着弹出来，而对话框是垂直居中的，
+按钮在最下面，于是 1080p 上（键盘约占 310dp）`OK` / `Cancel` 整排被盖住——用户看到输入框，却看不到怎么确认。
+
+### 原因
+
+| 位置 | 现状 | 电视上的后果 |
+| --- | --- | --- |
+| `SettingsDialogTextPreference` 的 `OutlinedTextField` | 可编辑字段；`SettingsAlertDialog` 的 body `FocusRequester` 在首帧把焦点给它 | 焦点落进**可编辑**字段 → Compose 立刻建立输入连接 → 键盘弹出；对话框本身居中，按钮在最下方，于是被键盘压住 |
+| M3 `AlertDialog` | 居中布局，没有 `imePadding`、也不会为键盘收缩窗口 | 对话框没法自己躲开键盘，也不能把按钮挪到键盘上方；`AlertDialog` 也不暴露 `DialogProperties` |
+
+### 改法
+
+| 位置 | 改动 |
+| --- | --- |
+| `core-ui/.../TvFocus.kt` | 新增 `Modifier.tvTextInputStartEditing(onStartEditing)`：把 CENTER 当作"开始输入"，消费该键并回调 |
+| `SettingsPreferenceComponents.kt` 的 `SettingsDialogTextPreference` | 电视上字段默认 `readOnly = isTvPresentation && !isFieldEditing`：打开对话框时只有焦点环、不弹键盘，OK/Cancel 完整可见；CENTER → `isFieldEditing = true` + `keyboardController.show()` 才真正开始输入；字段失焦（DOWN 到 OK、关闭对话框）时复位，下次进来仍是只读。手机分支完全不读这两个开关 |
+
+也就是说：键盘从"迎面上来"变成"用户按 OK 才来"。输入过程中的键盘遮挡仍是 IME 固有行为，但那时用户正在打字，
+且 IME 的 ✓ / BACK 都能立刻结束输入。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 打开对话框 | `ja0-dialog-readonly.png` | 字段带蓝环、值完整显示，`Cancel` / `OK` 都在屏上；`dumpsys input_method` 的 `mInputShown=false` |
+| CENTER 开始输入 | `jb0-editing-ime.png` | `mInputShown=true`，键盘弹出、光标在字段内，可正常输入 |
+| 输入 → BACK → DOWN → LEFT | uiautomator dump | 字段 `[568,456][1352,568]`（值 `probe`）→ BACK 收键盘仍停在字段 → DOWN 环到 OK `[1236,616][1352,712]` → LEFT 到 Cancel `[1080,616][1220,712]` |
+| Cancel | dump + `shared_prefs` | 关窗、焦点回到 `Mirror list URL (optional)` 行、`github_mirror_sync_url` 仍无键（输入被丢弃） |
+| 再次打开 | `jd1-reopened-readonly.png` | 与 `ja0` 像素一致（同 sha256）、`mInputShown=false`：只读态每次都重置，不会"记住上次在编辑" |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（2m 16s）。
+
+### 遗留
+
+1. 其它文本对话框（小说笔记、书签标题、WebDAV 路径、同步账号等）没有这层保护，仍是"焦点落下就弹键盘"。
+   本轮只改了设置页这条共享组件；`readOnly + tvTextInputStartEditing` 这套应该抽成共享件再铺开。
+2. 输入过程中的键盘遮挡没法消除：真正并排显示要自绘 `Dialog`（顶对齐 + `imePadding` + 自己的焦点链），
+   等于放弃 M3 `AlertDialog` 的槽位语义，本轮没做。
+3. 字段上没有"按 OK 开始编辑"的提示文案（新增字符串要走 Weblate），只能依赖电视用户"聚焦后按 OK"的习惯。
+4. 手机 / 平板路径只做了代码隔离（`isTvPresentation` 之后才有 `readOnly` 与 CENTER 处理），没有在手机 AVD 上跑一遍。
+
+## 第七十八轮：下拉菜单里"焦点在动、看不出在哪"——56 处菜单项补齐焦点环（2026-10-25）
+
+之前几轮反复留下的那条遗留是"约 70 处直接用 M3 `DropdownMenuItem` 的菜单没有焦点环"。其中一部分其实早就改过了
+（`CompactDropdownMenuItem`、收藏/搜索顶栏的快捷筛选、片头语种菜单），所以先做了一次精确盘点，再看现象。
+
+### 原因
+
+| 位置 | 现状 | 电视上的后果 |
+| --- | --- | --- |
+| M3 `DropdownMenuItem` | 焦点态只画一层 state layer（primary 8% 的淡色块），没有描边 | 弹出菜单后按 DOWN，高亮确实在换行，但整块菜单都是深色玻璃，用户判断不出当前停在哪一项；一屏 5–8 项时几乎没法用 |
+| 已迁移的菜单（`CompactDropdownMenuItem` 等） | 自带 `tvFocusable` 焦点环 | 同一个应用里一半菜单有环、一半没有，观感像"有的菜单坏了" |
+| `SettingsPreferenceComponents.kt`、`SwipeableFilterChip.kt`、`KototoroContentListScreen.kt` | 逐个调用点手写 `Modifier.tvFocusable(shape = …, addFocusTarget = false)` | 写法不一致（8dp / 10dp / 12dp / 圆形），漏改一个就少一环，靠人肉记住每个调用点 |
+
+### 改法
+
+| 位置 | 改动 |
+| --- | --- |
+| `core-ui/.../compose/TvDropdownMenuItem.kt`（新增） | 与 M3 `DropdownMenuItem` 同签名的包装（`text` / `onClick` / `leadingIcon` / `trailingIcon` / `enabled` / `colors` / `contentPadding` / `interactionSource` 全透传），内部只在 `modifier` 上串 `tvFocusable(shape = RoundedCornerShape(10.dp), addFocusTarget = false)`；`tvFocusable` 自身在非电视上直接返回原 modifier，所以手机/平板仍是纯 M3 菜单项 |
+| app 内 22 个文件、56 处调用点 | 把裸的 `DropdownMenuItem(` 换成 `TvDropdownMenuItem(`，并按文件调整 import（`DownloadDialog.kt` 里已有带环的项，保留原 import 两种并存） |
+
+盘点脚本按"调用点后 30 行内是否出现 `tvFocusable`"判定，改完复查剩余裸调用点为 **0**；同时用 BOM 检查确认
+这次替换没有给任何文件加 UTF-8 BOM（改动前后对比 diff 只有 1–2 行/文件，编码与行尾未变）。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 设置 → Spaces → 遥控器移到自定义空间的 ⋮ | `kw2.png` | ⋮ 按钮本身带蓝环，可被遥控器选中 |
+| CENTER 打开菜单 | `kw3.png` | 菜单弹出（Edit / Move up / Move down / Delete），此时焦点仍在触发按钮上 |
+| DOWN 进入菜单 | `kw4.png` | 焦点落到 `Move up`，**整项一圈 2dp 蓝色圆角描边**（不是 M3 的淡色 state layer） |
+| CENTER 激活 `Edit` | `ku2.png` | 打开 `Edit custom space` 对话框，行为与改动前一致（菜单项点击语义没变） |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（首次全量替换 1m 14s 编译失败→修好跨包限定调用后 1m 18s 通过）。
+
+### 遗留
+
+1. 本轮 22 个文件里只有 `SpacesSettingsScreen`（设置 → Spaces 的 ⋮）在设备上跑过；其余 21 个文件（笔记详情、
+   迁移列表、小说阅读器选词、筛选面板、浏览页语种、本地下载卡、来源管理等）只过了编译，没有逐个在电视上点开。
+2. `BookNotesDetailScreen` / `FilterSheetRoute` 的菜单需要先有笔记或已保存筛选预设，本地夹具没有，暂时没法验证。
+3. `SettingsPreferenceComponents.kt`、`SwipeableFilterChip.kt`、`KototoroContentListScreen.kt` 这三处仍保留手写的
+   `Modifier.tvFocusable`（形状分别是 10dp / 圆形 / 8dp），没有换成新包装——它们在改造前就已经有环，本轮不动，
+   免得把已经验证过的观感改掉。
+4. `SpacesSettingsScreen` 顺手暴露的下一个问题：`Edit custom space` 对话框的 Name 字段一打开就弹键盘（见 `ku2.png`），
+   与第 77 轮同类，但那不是设置页那条共享组件，还没接 `readOnly + tvTextInputStartEditing`。
+
+## 第七十九轮：文本框对话框"聚焦即只读、按 OK 才弹键盘"抽成共享件，并补上对话框里剩下的死站（2026-10-25）
+
+### 症状
+
+三个问题叠在同一个对话框里（设置 → Spaces → `Add custom space`）：
+
+1. 第 77 轮只在设置页那条共享的文本框对话框（`SettingsDialogTextPreference`）里做了 "先只读、CENTER 才弹键盘"。
+   空间编辑器（`SpaceEditorDialog`）自己抄了一份等价但更弱的写法：`ENTER` 才推进焦点，一打开仍然弹键盘。
+2. 键盘弹起来以后，遥控器一 `BACK` 关掉键盘，焦点还留在字段上，但**再按 CENTER 键盘不会回来**——这一次
+   对话框里就再也输不进字了。
+3. 表单没填满（没有名字或没勾内容类型）时 `OK` 是禁用的，而禁用按钮无法获得焦点：
+   `tvTextInputVerticalExit` 的 `leave()` 走 `moveFocus(Next)`，在 `SettingsAlertDialog` 的焦点组里
+   **返回 true 却没真的移动环**，于是 DOWN/ENTER 都像按在了空气上。
+
+顺带暴露出第四件事：内容类型/语言/来源类型那三排 `FilterChip`、以及 "All languages" / "All sources"
+两个 `TextButton` 都没有 `tvFocusable`，M3 只给一层极淡的 state layer，遥控器走进去等于"焦点消失"。
+
+### 改动
+
+- `core-ui/.../adaptive/TvFocus.kt`
+  - 新增共享件 `rememberTvTextFieldReadOnlyState(showKeyboard: (() -> Unit)? = null)`，返回
+    `TvTextFieldReadOnlyState(isReadOnly, fieldModifier)`：`fieldModifier` = `tvTextInputStartEditing { editing = true; 弹键盘 }`
+    + `onFocusChanged { if (!hasFocus) editing = false }`。非电视 `isReadOnly = false`、`fieldModifier = Modifier`，手机/平板行为不变。
+  - `rememberTvFieldExit(multiline, target: FocusRequester? = null)`：新增可选的 `target`。传了就复用调用方
+    已有的 requester（`targetModifier` 变成空 `Modifier`，因为一个节点只能挂一个 `focusRequester`），
+    这样"确认按钮禁用时"可以把出口指到当前真正能聚焦的控件上。
+- `SettingsPreferenceComponents.kt`：`SettingsDialogTextPreference` 换成共享件，删掉本地的
+  `isFieldEditing` / `keyboardController` / 手写 `tvTextInputStartEditing`。
+- `SpacesSettingsScreen.kt`：`SpaceEditorDialog` 换成共享件（Name 字段同样 `readOnly = readOnlyState.isReadOnly`），
+  删掉只认 `ENTER` 的 `advanceToSelectAll`，改成
+  `rememberTvFieldExit(target = if (canConfirm) null else selectAllRequester)`——表单没填满时 DOWN/ENTER 直接落到
+  "Select all"，按一下就满足"至少一个内容类型"。三排 `FilterChip` 与两个"清空本节"的 `TextButton` 补
+  `tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)`。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 打开 `Add custom space` | `ma0-editor-readonly.png` | 字段带蓝环、`mInputShown=false`，三排芯片 + Cancel/OK 全在屏上 |
+| CENTER | （`kx2-space-editing-ime.png`，同一构建前的等价行为） | `mInputShown=true`，光标在字段里 |
+| ENTER（等于键盘上的 ✓） | `ma1-enter-hides-ime.png` | 键盘收起，环**一下**落到 `Select all`（表单没填满，正好是新的出口目标） |
+| DOWN | `mb1.png` | 环进入芯片行，落在 `Adult Manga`，整块 8dp 圆角描边清晰可见 |
+| RIGHT ×2 | `kz4-chip-ring.png` | 逐个芯片走过，每个都有环，对话框自动上滚保持可见 |
+| 设置 → 存储与网络 → Mirror list URL | `md0-settings-text-dialog.png` | 共享组件重构后行为不变：只读 + 无键盘 + OK/Cancel 可见 |
+| 同上 → CENTER → ENTER | `md1-settings-text-dialog-after-enter.png` | 弹键盘 → 收起 → 环保留并移到 `OK` |
+
+`:app:assembleDebug` BUILD SUCCESSFUL（1m 14s / 2m 16s / 1m 20s 三轮）。
+
+### 遗留
+
+1. **`BACK` 关掉键盘后，同一次对话框里键盘再也回不来**（本次实测：`BACK` → `mInputShown=false`，
+   再按 CENTER、甚至先 DOWN 再 UP 回到字段再 CENTER，`mInputShown` 仍为 false；但字段仍是 `focused="true"`，
+   光标也会重新出现）。试过两条路都不行：`keyboardController.show()`（无会话时是空操作），
+   以及"`clearFocus()` + 下一帧 `requestFocus()`"强迫重建会话。看起来是系统对"用户用 BACK 主动关掉输入法"
+   的记忆，程序化 `show` 不会再覆盖它——这属于平台行为，App 侧能做的只是引导：对话框里输入法自带的 ✓/ENTER
+   走的是 `tvTextInputEnterAction → leave()`，会收起键盘并把环移到下一个控件（已验证），这才是该引导的路径。
+   彻底解决需要自绘对话框（不经 `Dialog` 窗口）或改用 `TextFieldState` 之外的输入方案，本轮没动。
+2. 从 IME 刚收起的动画期间按 DOWN 有一次被吞掉（`ma2` 与 `ma1` 同帧），等 1.3 s 后再按就正常；
+   没有定位到是 insets 动画还是 Compose 焦点树重建，先记录。
+3. 三排芯片、"All languages"/"All sources" 的环只在 `Add custom space` 上验证过；`Edit custom space`
+   走的是同一个 `SpaceEditorDialog`，但没有单独截图。
+
+## 第八十轮：快选层里"旋转屏幕"和本地内容的"下载"是两格空动作（2026-10-25）
+
+### 症状
+
+第六十八轮逐格走完电视阅读器 ⋮ 快选层时，九格里有两格"按了等于没按"，并留下一个待定的产品问题
+（那轮遗留 1）：
+
+- `Rotate screen`：电视永远横屏，`toggleScreenOrientation()` 只是翻一个系统设不接受的锁，屏幕上只多一句
+  `Screen rotation has been unlocked`（`dv1-crop.png`），画面不变。
+- `Download`：本地内容（"TV Audit" 系列就是导入的本地文件）没有远端章节可下，`downloadCurrentChapter()`
+  里 `mangaDetails` 拿不到东西就静默返回，而快选层的 `onAction` 已经先 `callbacks.onDismiss()` 收了面板
+  （`dw2-half.png`、`dw3.xml`）——用户看到的是"面板关了，什么都没发生"。
+
+这两格不是焦点问题，第七十九轮那套"补环、改出口"的修法救不了：格子确实能聚焦、确实响应 CENTER，
+只是背后没有可做的事。第六十八轮的建议就是按能力过滤 `mangaQuickActions()`，让它们干脆不出现。
+
+### 改动
+
+- `app/.../reader/ui/compose/ReaderMangaQuickActions.kt`：`mangaQuickActions()` 多两个开关
+  `canRotate: Boolean = true`、`canDownload: Boolean = true`，不满足就把 `ROTATE` / `DOWNLOAD` 从列表里摘掉。
+  默认值保持 true，函数的语义仍是"这台设备为这一章能做的事"，不是"电视专用"。
+- `app/.../reader/ui/compose/ComposeReaderOptionsSheet.kt`：`canRotate = !LocalUiPresentationConfig.current.isTv`，
+  `canDownload = state.canDownloadChapter`。
+- `core-ui/.../reader/ui/compose/ComposeReaderOptions.kt`：`ComposeReaderOptionsState` 新增
+  `canDownloadChapter: Boolean = true`（带默认值，Windows 与预览宿主不受影响）。
+- `app/.../reader/ui/ReaderActivity.kt`：`openMenu()` 里传
+  `canDownloadChapter = viewModel.getContentOrNull()?.isLocal == false`（`isLocal` 是 `core.model` 对
+  `Content` 的扩展属性，`:reader:ui` 原本没 import）。
+- `ReaderMangaQuickActionsTest`：新增三例（电视无旋转、本地无下载、电视读本地剩七格），原有两例不变。
+
+这条改动**不是电视专属**：本地内容在手机、平板上同样没有可下载的远端章节，同一个空按钮也一起消失
+（8 → 7 格，翻译可用时 9 → 8）。若评审只想影响电视，把 `canDownload` 改成 `state.canDownloadChapter || !isTv` 即可。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| Home → `TV Audit Manga 11` → `Continue` | `na2-reader.png`、`na3-controls.png` | 打开本地漫画第 1 章，顶栏只有 back / 标题 / `⋮` 三站 |
+| 环到 `⋮` → CENTER | `na5-quick-layer.png` | 快选层只剩七格一排：Chapters and pages / Add bookmark / Save page / Crop & note / Automatic scroll / Open in browser / Manga translation；`Rotate screen` 与 `Download` 都没画 |
+| RIGHT ×6 | `na6-last-cell.png` | 环逐格走过并停在最后一格 `Manga translation`，环完整落在面板内（格子右缘 1502，面板右缘约 1720），没有越界或裁切 |
+| `uiautomator dump` | `.tmp-na6.xml` | 文本节点正好七条，没有 `Rotate screen`、没有 `Download` |
+
+快选层七格的实际边界（`uiautomator`，1920×1080）：
+
+```
+'Chapters and pages' [236,980][410,1044]
+'Add bookmark'       [422,980][589,1012]
+'Save page'          [628,980][747,1012]
+'Crop & note'        [802,980][937,1012]
+'Automatic scroll'   [964,980][1138,1044]
+'Open in browser'    [1146,980][1320,1044]
+'Manga translation'  [1328,980][1502,1044]
+```
+
+构建与测试：`:app:assembleDebug` BUILD SUCCESSFUL（4m 19s），
+`:app:testDebugUnitTest --tests ReaderMangaQuickActionsTest` 5 项 0 失败（`app/build/test-results`）。
+
+### 遗留
+
+1. **正向分支没有设备证据**：本机夹具没配任何内容源，"TV Audit" 全是本地文件，看不到"远端章节 → `Download`
+   那格回来"的样子。逻辑由单测覆盖（默认 `canDownload = true` 时列表仍含 `DOWNLOAD`），但"远端内容在电视上
+   点 Download 真能下载"仍未过机。
+2. **已下载的远端章节没这层判断**：详情页章节行在 `item.isDownloaded` 时不画下载按钮，阅读器里的 `Download`
+   不知道"已经下过"，再按会重新排一次下载。要做得彻底得把"是否已下载"也传进 `ComposeReaderOptionsState`。
+3. 手机/平板没有 AVD，本轮只有编译级保证（`isTv = false` 时 `canRotate` 仍为 true）；本地内容少一格这件事
+   在手机上要等一次真机或手机模拟器复核。
+
+## 第八十一轮：阅读统计页整块仪表盘在遥控器上够不到（2026-10-25）
+
+### 症状
+
+离开阅读器、沿 `设置 → 服务 → 阅读统计` 进到统计页（`nb9-stats.png`），画面本身是完整的：`Week · All`、
+`2 h 47 min`、3 活跃天 / 116 会话 / 4 作品、7 天活动格、底部 `Reading times` 被屏幕下沿切掉一半。但遥控器
+只能在这几处停下来：
+
+| 按键 | 落点 | 结果 |
+| --- | --- | --- |
+| DOWN（首次） | 返回键 `[24,8][120,104]` | 有环，正常 |
+| DOWN（再一次） | 仍停在返回键 | 死站：下面什么都够不到 |
+| RIGHT | 清除按钮 `[1800,8][1896,104]` | 有环 |
+| DOWN（从清除按钮） | `Video` 芯片 `[655,140][783,236]` | 焦点确实到了芯片，但**屏幕上只有一层几乎看不出的容器 tint**，没有环 |
+| DOWN（从芯片） | 不动 | 死站：整个 `LazyColumn` 一个可聚焦的东西都没有 |
+
+也就是说：周期切换按钮和一排类型芯片虽然能被选中，却**没有可见焦点**；仪表盘本体（汇总卡、活动热力图、
+时段分布、类型占比、作品榜）**完全不可达**——`Reading times` 那段图表和下面的作品榜只能靠触屏拖出来。
+这和第三十六轮视频详情页"只读文本块是死站"是同一类缺陷，只是这次整页都是只读内容，等于整页都够不到。
+
+此外还查出两处同一页的焦点/返回缺陷：
+
+1. `Clear statistics` 确认框（`nf4-dialog.png`）里的两个裸 `TextButton` 没有环，电视上只靠按钮位置分辨。
+2. 确认框打开时按返回（遥控器的"退出"键），**整个统计页被 pop 掉**（`mCurrentFocus` 从 `StatsActivity`
+   变成 `SettingsActivity`，`nh2-after-back.png`）——平台的返回事件绕过对话框直接落到 Activity 的任务栈，
+   只想取消这个问题的用户把整页丢了。
+
+### 改动
+
+只动 `app/.../stats/ui/StatsScreen.kt` 一个文件：
+
+- **筛选行补环**：周期按钮 `FilledTonalButton`（:213）和四个类型芯片的 `Box`（:281）各加
+  `tvFocusable(shape = RoundedCornerShape(percent = 50), addFocusTarget = false)`。芯片的环色要区分选中态
+  （:284）：选中的芯片底色就是 `primary`，用默认环色等于画在同一个颜色上——实测`All` 芯片聚焦时环完全看不见
+  （`nf1` 那一版），改成 `onPrimary` 后才出现白环（`nf3-all-chip.png`）。
+- **仪表盘变成可聚焦的滚动体**（`tvScrollableDashboard`，:931）：`LazyColumn` 自己拿焦点、带 24dp 圆角环，
+  UP/DOWN 在预览阶段按 0.8 个视口滚动（`animateScrollBy`，视口未布局时退回 480px）。到顶时把 UP 交还出去
+  （焦点爬回筛选行），到底时把 DOWN **交给作品榜第一张可见卡片**（:317 `focusTopWork()`，靠
+  `LazyListState.layoutInfo.visibleItemsInfo` 找第一张注册过 `FocusRequester` 的卡）。一旦焦点落到卡片上，
+  拦截立刻停手（`isBodyFocused` 为 false），卡片自己按普通纵向列表走。
+- **作品榜卡片补环**（:747）：可点击的 `Surface` 加 `tvFocusable(shape = RoundedCornerShape(20.dp), …)`，
+  并挂上 `FocusRequester`（:371 起，`DisposableEffect` 注册进 `cardRequesters`），这样最后一屏既有可见焦点，
+  也能被上面的交接触发。
+- **确认框**：两个 `TextButton` 加环（:167、:176）；`showClearDialog` 为真时补一个
+  `BackHandler { showClearDialog = false }`（:154），返回键只关掉问题本身。
+
+`tvFocusable` 在非电视上是 no-op，所以手机/平板除了第 4 条（返回键先关对话框）以外行为不变；第 4 条对手机
+也是正确语义（对话框本来就该被返回键取消），只是过去被平台默认行为盖掉了。
+
+### 设备验证（`kototoro_tv_api36`，1920×1080@320）
+
+| 步骤 | 证据 | 结果 |
+| --- | --- | --- |
+| 统计页首屏 | `nd0-stats-new.png` | 数据完整，无焦点环 |
+| DOWN ×2 | `nd2-down2.png` | 环落在 `Week ▾` 药丸上（此前是死站） |
+| DOWN ×3 | `nd3-down3.png` | 环变成包住整个仪表盘的圆角框 |
+| DOWN ×4 | `nd6-scroll1.png` | 内容上移：出现 `Reading times` 时段图和 `Time by content type` |
+| DOWN ×7 | `nd8-scroll3.png` | 到顶：作品榜 1–4 名（`TV Audit Manga 11` / `Strip` / `Novel` / `Video`）全部可见 |
+| 再 DOWN | `ne2-handoff.png` | 焦点交给第 2 名卡片，卡片有蓝色圆角环 |
+| DOWN/UP 走榜 | dumps：`[32,596][1888,800]` → `[32,828][1888,1032]` → 回 `[32,500][1888,704]` | 逐张卡片移动，末张 DOWN 停在原地但不丢焦点 |
+| UP ×2（从卡片） | dumps：`[655,140][783,236]` → `[24,8][120,104]` | 焦点爬回芯片行、再到返回键 |
+| RIGHT（从周期按钮） | `ne5-chip-all.png` / `ne6-chip-manga.png` | 未选中芯片（`Manga`）有蓝环 |
+| LEFT ×3 回到 `All` | `nf3-all-chip.png` | 选中芯片用 `onPrimary` 白环 |
+| CENTER（清除按钮） | `nf4-dialog.png`、`nf6-dialog-clear.png` | 确认框默认停在 `Cancel` 并有环，RIGHT 到 `Clear` 也有环 |
+| 确认框里按返回 | `ni2-dialog-dismissed.png` + `mCurrentFocus=StatsActivity` | 只关对话框，整页保留、焦点回到清除按钮 |
+| CENTER（作品卡片） | `nj1-content-stats.png` | 打开单作品统计弹窗（`TV Audit Strip`、90 天柱状图、40 min / 34 会话 / 4 页） |
+| 弹窗里按返回 | `nj2-after-back.png` | 弹窗关闭，环回到原卡片 |
+
+焦点拓扑（实测，全部连通，无死站）：
+
+```
+返回键 ──DOWN──> Week ▾ ──DOWN──> 仪表盘（可滚动） ──DOWN 到底──> 作品榜第 N 张卡
+   ^                                    |                              |
+   |                                    └──UP 到顶──> 芯片行 <-──UP──┘
+   └────────────────── UP ──────────────┘        （芯片行内 LEFT/RIGHT 横移，末个 RIGHT 到清除按钮）
+```
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL。本轮没有新增单测——改动全是焦点/返回接线，验证手段是设备截图
+（统计页的数据由既有夹具提供，逻辑未变）。
+
+### 遗留
+
+1. **单作品统计弹窗自己的焦点没走**：`nj1-content-stats.png` 里右上角那个"打开详情"图标按钮
+   （`[1450,236][1530,316]`）本轮没验证有没有环、能不能聚焦；弹窗是只读的，返回键能关（`nj2`），
+   所以没卡住用户，但"CENTER 能不能进详情"未知。
+2. **从卡片 UP 出去要按两次才到芯片行**：第一次 UP 似乎被"把上一张卡滚进来"吃掉（`up3` 与 `up2` 落点相同），
+   第二、三次才爬到 `Video` 芯片和返回键。没有定位是 `LazyColumn` 的 bring-into-view 还是 beam 搜索，
+   用户能出去，先记录。
+3. **周期下拉菜单没单独截图**：菜单项走的是第七十八轮的 `TvDropdownMenuItem`（已有环），本轮只验证了
+   周期按钮本身能聚焦、能按 CENTER，没有走进去逐项看。
+4. **本轮只改了统计页**：`app` 里还有多处裸 `AlertDialog` + `TextButton`（例如阅读器里的裁剪/笔记对话框），
+   同一个"确认框按钮没有环 + 返回键穿透"的问题很可能也在，需要下一轮批量排查。
+
+## 第八十二轮：确认框与对话框的动作按钮批量补环，共享确认框吃下返回键（2026-10-25）
+
+### 症状
+
+上一轮遗留第 4 条要求"批量排查裸 `AlertDialog` + `TextButton`"。本轮先按"用户真会遇到的确认框"排序，
+从设置里最容易碰到的一个开始：`设置 → 外观 → Appearance mode`（`nk4-dialog.png`）。
+
+这个选择框打开后，画面上**没有任何一处焦点环**：四个选项行、`Black` 开关、右下角的 `OK` 全都是平的。
+按一下 DOWN 才在第一行 `Follow system` 上出现蓝环（`nk5-down1.png`），再按才走选项。原因不是对话框
+没抢到焦点，而是它的按钮本身没有环——同一个毛病在应用里是系统性的：
+
+| 统计 | 数量 |
+| --- | --- |
+| 裸 `TextButton(` 调用点（本轮之前） | 202 处 |
+| 其中**在 `AlertDialog(...)` 里**当确认/取消按钮用的 | 86 处 / 32 个文件 |
+| 对话框之外（sheet 底栏、工具条、空态动作） | 116 处 / 63 个文件 |
+
+M3 `TextButton` 的焦点提示只有一层 `stateLayer` 泛光，而电视上看的是**几何轮廓**——从三米外看，
+"按钮亮了一点"根本不构成"我现在停在这里"。同一个缺陷在第八十一轮里被逐个手补过（`StatsScreen` 的两个
+按钮加了 `tvFocusable`），说明修法早就有，只是没人一次性铺开。
+
+顺带查出的第二个缺陷：这些确认框上按返回（遥控器唯一的退出键），平台的默认处理会**绕过对话框**落到
+Activity 的任务栈上——第八十一轮在 `StatsActivity` 上实测过（整个统计页被 pop 掉，`nh2-after-back.png`）。
+对话框自己吃不下返回键，只想取消提问的用户把整页丢了。共享的 `SettingsAlertDialog`（设置里约 45 处
+确认/选择框都走它：外观、语言、阅读器设置、备份恢复、来源管理……）同样如此。
+
+### 改动
+
+**新增共享按钮 `core-ui/.../adaptive/TvTextButton.kt`**（86 行），签名与 M3 `TextButton` 一一对齐
+（`onClick`、`modifier`、`enabled`、`shape = ButtonDefaults.textShape`、`colors = ButtonDefaults.textButtonColors()`、
+`elevation`、`border`、`contentPadding = ButtonDefaults.TextButtonContentPadding`、`interactionSource`、
+`content: @Composable RowScope.() -> Unit`），唯一的不同是给 `textButton` 的 modifier 前面加
+`tvFocusable(enabled = enabled, shape = shape, addFocusTarget = false)`：
+
+- `addFocusTarget = false`——环**附着**在按钮自己的焦点目标上，不新增一个停留点。遥控器的按键次数和
+  手机上的可点区域都不变。
+- `shape` 跟随调用方，环的圆角就和按钮本身的圆角一致；默认 `ButtonDefaults.textShape`。
+- `tvFocusable` 在非电视上是 no-op，所以手机/平板外观与行为完全不变。
+
+**32 个文件 86 处对话按钮换成 `TvTextButton`**：`FilterSheetRoute` 7、`MigrationListScreen` 6、
+`ColorFilterConfigActivity` 6、`ReaderActivity` 5、`ComposeTranslationTaskPanel` 5、
+`DetailsSourceSheets` 4、`FavoriteDialogScreen` 4、`ErrorDetailsActivity` 4、`MainShellScene` 4、
+`Appearance` 之外的 `SettingsPreferenceComponents` 4……每次替换同时清理 `material3.TextButton` 的
+无用 import、按字母序补 `core.ui.adaptive.TvTextButton`。迁移脚本只认**位于 `AlertDialog(...)` 括号内**
+的 `TextButton(`，并且跳过本身已经带 `.tvFocusable(` 的调用——所以第八十一轮手补过的 `StatsScreen`
+和 `SettingsAlertDialog` 的 `SettingsDialogActionButton` 都没被重复包一层。
+
+**共享确认框吃下返回键**（`settings/compose/SettingsAlertDialog.kt`）：在 `AlertDialog(` 之前加
+
+```kotlin
+if (isTvPresentation) {
+    BackHandler { onDismissRequest() }
+}
+```
+
+只在电视上注册，而且注册在对话框自己的组合里——它比 Activity 的返回处理更近，所以返回键只关掉这个问题。
+不可取消的对话框（没有 `dismissButton`、`onDismissRequest` 是空实现）在电视上表现为"返回键什么都不做"，
+也比"把整页 pop 掉"好。
+
+### 设备验证（`kototoro_tv_api36`，1920×1080@320）
+
+| 步骤 | 证据 | 结果 |
+| --- | --- | --- |
+| `设置 → 外观 → Appearance mode`（**用 D-pad 打开**） | `nk12-open-by-key.png` | 打开即在 `Follow system` 上有蓝环，不用先按一下 |
+| DOWN | `nk5-down1.png` | 环移动，选项逐行走（选项行的环是既有 `tvFocusable`） |
+| 对话框上按返回 | `nk7-after-back.png`、`nk9-back-*.png` | 只关对话框：外观页还在，`mCurrentFocus=SettingsActivity` |
+| `历史 → ⋮ → Clear history` | `nk29-dialog.png` | 选项框打开，四个选项行 + `Cancel`/`Clear` 全平 |
+| DOWN ×5 | `nk30-ring.png`（裁剪 `nk30-crop.png`） | `Cancel` 出现蓝色圆角环——本轮 `TvTextButton` 的实证 |
+| RIGHT | `nk26-clear-ring.png` | `Clear` 同样有环，两个按钮的环互不重叠 |
+| 对话框上按返回 | `nk31-back.png`、`mCurrentFocus=MainActivity` | 历史页保留，没有被 pop |
+
+**一次自我否定的 A/B**：第一次看到 `nk4` 完全无环时，判断是"对话框把焦点给了 `LazyColumn` 自己
+（可滚动 ⇒ 自带焦点目标 ⇒ 不画环）"，于是加了个 `Modifier.tvListItemsTakeFocus()`
+（电视上 `focusProperties { canFocus = false }`）贴在三个选项 `LazyColumn` 上。为了确认它到底有没有用，
+又单独构建了一个**去掉该补丁**的对照包，用同样的 D-pad 路径打开同一个对话框：两张截图**字节级相同**
+（`nk16` 与 `nk12` 的 sha256 都是 `b050a3…`）。也就是说打开即有环与那个补丁无关，`nk4` 的无环另有原因：
+
+> 只要最后一次输入是**触摸**，Compose 就处在触摸模式，`FocusRequester.requestFocus()` 会被丢掉，
+> 于是下一帧没有焦点环，直到按下第一个键。本轮开头几张"什么都没有"的截图就是这么来的（我用
+> `input tap` 点的菜单）。
+
+结论：不是代码缺陷，真实遥控器（无触摸）不受影响；`tvListItemsTakeFocus` 已整体撤销，没有进入本轮提交。
+这条记进遗留，因为带触屏的遥控器/接了鼠标的电视盒会遇到。
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（1m）。
+
+### 遗留
+
+1. **116 处裸 `TextButton(`（63 个文件）仍在对话框之外**：sheet 底栏、面板工具条、空态动作。它们是同一类
+   "有焦点没轮廓"，下一轮按"共享组件优先"归并——先把同一模式的重复写法收敛成一个共享件，再逐个换。
+2. **带触屏/鼠标的输入设备上，对话框打开后第一下按键前没有环**（见上面 A/B 的说明）。要修得在
+   `SettingsAlertDialog` 的预聚焦里补一次"离开触摸模式"后的重试，属于平台信息层面的活，未做。
+3. **`Clear history` 这种对话框的选项行没有环**：4 个裸 `RadioButton + Row`（不在 `SettingsChoiceDialog`
+   里），遥控器要走 5 步才够到按钮，中间 4 步屏幕纹丝不动。同类"对话框里自己拼行的选择器"还有若干。
+4. **`AlertDialog` 的返回键行为按宿主 Activity 不同**：`MainActivity` 里的填空框可以正常关（`nk31`），
+   `StatsActivity`（第八十一轮）和 `SettingsActivity` 的共享确认框需要显式 `BackHandler`。没有证据之前
+   不给 55 处 `AlertDialog` 统一包一层，剩下阅读器/播放器/备份等宿主逐一验。
+5. **32 个文件里真正上机点开验证的只有 2 个对话框**（`Appearance mode`、`Clear history`），其余 84 处
+   是编译期 + 代码同构验证（同一行形态的批量替换）。
+
+## 第八十三轮：把剩下的"有焦点没轮廓"按钮扫干净，半屏面板的拖柄不再抢停（2026-10-25）
+
+### 症状
+
+第八十二轮把**对话框里**的动作按钮（86 处）换成了带环的 `TvTextButton`，留下了两条尾巴，本轮收第一条：
+
+| 统计（本轮之前） | 数量 |
+| --- | --- |
+| `TextButton(` 调用点总计 | 202 处 |
+| 其中**自己已经**带 `.tvFocusable(...)` | 24 处（第七十六～八十一轮手补的） |
+| 真·裸按钮，没有环 | **92 处 / 46 个文件** |
+
+这 92 处不是边角：`Explore` 右上角的"Extension management"、设置各页底部的文本动作、搜索筛选面板的
+"重置/应用"、迁移向导的"选择可见/清除可见"、认证页的按钮、笔记与批注面板里的动作——全是"按下 CENTER
+会做事，但屏幕上完全看不出焦点在哪"。现象与第八十二轮同一个：M3 `TextButton` 的焦点提示只有 stateLayer
+泛光，电视上看不出几何轮廓。
+
+第二条尾巴在**半屏面板**上。`ModalBottomSheet` 的 Material 拖柄本身是焦点路径上的一站，遥控器停在这个
+灰色小横杠上按 CENTER 什么都不会发生（拖拽对手柄来说是触屏动作）。全 app 15 处 `ModalBottomSheet`：
+
+- 12 处显式传了 `dragHandle = null`（或者走的是早前抽出来的 `TvModalBottomSheet`），电视上没有这一站；
+- **3 处漏了**——都在 `ComposeNovelMarkingsSheet.kt`（小说批注面板 :98、摘录 :588、:684），走默认拖柄。
+
+### 改动
+
+**92 处裸 `TextButton` → `TvTextButton`**（46 个文件）。迁移脚本按"调用的括号内是否已经有
+`.tvFocusable(`"判断，所以第七十六轮以来手补过的 24 处**一个都没动**（它们已经在画环，重复包一层只会
+得到两道环）。每次替换同时清理 `material3.TextButton` 的无用 import、按字母序插入
+`core.ui.adaptive.TvTextButton`；用 `material3.*` 通配 import 的文件（`ReorderDialog.kt`）保留通配。
+
+**`TvModalBottomSheet` 补齐透传参数**（`core/ui/compose/TvModalBottomSheet.kt`）：原来是
+`onDismissRequest / modifier / sheetState / content` 四个参数，只能接最简单的面板；小说批注那三个面板
+还要 `shape`、`containerColor`、`contentColor`、`tonalElevation`、`scrimColor`，于是把这五个按 M3 的
+默认值补齐再透传下去。三个面板改成 `TvModalBottomSheet(...)`，**只有拖柄**在电视上被换成 12dp 空白
+（非电视仍是 `BottomSheetDefaults.DragHandle()`），其余外观一个像素都没变。
+
+至此 `TextButton` 的账：202 处 = 178 处 `TvTextButton`（86 对话框 + 92 其它）+ 24 处自带
+`.tvFocusable(...)` 的 `TextButton`。**没有一个裸按钮了**。
+
+### 设备验证（`kototoro_tv_api36`，1920×1080@320）
+
+| 步骤 | 证据 | 结果 |
+| --- | --- | --- |
+| Explore 页，从导航栏按 RIGHT | `r83-8.png` | 焦点落到"Extension management"，出现**蓝色圆角环**（本轮迁移的 `TvTextButton`） |
+| 详情页 DOWN ×3 | `r83-15.png` | `Chapter 02` 行环正常（回归检查） |
+| 详情页 CENTER 进阅读器 | `r83-16.png`、`mCurrentFocus=…ReaderActivity` | 第 2 章连续模式正常渲染（回归检查） |
+| Home / History / Explore / 详情 首屏 | `r83-12` / `r83-2` / `r83-5` / `r83-13` | 布局无回归，按钮文字与位置不变 |
+| Display options 面板（`dragHandle = null` 的老面板） | `r83-4.png` | 面板顶部没有拖柄，焦点直接落在 Grid size 滑条上（与拖柄无关的老行为） |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（两轮增量，1m45s）。本轮没有新增单测——改动是"同一行
+形态的批量替换 + 一个参数补齐"，验证手段是代码盘点（202 = 178 + 24，裸按钮 0）与设备抽查。
+
+### 遗留
+
+1. **小说批注/摘录这三个面板的拖柄改动没上机**：库里没有带批注的小说，走不到那个面板；改动是
+   把调用换成早前已验证的 `TvModalBottomSheet`（同参数透传），静态核查 15 处面板已无默认拖柄。
+2. **对话框里手拼的 `RadioButton + Row` 选择行仍然没环**（第八十二轮遗留第 3 条）：`Clear history`
+   那种 4 行选项，遥控器要走 5 步才够到按钮、中间 4 步屏幕纹丝不动。
+3. **`AlertDialog` 的返回键行为按宿主 Activity 不同**（第八十二轮遗留第 4 条）：`MainActivity` 正常，
+   `StatsActivity`（第八十一轮）与共享 `SettingsAlertDialog`（第八十二轮）靠显式 `BackHandler`，
+   阅读器/播放器/备份等宿主仍未逐一验。
+4. **带触屏/鼠标的设备上，对话框打开后第一下按键前没有环**（第八十二轮遗留第 2 条）：触摸模式下
+   `requestFocus` 被丢弃，遥控器本身不受影响。
+5. **92 处里真正上机点开验证的只有 1 处**（Explore 的"Extension management"）；其余是"同一行形态
+   批量替换 + 编译期验证"。同类形态在不同容器（面板底栏、工具条、空态）里视觉一致，但没有逐屏截图。
+
+## 第八十四轮：遥控器停在芯片上什么也看不见——统一芯片焦点环（2026-10-25）
+
+### 症状
+
+第八十三轮把 `TextButton` 的账结清之后，电视上还剩一整类"有焦点没轮廓"的对照物没算：**芯片**。
+Material3 的 `AssistChip / FilterChip / SuggestionChip / InputChip` 内部都是 `clickable`，遥控器会
+老老实实停在上面，但屏幕上只有 stateLayer 的一层浅色泛光——两米外看就是"按了没反应"。
+
+本轮先在设备上抓到两组活证据（第八十三轮之后第一次上机走 Home / History）：
+
+- **History 页顶部统计卡**：从网格按 UP 越过筛选条再按一次 UP，焦点停在 `[192,140][1896,404]` 的
+  统计卡上（`uiautomator dump` 的 `focused="true"`），而 `r84-7.png` 里**整屏没有任何轮廓**；
+  在这个"看不见的焦点"上按 CENTER，页面直接跳进 `StatsActivity`（`r84-8.png`）。
+- **Home 页"Recent searches"芯片**：从 Quick access 第一张卡按 UP，焦点落到 "a" 这颗搜索历史芯片上，
+  `r84-15.png` 同样**没有环**。
+
+盘点全 app 的芯片调用：`AssistChip / FilterChip / SuggestionChip / InputChip` 加三个 Elevated 变体，
+共 **61 处调用**，其中 **42 处完全没有焦点环**（26 个文件），另外 19 处是第七十六轮以来手补过
+`.tvFocusable(...)` 的。
+
+### 改动
+
+**先抽共享件**：`core-ui` 的 `adaptive/TvFocus.kt` 新增
+`Modifier.tvChipRing(shape: Shape = RoundedCornerShape(8.dp))`，就是
+`tvFocusable(shape = shape, addFocusTarget = false)` 的一行包装。芯片自己把 modifier 放在内部
+`clickable` 之前，所以这个环观察到的正是那个停点，**不会多出一站**；默认 8dp 圆角就是
+`ChipDefaults.shape`，调用方自己声明了 `shape =` 的（expressive 下的 `if (expressive) 18.dp else 8.dp`、
+胶囊 `999.dp`、`style.chipShape`）就把那个表达式传进来。
+
+**42 处迁移（26 个文件）**。脚本按调用的括号内是否已有 `.tvFocusable(` / `.tvChipRing(` 判断，第七十六
+轮以来手补的 19 处一个都没动（重复包一层只会得到两道环）。三种插入形态：
+
+1. 已有 `modifier =` 实参的（`modifier = Modifier.height(32.dp)`、`modifier = modifier.heightIn(...)`），
+   直接在表达式后接 `.tvChipRing(...)`；
+2. 多行调用但没有 `modifier =` 的，补一行 `modifier = ...`；
+3. 单行调用（`AssistChip(onClick = {}, label = { Text(tag) })`）或首实参写在同一行的
+   （`FilterChip(selected = ...,`），按 `.editorconfig` 拆成一行一个实参。
+
+Kotlin 不允许命名实参与位置实参混用，所以**带位置实参的芯片**（`FilterChip(isNewOnly, { ... }, label = ...)`
+那种）把 `modifier =` 追加到实参列表末尾——这正是迁移脚本第一版跑出来的 9 个编译错误
+（`e: …SourcesCatalogScreen.kt`，"Mixing named and positional arguments is not allowed"，消息被 Gradle 按
+终端宽度截到 140 列，改用 UTF-16 解码 `.tmp-build.log` 才看全）。
+
+**统计卡补环**：`HistorySummarySection.kt` 的 `HistoryStatsSummaryCard` 是
+`Surface(...).clip(RoundedCornerShape(24.dp)).clickable(...)`，在 `clip` 之后、`clickable` 之前插一行
+`.tvFocusable(shape = RoundedCornerShape(24.dp), addFocusTarget = false)`——与芯片同一形态。
+
+### 设备验证（`kototoro_tv_api36`，1920×1080@320）
+
+| 步骤 | 证据 | 结果 |
+| --- | --- | --- |
+| History 页：导航栏 RIGHT → 筛选条 → UP | `r84-30.png` | 统计卡整块出现**蓝色圆角环**（本轮新增）；同一路径此前是 `r84-7.png` 的全黑无环 |
+| 同一停点再按 CENTER | `mCurrentFocus=…stats.ui.StatsActivity` | 仍然进统计页，BACK 回 `MainActivity`（无回归） |
+| History 页筛选条 | `r84-25.png` | "On device" 胶囊环正常（`QuickFilterGroupChip` 早前手补过，本轮未动） |
+| Home 页：hero → DOWN ×4 → UP | `r84-37.png` | "Recent searches" 的 "a" 芯片出现**蓝色圆角环**（本轮迁移的 `AssistChip`） |
+| 详情页工具条与来源芯片 | `r84-32.png`、`r84-33.png` | 双栏布局无回归；来源芯片之间的换源图标按钮有环 |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（增量 59s，只剩上一轮就有的警告）。本轮没有新增单测——改动
+是"一个共享修饰符 + 同一行形态的批量替换"，验证手段是代码盘点（61 = 42 + 19，裸芯片 0）与设备抽查。
+
+### 遗留
+
+1. **42 处里真正上机验证的只有 1 处**（Home 的 Recent searches）。其余是编译期 + 同构验证；芯片在
+   sheet、对话框、设置页里的视觉与 Home 一致，但没有逐屏截图。
+2. **`IconButton` 还没算**：全 app 190 处 `IconButton` 家族调用，去掉自带环/没有 `onClick` 的 55 处，还有
+   **135 处裸的（64 个文件）**——Downloads 页 9 处、章节选择条 6 处、Explore 来源页 6 处最密。下一轮先抽
+   `Modifier.tvIconButtonRing()` 再批量换。
+3. **`Clear history` 那种对话框里手拼的 `RadioButton + Row`**（第八十二/八十三轮遗留）仍未上机复核：
+   `HistoryActionDialogs.kt:75` 其实已经有 `tvFocusable(shape = ClearHistoryRowShape, addFocusTarget = false)`，
+   所以"4 个隐形单选停点"的说法要重新验，别照抄结论。
+4. **`SwipeableFilterChip`** 是自绘芯片（`main/ui/compose/SwipeableFilterChip.kt`），不在 M3 芯片清单里；
+   它的 `.tvFocusable(...)` 写在 `.clickable(...)` **之后**、`addFocusTarget` 还是默认 `true`，与"环必须在
+   `clickable` 之前 + 不加焦点节点"的规则相反。本轮没动，也没有它的实际停点证据，先记下来。
+5. 其余遗留（`AlertDialog` 返回键随宿主不同、触摸模式下首键前无环、64 处 `.clickable` 无环清单、空态整块
+   板、TV 空间切换入口）沿用第八十三轮的记录，本轮没有新证据。
+
+## 第八十五轮：遥控器停在图标按钮上同样什么也看不见——图标按钮焦点环（2026-10-25）
+
+### 症状
+
+第八十四轮把芯片和统计卡的焦点环补齐之后，同一类“隐形停点”还留在**图标按钮**上：`IconButton(` 家族
+（含 `FilledIconButton`/`FilledTonalIconButton`/`OutlinedIconButton` 与三种 toggle 变体）在 Material3 里也是一圈 `clickable`，
+遥控器停在上面时只有 stateLayer 那层泛光，沙发上看就是“什么都没选中”。全 app 190 处调用里 55 处已经手补过环，
+剩下 **135 处裸的，散在 64 个文件**：Downloads 页排头 9 处、章节选择条 6 处、Explore 来源页 6 处、设置偏好行 6 处。
+
+### 改动
+
+1. **新增 `Modifier.tvIconButtonRing()`**（`core-ui` 的 `adaptive/TvFocus.kt`，紧挨 `tvChipRing`）：
+   `tvFocusable(shape = CircleShape, addFocusTarget = false)`。圆形是 M3 图标按钮自己的形状；dock、选择栏
+   这类方形槽位由调用方传自己的圆角。和芯片一样它只观察那个停点，不新增焦点节点。
+2. **135 处调用迁移**：裸的 `IconButton(...)` 加上 `modifier = Modifier.tvIconButtonRing()`；
+   已经有 `modifier =` 的只把 `.tvIconButtonRing()` 续在值末尾，不再重排整个调用。
+3. 迁移脚本的排版规则（第一版踩过）：带 lambda 实参的多行调用如果整体重排，lambda 体还停在
+   原来的缩进上，看起来像“`onClick = {` 下面的代码浮出去了”；改成重排时把每个实参的续行
+   按实参自己右移的 4 格一起移，单行调用在加上新实参后仍然 ≤ 120 列就保持一行。
+
+### 设备验证（`kototoro_tv_api36`，1920×1080@320）
+
+| 界面 | 证据 | 结果 |
+| --- | --- | --- |
+| 设置页顶栏返回箭头 | `r85-2.png` | `[24,8][120,104]` 出现蓝色圆环 |
+| 设置页顶栏搜索 | `r85-3.png` | `[1800,8][1896,104]` 出现蓝色圆环 |
+| 阅读器顶栏返回 | `r85-11.png` | `[28,12][124,108]` 出现蓝色圆环 |
+| 阅读器顶栏溢出 ⋮ | `r85-10.png` | `[1796,12][1892,108]` 出现蓝色圆环 |
+| 阅读器页码条上一页 | `r85-13.png` | 96dp 圆按钮 `[604,982][700,1078]` 出现圆环，没有把胶囊条撑破 |
+| 收藏页排序/筛选图标按钮 | `r85-16.png` | `[176,216][268,312]` 出现圆环，紧贴 "On device" 芯片行但不压边 |
+
+六处都是“先 dump 拿到 `focused="true"` 的 bounds，再按同一路径截图”，`uiautomator` 的焦点框和截图上的
+蓝色环一一对应；`:app:assembleDebug` BUILD SUCCESSFUL（2m41s）。数量核对：190 处调用全部带环、裸的 0，
+新增行没有一行超过 120 列。
+
+### 遗留
+
+1. **默认圆形不一定配所有槽位**：`DetailsDock`、选择栏这类圆角方槽本来就该传
+   `RoundedCornerShape(12.dp)`（手补的 55 处里就是这么写的），批量迁移一律用默认圆形，视觉上要逐个看一遍。
+2. **135 处只上机验了 5 处**：Downloads 页选择栏（6 个图标一排）、章节选择条（6 个）、
+   Scrobbling 选择对话框（4 个）这类**紧排一行**的地方最容易看出环互相压边，还没截图。
+3. **对话框/弹层里的图标按钮**（`ScrobblingSelectorDialog`、`ImportDialog`、`ContentStatsDialog`）除了环，
+   还要看“弹层打开时焦点落在哪”——那是第八十三轮 `tvTakeInitialFocus` 的活儿，本轮没验。
+4. `SwipeableFilterChip`（自绘芯片）仍然把 `.tvFocusable(...)` 写在 `.clickable(...)` **之后**且
+   `addFocusTarget` 是默认 `true`，与“环在 `clickable` 之前 + 不加焦点节点”的规则相反；没有上机证据前不改。
+5. `Clear history` 那 4 个手拼单选行其实已经有 `tvFocusable(shape = ClearHistoryRowShape, addFocusTarget = false)`，
+   “4 个隐形停点”的旧结论要重新验。
+
+## 第八十六轮：图标按钮环统一形状、环不再被容器切掉（2026-10-25）
+
+### 症状
+
+第八十五轮把 135 个图标按钮一次性接进 `tvIconButtonRing()`，电视上"停得住但看不见"的站少了，但留下两类问题：
+
+1. **改法本身太重**：批量脚本把整条 `IconButton(...)` 重新排版，64 个文件 385 增 / 184 删，把原本已经
+   分行的实参链整体右移 4 格，24 处续行对不齐（`.editorconfig` 的 4 空格/120 列规则没被违反，但 diff 里
+   全是噪音，review 时看不出哪一处是真的加了环）。
+2. **环被容器切掉**：`Stroke` 是描在轮廓线**中心**上的，`tvFocusable` 又按节点原始尺寸建轮廓，于是 2 dp 的环
+   有一半（1 dp）画到节点外。单看一个按钮没问题，但详情页左栏那枚胶囊（`[679,40][943,134]`，47 dp 高）
+   里放的是 44 dp 的按钮，只要对焦，环的上下各 1 dp 就被胶囊裁掉——截图 `crop86-share.png` 里顶端是一道平切的缺口，
+   看上去像画坏了的圈，而不是"焦点在这里"。
+
+### 改动
+
+- `core-ui/.../adaptive/TvFocus.kt`：`tvFocusable` 画环时把轮廓按一个描边宽收缩并平移半个描边，
+  环整体落在节点以内：
+
+  ```kotlin
+  val strokeWidth = borderWidth.toPx()
+  val outlineSize = Size(
+      width = (size.width - strokeWidth).coerceAtLeast(1f),
+      height = (size.height - strokeWidth).coerceAtLeast(1f),
+  )
+  val outline = shape.createOutline(outlineSize, layoutDirection, this)
+  translate(left = strokeWidth / 2f, top = strokeWidth / 2f) {
+      drawOutline(outline = outline, color = resolvedRingColor, style = Stroke(width = strokeWidth))
+  }
+  ```
+
+  这是所有环（图标按钮、页签、芯片、选择栏）共用的原语，改一处，全部不会再越界。
+- 重跑 135 个站点的迁移，这次用**最小 diff** 的三条规则（脚本不进仓库）：已有 `modifier` 值就在链尾追加
+  `.tvIconButtonRing()`，只有投影超过 120 列才折行；实参已经一行一个的，只插入一行 `modifier = Modifier.tvIconButtonRing(),`；
+  只有实参内联在首行的那种才重新排版（续行整体保持原有缩进）。相对"未迁移的基线"，变动从 385/184 降到
+  287/152，24 处错位降到 14 处，且这 14 处都是改动前就在的（`DetailsSourceSheets.kt`、
+  `ScrobblingInfoSheetContent.kt`、`SourceGroupsDialog.kt`、`SourceTestDialog.kt`）。落到提交上更好看：
+  相对已提交的第八十五轮版本只有 10 个文件、44 增 46 删（其余 60 个文件的最小 diff 版与已提交内容逐字一致）。
+- `DetailsDock.kt` 里 3 处胶囊内按钮补成 `RoundedCornerShape(12.dp)`，和同一个 dock 里已有的手写环
+  （12 dp / 16 dp 两档）对齐；默认的 `CircleShape` 在这枚 42 dp 方按钮上会画成一个圆，和胶囊的圆角语言不一致。
+- `VideoScreenLockOverlay.kt` 的链在上一版里被拆成缺 `.` 的续行（`tvIconButtonRing(),` 单独一行），
+  本轮重新生成成正常的 `.size(64.dp).background(...).tvIconButtonRing(),`。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 历史 → `TV Audit Manga 11` → 左栏胶囊对焦 share | `r86-15.png`、`crop86-share2.png` | 环完整（44×44 dp），不再被胶囊平切；蓝色 bbox 由改前的 92×88 px 收到 88×88 px |
+| 左栏胶囊 ⋮ | `r86-13.png` | 环完整，同上 44×44 dp |
+| 右栏工具条 search | `r86-19.png`、`crop86-search2.png` | 48×48 dp 的 `RoundedCornerShape(12.dp)` 环，四边都在按钮内 |
+| 右栏工具条 ⋮ | `r86-29.png`、`crop86-dots2.png` | 同上，环贴着工具条的圆角内沿，没有被裁 |
+| 章节行长按进批量模式 → UP → 译 | `r86-22.png`、`crop86-selbar.png` | 紧排四图标行（译/删除/全选/⋮）里 12 dp 环完整可见 |
+| 批量模式 LEFT → ✕ | `r86-23.png`、`crop86-selclose.png` | 52 dp 节点上的 12 dp 环完整 |
+| 章节行尾的"译"图标 | `r86-32.png` | 行内 48 dp 圆形环（`CircleShape` 默认档）正常 |
+| 阅读器 CENTER → RIGHT → ⋮ / LEFT ×2 → 返回 | `r86-35.png`、`r86-36.png`、`crop86-readerdots.png` | 两枚 48 dp 圆形环与第八十五轮一致，未被本轮的收缩改坏 |
+| 设置页 UP → 返回 / RIGHT → 搜索 | `r86-38.png`、`r86-39.png` | 两枚 48 dp 环正常（回归） |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（1 m 46 s）。像素统计用 `.tmp-bluebox.py`（按"蓝 > 170、蓝-红 > 70、
+蓝-绿 > 40"筛出焦点环的 bbox），不靠肉眼估。
+
+### 遗留
+
+1. **详情页右栏那排图标页签（☰ / ▦ / 🔖）聚焦时仍然没有环**。`ChaptersPagesTabsContent.kt` 的
+   `DetailsTabsRow` 已经给 `Tab(modifier = Modifier.tvTabRing())`，第四十九轮也在设置页的
+   `PrimaryTabRow` 页签上截到过环，但这里对焦到 ▦ `[1074,54][1158,150]`、🔖 `[1158,54][1254,150]` 时，
+   同一区域的蓝色像素只剩选中页签自己的图标（`r86-5.png` 实测 bbox 只有 18×16 dp），也就是
+   **环一格都没画**。同一个原语在设置页能画、在这排画不出来，怀疑是 `SecondaryTabRow` 的子组合/测量把
+   `Tab` 的 modifier 放到了另一个节点上（或这一排的 `Tab` 没有拿到 `isTv`）。下一轮要先定位再改，
+   不要靠"再套一层 tvFocusable"糊过去。
+2. 左栏胶囊的两枚环（share / ⋮）现在完整了，但相对胶囊底色仍偏高约 2 dp（环中心 79.5 px，胶囊中心 87 px）——
+   是胶囊内容的排版偏差，不是环的问题，纯视觉小瑕疵，暂不动。
+3. `SwipeableFilterChip` 自绘的芯片环仍然是 `.clickable` **之后** + `addFocusTarget` 默认 `true`（第八十五轮遗留 4），
+   留待芯片专项轮。
+4. 本轮只验了按钮类站点；61 个芯片站点里的"紧排"场景（如 Favorites 快筛那一排）没有重截图，
+   但收缩只影响 1 dp，且芯片用的是同一个 `drawWithContent`。
+
+## 第八十七轮：图标页签的环不是画不出来，是按钮被撑出了槽位（2026-10-25）
+
+### 症状
+
+第八十六轮遗留 1：详情页右栏那排图标页签（☰ / ▦ / 🔖）遥控器停上去只有一层 M3 状态层圆盘，
+环一格都没有；同一排的 search / ⋮ 一直是好的。选中态也对（选中页签的图标是主色蓝），
+焦点事件也一直在跳——就是"停得住、状态变了、看不见"。
+
+### 定位（四次收敛，别照抄结论）
+
+1. **先确认这是哪个组件**。上一版我猜是 `ChaptersPagesTabsContent.kt` 的 `DetailsTabsRow`
+   （`SecondaryTabRow` + `tvTabRing()`），改完装到机器上毫无变化；uiautomator 显示这一排其实是
+   `android.widget.HorizontalScrollView [992,60][1252,144]` 加三个 84/84/96 px 的子节点，
+   来源是 `DetailsDock.kt` 的 `DetailsDockActionButton`（三个 `AnimatedVisibility` 各包一个 `IconButton`）。
+   那次改动是死代码，已 `git checkout` 回退。**页面标题栏这排页签并不在 `ChaptersPagesTabsContent` 里。**
+2. **确认焦点真的进了 `tvFocusable`**。在 `onFocusChanged` 里打 `println`：
+   `TVTAB Pages isFocused=true` 与 `TVFOCUS isFocused=true` 同时出现，说明 `isTv` 为真、`shape != null`，
+   焦点观察和环的绘制分支都成立。
+3. **确认绘制分支真的执行，且问题在轮廓本身**。在 `drawWithContent` 里临时加两笔：
+   先用 `drawRect(0x6600FF00)` 铺满节点，再在 12 px 内缩处用 `drawRoundRect` 画一条 4 px 纯蓝描边，
+   最后才走原来的 `createOutline` + `drawOutline`。截图里绿色铺满、蓝色手绘描边清晰可见，原来的环还是没有；
+   同时把几何打进日志：`size=Size(96.0, 96.0) outlineSize=Size(92.0, 92.0) stroke=4.0
+   color=Color(0.039,0.518,1.0) outline=Outline$Rounded`——尺寸、颜色、轮廓对象全部正常。
+4. **像素度量把矛盾钉死**：绿色填充（就是 `draw` 节点的 `size`）只到 **84×84 px**，
+   而 `draw` 里报的 `size` 是 **96×96 px**。差的 12 px 正好是被父容器裁掉的部分。
+
+### 根因
+
+- dock 给每个页签的槽位是 42 dp（`ModernDetailsDockTabButtonWidth`，按钮自己也是 `.width(42.dp).height(42.dp)`），
+  但 Material3 的 `IconButton` 会经 `minimumInteractiveComponentSize()` 把节点撑到 48 dp 触控目标，
+  于是**按钮比槽位大 3 dp/边**，又被外层容器裁回 42 dp。
+- `tvFocusable` 把环画在**节点自己的边缘**上（第八十六轮只把它整体内缩了一个描边宽，解决"半条环越界"，
+  解决不了"整个节点越界"），所以 48 dp 节点上的环整条落在 42 dp 裁剪区之外，一格都不显示。
+- 同排 search / ⋮ 之所以一直正常：它们的槽位 ≥ 48 dp，节点没被撑出槽外，环自然也落在裁剪区里。
+
+### 改动
+
+`app/.../details/ui/compose/DetailsDock.kt`（`DetailsDockActionButton`）：
+
+- 用 `CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides DockActionButtonSize)`
+  把最小触控目标压到槽位宽 42 dp，节点（以及画在它边缘的环）回到槽位里；
+- 去掉只为"承载裁剪"才存在的 `Surface`（`containerColor` 恒为 `Color.Transparent`）和随之无用的
+  `containerColor` 动画；`padding(end = spacingAfter)` 前移到按钮自己的 modifier 链首
+  （仍在环节点之外，环节点正好 42 dp）；
+- 环改用 `tvIconButtonRing(shape)`，形状取 dock 自己的 `RoundedCornerShape(if (modernStyle) 18.dp else 16.dp)`，
+  与第八十六轮"环跟随控件自身形状"的结论一致；
+- 新增 `private val DockActionButtonSize = 42.dp`：宽度、高度、最小触控目标三处同源。
+
+`core-ui/.../adaptive/TvFocus.kt` 本轮**没有留下改动**：第 2、3 步加的 `println`、绿色 `drawRect`
+和蓝色手绘描边全部撤掉（`git checkout`），环的原语保持第八十六轮的形态。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 详情页 → LEFT ×2，🔖 聚焦 | `r87-14.png`、`crop87-ring.png` | 环完整：自身右/下边界 1247/143（84×84 px = 42×42 dp），蓝色 bbox 与邻格选中图标连成 208×84；红色调试底、绿色调试填充都已撤掉 |
+| LEFT → ▦ 聚焦 | `r87-15.png`、`crop87-tabpages.png` | 环 84×84 px（bbox 与 ☰ 的选中蓝连成 144×84） |
+| LEFT → ☰ 聚焦（条带最左格） | `r87-16.png`、`crop87-tabchapters.png` | 环 84×84 px，贴着条带左边缘也没有被切 |
+| RIGHT 逐格走完三个页签 | `r87-17.png`、`r87-18.png` | 三格都有环，没有"过一格丢一格" |
+| 回归：右栏 search | `r87-21.png` | 96×96 px = 48×48 dp，与第八十六轮一致 |
+| 回归：右栏 ⋮ | `r87-22.png` | 96×96 px = 48×48 dp |
+| CENTER 点 ▦ | `r87-23.png` → `r87-24.png` | 右侧面板切到页面网格、▦ 转为选中蓝：去掉 `Surface` 容器后点击仍然正常 |
+| Continue / ▾ 分裂按钮 | `r87-19.png`、`r87-20.png`、`crop87-split-continue.png`、`crop87-split-more.png` | 两段各自的环都是完整的，合并侧是直角；当轮曾误判成"互相压住"，见第八十八轮 |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（1920×1080 的 x86_64 调试包）。像素统计同样用
+`.tmp-bluebox.py`（蓝 > 170、蓝 − 红 > 70、蓝 − 绿 > 40 筛出焦点环 bbox），不靠肉眼估。
+uiautomator 里内层 `android.widget.Button` 节点的 bounds 是 `[996,60][1080,144]` = 42×42 dp，
+与外层语义 `View` 报的 96 px 触控扩张并存——扩张只影响触摸，不影响绘制。
+
+### 横切结论（下一轮开场先读这段）
+
+**"焦点可见但没有环"的最后一种成因：环跟着节点走，而节点被父容器裁小了。**
+排查顺序固定为 ① 这个控件**节点**多大（uiautomator 或 `draw` 里打 `size`）；② 父容器给它的**槽位**多大、
+有没有 `clip`；③ 两者不一致就修布局，不要给环再套一层 `tvFocusable`。
+顺带记一条：Material3 的 48 dp 触控目标会让"看起来 42 dp 的按钮"实际占 48 dp，
+凡是槽位小于 48 dp 的地方（这条 dock、紧排图标行、芯片行）都要先想一遍这个差值。
+
+### 遗留
+
+1. ~~Continue / ▾ 分裂按钮的环互相压~~ —— **当轮误判，第八十八轮已撤销**：把 `r87-19.png` 的 3× 裁剪放大到 8×
+   并逐像素量过，两段的白环都是**完整**的，合并侧本来就是 `shapeRadiusPercent = 0` 指定的直角
+   （`r87-19` 右边缘 84/84 px 覆盖，`r87-20` 左边缘 84/84 px 覆盖），没有被任何一层压住。
+2. 第八十六轮遗留 2（左栏胶囊环相对底色高 2 dp）、3（`SwipeableFilterChip` 自绘环在 `.clickable` 之后）、
+   4（61 个芯片站点的紧排场景未重截图）仍然挂着。
+3. **TV 上的"页签"至少对应三套实现**：`DetailsDockActionButton`（本条 dock）、
+   `SecondaryTabRow` + `tvTabRing()`（设置页、词典页等）、`ChapterModeTabsRow`（纯文本页签）。
+   改之前先用 uiautomator 认节点，别按名字猜。
+4. **同一 checkout 里别并行跑两个 Gradle 构建**：本轮第一次 `:app:assembleDebug` 直接失败在
+   `Execution failed for task ':reader-core:jvmJar' > Could not create ZIP 'reader-core-jvm.jar'`，
+   原因是另一个会话正在同一目录跑 `:desktop-app:test`，占着共享 jar；等它退出后原命令重跑即 BUILD SUCCESSFUL。
+
+## 第八十八轮：撤销第八十七轮遗留 1——分裂按钮的两段环其实都是完整的（2026-10-25）
+
+### 起念
+
+第八十七轮收尾时用 3× 裁剪目测，把 Continue / ▾ 的环读成"互相压住对方一端"，写进了遗留 1。
+本轮准备动手改它之前，先把它量了一遍。
+
+### 量法（`.tmp-whitebox.py`，本地脚本不进仓库）
+
+在指定区域内筛"近白像素"（r、g、b 均 > 200），输出 bbox，以及 bbox **四条边各自被覆盖的像素比例**。
+判据：合并侧那条直边若完整，覆盖率应是 100%；圆角那一侧在 bbox 的极端列上只与圆相切，
+覆盖率天然只有 10~20%，低是正常的。
+
+### 结果（emulator-5554，1920×1080 @320）
+
+| 聚焦 | 环 bbox | 合并侧（直边） | 外侧（圆角端） | 顶 / 底 |
+| --- | --- | --- | --- | --- |
+| Continue（`r87-19.png`） | `[1328,60][1591,143]` = 264×84 px（132×42 dp） | 右边缘 x=1591 **84/84 px = 100%** | 左边缘 x=1328 16/84 px = 19%（圆角切线） | 229/264、228/264（缺的 13% 正是左侧半圆） |
+| ▾（`r87-20.png`） | `[1596,60][1675,143]` = 80×84 px（40×42 dp） | 左边缘 x=1596 **84/84 px = 100%** | 右边缘 x=1675 11/84 px = 13%（圆角切线） | 46/80、45/80（缺的 43% 正是右侧半圆） |
+
+放大到 8× 的 `crop87-split-continue.png`、`crop87-split-more.png` 也印证：白环四条边齐全，
+合并侧是一条竖直直边——那正是 `readButtonShape` / `trailingButtonShape` 在 `shapeRadiusPercent = 0`
+（未展开）时指定的直角，不是被谁盖掉的。
+
+### 结论
+
+- 分裂按钮没有缺陷，不改代码。两段是各自独立的 `Surface` + `border = BorderStroke(3.dp, onPrimary)`，
+  收拢时内侧直角、外侧半圆，两段之间留 `optionGap` 的缝——视觉上就是标准的分裂按钮。
+- 第八十七轮文档里那条遗留已就地改成"当轮误判"，验证表格里的措辞也一并改正。
+
+### 教训（写给下一轮）
+
+**"环被切了"不能只靠放大截图目测。** 判据要做成可量化的：先取 bbox，再分别量四条边的覆盖率；
+圆角端在 bbox 极端列上低覆盖是几何必然，直边那侧才是证据。
+另外记住：`Surface(border = BorderStroke(...))` 画在自己边界内，和 `tvFocusable` 的环是两套机制，
+排查一个控件"为什么没有环"之前，先确认这枚环到底由谁画。
+
+### 遗留
+
+1. 第八十七轮遗留 2–4 继续有效（左栏胶囊环偏移 2 dp、`SwipeableFilterChip` 自绘环在 `.clickable` 之后、
+   61 个芯片紧排场景未重截图；TV 上"页签"有三套实现；同一 checkout 不要并行跑两个 Gradle 构建）。
+2. 本轮没有改产品代码：只改文档，量测脚本 `.tmp-whitebox.py` 留在本地不入库。
+
+## 第八十九轮：设置里的文本框对话框，遥控器清不掉一个值（2026-10-25）
+
+### 起念
+
+第七十六轮把"行内文本框"换成了对话框编辑，因为行内输入框在遥控器上是死站。对话框确实能被
+遥控器打开、也能用 OK 存回去，但它少了一个动作：**把已经存着的值清空**。手机上有那枚过目即忘的
+`×`，TV 上一枚都没有。
+
+### 代码事实（`SettingsPreferenceComponents.kt`）
+
+`SettingsTextInputPreference` 在 TV 上直接委托给 `SettingsDialogTextPreference`（L877-887），
+后者是 `SettingsAlertDialog`：标题 + `OutlinedTextField` + `Cancel` / `OK`。
+文本框的尾随图标是：
+
+```kotlin
+trailingIcon = if (suggestions.isNotEmpty() && !isTvPresentation) { ... }
+```
+
+——**两个条件同时成立才画**。于是 TV 的文本框既没有 `×`，也没有别的地方能清空：值一旦存进去
+（镜像地址、API key、`1080p, 720p, 480p`），只能按 CENTER 进编辑态、调出软键盘、一格一格退格。
+十七个字符就是十七次退格，而这台"键盘"还会把对话框顶上去。
+
+### 修法
+
+只改 TV：`dismissButton` 里把 `Cancel` 与新增的 `Clear` 放进同一行（`Row`），非 TV 仍然只渲染
+`Cancel` 一个控件（把 Cancel 提成局部 `@Composable` lambda，手机端的组合与改前逐字节相同）。
+
+```kotlin
+dismissButton = {
+    val cancel = @Composable { SettingsDialogActionButton(text = stringResource(android.R.string.cancel), ...) }
+    if (isTvPresentation) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            cancel()
+            SettingsDialogActionButton(
+                text = stringResource(R.string.clear),
+                onClick = { pendingValue = "" },
+            )
+        }
+    } else {
+        cancel()
+    }
+}
+```
+
+三个决定值得写下来：
+
+1. **放在按钮行，不放在文本框下面。** 文本框的 DOWN/UP 被 `tvTextInputVerticalExit(leave)` 截走，
+   `leave()` 直接把焦点请求到 OK（`fieldExit.targetModifier`）——放在对话框正文里的控件，遥控器
+   永远走不到，只有按钮行是必经之路。
+2. **夹在 Cancel 与 OK 之间。** 实测焦点链是 文本框 --DOWN--> **OK** --LEFT--> **Clear** --LEFT--> Cancel，
+   Clear 正好在 OK 的左手边，一次 LEFT。
+3. **值为空时也保持 enabled。** Clear 只改 `pendingValue`，清完值按钮若跟着变灰，焦点会从环底下
+   被抽走；保持可点，等于把"空值再清一次"这个无害的 no-op 当作焦点稳定性来买。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 观察 | 证据 | 数字 |
+| --- | --- | --- |
+| 改前：对话框只有两个按钮 | `r89-3.png` + `u89.xml` | `Cancel [1080,616][1220,712]`、`OK [1236,616][1352,712]`，无第三个可聚焦节点 |
+| 改后：三个按钮 | `r89-4.png` / `r89-15.png` + `u89.xml` | `Cancel [961,616][1101,712]`、`Clear [1101,616][1220,712]`、`OK [1236,616][1352,712]` |
+| Clear 有可见环且没被切 | `r89-8.png`，蓝环 bbox 量测 | 环 `[1101,616][1219,711]` = 119×96 px（59.5×48 dp），节点 120×97 px → 覆盖 99% |
+| 遥控器走位可达 | 逐键 dump | 文本框 --DOWN--> `OK`；`OK` --LEFT--> `Clear`（环在 `Clear`） |
+| CENTER 真的清空 | 同一 dump 的 `EditText` | 清空前 `'1080p, 720p, 480pX'` → 清空后 `''`，焦点仍停在 `Clear` |
+| 软键盘不挡住按钮 | `r89-11.png` | 编辑态下对话框整体上移，`Cancel / Clear / OK` 全在键盘之上 |
+| 输入 + IME Done 的旧路径没坏 | 同一轮顺手复验 | `input text 'X'` 落到字段；ENTER（Done）→ 焦点跳到 `OK` |
+| 清空能被 OK 存下去 | `run-as … grep video_quality` | 存值 `1080p, 720p, 480pX` →（Clear + OK）→ `1080p, 720p, 480p` |
+
+最后一行是关键证据：这个字段的路由会把空串归一化回默认值（`DownloadsSettingsRoute.kt:150-158` 的
+`.ifBlank { "1080p, 720p, 480p" }`），所以"存值从 `…480pX` 变回默认串"只可能是 `onValueChange("")`
+真的跑了。顺带把模拟器状态复原成原来的默认值。
+
+### 教训（写给下一轮）
+
+**对话框里，只有按钮行对遥控器是保证可达的。** 文本框、`options` 这类正文控件都被
+`tvTextInputVerticalExit` 的显式 `leave()` 跳过；要加"清空/重置/插入"这种辅助动作，先问一句
+"它在不在这条必经之路上"，再决定放哪。
+
+**又一个"TV 少了手机有的东西"**：`trailingIcon` 上多挂了一个 `!isTvPresentation`，代码里看着是
+"TV 不需要那枚小图标"，对用户却是"TV 不能清空"。凡是在 TV 分支里屏蔽掉的控件，都要回答
+"那这个动作在 TV 上由谁承担"。
+
+### 遗留
+
+1. `SettingsDialogTextPreference` 的对话框宽度仍是手机尺寸（约 880 px / 1920 px），与
+   "Add note / crop-note 对话框在 TV 上偏小"同类，留待统一处理。
+2. 其余 TV 上的文本对话框（重命名、备注、截图命名）不走这个组件，同样没有"清空"，需要各自确认。
+3. 手机端的尾随 `×` 只服务带 suggestions 的字段，普通文本字段在手机上也没有清空入口——本轮按
+   "只改 TV"的边界没有动它，作为产品决定记在这里。
+4. 第七十六轮遗留（BACK-关掉 IME 后不能再唤起）未复验。
+
+## 第九十轮：BACK 关掉软键盘以后，这个文本框再也调不出来（2026-10-25）
+
+### 起念
+
+第七十六轮把设置里的行内文本框换成对话框编辑时，留下一句"BACK 关掉 IME 后不能再唤起"；第八十九轮
+结尾也把它记成"未复验"。这轮先复验——它还在，而且是个彻底的死站：对话框开着、环还在字段上，
+遥控器按 CENTER 却什么都不会发生。
+
+### 复现（改前的设备事实）
+
+| 手势 | `dumpsys input_method` | 界面 |
+| --- | --- | --- |
+| 打开"Default download video quality"对话框 | `mInputShown=false` | 字段 `[568,456][1352,568]`，环在字段上 |
+| CENTER（进编辑） | `mInputShown=true` | 软键盘升起 |
+| BACK | `mInputShown=false` | **对话框还在**，字段仍是焦点，值没变 |
+| CENTER、再 CENTER | 两次都是 `mInputShown=false` | 键盘不再出现（`r90-1.png`），值也没动 |
+
+焦点从头到尾没离开过字段：`onFocusChanged` 没有触发，`editing` 还是 `true`，`readOnly` 还是 `false`。
+平台把这条输入连接记成"用户自己关掉的"，此后 `show()` 一律被吞。
+
+顺带撞出一个路由事实：**软键盘开着的时候 CENTER 根本到不了字段的预览处理器**。它落在 IME 窗口上，
+把 IME 里默认高亮的 `q` 键打了进去（字段值当场变成 `1080p, 720p, 480pq`），而
+`tvTextInputStartEditing` 的日志根本没响。
+
+### 代码事实
+
+旧实现只有三行，状态机少了一个出口（`core-ui/.../adaptive/TvFocus.kt`，`rememberTvTextFieldReadOnlyState`）：
+
+```kotlin
+.tvTextInputStartEditing {
+    editing = true
+    showKeyboard?.invoke() ?: keyboardController?.show()
+}
+.onFocusChanged { if (!it.hasFocus) editing = false }
+```
+
+DOWN / ENTER / 焦点离开都会把 `editing` 清掉，只有 BACK 不会——它既不移动焦点，也不属于这套状态机。
+
+两条看起来更"正统"的路先被排除了：
+
+1. **`WindowInsets.ime`**：在对话框窗口里读数一直是 0。探针打了三轮日志，`imeVisible=false`
+   贯穿全流程，而同一时刻 `dumpsys input_method` 明明是 `mInputShown=true`——对话框窗口把 IME 的
+   inset 自己吃掉了。所以"键盘在不在"这件事不能靠 inset 判断（`tvTextInputFocusEscape` 里同样的
+   读法在列表页有效，在对话框里不一定）。
+2. **自己截 BACK**：App 侧接不到。键盘升起时按键先发给 IME 窗口，`SettingsAlertDialog` 的
+   `BackHandler { onDismissRequest() }` 在 BACK 时根本没触发（否则对话框会跟着关掉），这就是反证。
+
+### 修法
+
+用"能到达"本身当状态信息：**CENTER 能到达字段，就意味着屏幕上没有键盘**（有键盘时按键归 IME 窗口）。
+于是 `editing` 还是 true 却收到 CENTER，只可能是一种情况——键盘被 BACK 关掉了。这时把 `editing`
+退回 `false`（字段回到只读、光标消失），下一次 CENTER 走原来的"只读 → 编辑"路径，Compose 重建输入
+会话，键盘自己回来：
+
+```kotlin
+.tvTextInputStartEditing {
+    if (editing) {
+        // 按键能到字段 = 屏幕上没有键盘 = BACK 关掉了它；退回只读，下一次 CENTER 重建输入会话
+        editing = false
+    } else {
+        editing = true
+        showKeyboard?.invoke() ?: keyboardController?.show()
+    }
+}
+```
+
+试过又否决的两个变体：
+
+- `focusManager.clearFocus()` + `requestFocus()` 复位焦点：键盘确实能回来，但中间有一帧没有焦点，
+  设置页左上角的返回键被点亮，屏幕上出现**两个环**（`r90-7.png`）。焦点本来就不该在这条路上动。
+- 退回只读时再叫一次 `keyboardController.hide()`：键盘已经没了，这是一次多余的 IME 事务，去掉之后
+  行为完全一致。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 观察 | 证据 | 数字 |
+| --- | --- | --- |
+| 改前：BACK 之后 CENTER 无效 | `r90-1.png` + 逐次 dump | BACK 之后连续两次 CENTER 都是 `mInputShown=false`，字段 bounds 不动 |
+| 改后：BACK 之后第一次 CENTER 回到只读 | `r90-14.png` + dump | `mInputShown=false`，环仍在字段、光标消失、三个按钮可见 |
+| 改后：第二次 CENTER 键盘回来 | `r90-15.png` + dump | `mInputShown=true`，键盘升起 |
+| 打字正常 | `input text 'X'` | 字段 `'1080p, 720p, 480p'` → `'1080p, 720p, 480pX'` |
+| 离开字段的行内退出没坏 | BACK → DOWN | 焦点从字段移到 `OK` |
+| 提交正常 | CENTER on `OK` | 对话框关闭，落盘 `1080p, 720p, 480pX` |
+| 清空路径没坏 | DOWN → LEFT → CENTER → RIGHT → CENTER | 字段 `''`，落盘回落到 `1080p, 720p, 480p`（`DownloadsSettingsRoute.kt:150-158` 的空串归一化） |
+| 复原 | `run-as … cat shared_prefs` | 模拟器存值回到默认 `1080p, 720p, 480p` |
+
+最后两行同时证明：BACK 循环之后的字段和原来一样能打字、能提交、能用 Clear 清空——只是在"键盘被
+关掉"与"能重新调出"之间多了一次确认性的 CENTER。
+
+### 教训
+
+**平台把"用户关掉的输入连接"和"从没开过"当两回事。** `show()` 只在前一种情况之外有效，复位它的
+唯一药是重建输入会话（`readOnly` 翻转），不是再喊一次 `show()`。凡是"焦点不动、界面不动"的退出
+方式（BACK 是典型），都要问一句："这套状态机有没有对应它的出口？"
+
+**"能到达"本身是状态信息。** 按键路由已经替我们证明了"键盘不在屏幕上"；比起去问 insets
+（对话框窗口里读不到）或去截 BACK（被 IME 吃掉），用可达性反推状态更省事也更可靠。同样的思路可以
+套到别的"某个键只会在某状态下到达这里"的场合。
+
+**先打探针再改代码。** 三行日志确认 `imeVisible` 恒为 `false`，才敢把 insets 那条路整条划掉；
+否则很容易写出"逻辑正确、读数恒假"的补丁。
+
+### 遗留
+
+1. **走过 BACK 循环以后，再进编辑态对话框不再上移**，按钮行落在键盘后面（`r90-15.png`）；而从
+   对话框里第一次进编辑态是会上移的（`r90-13.png`，字段从 `[568,456]` 抬到 `[568,216]`，240 px = 120 dp）。
+   这不是死站（BACK 一按按钮就回来），但它和第八十九轮 `r89-11.png` 的"对话框整体上移、三个按钮
+   全在键盘之上"冲突，怀疑是对话框窗口的 IME inset 只在首次升起时生效一次。留待下一轮。
+2. 这一轮只动共享 holder（`core-ui` 的 `rememberTvTextFieldReadOnlyState`），两个调用点
+   （下载画质、自定义空间名称）同时受益；自定义空间名称那条没有单独在设备上复验。
+3. 第八十九轮遗留仍在：对话框宽度仍是手机尺寸；重命名/备注/截图命名等其它文本对话框没有"清空"；
+   手机端普通文本字段也没有清空入口。
+
+## 第九十一轮：再进编辑态以后，对话框不再上移（2026-10-25）
+
+### 起念
+
+第九十轮的"遗留 1"：走过一次 BACK 循环（键盘被关掉）再进编辑态，对话框不再上移，按钮行落到键盘
+后面；而同一个对话框第一次进编辑态是会上移的（`r90-13.png`，字段 `[568,456]` → `[568,216]`）。
+同一段代码、同一个手势，结果却取决于此前发生过什么——这不是布局参数的问题，是"谁在移动这个东西"
+的问题。这一轮把它查到底。
+
+### 两条平台路先被排除（探针证据）
+
+先假设是对话框窗口的 IME 处理没生效，试了两条"正统"的路，都被设备事实否掉：
+
+| 尝试 | 期望 | 实测 |
+| --- | --- | --- |
+| 给对话框窗口 `setSoftInputMode(SOFT_INPUT_ADJUST_RESIZE)` | 窗口被键盘顶小，居中盒子跟着上移 | 6 次里 1 次"恰好"上移，其余 5 次纹丝不动；`dumpsys window windows` 里 `softInputMode` 确实改了 |
+| `decorFitsSystemWindows = false` + `Box(imePadding())` | Compose 读到 IME inset 自己让位 | 对话框窗口里 `WindowInsets.ime.getBottom()` **恒为 0**（`TVIME inset=0`），盒子 `TVIME box=1120 x 1080` 也没被窗口缩小 |
+
+第二轮把对话框换成 `BasicAlertDialog` + `SOFT_INPUT_ADJUST_RESIZE`、`decorFitsSystemWindows=false` 的
+全屏窗口，仍然量到 `box=1120 x 1080`、`inset=0`。结论：**对话框窗口既不折叠、也不上报 IME inset**，
+`adjust=resize` 与 `imePadding()` 在这条路上都是死码。顺手确认了一件有用的事：全屏宿主下窗口高度
+就是 1080 px，卡片贴顶有位置可用。
+
+那 6 次里的那 1 次上移，是窗口首次创建时的布局竞态，不是可控行为——所以修法不能依赖它。
+
+### 修法：把"要不要上移"交给编辑状态，不再问窗口
+
+对话框内容已经在第九十轮统一成了"一份槽位、两个宿主"，于是只要宿主知道"字段正在编辑"，就能自己
+决定卡片停在哪：
+
+1. `TvTextFieldReadOnlyState` 多暴露一个 `isEditing`（`TvFocus.kt`）。它和既有的 `isReadOnly` 同源
+   （同一个 `editing` 状态），本来就是键盘开关的真身，只是之前没有花名。
+2. `SettingsAlertDialog` 加参数 `bodyEditing: Boolean = false`；`SettingsDialogTextPreference` 把
+   `readOnlyState.isEditing` 传进去（这一行也是唯一的调用点）。
+3. TV 宿主在编辑开始后把卡片**贴顶**（`Alignment.TopCenter` + 32 dp），并且**粘住**：键盘收起、
+   BACK 关掉键盘、焦点离开字段，卡片都不再滑回屏幕中央（`dockedToTop` 只置真不清）。
+
+```kotlin
+var dockedToTop by remember { mutableStateOf(false) }
+if (bodyEditing) {
+    dockedToTop = true
+}
+Box(
+    modifier = Modifier.fillMaxSize().padding(top = if (dockedToTop) 32.dp else 0.dp),
+    contentAlignment = if (dockedToTop) Alignment.TopCenter else Alignment.Center,
+) { TvDialogCard(...) }
+```
+
+粘性是有意的：换一次键盘就上下滑一次，比"一开始就贴顶"更晃眼。重开对话框时这层 `remember` 会跟着
+对话框一起销毁，所以下一次打开仍是居中。
+
+同时把 `TvDialogKeyboardHandling()` 从"申请 resize"改成"申请**别动**"
+（`SOFT_INPUT_ADJUST_NOTHING or SOFT_INPUT_STATE_UNCHANGED`）：卡片的位置现在由 Compose 负责，
+窗口再自己平移或缩放就会变成移动两次。
+
+手机端走另一条分支（原样 `AlertDialog`），`bodyEditing` 的默认值 `false` 让它完全不受影响。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+同一部机器、同一个对话框（Downloads → Default download video quality），全程遥控器操作：
+
+| 步骤 | 字段 bounds | `mInputShown` | 证据 |
+| --- | --- | --- | --- |
+| 打开对话框（居中） | `[552,472][1368,584]` | false | `r91-3.png` |
+| CENTER 进编辑 | `[552,216][1368,328]` | true | `r91-4.png`，卡片贴顶，Cancel / Clear / OK 全在键盘之上 |
+| BACK 关掉键盘 | `[552,216][1368,328]` | false | `r91-5.png`，卡片留在顶部，按钮仍可见 |
+| 再 CENTER（第九十轮的路径） | `[552,216][1368,328]` | true | `r91-6.png`，键盘回来，卡片不动 |
+| 打字 | `'1080p, 720p, 480p'` → `'1080p, 720p, 480pX'` | true | dump |
+| BACK → DOWN | 焦点到 `OK` `[1252,376][1368,472]` | false | `OK` 在键盘位之上（旧版这里是 632～728） |
+| CENTER 提交 | 对话框关闭 | — | 落盘 `downloads_video_quality=1080p, 720p, 480pX` |
+| 重开对话框 | `[552,472][1368,584]` | false | 回到居中（贴顶是这次打开内部的状态） |
+| Clear → OK | — | — | 落盘回落到默认 `1080p, 720p, 480p`（空串归一化） |
+
+三次"进编辑态"（首次、BACK 之后、清空之后再进）量到的字段位置完全一致，都是 `y=216`；改前同一台
+机器 6 次里 5 次是 `y=472`（即键盘压在卡片上）。第九十轮的"遗留 1"到此消失。
+
+### 顺带核对：不是本轮引入的两个观感问题
+
+对话框背后的设置页**没有压暗**、行的高亮环还留在对话框外面、卡片因为半透明能透出背后的行文字——
+这三样在第九十轮那张 `r90-14.png`（旧宿主、M3 `AlertDialog`）里一模一样，属于既有观感，不是这次换
+宿主带进来的。记在这里，留给"对话框遮罩与对比度"那一轮统一处理。
+
+### 教训
+
+**同一个手势两种结果，先问"它依赖什么状态没被记录"。** 第九十轮记下的是"再进编辑态不上移"，
+真正的差别只有"这个对话框此前编辑过没有"；一旦把这件事写进状态，就不再需要去猜窗口在什么时机
+重排。
+
+**窗口的行为不要指望两遍。** `adjust=resize` 改了参数却什么都不做、`decorFitsSystemWindows=false`
+之后 IME inset 仍是 0——参数生效不等于行为生效。对话框里的键盘问题，最后是靠 Compose 自己摆位置
+解决的：窗口只负责"别动"。
+
+**"粘住"比"精准跟随"更好用。** 键盘开了又关、焦点进进出出，如果每次都按当前状态重算位置，画面就
+一直在动；一次到底、重开才复位，反而更安静。
+
+### 遗留
+
+1. 对话框宽度仍是手机尺寸（`max 560.dp`，1920 px 屏上只占 925 px）；按钮行右对齐、标题左对齐，宽屏
+   下还可以再讲究。
+2. 对话框没有遮罩（背后的页面不压暗），半透明卡片会透出正文——与第九十轮一致，未处理。
+3. `SettingsDialogTextPreference` 之外的文本对话框（重命名、备注、截图命名）既不经过
+   `SettingsAlertDialog`，也没有"清空"，`bodyEditing` 这套贴顶逻辑对它们不生效；它们目前在 TV 上仍
+   是行内文本框或纯手机对话框。
+4. 自定义空间名称那条输入路径没有在设备上重复验证（共用同一 holder，理论上同样受益）。
+
+## 第九十二轮：对话框该有电视机的宽度与字号（2026-10-25）
+
+### 起念
+
+第九十一轮把对话框的"位置"治好了，剩下的观感问题都还在：卡片 928 px（464 dp，屏宽的 48%），
+正文和按钮沿用手机的 14 sp，长句在卡片里折成两三行。十尺距离下这不像一个对话框，更像被丢在屏幕
+中间的一小张纸。这一轮去查"宽度到底被谁限制"。
+
+### 先看清窗口：宽度不是窗口给的
+
+`dumpsys window windows` 里那个对话框窗口（`ty=APPLICATION`、与 Activity 同名、`fl=DIM_BEHIND`）：
+
+```
+mAttrs={(0,0)(fillxwrap) gr=CENTER sim={state=unchanged adjust=nothing} ... ty=APPLICATION}
+Requested w=1920 h=1080
+Frames: parent=[0,0][1920,1080] display=[0,0][1920,1080] frame=[0,0][1920,1080]
+```
+
+窗口是**满屏**的，而且确实带遮罩（同一像素位置：有对话框时 21、关掉后 31）。所以卡片窄与窗口无关，
+是 Compose 侧的限制：对话框布局把它自己的内容限制在 560 dp（`DialogMaxWidth`），而 TvDialogCard 外面
+还包了 48 dp 的横向留白，于是 560 − 96 = 464 dp —— 正好是量到的卡片宽度。
+
+### 一次"改了、装上了、一点没变"
+
+第一版改法是把手写宽度去掉、换成 `widthIn(max = 560.dp).fillMaxWidth()`，指望卡片吃满它拿到的空间。
+构建 exit=0、`install -r` Success、重新打开对话框——**字段还是 `[552,472][1368,584]`，一像素没变**。
+
+差在约束链的顺序：`fillMaxWidth` 取的是"当前进来的最大值"，而进来时已经被外层 48 dp 留白削到 464 dp，
+`widthIn(max=560)` 只是把它夹得更松的上限，等于没改动。设备上一字不差的测量正好说明"改动没有生效"，
+而不是"改动无效"——这两种情况在日志里长得一模一样，只有测量数字能分辨。
+
+### 修法：`requiredWidth` 越过对话框布局的上限
+
+```kotlin
+private val TvDialogWidth = 640.dp   // 1920 px 屏的 2/3
+
+Surface(
+    shape = shape,
+    color = containerColor,
+    tonalElevation = tonalElevation,
+    modifier = Modifier.requiredWidth(TvDialogWidth),
+) { ... }
+```
+
+`requiredWidth` 不理会父级约束，卡片就是 640 dp；它画在对话框内容盒（560 dp）之外，因为窗口本身是
+满屏的、链路上没有 `clipToBounds`/裁剪容器，所以既不会被切掉也不影响居中。这里顺带把字号提到电视档：
+正文 `bodyLarge`（16 sp），动作按钮 16 sp（手机仍是 14 sp），和 TV 设置列表本身的行文字一致。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 项目 | 第九十一轮 | 第九十二轮 |
+| --- | --- | --- |
+| 卡片宽度 | 928 px（464 dp，48% 屏宽） | 1280 px（640 dp，67% 屏宽） |
+| 输入框 | `[552,472][1368,584]`，816 px | `[400,472][1520,584]`，1120 px |
+| Cancel / Clear / OK | 92 / 71 / 40 px | 105 / 81 / 46 px |
+| 打开时（居中） | `y=472` | `y=472`（`r92-3.png`） |
+| CENTER 进编辑 | `y=216`，键盘升起 | `y=216`，键盘升起，按钮行在键盘之上（`r92-b2.png`） |
+| BACK 关键盘 | `y=216` 不动 | `y=216` 不动（`r92-b3.png`） |
+
+宽卡之后贴顶逻辑照旧：卡片上移 256 px，Cancel/Clear/OK 全部在键盘之上，没有被加宽影响。
+
+### 否掉一个自己写下的判断
+
+第九十一轮"遗留 2"里说"半透明卡片会透出背后的正文"。这一轮做了像素对照，**这条是错的**：
+
+| 取样 | 有对话框 | 说明 |
+| --- | --- | --- |
+| 卡片空白处 | 40～44 | 卡片底色 `(40,41,44)`，空白区最大 44 |
+| 同一行文字·卡片内 | 46 | 与底色差 6，几乎不可见 |
+| 同一行文字·卡片外 | 173 | 未被遮住的原始亮度 |
+| 页面背景 | 21（关掉对话框后 31） | 遮罩确实存在 |
+
+`dialogContainerAlpha = 0.96` 的玻璃卡片几乎不透，遮罩也在。真正的问题是**对比度**：卡片 `(40,41,44)`
+压在遮罩后的页面 `(21,21,24)` 上只亮 19 级，远看几乎没有边界；而被遮罩压暗的页面正文（60～90）比
+卡片本身更抢眼。这条改为"卡片与背景对比度低"，留给配色那一轮。
+
+### 新发现（下一轮入口）：BACK 之后第一下 CENTER 被吃掉
+
+按第九十一轮的记录，BACK 关掉键盘后再按 CENTER 键盘应该立刻回来。这轮复现到的是**要按两次**：
+
+| 步骤 | 输入框 | 底部条带（键盘判定） |
+| --- | --- | --- |
+| BACK 关掉键盘 | `[400,216]` | mean 32.0（`r92-b3.png`） |
+| CENTER | `[400,216]` | mean 32.0 —— 与上一张像素相同，键盘没回来（`r92-b4.png`） |
+| CENTER（第二次） | `[400,216]` | mean 37.7、max 189 —— 键盘回来了（`r92-b5.png`） |
+
+原因在 `rememberTvTextFieldReadOnlyState` 的 BACK 补救分支：BACK 只让系统收起键盘，字段仍持有焦点，
+所以应用侧的 `editing` 还是 `true`；下一次 CENTER 落到"正在编辑 ⇒ `editing = false`"那一支，只是把状态
+翻回去，键盘要等再下一次才 `show()`。当时的读数之所以显示"一次就回来"，应是焦点先被移走、`editing`
+已归位。要么把 CENTER 做成幂等的"给我键盘"，要么在键盘消失时把 `editing` 归位——两条都要独立验证
+（共享 holder 还有一处全屏表单在用）。
+
+### 教训
+
+**"改完没变化"先怀疑改动是否落在约束链上。** 同一个手势前后数字一字不差，是"这次修改没进入生效路径"
+的强信号；先量、再猜。
+
+**上限往往不在你写的那个修饰符上。** 560 dp 是 Compose 对话框布局的常量，不是我们的 `widthIn` 写的；
+写在那里的 `widthIn(max=560)` 只是在已经被削过的约束里再削一次。
+
+**遗留清单也要复核。** "透底"是我的眼睛在看归一化后的截图时得出的结论，像素一量就站不住；写进文档的
+判断同样需要证据等级。
+
+### 遗留
+
+1. BACK 之后第一下 CENTER 被吃掉（见上表），下一轮处理。
+2. 卡片与遮罩后页面的对比度只有 19 级，远看边界不清；配色/对比度一轮统一处理。
+3. `bodyLarge` 只在本轮的输入框对话上看过——它没有正文段落；带正文的消息型对话框没有单独复验。
+4. 卡片宽度现在是固定 640 dp：在 1280×720 这类更小的电视上（逻辑宽度约 853 dp）仍占 75%，没有按屏幕
+   比例收缩。
+5. 对话框背后的页面行仍保留自己的蓝色焦点环（打开对话框时有两个环），未处理。
+
+## 第九十三轮：BACK 之后那一下 CENTER 不该白按（2026-10-25）
+
+### 起念
+
+第九十二轮结尾量到的现象：BACK 收起键盘后，第一下 CENTER 什么也没发生，第二下键盘才回来。
+
+| 步骤 | 输入框 | 底部条带（键盘判定） |
+| --- | --- | --- |
+| BACK 关掉键盘 | `[400,216]` | mean 32.0（`r92-b3.png`） |
+| CENTER | `[400,216]` | mean 32.0，与上一张像素相同（`r92-b4.png`） |
+| CENTER（第二次） | `[400,216]` | mean 37.7、max 189（`r92-b5.png`） |
+
+代码里这是一个显式的两段式设计（`rememberTvTextFieldReadOnlyState`）：
+
+```kotlin
+if (editing) {
+    editing = false          // 只把状态翻回去，键盘要等下一按
+} else {
+    editing = true
+    showKeyboard()
+}
+```
+
+### 机制：被关掉的输入会话不会复活
+
+BACK 关掉键盘时字段仍持有焦点，所以 `onFocusChanged` 不会把 `editing` 归位，应用侧一直以为在编辑。
+平台这边，用户手动关掉的那条输入连接已经退役，对它再 `show()` 是空操作；代码注释里当时写的
+"重建输入会话才真的能把键盘带回来"是对的，问题只在于它把重建交给观众按第二下。
+
+两次按键之间，唯一的区别是中间**渲染过一帧 `readOnly = true`**：字段重新组合成只读、再翻回可编辑，
+平台据此建了一条新的输入连接。
+
+### 修法：把"两帧"换成"两次按键"
+
+```kotlin
+.tvTextInputStartEditing {
+    if (editing) {
+        editing = false
+        rearm++          // 让下面这个效应再跑一次
+    } else {
+        editing = true
+        showKeyboard?.invoke() ?: keyboardController?.show()
+    }
+}
+...
+LaunchedEffect(rearm) {
+    if (rearm > 0) {
+        withFrameNanos { }        // 先让 readOnly 的一帧真的画出去
+        editing = true
+        showKeyboard?.invoke() ?: keyboardController?.show()
+    }
+}
+```
+
+`withFrameNanos` 是这里的关键：如果只是连着写 `editing = false; editing = true`，同一个快照里等于没变，
+只读那一帧根本不会出现，平台也就不会重建连接。等一帧，让只读状态被组合、绘制，再翻回可编辑，重建才会发生。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 输入框 | 焦点 | 底部条带 |
+| --- | --- | --- | --- |
+| 打开对话框 | `[400,472][1520,584]` | EditText | 33.3（无键盘） |
+| CENTER 首次进编辑 | `[400,216][1520,328]` | EditText | 37.7 / max 189（键盘） |
+| BACK | `[400,216]` | EditText | 32.0（键盘收起，卡片不动） |
+| **CENTER（第一下）** | `[400,216]` | EditText | **37.7 / max 189（键盘回来了）** |
+| BACK + CENTER（第二轮） | `[400,216]` | EditText | 32.0 → 37.7（同样一下就回来） |
+| 输入 `Y` | `'1080p, 720p, 480pY'` | EditText | 37.7（按键真的进了字段） |
+| BACK + DOWN | `[400,216]` | View `[1428,376][1520,472]`（OK） | 32.0（离开字段照旧） |
+
+值真的写下去了：CENTER 确认后 `shared_prefs` 里 `downloads_video_quality` 变成 `1080p, 720p, 480pY`；
+再打开、Clear、OK 之后回到默认 `1080p, 720p, 480p`（`DownloadsSettingsRoute` 的空白归一化）。
+
+### 教训
+
+**"按一下没反应"通常是应用状态和系统状态不同步。** 应用以为在编辑、系统已经把输入连接退役，两边各说各话；
+把两次按键之间的差别（只读一帧）自动化，比让人多按一次更接近正确修复。
+
+**同一个快照里的连续赋值等于没赋值。** Compose 里 `state = false; state = true` 不会产生只读的一帧，
+必须等一帧（`withFrameNanos`）才能让中间状态真的被组合；这类"状态跳板"都是这个套路。
+
+### 本轮的操作失误（记录在案）
+
+导航时焦点停在 `Downloading over cellular network` 行上，我按 CENTER 想打开另一个对话框，结果进的是单选
+对话框，随后 LEFT/CENTER 选中了 `Ask every time`。核对过 `shared_prefs`：这个键根本没有落盘（本来就是这个
+默认值），只是测试路径上的误按。实验把 `downloads_video_quality` 改成过 `1080p, 720p, 480pY`，本轮结束前已
+清回默认值。
+
+### 遗留
+
+1. 共享 holder 的第二处调用（自定义空间的名称输入，全屏表单）没有在设备上复验，只是同一份代码。
+2. 动作行里 DOWN 停在 OK 之后不再回环（`r93-9` 焦点不动），是可接受的终点还是该绕回 Cancel，留待定。
+3. 卡片与遮罩后页面的对比度仍只有 19 级（第九十二轮遗留 2）。
+4. 带正文段落的消息型对话框没有单独复验 `bodyLarge`（第九十二轮遗留 3）。
+
+## 第九十四轮：对话框在十尺外要有边界（2026-10-25）
+
+### 起念
+
+第九十二轮量到一条没处理的数据：对话框卡片 `(40,41,44)` 对遮罩后的页面 `(21,21,24)`，只差 19 级。
+十尺之外这不是"卡片"，是页面中间一块颜色略有不同的雾。当时把它记成"卡片与背景对比度低"，本轮把它做完。
+
+### 两个原因，两处各治
+
+**遮罩太薄。** 页面底色未弹对话框时是 `31`，弹开后被压到 `21`——反推 `dimAmount ≈ 0.32`，是手机平台的默认值。
+电视是远距离观看，Material 对电视弹层本来就要求更重的遮罩，于是把这个窗口的遮罩提到 `0.6`：
+
+```kotlin
+findDialogWindow(view)?.apply {
+    setSoftInputMode(SOFT_INPUT_ADJUST_NOTHING or SOFT_INPUT_STATE_UNCHANGED)
+    setDimAmount(TvDialogDimAmount)     // 0.6f
+}
+```
+
+这个 `SideEffect` 原本叫 `TvDialogKeyboardHandling`，只做键盘那件事；现在它管的是整个对话框窗口，
+改名 `TvDialogWindowSetup`，KDoc 一起写清两件事。
+
+**卡片太薄。** 卡片原来是 `surfaceContainerHigh` 带 0.96 alpha 的玻璃色——手机拿在手里好看，电视上它和背景混成一片。
+电视分支改成不透明的 `surfaceContainerHighest`，并加一条 1 dp 的发丝边（`outlineVariant`）：两种色阶接近时，
+是这条边告诉眼睛"这是卡片"。
+
+两条都只作用于 TV 分支；手机/平板仍然是 `AlertDialog` + 玻璃卡片 + 平台默认遮罩。
+
+### 量出来的差别（emulator-5554，1920×1080 @320）
+
+| 量 | 第九十二轮 | 本轮 |
+| --- | --- | --- |
+| 页面底色（未弹框） | 31 | 31 |
+| 页面底色（弹框 + 遮罩） | 21 | **12** |
+| 卡片底色 | 40 | **52** |
+| 卡片与页面反差 | 19 | **40** |
+| 卡片边缘 | 无，圆角外直接是页面 | **2 px `(142,144,153)` 发丝边** |
+
+反推遮罩：`21/31 ≈ 0.68`（压掉 32%，平台默认）、`12/31 ≈ 0.39`（压掉 61%，与 `0.6f` 相符）。
+卡片边缘按行扫描确认：`x=320..322` 与 `x=1598..1600` 各 2 px 边框，卡内 `(52,53,56)`，卡外 `(12,12,14)`；
+卡片横向 1280 px，仍是第九十二轮定下的 640 dp。
+
+### 顺带复验：键盘那一套没被遮罩改动带歪
+
+| 步骤 | 输入框 | 底部条带（键盘判定） |
+| --- | --- | --- |
+| CENTER 进编辑 | `[400,216]`（贴顶） | 37.4（键盘） |
+| BACK | `[400,216]` | 18.6（收起） |
+| **一次 CENTER** | `[400,216]` | **37.4（回来了）** |
+| BACK ×2 关掉对话框 | 无输入框 | 47.2，页面底色回到 31 |
+
+注意第三列：遮罩变重之后，"键盘收起"的基线从 32.0 掉到 18.6，键盘在时仍是 37.4。
+这条判据没变，但**绝对数值跟着遮罩走**，以后跨轮比较要先看当时的页面底色，不能拿 32.0 当常数。
+
+### 教训
+
+**"对比度不够"往往不是一个参数的事。** 这里一半原因在卡片、一半在遮罩：只把卡片提亮，页面也被提亮了（透明卡片会透出页面），
+反差改不动多少；只压遮罩，卡片还是灰的。两处一起改，19 级才变成 40 级。
+
+**电视上的"边界"要靠边缘，不靠色差。** 色阶差在客厅距离上会糊成渐变，1 dp 的亮边却在任何距离都读得出来——
+这也是为什么玻璃面板、卡片在电视上普遍带描边。
+
+### 遗留
+
+1. 动作行 DOWN 停在 OK 之后不回环（第九十三轮遗留 2）。
+2. 带正文段落的消息型对话框没单独复验 `bodyLarge`（第九十二轮遗留 3）。
+3. 不经过 `SettingsAlertDialog` 的对话框（重命名/备注/截图命名）既没有这套宽度，也没有这套遮罩与描边。
+4. 发丝边取的是 `outlineVariant`（实测 `(142,144,153)`），是否在锐化较重的电视上产生光晕，真机才能定。
+
+## 第九十五轮：一个胶囊，四个遥控停靠点（2026-10-25）
+
+### 起念
+
+前面九十四轮几乎都在设置树与对话框里转。这一轮换了地方：应用里本来就有一份种子内容
+（"TV Audit Manga 11"，本地源，1 章 2 页），主页/历史/详情三张页面其实都能用遥控器走到，
+于是先做一轮"陌生页面"的焦点走查，看的是详情页（宽屏两栏）。
+
+第一个撞上的不是排版，是遥控的手感：标题下面那个"来源胶囊"
+
+```text
+▣ Local storage │ ▣ Local storage
+```
+
+看着是一整个控件，遥控器却要在里面停 **四次**。
+
+### 现场
+
+`adb` 层级里那一行有四个焦点节点：
+
+| # | bounds | 环的形状 |
+| --- | --- | --- |
+| 1 | `[280,222][356,298]` | 20×20 dp 圆（图标） |
+| 2 | `[356,222][496,298]` | 70×16 dp 药丸（文字） |
+| 3 | `[498,222][574,314]` | 20×20 dp 圆 |
+| 4 | `[574,222][714,318]` | 70×16 dp 药丸 |
+
+像素反查也一致：图标半边的环 bbox `(308,250)-(347,289)`，只有 40×40 px（20 dp），
+环上像素 462 个；文字半边的环 `(356,254)-(495,285)`，140×32 px，1233 个像素。两者线宽都是 4 px（2 dp）。
+
+原因在结构里：`SourceSummarySegment` 把"打开来源页"挂在图标上、"换来源"挂在文字上，
+触屏上是两个合理的命中区，但遥控器只认焦点节点，于是一个视觉胶囊变成了两个停靠点 × 两段。
+
+### 改法
+
+TV 分支把整段合成一个节点，图标退回装饰：
+
+```kotlin
+val rowModifier = if (isTvPresentation) {
+    modifier
+        .background(...)                       // 底色仍是整段满铺
+        .padding(TvSummarySegmentRingInset)     // 3 dp：环躲开胶囊自己的 1 dp 描边
+        .tvFocusable(shape = segmentShape, addFocusTarget = false)
+        .clickable(onClick = onNameClick)       // CENTER = 换来源（弹层）
+        .padding(start = 6.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+} else { /* 原样：图标、文字各一个命中区 */ }
+```
+
+三点说明：
+
+- **CENTER 给"换来源"**，不给"打开来源"——十尺外要改的是这一部的来源绑定，不是跳去源站。
+  图标那个动作在 TV 上降级为触屏快捷方式，这一点写进了 KDoc。
+- **环内缩 3 dp**。`tvFocusable` 的环画在节点内，段是贴着胶囊边长的；不内缩的话环会和
+  999 dp 胶囊的描边、圆角裁切顶在一起。内缩后环是 28 dp 高的胶囊，正好落在 34 dp 的胶囊里。
+- 手机/平板分支一个字没动（`else` 里就是原来的链），两段四命中区照旧。
+
+### 量出来的差别
+
+| 量 | 第九十五轮前 | 本轮 |
+| --- | --- | --- |
+| 胶囊里的焦点节点 | 4 | **2** |
+| 单个环 | 20×20 dp 圆 / 70×16 dp 药丸 | **108×28 dp 胶囊**（两段完全一致） |
+| 环上像素 | 462 / 1233 | **1976 / 1972** |
+| 环线宽 | 4 px | 4 px |
+| CENTER | 落在哪半段不清楚 | 该段的"换来源"弹层 |
+
+焦点走查（`emulator-5554`）：封面 → DOWN → `2/2` 行；顶部"分享"胶囊 → DOWN →（空一次）→ 阅读段 →
+UP → `Reading` 芯片 → UP → 阅读段 → LEFT → 元数据段 → LEFT → 封面。
+也就是 LEFT/RIGHT 现在在两段之间走一步就是一段，不再在图标与文字之间各停一次。
+
+行为复验：在元数据段按 CENTER，弹出"Metadata source"侧栏（标题、说明、
+`Metadata binding · Local storage`、Shikimori / AniList / MyAnimeList 三个追踪源）——动作映射正确。
+
+### 顺带撞见的两件事（本轮不改，进遗留）
+
+**一、遥控器的"焦点黑洞"。** 从左栏最下面那行（`2/2`，`[494,580][920,676]`）按 DOWN，屏幕上
+**任何环都消失**，但遥控器没死：再按两次 RIGHT 才落到 `P.1` 上。也就是说有一脚踩空，
+而且踩空之后要盲按两下才回得来。顶部"分享"胶囊 DOWN 的第一下也是同一个现象。
+
+层级里这一页只有 **一个** `scrollable=true` 节点（右栏 `[976,160][1896,1064]`），且 `focusable=false`，
+所以踩空的目标不在无障碍树里——按 Compose 的语义，DOWN 找不到候选时焦点会退到某个父级
+`focusGroup`，而那种节点不画环也不上报。下一轮从这个方向查：给左右两栏加 `focusGroup`
+并在每栏最后一行显式接 DOWN。
+
+**二、"Metadata source"侧栏的面板。** 它是全屏宽侧栏，但面板本身只有 **90% 不透明**：
+取两个基色不同的像素反解 `s = a·C + (1-a)·b`，三通道给出 `a ≈ 0.896 / 0.898 / 0.907`，
+面板色 `C ≈ (30,30,34)`。剩下那 10% 在亮色封面上就是满屏噪点——
+第九十四轮把 `SettingsAlertDialog` 的遮罩与卡片做厚了，这个侧栏走的是另一条宿主，
+没吃到那份改动。
+
+### 教训
+
+**"触屏命中区"和"遥控停靠点"不是一回事。** 一个控件在触屏上被拆成两个命中区，在代码里是特性；
+到了遥控器上就变成"同一个胶囊里停四次"，眼睛还得跟着环在两个完全不同的形状之间跳。
+TV 分支要按"视觉即控件"重新合并，而不是复用触屏的命中区划分。
+
+**环要内缩，才能和胶囊共存。** `tvFocusable` 的环画在节点内部，胶囊的描边与圆角也在同一块像素上；
+不内缩就是两套边界打架。3 dp 的内缩让环成为"胶囊里的小胶囊"，两套边界都读得出来。
+
+### 遗留
+
+1. 详情页左下角与顶部胶囊的 DOWN 踩空（本轮顺带撞见，见上）。
+2. `Metadata source` / `Reading source` 侧栏面板只有 90% 不透明，实测 `a ≈ 0.90`（第九十四轮遗留 3 的同族）。
+3. 动作行 DOWN 停在 OK 之后不回环（第九十三轮遗留 1）。
+4. 带正文段落的消息型对话框没单独复验 `bodyLarge`（第九十二轮遗留 3）。
+5. 发丝边取的是 `outlineVariant`（实测 `(142,144,153)`），是否在锐化较重的电视上产生光晕，真机才能定。
+## 第九十六轮：焦点黑洞的真名是 `SelectionContainer`（2026-10-25）
+
+### 起念
+
+第九十五轮把"详情页按 DOWN 环凭空消失"记成遗留，还留了个猜测：找不到候选时焦点会退到父级
+`focusGroup`。这一轮专门去证伪那个猜测——因为"焦点退到父级"解释不了一件事：黑洞里按 CENTER
+什么都不会发生，可父级 `focusGroup` 通常会把按键交给第一个孩子。
+
+### 现场
+
+两个可复现的黑洞：
+
+| # | 起点 | 按一下 DOWN 之后 |
+| --- | --- | --- |
+| 1 | 顶部"分享"胶囊 `[672,32][760,128]` | 环全屏消失，再按一下才落到阅读段 `[532,228][748,324]` |
+| 2 | 左栏 `1/2` 行 `[494,580][920,676]` | 环消失，继续按 DOWN 也不回来（UP 能回到 `1/2`） |
+
+黑洞状态下截图（`r96g1.png`，第九十五轮）与前后帧的唯一差别是背景动画，页面本身一字未动；
+按 CENTER 也没有反应——目标**没有点击动作**，符合"容器"。
+
+先逐个证伪，每一步都留了证据：
+
+- **左栏滚动容器？** 给 `Column(verticalScroll)` 加 `focusProperties { canFocus = false }`，
+  再用 `onFocusChanged` 打日志。logcat 证明它确实不再是停靠点
+  （`leftScroll isFocused=false hasFocus=false`），**黑洞照旧**。这条改动撤回了。
+- **标题/简介的 `clickable(enabled = false)`？** TV 上干脆不挂这个可点修饰符，
+  `uiautomator` 里那个 `TextView [296,149][944,245] ... cl=true` 也随之消失，
+  **黑洞照旧**。所以"禁用的 clickable 也算停靠点"这个假设是错的（浅层探针很容易看错）。
+- **`KototoroPullToRefreshBox` / `TabletDetailsPanes` / 全局 `clearFocus()`？**
+  静态排查即排除：前者只是 `Box(nestedScroll)`，后者是纯 `Row`，全仓 `clearFocus()` 只有 4 处且不在详情页。
+
+定位靠的是把日志打在两棵子树上：宽屏根节点 `Box` 与左栏滚动容器。
+
+```text
+wideRoot hasFocus=false isFocused=false     ← 焦点离开了整个宽屏内容
+leftScroll isFocused=false hasFocus=true    ← 同一毫秒，焦点进了滚动容器的子树
+wideRoot hasFocus=true  isFocused=false
+```
+
+`hasFocus=true` 而 `isFocused=false` 说明目标**是左栏内容的子孙节点**；同时它不在无障碍树里
+（那一次的 dump 里，`cl=true && en=false` 全屏只有标题与"No description"两个节点，且整棵树的
+`focused` 都是 false）。合起来只剩一种东西：**有焦点目标、但没有语义、也不画环的 Compose 内部节点**。
+
+翻 `DetailsHeader.kt` 就看见了：
+
+```kotlin
+SelectionContainer(modifier = Modifier.fillMaxWidth()) {   // 标题，L443
+    Text(text = titleForDisplay, ...)
+}
+...
+SelectionContainer {                                        // 简介，L710
+    Text(text = descriptionForDisplay, ...)
+}
+```
+
+`SelectionContainer` 为了支持键盘选区，自身就是一个 `focusable` 节点：十尺外没有鼠标，
+它既不能选、也不画环，于是完美的黑洞。两个 `SelectionContainer`、两个黑洞，位置也对得上
+（标题在顶栏与来源胶囊之间，简介在 `1/2` 行下方）。
+
+### 改法
+
+TV 上让它不可聚焦，其余一律不动：
+
+```kotlin
+SelectionContainer(
+    modifier = Modifier
+        // `SelectionContainer` 自己就是一个没有环的焦点目标（键盘选区要能拿到焦点），
+        // 遥控器从顶栏往下按会先掉进它，画面上的环凭空消失。电视上没有鼠标选区，直接跳过。
+        .focusProperties { if (isTvPresentation) canFocus = false }
+        .fillMaxWidth(),
+) {
+    Text(text = titleForDisplay, ...)
+}
+```
+
+三处同样处理：标题、简介、以及 `SupplementalMetadataDescription`（补充信息那一整块可选文本）。
+选 `focusProperties` 而不是 `if (isTv) …else SelectionContainer` 的条件组合，是因为前者只多一行、
+不改组合树形状，手机/平板的选区行为逐字节不变（lambda 里 `isTvPresentation` 为假时什么也不做）。
+
+### 量出来的差别
+
+| 量 | 第九十五轮末 | 本轮 |
+| --- | --- | --- |
+| 胶囊 → DOWN 落到阅读段 | 2 下（中间空一脚） | **1 下** |
+| 阅读段 → UP 回胶囊 | 2 下 | **1 下** |
+| `1/2` 行 → DOWN | 环消失，再按几下都不回来 | **环留在 `1/2`**（连按 3 下不变） |
+| 黑洞时的无障碍焦点节点 | 0（目标根本不在树里） | 目标已不存在 |
+| 环上像素（阅读段 / `1/2` 行） | — | 108 / 180 |
+
+焦点走查（`emulator-5554`，`r96f1.png` / `r96f2.png`）：
+
+```text
+Continue → LEFT×6 → 分享胶囊 → DOWN → 阅读段 [532,228][748,324]
+        → UP → 分享胶囊
+        → DOWN → 阅读段 → DOWN → Reading 芯片 [563,310][663,406]
+        → DOWN → 1/2 行 [494,580][920,676] → DOWN ×3 → 仍在 1/2 → UP → Reading 芯片
+```
+
+像素反查：聚焦阅读段时环边带 108 个蓝色像素，聚焦 `1/2` 行时 180 个；未聚焦的元数据段
+`[302,228][518,310]` 与未聚焦时的 `1/2` 行都是 0——环跟着焦点走，没有"看不见的停靠点"残留。
+
+行为复验：在 `Reading` 状态芯片上按 CENTER，弹出 Planned/Reading/Re-reading/Completed/On hold/Dropped
+下拉，环落在第一项——可点路径没被这次改动碰到。
+
+### 更正与顺带发现
+
+- **更正第九十五轮**：黑洞既不是滚动容器，也不是 `focusGroup` 兜底；顺带纠正一个更常见的误判——
+  `clickable(enabled = false)` 在 Compose 1.12 上**不是**遥控停靠点（把修饰符摘掉前后行为一致）。
+- `SelectionContainer` 全仓 6 处（不含导入）：本轮修了详情页 3 处，剩下 `VideoPlayerInfoDialog.kt:90`、
+  `CrashLogDetailScreen.kt:85`、`GlobalTagBlacklistScreen.kt:257`，以及小说阅读器的
+  `NovelSelectionContainer`（4 个调用点，阅读器整体还没审计过）——都进遗留。
+- 两次冷启动都直接看到 `Continue` 上的白环，不再需要先按两下方向键（第九十五轮之前的"冷启动无环"）。
+
+### 教训
+
+**"看不见的停靠点"多半是 API 自带的。** 组件库为了键盘/触屏加的可聚焦节点（选区、滚动、文本域外壳）
+在十尺外既没有环也没有语义，却照样吃掉一次方向键。查这类黑洞，先问一句
+"能不能用 `focusProperties { canFocus = false }` 把它摘掉"，比顺着布局猜父级快得多。
+
+**`onFocusChanged` 打日志能定"哪棵子树"，不能定"哪个节点"。** 容器上报 `hasFocus=true` 表示焦点在它
+的子孙里，只有配合"目标不在无障碍树里"这条信息，才能把范围缩到"无语义焦点节点"。
+
+**别用无障碍属性判断焦点目标。** 那个 `en=false fo=false cl=true` 的标题节点两次把我带偏：
+它既不是黑洞（摘掉无效），也说明不了谁是黑洞。
+
+### 遗留
+
+1. `SelectionContainer` 其余 3 处（`VideoPlayerInfoDialog` / `CrashLogDetailScreen` / `GlobalTagBlacklistScreen`）
+   与小说阅读器 `NovelSelectionContainer`，同一族但未复验是否形成停靠点。
+2. `SupplementalMetadataDescription` 的修复是按类比做的：种子内容没有补充信息，没实测到那个分支。
+3. 动作行 DOWN 停在 OK 之后不回环（第九十三轮遗留 1）。
+4. `Metadata source` / `Reading source` 侧栏面板只有 90% 不透明（第九十五轮遗留 2）。
+5. 带正文段落的消息型对话框没单独复验 `bodyLarge`（第九十二轮遗留 3）。
+6. 发丝边取的是 `outlineVariant`（实测 `(142,144,153)`），锐化较重的电视上是否产生光晕，真机才能定。
+
+## 第九十七轮：选项面板的第一下 DOWN 不该是瞎按（2026-10-25）
+
+### 起念
+
+前九十六轮全在设置、详情、对话框上转，漫画阅读器本身一次都没按过遥控器。这一轮第一次把遥控器
+走完阅读器的三层：隐藏控件时翻页 → 工具栏 → 章节面板 → 选项面板。走完的结论是主链路能用，
+但选项面板的两个方向各有一个坑，其中 UP 那个是死路。
+
+### 现场
+
+先说能用的（本轮新证据，`n0`–`n5`、`o1`、`k1`）：
+
+| 层 | 操作 | 结果 |
+| --- | --- | --- |
+| 页面（控件隐藏） | LEFT / RIGHT | 直接翻页，Pg.3 → Pg.4（`x15.png`） |
+| 页面 | CENTER | 出工具栏，环落在标题胶囊 `[784,12][1136,108]` |
+| 工具栏 | RIGHT / UP / DOWN | 标题 ↔ 返回 ↔ ⋮；DOWN 进 Translate 胶囊 → ⏭ → 页码滑条 |
+| 页码滑条 | LEFT / RIGHT | 一页一步（`z0.png`） |
+| 标题胶囊 | CENTER | 章节面板，初始环 = 当前章节行，标签/搜索/⋮ 都可达，BACK 回标题胶囊 |
+| ⋮ | CENTER | 选项面板（peek：模式条 + 7 块快捷操作），环在第一块 `[232,868][414,1056]` |
+
+坑一（死路）：选项面板 peek 状态下，从模式条 `Standard` 按 UP，环落到
+`[691,1050][846,1080]`——那是详情标签行，被裁成屏幕下沿 30 px 的一条，无障碍树里
+`cl=false foc=true`；截图 `k5.png` 上**所有环都消失**，面板看起来像死了，再按 UP 两下
+（`k3.xml` / `k4.xml`）位置一字不动，只有 BACK 能出去。几何上更荒唐的是这一行在模式条**下面**。
+
+坑二（同一个位置）：从快捷操作块按 DOWN，也会落到那一行；区别只在于那行上再按一次 DOWN
+会被它自己的展开处理接住（`k6.png`：环出现在展开后的 `[691,372][846,468]`）。也就是说
+老代码接受"一下瞎按"，只是没有把瞎按变成可见动作。
+
+### 改法
+
+两处，都只在 `isTv` 分支里动：
+
+1. **模式条是 peek 最上面一行**，往上没有画出来的东西，给它挂 `tvVerticalEdgeGuard(blockUp = true)`，
+   环留在原地（和第八十六轮给面板顶部行挂的那个守卫同一族）。
+2. **peek 的出口改成一按即展开并交接焦点**：
+   - 快捷操作网格外面包一层 `Box`，电视上接 `onPreviewKeyEvent`：peek 状态下的 DOWN 不再交给
+     焦点搜索（那里只有被裁掉的一行），而是置 `revealPending` 并吞掉按键；
+   - `LaunchedEffect(revealPending)` 调 `sheetActions.expand()`，然后 `withFrameNanos` 逐帧重试
+     `sheetActions.focusDetailRow()`（最多 8 帧）。`ReaderSheetActions` 新增这个槽，
+     `ReaderOptionsDetailTabs` 用 `LocalTvFocusRequest` 把环请求到标签行上；
+   - **为什么必须交接**：展开之后 peek 的头部会 `canFocus = false`（第八十六轮的守卫），环原来
+     停的那一块不再可聚焦，光展开会什么也没聚焦——实测那版就是 `NO FOCUSED NODE`（`p4x.xml`）；
+   - 标签行自己的 `expandOnPeekDown` 保留，作为"焦点已经先落进那行"时的兜底。
+
+非电视分支：外包 `Box` 的 modifier 是 `Modifier`，网格的约束与位置不变；`focusDetailRow` 默认
+返回 false；`expandOnPeekDown` 本来就有。手机/平板的视图与行为一字未改。
+
+### 量出来的差别
+
+| 量 | 修复前 | 修复后 |
+| --- | --- | --- |
+| 快捷块 → UP → 模式行 | 1 下 | 1 下（`[684,696][788,792]`） |
+| 模式行 → UP | 环消失，落在屏幕下沿被裁掉的标签行；再按 2 下不动 | **停在模式行**，第 2、3 下都不动 |
+| 快捷块 → DOWN | 环消失在同一行，再按一下才展开 | **一按展开**，环直接落在画出来的标签行 `[691,372][846,468]` |
+| 展开后能否进详情页 | 能，但先要一下瞎按 | 能，无瞎按 |
+| 标签行 → RIGHT → CENTER | 切换页面 | 切换页面，环跟到新页第一行 `[850,102][1012,198]`（`w14.png`，Display 页 `Follow app theme` 带环） |
+| 标签行 → UP | — | 留在标签行（展开后它是最上一行，上面只有拖拽把手） |
+| BACK | 收回 peek / 关闭 | 收回 peek（环回第一块 `[232,868][414,1056]`）→ 再按关闭（环回标题胶囊） |
+
+### 更正与顺带发现
+
+这一轮中间写错了三个版本，都留了证据，记下来免得下次再走：
+
+1. **只在头部 `Box` 上接 DOWN**：展开后焦点全失（`NO FOCUSED NODE`，`p4x.png`）——
+   证明"展开"和"交出焦点"必须同一件事做。
+2. **改成"标签行一拿到焦点就展开"**：从快捷块按 DOWN 根本到不了那行（`q9.xml` / `q10.xml`
+   都停在 `[596,868][778,1024]`），详情页彻底不可达——比原来更糟。
+3. **头部 `Box` 接 DOWN（不限行）**：从模式条按 DOWN 也被吞掉，快捷操作块被整段跳过，
+   于是处理器只能挂在网格上（"最后一行往下"才是它的语义边界）。
+
+另外两条如实记录：
+
+- 从高锚点 BACK 会先回中等锚点、再回 peek、再关（`w15` → `w16` → `x10`），是既有的锚点行为，
+  不是这一轮引入的。
+- `uiautomator` 报 `NO FOCUSED NODE` 仍可能是导出滞后：控件隐藏后按 RIGHT 那次也是这个报错，
+  截图里页码已经从 Pg.3 变 Pg.4（`x15.png`），行为是对的。
+
+### 教训
+
+- **"展开面板"和"交出焦点"是一件事。** 头部一旦因为展开变成不可聚焦，展开后的第一帧就是无主
+  状态；遥控器用户看到的是一块黑面板。
+- **预览键处理器挂在哪一层，就是它的语义边界。** 挂在头部会吞掉"模式条 → 快捷块"这一下，
+  挂在网格上才是"从最后一行往下"。同一个回调，挂错一层就是新 bug。
+- **焦点搜索的候选包含被裁掉的行。** 屏幕上不可见不等于不可聚焦；要么让它不参与（`canFocus`），
+  要么在被选中的瞬间把它变成可见的（本轮做法）。
+
+### 遗留
+
+1. 选项面板标签页的焦点环是近白色（M3 `SecondaryTabRow` 指示器盖在蓝环上），同面板其余停靠点
+   都是蓝环——环看得见，颜色不对（第八十七轮记过的同一族化妆问题）。
+2. 详情标签页里的开关、滑块、下拉还没逐个按过；本轮只到"能进、能切页、能回"。
+3. 阅读器的小说分支（`ComposeNovelReader`）整条还没上过遥控器，`NovelSelectionContainer` 的
+   4 个调用点也还在第九十六轮的遗留名单里。
+
+## 第九十八轮：七块快捷操作，按下去分别落到哪里（2026-10-25）
+
+### 起念
+
+第九十七轮把 peek 的第一下 DOWN 修成"一按展开"，但面板里那七块快捷操作一次都没按过。这一轮逐块
+按下去，记落点、记焦点、记 BACK 能不能回来。
+
+### 现场
+
+| 快捷操作 | 落点 | 结果 |
+| --- | --- | --- |
+| Chapters and pages | 章节面板 | 三标签都在，环落在当前章行（`z40`） |
+| Add bookmark | 无提示，面板关闭 | 书签真的写进去了：Bookmarks 标签里多出一张 P.4 卡（`z48`） |
+| Save page | 全屏裁剪编辑器 | Cancel / Save 都能到，比例块也能到（`z23`） |
+| Crop & note | 同编辑器 + 笔记框 | 键盘弹起挡住比例块；BACK 收键盘后再按 DOWN 就到（`A13`–`A15`） |
+| Automatic scroll | 自动滚动画板 | 开关、滑条、更多行都可达；滑条 LEFT 把 x4.1 拨到 x3.1（`z69`） |
+| Open in browser | 关闭面板，页面不动 | 本地源没有 URL，静默 no-op |
+| Manga translation | 关闭面板，右下 Translate 胶囊亮成蓝色 | 翻译模式开启，本地页没有可译文字，无覆盖层 |
+
+顺带量到的三处细节：
+
+- 章节面板的放大镜按 CENTER 会打开 `Find chapter` 输入框，环留在放大镜上（`z44`）——电视上这是对的，
+  键盘不该抢焦点。
+- Bookmarks 标签的卡片是焦点目标：DOWN 从标签行落进 P.4 卡（蓝环，`z48`），CENTER 直接跳回第 4 页
+  （`z49`，`Pg.4` 的页面内容）。
+- 裁剪编辑器的比例块按 CENTER 等同于 Save：编辑器当场关闭、阅读器推进到下一页，不会停在"已选比例"
+  等确认。手机上是否是同样语义没验。
+
+### 改法
+
+自动滚动画板打开时光标停在右上角 ✕，第一个控件（Auto scroll 开关）要按一下 DOWN 才到。原因是
+`rememberTvSheetStartFocus` 的启动焦点请求没落地，而它的重试窗口只有 10 帧。**但真正的病因不是帧数**
+（见下），最后改的是闸门：
+
+```kotlin
+if (!view.hasWindowFocus()) return@repeat   // 窗口自己还没拿到焦点，此刻的请求一定会被换掉
+if (hasFocus()) { /* 连中三帧才算落地 */ } else { requestFocusFromTouch(); requestFocus() }
+```
+
+重试窗口同时放宽到 40 帧（盖住滑入动画 + 窗口焦点交接），`hasFocus` 连中三帧才认为请求成立。
+非电视分支一字未改；同一 helper 的另一个用户是 `ComposeReaderToolsSheet`。
+
+### 量出来的差别
+
+| 量 | 修复前 | 修复后 |
+| --- | --- | --- |
+| 打开自动滚动画板 | 环在 ✕ `[1464,747][1568,843]`（`z62.png`） | 环在 Auto scroll 开关 `[1464,814][1568,910]`（`C14.png`） |
+| 板内走位 | ✕ → DOWN → 开 → DOWN → 滑条 → DOWN → Pause | 开 → DOWN → Pause → DOWN → 滑条 → UP → ✕，BACK 关闭回标题胶囊 |
+
+### 更正与顺带发现
+
+1. **"笔记框 DOWN 卡死"是我测错。** 键盘开着时 DOWN 归键盘所有，BACK 收起键盘后再按 DOWN 就落到比例块
+   （`A13` → `A14` → `A15`）。原实现的 `tvTextInputFocusEscape` 文档里写的正是这两步，我漏了第二步就下了结论。
+2. **"多等几帧"不是病因。** 加日志后在设备上读到：`f0 hasFocus=false req=Success(true) win=false`，
+   随后 `f1`–`f3 hasFocus=true`，但窗口还没拿到焦点；窗口拿到焦点后 Compose 把环换回 ✕。
+   也就是说请求当时是成功的，只是**窗口焦点一到就被默认节点顶掉**。加 `hasWindowFocus()` 闸门后一次就中。
+3. 裁剪编辑器的画布只有触摸语义：从比例块或 Cancel 都进不去画布，方向键到不了裁剪框。
+
+### 教训
+
+- **`requestFocus()` 返回成功不等于焦点在那。** 窗口自己还没拿到焦点时，请求会先成立、等窗口焦点一到又被
+  默认节点（内容里第一个可聚焦者）替换掉；要等的是窗口焦点事件，不是帧数。
+- **判断一个输入框是不是死路，必须按它的文档流程走完。** 注意到但没走完第二步就给实现判了死刑，是本轮
+  最贵的一次误判。
+
+### 遗留
+
+1. 裁剪画布只能触摸，遥控器不能移动/缩放裁剪框；电视上目前只有"整页"和四个比例块两种选择。
+2. `Save page` / `Save note` 在调试模拟器上没有在 Pictures / DCIM / Download 里留下文件（本地源 + 调试包），
+   落盘目标要单独确认。
+3. `Open in browser` 在本地源上是无声 no-op，电视上要不要给个可见提示待定；网络源在模拟器上无法测。
+4. `ComposeReaderToolsSheet` 用的同一个 helper，但默认电视 dock 没有 TOOLS 入口，本轮没能在设备上打开它。
+5. `Manga translation` 在本地页上没有可见产物，翻译链路本身还没审。
+
+## 第九十九轮：标签栏「能按到」不等于「看得出」（2026-10-25）
+
+### 起念
+
+第九十八轮末尾还留着一句旧笔记：章节面板标签行的焦点环被近白色的选区指示条吃掉，等于看不见。
+电视上「按不到」的那批控件已经修得差不多，剩下的坏味道换了一种样子——**能按到，但看不出自己按到了哪里**。
+这一轮就把「标签栏」这一类控件在真机上逐个按一遍：章节面板的 Chapters/Pages/Bookmarks、
+收藏页的 All favorites/Read later，顺便把章节行的行内操作也走一遍。
+
+### 现场
+
+**一、章节面板标签行：旧笔记不成立。**（1920×1080，`E12`/`E15`，两张图都看过）
+
+| 按键 | 焦点落点 | 画面 |
+| --- | --- | --- |
+| 打开面板 | 当前章节行 `[216,506][1624,618]` | — |
+| UP | Pages 药丸 `[873,372][1019,468]` | 蓝色 2 dp 圆角环，清楚（`E12`） |
+| LEFT | Chapters 药丸 `[684,372][869,468]` | 白色描边环，落在深色药丸上仍可辨（`E15`） |
+
+选中的 Chapters 是「深色药丸 + 近白文字」，环是白色，但两者反差足够，
+旧笔记里「看不见」的印象来自更早的另一种指示条样式，本轮的图更正它。
+
+**二、章节行里那三个图标：只有最后一个该能按。**（`F15`/`F24`）
+
+Chapter 01 行尾看着有三个图标，右侧能聚焦的只有 `[1616,514][1712,610]`（译）；
+Chapter 02 只有两个图标，RIGHT 落在 `[1616,626][1712,722]`，LEFT 直接回行体 `[216,618][1624,730]`。
+读代码才明白：左边两个不是按钮，是行内的**状态标记**（已收藏、已下载，见
+`core-ui/.../core/chapters/ChapterItemCard.kt` 的 `isBookmarked`/`isDownloaded` 分支），
+真正的操作按钮是 `details/.../ChapterItemCard.kt` 传进去的 trailing actions。
+行体注释也写明了「trailing actions 是独立焦点停靠点」，所以这是设计而不是漏改。
+
+**三、收藏页标签行：焦点几乎不可见。**（`M10`/`L23`，同一块区域裁剪放大成 `M10_crop`/`L23_crop`）
+
+焦点落在未选中的 `Read later`（dump：`[411,128][585,224]` focused=true，`M10`）时，
+裁剪图上只多出一层约 10% 白的淡淡色块，沙发距离等于没有；
+焦点落在选中的 `All favorites`（`L23`）时，那层淡色和蓝字、蓝下划线混在一起，谁也看不出环在哪。
+代码侧的原因很干净：`core-ui/src/commonMain/.../core/ui/topbar/TabletTopBar.kt` 的 `TopBarTabsRail`，
+每个 tab 只有
+
+```kotlin
+Box(modifier = itemModifier(item).height(tokens.minimumTouchTarget).clickable { onItemSelected(item.id) })
+```
+
+整条链上没有 `tvFocusable`，于是电视上唯一的反馈就是 Material 给 clickable 的 state layer。
+a11y 一直报告 focused=true——**它只说明焦点停在那儿，不说明画出来了**，这正是本轮最容易踩空的地方。
+
+### 改法
+
+在 `TopBarTabsRail` 的 tab 上、`.clickable` 之前补一环（顺序按 `tvFocusable` 的文档：必须在
+它要观察的焦点目标之前）：
+
+```kotlin
+itemModifier(item)
+    .height(tokens.minimumTouchTarget)
+    .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
+    .clickable { onItemSelected(item.id) }
+    .padding(horizontal = 10.dp)
+```
+
+`addFocusTarget = false` 是因为下面的 `clickable` 自己已经是焦点目标，这里只借它的焦点状态画环；
+`tvFocusable` 在非 TV 演示配置下原样返回 `this`，所以手机/平板的组合链没有任何变化。
+这条 rail 是全应用共用件（`CompactTopBarTabsRail` → 收藏页及带紧凑顶栏标签的页面），改一处，各页一致。
+
+### 量出来的差别
+
+| | 改前 | 改后 |
+| --- | --- | --- |
+| 焦点在未选中的 Read later | 淡白色块，几乎不可见（`M10_crop`） | 蓝色 2 dp 圆角环（`Q11_crop`） |
+| 焦点在选中的 All favorites | 与蓝字/下划线糊成一片（`L23_crop`） | 蓝色 2 dp 圆角环，与下划线分离（`Q10_crop`） |
+| 选区 vs 焦点 | 只能读出选区（下划线） | 选区下划线在 All favorites，环在 Read later，两个信息分开读 |
+
+dump 复核：`Q10` 焦点 `[210,128][407,224]`、`Q11` 焦点 `[411,128][585,224]`，
+环落在各自 tab 内部不越界（tab 高 48 dp，环内缩半个描边，不会被 LazyRow 裁掉）。
+
+构建：`:app:assembleDebug` `BUILD SUCCESSFUL in 1m 11s`，安装 `Success`，同一台模拟器复测。
+
+### 顺带发现（未修，留给后面的轮次）
+
+1. `InlineCompactTopBarTabsRail`（`app/.../KototoroTopBar.kt:1012` 一带）是同一类 `.clickable` 无环，
+   但它属于 MINIMAL 顶栏样式；电视用户切到该样式会复现同样的死站，需要在真机切样式后再补。
+2. 收藏页从标签行按 DOWN **进不到下面的筛选芯片行**（`L20`/`L21`/`L22`：DOWN 停在 tab 不动，
+   `[411,128][585,224]` 原地）；要进芯片只能从左侧导航栏 RIGHT。空态下芯片行下方没有可聚焦内容，
+   但这不该影响「tab → 紧邻的 chip 行」这一步，需要带焦点树日志单独核。
+3. 同一页在纯方向键操作里曾自己从 All favorites 翻到 Read later（`H19`，只发生过一次，`K20`–`K28`
+   复跑六次未再现）；收藏页内容确实是 `HorizontalPager`（`FavoritesHostScreen.kt` 的 `rememberPagerState`），
+   怀疑是某一下 RIGHT 没被焦点消费、被 pager 吃掉，需带日志复现后再动。
+
+### 教训
+
+「按不到的控件」修完之后，验收标准要往前挪一格：**按得到、也看得出**。
+a11y 的 `focused="true"` 只能证明焦点停靠成功，证明不了屏幕上有东西；
+这一轮两个「疑似缺陷」里，一个（章节面板标签环）是旧笔记过期，一个（收藏页标签环）是真的，
+两者的区别只有把同一区域裁剪放大逐像素比才看得出来。
+
+## 第一百轮：顶栏是叠在页面上的兄弟，DOWN 出不了这一层（2026-10-25）
+
+### 起念
+
+第九十九轮留了三条尾巴，第二条是「收藏页从标签行按 DOWN 进不到下面的筛选芯片行」，
+当时的结论是「需要带焦点树日志单独核」。这一轮先去复现它，再决定是修那一页，还是修别处。
+
+### 现场
+
+**一、先把死站钉死。**（`R11`–`R13`）
+
+焦点停在 `Read later`（dump：`[411,128][585,224]`，focused=true），连按三次 DOWN，三次 dump 的焦点矩形
+一字不改。反向却是通的：从芯片行按 UP 能回到 tab。**单向失效**说明问题不在「tab 不可聚焦」，
+而在「tab 往下找不到候选」。
+
+**二、顶栏整体出不去。**（`U13`/`U14`）
+
+从顶栏 ⋮ 按钮（`[1800,16][1896,112]`）按 DOWN，焦点落到 `Read later`（`[411,128][585,224]`）——
+还在顶栏内部；再按 DOWN 就是上面那个死站。也就是说：顶栏里能互相走，走不出去。
+
+**三、不是收藏页的毛病，是接缝的毛病。**（`T21`/`T22`、`W12`/`W13`）
+
+- 首页：从主视觉卡 `[216,144][1096,624]` 按 UP → 搜索框 `[332,16][1692,112]`；
+  再按 DOWN → **左侧导航栏** `[16,296][152,432]`，跳过正下方那张卡，直接飞出页面。
+- 对照：`Search in Favorites` 页（`X30`–`X32`），关掉输入法后 DOWN 从搜索框 `[124,0][1780,96]`
+  → `In Favorites` 芯片 `[32,88][242,184]` → 最近查询行 `[24,286][1896,414]`，**一路通畅**。
+
+同一套顶栏、同一个按键，两页两种结果。差别在焦点树结构（`R11.xml`）：
+
+- 内容列 `View [168,0][1920,1080] scrollable`（芯片行 `[168,224][1920,304]` + 空态文案）；
+- 顶栏 `View [168,0][1920,224]`（搜索行 16–112、标签行 128–224）；
+- 两者是同一个根下的**兄弟**，内容列从 y=0 开始（列表本来就要从玻璃顶栏下面滚过去）。
+
+焦点系统的表现与这一点一致：二维搜索只肯钻进「整体落在按键方向上」的兄弟节点；
+内容列起点在窗口顶端、把 tab 的矩形整个包住，于是这条兄弟被跳过、子树也不搜，
+DOWN 自然找不到候选；反向 UP 能成，是因为从内容列里往上看，顶栏确实整体在它上方。
+（直接 grep 过：`focusProperties` 的显式方向只有 `DetailsHeader`、`SpacesSettingsScreen`、
+`VideoPlayerInfoDialog`、`ReaderOptionsPanelHost` 四处，这一对兄弟之间没有任何手写方向。）
+
+### 改法
+
+新增一个通用件，放在 `core-ui/src/commonMain/.../core/ui/adaptive/TvFocus.kt`：
+
+```kotlin
+@Composable
+fun Modifier.tvDownFocusLink(target: FocusRequester?): Modifier {
+    if (target == null) return this
+    return onPreviewKeyEvent { event ->
+        event.type == KeyEventType.KeyDown &&
+            event.key == Key.DirectionDown &&
+            runCatching { target.requestFocus() }.isSuccess
+    }
+}
+```
+
+`requestFocus()` 不依赖几何，正好绕过上面那条「兄弟被跳过」的规则；`runCatching` 保证目标还没组合出来时
+按键**不被吞掉**，退回默认搜索。`target == null` 时原样返回 `this`，非 TV 组合链一字未动。
+
+接线（跨度是「谁同时拥有接缝两侧」）：
+
+| 文件 | 改动 |
+| --- | --- |
+| `core-ui/.../topbar/TabletTopBar.kt` | `TopBarTabsRail` 新增 `downFocusRequester`，接在 ring 与 `.clickable` 之间 |
+| `app/.../main/ui/compose/TopBarOverrideState.kt` | `CompactTabsTopBarOverrideState.downFocusRequester`（`overrideStateEquivalent` 不比较它，报告环路的判断不受影响） |
+| `app/.../main/ui/compose/KototoroTopBar.kt` | `CompactTopBarTabsRail` 把它透传下去 |
+| `app/.../favourites/ui/compose/FavoritesHostScreen.kt` | 仅 TV 下 `remember { FocusRequester() }`，写进 tab 状态，并传给列表页 |
+| `app/.../favourites/ui/compose/FavoritesListScreen.kt` | `quickFilterFocusRequester` → 排序控件 |
+| `app/.../list/ui/compose/SortOrderControl.kt` | 新增 `focusRequester`，落在芯片行行首的排序图标上 |
+
+收藏页刚好同时拥有两半：标签行来自它写进顶栏的 override state，芯片行来自它自己组合的列表头，
+所以 requester 从它这儿一次性串起来。`HorizontalPager` 的 `beyondViewportPageCount = 1` 会把邻页也组合出来，
+所以只在 `enabled`（当前页）时挂 requester，避免两个节点抢同一个 requester。
+
+为什么不用 `focusProperties { down = … }`：目标没组合时它会对未初始化的 requester 抛异常，
+而 `onPreviewKeyEvent` + `runCatching` 能把「没目标」这种情况干净地还给默认搜索。
+
+### 量出来的差别
+
+| 操作 | 改前 | 改后 |
+| --- | --- | --- |
+| `All favorites` 标签 DOWN | 原地不动（`R12`/`R13`） | 排序控件 `[176,216][268,312]`，蓝色环清楚（`V23`） |
+| `Read later` 标签 DOWN | 原地不动（`R11`） | 同上（`V32`） |
+| 顶栏 ⋮ → DOWN → DOWN | ⋮ → `Read later` → 死站（`U13`/`U14`） | ⋮ → `Read later` → 排序控件（`V43`/`V44`） |
+| 芯片行 UP | 回 tab（本来就通） | 不变（`V30`） |
+| 芯片行 LEFT/RIGHT | 排序控件 ↔ `On device`（`V34`/`V35`） | 不变（`V34`/`V35`） |
+| 空态下排序控件再按 DOWN | — | 停在原地（`V33`）：芯片行下方确实再没有停靠点 |
+
+构建：`:app:assembleDebug` `BUILD SUCCESSFUL in 1m 40s`，安装 `Success`，同一台模拟器复测。
+（`V10`–`V44`、`W10`–`W13`、`X10`–`X32` 是本轮新 dump/截图，`R11`–`R13`、`U13`/`U14`、`T21`/`T22` 是改前的。）
+
+### 顺带发现（未修，留给后面的轮次）
+
+1. 首页那条也在：搜索框 DOWN 落到左侧导航栏而不是正下方的卡（`W12`/`W13`，新包上复测）。
+   完全同因，只是首页没有 tab 行可挂 requester，得给内容区第一张卡单独做锚点。
+2. 收藏页开着书架/有卡片时，「芯片行 → 网格」这一段本轮没量到：这台 AVD 的收藏库是空的，
+   只有空态文案，没法验证网格首行。
+3. `InlineCompactTopBarTabsRail`（MINIMAL 顶栏样式）仍是没有环、也没有 DOWN 出口，与第九十九轮同一条尾巴。
+4. 「Search in Favorites」页里输入法打开时 D-pad 归输入法（`X20`/`X21` 原地不动），
+   这是 `tvTextInputFocusEscape` 文档里写明的既有权衡，不是新缺陷；关掉输入法后立刻恢复（`X31`/`X32`）。
+
+### 教训
+
+「这一页按不到」先别改这一页。这一轮的三个现象（收藏页 tab 死站、顶栏 ⋮ 出不去、首页 DOWN 飞到导航栏）
+看起来是三件互不相干的事，实际是同一个接缝：**顶栏是叠在页面上的兄弟，不是页面的父节点**。
+先找一个「同一套顶栏但内容结构不同」的页面对照（这里是搜索页，一路通畅），
+再接缝处下一个通用件，比逐个页面去改焦点属性快得多，也不会漏掉后面才发现的那两个同因实例。
+
+## 第一百零一轮：给内容区留一个「第一站」的槽位（2026-10-25）
+
+### 起念
+
+第一百轮留的第一条尾巴：首页搜索框按 DOWN 落到左侧导航栏，跳过正下方的主视觉卡。
+同一轮已经做出通用件 `tvDownFocusLink`，差的只是「谁把目标 requester 交到搜索框手上」。
+
+### 现场
+
+- 改前（`W12`/`W13`，第一百轮的包上复测）：搜索框 `[332,16][1692,112]` DOWN → 导航栏 `[16,296][152,432]`，
+  主视觉卡 `[216,144][1096,624]` 被整个跳过。反向通：从主视觉卡 UP 能回到搜索框（`T21`）。
+- 为什么不能照抄收藏页：收藏页同时拥有接缝两侧——标签行是它写进顶栏的 override state，芯片行是它自己组合的列表头，
+  所以一个 requester 从页内串两路即可。首页的两侧分属 `HomeHeroSection`（在 `HomeRoute`／`HomeScreen`／
+  `HomeTabletLayout` 之下）与 `KototoroTopBar`（在外壳 `MainTopChrome` 里，那个函数本身约 70 个参数）。
+  手工串参数要一路加进四五个签名，而且历史、探索、订阅、详情每一页都得再来一遍。
+- 另一个不能绕过的点：槽位里的目标必须是「此刻在屏幕上的那一页的第一站」。页面在导航栈里留着组合却不显示时，
+  若还占着槽位，按 DOWN 就会把焦点甩到一张看不见的卡上。
+
+### 改法
+
+把接缝的拥有者认定成外壳，给两个兄弟之间挖一个只有一格的槽位：
+
+```kotlin
+@Stable
+class MainContentFocusAnchor {
+
+    var requester: FocusRequester? by mutableStateOf(null)
+        private set
+
+    fun register(requester: FocusRequester) {
+        this.requester = requester
+    }
+
+    fun unregister(requester: FocusRequester) {
+        if (this.requester === requester) {
+            this.requester = null
+        }
+    }
+}
+
+val LocalMainContentFocusAnchor = staticCompositionLocalOf<MainContentFocusAnchor?> { null }
+```
+
+（`app/src/main/kotlin/org/skepsun/kototoro/main/ui/compose/MainContentFocusAnchor.kt`）
+
+接线三处：
+
+| 文件 | 改动 |
+| --- | --- |
+| `app/.../main/ui/compose/KototoroApp.kt` | `remember { MainContentFocusAnchor() }`，追加进外层已有的那个 `CompositionLocalProvider`（顶栏与内容列都在它下面） |
+| `app/.../main/ui/compose/KototoroTopBar.kt` | 读 `LocalMainContentFocusAnchor.current?.requester`，`.tvDownFocusLink(...)` 挂到三处搜索控件（展开式搜索条、COMPACT 搜索按钮、MINIMAL 行内搜索按钮） |
+| `app/.../home/ui/compose/hero/HomeHeroSection.kt` | 把已经在用的 `heroFocusRequester` 注册进槽位：只在 TV、只在 RESUMED 时 |
+
+两点设计取舍：
+
+- 用 `staticCompositionLocalOf`：槽位对象身份不变，变化的是它内部的 state，读它的顶栏照常重组；
+  非 TV 的页面不注册，槽位永远是 `null`，`tvDownFocusLink` 原样返回 `this`，手机/平板组合链一字未动。
+- 注册绑生命周期而不是绑组合：`LifecycleEventObserver` 在 `ON_RESUME` 注册、`ON_PAUSE`/`ON_STOP`/`ON_DESTROY` 注销，
+  另加「组合时已经是 RESUMED」这条即时注册（首帧就停在该页的情况），`onDispose` 兜底注销。
+  于是「页面在、但不是当前页」这种状态不会占着槽位。
+
+### 量出来的差别
+
+| 操作 | 改前 | 改后 |
+| --- | --- | --- |
+| 首页搜索框 DOWN | 导航栏 `[16,296][152,432]`（`W13`） | 主视觉卡 `[216,144][1096,624]`（`Y24`，截图里蓝色环） |
+| 主视觉卡 UP | 回搜索框（本来就通） | 不变（`Y22`→`Y23`） |
+| 强杀重启后再走一遍 | — | 导航栏 → RIGHT 主视觉卡（`Z11`）→ DOWN 历史卡（`Z12`/`Z13`）→ UP 三次回搜索框（`Z15`）→ DOWN 又落回主视觉卡（`Z20`，截图蓝环） |
+| 收藏页搜索框 DOWN | 标签行（`U13` 一脉） | 标签行 `[411,128][585,224]`（`Y52`）——首页已暂停，槽位清空，没有把焦点甩回首页那张卡 |
+| 收藏页标签行 DOWN | 排序控件 `[176,216][268,312]`（第一百轮） | 不变：`Y52` 先落在 `Read later`，这一轮没碰收藏页链路 |
+| 首页搜索框 LEFT | 内容卡（`Y30`，侧向旁的卡） | 不变 |
+
+构建：`:app:assembleDebug` `BUILD SUCCESSFUL in 1m 52s`，安装 `Success`，同一台模拟器复测。
+（`Y10`–`Y72`、`Z10`–`Z20` 是本轮新 dump／截图；`W12`/`W13`、`U13`、`T21` 是改前的。）
+
+### 顺带发现（未修，留给后面的轮次）
+
+1. 首页滚过主视觉卡之后（`Z12`/`Z13`），从历史卡 UP 要连按三次才回到搜索框（`Z12`→`Z14`→`Z15`），
+   中间那一步会把主视觉卡滚回视野。不是新缺陷，但说明这条 DOWN 出口依赖 hero 还组合着——
+   hero 若被数据清空，槽位就空着，DOWN 退回默认搜索（导航栏）。
+2. 历史、探索、订阅、详情这些页还没有注册锚点：槽位是通用的，接线只是 `register`/`unregister` 两行，
+   但它们各自「第一站」是谁要先量一遍，不能凭空猜。
+3. 第一百轮那两条尾巴照旧：收藏页空库验不到「芯片行 → 网格」；`InlineCompactTopBarTabsRail`（MINIMAL 样式）
+   仍是没环、没 DOWN 出口。
+
+### 教训
+
+**接缝不需要「谁拥有」的答案，需要的是一个放得下答案的槽位。** 一开始按收藏页的经验去找「哪一页同时拥有两侧」，
+结论是首页不是——两侧分属内容深处与外壳深处。真正同时拥有它俩的只有外壳自己，而这个外壳已经有一个
+`CompositionLocalProvider` 横在两者之上，于是加一格槽位、两行注册，比改五个签名更接近问题的形状。
+另外，凡是「注册一个指针给别人按」的东西，都必须同时回答「这个指针什么时候失效」；这一轮花在
+`ON_RESUME`/`ON_PAUSE` 上的几行代码，比注册那行更值钱——`Y52` 就是它没漏的证明。
+## 第一百零二轮：焦点落在「看不见的」顶栏上时，把它拉回来（2026-10-25）
+
+**现象**：历史页往下滚，顶栏按 `topAppBarState.heightOffset` 被真的移出窗口、并配合 `chromeAlpha` 淡出；
+但它的焦点目标还活在焦点树里。从统计卡 `[192,140][1896,404]` 按 UP，落点是一个**窗口外**的搜索胶囊：
+a11y dump 报 `NOTHING`（不可见节点被裁掉），截图与「全屏没焦点」时一模一样（`K34` 与 `J22` 同形），
+可 CENTER 依然会把搜索页打开（后来在 `J31` 量到 `EditText [124,0][1780,96]`）。
+用户拿到的是「按了没反应、其实已经点进去了」，比根本没焦点更糟。
+
+**根因**：隐藏用的是**位移**——`MainTopChrome` 的 `topChromeModifier` 上有
+`.offset { IntOffset(0, effectiveTopBarOffset.toInt()) }`（`KototoroAppTopChrome.kt`），既没有移除，
+也没有 `canFocus = false`。Compose 的焦点搜索只看几何关系，被移出窗口的节点在 2D 搜索里仍然是
+「上方最近的一个候选」，于是 UP 会稳稳落到一个屏幕外的东西上。
+
+**修法**：让顶栏自己报告「焦点在我这儿」，外壳据此把顶栏按回原位。
+1. `MainTopChrome` 的 `topChromeModifier` 加 `.onFocusChanged { focusState -> onChromeFocusChanged(focusState.hasFocus) }`，
+   新参数 `onChromeFocusChanged: (Boolean) -> Unit = {}`；`hasFocus` 是「本节点或任一子节点有焦点」，
+   所以胶囊、筛选、⋮ 谁被点亮都会报。
+2. `KototoroApp` 里 `var isChromeFocused by remember { mutableStateOf(false) }`，与 `presentationConfig.isTv`
+   合成 `shouldRevealChromeForFocus`，然后**两处**生效：`effectiveTopBarOffset` 在它有焦点时取 `0f`
+   （不是 `topAppBarState.heightOffset`），`effectiveChromeAlphaTarget` 在它有焦点时取 `1f`。
+3. 没有去改 `topAppBarState.heightOffset` 本身：滚动状态是页面的真相，焦点只是「临时让人看见」，
+   焦点一走，偏移与透明度就自动回到滚动该有的样子。整套判断都在 `presentationConfig.isTv` 后面，
+   手机/平板的行为一个字节都没动。
+
+**证据**（模拟器 1920×1080 @320，`P` 系列为最终构建 `102d`）：
+- 隐藏态：历史页滚到列表末尾，焦点 `[192,660][422,1080]`（`P12`），顶栏整体不可见。
+- UP 回到统计卡 `[192,140][1896,404]`（`P23`）；再 UP：`P24` 顶栏滑回，标题「History」与搜索胶囊
+  `[358,16][1692,112]` **带蓝色焦点环**出现在原位，a11y 也重新给出它的 bounds。
+- 回归：首页 hero `[216,144][1096,624]` → UP → 胶囊 `[332,16][1692,112]` → DOWN → 回到 hero（`R10`–`R12`）；
+  收藏页胶囊 `[399,16][1692,112]` → DOWN → 标签栏 `[411,128][585,224]`（`S20`–`S22`，与第一百轮
+  `Y51`→`Y52` 同一结果）。第一百零一轮的槽位没被这轮的位移覆盖打坏。
+
+**假线索（记下来）**：本轮第一次量同一场景（构建 `102b`，`K` 系列）时，UP 之后依旧 `NOTHING`、顶栏也没回来。
+为分清「回调没触发」还是「`isTv` 不是真」，临时加了一行 `Log.d("TvChromeProbe", ...)` 探针（`102c`）：
+探针打出 `tv=true`、`chromeFocus=true`，同一条路径随后连续复现两次成功；去掉探针重建（`102d`）仍然成功。
+那次失败没能复现，最可能是紧接「详情页 BACK」之后的一次过渡态——那一刻 `isChromeVisible` 还是 `false`，
+`scrollAlpha` 因此是 0，只把偏移归零依然看不见东西。所以修法补了第 2 步后半句：
+`effectiveChromeAlphaTarget` 也吃 `shouldRevealChromeForFocus`，让「焦点在顶栏」同时压过位移与透明度
+两条隐藏路径，而不是只压一条。
+
+**遗留**
+1. 回程还没有对偶：顶栏被拉回来并持有焦点后，DOWN 回内容区仍走 2D 搜索；历史页没有锚点，
+   于是落到导航栏（`L30` 量到 `[16,440][152,576]`）。第一百零一轮的槽位只管「内容 → 顶栏」，
+   反向要等历史/探索等页各自注册第一站。
+2. 「详情页 BACK 之后的一瞬」这个过渡态值得单独量一次：本轮的修法能兜住「焦点已进顶栏」的情形，
+   兜不住「顶栏该出现却没出现」本身。
+
+### 教训
+
+**能聚焦的东西，要么看得见，要么就别让它被聚焦。** 顶栏的隐藏是动画（位移 + 透明度），
+隐藏态下它仍是焦点树里合法的落点，于是遥控器的 UP 等于一次「盲点」。遮住它的不是焦点系统，
+而是「顶栏总在最上层」这条空间直觉——而这条直觉在 2D 焦点搜索里根本不存在。
+把「我在被聚焦」这一条信息交回给隐藏方自己（一行 `.onFocusChanged`），比在内容区一张张画面去补 UP 链接
+更省、也更不容易漏；同时要记得：隐藏有两条路径（位移、透明度），兜底也得两条都压住。
+## 第一百零三轮：让历史页把「第一站」交给顶栏（2026-10-25）
+
+**现象**：第一百零二轮把顶栏「按回来」之后，历史页的搜索胶囊 `[358,16][1692,112]` 拿到了焦点与环，
+但按 DOWN 落到了导航栏的历史项 `[16,440][152,576]`（`L30`）。也就是说「内容 → 顶栏」已经通了，
+「顶栏 → 内容」在这几页还是断的：胶囊到页面的路一断，遥控器就只能横着走到导轨上。
+
+**根因**：第一百零一轮的槽位 `LocalMainContentFocusAnchor` 本身是通用的，问题是**只有首页 hero 注册了**
+第一站。历史页没注册，胶囊上的 `tvDownFocusLink` 拿到的是 `null`，于是回落成 2D 搜索——顶栏是内容列的
+覆盖兄弟，2D 搜索从胶囊往下找不到页内候选（内容列从窗口顶部开始，把整个下拉方向吃掉），最后只在
+导航栏上找到东西。
+
+**修法**（把「注册一个指针」这件事从 hero 里提出来，变成一行可复用的）：
+1. `MainContentFocusAnchor.kt` 新增 `rememberMainContentFocusAnchorRequester(enabled)`：记住一个
+   `FocusRequester`，在页面 RESUMED 期间注册进槽位，ON_PAUSE/ON_STOP/ON_DESTROY 与 dispose 时注销；
+   非 TV、没有槽位宿主、或 `enabled = false` 时干脆不注册。
+2. `HomeHeroSection` 里那段手写的 `DisposableEffect` + `LifecycleEventObserver` 删掉，改成调用它
+   （行为不变，只是把轮子搬到接缝旁边）。
+3. `HistoryScreen` 的 `HistoryHeader`：`showStats` 为真时（统计卡或统计占位卡总有一个在），把同一个
+   requester 挂到那张卡上。搜索中（`libraryQuery` 非空）统计卡不渲染，`enabled` 跟着是 false，
+   槽位回落 2D 搜索而不是交出一个挂在空气上的 requester。
+
+**证据**（模拟器 1920×1080 @320，`T`/`U`/`V`/`W` 系列）：
+- 修复前（第一百零二轮同一构建）：胶囊 DOWN → 导轨 `[16,440][152,576]`。
+- 修复后：历史页 RIGHT → 卡 `[192,324][422,744]`，UP ×3 到胶囊 `[358,16][1692,112]`（`T33`），
+  **DOWN → 统计卡 `[192,140][1896,404]`**（`T40`）；再 DOWN → 相邻芯片 `[694,308][881,404]`（`T41`），
+  说明只是接管了「第一次 DOWN」，行内 2D 搜索没被压坏。
+- 反陈旧：历史页 → 导轨 → 收藏页，胶囊 `[399,16][1692,112]` 按 DOWN 仍是标签栏 `[411,128][585,224]`
+  （`U15`），没有落回历史页的统计卡。
+- 首页回归（因为第 2 步动了 hero）：hero `[152,147][960,621]` → UP → 胶囊 `[332,16][1692,112]` →
+  DOWN → 回到同一张 hero（`W10`–`W13`），与第一百零一轮一致。
+
+**顺手量到的下一处缝**（还没修）：首页 hero 这一页的 UP 取决于焦点卡落在分页器的哪半边——
+卡在右半边时 UP 落到筛选按钮 `[1708,16][1800,112]`（`V13`），而筛选/⋮ 没有 DOWN 链接，
+于是从筛选按 DOWN 又掉回导轨 `[16,296][152,432]`（`V14`）。第一百零一轮只给三处搜索控件挂了链接，
+这两颗图标是同一排里的邻居，却没有同样的出口。
+
+**遗留**
+1. 历史页的锚点挂在统计卡上，而统计卡是列表的第 0 个 item：滚远到它被 LazyColumn 回收之后，
+   槽位会跟着 `onDispose` 一起空掉。这一刻 DOWN 会回落成 2D 搜索，需要「离开视口就交给下一个可见停靠点」。
+2. 筛选/⋮ 两颗图标的 DOWN 出口（见上）。
+3. 探索、订阅、详情这些页仍然没注册第一站。
+
+### 教训
+
+**一个能复用的东西，第一件要做的事是把它从「第一个用它的地方」搬出来。** 第一百零一轮把注册逻辑写在
+hero 里是对的——那时只有一个使用者，抽象还没有形状。等到历史页需要它时，所谓「抽象」就是删掉 30 行
+`DisposableEffect` 换成一行调用：形状已经由第二个使用者定下来了。反过来，如果这一轮为了省事，把
+`DisposableEffect` 复制一份到 `HistoryHeader`，两边的注册/注销时机就会开始各自漂移，
+而它们漂移的症状（某一页抢走了槽位）恰恰极难复现。
+## 第一百零四轮：顶栏剩下的两颗按钮也要交出 DOWN（2026-10-25）
+
+**现象**：第一百零三轮把历史页的搜索胶囊接回内容之后，上一轮顺手量到的那处缝还在：首页 hero 的焦点卡
+落在分页器右半边时，UP 落到的不是搜索胶囊而是筛选按钮 `[1708,16][1800,112]`（`V13`），
+从这颗按钮按 DOWN 直接掉到导航栏 `[16,296][152,432]`（`V14`）。搜索胶囊、筛选、⋮ 是同一排里的邻居，
+只有胶囊有出口，右边两颗是遥控器的死站——而且它们恰恰是 UP 之后最容易落到的地方。
+
+**根因**：第一百零一轮只给三处搜索控件挂了 `tvDownFocusLink`。更具体的坑是
+**链接必须挂在真的持有焦点的节点上**：`SourceTagDropdown` 和 `SwipeableFilterChip` 都把调用方传进来的
+`modifier` 套在一个**不可聚焦的 Box** 外层，真正的 `tvFocusable` 在里面的 `IconButton` 上。
+所以第一次改法（把链接塞进调用点的 `modifier`）实测无效（`X15`/`X16` 还是掉到导轨），
+`onPreviewKeyEvent` 只有落在焦点路径上才会被派发。
+
+**修法**：
+1. `SourceTagDropdown` 与 `SwipeableFilterChip` 各加一个 `downFocusLink: FocusRequester? = null`，
+   由组件内部挂到**内层 IconButton** 上；默认 `null` 时完全等价于原来（手机侧零变化）。
+2. `KototoroTopBar` 把 `contentDownFocus` 同时交给搜索胶囊、内容类型筛选、来源标签下拉与 ⋮。
+
+**证据**（模拟器 1920×1080 @320，`Y`/`Z` 系列）：
+- 首页：hero → UP → 胶囊 → RIGHT → 筛选 `[1708,16][1800,112]` → **DOWN → hero `[216,144][1096,624]`**
+  （`Y14`，修改前是导轨 `[16,296][152,432]`）。
+- 首页：再 RIGHT → ⋮ `[1800,16][1896,112]` → **DOWN → hero**（`Y16`）。
+- 历史页：胶囊 → RIGHT → 筛选 → **DOWN → 统计卡 `[192,140][1896,404]`**（`Z35`，截图确认环画在卡片上），
+  即链接取的是「当前页注册的那一站」，与页面无关。
+- 按钮本身没被改坏：筛选 CENTER 打开标签下拉（焦点落 `[1507,124][1800,236]`，`Z11`）；⋮ CENTER 打开更多菜单
+  （焦点落 `[1460,124][1872,236]`，`Z21`），BACK 后焦点回到 ⋮（`Z22`）。
+- 环确实画出来了：`Z30` 截图上筛选按钮带完整蓝色焦点环。
+
+**没测到的**：内容类型筛选芯片（`SwipeableFilterChip`）在本 AVD 上没出现——它受「显示内容类型筛选」设置
+与路由开关控制（本地浏览/更新页才开），默认关，所以那一行改动只有代码层面的对称性，没有设备证据。
+
+**遗留**
+1. 用 BACK 关掉来源标签下拉后焦点掉到导航栏（`Z12`）；⋮ 有 `moreMenuAnchorFocus` 能回位，标签下拉没有。
+   同一个菜单、两条不同的退场路径，这是下一处该统一的。
+2. 内容类型筛选芯片的 DOWN 出口未在设备上验证（见上）。
+3. 探索、订阅、详情页仍未注册第一站。
+
+### 教训
+
+**`onPreviewKeyEvent` 挂在哪个节点上，等于问「谁真的拿着焦点」。** 两个组件的公共签名里都有 `modifier`，
+看着像"给我一个地方塞装饰"，实际它套在最外层容器上；焦点链在内层按钮。判断标准只有一条：
+把 `tvFocusable` 写在哪儿，链接就得写在哪儿——同一条 modifier 链上。改之前先用 a11y dump 确认那颗按钮的
+contentDescription（这次是 `Filter`/`More`），比在源码里按位置猜是哪一颗快得多。
+## 第一百零五轮：关掉标签下拉之后把焦点还给按钮（2026-10-25）
+
+**现象**：第一百零四轮的量法里冒出一条附带的：从筛选按钮 CENTER 打开来源标签下拉，BACK 关掉它之后
+焦点不在按钮上，而是掉到导航栏 `[16,296][152,432]`（`Z12`）。旁边的 ⋮ 不会这样——同一个 BACK，焦点回到
+⋮ 自己（`Z22`）。同一个顶栏、两个相邻菜单、两种退场结果。
+
+**根因**：`GlassDropdownMenu` 在 TV 上确实有一段「菜单销毁时把焦点交回锚点」的逻辑
+（`GlassDropdownMenu.kt:237-248`，只在 `isTvPresentation` 下跑，且要求宿主没有换成另一个菜单请求），
+但它要的是 `anchorFocusRequester` 参数——**默认 null，也就是不还**。⋮ 从第一百零一轮起就传了
+`moreMenuAnchorFocus`，标签下拉从来没传，于是菜单关掉后没人接住焦点，Compose 只能按 2D 搜索找最近的
+可聚焦节点，那就是导航栏。
+
+**修法**：`SourceTagDropdown` 自己记一个 `FocusRequester`，挂到内层 IconButton 的 modifier 链上
+（就是第一百零四轮那条链，`focusRequester` 必须和 `tvFocusable` 在一起），并把同一个 requester 传给
+`GlassDropdownMenu(anchorFocusRequester = …)`。手机侧不变：回焦那段代码本身被 `isTvPresentation` 挡住。
+
+**证据**（模拟器 1920×1080 @320，`AA` 系列）：
+- 筛选 → CENTER → 菜单（焦点 `[1507,124][1800,236]`，`AA12`）→ BACK → **焦点回到筛选 `[1708,16][1800,112]`**
+  （`AA13`，截图确认环画在按钮上）。修改前是导航栏（`Z12`）。
+- 菜单里再按 DOWN 到第二项 `[1507,236][1800,348]`（`AA14`）再 BACK → 仍回到筛选（`AA15`），
+  说明回的不一定是「第一项」，而是关闭时的锚点。
+- 回位之后继续 DOWN → 历史页统计卡 `[192,140][1896,404]`（`AA16`），第一百零四轮的链路没被破坏。
+- 附带看清一件事：这次进页面时统计卡已被滚出视口，`requestFocus` 仍把它拉回 `[192,140][1896,404]` 并渲染——
+  LazyColumn 对聚焦项会滚动回视口，所以第一百零三轮那条「滚远了锚点会随 item 回收失效」的边界比当初写的窄：
+  要真的滚到预取窗口之外才会失效。
+
+**遗留**
+1. `GlassDropdownMenu` 的 `anchorFocusRequester` 仍然是「谁想起来谁传」：仓库里 16 处调用传了 7 处。
+   剩下的（含 `TvContentTypeFilter` 里那个裸 `DropdownMenu`）关掉菜单后同样丢焦点。要么把默认行为反转为
+   「默认记住锚点」，要么在审计里逐个补齐——这需要先量一遍有哪些菜单真的丢焦点。
+2. 探索、订阅、详情页仍未注册第一站。
+
+### 教训
+
+**「同一个问题在相邻控件上表现不同」几乎总是同一个函数的不同参数。** 第一百零四轮是「两处都忘了挂链接」，
+这一轮是「一处传了 requester、一处没传」。两次都没有新机制要发明——机制早就在
+`GlassDropdownMenu`/`tvDownFocusLink` 里躺着了，缺的是把第二个调用点对齐。看到相邻控件行为不一致时，
+先找那个被传/没传的参数，比读十个组件的实现快。
+
+## 第一百零六轮：内联分类标签条也有环和 DOWN 出口了（2026-10-25）
+
+### 现象
+
+收藏页的"收藏分类位置"设成"内联标签条"（`FavoritesTabsPosition.INLINE_RAIL`）时，顶栏里那排分类标签
+（"All favorites" / "Read later"）有两个问题：遥控器能停上去（它们是 `.clickable`），但**屏幕上一动不动**；
+而且按 DOWN 直接掉到左侧导航栏，中间的筛选行完全够不着。
+
+顺带发现名字被截成 "Favo…"：`KototoroTopBar.kt` 里标题写死 `Modifier.widthIn(max = 72.dp)`，
+而同一行里给标签条的是 `weight(1f, fill = true)`，把剩下的空间全吃掉了。
+
+复现路径：设置 › 外观 › 界面与行为 › "收藏分类位置" → 内联标签条；回到收藏页。
+
+### 根因
+
+同一条标签条在仓库里有两份实现：
+
+* `core-ui` 的共享 `TopBarTabsRail`（非内联那种用）早就写好了
+  `height` → `tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)` →
+  `tvDownFocusLink(downFocusRequester)` → `clickable` → `padding`，
+  并且由 `CompactTopBarTabsRail` 把 `state.downFocusRequester` 递进去；
+* app 侧私有的 `InlineCompactTopBarTabsRail` 是另写的 `LazyRow`，item 只有
+  `Box(Modifier.height(...).clickable { … }.padding(...))`，**既没有环，也没有读 `state.downFocusRequester`**。
+
+关键在于这个 seam 其实早就铺好了：收藏页在 `FavoritesHostScreen.kt:212` 建了 `contentTopFocusRequester`，
+`:263` 交给 `CompactTabsTopBarOverrideState(downFocusRequester = …)`，另一端
+`FavoritesListScreen.kt:79` 把它挂在快速筛选行打头的排序控件上。也就是说，只要内联那份读一下 state，
+DOWN 就有地方去——缺的只是那一行。
+
+### 修法
+
+只改 `app/src/main/kotlin/org/skepsun/kototoro/main/ui/compose/KototoroTopBar.kt`（+8/−1）：
+
+1. `InlineCompactTopBarTabsRail` 的 item 换成与共享 rail 完全相同的链：
+   `.height(tokens.minimumTouchTarget)`
+   → `.tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)`
+   → `.tvDownFocusLink(state.downFocusRequester)` → `.clickable { … }` → `.padding(horizontal = 5.dp)`。
+   `tvFocusable` 只在 TV 上生效，且 `addFocusTarget = false`，只是"观察已有的可点停靠点"，不多造一个焦点目标。
+2. 标题宽度上限：`widthIn(max = if (isTvPresentation) 200.dp else 72.dp)`——只有电视放宽，
+   手机/平板保持原来的 72 dp。
+
+### 证据
+
+**修前**（`AZ10`–`AZ13`）：目标顺序是 导航栏 → RIGHT → 排序控件 `[176,120][268,216]` → UP → 搜索按钮
+`[188,16][284,112]` → RIGHT → "All favorites" `[466,16][620,112]` → RIGHT → "Read later" `[622,16][756,112]`。
+`AZ12` 的 a11y 焦点确实在 "Read later" 上，但截图里整条顶栏**没有任何环**；`AZ13` 按 DOWN 落到
+导航栏 `[16,584][152,720]`；标题是 "Favo…"。
+
+**修后**：
+
+* `BD11`："All favorites" 带着蓝色圆角环，标题完整写着 "Favorites"；
+* `BD12`：`tab1 [513,16][667,112]` → DOWN → 排序控件 `[176,120][268,216]`（修前是导航栏）；
+* `BE11`/`BE12`：`tab2 [669,16][803,112]` → DOWN → 同一个排序控件；
+* `BE13`：从这个排序控件 CENTER 打开排序弹窗，焦点落在 "Date added" 且带环；`BF10` BACK 之后焦点
+  回到排序控件本身；
+* `BF12`：CENTER 在 "Read later" 上真的翻了页（选中色与空态文案都变了），焦点留在标签上。
+
+标签位置从 `[466…]`/`[622…]` 右移到 `[513…]`/`[669…]`，就是标题不再被截断的直接结果。
+
+### 遗留
+
+1. 第一版修错了：把 `LocalMainContentFocusAnchor` 的 requester 当成 DOWN 目标传进去
+   （`downFocusLink = contentDownFocus`），编译通过、环也画上了，但 DOWN 仍然掉到导航栏（`BB14`）。
+   原因是**收藏页没有注册页面锚点**——`rememberMainContentFocusAnchorRequester` 目前只有首页 hero 和
+   历史统计卡在用（§103），所以 `contentDownFocus` 在收藏页是 `null`，链子等于空操作。
+   这也顺带确认了：收藏页的上漏斗/⋮ 按 DOWN 依旧会掉到导航栏，属于 §104 那条 seam 的一个未覆盖面。
+2. 第一版还用了 `tvTabRing()`（给 chip 用的 10 dp 圆角），而共享 rail 用的是
+   `tvFocusable(RoundedCornerShape(8.dp), …)`；最后跟随共享实现，免得同一个 rail 两种圆角。
+3. `favorites_tabs_position` 是跨端设置，本次只让 TV 放宽标题宽度；手机/平板的 72 dp 与"内联标签条"
+   表现未在手机 AVD 上复核（按约定不动手机端行为）。
+4. 这台 AVD 的收藏库是空的，所以"切到 Read later"只验证了翻页与选中态，没有验证有内容时的网格定位。
+5. 该 AVD 的设置现在停在"内联标签条"（非默认值），后续轮次对比前先确认这一点。
+
+### 教训
+
+**同一个控件存在第二份实现时，第二份几乎必然少接某个 seam。** 这轮少的不是机制而是"读一下 state 里已有的字段"：
+`downFocusRequester` 就在 `CompactTabsTopBarOverrideState` 里，调用方也早就在传。遇到"旁边那个一模一样的
+控件好好的"，先 diff 两份实现的 modifier 链，比重新发明一个入口快，也不会把"页面锚点"和"控件锚点"混为一谈。
+
+## 第一百零七轮：收藏页也有页面锚点了（2026-10-25）
+
+### 现象
+
+收藏页（`favorites_tabs_position = INLINE_RAIL`）上，右上角的漏斗 `[1708,16][1800,112]` 与 ⋮
+`[1800,16][1896,112]` 按 DOWN 直接掉到左侧导航栏 `[16,584][152,720]`，中间那排快速筛选芯片够不着。
+这是 §106 顺手发现、当时没修的那个洞：`rememberMainContentFocusAnchorRequester` 只有首页 hero（§103 之前）
+和历史统计卡（§103）在用，收藏页从来没有向 `LocalMainContentFocusAnchor` 注册过任何东西，所以顶栏
+`contentDownFocus` 在收藏页是 `null`，`tvDownFocusLink` 等于空操作。
+
+### 根因
+
+不是缺机制，是缺"宣布"。收藏页其实早就有这个 requester：`FavoritesHostScreen.kt` 为内联分类标签建了
+`contentTopFocusRequester`，经 `CompactTabsTopBarOverrideState(downFocusRequester = …)` 交给标签，
+另一端 `FavoritesListScreen.kt:79` 把它挂在快速筛选行打头的排序控件 `SortOrderControl` 上。
+这个排序控件正是"页面第一站"，只是它从没被登记到 shell 的锚点槽里。
+
+`rememberMainContentFocusAnchorRequester()` 不能直接复用——它自己 `remember { FocusRequester() }`，
+拿到手的只会是新 requester，无法接管已有的那个。
+
+### 修法
+
+两处，都是纯增量：
+
+1. `MainContentFocusAnchor.kt`：把登记逻辑抽成 `PublishMainContentFocusAnchor(requester, enabled)`，
+   `rememberMainContentFocusAnchorRequester` 变成"新建 requester + 调用它"的一行委托。
+   语义不变（仍是 TV + 已 resumed + enabled 才登记，暂停/销毁注销），只是允许传入现成的 requester。
+2. `FavoritesHostScreen.kt`：建完 `contentTopFocusRequester` 立刻
+   `PublishMainContentFocusAnchor(requester = contentTopFocusRequester)`。非 TV 时这个 requester 是 `null`，
+   函数直接空操作；`tvDownFocusLink` 那边本来就有 `runCatching`，requester 没挂上时按键照旧不被消费。
+
+### 证据
+
+**修前**（`CA10`–`CA14`，commit `bce36324a` 的 APK）：漏斗与 ⋮ 各自按 DOWN 都落到导航栏
+`[16,584][152,720]`。
+
+**修后**（`CB10`–`CG13`）：
+
+* `CC13`/`CC14`：漏斗 `[1708,16][1800,112]` → DOWN → 排序控件 `[176,120][268,216]`，截图里那个 ≡ 按钮
+  带着蓝色环；
+* `CE10`/`CE11`：⋮ `[1800,16][1896,112]` → DOWN → 同一个排序控件；
+* 回归：历史页仍走 §103 那条路（`CG10`–`CG13`，导航栏 History → CENTER → 首张卡片
+  `[192,324][422,744]` → UP → 搜索胶囊 `[358,16][1692,112]` → RIGHT → 漏斗 → DOWN → 统计卡
+  `[192,140][1896,404]`），说明抽出来的登记逻辑对"自己创建 requester"的旧调用点没有副作用；
+* 顺带确认：收藏页从排序控件 UP 回到搜索圆钮 `[188,16][284,112]`、LEFT 才回导航栏，与 §106 一致。
+
+### 遗留
+
+1. **Explore 与 Feed 页仍然没有锚点**：`CE12` 那段误落在 Feed 页时，Feed 的搜索胶囊
+   `[312,16][1692,112]` 按 DOWN 一样掉到导航栏。这两个页面的"第一站"还没定（Feed 的订阅时间线在
+   网络不可用时是空态），要先把它们的首个可聚焦控件找出来再接。
+2. 收藏页的两套机制现在共用同一个 requester（内联标签的 DOWN 与顶栏的 DOWN），这是有意的；
+   但如果将来内联标签改成别的锚点，这两处要一起改。
+3. `PublishMainContentFocusAnchor` 目前只有收藏页一个使用点；等 Explore/Feed 接上会变成三个，
+   届时可以再看要不要把"页面第一站"的登记收敛成一个小接口。
+
+### 教训
+
+**注释里写着"anchored on X"的 requester，往往只对了一半的调用方可见。** 收藏页那份注释准确描述了
+标签 → 排序控件这一条链，但 shell 那边要的是"这个 requester 是谁"，而不是"它挂在哪儿"。
+发现两套 seam 指向同一个控件时，优先把它登记成一等公民，而不是再 `remember` 一个新的。
+
+## 第一百零八轮：详情页"元数据来源"面板从死站变回可走（2026-10-25）
+
+### 现象
+
+详情页左侧信息条的两个来源药丸（`[302,228][518,310]` / `[532,228][748,324]`）按 CENTER 打开
+"Metadata source" 底部面板后，遥控器就废了：面板里第一张选项卡片带着一圈蓝边（像是焦点），
+按一次 DOWN 之后**整张面板再没有焦点环**，再按 DOWN 两次画面一字不差（`GT11 == GT12 == GT13`），
+只有 BACK 能退出。a11y 树给出了铁证：`focused="true"` 的节点是 `[0,0][1920,1080]` 的整窗根，
+它的 text 里塞着面板标题与结果标题——焦点落在窗口本身，不在任何控件上。
+
+### 根因（三层，第 3 层是修掉前两层后才暴露的）
+
+1. `DetailsSourceOverlayDialog` 把"点遮罩关闭、点面板吞掉点击"做成了 `Modifier.clickable`：遮罩是
+   `fillMaxSize()`，面板是 `fillMaxWidth() + fillMaxHeight(0.92f)`。`clickable` 自带焦点目标，于是 TV 上
+   凭空多出两个**覆盖整屏、没有焦点环、四个方向都没有邻居**的站点。D-pad 从卡片往下走一步就掉进遮罩。
+2. 面板里真正能点的东西一个焦点环都没有：`SourceOptionCard` 只有 `combinedClickable`，它身上那圈蓝边是
+   `isActiveSource` / `isSelected` 的**选中边框**（2.dp primary，alpha 0.7 / 0.5），跟焦点无关；
+   `TrackingSearchResultCard`、`ReadingSearchResultCard`、`SourceOptionSheetRow`、
+   `TrackingSearchResultRow`、`ReadingSearchResultRow` 五个结果项同样只有 `clickable`。
+3. 把第 1 层两个孩子去掉后，对话框的"第一个可聚焦项"变成了 `SourceSearchField` 里的 `BasicTextField`，
+   于是**面板一打开就弹软键盘**，D-pad 立刻转去操作键盘。
+
+### 修法
+
+三处，全部只改变 TV 表现：
+
+1. `DetailsSourceSearch.kt` · `DetailsSourceOverlayDialog`：`isTvPresentation` 为真时，遮罩与面板吞点击
+   这两条 `clickable` 整条返回 `Modifier`（TV 没有触摸，关闭入口是 BACK）。手机/平板分支一字未动。
+2. 同一个文件里 5 个搜索结果项 + `DetailsHeaderInfoPanel.kt` 的 `SourceOptionCard` 补
+   `tvFocusable(shape = …, addFocusTarget = false)`，紧贴在 `clickable`/`combinedClickable` 之前，
+   形状各用自己的圆角（卡片 `if (expressive) 24.dp else 18.dp`、选项卡 `if (expressive) 20.dp else 12.dp`、
+   行 `20.dp`）。
+3. `DetailsSourceSheets.kt` · `MetadataSourceSheet`：第一个选项卡片挂 `FocusRequester`，TV 时在打开后的
+   前 10 帧内请求一次焦点（`withFrameNanos` 重试，attach 失败就下一帧）。面板打开时焦点落在卡片上，
+   软键盘不弹；搜索框只有用户主动走过去才会拿到焦点。
+
+### 证据
+
+**修前**（`GS10`–`GT13`）：面板打开时卡片有蓝边（实为选中边框），一次 DOWN 后无环，三次 DOWN 画面全同。
+
+**修后**（本机 1920×1080 @320，`JA10`–`JE10`）：
+
+* `JA10`：面板打开，选项卡片 `[32,254][256,518]` 带**真正的焦点环**（`tvFocusable` 的 2.dp primary 描边，
+  贴着卡片外框），**没有软键盘**；
+* `JA11`：DOWN → 搜索框 `[32,508][1888,604]`（`android.widget.EditText`）拿到焦点，软键盘弹出（见遗留 1）；
+* `JB10` + `focus.py`：软键盘打开时再按 DOWN，**键盘自己吃掉按键**（截图里 `a` 键高亮），焦点仍在输入框；
+* `JC10`（focusable 清单）：选项卡 `[32,206][256,470]`、8 张结果卡 `[36,732][252,984]`…
+  `[1716,732][1888,984]` 全部 `focusable="true" clickable="true"`——环和可达性都到位；
+* `JD10`：BACK 收起软键盘后再 DOWN，焦点落到第 3 张结果卡 `[589,780][805,1032]`
+  （`desc=Manga Sadou: Manga de yomu sauna-dou`），卡片画出蓝色焦点环，横向列表还自动滚动把卡片露出来；
+* `JE10`：BACK 关闭面板，焦点回到元数据药丸 `[302,228][518,310]`，截图与打开面板前的 `GX10`
+  **逐字节相同**（sha256 前缀 `5725cf5fab34`），没有残留态。
+
+### 遗留
+
+1. **搜索框一聚焦就弹软键盘，且键盘会抢走 D-pad**（`JA11`/`JB10`）。TV 上应该"先聚焦、按 CENTER 才弹键盘"，
+   否则用户按两下 DOWN 就以为面板坏了。下一轮在 `SourceSearchField` 上做（`isTv` 时先不 show IME，
+   CENTER/click 再 show）。这也是仓库里既有的"IME-open D-pad"待办的一个实例。
+2. 结果卡片行在 TV 上被面板底部裁掉大半（`height(142.dp)` 封面 + 标题 + Migrate 按钮，只看得见灰封面），
+   `LazyColumn` 本身能滚，但焦点停在横向卡片行里时往下不会滚到下一节，需要在卡片行上接"下沿越界即交还"。
+3. `SourceOptionSheetRow` / `TrackingSearchResultRow` / `ReadingSearchResultRow` 三个"行"变体在本机这条
+   路径上没有渲染（面板走的是卡片变体），只做了代码级对齐，没上机验证。
+4. 换源面板（读源药丸）走的是同一个 `DetailsSourceOverlayDialog` 与同一批结果卡组件，按代码共享
+   本轮修复对它同样生效，但没有单独上机复测。
+
+### 教训
+
+**看起来像焦点环的框，可能只是"已选中"边框。** 选项卡片那圈 2.dp 蓝边在第一版截图里骗过了我，让我以为
+"卡片有环、只是 DOWN 之后丢了"。分辨方法是看**边框形状是否贴外框**（焦点环按 `tvFocusable` 的约定
+会缩进半个描边、贴着节点外沿），以及 a11y 里 `focused="true"` 到底落在谁身上。
+
+**装饰用的 `clickable` 在 TV 上是隐藏的焦点站。** 遮罩、吞点击的容器、整屏手势层都该在 TV 分支让位；
+把它们留给触摸，是"零行为改动"的最小修法。
+## 第一百零九轮：面板里的搜索框不再一聚焦就抢走遥控器（2026-10-25）
+
+### 现象
+
+第一百零八轮把面板里的假焦点站拿掉之后，新的第一个坏味道立刻显形（`JA11`）：从选项卡片按一次 DOWN，
+焦点落到搜索框 `[32,508][1888,604]`，**软键盘当场弹出**并占掉下半屏；此后再按 DOWN 完全没用——键盘自己
+吃掉了按键（`JB10` 里 `a` 键高亮，`focus.py` 仍报 EditText），必须先用 BACK 收起键盘，DOWN 才能走到结果卡
+（`JD10`）。也就是说：用户想"往下看看搜索结果"，按两下就掉进输入法；而输入法弹出来时，面板里真正的结果
+卡和"绑定"入口都被盖住了。
+
+### 根因
+
+`SourceSearchField` 里的 `BasicTextField` 是 `readOnly = false` 的普通输入框，Compose 的输入框**一拿到焦点就
+自己拉软键盘**。手机上是正确行为（点一下就该打字），TV 上却是灾难：焦点环是 D-pad 走过来的，用户根本没想
+打字；而 Android 的 IME 窗口一旦出现，DPAD 事件就交给它，应用层的 `tvTextInputFocusEscape` 再也没机会执行。
+
+### 修法
+
+仓库里已经有为这件事准备好的 holder：`core-ui` 的 `rememberTvTextFieldReadOnlyState()`
+（`TvFocus.kt:493`，第 76 轮"设置里的行内文本框改为对话框编辑"那条决策的产物）。它给的是三件套：
+`isReadOnly`、`fieldModifier`（CENTER 开始编辑、失去焦点自动退出编辑）、`isEditing`。把它接到
+`SourceSearchField` 上即可：
+
+* `readOnly = tvEditing.isReadOnly`；
+* `Modifier.then(tvEditing.fieldModifier).tvTextInputFocusEscape()`。
+
+于是 TV 上搜索框默认是只读的：聚焦只拿环、弹不出键盘，DOWN/UP 照常穿过它；要打字就按 CENTER，键盘才出现。
+手机/平板分支完全没变（holder 在非 TV 下 `isReadOnly = false`、modifier 为空）。
+
+### 证据
+
+* `KA11`：选项卡片 → DOWN，焦点到搜索框 `[32,556][1888,652]`（a11y 仍是 `android.widget.EditText`），
+  **整张面板没有任何软键盘**，8 张结果卡全部可见；
+* `KB10`：按 CENTER，键盘才出现（用户明确要求编辑），输入框有光标；
+* `KB11`：BACK 收起键盘，截图与 `KA11` **逐字节相同**（`05e1af86f8e8`），回到"只读 + 有环"的安静态；
+* `KB12`：DOWN，焦点落到第 3 张结果卡 `[589,780][805,1032]`，蓝色焦点环与第一百零八轮的 `JD10`
+  **逐字节相同**（`3db3292c7eb0`）——中途不需要 BACK，DOWN 直达；
+* 回程：结果卡 → UP → 搜索框（只读，无键盘）→ UP → 选项卡片 `[32,254][256,518]`（`KC10`）。
+
+### 遗留
+
+1. 搜索框只有容器颜色变化，**没有一圈明确的焦点环**（`KA11` 里靠底色变亮提示）。要让它在 TV 上像别的控件
+   一样画环，需要一个"给 `BasicTextField` 所在 Surface 画环、但不额外制造焦点站"的写法，留待下一轮。
+2. 编辑态（键盘在屏上）时，面板下半部仍在键盘后面；本轮只保证"退出编辑后一切复原"，没做键盘期间的面板
+   让位动画。
+3. 面板里结果卡片行被底部裁切的老问题（第一百零八轮遗留 2）依旧。
+
+### 教训
+
+**"输入框聚焦即弹键盘"在 TV 上是焦点劫持，不是便捷。** TV 的键盘不是辅助输入，而是抢走 D-pad 的另一层
+窗口；仓库里那个 `rememberTvTextFieldReadOnlyState` 就是为此存在的——遇到 TV 文本输入，先找它，而不是
+自己跟 IME 抢事件。
+
+**修完一层，下一个假象会自动浮上来。** 一百零八轮拿掉两个假站点后，真正的"第一个可聚焦项"变成输入框才
+暴露出来；每轮上机至少要把同一条路径走到头（这里是从卡片走到结果卡），否则只修了表面。
+
+## 第一百一十轮：结果卡片在 TV 上只留一个真能按到的动作（2026-10-25）
+
+### 现象
+
+第一百零九轮之后，面板里的结果卡已经能走到、能画环（`JD10`），但卡片上唯一真正有用的动作
+"Migrate（更换来源）"在手机上是一个 `FilledTonalButton`，位置在卡片最底部。1080p 上面板留给结果区的高度
+只有约 300 px，而手机卡整张约 580 px（142dp 封面 + 两行标题 + 分数 + 按钮），于是按钮被面板底边切掉：
+屏幕上看不见，遥控器也没有任何路径能聚焦到它——DOWN 从卡片直接跳到下一个站点的第一张卡
+（`[36,816][252,978]`），卡内的按钮等于死代码。
+
+### 根因
+
+* **尺寸**：手机竖版长卡的固有高度超过了 TV 面板能分给结果区的整条高度（标题 157 / 提示 211 / 选项卡
+  到 518 / 分隔线 533 / 搜索框 556-652 / 登录提示 686 / 站点标题 740 / 结果从约 770 起，屏高 1080，
+  面板底部还留 24dp）；
+* **焦点模型**：`combinedClickable` 给卡片一个焦点目标，卡内的 `FilledTonalButton` 是另一个焦点目标，
+  但它的 bounds 完全落在父卡片 bounds 之内。Compose 的二维焦点搜索只接受"在方向上"的候选，落在自己
+  矩形内部的候选不算 DOWN 方向，所以遥控器永远进不去——这与"看不见"是两个独立的问题。
+
+### 修法（试了两种，留的是第二种）
+
+**方案 A（放弃）**：让按钮独占焦点（卡片不参与）。在真机上它确实能画环、CENTER 能弹出确认框
+（`MB10` 焦点默认在 Cancel、`MC10` RIGHT 到 Migrate、BACK 回列表），但**下一站回不去了**：按钮只有
+192x96 px 且贴着结果行底部，下面那一站的卡片全在视口之外，DOWN 无候选择——横向修好、纵向弄死。
+
+**方案 B（采用）**：TV 上每张结果卡**只有一个焦点站**，卡片自己就是那个按钮。
+
+* 卡片继续是唯一的 `tvFocusable(addFocusTarget = false) + combinedClickable` 目标，焦点环与
+  横/纵向遍历都保持前两轮已经验证过的行为；
+* `onClick`/`onLongClick` 在 TV 上**对调**：CENTER = 更换来源（走原有确认对话框），长按 = 打开站点。
+  手机上 CENTER 打开站点、长按换源；TV 上"打开网页"对遥控器没有意义，换源才是要的那个动作；
+* TV 上不再渲染卡内的 `FilledTonalButton`，卡片因此也矮了一截，不再被面板底边切掉。
+
+### 证据
+
+* `NA10`：TV 卡现在是封面 48dp + 一行标题 + 一行信息（"16 EP"），焦点卡 `[589,780][805,942]`
+  （108x81 dp）画着完整蓝环，8 张卡一屏全见，不再有被底边切掉的可聚焦项；
+* `NA11`：DOWN 从该卡到下一站第一张卡 `[36,816][252,978]`，站点间纵向遍历恢复（方案 A 正是断在这里）；
+* `NB10`：CENTER 直接打开 "Metadata Source" 确认框（"… will be replaced with … from "MyAnimeList"
+  in your history and favorites"），焦点默认在 **Cancel** `[1047,644][1187,740]`，不会误操作；
+* BACK 关闭确认框后焦点回到结果行 `[276,780][492,942]`，面板没有被一起带走；
+* 手机/平板：所有改动都在 `if (isTvPresentation)` / `if (!isTvPresentation)` 分支里，非 TV 的卡片尺寸、
+  卡内按钮与点击语义一字未改。
+
+### 遗留
+
+1. TV 卡上不再有 "Migrate" 字样，CENTER 的语义只由确认框说明；要不要补一行小字提示，下一轮再定。
+2. 结果区末尾仍会被面板底边切掉一点（`NA10` 底部 "AniList" 标题只露半行），纵向滚动只能靠焦点移动带动，
+   没有可见滚动条。
+3. "长按 = 打开站点"只按代码存在性记录，没有用遥控器实测长按。
+
+### 教训
+
+**"看得见"和"按得到"是两件事。** 上一轮把按钮修进屏幕，它仍然是死代码：Compose 的焦点搜索不会进入一个
+完全包含在当前焦点矩形内的子元素。判断"能否操作"必须看焦点能否落到它身上，而不是看它在不在画面里。
+
+**TV 上卡片就是按钮。** 结果列表的每个单元只应有一个焦点站，而且应该是遥控器真正想做的那个动作；
+手机那套"点击打开 / 长按换源"在客厅里可以直接对调。
+
+**改焦点模型先量纵向。** 方案 A 的横向（RIGHT）全通，一按 DOWN 就发现断链；一条主要路径要走到底再定稿，
+只看一屏截图会被骗。
+
+## 第一百一十一轮：搜索框聚焦了，得让人看见（2026-10-25）
+
+### 现象
+
+`CA10`：焦点已经落在面板的搜索框上（a11y `focused=true`、`android.widget.EditText`，`[32,556][1888,652]`），
+但画面上**没有任何变化**——和没聚焦时一模一样。遥控器走到这里像是"卡住了"：唯一的反馈是没有反馈。
+
+### 根因
+
+`SourceSearchField` 的焦点反馈只有容器底色，而 expressive 主题下两条分支取的是同一个颜色：
+
+```kotlin
+val containerColor = if (expressive) {
+    if (isFocused) {
+        searchFieldColors.containerColor.detailsButtonContainerColor()
+    } else {
+        searchFieldColors.containerColor.detailsButtonContainerColor()
+    }
+} else if (isFocused) { … } else { … }
+```
+
+也就是说默认主题里这行 `isFocused` 判断是死代码，焦点在画面上不可见。面板里其它停靠点（站点选项卡、
+结果卡、按钮）都有 2dp 主色环，唯独这个面积最大的控件没有。
+
+### 修法
+
+在 `BasicTextField` 自己的 modifier 链上补
+`tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)`：它不新增焦点目标（输入框自己
+有），只观察同一个目标并画环——和结果卡、选项卡用的是同一条"环在前面、focusable 由后面的控件提供"
+的写法。`tvFocusable` 在非 TV 上直接返回原 modifier，手机/平板的输入框一字未改。
+
+### 证据
+
+* `CA10`（修前，sha `061fdb22`）：a11y 已经 `focused=true`，画面无环；
+* `CB10`（修后，sha `0945b321`）：同一个焦点位置，搜索框整圈亮蓝胶囊环，键盘仍未弹出——只读态保持，
+  第一百零九轮的修复没有被破坏；
+* `CC10`（sha `4d8a781b`）：CENTER 打开 Gboard，环仍然画在输入框上，编辑态也能看出光标在哪个控件里；
+* `CC11` 与第一百一十轮的 `NA10` **逐字节相同**（sha `e6ea6d10`）：BACK 收键盘、DOWN 到结果卡后环已经
+  消失，卡片环与走位跟前一轮完全一致——新环不会在失焦后残留，也没有改变遍历。
+
+### 遗留
+
+1. 聚焦时主色环贴在容器描边上，视觉偏粗；要不要在编辑态换成更淡的环，和上一轮"TV 卡片上没有 Migrate
+   字样"的提示一起在下一轮定。
+2. 面板里 "Sign in" 链接 `[1714,708][1888,752]` 和各站点区域是否也有环，尚未逐个核对。
+
+### 教训
+
+**焦点反馈不能只靠主题分支。** 一行 `if (isFocused)` 在默认主题里可能两条分支算出同一个值——这类"看着
+有、其实没有"的反馈只有对比截图才抓得住：同一位置、同一 a11y 状态，两张 PNG 的 hash 相同就是没变化。
+
+**一个面板要统一口径。** 同一个面板里别的停靠点都有环，漏掉面积最大的那个控件就会让遥控器"消失"一瞬。
+补环要走 `tvFocusable` 这条既有路径，而不是每个控件各自手搓 `drawWithContent`（见 `SwipeableFilterChip`
+里那份自绘环的历史遗留）。
+
+## 第一百一十二轮：阅读来源面板搜索框右边的两个按钮，遥控器原来走不到（2026-10-25）
+
+### 现象
+
+从详情页第二个来源药丸（`[532,228][748,324]`，CENTER）打开 **Reading Source** 面板：首焦点正确地落在当前
+来源卡 `[32,254][256,518]`（第一百零八轮的初始焦点），DOWN 到搜索框 `[32,560][1624,656]`。但搜索框右边还有
+两个按钮——搜索（`[1640,560][1756,656]`）和带 `1` 角标的筛选（`[1772,560][1888,656]`）——**RIGHT 按到底也出不去**：
+
+* `right1` / `right2` 两次 a11y dump 的焦点都还是那个 `android.widget.EditText`；
+* `DE10`/`DE11`/`DE12` 三张截图逐字节相同（sha `48545E11`）——三步操作，画面零变化。
+
+结果就是阅读来源面板里唯一能做的事（重新搜索、筛选来源）在 TV 上全部失效：面板只剩"看着当前来源"。
+
+### 根因
+
+`SourceSearchField` 里的 `BasicTextField` 为了自己的光标一直吞掉左右方向键，而它调用
+`tvTextInputFocusEscape()` **没有打开 `horizontalWhenIdle`**。这个参数在 `TvFocus.kt` 的文档里写得清清楚楚：
+"Pass `horizontalWhenIdle` for a field that sits between two toolbar buttons (a search bar): once the keyboard
+is closed nobody drives the caret with the horizontal arrows any more"——元数据来源面板的搜索框旁边没有按钮，
+所以默认值一直没暴露出问题；阅读来源面板给它加了两个按钮，缺口才显形。
+
+另外这两个按钮本身也没有焦点环（M3 `FilledTonalButton` 不会自己画），就算走得到也看不见。
+
+### 修法
+
+1. `SourceSearchField` 改为 `.tvTextInputFocusEscape(horizontalWhenIdle = true)`：键盘收起时左右键把焦点
+   交给邻居，键盘打开时（`WindowInsets.ime` 非零）照旧留给光标。两个面板共用这一个组件，元数据面板没有右邻，
+   搜索为空时 `moveFocus` 返回 false、按键原样落回输入框，行为不变。
+2. 阅读来源面板那两个 `FilledTonalButton` 补 `tvFocusable(shape = RoundedCornerShape(999.dp),
+   addFocusTarget = false)`，和第一百一十一轮的输入框同一条写法。
+
+### 证据
+
+* 修前：`right1`/`right2` 焦点不动，`DE10`=`DE11`=`DE12`（sha `48545E11`）；
+* 修后 `EC10`（sha `0D670EC1`）：RIGHT 从输入框到搜索按钮 `[1640,560][1756,656]`，按钮整圈蓝色胶囊环，
+  输入框的环已经撤掉；
+* 修后 `EC11`（sha `2BDCC7B4`）：再 RIGHT 到筛选按钮 `[1772,560][1888,656]`（a11y txt=`1` 就是角标），
+  同样有环；LEFT 之后焦点回到搜索按钮；
+* `ED10`（sha `B33EDFA2`）：CENTER 打开 Filter 面板，首焦点在 **Manage** `[1689,434][1844,530]`，环清楚，
+  黑名单/语言预设/来源类型三节与底部的 Reset filter / Cancel / Apply 都在屏内；BACK 后焦点回到筛选按钮；
+* `EE10`（sha `5A918736`）：CENTER 进编辑态，键盘弹出、输入框上移并保留环，此时 RIGHT 焦点仍留在输入框
+  （`[32,508][1624,604]`）——光标键没有被这次改动抢走；`EE11`（sha `F35E4703`）：BACK 收键盘后焦点回到输入框，
+  再 RIGHT 就是上面的搜索按钮。
+
+### 遗留
+
+1. 阅读来源面板此时显示 "No visible results. Disable Hide empty sources to inspect unavailable or empty
+   sources."，说明筛选里开着"隐藏空来源"且没有命中——结果卡（第一百一十轮刚瘦身的那批）在这个面板里仍然
+   没有被真正看到过，下次要先把筛选清掉再测一遍结果区与换源。
+2. Filter 面板里的 `All` 语言预设芯片和 Source Type 一排芯片还没有逐个走（它们的环是 `tvChipRing` 还是自绘，
+   待核）。
+
+### 教训
+
+**组件默认值是按"没有邻居"写的。** `horizontalWhenIdle = false` 对孤立的搜索框是对的，一旦旁边出现按钮就变成
+死胡同；共用组件换了放置位置，默认值要重新过一遍。
+
+**"能聚焦"和"能走到"是两件事。** 那两个按钮在 a11y 里一直是 `clickable=true`、也能被 pointer 点，看起来
+一切正常；只有连续按 RIGHT 并对比截图 hash，才知道遥控器根本进不去。
+
+## 第一百一十三轮：Find chapter 搜索条在 TV 上会抢键盘，下键进不去章节目录（2026-10-25）
+
+### 现象
+
+详情页右侧目录的 🔍（a11y 名字是 **Find chapter**，`[1698,54][1782,150]`）按 CENTER 会展开一条搜索框
+`[1008,182][1864,310]`。用遥控器 DOWN 进去，**键盘立刻弹出来**；此后按 DOWN 只有光标反应，下面的 Chapter 01/02
+永远到不了——`down1`/`down2` 两次 dump 焦点都还在 `android.widget.EditText`，`GA11`/`GB10` 两张截图里键盘一直占着
+下半屏。唯一出路是 BACK（收键盘）→ UP（回 Continue）→ 再想办法绕，或者连续 BACK 把整个面板关掉。
+
+### 根因
+
+字段原来只挂了 `.tvTextInputFocusEscape()`。这个修饰符的文档写得很清楚："While the on-screen IME is open it owns
+the D-pad"——它处理的是**键盘收起之后**的上下键；而这里字段一拿到焦点就自己把键盘拉起来（它是可编辑的
+`OutlinedTextField`），于是那条 escape 从来没有机会执行，DOWN 一直被 IME/光标吃掉。
+
+第一百零九轮已经在对话框里解决过同一类问题（`rememberTvTextFieldReadOnlyState`：字段先只读，CENTER 才开始编辑），
+只是详情页这条搜索条还没接上。
+
+### 修法
+
+`ChaptersPagesToolbar` 里的搜索框按第一百零九轮的写法接上：
+
+* `val tvEditing = rememberTvTextFieldReadOnlyState()` + `readOnly = tvEditing.isReadOnly`：
+  拿到焦点时只显示焦点框，不再自作主张弹键盘；CENTER 才进编辑态并弹键盘；焦点离开自动退回只读；
+* `modifier = ... .then(tvEditing.fieldModifier) .tvTextInputFocusEscape()`：只读态下上下键可以真正移动焦点，
+  键盘开着时仍归光标。
+
+手机上 `isReadOnly=false`、`fieldModifier` 为空，行为一字不改。
+
+### 证据
+
+* 修前：DOWN 进字段 → 键盘弹出；`down1`/`down2` 焦点不动（`GA11` sha `82975929`、`GB10` sha `b3dcdaa6` 两张
+  都带键盘、列表在键盘上方可见但走不到）；
+* 修后 `HC10`（sha `aa8cee89`）：字段有蓝色焦点框、**没有键盘**，整个面板（含 Chapter 01/02）都在屏内；
+* DOWN → `Chapter 01` `[992,368][1800,480]`；UP → 回到字段（焦点框仍在，键盘依旧不出）；
+* CENTER → 进编辑态弹键盘，`input text 02` 后 `HD11`（sha `ff58d05e`）里查询是 "02"、下面列表只剩 `Chapter 02`
+  ——搜索本身工作正常；
+* BACK 收键盘（焦点仍在字段、值仍是 "02"）→ DOWN → 落到过滤后的 `Chapter 02` 行（a11y `txt=Chapter 02`）；
+* 删掉查询后 DOWN 又落到 `Chapter 01`，说明过滤解除、列表按预期恢复。
+
+### 顺带核查：阅读来源面板的 Filter 面板
+
+第一百一十二轮留下的"结果区没看到"这条，这轮把 Filter 面板整个走完了：CENTER 打开后焦点落在 **Manage**
+`[1689,434][1844,530]`（有环），DOWN 依次是第二个 Manage（Language preset）、Source Type 一排芯片、Type 三枚芯片
+（Manga 选中）、**Pinned sources only**（关）、**Hide empty sources**（关）、**Reset filter**；再 RIGHT 到
+**Cancel** `[1539,952][1679,1048]` 与 **Apply** `[1695,952][1868,1048]`，三者都在屏内、都能落到（`ED10` sha
+`b33edfa2`、`FB10`）；BACK 关闭后焦点回到筛选按钮。
+
+两个开关都是关的，说明 "No visible results" 那句提示与开关状态不符——更可能的原因是**这部作品本来就只在本地源**
+（"TV Audit Manga 11" 是仓库里种下的本地漫画），在线源没有同名条目可换。这条留给后续用真实在线作品复核，
+不再当作本轮缺陷。
+
+### 教训
+
+**"已经加过 escape"不等于"按键走得到"。** `tvTextInputFocusEscape()` 只在键盘关闭时生效，而让键盘自动弹出的正是
+字段自己；只要字段一拿到焦点就把屏幕交给 IME，escape 就是死代码。判断标准只有一个：连按方向键，焦点真的动了没有。
+
+## 第一百一十四轮：筛选面板里两块一模一样的 Manage，一块按下去毫无反应（2026-10-25）
+
+### 现象
+
+阅读来源面板 → Filter → 面板顶部有两块几乎一样的卡片，每块右侧一个 "Manage"：
+
+* **Blacklisted tags** 的 Manage（`[1689,434][1844,530]`）按 CENTER：**什么都不发生**。焦点直接消失
+  （`focus.py` → `NOTHING`），`dumpsys window` 的 `mCurrentFocus` 仍是 `MainActivity`，logcat 里没有一条
+  `ActivityTaskManager: START`；截图 `LA10` 的 sha `8c5f255d` 与修前那张**逐字节相同**，说明画面根本没变。
+* **Language preset** 的 Manage（`[1689,551][1844,647]`）按 CENTER：立刻打开 `SourcePresetListActivity`。
+
+### 两层根因
+
+1. **详情页这条路径从来没接线。** `SearchFilterSheet` 的 `onOpenGlobalTagBlacklist` 参数默认是 `{}`，
+   而 `DetailsSourceSheets` 调它时没传这个参数（搜索浮层 `KototoroSearchOverlay` 和搜索结果页都传了）。
+   于是这块按钮在**所有设备上**都是死控件，不只是 TV。语言预设那块传了 `onManageLanguagePresets`，所以能开。
+2. **`tvFocusable()` 的默认值在这种按钮上会吞掉 CENTER。** `GlobalTagBlacklistStatus` 里那个 `TextButton`
+   写的是 `.tvFocusable(shape = RoundedCornerShape(10.dp))`，默认 `addFocusTarget = true`——它在本来就可点击
+   的按钮**外面又叠了一个焦点目标**。遥控器的 CENTER 落在那个没有任何点击处理的节点上，键就被吃掉了；
+   旁边语言预设那个按钮写的是 `addFocusTarget = false`，观察按钮自己的焦点目标，于是正常。
+
+两块按钮长得一样、行为一个死一个活，正好是这条规则的 A/B 对照。
+
+### 修法
+
+* `DetailsViewModel` 新增 `globalTagBlacklistCount`（`settings.observeAsStateFlow(AppSettings.KEY_GLOBAL_TAG_BLACKLIST)`
+  → `settings.globalTagBlacklist.size`），`DetailsScreen` 收集后传给 `ReadingSourceSheet`；
+* `ReadingSourceSheet` 新增 `blacklistedTagCount`、`onOpenGlobalTagBlacklist` 两个参数并透传给
+  `SearchFilterSheet`，`DetailsScreen` 用 `appRouter::openGlobalTagBlacklist` 接线——按钮从此真的能打开黑名单页；
+* `SearchFilterSheet` 的 `onOpenGlobalTagBlacklist` 改成可空（`(() -> Unit)? = null`），
+  `GlobalTagBlacklistStatus` 的 Manage 只在有处理者时才画：没地方可去时既不留死按钮，也不给遥控器留死焦点；
+* `GlobalTagBlacklistStatus` 的 `TextButton` 补 `addFocusTarget = false`。
+
+### 证据
+
+* 修前：CENTER on Manage #1 → `NOTHING` + `LA10` sha `8c5f255d` + `mCurrentFocus=MainActivity` + 无 START 日志；
+* 修后：CENTER on Manage #1 → `mCurrentFocus=GlobalTagBlacklistActivity`，焦点落在 `Back [8,16][104,112]`（有环），
+  `MA10` sha `d42b4501`：标题 "Blacklisted tags"、Search 框、"Available / 0 selected"、Genre 与 Theme 两段芯片网格；
+* BACK → 回到 Filter 面板，焦点回到 Manage #1；DOWN → Manage #2（语言预设），CENTER →
+  `SourcePresetListActivity`（回归通过，没被这次改动带坏）；BACK → 面板（焦点在 Manage #2）；BACK → 面板关闭，
+  焦点回到筛选按钮 `[1772,560][1888,656]`。
+
+### 清单：还有 4 处 `tvFocusable()` 用着默认值
+
+全仓 `tvFocusable(` 共 249 处提及，其中 189 处显式写了 `addFocusTarget = false`。剩下看着"没写"的 60 处，
+把多行调用拼成整段再核对，真正没写的只有 **4 处**：
+
+* `ExploreSkeletons.kt:83`：骨架占位，本身不可点，加一个焦点目标是对的，不用改；
+* `SwipeableFilterChip.kt:171`：`.clickable(...)` 在前、`.tvFocusable(shape = Capsule())` 在后，焦点目标落在
+  clickable 里面，属于首页筛选胶囊那条"自绘环"的老账，要按 CENTER 实测再定；
+* `StatsScreen.kt:938`、`VideoPlayerInfoDialog.kt:141`：都紧跟着 `.onPreviewKeyEvent`，要单独读上下文判断。
+
+下一轮按「后面跟的控件是否自带 clickable/selectable」逐个判定，判据只用一条：**遥控器按 CENTER 有没有反应**。
+
+（自查记录：第一版按"行里没有 addFocusTarget"数出 60 处，是把多行调用的第一行当成了整个调用。grep 一行的结论
+不能当真，判据只能是"整个调用里有没有这个参数"。）
+
+### 教训
+
+**"这颗按钮有焦点框"只能证明它能被选中，不能证明它能被按下。** 本轮两块按钮的焦点框都好用，CENTER 却一个死一个活；
+差别只在 `tvFocusable()` 有没有多叠一个焦点目标。凡是给"本来就能点"的控件加圈，一律 `addFocusTarget = false`。
+
+## 第一百一十五轮：设置页在 TV 上第一次系统性过一遍（2026-10-25）
+
+前一百多轮都在阅读器、详情页、来源面板上打转，设置页只在第七十六轮动过一次（行内文本框抢键盘）。
+这轮把电视上的整条设置路径按遥控器走完，确认哪些已经好了、哪两处还别扭。
+
+### 走查路径与结果
+
+* **首页 ⋮ 菜单**：UP → RIGHT×1 到 `More [1800,16][1896,112]` → CENTER。下拉打开，焦点落在第一项
+  `Display options`，带环；五项 Display options / Language preset / Settings / Help & feedback /
+  Incognito mode 齐全。
+* **Display options 面板**：DOWN×6 + RIGHT×2。六个列表模式、滑块、每页行数、末尾开关全部可达；
+  **面板自己滚动**把末行送到 y 920–1016，末行开关带环；滑块 RIGHT 两下 80 % → 90 %，环是整条轨道外的
+  圆角矩形；LEFT 两下回 80 %；BACK 关面板后焦点回到 `List options` 齿轮。
+* **设置主页**：CENTER 进 Settings → DOWN×8。Appearance / Reader settings / AI / Playback /
+  Content sources / Extension management / Downloads / Spaces / Tracking accounts 依次获得焦点；
+  行滚到 y 411–543 后固定不动、列表在下面滚动，焦点行始终带环。
+* **下载设置（两级面板右栏）**：DOWN×3 + CENTER。`Download novel illustrations` 整行带环，CENTER 把开关
+  从蓝变灰（关）再按一次回蓝（开）——**开关行可遥控**。
+* **两级面板左右切换**：LEFT / LEFT / UP。从右栏任意行 LEFT 进入左栏列表，再 LEFT 到底不再乱跑，
+  UP/DOWN 在左栏内移动，左栏行同样带环。
+（开关最终已还原为开，滑块已还原为 80 %，没有留下被改过的全局设置。）
+
+### 两处仍然别扭的地方（未改，记进下一轮）
+
+1. **LEFT 进左栏时落点任意。** 右栏正开着 Downloads，按 LEFT 焦点却落在左栏的 `Reader settings`
+   （`[24,370][696,542]`），再按 CENTER 就会把右栏换成阅读设置——用户想"换个分区"却先看到一颗别的分区在发光，
+   而且一旦误按就跑偏。合理行为是：首次进入左栏时落点就是当前右栏对应的那一行。
+2. **左栏不会滚到当前分区。** 右栏显示 Downloads（`Content & sources` 段）时，左栏仍停在最上面的
+   `Reading & interface` 段，当前分区那一行根本不在视野里，用户不知道自己在哪一节。
+
+两处是同一个根因的两面：左栏没有"当前分区"这个概念（只有焦点），所以既不能作为落点，也不会自动滚过去。
+下一轮的做法是从右栏状态算出左栏的选中行，给它 `focusRequester` + `BringIntoViewRequester`，
+LEFT 首次进入时请求焦点，进入页面时把它滚进视野。
+
+### 顺带核实的旧账
+
+* `StatsScreen.kt:938` 与 `VideoPlayerInfoDialog.kt:141` 那两处 `tvFocusable()` 默认值**是对的**：
+  它们给 `verticalScroll`/`LazyColumn` 体自己加焦点目标，并在 `onPreviewKeyEvent` 里自己处理上下键，
+  属于"自己就是唯一焦点目标"的类型，本轮确认不需要改。
+* `SwipeableFilterChip.kt:171` 的 `.clickable` 在前、`.tvFocusable` 在后：焦点目标在 clickable **里面**，
+  CENTER 会向上冒泡到 clickable，不会像第一百一十四轮那块按钮那样被吞；首页筛选胶囊实测可切换内容类型。
+  到这里第一百一十四轮那份"4 处默认值"清单全部有结论：1 处正常（骨架）、2 处故意、1 处正常。
+
+### 教训
+
+**"能用"也要留证据。** 这一轮没有改动一行代码，但它把"设置页在电视上到底行不行"从猜测变成了可复查的走查表——
+以后谁改坏了其中一格，回来看这张表就知道原来是什么样。
+
+## 第一百一十六轮：设置行里那两个小图标，遥控器永远够不着（2026-10-25）
+
+上一轮走查设置页时记下"左栏落点任意、左栏不滚到当前分区"，这轮顺着设置页往深处走，撞到一个更硬的死结。
+
+### 现象
+
+设置 → Appearance（两级面板右栏）第一行 **Interface style**，行尾有两个可点图标：调色板（`Color theme`）
+
+和滑杆（`Glass finish tuner`），后面才是箭头。用遥控器在这个行上按 RIGHT 三次，焦点一动不动，
+
+`focus.py` 三次都报同一行 `[746,212][1896,340]`；而 a11y 树里这两个图标明明都是 `clickable=true`：
+
+`[1624,228][1720,324]`（Color theme）、`[1720,228][1816,324]`（Glass finish tuner）。
+
+CENTER 打在这一行上倒是好的——打开界面风格选择框，焦点落在 `md3 expressive` 选项上。
+
+所以问题是：**行本身能用，行里那两个快捷入口在电视上是死的**。
+
+### 根因：焦点搜索永远不会走进自己的后代
+
+`SettingsPreferenceComponents.kt:432` 的 `SettingsChoicePreference` 把整行做成一个焦点目标
+
+（`.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)` + `.clickable { 开对话框 }`），
+
+而两个 `IconButton` 是这行的**子节点**（L499、L508，各自带 `tvIconButtonRing()`）。
+
+Compose 的方向性焦点搜索只在"严格位于当前节点矩形某个方向之外"的候选里挑：子节点整个落在父节点矩形内部，
+
+永远不满足这个条件，于是 RIGHT 在行上按多少次都不会进到图标，图标已有的 `clickable` 也白搭。
+
+这不是漏了 `addFocusTarget`，而是**结构问题**——父节点既是焦点目标又装着想要焦点的孩子。
+
+### 修法（下一轮实施，两个方案，倾向 B）
+
+* **A. 电视上把行拆开**：外层 `Row` 不再可点/可聚焦，正文（图标 + 标题 + 值）自己做一个焦点目标，
+  两个 `IconButton` 成为它的**兄弟**。兄弟之间方向键天然可达，顺序变成 正文 → 调色板 → 滑杆 → 箭头。
+  缺点是外层 `Row` 的点击区域会缩到正文，返回箭头那一截不再开对话框——手机上的手感会变，
+  所以必须按 `isTvPresentation` 分支，非 TV 保持现在的结构。
+* **B. 电视上不加焦点，改走"行内动作"入口**：行上按 CENTER 打开的那个选择框里已经有整套选项，
+  把 `Color theme` 与 `Glass finish tuner` 作为两条动作行追加到该对话框底部（只加 `isTvPresentation` 分支），
+  行尾的图标在电视上干脆不渲染。改动集中在一个 `if (isTvPresentation)`，不碰手机布局，
+  代价是电视上多一次按键才能进玻璃调音。
+
+倾向 B：它只改电视，不动行结构，也不会再把"父节点装着子焦点目标"的坑留给下一个组件。
+
+### 同一模式的其它嫌疑点（下轮一起查）
+
+`SettingsChoicePreference` 是共享组件（`SettingsSplitSwitchRow`、`SettingsValueRow` 等同族），
+凡是"整行可点 + 行尾还有别的小按钮"的写法都踩同一个坑。下轮用 grep 找
+`IconButton(` 与 `.clickable` 同处一个 `tvFocusable` 行内的组件，逐个确认要不要一起改。
+
+### 教训
+
+**`clickable` 在电视上不等于可达。** 一百一十四轮是"焦点到了但按键被吞"，这轮是"按键根本没走到"——
+两种失败看起来都是"按了没反应"，根因却一个是多余的焦点目标、一个是焦点树结构。查这类问题时
+先把 a11y 树里那颗控件的矩形和焦点所在行的矩形摆一起看：**控件在行内、焦点在行上，就是结构问题**。
+
+## 第一百一十七轮：把行尾那两个死键救回来——电视上正文和图标做兄弟（2026-10-25）
+
+上一轮定位到 `SettingsChoicePreference` 的行结构问题（整行一个焦点目标，行尾图标是它的孩子，
+方向键永远进不去），这轮按方案 A 修掉，只走电视分支。
+
+### 修法
+
+`SettingsPreferenceComponents.kt` 的 `SettingsChoicePreference`：
+
+* 行的 `.tvFocusable(...).clickable { 开对话框 }` 只在**非电视**分支保留；
+* 电视上外层 `Row` 不可点也不可聚焦，改成正文 `Column`（标题 + 当前值 + 摘要）自己带
+  `.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false).clickable(enabled) { 开对话框 }`；
+* 于是两个 `IconButton` 从"行的孩子"变成"正文的**兄弟**"，方向键天然可达，行尾箭头保持在最后不可聚焦。
+
+`addFocusTarget = false` 照第一百一十四条的规矩给（CENTER 要冒泡到紧跟着的 `clickable`）。
+手机路径一行没动：`isTvPresentation` 为假时走的还是原来那串修饰符。
+
+### 设备证据（emulator-5554，1920x1080@320）
+
+* 进设置 → Appearance，右栏首行焦点落在**正文** `[886,228][1608,324]`（desc 里不再混着两个图标名）；
+* RIGHT → `Color theme` `[1624,228][1720,324]`；再 RIGHT → `Glass finish tuner` `[1720,228][1816,324]`，
+  两个原来够不着的目标现在都拿到焦点；
+* 在玻璃调音上 CENTER → 右栏真的切到 **Glass finish tuner** 页（Light/Light gray/Dark/OLED 芯片、
+  玻璃预览、滑块都出来了，截图 PD10，焦点落在 `Light` 芯片上）；
+* BACK → 焦点回到正文 `[886,228][1608,324]`；再 CENTER → 照旧打开界面风格选择框、焦点在 `md3 expressive`，
+  说明"整行能开对话框"这条原有功能没被拆坏。
+
+### 教训
+
+**"把行拆成兄弟"比"给图标补焦点"更接近问题本质。** 上一轮一度想给 `IconButton` 补 `tvFocusable`——
+那不会有任何效果，因为拦路的是焦点树的形状而不是图标自己缺东西。真正的修法是把"可点的那块"缩到
+它该有的范围，让每个想被遥控器够到的东西都成为同一层的节点。
+
+## 第一百一十八轮：同一个坑的第二处——开关行的锁图标（2026-10-25）
+
+`SettingsPreferenceComponents.kt:360` 的 `SettingsSwitchPreference` 与上一轮修的 `SettingsChoicePreference`
+是同一个形状：整行 `.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)` + `.toggleable(role = Switch)`，
+而 `locked`/`onLockClick` 的锁图标（L412-420）是这行的孩子。所以来源锁定这类行在电视上会"行能开关、锁图标够不着"。
+
+修法与上一轮一致：`isTvPresentation` 时外层 `Row` 不带 `tvFocusable`/`toggleable`（只补 `fillMaxWidth`），
+开关下沉到正文 `Column`（`role = Switch` 与 CENTER 行为不变，只是换承载节点），锁图标因此成为兄弟；
+非电视分支原样保留两段修饰符。
+
+### 设备证据（emulator-5554，1920x1080@320）
+
+* 构建 `:app:assembleDebug` BUILD SUCCESSFUL in 1m59s，`adb install -r` Success；
+* 设置 → Appearance → Lists：`Preview card on tap` 开关行拿到焦点，矩形 `[886,228][1744,360]`——
+  正好是正文那块（开关本体在 1744 右侧之外），说明焦点确实落在承载 `toggleable` 的节点上；
+* 同页 DOWN 到 `List mode|Grid` 选择行、CENTER 打开对话框、焦点落在 `List` 选项上，
+  上一轮修的 Interface style 正文焦点 `[886,228][1608,324]` 也仍然成立——两处改动互不影响。
+
+### 还没做完的部分
+
+锁图标本身的可达性（进"内容来源"页、在锁定行上按 RIGHT、CENTER 弹出锁定提示）这轮没走到，
+`Preview card on tap` 的开关状态也没能从 a11y dump 里断言（开关的 checked 不在文本节点上）。
+这两条留给下一轮补验，任务先挂着不关。
+
+### 教训
+
+同一个组件文件里两处同构问题，说明"整行一个焦点目标"是这个代码库的默认写法，而不是偶发失误。
+真正该改的可能是 `settingsPreferenceLayout` 这一层——等第三处出现时就把"行体承载焦点、行尾控件做兄弟"
+做成公共修饰符，别每发现一处补一处。

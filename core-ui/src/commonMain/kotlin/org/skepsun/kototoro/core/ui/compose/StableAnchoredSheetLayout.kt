@@ -45,6 +45,9 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -152,6 +155,22 @@ private class StableSheetState(
     private var peekHeightPx: Float? by mutableStateOf(null)
     private var nestedDragInProgress = false
 
+    /**
+     * Whether the last pointer input was scroll-only (a mouse wheel or a trackpad's two-finger scroll).
+     * Those arrive as scroll input without any press, so the nested connection must not take them: it would
+     * drag the sheet away instead of scrolling the list inside it, which on Windows dismissed the reader's
+     * chapter panel on the first wheel tick (issue #601). A press is what makes a drag legitimate.
+     */
+    private var scrollOnlyPointer = false
+
+    fun noteScrollInput() {
+        scrollOnlyPointer = true
+    }
+
+    fun notePressedInput() {
+        scrollOnlyPointer = false
+    }
+
     /** Until then the sheet sits hidden only because it has not opened yet, not because it was dismissed. */
     private var hasOpened by mutableStateOf(false)
 
@@ -212,6 +231,8 @@ private class StableSheetState(
     }
 
     fun hasNestedDrag(): Boolean = nestedDragInProgress
+
+    fun isScrollOnlyPointer(): Boolean = scrollOnlyPointer
 
     suspend fun settle(velocityY: Float): StableSheetAnchor {
         nestedDragInProgress = false
@@ -303,7 +324,7 @@ private fun rememberStableSheetNestedScrollConnection(
     return remember(state) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (source != NestedScrollSource.UserInput) return Offset.Zero
+                if (source != NestedScrollSource.UserInput || state.isScrollOnlyPointer()) return Offset.Zero
                 val isPartiallyExpanded = state.offset > 0f
                 if (!state.hasNestedDrag() && (!isPartiallyExpanded || available.y == 0f)) return Offset.Zero
                 val consumed = state.dispatchNestedDelta(available.y)
@@ -315,7 +336,9 @@ private fun rememberStableSheetNestedScrollConnection(
                 available: Offset,
                 source: NestedScrollSource,
             ): Offset {
-                if (source != NestedScrollSource.UserInput || available.y <= 0f) return Offset.Zero
+                if (source != NestedScrollSource.UserInput || state.isScrollOnlyPointer() || available.y <= 0f) {
+                    return Offset.Zero
+                }
                 return Offset(0f, state.dispatchNestedDelta(available.y))
             }
 
@@ -441,6 +464,19 @@ fun StableAnchoredSheetLayout(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
+            // Parents see a pointer first in the initial pass, so the kind is known before the sheet's
+            // own content dispatches its nested scroll.
+            .pointerInput(state) {
+                awaitPointerEventScope {
+                    while (true) {
+                        when (awaitPointerEvent(PointerEventPass.Initial).type) {
+                            PointerEventType.Scroll -> state.noteScrollInput()
+                            PointerEventType.Press -> state.notePressedInput()
+                            else -> Unit
+                        }
+                    }
+                }
+            }
             .onSizeChanged { state.updateHostHeight(it.height.toFloat()) },
     ) {
         val sheetWidth = calculateStableSheetWidth(maxWidth, sheetMaxWidth)

@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceType
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.FilterPanelGroup
@@ -91,7 +92,9 @@ fun SearchFilterSheet(
     blacklistedTagCount: Int = 0,
     onApply: (SearchFilters) -> Unit,
     onManageLanguagePresets: (() -> Unit)? = null,
-    onOpenGlobalTagBlacklist: () -> Unit = {},
+    // Null when the host has nowhere to send the viewer: the row then shows the status only, instead
+    // of a Manage button that looks active and does nothing (and that a remote focus ring would land on).
+    onOpenGlobalTagBlacklist: (() -> Unit)? = null,
     onDismissRequest: () -> Unit,
 ) {
     var draft by rememberSaveable(stateSaver = SearchFiltersSaver) {
@@ -219,10 +222,10 @@ fun SearchFilterSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(onClick = { draft = SearchFilters() }, modifier = Modifier.weight(1f)) {
+                    TvTextButton(onClick = { draft = SearchFilters() }, modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.reset_filter))
                     }
-                    TextButton(onClick = onDismissRequest) {
+                    TvTextButton(onClick = onDismissRequest) {
                         Text(stringResource(android.R.string.cancel))
                     }
                     Button(onClick = {

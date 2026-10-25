@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.settings.SettingsGroup
 import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
 import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
+import org.skepsun.kototoro.core.ui.settings.SettingsSwitchRow
 import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
 
 /**
@@ -37,6 +41,9 @@ import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
 internal fun DesktopDataCleanupPage(controller: DesktopController, state: DesktopAppState) {
     val active = !state.busy
     var confirmFeed by remember { mutableStateOf(false) }
+    var confirmReadChapters by remember { mutableStateOf(false) }
+    // The queue is the live count of saved chapters; the page's own state carries none of it.
+    val savedChapters by controller.downloads.state.collectAsState()
     Column(
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -75,9 +82,51 @@ internal fun DesktopDataCleanupPage(controller: DesktopController, state: Deskto
                 modifier = Modifier.testTag("cleanup-feed"),
             )
         }
+        // Android's last group: the chapters the reading history has already passed, and the switch that runs the same
+        // sweep at every start. The row is enabled only while something is downloaded — Android greys it out with the
+        // same rule (no saved chapters, nothing to delete).
+        SettingsSectionHeader(AndroidStrings["chapters"])
+        SettingsGroup {
+            SettingsValueRow(
+                title = AndroidStrings["delete_read_chapters"],
+                summary = AndroidStrings["delete_read_chapters_summary"],
+                value = null,
+                onClick = { confirmReadChapters = true },
+                enabled = active && savedChapters.isNotEmpty(),
+                modifier = Modifier.testTag("cleanup-read-chapters"),
+            )
+            SettingsRowDivider()
+            SettingsSwitchRow(
+                title = AndroidStrings["delete_read_chapters_auto"],
+                summary = AndroidStrings["runs_on_app_start"],
+                checked = state.chaptersClearAuto,
+                enabled = active,
+                onCheckedChange = { controller.setChaptersClearAuto(it) },
+                testTag = "cleanup-read-chapters-auto",
+            )
+        }
         // The remaining Android rows act on stores this platform does not have yet (local manga/novel/video caches,
         // HTTP cache, search history, cookies and browser data, the database itself); they stay out instead of
-        // offering a button that would clear nothing. The chapter row is on the downloads page as batch removal.
+        // offering a button that would clear nothing.
     }
     if (confirmFeed) FeedClearDialog(controller, active) { confirmFeed = false }
+    if (confirmReadChapters) {
+        AlertDialog(
+            onDismissRequest = { confirmReadChapters = false },
+            title = { Text(AndroidStrings["delete_read_chapters"]) },
+            text = { Text(AndroidStrings["delete_read_chapters_prompt"]) },
+            confirmButton = {
+                TextButton({ confirmReadChapters = false; controller.cleanupReadChapters() },
+                    enabled = active, modifier = Modifier.testTag("cleanup-read-chapters-confirm")) {
+                    Text(desktopText("common.ok"))
+                }
+            },
+            dismissButton = {
+                TextButton({ confirmReadChapters = false }, modifier = Modifier.testTag("cleanup-read-chapters-cancel")) {
+                    Text(desktopText("common.cancel"))
+                }
+            },
+            modifier = Modifier.testTag("cleanup-read-chapters-dialog"),
+        )
+    }
 }

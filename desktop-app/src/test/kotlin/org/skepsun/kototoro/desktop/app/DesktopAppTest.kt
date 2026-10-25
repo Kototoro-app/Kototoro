@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.TimeUnit
 
 class DesktopAppTest {
     @TempDir lateinit var directory: Path
@@ -122,6 +121,44 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `source settings reorder the parser deduplication priority and the next start serves the shared source`() {
+        val root = directory.resolve("中文 jar priority")
+        probe("jarpriority-write", root, 150)
+        probe("jarpriority-read", root, 150)
+    }
+
+    @Test
+    fun `the source reorder editor stores Android's manual order and the rail follows it after a restart`() {
+        val root = directory.resolve("中文 source order")
+        probe("sourceorder-write", root, 150)
+        probe("sourceorder-read", root, 120)
+    }
+
+    @Test
+    fun `the setup wizard walks the intro appearance and done pages from the source settings row`() {
+        probe("wizard", directory.resolve("中文 setup wizard"), 180)
+    }
+
+    @Test
+    fun `the source test page runs every step against a local CMS site and exports the run`() {
+        probe("sourcetest", directory.resolve("中文 source test"), 180)
+    }
+
+    @Test
+    fun `a parser marked broken stays installed and the show broken sources switch hides and offers it`() {
+        val root = directory.resolve("中文 broken sources")
+        probe("brokensource-write", root, 150)
+        probe("brokensource-read", root, 150)
+    }
+
+    @Test
+    fun `the install behavior answers the catalogue question switches new sources and persists per kind`() {
+        val root = directory.resolve("中文 install behavior")
+        probe("installpolicy-write", root, 240)
+        probe("installpolicy-read", root, 150)
+    }
+
+    @Test
     fun `shared novel directory locates grouped chapters and keeps original indices in wide and narrow windows`() {
         probe("novel-directory", directory.resolve("中文 novel directory wide"))
         probe("novel-directory-narrow", directory.resolve("中文 novel directory narrow"))
@@ -141,9 +178,9 @@ class DesktopAppTest {
     @Test
     fun `tablet layout and immersive reader panels preserve progress in wide and narrow windows`() {
         probe("tablet", directory.resolve("中文 tablet wide"), 150)
-        probe("tablet-narrow", directory.resolve("中文 tablet narrow"))
-        probe("tablet-boundary", directory.resolve("中文 tablet expanded boundary"))
-        probe("tablet-boundary-compact", directory.resolve("中文 tablet medium boundary"))
+        probe("tablet-narrow", directory.resolve("中文 tablet narrow"), 150)
+        probe("tablet-boundary", directory.resolve("中文 tablet expanded boundary"), 150)
+        probe("tablet-boundary-compact", directory.resolve("中文 tablet medium boundary"), 150)
     }
 
     @Test
@@ -248,36 +285,24 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `recommendation worker switches gate the run on Wi-Fi widen the candidates and announce results`() {
+        val root = directory.resolve("中文 suggestion policy")
+        probe("suggestionpolicy-write", root, 120)
+        probe("suggestionpolicy-read", root, 90)
+    }
+
+    @Test
+    fun `services page records statistics on demand and hides the reading-time estimate`() {
+        val root = directory.resolve("中文 services")
+        probe("services-write", root, 180)
+        probe("services-read", root, 90)
+    }
+
+    @Test
     fun `production Windows window closes during startup and after import and releases storage`() {
         probe("window-early", directory.resolve("中文 early close"))
         probe("window", directory.resolve("中文 normal window"))
     }
 
-    private fun probe(mode: String, root: Path, seconds: Long = 60) {
-        val output = Files.createDirectories(Path.of("build/reports/desktop-smoke")).resolve("$mode.log")
-        val process = ProcessBuilder(Path.of(System.getProperty("java.home"), "bin/java.exe").toString(),
-            "-Xms32m", "-Xmx768m",
-            "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
-            *System.getProperties().stringPropertyNames()
-                .filter { it == "kototoro.dex.real.apks" || it == "kototoro.desktop.cloudstream.fixture" || it == "kototoro.libmpv.dir" || it == "kototoro.desktop.anime.fixture.jar" || it == "kototoro.ncnn.dir" ||
-                    it == "kototoro.desktop.locale" || it.startsWith("kototoro.real.") }
-                .map { "-D$it=${System.getProperty(it)}" }.toTypedArray(),
-            "-cp", System.getProperty("kototoro.desktop.test.classpath"),
-            DesktopAppProbe::class.java.name, mode, root.toString(),
-            System.getProperty("kototoro.desktop.fixture.jar"),
-            Path.of("build/reports/desktop-smoke").toAbsolutePath().toString(),
-            System.getProperty("kototoro.desktop.bridge.exe"), System.getProperty("kototoro.desktop.challenge.fixture.jar"),
-            System.getProperty("kototoro.desktop.reader.fixture.jar"), System.getProperty("kototoro.desktop.cover.fixture.jar"),
-            System.getProperty("kototoro.desktop.filter.fixture.jar"), System.getProperty("kototoro.desktop.parser.fixtures"))
-            .redirectErrorStream(true).redirectOutput(output.toFile()).start()
-        try {
-            assertTrue(process.waitFor(seconds, TimeUnit.SECONDS), "UI process did not finish: ${outputText(output)}")
-            val log = outputText(output)
-            assertEquals(0, process.exitValue(), log)
-            assertTrue(log.contains("DESKTOP_UI_OK=$mode"), log)
-        } finally { if (process.isAlive) process.destroyForcibly() }
-    }
-
-    // HotSpot native allocation errors can use the Windows locale even with UTF-8 stdout configured.
-    private fun outputText(path: Path): String = String(Files.readAllBytes(path), Charsets.UTF_8)
+    private fun probe(mode: String, root: Path, seconds: Long = 60) = DesktopProbes.run(mode, root, seconds)
 }

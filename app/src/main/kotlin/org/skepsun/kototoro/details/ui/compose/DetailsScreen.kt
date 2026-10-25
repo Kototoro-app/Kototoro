@@ -45,7 +45,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -100,6 +99,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
+import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
@@ -339,6 +339,7 @@ private fun DetailsScreenContent(
     val metadataSearchError = metadataSearchUiState.errorMessage
     val languagePresets by viewModel.languagePresets.collectAsStateWithLifecycle()
     val activeLanguagePresetId by viewModel.activeLanguagePresetId.collectAsStateWithLifecycle()
+    val globalTagBlacklistCount by viewModel.globalTagBlacklistCount.collectAsStateWithLifecycle()
     val readingSearchSources = readingSearchUiState.sources
     val readingSearchQuery = readingSearchUiState.query
     val readingSearchSections = readingSearchUiState.sections
@@ -1231,7 +1232,7 @@ private fun DetailsScreenContent(
                             Scaffold(
                                 modifier = paneModifier,
                                 containerColor = Color.Transparent,
-                                snackbarHost = { SnackbarHost(snackbarHostState) },
+                                snackbarHost = { KototoroSnackbarHost(snackbarHostState) },
                                 topBar = {
                                     CompositionLocalProvider(
                                         LocalLiquidGlassBackdrop provides detailsContentBackdrop,
@@ -1603,7 +1604,7 @@ private fun DetailsScreenContent(
                     }
                 }
                 // Hosted above the pane: inside the Scaffold the bottom dock drew over it.
-                SnackbarHost(
+                KototoroSnackbarHost(
                     snackbarHostState,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -1880,6 +1881,8 @@ private fun DetailsScreenContent(
                     scopeFilterUiState = readingSearchScopeFilterUiState,
                     languagePresets = languagePresets,
                     activeLanguagePresetId = activeLanguagePresetId,
+                    blacklistedTagCount = globalTagBlacklistCount,
+                    onOpenGlobalTagBlacklist = appRouter::openGlobalTagBlacklist,
                     currentContent = content,
                     unavailableText = stringResource(R.string.details_reading_source_unavailable),
                     onSearchQueryChange = viewModel::updateReadingSearchQuery,

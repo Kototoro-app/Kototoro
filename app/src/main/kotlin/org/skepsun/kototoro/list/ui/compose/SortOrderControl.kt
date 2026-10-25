@@ -48,7 +48,9 @@ internal fun SortOrderControl(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     onReorderClick: (() -> Unit)? = null,
+    focusRequester: FocusRequester? = null,
 ) {
+    val focusModifier = if (focusRequester == null) Modifier else Modifier.focusRequester(focusRequester)
     val options = remember(sortOrders) { listSortOptions(sortOrders) }
     val supportsDirection = options.any { it.ascending != null && it.descending != null }
     val selected = options.firstOrNull { it.contains(selectedSortOrder) } ?: options.firstOrNull() ?: return
@@ -79,6 +81,7 @@ internal fun SortOrderControl(
                     onClick = { expanded = true },
                     modifier = Modifier
                         .size(32.dp)
+                        .then(focusModifier)
                         .tvFocusable(shape = CircleShape, addFocusTarget = false),
                 ) {
                     Icon(
@@ -109,6 +112,7 @@ internal fun SortOrderControl(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
+                        .then(focusModifier)
                         .tvFocusable(shape = CircleShape, addFocusTarget = false),
                     colors = AssistChipDefaults.assistChipColors(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f),

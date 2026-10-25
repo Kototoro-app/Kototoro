@@ -28,6 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.extensions.SelectedSourcesDeletePlan
+import org.skepsun.kototoro.core.extensions.SelectedSourcesNsfwAction
+import org.skepsun.kototoro.core.extensions.resolveSelectedSourcesNsfwAction
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
@@ -97,7 +100,7 @@ private sealed interface UnifiedSourcesDialogState {
 
     data class TrustRepository(val repo: ExternalExtensionRepo) : UnifiedSourcesDialogState
     data class DeleteRepository(val repository: UnifiedSourceRepositoryItem) : UnifiedSourcesDialogState
-    data class DeleteSelectedSources(val plan: UnifiedSelectedSourceDeletePlan) : UnifiedSourcesDialogState
+    data class DeleteSelectedSources(val plan: SelectedSourcesDeletePlan) : UnifiedSourcesDialogState
     data class SetSelectedSourcesNsfw(
         val sourceIds: Set<String>,
     ) : UnifiedSourcesDialogState
@@ -132,34 +135,6 @@ internal sealed interface UnifiedThirdPartyAction {
 
     data class OpenRepositoryFile(val kind: UnifiedSourceKind) : UnifiedThirdPartyAction
     data object OpenLocalJar : UnifiedThirdPartyAction
-}
-
-internal data class UnifiedSelectedSourceDeletePlan(
-    val deletablePackageIds: List<String>,
-    val deletablePackageNames: List<String>,
-    val skippedJarPackageNames: List<String>,
-)
-
-internal enum class SelectedSourcesNsfwAction {
-    NONE,
-    SET_NSFW,
-    SET_SFW,
-    CHOOSE,
-}
-
-/**
- * Decides what the NSFW toggle chip should do for the current selection:
- * set NSFW when everything is non-NSFW, set SFW when everything is NSFW,
- * and ask the user when the selection mixes both.
- */
-internal fun resolveSelectedSourcesNsfwAction(
-    nsfwCount: Int,
-    selectedCount: Int,
-): SelectedSourcesNsfwAction = when {
-    selectedCount <= 0 -> SelectedSourcesNsfwAction.NONE
-    nsfwCount <= 0 -> SelectedSourcesNsfwAction.SET_NSFW
-    nsfwCount >= selectedCount -> SelectedSourcesNsfwAction.SET_SFW
-    else -> SelectedSourcesNsfwAction.CHOOSE
 }
 
 @Composable
@@ -539,7 +514,7 @@ fun UnifiedSourcesRoute(
             plan = dialog.plan,
             onDismiss = { activeDialog = null },
             onConfirm = {
-                viewModel.deletePackages(dialog.plan.deletablePackageIds.toSet())
+                viewModel.deletePackages(dialog.plan.packageIds.toSet())
                 selectedSourceIdList = emptyList()
                 activeDialog = null
             },

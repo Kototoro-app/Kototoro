@@ -58,6 +58,12 @@ enum class ReaderPanelSurfaceMode { Glass, Opaque, EInk }
 private val GlassShape = RoundedRectangle(28.dp)
 private const val GLASS_VEIL_ALPHA = 0.62f
 
+/** How many frames a sheet focus request is retried before the panel gives up on the ring. */
+private const val FOCUS_RETRY_FRAMES = 10
+
+/** How many frames the ring is re-requested for after the sheet collapses back to its peek. */
+private const val COLLAPSE_FOCUS_FRAMES = 3
+
 /** Draws a glass sheet over the page (Android's liquid glass). Without one, a glass panel falls back to opaque. */
 interface ReaderPanelGlass {
     @Composable
@@ -83,6 +89,15 @@ class ReaderSheetActions {
      * into a no-op.
      */
     var isExpanded: () -> Boolean = { true }
+
+    /**
+     * Puts the ring on the first row of the detail page and reports whether that row took it.
+     *
+     * Revealing the sheet alone is not enough for a remote: the header is what held the ring, and it
+     * stops being focusable the moment the sheet passes its peek, so the press that expanded the
+     * sheet would leave nothing focused at all. The row therefore has to be asked for by name.
+     */
+    var focusDetailRow: () -> Boolean = { false }
 }
 
 val LocalReaderSheetActions = staticCompositionLocalOf { ReaderSheetActions() }
@@ -197,7 +212,7 @@ fun ReaderPanelHost(
         // A real control is targeted, and the sheet is measured, anchored and slid into place over
         // several frames: a request issued before that control has a position is dropped. Retry until
         // the sheet reports the focus, then stop for good - asking again would pull the ring back out.
-        repeat(10) {
+        repeat(FOCUS_RETRY_FRAMES) {
             withFrameNanos { }
             if (sheetHasFocus) return@LaunchedEffect
             if (!requestFocus(focusTarget)) delay(70)
@@ -223,11 +238,20 @@ fun ReaderPanelHost(
             // focus has to come with it: left in the detail page it would sit on a hidden control.
             var wasExpanded by remember { mutableStateOf(false) }
             LaunchedEffect(scope.isExpandedPastPeek) {
-                if (isTv && wasExpanded && !scope.isExpandedPastPeek && !sheetHasFocus) {
+                val collapsing = wasExpanded && !scope.isExpandedPastPeek
+                wasExpanded = scope.isExpandedPastPeek
+                if (!isTv || !collapsing) return@LaunchedEffect
+                // Collapsing back to the peek brings the quick layer into view again, so the ring has
+                // to come with it. The sheet's own focus flag cannot gate this: it still reports the
+                // detail page's control for a frame after that page is gone, and a gated request is
+                // then never made. The ring would sit on nothing and the next direction press would
+                // hand it to the reader's page slider behind the sheet - a sliver of ring at the
+                // bottom edge and a dead panel. Ask outright instead, a few frames apart, so the
+                // request that lands is the one that sticks.
+                repeat(COLLAPSE_FOCUS_FRAMES) {
                     withFrameNanos { }
                     requestFocus(focusTarget)
                 }
-                wasExpanded = scope.isExpandedPastPeek
             }
             val sheetActions = remember { ReaderSheetActions() }
             SideEffect {

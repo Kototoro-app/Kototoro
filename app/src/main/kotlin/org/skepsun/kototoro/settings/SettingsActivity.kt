@@ -79,6 +79,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.adaptive.resolveUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.DynamicArtworkBackdrop
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
@@ -1741,7 +1742,7 @@ class SettingsActivity :
 
     private fun showContentSnackbar(text: CharSequence) {
         try {
-            Snackbar.make(contentRoot, text, Snackbar.LENGTH_SHORT).show()
+            contentRoot.makeSnackbar(text, Snackbar.LENGTH_SHORT).show()
         } catch (_: RuntimeException) {
             Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
         }

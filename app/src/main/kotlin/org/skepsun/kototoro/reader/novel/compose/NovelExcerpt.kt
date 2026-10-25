@@ -22,22 +22,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,7 +44,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,13 +55,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.theme.OnlineFontLoader
-import org.skepsun.kototoro.reader.novel.NovelReaderFont
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.pow
+import kotlinx.coroutines.launch
+import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.compose.TvModalBottomSheet
+import org.skepsun.kototoro.core.ui.theme.OnlineFontLoader
+import org.skepsun.kototoro.reader.novel.NovelReaderFont
 
 enum class NovelExcerptTemplate(@StringRes val displayNameRes: Int) {
     CALENDAR(R.string.novel_excerpt_template_calendar),
@@ -198,7 +198,7 @@ fun NovelExcerptSheet(
 
     val activeConfig = configuration.copy(pageIndex = currentPageIndex)
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    TvModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -220,7 +220,7 @@ fun NovelExcerptSheet(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        TextButton(
+                        TvTextButton(
                             onClick = { currentPageIndex = (currentPageIndex - 1).coerceAtLeast(0) },
                             enabled = currentPageIndex > 0,
                         ) {
@@ -230,7 +230,7 @@ fun NovelExcerptSheet(
                             text = "${currentPageIndex + 1} / $pageCount",
                             style = MaterialTheme.typography.labelMedium,
                         )
-                        TextButton(
+                        TvTextButton(
                             onClick = { currentPageIndex = (currentPageIndex + 1).coerceAtMost(pageCount - 1) },
                             enabled = currentPageIndex < pageCount - 1,
                         ) {
@@ -278,7 +278,7 @@ fun NovelExcerptSheet(
                 ) {
                     Text(stringResource(R.string.novel_excerpt_save_to_gallery))
                 }
-                TextButton(
+                TvTextButton(
                     onClick = {
                         if (onShare != null) {
                             onShare(activeData, activeConfig)

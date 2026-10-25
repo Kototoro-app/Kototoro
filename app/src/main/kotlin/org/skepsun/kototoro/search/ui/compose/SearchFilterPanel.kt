@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.search.ui.compose
 
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,9 +20,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -35,7 +37,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -173,14 +174,14 @@ internal fun SearchFilterPanel(
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(
+                TvTextButton(
                     onClick = onReset,
                     enabled = selectedFilterCount > 0,
                 ) {
                     Text(stringResource(R.string.clear))
                 }
                 Box {
-                    IconButton(onClick = { headerMenuExpanded = true }) {
+                    IconButton(onClick = { headerMenuExpanded = true }, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
                             contentDescription = stringResource(R.string.more),
@@ -191,7 +192,7 @@ internal fun SearchFilterPanel(
                         onDismissRequest = { headerMenuExpanded = false },
                         containerColor = MaterialTheme.colorScheme.popupMenuContainerColor(),
                     ) {
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = { Text(stringResource(R.string.refresh_filters)) },
                             leadingIcon = { Icon(painterResource(R.drawable.ic_sync), contentDescription = null) },
                             onClick = {
@@ -199,7 +200,7 @@ internal fun SearchFilterPanel(
                                 onRefreshFilters()
                             },
                         )
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = { Text(stringResource(R.string.save_filter)) },
                             leadingIcon = { Icon(painterResource(R.drawable.ic_save), contentDescription = null) },
                             enabled = isSaveEnabled,
@@ -208,7 +209,7 @@ internal fun SearchFilterPanel(
                                 pendingSaveName = ""
                             },
                         )
-                        DropdownMenuItem(
+                        TvDropdownMenuItem(
                             text = { Text(stringResource(R.string.blacklisted_tags)) },
                             leadingIcon = {
                                 Icon(painterResource(R.drawable.ic_cancel_multiple), contentDescription = null)
@@ -221,7 +222,7 @@ internal fun SearchFilterPanel(
                     }
                 }
                 if (onClose != null) {
-                    IconButton(onClick = onClose) {
+                    IconButton(onClick = onClose, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = stringResource(R.string.close),
@@ -391,7 +392,7 @@ internal fun SearchFilterPanel(
                                 FilterChip(
                                     selected = selected,
                                     onClick = { onToggleSavedFilter(preset) },
-                                    modifier = Modifier.heightIn(min = 24.dp),
+                                    modifier = Modifier.heightIn(min = 24.dp).tvChipRing(),
                                     label = {
                                         androidx.compose.material3.ProvideTextStyle(MaterialTheme.typography.labelSmall) {
                                             Text(
@@ -404,7 +405,7 @@ internal fun SearchFilterPanel(
                                     trailingIcon = {
                                         IconButton(
                                             onClick = { savedFilterMenuPreset = preset },
-                                            modifier = Modifier.size(18.dp),
+                                            modifier = Modifier.size(18.dp).tvIconButtonRing(),
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.MoreVert,
@@ -438,7 +439,7 @@ internal fun SearchFilterPanel(
                                 expanded = savedFilterMenuPreset == preset,
                                 onDismissRequest = { savedFilterMenuPreset = null },
                             ) {
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = {
                                         Text(
                                             if (preset.autoEnabled) {
@@ -453,14 +454,14 @@ internal fun SearchFilterPanel(
                                         onSetSavedFilterAutoEnabled(preset.id, !preset.autoEnabled)
                                     },
                                 )
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = { Text(stringResource(R.string.rename)) },
                                     onClick = {
                                         savedFilterMenuPreset = null
                                         pendingRenameFilter = preset
                                     },
                                 )
-                                DropdownMenuItem(
+                                TvDropdownMenuItem(
                                     text = { Text(stringResource(R.string.delete)) },
                                     onClick = {
                                         savedFilterMenuPreset = null
@@ -516,7 +517,7 @@ internal fun SearchFilterPanel(
             title = { Text(stringResource(R.string.save_filter)) },
             text = { Text(stringResource(R.string.filter_overwrite_confirm, name)) },
             confirmButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         pendingOverwriteName = null
                         onSaveFilter(name)
@@ -526,7 +527,7 @@ internal fun SearchFilterPanel(
                 }
             },
             dismissButton = {
-                TextButton(
+                TvTextButton(
                     onClick = {
                         pendingOverwriteName = null
                         pendingSaveName = name

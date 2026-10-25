@@ -4,8 +4,11 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
 import org.skepsun.kototoro.core.model.TagBlacklist
 import org.skepsun.kototoro.core.source.SourceContent
+import org.skepsun.kototoro.core.source.SourceEcosystem
+import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.core.source.SourceRef
 
@@ -51,7 +54,43 @@ class DesktopSourceSettingsTest {
     fun `Android's key name is reused so a shared backup carries the selection`() {
         assertEquals("global_tag_blacklist", DesktopSourceSettings.KEY_TAG_BLACKLIST)
         assertEquals("tags_warnings", DesktopSourceSettings.KEY_TAGS_WARNINGS)
+        // Android has no key of its own for the manual sequence (it writes each source row's `sort_key`).
+        assertEquals("sources_order", DesktopSourceSettings.KEY_ORDER)
     }
+
+    @Test
+    fun `the hand picked sequence keeps its order across the preference values`() {
+        val settings = DesktopSourceSettings(
+            sort = DesktopSourceSort.CUSTOM,
+            order = listOf("MIHON_9", "MIHON_2", "MIHON_7"),
+        )
+        val restored = DesktopSourceSettings.from(settings.toPreferences().filterValues { it != null }
+            .mapValues { it.value!! })
+        assertEquals(settings, restored)
+        // A text set is unordered by contract; the page still reads back what the editor stored.
+        assertEquals(listOf("MIHON_9", "MIHON_2", "MIHON_7"), restored.order)
+        assertEquals(listOf("MIHON_9", "MIHON_2", "MIHON_7"),
+            restored.sorted(listOf(listing("MIHON_2"), listing("MIHON_7"), listing("MIHON_9")))
+                .map { it.source.name })
+    }
+
+    @Test
+    fun `the custom order ranks the stored names first and keeps the rest in install order`() {
+        val installed = listOf(listing("MIHON_1"), listing("MIHON_2"), listing("MIHON_3"))
+        // A sequence naming a source that is gone still ranks the sources it does name; the rest follow untouched.
+        val settings = DesktopSourceSettings(sort = DesktopSourceSort.CUSTOM,
+            order = listOf("MIHON_3", "MIHON_GONE", "MIHON_1"))
+        assertEquals(listOf("MIHON_3", "MIHON_1", "MIHON_2"), settings.sorted(installed).map { it.source.name })
+        // Picking the order before saving anything falls back to the installation order.
+        assertEquals(listOf("MIHON_1", "MIHON_2", "MIHON_3"),
+            settings.copy(order = emptyList()).sorted(installed).map { it.source.name })
+        // The other orders ignore the sequence entirely.
+        assertEquals(listOf("MIHON_1", "MIHON_2", "MIHON_3"),
+            settings.copy(sort = DesktopSourceSort.DEFAULT).sorted(installed).map { it.source.name })
+    }
+
+    private fun listing(name: String) =
+        SourceListing(SourceRef(name, "zh", "MANGA"), name, SourceEcosystem.MIHON, supportsLatest = false)
 
     @Test
     fun `tag warnings default on and follow the shared warn list rather than a desktop copy`() {
@@ -120,4 +159,38 @@ class DesktopSourceSettingsTest {
                 DesktopSourceSettings.KEY_INCOGNITO_NSFW to SourcePreferenceValue.Toggle(true),
             )).incognitoForNsfw)
     }
+
+    @Test
+    fun `the source adult flag comes from the content type unless the user forced it`() {
+        assertTrue(hentaiListing().isNsfwSource())
+        assertFalse(plainListing().isNsfwSource())
+        // The host folds each extension's own metadata into the content type, so a declared-NSFW extension is already
+        // a HENTAI_ source here; the override is the only extra input the picker has.
+        assertFalse(hentaiListing().isNsfwSource(SourceNsfwOverrideSet(sfw = setOf("HENTAI_SOURCE"))))
+        assertTrue(plainListing().isNsfwSource(SourceNsfwOverrideSet(nsfw = setOf("PLAIN_SOURCE"))))
+    }
+
+    @Test
+    fun `the stored overrides use android's keys and survive a blank store`() {
+        assertEquals("source_nsfw_overrides", KEY_SOURCE_NSFW_OVERRIDES)
+        assertEquals("source_sfw_overrides", KEY_SOURCE_SFW_OVERRIDES)
+        assertEquals(SourceNsfwOverrideSet(), desktopSourceNsfwOverrides(emptyMap()))
+        val restored = desktopSourceNsfwOverrides(mapOf(
+            KEY_SOURCE_NSFW_OVERRIDES to SourcePreferenceValue.TextSet(linkedSetOf("PLAIN_SOURCE")),
+            KEY_SOURCE_SFW_OVERRIDES to SourcePreferenceValue.TextSet(linkedSetOf("HENTAI_SOURCE")),
+        ))
+        assertEquals(setOf("PLAIN_SOURCE"), restored.nsfw)
+        assertEquals(setOf("HENTAI_SOURCE"), restored.sfw)
+        // A value of the wrong type is ignored rather than cancelling the whole read.
+        assertEquals(setOf("PLAIN_SOURCE"), desktopSourceNsfwOverrides(mapOf(
+            KEY_SOURCE_NSFW_OVERRIDES to SourcePreferenceValue.TextSet(linkedSetOf("PLAIN_SOURCE")),
+            KEY_SOURCE_SFW_OVERRIDES to SourcePreferenceValue.Text("HENTAI_SOURCE"),
+        )).nsfw)
+    }
+
+    private fun plainListing() = SourceListing(SourceRef("PLAIN_SOURCE", "en", "MANGA"), "Plain",
+        SourceEcosystem.MIHON, true)
+
+    private fun hentaiListing() = SourceListing(SourceRef("HENTAI_SOURCE", "en", "HENTAI_MANGA"), "Adult",
+        SourceEcosystem.MIHON, true)
 }

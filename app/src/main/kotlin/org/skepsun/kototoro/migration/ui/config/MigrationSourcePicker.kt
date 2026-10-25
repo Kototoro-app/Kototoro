@@ -27,7 +27,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,7 +34,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,9 +59,13 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.jsonsource.SourceTypeIdentifier
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.FastScrollTouchWidth
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.migration.ui.migrationTitle
 
@@ -103,7 +105,7 @@ internal fun MigrationSourcePicker(
             Column(Modifier.heightIn(max = panelHeight * 0.58f).verticalScroll(rememberScrollState())) {
                 SheetDragHandle(Modifier.align(Alignment.CenterHorizontally))
                 Row(Modifier.padding(start = 4.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onDone) {
+                    IconButton(onClick = onDone, modifier = Modifier.tvIconButtonRing()) {
                         Icon(painterResource(R.drawable.ic_arrow_forward), stringResource(R.string.back),
                             Modifier.rotate(180f))
                     }
@@ -113,7 +115,7 @@ internal fun MigrationSourcePicker(
                         Text(stringResource(R.string.migration_selected_of, selected.size, entries.size),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     }
-                    TextButton(onClick = onDone) { Text(stringResource(android.R.string.ok)) }
+                    TvTextButton(onClick = onDone) { Text(stringResource(android.R.string.ok)) }
                 }
                 Text(stringResource(R.string.migration_sources_picker_hint),
                     Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
@@ -127,25 +129,34 @@ internal fun MigrationSourcePicker(
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SourceSelectionFilter.entries.forEach { selection ->
-                        FilterChip(selected = filters.selection == selection,
+                        FilterChip(
+                            selected = filters.selection == selection,
                             onClick = { filters = filters.copy(selection = selection) },
-                            label = { Text(stringResource(selection.labelRes())) })
+                            label = { Text(stringResource(selection.labelRes())) },
+                            modifier = Modifier.tvChipRing(),
+                        )
                     }
-                    FilterChip(selected = filters.pinnedOnly,
+                    FilterChip(
+                        selected = filters.pinnedOnly,
                         onClick = { filters = filters.copy(pinnedOnly = !filters.pinnedOnly) },
-                        label = { Text(stringResource(R.string.migration_select_pinned)) })
+                        label = { Text(stringResource(R.string.migration_select_pinned)) },
+                        modifier = Modifier.tvChipRing(),
+                    )
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { expanded = !expanded }) {
+                    TvTextButton(onClick = { expanded = !expanded }) {
                         val count = if (filters.activeCount > 0) " (${filters.activeCount})" else ""
                         Text(stringResource(R.string.more_filters) + count)
                     }
                     Spacer(Modifier.weight(1f))
-                    TextButton(enabled = visible.isNotEmpty(), onClick = { onPreset(SourcePreset.ALL, visibleNames) }) {
+                    TvTextButton(
+                        enabled = visible.isNotEmpty(),
+                        onClick = { onPreset(SourcePreset.ALL, visibleNames) },
+                    ) {
                         Text(stringResource(R.string.migration_select_visible))
                     }
-                    TextButton(enabled = visible.any { it.source.name in selected },
+                    TvTextButton(enabled = visible.any { it.source.name in selected },
                         onClick = { onPreset(SourcePreset.NONE, visibleNames) }) {
                         Text(stringResource(R.string.migration_clear_visible))
                     }
@@ -175,20 +186,23 @@ internal fun MigrationSourcePicker(
                     modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (filters.query.isNotEmpty() || filters.activeCount > 0) {
-                    TextButton(onClick = { filters = SourcePickerFilters(alphabetical = filters.alphabetical) }) {
+                    TvTextButton(onClick = { filters = SourcePickerFilters(alphabetical = filters.alphabetical) }) {
                         Text(stringResource(R.string.reset_filter))
                     }
                 }
-                FilterChip(selected = filters.alphabetical,
+                FilterChip(
+                    selected = filters.alphabetical,
                     onClick = { filters = filters.copy(alphabetical = !filters.alphabetical) },
-                    label = { Text(stringResource(R.string.sort_by_name_label)) })
+                    label = { Text(stringResource(R.string.sort_by_name_label)) },
+                    modifier = Modifier.tvChipRing(),
+                )
             }
             if (filters.alphabetical && visible.isNotEmpty()) {
                 val initials = visible.mapIndexed { index, entry -> entry.initial to index }.distinctBy { it.first }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     initials.forEach { (initial, index) ->
-                        TextButton(onClick = { scope.launch { listState.scrollToItem(index) } },
+                        TvTextButton(onClick = { scope.launch { listState.scrollToItem(index) } },
                             contentPadding = PaddingValues(horizontal = 10.dp),
                             modifier = Modifier.widthIn(min = 36.dp)) {
                             Text(initial, fontWeight = FontWeight.SemiBold)
@@ -254,10 +268,14 @@ private fun <T> PickerDropdown(
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
-        AssistChip(onClick = { open = true }, label = { Text(title) })
+        AssistChip(
+            onClick = { open = true },
+            label = { Text(title) },
+            modifier = Modifier.tvChipRing(),
+        )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             options.forEach { option ->
-                DropdownMenuItem(text = {
+                TvDropdownMenuItem(text = {
                     Text(label(option), fontWeight = if (option == selected) FontWeight.Bold else null)
                 },
                     onClick = { open = false; onSelect(option) })

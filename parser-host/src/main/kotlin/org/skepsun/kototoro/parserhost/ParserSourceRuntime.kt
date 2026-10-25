@@ -129,6 +129,15 @@ class ParserSourceRuntime(
         handle.parser.getRelatedContent(content.toParser(resolver(handle))).map { it.toSourceContent() }
     }
 
+    /**
+     * The plugin's own icon candidates for a source, largest first — Android's `ContentParser.getFavicons()`, which by
+     * default parses the site's `<link rel="icon">` and falls back to `<domain>/favicon.ico`. Empty when the plugin
+     * offers nothing, which leaves the host's letter tile in place.
+     */
+    suspend fun favicons(sourceName: String): List<String> = execute(sourceName) { handle ->
+        handle.parser.getFavicons().map { it.url }.filter { it.isNotBlank() }
+    }
+
     override suspend fun fetchImage(page: SourcePage): SourceImageArtifact = execute(page.source.name) { handle ->
         val store = images ?: throw SourceOperationUnsupportedException()
         val url = if (isDirect(page.url)) page.url else

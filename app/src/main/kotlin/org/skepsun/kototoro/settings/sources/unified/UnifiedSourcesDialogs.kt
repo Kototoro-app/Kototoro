@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.settings.sources.unified
 
-
 import android.util.Log
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -38,7 +37,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,6 +56,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.extensions.SelectedSourcesDeletePlan
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
 import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionRepo
@@ -91,7 +91,7 @@ internal fun <T> UnifiedSelectionDialog(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 options.forEach { option ->
-                    TextButton(
+                    TvTextButton(
                         onClick = { onSelected(option) },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -351,26 +351,26 @@ internal fun UnifiedSetFilteredSourcesEnabledDialog(
 
 @Composable
 internal fun UnifiedDeleteSelectedSourcesDialog(
-    plan: UnifiedSelectedSourceDeletePlan,
+    plan: SelectedSourcesDeletePlan,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    val skippedJarText = plan.skippedJarPackageNames.joinToString(", ")
+    val skippedJarText = plan.skippedNames.joinToString(", ")
     val message = when {
-        plan.deletablePackageIds.isNotEmpty() && plan.skippedJarPackageNames.isNotEmpty() -> {
+        plan.packageIds.isNotEmpty() && plan.skippedNames.isNotEmpty() -> {
             stringResource(
                 R.string.unified_sources_delete_selected_with_skipped_jars,
-                plan.deletablePackageIds.size,
+                plan.packageIds.size,
                 skippedJarText,
             )
         }
-        plan.deletablePackageIds.isNotEmpty() -> {
+        plan.packageIds.isNotEmpty() -> {
             stringResource(
                 R.string.unified_sources_delete_selected_message,
-                plan.deletablePackageIds.size,
+                plan.packageIds.size,
             )
         }
-        plan.skippedJarPackageNames.isNotEmpty() -> {
+        plan.skippedNames.isNotEmpty() -> {
             stringResource(
                 R.string.unified_sources_delete_selected_only_skipped_jars,
                 skippedJarText,
@@ -382,7 +382,7 @@ internal fun UnifiedDeleteSelectedSourcesDialog(
         title = stringResource(R.string.delete),
         onDismissRequest = onDismiss,
         confirmButton = {
-            if (plan.deletablePackageIds.isNotEmpty()) {
+            if (plan.packageIds.isNotEmpty()) {
                 SettingsDialogActionButton(
                     text = stringResource(R.string.delete),
                     onClick = onConfirm,
@@ -395,7 +395,7 @@ internal fun UnifiedDeleteSelectedSourcesDialog(
             }
         },
         dismissButton = {
-            if (plan.deletablePackageIds.isNotEmpty()) {
+            if (plan.packageIds.isNotEmpty()) {
                 SettingsDialogActionButton(
                     text = stringResource(android.R.string.cancel),
                     onClick = onDismiss,
@@ -871,7 +871,7 @@ internal fun UnifiedCombinedFilterDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End,
                         ) {
-                            TextButton(
+                            TvTextButton(
                                 onClick = onApplyPreferredLanguages,
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                             ) {

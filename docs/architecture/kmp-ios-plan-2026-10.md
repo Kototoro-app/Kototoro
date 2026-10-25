@@ -7951,8 +7951,1419 @@ storage 探针在真实数据根上写一个 2 KiB 的 `probe-cleaned.img` 与�
 仍待：Android 推荐设置还有三个 Windows 没有的开关——仅 WiFi（桌面没有移动网络）、包含禁用来源（Windows 来源栏
 尚无“禁用来源”概念）、通知（Windows 未接通知），它们不摆空按钮，等对应能力落地；`SuggestionsSettingsScreen`
 里“排除题材/优先题材”Android 是内联 `SettingsTextInputPreference`，Windows 仍是文本框对话框。
+## 174. Windows 扩展与仓库的来源开关对齐 Android 的来源启用/禁用（2026-10-24）
 
-## 174. iOS 小说翻译（系统 Translation 框架）与重复的扩展更新提示（2026-10-25）
+Android 的“源”页（`UnifiedSourcesScreen`）里每个来源带一个开关（`SourceEntity.enabled`）：关掉的来源仍然装着、它的收藏进度与
+下载都还在，只是不再出现在浏览/搜索/推荐/换源候选里。Windows 之前只有“装/卸”关系，想暂时隐藏一个来源只能卸载整个扩展
+（一个扩展常常带好几个来源，代价太大）。这一节把开关补上，并把“已装来源”与“可用来源”在状态层分开。
+
+- 存储：开关放进扩展记录同一个 store（`desktop_extensions`）的 `disabled_sources`（`TextSet`，存来源名，与 Android 用名字
+  而不是数字 id 的口径一致，重装后仍然对得上）。同一 store 里还躺着 JAR 记录（`Text`），所以 `restoreJars()` 改成
+  `as? SourcePreferenceValue.Text ?: continue`——离线重启探针原本就撞上这个坑：启动恢复对着 `TextSet` 强转，抛异常并记一条
+  “扩展恢复失败”。`uninstall()` 之后 `pruneDisabledSources()` 把已不存在的名字清掉；其余残留名无害（过滤时只是不匹配）。
+- Session/状态：`DesktopSession.disabledSources()` / `setSourceEnabled(name, enabled)`；`DesktopAppState` 新增
+  `disabledSources` 与派生的 `enabledSources`（对应 Android 的 `getEnabledSources()`）。来源栏、宽屏来源网格、来源筛选器、
+  搜索建议、换源候选与迁移都用 `enabledSources`；而收藏/历史/订阅/更新的筛选器、主页的生态映射与标题查找继续用
+  `state.sources`——禁用来源里存着的作品仍要能被筛到、被认出来，这与 Android 只是“不给新内容”一致。
+- Controller：`setSourceEnabled` 走串行 action，写盘成功后刷新 `sources`/`disabledSources`；如果当时正在浏览被关掉的那个来源，
+  就清空 `selectedSource`/`descriptor`/`items` 并回到扩展页，避免停在一个已不可用的来源上。卸载后同样刷新。
+- UI：`更多 → 扩展与仓库` 在“仓库”与“JSON 源”之间多一行“来源”（右侧值“已启用 m/n”，`source-switches-open`），点开是
+  `SourceSwitchDialog`：标题用 Android 的计数（`来源：已启用 m/n`）、搜索框（`source-list-query`）、高 420dp 的开关列表
+  （`source-enable-list`，行 `source-enabled:<名字>`，摘要“内容类型 · 生态 · 语言”）、空态“没有匹配的来源”、底部“确定”。
+  之所以做成对话框而不是页内平铺：真实安装有几十个来源，页内一行行铺开会把下面的目录/已安装两块顶出窗口气泡
+  （第一次实现就是这样，探针的安装点击直接被挤出可视区而失败）；对话框用自己的滚动，页面高度预算不变。
+- 探针与测试：`DesktopSourceSwitchTest` 四条（空集返回原列表同一实例、关掉后离开 `enabledSources` 但留在 `sources` 且恢复原位置、
+  全关仍保留已装列表、未知名字被忽略）；`repositories-write` 增加：搜索不到时的空态、关掉开关后状态与 store 的
+  `disabled_sources`、列表里的 `Off`、再打开后清空、浏览页不再出现该来源（`source:MIHON_…` 缺失 + 宽屏空态文案）；
+  `repositories-read` 断言离线重启后开关仍是关的、来源栏仍不给它、卸载后集合清空。
+- 截图：`repositories-write-sources.png`（对话框：标题计数、搜索框、“initial / 漫画 · Mihon · zh”开关行、确定）、
+  `repositories-write-source-off.png`（0/1 且开关关闭）、`json-sources-json-sources.png`（页面里新的一行“来源 / 关掉来源不必卸载…
+  / 已启用 1/1 →”夹在仓库与 JSON 源之间）已逐张看过。
+
+验证：`:desktop-app:verifyDesktopStrings`（924 键，中文全覆盖、无未使用键）、`:desktop-app:compileTestKotlin`、
+`:desktop-app:test --tests *SourceSwitch*`（4 条）、`--tests *SuggestionSources*`（6 条）、
+`--tests *repository*`（write+read 双进程全绿）、`--tests *CMS*`（JSON 源页面探针，页面新行后的布局不受影响）全绿。
+
+仍待：Android 的 `KEY_SOURCES_ENABLED_ALL` 总开关与扩展自带的 `lock` 来源；来源列表还没有启用/禁用筛选与批量开关；
+推荐设置里“包含禁用来源”仍无处可指（现在是硬性排除）；Android 同一页的“远程来源 JAR 优先级/显示损坏来源/扩展安装行为”
+与“镜像切换/处理链接”分组尚未在 Windows 出现。
+## 175. 来源开关对话框的启用筛选与批量启停（对齐 Android UnifiedEnabledFilter / 全选批处理）（2026-10-24）
+
+§174 只做了逐个开关。Android 的源页还有两件配套：`UnifiedEnabledFilter` 的“全部/已启用/已禁用”筛选芯片，以及
+“把当前筛选结果一次性打开或关掉”（`confirmSetFilteredSourcesEnabled`，先确认、再对筛选结果批量写）。装上几十个扩展
+之后，逐个点是点不完的，所以这一节把两者补上。
+
+- 纯逻辑在新文件 `DesktopSourceSwitch.kt`：`DesktopSourceEnabledFilter`（ALL/ENABLED/DISABLED）与
+  `filterSourceSwitchEntries(sources, query, filter, disabled)`——查询（标题或来源名、大小写不敏感、先去空白）与
+  筛选按“与”组合，顺序保持宿主自己的顺序；两者都是默认值时直接返回原列表实例，省掉一次重建。
+  `DesktopSourceSwitchTest` 增三条：默认直返原实例、筛选只列对应的那一侧、查询与筛选相乘（含大小写与前后空白）。
+- `DesktopSession.setSourcesEnabled(names, enabled)` 与 `DesktopController.setSourcesEnabled(names, enabled)`：
+  Android 的批量原语。整批一次写盘（不会中途只剩一半），一次状态刷新；单条开关改成委托给它，所以
+  “正在浏览的来源被关掉就退出浏览”那条规则对批量同样成立（`selectedSource` 落在 `disabledSources` 里就清空）。
+- 对话框：搜索框下面是三个 `FilterChip`（`source-enabled-filter:ALL/ENABLED/DISABLED`，文案取 Android 的
+  `all`/`enabled`/`disabled`），列表下面是 Android 工具栏那一对“全部启用/全部禁用”
+  （`source-switches-enable-all`/`-disable-all`，文案取 `unified_sources_enable_all`/`_disable_all`，与芯片的
+  启用/禁用区分开）；任一侧没有可改的行时按钮置灰。点按钮先弹 Android 的确认框
+  （`source-switch-batch-confirm`，标题 `unified_sources_disable_all`、正文
+  `禁用当前筛选结果中的 %1$d 个源？`、确认键 `disable`/`enable`、取消键 `common.cancel`），确认后对**当前可见行**
+  （`entries`，即搜索+筛选的结果）批量写。
+- 一处有意偏离：批量写完后把筛选切到结果所在的一侧（禁用→“已禁用”、启用→“已启用”）。Android 是让行直接从当前筛选
+  里消失，Windows 的对话框那样看起来像“点了确认之后自己清空了”，跟着结果走更像操作生效。
+- 探针（`repositories-write`）：清空查询后点“已禁用”看到空态、点“已启用”看到那一行；`全部禁用` → 确认框正文
+  “禁用当前筛选结果中的 1 个源？” → 确认后 `disabledSources` 与开关同步（筛选已切到“已禁用”，行仍在且是关的）；
+  再 `全部启用` → 确认 → `disabledSources` 清空、行回到开；最后切回“全部”继续原来那条单开关路径。
+  截图 `repositories-write-filter-enabled.png`（芯片+列表+全部启用/全部禁用）与
+  `repositories-write-batch-confirm.png`（“全部禁用 / 禁用当前筛选结果中的 1 个源？/ 取消 / 禁用”）已看过。
+
+验证：`:desktop-app:verifyDesktopStrings`（924 键不变，因为新文案全部来自 Android 的 `android-strings` 目录）、
+`:desktop-app:test --tests *SourceSwitch*`（7 条）、`--tests *SuggestionSources*`（6 条）、
+`--tests *repository*`（write+read 双进程全绿）、`--tests *CMS*`（JSON 源页面）全绿。
+
+仍待：Android 选择栏的其余动作（选中若干来源后删除/切换 NSFW）在 Windows 还没有对应能力——选中态本身、批量
+启用/禁用与“测试选中来源”已由 §192 补上；来源总览的
+“全部启用/禁用”是筛选+批量，Windows 目前只在开关对话框里提供同一能力。
+
+## 176. 远程来源 · 插件去重优先级（对齐 Android `jar_priority_order`，规则下沉 core-domain）（2026-10-24）
+
+§174–§175 把“来源开关”补齐之后，Android 来源设置里 `remote_sources` 分组还剩三项：JAR 优先级、显示损坏来源、
+扩展安装行为。这一节做第一项，同时把它背后的纯规则从 `app` 提到共享模块。
+
+- 共享提取：`app` 的 `core/extensions/JarSourcePriority.kt` 整文件 `git mv` 到
+  `core-domain/src/commonMain/.../core/extensions/`（包名不变、去掉 `internal`），内容是 Android 的单文件 JAR
+  去重规则——`DEFAULT_JAR_PRIORITY_ORDER_VALUE`、`resolveJarPriorityOrder`、`jarPriorityComparator`、
+  `jarCandidateComparator`、`selectPreferredJarSources`、`findShadowedJarSources`、`deduplicateJarPackages`、
+  `JarDeduplicationResult` 与 `jarPackageKey`/`jarVersionCode`/`jarBaseName`。测试同样移到
+  `core-domain/src/jvmTest`（9 条，`:core-domain:jvmTest --tests *JarSourcePriority*`）。Android 的
+  `AppSettings`/`SourcesSettingsViewModel`/`GlobalExtensionManager`/`SourceGroupRepository` 只是少了一个源文件，
+  导入路径不变，`:app:compileDebugKotlin` 全绿。
+- Windows 的语义映射：Android 存的是 JAR 文件名，Windows 装的是 parser 插件，所以同一把键里放插件 id，
+  排名规则本来就一致——`ParserPluginRegistry` 的构造参数 `priority` 与 `recompute()` 正是按 `plugin.info.id`
+  排名、第一个插件独占同名来源。`DesktopSession.open` 在构造 registry 之前读一次 `jar_priority_order`，
+  新的 `parserPluginPriority(savedOrder)` 把它拼在 `ParserPluginRegistry.DEFAULT_PRIORITY` 前面（去重、大小写不敏感），
+  所以没存过值的全新安装与 Android 默认完全一样。
+- 存储：`jar_priority_order` 写 `desktop_extensions`（与 `disabled_sources` 同一把 store），值仍是 Android 的
+  逗号分隔文本，备份/复制设置含义相同。`DesktopSession.jarPriorityOrder()` / `jarPriorityNames()`
+  （`resolveJarPriorityOrder(已装插件 id, 存值)`，解析不到的旧名字会被丢掉）/ `setJarPriorityOrder(names)`
+  一次写盘；`DesktopAppState.jarPriorityOrder` 只是它的镜像。
+- UI：来源设置页在“概览”下方新增“远程来源”一节（Android `remote_sources` 分组的位置），行是
+  `source-setting-jar-priority`：标题/摘要取 Android 的 `jar_priority_order_title`/`jar_priority_order_summary`，
+  值显示解析后的插件 id（还没存过就是 Android 的 `not_specified`），下面一行说明 `sources.jarPriorityNote`。
+  点行开 `jar-priority-dialog`：Android 的说明、每个已装 parser 插件一行（`jar-priority:<id>`）、行尾“上移/下移”
+  （`jar-priority-up/down:<id>`，文案复用 `library.categoryUp/Down`），每次移动立刻写盘（同分类管理，没有确认键），
+  关闭按钮 `jar-priority-close`；没有已装插件时显示 `jar-priority-empty`。
+- 为什么注明“下次启动生效”：`recompute()` 只在 registry 打开时排一次，对话框不假装能热排，行下直接写明时机。
+- 顺带修的一处冷启动缺口：`installedEntries` 原本只在打开“扩展与仓库”后才填，所以直接进来源设置会看不到插件
+  行。`DesktopController.refreshSources()`（启动时必跑）现在也带 `installedEntries`；页面在还没有插件列表时退回
+  只显示存下来的名字，不走 `resolve` 丢掉它们。
+- 探针走两个 JVM（`jarpriority-write` / `jarpriority-read`，同一数据根，用例名含 `deduplication`）：两个 parser
+  夹具都声明 `FIXTURE_SHARED`，默认排序（两者都不在 `DEFAULT_PRIORITY` 里，退化成按 id 字母序）由
+  `fixture-kotatsu` 提供服务；write 阶段在设置页把 `fixture-kototoro` 上移到最前，断言 `desktop_extensions` 里存成
+  `"fixture-kototoro,fixture-kotatsu"` 且页面跟着变；read 阶段重开数据根，断言 `pluginFor("FIXTURE_SHARED")` 换成
+  `fixture-kototoro`，而且这正是收起来的顺序里第一个、默认排序不会选的那个。截图
+  `jarpriority-write-dialog.png`（说明 + 两行上移/下移 + 生效说明）与 `jarpriority-write-row.png`
+  （远程来源节与解析后的值）已看过。
+
+验证：`:core-domain:jvmTest --tests *JarSourcePriority*`（9 条）、`:core-domain:compileCommonMainKotlinMetadata`
+（可移植性）、`:desktop-app:test --tests *JarPriority*`（4 条）、`:desktop-app:test --tests *deduplication*`
+（write+read 双进程，`DESKTOP_JAR_PRIORITY` 两行标记）、`:desktop-app:verifyDesktopStrings`、`:app:compileDebugKotlin` 全绿。
+
+仍待：Android 同组的“显示损坏来源”（`show_broken_sources`）与“扩展安装行为”（`extension_install_behavior`：
+询问/仅安装/安装并启用）在 Windows 还没有行；`deduplicateJarPackages`（同包多版本只留最新）在 Windows 侧还没有
+调用点——桌面的安装记录按 sha 目录天然分开，接之前要先确定“同包不同版本”在桌面上的表示。
+
+## 177. 远程来源 · 显示已损坏来源（对齐 Android `show_broken_sources`，parser host 读 `@Broken`）（2026-10-24）
+
+Android 的“显示已损坏来源”不是“加载失败的扩展”，而是扩展作者在解析器类上用 `@Broken` 主动标记的源：
+`JarExtensionLoader.scanBrokenSourceNames` 扫 DEX 里带 `@Broken` 的类、再用 `@ContentSourceParser(name)` /
+`@MangaSourceParser(name)` 得到源名，`GlobalExtensionManager` 把它塞进 `PluginContentSource(broken=…)`，
+`ContentSource.title` 变成 `"$baseTitle (${getString(source_broken)})"`，`ContentSourcesRepository` 只在
+`show_broken_sources` 打开时才把 `isBroken` 的源放进列表。插件本身照常安装、照常可调用，开关只管“要不要在UI里提供它”。
+Windows 这一轮把这个语义补齐，因为此前的 Windows 连“已损坏”这个概念都没有：`ParserPluginRegistry.build()`
+把所有枚举常量都构造成 `ContentSource`，任何一个抛异常就整个插件 `CONSTRUCTION_FAILED`，而作者主动标记的坏源
+反而完全看不出来。
+
+- parser host 侧（`ParserPluginRegistry.kt`）：`ParserSourceInfo` 新增 `broken: Boolean = false`。
+  `brokenSourceNames(path, loader)` 读 JAR 条目字节——只有含 `Lorg/skepsun/kototoro/parsers/Broken;` 或
+  `Lorg/koitharu/kotatsu/parsers/Broken;` 描述符的 class 才会被 `loadClass` 并读注解（Android 是全量扫 DEX，
+  这里先用字节预筛，几千个类的插件也只加载那几个），注解类型由宿主共享 ABI 提供（`ParserPluginClassLoader`
+  对这些包父优先），所以按 class 身份比较是稳的；单个类加载失败只跳过它，不带垮整次扫描。
+- 目录文件跟着升版：`CATALOG_VERSION = "2"`，每个源一行从 4 列变 5 列（末列 `1`/`0` 表示 `broken`）。
+  旧 v1 目录会被判为无效 → 走一次完整加载并重写，正好把标记算出来；`readCatalog` 之后注册的插件也带着这个标记，
+  不需要提前 open JAR。
+- 桌面侧：键 `show_broken_sources` 与 Android 同名，存 `desktop_extensions`（与 `disabled_sources`、
+  `jar_priority_order` 同一把 store），值是 `Toggle`，默认关。`DesktopSession.sourceListings(includeBroken = showBrokenSources())`
+  是唯一入口，所以来源栏、来源网格、筛选器、搜索建议、换源候选、来源开关对话框全都自动跟着走；
+  `pruneDisabledSources()` 显式传 `includeBroken = true`，否则关掉开关时会把坏源的“已禁用”状态当成过期名字删掉。
+- 标题：`parserListing(info)` 对坏源拼上 Android 的 `source_broken`（`Fixture Broken (已损坏)`），
+  与 Android `ContentSource.title` 同一套写法，取词走 `AndroidStrings`。
+- UI：来源设置页“远程来源”一节在插件去重顺序行与其“下次启动生效”说明之后新增整行开关
+  `source-setting-show-broken`（排在说明后面，因为它立即生效、不需要重启，紧贴说明会被读成也要重启），
+  标题/摘要直接用 Android 的 `show_broken_sources` / `show_broken_sources_summary`（“允许查看与使用被标记为已损坏的源插件”）。
+  切换后 `DesktopController.setShowBrokenSources` 重发 `sources`；如果当前浏览的正好是被藏起来的坏源，
+  清掉浏览选择（同禁用来源的处理），作品的进度、下载、设置都不动。
+- 夹具：`parser-host/src/fixtureBroken`（新 sourceSet，`fixture-broken.jar`）只有一个源 `FIXTURE_BROKEN`，
+  解析器类同时带 `@Broken("fixture: the site is offline")` 与 `@ContentSourceParser(name = "FIXTURE_BROKEN", …)`，
+  `newParser` 返回真实可调的 `BrokenFixtureParser`——这样“标记坏”与“能不能调”是两件事，能被分别断言。
+  `:desktop-app` 的测试任务补了 `dependsOn ':parser-host:fixtureBrokenJar'`。
+- 验证：`:parser-host:test --tests *ParserPluginRegistry*` 新增一条 `a parser the plugin marks broken is flagged,
+  kept callable and remembered by the catalog`（10 条全绿）：装 `fixture-broken.jar` 后 `sources()` 里
+  `FIXTURE_BROKEN.broken == true`、标题是 `Fixture Broken`、`withParser` 仍能正常取列表（0 条）；把工件换成非 JAR 的 PNG
+  后用目录重新注册，标记照样回来——目录 v2 的 `broken` 列确实生效。桌面探针 `brokensource-write`/`brokensource-read`
+  走两个 JVM：write 阶段导入夹具，断言 host 已标记、`sourceListings()` 默认不含它、`includeBroken = true` 才含，
+  进来源设置点 `source-setting-show-broken`，断言 `desktop_extensions` 里存成 `Toggle(true)`、
+  `state.sources` 里出现 `Fixture Broken (已损坏)`、再点一次又消失，截图 `brokensource-write-off.png`/`-on.png`；
+  read 阶段重开同一数据根，断言开关持久化、标题仍带“（已损坏）”、`pluginFor("FIXTURE_BROKEN")` 仍解析得到。
+- 仍待：Tsuki 自己模型里的 `isBroken`（Android 在 `PluginContentSource` 里与注解标记并列判断）在 Windows 侧
+  还没有对应实现；`extension_install_behavior`（询问/仅安装/安装并启用）已在 §178 补上。
+- 顺带修的一处共享模块编译缺口：`core-ui` 的 `TvFocus.kt` 用 `WindowInsets.isImeVisible` 判断软键盘（TV 输入框
+  左右键的放行条件），这个扩展只在 `foundation-layout` 的 Android 工件里，`commonMain` 编译 JVM/iOS 目标时是
+  未解析引用——Android 侧 `:app:compileDebugKotlin` 一直是绿的，桌面侧 `:core-ui:compileKotlinJvm` 却红了，
+  连带 `:desktop-app:*` 全部编译不了。改成共享写法 `WindowInsets.ime.getBottom(LocalDensity.current) > 0`
+  （Android 上就是同一个 ime 高度判定），`:core-ui:compileKotlinJvm` 与 `:app:compileDebugKotlin` 都重新编译通过。
+
+## 178. Windows 扩展安装行为对齐 Android 的 `extension_install_behavior`（2026-10-24）
+
+§174–§177 补完来源侧之后，“装上一个包以后，它带来的来源算不算启用”这条规则在 Windows 上还没有位置。
+Android 的 `UnifiedSourcesScreen` 在装/导入第三方包时按 `UnifiedSourceKind` 问一句，并把答案存在
+`AppSettings.KEY_EXTENSION_INSTALL_POLICIES`（`extension_install_policies`，`"<type>=<POLICY>"` 的 `Set<String>`，
+`ASK_EVERY_TIME` 不落盘）。
+
+- 共享：`ExtensionInstallPolicy` 与其编解码从 `app` 原样搬到 `core-domain` 的 `commonMain`（同包
+  `org.skepsun.kototoro.extensions.install`），`decode/encodeExtensionInstallPolicies` 由 `internal` 改成 public；
+  Android 侧只删实现、import 不变，两条测试跟着搬到 `core-domain/src/jvmTest`。契约里更厚的
+  `ExtensionInstallService` 与 `SystemPackageInstaller` 依赖 APK/系统安装，仍留在 `app`。
+- Windows 的“包类型”用 Android 自己的 `UnifiedSourceKind` 名：`MIHON`/`TSUNDOKU`/`ANIYOMI`/`JAR`/`CLOUDSTREAM`
+  （`DesktopInstallKind`）。仓库条目按包名标记分类（`.animeextension.` → Aniyomi、`.novelextension.` → Tsundoku、
+  解析器插件 → JAR、`.cs3` → Cloudstream），与目录行自己的生态标签同一份判据；文件导入只有 jar/APK 流水线可看，
+  所以小说 jar 走文件导入时记 MIHON（KDoc 里写明）。LEGADO/LNREADER/TVBOX/JS/IREADER 不在列表内：
+  Windows 的 JSON 来源是 URL 对话框，没有“装完是否启用”这一步。
+- 存储：`desktop_extensions` 的 `extension_install_policies`（与 Android 同键），值仍是那套文本集合，
+  `ASK_EVERY_TIME` 写回时删除条目；入口是 `DesktopSession.extensionInstallPolicies()` /
+  `setExtensionInstallPolicy(kind, policy)` / `setAllExtensionInstallPolicies(policy)`。
+- 生效点：`DesktopSession` 的 `installExtension`/`importJar`/`installManaged`/`installParser`/`installCloudstream`
+  多一个 `enableSources: Boolean?`（null = 不动开关），装完用既有的 `setSourcesEnabled(names, enable)` 落到
+  `disabled_sources`，与来源开关对话框是同一份数据。
+- 询问：`DesktopController.installExtension`（目录行按钮）照 Android 的 `installPackage` 先看策略，`ASK_EVERY_TIME`
+  就把待装请求放进 `DesktopAppState.installPrompt`（与无痕提示同一种“状态里存问题、回调里续做”的写法，
+  不占用 `action {}` 的 busy），对话框是 Android 的 `UnifiedInstallChoiceDialog`（标题“安装 %s”、来源条数、
+  `extension_install_remember_choice` 勾选、安装并启用/仅安装/取消）；勾选即写该类型的策略。
+  更新不询问（Android 的 `enableAfterInstall = null`），开关也保持原样。文件导入不询问：用户已经挑了这个文件，
+  `ASK_EVERY_TIME` 对它就等于“装上并显示来源”；真正值得提问的是目录行——一个仓库动辄几十个来源。
+- UI：来源设置“远程来源”节在“显示已损坏来源”之后新增整行 `source-setting-install-behavior`
+  （摘要 = 各类型答案去重后按 Android 的类型顺序拼起来，如“仅安装 · 每次询问”），打开 `install-behavior-dialog`：
+  “批量统一设置”行（对应 Android 的分段按钮）加“按源类型设置”分组，每个类型一行，点开是同一个三选一对话框
+  （`install-behavior-option:<POLICY>`）。
+- 验证：`:core-domain:jvmTest`（策略编解码两条测试随模块走）、`:desktop-app:compileTestKotlin`、
+  `:app:compileDebugKotlin`（共享枚举搬家后 Android 仍绿）。探针 `installpolicy-write`/`installpolicy-read` 两段 JVM：
+  write 断言默认集为空、`JAR=INSTALL_ONLY` 的文本集合、批量写 5 条、批量回“每次询问”清空；导入
+  `fixture-kototoro.jar` 后 `FIXTURE_KOTOTORO_ONLY` 进 `disabled_sources`，换 `INSTALL_AND_ENABLE` 再导入
+  `fixture-kotatsu.jar` 则 `FIXTURE_SHARED` 不进；仓库装包走真实目录行——取消后什么都没发生，勾选“记住”选
+  “仅安装”后包装上、该类型存成 `INSTALL_ONLY`、它带来的来源进 `disabled_sources`；设置页读回混合摘要，
+  弹窗里逐类型与批量行都改得对（批量回 ASK 时集合清空）；把同一包升一个版本号再装一次不弹问题、开关不动。
+  截图 `installpolicy-write-prompt.png`/`-sheet.png`/`-choice.png`；read 段重开数据根，断言 `JAR=INSTALL_ONLY`、
+  两个来源的开关状态、设置页摘要都还在。
+- 既有探针的连带更新：`repositories-write` 第一次点目录行现在会弹问题，探针点“安装并启用”并断言不勾选就不落盘；
+  其余经 `controller.importJar` 的探针默认答案等价于旧行为。
+- 仍待：`setup_wizard`、`handle_links`、`SourceSwitchDialog` 的选择模式、服务设置的浏览记录轮播、
+  外部追踪、定期本地备份等（推荐设置的三个 worker 开关已在 §179 补上，`related_manga` 已在 §191 补上）。
+
+## 179. Windows 推荐设置补齐 Android 推荐 worker 的三个开关（2026-10-24）
+
+§173 把“更多 → 推荐设置”按 Android 的 `SuggestionsSettingsScreen` 搬过来时只搬了“允许推荐 / 排除 NSFW / 标签 / 来源”
+几节，页面上还有三个直接接 `SuggestionsWorker` 的开关没有位置：`only_using_wifi`（WorkManager 的 `UNMETERED` 约束）、
+`include_disabled_sources`（候选是否包含已禁用的来源）与 `notifications_enable`（生成后是否提醒）。
+本轮把这三条补上，语义按 Android 的 worker 来定，而不是按“看上去合理”来定。
+
+- 存储：`desktop-runtime` 的 `DesktopSuggestionSettings` 新增 `wifiOnly`/`includeDisabledSources`/`notifications`，
+  三个都默认 `false`，键与 Android 的 `AppSettings` 一致——`suggestions_wifi`、`suggestions_disabled_sources`、
+  `suggestions_notifications`，仍写在 `desktop_background` 这个命名 store 里。
+- Wi-Fi 约束：Android 读的是 `NetworkType.UNMETERED`，而流量计费是 `ConnectivityManager` 才有的概念，JVM 上只有网卡。
+  新文件 `DesktopConnectivity.kt` 把网卡列表折成 `hasUnmeteredNetwork(interfaces)`：`isUp`、非回环、且网卡名或
+  显示名里没有 `wwan`/`cellular`/`mobile`/`rmnet`/`modem`/`lte`/`4g`/`5g` 才算“不计流量”——有线与 Wi-Fi 都过，
+  移动宽带不过。`desktopNetworkInterfaces()` 用 `NetworkInterface.getNetworkInterfaces()` 读一次，读失败就当空列表
+  （宁可跳过也不要假装不计流量）。`DesktopController` 把这个判定做成构造参数 `networkAvailable: () -> Boolean`
+  （默认读真网卡），探针因此能逐条驱动“这台机器有没有不计流量的链路”。
+  跳过时 `runSuggestionsOnIo` 在 `recordRun(LAST_SUGGESTIONS_RUN)` **之前**返回 0：不记本轮时间，下一次到期检查会
+  重试，而不是等满一个周期——这与 WorkManager 把“约束未满足”当作“本次不跑”而不是“跑完了”是同一件事。
+  跳过也不清空已有推荐（`refresh` 本身在缺种子/候选时就是“返回 0、不动表”）。
+- 含禁用来源：开关为真时候选换成 `session.sourceListings()` 全集，否则沿用 `state.value.disabledSources` 过滤后的
+  “已启用来源”。禁用来源本来就只是“不再出现在浏览/搜索/推荐里”，它仍安装、仍可调用（§174/§175 的口径），
+  所以这里只是换一个候选集合，不需要重装或唤醒什么。
+- 通知：Windows 没有 Android 的托盘与通知渠道，于是它落在应用内——`DesktopAppState.suggestionNotice` 存一行
+  `AndroidStrings.format("suggestion_manga", 作品名)`（Android 的原词条），只有“真的存进推荐（`stored > 0`）”
+  且开关打开时才设；主页推荐轨道上方用 `secondaryContainer` 圆角条显示，右侧一个“关闭”按钮调
+  `dismissSuggestionNotice()` 清掉。开关关着时什么都不发生，与 Android 不发通知一致。
+- UI（`DesktopRecommendations.kt`）：在“排除 NSFW”行与其后的分隔线之后，按 Android 的顺序插三条整行开关
+  `settings-suggestions-wifi` / `-disabled-sources` / `-notifications`，标题与摘要直接用 Android 的
+  `only_using_wifi`+`suggestions_wifi_only_summary`、`include_disabled_sources`+`suggestions_disabled_sources_summary`、
+  `notifications_enable`+`suggestions_notifications_summary`（都由 `prepareDesktopStrings` 从 `app/src/main/res` 导出），
+  并且与 Android 的 `enabled = isEnabled` 一样，只有“允许推荐”开着时这三行才可点。页尾说明换成 Android 的
+  `suggestions_info`（自造的 `settings.suggestionsInfo` 两条译文随之删除）。另外把“允许推荐”的摘要改写了一句：
+  候选默认只来自已启用的来源、下面那个开关可以放宽——Android 原文没讲这一层，但 Windows 上“来源”是一等配置，
+  说明里不提会让人以为那个开关没有生效。
+- 验证：新探针 `suggestionpolicy-write`/`suggestionpolicy-read`（`DesktopSuggestionPolicyProbe.kt`），与 §178 一样分两个
+  JVM。write 段导入 reader 夹具、把列表里第一部作品收藏起来当 worker 的种子，然后在真实 UI 里走推荐设置页——
+  三行都在、标题与摘要都是 Android 词条、推荐关着时三行都 `assertIsNotEnabled`；打开推荐后逐个点开，
+  `suggestionSettings` 三个字段翻真、`desktop_background` 里三个键都落成 `Toggle(true)`，截图 `-worker-rows.png`。
+  接着脱离页面直接驱动 worker：`networkAvailable = { unmetered }` 置假跑一次，断言既没有标题、也没有
+  `last_suggestions_run`、推荐表仍为空；置真再跑一次，标题出现且等于某个已存作品按 `suggestion_manga` 拼出来的样子；
+  回主页滚动到 `home-suggestion-notice` 截图后点关闭，条子与状态一起消失。最后禁用唯一来源：含禁用来源开着时
+  再跑仍会出标题，把它关掉再跑就没有了，之后恢复来源与开关。read 段重开数据根，断言三个键还在、
+  `DesktopSuggestionSettings.from` 读回三个 `true`、推荐表非空。
+- 顺带修掉“宽屏探针偶发 `UncompletedCoroutinesError`”：子 JVM 里 `runDesktopComposeUiTest` 的 `testTimeout` 参数
+  并不改 `runTest` 的默认 60 秒，而这几个探针在忙起来的机器上本来就要跑一分钟上下，于是报“test body did not run to
+  completion”而不是真失败。`DesktopAppTest.probe()` 现在给子 JVM 加 `-Dkotlinx.coroutines.test.default_timeout=10m`，
+  四个 tablet 探针的父进程等待也统一成 150 秒（宽屏本来就是 150）——真正的上限仍是父进程的 `waitFor(seconds)`。
+  改完后 `tablet`/`tablet-narrow`/`tablet-boundary`/`tablet-boundary-compact` 四个探针全绿（本轮 6m36s，
+  机器同时有别的构建在跑）。
+- 探针跑法的一个坑（顺手记下）：`cmd /c "gradlew.bat :desktop-app:test --tests "*xxx*" ..."` 那对内层引号会被 cmd
+  吃掉，Gradle 收到的是“带前导空格的模式”，于是报 `No tests found for given includes`——哪怕测试明明在类里。
+  改成 PowerShell 直接传 `'--tests=*xxx*'` 即可；这一轮先被这个坑绕了一圈。
+- 仍待：`setup_wizard`、`handle_links`、`SourceSwitchDialog` 的选择模式、服务设置的浏览记录轮播、
+  外部追踪、定期本地备份等（§178 列过的其余项不变，`related_manga` 已在 §191 补上）。
+
+## 180. Windows 服务设置页对齐 Android 的 `ServicesSettingsScreen`（2026-10-24）
+
+§155 起 Windows 的阅读统计一直挂在“更多”列表里，推荐设置（§173/§179）也是同一层的另一行；Android 把这两项和
+“它们到底记不记”的几个开关一起收在一个“服务”页（`ServicesSettingsScreen`）里，“更多”只列页面。本轮把这一层
+结构补上，并按 Android 的开关语义让它们真的起作用——不摆只有存储没有行为的开关。
+
+- 页面与动词：新增 `DesktopScreen.SERVICES`，`DesktopMorePanel` 里原来那两行（`settings-recommendations-open`、
+  `reading-stats-open`）换成一个 `services-open` 行（标题 `services`、摘要 `more.servicesSummary`，图标沿用推荐那只），
+  新页 `DesktopServicesPage.kt` 按 Android 的顺序画：推荐（值行，摘要按 Android 写成“启用/禁用”，即
+  `state.suggestionSettings.enabled`）、阅读统计（Android 的**分裂**行）、阅读时间估算（整行开关）。
+  Android 的 `suggestionsSummary` 与 `isStatsEnabled` 的摘要都是 `enabled`/`disabled` 两个词条，这里照抄。
+  统计页与推荐页的返回按钮同时指向 `showServices()`，不再回“更多”。
+- 共享行组件：`core-ui` 的 `SharedSettingsRows.kt` 新增 `SettingsSplitSwitchRow`——行尾是开关、行首标题区可点，
+  对应 Android 的 `SettingsSplitSwitchPreference`（点标题进统计页、点开关只切记录；Android 上这是两个不同目标，
+  所以不能用整行开关代替）。它和其余设置行共用 `SettingsRowText` 与 120dp 行高约定。
+- 存储：`desktop-runtime` 新增 `DesktopServicesSettings`（`statsEnabled`/`readingTimeEstimation`，都默认 `true`）
+  与 `DesktopServicesPreferences`（独立的 `desktop_services` store，读写形状同 §139/§160 的导航与下载设置），
+  键用 Android 的 `stats_on` 与 `reading_time`。
+- `stats_on` 的真实语义：Android 关掉后阅读仍写历史与进度，只是不再产生会话/统计行。Windows 的统计写入只有一个
+  收口点——`SourceLibrary.recordPage` 里的 `ReadingSessionTracker` 与 `writeReadingSession`——所以在
+  `core-library` 加了一个 `var statsRecording: Boolean = true`，`recordPage` 用它决定要不要 tick、`writeReadingSession`
+  第一行直接 return。这样六个 `recordPage` 调用点（详情预览、分页/连续阅读、小说、视频、滚动操作）都不必各自判断，
+  也不会出现“某个入口偷偷记账”。`DesktopController.init` 把存下来的值同时写进 `state.services` 与
+  `session.library.statsRecording`；`servicesSettings(...)` 保存后即时同步，写盘失败才报 `services.saveFailed`。
+- `reading_time` 的真实语义：Android 的 `ReadingTimeUseCase` 在 `HistoryInfo.estimatedTime` 里算这份估计，
+  但**Android 侧没有任何界面渲染它**（详情页、历史页、预览卡都没有引用 `estimatedTime`）。Windows 把同一份公式
+  摆到详情页的事实行里（`details-reading-time`，标签 `details.readingTime`，值 `%1$d h %2$d min` / `%d min`），
+  否则这个开关就没有可观察的效果；公式本身放在 `desktop-runtime` 的 `desktopReadingTime(...)`：每章 20 页、
+  每页用该作品自己的 `totalDuration / units`（没有统计或统计关着时退回 Android 的 10 秒默认），有未完进度就按
+  `1 - percent` 折算，不足 1 分钟返回 `null`（行不画）。`DesktopController.estimatedReadingTime` 在 `detailsOnIo`
+  里算一次，`DesktopAppState.detailsReadingTime` 随详情一起下发。
+- 未搬的行与理由：Android 这一页还有“浏览记录推荐”（`browse_tracking_recommendations` 与其子项
+  `browse_more_tracking_recommendations`）、“相关作品”（`related_manga`）和 Discord RPC。前两个依赖 Windows 还不存在的
+  功能（MAL/Bangumi 发现轮播、相关作品接口），Discord RPC 需要 IPC 客户端；按本项目的口径**没有行为就不出行**，
+  三个都留到后续轮次（`related_manga` 是下一步的候选），而不是先存一个什么都不管的开关。
+- 验证：新探针 `services-write`/`services-read`（`DesktopServicesProbe.kt`），两个 JVM。write 段导入夹具后走真实 UI：
+  详情页先经 `details-expand` 打开整页事实（宽窗默认是预览卡，事实在“详情”后面）并核对 `details-reading-time`
+  与公式一致；回“更多”断言 `reading-stats-open` 已不存在、`services-open` 打开服务页，三行的标题/摘要都是 Android 词条，
+  截图 `-services-page.png`；点 `services-stats-enabled` 关掉统计——`state.services`、`desktop_services` 的 `stats_on`、
+  `session.library.statsRecording` 三处同时为假，截图 `-services-page-off.png`；此时读一章：历史有了、会话数仍是 0；
+  打开开关再读一章：会话数变 1；关掉 `reading_time` 后回详情页，`detailsReadingTime` 为 `null` 且行消失；
+  最后回服务页截图 `-services-page-reading-time-off.png`。read 段重开数据根，断言两个键（`stats_on=true`、
+  `reading_time=false`）、`DesktopServicesSettings.from` 的结果、`state.services` 与 `statsRecording` 都一致。
+- 回归：`stats` 探针（“更多 → 服务 → 阅读统计”的新路径与统计页返回目标）、`suggestionpolicy` 探针（推荐入口的新路径）、
+  `tablet` 探针（宽窗详情与“更多”列表）全部重跑通过，合计约 7 分钟。
+- 仍待：浏览记录推荐的两个轮播（`related_manga` 已在 §191 补上）。其余不变（`setup_wizard`、`handle_links`、手动重排、
+  `BOOKMARKS` 的 NSFW 过滤目标、`SourceSwitchDialog` 选择模式、外部追踪、定期本地备份、`CacheLimitsSettings`）。
+
+## 181. Windows 已安装扩展按包展开来源，对齐 Android 的 `UnifiedPackageList`（2026-10-24）
+
+驱动原话里的“拓展管理…尤其是各个源的配置，怎么能平铺呢”，落到 Windows 上是这几页里唯一还和 Android 结构不同的一处：
+Android 的统一来源页把**来源挂在声明的扩展包下面**（`UnifiedSourcePackageHeader` + 包内 `UnifiedSourceRow`，
+点标题展开/收起，包行写版本与来源数，来源行写内容类型/语言并带自己的启用开关），而 Windows 的“更多 → 扩展与仓库”
+里“已安装”只是一行一个包、行尾“更新/卸载”，包里的来源完全看不到，只能去“来源”对话框里全局平铺找。
+
+- 模型：`DesktopInstalledEntry` 新增 `sourceNames: List<String>`（默认空），`DesktopSession.installedEntries()` 按包
+  现算：Mihon/Tsundoku/Aniyomi 扩展取 `extension.sources.map { it.source.name }`，解析器插件取
+  `plugin.sources.map { it.source.name }`，Cloudstream 取 `cloudstreamListing(it).source.name`。所以这一列永远和
+  registry 里的实际清单一致，不需要另存一份表。
+- 界面：`InstalledExtensions` 里包行末尾多一个 `TextButton`（`extension-sources:<包名或插件 id>`），文案是
+  `extensions.showSources=来源 · %d` / `extensions.hideSources=收起来源 · %d`（zh-CN 同键），只在 `sourceNames` 非空时出现；
+  展开集合是这一页自己的 `remember { mutableStateOf(emptySet<String>()) }`（Android 也不持久化展开状态）。
+  展开后每个来源一行共享的 `SettingsSplitSwitchRow`（§180 为“阅读统计”加的那个分裂行）：**标题点进该来源自己的设置页**
+  （`controller.sourceSettings(name)`，等价于原来“先选中来源再进设置”，不改选中来源之外的任何状态），
+  **行尾开关只切启用**（`controller.setSourceEnabled`，落 `desktop_extensions` 的 `disabled_sources`），摘要照旧是
+  `内容类型 · 生态 · 语言`，行左侧缩进 24dp 表示从属关系。测试标签 `extension-source-open:<来源名>` /
+  `extension-source:<来源名>`，和“来源”对话框的 `source-enabled:<来源名>` 分开。
+- 为什么不做 Android 的包内多选/批量：Android 那页还有长按选择、批量启用/禁用、安装/更新/删除的整条数据流；
+  Windows 的“来源”对话框已经提供搜索 + 全部/启用/禁用筛选 + 按筛选结果批量开关（§174）。这一轮只补“包 → 来源”
+  的层级和单个来源的入口，避免在同一个页面上叠两套批量语义。
+- 验证：扩了 `repositories` 探针的 write 段（真实 UI，服务器走本地 HTTP）：装包后 `installedEntries.single().sourceNames`
+  等于该 JAR 声明的来源名；`extension-sources:<包名>` 点开前 `extension-source:<来源名>` 不存在、点开后存在并截图
+  `-installed-sources.png`（另有 `-installed-rows.png` 只截已安装这一组，避免整窗截图被窗口下沿裁掉）；
+  点 `extension-source:<来源名>` 关掉该来源——`state.disabledSources` 立刻等于 `{来源名}`，再点回打开——集合清空；
+  点 `extension-source-open:<来源名>` 进设置页：`screen == PREFERENCES`、`selectedSource` 与 `preferences.source`
+  都是它（截图 `-installed-sources-settings.png`），再从主导航回到扩展页继续后面的更新/卸载流程。read 段在离线重启后
+  断言 `installedEntries.single().sourceNames` 仍是同一来源，证明这列不是内存里的临时值。
+  行在窗口下沿之外时点击不会命中，探针先用 `performScrollToNode` 把它滚进视口——这一点已经写进探针注释，后续加行时同样处理。
+- 回归：`repositories`、`kototoro kotatsu and UMA plugins through the UI`（用 `installed-list` 滚到
+  `extension-uninstall:<id>`）、`a Cloudstream plugin imports browses...` 三个探针重跑通过。
+- 仍待：包内多选/批量（见上）、Android 统一页的仓库卡片分组与语言/组合筛选、`SourceSwitchDialog` 的选择模式。
+
+## 182. Windows 来源手动重排，对齐 Android 的 `ReorderDialog` 与 `SourcesSortOrder.MANUAL`（2026-10-24）
+
+Android 的“来源设置 → 概览”只在排序方式为手动（`SourcesSortOrder.MANUAL`）时多出一行“重新排序”，点开是
+`ReorderDialog`：拖动手柄或长按条目移动、跨分组禁止、**显式保存**才写盘（`saveSourceOrder` 把每个名字写进该来源行的
+`sort_key`，并把排序方式改成 MANUAL）。Windows 之前的三种顺序里没有手动这一项，`DesktopSourceSort` 的注释还明说
+“没有手动重排编辑器”，所以用户排不出自己想要的顺序。
+
+- 模型（`desktop-runtime` 的 `DesktopSourceSettings`）：`DesktopSourceSort` 追加 `CUSTOM`——不叫 `MANUAL`，因为
+  `DEFAULT` 已经是“安装顺序”这个基线；落盘仍是枚举名，键还是原来的 `sources_sort`。新增 `order: List<String>`，
+  键 `sources_order`（`TextSet`，值就是来源名）：Android 没有这个键（它把顺序写在各来源行的 `sort_key` 上），
+  Windows 的库没有来源表，只能把名字序列存进 `desktop_background`。`sorted()` 在 `CUSTOM` 下按 `order` 的下标排名，
+  未列出的来源（刚装的、名字还没进序列的）按安装顺序跟在后面；`order` 为空时就是安装顺序。已卸载但在序列里的名字
+  保留（重装后能回到原位），排序时匹配不到来源而已。
+- 控制器：`DesktopController.saveSourceOrder(names)` 复刻 `saveSourceOrder` 的“保存即切顺序”语义——先按当前可用
+  来源过滤掉禁用/已卸载的名字并去重，再一次走已有的 `internal fun sourceSettings(settings)` 落盘
+  （`desktop_background`，失败仍报 `settings.sourcesSaveFailed`）。
+- 界面（`DesktopSourceSettingsPage`）：“概览”组的 `source-setting-sort` 下面，**仅当 `settings.sort == CUSTOM`**
+  多一行 `source-setting-reorder`（Android 同样只在手动排序时显示），标题取 Android 的 `reorder`（重新排序），摘要用
+  桌面自己的 `sources.reorderSummary=逐行上移或下移调整顺序，完成后保存`：Android 的 `reorder_hint` 讲的是“拖动手柄
+  或长按条目”，桌面既没有手柄也没有长按，照抄会写错交互。
+  对话框 `DesktopSourceOrderDialog`（`source-order-dialog`、行 `source-order:<名字>`、`source-order-up:`、
+  `source-order-down:`、`source-order-save`、`source-order-cancel`，空列表 `source-order-empty`）照
+  `DesktopJarPriorityDialog` 的形状：行是本地 draft，移动不写盘，点“保存”才调 `controller.saveSourceOrder`。
+  Android 的分组内限制这里不需要——桌面列表是平的、不画置顶/语言标题，而“按语言分组”开着时来源栏会自己重新分组，
+  存下的序列决定的是每组内部的先后。
+- 刻意不映射的：Android 的 `POPULARITY` 与 `LAST_USED`。桌面库既不统计来源热度也没有“上次使用”时间戳，加进去就是
+  点了没反应的选项（§177、§180 对同类差异的处理一致）；反过来 `LANGUAGE` 是 Windows 独有（Android 用分组而非排序）。
+- 验证：`DesktopSourceOrderProbe`（`sourceorder-write` / `sourceorder-read` 两个 JVM，本地 HTTP 服务器提供 MacCMS 接口）
+  导入两个 JSON 来源“重排甲/重排乙”→ 断言默认排序下没有重排行 → 排序方式选“自定义顺序”→ 重排行出现 → 打开对话框、
+  点 `source-order-up:<第二个>` 后**断言此刻 `order` 仍为空**（移动不写盘）→ 保存 → 断言 `sort == CUSTOM`、
+  `order == [乙, 甲]`、`desktop_background` 快照里的 `sources_order` 就是这个顺序 → 回“浏览”断言来源总览的两块瓷砖
+  按行优先顺序乙在前（截图 `-settings.png` / `-dialog.png` / `-overview.png`）。read 段离线重启后断言这三项都还在，
+  且重排行仍在。单元测试补在 `DesktopSourceSettingsTest`：序列经偏好往返保序、`CUSTOM` 排名（序列含已卸载名字、
+  空序列回退安装顺序、其它排序忽略序列）。
+- 回归：`tablet layout and immersive reader panels…`（来源栏/来源网格都走同一份 `settings.sorted`）与
+  `a JSON CMS source imports from the extensions page…` 重跑通过。
+- 仍待：把上移/下移换成真正的拖拽、Android 统一来源页的批量选择与仓库筛选分组。
+
+## 183. Windows 设置向导（对齐 Android 的 `setup_wizard` / `WelcomeSheet`）（2026-10-24）
+
+Android 的“来源设置 → 概览”最后一行是“设置向导”（`setup_wizard`），首次启动时还会自己弹出一次
+（`router.showWelcomeSheet()`），内容是一个四页 pager：简介（`WelcomeIntroStep`）、权限（`WelcomePermissionsStep`）、
+外观（`WelcomeAppearanceStep`，含 `WelcomeSpacesStep`）、完成（`WelcomeDoneStep`）。Windows 之前完全没有这一行，
+侧栏也没有对应的 screen，所以这是概览组里最后一个缺口（§182 收尾时列的第一条“仍待”）。
+
+- 三页而不是四页：
+  - 简介页、完成页照搬 Android 的字符串（`welcome_intro_*`、`welcome_done_*`），所以“仓库/拓展/源”三个概念的说明、
+    免责声明、“设置完成”的正文与“如果内容源出问题”的排查清单都是原句；
+  - 外观页保留 Android 的 `interface_style` 思路，但把开关换成 Windows 真有的三项——主题、界面风格、语言，
+    每行打开的就是“更多”页那套 `DesktopChoiceSettingsDialog`（同一个 `desktop_appearance` store：`theme` /
+    `interface_style` / `language`），只挑风格的向导会漏掉最显眼的两个设置；
+  - Android 的权限页整页丢弃：桌面没有运行时授权，那一页的每一行（通知、安装未知应用、电池优化）都是 Android 独有能力；
+  - Android 的空间页也丢弃：Windows 只有一个库、没有 space 概念；
+  - **不自动弹出**：Android 首次启动会直接盖住界面，Windows 若照做，任何新建数据根的测试（以及只想先看看的用户）
+    都会先撞上一个流程页，所以向导只能从“来源设置 → 设置向导”手动进入。
+- 界面（`DesktopSetupWizard.kt`，`DesktopScreen.SETUP_WIZARD`，`controller.showSetupWizard()`，标题取 Android 的
+  `setup_wizard`）：页面顶部照桌面惯例留一个“返回”（离开向导，回来源设置），下面一行 `wizard-progress`
+  写“第 1 / 3 步”（`sources.wizardStep`），然后是按步渲染的三块内容，最底下一对动作按钮 `wizard-back`
+  （文案是新增的 `common.previous`=上一步，第一步禁用——Android 的动作条只画一个返回箭头，桌面用文字才和顶部“返回”分得开）
+  与 `wizard-next`（最后一页换成 Android 的 `done`=完成，点了回来源设置）。
+- 入口行 `source-setting-wizard` 放在概览组的最后（Android 同位置），标题用 Android 的 `setup_wizard`，
+  摘要用桌面自己的 `sources.wizardSummary`：Android 的 `setup_wizard_summary` 写的是“选择内容语言和类型，
+  这重置已启用的图源列表”，而当前 Android 的四页里并没有这一步，桌面的向导也不重置来源，照抄会写错功能。
+  同理外观页的说明用 `sources.wizardAppearanceSummary` 而不是 `welcome_appearance_summary`——后者承诺的
+  “导航转场与详情页全景动画”只有手机画得出来（和 §182 拒绝 `reorder_hint` 的拖动文案同一条规矩）。
+- 完成页的两行就是 Android 那两个跳转：`wizard-open-extensions` 进“扩展与仓库”（`EXTENSIONS`），
+  `wizard-restore-backup` 进“图书馆备份”（`BACKUPS`，摘要用 Android 的 `welcome_restore_summary`）；
+  Android 的页头摘要与卡片正文在桌面折成一行 `SettingsInfoRow(摘要, 正文)`。
+- 不持久化当前页：Android 把 `currentPage` 存在偏好里以便中途退出后回到原页，Windows 的向导每次打开都从简介开始
+  ——它只有三页、也没有自动弹出，存一个“上次停在哪”反而要让“重看一遍”多一步。
+- 验证：`DesktopWizardProbe`（`wizard` 单段，空数据根，无 fixture）走完整条路径——
+  更多 → 来源设置 → 断言概览组末尾有 `source-setting-wizard` → 点进向导 → 断言 `wizard-progress` 是第 1/3 步、
+  `wizard-back` 禁用、简介页的 Android 原句（标题与免责声明）都在 → 下一步 → 断言主题/界面风格/语言三行都在、
+  点主题选 `LIGHT` → 断言 `state.appearance` 与 `desktop_appearance` 快照里的 `theme` 都变成 `LIGHT`（向导写的是同一把键）
+  → 下一步 → 断言完成页的标题、两个跳转行与“完成”文案 → 点 `wizard-open-extensions` 落到 `EXTENSIONS`、
+  重新进向导点 `wizard-restore-backup` 落到 `BACKUPS` → 再进向导，`wizard-back` 从第 3 步退回第 2 步、
+  “完成”回来源设置。截图 `wizard-{settings,intro,appearance,done,returned}.png` 都已逐张看过：
+  入口行在概览组最后、三页排版一致、主题改成浅色后完成页确实是浅色（说明那条设置真生效了）。
+- 回归：`the source reorder editor stores Android's manual order…` 与
+  `a parser marked broken stays installed and the show broken sources switch hides and offers it` 重跑通过
+  ——两者都要在同一张来源设置页上滚动找行，新行不能把已有的行挤出可达范围。
+- 仍待：`handle_links`（Android 概览组里的“处理链接”，Windows 没有注册 `http/https` 的关联入口）、
+  把重排对话框换成真正的拖拽、Android 统一来源页的批量选择与仓库筛选分组。
+
+## 184. Windows 来源测试页（对齐 Android 的 `SourceTester` / `SourceTestDialog`）（2026-10-24）
+
+Android 的“来源设置”与统一来源页各有一个“测试全部”（`source_test_all`），点开是 `SourceTestDialog`：
+`SourceTester`（`settings/sources/test/SourceTester.kt`）对每个已启用来源依次问七件事——主列表、封面、详情、
+章节、页面、随机、搜索——每步给出 PASS/FAIL/SKIP/CLOUDFLARE 与耗时，跑完汇总“可用/不可用/Cloudflare”，
+还能导出 JSON、禁用失败的来源。Windows 之前没有任何对应物：来源出问题只能靠逐个点进去看错误提示，
+诊断信息还带 requestId，用户没法一眼比较“到底是哪几家挂了”。
+
+- 六个步骤而不是七个（`DesktopSourceTester.kt`）：
+  - RANDOM 丢弃：`core-source` 的 `SourceRuntime` 契约里没有随机操作（浏览页的“换一批”是页内重排），
+    没有可问的东西就不假装问了；`source_test_step_random` 这一行不会出现。
+  - LIST/COVERS/DETAILS/CHAPTERS/PAGES/SEARCH 与 Android 同序同名，字符串直接用 Android 的
+    `source_test_step_*`、`source_test_msg_*`、`source_test_status_*`（中文 catalog 里这批键没有译文，
+    所以中文界面下步骤名与判定仍是英文——与手机上的表现一致，不手工翻译，见 Weblate 规矩）。
+  - 超时与并发照搬 Android：单步 20 s（`source_test_msg_timeout`）、单个来源 90 s
+    （`source_test_msg_total_timeout`）、同时三个来源；某步失败后已排到的后续步骤不再执行，
+    并按“前一步失败”填 SKIP（`source_test_msg_prev_failed`），不是中断整轮。
+  - 无操作支持的步骤（`UNSUPPORTED_OPERATION`）读 SKIP（`source_test_msg_unsupported`），与 Android 同规则；
+    Cloudflare/挑战读独立的 CHALLENGE（`source_test_status_cloudflare`），**不**在跑测中途弹浏览器窗口——
+    需要人工过验证的来源正是这一页要列出来的东西，让用户在无人的跑测里点掉它反而是错的行为。
+- 三种内容类型走三条 PAGES 判定（Android 的 PAGES 只有图片一种）：
+  - `DesktopReaderKind.PAGES`：`getPages` 后只下载第一张图，下载成功才算 PASS（`source_test_msg_pages`）；
+  - `NOVEL`：`getChapterContent` 的 html 非空（`source_test_msg_text_chapter`）；
+  - `VIDEO`：`getPages` 给出流地址后 `DesktopSession.probeUrl` GET 一次，状态码成功才算
+    `source_test_msg_video_stream`（“stream reachable”这句话必须真的验过），失败写 `source_test_msg_stream_failed`。
+  - COVERS 复用 `session.covers.load(content, refresh = true)`，与网格同一条管线，所以 TVBox/CMS 那种
+    “协议不返回封面、只有 URL”的来源也走 Session 的直连兜底，PASS 意味着图片真的落盘了。
+- 页面（`DesktopSourceTestPage.kt`，`DesktopScreen.SOURCE_TEST`，标题 `source_test_title`）：Windows 的设置页
+  都是平铺页而不是对话框（§158–183 一路如此），六个步骤 × N 个来源也塞不进一个弹窗，所以做成独立页；
+  入口在“扩展与仓库”的已安装区末尾（`extension-test-sources`，标题 `source_test_title`、摘要 `extensions.testSourcesSummary`），
+  因为“来源”本来就住在那一页。返回回“扩展与仓库”。
+  - 进度块：`LinearProgressIndicator`（`source-test-bar`）、“N / M checked”（`source_test_progress`）、
+    正在跑的是谁（`source_test_running`，固定两行避免按钮跳动）、跑完的汇总（`source_test_summary`）、
+    取消说明（`source_test_cancelled_note`）；按钮在不跑时是“测试全部”（`source-test-run`，禁用条件是没有已启用来源），
+    跑着时换成“取消”（`source-test-cancel`），旁边是“导出结果”（`source_test_export`，写剪贴板，
+    失败时用 DesktopClipboard 的兜底提示）与“禁用失败的来源”（`source_test_disable_failed`，跑完且有 FAIL 才出现）。
+  - 结果区按来源一行（`source-test-result:<name>`）：标题、判定（`source-test-verdict:<name>`）、“N 步”，
+    点开逐行列出步骤名、判定（`source-test-step:<name>:<STEP>`）、耗时与消息——顺序与 Android 对话框一致。
+  - 进度放在 `DesktopSourceTester.progress` 这个独立 StateFlow 里（不进 `DesktopAppState`，同 §162 的镜像测速），
+    页面 `collectAsState()` 直接读；跑测是通过 `scope.launch` 起的，**不走** `action{}` 的 gate，
+    所以一轮几分钟的跑测不会把窗口其余部分锁成 busy。
+  - 进入页面即 `sourceTester.reset()`：第二次进来看到的是一张空表，而不是上一轮里某个已经卸载来源的判定。
+- “禁用失败的来源”写的就是来源开关对话框那份 `disabled_sources`（`session.setSourcesEnabled`），
+  失败的来源随即离开来源栏/网格/筛选器，收藏进度与下载都保留；Android 的 `disableFailed()` 是同一语义。
+- 导出与 Android 的 `exportJson()` 同形：`{"generated":ISO,"sources":[{"name","status","steps":{STEP:pass|fail|skip|challenge},"messages":{…}}]}`，
+  状态小写、消息只给 FAIL/CHALLENGE，一份 JSON 可以逐行对照两个平台。
+- 一个真实现象：CMS 站点整体坏掉（目录返回 500 或读不懂的文档）在 Windows 侧读成 UNSUPPORTED——`MacCmsSourceRuntime`
+  的 `provider()` 找不到能解析出分类/条目的候选地址就抛 `SourceOperationUnsupportedException`——所以那种来源的
+  LIST 是 SKIP 而不是 FAIL。这不是本页的取舍，而是该 runtime 自己的判定语义；测试夹具因此让“坏站点”的**某一集**返回
+  500，FAIL 出现在真正失败的那一步上。
+- 验证：`DesktopSourceTestProbe`（`sourcetest` 单段，空数据根，内建 `com.sun.net.httpserver` 假站点）——
+  导入两个 CMS 来源（一个正常、一个剧集地址 500）→ 扩展与仓库 → `extension-test-sources` → 断言进了 `SOURCE_TEST`
+  → 点“测试全部” → 断言 2/2 完成、正常来源六步全 PASS（含真的下了封面、真的是 200 的流），坏来源只有 PAGES FAIL
+  且消息是 `Stream failed: HTTP 500`、其后 SEARCH 仍然执行（证明单步失败不中断）→ 断言页面上的判定、展开的步骤行、
+  汇总行都在 → 导出 JSON 含 `"status":"pass"`、`"status":"fail"`、`"messages":{"PAGES":"Stream failed: HTTP 500"}`
+  → 点“禁用失败的来源”后坏来源进 `disabled_sources`、正常来源仍在 `enabledSources` → 返回再进页面，上一轮结果已清空。
+  截图 `sourcetest-{source-test-idle,source-test-results,source-test-disabled}.png` 都已逐张看过。
+- 回归：整套 `:desktop-app:test` 重跑（48 个用例）通过——新行与新页都不影响既有的来源设置、安装策略、JSON 来源与
+  仓库路径。
+- 仍待（本切片之外）：Android 统一来源页的批量选择、仓库筛选与分组、真正的拖拽重排、`handle_links`。
+
+## 185. Android 导出的备份在 Windows 恢复失败：特殊浮点与后加字段（2026-10-25）
+
+用户反馈“安卓「备份与恢复」页导出的 ZIP 拷到 Windows 后在图书馆备份页恢复会报错”，没拿到错误原文，
+所以从两端的读写契约反推，并用安卓形状的归档夹具复现——两条都在**预览阶段**就让整份档案读不进来，
+与恢复模式、数据内容无关：
+
+- Android 侧 `BackupRepository` 的 `Json` 开着 `allowSpecialFloatingPointValues`，所以 `percent`/`scroll` 这类进度
+  浮点在“没算出来/除零/小说偏移”时会写成 `NaN`、`Infinity`；`core-library` 的 `LibraryBackupJson` 没开这个键，
+  于是第一行坏浮点就让 `preview()` 抛 `JsonDecodingException`（`JsonExceptions.kt:48`）。脏进度的容忍本来就在——
+  `normalizeBackupPercent` 早就在处理 1.0000001 的溢出与 18844.0 这种小说偏移——只是解码器先一步拒绝了它。
+  现在 `LibraryBackupJson` 与 Android 同为 `allowSpecialFloatingPointValues = true`，脏值改为建行时归一化：
+  `history()` 的 `scroll` 非有限或负数落 0（不再整段回滚），`percent` 仍走 `normalizeBackupPercent`（→ `-1` 未知）；
+  `ReadingStatisticsBackup.restoreReadingStatistic` 不再要求会话 `start_percent`/`end_percent` 有限，
+  非有限按 0 处理后再 `coerceIn(0f, 1f)`。
+- `BookmarkBackup.Bookmark` 的 `image_url`、`percent` 与 `BookmarkBackup.tags` 原本是必填字段，早于“书签快照图”
+  的写入器（以及 Kotatsu 时代的档案）没有这几个键，整份档案就停在
+  `MissingFieldException: Field 'image_url' is required ... at path: $.bookmarks[0]`。现在三者都有默认值
+  （`""`、`BACKUP_PROGRESS_NONE`、`emptySet()`），书签本身照常恢复。
+- 复现即验证：`DesktopLibraryBackupTest` 新增
+  `an Android export with non-finite progress restores instead of failing the whole preview`——一份安卓形状的档案
+  （`history` 的 `scroll:Infinity` + `percent:NaN`、书签缺 `image_url` 且 `percent:NaN`、统计会话两个 percent 是
+  `NaN`/`Infinity`）在旧代码上失败于 `JsonDecodingException`，修好后 `restore` 通过，落库值是 `scroll=0`、
+  `history.percent=-1`、`bookmark.percent=-1`、会话 percent `0`。
+- 回归：`:desktop-runtime:test` 161 个用例 0 失败、`:core-backup:jvmTest` 15 个 0 失败、`:core-library:jvmTest` 通过。
+  `LibraryBackupJson` 是共享单例，所以 Windows 导出遇到本地已有 `NaN` 也不再抛，iOS 的恢复同步受益。
+- 仍未确认：拿不到用户那份原文件，也没有报错原文；若还有第三个原因，最可能在 `DesktopBackupArchive.open` 的
+  ZIP 结构校验或 `saveContent` 的作品编号冲突上——这两处都会把异常原文带到界面上，等反馈补充。
+
+## 186. 源设置里嵌套的分组不再被压平：Android 的分组标签行（2026-10-25）
+
+“各个源的配置怎么能平铺”这条反馈落到源设置页（`DesktopSourcePreferences`）时，还有最后一段没对齐：
+协议树的 `GROUP` 节点带 `children`，可以任意嵌套，而 Windows 的折页只把**顶层**有标题的 `GROUP` 变成 section，
+顶层的无标题 `GROUP` 和所有**嵌套** `GROUP` 一律被摊平成行——分组标题直接丢掉，于是像
+`Account → Advanced → 代理` 这种三层的扩展在界面上就是一张看不出结构的长卡片。
+
+Android 的做法是 `ComposePreferenceAdapter.flattenGroupRows`：嵌套的 `PreferenceGroup` 先补一行
+`SourceSettingsGroupLabelRowUiState`（`SourceSettingsScreen` 用 `SettingsGroupLabel` 画：`labelLarge`、
+`onSurfaceVariant`、左右 16 dp / 上下 10 dp，仍在同一张卡里），再递归它自己的行；无标题的嵌套组只贡献行。
+Windows 现在照同一规则折：
+
+- `SourcePreferenceSection` 的 `rows` 换成 `entries: List<SourcePreferenceEntry>`，`Row(node)` 与
+  `Label(id, title)` 两种；`rows` 留作只取叶子的派生属性（对话框宿主按下标查行、测试断言叶序都用它）。
+  `groupEntries` 递归时，嵌套且**有标题且**有可见后代的 `GROUP` 先产出 `Label("label:<id>")` 再产出子树，
+  无标题的组直接展开，叶子顺序与源的声明顺序一致。
+- 共享行组件新增 `SettingsGroupLabelRow`（`core-ui` 的 `SharedSettingsRows.kt`），与 Android 的
+  `SettingsGroupLabel` 同字号同色同内边距，所以 iOS 拿到同一棵树也只差一个调用。
+- 分隔线只在**两个相邻的 `Row`** 之间画：标签本身就是它下面那组行的分隔，画了反而多一道线。
+- `DesktopSourcePreferencesTest` 三处旧断言里的“嵌套组摊平”改成“嵌套组建标签行”
+  （`nested groups keep their title as a label row inside the owning section`，断言
+  `source:a → label:group:inner → source:b` 且 `rows` 仍是 `source:a, source:b`），另有
+  `an untitled nested group only contributes its rows` 覆盖“无标题组不产标签、两层嵌套各留标题”。
+- 回归：`desktop-app` 的 `*DesktopSourcePreferencesTest*` 5 个用例 0 失败；`write`/`read` 探针
+  （`Windows rendered source details reader settings and shared state survive a second process`）走的是同一份
+  源设置页，仍能按 `preference:<id>` 找到行并成功写入，`read-preferences.png` 与旧截图一致。
+- 仍未做：Android 顶层的 `PreferenceCategory` 与 `PreferenceGroup` 在协议里都只是 `GROUP`，所以 Windows 无法
+  区分“该成为 section 的分类”和“该成为标签行的嵌套组”——现在按“顶层有标题即 section、嵌套有标题即标签”
+  处理，多层嵌套比 Android 多留一层标题（Android 对嵌套的 `PreferenceCategory` 会丢标题）；要精确对齐得给
+  协议节点加一个来源类型字段，属于协议变更，本轮不做。
+
+## 187. 定期备份的本地副本：上传前先落盘，没有 WebDAV 也能按间隔备份（2026-10-25）
+
+视频/备份页的云同步此前只有“上传”一条路：没有服务器就完全没有自动备份，服务器 500 时这一轮备份直接丢掉。
+Android 的 `PeriodicalBackupService` 不是这样——它把导出写进临时文件后先
+`externalBackupStorage.put(output)` 再 `trim(periodicalBackupMaxCount)`，**之后**才做 WebDAV 上传，
+所以本地永远有一份可恢复的副本，服务器故障只影响远端。Windows 现在照这个顺序补齐：
+
+- `desktop-runtime` 新增 `DesktopLocalBackups`（`DesktopDataPaths.backups`，即数据根下的 `backups`）：
+  文件名复用 Android `BackupUtils.generateFileName` 的 `<app>_yyyyMMdd-HHmm.bk.zip`（小写 `kototoro_`），
+  `list()` 只认这一个形状（`desktopBackupTimestamp` 解析失败的名字——手工导出的
+  `kototoro-library-*.zip`、暂存文件、目录——一律不算），按时间新→旧排；
+  `keep()` 复制时先写 `<name>.part` 再 `ATOMIC_MOVE` 到最终名，崩溃不会留下看起来能恢复的半截档案，
+  同一分钟内第二份用 `-2`/`-3` 后缀而不是覆盖；`trim(count)` 只删这类文件，`count <= 0` 全留
+  （对应 Android “删除旧备份”关掉时的 `Int.MAX_VALUE`）。
+- 设置：`DesktopWebDavSettings` 加 `keepLocalCopy`/`trimLocal`/`localCount`（默认 `true`/`true`/`10`），
+  键是桌面自己的 `webdav_keep_local_copy`/`webdav_trim_local_copy`/`webdav_local_max_count`
+  （Android 的 `backup_periodic_trim`/`backup_periodic_count` 存在手机的 SharedPreferences 里，桌面不共享这份存储，
+  所以沿用桌面 `webdav_*` 命名空间；语义与默认值照 Android）。
+- 上传路径：`uploadLocked()` 在 `backups.export(file)` 之后、`client.upload` 之前调 `keepLocal()`，
+  落盘失败只吞掉本地那一步（`check` 只留给纯本地模式），上传照常；
+  `WebDavUploadResult.local` 回传文件名，`webDavUpload()` 把它接在“已上传 …”后面（`webdav.localKept`）。
+  写盘同时记 `webdav_last_local_backup_millis` 并 `refreshLocal()`，列表不需要退出页面就能看到新副本。
+- 纯本地定时备份：`autoBackupEnabled` 从“必须有服务器”放宽成 `intervalHours > 0 && (configured || keepLocalCopy)`，
+  `autoBackup()` 在没有服务器时走 `keepLocalOnly()`（导出→`keepLocal`，不建 client、不发任何请求）并回新值
+  `DesktopAutoBackup.Saved`。计时基准刻意与 Android 不同：配了服务器时仍只看 `lastUploadMillis`，
+  上传失败继续按调用方的十分钟退避重试（Android 取 `max(local, webdav)`，一次本地成功就会压掉整轮的重试，
+  用户会以为已经同步到云端）；纯本地模式才用 `lastLocalMillis`。
+- 界面（备份与恢复页的云同步卡）：`上传后保留本地副本`（Android 的 `webdav_keep_local_copy` 原句）、
+  开时多出 `删除旧备份文件`（`delete_old_backups`）与 `最大备份数` 滑块（`max_backups_count`，1..32，
+  共享 `SettingsSliderRow`）、`本地副本目录` 行带 Android 的路径与“打开”按钮、最后一行
+  `last_successful_backup` 原句加副本数与最新文件名；关掉保留开关时这几行整体消失，与 Android 的分组一致。
+  标签 `webdav-keep-local`/`webdav-trim-local`/`webdav-local-count`/`webdav-local-open`/`webdav-local-status`。
+  新增桌面文案 `webdav.localKept`/`localNever`/`localSummary`/`localFailed`/`localOpen`/`open`/`localOpenFailed`
+  （base 与 `_zh-CN` 同时写，`:desktop-app:verifyDesktopStrings` 954 键全通过）。
+- 回归：`DesktopLocalBackupsTest` 7 个用例（命名/往返解析/`keep` 覆盖同分钟与 `.part` 发布/列表排序/
+  保留只删自己的文件/`trim(0)`/进行中的副本不进列表）；`DesktopWebDavAutoBackupTest` 8 个用例，其中
+  “服务器 500 仍留本地副本、重启后仍列出”“纯本地 tick 写副本且 `requests == 0`、第二次要等满间隔”、
+  “保留开关关掉后整页只剩上传”三条是新加的；探针 `backups-write`/`backups-read` 在真实窗口里断言五行存在、
+  关掉开关后 `webdav-trim-local` 消失、把间隔设成 1 小时打开纯本地计时器后
+  `waitUntil` 到 `kototoro_*.bk.zip` 真的写进 `backups`（截图 `backups-write-local-copy-filled.png`：
+  `最近备份成功: 2026年10月25日 09:55`、`共 1 个副本 · 最新 kototoro_20261025-0955.bk.zip`），
+  读阶段重开同一数据根仍能看到这份副本。
+- 仍未做：Android 的 SAF 自选输出目录（Windows 固定用数据根 `backups`，页面给了“打开”按钮）、
+  WebDAV 自动恢复（`backup_periodic_webdav_auto_restore`）、把本地副本直接列进恢复区的卡片
+  （现在走既有“选择恢复文件”，文件选择器本来就认 `.bk.zip`）。
+
+## 188. WebDAV 启动时自动恢复（对齐 Android 的 `webdav_auto_restore` / `WebDavAutoRestoreRunner`）（2026-10-25）
+
+Android 在备份页和定期备份页都摆着“启动时自动恢复”（`backup_periodic_webdav_auto_restore`，默认关）：
+每天首次启动时由 `WebDavAutoRestoreService` + `WebDavAutoRestoreRunner` 列出远端、
+只取 V3 命名空间里最新的那份、下载后按合并方式恢复一次，恢复完立刻把合并后的快照传回服务器，
+再把“今天已经查过”的时间（`backup_periodic_webdav_last_auto_restore_check`）写盘。
+判定细节：开关关或 WebDAV 配置不全直接跳过；`yyyy-MM-dd` 相同就跳过；列表为空/没有可用备份算“查过了”；
+抛异常不算（下次启动还会再试）。
+
+Windows 侧没有开机广播和前台服务，所以“启动时”是应用打开会话的那一刻：
+
+- `DesktopWebDavSettings` 增 `autoRestore`（键 `webdav_auto_restore`，默认 false，与 Android 同语义），
+  页面在云同步卡的本地副本开关之上加 `启动时自动恢复` 一行（`webdav_auto_restore` 与
+  `webdav_auto_restore_summary` 直接用 Android 原句），只有服务器地址填好才可点，标签 `webdav-auto-restore`。
+- `DesktopWebDavOperations.autoRestore()` 返回 `DesktopAutoRestore`：`Disabled`/`NotDue`/`Nothing`/
+  `Restored(name, merged, uploaded)`/`Failed`。查过的时间存 `webdav_last_auto_restore_check_millis`，
+  日期比较与 Android 一样按本地日历日（23:59 与次日 00:01 算两天），失败不落盘。
+- 恢复复用 `DesktopLibraryBackup.preview()`/`restore()`（和手动恢复、远端预览同一条路），下载走既有 staging
+  目录并在用完后删除；随后 `uploadLocked()` 把合并后的快照传回，所以另一台设备能合并到这次的并集。
+- 控制器 `startAutoRestore()` 是 one-shot：`init` 里 `webDav.restore()` 之后跑一次，`webDavSettings()` 保存后
+  再跑一次（用户刚打开开关就生效，不必等下次启动），成功时把 `items`/`content` 清空让界面重读，
+  并提示 `webdav.autoRestoredAndUploaded`（新增桌面文案，base 与 `_zh-CN` 同时写）；失败只留在
+  `webDavUi.error` 里，由页面自己显示。
+
+验证：
+
+- `DesktopWebDavAutoRestoreTest` 5 个用例：最新备份被合并并把合并快照传回（`puts == 1`）、当天再调返回
+  `NotDue` 且零请求、次日再合并再上传；“空服务器也算查过”（`Nothing` + 当天不再请求）；
+  “失败的检查不算今天”（`Failed` 且时间仍是 0，把服务器修好后同一天能重试成功）；
+  “开关需要完整目的地与显式同意”（关着或服务器为空时 `Disabled` 且 `requests == 0`）；
+  “查过的时间能跨进程”（重开同一数据根仍是 `NotDue` 且不再请求）。
+- 真实窗口探针 `backups-write`/`backups-read`：断言 `webdav-auto-restore` 行存在、没填服务器时是禁用的、
+  填上服务器后变为可用且默认仍是关（截图 `backups-write-auto-restore.png`：
+  `启动时自动恢复 / 应用每天首次启动时合并恢复 WebDAV 上最新备份一次，恢复完成后立即把合并后的快照上传回 WebDAV。`）。
+- 回归：`DesktopWebDavTest` 10、`DesktopWebDavAutoBackupTest` 8、`DesktopWebDavRoundTripTest` 1 全绿；
+  `:desktop-app:verifyDesktopStrings` 通过。
+
+与 Android 不同的地方：没有系统级启动触发（只在打开应用时检查），也没有 TeleCloud/Telegram 目的地；
+上传是“每次成功恢复后都传一次”（Android 只在写入器世代为权威快照时上传），对本机是幂等的。
+
+## 189. 备份输出目录可自选（对齐 Android 的 `backups_output_directory` / `periodicalBackupDirectory`）（2026-10-25）
+
+Android 备份页第一组第一行就是“备份文件保存目录”：`AppSettings.periodicalBackupDirectory` 存一个 SAF
+tree URI，`BackupUtils` 在 tree 解析不出来或 `canWrite()` 为 false 时**回落到应用自己的备份目录**，
+页面把回落前的状态显示成 `invalid_value_message` 而不是让每次备份都失败。
+
+Windows 之前这一行只读（显示数据根 `backups`，带一个“打开”按钮），用户在桌面端没有等价操作：
+想把备份放到 OneDrive/网盘目录、或放到另一块磁盘上，只能手动搬文件。
+本切片把它变成 Android 那样的可选目录：
+
+- 设置里新增 `DesktopWebDavSettings.outputDirectory`（键 `backup_output_directory`，空 = 数据根 `backups`），
+  和已有的本地副本开关/保留份数写在同一个 `desktop_webdav` store 里。
+- `desktop-runtime` 新增顶层函数 `desktopBackupDirectory(chosen, fallback)`：`chosen` 非空且仍是可写目录时用它，
+  否则（空、路径名非法、不存在、不是目录、不可写）返回 `fallback`——就是 Android 的回落规则，
+  所以用户把目录删掉/拔掉移动盘之后备份不会静默消失，而是回到数据根继续写。
+- `DesktopWebDavOperations` 不再在构造时固定 `DesktopLocalBackups`，改为每次按当前设置解析
+  （`localBackups(settings)` / `localDirectory(settings)`）：本地副本、纯本地定时备份的报错文案、
+  页面显示的目录都走同一个解析，`settings()` 保存后重读列表，切换到新目录时旧目录的条目立刻不再列出。
+- 页面把原来的只读行换成 Android 的 `backups_output_directory`（标题直接用 Android 原句 “备份文件保存目录”），
+  行尾三个动作：`选择…`（`JFileChooser` 只能选目录，与仓库导出/恢复用同一套 Swing 选择器）、
+  `恢复默认`（只在自定义目录时出现）、`打开`（仍然打开当前这个目录）。
+- 控制器 `webDavOutputDirectory(Path?)` 像 Android 那样拒绝不是一个目录的路径（提示
+  `webdav.outputInvalid`，设置保持不变），`webDavOpenLocalDirectory()` 改为打开当前目录而不是数据根。
+- 文案：新增 `webdav.choose`、`webdav.outputReset`、`webdav.outputInvalid`（base 与 `_zh-CN` 同时写），
+  删掉被替换的 `webdav.localOpen`；`:desktop-app:verifyDesktopStrings` 仍然要求无缺失、无未使用键。
+
+验证：
+
+- `DesktopLocalBackupsTest` 新增 2 个用例（共 9 个）：可用的自选目录胜出；空串、纯空格、已删除目录、
+  普通文件、JVM 拒绝命名的路径都回落到数据根。
+- `DesktopWebDavAutoBackupTest` 新增 1 个用例（共 9 个）：`outputDirectory` 指向自选目录时纯本地定时备份
+  真的写进那个目录（数据根里没有同名文件，`localDirectory` 与列表一致）；把设置改到另一个目录后
+  列表换成新目录（旧的条目不再出现）且下一次备份写进新目录；把那个目录删掉后 `localDirectory` 回到数据根。
+- 真实窗口探针 `backups-write`/`backups-read`：断言 `webdav-local-open` 行存在、选择后摘要与
+  `webdavUi.localDirectory` 都变成所选目录、`webdav-local-choose`/`webdav-local-reset` 都在、
+  传一个文件路径会被拒绝（设置不变且有提示）、`恢复默认` 之后回到数据根（截图
+  `backups-write-output-directory.png`：`备份文件保存目录 / …\chosen-backups   选择…  恢复默认  打开`）。
+- 回归：`DesktopWebDavTest` 10、`DesktopWebDavAutoBackupTest` 9、`DesktopWebDavAutoRestoreTest` 5、
+  `DesktopWebDavRoundTripTest` 1、`DesktopLocalBackupsTest` 9 全绿；`:desktop-app:verifyDesktopStrings` 通过。
+
+与 Android 不同的地方：Android 用 SAF，Windows 用系统文件夹选择器（只能是本机路径，没有 URI 授权）；
+Android 的“备份频率”下拉（6 小时/1 天/…/1 个月）在 Windows 仍是“自动备份间隔（小时）”数字输入，
+两者量纲不同但语义相同（0 = 关），这次没有改动。
+
+
+## 190. 数据清理页的“章节”分组：删除已读章节 + 自动删除（对齐 Android 的 `delete_read_chapters` / `chapters_clear_auto`）（2026-10-25）
+
+Android 的数据清理页（`DataCleanupSettingsScreen`）最后还有一个“章节”分组，两行：一行动作
+`delete_read_chapters`（摘要 `delete_read_chapters_summary`，确认框 `delete_read_chapters_prompt`），
+一行开关 `delete_read_chapters_auto`（摘要 `runs_on_app_start`，键 `AppSettings.KEY_CHAPTERS_CLEAR_AUTO`，
+默认关）。Android 的“已读”不是逐章标记，而是**相对历史记录**：`DeleteReadChaptersUseCase` 取该作品的历史
+章节，按话号排序、限定同一分支（`branch`），把“当前章节之前”的所有章节算作已读，再与真正存下来的章节取交集，
+删掉交集——历史不在列表里、没有历史行、或者交集为空时什么都不做。Windows 之前这两行都没有，
+清理页注释里写的是“章节那行就是下载页的批量移除”，但用户没法一键清掉已读的本地下载。
+
+本切片把 Android 的这两行补上：
+
+- `desktop-runtime` 新增 `DesktopChapterCleanup.kt`，三个纯函数就是 Android 那套规则的可测内核：
+  `desktopReadChapterIds(chapters, currentChapterId)`（当前章节之前的同分支章节；当前章节不在列表里 → 空集）、
+  `desktopChapterCandidates(saved, downloaded)`（库里恢复的章节表 ∪ 已下载章节，按 id 去重，对应 Android 的
+  `(localChapters + dbChapters).distinctBy { it.id }`）、
+  `desktopReadSavedChapters(saved, downloaded, currentChapterId)`（把交集窄到“真的存了”的章节，
+  来源列表里提到但没下载的章节永远不会被当成删除目标）。
+- `DesktopController.cleanupReadChapters()` 按 `downloadStore.records` 的 `contentId` 分组，逐部作品读历史
+  （`session.library.progress`）与章节表（`session.library.find(...)?.chapters`），算出已读的已保存章节，
+  然后走下载页批量移除同一条序列（`downloads.pause` → `settle` → `downloadStore.delete` → `forget`），
+  最后把选择集裁到还存在的行为，并报 `cleanup.readChaptersDeleted`。图片文件不在这里删：
+  这些清单引用过的页面块变成“无引用的元数据”，由图片预算在下一轮清理里回收（和批量移除完全一样的手递手）。
+- 自动开关：`DesktopSession.chaptersClearAuto()` / `setChaptersClearAuto()` 读写新的 `desktop_cleanup`
+  store 的 `chapters_clear_auto`（与 Android 同键、同 `Toggle` 语义、默认关）；`DesktopAppState.chaptersClearAuto`
+  供页面渲染，控制器 `setChaptersClearAuto` 只是记住，**不会立刻扫一遍**——Android 的开关也是等下次启动。
+  会话打开时（`init` 里 `startAutoRestore()` 之后）如果开关是开的，就跑一次 `runCleanupReadChapters(announceEmpty = false)`：
+  没有可删的章节时不弹任何提示，有的话留下 `cleanup.readChaptersDeleted` 消息。
+- 页面 `DesktopDataCleanupPage` 加 Android 的“章节”分组：动作行（`cleanup-read-chapters`，
+  没有已保存章节时禁用——Android 也是这个规则）、开关行（`cleanup-read-chapters-auto`），
+  确认框用 Android 的 `delete_read_chapters` / `delete_read_chapters_prompt`（`cleanup-read-chapters-dialog`、
+  `-confirm`、`-cancel`），零删除时用 Android 的 `no_chapters_deleted`。
+- 文案：新增 `cleanup.readChaptersDeleted`（base 与 `_zh-CN`）；其余标题/摘要/提示/开关摘要/空结果都取 Android 原句
+  （`AndroidStrings`）。
+
+验证：
+
+- `desktop-runtime` 的 `DesktopChapterCleanupTest` 5 个用例：话号乱序也能按顺序判定、当前章节与其后的章节保留、
+  另一个分支独立、当前章节不在列表里（或列表为空）算零已读、下载章节补进候选且不重复。
+- `desktop-app` 的 `DesktopReadChaptersCleanupTest` 2 个用例：写 4 章真记录进 `DesktopDownloadStore`，
+  历史停在第 3 章时只删第 1、2 章（重开 store 证明清单真的没了，第 3、4 章还在）；
+  历史 id 对不上时一章不删。
+- 真实窗口探针 `DesktopStorageProbe`：在数据清理页断言 `cleanup-read-chapters` 在没有保存章节时是禁用的、
+  自动开关默认关、点击后 `state.chaptersClearAuto` 变真且 `desktop_cleanup` 里存的是
+  `chapters_clear_auto=true`（截图 `storage-data-cleanup-chapters.png`：`章节 / 删除已读章节 /
+  自动删除已读章节 [开]`）。
+
+与 Android 不同的地方：Android 在删除后用数据库体积差报“释放了多少字节”，Windows 拿不到可靠的数字
+（页面块要等图片预算回收才真正落盘），所以只报删掉的章数；Android 的自动删除挂在 WorkManager/启动服务上，
+Windows 是会话打开时同步跑一次；章节表只取库里恢复的那份（离线优先），没有 Android 那种“表里没有就现拉远端章节列表”
+的回退，所以一部从没在桌面端打开过详情的作品不会被这一步判定。
+
+## 191. 详情页的相关作品与「相关漫画」开关（对齐 Android 的 `related_manga` / `RelatedContentUseCase`）（2026-10-25）
+
+Android 的详情页在简介/标签下面还有一条“相关作品”（`details_related_works`）横向列表，点一张就换到那部作品；
+它由服务页的 `related_manga` 开关（`services` 分组，摘要 `related_manga_summary`）决定要不要问来源。
+数据来自 `RelatedContentUseCase`：先让来源自己给相关列表（Mihon 的 `fetchRelatedMangaList`，`supportsRelatedMangas`
+且没被扩展禁用时），否则退回 `RelatedContentSearchFallback`——拿作品的主标题与别名（再加标题里的词，最多 6 个查询）
+逐个搜索，只留“标题或别名里出现过这个查询”的结果，最后取结果最少的那一组。取回来之后还要把作品自己滤掉：
+同 id、同 URL/公开 URL 身份、或同标题配同一张封面（按 URL 路径比较，换域名也算同一张图）。Windows 之前这整块
+都没有，服务页注释里也把 `related_manga` 写成“没有 Windows 行为”。
+
+本切片把这条链路补上，并把可以共享的规则真的搬进 `core-domain`：
+
+- `core-domain` 新增 `details/domain/RelatedContentRules.kt`：`searchQueries(title, altTitles)`（主标题 → 别名 →
+  标题里的词，去重去空、最多 `MAX_QUERIES = 6`）、`isSearchCandidate(query, RelatedCandidate)`（标题或别名包含该查询，
+  忽略大小写）、`smallestResult(sets)`（结果最少的一组，空输入给空表）。Android 的
+  `core/parser/RelatedContentSearchFallback.kt` 改成调用这三个函数，只留自己的 `id/url/publicUrl` 去重，
+  所以两端的位置与取舍规则是同一份代码，不再各写一遍。
+- `core-domain` 还新增 `tracking/domain/TitleKeys.kt`：`normalize`（去首尾空白、小写、标点/符号变空格、折叠空白）
+  与 `normalize(value, sourceNames)` / `stripTrailingSourceSuffix`（去掉与来源名重复的 `(来源名)` 尾巴）。
+  Android 的 `tracking/discovery/domain/TitleSimilarity.kt` 里 `normalizeStrictTitleKey` 与
+  `stripTrailingSourceTitleSuffix` 现在只是它的薄封装（模糊评分要用 `java.text.Normalizer`，仍留在 Android）。
+- `core-domain` 再新增 `details/domain/RelatedWorkRules.kt`：`filterCurrentWork(seed, candidates, key)` 就是
+  Android 的 `filterCurrentWorkFromRelated`——别的来源的候选一律保留；同来源时丢掉同 id、
+  `ContentIdentityKeys.hasSameIdentity(...)` 命中的、以及 `TitleKeys` 严格标题相同且封面路径相同的
+  （封面按 http(s) 的路径比，换域名也算同一张图）。两端只各自提供投影：Android 的 `RelatedContentUseCase.kt`
+  现在把 `Content` 投成 `RelatedWorkKey`，Windows 的 `desktopRelatedWorks(seed, candidates)` 把 `SourceContent`
+  投成同一结构，所以“什么算作品自己”这条规则只有一份。封面路径的取法为了留在 `commonMain` 没有用
+  `java.net.URI`（`compileCommonMainKotlinMetadata` 会拒绝），改成纯字符串切 scheme/host 再截 query/fragment。
+- `desktop-runtime` 新增 `DesktopRelatedContent.kt`：`desktopRelatedWorks` 在共享规则之上只多加一件事——
+  按 `来源:id:url` 去重，同一部作品在来源里列两次也只出一张卡。
+- `DesktopServicesSettings` 加 `relatedContent`（Android 的 `KEY_RELATED_MANGA = "related_manga"`，默认开，
+  存 `desktop_services`）；服务页在推荐行下面多一行 `services-related-manga`，标题/摘要都用 Android 原句。
+- `DesktopController` 在 `detailsOnIo` 末尾调 `loadRelatedWorks(content)`：先清空列表、置 `relatedLoading`，
+  在独立的 `relatedJob` 上跑（不进 `action{}`/`navigate{}` 的门，页面在等的时候照样能点）。
+  取数据先试 `session.sources.getRelated(seed)`（parser 插件与将来的 host 能用），失败或空就用
+  `session.sources.getList(name, 0, null, SourceFilter(query = ...))` 走 `RelatedContentRules` 那套搜索回退，
+  最后过 `desktopRelatedWorks`。`related_manga` 关着时直接空表且不发请求；写回状态前核对
+  `content.id` 与来源名，慢回来的旧请求不会覆盖新作品。切开关时如果详情还开着，立刻按新值重取或清空；
+  `dismissDetails` 关掉页面时取消 `relatedJob` 并清空列表，不会有关掉的页面还在后台搜索 6 个查询。
+- 一天里最关键的一条：**Mihon 的桌面 host 根本不给相关列表**（`MihonSourceRuntime.getRelated` 直接抛
+  `SourceOperationUnsupportedException`），所以 Windows 上绝大多数来源唯一的路径就是搜索回退——这也正是 Android
+  对 `!supportsRelatedMangas` 扩展的做法，行为与手机一致，而不是“开关打开但永远空白”。
+- 界面 `DesktopDetailsRelated.kt`：只有拿到结果或还在加载时才出现（没相关作品的作品页面不会多一块空白），
+  标题用 `details_related_works`，加载时标题旁一个小进度圈，卡片是 96dp 宽的 2:3 封面 + 两行标题 + 来源名，
+  点击 `controller.details(work)`；整块 `testTag` 是 `details-related`、卡片 `details-related:<id>`。
+
+验证：
+
+- `core-domain`：`RelatedContentRulesTest` 5 个用例（标题/别名/词与去重、单字丢弃与 6 个上限、空标题、
+  候选判定含别名、最小组与空输入）；`TitleKeysTest` 4 个用例（大小写/标点/空白、来源名尾巴被去掉、
+  别的括号尾巴保留、空括号不切标题）；`RelatedWorkRulesTest` 5 个用例（同 id/同 URL/同公开 URL 都算自己、
+  同标题配同一张封面路径（含换域名带 query）算同一部、不同标题或不同封面保留、别的来源同 id 不算自己、
+  没有封面时不能只按标题判同）。前者 `:core-domain:compileCommonMainKotlinMetadata` 通过，规则可移植。
+- Android：`RelatedContentUseCaseTest` 2 个用例在改用共享规则后仍然通过，`TitleSimilarityTest`（10）、
+  `TitleNormalizerTest`（6）也通过，`RelatedContentSearchFallback` 换成 `RelatedContentRules` 后
+  `:app:compileDebugKotlin` 通过。
+- `desktop-runtime`：`DesktopRelatedContentTest` 6 个用例（同 id/同 URL/同公开 URL 都丢、同标题不同封面保留、
+  同标题同封面换域名也丢、不同标题同封面保留、别的来源同 id 不算自己、重复项合成一张卡、
+  `related_manga` 默认开且能来回存取）。
+- `desktop-app` 真实窗口探针 `DesktopServicesProbe`：详情页等 `relatedLoading` 结束，断言
+  `state.relatedWorks` 非空、`details-related` 与第一张卡存在（截图 `details-related.png`）；
+  服务页断言 `services-related-manga` 行与 Android 的两个字符串存在，点一下确认开关关掉、列表立刻清空、
+  `desktop_services` 里存的是 `related_manga=false`，再点回开并等列表重新填上（截图 `services-page-related-on.png`），
+  最后再关一次并留在关的状态，让读阶段断言重启后 `relatedContent == false`、`related_manga == false`。
+  探针能拿到结果靠的是 `OfflineSource.fetchSearchManga` 现在给搜索结果一个自己的 URL（`/search?q=...`）：
+  之前搜索与热门共用 `/manga`，而 Mihon 的 id 由 URL 派生，回退搜索会把作品自己当成“同一部”滤掉。
+
+与 Android 不同的地方：Android 的相关列表是 Compose 的 `LazyRow` 而不是分页，Windows 同样一次只取一组结果；
+“什么算作品自己”的判断现在是同一份 `RelatedWorkRules`，Windows 只多一层去重；Android 还有“浏览记录推荐”
+（`browse_tracking_recommendations`）那条来源，它依赖整个 tracking-discovery 子系统，桌面仍然没有。
+
+## 192. 来源开关对话框的选中态：全选 + 批量启用/禁用/测试选中来源（对齐 Android `UnifiedSourceSelectionBar`）（2026-10-25）
+
+§174–§175 把 Android 来源开关的逐行开关与“按当前筛选结果全部启用/禁用”搬进 Windows 之后，统一来源页还剩一条能力：
+Android 长按来源卡进入选中模式，整条工具栏换成 `已选 N` / 全选 / 启用 / 禁用 / NSFW / 测试 / 删除
+（`UnifiedSourcesScreenBody.UnifiedSourceSelectionBar`）。这一节补上其中除删除与 NSFW 之外的三项。
+
+- 纯规则写在 `DesktopSourceSwitch.kt`（与 §175 的 `filterSourceSwitchEntries` 同一文件）：
+  `toggleSourceSelection(selected, name)` 点一下加入、再点移出，**空集合就是退出选中模式**（对应 Android 的
+  `isSelectionMode = selectedSourceIds.isNotEmpty()`）；`toggleVisibleSourceSelection(selected, entries)` 是 Android 的
+  全选芯片——可见行全在集合里就整体移出，否则全部加入，空列表原样返回；`everyVisibleSourceSelected(selected, entries)`
+  决定芯片读“全选”还是“取消全选”，空列表不算全选。只有搜索与启用筛选留下的行参与，和上面那对
+  “全部启用/禁用”用的是同一份 `entries`。
+- `DesktopSourceSwitchTest` 增四条：加入/移出/清空；全选只覆盖可见行且能整体退回（查询把第三行筛掉时点全选不会带上它）；
+  空列表既不全选也原样返回；标签只在可见行全选中时翻转（选中里混着被筛掉的行仍读“取消全选”，因为全选只代表这份列表）。
+  该类合计 11 条。
+- 入口与 Android 有意不同：Android 靠长按来源卡进入选中模式，鼠标用户没有理由在设置行上试长按，所以 Windows 的
+  “全选”按钮兼作入口——点一下即进入选中模式并选中全部可见行。进入后行换成整行 `Role.Checkbox` 切换
+  （`source-selected:<name>` 是行，右侧是 `Checkbox`），再点“全选”读作“取消全选”；退出是“取消”
+  （`source-selection-close`）或把选中清空。计数用 Android 的 `selected_count`（`source-selection-count`）。
+- 选中态的三个动作都是 Android 的：启用/禁用直接走 §175 已有的 `setSourcesEnabled(names, enabled)`（整批一次写盘、
+  一次状态刷新，“正在浏览的来源被关掉就退出浏览”这条对选中同样成立），写完清空选中并按结果切换筛选
+  （与确认框那条规则一致，否则刚点完按钮列表就空了）。测试那一个先 `showSourceTest()`（进页面前重置上一次结果）
+  再 `startSourceTest(names)`：`DesktopController.startSourceTest` 现在收一个可选的名字集合，对应 Android 的
+  `testSources(selectedSourceIds)`（默认仍只跑已启用来源）；池子取 `state.sources`（已装）而不是 `enabledSources`，
+  所以选中里可以有被关掉的来源，与 Android 选中列表一致。
+- 删除这一片没做：Android 的删除要先按安装包折叠成 `UnifiedSelectedSourceDeletePlan`（选中若干来源 →
+  删掉声明它们的那个包），留待下一片；NSFW 芯片原计划也在这里，后来单独成 §193（每来源的成人标记覆盖 +
+  选中栏那颗芯片），所以本节只覆盖启用/禁用/测试选中来源三项。
+- 探针（`DesktopRepositoriesProbe` 的 write 阶段）：`全选` → 出现 `source-selected:<name>` 与 `已选 1`
+  （截图 `repositories-write-selection.png`），再点该行即退出模式且什么都没写；`全选` → `禁用` →
+  `disabledSources` 恰为那一个、选中行消失、筛选跟到“已禁用”且开关是关的；`全选` → `启用` → `disabledSources` 清空；
+  最后切回“全部”继续原来那条单开关路径。
+
+验证：
+
+- `:desktop-app:test --tests=*SourceSwitch*`：`DesktopSourceSwitchTest` 11 条（含新增四条）全绿。
+- `:desktop-app:test`：51 个套件 / 282 个用例（此前 278 + 新增 4）/ 0 失败；`:desktop-runtime:test`
+  28 个套件 / 181 个用例 / 0 失败；`:desktop-app:verifyDesktopStrings` 通过（文案全用 Android 键，
+  桌面 catalog 未增删，仍是 958 键）。
+## 193. 每来源的成人标记覆盖：共享规则 + 选中栏 NSFW 芯片（对齐 Android `SourceNsfwOverrides` / `setSourcesNsfw`）（2026-10-25）
+
+§192 的选中栏里 Android 还有一颗 NSFW 芯片，它既是 Android 唯一能改写“这个来源算不算成人”的入口，也决定
+`AdultContentFilterTarget` 那七个过滤目标在哪里生效。Windows 之前把成人判定写死成 `isNsfwSource()` 里看
+`contentType` 前缀 `HENTAI_`，没有任何可写的偏好，所以这一片先把 Android 的规则下沉到 `core-domain`，再给
+Windows 补上存储、状态、芯片与对话框。
+
+- 共享规则 `core/extensions/SourceNsfwRules.kt`（`core-domain` 的 `commonMain`）：
+  - `SelectedSourcesNsfwAction { NONE, SET_NSFW, SET_SFW, CHOOSE }` 与
+    `resolveSelectedSourcesNsfwAction(nsfwCount, selectedCount)` 逐条照 Android 的 `ContentSource`/选中栏判定：
+    选中为空是 `NONE`、没一个成人是 `SET_NSFW`、全是成人是 `SET_SFW`（`nsfwCount >= selectedCount` 也算，
+    所以计数偏大不会漏判）、其余 `CHOOSE`。
+  - `SourceNsfwOverrideSet(nsfw, sfw)` 加 `resolve(name)`（先查 `sfw` 再查 `nsfw`，都查不到才 `null` —— SFW 优先，
+    与 Android 的 `SourceNsfwOverrides.resolve` 一致）、`withOverride(names, isNsfw)`（`true` 进 `nsfw` 出 `sfw`、
+    `false` 反过来、`null` 从两边摘掉，空白名字丢弃）与 `changedNsfwSources(names, isNsfw, isNsfwNow)`
+    （Android `UnifiedSourcesViewModel.setSourcesNsfw` 只写真正变了的 id）。
+  - 名字叫 `SourceNsfwOverrideSet` 而不是 `SourceNsfwOverrides`，因为 Android 还有一个同名的进程级持有对象
+    （`core/model/SourceNsfwOverrides.kt` 的 `update`/`resolve`），两者在 `AppSettings.kt` 里会撞 import。
+- Android 侧改吃这份共享规则：`AppSettings.setSourceNsfwOverride` 现在把两个集合读成 `SourceNsfwOverrideSet`、
+  用 `withOverride` 算出新值再写两个键（行为不变，只是规则不再有两份），`UnifiedSourcesScreen.kt` 里本地的
+  enum 与 `resolveSelectedSourcesNsfwAction` 删掉后从 `core.extensions` 导入。`SourceNsfwOverridesTest`（8 条，含新增两条）
+  顺手钉住“共享集合驱动 app 读到的持有对象”和“只持久化真正变了的来源”。
+- Windows 存储沿用 Android 的键与同一份 store：`desktop-runtime` 的 `KEY_SOURCE_NSFW_OVERRIDES = "source_nsfw_overrides"`、
+  `KEY_SOURCE_SFW_OVERRIDES = "source_sfw_overrides"` 与 `desktopSourceNsfwOverrides(values)` 负责解码，
+  `DesktopSession.sourceNsfwOverrides()` 读 `desktop_extensions`、`setSourcesNsfw(names, isNsfw)` 一次 `edit` 写两个集合
+  （同 `disabled_sources` 的写法，崩溃也不会让一个名字同时落在两边）。`DesktopAppState.sourceNsfwOverrides` 在
+  `open`/`refreshSources` 时填充，`DesktopController.setSourcesNsfw` 先用 `changedNsfwSources` 与当前有效标记比对，
+  空集合直接返回，写完再读一次 store 刷新状态。
+- `isNsfwSource(overrides)` 取代原来只看内容类型的版本：覆盖优先，其次 `contentType` 的 `HENTAI_` 前缀。
+  host 侧本来就把各生态自己的元数据折进了内容类型（`MihonJarRegistry` 对 `metadata.isNsfw` 的包直接写
+  `HENTAI_$kind`），所以“扩展自己声明成人”这一层在 Windows 上不缺，缺的只有用户覆盖。消费方：来源栏
+  （`DesktopApp.kt`）与来源网格（`DesktopSourceGrid.kt`）的 `SOURCES` 目标、以及推荐生成
+  （`DesktopSuggestions.refresh(sources, settings, nsfwOverrides)`，`excludeNsfw` 现在看的是同一份有效标记）。
+- 选中栏芯片（`source-selection-nsfw`）夹在“禁用”和“测试源”之间，位置与 Android 相同：文案由
+  `selectedSourcesNsfwLabel(action)` 给出 Android 的 `unified_sources_mark_nsfw` / `unified_sources_unmark_nsfw` /
+  `unified_sources_set_nsfw`；`SET_NSFW`/`SET_SFW` 直接写并退出选中模式（不清筛选，成人标记不会让行换边），
+  `CHOOSE` 弹 Android 的 `unified_sources_set_nsfw_title` 对话框，两行选项 `unified_sources_mark_as_nsfw` /
+  `unified_sources_mark_as_sfw` 加取消。动作行从 `Row` 换成 `FlowRow`，窄窗口下按钮换行而不是被裁掉。
+- 探针（`DesktopRepositoriesProbe`）：安装的那个来源是普通漫画，所以选中后芯片读“标记NSFW”，点一下把
+  `sourceNsfwOverrides.nsfw` 写成它、`sfw` 为空且退出模式；再选中时同一颗芯片变成“取消NSFW”，点一下换成
+  `sfw = {name}`；第三次点回“标记NSFW”并留在那个状态（截图 `repositories-write-nsfw-marked.png`），
+  并核对 store 里的 `source_nsfw_overrides` 恰为该名字。离线进程再起来时 `sourceNsfwOverrides.nsfw` 仍是它，
+  且 `isNsfwSource(...)` 对该来源返回 true。
+- 仍未对齐：选中栏的“删除”（Android 要先按安装包折叠成 `UnifiedSelectedSourceDeletePlan`）；`BOOKMARKS` /
+  `SUGGESTIONS` 两个 NSFW 目标（桌面还没有对应页面）；Mihon 真实的相关推荐 API（与本节无关，见 §191）。
+
+验证：
+
+- `:core-domain:jvmTest --tests=*SourceNsfwRules*`：新增 7 条全绿（动作表、空集、双向覆盖、SFW 优先、批量搬移、
+  空白批次、`changedNsfwSources`）。
+- `:app:compileDebugKotlin` 与 `:app:testDebugUnitTest --tests=*SourceNsfwOverridesTest`：编译通过、8 条全绿，
+  证明共享化没有改变 Android 行为。
+- `:desktop-app:test --tests=*DesktopSourceSwitchTest*` 14 条、`:desktop-runtime:test --tests=*DesktopSourceSettingsTest*`
+  12 条全绿（含“覆盖优先于内容类型”“存的是 Android 的键、坏类型只丢那一项”“芯片动作随有效标记变化”）。
+- `:desktop-app:test --tests=*repository*`：离线双进程探针通过，`DESKTOP_UI_OK=write` 与离线断言均成立。
+- 全量基线：`:desktop-app:test` 51 个套件 / 285 个用例（此前 282 + 新增 3）/ 0 失败；`:desktop-runtime:test`
+  28 个套件 / 183 个用例（此前 181 + 新增 2）/ 0 失败；`:core-domain:jvmTest` 41 个套件 / 255 个用例 / 0 失败；
+  `:desktop-app:verifyDesktopStrings` 通过（文案全用 Android 键，桌面 catalog 未增删，仍是 958 键）。
+## 194. 选中栏的「删除」：把选择折成要卸载的扩展包（对齐 Android `UnifiedSelectedSourceDeletePlan`）（2026-10-25）
+
+Android 统一来源页的选中栏最后一个动作是删除。一个包常常声明多个来源，所以选中的来源要先折成“要卸载哪些包”；
+如果声明它的是单文件 JAR 插件，就不能因为选中了其中一个来源就把整个插件删掉，只能报告并跳过。
+
+### 共享规则
+- `core-domain` 的 `core/extensions/SourceDeletionRules.kt`：`SourceDeletionCandidate`（来源名 + 声明它的包 id 与显示名 +
+  是否可卸载）、`SelectedSourcesDeletePlan`（平行的 `packageIds`/`packageNames`、`skippedNames`、`hasPackages`、`isEmpty`）、
+  `selectedSourcesDeletePlan(selectedSourceNames, candidates)`。
+- 规则逐条对齐 Android 原实现：每个包只出现一次且按候选顺序（对话框要数包，调用方要按同一顺序卸载）；
+  没有包的来源（内联 JSON 源）不产生任何东西；不可卸载的包只进 `skippedNames`，名字取包显示名、空了退回来源名。
+- `SourceDeletionRulesTest`（`core-domain/src/jvmTest`）：6 条，覆盖折叠去重、顺序、跳过、无包来源、空选择与名字回落。
+
+### Android 改为消费共享规则
+- `UnifiedSourcesDisplay.buildDeletePlan` 只剩投影：`allSources`/`allPackages` 变成候选，包显示名按
+  `allPackages[id].name → item.packageName → item.title` 取，`UnifiedSourceKind.JAR` 记为不可卸载。
+- 本地 `UnifiedSelectedSourceDeletePlan` 删除，`UnifiedSourcesScreen` 的 `DeleteSelectedSources` 与
+  `UnifiedSourcesDialogs` 直接用共享类型，四条弹窗文案与按钮顺序不变。
+
+### Windows
+- `DesktopSourceSwitch.sourceDeletePlan(selected, installedEntries)`：每个已装包按它声明的来源展开成候选，包 id 用
+  `DesktopInstalledEntry.id`、显示名用 `label`。`DesktopInstalledKind.PARSER`（单文件解析器 JAR 插件）记为不可卸载，
+  与 Android 跳过 JAR 源同一理由；JSON/TVBox 来源不属于任何已装包，因此不参与删除（与 Android 的空 `packageId` 一致）。
+- `DesktopController.uninstallPackages(packageIds)`：在一个 `action{}` 里逐个 `session.uninstall(entry)`——先删安装记录、
+  再卸 loader、再清 `disabled_sources` 里的死键与未引用产物；单个包失败只记录并继续，最后一次性刷新
+  sources/disabled/每来源成人覆盖/已安装列表/更新列表。成功消息用 Android 的 `extensions.uninstalled`，
+  失败拼在桌面新增的 `extensions.uninstallFailed`（en 与 zh-CN 两份桌面 catalog 都补了）。
+- 选中栏在“测试源”之后多出「删除」（`source-selection-delete`，文案沿用 Android 的 `delete`）。点击先算计划再弹
+  Android 的 `UnifiedDeleteSelectedSourcesDialog`（`source-switch-delete-dialog`）：包数与跳过的插件名走
+  `unified_sources_delete_selected_with_skipped_jars` / `_message` / `_only_skipped_jars` / `_no_packages` 四条原句。
+  有计划时确认（`source-switch-delete-confirm`）卸载并退出选中态，取消（`source-switch-delete-cancel`）留在栏里；
+  没有可删的包时只有一个 `common.ok`（`source-switch-delete-close`），和 Android 一样只是告知。
+- 既有差异保留：Android 靠长按进入选中态，Windows 用“全选”兼作入口，见计划 §192。
+
+### 验证
+- `:core-domain:jvmTest --tests=*SourceDeletionRules*`：6 条全绿。
+- `:desktop-app:test --tests=*DesktopSourceSwitchTest*`：17 条全绿（新增 3 条：一个包的多个来源折成一条、
+  解析器插件只报告不删、没有任何包声明的来源不产生计划）。
+- `:desktop-app:test --tests=*repository*`：双进程探针通过。写进程选中全部来源后点「删除」，弹窗显示
+  “删除选中的 1 个扩展包？”（截图 `repositories-write-package-count.png`），取消后包仍在，离线进程照旧读得到该来源。
+- `:app:compileDebugKotlin`：通过（Android 侧只是改成消费共享规则与共享类型）。
+- 全量基线：`:desktop-app:test` 51 个套件 / 288 个用例（此前 285 + 新增 3）/ 0 失败；`:desktop-runtime:test`
+  28 个套件 / 183 个用例（不变）/ 0 失败；`:core-domain:jvmTest` 42 个套件 / 261 个用例（此前 41 / 255 +
+  新的 `SourceDeletionRulesTest` 6 条）/ 0 失败；`:desktop-app:verifyDesktopStrings` 通过——桌面 catalog 增加
+  1 个仅桌面使用的 `extensions.uninstallFailed`（卸载失败前缀），其余文案仍是 Android 键，共 959 键 / 959 条被引用。
+
+
+## 195. Windows 的书签页（对齐 Android `AppBookmarksRoute` / `AllBookmarksViewModel`）（2026-10-25）
+
+Android 的书签是顶层目的地（`NavItem.BOOKMARKS`，标签取 `R.string.notes`），页标题用 `R.string.bookmarks`。
+Windows 此前只有详情页里的“选择书签”面板，没有“全部书签”这一层，`disable_bookmarks_nsfw` 也因此没有落点。
+本切片补齐页面本身，并把成人过滤的第六个目标接上。
+
+### 共享规则（`core-library` / `desktop-runtime`）
+- `SourceBookmark` 末位补 `chapterTitle`（Android `Bookmark.chapter.title`，原本只有 `chapterId`），
+  `SourceLibrary.bookmarkGroups()` 用 `ChaptersDao.findByIds` 一次查出标题再回填；新增 `removeBookmarks(pageIds)`
+  在单个 `immediateTransaction` 里删。
+- `SourceBookmarkGroup`（作品 + 它的书签）与 `DesktopBookmarkShelf.kt` 的 `desktopBookmarkShelf(groups, hideNsfw)`：
+  丢掉空组、按 `hideNsfw` 滤掉成人作品、组内保持 DAO 的 `percent` 顺序，组间“最新保存的位置优先”、同值按标题。
+  Windows 这页没有 Android 的排序控件，所以顺序写成固定规则。
+- `DesktopNsfwTarget` 增加 `BOOKMARKS`（Android 的七目标里 SUGGESTIONS 不映射，因为推荐页编辑的就是
+  Android 自己的 `suggestions_exclude_nsfw`）；`DesktopNavItem` 增加 `BOOKMARKS`（`nav_main` 默认仍不含它，
+  与 Android 默认列表一致，`MainNavigationRules.MAX_ITEMS` 是 5 所以要先移掉一项才能加）。
+
+### Windows 外壳
+- `DesktopScreen.BOOKMARKS`：`showBookmarks()` 进入时 `reloadBookmarkShelf()`，选中集与现存 pageId 求交；
+  `openShelfBookmark(group, bookmark)` 用本地 `find` 取整份章节表（源没了也能重开），把 `detailsOrigin` 记成
+  `BOOKMARKS`，再 `startReading(..., incognito = true)`——Android 用 `ReaderIntent…incognito()` 打开书签，
+  免得“回到保存的位置”覆写进度；`dismissDetails` 回到 `BOOKMARKS` 时重读书架，覆盖详情里删掉书签的情况。
+- `DesktopBookmarksPage`：`bookmarks-count`（未选中显示 Android 的 `reader.bookmarksCount`，选中显示
+  `details.bookmarksSelectedCount`）、`bookmarks-select-all`/`-select-none`/`-select-delete`、空态
+  `bookmarks-empty`（`no_bookmarks_yet` + `no_bookmarks_summary`）、`bookmarks-list` 按作品分节
+  （`bookmark-group:<id>` 带数量与「更多」→ 详情，`bookmark-row:<pageId>` 带章节标题/小说摘录/位置、
+  `bookmark-check:<pageId>`）。
+- 入口三处：首页快捷卡第 4 格（`home-quick:3`，排在收藏/历史/订阅之后，所以 `home-quick:0` 仍是收藏，
+  §192 的平板探针不受影响）、主导航 `DesktopNavItem.BOOKMARKS`（`desktopNavItemId` 6、图标 `ic_bookmark`、
+  标签 `AndroidStrings["notes"]`）、来源设置成人节的第六个目标（`sources.nsfw.bookmarks`，en/zh 都补了；
+  `sources.adultNote` 改成只说推荐页有自己的开关）。
+- 两处刻意差异：Android 的 `SelectionAction.SAVE`（PageSaveHelper）在 Windows 没有对应管线，选择栏只留删除；
+  Android 画海报卡片并在卡上显示保存的那一页，Windows 用文本行（章节、位置、小说摘录），
+  只有当用户真的打开某一条时才碰来源，一页几十条书签不会各自起一次下载。长按进入选中态改为每行常驻复选框，
+  与 §192 的处理一致。
+
+### 验证
+- `:desktop-runtime:test --tests=*DesktopBookmarkShelfTest*`：4 条（最新优先、空组丢弃、成人过滤开关、组内顺序）。
+- `:desktop-app:test --tests=*DesktopBookmarksShelfTest*`：双进程探针通过——写进程存一个第 4 页书签，
+  读进程从首页快捷卡进书签页，断言分节/行/复选框存在，点行后阅读器以无痕打开同一章节同一像素位置且
+  历史行与写进程留下的一模一样，返回详情再回书签页，全选 + 删除后书架与数据库都空、显示空态。
+- `:desktop-runtime:test` 187 条 0 失败（`DesktopNavigationSettingsTest` 与 `DesktopBackgroundSettingsTest`
+  的枚举断言随新目标/新导航项一起更新）；`:desktop-app:verifyDesktopStrings` 通过，960 键 / 960 条被引用。
+
+## 196. 滚轮与触控板滚动不再拖走锚定面板（issue #601）（2026-10-25）
+
+用户报告（#601，Windows 2.3.2 / Windows 11 / Lenovo IdeaPad Slim 3）：在阅读器里用触控板双指滚动章节列表，
+章节面板反而一直开开合合，根本滚不动。原因在共享的 `core-ui` 锚定面板而不是 Windows 外壳：
+
+### 根因
+- `StableAnchoredSheetLayout` 的嵌套滚动回调把任何 `NestedScrollSource.UserInput` 的纵向增量先交给面板：
+  `onPreScroll` 只在“面板没有在拖、且已完全展开”时才放手，`onPostScroll` 在内容到顶后继续接。面板不在 `Full`
+  锚点时，第一格滚轮就被 `dispatchNestedDelta` 吃掉去挪面板，列表拿到 0。
+- 滚轮/双指滚动以 `PointerEventType.Scroll` 到达，没有按下事件，于是 `hasNestedDrag()` 变真后
+  `onPreFling` 的 `settle` 把面板往下一个锚点送，到 `Hidden` 就 `onDismissRequest`——面板关闭；反向再滚又打开。
+  触屏拖动本来就该这样（Android 上就是拖着收面板），所以问题只出在“没有按下的滚动”被当成了拖动。
+
+### 修法（共享，Android 接鼠标时同样受益）
+- `StableSheetState` 记住“最近一次指针输入是不是只有滚动”：`noteScrollInput()`/`notePressedInput()`，
+  `isScrollOnlyPointer()`；`onPreScroll`/`onPostScroll` 第一行在这个状态下直接返回 `Offset.Zero`，
+  面板不再吞滚轮，`hasNestedDrag()` 也不会被滚轮点亮。
+- 面板根节点用一个 `Modifier.pointerInput` 在 `PointerEventPass.Initial` 上观察事件类型（父节点先于内容收到，
+  所以判定总在内容派发嵌套滚动之前）：`Scroll` 置位、`Press` 清位。真实拖动（有按下）仍保留 Android 的
+  “拖列表到顶继续往下收面板”行为，滚轮/触控板永远只滚列表。
+- 标题/芯片上的 `anchoredDraggable`（`dragModifier`）走的是按下拖动，不经过这条判定，没有改动。
+
+### 验证
+- `:desktop-app:test --tests=*StableSheetWheelScrollTest*`（新增，2 条）：在共享面板里放一个 `LazyColumn`，
+  滚轮上下滚必须滚动列表且 `onDismissRequest` 一次都不触发（修复前该条红：列表不动，增量被面板吃掉）；
+  另一条按下拖标题，面板仍必须真的下移、列表不动——保证没有把 Android 的收起手势一起关掉。
+- `:desktop-app:test --tests=*DesktopChapterPanelScrollTest*`（新增）：`manga-directory` 探针在真实阅读器的
+  章节面板里多了一步滚轮（`scroll(4f)` 后列表位置必须前进、面板必须还在、页码与导航不变）与反向大步滚（面板仍在），
+  随后原有拖动/筛选/网格/搜索步骤照旧。
+- 全量：`:desktop-app:test` 292 条 0 失败、`:desktop-runtime:test` 187 条 0 失败、`:core-domain:jvmTest` 261 条 0 失败、
+  `:desktop-app:verifyDesktopStrings` 960 键 / 960 被引用、`:core-ui:compileCommonMainKotlinMetadata` 与
+  `:app:compileDebugKotlin` 通过。
+
+## 197. Windows 补上 Android 的更新页（2026-10-25）
+
+目标里的“补全功能”继续推进。Android 的 `NavItem.UPDATED`（`UpdatedTopLevelRouteContent` + `UpdatesViewModel`）
+在 Windows 一直没有对应页面：订阅页只把新章节画成轮播，轮播的“全部”还是死链（`onMoreClick = null`）。
+本轮把这一页接上，并把入口、清计数语义和导航项一起对齐。
+
+### 数据（共享规则）
+- `FeedUpdateRow` 是“每条追踪一行”的投影（v84 已无实体图谱），所以页面必须先按作品折起来：
+  `desktop-runtime` 新增 `DesktopUpdates.kt`，`desktopUpdateGroups(rows, hideNsfw, acceptsSource)` 以
+  `displayMangaId ?: mangaId` 为键，章节数相加（负数按 0）、`lastChapterDate` 取最大、代表行取 `lastCheckTime`
+  最新的那条（标题/封面/来源/成人标记都来自它），`ownerIds` 保留每条追踪以备“标为已读”。
+- 排序：置顶优先，随后新章节日期倒序、检查时间倒序、标题。`lastChapterDate` 缺失的作品不编造日期，排在最后
+  （Android 那边同样用 `updated_long_ago` 兜底）。
+- 成人目标沿用订阅轮播的 `sources.nsfw.updates`；来源/内容类型筛选与标签黑名单走订阅页同一套
+  `acceptsFeedSource`（从 `private` 改成 `internal` 复用）与 `TagTitleBlacklist`。
+- `desktopUpdatesSummary` 给出头部那句“N 部有更新 · M 个新章节”（`updated_header_summary`）。
+
+### 页面（`DesktopUpdatesPage`）
+- 头部：标题 `updated`、副标题是上面那句摘要、来源筛选条、检查更新按钮、`updated_header_all_read`
+  （无更新时禁用）。
+- 行：封面、标题（置顶画 `ic_pin`）、`来源 · N 个新章节`、日期（没有日期用 `updated_long_ago`）、
+  “继续阅读”与“移除”；点行本身进详情（Android 的 `openTracked`）。
+- 追踪关着时（`trackedCategories == 0`）显示订阅页同一块“追踪未开启”提示与一键开启；空态用 Android 的
+  `updated_header_up_to_date` 与其副标题。
+- “移除”和“全部标为已读”是 Android 的同一个动作 `UpdatesViewModel.remove` → `TrackingRepository.clearUpdates`
+  → `core-domain` 的 `completePendingUpdates`：清章节计数与待读标记，历史、进度与时间线日志都不动。
+  点开一行仍只是 `markSeen`（Android 的 `clearReadUpdates`）——Android 要等新章节真的读到末页才清计数，
+  探针也按这条断言，免得把“点开”写成“已读”。
+
+### 入口与导航
+- 轮播“全部”调 `controller.showUpdates()`；共享 `UpdatedContentCarousel` 只新增一个可选 `moreModifier`
+  （桌面给按钮挂 `feed-updated-more`，Android 不传，行为不变）。
+- `DesktopNavItem.UPDATED`（id 7、标签 `updated`、图标 `ic_updated`）可加入主导航。默认顺序仍是 Android 的
+  五项上限，所以和 Android 一样要靠“导航配置”把它换进去——订阅页轮播才是主要入口。
+- 详情页的返回起点 `DetailsOrigins` 与 `dismissDetails` 的刷新条件都加入 UPDATED：从更新页进详情再返回，
+  仍在更新页且计数是最新的。
+
+### 验证
+- `:desktop-runtime:test --tests=*DesktopUpdatesTest*`（新增 4 条）：两部作品两条追踪的折叠（`ownerIds`、
+  章节数相加、代表行的来源、日期取最大、按日期倒序）、负数计数按 0 计、置顶优先且成人过滤生效、
+  来源过滤先于折叠并影响摘要。`*DesktopNavigationSettingsTest*` 的“可添加项”断言随新导航项更新。
+- `:desktop-app:test --tests=*DesktopUpdatesPageTest*`（新增探针，`updates` 模式）：导入 fixture 来源、收藏一部作品、
+  直接写一条 `chapters_new = 2` 的 tracks 行，从订阅轮播的“全部”进更新页，断言标题句、行与章节数；
+  点行进详情且计数仍为 2，返回仍在更新页；行“移除”后计数归零、进度不变、出现空态；
+  再种 3 章用“全部标为已读”清空；“继续阅读”打开阅读器并加载出页面。
+- 全量：`:desktop-app:test` 293 条 0 失败（4 跳过）、`:desktop-runtime:test` 191 条 0 失败（2 跳过）、
+  `:core-domain:jvmTest` 261 条 0 失败、`:desktop-app:verifyDesktopStrings` 960 键 / 960 被引用、
+  `:core-ui:compileCommonMainKotlinMetadata` 与 `:app:compileDebugKotlin` 通过。
+
+## 198. Windows 补上 Android 的推荐页（对齐 Android `NavItem.SUGGESTIONS` / `SuggestionsTopLevelRouteContent`）（2026-10-25）
+
+承接 §179 的推荐设置（worker 规则已对齐）：Android 在 `settings.isSuggestionsEnabled` 时提供 `NavItem.SUGGESTIONS`
+顶层页（`MainShellScene.kt` 的 `SuggestionsTopLevelRouteContent` + `SuggestionsHeaderCard` +
+`SuggestionsListQuickFilter`），Windows 此前只有首页的推荐轮播和推荐设置，没有“把整份推荐当列表看”的页面。
+本轮补上页面、快捷筛选和导航项。
+
+### 数据（共享规则）
+- `desktop-runtime` 新增 `DesktopSuggestionFilters.kt`。`DesktopSuggestionFilter` 是 Android
+  `SuggestionsListQuickFilter` 的三类芯片：`Tag(title)`、`Source(name)`、`Adult`/`Safe`（`Macro.NSFW` 与 SFW）。
+- `desktopSuggestionFilters(items, includeAdultChips, tagLimit = 5, sourceLimit = 3)` 照 Android 的顺序拼芯片：
+  先 `getTopTags(5)`，再两个宏（仅当 `!settings.isSuggestionsExcludeNsfw`，即 `includeAdultChips`），
+  最后 `getTopSources(3)`；空列表没有芯片。
+- 计数与 Android 的 SQL 不同但结论相同：Android 对 `manga_tags`/`manga.source` 分组计数，Windows 手里已是
+  `SourceContent` 列表，所以按标题分组（大小写不敏感、同一部作品重复标签只算一次、同数时按标题升序，
+  保留首次出现的写法），来源按 `source.name` 计数。标签芯片因此按标题匹配，而不是 tag 行 id——页面画的就是标题。
+- `SourceContent.acceptsSuggestionFilters(filters)` 是 Android DAO 的 AND 语义：每个芯片都必须命中，
+  空集合不过滤；`Adult`/`Safe` 走 `core-source` 的 `isNsfw`（`ADULT` 或 `HENTAI_` 前缀来源类型），
+  所以两个宏同时选中必然空列表。`desktopSuggestedContents(items, filters)` 是页面用的投影（空集合原样返回）。
+
+### 页面（`DesktopSuggestionsPage`）
+- 头部：`TopBarTitleBlock(suggestions, subtitle = suggestions_header_subtitle)`、`suggestions_header_refresh`
+  （Android 头部卡的“换一批”，走 `refreshSuggestions()`，生成中禁用）与进入推荐设置的链接。
+- 未开启推荐时页面不假装有内容，而是显示 `home.suggestionsOffDetail` + 一键开启（`enableSuggestions()`）；
+  开启但还没生成时是 `home.suggestionsDetail` + 生成按钮；生成中头部下方有进度条与 `message.generatingSuggestions`。
+- 主体是 `FlowRow` 的两个宏/标签/来源芯片（`suggestion-chip:<nsfw|sfw|tag:…|source:…>`，同一芯片再点即取消）
+  加 `ContentGrid`（沿用书架的 `library_list_mode` 网格/列表两种布局）。点卡片进详情，`DetailsOrigins`
+  与 `dismissDetails` 都加入 SUGGESTIONS，返回时仍是这张列表。
+- `DesktopAppState.suggestionFilters` 只活在内存里（Android 的 quick filter 也不持久化）。
+  `refreshSuggestions()` 的完工回调与 `suggestionSettings()` 都会按新列表/新的 nsfw 开关把已选芯片里
+  不再提供的那些丢掉，等价于 Android 每次重载列表重算可选项。
+
+### 入口与导航
+- 首页推荐轮播的“全部”从“重新生成”改成 `controller.showSuggestions()`（Android 首页推荐栏的“全部”打开顶层页），
+  轮播标题右侧的刷新按钮仍是 `refreshSuggestions()`。
+- `DesktopNavItem.SUGGESTIONS`（id 8、标签 `suggestions`、图标 `ic_suggestion`）可加入主导航；和 Android 一样
+  **总是可添加**（`NavConfigViewModel.availableItems` 不按 `isAvailable` 过滤），配置页对“已配置但当前不可用”的行
+  显示 Android 的 `suggestions_unavailable_text`（`DesktopNavItem.isAvailable(suggestionsEnabled)`）。
+  默认顺序仍是五项上限，所以入口是首页轮播或导航配置。
+- 页面自己承担“未开启”的提示，所以侧栏照旧无条件画已配置项（与 Android 底层导航条不去过滤一致）。
+
+### 与 Android 的差异
+- 列表模式复用书架的单一 `library_list_mode`：Android 的 `ListConfigSection.Suggestions` 是每页一份的列表配置，
+  Windows 没有那套每页配置表，不为这一页新起一个键。
+- 推荐页没有 Android 的 library 搜索横幅（Windows 的搜索在浏览页），也没有内容类型/来源标签筛选条——
+  Android 在这一页同样隐藏了它们，只留快捷筛选芯片。
+- 标签芯片按标题匹配（见上），Android 按 tag 行 id；对用户可见的结果一致。
+
+### 验证
+- `:desktop-runtime:test --tests=*DesktopSuggestionFiltersTest*`（新增 5 条）：芯片顺序与上限（5 标签 → 2 宏 → 3 来源）、
+  `includeAdultChips = false` 时不出现宏、同一作品重复标签只算一次且同数时稳定、
+  `acceptsSuggestionFilters` 的 AND 语义（Tag/Source/Adult/Safe、`Adult + Safe` 为空）、标题匹配忽略大小写与首尾空格。
+  `*DesktopNavigationSettingsTest*` 的“可添加项”断言加入 SUGGESTIONS，并新增一条“只有推荐项依赖开关”的断言。
+- `:desktop-app:test --tests=*DesktopSuggestionsPageTest*`（新增探针，`suggestions` 模式）：导入 fixture 来源、
+  收藏一部作品、在首页轮播里开启并生成，从“全部”进推荐页；断言头部、网格与芯片；
+  挑一个真能切分当前列表的芯片（某标签或某个宏）点选，断言第一行里命中的卡片还在、不命中的消失，
+  再点一次全部回来；`换一批` 重建后页面仍可用；`推荐设置` 进入设置页；点卡片进详情、返回同一页；
+  把导航项换进侧栏后 `nav:推荐` 能进；关掉推荐后页面显示开启提示、导航配置页的该行显示
+  `suggestions_unavailable_text`，再用页面上的按钮开启并生成。
+- `DesktopAppTest`（`navconfig` 探针）补一条：添加对话框里有 `nav-config-add-option:SUGGESTIONS`，
+  即推荐关着也仍可添加。
+- 全量：`:desktop-app:test` 294 条 0 失败（4 跳过）、`:desktop-runtime:test` 197 条 0 失败（2 跳过）、
+  `:core-domain:jvmTest` 261 条 0 失败、`:desktop-app:verifyDesktopStrings` 960 键 / 960 被引用、
+  `:core-ui:compileCommonMainKotlinMetadata` 与 `:app:compileDebugKotlin` 通过。
+
+## 199. 浏览页：结果自动加载下一批 + 来源图标（对齐 Android Paging 与 `FaviconFetcher`）（2026-10-25）
+
+用户报的两个 Windows 浏览页问题：一是内容源瓦片只有首字母，安卓那边是有图标的；二是每个来源的作品列表被做成了
+强制分页（要点“下一页”），安卓是滚到哪就接着加载。两处都按安卓的行为重做。
+
+### 结果页：滚到底自动加载下一批
+- `DesktopAppState` 新增 `browsePageSize`（上一批实际条数）与 `browseExhausted`；`DesktopController.browseNextPage()`
+  成为自动与手动共用的“下一批”入口，`browseOnIo(offset, query, order, changes, append)` 追加而不是替换。
+- `ContentGrid` 增加可选 `onReachEnd`/`endReached`：列表末尾追加一个占满整行的页脚 item，
+  `LaunchedEffect(contents.size)` 在页脚被组合时触发一次请求——与 Android Paging 的 loader/end item 同义，
+  所以列表还没填满屏幕时也会继续加载，直到内容撑满或来源给出空页；页脚同时画 18dp 进度圈（`content-loading`）。
+- 结束判定只用“空批次”：`MihonSourceRuntime.getList` 不透传 `hasNextPage`，因此 `browseExhausted = fresh.isEmpty()`
+  （按 `(id, source.name)` 去重后仍为空），空批次不推进 `offset`/`pageOffsets`；页脚改成 `browse.noMorePages`，
+  上一批/下一批按钮在结束时禁用而不是消失。
+- 手动“上一批/下一批”保留：上一批仍是替换语义（回看某一批），下一批与自动加载走同一条 append 路径；
+  中间显示 `browse.pageNumber`（Android 分页行的“第 N 批”）。
+
+### 来源图标：先扩展 APK 自带的，再网站 favicon
+- 用户指出 Mihon/Aniyomi/Tsundoku 扩展本来就是带图标的 APK，安卓 `FaviconFetcher.fetchPluginIcon` 走的是
+  `PackageManager.getApplicationIcon`（`DataSource.DISK`，不联网）。Windows 的 APK→JAR 转换会丢掉 `res/`，
+  所以图标必须在转换前取出：`desktop-runtime` 新增 `DesktopExtensionIcons`，安装 APK 时从包里挑启动图标
+  （`res/mipmap-*` 的 `ic_launcher`，密度越高越优先，跳过 `mipmap-anydpi-v26` 的自适应 XML 与 `.9.png` 九宫格，
+  只认真正的图片字节），存成与不可变产物同目录的 `<sha256>.icon`；`DesktopRepositories.packagedIcon(sha256)`
+  供 UI 查询。来源名（`MIHON_<id>`/`TSUNDOKU_<id>`/`ANIYOMI_<id>`）经 `registry.installed()` 反查到扩展再取图标。
+- `DesktopFavicons` 因此多一条 `packaged` 候选并排在所有地址之前：扩展图标是本地权威结果，命中时不发任何请求。
+  解析插件（kototoro/kotatsu/Tsuki）仍按安卓问插件自己的 `getFavicons()`，TVBox/JSON 来源用它文档里的 `iconUrl`，
+  都没有时才对网站下手（`siteUrl` → `<host>/favicon.ico` → 该页的 `<link rel="icon">`）。原来为 Mihon/Aniyomi
+  加的“扩展 `baseUrl` 反推 favicon”已删除——那正是用户否掉的做法。
+- 抓取入口抽成 `fetch: suspend (String) -> Response?`（`DesktopFavicons.httpFetcher(client)` 才是 OkHttp 实现，
+  复用会话的代理/Cookie/镜像），磁盘缓存 `<sha256>.icon`、7 天 miss、内存 LRU 64、并发 3 与 10 秒超时不变；
+  解不出来仍是首字母瓦片。
+
+### 与 Android 的差异
+- 扩展图标只从 APK 的 `res/` 直接取位图，不解析 `resources.arsc`：只有自适应图标 XML 而没有位图回退的极端扩展
+  会退回首字母（安卓能靠 PackageManager 合成）。
+- Cloudstream 插件（`.cs3`）的仓库图标地址还没进索引，仍是首字母瓦片。
+- 结束判定依赖空页而非 `hasNextPage`（`MihonSourceRuntime` 本来就不透传），所以来源在最后一页仍报
+  `hasNextPage = true` 时会多问一次才判定结束。
+- 自动加载没有“先填满一屏再停”的显式阈值，和安卓一样由页脚是否组合决定；因此“一页只有 1 条”的假来源会一直追加
+  （fixture 已改成真实页大小 40 条并如实终止），产品代码不为测试留开关。
+
+### 验证
+- `:desktop-app:test --tests=*DesktopFaviconsTest*`（6 条）：源自己声明的图标取一次后走磁盘、站点起始页 →
+  `/favicon.ico`、起始页的 `<link rel="shortcut icon">`、随源打包的图标优先且零请求、miss 记住并在 8 天后重试、
+  `faviconOf`/`iconLinks` 的派生规则。
+- `:desktop-runtime:test --tests=*DesktopExtensionIconsTest*`（3 条）：`ic_launcher` 与密度优先级、
+  `.9.png`/自适应 XML/假图片不被当图标、图标落在产物旁且不重写。
+- `:desktop-app:test --tests=*DesktopBrowsePagingTest*`：自动追加、空页结束、去重与上一批替换。
+- `DesktopParserProbe`（`writing` 探针）改为断言不点按钮就拿到 fixture 全部 4 部作品、`offset == 1`、
+  `browse-no-more` 出现且下一批禁用，再由上一批回到第一批；`DesktopCloudstreamProbe` 断言两个首页分区两批自动到位；
+  `fixture/desktop/FilterSource` 改成真实页大小（40 条、唯一地址、第 3 页起空页），既让筛选探针的“最后一次请求”
+  断言仍然成立，也让分页真的能结束。
+- 全量：`:desktop-app:test` 301 条 0 失败（4 跳过）、`:desktop-runtime:test` 200 条 0 失败（2 跳过）、
+  `:desktop-app:verifyDesktopStrings` 961 键 / 961 被引用、`:core-ui:compileCommonMainKotlinMetadata` 与
+  `:app:compileDebugKotlin` 通过。
+
+## 200. 少选项下拉框改标签按钮（`core-ui` 共享 chip 行）（2026-10-25）
+
+用户反馈：PC 屏幕够宽，可选项很少的下拉框应该直接铺成标签按钮，而不是先点开菜单再选。安卓侧的筛选抽屉本来
+就是这么画的（`FilterSheetRoute` 里私有的 `CompactFilterChipFlow`/`CompactFilterChip`），所以这一刀既是
+Windows 的可用性改进，也是一次把安卓私有控件提取成共享代码的机会。
+
+### 实现
+- `core-ui` 新增 `core/ui/chips/ChoiceChips.kt`：`ChoiceChipFlow`（`FlowRow`，默认 6dp 间距）与 `ChoiceChip`
+  （`FilterChip`，最小高度 36dp、`labelLarge` 字重、可选 `trailingIcon`），即安卓那两个私有 helper 的逐行等价物。
+- 安卓 `FilterSheetRoute` 的 `CompactFilterChipFlow`/`CompactFilterChip` 改为委托共享实现，只保留自己的
+  `tvChipRing()`；调用点一个没动，行为与观感不变（5 处 chip 区共用同一份）。
+- Windows 的来源筛选对话框（`DesktopFilters.kt`）把 `SELECT`/`SORT` 控件按选项数分成两种画法：
+  `node.values.size <= CHIP_OPTION_LIMIT`（5）时铺成 chip 行，一次点击即选中；更长的列表仍是
+  `OutlinedButton` + `DropdownMenu` 两步（标签几十个的源不该变成一屏 chip）。`SORT` 的方向按钮与「清除」放在
+  同一个 chip 行里（与菜单行布局一致，也避免多占一行把列表末尾挤出组合窗口），tag 仍是
+  `filter:<id>:direction` / `filter:<id>:clear`，选项 chip 是 `filter:<id>:option:<n>`（与菜单项同名）。
+- 值仍然只写原生索引：`SourceFilterValue.Choice(index)` / `SourceFilterValue.Sort(index, ascending)`，与菜单路径
+  完全同一份回调，所以来源侧看到的筛选参数不变。
+
+### 与 Android 的差异
+- 阈值是本端定的（5）：安卓筛选抽屉按控件类型直接铺 chip、不设上限，Windows 保留菜单给长列表。
+- 顶栏 pill（内容类型、标签菜单）与各行溢出菜单没有改动——它们本来就是安卓的菜单形态，不是“该铺开的少选项下拉框”。
+
+### 验证
+- `:desktop-app:test --tests=*DesktopFilterChipsTest*`（3 条）：3 个选项铺 chip 且一次点击就选中并回读选中态、
+  7 个选项仍是菜单（未展开时没有 option 节点，展开后选第 7 项）、chip 排序的方向按钮与清除按钮。
+- `DesktopFilterProbe`（`filters` 与 `filters-narrow` 两档）改为直接点 option chip，并把原来断言按钮文字「未选择」
+  改成断言 chip 未选中；整条链路（默认值、草稿丢弃、失败恢复、分页、来源隔离）仍通过。
+- `:app:compileDebugKotlin`（安卓委托共享 chip 后）、`:core-ui:compileCommonMainKotlinMetadata`、
+  `:desktop-app:verifyDesktopStrings` 通过。
+- 全量：`:desktop-app:test` 304 条 0 失败（4 跳过，比 §199 多出新的 3 条 chip 用例）。
+
+## 201. Windows 连续阅读器补「条漫分割」（`webtoon_gaps`）（2026-10-25）
+
+安卓阅读设置里的「条漫分割」（`AppSettings.KEY_WEBTOON_GAPS`，默认关）在 Windows 一直没有对应能力：连续阅读器把
+页间距写死成 8dp，阅读偏好里也没有这个键，想把条漫的页与页分开只能改代码。这一刀把开关补齐，
+并把「页间距」收敛成一个值。
+
+### 实现
+- `DesktopReaderSettings` 新增 `webtoonGaps`（默认 false，与安卓同默认）；`DesktopController.readerSettings` 把它
+  写进阅读偏好 store 的 `webtoon_gaps`，`restoredReaderSettings` 读回。它与 `crop_paged`/`crop_continuous` 同段，
+  切换只改页间空白，不重载已经加载的页面（只有 `cropActive`/`upscale` 才 `cancelPrefetch()`）。
+- 连续阅读器（`DesktopScrollReader`）里同一个 `gap` 同时喂给共享 `DesktopScrollLayout`（`VerticalReaderScene` 的
+  `spacing`）和 `LazyColumn` 的 `Arrangement.spacedBy`：关时 0dp（原来是写死的 8dp），开时
+  `WEBTOON_PAGE_GAP_DP = 24`（安卓 `R.dimen.webtoon_pages_gap` 的值）。两处必须同值，否则历史锚点与实际画面会错位。
+- 阅读设置页（更多 → 阅读设置）的「页面」节在连续模式下多一行开关，tag `reader-setting-webtoon-gaps`，
+  文案直接用安卓的 `webtoon_gaps`/`webtoon_gaps_summary`（`prepareDesktopStrings` 早就把这个键导出了）。
+
+### 与 Android 的差异
+- 默认页间距从 8dp 变成 0dp（安卓默认就是页与页相接），这是这一刀唯一会改变既有观感的地方。
+- 安卓的阅读设置一直显示这个开关（它在条漫分组里），Windows 沿用设置页「只显示当前模式用得到的开关」的既有约定
+  （与「双页封面页」只在分页模式出现一致），所以只有切到连续阅读才看得到它。
+- 阅读器侧面板不加这一项：安卓也只在设置页给这个开关；设置页与侧面板改的是同一份 `DesktopReaderSettings`，
+  阅读中改也是即时生效。
+
+### 验证
+- 新增 `DesktopReaderWebtoonGapsTest`（探针 `reader-webtoon-gaps`，真实 fixture 扩展 + 真实连续阅读器）：默认两页
+  之间量到的缝为 0px；打开开关后缝等于 24dp（按当前 density 折算，容差 1.5px）；关回去又变回 0px；最后回到阅读
+  设置页点该行，`assertIsOn`/`assertIsOff` 与 `readerSettings.webtoonGaps` 一致（开关与阅读器读到的是同一份状态）。
+- 全量：`:desktop-app:test` 305 条 0 失败（4 跳过，比 §200 多出新的 1 条）；`:desktop-app:verifyDesktopStrings`
+  961 键 / 961 被引用通过。
+
+## 202. Windows 阅读器补「章节标题在底部」（`reader_chapter_title_bottom`）（2026-10-25）
+
+### 实现
+- `DesktopReaderSettings` 增 `chapterTitleAtBottom`（默认 `false`，与 Android `AppSettings.isReaderChapterTitleAtBottom`
+  同默认），读写阅读偏好 store 的 `reader_chapter_title_bottom`（Android `KEY_READER_CHAPTER_TITLE_BOTTOM` 同名键）。
+- `DesktopReaderChrome` 把该值传给共享 `ReaderChromeTopBar`：开着时顶栏那枚 `ReaderChapterTitleChip` 不再画；
+  同时在底部 chrome 里、进度坞上方按 `FloatingControlInset` 基线画一枚同样的共享药丸（与右侧悬浮按钮同高，
+  Android `ComposeReaderActivityScaffold` 的底部药丸就是这么摆的），点它仍开章节面板，语义标签
+  `reader-chapter-title-bottom`，所以开着时全画面只有一枚药丸。
+- 阅读器侧面板用的是共享面板：`DesktopReaderOptionsFeatures.chapterTitleAtBottom` 从 `false` 改成 `true`，
+  `toOptionsState` 带上该值，`onChapterTitleAtBottomChanged` 写回同一份设置；共享面板这行加了
+  `reader-options-chapter-title-bottom` 标签（Android 行为不变，只多一个测试锚点）。
+- 阅读设置页「页面」节也加了一行：文案用 Android 的 `reader_chapter_title_at_bottom`/`_summary`
+  （Android 阅读设置页里就是这一对），测试标签 `reader-setting-chapter-title-bottom`。
+
+### 与 Android 的差异
+- Android 把底部药丸与进度坞放进同一个 `AnimatedVisibility`；Windows 本来就把顶栏和底部 chrome 各自做动画，
+  所以药丸跟底部 chrome 一起出现/消失，控件隐藏时的 info bar 不变（仍是章节名 + 页码）。
+- 药丸宽度仍由共享组件限制（`widthIn(min = 148.dp, max = 176.dp)`），窗口再宽也不会拉长，与顶栏那枚一致。
+
+### 验证
+- 新增 `DesktopReaderTitleBottomTest`（探针 `reader-title-bottom`，真实 fixture 扩展 + 真实阅读器，7.6 s）：
+  默认 `reader-chapter-title-bottom` 不存在、`reader-chapters` 药丸的上沿在画面一半以上；打开设置后底部药丸出现、
+  `reader-chapters` 在全画面只剩一个且落在下半；最后在阅读设置页点该行，`assertIsOn`/`assertIsOff` 与
+  `readerSettings.chapterTitleAtBottom` 一致。
+- 全量：`:desktop-app:test` 306 条 0 失败（4 跳过，比 §201 多出新的 1 条）；`:desktop-app:verifyDesktopStrings`
+  961 键 / 961 被引用通过。
+
+## 203. Windows 阅读器补「减少页面预加载」（`reader_reduce_offscreen_quality`）（2026-10-25）
+
+### 实现
+- 共享 `ReaderOptionsFeatures` 原先只有一个 `performance` 旗标代表 Android 性能分组的两行；现在拆成
+  `optimization`（「限制图片内存缓存」，Android `reader_optimize`）与 `preloadReduction`（「减少页面预加载」，
+  Android `reader_reduce_page_preloading`）两个旗标。`AndroidReaderOptionsFeatures` 只依赖默认值，所以安卓照旧画两行。
+- `DesktopReaderSettings` 增 `reducePagePreloading`（默认 `false`，与 Android
+  `AppSettings.isReaderPreloadReductionEnabled` 同默认），读写阅读偏好 store 的 `reader_reduce_offscreen_quality`
+  （Android `KEY_READER_REDUCE_PRELOAD` 就是这把键——安卓的标签说“预加载”，存的却是视口外页）。
+- `prefetchAroundSlot` 按开关改窗口：关时 reader-core 的
+  `PagedSceneResourceWindowStrategy(lookaheadSlots = 2, prepareAdjacentSlots = true)`（当前槽 + 前后各两槽，相邻槽预呈现），
+  开时 `lookaheadSlots = 1, prepareAdjacentSlots = false`（当前槽 + 前后各一槽、只取源），并且不再在章末提前预加载下一章。
+  开关一改，若正停在阅读器就立刻 `cancelPrefetch()` 再按新窗口重排；已经加载的页留在 `readerImages` 里，不会被丢掉。
+- 阅读器侧面板用共享面板：`DesktopReaderOptionsFeatures.preloadReduction = true`，`toOptionsState` 带上该值，
+  `onPreloadReductionChanged` 写回同一份设置，共享面板这行标签 `reader-options-preload-reduction`。
+- 阅读设置页「页面」节也加了一行（紧跟在「章节标题在底部」之后），文案用 Android 的
+  `reader_reduce_page_preloading`/`_summary`，标签 `reader-setting-reduce-preloading`。
+
+### 与 Android 的差异
+- 只在分页（单页/双页）生效：连续阅读器本来就不保留视口外的页（`prefetchAroundSlot` 在 `CONTINUOUS` 直接返回），
+  没有可减的预加载，开关照存照显示但不影响连续模式。
+- Android 的「限制图片内存缓存（beta）」（`reader_optimize`）在 Windows 没有对应管线（桌面图片缓存是下载目录里的
+  blob 加图片预算的内存 LRU，不是安卓那种页面位图缓存），所以共享面板的 `optimization` 保持 `false`，那一行不出现；
+  旗标拆开就是为了让这一行能单独隐藏。
+- 共享 `ReaderOptionsPageList` 多一个 `reader-options-list` 标签，供探针在懒加载列表里滚到末尾的性能分组（安卓无影响）。
+
+### 验证
+- 新增 `DesktopPreloadReductionTest`（探针 `preload-reduction`，真实 fixture 扩展 + 真实阅读器，约 20 s）：
+  fixture 章节 5 页，默认读出的页索引恰好 `{0, 1, 2}`（当前页加后两槽）；侧面板「布局」页滚到底打开开关后
+  `readerSettings.reducePagePreloading` 为真、退出重进同一章读出的只剩 `{0, 1}`；最后在阅读设置页
+  `assertIsOn` → 点掉 → `assertIsOff`，把默认值写回，探针结束打印 `DESKTOP_UI_OK=preload-reduction` 与
+  `NETWORK_REQUESTS=0`。
+- 全量：`:desktop-app:test` 307 条 0 失败（4 跳过，比 §202 多出新的 1 条）；
+  `:desktop-app:verifyDesktopStrings` 961 键 / 961 被引用通过。
+
+## 204. Windows 阅读器补「连续（横向）」模式与方向开关（2026-10-25）
+
+### 实现
+- `DesktopReaderMode` 多一个 `CONTINUOUS_HORIZONTAL`（安卓 `continuous_horizontal`），并给出两个派生判定：
+  `isContinuous`（两种连续模式都滚条带，取代原来各处对 `CONTINUOUS` 的等值比较——裁剪生效、自动跨章让位、
+  键盘让位、滚动操作接受、阅读设置页的行取舍）与 `isVerticalStrip`（只有竖条有「条漫间隙」）。
+- 条带几何抽成 `DesktopStripLayout`（`scene`/`extent(index)`/`frame(first, offset)`）：竖条仍是
+  `DesktopScrollLayout`（`VerticalReaderScene`），横条是新的 `DesktopHorizontalScrollLayout`，包 reader-core 的
+  `HorizontalReaderScene`——页面按窗口高度适配，几何提示依次取下载索引的显示尺寸、图片实际尺寸，最后退到
+  `Estimated(0.7f)`；`reversed` 同时决定场景的 `RIGHT_TO_LEFT` 与 `LazyRow(reverseLayout = true)`，所以第 0 页
+  永远贴在自己那一侧的边沿，历史偏移仍从页面阅读方向的起始边量（`intraPageOffsetPx`）。
+- `DesktopScrollReader` 在同一份 `LazyListState` 上换轴：`LazyRow` + `HorizontalScrollbar`、横条给自己留底部
+  16dp 的滚动条槽、页面 `fillMaxHeight().width(extent)`；鼠标只有竖轮，横条把滚轮 delta 手动映射到自己的轴上
+  （每单位 48dp），拖动/甩动取 `dx` 乘方向符号，`DirectionRight/Left`、`PageDown/PageUp`、空格按一屏 90% 走，
+  `MoveHome/End` 走章首页尾；`LazyColumn` 那条路径不动。
+- 模式照旧存阅读偏好的 `mode` 键（枚举名），方向用安卓自己的 `reader_continuous_horizontal_reversed`
+  （`DesktopReaderSettings.continuousHorizontalReversed`，追加为最后一个字段，默认 `false`），关章重进由
+  `restoredReaderSettings` 读回。
+- 共享面板因此多出第五个模式芯片（文案直接取安卓 `continuous_horizontal`），该模式下「布局」页出现安卓的
+  「反向」开关（新标签 `reader-options-horizontal-reversed`）；阅读设置页的模式对话框照 `DesktopReaderMode.entries`
+  自动多一项，裁剪/动画按 `isContinuous` 生效，「条漫间隙」行只在竖条出现，横条既无间隙也无那一行。
+
+### 与 Android 的差异
+- 安卓横条按方向切两个场景实例；Windows 只有一个 `LazyRow`，方向是数据（`reversed`）而不是两套组件，
+  但页面顺序、贴边与历史偏移的语义相同。
+- 「反向」开关和安卓一样只在阅读器侧面板，不放进阅读设置页（§202/§203 那两行在设置页）。
+- 横条没有「条漫间隙」：安卓 `webtoon_gaps` 只作用于 WEBTOON，Windows 用 `isVerticalStrip` 保持同一范围。
+
+### 验证
+- 新增 `DesktopHorizontalStripTest`（探针 `reader-horizontal-strip`，真实 fixture 扩展 + 真实阅读器，约 10 s）：
+  从侧面板选「连续（横向）」后断言阅读模式与 `reader-scroll-list`，页 0 与页 1 顶边齐平、页 1 在页 0 右侧、
+  页高等同条带高、宽高比仍是 fixture 的 400x600；在 `reader-viewport` 上滚一格真的把条带推走（页索引或页内
+  像素变），面板「反向」开关打开后下一页跑到左边，关章写进历史的正是那一页与像素位，重进后模式、方向与位置
+  一起恢复，最后把开关关回去、顺序回到从左到右。截图 `reader-horizontal-strip-left-to-right.png` 与
+  `-reversed.png` 也留在 `build/reports/desktop-smoke` 里供肉眼核对。
+- 全量：`:desktop-app:test` 308 条 0 失败（4 跳过，比 §203 多出新的 1 条）；
+  `:desktop-app:verifyDesktopStrings` 961 键 / 961 被引用通过（无新桌面文案键）。
+
+## 205. Windows 补「自动检测阅读模式」与每作品阅读模式记忆（`reader_mode_detect`）（2026-10-25）
+
+### 实现
+- 安卓 `DetectReaderModeUseCase` 的判定抽到 reader-core 的 `ReaderModeDetection`（纯 Kotlin，三个成员）：
+  `probePageIndex(pageCount) = (pageCount * 0.3).roundToInt()`（读 30% 处那一页，跳过卷首彩页/封面）、
+  `isWebtoonPage(width, height) = width * MIN_WEBTOON_RATIO < height`（`MIN_WEBTOON_RATIO = 1.8f`，严格小于），
+  以及 `MIN_WEBTOON_RATIO` 常量本身。安卓侧因此删掉自己的 `(pages.size * 0.3).roundToInt()` 与私有
+  `MIN_WEBTOON_RATIO`，只留“取 URL → 读 `BitmapFactory` 尺寸”这一步（Android `Size`/`BitmapFactory` 绑定），
+  `jvmTest` 的 `ReaderModeDetectionTest` 覆盖 0..40 页的索引范围与 1.8 边界（400x720 不算条漫）。
+- 顺带修 `ReaderCoreIsolationGuardTest`：`412540695` 把共享解码规划搬进 reader-core 的
+  `org.skepsun.kototoro.reader.image` 之后，文本扫描仍把除 `reader.core` 之外的 `org.skepsun.kototoro.*`
+  都算应用层泄漏，`:reader-core:jvmTest` 因此一直红在 10 个 package 声明上；允许列表与正则的前瞻各加 `reader.image`。
+- Windows 侧 `DesktopReaderSettings` 增 `readerModeDetection`（键 `reader_mode_detect`，默认 `true`，与
+  `AppSettings.isReaderModeDetectionEnabled` 同默认），阅读设置页「页面」节紧跟「阅读模式」一行（标签
+  `reader-setting-detect-mode`，文案直接用安卓 `detect_reader_mode`/`detect_reader_mode_summary`）。
+- `readOnIo` 在取到页列表后先解析本次要用的模式：先看**每作品记忆**，没有记忆且开关打开、当前不是连续模式时，
+  用 `session.readerImage(30% 页)` 取尺寸判定（失败/取不到就退回当前模式），判为条漫则用 `CONTINUOUS`，
+  与安卓一样把结论写进记忆（正反两向都写），再把这个模式放进 `readerSettings` 交给分页/条带两条装载路径。
+- 每作品记忆对应安卓 `ContentDataRepository.saveReaderMode` 写 `preferences.mode` 的那一列：Windows 没有
+  Room 侧的 `MangaPrefsEntity` 读者，所以在阅读偏好 store 里加一份 `reader_modes` 字符串集合
+  （`"<contentId>=<MODE>"`），`rememberedReaderMode`/`rememberReaderMode` 读写它；用户手动换模式时
+  `readerSettings()` 在正停在阅读器且模式变了的条件下也写这条（对应安卓 `ReaderViewModel.switchMode` 的
+  `saveReaderMode`），所以换过的模式下次打开仍是它。
+- 记忆中读出的模式只属于那一部作品：`backToDetails()` 离开阅读器时把 `readerSettings.mode` 换回偏好里的值
+  （`restoredReaderSettings().mode`，手动改过的模式已在偏好里，所以这一换是空操作），下一部作品仍从偏好起步。
+
+### 与 Android 的差异
+- 安卓的模式 id（STANDARD/REVERSED/VERTICAL/WEBTOON/CONTINUOUS_HORIZONTAL）与 Windows 的
+  `DesktopReaderMode`（SINGLE/DOUBLE/CONTINUOUS/CONTINUOUS_HORIZONTAL）不是一一对应，所以记忆不写
+  `MangaPrefsEntity.mode`，而是桌面自己的 `reader_modes`；判为条漫时安卓返回 WEBTOON、Windows 返回
+  `CONTINUOUS`（竖条），语义一致。
+- 检测只看“是不是条漫”：安卓的默认模式若已是 WEBTOON 就跳过检测，Windows 的判定同理是“连续模式跳过”
+  （`mode.isContinuous`），因为两种连续模式都已经是在读条带。
+- 探针页会真的下载一次（和安卓一样是多读一张图）；下载逻辑走 `session.readerImage`，因此顺带写进阅读图片索引。
+
+### 验证
+- 新增 `DesktopModeDetectTest`（探针 `reader-mode-detect`，真实 fixture 扩展 + 真实阅读器）：fixture 加
+  `fixture.reader.probe.tall`（第 2 页变 400x2400，五页章节的 30% 正好是它）；关掉开关 → 打开作品没有
+  `reader-scroll-list`（仍是分页）；打开开关 → 出现条带（检测生效）；再关掉开关 → 仍是条带（记忆生效，且离开
+  阅读器后偏好里的模式仍是分页，说明记忆没漏成全局默认）；最后在阅读设置页 `assertIsOff` → 点成 `assertIsOn`，
+  把默认值写回。
+- `DesktopProbes` 的白名单原本只透传 `kototoro.*`，现在也透传 `fixture.*`（fixture 源就是靠这些开关改行为的）；
+  探针用的 `fixture.reader.probe.tall` 在 `finally` 里还原，否则同一测试 JVM 里后面的探针会读到条漫页
+  （§203 的预加载窗口断言会因此看到条带）。
+- `:reader-core:jvmTest` 全绿（新增 3 条）；`:app:compileDebugKotlin` 通过；全量 `:desktop-app:test` 与
+  `:desktop-app:verifyDesktopStrings` 见下。
+
+## 206. iOS 小说翻译（系统 Translation 框架）与重复的扩展更新提示（2026-10-25）
 
 **界面去重**：扩展页原先同时有“发现 N 个扩展可更新”横幅（含“全部更新”）和“可更新 · N”分组标题（又一个“全部更新”），
 横幅已删除，只留分组标题；设置页“仓库与扩展”行的自绘橙色胶囊改为系统 `.badge`，与“设置”Tab 角标同源。
@@ -7975,7 +9386,7 @@ storage 探针在真实数据根上写一个 2 KiB 的 `probe-cleaned.img` 与�
 `LocalImportTests/testNovelTranslationLaysOutBilingualPages` 通过（`KOTOTORO_TRANSLATION_FIXTURE=1` 用标记译文代替系统
 翻译器，截图确认原文变灰、译文在下、页码不跳）。模拟器上系统翻译会弹出“在模拟设备上不受支持”，真机翻译待验证。
 
-## 175. iOS 全局标签黑名单与敏感类别高亮（共享 core-domain 规则，2026-10-25）
+## 207. iOS 全局标签黑名单与敏感类别高亮（共享 core-domain 规则，2026-10-25）
 
 `ios-shared` 新增 `IosTags`：`isWarned` 直接用 `TagWarnings`，`blacklist(selected)` 包装 `TagTitleBlacklist`，
 `categories(language)` 按 `TaxonomyCategory` 列出词库（去掉 deprecated），`selection(title)` 把标题解析成词库 ID，
@@ -7994,7 +9405,7 @@ storage 探针在真实数据根上写一个 2 KiB 的 `probe-cleaned.img` 与�
 添加自定义词、重启后计数仍为 2、清空），截图已看过。列表过滤没有做端到端测试，因为本地测试数据没有标签。
 待定：是否给 Android/Windows 的书架也加“已隐藏 N 部”提示（需要三端一起改）。
 
-## 176. iOS 无痕阅读：全局开关 + 成人内容三态（2026-10-25）
+## 208. iOS 无痕阅读：全局开关 + 成人内容三态（2026-10-25）
 
 - 成人作品的判定走共享的 `SourceContent.isNsfw`（`IosSourceContent.isNsfw`），同时替换了 Swift 里两处手写的
   `HENTAI_`/`ADULT` 判断（`ContentCollection` 的 18+ 角标、全局搜索的成人过滤）。来源级别的 `isAdult` 判断不受影响。
@@ -8011,7 +9422,7 @@ storage 探针在真实数据根上写一个 2 KiB 的 `probe-cleaned.img` 与�
 验证：模拟器构建通过；`LocalImportTests/testIncognitoReadingKeepsTheSavedPosition` 通过（正常阅读到 0% →
 全局无痕下读到 70% → 重新打开仍是 0%，并出现无痕提示）。ASK 询问页没有 UI 测试，因为本地测试数据都不是成人内容。
 
-## 177. iOS 漫画页面 OCR 翻译（Vision + 系统 Translation，2026-10-25）
+## 209. iOS 漫画页面 OCR 翻译（Vision + 系统 Translation，2026-10-25）
 
 对照表第 1 项。`ReaderPageTranslation.swift`：
 - `PageTextRecognizer`：Vision `RecognizeTextRequest`（accurate、自动识别语言），只保留含字母的行；高宽比 > 2.2 视为
@@ -8020,7 +9431,7 @@ storage 探针在真实数据根上写一个 2 KiB 的 `probe-cleaned.img` 与�
 - `PageTranslationRenderer`：在与原图同尺寸的画布上，用气泡边缘较亮一半采样的纸色盖住原文，再以能放下的最大字号居中
   写入译文；竖排气泡横向加宽。同尺寸意味着阅读器换图时不会重新排版。
 - `ReaderPageTranslator`：识别不需要会话，页面加载后即可排队识别；第一页识别出的文字用 `NLLanguageRecognizer` 定源语言，
-  再建 `TranslationSession.Configuration`（与 §174 同理，源语言为 nil 时会失败；同语言直接提示）。`.translationTask`
+  再建 `TranslationSession.Configuration`（与 §206 同理，源语言为 nil 时会失败；同语言直接提示）。`.translationTask`
   中按页批量翻译，渲染放到后台线程。
 - 接入：`SourceReaderModel.sync()` 在翻译开启时按 `pageIdentity` 用译后图代替原图，并清掉 artifact（否则高清分块会把原文
   画回来）；分页（`ReaderPageTile`）与条漫（`ReaderStripPageView`）都读同一个 `ReaderPageState`，所以两条路径都生效。
@@ -8033,7 +9444,7 @@ storage 探针在真实数据根上写一个 2 KiB 的 `probe-cleaned.img` 与�
 气泡被拆成两块，修复后截图确认白底、合并正确。已知问题：覆盖块的圆角略压到气泡描边；对竖排日文的效果在模拟器上
 未验证；系统翻译本身需真机验证。
 
-## 178. iOS 小说朗读、本章搜索、文本替换规则；Android 朗读切分修复（2026-10-25）
+## 210. iOS 小说朗读、本章搜索、文本替换规则；Android 朗读切分修复（2026-10-25）
 
 对照表第 2–4 项。
 
@@ -8072,7 +9483,7 @@ storage 探针在真实数据根上写一个 2 KiB 的 `probe-cleaned.img` 与�
 - Android：`:app:testDebugUnitTest --tests *TokenizerTest*` 2/2（不传音色池时对话不带角色音色；同一角色跨段保持同一声音、
   新角色换下一个声音）。首轮该测试暴露了上面第 3 条切分问题。
 
-## 179. iOS 笔记、保存筛选、成人内容分目标过滤、下载设置、WebDAV 备份（2026-10-25）
+## 211. iOS 笔记、保存筛选、成人内容分目标过滤、下载设置、WebDAV 备份（2026-10-25）
 
 对照表第 5、6、8、9、10 项。
 
@@ -8115,7 +9526,7 @@ Android 的 1.6 s 只对要求减速的来源生效，共享源契约没有这�
 - 编译器问题：`WebDavSyncView` 里 `if let preview { … Task { … preview … } }` 这种同名遮蔽、并在嵌套闭包中使用的写法会让
   Swift 6.4 的类型检查器断言崩溃，绑定改名后解决。
 
-## 180. iOS GitHub 镜像、后台更新检测、应用锁、小说划线；Android 应用密码改为 PBKDF2（2026-10-25，进行中）
+## 212. iOS GitHub 镜像、后台更新检测、应用锁、小说划线；Android 应用密码改为 PBKDF2（2026-10-25，进行中）
 
 - GitHub 镜像（#11）：`IosGitHubMirror` 桥接共享 `GitHubMirrorCatalog`，Android 同键 `github_mirror`；只改写扩展安装包下载，
   仓库索引与 api.github.com 不改写（同 Windows）。设置 → 网络 → GitHub 镜像，并行测速（6 s）。代理判定为不适用（系统代理/VPN）。
@@ -8132,7 +9543,7 @@ Android 的 1.6 s 只对要求减速的来源生效，共享源契约没有这�
   分页选中菜单“划线”、更多面板“划线当前段”、笔记页列出划线。已编译，未跑 UI 测试。
 - 保存筛选 UI 测试最终通过（需在视频空间启动、先清理上次遗留的筛选）。
 
-## 181. iOS 自定义空间、剩余阅读时间、划线与应用锁测试收尾（2026-10-25）
+## 213. iOS 自定义空间、剩余阅读时间、划线与应用锁测试收尾（2026-10-25）
 
 - 自定义空间（#13）：`core-domain` 新增 `CustomSpace`（按 Android 在 `space_definitions` 中的存储格式解码/编码，类型/语言/来源
   类型之间为“且”、同一项内为“或”、留空不限，`mediaKind` 给出单一媒体类型），`CustomSpacesTest` 2/2。iOS `IosSpaces`
@@ -8147,7 +9558,7 @@ Android 的 1.6 s 只对要求减速的来源生效，共享源契约没有这�
 - 小说划线 UI 测试 `testNovelParagraphHighlightAppearsInNotes` 通过（更多面板划线当前段 → 笔记页出现 → 删除）。
 - 应用锁/后台更新测试 `testAppLockAndBackgroundUpdateSettings` 通过（宽行里的开关要点在行尾）。
 
-## 182. iOS 作品库筛选、分享页面、PDF 导入（2026-10-25）
+## 214. iOS 作品库筛选、分享页面、PDF 导入（2026-10-25）
 
 - 作品库筛选：`core-domain` 新增 `ShelfFilter`/`ShelfRow`（阅读进度、下载、快捷、出版状态、来源、标签；组内“或”、组间“且”；
   “在读”与“读完”共用 0.999 阈值，避免 Windows `DesktopLibrarySelection` 里 99.95% 同时属于两组的问题），`ShelfFilterTest` 2/2；
@@ -8158,7 +9569,7 @@ Android 的 1.6 s 只对要求减速的来源生效，共享源契约没有这�
   重复导入沿用同一作品身份）后走原 CBZ 导入；`fixture_pdf.pdf`（Pillow 生成）+ `testPdfImportsAsAComic` 通过。
 - 弹幕：按要求不做，期间写的共享协议、iOS 弹层与测试接口已全部撤回。
 
-## 183. iOS 小组件、视频文件夹导入、按 HIG 调整界面与朗读的系统播放控制（2026-10-25）
+## 215. iOS 小组件、视频文件夹导入、按 HIG 调整界面与朗读的系统播放控制（2026-10-25）
 
 - 视频文件夹：`core-local` 的 `LocalSourceRuntime.importVideoFolder` 把一个文件夹的视频按自然顺序导入为一部作品、每个文件一集
   （`LocalItem` 新增带默认值的 `episodes`/`contentHash`，旧数据与 Android 不受影响；同一组文件重复导入沿用作品身份），

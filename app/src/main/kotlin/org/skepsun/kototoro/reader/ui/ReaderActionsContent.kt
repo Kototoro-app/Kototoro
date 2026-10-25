@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ReaderControl
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.reader.ui.compose.design.readerControlContentColor
 
@@ -122,6 +123,17 @@ internal fun ReaderActionsContent(
         }
 
         if (isSliderVisible) {
+            val displayValue = (if (sliderReversed) {
+                state.sliderMax - state.sliderValue
+            } else {
+                state.sliderValue
+            }).coerceIn(0f, state.sliderMax.toFloat())
+            val applyDisplayValue: (Float) -> Unit = { value ->
+                val actualValue = if (sliderReversed) state.sliderMax - value else value
+                if (actualValue.toInt() != state.sliderValue.toInt()) {
+                    callbacks.onSliderValueChanged(actualValue)
+                }
+            }
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -133,18 +145,17 @@ internal fun ReaderActionsContent(
                         .padding(horizontal = 4.dp)
                         .semantics {
                             if (state.pageLabel.isNotEmpty()) contentDescription = state.pageLabel
-                        },
-                    value = (if (sliderReversed) {
-                        state.sliderMax - state.sliderValue
-                    } else {
-                        state.sliderValue
-                    }).coerceIn(0f, state.sliderMax.toFloat()),
-                    onValueChange = { value ->
-                        val actualValue = if (sliderReversed) state.sliderMax - value else value
-                        if (actualValue.toInt() != state.sliderValue.toInt()) {
-                            callbacks.onSliderValueChanged(actualValue)
                         }
-                    },
+                        // 遥控器上滑杆自己不带环也不会响应左右键，见 tvSliderDpad（手机上是 no-op）。
+                        .tvSliderDpad(
+                            value = displayValue,
+                            valueRange = 0f..state.sliderMax.toFloat(),
+                            onValueChange = applyDisplayValue,
+                            steps = (state.sliderMax - 1).coerceAtLeast(0),
+                            enabled = state.sliderEnabled,
+                        ),
+                    value = displayValue,
+                    onValueChange = applyDisplayValue,
                     onValueChangeFinished = callbacks.onSliderValueChangeFinished,
                     enabled = state.sliderEnabled,
                     steps = (state.sliderMax - 1).coerceAtLeast(0),

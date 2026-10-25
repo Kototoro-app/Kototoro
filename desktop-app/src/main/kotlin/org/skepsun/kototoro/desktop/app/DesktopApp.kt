@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -116,6 +117,8 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                         when (listState.screen) {
                             DesktopScreen.HOME -> DesktopHomePanel(controller, listState, !closing)
                             DesktopScreen.FEED -> DesktopFeedPanel(controller, listState, !closing)
+                            DesktopScreen.UPDATED -> DesktopUpdatesPage(controller, state, !closing)
+                            DesktopScreen.SUGGESTIONS -> DesktopSuggestionsPage(controller, state, !closing)
                             DesktopScreen.EXPLORE -> Browse(controller, listState, !closing)
                             DesktopScreen.LIBRARY, DesktopScreen.HISTORY -> DesktopLibraryPanel(controller, listState, !closing)
                             DesktopScreen.DETAILS -> Details(controller, state)
@@ -127,9 +130,12 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.DOWNLOADS -> DesktopDownloadsPanel(controller, closing)
                             DesktopScreen.BACKUPS -> DesktopBackupsPanel(controller, closing)
                             DesktopScreen.RECOMMENDATIONS -> DesktopRecommendations(controller, listState)
+                            DesktopScreen.SERVICES -> DesktopServicesPage(controller, state)
                             DesktopScreen.EXTENSIONS -> DesktopExtensionsPanel(controller, closing)
                             DesktopScreen.READER_SETTINGS -> DesktopReaderSettingsPage(controller, listState)
                             DesktopScreen.SOURCE_SETTINGS -> DesktopSourceSettingsPage(controller, listState)
+                            DesktopScreen.SETUP_WIZARD -> DesktopSetupWizard(controller, state)
+                            DesktopScreen.SOURCE_TEST -> DesktopSourceTestPage(controller, state)
                             DesktopScreen.TAG_BLACKLIST -> DesktopTagBlacklistPage(controller, listState)
                             DesktopScreen.READING_STATS -> DesktopReadingStatsPage(controller, listState)
                             DesktopScreen.STORAGE -> DesktopStorageSettingsPage(controller, state)
@@ -138,6 +144,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.PROXY_SETTINGS -> DesktopProxySettingsPage(controller, state)
                             DesktopScreen.CHANGELOG -> DesktopChangelogPage(controller, state)
                             DesktopScreen.CRASH_LOGS -> DesktopCrashLogsPage(controller, state)
+                            DesktopScreen.BOOKMARKS -> DesktopBookmarksPage(controller, listState, !closing)
                             DesktopScreen.REPLACE_RULES -> DesktopReplaceRulesPage(controller, state)
                             DesktopScreen.DICTIONARY_RULES -> DesktopDictionaryRulesPage(controller, state)
                             DesktopScreen.DOWNLOAD_SETTINGS -> DesktopDownloadSettingsPage(controller, state)
@@ -166,11 +173,12 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
     // The rail lists every installed source, so it carries Android's two top-bar filters itself: the same filter also
     // narrows the works of whichever source is picked, which is how the Android tablet keeps one scope for both.
     val settings = state.sourceSettings
-    val sources = settings.sorted(state.sources.filter {
+    // Switching a source off on the extensions page removes it here, as Android's enabled-only source list does.
+    val sources = settings.sorted(state.enabledSources.filter {
         (it.displayName.contains(filter, true) || it.source.locale.contains(filter, true)) &&
             state.exploreFilter.accepts(it) &&
             // Android's SOURCES_AND_BROWSE target: the rail is the only place Windows can hide an adult source.
-            !(settings.hidesNsfw(DesktopNsfwTarget.SOURCES) && it.isNsfwSource())
+            !(settings.hidesNsfw(DesktopNsfwTarget.SOURCES) && it.isNsfwSource(state.sourceNsfwOverrides))
     })
     Column(Modifier.width(240.dp).fillMaxHeight().background(MaterialTheme.colorScheme.surface,
         RoundedCornerShape(20.dp)).padding(16.dp).testTag("source-pane"),
@@ -185,7 +193,9 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
         HorizontalDivider()
         Text(desktopText("browse.sources", sources.size), fontWeight = FontWeight.SemiBold)
         DesktopSearchField(filter, { filter = it }, desktopText("browse.findSource"), modifier = Modifier.fillMaxWidth())
-        DesktopSourceFilterControls(state.exploreFilter, state.sources, controller::exploreFilter, enabled, "rail")
+        DesktopSourceFilterControls(
+            state.exploreFilter, state.enabledSources, controller::exploreFilter, enabled, "rail",
+        )
         LazyColumn(Modifier.weight(1f).testTag("source-list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(sources, key = { it.source.name }) { source ->
                 SourceRailTile(source, state, enabled, controller, Modifier.fillMaxWidth())
@@ -216,14 +226,19 @@ private fun Header(state: DesktopAppState) {
     val title = when (state.screen) {
         DesktopScreen.HOME -> desktopText("nav.home")
         DesktopScreen.FEED -> desktopText("nav.subscriptions")
+        DesktopScreen.UPDATED -> AndroidStrings["updated"]
+        DesktopScreen.SUGGESTIONS -> AndroidStrings["suggestions"]
         DesktopScreen.EXPLORE -> state.selectedSource?.displayName ?: desktopText("screens.browseSource")
         DesktopScreen.LIBRARY -> desktopText("nav.favourites")
         DesktopScreen.HISTORY -> desktopText("screens.history")
         DesktopScreen.DOWNLOADS -> desktopText("screens.downloads")
         DesktopScreen.BACKUPS -> desktopText("screens.backups")
         DesktopScreen.RECOMMENDATIONS -> desktopText("screens.recommendations")
+        DesktopScreen.SERVICES -> AndroidStrings["services"]
         DesktopScreen.READER_SETTINGS -> desktopText("screens.readerSettings")
         DesktopScreen.SOURCE_SETTINGS -> desktopText("screens.sourceSettings")
+        DesktopScreen.SETUP_WIZARD -> AndroidStrings["setup_wizard"]
+        DesktopScreen.SOURCE_TEST -> AndroidStrings["source_test_title"]
         DesktopScreen.TAG_BLACKLIST -> desktopText("screens.tagBlacklist")
         DesktopScreen.READING_STATS -> AndroidStrings["reading_stats"]
         DesktopScreen.STORAGE -> AndroidStrings["storage_and_network"]
@@ -235,6 +250,7 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.REPLACE_RULES -> AndroidStrings["replace_rules"]
         DesktopScreen.DICTIONARY_RULES -> AndroidStrings["dictionary_rules"]
         DesktopScreen.DOWNLOAD_SETTINGS -> AndroidStrings["downloads"]
+        DesktopScreen.BOOKMARKS -> AndroidStrings["bookmarks"]
         DesktopScreen.NAV_CONFIG -> AndroidStrings["main_screen_sections"]
         DesktopScreen.EXTENSIONS -> desktopText("screens.extensions")
         DesktopScreen.DETAILS -> desktopText("screens.details")
@@ -331,18 +347,26 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
             }
         }
         // Android's ExploreRepository filters every browse page through the global tag blacklist; the page in the
-        // state stays untouched so paging and the "next page" button still follow what the source returned.
+        // state stays untouched so paging and the endless list still follow what the source returned.
         val blacklist = remember(state.sourceSettings.tagBlacklist) { state.sourceSettings.tagBlacklistRules() }
         val visibleItems = remember(state.items, blacklist) {
             state.items.filter { content -> content.tags.none { blacklist.containsTagTitle(it.title) } }
         }
-        Box(Modifier.weight(1f)) { ContentGrid(visibleItems, enabled, controller.session.covers, controller::details) }
+        // Android's paging list keeps fetching as you scroll: the grid's own footer composes only once its last rows are
+        // reached, and each composition asks for the next batch — no manual 下一批 and no polling of the layout.
+        Box(Modifier.weight(1f)) {
+            ContentGrid(visibleItems, enabled, controller.session.covers, controller::details,
+                onReachEnd = { controller.browseNextPage() }, endReached = state.browseExhausted)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton({ controller.browse((state.offset - 1).coerceAtLeast(0)) },
                 enabled = enabled && state.offset > 0) { Text(desktopText("browse.previousPage")) }
             Text(desktopText("browse.pageNumber", state.offset + 1), color = Muted)
-            OutlinedButton({ controller.browse(state.offset + 1) },
-                enabled = enabled && state.items.isNotEmpty()) { Text(desktopText("browse.nextPage")) }
+            OutlinedButton({ controller.browseMore() },
+                enabled = enabled && !state.browseExhausted && state.items.isNotEmpty(),
+                modifier = Modifier.testTag("browse-next-page")) { Text(desktopText("browse.nextPage")) }
+            if (state.browseExhausted) Text(desktopText("browse.noMorePages"), color = Muted,
+                modifier = Modifier.testTag("browse-no-more"))
         }
     }
 }
@@ -358,7 +382,14 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
     /** Android's list mode: the shelves can render one work per row instead of the poster grid. */
     listMode: org.skepsun.kototoro.desktop.runtime.DesktopListMode =
         org.skepsun.kototoro.desktop.runtime.DesktopListMode.GRID,
-    metaOf: (SourceContent) -> String = { it.authors.joinToString().ifBlank { it.source.name } }) {
+    metaOf: (SourceContent) -> String = { it.authors.joinToString().ifBlank { it.source.name } },
+    /**
+     * Android's endless list: the grid's footer is composed only when the last rows are reached, and every composition
+     * asks for one more batch — the same trigger Paging uses, without pressing a button.
+     */
+    onReachEnd: (() -> Unit)? = null,
+    /** Set when the source has no more batches: the footer then stops asking and the row below says so. */
+    endReached: Boolean = false) {
     if (contents.isEmpty()) { EmptyPanel(desktopText("browse.noWorks"), desktopText("browse.noWorksDetail")); return }
     if (listMode == org.skepsun.kototoro.desktop.runtime.DesktopListMode.LIST) {
         ContentRowList(contents, enabled, covers, onOpen, progressOf, newChaptersOf, pinnedOf,
@@ -424,6 +455,18 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
                             Modifier.align(Alignment.BottomCenter).testTag("content-progress:${content.id}"))
                     },
                 )
+            }
+        }
+        if (onReachEnd != null) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                // Composed only when the grid reaches its last rows, and re-composed after every appended batch.
+                if (!endReached) {
+                    LaunchedEffect(contents.size) { onReachEnd() }
+                    Box(Modifier.fillMaxWidth().height(40.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp).testTag("content-loading"),
+                            strokeWidth = 2.dp)
+                    }
+                }
             }
         }
     }

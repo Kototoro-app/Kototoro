@@ -69,6 +69,9 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.rememberTvTextFieldReadOnlyState
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
@@ -92,6 +95,11 @@ internal fun SourceSearchField(
     modifier: Modifier = Modifier,
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    // A field that raises the keyboard the moment the ring reaches it hijacks the remote: from then on
+    // every key belongs to the IME and the result cards below it cannot be reached. Keep it read-only
+    // until the centre key asks for editing - the same holder the dialog fields use - so DOWN walks
+    // through the field and the keyboard only appears when the viewer means to type.
+    val tvEditing = rememberTvTextFieldReadOnlyState()
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val shape = RoundedCornerShape(if (expressive) 999.dp else 22.dp)
     val searchFieldColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
@@ -126,8 +134,24 @@ internal fun SourceSearchField(
                 onValueChange = onValueChange,
                 modifier = Modifier
                     .fillMaxSize()
-                    .onFocusChanged { isFocused = it.isFocused }.tvTextInputFocusEscape(),
+                    // The container tint above is the only focus feedback this field has, and in the
+                    // expressive theme both of its branches resolve to the same colour, so a focused
+                    // field looks exactly like an unfocused one and the remote appears to vanish here.
+                    // Give it the same outline every other TV stop has (no extra focus target - the
+                    // text field owns the one below).
+                    .tvFocusable(
+                        shape = RoundedCornerShape(999.dp),
+                        addFocusTarget = false,
+                    )
+                    .onFocusChanged { isFocused = it.isFocused }
+                    .then(tvEditing.fieldModifier)
+                    // This bar can have buttons to its right (the reading-source sheet puts search and
+                    // filter there), and a focused text field eats the horizontal arrows for its own
+                    // caret: with the keyboard closed they now move focus to those buttons instead of
+                    // doing nothing visible.
+                    .tvTextInputFocusEscape(horizontalWhenIdle = true),
                 singleLine = true,
+                readOnly = tvEditing.isReadOnly,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
                     color = MaterialTheme.colorScheme.onSurface,
                     lineHeight = MaterialTheme.typography.bodyMedium.fontSize,
@@ -179,6 +203,11 @@ internal fun DetailsSourceOverlayDialog(
 ) {
     var panelOffsetY by remember { mutableFloatStateOf(0f) }
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    // The scrim and the panel below are tap targets only: they dismiss on an outside tap and swallow
+    // taps on the panel. Both are clickable, so on TV the D-pad can land on the invisible sheet
+    // background and stay there (no ring, no neighbour in any direction) - the sheet then eats every
+    // key until BACK. There is no touch on TV, so skip those two nodes there entirely.
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val panelColors = rememberGlassSurfaceColors(
         style = GlassDefaults.regularStyle(),
         glassPrefs = rememberDetailsSourceOverlayGlassPrefs(),
@@ -213,10 +242,16 @@ internal fun DetailsSourceOverlayDialog(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.18f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismissRequest,
+                .then(
+                    if (isTvPresentation) {
+                        Modifier
+                    } else {
+                        Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDismissRequest,
+                        )
+                    },
                 ),
             contentAlignment = Alignment.BottomCenter,
         ) {
@@ -225,11 +260,17 @@ internal fun DetailsSourceOverlayDialog(
                     .fillMaxWidth()
                     .fillMaxHeight(0.92f)
                     .offset { IntOffset(0, panelOffsetY.roundToInt()) }
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {},
-                ),
+                    .then(
+                        if (isTvPresentation) {
+                            Modifier
+                        } else {
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {},
+                            )
+                        },
+                    ),
                 shape = RoundedCornerShape(topStart = if (expressive) 36.dp else 28.dp, topEnd = if (expressive) 36.dp else 28.dp),
                 color = panelColors.containerColor.detailsPanelContainerColor(),
                 border = panelColors.border,
@@ -429,6 +470,7 @@ private fun SourceOptionSheetRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .tvFocusable(shape = RoundedCornerShape(20.dp), addFocusTarget = false)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -472,6 +514,7 @@ private fun TrackingSearchResultRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .tvFocusable(shape = RoundedCornerShape(20.dp), addFocusTarget = false)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -550,6 +593,11 @@ private fun TrackingSearchResultCard(
     modifier: Modifier = Modifier,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    // A full phone card (142.dp cover + two title lines + score + button) is taller than the whole
+    // result strip the sheet can show on a 1080p TV, so its Migrate button ends up past the bottom
+    // edge with no way to scroll it into reach. Keep the TV card to what the remote needs: a small
+    // cover, one title line, one info line and the button itself.
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val resultCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     Surface(
         modifier = modifier.width(108.dp),
@@ -562,36 +610,47 @@ private fun TrackingSearchResultCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onBindClick,
+                // On TV the card itself is the one stop the remote can act on: the phone card's
+                // centre key "open the site" leads to a web page a d-pad cannot use, while the
+                // bind button that matters sits inside the card's own bounds and can never be
+                // reached by focus search. So on TV centre binds (with the usual confirmation
+                // dialog) and a long press still opens the site; phones keep the phone mapping.
+                .tvFocusable(
+                    shape = RoundedCornerShape(if (expressive) 24.dp else 18.dp),
+                    addFocusTarget = false,
                 )
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .combinedClickable(
+                    onClick = if (isTvPresentation) onBindClick else onClick,
+                    onLongClick = if (isTvPresentation) onClick else onBindClick,
+                )
+                .padding(if (isTvPresentation) 6.dp else 10.dp),
+            verticalArrangement = Arrangement.spacedBy(if (isTvPresentation) 5.dp else 8.dp),
         ) {
             TrackingCoverImage(
                 coverUrl = item.coverUrl,
                 contentDescription = item.title,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(142.dp)
+                    .height(if (isTvPresentation) 48.dp else 142.dp)
                     .clip(RoundedCornerShape(14.dp)),
             )
             Text(
                 text = item.title,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
+                maxLines = if (isTvPresentation) 1 else 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            item.altTitle?.takeIf { it.isNotBlank() }?.let { altTitle ->
-                Text(
-                    text = altTitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            if (!isTvPresentation) {
+                item.altTitle?.takeIf { it.isNotBlank() }?.let { altTitle ->
+                    Text(
+                        text = altTitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             val infoParts = buildList {
                 item.score?.let { score ->
@@ -611,21 +670,23 @@ private fun TrackingSearchResultCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            FilledTonalButton(
-                onClick = onBindClick,
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_replace),
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = stringResource(R.string.migrate),
-                    style = MaterialTheme.typography.labelSmall,
-                )
+            if (!isTvPresentation) {
+                FilledTonalButton(
+                    onClick = onBindClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_replace),
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = stringResource(R.string.migrate),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
             }
         }
     }
@@ -698,6 +759,7 @@ private fun ReadingSearchResultRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .tvFocusable(shape = RoundedCornerShape(20.dp), addFocusTarget = false)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -767,6 +829,10 @@ private fun ReadingSearchResultCard(
     val latestChapterInfo = remember(item) { item.readingSearchLatestChapterInfo() }
     val context = LocalContext.current
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    // Same reason as TrackingSearchResultCard: the phone card is taller than the TV sheet's result
+    // strip, which pushed the Migrate button off the bottom edge. Compact layout on TV, one info
+    // line (the latest chapter) instead of two, so cover, title, hint and button all fit.
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val resultCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     val coverUrl = item.coverUrl?.takeIfUsableImageUri()
     val coverRequest = remember(item.id, coverUrl, item.source) {
@@ -788,30 +854,36 @@ private fun ReadingSearchResultCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onMigrateClick,
+                // Same TV mapping as TrackingSearchResultCard: centre performs the source change
+                // the remote actually needs, a long press keeps the phone's "open the site" action.
+                .tvFocusable(
+                    shape = RoundedCornerShape(if (expressive) 24.dp else 18.dp),
+                    addFocusTarget = false,
                 )
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .combinedClickable(
+                    onClick = if (isTvPresentation) onMigrateClick else onClick,
+                    onLongClick = if (isTvPresentation) onClick else onMigrateClick,
+                )
+                .padding(if (isTvPresentation) 6.dp else 10.dp),
+            verticalArrangement = Arrangement.spacedBy(if (isTvPresentation) 5.dp else 8.dp),
         ) {
             SourceCoverImage(
                 model = coverRequest,
                 contentDescription = item.title,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(142.dp)
+                    .height(if (isTvPresentation) 48.dp else 142.dp)
                     .clip(RoundedCornerShape(14.dp)),
             )
             Text(
                 text = item.title,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
+                maxLines = if (isTvPresentation) 1 else 2,
                 overflow = TextOverflow.Ellipsis,
             )
             val chaptersCount = item.chapters?.size ?: 0
-            if (chaptersCount > 0) {
+            if (chaptersCount > 0 && !isTvPresentation) {
                 Text(
                     text = pluralStringResource(R.plurals.chapters, chaptersCount, chaptersCount),
                     style = MaterialTheme.typography.labelSmall,
@@ -842,21 +914,23 @@ private fun ReadingSearchResultCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            FilledTonalButton(
-                onClick = onMigrateClick,
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_replace),
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = stringResource(R.string.migrate),
-                    style = MaterialTheme.typography.labelSmall,
-                )
+            if (!isTvPresentation) {
+                FilledTonalButton(
+                    onClick = onMigrateClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_replace),
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = stringResource(R.string.migrate),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
             }
         }
     }

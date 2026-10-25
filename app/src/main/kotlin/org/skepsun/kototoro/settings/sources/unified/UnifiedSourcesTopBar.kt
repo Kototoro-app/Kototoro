@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.ui.draw.clip
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -62,6 +61,8 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import androidx.compose.ui.graphics.Color
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -93,7 +94,7 @@ private fun ToolbarSearchIconButton(
     Box(contentAlignment = Alignment.TopEnd) {
         IconButton(
             onClick = onClick,
-            modifier = Modifier.size(40.dp),
+            modifier = Modifier.size(40.dp).tvIconButtonRing(),
         ) {
             Icon(
                 Icons.Filled.Search,
@@ -127,7 +128,7 @@ private fun ToolbarFilterIconButton(
     Box(contentAlignment = Alignment.TopEnd) {
         IconButton(
             onClick = onClick,
-            modifier = Modifier.size(40.dp),
+            modifier = Modifier.size(40.dp).tvIconButtonRing(),
         ) {
             Icon(
                 painter = rememberSafePainter(iconRes),
@@ -260,7 +261,7 @@ fun UnifiedSourcesActionCapsule(
                 IconButton(
                     onClick = { menuExpanded = true },
                     enabled = hasMenu,
-                    modifier = Modifier.size(tokens.topBarButtonSize - 4.dp),
+                    modifier = Modifier.size(tokens.topBarButtonSize - 4.dp).tvIconButtonRing(),
                 ) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
@@ -273,7 +274,7 @@ fun UnifiedSourcesActionCapsule(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
                 ) {
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.reorder)) },
                         enabled = onReorderClick != null && reorderEnabled,
                         leadingIcon = {
@@ -287,7 +288,7 @@ fun UnifiedSourcesActionCapsule(
                             onReorderClick?.invoke()
                         },
                     )
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.source_groups_title)) },
                         enabled = onGroupsClick != null,
                         leadingIcon = {

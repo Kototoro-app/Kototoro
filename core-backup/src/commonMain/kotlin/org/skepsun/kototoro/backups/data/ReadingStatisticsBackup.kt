@@ -25,8 +25,9 @@ suspend fun MangaDatabase.restoreReadingStatistic(backup: StatisticBackup) {
     backup.session?.let { detail ->
         require(backup.startedAt >= 0 && detail.endAt > backup.startedAt &&
             detail.endAt - backup.startedAt <= backup.duration &&
-            detail.startPage >= 0 && detail.endPage >= 0 && detail.startScroll >= 0 && detail.endScroll >= 0 &&
-            detail.startPercent.isFinite() && detail.endPercent.isFinite()) { "备份阅读会话无效" }
+            detail.startPage >= 0 && detail.endPage >= 0 && detail.startScroll >= 0 && detail.endScroll >= 0) {
+            "备份阅读会话无效"
+        }
     }
     val previous = getStatsDao().find(backup.mangaId, backup.startedAt)
     getStatsDao().upsert(backup.toEntity().copy(duration = maxOf(backup.duration, previous?.duration ?: 0),
@@ -35,9 +36,14 @@ suspend fun MangaDatabase.restoreReadingStatistic(backup: StatisticBackup) {
         val dao = getReadingRecordDao()
         val local = dao.findAtStart(backup.mangaId, backup.startedAt)
         if (local == null || detail.endAt > local.endAt) {
+            // The Android writer allows special floats, so an unmeasured percentage can arrive as NaN/Infinity; that
+            // means "unknown", not "unreadable session".
             val row = detail.toEntity(backup.mangaId, backup.startedAt).copy(id = local?.id ?: 0,
-                startPercent = detail.startPercent.coerceIn(0f, 1f), endPercent = detail.endPercent.coerceIn(0f, 1f))
+                startPercent = detail.startPercent.orUnknownPercent().coerceIn(0f, 1f),
+                endPercent = detail.endPercent.orUnknownPercent().coerceIn(0f, 1f))
             if (local == null) dao.insertSession(row) else dao.updateSession(row)
         }
     }
 }
+
+private fun Float.orUnknownPercent(): Float = if (isFinite()) this else 0f

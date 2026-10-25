@@ -17,7 +17,9 @@ import org.skepsun.kototoro.core.source.SourcePreferenceEdit
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.desktop.runtime.DESKTOP_BACKUP_DATA_VERSION
 import org.skepsun.kototoro.desktop.runtime.DesktopLibraryBackup
+import org.skepsun.kototoro.desktop.runtime.DesktopLocalBackups
 import org.skepsun.kototoro.desktop.runtime.DesktopRuntime
+import org.skepsun.kototoro.desktop.runtime.desktopBackupDirectory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.text.SimpleDateFormat
@@ -34,12 +36,50 @@ internal data class DesktopWebDavUi(
     val error: String? = null,
     /** When the last successful upload happened, in epoch millis; `0` means none yet. */
     val lastUploadMillis: Long = 0L,
+    /** The local copies Android writes beside the library, newest first. */
+    val localFiles: List<Path> = emptyList(),
+    /** When the last local copy was written, in epoch millis; `0` means none since this field was added. */
+    val lastLocalMillis: Long = 0L,
+    /** The directory the local copies live in, so the page can show where they are. */
+    val localDirectory: Path? = null,
+    /** The day of the last automatic restore check, in epoch millis; `0` means no check since this field was added. */
+    val lastAutoRestoreCheckMillis: Long = 0L,
 ) {
     val latest: WebDavBackupFile? get() = WebDavBackupCatalog.latest(files)
 }
 
 /** What one tick of the automatic backup did, so the caller can decide whether to wait or retry sooner. */
-internal enum class DesktopAutoBackup { Disabled, Busy, NotDue, Uploaded, Failed }
+internal enum class DesktopAutoBackup {
+    /** The timer is off: neither a server nor a local copy is configured. */
+    Disabled,
+    Busy,
+    NotDue,
+    Uploaded,
+
+    /** Written to the local directory only: Android's periodical backup without a WebDAV destination. */
+    Saved,
+    Failed,
+}
+
+/**
+ * What one pass of Android's "auto restore on startup" did. Android runs it once per calendar day, so every answer
+ * other than [Failed] settles that day: a start that found nothing must not query the server again until tomorrow.
+ */
+internal sealed interface DesktopAutoRestore {
+    /** The switch is off or the destination is incomplete: nothing was requested. */
+    data object Disabled : DesktopAutoRestore
+
+    /** Already checked today; the server was not contacted. */
+    data object NotDue : DesktopAutoRestore
+
+    /** The server has no compatible backup to merge; the day counts as checked. */
+    data object Nothing : DesktopAutoRestore
+
+    /** [merged] rows came over from [name], and the merged snapshot went back up as [uploaded]. */
+    data class Restored(val name: String, val merged: Int, val uploaded: String) : DesktopAutoRestore
+    /** Listing or restoring failed; the day stays unchecked so the next start tries again. */
+    data object Failed : DesktopAutoRestore
+}
 
 /**
  * Android's periodic WebDAV backup for the Windows client: the backups page edits the destination, tests it, uploads
@@ -74,6 +114,19 @@ internal class DesktopWebDavOperations(
     )
     private val staging: Path = storage.paths.root.resolve("webdav")
 
+    /**
+     * Android's local periodical copies: the same export the upload sends is written here first, so a server that
+     * refuses the file still leaves a restorable backup on this machine. The directory is Android's
+     * `periodicalBackupDirectory` — the one the page picked, or the data root's `backups` when it picked none or the
+     * picked one stopped being usable — so it is resolved per call instead of being frozen at construction.
+     */
+    private fun localBackups(settings: DesktopWebDavSettings) =
+        DesktopLocalBackups(localDirectory(settings), clock)
+
+    /** Where the copies of [settings] go; the page shows this path, so both sides resolve it the same way. */
+    private fun localDirectory(settings: DesktopWebDavSettings): Path =
+        desktopBackupDirectory(settings.outputDirectory, storage.paths.backups)
+
     private val mutableUi = MutableStateFlow(DesktopWebDavUi())
     val ui = mutableUi.asStateFlow()
 
@@ -86,7 +139,18 @@ internal class DesktopWebDavOperations(
         mutableUi.value = DesktopWebDavUi(
             settings = DesktopWebDavSettings.from(values),
             lastUploadMillis = (values[KEY_LAST_UPLOAD] as? SourcePreferenceValue.Text)?.value?.toLongOrNull() ?: 0L,
+            lastLocalMillis = (values[KEY_LAST_LOCAL] as? SourcePreferenceValue.Text)?.value?.toLongOrNull() ?: 0L,
+            lastAutoRestoreCheckMillis =
+                (values[KEY_LAST_AUTO_RESTORE_CHECK] as? SourcePreferenceValue.Text)?.value?.toLongOrNull() ?: 0L,
         )
+        refreshLocal()
+    }
+
+    /** Re-reads the local copies; cheap, because retention only ever keeps a handful of files. */
+    fun refreshLocal() {
+        val directory = localDirectory(mutableUi.value.settings)
+        val files = runCatching { DesktopLocalBackups(directory, clock).list() }.getOrDefault(emptyList())
+        mutableUi.value = mutableUi.value.copy(localFiles = files, localDirectory = directory)
     }
 
     fun settings(value: DesktopWebDavSettings) {
@@ -95,6 +159,8 @@ internal class DesktopWebDavOperations(
             settings = value,
             error = if (saved) null else desktopText("webdav.settingsSaveFailed"),
         )
+        // A new output directory is a different set of local copies, so the row must not keep the old listing.
+        refreshLocal()
     }
 
     /** Sends a `PROPFIND` with depth 0 so "reachable" means the directory answers, not that a download works. */
@@ -134,20 +200,24 @@ internal class DesktopWebDavOperations(
     suspend fun upload(): WebDavUploadResult = uploadLock.withLock { uploadLocked() }
 
     /**
-     * How long the timer should wait before the next automatic upload, `null` when there is nothing to wait for because
-     * the interval is off or the destination is incomplete. `0` means "upload now", which is also what a fresh install
-     * does: it has no previous upload to measure the interval against.
+     * How long the timer should wait before the next automatic backup, `null` when there is nothing to wait for because
+     * the interval is off or nothing can receive the file. `0` means "back up now", which is also what a fresh install
+     * does: it has no previous backup to measure the interval against.
+     *
+     * The baseline is the last successful *upload* when a server is configured, so a refused upload is retried on the
+     * caller's backoff instead of waiting a whole interval for a copy the user believes is in the cloud. Without a
+     * server the baseline is the last local copy, which is Android's rule for a local-only destination.
      */
     fun autoBackupDelay(now: Long = clock()): Long? {
         val settings = mutableUi.value.settings
         if (!settings.autoBackupEnabled) return null
         val interval = settings.intervalHours.toLong() * 60 * 60 * 1000
-        val last = mutableUi.value.lastUploadMillis
+        val last = if (settings.configured) mutableUi.value.lastUploadMillis else mutableUi.value.lastLocalMillis
         return if (last <= 0L) 0L else (last + interval - now).coerceAtLeast(0L)
     }
 
     /**
-     * One tick of the timer. A busy upload, an interval that has not passed and a disabled timer all leave the remote
+     * One tick of the timer. A busy backup, an interval that has not passed and a disabled timer all leave the remote
      * alone; a failed upload keeps the previous "last upload" so the retry happens after the caller's backoff.
      */
     suspend fun autoBackup(): DesktopAutoBackup {
@@ -155,18 +225,100 @@ internal class DesktopWebDavOperations(
         if (!uploadLock.tryLock()) return DesktopAutoBackup.Busy
         try {
             if (autoBackupDelay() != 0L) return DesktopAutoBackup.NotDue
-            return try {
-                uploadLocked()
-                DesktopAutoBackup.Uploaded
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                mutableUi.value = mutableUi.value.copy(error = desktopWebDavError(error))
-                DesktopAutoBackup.Failed
+            val settings = mutableUi.value.settings
+            return if (settings.configured) {
+                try {
+                    uploadLocked()
+                    DesktopAutoBackup.Uploaded
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    mutableUi.value = mutableUi.value.copy(error = desktopWebDavError(error))
+                    DesktopAutoBackup.Failed
+                }
+            } else {
+                try {
+                    keepLocalOnly(settings)
+                    DesktopAutoBackup.Saved
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    mutableUi.value = mutableUi.value.copy(error = desktopWebDavError(error))
+                    DesktopAutoBackup.Failed
+                }
             }
         } finally {
             uploadLock.unlock()
         }
+    }
+
+    /** A tick with no server: the same export Android's local-only destination writes, and nothing else. */
+    private suspend fun keepLocalOnly(settings: DesktopWebDavSettings) {
+        val now = clock()
+        Files.createDirectories(staging)
+        val file = Files.createTempFile(staging, "local-", ".zip")
+        try {
+            Files.deleteIfExists(file)
+            backups.export(file)
+            check(keepLocal(settings, file, now) != null) {
+                desktopText("webdav.localFailed", localDirectory(settings))
+            }
+        } finally {
+            Files.deleteIfExists(file)
+        }
+    }
+
+    /**
+     * Android's `WebDavAutoRestoreRunner`: once per calendar day, list the server, merge the newest compatible backup
+     * and push the merged snapshot back so the next device sees the union.
+     *
+     * A day is settled whenever the check itself finished — finding no backup counts as checked, exactly like
+     * Android, so a machine that is offline for a week does not hit the server on every start. A failure is *not*
+     * settled, because the switch exists to reconcile with the server and a transient error should be retried.
+     */
+    suspend fun autoRestore(): DesktopAutoRestore {
+        val settings = mutableUi.value.settings
+        if (!settings.autoRestore || !settings.configured) return DesktopAutoRestore.Disabled
+        val now = clock()
+        if (isSameDay(mutableUi.value.lastAutoRestoreCheckMillis, now)) return DesktopAutoRestore.NotDue
+        return try {
+            val files = refresh()
+            val candidate = WebDavBackupCatalog.latest(files.filter { it.namespace == RemoteNamespace.V3 })
+            if (candidate == null) {
+                rememberAutoRestoreCheck(now)
+                return DesktopAutoRestore.Nothing
+            }
+            val merged = restoreRemote(candidate)
+            // Android uploads the merged snapshot right after the restore, so the other devices can merge the union.
+            val uploaded = uploadLock.withLock { uploadLocked() }.name
+            rememberAutoRestoreCheck(now)
+            DesktopAutoRestore.Restored(name = candidate.name, merged = merged, uploaded = uploaded)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            mutableUi.value = mutableUi.value.copy(error = desktopWebDavError(error))
+            DesktopAutoRestore.Failed
+        }
+    }
+
+    /** Merges [file] through the same archive/merge flow the page uses, so the two cannot drift apart. */
+    private suspend fun restoreRemote(file: WebDavBackupFile): Int {
+        val path = download(file)
+        return try {
+            backups.preview(path).use { backups.restore(it) }
+        } finally {
+            Files.deleteIfExists(path)
+        }
+    }
+
+    /** Marks today as checked; Android persists it so a restart later the same day stays quiet. */
+    private fun rememberAutoRestoreCheck(now: Long) {
+        preferences.edit(
+            SourcePreferenceEdit(
+                changes = mapOf(KEY_LAST_AUTO_RESTORE_CHECK to SourcePreferenceValue.Text(now.toString())),
+            ),
+        )
+        mutableUi.value = mutableUi.value.copy(lastAutoRestoreCheckMillis = now)
     }
 
     private suspend fun uploadLocked(): WebDavUploadResult {
@@ -178,6 +330,8 @@ internal class DesktopWebDavOperations(
         try {
             Files.deleteIfExists(file)
             backups.export(file)
+            // Android writes the local copy before it uploads: a server that answers 500 must not cost the backup.
+            val local = keepLocal(settings, file, now)
             val name = client.remoteName(
                 dataVersion = DESKTOP_BACKUP_DATA_VERSION,
                 timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(now)),
@@ -187,10 +341,26 @@ internal class DesktopWebDavOperations(
             val removed = runCatching { client.trim(settings, RemoteNamespace.V3) }.getOrDefault(emptyList())
             rememberUpload(now)
             refresh()
-            return WebDavUploadResult(name, size, removed)
+            return WebDavUploadResult(name, size, removed, local)
         } finally {
             Files.deleteIfExists(file)
         }
+    }
+
+    /** The local copy of [file], when the page asks for one; a failing disk keeps the upload going, like Android's. */
+    private fun keepLocal(settings: DesktopWebDavSettings, file: Path, now: Long): String? {
+        if (!settings.keepLocalCopy) return null
+        val copies = localBackups(settings)
+        val kept = runCatching { copies.keep(file, now) }.getOrNull()
+        if (kept != null) {
+            preferences.edit(
+                SourcePreferenceEdit(changes = mapOf(KEY_LAST_LOCAL to SourcePreferenceValue.Text(now.toString()))),
+            )
+            mutableUi.value = mutableUi.value.copy(lastLocalMillis = now)
+        }
+        if (settings.trimLocal) runCatching { copies.trim(settings.localCount) }
+        refreshLocal()
+        return kept?.fileName?.toString()
     }
 
     /** A successful upload is the only thing that moves the timer's baseline, so a failed one is retried. */
@@ -226,10 +396,32 @@ internal class DesktopWebDavOperations(
     }
 }
 
-internal data class WebDavUploadResult(val name: String, val size: Long, val removed: List<String>)
+internal data class WebDavUploadResult(
+    val name: String,
+    val size: Long,
+    val removed: List<String>,
+    /** The local copy written before the upload, `null` when the page has "keep a local copy" off. */
+    val local: String? = null,
+)
 
 /** Epoch millis of the last successful upload, kept next to the destination it belongs to. */
 private const val KEY_LAST_UPLOAD = "webdav_last_upload_millis"
+
+/** Epoch millis of the last local copy; Android shows it as "last successful backup" on the periodical page. */
+private const val KEY_LAST_LOCAL = "webdav_last_local_backup_millis"
+
+/** Epoch millis of the last automatic restore check, which Android's runner compares as a calendar day. */
+private const val KEY_LAST_AUTO_RESTORE_CHECK = "webdav_last_auto_restore_check_millis"
+
+/**
+ * Android compares the two instants as `yyyy-MM-dd` in the device zone, so "today" is the user's day rather than a
+ * rolling 24 hours: a start at 23:59 and one at 00:01 are two different days.
+ */
+private fun isSameDay(previous: Long, now: Long): Boolean {
+    if (previous <= 0L) return false
+    val format = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    return format.format(Date(previous)) == format.format(Date(now))
+}
 
 /** A server's own message is the useful part ("401 Unauthorized"); the exception name is the last resort. */
 private fun desktopWebDavError(error: Exception): String =

@@ -22,6 +22,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.discover.ui.compose.DiscoverScreen
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -64,7 +65,7 @@ class TrackingDiscoverActivity : BaseComposeActivity() {
                             )
                         },
                         navigationIcon = {
-                            IconButton(onClick = ::finish) {
+                            IconButton(onClick = ::finish, modifier = Modifier.tvIconButtonRing()) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = stringResource(R.string.back),
@@ -81,6 +82,7 @@ class TrackingDiscoverActivity : BaseComposeActivity() {
                                             scheduleCategory.nameResId,
                                         )
                                     },
+                                    modifier = Modifier.tvIconButtonRing(),
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.DateRange,

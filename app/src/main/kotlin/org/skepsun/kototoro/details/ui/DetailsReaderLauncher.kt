@@ -12,6 +12,7 @@ import org.skepsun.kototoro.core.model.mergeRepeated
 import org.skepsun.kototoro.core.model.unwrap
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ReaderIntent
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.reader.ui.ReaderState
 
@@ -45,7 +46,7 @@ internal fun openDetailsReader(
     if (viewModel.historyInfo.value.isChapterMissing) {
         // The saved chapter no longer exists (its files were replaced or re-imported). Say so, and
         // offer to start over instead of leaving Read as a dead end.
-        Snackbar.make(snackbarHost, R.string.chapter_is_missing, Snackbar.LENGTH_LONG)
+        snackbarHost.makeSnackbar(R.string.chapter_is_missing, Snackbar.LENGTH_LONG)
             .setAction(R.string.start_reading) {
                 intentBuilder.state(ReaderState(manga, viewModel.selectedBranchValue))
                 launch()

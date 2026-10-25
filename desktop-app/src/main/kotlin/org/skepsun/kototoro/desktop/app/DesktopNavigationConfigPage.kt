@@ -63,7 +63,11 @@ internal fun DesktopNavigationConfigPage(controller: DesktopController, state: D
                 if (index != 0) SettingsRowDivider()
                 SettingsActionRow(
                     title = desktopNavItemLabel(item),
-                    summary = desktopText("navSettings.position", index + 1, settings.items.size),
+                    // Android's nav configuration marks an unavailable destination instead of hiding it; the one
+                    // destination with a setting behind it is the recommendations tab.
+                    summary = if (item.isAvailable(state.suggestionSettings.enabled)) {
+                        desktopText("navSettings.position", index + 1, settings.items.size)
+                    } else AndroidStrings["suggestions_unavailable_text"],
                     modifier = Modifier.testTag("nav-config-item:${item.name}"),
                 ) {
                     TextButton(

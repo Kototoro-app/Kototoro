@@ -15,7 +15,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +33,7 @@ import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.util.ext.isSerializable
@@ -226,12 +226,12 @@ class ScrobblerConfigActivity : BaseComposeActivity() {
                         Text(stringResource(R.string.logged_in_as, viewModel.user.value?.nickname.orEmpty()))
                     },
                     confirmButton = {
-                        TextButton(onClick = ::logout) {
+                        TvTextButton(onClick = ::logout) {
                             Text(stringResource(R.string.logout))
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { dismissDialog(dialog) }) {
+                        TvTextButton(onClick = { dismissDialog(dialog) }) {
                             Text(stringResource(R.string.close))
                         }
                     },

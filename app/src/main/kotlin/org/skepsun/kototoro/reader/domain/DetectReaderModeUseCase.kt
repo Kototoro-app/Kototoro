@@ -19,11 +19,11 @@ import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import org.skepsun.kototoro.reader.core.ReaderModeDetection
 import org.skepsun.kototoro.reader.ui.ReaderState
 import java.io.InputStream
 import java.util.zip.ZipFile
 import javax.inject.Inject
-import kotlin.math.roundToInt
 import android.util.Base64
 import java.io.ByteArrayInputStream
 
@@ -62,8 +62,7 @@ class DetectReaderModeUseCase @Inject constructor(
      */
     private suspend fun guessContentIsWebtoon(repository: ContentRepository, pages: List<ContentPage>): Boolean {
         if (pages.isEmpty()) return false
-        val pageIndex = (pages.size * 0.3).roundToInt()
-        val page = pages.getOrNull(pageIndex) ?: return false
+        val page = pages.getOrNull(ReaderModeDetection.probePageIndex(pages.size)) ?: return false
         val url = runCatching { repository.getPageUrl(page) }.getOrNull() ?: return false
         val uri = url.toUri()
 
@@ -100,12 +99,10 @@ class DetectReaderModeUseCase @Inject constructor(
                 }
             }
         }.getOrNull() ?: return false
-        return size.width * MIN_WEBTOON_RATIO < size.height
+        return ReaderModeDetection.isWebtoonPage(size.width, size.height)
     }
 
     companion object {
-
-        private const val MIN_WEBTOON_RATIO = 1.8
 
         private fun getBitmapSize(input: InputStream?): Size {
             val options = BitmapFactory.Options().apply {

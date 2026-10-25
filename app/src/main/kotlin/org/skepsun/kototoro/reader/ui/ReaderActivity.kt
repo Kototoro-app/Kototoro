@@ -22,7 +22,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +52,7 @@ import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.unwrap
 import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
@@ -60,6 +60,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.nav.ReaderIntent
 import org.skepsun.kototoro.core.parser.ContentDataRepository
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -1189,6 +1190,8 @@ class ReaderActivity :
                 mode = composeReaderController.readerMode,
                 continuousHorizontalReversed = settings.isContinuousHorizontalReversed,
                 chaptersReversed = viewModel.isChapterOrderReversed.value,
+                // A local chapter is already on the device, so its download cell has nothing to fetch.
+                canDownloadChapter = viewModel.getContentOrNull()?.isLocal == false,
                 webtoonSceneReader = settings.isExperimentalSceneReaderEnabled,
                 pagedSceneReader = settings.isExperimentalPagedSceneReaderEnabled,
                 animation = settings.readerAnimation,
@@ -1255,7 +1258,16 @@ class ReaderActivity :
         }.getOrNull()
         val url = chapterUrl?.takeIf { it.startsWith("http", ignoreCase = true) }
             ?: manga.publicUrl.takeIf { it.startsWith("http", ignoreCase = true) }
-        if (url != null) router.openBrowser(url, manga.source, chapter.title) else router.openBrowser(manga)
+        when {
+            url != null -> router.openBrowser(url, manga.source, chapter.title)
+            manga.url.startsWith("http", ignoreCase = true) -> router.openBrowser(manga)
+            // Local files and other non-http content have no page to show: the in-app browser would
+            // only render net::ERR_ACCESS_DENIED for a file:// path.
+            else -> composeReaderController.showMessage(
+                getString(R.string.open_in_browser_unavailable),
+                TOAST_DURATION,
+            )
+        }
     }
 
     override fun scrollBy(delta: Int, smooth: Boolean): Boolean {
@@ -1678,13 +1690,13 @@ private fun ReaderLoadingErrorDialog(
         text = { Text(message) },
         confirmButton = {
             if (resolveActionStringId != 0) {
-                TextButton(onClick = onResolve) {
+                TvTextButton(onClick = onResolve) {
                     Text(stringResource(resolveActionStringId))
                 }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TvTextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.close))
             }
         },
@@ -1728,13 +1740,13 @@ private fun IncognitoModeDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDisabledSelected) {
+                TvTextButton(onClick = onDisabledSelected) {
                     Text(stringResource(R.string.disable))
                 }
-                TextButton(onClick = onDismissRequest) {
+                TvTextButton(onClick = onDismissRequest) {
                     Text(stringResource(android.R.string.cancel))
                 }
-                TextButton(onClick = onIncognitoModeSelected) {
+                TvTextButton(onClick = onIncognitoModeSelected) {
                     Text(stringResource(R.string.incognito))
                 }
             }

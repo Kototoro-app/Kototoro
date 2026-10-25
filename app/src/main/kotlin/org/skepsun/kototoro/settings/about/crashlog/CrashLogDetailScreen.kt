@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 
 /**
  * Full Compose crash log detail screen replacing:
@@ -43,7 +44,7 @@ fun CrashLogDetailScreen(
             TopAppBar(
                 title = { Text(text = "Crash Log Detail") }, // TODO: use stringResource
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
+                    IconButton(onClick = onNavigateUp, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Navigate back",
@@ -51,13 +52,13 @@ fun CrashLogDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onCopy) {
+                    IconButton(onClick = onCopy, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.Outlined.ContentCopy,
                             contentDescription = "Copy to clipboard",
                         )
                     }
-                    IconButton(onClick = onShare) {
+                    IconButton(onClick = onShare, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.Outlined.Share,
                             contentDescription = "Share",

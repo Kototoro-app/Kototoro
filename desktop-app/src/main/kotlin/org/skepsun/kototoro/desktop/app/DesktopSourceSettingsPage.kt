@@ -2,20 +2,29 @@ package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.core.extensions.resolveJarPriorityOrder
+import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.core.ui.settings.SettingsGroup
 import org.skepsun.kototoro.core.ui.settings.SettingsInfoRow
 import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
@@ -48,6 +57,13 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
         SettingsGroup {
             SettingsValueRow(desktopText("sources.sort"), desktopText("sources.sortSummary"), settings.sort.title,
                 active, { dialog = SourceSettingsDialog.SORT }, testTag = "source-setting-sort")
+            if (settings.sort == DesktopSourceSort.CUSTOM) {
+                SettingsRowDivider()
+                // Android's `SourcesSettingsScreen` only shows the reorder action while the hand-picked order is the
+                // chosen one, because that is the only order the editor can change.
+                SettingsValueRow(AndroidStrings["reorder"], desktopText("sources.reorderSummary"), null, active,
+                    { dialog = SourceSettingsDialog.REORDER }, testTag = "source-setting-reorder")
+            }
             SettingsRowDivider()
             SettingsSwitchRow(desktopText("sources.grid"), desktopText("sources.gridSummary"), settings.grid, active,
                 { update(settings.copy(grid = it)) }, testTag = "source-setting-grid")
@@ -55,6 +71,36 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
             SettingsSwitchRow(desktopText("sources.groupLanguage"), desktopText("sources.groupLanguageSummary"),
                 settings.groupByLanguage, active, { update(settings.copy(groupByLanguage = it)) },
                 testTag = "source-setting-group-language")
+            SettingsRowDivider()
+            // Android closes this group with the wizard entry; on Windows it is the only way in, since nothing opens
+            // the wizard by itself on a fresh data root.
+            SettingsValueRow(AndroidStrings["setup_wizard"], desktopText("sources.wizardSummary"), null, active,
+                { controller.showSetupWizard() }, testTag = "source-setting-wizard")
+        }
+        SettingsSectionHeader(desktopText("sources.remote"))
+        SettingsGroup {
+            // Android's `jar_priority_order` (a reorder preference): which plugin serves a source two plugins share.
+            SettingsValueRow(AndroidStrings["jar_priority_order_title"],
+                AndroidStrings["jar_priority_order_summary"],
+                state.jarPriorityOrder.resolvedPluginNames(state).takeIf { it.isNotEmpty() }?.joinToString(", ")
+                    ?: AndroidStrings["not_specified"],
+                active, { dialog = SourceSettingsDialog.JAR_PRIORITY }, testTag = "source-setting-jar-priority")
+            SettingsRowDivider()
+            // The restart note belongs to the priority order above, so it stays right under it.
+            SettingsInfoRow(desktopText("sources.jarPriorityNote"), null)
+            SettingsRowDivider()
+            // Android's `show_broken_sources`: a `@Broken` parser stays installed, this decides if lists offer it.
+            // Unlike the order above it applies at once, so it sits after the restart note rather than before it.
+            SettingsSwitchRow(AndroidStrings["show_broken_sources"],
+                AndroidStrings["show_broken_sources_summary"], state.showBrokenSources, active,
+                { controller.setShowBrokenSources(it) }, testTag = "source-setting-show-broken")
+            SettingsRowDivider()
+            // Android's `extension_install_behavior` (§178): what installing a package does to the sources it brings,
+            // per kind. It is a live setting like the switch above, so it stays after the restart note too.
+            SettingsValueRow(AndroidStrings["extension_install_behavior"],
+                AndroidStrings["extension_install_behavior_sheet_summary"],
+                state.extensionInstallPolicies.policySummary(), active,
+                { dialog = SourceSettingsDialog.INSTALL_BEHAVIOR }, testTag = "source-setting-install-behavior")
         }
         SettingsSectionHeader(desktopText("sources.tags"))
         SettingsGroup {
@@ -114,6 +160,24 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
             },
             onDismiss = { dialog = null },
         )
+        SourceSettingsDialog.JAR_PRIORITY -> DesktopJarPriorityDialog(state = state, enabled = active,
+            onOrder = { controller.setJarPriorityOrder(it) }, onDismiss = { dialog = null })
+        SourceSettingsDialog.REORDER -> DesktopSourceOrderDialog(
+            sources = settings.sorted(state.enabledSources),
+            enabled = active,
+            onSave = { names ->
+                dialog = null
+                controller.saveSourceOrder(names)
+            },
+            onDismiss = { dialog = null },
+        )
+        SourceSettingsDialog.INSTALL_BEHAVIOR -> DesktopInstallBehaviorDialog(
+            policies = state.extensionInstallPolicies,
+            enabled = active,
+            onPolicy = { typeName, policy -> controller.setExtensionInstallPolicy(typeName, policy) },
+            onAllPolicies = { controller.setAllExtensionInstallPolicies(it) },
+            onDismiss = { dialog = null },
+        )
         SourceSettingsDialog.NSFW_TARGETS -> DesktopMultiChoiceSettingsDialog(
             title = desktopText("sources.nsfwFilter"),
             summary = desktopText("sources.nsfwFilterSummary"),
@@ -134,7 +198,128 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
     }
 }
 
-private enum class SourceSettingsDialog { SORT, NSFW_TARGETS, INCOGNITO_NSFW }
+private enum class SourceSettingsDialog { SORT, JAR_PRIORITY, NSFW_TARGETS, INCOGNITO_NSFW, INSTALL_BEHAVIOR, REORDER }
+
+/**
+ * The parser plugins that `jar_priority_order` ranks, in that order; plugins the value does not name come last. A
+ * session that has not listed its extensions yet only knows the stored names, which are the plugin ids anyway.
+ */
+private fun String.resolvedPluginNames(state: DesktopAppState): List<String> {
+    val installed = state.installedEntries.filter { it.kind == DesktopInstalledKind.PARSER }.map { it.id }
+    return if (installed.isEmpty()) parseJarPriorityNames() else resolveJarPriorityOrder(installed, this)
+}
+
+/**
+ * Android's reorder preference for the deduplication order. The list is the installed parser plugins; each move
+ * stores immediately like the category manager does, because [org.skepsun.kototoro.parserhost.ParserPluginRegistry]
+ * applies the order when it opens — the row's note says so instead of promising a live re-rank.
+ */
+@Composable
+private fun DesktopJarPriorityDialog(state: DesktopAppState, enabled: Boolean, onOrder: (List<String>) -> Unit,
+    onDismiss: () -> Unit) {
+    val order = state.jarPriorityOrder.resolvedPluginNames(state)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.widthIn(max = 560.dp).testTag("jar-priority-dialog"),
+        title = { Text(AndroidStrings["jar_priority_order_title"]) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(AndroidStrings["jar_priority_order_summary"],
+                    style = MaterialTheme.typography.bodySmall)
+                if (order.isEmpty()) {
+                    Text(desktopText("extensions.installedEmpty"),
+                        modifier = Modifier.testTag("jar-priority-empty"),
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                order.forEachIndexed { index, name ->
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().testTag("jar-priority:$name")) {
+                        Text(name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            fontSize = 14.sp)
+                        TextButton({ onOrder(order.moved(from = index, to = index - 1)) },
+                            enabled = enabled && index > 0, modifier = Modifier.testTag("jar-priority-up:$name")) {
+                            Text(desktopText("library.categoryUp"))
+                        }
+                        TextButton({ onOrder(order.moved(from = index, to = index + 1)) },
+                            enabled = enabled && index < order.lastIndex,
+                            modifier = Modifier.testTag("jar-priority-down:$name")) {
+                            Text(desktopText("library.categoryDown"))
+                        }
+                    }
+                }
+                Text(desktopText("sources.jarPriorityNote"), modifier = Modifier.testTag("jar-priority-note"),
+                    style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = {
+            TextButton(onDismiss, modifier = Modifier.testTag("jar-priority-close")) {
+                Text(desktopText("common.close"))
+            }
+        },
+    )
+}
+
+private fun <T> List<T>.moved(from: Int, to: Int): List<T> =
+    toMutableList().apply { add(to, removeAt(from)) }
+
+/**
+ * Android's `ReorderDialog` for the source rail. As on Android, moving never writes: the rows are a local draft and
+ * only "保存" stores the sequence (which also switches the sort order to it, exactly like `saveSourceOrder` does).
+ * Android drags a handle and locks each move to the item's group because its editor draws the pinned/language headers;
+ * this list is flat and a mouse host has no long-press, so every row carries the two moves as buttons — the same shape
+ * the plugin priority dialog uses — and 按语言分组 re-groups the rail afterwards, leaving the stored sequence in charge
+ * of the order inside each language.
+ */
+@Composable
+private fun DesktopSourceOrderDialog(
+    sources: List<SourceListing>,
+    enabled: Boolean,
+    onSave: (List<String>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var draft by remember(sources) { mutableStateOf(sources.map { it.source.name to it.displayName }) }
+    fun move(from: Int, to: Int) {
+        if (from in draft.indices && to in draft.indices) draft = draft.moved(from, to)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.widthIn(max = 560.dp).testTag("source-order-dialog"),
+        title = { Text(AndroidStrings["reorder"]) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(desktopText("sources.reorderSummary"), style = MaterialTheme.typography.bodySmall)
+                if (draft.isEmpty()) {
+                    Text(desktopText("sources.reorderEmpty"), modifier = Modifier.testTag("source-order-empty"),
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                draft.forEachIndexed { index, (name, title) ->
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().testTag("source-order:$name")) {
+                        Text(title, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            fontSize = 14.sp)
+                        TextButton({ move(index, index - 1) }, enabled = enabled && index > 0,
+                            modifier = Modifier.testTag("source-order-up:$name")) {
+                            Text(AndroidStrings["reorder_move_up"])
+                        }
+                        TextButton({ move(index, index + 1) }, enabled = enabled && index < draft.lastIndex,
+                            modifier = Modifier.testTag("source-order-down:$name")) {
+                            Text(AndroidStrings["reorder_move_down"])
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton({ onSave(draft.map { it.first }) }, enabled = enabled && draft.isNotEmpty(),
+                modifier = Modifier.testTag("source-order-save")) { Text(desktopText("common.save")) }
+        },
+        dismissButton = {
+            TextButton(onDismiss, modifier = Modifier.testTag("source-order-cancel")) {
+                Text(desktopText("common.cancel"))
+            }
+        },
+    )
+}
 
 /** Same rendering rule as the recommendations page: nothing selected reads as no value at all. */
 private fun Set<String>.showAsList(): String? =
@@ -145,6 +330,7 @@ private val DesktopSourceSort.title: String
         DesktopSourceSort.DEFAULT -> desktopText("sources.sort.default")
         DesktopSourceSort.TITLE -> desktopText("sources.sort.title")
         DesktopSourceSort.LANGUAGE -> desktopText("sources.sort.language")
+        DesktopSourceSort.CUSTOM -> desktopText("sources.sort.custom")
     }
 
 private val DesktopNsfwTarget.title: String
@@ -154,6 +340,7 @@ private val DesktopNsfwTarget.title: String
         DesktopNsfwTarget.HISTORY -> desktopText("sources.nsfw.history")
         DesktopNsfwTarget.FEED -> desktopText("sources.nsfw.feed")
         DesktopNsfwTarget.UPDATES -> desktopText("sources.nsfw.updates")
+        DesktopNsfwTarget.BOOKMARKS -> desktopText("sources.nsfw.bookmarks")
     }
 
 /** Android's three options in its `TriStateOption` order, worded as the question about adult works. */

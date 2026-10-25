@@ -55,6 +55,8 @@ import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.compose.SelectionActionBar
+import org.skepsun.kototoro.core.ui.compose.SelectionBarIconButton
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.artworkAwareContainerColor
@@ -283,32 +285,16 @@ fun BookmarksScreen(
             exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
         ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.inverseSurface,
-                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+            SelectionActionBar(
+                selectedCount = selectedItemIds.size,
+                onClearSelection = onClearSelection,
                 modifier = Modifier.padding(16.dp).windowInsetsPadding(WindowInsets.safeDrawing),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onClearSelection) {
-                            Icon(imageVector = Icons.Default.Close, contentDescription = "Clear")
-                        }
-                        Text(
-                            text = "${selectedItemIds.size}",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(start = 8.dp),
-                        )
-                    }
-                    Row {
-                        IconButton(onClick = { onSelectionActionClick(R.id.action_delete) }) {
-                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete")
-                        }
-                    }
+                SelectionBarIconButton(onClick = { onSelectionActionClick(R.id.action_delete) }) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = stringResource(R.string.delete),
+                    )
                 }
             }
         }

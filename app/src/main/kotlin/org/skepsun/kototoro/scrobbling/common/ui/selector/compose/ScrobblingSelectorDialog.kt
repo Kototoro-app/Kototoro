@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.scrobbling.common.ui.scrobblerIconTint
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -96,12 +97,12 @@ fun ScrobblingSelectorDialog(
         TopAppBar(
             title = { Text(stringResource(R.string.tracking)) },
             navigationIcon = {
-                IconButton(onClick = onDismissRequest) {
+                IconButton(onClick = onDismissRequest, modifier = Modifier.tvIconButtonRing()) {
                     Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
                 }
             },
             actions = {
-                IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
+                IconButton(onClick = { isSearchExpanded = !isSearchExpanded }, modifier = Modifier.tvIconButtonRing()) {
                     Icon(
                         imageVector = if (isSearchExpanded) Icons.Default.Close else Icons.Default.Search,
                         contentDescription = stringResource(R.string.search),
@@ -157,7 +158,7 @@ private fun ScrobblerSearchField(
             ),
         placeholder = { Text(stringResource(R.string.search)) },
         trailingIcon = {
-                IconButton(onClick = submit) {
+                IconButton(onClick = submit, modifier = Modifier.tvIconButtonRing()) {
                     Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search))
                 }
             },
@@ -223,7 +224,7 @@ private fun ScrobblerTabs(viewModel: ScrobblingSelectorViewModel) {
             IconButton(
                 onClick = viewModel::onDoneClick,
                 enabled = !isLoading,
-                modifier = Modifier.padding(end = dimensionResource(R.dimen.toolbar_button_margin)),
+                modifier = Modifier.padding(end = dimensionResource(R.dimen.toolbar_button_margin)).tvIconButtonRing(),
             ) {
                 Icon(
                     painter = rememberSafePainter(

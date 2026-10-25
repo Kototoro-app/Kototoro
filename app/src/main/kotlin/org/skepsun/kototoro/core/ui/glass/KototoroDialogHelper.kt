@@ -41,7 +41,7 @@ fun ApplyDynamicArtworkBlurDialogStyle() {
     }
 }
 
-private fun findDialogWindow(view: View): Window? {
+internal fun findDialogWindow(view: View): Window? {
     var current: View? = view
     while (current != null) {
         if (current is DialogWindowProvider) {

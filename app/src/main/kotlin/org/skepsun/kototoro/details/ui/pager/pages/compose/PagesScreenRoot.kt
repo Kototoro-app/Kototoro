@@ -15,6 +15,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.util.ext.findActivity
+import org.skepsun.kototoro.core.util.ext.makeSnackbar
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
@@ -60,13 +61,9 @@ fun PagesScreenRoot(
         viewModel.onPageSaved.observeEvent(lifecycleOwner) { uris ->
             if (uris.isEmpty()) return@observeEvent
             if (uris.size == 1) {
-                Snackbar.make(viewForSnackbar, R.string.page_saved, Snackbar.LENGTH_LONG).show()
+                viewForSnackbar.makeSnackbar(R.string.page_saved, Snackbar.LENGTH_LONG).show()
             } else {
-                Snackbar.make(
-                    viewForSnackbar,
-                    context.getString(R.string.pages_saved),
-                    Snackbar.LENGTH_LONG,
-                ).show()
+                viewForSnackbar.makeSnackbar(context.getString(R.string.pages_saved), Snackbar.LENGTH_LONG).show()
             }
         }
         onDispose {}

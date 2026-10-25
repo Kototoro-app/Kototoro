@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChromeTopBar
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderChapterTitleChip
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderFloatingControlButton
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressBar
@@ -94,7 +95,7 @@ internal fun BoxScope.DesktopReaderChrome(
         ReaderChromeTopBar(
             title = state.content?.title.orEmpty(),
             subtitle = state.chapter?.title.orEmpty(),
-            chapterTitleAtBottom = false,
+            chapterTitleAtBottom = state.readerSettings.chapterTitleAtBottom,
             backDescription = AndroidStrings["back"],
             optionsDescription = AndroidStrings["options"],
             onNavigateBack = onBack,
@@ -106,6 +107,20 @@ internal fun BoxScope.DesktopReaderChrome(
     AnimatedVisibility(controlsVisible, enter = slideInVertically { it }, exit = slideOutVertically { it },
         modifier = Modifier.align(Alignment.BottomCenter)) {
         Box(Modifier.fillMaxWidth()) {
+            if (state.readerSettings.chapterTitleAtBottom) {
+                // Android's bottom title pill: it shares the floating controls' baseline (bottom inset), so the
+                // chapter is reachable with the mouse where the dock is and never collides with it.
+                ReaderChapterTitleChip(
+                    title = state.content?.title.orEmpty(),
+                    subtitle = state.chapter?.title.orEmpty(),
+                    onClick = onChapters,
+                    contentColor = chromeText,
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                        .padding(horizontal = 12.dp)
+                        .padding(bottom = FloatingControlInset)
+                        .testTag("reader-chapter-title-bottom"),
+                )
+            }
             if (state.pages.size > 1) ReaderProgressDock(
                 isIosStyle = false,
                 modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 12.dp, vertical = 4.dp),

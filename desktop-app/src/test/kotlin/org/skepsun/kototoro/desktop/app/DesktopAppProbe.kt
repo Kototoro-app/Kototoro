@@ -27,6 +27,18 @@ object DesktopAppProbe {
                 DesktopBookmarksProbe.run(args)
                 return
             }
+            if (args[0] == "updates") {
+                DesktopUpdatesProbe.run(args)
+                return
+            }
+            if (args[0] == "suggestions") {
+                DesktopSuggestionsProbe.run(args)
+                return
+            }
+            if (args[0] == "browsePaging") {
+                DesktopBrowsePagingProbe.run(args)
+                return
+            }
             if (args[0] == "incognito") {
                 DesktopIncognitoProbe.run(args)
                 return
@@ -61,6 +73,34 @@ object DesktopAppProbe {
             }
             if (args[0] == "downloadsettings") {
                 DesktopDownloadSettingsProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("jarpriority-")) {
+                DesktopJarPriorityProbe.run(args)
+                return
+            }
+            if (args[0] == "wizard") {
+            DesktopWizardProbe.run(args)
+            return
+        }
+        if (args[0].startsWith("sourceorder-")) {
+                DesktopSourceOrderProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("brokensource-")) {
+                DesktopBrokenSourcesProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("installpolicy-")) {
+                DesktopInstallPolicyProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("suggestionpolicy-")) {
+                DesktopSuggestionPolicyProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("services-")) {
+                DesktopServicesProbe.run(args)
                 return
             }
             if (args[0] == "navconfig") {
@@ -115,6 +155,10 @@ object DesktopAppProbe {
                 DesktopJsonSourcesProbe.run(args)
                 return
             }
+            if (args[0] == "sourcetest") {
+                DesktopSourceTestProbe.run(args)
+                return
+            }
             if (args[0].startsWith("repositories-")) {
                 DesktopRepositoriesProbe.run(args)
                 return
@@ -153,6 +197,26 @@ object DesktopAppProbe {
             }
             if (args[0].startsWith("reader-gestures-")) {
                 DesktopReaderGestureProbe.run(args)
+                return
+            }
+            if (args[0] == "reader-webtoon-gaps") {
+                DesktopWebtoonGapsProbe.run(args)
+                return
+            }
+            if (args[0] == "reader-horizontal-strip") {
+                DesktopHorizontalStripProbe.run(args)
+                return
+            }
+            if (args[0] == "reader-title-bottom") {
+                DesktopReaderTitleBottomProbe.run(args)
+                return
+            }
+            if (args[0] == "preload-reduction") {
+                DesktopPreloadReductionProbe.run(args)
+                return
+            }
+            if (args[0] == "reader-mode-detect") {
+                DesktopModeDetectProbe.run(args)
                 return
             }
             if (args[0].startsWith("reader-camera-")) {

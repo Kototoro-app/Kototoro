@@ -824,6 +824,7 @@ internal object DesktopTabletProbe {
                 check((session.storage.preferences.open("desktop_background").snapshot()["tracker_freq"]
                     as? org.skepsun.kototoro.core.source.SourcePreferenceValue.Text)?.value == "2.0")
                 onNodeWithTag("settings-tracker-dialog").assertDoesNotExist()
+                onNodeWithTag("services-open").performScrollTo().performClick(); idle()
                 onNodeWithTag("settings-recommendations-open").performScrollTo().performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.RECOMMENDATIONS)
                 onNodeWithTag("settings-suggestions-enabled").assertExists()

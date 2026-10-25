@@ -76,7 +76,10 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
+import org.skepsun.kototoro.core.ui.adaptive.rememberTvTextFieldReadOnlyState
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
@@ -365,14 +368,25 @@ fun SettingsSwitchPreference(
     onLockClick: (() -> Unit)? = null,
     onCheckedChange: (Boolean) -> Unit,
 ) {
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     Row(
         modifier = Modifier
-            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
-            .toggleable(
-                value = checked,
-                enabled = enabled,
-                role = Role.Switch,
-                onValueChange = onCheckedChange,
+            .then(if (isTvPresentation) Modifier.fillMaxWidth() else Modifier)
+            .then(
+                if (isTvPresentation) {
+                    // 与 SettingsChoicePreference 同理：整行既当焦点目标又装着行尾的锁按钮时，方向键
+                    // 永远走不进自己矩形里的孩子，锁图标就成了够不着的死键。电视上把开关让给正文。
+                    Modifier
+                } else {
+                    Modifier
+                        .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+                        .toggleable(
+                            value = checked,
+                            enabled = enabled,
+                            role = Role.Switch,
+                            onValueChange = onCheckedChange,
+                        )
+                },
             )
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
@@ -383,7 +397,22 @@ fun SettingsSwitchPreference(
             tone = SettingsIconTone.SECONDARY_VARIANT,
         )
         Column(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (isTvPresentation) {
+                        Modifier
+                            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+                            .toggleable(
+                                value = checked,
+                                enabled = enabled,
+                                role = Role.Switch,
+                                onValueChange = onCheckedChange,
+                            )
+                    } else {
+                        Modifier
+                    },
+                ),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
@@ -407,7 +436,7 @@ fun SettingsSwitchPreference(
             }
         }
         if (onLockClick != null) {
-            IconButton(onClick = onLockClick) {
+            IconButton(onClick = onLockClick, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     painter = painterResource(if (locked) R.drawable.ic_lock else R.drawable.ic_lock_open),
                     contentDescription = stringResource(if (locked) R.string.source_lock_locked else R.string.source_lock_unlocked),
@@ -446,12 +475,23 @@ fun <T> SettingsChoicePreference(
     var isDialogVisible by remember { mutableStateOf(false) }
     var currentValue by remember(value) { mutableStateOf(value) }
     val selectedLabel = options.firstOrNull { it.value == currentValue }?.label.orEmpty()
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
-            .clickable(enabled = enabled) { isDialogVisible = true }
+            .then(
+                if (isTvPresentation) {
+                    // 电视上整行不能既当焦点目标又装着行尾的图标按钮：方向性焦点搜索只认"严格位于
+                    // 当前节点矩形之外"的候选，孩子永远在父矩形内部，于是行尾那两个快捷入口成了
+                    // 够不着的死键。这里把可点区域让给正文，图标各成一个兄弟焦点目标。
+                    Modifier
+                } else {
+                    Modifier
+                        .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+                        .clickable(enabled = enabled) { isDialogVisible = true }
+                },
+            )
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -461,7 +501,17 @@ fun <T> SettingsChoicePreference(
             tone = SettingsIconTone.PRIMARY_VARIANT,
         )
         Column(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (isTvPresentation) {
+                        Modifier
+                            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+                            .clickable(enabled = enabled) { isDialogVisible = true }
+                    } else {
+                        Modifier
+                    },
+                ),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
@@ -493,7 +543,7 @@ fun <T> SettingsChoicePreference(
         }
         Spacer(modifier = Modifier.width(8.dp))
         if (onSettingsClick != null) {
-            IconButton(onClick = onSettingsClick, enabled = enabled) {
+            IconButton(onClick = onSettingsClick, enabled = enabled, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     imageVector = settingsIcon,
                     contentDescription = settingsContentDescription,
@@ -502,7 +552,7 @@ fun <T> SettingsChoicePreference(
             }
         }
         if (onSecondarySettingsClick != null) {
-            IconButton(onClick = onSecondarySettingsClick, enabled = enabled) {
+            IconButton(onClick = onSecondarySettingsClick, enabled = enabled, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
                     imageVector = secondarySettingsIcon,
                     contentDescription = secondarySettingsContentDescription,
@@ -773,6 +823,14 @@ fun SettingsSliderPreference(
     var committedValue by remember(value) { mutableStateOf(value.coerceIn(valueRange.first, valueRange.last)) }
     val steps = ((valueRange.last - valueRange.first) / step - 1).coerceAtLeast(0)
     val currentValue = sliderValue.roundToInt().coerceIn(valueRange.first, valueRange.last)
+    val applyValue: (Float) -> Unit = { newValue ->
+        sliderValue = newValue
+        val nextValue = newValue.roundToInt().coerceIn(valueRange.first, valueRange.last)
+        if (nextValue != committedValue) {
+            committedValue = nextValue
+            onValueChange(nextValue)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -821,18 +879,20 @@ fun SettingsSliderPreference(
         }
         KototoroSlider(
             value = sliderValue,
-            onValueChange = {
-                sliderValue = it
-                val nextValue = it.roundToInt().coerceIn(valueRange.first, valueRange.last)
-                if (nextValue != committedValue) {
-                    committedValue = nextValue
-                    onValueChange(nextValue)
-                }
-            },
+            onValueChange = applyValue,
             valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
             steps = steps,
             enabled = enabled,
             compactThumb = true,
+            // 电视上没有这里的遥控器接线，滑杆就是一个“焦点进去、什么都看不出、只能靠上下键逃出”的死胡同：
+            // 环与左右键按步进都由 tvSliderDpad 提供（手机上是 no-op）。
+            modifier = Modifier.tvSliderDpad(
+                value = sliderValue,
+                valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
+                onValueChange = applyValue,
+                steps = steps,
+                enabled = enabled,
+            ),
             onValueChangeFinished = {
                 if (currentValue != committedValue) {
                     committedValue = currentValue
@@ -854,6 +914,26 @@ fun SettingsTextInputPreference(
     enabled: Boolean = true,
     onValueChange: (String) -> Unit,
 ) {
+    // An inline field is a dead end for a remote: while it holds the focus the D-pad belongs to the
+    // caret, and the focus escape cannot always find a neighbour inside a scrolling settings pane, so
+    // every row below the field becomes unreachable (found on Settings > Storage and network, where
+    // the mirror URL field hid the whole rest of the page). On TV the same value is edited in a
+    // dialog instead, where the field hands the focus back to OK through a FocusRequester
+    // (`rememberTvFieldExit`). Phones and tablets keep the inline field exactly as before.
+    if (LocalUiPresentationConfig.current.isTv) {
+        SettingsDialogTextPreference(
+            title = title,
+            value = value,
+            summary = summary,
+            placeholder = placeholder,
+            isPassword = isPassword,
+            iconRes = iconRes,
+            enabled = enabled,
+            onValueChange = onValueChange,
+        )
+        return
+    }
+
     var currentValue by remember(value) { mutableStateOf(value) }
 
     Column(
@@ -976,12 +1056,18 @@ fun SettingsDialogTextPreference(
         val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
         val isTvPresentation = LocalUiPresentationConfig.current.isTv
         val fieldExit = rememberTvFieldExit()
+        // TV keeps the dialog's field read-only until the centre key asks for editing: an editable
+        // field opens the software keyboard the moment it takes the focus, and on a 1080p set that
+        // keyboard covers the OK/Cancel row below it. Read-only first means the dialog opens with the
+        // ring on the field and every button visible; centre starts the keyboard on purpose.
+        val readOnlyState = rememberTvTextFieldReadOnlyState()
         SettingsAlertDialog(
             title = title,
             onDismissRequest = {
                 isSuggestionsExpanded = false
                 isDialogVisible = false
             },
+            bodyEditing = readOnlyState.isEditing,
             text = {
                 Column {
                     OutlinedTextField(
@@ -989,15 +1075,20 @@ fun SettingsDialogTextPreference(
                         onValueChange = {
                             pendingValue = it
                         },
+                        readOnly = readOnlyState.isReadOnly,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .then(readOnlyState.fieldModifier)
                             .then(fieldExit.fieldModifier),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { fieldExit.onDone() }),
                         placeholder = placeholder?.let { { Text(text = it) } },
                         trailingIcon = if (suggestions.isNotEmpty() && !isTvPresentation) {
                             {
-                                IconButton(onClick = { isSuggestionsExpanded = !isSuggestionsExpanded }) {
+                                IconButton(
+                                    onClick = { isSuggestionsExpanded = !isSuggestionsExpanded },
+                                    modifier = Modifier.tvIconButtonRing(),
+                                ) {
                                     Icon(
                                         imageVector = if (isSuggestionsExpanded) {
                                             Icons.Filled.KeyboardArrowUp
@@ -1056,13 +1147,33 @@ fun SettingsDialogTextPreference(
                 )
             },
             dismissButton = {
-                SettingsDialogActionButton(
-                    text = stringResource(android.R.string.cancel),
-                    onClick = {
-                        isSuggestionsExpanded = false
-                        isDialogVisible = false
-                    },
-                )
+                val cancel = @Composable {
+                    SettingsDialogActionButton(
+                        text = stringResource(android.R.string.cancel),
+                        onClick = {
+                            isSuggestionsExpanded = false
+                            isDialogVisible = false
+                        },
+                    )
+                }
+                if (isTvPresentation) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        cancel()
+                        // A remote cannot select all and delete, and the TV keyboard only offers one
+                        // backspace at a time, so emptying a stored value - a mirror URL, an API key,
+                        // "1080p, 720p, 480p" - meant seventeen deletes through a keyboard that covers
+                        // this very button row. Clear sits between Cancel and OK because that is the
+                        // row the remote already walks: the field's exit lands on OK and the rest are
+                        // one LEFT away. It stays enabled even on an empty value on purpose; disabling
+                        // it would remove the focus target from under the ring mid-dialog.
+                        SettingsDialogActionButton(
+                            text = stringResource(R.string.clear),
+                            onClick = { pendingValue = "" },
+                        )
+                    }
+                } else {
+                    cancel()
+                }
             },
         )
     }
@@ -1173,6 +1284,7 @@ fun SettingsReorderPreference(
                                         }
                                     },
                                     enabled = index > 0,
+                                    modifier = Modifier.tvIconButtonRing(),
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.KeyboardArrowUp,
@@ -1188,6 +1300,7 @@ fun SettingsReorderPreference(
                                         }
                                     },
                                     enabled = index < pendingValue.lastIndex,
+                                    modifier = Modifier.tvIconButtonRing(),
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.KeyboardArrowDown,

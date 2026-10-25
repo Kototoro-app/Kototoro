@@ -42,7 +42,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,6 +79,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
@@ -459,7 +460,7 @@ private fun PlayerIconButton(
         modifier = modifier
             .size(if (isTvPresentation) 48.dp else 36.dp)
             .then(focusModifier)
-            .semantics { this.contentDescription = contentDescription },
+            .semantics { this.contentDescription = contentDescription }.tvIconButtonRing(),
         content = icon,
     )
 }
@@ -541,7 +542,7 @@ private fun PlayerChapterButton(
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     var isFocused by remember { mutableStateOf(false) }
     val focusShape = RoundedCornerShape(10.dp)
-    TextButton(
+    TvTextButton(
         onClick = onClick,
         modifier = modifier
             .height(if (isTvPresentation) 48.dp else 40.dp)
@@ -598,7 +599,7 @@ private fun PlayerTextButton(
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     var isFocused by remember { mutableStateOf(false) }
     val focusShape = RoundedCornerShape(10.dp)
-    TextButton(
+    TvTextButton(
         onClick = onClick,
         modifier = modifier
             .height(if (isTvPresentation) 48.dp else 40.dp)

@@ -27,7 +27,7 @@ import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 @Composable
 fun GlobalTagBlacklistStatus(
     blacklistedTagCount: Int,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
@@ -96,13 +96,18 @@ fun GlobalTagBlacklistStatus(
                     },
                 )
             }
-            TextButton(
-                onClick = onClick,
-                modifier = Modifier
-                    .padding(start = 8.dp)
-                    .tvFocusable(shape = RoundedCornerShape(10.dp)),
-            ) {
-                Text(stringResource(R.string.manage))
+            if (onClick != null) {
+                TextButton(
+                    onClick = onClick,
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        // The button is clickable and therefore already a focus target: letting
+                        // tvFocusable add a second one puts the D-pad key on a node with no click
+                        // handling, so centre presses were swallowed and the button looked dead.
+                        .tvFocusable(shape = RoundedCornerShape(10.dp), addFocusTarget = false),
+                ) {
+                    Text(stringResource(R.string.manage))
+                }
             }
             if (compact) {
                 Icon(

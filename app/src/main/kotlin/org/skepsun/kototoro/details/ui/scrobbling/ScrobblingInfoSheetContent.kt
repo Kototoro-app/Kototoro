@@ -28,14 +28,12 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -65,6 +63,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
+import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
+import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.ContentCoverShape
 import org.skepsun.kototoro.core.ui.widgets.SelectableTextView
@@ -162,7 +164,7 @@ private fun ScrobblingInfoSheetLayout(
                     onUnregister = onUnregister,
                 )
             },
-            snackbarHost = { SnackbarHost(snackbarHostState) },
+            snackbarHost = { KototoroSnackbarHost(snackbarHostState) },
         ) { contentPadding ->
             Column(
                 modifier = Modifier
@@ -219,28 +221,28 @@ private fun ScrobblingTopBar(
     TopAppBar(
         title = { Text(stringResource(R.string.tracking)) },
         navigationIcon = {
-            IconButton(onClick = onDismissRequest) {
+            IconButton(onClick = onDismissRequest, modifier = Modifier.tvIconButtonRing()) {
                 Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
             }
         },
         actions = {
             Box {
-                IconButton(onClick = { isMenuExpanded = true }) {
+                IconButton(onClick = { isMenuExpanded = true }, modifier = Modifier.tvIconButtonRing()) {
                     Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.open_in_browser))
                 }
                 DropdownMenu(
                     expanded = isMenuExpanded,
                     onDismissRequest = { isMenuExpanded = false },
                 ) {
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.open_in_browser)) },
                         onClick = { isMenuExpanded = false; onOpenBrowser() },
                     )
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.edit)) },
                         onClick = { isMenuExpanded = false; onEdit() },
                     )
-                    DropdownMenuItem(
+                    TvDropdownMenuItem(
                         text = { Text(stringResource(R.string.remove)) },
                         onClick = { isMenuExpanded = false; onUnregister() },
                     )
@@ -286,7 +288,7 @@ private fun ScrobblingHeader(
             )
             IconButton(
                 onClick = onOpenCover,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().tvIconButtonRing(),
             ) { }
             Box(
                 modifier = Modifier
@@ -413,7 +415,11 @@ private fun TrackingDetails(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             details.tags.forEach { tag ->
-                AssistChip(onClick = {}, label = { Text(tag) })
+                AssistChip(
+                    onClick = {},
+                    label = { Text(tag) },
+                    modifier = Modifier.tvChipRing(),
+                )
             }
         }
     }

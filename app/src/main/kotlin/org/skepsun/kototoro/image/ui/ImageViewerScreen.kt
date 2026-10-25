@@ -43,6 +43,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import coil3.ImageLoader
 import me.saket.telephoto.zoomable.coil3.ZoomableAsyncImage
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 
 data class ImageErrorState(
     val message: String,
@@ -161,7 +162,7 @@ private fun ImageActionButton(
             )
             .background(MaterialTheme.colorScheme.surface, CircleShape)
             .clip(CircleShape)
-            .semantics { this.contentDescription = contentDescription },
+            .semantics { this.contentDescription = contentDescription }.tvIconButtonRing(),
     ) {
         content()
     }
