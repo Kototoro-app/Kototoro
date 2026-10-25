@@ -437,6 +437,14 @@ fun Modifier.tvTextInputEnterAction(onEnter: () -> Unit): Modifier {
  * editing, and drops back to read-only as soon as the ring leaves, so opening the dialog a second
  * time starts from the same quiet state.
  *
+ * Back is the one way out of editing that does not move the ring: the platform closes the keyboard
+ * and the field keeps its editing state, and from then on it ignores `show()` because the viewer is
+ * the one who closed that input connection. Centre then did nothing at all. The way out is that a
+ * centre press can only reach the field while no keyboard is on screen - the platform hands the keys
+ * to the keyboard otherwise - so a press that arrives while still editing means exactly that: it
+ * drops the field back to read-only, and the press after it starts editing from the state a freshly
+ * opened dialog is in, which is the state that does bring the keyboard back.
+ *
  * Wire it up as
  * `readOnly = state.isReadOnly` and `modifier = Modifier.then(state.fieldModifier).then(fieldExit.fieldModifier)`.
  * Off TV [isReadOnly] is false and [fieldModifier] is empty, so phones and tablets are unaffected.
@@ -465,8 +473,19 @@ fun rememberTvTextFieldReadOnlyState(
     } else {
         Modifier
             .tvTextInputStartEditing {
-                editing = true
-                showKeyboard?.invoke() ?: keyboardController?.show()
+                if (editing) {
+                    // Still editing, yet the centre key reached this field: while a keyboard is on
+                    // screen the platform hands the keys to it, so reaching this handler at all
+                    // means the keyboard is gone. Back closes it without moving the ring, and from
+                    // then on the field keeps counting as editing while the platform ignores
+                    // show() for the connection the viewer closed by hand. Drop back to read-only
+                    // here and let the next press start editing again: rebuilding the input session
+                    // is what actually brings the keyboard back on this platform.
+                    editing = false
+                } else {
+                    editing = true
+                    showKeyboard?.invoke() ?: keyboardController?.show()
+                }
             }
             .onFocusChanged { if (!it.hasFocus) editing = false }
     }
