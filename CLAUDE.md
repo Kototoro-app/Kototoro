@@ -270,6 +270,13 @@ npm run docs:build
   APK 自带的启动图标（`desktop-runtime` 的 `DesktopExtensionIcons` 在转换前从 `res/mipmap-*` 取出存成
   `<sha256>.icon`，与 Android `fetchPluginIcon` 一样本地且不联网），解析插件问自己的 `getFavicons()`，
   TVBox/JSON 用文档的 `iconUrl`，最后才退到 `siteUrl`/`favicon.ico`/`<link rel="icon">`，都没有就画首字母。
+  少选项下拉框也按安卓的画法铺成标签按钮（§200）：`core-ui` 的 `core/ui/chips/ChoiceChips.kt` 是安卓
+  `FilterSheetRoute` 那两个私有 chip helper 的共享版（`ChoiceChipFlow` 六 dp 间距、`ChoiceChip` 最小 36dp 高配
+  `labelLarge`，安卓只保留自己的 `tvChipRing()` 后委托过去，5 个调用点不动），Windows 来源筛选对话框里选项数
+  不超过 5 的 `SELECT`/`SORT` 行直接铺 chip、一次点击即选中，更长仍是 `OutlinedButton` + 菜单两步，
+  排序的方向与「清除」跟 chip 同排（与菜单行一致，也不多占一行），值仍是原生索引
+  （`Choice(index)`/`Sort(index, ascending)`），回归用 `DesktopFilterChipsTest`（3 条）与改造后的
+  `DesktopFilterProbe`（断言 chip 未选中代替「未选择」文字），见计划 §200。
   .pb/新版 JSON 仓库添加/列表/搜索、JAR 安装/更新/导入及身份恢复；新产物保存到应用管理的 SHA 目录。
   仓库可“忘记”（只删索引条目，已安装扩展与 JAR 保留，重新添加即恢复）。
   来源浏览/搜索、详情、收藏、分页图片阅读、历史与源设置，以及可选网页/HTML/JS 调试。

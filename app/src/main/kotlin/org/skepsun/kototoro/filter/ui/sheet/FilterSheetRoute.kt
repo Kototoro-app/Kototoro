@@ -3,14 +3,11 @@ package org.skepsun.kototoro.filter.ui.sheet
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,7 +23,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,6 +52,8 @@ import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
+import org.skepsun.kototoro.core.ui.chips.ChoiceChip
+import org.skepsun.kototoro.core.ui.chips.ChoiceChipFlow
 import org.skepsun.kototoro.core.ui.compose.KototoroRangeSlider
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.model.titleResId
@@ -1228,17 +1226,12 @@ private fun FilterSection(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CompactFilterChipFlow(
     content: @Composable () -> Unit,
 ) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        content()
-    }
+    // Shared with the Windows filter dialog: a short option set is chips there too.
+    ChoiceChipFlow { content() }
 }
 
 @Composable
@@ -1249,15 +1242,11 @@ private fun CompactFilterChip(
     modifier: Modifier = Modifier,
     trailingIcon: (@Composable () -> Unit)? = null,
 ) {
-    FilterChip(
+    ChoiceChip(
         selected = selected,
         onClick = onClick,
-        modifier = modifier.heightIn(min = 36.dp).tvChipRing(),
-        label = {
-            androidx.compose.material3.ProvideTextStyle(MaterialTheme.typography.labelLarge) {
-                label()
-            }
-        },
+        modifier = modifier.tvChipRing(),
         trailingIcon = trailingIcon,
+        label = label,
     )
 }

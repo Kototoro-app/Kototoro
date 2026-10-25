@@ -11,6 +11,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.source.*
+import org.skepsun.kototoro.core.ui.chips.ChoiceChip
+import org.skepsun.kototoro.core.ui.chips.ChoiceChipFlow
 
 /** Edits are local to the dialog; only Apply publishes a typed request to the source. */
 @Composable
@@ -62,7 +64,7 @@ internal fun DesktopFilters(controller: DesktopController, state: DesktopAppStat
 }
 
 @Composable
-private fun FilterControl(node: SourceFilterNode, value: SourceFilterValue?, enabled: Boolean,
+internal fun FilterControl(node: SourceFilterNode, value: SourceFilterValue?, enabled: Boolean,
     onChange: (SourceFilterValue?) -> Unit) {
     val tag = "filter:${node.id}"
     when (node.kind) {
@@ -94,32 +96,41 @@ private fun FilterControl(node: SourceFilterNode, value: SourceFilterValue?, ena
         SourceFilterKind.SELECT, SourceFilterKind.SORT -> {
             val sort = value as? SourceFilterValue.Sort
             val index = (value as? SourceFilterValue.Choice)?.index ?: sort?.index
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(node.name)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    var expanded by remember(node.id) { mutableStateOf(false) }
-                    Box(Modifier.weight(1f)) {
-                        OutlinedButton({ expanded = true }, enabled = enabled && node.values.isNotEmpty(),
-                            modifier = Modifier.fillMaxWidth().testTag(tag)) {
-                            Text(index?.let { node.values.getOrNull(it) } ?: desktopText("filters.unselected"))
+                fun pick(position: Int) {
+                    onChange(if (node.kind == SourceFilterKind.SELECT) SourceFilterValue.Choice(position)
+                        else SourceFilterValue.Sort(position, sort?.ascending ?: false))
+                }
+                // Android's filter sheet draws its own short option sets as chips: a desktop window fits them all, so
+                // the same row costs one click where the menu costs two. A sort keeps its direction and reset beside
+                // the chips on that same line, which is also how the menu row lays them out.
+                if (node.values.size in 1..CHIP_OPTION_LIMIT) {
+                    ChoiceChipFlow {
+                        node.values.forEachIndexed { position, label ->
+                            ChoiceChip(selected = index == position, onClick = { pick(position) }, enabled = enabled,
+                                modifier = Modifier.testTag("$tag:option:$position")) { Text(label) }
                         }
-                        DropdownMenu(expanded && enabled, { expanded = false }) {
-                            node.values.forEachIndexed { position, label ->
-                                DropdownMenuItem(onClick = { expanded = false
-                                    onChange(if (node.kind == SourceFilterKind.SELECT) SourceFilterValue.Choice(position)
-                                        else SourceFilterValue.Sort(position, sort?.ascending ?: false)) },
-                                    modifier = Modifier.testTag("$tag:option:$position"),
-                                    text = { Text(label) })
+                        if (node.kind == SourceFilterKind.SORT) SortActions(tag, sort, enabled, onChange)
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        var expanded by remember(node.id) { mutableStateOf(false) }
+                        Box(Modifier.weight(1f)) {
+                            OutlinedButton({ expanded = true }, enabled = enabled && node.values.isNotEmpty(),
+                                modifier = Modifier.fillMaxWidth().testTag(tag)) {
+                                Text(index?.let { node.values.getOrNull(it) } ?: desktopText("filters.unselected"))
+                            }
+                            DropdownMenu(expanded && enabled, { expanded = false }) {
+                                node.values.forEachIndexed { position, label ->
+                                    DropdownMenuItem(onClick = { expanded = false; pick(position) },
+                                        modifier = Modifier.testTag("$tag:option:$position"),
+                                        text = { Text(label) })
+                                }
                             }
                         }
-                    }
-                    if (node.kind == SourceFilterKind.SORT) {
-                        OutlinedButton({ sort?.let { onChange(it.copy(ascending = !it.ascending)) } },
-                            enabled = enabled && sort != null, modifier = Modifier.testTag("$tag:direction")) {
-                            Text(if (sort?.ascending == true) desktopText("filters.ascending") else desktopText("filters.descending"))
-                        }
-                        TextButton({ onChange(null) }, enabled = enabled && sort != null,
-                            modifier = Modifier.testTag("$tag:clear")) { Text(desktopText("common.clear")) }
+                        if (node.kind == SourceFilterKind.SORT) SortActions(tag, sort, enabled, onChange)
                     }
                 }
             }
@@ -127,3 +138,23 @@ private fun FilterControl(node: SourceFilterNode, value: SourceFilterValue?, ena
         SourceFilterKind.UNSUPPORTED -> Text(desktopText("filters.unsupported", node.name), color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f))
     }
 }
+
+/** A sort's direction and its "no sort" reset, shared by the chip row and the menu row. */
+@Composable
+private fun SortActions(tag: String, sort: SourceFilterValue.Sort?, enabled: Boolean,
+    onChange: (SourceFilterValue?) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedButton({ sort?.let { onChange(it.copy(ascending = !it.ascending)) } },
+            enabled = enabled && sort != null, modifier = Modifier.testTag("$tag:direction")) {
+            Text(if (sort?.ascending == true) desktopText("filters.ascending") else desktopText("filters.descending"))
+        }
+        TextButton({ onChange(null) }, enabled = enabled && sort != null,
+            modifier = Modifier.testTag("$tag:clear")) { Text(desktopText("common.clear")) }
+    }
+}
+
+/**
+ * Android's own sheet chips a short option set (`CompactFilterChipFlow`); a list longer than this is a real menu,
+ * where every option would otherwise become a chip the reader has to scan.
+ */
+private const val CHIP_OPTION_LIMIT = 5

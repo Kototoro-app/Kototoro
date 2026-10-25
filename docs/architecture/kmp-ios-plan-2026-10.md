@@ -9152,3 +9152,35 @@ Windows 此前只有详情页里的“选择书签”面板，没有“全部书
 - 全量：`:desktop-app:test` 301 条 0 失败（4 跳过）、`:desktop-runtime:test` 200 条 0 失败（2 跳过）、
   `:desktop-app:verifyDesktopStrings` 961 键 / 961 被引用、`:core-ui:compileCommonMainKotlinMetadata` 与
   `:app:compileDebugKotlin` 通过。
+
+## 200. 少选项下拉框改标签按钮（`core-ui` 共享 chip 行）（2026-10-25）
+
+用户反馈：PC 屏幕够宽，可选项很少的下拉框应该直接铺成标签按钮，而不是先点开菜单再选。安卓侧的筛选抽屉本来
+就是这么画的（`FilterSheetRoute` 里私有的 `CompactFilterChipFlow`/`CompactFilterChip`），所以这一刀既是
+Windows 的可用性改进，也是一次把安卓私有控件提取成共享代码的机会。
+
+### 实现
+- `core-ui` 新增 `core/ui/chips/ChoiceChips.kt`：`ChoiceChipFlow`（`FlowRow`，默认 6dp 间距）与 `ChoiceChip`
+  （`FilterChip`，最小高度 36dp、`labelLarge` 字重、可选 `trailingIcon`），即安卓那两个私有 helper 的逐行等价物。
+- 安卓 `FilterSheetRoute` 的 `CompactFilterChipFlow`/`CompactFilterChip` 改为委托共享实现，只保留自己的
+  `tvChipRing()`；调用点一个没动，行为与观感不变（5 处 chip 区共用同一份）。
+- Windows 的来源筛选对话框（`DesktopFilters.kt`）把 `SELECT`/`SORT` 控件按选项数分成两种画法：
+  `node.values.size <= CHIP_OPTION_LIMIT`（5）时铺成 chip 行，一次点击即选中；更长的列表仍是
+  `OutlinedButton` + `DropdownMenu` 两步（标签几十个的源不该变成一屏 chip）。`SORT` 的方向按钮与「清除」放在
+  同一个 chip 行里（与菜单行布局一致，也避免多占一行把列表末尾挤出组合窗口），tag 仍是
+  `filter:<id>:direction` / `filter:<id>:clear`，选项 chip 是 `filter:<id>:option:<n>`（与菜单项同名）。
+- 值仍然只写原生索引：`SourceFilterValue.Choice(index)` / `SourceFilterValue.Sort(index, ascending)`，与菜单路径
+  完全同一份回调，所以来源侧看到的筛选参数不变。
+
+### 与 Android 的差异
+- 阈值是本端定的（5）：安卓筛选抽屉按控件类型直接铺 chip、不设上限，Windows 保留菜单给长列表。
+- 顶栏 pill（内容类型、标签菜单）与各行溢出菜单没有改动——它们本来就是安卓的菜单形态，不是“该铺开的少选项下拉框”。
+
+### 验证
+- `:desktop-app:test --tests=*DesktopFilterChipsTest*`（3 条）：3 个选项铺 chip 且一次点击就选中并回读选中态、
+  7 个选项仍是菜单（未展开时没有 option 节点，展开后选第 7 项）、chip 排序的方向按钮与清除按钮。
+- `DesktopFilterProbe`（`filters` 与 `filters-narrow` 两档）改为直接点 option chip，并把原来断言按钮文字「未选择」
+  改成断言 chip 未选中；整条链路（默认值、草稿丢弃、失败恢复、分页、来源隔离）仍通过。
+- `:app:compileDebugKotlin`（安卓委托共享 chip 后）、`:core-ui:compileCommonMainKotlinMetadata`、
+  `:desktop-app:verifyDesktopStrings` 通过。
+- 全量：`:desktop-app:test` 304 条 0 失败（4 跳过，比 §199 多出新的 3 条 chip 用例）。

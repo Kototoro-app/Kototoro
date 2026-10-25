@@ -55,8 +55,8 @@ internal object DesktopFilterProbe {
                     return onNodeWithTag("filter:${node.id}$suffix")
                 }
                 fun choice(name: String, index: Int) {
-                    control(name).performScrollTo().performClick()
-                    control(name, ":option:$index").performClick()
+                    // A short option set is chips on both hosts, so the option itself is the button.
+                    control(name, ":option:$index").performScrollTo().performClick()
                 }
                 fun edit() {
                     control("已完结").performScrollTo().performClick()
@@ -79,7 +79,7 @@ internal object DesktopFilterProbe {
                 control("已完结").assertIsOn()
                 control("冒险").assertTextEquals("包含")
                 control("作者").performScrollTo().assertTextContains("默认作者")
-                control("排序").performScrollTo().assertTextEquals("未选择")
+                control("排序", ":option:0").performScrollTo().assertIsNotSelected()
                 onNodeWithText("自定义控件：暂不支持此控件").performScrollTo().assertIsDisplayed()
                 edit()
                 val bitmap = onNodeWithTag("filter-dialog").captureToImage()
@@ -153,7 +153,7 @@ internal object DesktopFilterProbe {
                 control("已完结").performScrollTo().assertIsOn()
                 control("冒险").assertTextEquals("包含")
                 control("作者").performScrollTo().assertTextContains("默认作者")
-                control("排序").performScrollTo().assertTextEquals("未选择")
+                control("排序", ":option:0").performScrollTo().assertIsNotSelected()
                 onNodeWithTag("filter-apply").performClick()
                 received("1||true|1|original|默认作者|null")
                 val before = controller.state.value
