@@ -455,6 +455,8 @@ class TvTextFieldReadOnlyState internal constructor(
     val isReadOnly: Boolean,
     /** Attach to the text field: centre starts editing, losing the ring stops it. */
     val fieldModifier: Modifier,
+    /** True while editing is on, so the dialog around the field can make room for the keyboard. */
+    val isEditing: Boolean = false,
 )
 
 /**
@@ -492,6 +494,7 @@ fun rememberTvTextFieldReadOnlyState(
     return TvTextFieldReadOnlyState(
         isReadOnly = isTv && !editing,
         fieldModifier = fieldModifier,
+        isEditing = isTv && editing,
     )
 }
 

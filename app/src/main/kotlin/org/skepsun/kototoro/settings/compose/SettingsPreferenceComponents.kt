@@ -1020,6 +1020,7 @@ fun SettingsDialogTextPreference(
                 isSuggestionsExpanded = false
                 isDialogVisible = false
             },
+            bodyEditing = readOnlyState.isEditing,
             text = {
                 Column {
                     OutlinedTextField(
