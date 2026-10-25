@@ -53,6 +53,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import org.skepsun.kototoro.main.ui.compose.LocalMainContentFocusAnchor
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -110,6 +115,30 @@ internal fun HomeHeroSection(
     val heroFocusRequester = remember { FocusRequester() }
     val initialFocusPage = remember { pagerState.currentPage }
     var initialFocusAttempted by rememberSaveable { mutableStateOf(false) }
+    // TV: the hero card is the first stop of the page, so publish its requester to the top bar. The bar
+    // is an overlay sibling of the content and cannot search its way down into the page on its own.
+    val contentFocusAnchor = LocalMainContentFocusAnchor.current.takeIf { isTvPresentation }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(contentFocusAnchor, lifecycleOwner) {
+        val anchor = contentFocusAnchor ?: return@DisposableEffect onDispose { }
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> anchor.register(heroFocusRequester)
+                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP, Lifecycle.Event.ON_DESTROY -> {
+                    anchor.unregister(heroFocusRequester)
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            anchor.register(heroFocusRequester)
+        }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            anchor.unregister(heroFocusRequester)
+        }
+    }
     val selectedIndex by remember(entries, pagerState) {
         derivedStateOf { pagerState.currentPage.coerceIn(0, entries.lastIndex) }
     }

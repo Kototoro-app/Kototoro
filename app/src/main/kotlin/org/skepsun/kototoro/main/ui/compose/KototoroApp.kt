@@ -1006,6 +1006,9 @@ fun KototoroApp(
             label = "chrome_scroll_overlap",
         )
         val isScrollbarActive = remember { mutableStateOf(false) }
+        // The top bar is an overlay sibling of the page content, so DOWN on a chrome stop cannot reach
+        // the page on its own. The visible page publishes its first stop here and the bar links to it.
+        val contentFocusAnchor = remember { MainContentFocusAnchor() }
         CompositionLocalProvider(
             LocalLiquidGlassBackdrop provides activeLiquidGlassBackdrop,
             LocalLiquidGlassLayerBackdrop provides activeLiquidGlassBackdrop,
@@ -1015,6 +1018,7 @@ fun KototoroApp(
             LocalRailAnimationFactor provides railAnimationFactor,
             LocalChromeScrollOverlap provides chromeScrollOverlap,
             LocalScrollbarActive provides isScrollbarActive,
+            LocalMainContentFocusAnchor provides contentFocusAnchor,
         ) {
             val immersiveStrength = ((LocalGlassPrefs.current?.immersiveStrengthPercent ?: 65).coerceIn(0, 100)) / 100f
             val immersiveBaseColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f)

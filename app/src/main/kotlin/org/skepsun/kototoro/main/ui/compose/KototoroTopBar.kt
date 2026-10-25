@@ -98,6 +98,7 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvDownFocusLink
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.topbar.EnsureRailItemFullyVisible
 import org.skepsun.kototoro.core.ui.topbar.RailSurface
@@ -242,6 +243,9 @@ fun KototoroTopBar(
     val showMoreActions = true
     val topBarTitle = titleText ?: titleRes?.let { stringResource(it) }
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    // TV: the page under the bar publishes its first stop, so DOWN on a search control can leave the
+    // chrome overlay instead of jumping out to the navigation rail (null off TV or before registration).
+    val contentDownFocus = LocalMainContentFocusAnchor.current?.requester
     var areCompactTabsExpanded by rememberSaveable { mutableStateOf(false) }
     val isInlineTabs = compactTabsState != null && favoritesTabsPosition == FavoritesTabsPosition.INLINE_RAIL
     val hidePrimaryControlsForTabs = isInlineTabs && areCompactTabsExpanded
@@ -279,7 +283,8 @@ fun KototoroTopBar(
                             onClick = onSearchClick,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .tvFocusable(shape = Capsule(), addFocusTarget = false),
+                                .tvFocusable(shape = Capsule(), addFocusTarget = false)
+                                .tvDownFocusLink(contentDownFocus),
                             colors = IconButtonDefaults.iconButtonColors(
                                 containerColor = Color.Transparent,
                                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -319,7 +324,8 @@ fun KototoroTopBar(
                         onClick = onSearchClick,
                         modifier = Modifier
                             .fillMaxSize()
-                            .tvFocusable(shape = Capsule(), addFocusTarget = false),
+                            .tvFocusable(shape = Capsule(), addFocusTarget = false)
+                            .tvDownFocusLink(contentDownFocus),
                         colors = IconButtonDefaults.iconButtonColors(
                             containerColor = Color.Transparent,
                             contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -371,7 +377,9 @@ fun KototoroTopBar(
                         placeholder = stringResource(R.string.search_bar_placeholder),
                         searchIcon = rememberVectorPainter(Icons.Filled.Search),
                         onClick = onSearchClick,
-                        modifier = Modifier.tvFocusable(shape = Capsule(), addFocusTarget = false),
+                        modifier = Modifier
+                            .tvFocusable(shape = Capsule(), addFocusTarget = false)
+                            .tvDownFocusLink(contentDownFocus),
                         iconSize = topBarIconSize,
                         searchLabel = stringResource(R.string.search),
                     )

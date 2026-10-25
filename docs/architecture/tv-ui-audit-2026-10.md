@@ -6665,3 +6665,96 @@ fun Modifier.tvDownFocusLink(target: FocusRequester?): Modifier {
 看起来是三件互不相干的事，实际是同一个接缝：**顶栏是叠在页面上的兄弟，不是页面的父节点**。
 先找一个「同一套顶栏但内容结构不同」的页面对照（这里是搜索页，一路通畅），
 再接缝处下一个通用件，比逐个页面去改焦点属性快得多，也不会漏掉后面才发现的那两个同因实例。
+
+## 第一百零一轮：给内容区留一个「第一站」的槽位（2026-10-25）
+
+### 起念
+
+第一百轮留的第一条尾巴：首页搜索框按 DOWN 落到左侧导航栏，跳过正下方的主视觉卡。
+同一轮已经做出通用件 `tvDownFocusLink`，差的只是「谁把目标 requester 交到搜索框手上」。
+
+### 现场
+
+- 改前（`W12`/`W13`，第一百轮的包上复测）：搜索框 `[332,16][1692,112]` DOWN → 导航栏 `[16,296][152,432]`，
+  主视觉卡 `[216,144][1096,624]` 被整个跳过。反向通：从主视觉卡 UP 能回到搜索框（`T21`）。
+- 为什么不能照抄收藏页：收藏页同时拥有接缝两侧——标签行是它写进顶栏的 override state，芯片行是它自己组合的列表头，
+  所以一个 requester 从页内串两路即可。首页的两侧分属 `HomeHeroSection`（在 `HomeRoute`／`HomeScreen`／
+  `HomeTabletLayout` 之下）与 `KototoroTopBar`（在外壳 `MainTopChrome` 里，那个函数本身约 70 个参数）。
+  手工串参数要一路加进四五个签名，而且历史、探索、订阅、详情每一页都得再来一遍。
+- 另一个不能绕过的点：槽位里的目标必须是「此刻在屏幕上的那一页的第一站」。页面在导航栈里留着组合却不显示时，
+  若还占着槽位，按 DOWN 就会把焦点甩到一张看不见的卡上。
+
+### 改法
+
+把接缝的拥有者认定成外壳，给两个兄弟之间挖一个只有一格的槽位：
+
+```kotlin
+@Stable
+class MainContentFocusAnchor {
+
+    var requester: FocusRequester? by mutableStateOf(null)
+        private set
+
+    fun register(requester: FocusRequester) {
+        this.requester = requester
+    }
+
+    fun unregister(requester: FocusRequester) {
+        if (this.requester === requester) {
+            this.requester = null
+        }
+    }
+}
+
+val LocalMainContentFocusAnchor = staticCompositionLocalOf<MainContentFocusAnchor?> { null }
+```
+
+（`app/src/main/kotlin/org/skepsun/kototoro/main/ui/compose/MainContentFocusAnchor.kt`）
+
+接线三处：
+
+| 文件 | 改动 |
+| --- | --- |
+| `app/.../main/ui/compose/KototoroApp.kt` | `remember { MainContentFocusAnchor() }`，追加进外层已有的那个 `CompositionLocalProvider`（顶栏与内容列都在它下面） |
+| `app/.../main/ui/compose/KototoroTopBar.kt` | 读 `LocalMainContentFocusAnchor.current?.requester`，`.tvDownFocusLink(...)` 挂到三处搜索控件（展开式搜索条、COMPACT 搜索按钮、MINIMAL 行内搜索按钮） |
+| `app/.../home/ui/compose/hero/HomeHeroSection.kt` | 把已经在用的 `heroFocusRequester` 注册进槽位：只在 TV、只在 RESUMED 时 |
+
+两点设计取舍：
+
+- 用 `staticCompositionLocalOf`：槽位对象身份不变，变化的是它内部的 state，读它的顶栏照常重组；
+  非 TV 的页面不注册，槽位永远是 `null`，`tvDownFocusLink` 原样返回 `this`，手机/平板组合链一字未动。
+- 注册绑生命周期而不是绑组合：`LifecycleEventObserver` 在 `ON_RESUME` 注册、`ON_PAUSE`/`ON_STOP`/`ON_DESTROY` 注销，
+  另加「组合时已经是 RESUMED」这条即时注册（首帧就停在该页的情况），`onDispose` 兜底注销。
+  于是「页面在、但不是当前页」这种状态不会占着槽位。
+
+### 量出来的差别
+
+| 操作 | 改前 | 改后 |
+| --- | --- | --- |
+| 首页搜索框 DOWN | 导航栏 `[16,296][152,432]`（`W13`） | 主视觉卡 `[216,144][1096,624]`（`Y24`，截图里蓝色环） |
+| 主视觉卡 UP | 回搜索框（本来就通） | 不变（`Y22`→`Y23`） |
+| 强杀重启后再走一遍 | — | 导航栏 → RIGHT 主视觉卡（`Z11`）→ DOWN 历史卡（`Z12`/`Z13`）→ UP 三次回搜索框（`Z15`）→ DOWN 又落回主视觉卡（`Z20`，截图蓝环） |
+| 收藏页搜索框 DOWN | 标签行（`U13` 一脉） | 标签行 `[411,128][585,224]`（`Y52`）——首页已暂停，槽位清空，没有把焦点甩回首页那张卡 |
+| 收藏页标签行 DOWN | 排序控件 `[176,216][268,312]`（第一百轮） | 不变：`Y52` 先落在 `Read later`，这一轮没碰收藏页链路 |
+| 首页搜索框 LEFT | 内容卡（`Y30`，侧向旁的卡） | 不变 |
+
+构建：`:app:assembleDebug` `BUILD SUCCESSFUL in 1m 52s`，安装 `Success`，同一台模拟器复测。
+（`Y10`–`Y72`、`Z10`–`Z20` 是本轮新 dump／截图；`W12`/`W13`、`U13`、`T21` 是改前的。）
+
+### 顺带发现（未修，留给后面的轮次）
+
+1. 首页滚过主视觉卡之后（`Z12`/`Z13`），从历史卡 UP 要连按三次才回到搜索框（`Z12`→`Z14`→`Z15`），
+   中间那一步会把主视觉卡滚回视野。不是新缺陷，但说明这条 DOWN 出口依赖 hero 还组合着——
+   hero 若被数据清空，槽位就空着，DOWN 退回默认搜索（导航栏）。
+2. 历史、探索、订阅、详情这些页还没有注册锚点：槽位是通用的，接线只是 `register`/`unregister` 两行，
+   但它们各自「第一站」是谁要先量一遍，不能凭空猜。
+3. 第一百轮那两条尾巴照旧：收藏页空库验不到「芯片行 → 网格」；`InlineCompactTopBarTabsRail`（MINIMAL 样式）
+   仍是没环、没 DOWN 出口。
+
+### 教训
+
+**接缝不需要「谁拥有」的答案，需要的是一个放得下答案的槽位。** 一开始按收藏页的经验去找「哪一页同时拥有两侧」，
+结论是首页不是——两侧分属内容深处与外壳深处。真正同时拥有它俩的只有外壳自己，而这个外壳已经有一个
+`CompositionLocalProvider` 横在两者之上，于是加一格槽位、两行注册，比改五个签名更接近问题的形状。
+另外，凡是「注册一个指针给别人按」的东西，都必须同时回答「这个指针什么时候失效」；这一轮花在
+`ON_RESUME`/`ON_PAUSE` 上的几行代码，比注册那行更值钱——`Y52` 就是它没漏的证明。
