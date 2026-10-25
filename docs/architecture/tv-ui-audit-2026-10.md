@@ -7329,3 +7329,63 @@ val containerColor = if (expressive) {
 **一个面板要统一口径。** 同一个面板里别的停靠点都有环，漏掉面积最大的那个控件就会让遥控器"消失"一瞬。
 补环要走 `tvFocusable` 这条既有路径，而不是每个控件各自手搓 `drawWithContent`（见 `SwipeableFilterChip`
 里那份自绘环的历史遗留）。
+
+## 第一百一十二轮：阅读来源面板搜索框右边的两个按钮，遥控器原来走不到（2026-10-25）
+
+### 现象
+
+从详情页第二个来源药丸（`[532,228][748,324]`，CENTER）打开 **Reading Source** 面板：首焦点正确地落在当前
+来源卡 `[32,254][256,518]`（第一百零八轮的初始焦点），DOWN 到搜索框 `[32,560][1624,656]`。但搜索框右边还有
+两个按钮——搜索（`[1640,560][1756,656]`）和带 `1` 角标的筛选（`[1772,560][1888,656]`）——**RIGHT 按到底也出不去**：
+
+* `right1` / `right2` 两次 a11y dump 的焦点都还是那个 `android.widget.EditText`；
+* `DE10`/`DE11`/`DE12` 三张截图逐字节相同（sha `48545E11`）——三步操作，画面零变化。
+
+结果就是阅读来源面板里唯一能做的事（重新搜索、筛选来源）在 TV 上全部失效：面板只剩"看着当前来源"。
+
+### 根因
+
+`SourceSearchField` 里的 `BasicTextField` 为了自己的光标一直吞掉左右方向键，而它调用
+`tvTextInputFocusEscape()` **没有打开 `horizontalWhenIdle`**。这个参数在 `TvFocus.kt` 的文档里写得清清楚楚：
+"Pass `horizontalWhenIdle` for a field that sits between two toolbar buttons (a search bar): once the keyboard
+is closed nobody drives the caret with the horizontal arrows any more"——元数据来源面板的搜索框旁边没有按钮，
+所以默认值一直没暴露出问题；阅读来源面板给它加了两个按钮，缺口才显形。
+
+另外这两个按钮本身也没有焦点环（M3 `FilledTonalButton` 不会自己画），就算走得到也看不见。
+
+### 修法
+
+1. `SourceSearchField` 改为 `.tvTextInputFocusEscape(horizontalWhenIdle = true)`：键盘收起时左右键把焦点
+   交给邻居，键盘打开时（`WindowInsets.ime` 非零）照旧留给光标。两个面板共用这一个组件，元数据面板没有右邻，
+   搜索为空时 `moveFocus` 返回 false、按键原样落回输入框，行为不变。
+2. 阅读来源面板那两个 `FilledTonalButton` 补 `tvFocusable(shape = RoundedCornerShape(999.dp),
+   addFocusTarget = false)`，和第一百一十一轮的输入框同一条写法。
+
+### 证据
+
+* 修前：`right1`/`right2` 焦点不动，`DE10`=`DE11`=`DE12`（sha `48545E11`）；
+* 修后 `EC10`（sha `0D670EC1`）：RIGHT 从输入框到搜索按钮 `[1640,560][1756,656]`，按钮整圈蓝色胶囊环，
+  输入框的环已经撤掉；
+* 修后 `EC11`（sha `2BDCC7B4`）：再 RIGHT 到筛选按钮 `[1772,560][1888,656]`（a11y txt=`1` 就是角标），
+  同样有环；LEFT 之后焦点回到搜索按钮；
+* `ED10`（sha `B33EDFA2`）：CENTER 打开 Filter 面板，首焦点在 **Manage** `[1689,434][1844,530]`，环清楚，
+  黑名单/语言预设/来源类型三节与底部的 Reset filter / Cancel / Apply 都在屏内；BACK 后焦点回到筛选按钮；
+* `EE10`（sha `5A918736`）：CENTER 进编辑态，键盘弹出、输入框上移并保留环，此时 RIGHT 焦点仍留在输入框
+  （`[32,508][1624,604]`）——光标键没有被这次改动抢走；`EE11`（sha `F35E4703`）：BACK 收键盘后焦点回到输入框，
+  再 RIGHT 就是上面的搜索按钮。
+
+### 遗留
+
+1. 阅读来源面板此时显示 "No visible results. Disable Hide empty sources to inspect unavailable or empty
+   sources."，说明筛选里开着"隐藏空来源"且没有命中——结果卡（第一百一十轮刚瘦身的那批）在这个面板里仍然
+   没有被真正看到过，下次要先把筛选清掉再测一遍结果区与换源。
+2. Filter 面板里的 `All` 语言预设芯片和 Source Type 一排芯片还没有逐个走（它们的环是 `tvChipRing` 还是自绘，
+   待核）。
+
+### 教训
+
+**组件默认值是按"没有邻居"写的。** `horizontalWhenIdle = false` 对孤立的搜索框是对的，一旦旁边出现按钮就变成
+死胡同；共用组件换了放置位置，默认值要重新过一遍。
+
+**"能聚焦"和"能走到"是两件事。** 那两个按钮在 a11y 里一直是 `clickable=true`、也能被 pointer 点，看起来
+一切正常；只有连续按 RIGHT 并对比截图 hash，才知道遥控器根本进不去。

@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Search
@@ -56,6 +57,7 @@ import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.explore.data.SourcePreset
@@ -434,6 +436,10 @@ fun ReadingSourceSheet(
                         )
                         FilledTonalButton(
                             onClick = onSearch,
+                            modifier = Modifier.tvFocusable(
+                                shape = RoundedCornerShape(999.dp),
+                                addFocusTarget = false,
+                            ),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             Icon(
@@ -444,6 +450,10 @@ fun ReadingSourceSheet(
                         }
                         FilledTonalButton(
                             onClick = { showFilterSheet = true },
+                            modifier = Modifier.tvFocusable(
+                                shape = RoundedCornerShape(999.dp),
+                                addFocusTarget = false,
+                            ),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             Icon(

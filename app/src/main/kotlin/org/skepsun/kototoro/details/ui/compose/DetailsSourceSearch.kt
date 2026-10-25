@@ -145,7 +145,11 @@ internal fun SourceSearchField(
                     )
                     .onFocusChanged { isFocused = it.isFocused }
                     .then(tvEditing.fieldModifier)
-                    .tvTextInputFocusEscape(),
+                    // This bar can have buttons to its right (the reading-source sheet puts search and
+                    // filter there), and a focused text field eats the horizontal arrows for its own
+                    // caret: with the keyboard closed they now move focus to those buttons instead of
+                    // doing nothing visible.
+                    .tvTextInputFocusEscape(horizontalWhenIdle = true),
                 singleLine = true,
                 readOnly = tvEditing.isReadOnly,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
