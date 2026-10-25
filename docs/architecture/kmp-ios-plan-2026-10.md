@@ -8475,3 +8475,34 @@ Android 的“来源设置”与统一来源页各有一个“测试全部”（
   `LibraryBackupJson` 是共享单例，所以 Windows 导出遇到本地已有 `NaN` 也不再抛，iOS 的恢复同步受益。
 - 仍未确认：拿不到用户那份原文件，也没有报错原文；若还有第三个原因，最可能在 `DesktopBackupArchive.open` 的
   ZIP 结构校验或 `saveContent` 的作品编号冲突上——这两处都会把异常原文带到界面上，等反馈补充。
+
+## 186. 源设置里嵌套的分组不再被压平：Android 的分组标签行（2026-10-25）
+
+“各个源的配置怎么能平铺”这条反馈落到源设置页（`DesktopSourcePreferences`）时，还有最后一段没对齐：
+协议树的 `GROUP` 节点带 `children`，可以任意嵌套，而 Windows 的折页只把**顶层**有标题的 `GROUP` 变成 section，
+顶层的无标题 `GROUP` 和所有**嵌套** `GROUP` 一律被摊平成行——分组标题直接丢掉，于是像
+`Account → Advanced → 代理` 这种三层的扩展在界面上就是一张看不出结构的长卡片。
+
+Android 的做法是 `ComposePreferenceAdapter.flattenGroupRows`：嵌套的 `PreferenceGroup` 先补一行
+`SourceSettingsGroupLabelRowUiState`（`SourceSettingsScreen` 用 `SettingsGroupLabel` 画：`labelLarge`、
+`onSurfaceVariant`、左右 16 dp / 上下 10 dp，仍在同一张卡里），再递归它自己的行；无标题的嵌套组只贡献行。
+Windows 现在照同一规则折：
+
+- `SourcePreferenceSection` 的 `rows` 换成 `entries: List<SourcePreferenceEntry>`，`Row(node)` 与
+  `Label(id, title)` 两种；`rows` 留作只取叶子的派生属性（对话框宿主按下标查行、测试断言叶序都用它）。
+  `groupEntries` 递归时，嵌套且**有标题且**有可见后代的 `GROUP` 先产出 `Label("label:<id>")` 再产出子树，
+  无标题的组直接展开，叶子顺序与源的声明顺序一致。
+- 共享行组件新增 `SettingsGroupLabelRow`（`core-ui` 的 `SharedSettingsRows.kt`），与 Android 的
+  `SettingsGroupLabel` 同字号同色同内边距，所以 iOS 拿到同一棵树也只差一个调用。
+- 分隔线只在**两个相邻的 `Row`** 之间画：标签本身就是它下面那组行的分隔，画了反而多一道线。
+- `DesktopSourcePreferencesTest` 三处旧断言里的“嵌套组摊平”改成“嵌套组建标签行”
+  （`nested groups keep their title as a label row inside the owning section`，断言
+  `source:a → label:group:inner → source:b` 且 `rows` 仍是 `source:a, source:b`），另有
+  `an untitled nested group only contributes its rows` 覆盖“无标题组不产标签、两层嵌套各留标题”。
+- 回归：`desktop-app` 的 `*DesktopSourcePreferencesTest*` 5 个用例 0 失败；`write`/`read` 探针
+  （`Windows rendered source details reader settings and shared state survive a second process`）走的是同一份
+  源设置页，仍能按 `preference:<id>` 找到行并成功写入，`read-preferences.png` 与旧截图一致。
+- 仍未做：Android 顶层的 `PreferenceCategory` 与 `PreferenceGroup` 在协议里都只是 `GROUP`，所以 Windows 无法
+  区分“该成为 section 的分类”和“该成为标签行的嵌套组”——现在按“顶层有标题即 section、嵌套有标题即标签”
+  处理，多层嵌套比 Android 多留一层标题（Android 对嵌套的 `PreferenceCategory` 会丢标题）；要精确对齐得给
+  协议节点加一个来源类型字段，属于协议变更，本轮不做。

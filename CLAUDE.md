@@ -245,9 +245,10 @@ npm run docs:build
   .pb/新版 JSON 仓库添加/列表/搜索、JAR 安装/更新/导入及身份恢复；新产物保存到应用管理的 SHA 目录。
   仓库可“忘记”（只删索引条目，已安装扩展与 JAR 保留，重新添加即恢复）。
   来源浏览/搜索、详情、收藏、分页图片阅读、历史与源设置，以及可选网页/HTML/JS 调试。
-  源设置按 Android 折成带标题的 section（`host:` 行置默认节、有标题 GROUP 各自成节），开关整行可点、
+  源设置按 Android 折成带标题的 section（`host:` 行置默认节、有标题 GROUP 各自成节、嵌套的有标题 GROUP 折成
+  Android 的分组标签行而不是被摊平），开关整行可点、
   选项/多选/文本/动作行显示当前值并开对话框，行组件在 `core-ui` 的 `core/ui/settings/SharedSettingsRows.kt`
-  与 Android/iOS 共用，见计划 §135。推荐设置另有独立页面（更多 → 推荐设置）：推荐/标签/来源三节，
+  与 Android/iOS 共用，见计划 §135、§186。推荐设置另有独立页面（更多 → 推荐设置）：推荐/标签/来源三节，
   每个已装来源的“优先/排除”打开 Android 自己的来源选择器（`DesktopSuggestionSources.kt`：搜索框、内容类型与
   来源类型两组芯片、待定选择与清空/取消/确定，摘要只写前三个名字加 `+N`），标签用文本对话框；
   更新检查的频率也改成单选对话框。单选/多选/文本三种设置对话框集中在 `DesktopSettingsDialogs.kt`，

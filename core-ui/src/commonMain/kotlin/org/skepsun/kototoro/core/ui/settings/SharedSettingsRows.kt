@@ -278,6 +278,22 @@ fun SettingsInfoRow(title: String, summary: String?, modifier: Modifier = Modifi
 }
 
 /**
+ * Sub-label inside a section: Android draws one for every preference group nested in another group
+ * (`SettingsGroupLabel`), so a source whose settings nest several groups keeps its structure instead of collapsing
+ * into one flat card of rows.
+ */
+@Composable
+fun SettingsGroupLabelRow(text: String, modifier: Modifier = Modifier) {
+    if (text.isBlank()) return
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+    )
+}
+
+/**
  * Row whose control is not a switch or a chevron — two action buttons for an installed extension, for instance. The
  * title and summary keep the same typography and insets as every other row, so a section can mix row kinds.
  */
