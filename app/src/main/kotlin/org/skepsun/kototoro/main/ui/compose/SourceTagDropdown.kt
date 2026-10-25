@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -66,6 +67,9 @@ fun SourceTagDropdown(
 ) {
     var expanded by remember { mutableStateOf(false) }
     var anchorBounds by remember { mutableStateOf<Rect?>(null) }
+    // Back the ring up onto this button when the menu closes: the popup owns the focus while it is
+    // open, and without this the remote lands on the navigation rail after a BACK.
+    val anchorFocus = remember { FocusRequester() }
 
     val iconRes = if (selectedTags.size == 1) {
         selectedTags.first().iconRes
@@ -96,6 +100,7 @@ fun SourceTagDropdown(
             },
             modifier = Modifier
                 .fillMaxSize()
+                .focusRequester(anchorFocus)
                 .tvFocusable(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
                     addFocusTarget = false,
@@ -118,6 +123,7 @@ fun SourceTagDropdown(
             // Keep the pill's press gloss when this button dismisses the menu.
             anchorTapThrough = true,
             anchorBounds = anchorBounds,
+            anchorFocusRequester = anchorFocus,
         ) {
             if (customMenuContent != null) {
                 val close = { expanded = false }
