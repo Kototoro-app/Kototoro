@@ -7508,3 +7508,51 @@ the D-pad"——它处理的是**键盘收起之后**的上下键；而这里字
 
 **"这颗按钮有焦点框"只能证明它能被选中，不能证明它能被按下。** 本轮两块按钮的焦点框都好用，CENTER 却一个死一个活；
 差别只在 `tvFocusable()` 有没有多叠一个焦点目标。凡是给"本来就能点"的控件加圈，一律 `addFocusTarget = false`。
+
+## 第一百一十五轮：设置页在 TV 上第一次系统性过一遍（2026-10-25）
+
+前一百多轮都在阅读器、详情页、来源面板上打转，设置页只在第七十六轮动过一次（行内文本框抢键盘）。
+这轮把电视上的整条设置路径按遥控器走完，确认哪些已经好了、哪两处还别扭。
+
+### 走查路径与结果
+
+* **首页 ⋮ 菜单**：UP → RIGHT×1 到 `More [1800,16][1896,112]` → CENTER。下拉打开，焦点落在第一项
+  `Display options`，带环；五项 Display options / Language preset / Settings / Help & feedback /
+  Incognito mode 齐全。
+* **Display options 面板**：DOWN×6 + RIGHT×2。六个列表模式、滑块、每页行数、末尾开关全部可达；
+  **面板自己滚动**把末行送到 y 920–1016，末行开关带环；滑块 RIGHT 两下 80 % → 90 %，环是整条轨道外的
+  圆角矩形；LEFT 两下回 80 %；BACK 关面板后焦点回到 `List options` 齿轮。
+* **设置主页**：CENTER 进 Settings → DOWN×8。Appearance / Reader settings / AI / Playback /
+  Content sources / Extension management / Downloads / Spaces / Tracking accounts 依次获得焦点；
+  行滚到 y 411–543 后固定不动、列表在下面滚动，焦点行始终带环。
+* **下载设置（两级面板右栏）**：DOWN×3 + CENTER。`Download novel illustrations` 整行带环，CENTER 把开关
+  从蓝变灰（关）再按一次回蓝（开）——**开关行可遥控**。
+* **两级面板左右切换**：LEFT / LEFT / UP。从右栏任意行 LEFT 进入左栏列表，再 LEFT 到底不再乱跑，
+  UP/DOWN 在左栏内移动，左栏行同样带环。
+（开关最终已还原为开，滑块已还原为 80 %，没有留下被改过的全局设置。）
+
+### 两处仍然别扭的地方（未改，记进下一轮）
+
+1. **LEFT 进左栏时落点任意。** 右栏正开着 Downloads，按 LEFT 焦点却落在左栏的 `Reader settings`
+   （`[24,370][696,542]`），再按 CENTER 就会把右栏换成阅读设置——用户想"换个分区"却先看到一颗别的分区在发光，
+   而且一旦误按就跑偏。合理行为是：首次进入左栏时落点就是当前右栏对应的那一行。
+2. **左栏不会滚到当前分区。** 右栏显示 Downloads（`Content & sources` 段）时，左栏仍停在最上面的
+   `Reading & interface` 段，当前分区那一行根本不在视野里，用户不知道自己在哪一节。
+
+两处是同一个根因的两面：左栏没有"当前分区"这个概念（只有焦点），所以既不能作为落点，也不会自动滚过去。
+下一轮的做法是从右栏状态算出左栏的选中行，给它 `focusRequester` + `BringIntoViewRequester`，
+LEFT 首次进入时请求焦点，进入页面时把它滚进视野。
+
+### 顺带核实的旧账
+
+* `StatsScreen.kt:938` 与 `VideoPlayerInfoDialog.kt:141` 那两处 `tvFocusable()` 默认值**是对的**：
+  它们给 `verticalScroll`/`LazyColumn` 体自己加焦点目标，并在 `onPreviewKeyEvent` 里自己处理上下键，
+  属于"自己就是唯一焦点目标"的类型，本轮确认不需要改。
+* `SwipeableFilterChip.kt:171` 的 `.clickable` 在前、`.tvFocusable` 在后：焦点目标在 clickable **里面**，
+  CENTER 会向上冒泡到 clickable，不会像第一百一十四轮那块按钮那样被吞；首页筛选胶囊实测可切换内容类型。
+  到这里第一百一十四轮那份"4 处默认值"清单全部有结论：1 处正常（骨架）、2 处故意、1 处正常。
+
+### 教训
+
+**"能用"也要留证据。** 这一轮没有改动一行代码，但它把"设置页在电视上到底行不行"从猜测变成了可复查的走查表——
+以后谁改坏了其中一格，回来看这张表就知道原来是什么样。
