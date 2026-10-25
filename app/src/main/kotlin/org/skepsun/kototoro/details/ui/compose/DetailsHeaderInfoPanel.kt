@@ -95,6 +95,7 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import java.util.Locale
@@ -213,6 +214,14 @@ internal fun DetailsSourceSummaryRow(
     }
 }
 
+/**
+ * Padding between a TV source segment's outline and the pill that contains it.
+ *
+ * The outline is drawn inside its own node, so a ring drawn on the bare segment would collide with
+ * the pill's own 1 dp border and lose its outer corners to the pill's clip.
+ */
+private val TvSummarySegmentRingInset = 3.dp
+
 @Composable
 private fun SourceSummarySegment(
     label: String,
@@ -224,28 +233,54 @@ private fun SourceSummarySegment(
     modifier: Modifier = Modifier,
 ) {
     val hasResolvedSource = displayModel != null
-    Row(
-        modifier = modifier
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val segmentShape = RoundedCornerShape(999.dp)
+    // Icon and label are two separate hit targets for a finger. A remote walked them as two stops
+    // inside one pill instead: the outline shrank to a 20 dp circle over the icon and then to the
+    // text, so the metadata/reading strip of a work became four stops that flicker in place and a
+    // CENTER press had to guess which half it was on. On TV the whole segment is the stop, the
+    // outline wraps icon + label, and CENTER runs the name action (the source sheet); opening the
+    // source page itself stays a touch-only shortcut. Two stops remain, one per role.
+    val rowModifier = if (isTvPresentation) {
+        modifier
             .background(color.copy(alpha = if (hasResolvedSource) 0.18f else 0.10f))
-            .padding(start = 6.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+            .padding(TvSummarySegmentRingInset)
+            .tvFocusable(shape = segmentShape, addFocusTarget = false)
+            .clickable(onClick = onNameClick)
+            .padding(start = 6.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+    } else {
+        modifier
+            .background(color.copy(alpha = if (hasResolvedSource) 0.18f else 0.10f))
+            .padding(start = 6.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+    }
+    Row(
+        modifier = rowModifier,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)
-                .clickable(onClick = if (hasResolvedSource) onIconClick else onNameClick)
-                .padding(3.dp),
+            modifier = if (isTvPresentation) {
+                Modifier.padding(3.dp)
+            } else {
+                Modifier
+                    .clip(segmentShape)
+                    .tvFocusable(shape = segmentShape, addFocusTarget = false)
+                    .clickable(onClick = if (hasResolvedSource) onIconClick else onNameClick)
+                    .padding(3.dp)
+            },
             contentAlignment = Alignment.Center,
         ) {
             SourceSummaryIcon(displayModel = displayModel)
         }
         Text(
             text = label.ifBlank { fallbackLabel },
-            modifier = Modifier
-                .tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)
-                .clickable(onClick = onNameClick),
+            modifier = if (isTvPresentation) {
+                Modifier
+            } else {
+                Modifier
+                    .tvFocusable(shape = segmentShape, addFocusTarget = false)
+                    .clickable(onClick = onNameClick)
+            },
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (hasResolvedSource) 1f else 0.68f),
             maxLines = 1,
