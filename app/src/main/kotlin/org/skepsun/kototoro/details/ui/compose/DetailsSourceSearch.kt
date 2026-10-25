@@ -580,6 +580,11 @@ private fun TrackingSearchResultCard(
     modifier: Modifier = Modifier,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    // A full phone card (142.dp cover + two title lines + score + button) is taller than the whole
+    // result strip the sheet can show on a 1080p TV, so its Migrate button ends up past the bottom
+    // edge with no way to scroll it into reach. Keep the TV card to what the remote needs: a small
+    // cover, one title line, one info line and the button itself.
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val resultCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     Surface(
         modifier = modifier.width(108.dp),
@@ -592,40 +597,47 @@ private fun TrackingSearchResultCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // On TV the card itself is the one stop the remote can act on: the phone card's
+                // centre key "open the site" leads to a web page a d-pad cannot use, while the
+                // bind button that matters sits inside the card's own bounds and can never be
+                // reached by focus search. So on TV centre binds (with the usual confirmation
+                // dialog) and a long press still opens the site; phones keep the phone mapping.
                 .tvFocusable(
                     shape = RoundedCornerShape(if (expressive) 24.dp else 18.dp),
                     addFocusTarget = false,
                 )
                 .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onBindClick,
+                    onClick = if (isTvPresentation) onBindClick else onClick,
+                    onLongClick = if (isTvPresentation) onClick else onBindClick,
                 )
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(if (isTvPresentation) 6.dp else 10.dp),
+            verticalArrangement = Arrangement.spacedBy(if (isTvPresentation) 5.dp else 8.dp),
         ) {
             TrackingCoverImage(
                 coverUrl = item.coverUrl,
                 contentDescription = item.title,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(142.dp)
+                    .height(if (isTvPresentation) 48.dp else 142.dp)
                     .clip(RoundedCornerShape(14.dp)),
             )
             Text(
                 text = item.title,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
+                maxLines = if (isTvPresentation) 1 else 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            item.altTitle?.takeIf { it.isNotBlank() }?.let { altTitle ->
-                Text(
-                    text = altTitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            if (!isTvPresentation) {
+                item.altTitle?.takeIf { it.isNotBlank() }?.let { altTitle ->
+                    Text(
+                        text = altTitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             val infoParts = buildList {
                 item.score?.let { score ->
@@ -645,21 +657,23 @@ private fun TrackingSearchResultCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            FilledTonalButton(
-                onClick = onBindClick,
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_replace),
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = stringResource(R.string.migrate),
-                    style = MaterialTheme.typography.labelSmall,
-                )
+            if (!isTvPresentation) {
+                FilledTonalButton(
+                    onClick = onBindClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_replace),
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = stringResource(R.string.migrate),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
             }
         }
     }
@@ -802,6 +816,10 @@ private fun ReadingSearchResultCard(
     val latestChapterInfo = remember(item) { item.readingSearchLatestChapterInfo() }
     val context = LocalContext.current
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    // Same reason as TrackingSearchResultCard: the phone card is taller than the TV sheet's result
+    // strip, which pushed the Migrate button off the bottom edge. Compact layout on TV, one info
+    // line (the latest chapter) instead of two, so cover, title, hint and button all fit.
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val resultCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     val coverUrl = item.coverUrl?.takeIfUsableImageUri()
     val coverRequest = remember(item.id, coverUrl, item.source) {
@@ -823,34 +841,36 @@ private fun ReadingSearchResultCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // Same TV mapping as TrackingSearchResultCard: centre performs the source change
+                // the remote actually needs, a long press keeps the phone's "open the site" action.
                 .tvFocusable(
                     shape = RoundedCornerShape(if (expressive) 24.dp else 18.dp),
                     addFocusTarget = false,
                 )
                 .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onMigrateClick,
+                    onClick = if (isTvPresentation) onMigrateClick else onClick,
+                    onLongClick = if (isTvPresentation) onClick else onMigrateClick,
                 )
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(if (isTvPresentation) 6.dp else 10.dp),
+            verticalArrangement = Arrangement.spacedBy(if (isTvPresentation) 5.dp else 8.dp),
         ) {
             SourceCoverImage(
                 model = coverRequest,
                 contentDescription = item.title,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(142.dp)
+                    .height(if (isTvPresentation) 48.dp else 142.dp)
                     .clip(RoundedCornerShape(14.dp)),
             )
             Text(
                 text = item.title,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
+                maxLines = if (isTvPresentation) 1 else 2,
                 overflow = TextOverflow.Ellipsis,
             )
             val chaptersCount = item.chapters?.size ?: 0
-            if (chaptersCount > 0) {
+            if (chaptersCount > 0 && !isTvPresentation) {
                 Text(
                     text = pluralStringResource(R.plurals.chapters, chaptersCount, chaptersCount),
                     style = MaterialTheme.typography.labelSmall,
@@ -881,21 +901,23 @@ private fun ReadingSearchResultCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            FilledTonalButton(
-                onClick = onMigrateClick,
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_replace),
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = stringResource(R.string.migrate),
-                    style = MaterialTheme.typography.labelSmall,
-                )
+            if (!isTvPresentation) {
+                FilledTonalButton(
+                    onClick = onMigrateClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_replace),
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = stringResource(R.string.migrate),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
             }
         }
     }
