@@ -439,11 +439,13 @@ fun Modifier.tvTextInputEnterAction(onEnter: () -> Unit): Modifier {
  *
  * Back is the one way out of editing that does not move the ring: the platform closes the keyboard
  * and the field keeps its editing state, and from then on it ignores `show()` because the viewer is
- * the one who closed that input connection. Centre then did nothing at all. The way out is that a
- * centre press can only reach the field while no keyboard is on screen - the platform hands the keys
- * to the keyboard otherwise - so a press that arrives while still editing means exactly that: it
- * drops the field back to read-only, and the press after it starts editing from the state a freshly
- * opened dialog is in, which is the state that does bring the keyboard back.
+ * the one who closed that input connection. The way out is that a centre press can only reach the
+ * field while no keyboard is on screen - the platform hands the keys to the keyboard otherwise - so a
+ * press that arrives while still editing means exactly that. Such a press re-arms the field: the
+ * read-only state is composed for a frame and editing is turned back on in the next one, which
+ * rebuilds the input session the platform had retired, and the keyboard returns on that same press.
+ * (Dropping to read-only and waiting for the viewer to press again also worked, but it cost a press
+ * that visibly did nothing.)
  *
  * Wire it up as
  * `readOnly = state.isReadOnly` and `modifier = Modifier.then(state.fieldModifier).then(fieldExit.fieldModifier)`.
@@ -470,6 +472,19 @@ fun rememberTvTextFieldReadOnlyState(
     val isTv = LocalUiPresentationConfig.current.isTv
     val keyboardController = LocalSoftwareKeyboardController.current
     var editing by remember { mutableStateOf(false) }
+    // Counts re-arms of the input session; see the effect below.
+    var rearm by remember { mutableStateOf(0) }
+    if (isTv) {
+        // A re-arm renders the field read-only for one frame and editable again on the next, which is
+        // what makes the platform build a new input session - the retired one ignores show().
+        LaunchedEffect(rearm) {
+            if (rearm > 0) {
+                withFrameNanos { }
+                editing = true
+                showKeyboard?.invoke() ?: keyboardController?.show()
+            }
+        }
+    }
     val fieldModifier = if (!isTv) {
         Modifier
     } else {
@@ -478,12 +493,11 @@ fun rememberTvTextFieldReadOnlyState(
                 if (editing) {
                     // Still editing, yet the centre key reached this field: while a keyboard is on
                     // screen the platform hands the keys to it, so reaching this handler at all
-                    // means the keyboard is gone. Back closes it without moving the ring, and from
-                    // then on the field keeps counting as editing while the platform ignores
-                    // show() for the connection the viewer closed by hand. Drop back to read-only
-                    // here and let the next press start editing again: rebuilding the input session
-                    // is what actually brings the keyboard back on this platform.
+                    // means the keyboard is gone. Back closes it without moving the ring, and the
+                    // input session it closed stays retired - show() on it is a no-op. Re-arm: go
+                    // read-only for a frame, then editable again in the next one.
                     editing = false
+                    rearm++
                 } else {
                     editing = true
                     showKeyboard?.invoke() ?: keyboardController?.show()
