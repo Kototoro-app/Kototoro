@@ -8447,3 +8447,31 @@ Android 的“来源设置”与统一来源页各有一个“测试全部”（
 - 回归：整套 `:desktop-app:test` 重跑（48 个用例）通过——新行与新页都不影响既有的来源设置、安装策略、JSON 来源与
   仓库路径。
 - 仍待（本切片之外）：Android 统一来源页的批量选择、仓库筛选与分组、真正的拖拽重排、`handle_links`。
+
+## 185. Android 导出的备份在 Windows 恢复失败：特殊浮点与后加字段（2026-10-25）
+
+用户反馈“安卓「备份与恢复」页导出的 ZIP 拷到 Windows 后在图书馆备份页恢复会报错”，没拿到错误原文，
+所以从两端的读写契约反推，并用安卓形状的归档夹具复现——两条都在**预览阶段**就让整份档案读不进来，
+与恢复模式、数据内容无关：
+
+- Android 侧 `BackupRepository` 的 `Json` 开着 `allowSpecialFloatingPointValues`，所以 `percent`/`scroll` 这类进度
+  浮点在“没算出来/除零/小说偏移”时会写成 `NaN`、`Infinity`；`core-library` 的 `LibraryBackupJson` 没开这个键，
+  于是第一行坏浮点就让 `preview()` 抛 `JsonDecodingException`（`JsonExceptions.kt:48`）。脏进度的容忍本来就在——
+  `normalizeBackupPercent` 早就在处理 1.0000001 的溢出与 18844.0 这种小说偏移——只是解码器先一步拒绝了它。
+  现在 `LibraryBackupJson` 与 Android 同为 `allowSpecialFloatingPointValues = true`，脏值改为建行时归一化：
+  `history()` 的 `scroll` 非有限或负数落 0（不再整段回滚），`percent` 仍走 `normalizeBackupPercent`（→ `-1` 未知）；
+  `ReadingStatisticsBackup.restoreReadingStatistic` 不再要求会话 `start_percent`/`end_percent` 有限，
+  非有限按 0 处理后再 `coerceIn(0f, 1f)`。
+- `BookmarkBackup.Bookmark` 的 `image_url`、`percent` 与 `BookmarkBackup.tags` 原本是必填字段，早于“书签快照图”
+  的写入器（以及 Kotatsu 时代的档案）没有这几个键，整份档案就停在
+  `MissingFieldException: Field 'image_url' is required ... at path: $.bookmarks[0]`。现在三者都有默认值
+  （`""`、`BACKUP_PROGRESS_NONE`、`emptySet()`），书签本身照常恢复。
+- 复现即验证：`DesktopLibraryBackupTest` 新增
+  `an Android export with non-finite progress restores instead of failing the whole preview`——一份安卓形状的档案
+  （`history` 的 `scroll:Infinity` + `percent:NaN`、书签缺 `image_url` 且 `percent:NaN`、统计会话两个 percent 是
+  `NaN`/`Infinity`）在旧代码上失败于 `JsonDecodingException`，修好后 `restore` 通过，落库值是 `scroll=0`、
+  `history.percent=-1`、`bookmark.percent=-1`、会话 percent `0`。
+- 回归：`:desktop-runtime:test` 161 个用例 0 失败、`:core-backup:jvmTest` 15 个 0 失败、`:core-library:jvmTest` 通过。
+  `LibraryBackupJson` 是共享单例，所以 Windows 导出遇到本地已有 `NaN` 也不再抛，iOS 的恢复同步受益。
+- 仍未确认：拿不到用户那份原文件，也没有报错原文；若还有第三个原因，最可能在 `DesktopBackupArchive.open` 的
+  ZIP 结构校验或 `saveContent` 的作品编号冲突上——这两处都会把异常原文带到界面上，等反馈补充。

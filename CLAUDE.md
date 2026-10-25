@@ -228,6 +228,10 @@ npm run docs:build
   DesktopLibraryBackup 复用 core-backup 导出/合并恢复收藏分类、收藏、历史、书签、统计、内容与来源排序；
   ZIP 私有预览/CRC、流式预算、完整事务回滚、分类映射和历史 tombstone 保护见 §53–54。
   书签使用完整主键，统计会话计数取较大值，旧 Work 状态按锚点投影；不重建实体体系。
+  归档读取与 Android 写入器同规则：`LibraryBackupJson` 开 `allowSpecialFloatingPointValues`（进度的
+  `NaN`/`Infinity` 在建行时归一化，`scroll` 落 0、`percent` 记 `-1`，会话 percent 落 0..1），
+  `BookmarkBackup` 的 `tags`/`image_url`/`percent` 有默认值，所以老写入器或缺快照图的书签不再让整份档案读不进来；
+  安卓导出的 ZIP 因此能直接恢复，见计划 §185。
   运行时沿用 Room 2.8.4/SQLite 2.6.2；其他备份节/外部格式与同步/高级控件/完整兼容层仍待，见计划 §30–35、§53–54。
 - `desktop-app/` - 可选 Windows Compose Desktop 外壳（`-PwithDesktopApp`，同时启用 compat）：
   对照 Android 平板的 80dp 主导航、浏览来源栏、2:3 封面网格和 1000dp 详情分栏；辅助功能集中于更多。
