@@ -5470,3 +5470,93 @@ uiautomator 里内层 `android.widget.Button` 节点的 bounds 是 `[996,60][108
 1. 第八十七轮遗留 2–4 继续有效（左栏胶囊环偏移 2 dp、`SwipeableFilterChip` 自绘环在 `.clickable` 之后、
    61 个芯片紧排场景未重截图；TV 上"页签"有三套实现；同一 checkout 不要并行跑两个 Gradle 构建）。
 2. 本轮没有改产品代码：只改文档，量测脚本 `.tmp-whitebox.py` 留在本地不入库。
+
+## 第八十九轮：设置里的文本框对话框，遥控器清不掉一个值（2026-10-25）
+
+### 起念
+
+第七十六轮把"行内文本框"换成了对话框编辑，因为行内输入框在遥控器上是死站。对话框确实能被
+遥控器打开、也能用 OK 存回去，但它少了一个动作：**把已经存着的值清空**。手机上有那枚过目即忘的
+`×`，TV 上一枚都没有。
+
+### 代码事实（`SettingsPreferenceComponents.kt`）
+
+`SettingsTextInputPreference` 在 TV 上直接委托给 `SettingsDialogTextPreference`（L877-887），
+后者是 `SettingsAlertDialog`：标题 + `OutlinedTextField` + `Cancel` / `OK`。
+文本框的尾随图标是：
+
+```kotlin
+trailingIcon = if (suggestions.isNotEmpty() && !isTvPresentation) { ... }
+```
+
+——**两个条件同时成立才画**。于是 TV 的文本框既没有 `×`，也没有别的地方能清空：值一旦存进去
+（镜像地址、API key、`1080p, 720p, 480p`），只能按 CENTER 进编辑态、调出软键盘、一格一格退格。
+十七个字符就是十七次退格，而这台"键盘"还会把对话框顶上去。
+
+### 修法
+
+只改 TV：`dismissButton` 里把 `Cancel` 与新增的 `Clear` 放进同一行（`Row`），非 TV 仍然只渲染
+`Cancel` 一个控件（把 Cancel 提成局部 `@Composable` lambda，手机端的组合与改前逐字节相同）。
+
+```kotlin
+dismissButton = {
+    val cancel = @Composable { SettingsDialogActionButton(text = stringResource(android.R.string.cancel), ...) }
+    if (isTvPresentation) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            cancel()
+            SettingsDialogActionButton(
+                text = stringResource(R.string.clear),
+                onClick = { pendingValue = "" },
+            )
+        }
+    } else {
+        cancel()
+    }
+}
+```
+
+三个决定值得写下来：
+
+1. **放在按钮行，不放在文本框下面。** 文本框的 DOWN/UP 被 `tvTextInputVerticalExit(leave)` 截走，
+   `leave()` 直接把焦点请求到 OK（`fieldExit.targetModifier`）——放在对话框正文里的控件，遥控器
+   永远走不到，只有按钮行是必经之路。
+2. **夹在 Cancel 与 OK 之间。** 实测焦点链是 文本框 --DOWN--> **OK** --LEFT--> **Clear** --LEFT--> Cancel，
+   Clear 正好在 OK 的左手边，一次 LEFT。
+3. **值为空时也保持 enabled。** Clear 只改 `pendingValue`，清完值按钮若跟着变灰，焦点会从环底下
+   被抽走；保持可点，等于把"空值再清一次"这个无害的 no-op 当作焦点稳定性来买。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 观察 | 证据 | 数字 |
+| --- | --- | --- |
+| 改前：对话框只有两个按钮 | `r89-3.png` + `u89.xml` | `Cancel [1080,616][1220,712]`、`OK [1236,616][1352,712]`，无第三个可聚焦节点 |
+| 改后：三个按钮 | `r89-4.png` / `r89-15.png` + `u89.xml` | `Cancel [961,616][1101,712]`、`Clear [1101,616][1220,712]`、`OK [1236,616][1352,712]` |
+| Clear 有可见环且没被切 | `r89-8.png`，蓝环 bbox 量测 | 环 `[1101,616][1219,711]` = 119×96 px（59.5×48 dp），节点 120×97 px → 覆盖 99% |
+| 遥控器走位可达 | 逐键 dump | 文本框 --DOWN--> `OK`；`OK` --LEFT--> `Clear`（环在 `Clear`） |
+| CENTER 真的清空 | 同一 dump 的 `EditText` | 清空前 `'1080p, 720p, 480pX'` → 清空后 `''`，焦点仍停在 `Clear` |
+| 软键盘不挡住按钮 | `r89-11.png` | 编辑态下对话框整体上移，`Cancel / Clear / OK` 全在键盘之上 |
+| 输入 + IME Done 的旧路径没坏 | 同一轮顺手复验 | `input text 'X'` 落到字段；ENTER（Done）→ 焦点跳到 `OK` |
+| 清空能被 OK 存下去 | `run-as … grep video_quality` | 存值 `1080p, 720p, 480pX` →（Clear + OK）→ `1080p, 720p, 480p` |
+
+最后一行是关键证据：这个字段的路由会把空串归一化回默认值（`DownloadsSettingsRoute.kt:150-158` 的
+`.ifBlank { "1080p, 720p, 480p" }`），所以"存值从 `…480pX` 变回默认串"只可能是 `onValueChange("")`
+真的跑了。顺带把模拟器状态复原成原来的默认值。
+
+### 教训（写给下一轮）
+
+**对话框里，只有按钮行对遥控器是保证可达的。** 文本框、`options` 这类正文控件都被
+`tvTextInputVerticalExit` 的显式 `leave()` 跳过；要加"清空/重置/插入"这种辅助动作，先问一句
+"它在不在这条必经之路上"，再决定放哪。
+
+**又一个"TV 少了手机有的东西"**：`trailingIcon` 上多挂了一个 `!isTvPresentation`，代码里看着是
+"TV 不需要那枚小图标"，对用户却是"TV 不能清空"。凡是在 TV 分支里屏蔽掉的控件，都要回答
+"那这个动作在 TV 上由谁承担"。
+
+### 遗留
+
+1. `SettingsDialogTextPreference` 的对话框宽度仍是手机尺寸（约 880 px / 1920 px），与
+   "Add note / crop-note 对话框在 TV 上偏小"同类，留待统一处理。
+2. 其余 TV 上的文本对话框（重命名、备注、截图命名）不走这个组件，同样没有"清空"，需要各自确认。
+3. 手机端的尾随 `×` 只服务带 suggestions 的字段，普通文本字段在手机上也没有清空入口——本轮按
+   "只改 TV"的边界没有动它，作为产品决定记在这里。
+4. 第七十六轮遗留（BACK-关掉 IME 后不能再唤起）未复验。
