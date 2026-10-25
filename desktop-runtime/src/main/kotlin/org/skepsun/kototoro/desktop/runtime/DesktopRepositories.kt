@@ -251,6 +251,13 @@ class DesktopRepositories(
         Files.newInputStream(path).use { stage(it, null) }
     }
 
+    /**
+     * The launcher icon an installed extension APK shipped ([DesktopExtensionIcons]); null for a jar built without
+     * resources, which is what a Keiyoushi-style jar is.
+     */
+    fun packagedIcon(sha256: String): Path? =
+        DesktopExtensionIcons.pathOf(artifacts.resolve("$sha256.jar")).takeIf { Files.isRegularFile(it) }
+
     /** A Cloudstream `.cs3`, kept as published (its DEX is converted when loaded); [id] defaults to the file name. */
     suspend fun importCloudstreamPlugin(path: Path, id: String = DesktopExtensionFiles.cloudstreamPluginId(path.fileName.toString())):
         DesktopManagedCloudstreamPlugin = withContext(Dispatchers.IO) {
@@ -312,7 +319,8 @@ class DesktopRepositories(
         staged(input) { temporary ->
             val converted = Files.createTempFile(artifacts, ".converted-", ".tmp")
             try {
-                val ready = if (ApkExtensionConverter.isApk(temporary)) {
+                val apk = ApkExtensionConverter.isApk(temporary)
+                val ready = if (apk) {
                     try { ApkExtensionConverter.convert(temporary, converted) } catch (failure: DexConversionException) {
                         throw IOException(DesktopRuntimeStrings.text("runtime.extension.apkConvertFailed", "could not convert the Android APK to JVM class files: %s", failure.failure), failure)
                     }
@@ -326,6 +334,8 @@ class DesktopRepositories(
                 val identity = MihonJarIdentity(metadata.packageName, metadata.versionCode, metadata.sha256)
                 val target = publish(ready, metadata.sha256)
                 inspector.verify(inspector.inspect(target), identity)
+                // Android shows the source with the launcher icon of its APK; the conversion drops the resources.
+                if (apk) DesktopExtensionIcons.store(temporary, target)
                 DesktopManagedJar(target, identity)
             } finally { Files.deleteIfExists(converted) }
         }

@@ -261,14 +261,20 @@ internal object DesktopParserProbe {
                     onNodeWithTag("source:FIXTURE_KOTOTORO_ONLY").performClick(); idle()
                     check(controller.state.value.descriptor?.pagingMode == SourcePagingMode.OFFSET)
                     check(controller.state.value.descriptor?.isChapterContentSupported == true)
-                    check(controller.state.value.items.map { it.id } == listOf(1000L, 1001L))
-                    // Offset paging: the second batch continues after the two items shown, the third is past the end.
-                    onNodeWithText("下一批").performClick(); idle()
-                    check(controller.state.value.items.map { it.id } == listOf(1002L, 1003L) && controller.state.value.offset == 1)
-                    onNodeWithText("下一批").performClick(); idle()
-                    check(controller.state.value.items.isEmpty())
-                    onNodeWithText("上一批").performClick(); idle()
-                    check(controller.state.value.items.map { it.id } == listOf(1002L, 1003L))
+                    // Offset paging appends: the grid keeps asking for the next batch while rows are on screen, so
+                    // the whole fixture list (four works) arrives without a click, and the empty batch past the end
+                    // ends the list without adding a page.
+                    waitUntil(timeoutMillis = 15_000) {
+                        !controller.state.value.busy && controller.state.value.browseExhausted
+                    }
+                    check(controller.state.value.items.map { it.id } == listOf(1000L, 1001L, 1002L, 1003L) &&
+                        controller.state.value.offset == 1)
+                    onNodeWithTag("browse-no-more").assertExists()
+                    onNodeWithTag("browse-next-page").assertIsNotEnabled()
+                    // 上一批 still replaces the rows with that batch alone (the manual button keeps replace semantics).
+                    runBlocking { controller.browse(0).join() }
+                    check(controller.state.value.items.map { it.id } == listOf(1000L, 1001L) &&
+                        !controller.state.value.browseExhausted && controller.state.value.offset == 0)
                     // Parser sources expose their full sort list, not only Mihon's two buttons.
                     onNodeWithTag("source-sort").performClick()
                     onNodeWithTag("source-sort:RATING").performClick(); idle()
@@ -530,7 +536,8 @@ internal object DesktopParserProbe {
                     onNodeWithTag("details-chapter-select").assertTextContains("选择章节")
                 } else {
                     onNodeWithTag("source:FIXTURE_KOTOTORO_ONLY").performClick(); idle()
-                    check(controller.state.value.items.size == 2)
+                    // The endless list may already have appended further batches; the first row is what paging starts at.
+                    check(controller.state.value.items.first().id == 1000L)
                     // The favourite resolves its source through the restored plugin again.
                     runBlocking { controller.library().join() }
                     val saved = controller.state.value.library.entries.single().content

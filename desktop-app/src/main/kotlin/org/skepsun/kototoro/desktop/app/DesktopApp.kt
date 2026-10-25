@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -346,18 +347,26 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
             }
         }
         // Android's ExploreRepository filters every browse page through the global tag blacklist; the page in the
-        // state stays untouched so paging and the "next page" button still follow what the source returned.
+        // state stays untouched so paging and the endless list still follow what the source returned.
         val blacklist = remember(state.sourceSettings.tagBlacklist) { state.sourceSettings.tagBlacklistRules() }
         val visibleItems = remember(state.items, blacklist) {
             state.items.filter { content -> content.tags.none { blacklist.containsTagTitle(it.title) } }
         }
-        Box(Modifier.weight(1f)) { ContentGrid(visibleItems, enabled, controller.session.covers, controller::details) }
+        // Android's paging list keeps fetching as you scroll: the grid's own footer composes only once its last rows are
+        // reached, and each composition asks for the next batch — no manual 下一批 and no polling of the layout.
+        Box(Modifier.weight(1f)) {
+            ContentGrid(visibleItems, enabled, controller.session.covers, controller::details,
+                onReachEnd = { controller.browseNextPage() }, endReached = state.browseExhausted)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton({ controller.browse((state.offset - 1).coerceAtLeast(0)) },
                 enabled = enabled && state.offset > 0) { Text(desktopText("browse.previousPage")) }
             Text(desktopText("browse.pageNumber", state.offset + 1), color = Muted)
-            OutlinedButton({ controller.browse(state.offset + 1) },
-                enabled = enabled && state.items.isNotEmpty()) { Text(desktopText("browse.nextPage")) }
+            OutlinedButton({ controller.browseMore() },
+                enabled = enabled && !state.browseExhausted && state.items.isNotEmpty(),
+                modifier = Modifier.testTag("browse-next-page")) { Text(desktopText("browse.nextPage")) }
+            if (state.browseExhausted) Text(desktopText("browse.noMorePages"), color = Muted,
+                modifier = Modifier.testTag("browse-no-more"))
         }
     }
 }
@@ -373,7 +382,14 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
     /** Android's list mode: the shelves can render one work per row instead of the poster grid. */
     listMode: org.skepsun.kototoro.desktop.runtime.DesktopListMode =
         org.skepsun.kototoro.desktop.runtime.DesktopListMode.GRID,
-    metaOf: (SourceContent) -> String = { it.authors.joinToString().ifBlank { it.source.name } }) {
+    metaOf: (SourceContent) -> String = { it.authors.joinToString().ifBlank { it.source.name } },
+    /**
+     * Android's endless list: the grid's footer is composed only when the last rows are reached, and every composition
+     * asks for one more batch — the same trigger Paging uses, without pressing a button.
+     */
+    onReachEnd: (() -> Unit)? = null,
+    /** Set when the source has no more batches: the footer then stops asking and the row below says so. */
+    endReached: Boolean = false) {
     if (contents.isEmpty()) { EmptyPanel(desktopText("browse.noWorks"), desktopText("browse.noWorksDetail")); return }
     if (listMode == org.skepsun.kototoro.desktop.runtime.DesktopListMode.LIST) {
         ContentRowList(contents, enabled, covers, onOpen, progressOf, newChaptersOf, pinnedOf,
@@ -439,6 +455,18 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
                             Modifier.align(Alignment.BottomCenter).testTag("content-progress:${content.id}"))
                     },
                 )
+            }
+        }
+        if (onReachEnd != null) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                // Composed only when the grid reaches its last rows, and re-composed after every appended batch.
+                if (!endReached) {
+                    LaunchedEffect(contents.size) { onReachEnd() }
+                    Box(Modifier.fillMaxWidth().height(40.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp).testTag("content-loading"),
+                            strokeWidth = 2.dp)
+                    }
+                }
             }
         }
     }

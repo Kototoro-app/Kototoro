@@ -98,6 +98,38 @@ class DesktopSession private constructor(
     /** Sites the JSON runtime serves right now; the runtime reads the same list. */
     internal fun jsonSourceList(): List<org.skepsun.kototoro.desktop.runtime.DesktopJsonSource> = jsonSourceCache
 
+    /** Android's `favicon_cache`: the browse tiles draw the site's own icon instead of a letter when they can. */
+    internal val favicons = DesktopFavicons(
+        directory = storage.paths.favicons,
+        fetch = DesktopFavicons.httpFetcher(jsonClient),
+        candidates = { listing -> iconCandidates(listing) },
+        packaged = { listing -> packagedIcons(listing) },
+    )
+
+    /**
+     * The extension APK icons of a source — Android's `fetchPluginIcon`, which asks the package manager and never the
+     * network. A Mihon/Aniyomi/Tsundoku source always has one because the APK ships it.
+     */
+    private fun packagedIcons(listing: SourceListing): List<Path> = when (listing.ecosystem) {
+        SourceEcosystem.MIHON, SourceEcosystem.TSUNDOKU, SourceEcosystem.ANIYOMI -> registry.installed()
+            .filter { extension -> extension.sources.any { it.source.name == listing.source.name } }
+            .mapNotNull { extension -> repositories.packagedIcon(extension.metadata.sha256) }
+        else -> emptyList()
+    }
+
+    /**
+     * The icon addresses Android's favicon fetcher walks for one source: what the source's own metadata names first
+     * (a plugin's `getFavicons()`, a TVBox `iconUrl`). Failing to resolve them is not an error — the tile keeps its
+     * letter.
+     */
+    private suspend fun iconCandidates(listing: SourceListing): List<String> {
+        val candidates = mutableListOf<String>()
+        listing.iconUrl?.takeIf(String::isNotBlank)?.let(candidates::add)
+        val name = listing.source.name
+        if (parsers.owns(name)) runCatching { parserRuntime.favicons(name) }.getOrNull()?.let(candidates::addAll)
+        return candidates.distinct()
+    }
+
     /**
      * A changed proxy must not reuse a connection the previous route opened, so the desktop page drops the pool right
      * after saving. The client itself keeps working; only its idle connections go away.
@@ -707,7 +739,7 @@ class DesktopSession private constructor(
 
     override fun close() {
         var failure: Throwable? = null
-        for (owner in listOfNotNull(covers, browser, repositories, parsers, cloudstream, registry, platform, storage)) {
+        for (owner in listOfNotNull(favicons, covers, browser, repositories, parsers, cloudstream, registry, platform, storage)) {
             try { owner.close() } catch (error: Throwable) {
                 if (failure == null) failure = error else failure.addSuppressed(error)
             }
@@ -809,6 +841,9 @@ private fun cloudstreamListing(source: org.skepsun.kototoro.cloudstream.model.Cl
 private fun jsonListing(source: org.skepsun.kototoro.desktop.runtime.DesktopJsonSource) = SourceListing(
     SourceRef(source.id, "", org.skepsun.kototoro.tvbox.MacCmsSourceRuntime.CONTENT_TYPE),
     source.name, SourceEcosystem.TVBOX, supportsLatest = false,
+    // Android's TVBox/JSON sources carry their own icon; the site address answers when the document had none.
+    iconUrl = source.iconUrl?.takeIf(String::isNotBlank),
+    siteUrl = source.api?.takeIf(String::isNotBlank),
 )
 
 private fun mihonListing(source: MihonSourceDescriptor, ecosystem: SourceEcosystem) =

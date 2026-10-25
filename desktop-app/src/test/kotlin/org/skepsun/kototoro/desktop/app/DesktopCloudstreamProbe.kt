@@ -43,10 +43,18 @@ internal object DesktopCloudstreamProbe {
                 // The browse page lists it like every other source; opening it lists every home section.
                 runBlocking { controller.explore().join() }; idle()
                 onNodeWithTag("source:${listing.source.name}").performClick()
-                waitUntil(timeoutMillis = 30_000) { controller.state.value.items.isNotEmpty() }; idle()
-                check(controller.state.value.items.map { it.title } == listOf("热门 剧集 1", "最新 剧集 1")) {
+                // Both home sections page twice, so the grid's end-of-list trigger appends the second batch on
+                // its own and the empty third one ends the list.
+                waitUntil(timeoutMillis = 30_000) {
+                    !controller.state.value.busy && controller.state.value.browseExhausted
+                }
+                idle()
+                check(controller.state.value.items.map { it.title } == listOf(
+                    "热门 剧集 1", "最新 剧集 1", "热门 剧集 2", "最新 剧集 2")) {
                     "${controller.state.value.items.map { it.title }}"
                 }
+                onNodeWithTag("browse-no-more").assertExists()
+                onNodeWithTag("browse-next-page").assertIsNotEnabled()
                 onNodeWithTag("source-query").performTextReplacement("星际")
                 onNodeWithText("搜索").performClick(); idle()
                 check(controller.state.value.items.single().title == "电影 星际")

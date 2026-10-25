@@ -270,6 +270,10 @@ data class DesktopAppState(
     val offset: Int = 0,
     /** Source offsets of the batches visited so far; offset-paged sources continue after the items already shown. */
     val pageOffsets: List<Int> = listOf(0),
+    /** Items the last batch returned: an appended batch continues after exactly these, not after every row shown. */
+    val browsePageSize: Int = 0,
+    /** The source answered with an empty batch, so Android's endless list stops asking and says there is no more. */
+    val browseExhausted: Boolean = false,
     val query: String = "",
     val browseOrder: String? = null,
     val dynamicFilters: SourceDynamicFilters? = null,
@@ -977,11 +981,28 @@ class DesktopController(
         val descriptor = session.sources.describe(source.source.name)
         mutableState.update { it.copy(screen = DesktopScreen.EXPLORE, selectedSource = source,
             descriptor = descriptor, items = emptyList(), offset = 0, pageOffsets = listOf(0), query = "", content = null,
-            browseOrder = null, dynamicFilters = null, appliedFilters = emptyList(), filterDialogOpen = false) }
+            browseOrder = null, browsePageSize = 0, browseExhausted = false,
+            dynamicFilters = null, appliedFilters = emptyList(), filterDialogOpen = false) }
         browseOnIo(0, "")
     }
 
     fun browse(offset: Int = 0, query: String = state.value.query) = navigate { browseOnIo(offset, query) }
+
+    /**
+     * Android's endless browse list: the next batch is appended to the rows already shown instead of replacing them.
+     * Called from the grid's end-of-list footer, so it queues behind whatever action is running instead of dropping the
+     * request, and it stays a no-op once the source said there is nothing left.
+     */
+    fun browseNextPage(): Job? {
+        val snapshot = state.value
+        if (snapshot.selectedSource == null || snapshot.browseExhausted) return null
+        return action { browseOnIo(state.value.offset + 1, state.value.query, append = true) }
+    }
+
+    /** The manual "next batch" button: same append path as the scroll trigger, so both keep the shown rows. */
+    fun browseMore() = navigate {
+        if (!state.value.browseExhausted) browseOnIo(state.value.offset + 1, state.value.query, append = true)
+    }
 
     fun explore() = navigate {
         if (state.value.selectedSource == null) mutableState.update {
@@ -993,6 +1014,7 @@ class DesktopController(
     fun exitSource() = navigate {
         mutableState.update { it.copy(screen = DesktopScreen.EXPLORE, selectedSource = null, descriptor = null,
             items = emptyList(), offset = 0, pageOffsets = listOf(0), query = "", content = null, browseOrder = null,
+            browsePageSize = 0, browseExhausted = false,
             dynamicFilters = null, appliedFilters = emptyList(), filterDialogOpen = false) }
     }
 
@@ -1030,7 +1052,7 @@ class DesktopController(
     }
 
     private suspend fun browseOnIo(offset: Int, query: String, order: String? = state.value.browseOrder,
-        changes: List<SourceFilterChange> = state.value.appliedFilters) {
+        changes: List<SourceFilterChange> = state.value.appliedFilters, append: Boolean = false) {
         val source = requireNotNull(state.value.selectedSource) { desktopText("extensions.selectSourceFirst") }
         val filter = if (query.isNotBlank() || changes.isNotEmpty()) {
             SourceFilter(query = query.takeIf { it.isNotBlank() }, dynamicFilters = changes)
@@ -1039,13 +1061,26 @@ class DesktopController(
         val previous = state.value
         val offsets = if (offset == 0) listOf(0) else previous.pageOffsets
         val requestOffset = if (previous.descriptor?.pagingMode == SourcePagingMode.OFFSET) {
-            offsets.getOrNull(offset) ?: (offsets.last() + previous.items.size)
+            offsets.getOrNull(offset)
+                ?: (offsets.last() + (previous.browsePageSize.takeIf { it > 0 } ?: previous.items.size))
         } else offset
         val items = session.sources.getList(source.source.name, requestOffset, order, filter)
+        // A source that ignores the offset would repeat the batch it already sent; appending those rows would
+        // duplicate grid keys and loop forever, so a batch with nothing new is the end of the list.
+        val fresh = if (append) {
+            items.filter { item -> previous.items.none { it.id == item.id && it.source.name == item.source.name } }
+        } else items
         // Commit the query and controls only when the source has returned a successful result.
-        mutableState.update { it.copy(screen = DesktopScreen.EXPLORE, items = items, offset = offset,
-            pageOffsets = if (offset < offsets.size) offsets else offsets + requestOffset,
-            query = query, browseOrder = order, appliedFilters = changes) }
+        mutableState.update {
+            val endsHere = fresh.isEmpty()
+            it.copy(screen = DesktopScreen.EXPLORE,
+                items = if (append) previous.items + fresh else items,
+                // An empty batch adds no page: the batch counter keeps pointing at the rows on screen.
+                offset = if (append && endsHere) previous.offset else offset,
+                pageOffsets = if ((append && endsHere) || offset < offsets.size) offsets else offsets + requestOffset,
+                browsePageSize = items.size, browseExhausted = endsHere,
+                query = query, browseOrder = order, appliedFilters = changes)
+        }
     }
 
     fun library(history: Boolean = false) = navigate {

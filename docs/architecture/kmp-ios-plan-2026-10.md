@@ -9096,3 +9096,59 @@ Windows 此前只有详情页里的“选择书签”面板，没有“全部书
 - 全量：`:desktop-app:test` 294 条 0 失败（4 跳过）、`:desktop-runtime:test` 197 条 0 失败（2 跳过）、
   `:core-domain:jvmTest` 261 条 0 失败、`:desktop-app:verifyDesktopStrings` 960 键 / 960 被引用、
   `:core-ui:compileCommonMainKotlinMetadata` 与 `:app:compileDebugKotlin` 通过。
+
+## 199. 浏览页：结果自动加载下一批 + 来源图标（对齐 Android Paging 与 `FaviconFetcher`）（2026-10-25）
+
+用户报的两个 Windows 浏览页问题：一是内容源瓦片只有首字母，安卓那边是有图标的；二是每个来源的作品列表被做成了
+强制分页（要点“下一页”），安卓是滚到哪就接着加载。两处都按安卓的行为重做。
+
+### 结果页：滚到底自动加载下一批
+- `DesktopAppState` 新增 `browsePageSize`（上一批实际条数）与 `browseExhausted`；`DesktopController.browseNextPage()`
+  成为自动与手动共用的“下一批”入口，`browseOnIo(offset, query, order, changes, append)` 追加而不是替换。
+- `ContentGrid` 增加可选 `onReachEnd`/`endReached`：列表末尾追加一个占满整行的页脚 item，
+  `LaunchedEffect(contents.size)` 在页脚被组合时触发一次请求——与 Android Paging 的 loader/end item 同义，
+  所以列表还没填满屏幕时也会继续加载，直到内容撑满或来源给出空页；页脚同时画 18dp 进度圈（`content-loading`）。
+- 结束判定只用“空批次”：`MihonSourceRuntime.getList` 不透传 `hasNextPage`，因此 `browseExhausted = fresh.isEmpty()`
+  （按 `(id, source.name)` 去重后仍为空），空批次不推进 `offset`/`pageOffsets`；页脚改成 `browse.noMorePages`，
+  上一批/下一批按钮在结束时禁用而不是消失。
+- 手动“上一批/下一批”保留：上一批仍是替换语义（回看某一批），下一批与自动加载走同一条 append 路径；
+  中间显示 `browse.pageNumber`（Android 分页行的“第 N 批”）。
+
+### 来源图标：先扩展 APK 自带的，再网站 favicon
+- 用户指出 Mihon/Aniyomi/Tsundoku 扩展本来就是带图标的 APK，安卓 `FaviconFetcher.fetchPluginIcon` 走的是
+  `PackageManager.getApplicationIcon`（`DataSource.DISK`，不联网）。Windows 的 APK→JAR 转换会丢掉 `res/`，
+  所以图标必须在转换前取出：`desktop-runtime` 新增 `DesktopExtensionIcons`，安装 APK 时从包里挑启动图标
+  （`res/mipmap-*` 的 `ic_launcher`，密度越高越优先，跳过 `mipmap-anydpi-v26` 的自适应 XML 与 `.9.png` 九宫格，
+  只认真正的图片字节），存成与不可变产物同目录的 `<sha256>.icon`；`DesktopRepositories.packagedIcon(sha256)`
+  供 UI 查询。来源名（`MIHON_<id>`/`TSUNDOKU_<id>`/`ANIYOMI_<id>`）经 `registry.installed()` 反查到扩展再取图标。
+- `DesktopFavicons` 因此多一条 `packaged` 候选并排在所有地址之前：扩展图标是本地权威结果，命中时不发任何请求。
+  解析插件（kototoro/kotatsu/Tsuki）仍按安卓问插件自己的 `getFavicons()`，TVBox/JSON 来源用它文档里的 `iconUrl`，
+  都没有时才对网站下手（`siteUrl` → `<host>/favicon.ico` → 该页的 `<link rel="icon">`）。原来为 Mihon/Aniyomi
+  加的“扩展 `baseUrl` 反推 favicon”已删除——那正是用户否掉的做法。
+- 抓取入口抽成 `fetch: suspend (String) -> Response?`（`DesktopFavicons.httpFetcher(client)` 才是 OkHttp 实现，
+  复用会话的代理/Cookie/镜像），磁盘缓存 `<sha256>.icon`、7 天 miss、内存 LRU 64、并发 3 与 10 秒超时不变；
+  解不出来仍是首字母瓦片。
+
+### 与 Android 的差异
+- 扩展图标只从 APK 的 `res/` 直接取位图，不解析 `resources.arsc`：只有自适应图标 XML 而没有位图回退的极端扩展
+  会退回首字母（安卓能靠 PackageManager 合成）。
+- Cloudstream 插件（`.cs3`）的仓库图标地址还没进索引，仍是首字母瓦片。
+- 结束判定依赖空页而非 `hasNextPage`（`MihonSourceRuntime` 本来就不透传），所以来源在最后一页仍报
+  `hasNextPage = true` 时会多问一次才判定结束。
+- 自动加载没有“先填满一屏再停”的显式阈值，和安卓一样由页脚是否组合决定；因此“一页只有 1 条”的假来源会一直追加
+  （fixture 已改成真实页大小 40 条并如实终止），产品代码不为测试留开关。
+
+### 验证
+- `:desktop-app:test --tests=*DesktopFaviconsTest*`（6 条）：源自己声明的图标取一次后走磁盘、站点起始页 →
+  `/favicon.ico`、起始页的 `<link rel="shortcut icon">`、随源打包的图标优先且零请求、miss 记住并在 8 天后重试、
+  `faviconOf`/`iconLinks` 的派生规则。
+- `:desktop-runtime:test --tests=*DesktopExtensionIconsTest*`（3 条）：`ic_launcher` 与密度优先级、
+  `.9.png`/自适应 XML/假图片不被当图标、图标落在产物旁且不重写。
+- `:desktop-app:test --tests=*DesktopBrowsePagingTest*`：自动追加、空页结束、去重与上一批替换。
+- `DesktopParserProbe`（`writing` 探针）改为断言不点按钮就拿到 fixture 全部 4 部作品、`offset == 1`、
+  `browse-no-more` 出现且下一批禁用，再由上一批回到第一批；`DesktopCloudstreamProbe` 断言两个首页分区两批自动到位；
+  `fixture/desktop/FilterSource` 改成真实页大小（40 条、唯一地址、第 3 页起空页），既让筛选探针的“最后一次请求”
+  断言仍然成立，也让分页真的能结束。
+- 全量：`:desktop-app:test` 301 条 0 失败（4 跳过）、`:desktop-runtime:test` 200 条 0 失败（2 跳过）、
+  `:desktop-app:verifyDesktopStrings` 961 键 / 961 被引用、`:core-ui:compileCommonMainKotlinMetadata` 与
+  `:app:compileDebugKotlin` 通过。

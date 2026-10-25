@@ -16,6 +16,9 @@ class DesktopDataPaths private constructor(val root: Path) {
     /** Android's `getAppBackupDir`: the periodical local backups, named like the phone writes them. */
     val backups: Path = root.resolve("backups")
 
+    /** Source site icons, fetched once per source the way Android's `favicon_cache` does. */
+    val favicons: Path = root.resolve("favicons")
+
     companion object {
         /** Pure selection, with injectable environment/home for tests; does not create directories. */
         fun defaultRoot(

@@ -35,6 +35,10 @@ object DesktopAppProbe {
                 DesktopSuggestionsProbe.run(args)
                 return
             }
+            if (args[0] == "browsePaging") {
+                DesktopBrowsePagingProbe.run(args)
+                return
+            }
             if (args[0] == "incognito") {
                 DesktopIncognitoProbe.run(args)
                 return

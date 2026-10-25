@@ -263,6 +263,13 @@ npm run docs:build
   `acceptsSuggestionFilters` 与 Android 的 SQL 一样跨芯片取“且”，所以两个宏同时选中必然空），页面头部是
   Android 头部卡的 `suggestions_header_subtitle` 与“换一批”，未开启推荐时页面自己给出开启提示（导航项仍总是可添加，
   配置页对该行显示 `suggestions_unavailable_text`），点卡片进详情再返回原列表，见计划 §198。
+  浏览页有两个安卓行为已对齐（§199）：结果列表不再是“手动下一页”，`ContentGrid` 末尾的组合页脚
+  （`onReachEnd`/`endReached`，`LaunchedEffect(contents.size)`）像 Android Paging 的 loader item 一样滚到哪追加到哪，
+  结束判定只用空批次（`browseExhausted`，`MihonSourceRuntime` 不透传 `hasNextPage`），`browseNextPage()` 仍是手动
+  “下一批”那条 append 路径，上一批保持替换语义；来源瓦片的图标也不再只有首字母——Mihon/Aniyomi/Tsundoku 走
+  APK 自带的启动图标（`desktop-runtime` 的 `DesktopExtensionIcons` 在转换前从 `res/mipmap-*` 取出存成
+  `<sha256>.icon`，与 Android `fetchPluginIcon` 一样本地且不联网），解析插件问自己的 `getFavicons()`，
+  TVBox/JSON 用文档的 `iconUrl`，最后才退到 `siteUrl`/`favicon.ico`/`<link rel="icon">`，都没有就画首字母。
   .pb/新版 JSON 仓库添加/列表/搜索、JAR 安装/更新/导入及身份恢复；新产物保存到应用管理的 SHA 目录。
   仓库可“忘记”（只删索引条目，已安装扩展与 JAR 保留，重新添加即恢复）。
   来源浏览/搜索、详情、收藏、分页图片阅读、历史与源设置，以及可选网页/HTML/JS 调试。

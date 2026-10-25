@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,8 +15,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.source.SourceListing
@@ -73,9 +77,7 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
                             cardBackground = Color.Transparent,
                             supportingText = source.desktopSupportingText(),
                             icon = { iconModifier ->
-                                Box(iconModifier, contentAlignment = Alignment.Center) {
-                                    Text(source.displayName.take(1), fontSize = 48.sp, color = Accent)
-                                }
+                                DesktopSourceIcon(controller, source, iconModifier, 48.sp)
                             },
                         )
                     }
@@ -93,9 +95,7 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
                                 else Modifier).padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                                    Text(source.displayName.take(1), fontSize = 20.sp, color = Accent)
-                                }
+                                DesktopSourceIcon(controller, source, Modifier.size(40.dp), 20.sp)
                                 Column(Modifier.weight(1f)) {
                                     Text(source.displayName, maxLines = 1, fontWeight = FontWeight.SemiBold)
                                     Text(source.desktopSupportingText(), fontSize = 12.sp, color = Muted)
@@ -113,6 +113,28 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
 private fun SourceGroupHeader(language: String) {
     Text(language, fontSize = 12.sp, color = Muted, fontWeight = FontWeight.SemiBold,
         modifier = Modifier.testTag("source-group:$language").padding(top = 8.dp, bottom = 4.dp))
+}
+
+/**
+ * Android's source tile icon: the site's own favicon when [DesktopFavicons] can fetch one, the first letter of the
+ * source name while it loads or when the site has nothing to offer. Both live in the same slot so a grid of tiles
+ * does not shift when the icons arrive.
+ */
+@Composable
+internal fun DesktopSourceIcon(controller: DesktopController, source: SourceListing, modifier: Modifier,
+    letterSize: TextUnit) {
+    val icon by produceState<ImageBitmap?>(initialValue = null, source.source.name, source.iconUrl, source.siteUrl) {
+        value = controller.session.favicons.load(source)
+    }
+    Box(modifier, contentAlignment = Alignment.Center) {
+        val bitmap = icon
+        if (bitmap != null) {
+            Image(bitmap, source.displayName, contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize().padding(4.dp).testTag("source-icon:${source.source.name}"))
+        } else {
+            Text(source.displayName.take(1), fontSize = letterSize, color = Accent)
+        }
+    }
 }
 
 private fun SourceListing.desktopSupportingText(): String =
