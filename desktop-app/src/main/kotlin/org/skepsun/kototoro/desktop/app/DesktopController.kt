@@ -2417,14 +2417,27 @@ class DesktopController(
 
     internal fun webDavUpload() = action {
         val result = webDav.upload()
-        val message = if (result.removed.isEmpty()) {
+        val uploaded = if (result.removed.isEmpty()) {
             desktopText("webdav.uploaded", result.name, result.size / 1024)
         } else {
             desktopText("webdav.uploadedTrimmed", result.name, result.size / 1024, result.removed.size)
         }
+        // Android reports the kept copy separately, because the upload is what the button promised.
+        val message = if (result.local != null) "$uploaded ${desktopText("webdav.localKept", result.local)}" else uploaded
         mutableState.update { it.copy(message = message) }
         // A manual upload moves the timer's baseline, so a sleeping loop must be recomputed against it.
         startAutoBackup()
+    }
+
+    /** Android's periodical page points at its output directory; on Windows that is the data root's `backups`. */
+    internal fun webDavOpenLocalDirectory() {
+        val directory = session.storage.paths.backups
+        runCatching {
+            Files.createDirectories(directory)
+            java.awt.Desktop.getDesktop().open(directory.toFile())
+        }.onFailure {
+            mutableState.update { state -> state.copy(message = desktopText("webdav.localOpenFailed", directory)) }
+        }
     }
 
     /** The remote file is downloaded, then previewed through the same archive/merge flow a local file uses. */

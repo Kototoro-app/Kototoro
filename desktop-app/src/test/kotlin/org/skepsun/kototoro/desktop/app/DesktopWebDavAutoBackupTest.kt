@@ -9,6 +9,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.skepsun.kototoro.backups.webdav.WebDavBackupClient
@@ -18,6 +19,7 @@ import org.skepsun.kototoro.core.source.SourceRef
 import org.skepsun.kototoro.desktop.runtime.DesktopLibrary
 import org.skepsun.kototoro.desktop.runtime.DesktopLibraryBackup
 import org.skepsun.kototoro.desktop.runtime.DesktopRuntime
+import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -57,6 +59,9 @@ class DesktopWebDavAutoBackupTest {
 
     private val clock = AtomicInteger(1_800_000_000)
     private val puts = AtomicInteger()
+
+    /** Every request the operations make, so a local-only tick can prove it never touched the network. */
+    private val requests = AtomicInteger()
     private var failUploads = false
 
     private fun hour(multiplier: Int) = 60L * 60 * 1000 * multiplier
@@ -71,6 +76,7 @@ class DesktopWebDavAutoBackupTest {
     }
 
     private fun engine(): MockEngine = MockEngine { request ->
+        requests.incrementAndGet()
         when (request.method) {
             HttpMethod.Put -> {
                 puts.incrementAndGet()
@@ -85,16 +91,50 @@ class DesktopWebDavAutoBackupTest {
     }
 
     @Test
-    fun `without an interval the timer is off and the server is never touched`() = runBlocking {
+    fun `without a destination the timer is off and the server is never touched`() = runBlocking {
         val runtime = DesktopRuntime.open(root.resolve("off"))
         val engine = engine()
         val operations = operations(runtime, engine)
         try {
-            operations.settings(settings.copy(intervalHours = 0))
+            // No server and no local copy: there is nothing the timer could write, so it stays off.
+            operations.settings(settings.copy(intervalHours = 0, keepLocalCopy = false))
             assertNull(operations.autoBackupDelay())
             assertEquals(DesktopAutoBackup.Disabled, operations.autoBackup())
             assertEquals(0, puts.get())
             assertEquals(0L, operations.ui.value.lastUploadMillis)
+        } finally {
+            engine.close()
+            runtime.close()
+        }
+    }
+
+    @Test
+    fun `a local-only destination backs up on the timer without touching the network`() = runBlocking {
+        val runtime = DesktopRuntime.open(root.resolve("local-only"))
+        val engine = engine()
+        DesktopLibrary(runtime.database) { source }.addFavourite(content)
+        try {
+            val operations = operations(runtime, engine)
+            // Android's periodical worker writes the local copy on the same schedule, with no server configured.
+            operations.settings(DesktopWebDavSettings(intervalHours = 1, keepLocalCopy = true))
+
+            assertEquals(0L, operations.autoBackupDelay())
+            assertEquals(DesktopAutoBackup.Saved, operations.autoBackup())
+            assertEquals(0, puts.get())
+            assertEquals(0, requests.get())
+            assertEquals(runtime.paths.backups, operations.ui.value.localDirectory)
+            assertEquals(1, operations.ui.value.localFiles.size)
+            assertEquals("PK", Files.readAllBytes(operations.ui.value.localFiles.single()).take(2)
+                .toByteArray().toString(Charsets.US_ASCII))
+            assertEquals(0L, operations.ui.value.lastUploadMillis)
+
+            // The local copy is the interval's baseline, so the next tick has to wait.
+            assertEquals(hour(1), operations.autoBackupDelay())
+            assertEquals(DesktopAutoBackup.NotDue, operations.autoBackup())
+            clock.addAndGet((hour(1) / 1000).toInt())
+            assertEquals(DesktopAutoBackup.Saved, operations.autoBackup())
+            assertEquals(2, operations.ui.value.localFiles.size)
+            assertEquals(0, requests.get())
         } finally {
             engine.close()
             runtime.close()
@@ -180,15 +220,75 @@ class DesktopWebDavAutoBackupTest {
     }
 
     @Test
-    fun `an unconfigured destination keeps the timer off even with an interval`() = runBlocking {
+    fun `a half-filled form with the local copy off keeps the timer off`() = runBlocking {
         val runtime = DesktopRuntime.open(root.resolve("unconfigured"))
         val engine = engine()
         val operations = operations(runtime, engine)
         try {
-            operations.settings(DesktopWebDavSettings(intervalHours = 6))
+            operations.settings(DesktopWebDavSettings(intervalHours = 6, keepLocalCopy = false))
             assertNull(operations.autoBackupDelay())
             assertEquals(DesktopAutoBackup.Disabled, operations.autoBackup())
             assertEquals(0, puts.get())
+            assertEquals(0, requests.get())
+        } finally {
+            engine.close()
+            runtime.close()
+        }
+    }
+
+    @Test
+    fun `the backup is written locally before the upload, so a refused upload still leaves a copy`() = runBlocking {
+        val runtime = DesktopRuntime.open(root.resolve("local"))
+        val engine = engine()
+        DesktopLibrary(runtime.database) { source }.addFavourite(content)
+        try {
+            val operations = operations(runtime, engine)
+            operations.settings(settings.copy(localCount = 1))
+            failUploads = true
+
+            assertEquals(DesktopAutoBackup.Failed, operations.autoBackup())
+
+            // Android writes the local copy first; a server answering 500 must not cost the user the backup.
+            val kept = operations.ui.value.localFiles
+            assertEquals(1, kept.size)
+            val name = kept.single().fileName.toString()
+            assertTrue(Regex("""kototoro_\d{8}-\d{4}\.bk\.zip""").matches(name), name)
+            assertEquals(runtime.paths.backups, operations.ui.value.localDirectory)
+            assertEquals(clock.get() * 1000L, operations.ui.value.lastLocalMillis)
+            // The copy is the real export archive, not an empty staging file.
+            assertEquals("PK", Files.readAllBytes(kept.single()).take(2).toByteArray().toString(Charsets.US_ASCII))
+
+            failUploads = false
+            clock.addAndGet((hour(6) / 1000).toInt())
+            assertEquals(DesktopAutoBackup.Uploaded, operations.autoBackup())
+            // The local retention count is what trimmed: the older copy retired, the newest stayed.
+            assertEquals(1, operations.ui.value.localFiles.size)
+            assertTrue(operations.ui.value.localFiles.single().fileName.toString() != name)
+
+            // The listing survives a restart, exactly like the upload baseline does.
+            val reopened = operations(runtime, engine)
+            reopened.restore()
+            assertEquals(1, reopened.ui.value.localFiles.size)
+            assertEquals(operations.ui.value.lastLocalMillis, reopened.ui.value.lastLocalMillis)
+        } finally {
+            engine.close()
+            runtime.close()
+        }
+    }
+
+    @Test
+    fun `turning the local copy off uploads only`() = runBlocking {
+        val runtime = DesktopRuntime.open(root.resolve("local-off"))
+        val engine = engine()
+        DesktopLibrary(runtime.database) { source }.addFavourite(content)
+        try {
+            val operations = operations(runtime, engine)
+            operations.settings(settings.copy(keepLocalCopy = false))
+
+            assertEquals(DesktopAutoBackup.Uploaded, operations.autoBackup())
+            assertEquals(1, puts.get())
+            assertEquals(emptyList<java.nio.file.Path>(), operations.ui.value.localFiles)
+            assertEquals(0L, operations.ui.value.lastLocalMillis)
         } finally {
             engine.close()
             runtime.close()

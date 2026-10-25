@@ -8506,3 +8506,49 @@ Windows 现在照同一规则折：
   区分“该成为 section 的分类”和“该成为标签行的嵌套组”——现在按“顶层有标题即 section、嵌套有标题即标签”
   处理，多层嵌套比 Android 多留一层标题（Android 对嵌套的 `PreferenceCategory` 会丢标题）；要精确对齐得给
   协议节点加一个来源类型字段，属于协议变更，本轮不做。
+
+## 187. 定期备份的本地副本：上传前先落盘，没有 WebDAV 也能按间隔备份（2026-10-25）
+
+视频/备份页的云同步此前只有“上传”一条路：没有服务器就完全没有自动备份，服务器 500 时这一轮备份直接丢掉。
+Android 的 `PeriodicalBackupService` 不是这样——它把导出写进临时文件后先
+`externalBackupStorage.put(output)` 再 `trim(periodicalBackupMaxCount)`，**之后**才做 WebDAV 上传，
+所以本地永远有一份可恢复的副本，服务器故障只影响远端。Windows 现在照这个顺序补齐：
+
+- `desktop-runtime` 新增 `DesktopLocalBackups`（`DesktopDataPaths.backups`，即数据根下的 `backups`）：
+  文件名复用 Android `BackupUtils.generateFileName` 的 `<app>_yyyyMMdd-HHmm.bk.zip`（小写 `kototoro_`），
+  `list()` 只认这一个形状（`desktopBackupTimestamp` 解析失败的名字——手工导出的
+  `kototoro-library-*.zip`、暂存文件、目录——一律不算），按时间新→旧排；
+  `keep()` 复制时先写 `<name>.part` 再 `ATOMIC_MOVE` 到最终名，崩溃不会留下看起来能恢复的半截档案，
+  同一分钟内第二份用 `-2`/`-3` 后缀而不是覆盖；`trim(count)` 只删这类文件，`count <= 0` 全留
+  （对应 Android “删除旧备份”关掉时的 `Int.MAX_VALUE`）。
+- 设置：`DesktopWebDavSettings` 加 `keepLocalCopy`/`trimLocal`/`localCount`（默认 `true`/`true`/`10`），
+  键是桌面自己的 `webdav_keep_local_copy`/`webdav_trim_local_copy`/`webdav_local_max_count`
+  （Android 的 `backup_periodic_trim`/`backup_periodic_count` 存在手机的 SharedPreferences 里，桌面不共享这份存储，
+  所以沿用桌面 `webdav_*` 命名空间；语义与默认值照 Android）。
+- 上传路径：`uploadLocked()` 在 `backups.export(file)` 之后、`client.upload` 之前调 `keepLocal()`，
+  落盘失败只吞掉本地那一步（`check` 只留给纯本地模式），上传照常；
+  `WebDavUploadResult.local` 回传文件名，`webDavUpload()` 把它接在“已上传 …”后面（`webdav.localKept`）。
+  写盘同时记 `webdav_last_local_backup_millis` 并 `refreshLocal()`，列表不需要退出页面就能看到新副本。
+- 纯本地定时备份：`autoBackupEnabled` 从“必须有服务器”放宽成 `intervalHours > 0 && (configured || keepLocalCopy)`，
+  `autoBackup()` 在没有服务器时走 `keepLocalOnly()`（导出→`keepLocal`，不建 client、不发任何请求）并回新值
+  `DesktopAutoBackup.Saved`。计时基准刻意与 Android 不同：配了服务器时仍只看 `lastUploadMillis`，
+  上传失败继续按调用方的十分钟退避重试（Android 取 `max(local, webdav)`，一次本地成功就会压掉整轮的重试，
+  用户会以为已经同步到云端）；纯本地模式才用 `lastLocalMillis`。
+- 界面（备份与恢复页的云同步卡）：`上传后保留本地副本`（Android 的 `webdav_keep_local_copy` 原句）、
+  开时多出 `删除旧备份文件`（`delete_old_backups`）与 `最大备份数` 滑块（`max_backups_count`，1..32，
+  共享 `SettingsSliderRow`）、`本地副本目录` 行带 Android 的路径与“打开”按钮、最后一行
+  `last_successful_backup` 原句加副本数与最新文件名；关掉保留开关时这几行整体消失，与 Android 的分组一致。
+  标签 `webdav-keep-local`/`webdav-trim-local`/`webdav-local-count`/`webdav-local-open`/`webdav-local-status`。
+  新增桌面文案 `webdav.localKept`/`localNever`/`localSummary`/`localFailed`/`localOpen`/`open`/`localOpenFailed`
+  （base 与 `_zh-CN` 同时写，`:desktop-app:verifyDesktopStrings` 954 键全通过）。
+- 回归：`DesktopLocalBackupsTest` 7 个用例（命名/往返解析/`keep` 覆盖同分钟与 `.part` 发布/列表排序/
+  保留只删自己的文件/`trim(0)`/进行中的副本不进列表）；`DesktopWebDavAutoBackupTest` 8 个用例，其中
+  “服务器 500 仍留本地副本、重启后仍列出”“纯本地 tick 写副本且 `requests == 0`、第二次要等满间隔”、
+  “保留开关关掉后整页只剩上传”三条是新加的；探针 `backups-write`/`backups-read` 在真实窗口里断言五行存在、
+  关掉开关后 `webdav-trim-local` 消失、把间隔设成 1 小时打开纯本地计时器后
+  `waitUntil` 到 `kototoro_*.bk.zip` 真的写进 `backups`（截图 `backups-write-local-copy-filled.png`：
+  `最近备份成功: 2026年10月25日 09:55`、`共 1 个副本 · 最新 kototoro_20261025-0955.bk.zip`），
+  读阶段重开同一数据根仍能看到这份副本。
+- 仍未做：Android 的 SAF 自选输出目录（Windows 固定用数据根 `backups`，页面给了“打开”按钮）、
+  WebDAV 自动恢复（`backup_periodic_webdav_auto_restore`）、把本地副本直接列进恢复区的卡片
+  （现在走既有“选择恢复文件”，文件选择器本来就认 `.bk.zip`）。

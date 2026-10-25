@@ -13,6 +13,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.backups.webdav.WebDavBackupFile
+import org.skepsun.kototoro.core.ui.settings.SettingsActionRow
+import org.skepsun.kototoro.core.ui.settings.SettingsInfoRow
+import org.skepsun.kototoro.core.ui.settings.SettingsSliderRow
+import org.skepsun.kototoro.core.ui.settings.SettingsSwitchRow
 import java.text.DateFormat
 import java.util.Date
 
@@ -103,9 +107,65 @@ internal fun DesktopWebDavSection(controller: DesktopController, ui: DesktopWebD
                 Button({ controller.webDavUpload() }, enabled = enabled && settings.configured,
                     modifier = Modifier.testTag("webdav-upload")) { Text(desktopText("webdav.upload")) }
             }
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            // Android's periodical page keeps the local copy beside the upload, with its own retention count.
+            SettingsSwitchRow(
+                title = AndroidStrings["webdav_keep_local_copy"],
+                summary = AndroidStrings["webdav_keep_local_copy_summary"],
+                checked = settings.keepLocalCopy,
+                enabled = enabled,
+                onCheckedChange = { controller.webDavSettings(settings.copy(keepLocalCopy = it)) },
+                testTag = "webdav-keep-local",
+            )
+            if (settings.keepLocalCopy) {
+                SettingsSwitchRow(
+                    title = AndroidStrings["delete_old_backups"],
+                    summary = AndroidStrings["delete_old_backups_summary"],
+                    checked = settings.trimLocal,
+                    enabled = enabled,
+                    onCheckedChange = { controller.webDavSettings(settings.copy(trimLocal = it)) },
+                    testTag = "webdav-trim-local",
+                )
+                if (settings.trimLocal) {
+                    SettingsSliderRow(
+                        title = AndroidStrings["max_backups_count"],
+                        summary = null,
+                        value = settings.localCount,
+                        valueRange = 1..32,
+                        valueText = Int::toString,
+                        enabled = enabled,
+                        onValueChange = { controller.webDavSettings(settings.copy(localCount = it)) },
+                        testTag = "webdav-local-count",
+                    )
+                }
+                SettingsActionRow(
+                    title = desktopText("webdav.localOpen"),
+                    summary = ui.localDirectory?.toString().orEmpty(),
+                    modifier = Modifier.testTag("webdav-local-open"),
+                ) {
+                    TextButton(onClick = { controller.webDavOpenLocalDirectory() }, enabled = enabled) {
+                        Text(desktopText("webdav.open"))
+                    }
+                }
+                SettingsInfoRow(
+                    title = if (ui.lastLocalMillis > 0L) {
+                        AndroidStrings.format(
+                            "last_successful_backup",
+                            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, DesktopStrings.locale)
+                                .format(Date(ui.lastLocalMillis)),
+                        )
+                    } else {
+                        desktopText("webdav.localNever")
+                    },
+                    summary = ui.localFiles.firstOrNull()?.fileName?.toString()?.let { newest ->
+                        desktopText("webdav.localSummary", ui.localFiles.size, newest)
+                    },
+                    modifier = Modifier.testTag("webdav-local-status"),
+                )
+            }
             if (ui.reachable == true) Text(desktopText("webdav.reachable"), style = MaterialTheme.typography.bodyMedium)
-            // Only shown when a timer is configured: without one, "never uploaded" would be noise.
-            if (settings.autoBackupEnabled) {
+            // Only shown for a timer that uploads: a local-only timer reports itself in the local row below.
+            if (settings.autoBackupEnabled && settings.configured) {
                 Text(
                     if (ui.lastUploadMillis > 0L) {
                         desktopText(

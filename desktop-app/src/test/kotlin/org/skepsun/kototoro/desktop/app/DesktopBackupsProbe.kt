@@ -57,6 +57,43 @@ internal object DesktopBackupsProbe {
                 idle()
                 onNodeWithTag("backup-export").assertExists()
                 onNodeWithTag("backup-open").assertExists()
+                // Android's local copy rows: on by default, with the trim switch and its count under it.
+                onNodeWithTag("webdav-keep-local").performScrollTo().assertExists()
+                onNodeWithTag("webdav-trim-local").performScrollTo().assertExists()
+                onNodeWithTag("webdav-local-count").performScrollTo().assertExists()
+                onNodeWithTag("webdav-local-status").performScrollTo().assertExists()
+                check(controller.webDavUi.value.settings.keepLocalCopy)
+                // The read phase reopens a root whose write phase already left a copy behind.
+                check(controller.webDavUi.value.localFiles.all {
+                    Regex("""kototoro_\d{8}-\d{4}\.bk\.zip""").matches(it.fileName.toString())
+                })
+                snapshot("local-copy")
+                if (mode.endsWith("write")) {
+                    // Turning the keep switch off hides the rest of the local section, exactly like Android's page.
+                    onNodeWithTag("webdav-keep-local").performScrollTo().performClick()
+                    idle()
+                    check(!controller.webDavUi.value.settings.keepLocalCopy)
+                    onNodeWithTag("webdav-trim-local").assertDoesNotExist()
+                    onNodeWithTag("webdav-keep-local").performClick()
+                    idle()
+                    check(controller.webDavUi.value.settings.keepLocalCopy)
+                    onNodeWithTag("webdav-trim-local").assertExists()
+                    // A local-only destination is Android's periodical backup without WebDAV: the timer writes the copy.
+                    controller.webDavSettings(DesktopWebDavSettings(intervalHours = 1, keepLocalCopy = true))
+                    waitUntil(timeoutMillis = 30_000) { controller.webDavUi.value.localFiles.isNotEmpty() }
+                    val local = controller.webDavUi.value.localFiles.first()
+                    check(Regex("""kototoro_\d{8}-\d{4}\.bk\.zip""").matches(local.fileName.toString()))
+                    check(Files.size(local) > 0L)
+                    check(local.parent == session.storage.paths.backups)
+                    // The settings write re-lays the page out; scroll back to the filled rows before the snapshot.
+                    onNodeWithTag("webdav-local-status").performScrollTo()
+                    waitForIdle()
+                    snapshot("local-copy-filled")
+                    // Back to the factory settings so the rest of the probe runs without a timer behind it.
+                    controller.webDavSettings(DesktopWebDavSettings())
+                    idle()
+                    check(controller.webDavUi.value.settings.intervalHours == 0)
+                }
                 check(controller.state.value.sources.isEmpty())
                 if (mode.endsWith("write")) {
                     runBlocking { controller.previewLibraryBackup(file).join() }

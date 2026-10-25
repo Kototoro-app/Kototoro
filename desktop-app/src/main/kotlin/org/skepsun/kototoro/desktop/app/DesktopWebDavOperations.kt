@@ -17,6 +17,7 @@ import org.skepsun.kototoro.core.source.SourcePreferenceEdit
 import org.skepsun.kototoro.core.source.SourcePreferenceValue
 import org.skepsun.kototoro.desktop.runtime.DESKTOP_BACKUP_DATA_VERSION
 import org.skepsun.kototoro.desktop.runtime.DesktopLibraryBackup
+import org.skepsun.kototoro.desktop.runtime.DesktopLocalBackups
 import org.skepsun.kototoro.desktop.runtime.DesktopRuntime
 import java.nio.file.Files
 import java.nio.file.Path
@@ -34,12 +35,28 @@ internal data class DesktopWebDavUi(
     val error: String? = null,
     /** When the last successful upload happened, in epoch millis; `0` means none yet. */
     val lastUploadMillis: Long = 0L,
+    /** The local copies Android writes beside the library, newest first. */
+    val localFiles: List<Path> = emptyList(),
+    /** When the last local copy was written, in epoch millis; `0` means none since this field was added. */
+    val lastLocalMillis: Long = 0L,
+    /** The directory the local copies live in, so the page can show where they are. */
+    val localDirectory: Path? = null,
 ) {
     val latest: WebDavBackupFile? get() = WebDavBackupCatalog.latest(files)
 }
 
 /** What one tick of the automatic backup did, so the caller can decide whether to wait or retry sooner. */
-internal enum class DesktopAutoBackup { Disabled, Busy, NotDue, Uploaded, Failed }
+internal enum class DesktopAutoBackup {
+    /** The timer is off: neither a server nor a local copy is configured. */
+    Disabled,
+    Busy,
+    NotDue,
+    Uploaded,
+
+    /** Written to the local directory only: Android's periodical backup without a WebDAV destination. */
+    Saved,
+    Failed,
+}
 
 /**
  * Android's periodic WebDAV backup for the Windows client: the backups page edits the destination, tests it, uploads
@@ -74,6 +91,12 @@ internal class DesktopWebDavOperations(
     )
     private val staging: Path = storage.paths.root.resolve("webdav")
 
+    /**
+     * Android's local periodical copies: the same export the upload sends is written here first, so a server that
+     * refuses the file still leaves a restorable backup on this machine.
+     */
+    private val localBackups = DesktopLocalBackups(storage.paths.backups, clock)
+
     private val mutableUi = MutableStateFlow(DesktopWebDavUi())
     val ui = mutableUi.asStateFlow()
 
@@ -86,7 +109,15 @@ internal class DesktopWebDavOperations(
         mutableUi.value = DesktopWebDavUi(
             settings = DesktopWebDavSettings.from(values),
             lastUploadMillis = (values[KEY_LAST_UPLOAD] as? SourcePreferenceValue.Text)?.value?.toLongOrNull() ?: 0L,
+            lastLocalMillis = (values[KEY_LAST_LOCAL] as? SourcePreferenceValue.Text)?.value?.toLongOrNull() ?: 0L,
         )
+        refreshLocal()
+    }
+
+    /** Re-reads the local copies; cheap, because retention only ever keeps a handful of files. */
+    fun refreshLocal() {
+        val files = runCatching { localBackups.list() }.getOrDefault(emptyList())
+        mutableUi.value = mutableUi.value.copy(localFiles = files, localDirectory = storage.paths.backups)
     }
 
     fun settings(value: DesktopWebDavSettings) {
@@ -134,20 +165,24 @@ internal class DesktopWebDavOperations(
     suspend fun upload(): WebDavUploadResult = uploadLock.withLock { uploadLocked() }
 
     /**
-     * How long the timer should wait before the next automatic upload, `null` when there is nothing to wait for because
-     * the interval is off or the destination is incomplete. `0` means "upload now", which is also what a fresh install
-     * does: it has no previous upload to measure the interval against.
+     * How long the timer should wait before the next automatic backup, `null` when there is nothing to wait for because
+     * the interval is off or nothing can receive the file. `0` means "back up now", which is also what a fresh install
+     * does: it has no previous backup to measure the interval against.
+     *
+     * The baseline is the last successful *upload* when a server is configured, so a refused upload is retried on the
+     * caller's backoff instead of waiting a whole interval for a copy the user believes is in the cloud. Without a
+     * server the baseline is the last local copy, which is Android's rule for a local-only destination.
      */
     fun autoBackupDelay(now: Long = clock()): Long? {
         val settings = mutableUi.value.settings
         if (!settings.autoBackupEnabled) return null
         val interval = settings.intervalHours.toLong() * 60 * 60 * 1000
-        val last = mutableUi.value.lastUploadMillis
+        val last = if (settings.configured) mutableUi.value.lastUploadMillis else mutableUi.value.lastLocalMillis
         return if (last <= 0L) 0L else (last + interval - now).coerceAtLeast(0L)
     }
 
     /**
-     * One tick of the timer. A busy upload, an interval that has not passed and a disabled timer all leave the remote
+     * One tick of the timer. A busy backup, an interval that has not passed and a disabled timer all leave the remote
      * alone; a failed upload keeps the previous "last upload" so the retry happens after the caller's backoff.
      */
     suspend fun autoBackup(): DesktopAutoBackup {
@@ -155,17 +190,46 @@ internal class DesktopWebDavOperations(
         if (!uploadLock.tryLock()) return DesktopAutoBackup.Busy
         try {
             if (autoBackupDelay() != 0L) return DesktopAutoBackup.NotDue
-            return try {
-                uploadLocked()
-                DesktopAutoBackup.Uploaded
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                mutableUi.value = mutableUi.value.copy(error = desktopWebDavError(error))
-                DesktopAutoBackup.Failed
+            val settings = mutableUi.value.settings
+            return if (settings.configured) {
+                try {
+                    uploadLocked()
+                    DesktopAutoBackup.Uploaded
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    mutableUi.value = mutableUi.value.copy(error = desktopWebDavError(error))
+                    DesktopAutoBackup.Failed
+                }
+            } else {
+                try {
+                    keepLocalOnly(settings)
+                    DesktopAutoBackup.Saved
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    mutableUi.value = mutableUi.value.copy(error = desktopWebDavError(error))
+                    DesktopAutoBackup.Failed
+                }
             }
         } finally {
             uploadLock.unlock()
+        }
+    }
+
+    /** A tick with no server: the same export Android's local-only destination writes, and nothing else. */
+    private suspend fun keepLocalOnly(settings: DesktopWebDavSettings) {
+        val now = clock()
+        Files.createDirectories(staging)
+        val file = Files.createTempFile(staging, "local-", ".zip")
+        try {
+            Files.deleteIfExists(file)
+            backups.export(file)
+            check(keepLocal(settings, file, now) != null) {
+                desktopText("webdav.localFailed", storage.paths.backups)
+            }
+        } finally {
+            Files.deleteIfExists(file)
         }
     }
 
@@ -178,6 +242,8 @@ internal class DesktopWebDavOperations(
         try {
             Files.deleteIfExists(file)
             backups.export(file)
+            // Android writes the local copy before it uploads: a server that answers 500 must not cost the backup.
+            val local = keepLocal(settings, file, now)
             val name = client.remoteName(
                 dataVersion = DESKTOP_BACKUP_DATA_VERSION,
                 timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(now)),
@@ -187,10 +253,25 @@ internal class DesktopWebDavOperations(
             val removed = runCatching { client.trim(settings, RemoteNamespace.V3) }.getOrDefault(emptyList())
             rememberUpload(now)
             refresh()
-            return WebDavUploadResult(name, size, removed)
+            return WebDavUploadResult(name, size, removed, local)
         } finally {
             Files.deleteIfExists(file)
         }
+    }
+
+    /** The local copy of [file], when the page asks for one; a failing disk keeps the upload going, like Android's. */
+    private fun keepLocal(settings: DesktopWebDavSettings, file: Path, now: Long): String? {
+        if (!settings.keepLocalCopy) return null
+        val kept = runCatching { localBackups.keep(file, now) }.getOrNull()
+        if (kept != null) {
+            preferences.edit(
+                SourcePreferenceEdit(changes = mapOf(KEY_LAST_LOCAL to SourcePreferenceValue.Text(now.toString()))),
+            )
+            mutableUi.value = mutableUi.value.copy(lastLocalMillis = now)
+        }
+        if (settings.trimLocal) runCatching { localBackups.trim(settings.localCount) }
+        refreshLocal()
+        return kept?.fileName?.toString()
     }
 
     /** A successful upload is the only thing that moves the timer's baseline, so a failed one is retried. */
@@ -226,10 +307,19 @@ internal class DesktopWebDavOperations(
     }
 }
 
-internal data class WebDavUploadResult(val name: String, val size: Long, val removed: List<String>)
+internal data class WebDavUploadResult(
+    val name: String,
+    val size: Long,
+    val removed: List<String>,
+    /** The local copy written before the upload, `null` when the page has "keep a local copy" off. */
+    val local: String? = null,
+)
 
 /** Epoch millis of the last successful upload, kept next to the destination it belongs to. */
 private const val KEY_LAST_UPLOAD = "webdav_last_upload_millis"
+
+/** Epoch millis of the last local copy; Android shows it as "last successful backup" on the periodical page. */
+private const val KEY_LAST_LOCAL = "webdav_last_local_backup_millis"
 
 /** A server's own message is the useful part ("401 Unauthorized"); the exception name is the last resort. */
 private fun desktopWebDavError(error: Exception): String =
