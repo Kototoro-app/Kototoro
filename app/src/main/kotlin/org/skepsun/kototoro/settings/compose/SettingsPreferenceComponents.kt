@@ -449,12 +449,23 @@ fun <T> SettingsChoicePreference(
     var isDialogVisible by remember { mutableStateOf(false) }
     var currentValue by remember(value) { mutableStateOf(value) }
     val selectedLabel = options.firstOrNull { it.value == currentValue }?.label.orEmpty()
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
-            .clickable(enabled = enabled) { isDialogVisible = true }
+            .then(
+                if (isTvPresentation) {
+                    // 电视上整行不能既当焦点目标又装着行尾的图标按钮：方向性焦点搜索只认"严格位于
+                    // 当前节点矩形之外"的候选，孩子永远在父矩形内部，于是行尾那两个快捷入口成了
+                    // 够不着的死键。这里把可点区域让给正文，图标各成一个兄弟焦点目标。
+                    Modifier
+                } else {
+                    Modifier
+                        .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+                        .clickable(enabled = enabled) { isDialogVisible = true }
+                },
+            )
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -464,7 +475,17 @@ fun <T> SettingsChoicePreference(
             tone = SettingsIconTone.PRIMARY_VARIANT,
         )
         Column(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (isTvPresentation) {
+                        Modifier
+                            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+                            .clickable(enabled = enabled) { isDialogVisible = true }
+                    } else {
+                        Modifier
+                    },
+                ),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(

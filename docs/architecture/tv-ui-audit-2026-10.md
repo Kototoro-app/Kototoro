@@ -7613,3 +7613,36 @@ Compose 的方向性焦点搜索只在"严格位于当前节点矩形某个方�
 **`clickable` 在电视上不等于可达。** 一百一十四轮是"焦点到了但按键被吞"，这轮是"按键根本没走到"——
 两种失败看起来都是"按了没反应"，根因却一个是多余的焦点目标、一个是焦点树结构。查这类问题时
 先把 a11y 树里那颗控件的矩形和焦点所在行的矩形摆一起看：**控件在行内、焦点在行上，就是结构问题**。
+
+## 第一百一十七轮：把行尾那两个死键救回来——电视上正文和图标做兄弟（2026-10-25）
+
+上一轮定位到 `SettingsChoicePreference` 的行结构问题（整行一个焦点目标，行尾图标是它的孩子，
+方向键永远进不去），这轮按方案 A 修掉，只走电视分支。
+
+### 修法
+
+`SettingsPreferenceComponents.kt` 的 `SettingsChoicePreference`：
+
+* 行的 `.tvFocusable(...).clickable { 开对话框 }` 只在**非电视**分支保留；
+* 电视上外层 `Row` 不可点也不可聚焦，改成正文 `Column`（标题 + 当前值 + 摘要）自己带
+  `.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false).clickable(enabled) { 开对话框 }`；
+* 于是两个 `IconButton` 从"行的孩子"变成"正文的**兄弟**"，方向键天然可达，行尾箭头保持在最后不可聚焦。
+
+`addFocusTarget = false` 照第一百一十四条的规矩给（CENTER 要冒泡到紧跟着的 `clickable`）。
+手机路径一行没动：`isTvPresentation` 为假时走的还是原来那串修饰符。
+
+### 设备证据（emulator-5554，1920x1080@320）
+
+* 进设置 → Appearance，右栏首行焦点落在**正文** `[886,228][1608,324]`（desc 里不再混着两个图标名）；
+* RIGHT → `Color theme` `[1624,228][1720,324]`；再 RIGHT → `Glass finish tuner` `[1720,228][1816,324]`，
+  两个原来够不着的目标现在都拿到焦点；
+* 在玻璃调音上 CENTER → 右栏真的切到 **Glass finish tuner** 页（Light/Light gray/Dark/OLED 芯片、
+  玻璃预览、滑块都出来了，截图 PD10，焦点落在 `Light` 芯片上）；
+* BACK → 焦点回到正文 `[886,228][1608,324]`；再 CENTER → 照旧打开界面风格选择框、焦点在 `md3 expressive`，
+  说明"整行能开对话框"这条原有功能没被拆坏。
+
+### 教训
+
+**"把行拆成兄弟"比"给图标补焦点"更接近问题本质。** 上一轮一度想给 `IconButton` 补 `tvFocusable`——
+那不会有任何效果，因为拦路的是焦点树的形状而不是图标自己缺东西。真正的修法是把"可点的那块"缩到
+它该有的范围，让每个想被遥控器够到的东西都成为同一层的节点。
