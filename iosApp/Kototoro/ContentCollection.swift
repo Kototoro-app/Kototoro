@@ -204,6 +204,21 @@ struct ContentCollection<Destination: View, Actions: View>: View {
     @AppStorage(ContentGridSize.key) private var gridSize = 100.0
     @EnvironmentObject private var library: LibraryModel
     @EnvironmentObject private var downloads: ReaderDownloadQueue
+    @ObservedObject private var tagFilter = TagFilterStore.shared
+    @ObservedObject private var customSpaces = CustomSpaceStore.shared
+    @EnvironmentObject private var sourcesModel: SourcesModel
+    @AppStorage(ContentSpace.key) private var space = ""
+    @AppStorage(AdultContentFilter.Target.favourites.rawValue) private var hideAdultFavourites = false
+    @AppStorage(AdultContentFilter.Target.suggestions.rawValue) private var hideAdultSuggestions = false
+
+    /// Android's adult filter target of this list, by its identifier prefix.
+    private var adultHidden: Bool {
+        switch identifierPrefix {
+        case "favourite.": hideAdultFavourites
+        case "suggestion.": hideAdultSuggestions
+        default: false
+        }
+    }
 
     private var gridColumns: [GridItem] {
         let compact = mode.hasTitleOverlay
@@ -222,7 +237,7 @@ struct ContentCollection<Destination: View, Actions: View>: View {
                 newChapters: updates[itemKey] ?? 0,
                 favourite: favourites.contains(itemKey),
                 downloaded: downloaded.contains(itemKey),
-                adult: content.contentType.hasPrefix("HENTAI_") || content.contentRating == "ADULT"
+                adult: content.isNsfw
             )
         }
     }
@@ -235,6 +250,27 @@ struct ContentCollection<Destination: View, Actions: View>: View {
     }
 
     var body: some View {
+        let adult = adultHidden
+        // A custom Space also narrows works by their sources' language and kind.
+        let custom = ContentSpace.isCustom(space)
+        let shown = tagFilter.blacklist.isEmpty && !adult && !custom ? items
+            : items.filter { !tagFilter.hides($0.content) && !(adult && $0.content.isNsfw)
+                && (!custom || ContentSpace.admits($0.content, sources: sourcesModel.sources)) }
+        VStack(spacing: 12) {
+            collection(shown)
+            if shown.count < items.count {
+                Label("已按标签黑名单隐藏 \(items.count - shown.count) 部", systemImage: "eye.slash")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("\(identifierPrefix)hiddenByTags")
+                    // Paging asks for more when the caller's last work appears; when that one is hidden (or a whole
+                    // page is), reaching the end of what is shown stands in for it.
+                    .onAppear { if shown.last?.identity != items.last?.identity, let last = items.last { onItemAppear?(last) } }
+                    .id(items.count)
+            }
+        }
+    }
+
+    @ViewBuilder private func collection(_ items: [ContentItem]) -> some View {
         let lookup = self.lookup
         if mode.isGrid {
             let compact = mode.hasTitleOverlay

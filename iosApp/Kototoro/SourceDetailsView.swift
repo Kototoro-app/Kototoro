@@ -348,12 +348,14 @@ struct SourceDetailsView: View {
     @State private var metadataRequest: UUID?
     private var shownContent: IosSourceContent { metadataContent ?? model.details ?? model.content }
     @State private var showingAllChapters = false
+    @State private var timeLeft: String?
     @State private var showingBookmarks = false
     @State private var bookmarks: [IosBookmark] = []
     @AppStorage("details.newestFirst") private var newestFirst = false
     /// "source" (default) or "number"; see SourceDetailsModel.orderByNumber.
     @AppStorage("details.chapterOrder") private var chapterOrder = "source"
     @AppStorage(PanoramaKeys.enabled) private var panorama = true
+    @AppStorage(TagFilterStore.warningsKey) private var tagWarnings = true
     @AppStorage(PanoramaKeys.layout) private var panoramaLayout = PanoramaLayout.top
     @State private var scrollOffset: CGFloat = 0
     @State private var headerReadVisible = true
@@ -546,9 +548,9 @@ struct SourceDetailsView: View {
             DetailsBookmarksView(model: model, bookmarks: $bookmarks, refreshRecords: refreshRecords)
         }
         .navigationDestination(item: $reading) { DetailsReaderDestination(runtime: model.runtime, request: $0) }
+        .task(id: "\(model.details?.chapterCount ?? 0)|\(resume?.chapterId ?? "")|\(reading == nil)") { await loadTimeLeft() }
         .fullScreenCover(item: $playing, onDismiss: { Task { await refreshRecords() } }) { request in
-            VideoPlayerView(runtime: model.runtime, content: request.content, chapter: request.chapter)
-                .id(request.id)
+            VideoPlayerDestination(runtime: model.runtime, request: request)
         }
     }
 
@@ -858,6 +860,19 @@ struct SourceDetailsView: View {
     /// Android's header shows the same reading progress as `currentChapter + 1 / total` (`0/N` before the first
     /// chapter), and always includes it, video included. The count follows the listed chapters: the chosen line for
     /// video, all chapters otherwise, so the value matches the directory heading below.
+    /// "约 3 小时 20 分钟" left, from the shared estimate; updated with the chapters and the reading position.
+    private func loadTimeLeft() async {
+        guard let library = library.library, model.details != nil else { timeLeft = nil; return }
+        let content = model.details ?? model.content
+        let progress = (try? await library.position(content: content)).map { $0.progress }
+        guard let seconds = try? await library.readingTimeLeft(content: content, progress: progress.map { KotlinFloat(value: $0) })
+        else { timeLeft = nil; return }
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = seconds.int64Value >= 3600 ? [.hour, .minute] : [.minute]
+        formatter.unitsStyle = .short
+        timeLeft = formatter.string(from: TimeInterval(seconds.int64Value)).map { String(localized: "剩余约 \($0)") }
+    }
+
     private var chapterInfo: some View {
         HStack(spacing: 12) {
             Label(Self.mediaKindTitle(shownContent.mediaKind), systemImage: "character.book.closed")
@@ -868,6 +883,11 @@ struct SourceDetailsView: View {
                 listed.firstIndex { $0.id == position.chapterId }
             }.map { $0 + 1 } ?? 0
             let progressText = totalChapters > 0 ? "\(readChapter)/\(totalChapters)" : "-"
+            if let timeLeft {
+                // Android's estimated time left (shared rule; manga only).
+                Text(timeLeft).font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("details.timeLeft")
+            }
             if totalChapters > 0 {
                 Button {
                     showingAllChapters = true
@@ -921,12 +941,21 @@ struct SourceDetailsView: View {
                 if !shown.tags.isEmpty {
                     FlowLayout(spacing: 6) {
                         ForEach(shown.tags, id: \.self) { tag in
+                            // Android's sensitive-category highlight; a long press hides works with the tag.
+                            let warned = tagWarnings && IosTags.shared.isWarned(title: tag)
                             Text(tag)
                                 .font(.caption)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
-                                .background(Color(.tertiarySystemFill), in: .capsule)
-                                .foregroundStyle(.primary)
+                                .background(warned ? AnyShapeStyle(Color.orange.opacity(0.18))
+                                                   : AnyShapeStyle(Color(.tertiarySystemFill)), in: .capsule)
+                                .foregroundStyle(warned ? Color.orange : Color.primary)
+                                .accessibilityIdentifier(warned ? "details.tag.warning" : "details.tag")
+                                .contextMenu {
+                                    Button("加入标签黑名单", systemImage: "eye.slash") {
+                                        TagFilterStore.shared.add(title: tag)
+                                    }
+                                }
                         }
                     }
                     .padding(.top, 2)

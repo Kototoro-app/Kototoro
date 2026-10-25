@@ -43,6 +43,9 @@ struct LibraryView: View {
     @State private var managingCategories = false
     @State private var migrating = false
     @State private var findingDuplicates = false
+    @State private var filtering = false
+    @State private var shelf = LibraryShelfSelection()
+    @EnvironmentObject private var downloads: ReaderDownloadQueue
     /// Batch selection: keys of the works chosen, kept across searches and categories until done.
     @State private var selecting = false
     @State private var selected: Set<String> = []
@@ -65,7 +68,7 @@ struct LibraryView: View {
     }
     private var availableKinds: Set<String> { library.favouriteIndex.availableKinds }
     private var selectedKind: String? {
-        if spacesEnabled { return space.isEmpty ? nil : space }
+        if spacesEnabled { return ContentSpace.kind(space) }
         return ContentKindPicker.effective(pageKind, available: availableKinds)
     }
     private var collection: LibraryCollectionIndex<IosLibraryEntry>.Slice {
@@ -117,6 +120,11 @@ struct LibraryView: View {
                         if spacesEnabled { SpaceMenu() }
                     }
                     ToolbarItemGroup(placement: .topBarTrailing) {
+                        Button { filtering = true } label: {
+                            Label(shelf.count > 0 ? "筛选 \(shelf.count)" : "筛选",
+                                  systemImage: shelf.count > 0 ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease")
+                        }
+                        .accessibilityIdentifier("library.filter")
                         ContentListModeMenu(mode: $mode) {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("排序").font(.subheadline)
@@ -147,6 +155,7 @@ struct LibraryView: View {
                 LibraryMigrationView(favourites: migrationSubset ?? kindFavourites.map(\.content))
             }
             .sheet(item: $editor) { CategoryEditorSheet(editor: $0) }
+            .sheet(isPresented: $filtering) { LibraryFilterSheet(selection: $shelf, entries: kindFavourites) }
             .sheet(item: $categoryContent) { FavouriteCategoriesView(content: $0.content) }
             .sheet(isPresented: $managingCategories) { CategoryManagementSheet() }
             .onChange(of: library.categories) { _, _ in
@@ -338,12 +347,24 @@ struct LibraryView: View {
     // MARK: Works
 
     private var items: [ContentItem] {
-        let key = "\(library.recordsRevision)|\(selectedKind ?? "")|\(selectedCategory ?? -1)|\(sort.rawValue)|\(query)"
+        let key = "\(library.recordsRevision)|\(selectedKind ?? "")|\(selectedCategory ?? -1)|\(sort.rawValue)|\(query)|\(shelf.hashValue)|\(downloads.completedContentKeys.count)"
         if itemCache.key == key {
             return itemCache.items
         }
         let text = query.trimmingCharacters(in: .whitespaces)
-        let baseEntries = selectedCategory.flatMap { collection.byCategory[$0] } ?? kindFavourites
+        var baseEntries = selectedCategory.flatMap { collection.byCategory[$0] } ?? kindFavourites
+        if shelf.count > 0 {
+            // Android's filter groups (shared rule): progress, downloads, chips, state, source, tags.
+            let filter = shelf.filter
+            let downloaded = downloads.completedContentKeys
+            let updates = library.updateChapterCounts
+            baseEntries = baseEntries.filter { entry in
+                let key = ContentMarks.key(entry.content)
+                return IosShelf.shared.accepts(filter: filter, content: entry.content,
+                                               progress: entry.hasProgress ? KotlinFloat(value: entry.progress) : nil,
+                                               onDevice: downloaded.contains(key), newChapters: Int32(updates[key] ?? 0))
+            }
+        }
         let entries: [IosLibraryEntry]
         if text.isEmpty {
             entries = baseEntries

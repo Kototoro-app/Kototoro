@@ -15,7 +15,6 @@ struct RepositoriesView: View {
     @State private var importingFile = false
     @State private var selection: ExtensionSelection?
     @State private var removingRepository: IosRepository?
-    @State private var bannerDismissed = false
     @AppStorage("extensions.filter.languages") private var storedLanguages = Data()
     @AppStorage("extensions.filter.ecosystem") private var ecosystem = ""
     @AppStorage("extensions.filter.scope") private var scope = ExtensionScope.all
@@ -274,42 +273,6 @@ struct RepositoriesView: View {
                         Button("添加仓库") { addingRepository = true }.buttonStyle(.glassProminent)
                     } else { Button("清除筛选") { resetFilter() }.buttonStyle(.glass) }
                 }.listRowBackground(Color.clear)
-            }
-        }
-        if !updates.isEmpty && !bannerDismissed && model.batchProgress == nil {
-            Section {
-                HStack(spacing: 12) {
-                    Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.orange)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("发现 \(updates.count) 个扩展可更新")
-                            .font(.subheadline.weight(.semibold))
-                        Text("建议更新到最新版本，以获得最佳解析与稳定体验")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("全部更新") {
-                        Task { await model.updateAll() }
-                    }
-                    .buttonStyle(.glassProminent)
-                    .tint(.orange)
-                    .controlSize(.small)
-                    .disabled(model.busy || NativeSourceTransport.isFixtureRuntime)
-
-                    Button {
-                        withAnimation { bannerDismissed = true }
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(.secondary)
-                            .padding(6)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("忽略提示")
-                }
-                .padding(.vertical, 4)
             }
         }
         if let progress = model.batchProgress {

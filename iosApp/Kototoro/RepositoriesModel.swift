@@ -218,8 +218,9 @@ final class RepositoriesModel: ObservableObject {
     private func performInstall(_ extensionItem: IosExtension, catalog: IosRepositoryCatalog) async throws {
         guard let url = Self.resourceURL(extensionItem.url, catalog: catalog) else { throw URLError(.badURL) }
         status = String(localized: "正在下载 \(extensionItem.title)…")
-        // URLSession downloads to disk; do not buffer large APKs on the UI thread.
-        let (temp, response) = try await URLSession.shared.download(from: url)
+        // URLSession downloads to disk; do not buffer large APKs on the UI thread. GitHub downloads go through the
+        // chosen mirror (Android's `github_mirror`).
+        let (temp, response) = try await URLSession.shared.download(from: GitHubMirror.rewrite(url))
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode
             throw InstallDownloadError(url: url, statusCode: code)

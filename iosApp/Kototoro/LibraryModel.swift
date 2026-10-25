@@ -185,13 +185,19 @@ final class LibraryModel: ObservableObject {
     }
 
     func checkUpdates(_ sources: IosSources) async {
-        guard let library, !isCheckingUpdates else { return }
+        _ = await checkUpdatesReport(sources)
+    }
+
+    /// The check with its report, for the background refresh's notification; nil while one runs or on failure.
+    func checkUpdatesReport(_ sources: IosSources) async -> IosUpdateReport? {
+        guard let library, !isCheckingUpdates else { return nil }
         isCheckingUpdates = true
         defer { isCheckingUpdates = false }
         do {
             let report = try await library.checkUpdates(sources: sources)
             updateSummary = String(localized: "已检查 \(report.checked) 部，\(report.withUpdates) 部有更新，\(report.failed) 部失败")
             try await refreshRecords()
-        } catch { self.error = error.localizedDescription }
+            return report
+        } catch { self.error = error.localizedDescription; return nil }
     }
 }

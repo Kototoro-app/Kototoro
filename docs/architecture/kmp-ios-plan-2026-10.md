@@ -7951,3 +7951,226 @@ storage 探针在真实数据根上写一个 2 KiB 的 `probe-cleaned.img` 与�
 仍待：Android 推荐设置还有三个 Windows 没有的开关——仅 WiFi（桌面没有移动网络）、包含禁用来源（Windows 来源栏
 尚无“禁用来源”概念）、通知（Windows 未接通知），它们不摆空按钮，等对应能力落地；`SuggestionsSettingsScreen`
 里“排除题材/优先题材”Android 是内联 `SettingsTextInputPreference`，Windows 仍是文本框对话框。
+
+## 174. iOS 小说翻译（系统 Translation 框架）与重复的扩展更新提示（2026-10-25）
+
+**界面去重**：扩展页原先同时有“发现 N 个扩展可更新”横幅（含“全部更新”）和“可更新 · N”分组标题（又一个“全部更新”），
+横幅已删除，只留分组标题；设置页“仓库与扩展”行的自绘橙色胶囊改为系统 `.badge`，与“设置”Tab 角标同源。
+
+**共享层**：`reader-novel` 新增 `withNovelTranslations(translations, mode)`（按块下标挂译文，保留 `sourceRange`）
+和 `NovelDocumentBlock.Text.displayLines`（与 Android `ComposeNovelReader` 同规则：仅译文 / 原文在上的双语）；
+`buildNovelPageSegments` 改为排版 `displayLines`，双语块内两行用同一段间分隔与缩进，`contentStart` 仍指原文起点。
+`ios-shared` 的 `IosNovelDocument.translated(translations, bilingual)` 复用同一 `styled` 文本，所以历史 scroll、
+书签摘录定位与分页 position 都按原章节偏移计算；译文块不再套书籍样式，双语原文段给出 `IosNovelStyleRun.secondary`。
+`translatableTexts` 只交出含字母的文本块。
+
+**iOS**：`NovelTranslation.swift` 用 `NLLanguageRecognizer` 识别正文语言（源语言为 nil 时 `prepareTranslation()`
+会报 unsupportedLanguagePairing），同语言直接提示“正文已是目标语言”；`.translationTask` 拿到会话后每 24 行一批
+`translations(from:)`，逐批写回并按“作品|章节|目标语言”缓存在 Caches/novel-translations。阅读器“更多”面板与
+可选悬浮按钮提供“翻译本章/显示原文”，翻译开着时换章自动续译；阅读设置新增“翻译”节（仅译文/双语对照、目标语言
+取 `LanguageAvailability().supportedLanguages`、清除缓存）。滚动模式按行替换/双语显示，分页模式经共享分段重新排版
+并以当前块重新定位。
+
+**验证**：`:reader-novel:jvmTest --tests *NovelPageSegmentsTest*`（4/4）；iOS 模拟器构建通过；
+`LocalImportTests/testNovelTranslationLaysOutBilingualPages` 通过（`KOTOTORO_TRANSLATION_FIXTURE=1` 用标记译文代替系统
+翻译器，截图确认原文变灰、译文在下、页码不跳）。模拟器上系统翻译会弹出“在模拟设备上不受支持”，真机翻译待验证。
+
+## 175. iOS 全局标签黑名单与敏感类别高亮（共享 core-domain 规则，2026-10-25）
+
+`ios-shared` 新增 `IosTags`：`isWarned` 直接用 `TagWarnings`，`blacklist(selected)` 包装 `TagTitleBlacklist`，
+`categories(language)` 按 `TaxonomyCategory` 列出词库（去掉 deprecated），`selection(title)` 把标题解析成词库 ID，
+解析不到则存 Android 同格式的 `raw:` 键。iOS 以 Android 同键 `global_tag_blacklist`（字符串数组）与 `tags_warnings`
+（默认开）保存。
+
+- 设置 → 内容过滤 → 标签黑名单（`TagBlacklistView`）：常驻搜索栏（词库约 300 项，下拉才出现的搜索框不好用）、按类别
+  分组的芯片、长按看另一语言名与别名、词库不认识的词可“屏蔽‘…’”、清空需确认。
+- 详情页标签：命中警示词表时换橙色；长按“加入标签黑名单”（Android 只能去设置页里找词，这里就地加更直接）。
+- 过滤放在共享的 `ContentCollection`，作品库、来源浏览/搜索结果、推荐都经过它。范围与 Android 一致（Android 收藏/
+  历史书架同样会隐藏），但 Android 是静默隐藏；iOS 在列表末尾显示“已按标签黑名单隐藏 N 部”，以免被误认为作品丢失。
+- 分页修正：iOS 靠“调用方最后一项出现”加载下一页，如果最后一项（或整页）被隐藏就永远不会再翻页；末尾的提示行出现时
+  会代为回传调用方的最后一项（`.id(items.count)` 让每页都会重新触发）。Android 由列表的加载尾项触发，没有这个问题。
+
+验证：模拟器构建通过；`SuggestionsTests/testTagBlacklistSelectsCatalogAndCustomTagsAndPersists` 通过（选中“恐怖”、
+添加自定义词、重启后计数仍为 2、清空），截图已看过。列表过滤没有做端到端测试，因为本地测试数据没有标签。
+待定：是否给 Android/Windows 的书架也加“已隐藏 N 部”提示（需要三端一起改）。
+
+## 176. iOS 无痕阅读：全局开关 + 成人内容三态（2026-10-25）
+
+- 成人作品的判定走共享的 `SourceContent.isNsfw`（`IosSourceContent.isNsfw`），同时替换了 Swift 里两处手写的
+  `HENTAI_`/`ADULT` 判断（`ContentCollection` 的 18+ 角标、全局搜索的成人过滤）。来源级别的 `isAdult` 判断不受影响。
+- 设置 → 内容过滤：Android 同键 `incognito`（全局无痕）与 `incognito_nsfw`（ENABLED/ASK/DISABLED，默认 ASK，存枚举名）。
+  全局无痕开着时三态选择置灰（不起作用）。
+- `IncognitoGate` 在阅读器创建**之前**决定是否无痕（与 Windows 一致；Android 在阅读器内弹窗）。这样阅读器打开时那次
+  保存也不会被记录。ASK 时显示整页询问：无痕阅读 / 正常阅读 / 取消，以及“不再询问”（写回三态）。
+  `DetailsReaderDestination`（漫画、小说）与新的 `VideoPlayerDestination`（详情页和目录页的视频播放）都经过它。
+- 无痕会话中三个阅读器的 `persist()` 直接返回：不写历史和进度，统计记录器拿不到 library 所以也不计时，离开时不同步
+  到追踪网站。书签与下载属于主动操作，照常进行。进入时显示 2.5 秒的“无痕模式”提示。
+- 没有把三态判定提成共享函数：只有三行，Android 的 `TriStateOption`/Windows 的 `DesktopTriState` 都已接进各自的设置存储，
+  迁移收益很小。
+
+验证：模拟器构建通过；`LocalImportTests/testIncognitoReadingKeepsTheSavedPosition` 通过（正常阅读到 0% →
+全局无痕下读到 70% → 重新打开仍是 0%，并出现无痕提示）。ASK 询问页没有 UI 测试，因为本地测试数据都不是成人内容。
+
+## 177. iOS 漫画页面 OCR 翻译（Vision + 系统 Translation，2026-10-25）
+
+对照表第 1 项。`ReaderPageTranslation.swift`：
+- `PageTextRecognizer`：Vision `RecognizeTextRequest`（accurate、自动识别语言），只保留含字母的行；高宽比 > 2.2 视为
+  竖排列。相邻行合并成气泡：距离按两行中**较粗**的一行计算（不带上伸部的行如 “at noon.” 框更矮，只按自身行高判断会
+  拆成两段），竖排列从右到左、横排从上到下拼接，含汉字时不加空格。
+- `PageTranslationRenderer`：在与原图同尺寸的画布上，用气泡边缘较亮一半采样的纸色盖住原文，再以能放下的最大字号居中
+  写入译文；竖排气泡横向加宽。同尺寸意味着阅读器换图时不会重新排版。
+- `ReaderPageTranslator`：识别不需要会话，页面加载后即可排队识别；第一页识别出的文字用 `NLLanguageRecognizer` 定源语言，
+  再建 `TranslationSession.Configuration`（与 §174 同理，源语言为 nil 时会失败；同语言直接提示）。`.translationTask`
+  中按页批量翻译，渲染放到后台线程。
+- 接入：`SourceReaderModel.sync()` 在翻译开启时按 `pageIdentity` 用译后图代替原图，并清掉 artifact（否则高清分块会把原文
+  画回来）；分页（`ReaderPageTile`）与条漫（`ReaderStripPageView`）都读同一个 `ReaderPageState`，所以两条路径都生效。
+  页面的无障碍标签附上译文，VoiceOver 能读出翻译。入口是“更多 → 快捷 → 翻译页面/显示原文”，顶部胶囊显示进度。目标语言
+  沿用小说翻译设置。
+
+测试数据：`stage-picker-fixtures.py` 新增 `fixture_reader_text.cbz`（Pillow 画的英文气泡，没有 Pillow 时跳过）。
+验证：`LocalImportTests/testMangaPageTranslationRecognizesAndReplacesBubbles` 通过（模拟器上 Vision 真实识别，
+`KOTOTORO_TRANSLATION_FIXTURE=1` 代替系统翻译器）。首轮截图发现两个问题：覆盖块是灰色（采样的位图行序翻反了）、第二个
+气泡被拆成两块，修复后截图确认白底、合并正确。已知问题：覆盖块的圆角略压到气泡描边；对竖排日文的效果在模拟器上
+未验证；系统翻译本身需真机验证。
+
+## 178. iOS 小说朗读、本章搜索、文本替换规则；Android 朗读切分修复（2026-10-25）
+
+对照表第 2–4 项。
+
+**朗读（#2）**：`NovelSpeech.swift` 用 `AVSpeechSynthesizer`，从当前段开始每段一个 utterance（开着翻译时读译文），
+`.playback/.spokenAudio` 音频会话（Info.plist 已有 audio 后台模式）。开始读某段时阅读位置跟到该段；整章读完自动打开
+下一章接着读，手动换章则停止。控制条（上一段/暂停/下一段/停止）在阅读控件收起时也保留。可作为悬浮按钮。
+阅读设置新增“朗读”节：语速、声音（默认按正文语言自动选，`NLLanguageRecognizer` 识别后转成 `zh-CN` 这种标签）。
+
+**本章搜索（#3）**：“更多 → 搜索本章”，按显示文本搜索（开着翻译时原文和译文都能搜到），列出带上下文的匹配段落，
+点选经 `model.jump(to:)` 跳转，分页/滚动都定位到该段。
+
+**替换规则（#4）**：
+- 共享：`DesktopReplaceRules` 移入 `core-library/commonMain` 改名为 `ReplaceRuleStore`（时钟改为可注入的
+  `kotlin.time.Clock`），`desktop-runtime` 里保留同名 typealias，Windows 调用方不变。
+- `ios-shared` 的 `IosReplaceRules`（`IosLibrary.replaceRules`）：增删改、全开/全关、Legado JSON 导入导出、编辑器预览；
+  `apply(document, content)` 按 Android 同款作用域（书名 + 来源名）取正文规则，整章按行拼接后执行一遍（每条规则的超时
+  按章计算），如果规则增删了换行导致行数对不上，就退回逐行执行；`title()` 应用章节标题规则。
+  `IosNovelDocument.withLines` 改写行文本但保留 `sourceRange`，被改写的行不再套书籍样式（偏移已失配）。
+- iOS 页面 `ReplaceRulesView`：分组列表 + 开关、滑动删除、编辑器（Android 的字段 + 实时预览）、导入/导出。入口在
+  设置 → 阅读，以及小说阅读设置。规则变更时 bump `replaceRules.revision`，打开中的阅读器保存位置后重新加载当前章。
+
+**Android 修复（朗读切分 `Tokenizer`）**：
+1. 角色音色写死为三个 Azure 语音名，HTTP 朗读引擎拼 `{{voice}}` 时优先用它，非 Edge/Azure 的 Legado 朗读源在对话句上
+   会请求失败或换错声音。改为 `tokenize(text, speakerVoices = emptyList())`：没有传入可用音色时不分配，引擎使用用户选的声音。
+2. `SpeakerResolver` 原先每段新建，同一角色换段就换声音；改为整章一个。
+3. 句子按 `。！？` 切分会把 `“你好。”张三说。` 切成 `“你好。` 与 `”张三说。`，两段都被当作对话，说话人名还会带上引号；
+   现在句末右引号留在本句，说话人名排除引号字符。
+
+验证：
+- iOS UI：`testNovelReadAloudFollowsTheSpokenLine`（出现控制条、跳段后进度变化、停止后控制条消失）、
+  `testNovelChapterSearchJumpsToTheMatch`（搜“第30段”只有 1 条结果，点选后分页显示该段）、
+  `testReplaceRuleRewritesNovelText`（设置里新建“晨光→夕阳”，阅读器正文变为“夕阳落在书页上”且不再出现“晨光”，最后删除全部规则）均通过。
+  过程中的失败都是测试本身的问题：朗读按钮已经收起面板、测试却还去点关闭；上一个测试留下的阅读位置影响了共享的
+  初始化辅助方法；清理步骤停在了没有 Tab 栏的详情页；一次失败留下的规则让清理少删一条。这些都已改为不依赖前一个测试的状态。
+- `:desktop-runtime:test --tests *DesktopReplaceRulesTest*` 5/5（store 移到共享模块后）。
+- Android：`:app:testDebugUnitTest --tests *TokenizerTest*` 2/2（不传音色池时对话不带角色音色；同一角色跨段保持同一声音、
+  新角色换下一个声音）。首轮该测试暴露了上面第 3 条切分问题。
+
+## 179. iOS 笔记、保存筛选、成人内容分目标过滤、下载设置、WebDAV 备份（2026-10-25）
+
+对照表第 5、6、8、9、10 项。
+
+**笔记（#5）**
+- 共享：`core-domain` 新增 `summarizeBookNotes`/`BookNotesCounts`（划线 + 媒体笔记 + 书签的每作品计数，空白想法算摘录）；
+  `core-library` 新增 `BookNotesStore`（漫画裁切/视频时间点的增删改查，读写共享 `media_notes` 表）。
+- Android：`BookNotesRepository.observeSummaries` 计数改用共享函数，作品按 id 建一次索引，替换原来每个作品在
+  `bookmarksMap.keys` 里线性查找（O(n²)）。
+- iOS：`IosNotes`（`IosLibrary.notes`）；裁切面板可“存为笔记”（附想法，记录页面内的相对矩形）或导出图片；视频播放器
+  “记笔记”保存时间点，能从本地文件截帧（HLS 等流媒体取不到帧时只存时间点）；图片存 Application Support/notes，删除
+  笔记时一并删除。设置 → 阅读 → 笔记：作品列表（摘录/想法/书签计数）→ 作品笔记（图片、位置、想法；滑动编辑/删除；
+  点裁切笔记打开阅读器并定位到该页）。
+
+**命名保存筛选（#6）**：筛选面板顶部“已保存的筛选”：保存当前筛选、点选载入、长按重命名/删除/设为打开来源时自动应用
+（每个来源最多一个）。载入都经过 `BrowseFilter.reconciled(with:)`，来源已不再提供的标签或扩展控件会被丢弃，不会被误用。
+Android 用 `name.hashCode()` 当 id，不同名字可能互相覆盖、重命名会改变 id；iOS 以完整名称为键。名称输入框的 alert
+必须挂在具体的行上：挂在 Form 的 Section 上时 SwiftUI 不会弹出（首轮 UI 测试即失败于此）。
+
+**成人内容分目标过滤（#8）**：设置 → 内容过滤 → 成人内容过滤。来源/浏览沿用已有的“包含成人内容源”开关（Android 的
+`no_nsfw`），另加作品库、阅读记录、更新记录、推荐、笔记与书签 5 个目标，键与 Android 同名（`favourites_exclude_nsfw` 等）。
+判定统一用共享的 `isNsfw`，过滤点：`ContentCollection`（按列表前缀区分作品库/推荐）、记录页时间线（阅读 vs 更新事件）、
+笔记总览。没有端到端测试（本地测试数据都不是成人内容）。
+
+**下载设置（#9）**：设置 → 下载设置：请求间隔、每页尝试次数、重试间隔，键与 Android 同名，上下限取共享
+`DownloadPolicy`（`IosDownloadSettings` 桥接；尝试次数沿用 Android 语义：存的是总次数）。请求间隔默认 0（同 Windows：
+Android 的 1.6 s 只对要求减速的来源生效，共享源契约没有这个标记）。没有搬线程数和同时下载作品数：iOS 有意逐页下载，
+以控制解释执行的 JVM 上扩展与解码的内存，这两项在 iOS 上只会增加风险。漫画下载循环每页先等请求间隔，图片请求按
+设定次数重试（取消不重试）。
+
+**WebDAV 备份（#10）**
+- 共享：`core-library` 新增 `WebDavSettings`（Android 的键与默认值，含 `isDue(lastUploadAt, now)`）、`webDavEndpoint`
+  （仅在填写用户名时发送 Basic 凭据，`kotlin.io.encoding.Base64`）与 `WebDavLibrarySync`（探测、列表、流式上传/下载、
+  按共享规则保留、远端命名），`core-library` 因此依赖 `core-net`。Windows 的 `DesktopWebDav.kt` 本可改为它的薄封装，
+  但 `desktop-app` 在这台 Mac 上无法编译（需要 Windows 上的 `-PmihonCompatibilityDirectory`），没有验证的改动已撤回，
+  迁移留给 Windows 构建时做。
+- iOS：`IosWebDav`（`IosLibrary.webDav`）用 POSIX 文件 IO 流式读写；页面设置 → WebDAV 备份：服务器/目录/用户名/密码
+  （密码存钥匙串；Android 存在普通偏好里）、云端保留份数、自动备份间隔、测试连接、立即上传、云端列表 → 下载 → 复用
+  备份预览 → 合并恢复。自动备份在应用回到前台时按“距上次成功上传”判断，失败后 10 分钟内不再重试（同 Windows）。
+- 测试工具：`Scripts/serve-webdav-fixture.py`（127.0.0.1:8766，PROPFIND/PUT/GET/DELETE，必须携带 Basic 凭据）。
+- 编译器问题：`WebDavSyncView` 里 `if let preview { … Task { … preview … } }` 这种同名遮蔽、并在嵌套闭包中使用的写法会让
+  Swift 6.4 的类型检查器断言崩溃，绑定改名后解决。
+
+## 180. iOS GitHub 镜像、后台更新检测、应用锁、小说划线；Android 应用密码改为 PBKDF2（2026-10-25，进行中）
+
+- GitHub 镜像（#11）：`IosGitHubMirror` 桥接共享 `GitHubMirrorCatalog`，Android 同键 `github_mirror`；只改写扩展安装包下载，
+  仓库索引与 api.github.com 不改写（同 Windows）。设置 → 网络 → GitHub 镜像，并行测速（6 s）。代理判定为不适用（系统代理/VPN）。
+  UI 测试 `testGitHubMirrorChoicePersistsAndProbes` 通过。
+- 后台更新（#7）：`BackgroundUpdates` + `.backgroundTask(.appRefresh)`；进入后台时提交请求，系统执行时检查收藏更新并发本地通知。
+  Info.plist 增加 `fetch` 后台模式与 `BGTaskSchedulerPermittedIdentifiers`。冷启动的后台唤醒没有扩展运行时，只排下一次。
+- 应用锁（#16）：`AppLock` 用 LocalAuthentication（面容/触控 ID/设备密码），不存密码；启动与回到前台时锁定，非活跃时遮盖。
+  `testAppLockAndBackgroundUpdateSettings` 中锁屏遮盖与“未认证不能开启”两段通过，后台更新开关一段因 Settings 中的位置
+  定位失败，测试已改为从顶部重新进入，尚未重跑。
+- Android：应用锁密码原为无盐 MD5，新增 `AppPasswordHash`（加盐 PBKDF2-HMAC-SHA256，旧 MD5 首次解锁成功后升级），
+  `AppPasswordHashTest` 2/2 通过。
+- 小说划线（#18）：共享 `reader-novel/NovelMarkings.kt`（`relocateNovelMarking` 等，Android 原函数改为委托，
+  `NovelTextSelectionTest` 10/10、`NovelMarkingsTest` 4/4）、`core-library` 的 `NovelMarkingStore`、iOS `IosNovelMarkings`；
+  分页选中菜单“划线”、更多面板“划线当前段”、笔记页列出划线。已编译，未跑 UI 测试。
+- 保存筛选 UI 测试最终通过（需在视频空间启动、先清理上次遗留的筛选）。
+
+## 181. iOS 自定义空间、剩余阅读时间、划线与应用锁测试收尾（2026-10-25）
+
+- 自定义空间（#13）：`core-domain` 新增 `CustomSpace`（按 Android 在 `space_definitions` 中的存储格式解码/编码，类型/语言/来源
+  类型之间为“且”、同一项内为“或”、留空不限，`mediaKind` 给出单一媒体类型），`CustomSpacesTest` 2/2。iOS `IosSpaces`
+  （`IosLibrary.spaces`，iOS 生态映射到 Android 来源类型：MIHON/ANIYOMI/TSUNDOKU 同名，CMS→JSON_TVBOX，本地→NATIVE，
+  JAR 解析器→EXTERNAL）；`CustomSpaceStore` + `ContentSpace.kind/admits`：`space.kind` 可以是自定义空间 id，按媒体类型筛选的
+  页面沿用原逻辑，来源列表、全局搜索、`ContentCollection`（作品库/浏览结果/推荐）与记录时间线再按来源语言与类型限定。切换面板
+  列出自定义空间并可进入“管理自定义空间”；设置 → 内容空间 下也有入口。`testCustomSpaceCanBeCreatedSelectedAndDeleted` 通过，
+  截图确认“漫画 + 本地”空间的浏览页只剩本地漫画来源。未做：Android 的每空间独立导航状态。
+- 剩余阅读时间（#17 的一部分）：`core-domain` 新增 `ReadingTimeEstimate`，只为漫画类作品估算（每章 20 页 × 测得的每页时间），
+  小说（“页”是行）与视频不估算；Android `ReadingTimeUseCase` 改用它（原先对小说/视频也给出无意义的数字），
+  `ReadingTimeEstimateTest` 2/2。iOS 详情页章节行显示“剩余约 …”，`testTimeLeftShowsForComicsOnly` 通过。
+- 小说划线 UI 测试 `testNovelParagraphHighlightAppearsInNotes` 通过（更多面板划线当前段 → 笔记页出现 → 删除）。
+- 应用锁/后台更新测试 `testAppLockAndBackgroundUpdateSettings` 通过（宽行里的开关要点在行尾）。
+
+## 182. iOS 作品库筛选、分享页面、PDF 导入（2026-10-25）
+
+- 作品库筛选：`core-domain` 新增 `ShelfFilter`/`ShelfRow`（阅读进度、下载、快捷、出版状态、来源、标签；组内“或”、组间“且”；
+  “在读”与“读完”共用 0.999 阈值，避免 Windows `DesktopLibrarySelection` 里 99.95% 同时属于两组的问题），`ShelfFilterTest` 2/2；
+  iOS `IosShelf` + `LibraryFilterSheet`，作品库顶栏“筛选 N”。Windows 迁移到共享规则待 Windows 构建。
+  `testLibraryFilterCountsAndClears` 通过。
+- 漫画阅读器“分享页面”（系统分享面板）。
+- PDF 导入：`PdfImport` 用 PDFKit 把每页渲染为 JPEG，写成无压缩 CBZ（`StoredZip`，固定时间戳，同一 PDF 得到相同字节，
+  重复导入沿用同一作品身份）后走原 CBZ 导入；`fixture_pdf.pdf`（Pillow 生成）+ `testPdfImportsAsAComic` 通过。
+- 弹幕：按要求不做，期间写的共享协议、iOS 弹层与测试接口已全部撤回。
+
+## 183. iOS 小组件、视频文件夹导入、按 HIG 调整界面与朗读的系统播放控制（2026-10-25）
+
+- 视频文件夹：`core-local` 的 `LocalSourceRuntime.importVideoFolder` 把一个文件夹的视频按自然顺序导入为一部作品、每个文件一集
+  （`LocalItem` 新增带默认值的 `episodes`/`contentHash`，旧数据与 Android 不受影响；同一组文件重复导入沿用作品身份），
+  `LocalSourceRuntimeTest` 15/15（含新用例），Android 编译通过。iOS 本地视频来源顶栏“导入视频文件夹”（系统文件夹选择器，
+  逐个用 AVFoundation 校验，跳过不能播放的）。`testVideoFolderImportsAsEpisodes` 通过。
+- 小组件：新 WidgetKit 扩展 `KototoroWidget`（App Group `group.org.skepsun.kototoro.ios`）。App 在阅读记录变化时把最近 3 部作品
+  （标题、进度、240 px 封面）写进共享容器并刷新时间线；组件支持桌面小/中尺寸与锁屏矩形/圆形/单行，按 HIG 使用系统材质、
+  `ContainerRelativeShape`、着色模式下封面去饱和，中尺寸每部作品单独深链 `kototoro://continue?key=…`（App 拦截后直接继续阅读），
+  无记录时组件库显示示例。已确认扩展嵌入 App、共享容器内生成 `recent.json` 与封面。真机需要在开发者账号中启用该 App Group
+  （自动签名会处理）。
+- 按 HIG 调整：作品库筛选、自定义空间编辑、标签黑名单、已保存筛选由安卓式“胶囊”改为 iOS 表单惯例——单选用分段 `Picker`，
+  多选用带勾选的行（`CheckRow`），长列表（标签、语言）进入可搜索的子页面，详情放进上下文菜单，删除/重命名用左滑操作。
+- 朗读接入 `MPNowPlayingInfoCenter` 与 `MPRemoteCommandCenter`：锁屏与控制中心显示作品/当前段落，可暂停/继续、上一段/下一段。
+- 不适用 iOS 的项（理由记入对照表）：DLNA（iOS 用 AirPlay，且需多播审批权限）、系统后台下载（页面经进程内扩展运行时获取）、
+  CBR/7z（无系统解压支持、RAR 许可受限）。

@@ -127,7 +127,7 @@ struct DetailsChaptersView: View {
             DetailsPagePreviewView(model: model, chapter: $0.chapter, resume: resume, refreshRecords: refreshRecords)
         }
         .fullScreenCover(item: $playing, onDismiss: { Task { await refreshRecords() } }) {
-            VideoPlayerView(runtime: model.runtime, content: $0.content, chapter: $0.chapter)
+            VideoPlayerDestination(runtime: model.runtime, request: $0)
         }
         .onChange(of: reading == nil) { _, closed in if closed { Task { await refreshRecords() } } }
         .sheet(isPresented: $showingDownloads) { ReaderDownloadsSheet() }
@@ -375,18 +375,33 @@ struct DetailsBookmarksView: View {
     }
 }
 
+/// The player behind the incognito decision, like [DetailsReaderDestination].
+struct VideoPlayerDestination: View {
+    let runtime: IosSources
+    let request: PlaybackRequest
+
+    var body: some View {
+        IncognitoGate(content: request.content) { incognito in
+            VideoPlayerView(runtime: runtime, content: request.content, chapter: request.chapter, incognito: incognito)
+        }
+        .id(request.id)
+    }
+}
+
 struct DetailsReaderDestination: View {
     let runtime: IosSources
     let request: PlaybackRequest
 
     var body: some View {
-        Group {
+        IncognitoGate(content: request.content) { incognito in
             if request.content.mediaKind == "NOVEL" {
                 NovelReaderView(runtime: runtime, content: request.content, chapter: request.chapter,
-                                initialBookmark: request.initialBookmark, initialIndex: request.initialPage)
+                                initialBookmark: request.initialBookmark, initialIndex: request.initialPage,
+                                incognito: incognito)
             } else {
                 SourceReaderView(runtime: runtime, content: request.content, chapter: request.chapter,
-                                 initialPage: request.initialPage, initialBookmark: request.initialBookmark)
+                                 initialPage: request.initialPage, initialBookmark: request.initialBookmark,
+                                 incognito: incognito)
             }
         }
         .id(request.id)

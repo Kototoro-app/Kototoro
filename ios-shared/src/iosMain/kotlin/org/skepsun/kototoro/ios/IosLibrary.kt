@@ -41,6 +41,16 @@ class IosLibrary {
     private val sourceRefs = AtomicReference<Map<String, SourceRef>>(emptyMap())
     internal val records by lazy { SourceLibrary(database) { sourceRefs.load()[it] } }
     val tracking by lazy { IosTracking(this) }
+    /** Novel text replacement rules in the shared `replace_rules` table. */
+    /** WebDAV backups (Android's uploader format), over the shared `WebDavLibrarySync`. */
+    val webDav by lazy { IosWebDav(this) }
+    /** Custom Spaces (`space_definitions`), shared with Android. */
+    val spaces by lazy { IosSpaces(this) }
+    /** Novel highlights (`novel_markings`), shared with Android. */
+    val markings by lazy { IosNovelMarkings(org.skepsun.kototoro.core.library.NovelMarkingStore(database)) }
+    /** Panel crops and video time points (`media_notes`) and the notes overview. */
+    val notes by lazy { IosNotes(org.skepsun.kototoro.core.library.BookNotesStore(database), this) }
+    val replaceRules by lazy { IosReplaceRules(org.skepsun.kototoro.core.library.ReplaceRuleStore(database)) }
     val duplicates by lazy { IosLibraryDuplicates(this) }
     val statistics by lazy { IosStatistics(this) }
     val recovery by lazy { IosLibraryRecovery(this) }
@@ -382,6 +392,19 @@ class IosLibrary {
         records.recordPage(content.value, chapter.value, index, count, lastVisible, scroll, content.part(chapter.value))
 
     @Throws(Exception::class)
+    /**
+     * Android's "time left" for [content] (shared `ReadingTimeEstimate`): the work's own pace once enough of it is
+     * read, else the reader's overall pace; null for novels, videos and less than a minute.
+     */
+    suspend fun readingTimeLeft(content: IosSourceContent, progress: Float?): Long? {
+        val stats = database.getStatsDao()
+        val id = content.value.id
+        val perPageMillis = if (stats.getReadPagesCount(id) >= org.skepsun.kototoro.details.domain.ReadingTimeEstimate.MIN_PAGES_FOR_WORK_PACE)
+            stats.getAverageTimePerPage(id) else stats.getAverageTimePerPage()
+        return org.skepsun.kototoro.details.domain.ReadingTimeEstimate.remainingSeconds(content.contentType,
+            content.chapterCount, progress, perPageMillis / 1000)
+    }
+
     suspend fun bookmarks(content: IosSourceContent): List<IosBookmark> = records.bookmarks(content.value.id).map(::IosBookmark)
 
     @Throws(Exception::class)

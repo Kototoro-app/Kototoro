@@ -245,6 +245,7 @@ struct ReaderMorePanel: View {
     @ObservedObject var settings: ReaderSettings
     @Binding var autoScroll: Bool
     let isBookmarked: Bool
+    var translating = false
     let status: String?
     let downloading: Bool
     let onAction: (String) -> Void
@@ -254,7 +255,9 @@ struct ReaderMorePanel: View {
     static let actions: [(String, String, String)] = [
         ("chapters", String(localized: "章节列表"), "list.bullet"), ("thumbnails", String(localized: "缩略图"), "square.grid.2x2"),
         ("bookmark", String(localized: "添加书签"), "bookmark"),
-        ("save", String(localized: "保存页面"), "square.and.arrow.down"), ("crop", String(localized: "裁切批注"), "crop"),
+        ("save", String(localized: "保存页面"), "square.and.arrow.down"),
+        ("share", String(localized: "分享页面"), "square.and.arrow.up"), ("crop", String(localized: "裁切批注"), "crop"),
+        ("translate", String(localized: "翻译页面"), "translate"),
         ("auto", String(localized: "自动翻页"), "play.circle"), ("direction", String(localized: "切换方向"), "arrow.left.arrow.right"),
         ("download", String(localized: "下载本章"), "arrow.down.circle"), ("browser", String(localized: "浏览器打开"), "safari"),
     ]
@@ -274,10 +277,12 @@ struct ReaderMorePanel: View {
                                     if action.0 == "auto" { autoScroll.toggle() } else { onAction(action.0) }
                                 } label: {
                                     Label(action.0 == "auto" && autoScroll ? String(localized: "停止自动翻页") :
-                                          action.0 == "bookmark" && isBookmarked ? String(localized: "取消书签") : action.1,
+                                          action.0 == "bookmark" && isBookmarked ? String(localized: "取消书签") :
+                                          action.0 == "translate" && translating ? String(localized: "显示原文") : action.1,
                                           systemImage: action.0 == "bookmark" && isBookmarked ? "bookmark.fill" : action.2)
                                         .font(.subheadline).frame(maxWidth: .infinity, minHeight: 52)
                                 }.buttonStyle(.glass).disabled(action.0 == "download" && downloading)
+                                    .accessibilityIdentifier("reader.action.\(action.0)")
                             }
                         }
                         if let status { Text(status).font(.caption).foregroundStyle(.secondary) }
@@ -353,7 +358,10 @@ struct ReaderMorePanel: View {
 struct ReaderCropView: View {
     let image: UIImage
     let onSave: (UIImage) -> Void
+    /// Saves the crop as a note: the picture, where it sits on the page (0–1) and the written thought.
+    var onNote: ((UIImage, CGRect, String) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
+    @State private var note = ""
     @State private var start: CGPoint?
     @State private var rect = CGRect.zero
     @State private var strokes: [[CGPoint]] = []
@@ -385,14 +393,34 @@ struct ReaderCropView: View {
                     .toolbar {
                         Toggle("批注", isOn: $annotate)
                         Button("重置") { rect = .zero; strokes = [] }
-                        Button("保存") { render(fit: fit); dismiss() }
+                        Button("导出") { onSave(render(fit: fit).image); dismiss() }
+                    }
+                    .safeAreaInset(edge: .bottom) {
+                        if let onNote {
+                            HStack {
+                                TextField("写下想法（可选）", text: $note)
+                                    .textFieldStyle(.roundedBorder)
+                                    .accessibilityIdentifier("crop.note")
+                                Button("存为笔记") {
+                                    let result = render(fit: fit)
+                                    let unit = CGRect(x: result.rect.minX / size.width, y: result.rect.minY / size.height,
+                                                      width: result.rect.width / size.width, height: result.rect.height / size.height)
+                                    onNote(result.image, unit, note)
+                                    dismiss()
+                                }
+                                .buttonStyle(.glassProminent)
+                                .accessibilityIdentifier("crop.saveNote")
+                            }
+                            .padding(.vertical, 8)
+                        }
                     }
             }.padding()
                 .navigationTitle("裁切与批注")
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }
         }
     }
-    private func render(fit: CGFloat) {
+    /// The marked page cut to the selection (the whole page without one) and the selection in view points.
+    private func render(fit: CGFloat) -> (image: UIImage, rect: CGRect) {
         let renderer = UIGraphicsImageRenderer(size: image.size)
         let marked = renderer.image { context in
             image.draw(at: .zero)
@@ -404,11 +432,12 @@ struct ReaderCropView: View {
                 context.cgContext.strokePath()
             }
         }
+        let whole = CGRect(origin: .zero, size: CGSize(width: image.size.width * fit, height: image.size.height * fit))
         guard !rect.isEmpty, let cg = marked.cgImage,
               let crop = cg.cropping(to: CGRect(x: rect.minX / fit * marked.scale, y: rect.minY / fit * marked.scale,
                                                 width: rect.width / fit * marked.scale, height: rect.height / fit * marked.scale)) else {
-            onSave(marked); return
+            return (marked, whole)
         }
-        onSave(UIImage(cgImage: crop))
+        return (UIImage(cgImage: crop), rect)
     }
 }

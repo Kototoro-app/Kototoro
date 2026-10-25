@@ -148,7 +148,10 @@ enum ReaderDownloads {
             }
             try Task.checkCancellation()
             if record == nil {
-                let artifact = try await runtime.image(page: page)
+                // Android's request delay and per-page attempts (shared limits).
+                let delay = DownloadSettings.requestDelayMs
+                if delay > 0, index > 0 { try await Task.sleep(for: .milliseconds(delay)) }
+                let artifact = try await DownloadSettings.withRetries { try await runtime.image(page: page) }
                 try Task.checkCancellation()
                 _ = try await artifact.decodedImage()
                 try Task.checkCancellation()

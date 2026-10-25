@@ -58,6 +58,8 @@ final class VideoPlayerModel: ObservableObject {
     private var timeObserver: Any?
     private var observers: [AnyCancellable] = []
     var library: IosLibrary?
+    /// An incognito session (`IncognitoGate`) records no history, progress, statistics or tracker updates.
+    var incognito = false
     private var lastSavedAt = 0.0
 
     init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter) {
@@ -291,7 +293,32 @@ final class VideoPlayerModel: ObservableObject {
         selectDefaultExternalSubtitle()
     }
 
+    /// Saves the current moment as a note (Android's video time-point notes) with its frame when the media
+    /// allows one (streams such as HLS give no frame); returns what to tell the viewer.
+    func saveNote(_ text: String) async -> String {
+        guard let library else { return String(localized: "无法保存笔记") }
+        let duration = player?.currentItem?.duration.seconds ?? 0
+        var path: String?
+        if let asset = player?.currentItem?.asset {
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 1280, height: 1280)
+            if let frame = try? await generator.image(at: CMTime(seconds: position, preferredTimescale: 600)).image {
+                path = NoteImages.save(UIImage(cgImage: frame))
+            }
+        }
+        do {
+            _ = try await library.notes.saveVideo(content: content, chapter: chapter, positionMs: Int64(position * 1000),
+                durationMs: duration.isFinite ? Int64(duration * 1000) : 0, imagePath: path, note: text)
+            return String(localized: "已存为笔记")
+        } catch {
+            NoteImages.remove(path)
+            return error.localizedDescription
+        }
+    }
+
     func persist() async {
+        guard !incognito else { return }
         guard position.isFinite, position > 0, let library else { return }
         let duration = player?.currentItem?.duration.seconds ?? 0
         let progress = duration.isFinite && duration > 0 ? min(999, Int(position / duration * 1000)) : 0
@@ -370,9 +397,14 @@ struct VideoPlayerView: View {
     @State private var pip = PictureInPicture()
     @State private var showingEpisodes = false
     @State private var downloadError: String?
+    @State private var noting = false
+    @State private var noteText = ""
+    @State private var noteMessage: String?
 
-    init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter) {
-        _model = StateObject(wrappedValue: VideoPlayerModel(runtime: runtime, content: content, chapter: chapter))
+    init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter, incognito: Bool = false) {
+        let model = VideoPlayerModel(runtime: runtime, content: content, chapter: chapter)
+        model.incognito = incognito
+        _model = StateObject(wrappedValue: model)
     }
 
     var body: some View {
@@ -427,13 +459,23 @@ struct VideoPlayerView: View {
                                             set: { if !$0 { downloadError = nil } })) {
             Button("好") { downloadError = nil }
         } message: { Text(downloadError ?? "") }
+        .alert("记下这一刻", isPresented: $noting) {
+            TextField("写下想法（可选）", text: $noteText)
+            Button("保存") { Task { noteMessage = await model.saveNote(noteText) } }
+            Button("取消", role: .cancel) {}
+        }
+        .alert(noteMessage ?? "", isPresented: Binding(get: { noteMessage != nil }, set: { if !$0 { noteMessage = nil } })) {
+            Button("好") { noteMessage = nil }
+        }
         .onDisappear {
             Task {
                 await model.persist()
                 await model.finishReadingActivity()
                 model.stop()
                 await library.refresh()
-                await library.trackingAccounts.syncAfterReading(model.content, tracking: library.library?.tracking)
+                if !model.incognito {
+                    await library.trackingAccounts.syncAfterReading(model.content, tracking: library.library?.tracking)
+                }
             }
         }
     }
@@ -486,6 +528,15 @@ struct VideoPlayerView: View {
                 .font(.caption).foregroundStyle(.white.opacity(0.8))
             }
             Spacer(minLength: 0)
+            Button("记笔记", systemImage: "note.text.badge.plus") {
+                hideTask?.cancel()
+                model.player?.pause()
+                noteText = ""
+                noting = true
+            }
+            .labelStyle(.iconOnly).font(.title3).frame(width: 44, height: 44)
+            .glassEffect(.regular.interactive(), in: .circle)
+            .accessibilityIdentifier("player.note")
             if model.chapters.count > 1 {
                 Button("选集", systemImage: "list.bullet") {
                     hideTask?.cancel()

@@ -23,6 +23,7 @@ final class SourceBrowseModel: ObservableObject {
     /// Why the filter panel could not be described; the chip stays and its sheet offers a retry.
     @Published private(set) var panelError: String?
     @Published private(set) var filter = BrowseFilter()
+    private var autoFilterApplied = false
     @Published var query = ""
     let runtime: IosSources
     let source: IosSource
@@ -180,6 +181,13 @@ final class SourceBrowseModel: ObservableObject {
             categories = loaded.quickTags
             filter = filter.reconciled(with: loaded)
             synchronizeCategory()
+            // Android's auto-applied saved filter, once per opening and only over an untouched filter.
+            if !autoFilterApplied, filter.count == 0, filter.order == nil,
+               let saved = SavedFilterStore.auto(source: source.name) {
+                autoFilterApplied = true
+                let restored = saved.filter.reconciled(with: loaded)
+                if restored.isActive(loaded) { await apply(restored) }
+            }
         } catch {
             if !Task.isCancelled, panelRequest == request {
                 panel = nil
@@ -199,6 +207,7 @@ struct SourceBrowseView: View {
     @State private var settingsOpen = false
     @State private var settingsNeedReload = false
     @State private var importingFiles = false
+    @State private var importingFolder = false
     @State private var messageTitle = ""
     @State private var message: String?
     @State private var searchPresented = false
@@ -312,6 +321,12 @@ struct SourceBrowseView: View {
                 }
             } else {
                 ToolbarItem(placement: .topBarTrailing) { ContentListModeMenu(mode: $mode) }
+                if model.source.name == "LOCAL_VIDEO" {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("导入视频文件夹", systemImage: "folder.badge.plus") { importingFolder = true }
+                            .accessibilityIdentifier("browse.importFolder")
+                    }
+                }
                 // Filtering stays on the chip at the start of the category row; the toolbar opens the source's settings.
                 ToolbarItem(placement: .topBarTrailing) {
                     if isLocal {
@@ -337,6 +352,14 @@ struct SourceBrowseView: View {
                 await model.reload()
             }
         }
+        .fileImporter(isPresented: $importingFolder, allowedContentTypes: [.folder]) { result in
+            guard case .success(let url) = result else { return }
+            Task {
+                let message = await LocalImport.runFolder(url, runtime: model.runtime)
+                showMessage(String(localized: "导入视频文件夹"), message)
+                await model.reload()
+            }
+        }
         .alert(messageTitle, isPresented: Binding(get: { message != nil }, set: {
             if !$0 { message = nil }
         })) {
@@ -352,7 +375,9 @@ struct SourceBrowseView: View {
         }
         .sheet(isPresented: $editingFilter) {
             if let panel = model.panel {
-                SourceFilterSheet(panel: panel, initial: model.filter) { next in Task { await model.apply(next) } }
+                SourceFilterSheet(panel: panel, initial: model.filter, sourceName: model.source.name) { next in
+                    Task { await model.apply(next) }
+                }
             } else {
                 FilterPanelPlaceholder(error: model.panelError) { await model.loadCategories() }
             }
@@ -753,7 +778,7 @@ private struct FilterPanelPlaceholder: View {
 /// Copies picked files into the app as local works; returns a summary when something needs saying.
 enum LocalImport {
     static let contentTypes: [UTType] = [
-        .zip, .epub, .plainText, .movie, UTType(filenameExtension: "cbz") ?? .data, .data
+        .zip, .epub, .pdf, .plainText, .movie, UTType(filenameExtension: "cbz") ?? .data, .data
     ]
 
     @MainActor
@@ -764,6 +789,14 @@ enum LocalImport {
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             do {
+                if url.pathExtension.lowercased() == "pdf" {
+                    // Rendered to a comic archive off the main actor, then imported like any CBZ.
+                    let archive = try await Task.detached(priority: .userInitiated) { try PdfImport.comicArchive(from: url) }.value
+                    defer { try? FileManager.default.removeItem(at: archive.deletingLastPathComponent()) }
+                    let content = try await runtime.importLocal(path: archive.path, fileName: archive.lastPathComponent)
+                    imported.append(content.title)
+                    continue
+                }
                 if runtime.localFileContentType(fileName: url.lastPathComponent) == "VIDEO" {
                     try await validateVideo(url)
                 }
@@ -775,6 +808,28 @@ enum LocalImport {
         }
         if failed.isEmpty { return imported.count > 1 ? String(localized: "已导入 \(imported.count) 个文件") : nil }
         return (imported.isEmpty ? "" : String(localized: "已导入 \(imported.count) 个文件。\n")) + String(localized: "未能导入：\n") + failed.joined(separator: "\n")
+    }
+
+    /// A folder of videos becomes one work with an episode per playable file (Android's video directory import).
+    @MainActor
+    static func runFolder(_ folder: URL, runtime: IosSources) async -> String {
+        let scoped = folder.startAccessingSecurityScopedResource()
+        defer { if scoped { folder.stopAccessingSecurityScopedResource() } }
+        let files = ((try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isRegularFileKey]))
+            ?? []).filter { runtime.localFileContentType(fileName: $0.lastPathComponent) == "VIDEO" }
+        var playable: [URL] = []
+        var skipped: [String] = []
+        for file in files {
+            if (try? await validateVideo(file)) != nil { playable.append(file) } else { skipped.append(file.lastPathComponent) }
+        }
+        do {
+            let content = try await runtime.importVideoFolder(paths: playable.map(\.path), names: playable.map(\.lastPathComponent),
+                                                              title: folder.lastPathComponent)
+            let base = String(localized: "已导入“\(content.title)”，共 \(playable.count) 集")
+            return skipped.isEmpty ? base : base + "\n" + String(localized: "已跳过无法播放的文件：") + skipped.joined(separator: "、")
+        } catch {
+            return SourceErrorText.describe(error)
+        }
     }
 
     /// Container names alone do not establish codec support. Keep an unplayable file out of the local library.

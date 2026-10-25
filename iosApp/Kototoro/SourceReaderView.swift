@@ -136,6 +136,8 @@ final class SourceReaderModel: ObservableObject {
     let content: IosSourceContent
     private let chapterByID: [String: IosSourceChapter]
     let engine = IosReader()
+    /// Page OCR + translation (Android's manga translation), swapped in by `sync` when enabled.
+    let translator = ReaderPageTranslator()
     var library: IosLibrary?
     private var request: UUID?
     /// One load (download and decode) per page, keyed by the page's identity and owned by the model, not by the view
@@ -223,6 +225,8 @@ final class SourceReaderModel: ObservableObject {
     var isBookmarked: Bool { bookmarks.contains { $0.chapterId == chapter.id && Int($0.index) == index } }
 
     private var initialPage: Int?
+    /// An incognito session (`IncognitoGate`) records no history, progress, statistics or tracker updates.
+    var incognito = false
     private var initialBookmark: IosBookmark?
 
     init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter, initialPage: Int? = nil,
@@ -231,6 +235,26 @@ final class SourceReaderModel: ObservableObject {
         self.initialPage = initialPage
         self.initialBookmark = initialBookmark
         chapterByID = Dictionary(content.chapters.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        translator.onRendered = { [weak self] in self?.syncPageStates() }
+    }
+
+    /// Saves a page crop as a note (Android's panel crop notes); returns what to tell the reader.
+    func saveCropNote(_ image: UIImage, rect: CGRect, note: String) async -> String {
+        guard let library, let path = NoteImages.save(image) else { return String(localized: "无法保存笔记") }
+        do {
+            _ = try await library.notes.saveCrop(content: content, chapter: chapter, page: Int32(index), imagePath: path,
+                note: note, left: Float(rect.minX), top: Float(rect.minY), right: Float(rect.maxX), bottom: Float(rect.maxY))
+            return String(localized: "已存为笔记")
+        } catch {
+            NoteImages.remove(path)
+            return error.localizedDescription
+        }
+    }
+
+    /// Turns page translation on (loaded pages are queued at once) or back to the original pages.
+    func toggleTranslation() {
+        translator.toggle()
+        syncPageStates()
     }
 
     func configure(size: CGSize, preferences: ReaderPreferences) {
@@ -926,9 +950,21 @@ final class SourceReaderModel: ObservableObject {
     /// Assigns only what changed: each assignment re-renders that page.
     private func sync(_ state: ReaderPageState, at target: Int) {
         var changed = false
-        let image = images[target]
+        var image = images[target]
+        var artifact = artifacts[target]
+        // A translated page replaces the original at the same size; its tiles would show the original text.
+        if translator.enabled, let base = image, window.indices.contains(target) {
+            let key = pageIdentity(window[target])
+            if let translated = translator.rendered[key] {
+                image = translated
+                artifact = nil
+                let description = pageDescription(at: target) + "：" + (translator.texts[key] ?? []).joined(separator: " ")
+                if state.description != description { state.description = description; changed = true }
+            } else {
+                translator.enqueue(key: key, image: base)
+            }
+        }
         if state.image !== image { state.image = image; changed = true }
-        let artifact = artifacts[target]
         if state.artifact != artifact { state.artifact = artifact; changed = true }
         let failure = pageFailures[target]
         if state.failure != failure { state.failure = failure; changed = true }
@@ -1266,6 +1302,7 @@ final class SourceReaderModel: ObservableObject {
     }
 
     func persist() async {
+        guard !incognito else { return }
         guard let library else { return }
         guard pages.indices.contains(index), images[windowIndex] != nil else {
             activity.pause()
@@ -1377,6 +1414,7 @@ struct SourceReaderView: View {
     @State private var export: ReaderPNG?
     @State private var exporting = false
     @State private var cropping = false
+    @State private var sharing: SharedPage?
     @State private var croppedImage: UIImage?
     /// The paged scroll view's offset. Not view state: it changes every frame of a scroll.
     @State private var scroll = ReaderScrollTracker()
@@ -1398,9 +1436,11 @@ struct SourceReaderView: View {
     }
 
     init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter, initialPage: Int? = nil,
-         initialBookmark: IosBookmark? = nil) {
-        _model = StateObject(wrappedValue: SourceReaderModel(runtime: runtime, content: content, chapter: chapter,
-                                                           initialPage: initialPage, initialBookmark: initialBookmark))
+         initialBookmark: IosBookmark? = nil, incognito: Bool = false) {
+        let model = SourceReaderModel(runtime: runtime, content: content, chapter: chapter,
+                                      initialPage: initialPage, initialBookmark: initialBookmark)
+        model.incognito = incognito
+        _model = StateObject(wrappedValue: model)
         _settings = StateObject(wrappedValue: ReaderSettings(contentID: content.id))
     }
 
@@ -1550,19 +1590,30 @@ struct SourceReaderView: View {
                 await model.finishReadingActivity()
                 await library.refresh()
                 await ReaderTileBaseCache.shared.clear()
-                await library.trackingAccounts.syncAfterReading(model.content, tracking: library.library?.tracking)
+                if !model.incognito {
+                    await library.trackingAccounts.syncAfterReading(model.content, tracking: library.library?.tracking)
+                }
             }
         }
+        .overlay(alignment: .top) { ReaderTranslationHost(translator: model.translator) }
         .readerPresence(directories: model.storageDirectories)
         .sheet(isPresented: $showingDownloads) { ReaderDownloadsSheet() }
         .fileExporter(isPresented: $exporting, document: export, contentType: .png,
                       defaultFilename: "\(model.content.title)-\(model.index + 1)") { result in
             if case .failure(let error) = result { downloadStatus = error.localizedDescription }
         }
+        .sheet(item: $sharing) { page in
+            ActivitySheet(items: [page.image, String(localized: "\(model.content.title) · 第 \(model.index + 1) 页")])
+                .presentationDetents([.medium, .large])
+        }
         .sheet(isPresented: $cropping, onDismiss: {
             if let image = croppedImage { croppedImage = nil; save(image) }
         }) {
-            if let image = model.image { ReaderCropView(image: image) { croppedImage = $0 } }
+            if let image = model.image {
+                ReaderCropView(image: image, onSave: { croppedImage = $0 }, onNote: { crop, rect, note in
+                    Task { downloadStatus = await model.saveCropNote(crop, rect: rect, note: note) }
+                })
+            }
         }
     }
 
@@ -1861,6 +1912,7 @@ struct SourceReaderView: View {
                 } else {
                     ReaderMorePanel(settings: settings, autoScroll: $model.autoScroll,
                                     isBookmarked: model.isBookmarked,
+                                    translating: model.translator.enabled,
                                     status: currentDownloadStatus, downloading: downloading,
                                     onAction: moreAction)
                 }
@@ -2016,7 +2068,9 @@ struct SourceReaderView: View {
         case "thumbnails": withAnimation(chromeAnimation) { panel = .thumbnails }
         case "bookmark": Task { await model.toggleBookmark() }
         case "save": if let image = model.image { closePanel(); save(image) }
+        case "share": if let image = model.image { closePanel(); sharing = SharedPage(image: image) }
         case "crop": if model.image != nil { closePanel(); cropping = true }
+        case "translate": closePanel(); model.toggleTranslation()
         case "direction":
             if settings.value.mode == 4 { settings.value.horizontalReversed.toggle() }
             else { settings.value.mode = settings.value.mode == 1 ? 0 : 1 }
@@ -2667,4 +2721,18 @@ final class ReaderZoomScrollView: UIScrollView {
         controller.addChild(host)
         host.didMove(toParent: controller)
     }
+}
+
+/// A page handed to the system share sheet (Android's "share page").
+struct SharedPage: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
+
+struct ActivitySheet: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }

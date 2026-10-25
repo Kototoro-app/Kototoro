@@ -61,7 +61,7 @@ struct SuggestionsView: View {
     private var selectedKind: String? {
         if previewLimit != nil { return previewKind }
         // A fixed space does not need to enumerate the source catalog to choose a media type.
-        if spacesEnabled { return space.isEmpty ? nil : space }
+        if spacesEnabled { return ContentSpace.kind(space) }
         return ContentSpace.filter(enabled: spacesEnabled, space: space, page: pageKind, available: availableKinds)
     }
     private var visible: [ContentItem] {

@@ -3,6 +3,7 @@ import CoreText
 import ImageIO
 import KototoroShared
 import SwiftUI
+import Translation
 
 /// One block of a chapter: a paragraph of text or an illustration.
 enum NovelBlock: Hashable {
@@ -33,7 +34,7 @@ struct NovelReadingTarget: Equatable {
 }
 
 @MainActor
-final class NovelReaderModel: ObservableObject {
+final class NovelReaderModel: NSObject, ObservableObject {
     private lazy var activity = ReadingActivityRecorder(content: content)
 
     func setReadingActive(_ value: Bool) {
@@ -45,10 +46,30 @@ final class NovelReaderModel: ObservableObject {
         activity.setActive(false)
         await activity.flush()
     }
-    @Published private(set) var chapter: IosSourceChapter
+    @Published private(set) var chapter: IosSourceChapter {
+        didSet { displayTitle = chapter.title }
+    }
+    /// The chapter title after the title replacement rules.
+    @Published private(set) var displayTitle = ""
     @Published private(set) var blocks: [NovelBlock] = []
-    /// The converted chapter; maps blocks to the chapter progress Android also reads and writes.
+    /// The chapter shown: the converted chapter, or it with its translations; maps blocks to the chapter progress
+    /// Android also reads and writes (a translated copy keeps the original's positions).
     private var document: IosNovelDocument?
+    /// The converted chapter without translations.
+    private(set) var sourceDocument: IosNovelDocument?
+    /// The reader translates chapters as they open (Android's translate action, kept for the session).
+    @Published private(set) var translationEnabled = false
+    /// Translations of the current chapter's lines, by block index.
+    @Published private(set) var translations: [Int: String] = [:]
+    @Published var translationStatus = NovelTranslationStatus.idle
+    /// Starts the view's translation task; a new value (or `invalidate()`) translates what is still missing.
+    @Published var translationConfiguration: TranslationSession.Configuration?
+    private(set) var translationBilingual = UserDefaults.standard.bool(forKey: NovelTranslationSettings.bilingualKey)
+    private var translationTarget = NovelTranslationSettings.target(
+        UserDefaults.standard.string(forKey: NovelTranslationSettings.targetKey) ?? "")
+    var translationKey: String {
+        NovelTranslationCache.key(content: content.id, chapter: chapter.id, target: translationTarget)
+    }
     @Published private(set) var bookmarks: [IosBookmark] = []
     private(set) var text: IosChapterText?
     /// Downloaded pictures of the current chapter, by their original URL.
@@ -63,6 +84,8 @@ final class NovelReaderModel: ObservableObject {
     let content: IosSourceContent
     private var request: UUID?
     var library: IosLibrary?
+    /// An incognito session (`IncognitoGate`) records no history, progress, statistics or tracker updates.
+    var incognito = false
     @Published private(set) var resumeIndex = 0
     @Published private(set) var visibleIndex = 0
     /// Where the reader should go: the restored position after a load, a bookmark, or the end of the previous chapter.
@@ -85,9 +108,110 @@ final class NovelReaderModel: ObservableObject {
         // Downloaded books are read by their chapters; a download listed that way opens at the first of them.
         let content = NovelDownloads.listingBooks(content)
         self.content = content
-        self.chapter = content.listedChapter(chapter: chapter)
+        let listed = content.listedChapter(chapter: chapter)
+        self.chapter = listed
+        self.displayTitle = listed.title
         self.initialBookmark = initialBookmark
         self.initialIndex = initialIndex
+        super.init()
+        speech.onLine = { [weak self] index in self?.follow(index) }
+        speech.onRemoteSkip = { [weak self] delta in self?.skipSpeech(delta) }
+        speech.onChapterEnd = { [weak self] in
+            guard let self, let next = self.next else { return false }
+            await self.move(to: next, continueSpeech: true)
+            self.startSpeech(from: 0)
+            return true
+        }
+    }
+
+    /// Reading aloud; follows the reader into the next chapter.
+    let speech = NovelSpeech()
+
+    /// Highlights of the current chapter (Android's novel markings), and where they lie in its text.
+    @Published private(set) var markings: [IosNovelMarking] = []
+    @Published private(set) var markingRanges: [IosTextRange] = []
+
+    func loadMarkings() async {
+        guard let library, let document = sourceDocument else { markings = []; markingRanges = []; return }
+        markings = (try? await library.markings.forChapter(content: content, chapter: chapter)) ?? []
+        markingRanges = document.markingRanges(markings: markings)
+    }
+
+    /// Highlights `start until end` of the chapter text, or removes the highlights the range touches.
+    func toggleMarking(start: Int, end: Int) async {
+        guard let library, let document = sourceDocument, end > start else { return }
+        let touched = markingRanges.filter { $0.start < Int32(end) && Int32(start) < $0.end }
+        if touched.isEmpty {
+            let text = (document.text(start: Int32(start), end: Int32(end)) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return }
+            _ = try? await library.markings.toggle(content: content, chapter: chapter, start: Int32(start), end: Int32(end), text: text)
+        } else {
+            for range in touched { try? await library.markings.delete(id: range.id) }
+        }
+        await loadMarkings()
+        // The paged reader lays the chapter out again with the new highlights, at the same place.
+        target = NovelReadingTarget(block: visibleIndex, scroll: pagedScroll ?? document.scroll(index: Int32(visibleIndex)),
+                                    atEnd: false)
+        revision += 1
+    }
+
+    /// Highlights within line [index] (the scrolling reader).
+    func lineHighlights(_ index: Int) -> [IosTextRange] {
+        guard !markingRanges.isEmpty, let document else { return [] }
+        return document.lineHighlights(index: Int32(index), ranges: markingRanges)
+    }
+
+    /// Highlights or clears the whole of line [index] (the scrolling reader's long press).
+    func toggleLineMarking(_ index: Int) async {
+        guard let range = document?.lineRange(index: Int32(index)) else { return }
+        await toggleMarking(start: Int(range.start), end: Int(range.end))
+    }
+
+    /// The lines as shown, for searching the chapter: a translated line is found by either text.
+    var searchableLines: [(Int, String)] {
+        blocks.indices.compactMap { index in
+            guard case .text(let text) = blocks[index] else { return nil }
+            return (index, translation(index).map { text + "\n" + $0 } ?? text)
+        }
+    }
+
+    /// The lines as shown (translations replace their lines), for reading aloud.
+    private var spokenTexts: [(Int, String)] {
+        blocks.indices.compactMap { index in
+            guard case .text(let text) = blocks[index] else { return nil }
+            return (index, translation(index) ?? text)
+        }
+    }
+
+    /// Starts reading aloud from line [index], in the chapter's language unless a voice is chosen.
+    func startSpeech(from index: Int) {
+        let texts = spokenTexts
+        let language: Locale.Language? = translations.isEmpty || !translationEnabled
+            ? NovelTranslationSettings.source(of: texts.prefix(40).map(\.1)) : translationTarget
+        speech.nowPlayingTitle = "\(content.title) · \(displayTitle)"
+        speech.start(texts, from: index, language: language.flatMap(Self.speechLanguage))
+    }
+
+    /// Skips [delta] lines from the one being spoken.
+    func skipSpeech(_ delta: Int) {
+        let texts = spokenTexts.map(\.0)
+        guard let current = speech.current ?? Optional(visibleIndex),
+              let position = texts.firstIndex(where: { $0 >= current }) else { return }
+        let target = texts[min(max(0, position + delta), texts.count - 1)]
+        startSpeech(from: target)
+    }
+
+    /// An `AVSpeechSynthesisVoice` language tag ("zh-CN") for a recognized language.
+    private static func speechLanguage(_ language: Locale.Language) -> String? {
+        let maximal = Locale.Language(identifier: language.maximalIdentifier)
+        guard let code = maximal.languageCode?.identifier else { return nil }
+        return maximal.region.map { "\(code)-\($0.identifier)" } ?? code
+    }
+
+    /// Keeps the spoken line in view without a save per line beyond the usual debounce.
+    private func follow(_ index: Int) {
+        guard blocks.indices.contains(index), index != visibleIndex else { return }
+        seek(to: index)
     }
 
     var previous: IosSourceChapter? { content.adjacentChapter(chapter: chapter, forward: false) }
@@ -120,11 +244,20 @@ final class NovelReaderModel: ObservableObject {
             self.text = text
             localImages = offline?.1 ?? [:]
             isOffline = offline != nil
-            let document: IosNovelDocument? = if let text {
+            var document: IosNovelDocument? = if let text {
                 await Task.detached(priority: .userInitiated) { text.document() }.value
             } else { nil }
+            // Android's text replacement rules, on the lines and the chapter title.
+            if let converted = document, let library {
+                document = (try? await library.replaceRules.apply(document: converted, content: content)) ?? converted
+                displayTitle = (try? await library.replaceRules.title(title: selected.title, content: content)) ?? selected.title
+            }
             guard self.request == request else { return }
+            self.sourceDocument = document
             self.document = document
+            translations = [:]
+            translationStatus = .idle
+            if translationEnabled { restoreTranslations() }
             lineStyleCache.removeAll(keepingCapacity: true)
             blocks = document.map(NovelBlock.blocks(from:)) ?? []
             var scroll: Float = 0
@@ -147,6 +280,7 @@ final class NovelReaderModel: ObservableObject {
             revision += 1
             await persist()
             await refreshBookmarks()
+            await loadMarkings()
         } catch {
             if !Task.isCancelled, self.request == request {
                 self.error = SourceErrorText.describe(error)
@@ -162,12 +296,14 @@ final class NovelReaderModel: ObservableObject {
     }
 
     /// Opens another chapter at its start, or at its end when going back a page from the first one.
-    func move(to target: IosSourceChapter, atEnd: Bool = false) async {
+    func move(to target: IosSourceChapter, atEnd: Bool = false, continueSpeech: Bool = false) async {
+        if !continueSpeech { speech.stop() }
         await persist()
         chapter = target
         lineStyleCache.removeAll()
         blocks = []
         document = nil
+        sourceDocument = nil
         openAtEnd = atEnd
         await load()
     }
@@ -240,7 +376,83 @@ final class NovelReaderModel: ObservableObject {
         saveTask = Task { try? await Task.sleep(for: .milliseconds(600)); if !Task.isCancelled { await persist() } }
     }
 
+    /// Turns translation on (cached lines show at once, the rest are translated) or back to the original text.
+    func toggleTranslation() {
+        translationEnabled.toggle()
+        if translationEnabled {
+            restoreTranslations()
+        } else {
+            translationConfiguration = nil
+            translationStatus = .idle
+            translations = [:]
+            showTranslations()
+        }
+    }
+
+    /// The reader's translation settings changed: re-show (display mode) or re-translate (target language).
+    func updateTranslationSettings(bilingual: Bool, target: String) {
+        let language = NovelTranslationSettings.target(target)
+        let retarget = language.minimalIdentifier != translationTarget.minimalIdentifier
+        translationBilingual = bilingual
+        translationTarget = language
+        guard translationEnabled else { return }
+        if retarget {
+            translationConfiguration = nil
+            restoreTranslations()
+        } else {
+            showTranslations()
+        }
+    }
+
+    /// Shows the current chapter's cached translations and asks the view's task to translate the rest.
+    private func restoreTranslations() {
+        guard sourceDocument != nil else { return }
+        translations = NovelTranslationCache.load(translationKey)
+        showTranslations()
+        let lines = sourceDocument?.translatableTexts.sorted { $0.key.intValue < $1.key.intValue }.map(\.value) ?? []
+        let source = NovelTranslationSettings.source(of: lines)
+        // UI tests: the system translator is unavailable in the simulator, so lines are "translated" by tagging them.
+        if ProcessInfo.processInfo.environment["KOTOTORO_TRANSLATION_FIXTURE"] == "1" {
+            let tag = "[\(translationTarget.minimalIdentifier)] "
+            applyTranslations(Dictionary(uniqueKeysWithValues: (sourceDocument?.translatableTexts ?? [:])
+                .map { ($0.key.intValue, tag + $0.value) }))
+            return
+        }
+        if let source, NovelTranslationSettings.matches(source, translationTarget) {
+            translationConfiguration = nil
+            translationStatus = .sameLanguage
+            return
+        }
+        if translationConfiguration?.source == source,
+           translationConfiguration?.target?.minimalIdentifier == translationTarget.minimalIdentifier {
+            translationConfiguration?.invalidate()
+        } else {
+            translationConfiguration = TranslationSession.Configuration(source: source, target: translationTarget)
+        }
+    }
+
+    func applyTranslations(_ update: [Int: String]) {
+        guard !update.isEmpty else { return }
+        translations.merge(update) { _, new in new }
+        showTranslations()
+    }
+
+    /// Re-lays the chapter out with [translations], keeping the line being read in place.
+    private func showTranslations() {
+        guard let sourceDocument else { return }
+        let values = Dictionary(uniqueKeysWithValues: translations.map { (KotlinInt(int: Int32($0.key)), $0.value) })
+        document = values.isEmpty ? sourceDocument : sourceDocument.translated(translations: values, bilingual: translationBilingual)
+        lineStyleCache.removeAll(keepingCapacity: true)
+        target = NovelReadingTarget(block: visibleIndex, scroll: pagedScroll ?? document?.scroll(index: Int32(visibleIndex)) ?? 0,
+                                    atEnd: false)
+        revision += 1
+    }
+
+    /// The translation of line [index] when shown, and whether the original stays above it.
+    func translation(_ index: Int) -> String? { translationEnabled ? translations[index] : nil }
+
     func persist() async {
+        guard !incognito else { return }
         guard !blocks.isEmpty, let library else { return }
         activity.update(library: library, chapter: chapter, index: visibleIndex, count: blocks.count,
                         scroll: pagedScroll ?? document?.scroll(index: Int32(visibleIndex)) ?? 0)
@@ -282,11 +494,13 @@ final class NovelReaderModel: ObservableObject {
 }
 
 private enum NovelReaderAction: String, CaseIterable, Identifiable {
-    case bookmark, chapters, typography, downloads
+    case bookmark, speak, translate, chapters, typography, downloads
     var id: String { rawValue }
     var title: String {
         switch self {
         case .bookmark: String(localized: "书签")
+        case .translate: String(localized: "翻译")
+        case .speak: String(localized: "朗读")
         case .chapters: String(localized: "目录与书签")
         case .typography: String(localized: "阅读设置")
         case .downloads: String(localized: "下载队列")
@@ -294,6 +508,8 @@ private enum NovelReaderAction: String, CaseIterable, Identifiable {
     }
     var symbol: String {
         switch self {
+        case .translate: "translate"
+        case .speak: "speaker.wave.2"
         case .bookmark: "bookmark"
         case .chapters: "list.bullet"
         case .typography: "textformat.size"
@@ -308,7 +524,7 @@ private enum NovelReaderAction: String, CaseIterable, Identifiable {
 
 struct NovelReaderView: View {
     private enum ReaderSheet: String, Identifiable {
-        case chapters, settings, downloads
+        case chapters, settings, downloads, search
         var id: String { rawValue }
     }
     @EnvironmentObject private var library: LibraryModel
@@ -330,6 +546,9 @@ struct NovelReaderView: View {
     @AppStorage(NovelStyle.Key.bookStyles) private var bookStyles = true
     @AppStorage(NovelStyle.Key.pageTurn) private var pageTurn = "SLIDE"
     @AppStorage(NovelStyle.Key.floatingActions) private var floatingActions = "bookmark"
+    @AppStorage(NovelTranslationSettings.bilingualKey) private var translationBilingual = false
+    @AppStorage(NovelTranslationSettings.targetKey) private var translationTarget = ""
+    @AppStorage(ReplaceRulesRevision.key) private var replaceRulesRevision = 0
     @State private var activeSheet: ReaderSheet?
     @State private var sheetTab = 0
     /// Downloaded books folded away in the chapter list; books open expanded, as on Android.
@@ -343,9 +562,11 @@ struct NovelReaderView: View {
     @State private var scrollParagraph: Int?
 
     init(runtime: IosSources, content: IosSourceContent, chapter: IosSourceChapter,
-         initialBookmark: IosBookmark? = nil, initialIndex: Int? = nil) {
-        _model = StateObject(wrappedValue: NovelReaderModel(runtime: runtime, content: content, chapter: chapter,
-                                                          initialBookmark: initialBookmark, initialIndex: initialIndex))
+         initialBookmark: IosBookmark? = nil, initialIndex: Int? = nil, incognito: Bool = false) {
+        let model = NovelReaderModel(runtime: runtime, content: content, chapter: chapter,
+                                     initialBookmark: initialBookmark, initialIndex: initialIndex)
+        model.incognito = incognito
+        _model = StateObject(wrappedValue: model)
     }
 
     private var style: NovelStyle {
@@ -374,6 +595,11 @@ struct NovelReaderView: View {
                         })
                 }
                 if !chromeHidden { chrome(height: geometry.size.height).transition(.opacity) }
+                else {
+                    // Reading aloud keeps its controls while the reading controls are hidden.
+                    NovelSpeechBarIfActive(speech: model.speech) { model.skipSpeech($0) }
+                        .frame(maxHeight: .infinity, alignment: .bottom).padding(.bottom, 24)
+                }
             }
         }
         .background(style.colors.background.ignoresSafeArea())
@@ -384,6 +610,11 @@ struct NovelReaderView: View {
             case .chapters: navigationSheet
             case .settings: NovelReaderSettingsSheet()
             case .downloads: ReaderDownloadsSheet()
+            case .search:
+                NovelChapterSearchSheet(lines: model.searchableLines) { index in
+                    activeSheet = nil
+                    Task { await model.jump(to: index) }
+                }
             }
         }
         .alert("无法下载", isPresented: Binding(get: { downloadError != nil }, set: { if !$0 { downloadError = nil } })) {
@@ -399,15 +630,26 @@ struct NovelReaderView: View {
             Task { await model.persist() }
         }
         .onDisappear {
+            model.speech.stop()
             model.setReadingActive(false)
             Task {
                 await model.persist()
                 await model.finishReadingActivity()
                 await library.refresh()
-                await library.trackingAccounts.syncAfterReading(model.content, tracking: library.library?.tracking)
+                if !model.incognito {
+                    await library.trackingAccounts.syncAfterReading(model.content, tracking: library.library?.tracking)
+                }
             }
         }
         .onChange(of: model.chapter.id) { _, _ in showingMore = false; scrubPosition = nil; isScrubbing = false }
+        .translationTask(model.translationConfiguration) { session in await model.translate(using: session) }
+        .onChange(of: replaceRulesRevision) { _, _ in
+            // Edited rules apply to the open chapter at the line being read.
+            Task { await model.persist(); await model.load() }
+        }
+        .onChange(of: "\(translationBilingual)|\(translationTarget)") { _, _ in
+            model.updateTranslationSettings(bilingual: translationBilingual, target: translationTarget)
+        }
         .readerPresence(directories: [
             ReaderStorageMetadata.directoryID(contentID: model.content.id, chapterID: model.chapter.id)
         ])
@@ -423,6 +665,10 @@ struct NovelReaderView: View {
     private func perform(_ action: NovelReaderAction) {
         switch action {
         case .bookmark: Task { await model.toggleBookmark() }
+        case .translate: model.toggleTranslation()
+        case .speak:
+            showingMore = false
+            if model.speech.isActive { model.speech.togglePause() } else { model.startSpeech(from: model.visibleIndex) }
         case .chapters: showingMore = false; activeSheet = .chapters
         case .typography: showingMore = false; activeSheet = .settings
         case .downloads: showingMore = false; activeSheet = .downloads
@@ -441,7 +687,7 @@ struct NovelReaderView: View {
                             .frame(width: 44, height: 44).accessibilityIdentifier("novel.back")
                         Spacer(minLength: 16)
                         Button { perform(.chapters) } label: {
-                            Label(model.chapter.title, systemImage: "list.bullet").font(.subheadline).lineLimit(1)
+                            Label(model.displayTitle, systemImage: "list.bullet").font(.subheadline).lineLimit(1)
                                 .padding(.horizontal, 14).padding(.vertical, 12)
                         }.buttonStyle(.plain).glassEffect(.regular.interactive(), in: .capsule)
                             .accessibilityIdentifier("novel.chapters")
@@ -454,6 +700,13 @@ struct NovelReaderView: View {
                 }
                 Spacer(minLength: 0)
                 let actions = NovelReaderAction.selected(floatingActions)
+                if !showingMore, model.translationEnabled, let status = model.translationStatus.text {
+                    Label(status, systemImage: "translate")
+                        .font(.caption).lineLimit(2)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .glassEffect(.regular, in: .capsule)
+                        .accessibilityIdentifier("novel.translationStatus")
+                }
                 if !showingMore && !actions.isEmpty {
                     HStack(spacing: 12) {
                         Spacer()
@@ -461,13 +714,21 @@ struct NovelReaderView: View {
                             Button { perform(action) } label: {
                                 Image(systemName: action == .bookmark && model.isBookmarked ? "bookmark.fill" : action.symbol)
                                     .frame(width: 44, height: 44)
-                            }.buttonStyle(.plain).glassEffect(.regular.tint(.accentColor).interactive(), in: .circle)
+                                    .foregroundStyle(action == .translate && model.translationEnabled ? Color.white : Color.primary)
+                            }.buttonStyle(.plain)
+                                .glassEffect(.regular.tint(action == .translate && model.translationEnabled
+                                                           ? Color.accentColor : Color.accentColor.opacity(0.35)).interactive(),
+                                             in: .circle)
                                 .disabled(action == .bookmark && (model.blocks.isEmpty || model.isLoading))
                                 .accessibilityLabel(action.title)
-                                .accessibilityValue(action == .bookmark ? (model.isBookmarked ? "已添加" : "未添加") : "")
+                                .accessibilityValue(action == .bookmark ? (model.isBookmarked ? "已添加" : "未添加")
+                                                    : action == .translate ? (model.translationEnabled ? "已开启" : "已关闭") : "")
                                 .accessibilityIdentifier("novel.floating.\(action.rawValue)")
                         }
                     }
+                }
+                if !showingMore {
+                    NovelSpeechBarIfActive(speech: model.speech) { model.skipSpeech($0) }
                 }
                 progressControl
             }.padding(12)
@@ -530,6 +791,28 @@ struct NovelReaderView: View {
                                systemImage: model.isBookmarked ? "bookmark.fill" : "bookmark") { perform(.bookmark) }
                             .disabled(model.blocks.isEmpty || model.isLoading)
                             .accessibilityIdentifier("novel.bookmark")
+                        // The paged reader marks a selection from its menu; this marks the paragraph being read, in either
+                        // mode (the scrolling reader's selectable text takes no custom menu items).
+                        let marked = !model.lineHighlights(model.visibleIndex).isEmpty
+                        Button(marked ? "取消本段划线" : "划线当前段", systemImage: "highlighter") {
+                            Task { await model.toggleLineMarking(model.visibleIndex) }
+                        }
+                        .disabled(model.blocks.isEmpty || model.isLoading)
+                        .accessibilityIdentifier("novel.markParagraph")
+                        Button("搜索本章", systemImage: "magnifyingglass") { showingMore = false; activeSheet = .search }
+                            .disabled(model.blocks.isEmpty || model.isLoading)
+                            .accessibilityIdentifier("novel.search")
+                        Button("朗读", systemImage: "speaker.wave.2") { perform(.speak) }
+                            .disabled(model.blocks.isEmpty || model.isLoading)
+                            .accessibilityIdentifier("novel.speak")
+                        Button(model.translationEnabled ? "显示原文" : "翻译本章", systemImage: "translate") {
+                            perform(.translate)
+                        }
+                        .disabled(model.blocks.isEmpty || model.isLoading)
+                        .accessibilityIdentifier("novel.translate")
+                        if model.translationEnabled, let status = model.translationStatus.text {
+                            Text(status).font(.caption).foregroundStyle(.secondary)
+                        }
                         Button("阅读设置", systemImage: "textformat.size") { perform(.typography) }
                             .accessibilityIdentifier("novel.typography")
                         // Imported files are already on the device.
@@ -562,8 +845,9 @@ struct NovelReaderView: View {
     }
 
     /// One line of the scrolling reader, with the book's alignment, heading size and emphasis when enabled.
-    private func scrollLine(_ text: String, index: Int, style: NovelStyle) -> some View {
-        let book: (runs: [NovelRun], layout: NovelLineLayout?) = style.bookStyles ? model.lineStyle(index) : ([], nil)
+    /// [plain] lines (translations and the original above them) leave out the book's styles, which belong to the original.
+    private func scrollLine(_ text: String, index: Int, style: NovelStyle, plain: Bool = false) -> some View {
+        let book: (runs: [NovelRun], layout: NovelLineLayout?) = style.bookStyles && !plain ? model.lineStyle(index) : ([], nil)
         let indented = style.indent && !IosNovelStyle.shared.isTitleLine(line: text) && (book.layout?.indent ?? true)
         let prefix = indented ? "\u{3000}\u{3000}" : ""
         let align: TextAlignment = switch book.layout?.align {
@@ -576,9 +860,9 @@ struct NovelReaderView: View {
         case .trailing: .trailing
         default: .leading
         }
-        return Text(style.styledLine(prefix + text, runs: book.runs, shift: (prefix as NSString).length))
+        return Text(style.styledLine(prefix + text, runs: book.runs, shift: (prefix as NSString).length,
+                                     highlights: plain ? [] : model.lineHighlights(index)))
             .lineSpacing(style.lineGap * (book.layout?.scale ?? 1))
-            .foregroundStyle(style.colors.text)
             .multilineTextAlignment(align)
             .frame(maxWidth: .infinity, alignment: frame)
             .textSelection(.enabled)
@@ -587,7 +871,7 @@ struct NovelReaderView: View {
     private func scrollReader(_ style: NovelStyle) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: style.paragraphGap) {
-                Text(model.chapter.title)
+                Text(model.displayTitle)
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(style.colors.text)
                     .padding(.bottom, model.isOffline ? 0 : 8)
@@ -616,8 +900,19 @@ struct NovelReaderView: View {
                     Group {
                     switch block {
                     case .text(let text):
-                        scrollLine(text, index: index, style: style)
+                        if let translated = model.translation(index) {
+                            VStack(alignment: .leading, spacing: style.paragraphGap) {
+                                if translationBilingual {
+                                    scrollLine(text, index: index, style: style, plain: true)
+                                        .foregroundStyle(style.colors.secondaryText)
+                                }
+                                scrollLine(translated, index: index, style: style, plain: true)
+                            }
                             .accessibilityIdentifier(index == 0 ? "novel.firstParagraph" : "novel.paragraph")
+                        } else {
+                            scrollLine(text, index: index, style: style)
+                                .accessibilityIdentifier(index == 0 ? "novel.firstParagraph" : "novel.paragraph")
+                        }
                     case .image(let url):
                         HeaderImage(url: model.localImages[url.absoluteString] ?? url,
                                     headers: model.text?.headers(imageUrl: url.absoluteString) ?? [:])
@@ -630,6 +925,7 @@ struct NovelReaderView: View {
                     }
                 }
             }
+            .foregroundStyle(style.colors.text)
             .padding(.horizontal, style.marginHorizontal)
             .padding(.vertical, style.marginVertical)
             .scrollTargetLayout()
@@ -821,7 +1117,10 @@ struct NovelColors: Equatable {
     let text: Color
     let secondaryText: Color
     let uiText: UIColor
+    let uiSecondaryText: UIColor
     let uiBackground: UIColor
+    /// The theme's highlight, for saved highlights.
+    let uiHighlight: UIColor
 
     init(theme: String, dark: Bool) {
         let colors = IosNovelStyle.shared.colors(theme: theme, dark: dark)
@@ -829,6 +1128,8 @@ struct NovelColors: Equatable {
         text = Color(uiColor: UIColor(argb: colors.text))
         secondaryText = Color(uiColor: UIColor(argb: colors.secondaryText))
         uiText = UIColor(argb: colors.text)
+        uiSecondaryText = UIColor(argb: colors.secondaryText)
+        uiHighlight = UIColor(argb: colors.highlight).withAlphaComponent(0.35)
         uiBackground = UIColor(argb: colors.background)
     }
 }
@@ -913,8 +1214,16 @@ struct NovelStyle: Equatable {
     }
 
     /// [text] with the reader's attributes and the book's line layouts and inline styles laid over them.
-    func attributed(_ text: String, runs: [NovelRun], lines: [NovelLineLayout]) -> NSAttributedString {
+    func attributed(_ text: String, runs: [NovelRun], lines: [NovelLineLayout],
+                    highlights: [IosTextRange] = []) -> NSAttributedString {
         let result = NSMutableAttributedString(string: text, attributes: attributes())
+        for highlight in highlights {
+            let start = min(max(0, Int(highlight.start)), result.length)
+            let end = min(max(start, Int(highlight.end)), result.length)
+            if end > start {
+                result.addAttribute(.backgroundColor, value: colors.uiHighlight, range: NSRange(location: start, length: end - start))
+            }
+        }
         let length = result.length
         func clamp(_ range: NSRange) -> NSRange? {
             let start = min(max(0, range.location), length)
@@ -940,6 +1249,10 @@ struct NovelStyle: Equatable {
                     [kCTRubyAnnotationSizeFactorAttributeName: 0.5] as CFDictionary)
                 result.addAttribute(NSAttributedString.Key(kCTRubyAnnotationAttributeName as String), value: annotation,
                                     range: range)
+                continue
+            }
+            if run.secondary {
+                result.addAttribute(.foregroundColor, value: colors.uiSecondaryText, range: range)
                 continue
             }
             let font = styledFont(run)
@@ -996,11 +1309,18 @@ struct NovelStyle: Equatable {
     }
 
     /// A line of the scrolling reader with the book's inline styles (readings are left out there).
-    func styledLine(_ text: String, runs: [NovelRun], shift: Int) -> AttributedString {
+    func styledLine(_ text: String, runs: [NovelRun], shift: Int, highlights: [IosTextRange] = []) -> AttributedString {
         var result = AttributedString(text)
         result.font = Font(uiFont)
-        guard !runs.isEmpty else { return result }
         let length = (text as NSString).length
+        for highlight in highlights {
+            let start = min(max(0, Int(highlight.start) + shift), length)
+            let end = min(max(start, Int(highlight.end) + shift), length)
+            guard end > start, let stringRange = Range(NSRange(location: start, length: end - start), in: text),
+                  let range = Range(stringRange, in: result) else { continue }
+            result[range].backgroundColor = Color(uiColor: colors.uiHighlight)
+        }
+        guard !runs.isEmpty else { return result }
         for run in runs where run.ruby == nil {
             let start = min(max(0, run.range.location + shift), length)
             let end = min(max(start, run.range.location + run.range.length + shift), length)
@@ -1025,11 +1345,13 @@ struct NovelRun {
     let vertical: Int
     let scale: CGFloat
     let ruby: String?
+    /// The original line above a bilingual translation, in the theme's secondary color.
+    let secondary: Bool
 
     init(_ run: IosNovelStyleRun) {
         range = NSRange(location: Int(run.start), length: Int(run.end - run.start))
         bold = run.bold; italic = run.italic; underline = run.underline; strike = run.strike
-        vertical = Int(run.vertical); scale = CGFloat(run.scale); ruby = run.ruby
+        vertical = Int(run.vertical); scale = CGFloat(run.scale); ruby = run.ruby; secondary = run.secondary
     }
 }
 
@@ -1056,6 +1378,8 @@ struct NovelLaidOutPage: Equatable {
     let segment: Int
     let start: Int
     let end: Int
+    /// Where [text] begins in the segment ([start] includes the blank lines a page does not show).
+    var textStart = 0
     let text: NSAttributedString?
     let imageUrl: String?
 }
@@ -1066,6 +1390,7 @@ struct NovelLayoutSegment {
     let imageUrl: String?
     let runs: [NovelRun]
     let lines: [NovelLineLayout]
+    var highlights: [IosTextRange] = []
 }
 
 /// Pages laid out with TextKit 2 and split into whole lines by the rule Android's paged reader uses.
@@ -1075,7 +1400,7 @@ enum NovelPaginator {
         var pages: [NovelLaidOutPage] = []
         for (index, segment) in segments.enumerated() {
             if let text = segment.text {
-                let attributed = style.attributed(text, runs: segment.runs, lines: segment.lines)
+                let attributed = style.attributed(text, runs: segment.runs, lines: segment.lines, highlights: segment.highlights)
                 let starts = lineStarts(attributed, size: size)
                 let string = attributed.string as NSString
                 for (page, start) in starts.enumerated() {
@@ -1087,7 +1412,7 @@ enum NovelPaginator {
                     while last > first, string.character(at: last - 1) == 0x0A { last -= 1 }
                     guard last > first else { continue }
                     let body = attributed.attributedSubstring(from: NSRange(location: first, length: last - first))
-                    pages.append(NovelLaidOutPage(segment: index, start: start, end: end, text: body, imageUrl: nil))
+                    pages.append(NovelLaidOutPage(segment: index, start: start, end: end, textStart: first, text: body, imageUrl: nil))
                 }
             } else if let url = segment.imageUrl {
                 pages.append(NovelLaidOutPage(segment: index, start: 0, end: 0, text: nil, imageUrl: url))
@@ -1208,7 +1533,7 @@ struct NovelPagedReader: View {
         VStack(spacing: 0) {
             Group {
                 if let text = page.text {
-                    NovelPageText(text: text)
+                    NovelPageText(text: text) { range in mark(page, range: range) }
                         .frame(width: content.width, height: content.height, alignment: .topLeading)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(text.string)
@@ -1227,7 +1552,7 @@ struct NovelPagedReader: View {
         .overlay(alignment: .bottom) {
             // The lower margin is the gap above the footer, just as the upper margin starts below the cutout.
             HStack {
-                Text(model.chapter.title).lineLimit(1)
+                Text(model.displayTitle).lineLimit(1)
                 Spacer()
                 Text("\(index + 1) / \(pages.count)").monospacedDigit()
             }
@@ -1238,6 +1563,16 @@ struct NovelPagedReader: View {
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("novel.footer")
         }
+    }
+
+    /// Highlights (or clears) a selection on [page]; [range] is in the page's text.
+    private func mark(_ page: NovelLaidOutPage, range: NSRange) {
+        guard let source = model.pages(indent: style.indent, spacing: style.paragraphSpacing, bookStyles: style.bookStyles)
+        else { return }
+        let segment = Int32(page.segment)
+        let start = source.sourceOffset(segment: segment, offset: Int32(page.textStart + range.location))
+        let end = source.sourceOffset(segment: segment, offset: Int32(page.textStart + range.location + range.length))
+        Task { await model.toggleMarking(start: Int(start), end: Int(end)) }
     }
 
     private func relayout(size: CGSize) async {
@@ -1253,7 +1588,8 @@ struct NovelPagedReader: View {
             let segment = Int32(index)
             return NovelLayoutSegment(text: source.text(segment: segment), imageUrl: source.imageUrl(segment: segment),
                                       runs: source.styles(segment: segment).map(NovelRun.init),
-                                      lines: source.paragraphs(segment: segment).map(NovelLineLayout.init))
+                                      lines: source.paragraphs(segment: segment).map(NovelLineLayout.init),
+                                      highlights: source.highlights(segment: segment, ranges: model.markingRanges))
         }
         let style = style
         let laidOut = await Task.detached(priority: .userInitiated) {
@@ -1454,9 +1790,29 @@ struct NovelPager<Page: View>: UIViewControllerRepresentable {
 /// It is selectable; links are not followed.
 struct NovelPageText: UIViewRepresentable {
     let text: NSAttributedString
+    /// Highlights the selected range (Android's text marking), offered in the selection menu.
+    var onMark: ((NSRange) -> Void)? = nil
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: NovelPageText
+        init(_ parent: NovelPageText) { self.parent = parent }
+
+        func textView(_ textView: UITextView, editMenuForTextIn range: NSRange,
+                      suggestedActions: [UIMenuElement]) -> UIMenu? {
+            guard let onMark = parent.onMark, range.length > 0 else { return nil }
+            let mark = UIAction(title: String(localized: "划线"), image: UIImage(systemName: "highlighter")) { _ in
+                onMark(range)
+                textView.selectedRange = NSRange(location: range.location, length: 0)
+            }
+            return UIMenu(children: [mark] + suggestedActions)
+        }
+    }
 
     func makeUIView(context: Context) -> UITextView {
         let view = UITextView(usingTextLayoutManager: true)
+        view.delegate = context.coordinator
         view.isEditable = false
         // Long press selects text for the system menu (copy, look up, translate, share); taps reach the pager.
         view.isSelectable = true
@@ -1468,6 +1824,7 @@ struct NovelPageText: UIViewRepresentable {
     }
 
     func updateUIView(_ view: UITextView, context: Context) {
+        context.coordinator.parent = self
         if view.attributedText != text { view.attributedText = text }
     }
 
@@ -1480,6 +1837,7 @@ struct NovelPageText: UIViewRepresentable {
 
 /// The Android reader's typography and theme settings, stored per device.
 struct NovelReaderSettingsSheet: View {
+    @EnvironmentObject private var library: LibraryModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(NovelStyle.Key.mode) private var mode = NovelStyle.Default.mode
@@ -1553,6 +1911,16 @@ struct NovelReaderSettingsSheet: View {
                 } footer: {
                     Text("书籍排版：使用书籍自带的标题、对齐、粗斜体与注音（EPUB 与带样式的正文）。")
                 }
+                if let rules = library.library?.replaceRules {
+                    Section {
+                        NavigationLink { ReplaceRulesView(rules: rules) } label: {
+                            Label("文本替换规则", systemImage: "text.badge.checkmark")
+                        }
+                        .accessibilityIdentifier("novel.settings.replaceRules")
+                    }
+                }
+                NovelSpeechSettingsSection()
+                NovelTranslationSettingsSection()
                 Section("边距") {
                     Stepper("左右 \(marginHorizontal)", value: $marginHorizontal,
                             in: Int(limits.minMargin)...Int(limits.maxMargin), step: Int(limits.marginStep))

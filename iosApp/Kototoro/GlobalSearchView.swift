@@ -181,7 +181,7 @@ struct GlobalSearchView: View {
         let enabled = sources.sources.filter { source in
             sources.isEnabled(source) && (showAdult || !source.isAdult) &&
                 (selectionMediaKind.map { source.mediaKind == $0 } ?? !kinds.contains(source.mediaKind)) &&
-                (!pinnedOnly || sources.isPinned(source))
+                (!pinnedOnly || sources.isPinned(source)) && ContentSpace.admits(source)
         }
         let ordered = sources.ordered(enabled)
         return ordered.filter(sources.isPinned) + ordered.filter { !sources.isPinned($0) }
@@ -199,7 +199,7 @@ struct GlobalSearchView: View {
         let pinned = Set(sources.sources.filter(sources.isPinned).map(\.name))
         func matches(_ item: IosSourceContent) -> Bool {
             (selectionMediaKind.map { item.mediaKind == $0 } ?? !kinds.contains(item.mediaKind)) &&
-                (showAdult || (!item.contentType.hasPrefix("HENTAI_") && item.contentRating != "ADULT")) &&
+                (showAdult || !item.isNsfw) &&
                 (!pinnedOnly || pinned.contains(item.sourceName)) &&
                 (item.title.localizedCaseInsensitiveContains(value) ||
                     item.altTitles.contains { $0.localizedCaseInsensitiveContains(value) })
