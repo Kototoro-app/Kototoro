@@ -339,6 +339,7 @@ private fun DetailsScreenContent(
     val metadataSearchError = metadataSearchUiState.errorMessage
     val languagePresets by viewModel.languagePresets.collectAsStateWithLifecycle()
     val activeLanguagePresetId by viewModel.activeLanguagePresetId.collectAsStateWithLifecycle()
+    val globalTagBlacklistCount by viewModel.globalTagBlacklistCount.collectAsStateWithLifecycle()
     val readingSearchSources = readingSearchUiState.sources
     val readingSearchQuery = readingSearchUiState.query
     val readingSearchSections = readingSearchUiState.sections
@@ -1880,6 +1881,8 @@ private fun DetailsScreenContent(
                     scopeFilterUiState = readingSearchScopeFilterUiState,
                     languagePresets = languagePresets,
                     activeLanguagePresetId = activeLanguagePresetId,
+                    blacklistedTagCount = globalTagBlacklistCount,
+                    onOpenGlobalTagBlacklist = appRouter::openGlobalTagBlacklist,
                     currentContent = content,
                     unavailableText = stringResource(R.string.details_reading_source_unavailable),
                     onSearchQueryChange = viewModel::updateReadingSearchQuery,

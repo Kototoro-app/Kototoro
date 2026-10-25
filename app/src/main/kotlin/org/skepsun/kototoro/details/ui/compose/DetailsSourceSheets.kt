@@ -318,6 +318,8 @@ fun ReadingSourceSheet(
     currentContent: Content?,
     unavailableText: String,
     label: String,
+    blacklistedTagCount: Int = 0,
+    onOpenGlobalTagBlacklist: (() -> Unit)? = null,
     onDismissRequest: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
@@ -656,6 +658,7 @@ fun ReadingSourceSheet(
             hideEmpty = scopeFilterUiState.hideEmpty,
             languagePresets = languagePresets,
             activeLanguagePresetId = activeLanguagePresetId,
+            blacklistedTagCount = blacklistedTagCount,
             onApply = { filters ->
                 (filters.sourceTypes - scopeFilterUiState.sourceTypes).forEach(onSourceTypeToggle)
                 (scopeFilterUiState.sourceTypes - filters.sourceTypes).forEach(onSourceTypeToggle)
@@ -666,6 +669,7 @@ fun ReadingSourceSheet(
                 onLanguagePresetSelected(filters.languagePresetId)
             },
             onManageLanguagePresets = onManageLanguagePresets,
+            onOpenGlobalTagBlacklist = onOpenGlobalTagBlacklist,
             onDismissRequest = { showFilterSheet = false },
         )
     }

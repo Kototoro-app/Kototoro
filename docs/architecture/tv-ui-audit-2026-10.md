@@ -7446,3 +7446,65 @@ the D-pad"——它处理的是**键盘收起之后**的上下键；而这里字
 
 **"已经加过 escape"不等于"按键走得到"。** `tvTextInputFocusEscape()` 只在键盘关闭时生效，而让键盘自动弹出的正是
 字段自己；只要字段一拿到焦点就把屏幕交给 IME，escape 就是死代码。判断标准只有一个：连按方向键，焦点真的动了没有。
+
+## 第一百一十四轮：筛选面板里两块一模一样的 Manage，一块按下去毫无反应（2026-10-25）
+
+### 现象
+
+阅读来源面板 → Filter → 面板顶部有两块几乎一样的卡片，每块右侧一个 "Manage"：
+
+* **Blacklisted tags** 的 Manage（`[1689,434][1844,530]`）按 CENTER：**什么都不发生**。焦点直接消失
+  （`focus.py` → `NOTHING`），`dumpsys window` 的 `mCurrentFocus` 仍是 `MainActivity`，logcat 里没有一条
+  `ActivityTaskManager: START`；截图 `LA10` 的 sha `8c5f255d` 与修前那张**逐字节相同**，说明画面根本没变。
+* **Language preset** 的 Manage（`[1689,551][1844,647]`）按 CENTER：立刻打开 `SourcePresetListActivity`。
+
+### 两层根因
+
+1. **详情页这条路径从来没接线。** `SearchFilterSheet` 的 `onOpenGlobalTagBlacklist` 参数默认是 `{}`，
+   而 `DetailsSourceSheets` 调它时没传这个参数（搜索浮层 `KototoroSearchOverlay` 和搜索结果页都传了）。
+   于是这块按钮在**所有设备上**都是死控件，不只是 TV。语言预设那块传了 `onManageLanguagePresets`，所以能开。
+2. **`tvFocusable()` 的默认值在这种按钮上会吞掉 CENTER。** `GlobalTagBlacklistStatus` 里那个 `TextButton`
+   写的是 `.tvFocusable(shape = RoundedCornerShape(10.dp))`，默认 `addFocusTarget = true`——它在本来就可点击
+   的按钮**外面又叠了一个焦点目标**。遥控器的 CENTER 落在那个没有任何点击处理的节点上，键就被吃掉了；
+   旁边语言预设那个按钮写的是 `addFocusTarget = false`，观察按钮自己的焦点目标，于是正常。
+
+两块按钮长得一样、行为一个死一个活，正好是这条规则的 A/B 对照。
+
+### 修法
+
+* `DetailsViewModel` 新增 `globalTagBlacklistCount`（`settings.observeAsStateFlow(AppSettings.KEY_GLOBAL_TAG_BLACKLIST)`
+  → `settings.globalTagBlacklist.size`），`DetailsScreen` 收集后传给 `ReadingSourceSheet`；
+* `ReadingSourceSheet` 新增 `blacklistedTagCount`、`onOpenGlobalTagBlacklist` 两个参数并透传给
+  `SearchFilterSheet`，`DetailsScreen` 用 `appRouter::openGlobalTagBlacklist` 接线——按钮从此真的能打开黑名单页；
+* `SearchFilterSheet` 的 `onOpenGlobalTagBlacklist` 改成可空（`(() -> Unit)? = null`），
+  `GlobalTagBlacklistStatus` 的 Manage 只在有处理者时才画：没地方可去时既不留死按钮，也不给遥控器留死焦点；
+* `GlobalTagBlacklistStatus` 的 `TextButton` 补 `addFocusTarget = false`。
+
+### 证据
+
+* 修前：CENTER on Manage #1 → `NOTHING` + `LA10` sha `8c5f255d` + `mCurrentFocus=MainActivity` + 无 START 日志；
+* 修后：CENTER on Manage #1 → `mCurrentFocus=GlobalTagBlacklistActivity`，焦点落在 `Back [8,16][104,112]`（有环），
+  `MA10` sha `d42b4501`：标题 "Blacklisted tags"、Search 框、"Available / 0 selected"、Genre 与 Theme 两段芯片网格；
+* BACK → 回到 Filter 面板，焦点回到 Manage #1；DOWN → Manage #2（语言预设），CENTER →
+  `SourcePresetListActivity`（回归通过，没被这次改动带坏）；BACK → 面板（焦点在 Manage #2）；BACK → 面板关闭，
+  焦点回到筛选按钮 `[1772,560][1888,656]`。
+
+### 清单：还有 4 处 `tvFocusable()` 用着默认值
+
+全仓 `tvFocusable(` 共 249 处提及，其中 189 处显式写了 `addFocusTarget = false`。剩下看着"没写"的 60 处，
+把多行调用拼成整段再核对，真正没写的只有 **4 处**：
+
+* `ExploreSkeletons.kt:83`：骨架占位，本身不可点，加一个焦点目标是对的，不用改；
+* `SwipeableFilterChip.kt:171`：`.clickable(...)` 在前、`.tvFocusable(shape = Capsule())` 在后，焦点目标落在
+  clickable 里面，属于首页筛选胶囊那条"自绘环"的老账，要按 CENTER 实测再定；
+* `StatsScreen.kt:938`、`VideoPlayerInfoDialog.kt:141`：都紧跟着 `.onPreviewKeyEvent`，要单独读上下文判断。
+
+下一轮按「后面跟的控件是否自带 clickable/selectable」逐个判定，判据只用一条：**遥控器按 CENTER 有没有反应**。
+
+（自查记录：第一版按"行里没有 addFocusTarget"数出 60 处，是把多行调用的第一行当成了整个调用。grep 一行的结论
+不能当真，判据只能是"整个调用里有没有这个参数"。）
+
+### 教训
+
+**"这颗按钮有焦点框"只能证明它能被选中，不能证明它能被按下。** 本轮两块按钮的焦点框都好用，CENTER 却一个死一个活；
+差别只在 `tvFocusable()` 有没有多叠一个焦点目标。凡是给"本来就能点"的控件加圈，一律 `addFocusTarget = false`。

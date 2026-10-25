@@ -92,7 +92,9 @@ fun SearchFilterSheet(
     blacklistedTagCount: Int = 0,
     onApply: (SearchFilters) -> Unit,
     onManageLanguagePresets: (() -> Unit)? = null,
-    onOpenGlobalTagBlacklist: () -> Unit = {},
+    // Null when the host has nowhere to send the viewer: the row then shows the status only, instead
+    // of a Manage button that looks active and does nothing (and that a remote focus ring would land on).
+    onOpenGlobalTagBlacklist: (() -> Unit)? = null,
     onDismissRequest: () -> Unit,
 ) {
     var draft by rememberSaveable(stateSaver = SearchFiltersSaver) {
