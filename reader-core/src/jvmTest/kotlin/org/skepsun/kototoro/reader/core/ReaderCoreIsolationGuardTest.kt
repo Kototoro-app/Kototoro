@@ -34,17 +34,20 @@ class ReaderCoreIsolationGuardTest {
     // Scanner
     // ---------------------------------------------------------------------------------------------
 
+    // reader.image was moved into this module when decode planning became shared, so its own package
+    // belongs to the core alongside reader.core; everything else under org.skepsun.kototoro is app-layer.
     private val allowedImportPrefixes = listOf(
         "kotlin.",
         "kotlinx.",
         "java.",
         "javax.",
         "org.skepsun.kototoro.reader.core.",
+        "org.skepsun.kototoro.reader.image.",
     )
 
     private val importRegex = Regex("""^\s*import\s+([A-Za-z0-9_.]+)(\s+as\s+\w+)?\s*$""")
     private val androidReferenceRegex = Regex("""\bandroidx?\b\.""")
-    private val appLayerReferenceRegex = Regex("""\borg\.skepsun\.kototoro\.(?!reader\.core\b)""")
+    private val appLayerReferenceRegex = Regex("""\borg\.skepsun\.kototoro\.(?!reader\.(?:core|image)\b)""")
 
     private fun scanKotlinSource(path: Path): List<Violation> {
         val stripped = stripComments(path.readText())
