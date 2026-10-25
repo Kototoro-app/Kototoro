@@ -5336,3 +5336,94 @@ Kotlin 不允许命名实参与位置实参混用，所以**带位置实参的�
    留待芯片专项轮。
 4. 本轮只验了按钮类站点；61 个芯片站点里的"紧排"场景（如 Favorites 快筛那一排）没有重截图，
    但收缩只影响 1 dp，且芯片用的是同一个 `drawWithContent`。
+
+## 第八十七轮：图标页签的环不是画不出来，是按钮被撑出了槽位（2026-10-25）
+
+### 症状
+
+第八十六轮遗留 1：详情页右栏那排图标页签（☰ / ▦ / 🔖）遥控器停上去只有一层 M3 状态层圆盘，
+环一格都没有；同一排的 search / ⋮ 一直是好的。选中态也对（选中页签的图标是主色蓝），
+焦点事件也一直在跳——就是"停得住、状态变了、看不见"。
+
+### 定位（四次收敛，别照抄结论）
+
+1. **先确认这是哪个组件**。上一版我猜是 `ChaptersPagesTabsContent.kt` 的 `DetailsTabsRow`
+   （`SecondaryTabRow` + `tvTabRing()`），改完装到机器上毫无变化；uiautomator 显示这一排其实是
+   `android.widget.HorizontalScrollView [992,60][1252,144]` 加三个 84/84/96 px 的子节点，
+   来源是 `DetailsDock.kt` 的 `DetailsDockActionButton`（三个 `AnimatedVisibility` 各包一个 `IconButton`）。
+   那次改动是死代码，已 `git checkout` 回退。**页面标题栏这排页签并不在 `ChaptersPagesTabsContent` 里。**
+2. **确认焦点真的进了 `tvFocusable`**。在 `onFocusChanged` 里打 `println`：
+   `TVTAB Pages isFocused=true` 与 `TVFOCUS isFocused=true` 同时出现，说明 `isTv` 为真、`shape != null`，
+   焦点观察和环的绘制分支都成立。
+3. **确认绘制分支真的执行，且问题在轮廓本身**。在 `drawWithContent` 里临时加两笔：
+   先用 `drawRect(0x6600FF00)` 铺满节点，再在 12 px 内缩处用 `drawRoundRect` 画一条 4 px 纯蓝描边，
+   最后才走原来的 `createOutline` + `drawOutline`。截图里绿色铺满、蓝色手绘描边清晰可见，原来的环还是没有；
+   同时把几何打进日志：`size=Size(96.0, 96.0) outlineSize=Size(92.0, 92.0) stroke=4.0
+   color=Color(0.039,0.518,1.0) outline=Outline$Rounded`——尺寸、颜色、轮廓对象全部正常。
+4. **像素度量把矛盾钉死**：绿色填充（就是 `draw` 节点的 `size`）只到 **84×84 px**，
+   而 `draw` 里报的 `size` 是 **96×96 px**。差的 12 px 正好是被父容器裁掉的部分。
+
+### 根因
+
+- dock 给每个页签的槽位是 42 dp（`ModernDetailsDockTabButtonWidth`，按钮自己也是 `.width(42.dp).height(42.dp)`），
+  但 Material3 的 `IconButton` 会经 `minimumInteractiveComponentSize()` 把节点撑到 48 dp 触控目标，
+  于是**按钮比槽位大 3 dp/边**，又被外层容器裁回 42 dp。
+- `tvFocusable` 把环画在**节点自己的边缘**上（第八十六轮只把它整体内缩了一个描边宽，解决"半条环越界"，
+  解决不了"整个节点越界"），所以 48 dp 节点上的环整条落在 42 dp 裁剪区之外，一格都不显示。
+- 同排 search / ⋮ 之所以一直正常：它们的槽位 ≥ 48 dp，节点没被撑出槽外，环自然也落在裁剪区里。
+
+### 改动
+
+`app/.../details/ui/compose/DetailsDock.kt`（`DetailsDockActionButton`）：
+
+- 用 `CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides DockActionButtonSize)`
+  把最小触控目标压到槽位宽 42 dp，节点（以及画在它边缘的环）回到槽位里；
+- 去掉只为"承载裁剪"才存在的 `Surface`（`containerColor` 恒为 `Color.Transparent`）和随之无用的
+  `containerColor` 动画；`padding(end = spacingAfter)` 前移到按钮自己的 modifier 链首
+  （仍在环节点之外，环节点正好 42 dp）；
+- 环改用 `tvIconButtonRing(shape)`，形状取 dock 自己的 `RoundedCornerShape(if (modernStyle) 18.dp else 16.dp)`，
+  与第八十六轮"环跟随控件自身形状"的结论一致；
+- 新增 `private val DockActionButtonSize = 42.dp`：宽度、高度、最小触控目标三处同源。
+
+`core-ui/.../adaptive/TvFocus.kt` 本轮**没有留下改动**：第 2、3 步加的 `println`、绿色 `drawRect`
+和蓝色手绘描边全部撤掉（`git checkout`），环的原语保持第八十六轮的形态。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 详情页 → LEFT ×2，🔖 聚焦 | `r87-14.png`、`crop87-ring.png` | 环完整：自身右/下边界 1247/143（84×84 px = 42×42 dp），蓝色 bbox 与邻格选中图标连成 208×84；红色调试底、绿色调试填充都已撤掉 |
+| LEFT → ▦ 聚焦 | `r87-15.png`、`crop87-tabpages.png` | 环 84×84 px（bbox 与 ☰ 的选中蓝连成 144×84） |
+| LEFT → ☰ 聚焦（条带最左格） | `r87-16.png`、`crop87-tabchapters.png` | 环 84×84 px，贴着条带左边缘也没有被切 |
+| RIGHT 逐格走完三个页签 | `r87-17.png`、`r87-18.png` | 三格都有环，没有"过一格丢一格" |
+| 回归：右栏 search | `r87-21.png` | 96×96 px = 48×48 dp，与第八十六轮一致 |
+| 回归：右栏 ⋮ | `r87-22.png` | 96×96 px = 48×48 dp |
+| CENTER 点 ▦ | `r87-23.png` → `r87-24.png` | 右侧面板切到页面网格、▦ 转为选中蓝：去掉 `Surface` 容器后点击仍然正常 |
+| Continue / ▾ 分裂按钮 | `r87-19.png`、`crop87-right1.png`、`r87-20.png`、`crop87-right2.png` | 焦点环可见，但两段各盖住对方一端（遗留 1） |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（1920×1080 的 x86_64 调试包）。像素统计同样用
+`.tmp-bluebox.py`（蓝 > 170、蓝 − 红 > 70、蓝 − 绿 > 40 筛出焦点环 bbox），不靠肉眼估。
+uiautomator 里内层 `android.widget.Button` 节点的 bounds 是 `[996,60][1080,144]` = 42×42 dp，
+与外层语义 `View` 报的 96 px 触控扩张并存——扩张只影响触摸，不影响绘制。
+
+### 横切结论（下一轮开场先读这段）
+
+**"焦点可见但没有环"的最后一种成因：环跟着节点走，而节点被父容器裁小了。**
+排查顺序固定为 ① 这个控件**节点**多大（uiautomator 或 `draw` 里打 `size`）；② 父容器给它的**槽位**多大、
+有没有 `clip`；③ 两者不一致就修布局，不要给环再套一层 `tvFocusable`。
+顺带记一条：Material3 的 48 dp 触控目标会让"看起来 42 dp 的按钮"实际占 48 dp，
+凡是槽位小于 48 dp 的地方（这条 dock、紧排图标行、芯片行）都要先想一遍这个差值。
+
+### 遗留
+
+1. **Continue / ▾ 分裂按钮的环互相压**：`r87-19.png` 里 Continue 聚焦时白环的右端被 ▾ 的深色盘盖成直切，
+   `r87-20.png` 里 ▾ 聚焦时环的左端又被 Continue 盘盖住。焦点可见性还在（环约 85% 可见），
+   属两个节点重叠的视觉瑕疵，留待分裂按钮专项轮：要么给两段各自画半环，要么把环画在分裂按钮的合并轮廓上。
+2. 第八十六轮遗留 2（左栏胶囊环相对底色高 2 dp）、3（`SwipeableFilterChip` 自绘环在 `.clickable` 之后）、
+   4（61 个芯片站点的紧排场景未重截图）仍然挂着。
+3. **TV 上的"页签"至少对应三套实现**：`DetailsDockActionButton`（本条 dock）、
+   `SecondaryTabRow` + `tvTabRing()`（设置页、词典页等）、`ChapterModeTabsRow`（纯文本页签）。
+   改之前先用 uiautomator 认节点，别按名字猜。
+4. **同一 checkout 里别并行跑两个 Gradle 构建**：本轮第一次 `:app:assembleDebug` 直接失败在
+   `Execution failed for task ':reader-core:jvmJar' > Could not create ZIP 'reader-core-jvm.jar'`，
+   原因是另一个会话正在同一目录跑 `:desktop-app:test`，占着共享 jar；等它退出后原命令重跑即 BUILD SUCCESSFUL。
