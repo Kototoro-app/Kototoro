@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.extensions.SelectedSourcesDeletePlan
 import org.skepsun.kototoro.core.extensions.SelectedSourcesNsfwAction
 import org.skepsun.kototoro.core.ui.settings.SettingsActionRow
 import org.skepsun.kototoro.core.ui.settings.SettingsGroup
@@ -478,6 +479,8 @@ private fun SourceSwitchDialog(
     var pendingBatch by remember { mutableStateOf<Boolean?>(null) }
     // Android's `SetSelectedSourcesNsfw` dialog: only a mixed selection needs it, a uniform one toggles immediately.
     var pendingNsfw by remember { mutableStateOf(false) }
+    // Android's `DeleteSelectedSources` dialog, opened with the plan the current selection folds into.
+    var pendingDelete by remember { mutableStateOf<SelectedSourcesDeletePlan?>(null) }
     // Android's `selectedSourceIds` with its own lifetime: a tap on a source in selection mode joins or leaves the set,
     // an empty set ends the mode, and the rows are switches again — exactly Android's `isSelectionMode`.
     var selected by remember { mutableStateOf(emptySet<String>()) }
@@ -633,6 +636,12 @@ private fun SourceSwitchDialog(
                             enabled = enabled,
                             modifier = Modifier.testTag("source-selection-test"),
                         ) { Text(AndroidStrings["source_test_action"]) }
+                        // Android's 删除 asks first, with the package count and the JAR packages it refuses to touch.
+                        TextButton(
+                            onClick = { pendingDelete = sourceDeletePlan(selected, state.installedEntries) },
+                            enabled = enabled,
+                            modifier = Modifier.testTag("source-selection-delete"),
+                        ) { Text(AndroidStrings["delete"]) }
                         TextButton(
                             onClick = { selected = emptySet() },
                             enabled = enabled,
@@ -709,6 +718,51 @@ private fun SourceSwitchDialog(
             },
             confirmButton = {
                 TextButton(onClick = { pendingNsfw = false }) { Text(desktopText("common.cancel")) }
+            },
+        )
+    }
+    val deletePlan = pendingDelete
+    if (deletePlan != null) {
+        // Android's `UnifiedDeleteSelectedSourcesDialog`: the count of packages, and the JAR plugins it left alone.
+        // A plan with nothing removable only tells the user so, so its single button just closes.
+        val skipped = deletePlan.skippedNames.joinToString(", ")
+        val message = when {
+            deletePlan.hasPackages && deletePlan.skippedNames.isNotEmpty() ->
+                AndroidStrings.format("unified_sources_delete_selected_with_skipped_jars",
+                    deletePlan.packageIds.size, skipped)
+            deletePlan.hasPackages ->
+                AndroidStrings.format("unified_sources_delete_selected_message", deletePlan.packageIds.size)
+            deletePlan.skippedNames.isNotEmpty() ->
+                AndroidStrings.format("unified_sources_delete_selected_only_skipped_jars", skipped)
+            else -> AndroidStrings["unified_sources_delete_selected_no_packages"]
+        }
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            modifier = Modifier.testTag("source-switch-delete-dialog"),
+            title = { Text(AndroidStrings["delete"]) },
+            text = { Text(message) },
+            confirmButton = {
+                if (deletePlan.hasPackages) {
+                    TextButton(
+                        onClick = {
+                            pendingDelete = null
+                            selected = emptySet()
+                            controller.uninstallPackages(deletePlan.packageIds)
+                        },
+                        modifier = Modifier.testTag("source-switch-delete-confirm"),
+                    ) { Text(AndroidStrings["delete"]) }
+                } else {
+                    TextButton(onClick = { pendingDelete = null },
+                        modifier = Modifier.testTag("source-switch-delete-close"),
+                    ) { Text(desktopText("common.ok")) }
+                }
+            },
+            dismissButton = {
+                if (deletePlan.hasPackages) {
+                    TextButton(onClick = { pendingDelete = null },
+                        modifier = Modifier.testTag("source-switch-delete-cancel"),
+                    ) { Text(desktopText("common.cancel")) }
+                }
             },
         )
     }

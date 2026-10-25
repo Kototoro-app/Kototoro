@@ -263,8 +263,12 @@ npm run docs:build
   `disabled_sources` 存在 `desktop_extensions`，`DesktopAppState.disabledSources`/`enabledSources` 把“已装”与
   “可用”分开，关掉的来源不再出现在来源栏/来源网格/筛选器/搜索建议/换源候选，但它的收藏进度与下载都保留），
   见计划 §174、§175。对话框里另有 Android 的选中态（`UnifiedSourceSelectionBar`）：Android 用长按进入，Windows 让
-  “全选”兼作入口，进入后行变整行复选、`已选 N` 配启用/禁用/NSFW/测试，测试走 `startSourceTest(选中的名字)` 只跑选中的来源
-  （Android 的 `testSources(ids)`），删除仍待，见计划 §192。选择栏的 NSFW 芯片走 Android 的每来源成人标记覆盖：规则
+  “全选”兼作入口，进入后行变整行复选、`已选 N` 配启用/禁用/NSFW/测试/删除，测试走 `startSourceTest(选中的名字)` 只跑选中的来源
+  （Android 的 `testSources(ids)`），见计划 §192。选择栏的「删除」也补齐了：折叠规则
+  `SelectedSourcesDeletePlan`/`SourceDeletionCandidate`/`selectedSourcesDeletePlan` 已下沉 `core-domain`（每个包只出现一次、
+  无包来源不参与、单文件 JAR 插件只报告不删），Android 的 `buildDeletePlan` 与 Windows 的
+  `sourceDeletePlan(selected, installedEntries)` 都只是投影，Windows 确认后走 `uninstallPackages(packageIds)`
+  在一个操作里逐个卸载并刷新状态，弹窗沿用 Android 那四条 `unified_sources_delete_selected_*` 文案，见计划 §194。选择栏的 NSFW 芯片走 Android 的每来源成人标记覆盖：规则
   （`SelectedSourcesNsfwAction`/`SourceNsfwOverrideSet`/`changedNsfwSources`）已下沉 `core-domain`，Android 的
   `AppSettings.setSourceNsfwOverride` 与统一来源页也改吃它；Windows 把两个集合写进 `desktop_extensions` 的
   `source_nsfw_overrides`/`source_sfw_overrides`（与 Android 同键），`isNsfwSource(overrides)` 先看覆盖再看内容类型的

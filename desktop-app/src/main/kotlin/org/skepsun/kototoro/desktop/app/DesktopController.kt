@@ -681,6 +681,48 @@ class DesktopController(
         }
     }
 
+    /**
+     * Android's selection-bar 删除: the plan folds a selection of sources into the packages that declare them, and this
+     * removes those packages in one operation. A package that fails is reported and the rest still go, so one broken
+     * artifact cannot pin the selection forever.
+     */
+    fun uninstallPackages(packageIds: Collection<String>) = action {
+        val targets = state.value.installedEntries.filter { it.id in packageIds }
+        if (targets.isNotEmpty()) {
+            val failures = ArrayList<String>(0)
+            for (entry in targets) {
+                try {
+                    session.uninstall(entry)
+                } catch (error: kotlinx.coroutines.CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    failures += "${entry.label}：${error.message ?: error.javaClass.simpleName}"
+                }
+            }
+            val descriptors = sourceDescriptors()
+            mutableState.update { previous ->
+                val selected = previous.selectedSource
+                val removed = selected != null && descriptors.none { it.source.name == selected.source.name }
+                previous.copy(
+                    sources = descriptors,
+                    disabledSources = session.disabledSources(),
+                    sourceNsfwOverrides = session.sourceNsfwOverrides(),
+                    installedExtensions = installedVersions(),
+                    installedEntries = session.installedEntries(),
+                    extensionUpdates = previous.extensionUpdates.filterNot { it.extension.packageName in packageIds },
+                    selectedSource = if (removed) null else previous.selectedSource,
+                    descriptor = if (removed) null else previous.descriptor,
+                    items = if (removed) emptyList() else previous.items,
+                    message = if (failures.isEmpty()) {
+                        desktopText("extensions.uninstalled", targets.joinToString(", ") { it.label })
+                    } else {
+                        desktopText("extensions.uninstallFailed") + failures.joinToString("\n")
+                    },
+                )
+            }
+        }
+    }
+
     fun refreshSources() = action {
         mutableState.update { it.copy(sources = sourceDescriptors(), disabledSources = session.disabledSources(),
             sourceNsfwOverrides = session.sourceNsfwOverrides(),

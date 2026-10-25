@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.extensions.SelectedSourcesDeletePlan
 import org.skepsun.kototoro.core.extensions.SelectedSourcesNsfwAction
 import org.skepsun.kototoro.core.extensions.resolveSelectedSourcesNsfwAction
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
@@ -99,7 +100,7 @@ private sealed interface UnifiedSourcesDialogState {
 
     data class TrustRepository(val repo: ExternalExtensionRepo) : UnifiedSourcesDialogState
     data class DeleteRepository(val repository: UnifiedSourceRepositoryItem) : UnifiedSourcesDialogState
-    data class DeleteSelectedSources(val plan: UnifiedSelectedSourceDeletePlan) : UnifiedSourcesDialogState
+    data class DeleteSelectedSources(val plan: SelectedSourcesDeletePlan) : UnifiedSourcesDialogState
     data class SetSelectedSourcesNsfw(
         val sourceIds: Set<String>,
     ) : UnifiedSourcesDialogState
@@ -135,12 +136,6 @@ internal sealed interface UnifiedThirdPartyAction {
     data class OpenRepositoryFile(val kind: UnifiedSourceKind) : UnifiedThirdPartyAction
     data object OpenLocalJar : UnifiedThirdPartyAction
 }
-
-internal data class UnifiedSelectedSourceDeletePlan(
-    val deletablePackageIds: List<String>,
-    val deletablePackageNames: List<String>,
-    val skippedJarPackageNames: List<String>,
-)
 
 @Composable
 fun UnifiedSourcesRoute(
@@ -519,7 +514,7 @@ fun UnifiedSourcesRoute(
             plan = dialog.plan,
             onDismiss = { activeDialog = null },
             onConfirm = {
-                viewModel.deletePackages(dialog.plan.deletablePackageIds.toSet())
+                viewModel.deletePackages(dialog.plan.packageIds.toSet())
                 selectedSourceIdList = emptyList()
                 activeDialog = null
             },

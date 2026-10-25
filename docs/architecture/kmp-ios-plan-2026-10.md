@@ -8859,3 +8859,48 @@ Windows 补上存储、状态、芯片与对话框。
 - 全量基线：`:desktop-app:test` 51 个套件 / 285 个用例（此前 282 + 新增 3）/ 0 失败；`:desktop-runtime:test`
   28 个套件 / 183 个用例（此前 181 + 新增 2）/ 0 失败；`:core-domain:jvmTest` 41 个套件 / 255 个用例 / 0 失败；
   `:desktop-app:verifyDesktopStrings` 通过（文案全用 Android 键，桌面 catalog 未增删，仍是 958 键）。
+## 194. 选中栏的「删除」：把选择折成要卸载的扩展包（对齐 Android `UnifiedSelectedSourceDeletePlan`）（2026-10-25）
+
+Android 统一来源页的选中栏最后一个动作是删除。一个包常常声明多个来源，所以选中的来源要先折成“要卸载哪些包”；
+如果声明它的是单文件 JAR 插件，就不能因为选中了其中一个来源就把整个插件删掉，只能报告并跳过。
+
+### 共享规则
+- `core-domain` 的 `core/extensions/SourceDeletionRules.kt`：`SourceDeletionCandidate`（来源名 + 声明它的包 id 与显示名 +
+  是否可卸载）、`SelectedSourcesDeletePlan`（平行的 `packageIds`/`packageNames`、`skippedNames`、`hasPackages`、`isEmpty`）、
+  `selectedSourcesDeletePlan(selectedSourceNames, candidates)`。
+- 规则逐条对齐 Android 原实现：每个包只出现一次且按候选顺序（对话框要数包，调用方要按同一顺序卸载）；
+  没有包的来源（内联 JSON 源）不产生任何东西；不可卸载的包只进 `skippedNames`，名字取包显示名、空了退回来源名。
+- `SourceDeletionRulesTest`（`core-domain/src/jvmTest`）：6 条，覆盖折叠去重、顺序、跳过、无包来源、空选择与名字回落。
+
+### Android 改为消费共享规则
+- `UnifiedSourcesDisplay.buildDeletePlan` 只剩投影：`allSources`/`allPackages` 变成候选，包显示名按
+  `allPackages[id].name → item.packageName → item.title` 取，`UnifiedSourceKind.JAR` 记为不可卸载。
+- 本地 `UnifiedSelectedSourceDeletePlan` 删除，`UnifiedSourcesScreen` 的 `DeleteSelectedSources` 与
+  `UnifiedSourcesDialogs` 直接用共享类型，四条弹窗文案与按钮顺序不变。
+
+### Windows
+- `DesktopSourceSwitch.sourceDeletePlan(selected, installedEntries)`：每个已装包按它声明的来源展开成候选，包 id 用
+  `DesktopInstalledEntry.id`、显示名用 `label`。`DesktopInstalledKind.PARSER`（单文件解析器 JAR 插件）记为不可卸载，
+  与 Android 跳过 JAR 源同一理由；JSON/TVBox 来源不属于任何已装包，因此不参与删除（与 Android 的空 `packageId` 一致）。
+- `DesktopController.uninstallPackages(packageIds)`：在一个 `action{}` 里逐个 `session.uninstall(entry)`——先删安装记录、
+  再卸 loader、再清 `disabled_sources` 里的死键与未引用产物；单个包失败只记录并继续，最后一次性刷新
+  sources/disabled/每来源成人覆盖/已安装列表/更新列表。成功消息用 Android 的 `extensions.uninstalled`，
+  失败拼在桌面新增的 `extensions.uninstallFailed`（en 与 zh-CN 两份桌面 catalog 都补了）。
+- 选中栏在“测试源”之后多出「删除」（`source-selection-delete`，文案沿用 Android 的 `delete`）。点击先算计划再弹
+  Android 的 `UnifiedDeleteSelectedSourcesDialog`（`source-switch-delete-dialog`）：包数与跳过的插件名走
+  `unified_sources_delete_selected_with_skipped_jars` / `_message` / `_only_skipped_jars` / `_no_packages` 四条原句。
+  有计划时确认（`source-switch-delete-confirm`）卸载并退出选中态，取消（`source-switch-delete-cancel`）留在栏里；
+  没有可删的包时只有一个 `common.ok`（`source-switch-delete-close`），和 Android 一样只是告知。
+- 既有差异保留：Android 靠长按进入选中态，Windows 用“全选”兼作入口，见计划 §192。
+
+### 验证
+- `:core-domain:jvmTest --tests=*SourceDeletionRules*`：6 条全绿。
+- `:desktop-app:test --tests=*DesktopSourceSwitchTest*`：17 条全绿（新增 3 条：一个包的多个来源折成一条、
+  解析器插件只报告不删、没有任何包声明的来源不产生计划）。
+- `:desktop-app:test --tests=*repository*`：双进程探针通过。写进程选中全部来源后点「删除」，弹窗显示
+  “删除选中的 1 个扩展包？”（截图 `repositories-write-package-count.png`），取消后包仍在，离线进程照旧读得到该来源。
+- `:app:compileDebugKotlin`：通过（Android 侧只是改成消费共享规则与共享类型）。
+- 全量基线：`:desktop-app:test` 51 个套件 / 288 个用例（此前 285 + 新增 3）/ 0 失败；`:desktop-runtime:test`
+  28 个套件 / 183 个用例（不变）/ 0 失败；`:core-domain:jvmTest` 42 个套件 / 261 个用例（此前 41 / 255 +
+  新的 `SourceDeletionRulesTest` 6 条）/ 0 失败；`:desktop-app:verifyDesktopStrings` 通过——桌面 catalog 增加
+  1 个仅桌面使用的 `extensions.uninstallFailed`（卸载失败前缀），其余文案仍是 Android 键，共 959 键 / 959 条被引用。

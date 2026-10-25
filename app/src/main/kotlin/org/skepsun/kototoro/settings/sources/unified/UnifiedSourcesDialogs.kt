@@ -56,6 +56,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.extensions.SelectedSourcesDeletePlan
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
 import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
@@ -350,26 +351,26 @@ internal fun UnifiedSetFilteredSourcesEnabledDialog(
 
 @Composable
 internal fun UnifiedDeleteSelectedSourcesDialog(
-    plan: UnifiedSelectedSourceDeletePlan,
+    plan: SelectedSourcesDeletePlan,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    val skippedJarText = plan.skippedJarPackageNames.joinToString(", ")
+    val skippedJarText = plan.skippedNames.joinToString(", ")
     val message = when {
-        plan.deletablePackageIds.isNotEmpty() && plan.skippedJarPackageNames.isNotEmpty() -> {
+        plan.packageIds.isNotEmpty() && plan.skippedNames.isNotEmpty() -> {
             stringResource(
                 R.string.unified_sources_delete_selected_with_skipped_jars,
-                plan.deletablePackageIds.size,
+                plan.packageIds.size,
                 skippedJarText,
             )
         }
-        plan.deletablePackageIds.isNotEmpty() -> {
+        plan.packageIds.isNotEmpty() -> {
             stringResource(
                 R.string.unified_sources_delete_selected_message,
-                plan.deletablePackageIds.size,
+                plan.packageIds.size,
             )
         }
-        plan.skippedJarPackageNames.isNotEmpty() -> {
+        plan.skippedNames.isNotEmpty() -> {
             stringResource(
                 R.string.unified_sources_delete_selected_only_skipped_jars,
                 skippedJarText,
@@ -381,7 +382,7 @@ internal fun UnifiedDeleteSelectedSourcesDialog(
         title = stringResource(R.string.delete),
         onDismissRequest = onDismiss,
         confirmButton = {
-            if (plan.deletablePackageIds.isNotEmpty()) {
+            if (plan.packageIds.isNotEmpty()) {
                 SettingsDialogActionButton(
                     text = stringResource(R.string.delete),
                     onClick = onConfirm,
@@ -394,7 +395,7 @@ internal fun UnifiedDeleteSelectedSourcesDialog(
             }
         },
         dismissButton = {
-            if (plan.deletablePackageIds.isNotEmpty()) {
+            if (plan.packageIds.isNotEmpty()) {
                 SettingsDialogActionButton(
                     text = stringResource(android.R.string.cancel),
                     onClick = onDismiss,

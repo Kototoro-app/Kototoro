@@ -29,6 +29,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.extensions.SelectedSourcesDeletePlan
+import org.skepsun.kototoro.core.extensions.SourceDeletionCandidate
+import org.skepsun.kototoro.core.extensions.selectedSourcesDeletePlan
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.ui.adaptive.tvChipRing
 import org.skepsun.kototoro.core.util.ext.getDisplayName
@@ -72,32 +75,23 @@ internal fun String?.normalizedLanguageTag(): String? {
 
 internal fun UnifiedSourcesUiState.Ready.buildDeletePlan(
     selectedSourceIds: Set<String>,
-): UnifiedSelectedSourceDeletePlan {
+): SelectedSourcesDeletePlan {
     val packagesById = allPackages.associateBy { it.id }
-    val deletablePackageIds = LinkedHashSet<String>()
-    val deletablePackageNames = LinkedHashSet<String>()
-    val skippedJarPackageNames = LinkedHashSet<String>()
-
-    allSources
-        .asSequence()
-        .filter { it.id in selectedSourceIds }
-        .forEach { item ->
-            when {
-                item.kind == UnifiedSourceKind.JAR -> {
-                    skippedJarPackageNames += packagesById[item.packageId]?.name ?: item.packageName ?: item.title
-                }
-                item.packageId != null -> {
-                    if (deletablePackageIds.add(item.packageId)) {
-                        deletablePackageNames += packagesById[item.packageId]?.name ?: item.packageName ?: item.title
-                    }
-                }
-            }
-        }
-
-    return UnifiedSelectedSourceDeletePlan(
-        deletablePackageIds = deletablePackageIds.toList(),
-        deletablePackageNames = deletablePackageNames.toList(),
-        skippedJarPackageNames = skippedJarPackageNames.toList(),
+    return selectedSourcesDeletePlan(
+        selectedSourceNames = selectedSourceIds,
+        candidates = allSources.map { item ->
+            SourceDeletionCandidate(
+                sourceName = item.id,
+                packageId = item.packageId,
+                packageName = item.packageId
+                    ?.let(packagesById::get)
+                    ?.name
+                    ?: item.packageName
+                    ?: item.title,
+                // Android uninstalls through the platform, so a single-file JAR plugin is only ever reported.
+                uninstallable = item.kind != UnifiedSourceKind.JAR,
+            )
+        },
     )
 }
 

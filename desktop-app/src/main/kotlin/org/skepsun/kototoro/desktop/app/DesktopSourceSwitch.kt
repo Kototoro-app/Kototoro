@@ -1,8 +1,11 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.extensions.SelectedSourcesDeletePlan
 import org.skepsun.kototoro.core.extensions.SelectedSourcesNsfwAction
+import org.skepsun.kototoro.core.extensions.SourceDeletionCandidate
 import org.skepsun.kototoro.core.extensions.SourceNsfwOverrideSet
 import org.skepsun.kototoro.core.extensions.resolveSelectedSourcesNsfwAction
+import org.skepsun.kototoro.core.extensions.selectedSourcesDeletePlan
 import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.desktop.runtime.isNsfwSource
 
@@ -77,4 +80,26 @@ fun selectedSourcesNsfwLabel(action: SelectedSourcesNsfwAction): String = when (
     SelectedSourcesNsfwAction.CHOOSE -> "unified_sources_set_nsfw"
     SelectedSourcesNsfwAction.NONE -> "unified_sources_mark_nsfw"
 }
+
+/**
+ * Android's `UnifiedSelectedSourceDeletePlan` on Windows: each installed package declares the sources it provides, so a
+ * selection folds into the packages to uninstall. A parser plugin is a single-file JAR — deleting one because one of
+ * its sources was selected would take the whole plugin, which is why Android only reports those, and so does this.
+ */
+fun sourceDeletePlan(
+    selected: Set<String>,
+    entries: List<DesktopInstalledEntry>,
+): SelectedSourcesDeletePlan = selectedSourcesDeletePlan(
+    selectedSourceNames = selected,
+    candidates = entries.flatMap { entry ->
+        entry.sourceNames.map { name ->
+            SourceDeletionCandidate(
+                sourceName = name,
+                packageId = entry.id,
+                packageName = entry.label,
+                uninstallable = entry.kind != DesktopInstalledKind.PARSER,
+            )
+        }
+    },
+)
 

@@ -249,6 +249,17 @@ internal object DesktopRepositoriesProbe {
                     val nsfwRecord = session.storage.preferences.open("desktop_extensions")
                         .snapshot()["source_nsfw_overrides"] as SourcePreferenceValue.TextSet
                     check(nsfwRecord.values == setOf(installedSourceName()))
+                    // §194: the selection bar's 删除 folds the selection into the packages that declare it. This
+                    // package declares the one source, so the dialog counts one; cancelling keeps it installed.
+                    onNodeWithTag("source-selection-all").performClick(); idle()
+                    onNodeWithTag("source-selection-delete").performClick(); idle()
+                    onNodeWithTag("source-switch-delete-dialog").assertExists()
+                    onNodeWithText("删除选中的 1 个扩展包？").assertExists()
+                    snapshotTag("source-switch-delete-dialog", "package-count")
+                    onNodeWithTag("source-switch-delete-cancel").performClick(); idle()
+                    onNodeWithTag("source-switch-delete-dialog").assertDoesNotExist()
+                    check(controller.state.value.installedEntries.size == 1)
+                    onNodeWithTag("source-selection-close").performClick(); idle()
                     onNodeWithTag(switchTag).performClick(); idle()
                     check(controller.state.value.disabledSources == setOf(installedSourceName()))
                     check(controller.state.value.enabledSources.none { it.sourceId == 9007199254740993L })

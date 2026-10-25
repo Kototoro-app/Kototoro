@@ -163,4 +163,47 @@ class DesktopSourceSwitchTest {
         assertEquals("unified_sources_set_nsfw", selectedSourcesNsfwLabel(SelectedSourcesNsfwAction.CHOOSE))
         assertEquals("unified_sources_mark_nsfw", selectedSourcesNsfwLabel(SelectedSourcesNsfwAction.NONE))
     }
+
+    private fun installed(
+        kind: DesktopInstalledKind,
+        id: String,
+        label: String,
+        sources: List<String>,
+    ) = DesktopInstalledEntry(kind, id, label, SourceEcosystem.MIHON, "v1", 1L, sources.size, sources)
+
+    @Test
+    fun `the delete plan folds a selection into the packages that declare it`() {
+        val entries = listOf(
+            installed(DesktopInstalledKind.EXTENSION, "eu.kanade.tachiyomi.alph", "Alpha Extension",
+                listOf("alpha", "beta")),
+            installed(DesktopInstalledKind.EXTENSION, "eu.kanade.tachiyomi.gamm", "Gamma Extension", listOf("gamma")),
+        )
+        val plan = sourceDeletePlan(setOf("alpha", "beta", "gamma"), entries)
+        assertEquals(listOf("eu.kanade.tachiyomi.alph", "eu.kanade.tachiyomi.gamm"), plan.packageIds)
+        assertEquals(listOf("Alpha Extension", "Gamma Extension"), plan.packageNames)
+        assertEquals(true, plan.hasPackages)
+        // One source of a package is enough: Android uninstalls the package, not the source.
+        assertEquals(listOf("eu.kanade.tachiyomi.gamm"), sourceDeletePlan(setOf("gamma"), entries).packageIds)
+    }
+
+    @Test
+    fun `a parser plugin is skipped instead of uninstalled`() {
+        val entries = listOf(
+            installed(DesktopInstalledKind.PARSER, "plugin.jar", "Parser Plugin", listOf("delta")),
+            installed(DesktopInstalledKind.CLOUDSTREAM, "cloud.stream", "Cloud Plugin", listOf("stream")),
+        )
+        val plan = sourceDeletePlan(setOf("delta", "stream"), entries)
+        assertEquals(listOf("cloud.stream"), plan.packageIds)
+        assertEquals(listOf("Parser Plugin"), plan.skippedNames)
+        // A selection of only a parser source plans nothing to delete, so the dialog can only tell the user so.
+        assertEquals(false, sourceDeletePlan(setOf("delta"), entries).hasPackages)
+        assertEquals(false, sourceDeletePlan(setOf("delta"), entries).isEmpty)
+    }
+
+    @Test
+    fun `a source no installed package declares plans nothing`() {
+        val entries = listOf(installed(DesktopInstalledKind.EXTENSION, "pkg", "Package", listOf("alpha")))
+        assertEquals(true, sourceDeletePlan(setOf("gamma"), entries).isEmpty)
+        assertEquals(true, sourceDeletePlan(emptySet(), entries).isEmpty)
+    }
 }
