@@ -34,6 +34,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -70,6 +71,7 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.adaptive.tvDownFocusLink
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -96,9 +98,14 @@ fun SwipeableFilterChip(
     controlSize: Dp = CompactFilterChipSize,
     iconSize: Dp = 16.dp,
     modifier: Modifier = Modifier,
+    /**
+     * TV only: the first stop of the page below the bar, so DOWN leaves the chrome instead of falling
+     * through to the navigation rail. It has to reach the focusable button, not [modifier]'s Box.
+     */
+    downFocusLink: FocusRequester? = null,
 ) {
     if (LocalUiPresentationConfig.current.isTv) {
-        TvContentTypeFilter(selectedType, enabledTypes, onTypeSelected, controlSize, iconSize, modifier)
+        TvContentTypeFilter(selectedType, enabledTypes, onTypeSelected, controlSize, iconSize, modifier, downFocusLink)
         return
     }
     val density = LocalDensity.current
@@ -383,6 +390,7 @@ private fun TvContentTypeFilter(
     controlSize: Dp,
     iconSize: Dp,
     modifier: Modifier,
+    downFocusLink: FocusRequester?,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val types = listOf(null, ContentType.VIDEO, ContentType.MANGA, ContentType.NOVEL)
@@ -398,11 +406,14 @@ private fun TvContentTypeFilter(
         IconButton(
             onClick = { expanded = true },
             enabled = enabledTypes.isNotEmpty(),
-            modifier = Modifier.size(controlSize).tvFocusable(
-                enabled = enabledTypes.isNotEmpty(),
-                shape = CircleShape,
-                addFocusTarget = false,
-            ),
+            modifier = Modifier
+                .size(controlSize)
+                .tvFocusable(
+                    enabled = enabledTypes.isNotEmpty(),
+                    shape = CircleShape,
+                    addFocusTarget = false,
+                )
+                .tvDownFocusLink(downFocusLink),
         ) {
             Icon(
                 painter = painterResource(icons[selectedIndex]),

@@ -415,6 +415,7 @@ fun KototoroTopBar(
                                     controlSize = topBarControlHeight,
                                     iconSize = topBarIconSize,
                                     modifier = Modifier.zIndex(1f),
+                                    downFocusLink = contentDownFocus,
                                 )
                             }
                             if (isSourceTagFilterVisible) {
@@ -426,6 +427,7 @@ fun KototoroTopBar(
                                     onTagSelected = onSourceTagSelected,
                                     buttonSize = topBarControlHeight,
                                     iconSize = topBarIconSize,
+                                    downFocusLink = contentDownFocus,
                                     customMenuContent = sourceTagCustomMenuContent,
                                 )
                             }
@@ -451,7 +453,8 @@ fun KototoroTopBar(
                                         modifier = Modifier
                                             .focusRequester(moreMenuAnchorFocus)
                                             .size(topBarControlHeight)
-                                            .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
+                                            .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+                                            .tvDownFocusLink(contentDownFocus),
                                         colors = IconButtonDefaults.iconButtonColors(
                                             containerColor = Color.Transparent,
                                             contentColor = MaterialTheme.colorScheme.onSurface,

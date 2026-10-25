@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarCompactButtonSize
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.adaptive.tvDownFocusLink
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
@@ -55,6 +57,11 @@ fun SourceTagDropdown(
     modifier: Modifier = Modifier,
     buttonSize: Dp = CompactTopBarCompactButtonSize,
     iconSize: Dp = CompactSourceTagIconSize,
+    /**
+     * TV only: the first stop of the page below the bar, so DOWN leaves the chrome instead of falling
+     * through to the navigation rail. It has to land on the focusable button, not [modifier]'s Box.
+     */
+    downFocusLink: FocusRequester? = null,
     customMenuContent: (@Composable ((close: () -> Unit) -> Unit))? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -92,7 +99,8 @@ fun SourceTagDropdown(
                 .tvFocusable(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
                     addFocusTarget = false,
-                ),
+                )
+                .tvDownFocusLink(downFocusLink),
         ) {
             Icon(
                 painter = rememberSafePainter(iconRes),
