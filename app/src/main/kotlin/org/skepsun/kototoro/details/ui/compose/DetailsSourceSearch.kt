@@ -70,6 +70,7 @@ import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.rememberTvTextFieldReadOnlyState
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
@@ -94,6 +95,11 @@ internal fun SourceSearchField(
     modifier: Modifier = Modifier,
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    // A field that raises the keyboard the moment the ring reaches it hijacks the remote: from then on
+    // every key belongs to the IME and the result cards below it cannot be reached. Keep it read-only
+    // until the centre key asks for editing - the same holder the dialog fields use - so DOWN walks
+    // through the field and the keyboard only appears when the viewer means to type.
+    val tvEditing = rememberTvTextFieldReadOnlyState()
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val shape = RoundedCornerShape(if (expressive) 999.dp else 22.dp)
     val searchFieldColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
@@ -128,8 +134,11 @@ internal fun SourceSearchField(
                 onValueChange = onValueChange,
                 modifier = Modifier
                     .fillMaxSize()
-                    .onFocusChanged { isFocused = it.isFocused }.tvTextInputFocusEscape(),
+                    .onFocusChanged { isFocused = it.isFocused }
+                    .then(tvEditing.fieldModifier)
+                    .tvTextInputFocusEscape(),
                 singleLine = true,
+                readOnly = tvEditing.isReadOnly,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
                     color = MaterialTheme.colorScheme.onSurface,
                     lineHeight = MaterialTheme.typography.bodyMedium.fontSize,
