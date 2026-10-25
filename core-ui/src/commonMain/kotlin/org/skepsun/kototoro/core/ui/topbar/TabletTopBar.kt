@@ -34,6 +34,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import org.skepsun.kototoro.core.ui.adaptive.tvDownFocusLink
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.gestures.mouseDragScroll
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
@@ -195,6 +197,10 @@ fun TopBarSearchPillContent(
 /**
  * Android's category tabs rail: the selected tab is kept centred and underlined; [pagePosition] lets a pager
  * slide the underline between tabs while swiping.
+ *
+ * [downFocusRequester] is the TV escape hatch for the rail: the host anchors it on the first stop of the
+ * content it owns below the bar, because the bar is an overlay sibling and the default DOWN search cannot
+ * reach into the page (see [tvDownFocusLink]).
  */
 @Composable
 fun TopBarTabsRail(
@@ -206,6 +212,7 @@ fun TopBarTabsRail(
     horizontalPadding: Dp = 0.dp,
     pagePosition: (() -> Float)? = null,
     itemModifier: (TopBarTabItem) -> Modifier = { Modifier },
+    downFocusRequester: FocusRequester? = null,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
     val listState = rememberLazyListState()
@@ -272,6 +279,7 @@ fun TopBarTabsRail(
                         // layer Material draws for it, which from a sofa is no change at all. Draw
                         // the ring the rest of the TV UI uses, on the same node, before that click.
                         .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
+                        .tvDownFocusLink(downFocusRequester)
                         .clickable { onItemSelected(item.id) }
                         .padding(horizontal = 10.dp),
                     contentAlignment = Alignment.Center,

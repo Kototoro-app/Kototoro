@@ -855,6 +855,7 @@ fun CompactTopBarTabsRail(
     modifier = modifier,
     horizontalPadding = CompactTopBarHorizontalPadding,
     pagePosition = state.pagePosition,
+    downFocusRequester = state.downFocusRequester,
 )
 
 @Composable

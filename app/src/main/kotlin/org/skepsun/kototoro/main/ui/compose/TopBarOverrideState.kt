@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.main.ui.compose
 
+import androidx.compose.ui.focus.FocusRequester
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -15,6 +16,12 @@ data class CompactTabsTopBarOverrideState(
     val onItemSelected: (Long) -> Unit,
     val pagePosition: (() -> Float)? = null,
     val autoExpandOnSelection: Boolean = true,
+    /**
+     * TV only: first stop of the page content, so DOWN on a tab leaves the overlay instead of doing
+     * nothing. The host owns both sides of that seam and passes a requester it also anchors below;
+     * ignored everywhere else (see `tvDownFocusLink`).
+     */
+    val downFocusRequester: FocusRequester? = null,
 ) : TopBarOverrideState
 
 data class CompactFilterRailItem(

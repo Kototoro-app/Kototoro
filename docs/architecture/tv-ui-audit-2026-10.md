@@ -6558,3 +6558,110 @@ dump 复核：`Q10` 焦点 `[210,128][407,224]`、`Q11` 焦点 `[411,128][585,22
 a11y 的 `focused="true"` 只能证明焦点停靠成功，证明不了屏幕上有东西；
 这一轮两个「疑似缺陷」里，一个（章节面板标签环）是旧笔记过期，一个（收藏页标签环）是真的，
 两者的区别只有把同一区域裁剪放大逐像素比才看得出来。
+
+## 第一百轮：顶栏是叠在页面上的兄弟，DOWN 出不了这一层（2026-10-25）
+
+### 起念
+
+第九十九轮留了三条尾巴，第二条是「收藏页从标签行按 DOWN 进不到下面的筛选芯片行」，
+当时的结论是「需要带焦点树日志单独核」。这一轮先去复现它，再决定是修那一页，还是修别处。
+
+### 现场
+
+**一、先把死站钉死。**（`R11`–`R13`）
+
+焦点停在 `Read later`（dump：`[411,128][585,224]`，focused=true），连按三次 DOWN，三次 dump 的焦点矩形
+一字不改。反向却是通的：从芯片行按 UP 能回到 tab。**单向失效**说明问题不在「tab 不可聚焦」，
+而在「tab 往下找不到候选」。
+
+**二、顶栏整体出不去。**（`U13`/`U14`）
+
+从顶栏 ⋮ 按钮（`[1800,16][1896,112]`）按 DOWN，焦点落到 `Read later`（`[411,128][585,224]`）——
+还在顶栏内部；再按 DOWN 就是上面那个死站。也就是说：顶栏里能互相走，走不出去。
+
+**三、不是收藏页的毛病，是接缝的毛病。**（`T21`/`T22`、`W12`/`W13`）
+
+- 首页：从主视觉卡 `[216,144][1096,624]` 按 UP → 搜索框 `[332,16][1692,112]`；
+  再按 DOWN → **左侧导航栏** `[16,296][152,432]`，跳过正下方那张卡，直接飞出页面。
+- 对照：`Search in Favorites` 页（`X30`–`X32`），关掉输入法后 DOWN 从搜索框 `[124,0][1780,96]`
+  → `In Favorites` 芯片 `[32,88][242,184]` → 最近查询行 `[24,286][1896,414]`，**一路通畅**。
+
+同一套顶栏、同一个按键，两页两种结果。差别在焦点树结构（`R11.xml`）：
+
+- 内容列 `View [168,0][1920,1080] scrollable`（芯片行 `[168,224][1920,304]` + 空态文案）；
+- 顶栏 `View [168,0][1920,224]`（搜索行 16–112、标签行 128–224）；
+- 两者是同一个根下的**兄弟**，内容列从 y=0 开始（列表本来就要从玻璃顶栏下面滚过去）。
+
+焦点系统的表现与这一点一致：二维搜索只肯钻进「整体落在按键方向上」的兄弟节点；
+内容列起点在窗口顶端、把 tab 的矩形整个包住，于是这条兄弟被跳过、子树也不搜，
+DOWN 自然找不到候选；反向 UP 能成，是因为从内容列里往上看，顶栏确实整体在它上方。
+（直接 grep 过：`focusProperties` 的显式方向只有 `DetailsHeader`、`SpacesSettingsScreen`、
+`VideoPlayerInfoDialog`、`ReaderOptionsPanelHost` 四处，这一对兄弟之间没有任何手写方向。）
+
+### 改法
+
+新增一个通用件，放在 `core-ui/src/commonMain/.../core/ui/adaptive/TvFocus.kt`：
+
+```kotlin
+@Composable
+fun Modifier.tvDownFocusLink(target: FocusRequester?): Modifier {
+    if (target == null) return this
+    return onPreviewKeyEvent { event ->
+        event.type == KeyEventType.KeyDown &&
+            event.key == Key.DirectionDown &&
+            runCatching { target.requestFocus() }.isSuccess
+    }
+}
+```
+
+`requestFocus()` 不依赖几何，正好绕过上面那条「兄弟被跳过」的规则；`runCatching` 保证目标还没组合出来时
+按键**不被吞掉**，退回默认搜索。`target == null` 时原样返回 `this`，非 TV 组合链一字未动。
+
+接线（跨度是「谁同时拥有接缝两侧」）：
+
+| 文件 | 改动 |
+| --- | --- |
+| `core-ui/.../topbar/TabletTopBar.kt` | `TopBarTabsRail` 新增 `downFocusRequester`，接在 ring 与 `.clickable` 之间 |
+| `app/.../main/ui/compose/TopBarOverrideState.kt` | `CompactTabsTopBarOverrideState.downFocusRequester`（`overrideStateEquivalent` 不比较它，报告环路的判断不受影响） |
+| `app/.../main/ui/compose/KototoroTopBar.kt` | `CompactTopBarTabsRail` 把它透传下去 |
+| `app/.../favourites/ui/compose/FavoritesHostScreen.kt` | 仅 TV 下 `remember { FocusRequester() }`，写进 tab 状态，并传给列表页 |
+| `app/.../favourites/ui/compose/FavoritesListScreen.kt` | `quickFilterFocusRequester` → 排序控件 |
+| `app/.../list/ui/compose/SortOrderControl.kt` | 新增 `focusRequester`，落在芯片行行首的排序图标上 |
+
+收藏页刚好同时拥有两半：标签行来自它写进顶栏的 override state，芯片行来自它自己组合的列表头，
+所以 requester 从它这儿一次性串起来。`HorizontalPager` 的 `beyondViewportPageCount = 1` 会把邻页也组合出来，
+所以只在 `enabled`（当前页）时挂 requester，避免两个节点抢同一个 requester。
+
+为什么不用 `focusProperties { down = … }`：目标没组合时它会对未初始化的 requester 抛异常，
+而 `onPreviewKeyEvent` + `runCatching` 能把「没目标」这种情况干净地还给默认搜索。
+
+### 量出来的差别
+
+| 操作 | 改前 | 改后 |
+| --- | --- | --- |
+| `All favorites` 标签 DOWN | 原地不动（`R12`/`R13`） | 排序控件 `[176,216][268,312]`，蓝色环清楚（`V23`） |
+| `Read later` 标签 DOWN | 原地不动（`R11`） | 同上（`V32`） |
+| 顶栏 ⋮ → DOWN → DOWN | ⋮ → `Read later` → 死站（`U13`/`U14`） | ⋮ → `Read later` → 排序控件（`V43`/`V44`） |
+| 芯片行 UP | 回 tab（本来就通） | 不变（`V30`） |
+| 芯片行 LEFT/RIGHT | 排序控件 ↔ `On device`（`V34`/`V35`） | 不变（`V34`/`V35`） |
+| 空态下排序控件再按 DOWN | — | 停在原地（`V33`）：芯片行下方确实再没有停靠点 |
+
+构建：`:app:assembleDebug` `BUILD SUCCESSFUL in 1m 40s`，安装 `Success`，同一台模拟器复测。
+（`V10`–`V44`、`W10`–`W13`、`X10`–`X32` 是本轮新 dump/截图，`R11`–`R13`、`U13`/`U14`、`T21`/`T22` 是改前的。）
+
+### 顺带发现（未修，留给后面的轮次）
+
+1. 首页那条也在：搜索框 DOWN 落到左侧导航栏而不是正下方的卡（`W12`/`W13`，新包上复测）。
+   完全同因，只是首页没有 tab 行可挂 requester，得给内容区第一张卡单独做锚点。
+2. 收藏页开着书架/有卡片时，「芯片行 → 网格」这一段本轮没量到：这台 AVD 的收藏库是空的，
+   只有空态文案，没法验证网格首行。
+3. `InlineCompactTopBarTabsRail`（MINIMAL 顶栏样式）仍是没有环、也没有 DOWN 出口，与第九十九轮同一条尾巴。
+4. 「Search in Favorites」页里输入法打开时 D-pad 归输入法（`X20`/`X21` 原地不动），
+   这是 `tvTextInputFocusEscape` 文档里写明的既有权衡，不是新缺陷；关掉输入法后立刻恢复（`X31`/`X32`）。
+
+### 教训
+
+「这一页按不到」先别改这一页。这一轮的三个现象（收藏页 tab 死站、顶栏 ⋮ 出不去、首页 DOWN 飞到导航栏）
+看起来是三件互不相干的事，实际是同一个接缝：**顶栏是叠在页面上的兄弟，不是页面的父节点**。
+先找一个「同一套顶栏但内容结构不同」的页面对照（这里是搜索页，一路通畅），
+再接缝处下一个通用件，比逐个页面去改焦点属性快得多，也不会漏掉后面才发现的那两个同因实例。

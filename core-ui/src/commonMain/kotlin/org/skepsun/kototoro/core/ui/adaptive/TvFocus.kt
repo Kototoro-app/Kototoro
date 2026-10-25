@@ -302,6 +302,30 @@ fun Modifier.tvVerticalEdgeGuard(blockUp: Boolean = false, blockDown: Boolean = 
 }
 
 /**
+ * Hands DOWN from a top-bar stop to the first stop of the page below it.
+ *
+ * The top bar is drawn as an overlay *sibling* of the page content (the content scrolls under the
+ * bar), and that content column starts at the very top of the window. Compose's 2D search only
+ * descends into a sibling that lies entirely in the pressed direction, so a column that spans the
+ * focused item is skipped, subtree included: DOWN from the category tabs (or from the search pill)
+ * finds no candidate and the remote reads as dead, while UP from the content back into the bar
+ * still works. Hosts that own both sides of the seam pass a [FocusRequester] anchored on their
+ * first content stop and the press moves there directly.
+ *
+ * The key is left unconsumed when the target is not attached yet (the page has not composed its
+ * header), so the default search still runs and nothing is swallowed.
+ */
+@Composable
+fun Modifier.tvDownFocusLink(target: FocusRequester?): Modifier {
+    if (target == null) return this
+    return onPreviewKeyEvent { event ->
+        event.type == KeyEventType.KeyDown &&
+            event.key == Key.DirectionDown &&
+            runCatching { target.requestFocus() }.isSuccess
+    }
+}
+
+/**
  * Lets a remote leave a focused text field instead of trapping the D-pad inside it.
  *
  * Compose text fields keep the hardware arrow keys for caret movement, so on a TV the up/down

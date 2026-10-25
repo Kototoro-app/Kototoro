@@ -32,6 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
@@ -52,6 +53,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.TextButton
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.favourites.ui.container.FavouriteTabModel
@@ -188,6 +190,7 @@ fun KototoroFavoritesHostRoute(
         pageCount = { displayCategories.size },
     )
     val coroutineScope = rememberCoroutineScope()
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     var initialSelectionApplied by rememberSaveable(initialCategoryId) { mutableStateOf(false) }
     var childTopBarOverrideState by remember { mutableStateOf<TopBarOverrideState?>(null) }
     var childTopBarOverrideGeneration by remember { mutableIntStateOf(-1) }
@@ -203,6 +206,10 @@ fun KototoroFavoritesHostRoute(
         activeCategory?.order ?: allFavoritesSortOrder
     }
 
+    // TV only: the category tabs live in the top-bar overlay, whose DOWN press cannot reach into the
+    // page (the list column starts at the top of the window). This requester is handed to the tabs
+    // through the override state and anchored on the sort control that heads the quick-filter row.
+    val contentTopFocusRequester = remember { if (isTvPresentation) FocusRequester() else null }
     val activeListHost = activeCategoryId?.let { categoryId -> viewModel.listHost(categoryId) }
     LaunchedEffect(activeListHost) {
         if (activeListHost != null && resolvedActiveFavouritesHostRef.value !== activeListHost) {
@@ -234,7 +241,7 @@ fun KototoroFavoritesHostRoute(
         childTopBarOverrideState = null
     }
 
-    val compactTabsState = remember(displayCategories, activePage, allFavouritesLabel) {
+    val compactTabsState = remember(displayCategories, activePage, allFavouritesLabel, contentTopFocusRequester) {
         CompactTabsTopBarOverrideState(
             items = displayCategories.map {
                 CompactTopBarTabItem(
@@ -253,6 +260,7 @@ fun KototoroFavoritesHostRoute(
                 (pagerState.currentPage + pagerState.currentPageOffsetFraction)
                     .coerceIn(0f, (displayCategories.size - 1).coerceAtLeast(0).toFloat())
             },
+            downFocusRequester = contentTopFocusRequester,
         )
     }
 
@@ -376,6 +384,7 @@ fun KototoroFavoritesHostRoute(
                         onFilterRailOverrideChanged = {},
                         libraryQuery = libraryQuery,
                         onClearLibraryQuery = viewModel::clearLibraryQuery,
+                        quickFilterFocusRequester = contentTopFocusRequester?.takeIf { enabled },
                     )
                 }
             }
