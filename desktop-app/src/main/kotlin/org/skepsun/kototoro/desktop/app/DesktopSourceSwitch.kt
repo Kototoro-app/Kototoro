@@ -30,3 +30,24 @@ fun filterSourceSwitchEntries(
         }
     }
 }
+
+/**
+ * Android's selection state, which both hosts keep outside the model: a tapped source joins or leaves the set, and an
+ * empty set is what ends selection mode (the bar disappears and the rows are switches again).
+ */
+fun toggleSourceSelection(selected: Set<String>, sourceName: String): Set<String> =
+    if (sourceName in selected) selected - sourceName else selected + sourceName
+
+/**
+ * Android's 全选 chip, which reads 取消全选 once the whole visible list is in the selection. Only the rows the search
+ * and the enabled filter left on screen take part, exactly like the bulk enable/disable pair above them.
+ */
+fun toggleVisibleSourceSelection(selected: Set<String>, entries: List<SourceListing>): Set<String> {
+    val visible = entries.mapTo(LinkedHashSet(entries.size)) { it.source.name }
+    if (visible.isEmpty()) return selected
+    return if (visible.all { it in selected }) selected - visible else selected + visible
+}
+
+/** Whether the 全选 chip reads 取消全选: an empty list is not "all selected". */
+fun everyVisibleSourceSelected(selected: Set<String>, entries: List<SourceListing>): Boolean =
+    entries.isNotEmpty() && entries.all { it.source.name in selected }

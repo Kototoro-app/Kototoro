@@ -2196,16 +2196,20 @@ class DesktopController(
     }
 
     /**
-     * Starts a run over the sources the browse rail offers (Android tests the enabled ones; `state.sources` is exactly
-     * that set). It is *not* an [action]: the run can take minutes and must stay cancellable from its own page while
-     * the rest of the window keeps rendering, so its progress lives in [DesktopSourceTester.progress] and the page
-     * collects it directly, the way the GitHub mirror sweep works.
+     * Starts a run over the sources the browse rail offers (Android tests the enabled ones, which is
+     * [DesktopAppState.enabledSources]), or over exactly the names [sources] lists when the switch dialog's selection
+     * asked for a few of them — Android's `testSources(selectedSourceIds)`. A selection can include sources the user
+     * switched off, so the pool is the installed list, not the offered one. It is *not* an [action]: the run can take
+     * minutes and must stay cancellable from its own page while the rest of the window keeps rendering, so its
+     * progress lives in [DesktopSourceTester.progress] and the page collects it directly, the way the GitHub mirror
+     * sweep works.
      */
-    fun startSourceTest() {
+    fun startSourceTest(sources: Collection<String>? = null) {
         if (sourceTestJob?.isActive == true) return
-        val targets = mutableState.value.enabledSources.map {
-            SourceTestTarget(it.source.name, it.displayName)
-        }
+        val state = mutableState.value
+        val names = sources?.toSet()
+        val chosen = if (names == null) state.enabledSources else state.sources.filter { it.source.name in names }
+        val targets = chosen.map { SourceTestTarget(it.source.name, it.displayName) }
         if (targets.isEmpty()) return
         sourceTestJob = scope.launch { sourceTester.testAll(targets) }
     }

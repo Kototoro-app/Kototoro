@@ -15,8 +15,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -32,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.settings.SettingsActionRow
 import org.skepsun.kototoro.core.ui.settings.SettingsGroup
@@ -469,8 +472,20 @@ private fun SourceSwitchDialog(
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf(DesktopSourceEnabledFilter.ALL) }
     var pendingBatch by remember { mutableStateOf<Boolean?>(null) }
+    // Android's `selectedSourceIds` with its own lifetime: a tap on a source in selection mode joins or leaves the set,
+    // an empty set ends the mode, and the rows are switches again — exactly Android's `isSelectionMode`.
+    var selected by remember { mutableStateOf(emptySet<String>()) }
+    val selecting = selected.isNotEmpty()
     val entries = remember(state.sources, state.disabledSources, query, filter) {
         filterSourceSwitchEntries(state.sources, query, filter, state.disabledSources)
+    }
+    // Android's per-selection bulk primitive: one write for the whole selection and the mode ends with it. The filter
+    // follows the side the rows moved to, the same rule the confirmation below follows, so the result stays on screen
+    // instead of vanishing right after the user pressed the button.
+    fun applySelection(enable: Boolean, names: Set<String>) {
+        controller.setSourcesEnabled(names, enable)
+        selected = emptySet()
+        filter = if (enable) DesktopSourceEnabledFilter.ENABLED else DesktopSourceEnabledFilter.DISABLED
     }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -503,34 +518,114 @@ private fun SourceSwitchDialog(
                     LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp).testTag("source-enable-list")) {
                         itemsIndexed(entries, key = { _, listing -> listing.source.name }) { index, listing ->
                             if (index > 0) SettingsRowDivider()
-                            SettingsSwitchRow(
-                                title = listing.displayName,
-                                summary = listOf(
-                                    DesktopSourceLabels.contentType(listing.source.contentType),
-                                    DesktopSourceLabels.ecosystem(listing.ecosystem),
-                                    listing.source.locale,
-                                ).joinToString(" · "),
-                                checked = listing.source.name !in state.disabledSources,
-                                enabled = enabled,
-                                onCheckedChange = { controller.setSourceEnabled(listing.source.name, it) },
-                                testTag = "source-enabled:${listing.source.name}",
-                            )
+                            val name = listing.source.name
+                            val summary = listOf(
+                                DesktopSourceLabels.contentType(listing.source.contentType),
+                                DesktopSourceLabels.ecosystem(listing.ecosystem),
+                                listing.source.locale,
+                            ).joinToString(" · ")
+                            if (selecting) {
+                                // Android shares one row for both modes: in selection mode the whole row is the
+                                // checkbox, so a tap joins or leaves the selection instead of flipping the switch.
+                                val isSelected = name in selected
+                                SettingsActionRow(
+                                    title = listing.displayName,
+                                    summary = summary,
+                                    modifier = Modifier
+                                        .toggleable(
+                                            value = isSelected,
+                                            enabled = enabled,
+                                            role = Role.Checkbox,
+                                        ) { selected = toggleSourceSelection(selected, name) }
+                                        .testTag("source-selected:$name"),
+                                ) {
+                                    Checkbox(checked = isSelected, onCheckedChange = null, enabled = enabled)
+                                }
+                            } else {
+                                SettingsSwitchRow(
+                                    title = listing.displayName,
+                                    summary = summary,
+                                    checked = name !in state.disabledSources,
+                                    enabled = enabled,
+                                    onCheckedChange = { controller.setSourceEnabled(name, it) },
+                                    testTag = "source-enabled:$name",
+                                )
+                            }
                         }
                     }
                 }
-                // The bulk pair also follows the filter, like Android's confirmation counts it does. Its labels are
-                // Android's toolbar pair (Enable all / Disable all), not the chips' 启用/禁用, which are filters here.
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Android's selection bar, in its own order: the count, 全选/取消全选, then the actions. 全选 doubles as
+                // the only way into selection mode here — Android enters it with a long press, which a mouse user has
+                // no reason to try on a settings row.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     TextButton(
-                        onClick = { pendingBatch = true },
-                        enabled = enabled && entries.any { it.source.name in state.disabledSources },
-                        modifier = Modifier.testTag("source-switches-enable-all"),
-                    ) { Text(AndroidStrings["unified_sources_enable_all"]) }
-                    TextButton(
-                        onClick = { pendingBatch = false },
-                        enabled = enabled && entries.any { it.source.name !in state.disabledSources },
-                        modifier = Modifier.testTag("source-switches-disable-all"),
-                    ) { Text(AndroidStrings["unified_sources_disable_all"]) }
+                        onClick = { selected = toggleVisibleSourceSelection(selected, entries) },
+                        enabled = enabled && entries.isNotEmpty(),
+                        modifier = Modifier.testTag("source-selection-all"),
+                    ) {
+                        val all = everyVisibleSourceSelected(selected, entries)
+                        Text(AndroidStrings[if (all) "deselect_all" else "select_all"])
+                    }
+                    if (selecting) {
+                        Text(
+                            text = AndroidStrings.format("selected_count", selected.size),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.testTag("source-selection-count"),
+                        )
+                    }
+                }
+                if (selecting) {
+                    // Android's `onEnableSelectedSources`/`onDisableSelectedSources`/`onTestSelectedSources`: one write
+                    // for the whole selection, and the mode ends with it.
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(
+                            onClick = { applySelection(true, selected) },
+                            enabled = enabled,
+                            modifier = Modifier.testTag("source-selection-enable"),
+                        ) { Text(AndroidStrings["enable"]) }
+                        TextButton(
+                            onClick = { applySelection(false, selected) },
+                            enabled = enabled,
+                            modifier = Modifier.testTag("source-selection-disable"),
+                        ) { Text(AndroidStrings["disable"]) }
+                        TextButton(
+                            onClick = {
+                                val names = selected.toList()
+                                selected = emptySet()
+                                onDismiss()
+                                // The tester owns its own page and forgets a stale run on entry, so navigate first
+                                // and start the run over the selection (Android's `testSources(ids)`).
+                                controller.showSourceTest()
+                                controller.startSourceTest(names)
+                            },
+                            enabled = enabled,
+                            modifier = Modifier.testTag("source-selection-test"),
+                        ) { Text(AndroidStrings["source_test_action"]) }
+                        TextButton(
+                            onClick = { selected = emptySet() },
+                            enabled = enabled,
+                            modifier = Modifier.testTag("source-selection-close"),
+                        ) { Text(desktopText("common.cancel")) }
+                    }
+                } else {
+                    // The bulk pair also follows the filter, like Android's confirmation counts it does. Its labels are
+                    // Android's toolbar pair (Enable all / Disable all), not the chips' 启用/禁用, which are filters here.
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(
+                            onClick = { pendingBatch = true },
+                            enabled = enabled && entries.any { it.source.name in state.disabledSources },
+                            modifier = Modifier.testTag("source-switches-enable-all"),
+                        ) { Text(AndroidStrings["unified_sources_enable_all"]) }
+                        TextButton(
+                            onClick = { pendingBatch = false },
+                            enabled = enabled && entries.any { it.source.name !in state.disabledSources },
+                            modifier = Modifier.testTag("source-switches-disable-all"),
+                        ) { Text(AndroidStrings["unified_sources_disable_all"]) }
+                    }
                 }
             }
         },

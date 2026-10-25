@@ -203,6 +203,26 @@ internal object DesktopRepositoriesProbe {
                     check(controller.state.value.disabledSources.isEmpty())
                     onNodeWithTag(switchTag).assertIsOn()
                     onNodeWithTag("source-enabled-filter:ALL").performClick(); idle()
+                    // Android's selection bar (§192): 全选 enters selection mode and picks the visible rows, a tap on a
+                    // row joins or leaves the selection, and the two action buttons write the whole selection at once.
+                    onNodeWithTag("source-selection-all").performClick(); idle()
+                    onNodeWithTag("source-selected:${installedSourceName()}").assertExists()
+                    onNodeWithTag("source-selection-count").assertExists()
+                    // Deselecting the only row ends the mode and writes nothing: the rows are switches again.
+                    onNodeWithTag("source-selected:${installedSourceName()}").performClick(); idle()
+                    onNodeWithTag("source-selected:${installedSourceName()}").assertDoesNotExist()
+                    check(controller.state.value.disabledSources.isEmpty())
+                    onNodeWithTag("source-selection-all").performClick(); idle()
+                    snapshotTag("source-switch-dialog", "selection")
+                    onNodeWithTag("source-selection-disable").performClick(); idle()
+                    check(controller.state.value.disabledSources == setOf(installedSourceName()))
+                    // The write ended the mode, and the filter followed the row to the side it moved to.
+                    onNodeWithTag("source-selected:${installedSourceName()}").assertDoesNotExist()
+                    onNodeWithTag(switchTag).assertIsOff()
+                    onNodeWithTag("source-selection-all").performClick(); idle()
+                    onNodeWithTag("source-selection-enable").performClick(); idle()
+                    check(controller.state.value.disabledSources.isEmpty())
+                    onNodeWithTag("source-enabled-filter:ALL").performClick(); idle()
                     onNodeWithTag("source-enable-list").performScrollToNode(hasTestTag(switchTag))
                     onNodeWithTag(switchTag).assertIsOn()
                     snapshotTag("source-switch-dialog", "sources")

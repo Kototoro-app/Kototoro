@@ -8019,7 +8019,8 @@ Android 的“源”页（`UnifiedSourcesScreen`）里每个来源带一个开�
 `:desktop-app:test --tests *SourceSwitch*`（7 条）、`--tests *SuggestionSources*`（6 条）、
 `--tests *repository*`（write+read 双进程全绿）、`--tests *CMS*`（JSON 源页面）全绿。
 
-仍待：Android 选择栏的其余动作（选中若干来源后测速/删除/切换 NSFW）在 Windows 还没有选中态；来源总览的
+仍待：Android 选择栏的其余动作（选中若干来源后删除/切换 NSFW）在 Windows 还没有对应能力——选中态本身、批量
+启用/禁用与“测试选中来源”已由 §192 补上；来源总览的
 “全部启用/禁用”是筛选+批量，Windows 目前只在开关对话框里提供同一能力。
 
 ## 176. 远程来源 · 插件去重优先级（对齐 Android `jar_priority_order`，规则下沉 core-domain）（2026-10-24）
@@ -8760,3 +8761,43 @@ Android 的详情页在简介/标签下面还有一条“相关作品”（`deta
 与 Android 不同的地方：Android 的相关列表是 Compose 的 `LazyRow` 而不是分页，Windows 同样一次只取一组结果；
 “什么算作品自己”的判断现在是同一份 `RelatedWorkRules`，Windows 只多一层去重；Android 还有“浏览记录推荐”
 （`browse_tracking_recommendations`）那条来源，它依赖整个 tracking-discovery 子系统，桌面仍然没有。
+
+## 192. 来源开关对话框的选中态：全选 + 批量启用/禁用/测试选中来源（对齐 Android `UnifiedSourceSelectionBar`）（2026-10-25）
+
+§174–§175 把 Android 来源开关的逐行开关与“按当前筛选结果全部启用/禁用”搬进 Windows 之后，统一来源页还剩一条能力：
+Android 长按来源卡进入选中模式，整条工具栏换成 `已选 N` / 全选 / 启用 / 禁用 / NSFW / 测试 / 删除
+（`UnifiedSourcesScreenBody.UnifiedSourceSelectionBar`）。这一节补上其中除删除与 NSFW 之外的三项。
+
+- 纯规则写在 `DesktopSourceSwitch.kt`（与 §175 的 `filterSourceSwitchEntries` 同一文件）：
+  `toggleSourceSelection(selected, name)` 点一下加入、再点移出，**空集合就是退出选中模式**（对应 Android 的
+  `isSelectionMode = selectedSourceIds.isNotEmpty()`）；`toggleVisibleSourceSelection(selected, entries)` 是 Android 的
+  全选芯片——可见行全在集合里就整体移出，否则全部加入，空列表原样返回；`everyVisibleSourceSelected(selected, entries)`
+  决定芯片读“全选”还是“取消全选”，空列表不算全选。只有搜索与启用筛选留下的行参与，和上面那对
+  “全部启用/禁用”用的是同一份 `entries`。
+- `DesktopSourceSwitchTest` 增四条：加入/移出/清空；全选只覆盖可见行且能整体退回（查询把第三行筛掉时点全选不会带上它）；
+  空列表既不全选也原样返回；标签只在可见行全选中时翻转（选中里混着被筛掉的行仍读“取消全选”，因为全选只代表这份列表）。
+  该类合计 11 条。
+- 入口与 Android 有意不同：Android 靠长按来源卡进入选中模式，鼠标用户没有理由在设置行上试长按，所以 Windows 的
+  “全选”按钮兼作入口——点一下即进入选中模式并选中全部可见行。进入后行换成整行 `Role.Checkbox` 切换
+  （`source-selected:<name>` 是行，右侧是 `Checkbox`），再点“全选”读作“取消全选”；退出是“取消”
+  （`source-selection-close`）或把选中清空。计数用 Android 的 `selected_count`（`source-selection-count`）。
+- 选中态的三个动作都是 Android 的：启用/禁用直接走 §175 已有的 `setSourcesEnabled(names, enabled)`（整批一次写盘、
+  一次状态刷新，“正在浏览的来源被关掉就退出浏览”这条对选中同样成立），写完清空选中并按结果切换筛选
+  （与确认框那条规则一致，否则刚点完按钮列表就空了）。测试那一个先 `showSourceTest()`（进页面前重置上一次结果）
+  再 `startSourceTest(names)`：`DesktopController.startSourceTest` 现在收一个可选的名字集合，对应 Android 的
+  `testSources(selectedSourceIds)`（默认仍只跑已启用来源）；池子取 `state.sources`（已装）而不是 `enabledSources`，
+  所以选中里可以有被关掉的来源，与 Android 选中列表一致。
+- 删除与“切换 NSFW”这一片没做：Android 的删除要先按安装包折叠成 `UnifiedSelectedSourceDeletePlan`（选中若干来源 →
+  删掉声明它们的那个包），NSFW 需要一层每来源的覆盖开关（Windows 现在的 `isNsfwSource()` 是从 `contentType` 推
+  `HENTAI_`，没有可写的偏好），两者都留待下一片。
+- 探针（`DesktopRepositoriesProbe` 的 write 阶段）：`全选` → 出现 `source-selected:<name>` 与 `已选 1`
+  （截图 `repositories-write-selection.png`），再点该行即退出模式且什么都没写；`全选` → `禁用` →
+  `disabledSources` 恰为那一个、选中行消失、筛选跟到“已禁用”且开关是关的；`全选` → `启用` → `disabledSources` 清空；
+  最后切回“全部”继续原来那条单开关路径。
+
+验证：
+
+- `:desktop-app:test --tests=*SourceSwitch*`：`DesktopSourceSwitchTest` 11 条（含新增四条）全绿。
+- `:desktop-app:test`：51 个套件 / 282 个用例（此前 278 + 新增 4）/ 0 失败；`:desktop-runtime:test`
+  28 个套件 / 181 个用例 / 0 失败；`:desktop-app:verifyDesktopStrings` 通过（文案全用 Android 键，
+  桌面 catalog 未增删，仍是 958 键）。

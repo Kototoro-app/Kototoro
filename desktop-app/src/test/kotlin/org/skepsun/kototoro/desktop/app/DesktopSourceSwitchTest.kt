@@ -86,4 +86,40 @@ class DesktopSourceSwitchTest {
             filterSourceSwitchEntries(sources, " BETA ", DesktopSourceEnabledFilter.DISABLED, disabled),
         )
     }
+
+    @Test
+    fun `a tapped row joins the selection and tapping it again leaves it`() {
+        val once = toggleSourceSelection(emptySet(), "alpha")
+        assertEquals(setOf("alpha"), once)
+        assertEquals(setOf("alpha", "beta"), toggleSourceSelection(once, "beta"))
+        assertEquals(setOf("beta"), toggleSourceSelection(setOf("alpha", "beta"), "alpha"))
+        assertEquals(emptySet<String>(), toggleSourceSelection(setOf("beta"), "beta"))
+    }
+
+    @Test
+    fun `select all covers the visible rows and toggles back to none of them`() {
+        val sources = listOf(alpha, beta, gamma)
+        // The query left gamma out, so 全选 must not reach it: only the rows on screen take part.
+        val visible = filterSourceSwitchEntries(sources, "a", DesktopSourceEnabledFilter.ENABLED, setOf("gamma"))
+        assertEquals(listOf(alpha, beta), visible)
+        val picked = toggleVisibleSourceSelection(setOf("gamma"), visible)
+        assertEquals(setOf("alpha", "beta", "gamma"), picked)
+        assertEquals(setOf("gamma"), toggleVisibleSourceSelection(picked, visible))
+    }
+
+    @Test
+    fun `an empty list is never all selected`() {
+        assertEquals(emptySet<String>(), toggleVisibleSourceSelection(emptySet(), emptyList()))
+        assertEquals(false, everyVisibleSourceSelected(emptySet(), emptyList()))
+    }
+
+    @Test
+    fun `the select all label flips only once every visible row is picked`() {
+        val sources = listOf(alpha, beta)
+        assertEquals(false, everyVisibleSourceSelected(emptySet(), sources))
+        assertEquals(false, everyVisibleSourceSelected(setOf("alpha"), sources))
+        assertEquals(true, everyVisibleSourceSelected(setOf("alpha", "beta"), sources))
+        // A selection that also holds a row the filter hid still reads 取消全选, because 全选 only speaks for the list.
+        assertEquals(true, everyVisibleSourceSelected(setOf("alpha", "beta", "gamma"), sources))
+    }
 }
