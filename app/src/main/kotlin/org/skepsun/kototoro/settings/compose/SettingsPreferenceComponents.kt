@@ -1099,13 +1099,33 @@ fun SettingsDialogTextPreference(
                 )
             },
             dismissButton = {
-                SettingsDialogActionButton(
-                    text = stringResource(android.R.string.cancel),
-                    onClick = {
-                        isSuggestionsExpanded = false
-                        isDialogVisible = false
-                    },
-                )
+                val cancel = @Composable {
+                    SettingsDialogActionButton(
+                        text = stringResource(android.R.string.cancel),
+                        onClick = {
+                            isSuggestionsExpanded = false
+                            isDialogVisible = false
+                        },
+                    )
+                }
+                if (isTvPresentation) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        cancel()
+                        // A remote cannot select all and delete, and the TV keyboard only offers one
+                        // backspace at a time, so emptying a stored value - a mirror URL, an API key,
+                        // "1080p, 720p, 480p" - meant seventeen deletes through a keyboard that covers
+                        // this very button row. Clear sits between Cancel and OK because that is the
+                        // row the remote already walks: the field's exit lands on OK and the rest are
+                        // one LEFT away. It stays enabled even on an empty value on purpose; disabling
+                        // it would remove the focus target from under the ring mid-dialog.
+                        SettingsDialogActionButton(
+                            text = stringResource(R.string.clear),
+                            onClick = { pendingValue = "" },
+                        )
+                    }
+                } else {
+                    cancel()
+                }
             },
         )
     }
