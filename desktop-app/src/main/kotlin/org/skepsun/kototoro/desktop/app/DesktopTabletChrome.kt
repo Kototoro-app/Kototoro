@@ -306,6 +306,7 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                 }
                 DesktopDetailsInfo(content, enabled = !state.busy, warnings = state.sourceSettings,
                     readingTime = state.detailsReadingTime)
+                DesktopDetailsRelated(controller, state)
             }
         }
         var tab by remember(content.id) { mutableStateOf(DesktopDetailsTab.CHAPTERS) }

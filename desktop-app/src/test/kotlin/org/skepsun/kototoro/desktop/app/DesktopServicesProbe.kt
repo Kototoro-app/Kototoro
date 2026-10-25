@@ -115,6 +115,17 @@ internal object DesktopServicesProbe {
                         substring = true)
                 }
 
+                // §191: Android's related works. This host's Mihon source has no related API, so the page searches the
+                // source with the work's title and keeps the hits that name it — the fallback Android uses too.
+                waitUntil(timeoutMillis = 20_000) { !controller.state.value.relatedLoading }
+                idle()
+                check(controller.state.value.relatedWorks.isNotEmpty()) {
+                    "related search found nothing for ${details.title} ${details.url}"
+                }
+                onNodeWithTag("details-related").performScrollTo().assertExists()
+                onNodeWithTag("details-related:${controller.state.value.relatedWorks.first().id}").assertExists()
+                snapshot("details-related")
+
                 // 更多 keeps one 服务 row; the two entries moved onto the page behind it.
                 onNodeWithTag("nav:更多").performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.MORE }
@@ -124,12 +135,29 @@ internal object DesktopServicesProbe {
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.SERVICES }
                 idle()
                 onNodeWithTag("settings-recommendations-open").performScrollTo().assertExists()
+                onNodeWithTag("services-related-manga").assertExists()
+                onNodeWithText(AndroidStrings["related_manga"]).assertExists()
+                onNodeWithText(AndroidStrings["related_manga_summary"]).assertExists()
                 onNodeWithTag("services-stats-open").assertExists()
                 onNodeWithText(AndroidStrings["reading_stats"]).assertExists()
                 onNodeWithTag("services-reading-time").assertExists()
                 onNodeWithText(AndroidStrings["reading_time_estimation"]).assertExists()
                 onNodeWithText(AndroidStrings["reading_time_estimation_summary"]).assertExists()
                 snapshot("services-page")
+
+                // §191: 相关漫画 is Android's `related_manga`. Off empties the open page's rail and stores the key; back on
+                // fills it again without reopening the details (the wrong way round would leave a dead switch behind).
+                onNodeWithTag("services-related-manga").performClick(); idle()
+                check(!controller.state.value.services.relatedContent) { "the switch turned related works off" }
+                check(controller.state.value.relatedWorks.isEmpty()) { "the rail emptied with the switch" }
+                check((session.storage.preferences.open("desktop_services").snapshot()["related_manga"]
+                    as? SourcePreferenceValue.Toggle)?.value == false) { "related_manga was stored under Android's key" }
+                onNodeWithTag("services-related-manga").performClick()
+                waitUntil(timeoutMillis = 20_000) {
+                    !controller.state.value.relatedLoading && controller.state.value.relatedWorks.isNotEmpty()
+                }
+                idle()
+                snapshot("services-page-related-on")
 
                 // Android's split row: the switch alone records or stops recording; the label opens the statistics screen.
                 onNodeWithTag("services-stats-enabled").performClick(); idle()
@@ -172,6 +200,10 @@ internal object DesktopServicesProbe {
                 onNodeWithTag("services-stats-enabled").assertExists()
                 onNodeWithTag("services-reading-time").performScrollTo().assertExists()
                 snapshot("services-page-reading-time-off")
+
+                // Leave related works off so the read phase proves the key survives a restart.
+                onNodeWithTag("services-related-manga").performScrollTo().performClick(); idle()
+                check(!controller.state.value.services.relatedContent) { "related works were switched back off" }
             }
         } finally {
             session.close()
@@ -186,8 +218,10 @@ internal object DesktopServicesProbe {
             val settings = DesktopServicesSettings.from(stored)
             check(settings.statsEnabled) { "stats_on came back on" }
             check(!settings.readingTimeEstimation) { "reading_time came back off" }
+            check(!settings.relatedContent) { "related_manga came back off" }
             check((stored["stats_on"] as? SourcePreferenceValue.Toggle)?.value == true)
             check((stored["reading_time"] as? SourcePreferenceValue.Toggle)?.value == false)
+            check((stored["related_manga"] as? SourcePreferenceValue.Toggle)?.value == false)
             val controller = DesktopController(session)
             check(controller.state.value.services == settings) { "the page reads the stored switches" }
             check(session.library.statsRecording) { "the library follows stats_on at start" }        } finally {

@@ -24,10 +24,11 @@ import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
  * Android keeps them under one 服务 page, together with the switches that decide what the reader records, so 更多 goes
  * back to being a list of pages and this page owns the choices.
  *
- * The rows follow Android's order: the recommendations entry, 阅读统计 as a split row — the title opens the statistics
- * screen while the switch alone starts or stops recording — then 阅读时间估算, whose estimate the details page shows.
- * Android's remaining rows (browse-tracking carousels, related works, Discord RPC) have no Windows behaviour yet, so they
- * are not drawn: a switch that gates nothing would be worse than a missing row.
+ * The rows follow Android's order: the recommendations entry, 相关漫画 — which decides whether the details page asks the
+ * source for related works — then 阅读统计 as a split row (the title opens the statistics screen while the switch alone
+ * starts or stops recording), then 阅读时间估算, whose estimate the details page shows. Android's remaining rows
+ * (browse-tracking carousels, Discord RPC) have no Windows behaviour yet, so they are not drawn: a switch that gates
+ * nothing would be worse than a missing row.
  */
 @Composable
 internal fun DesktopServicesPage(controller: DesktopController, state: DesktopAppState) {
@@ -47,6 +48,11 @@ internal fun DesktopServicesPage(controller: DesktopController, state: DesktopAp
             SettingsValueRow(AndroidStrings["suggestions"], recommendationsSummary, null, active,
                 { controller.showRecommendations() }, testTag = "settings-recommendations-open",
                 leadingIcon = painterResource("icons/ic_suggestion.svg"))
+            SettingsRowDivider()
+            SettingsSwitchRow(AndroidStrings["related_manga"], AndroidStrings["related_manga_summary"],
+                settings.relatedContent, active,
+                { controller.servicesSettings(settings.copy(relatedContent = it)) },
+                testTag = "services-related-manga")
             SettingsRowDivider()
             // Android's split preference: the label opens the statistics screen, the switch turns recording on or off.
             SettingsSplitSwitchRow(AndroidStrings["reading_stats"], statsSummary,

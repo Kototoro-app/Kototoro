@@ -9,8 +9,8 @@ import org.skepsun.kototoro.core.source.SourcePreferences
 
 /**
  * Android's services switches that have a Windows meaning today, with Android's own keys: `stats_on` decides whether
- * the reader's tracker writes statistics rows at all, and `reading_time` decides whether the details page shows the
- * estimate built from them.
+ * the reader's tracker writes statistics rows at all, `reading_time` decides whether the details page shows the
+ * estimate built from them, and `related_manga` decides whether the details page asks the source for related works.
  *
  * Android keeps both in the same preferences file as everything else; Windows gives them their own store
  * (`desktop_services`) so the services page does not rewrite the appearance, library or source documents.
@@ -20,10 +20,13 @@ data class DesktopServicesSettings(
     val statsEnabled: Boolean = true,
     /** Android's `reading_time`: the details page's estimated time left, see [desktopReadingTime]. */
     val readingTimeEstimation: Boolean = true,
+    /** Android's `related_manga`: the details page's 相关作品 rail, see [desktopRelatedWorks]. */
+    val relatedContent: Boolean = true,
 ) {
     fun toPreferences(): Map<String, SourcePreferenceValue?> = mapOf(
         KEY_STATS_ENABLED to SourcePreferenceValue.Toggle(statsEnabled),
         KEY_READING_TIME to SourcePreferenceValue.Toggle(readingTimeEstimation),
+        KEY_RELATED_CONTENT to SourcePreferenceValue.Toggle(relatedContent),
     )
 
     companion object {
@@ -33,10 +36,14 @@ data class DesktopServicesSettings(
         /** Android's `AppSettings.KEY_READING_TIME`. */
         const val KEY_READING_TIME = "reading_time"
 
+        /** Android's `AppSettings.KEY_RELATED_MANGA`. */
+        const val KEY_RELATED_CONTENT = "related_manga"
+
         fun from(values: Map<String, SourcePreferenceValue>) = DesktopServicesSettings(
-            // Android reads both with a `true` default, so a fresh profile records statistics and shows the estimate.
+            // Android reads all three with a `true` default, so a fresh profile is fully switched on.
             statsEnabled = (values[KEY_STATS_ENABLED] as? SourcePreferenceValue.Toggle)?.value ?: true,
             readingTimeEstimation = (values[KEY_READING_TIME] as? SourcePreferenceValue.Toggle)?.value ?: true,
+            relatedContent = (values[KEY_RELATED_CONTENT] as? SourcePreferenceValue.Toggle)?.value ?: true,
         )
     }
 }

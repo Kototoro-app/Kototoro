@@ -13,6 +13,8 @@ import kotlinx.datetime.TimeZone
 import org.skepsun.kototoro.core.library.LibraryContentStats
 import org.skepsun.kototoro.core.library.LibraryReadingStats
 import org.skepsun.kototoro.core.dictionary.DictionaryRule
+import org.skepsun.kototoro.details.domain.RelatedCandidate
+import org.skepsun.kototoro.details.domain.RelatedContentRules
 import org.skepsun.kototoro.core.replace.ReplaceRule
 import org.skepsun.kototoro.core.source.*
 import org.skepsun.kototoro.tracker.domain.completePendingUpdates
@@ -45,6 +47,7 @@ import org.skepsun.kototoro.desktop.runtime.DesktopNavigationSettings
 import org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings
 import org.skepsun.kototoro.desktop.runtime.desktopReadChapterIds
 import org.skepsun.kototoro.desktop.runtime.desktopReadSavedChapters
+import org.skepsun.kototoro.desktop.runtime.desktopRelatedWorks
 import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
 import org.skepsun.kototoro.extensions.repo.ExtensionStoreIndex
 import org.skepsun.kototoro.core.ui.chapters.ChapterBranchLocale
@@ -166,6 +169,13 @@ data class DesktopAppState(
      * enough to estimate; null keeps the row off the page.
      */
     val detailsReadingTime: org.skepsun.kototoro.desktop.runtime.DesktopReadingTime? = null,
+    /**
+     * Android's related works for the open details: what the source answered, or the search fallback the Mihon host
+     * needs. Empty while the rail loads or when `related_manga` is off, which keeps the section off the page.
+     */
+    val relatedWorks: List<SourceContent> = emptyList(),
+    /** True while [DesktopController.details] asks the source for [relatedWorks] in the background. */
+    val relatedLoading: Boolean = false,
     /** Home's history row; separate from [library], which the favourites/history pages own. */
     val homeHistory: DesktopLibrarySnapshot = DesktopLibrarySnapshot(),
     /** Android's feed read model (update logs and works with pending new chapters). */
@@ -360,6 +370,8 @@ class DesktopController(
     private var autoBackupJob: Job? = null
     private var autoRestoreJob: Job? = null
     private var mirrorProbeJob: Job? = null
+    /** The related-works request of the open details; a new details cancels the old one. */
+    private var relatedJob: Job? = null
 
     init {
         // The saved language applies before the first screen is composed; `--lang` outranks it for this run.
@@ -1101,6 +1113,69 @@ class DesktopController(
         mutableState.update { it.copy(screen = DesktopScreen.DETAILS, content = details,
             detailsOrigin = origin, detailsExpanded = false, isFavourite = favourite, chapterBranch = branch,
             detailsChapterId = chapterId, bookmarks = bookmarks, detailsReadingTime = readingTime) }
+        loadRelatedWorks(details)
+    }
+
+    /**
+     * Android's `RelatedContentUseCase` for the open details, off the operation gate: a related request or its search
+     * fallback takes as long as the source does, and the page must stay usable while it runs. The rail is cleared first
+     * so a previous work's list cannot be mistaken for this one's.
+     */
+    private fun loadRelatedWorks(content: SourceContent) {
+        relatedJob?.cancel()
+        if (!state.value.services.relatedContent) {
+            mutableState.update { it.copy(relatedWorks = emptyList(), relatedLoading = false) }
+            return
+        }
+        mutableState.update { it.copy(relatedWorks = emptyList(), relatedLoading = true) }
+        relatedJob = scope.launch {
+            val works = relatedWorksOnIo(content)
+            mutableState.update {
+                // A newer details may have opened while this ran; only write back for the work still on screen.
+                if (it.content?.id != content.id || it.content.source.name != content.source.name) it
+                else it.copy(relatedWorks = works, relatedLoading = false)
+            }
+        }
+    }
+
+    /** The source's own related list when the host can answer, Android's title search when it cannot. */
+    private suspend fun relatedWorksOnIo(seed: SourceContent): List<SourceContent> {
+        val related = relatedAttempt { session.sources.getRelated(seed) }.orEmpty()
+        val candidates = related.takeIf { it.isNotEmpty() } ?: relatedSearchOnIo(seed)
+        return desktopRelatedWorks(seed, candidates)
+    }
+
+    /**
+     * `RelatedContentSearchFallback` over the shared source search: the work's titles, the results that name the work,
+     * and the narrowest result set (Android's rule). A Mihon extension has no related API on this host, so this is the
+     * only route to related works for most Windows sources.
+     */
+    private suspend fun relatedSearchOnIo(seed: SourceContent): List<SourceContent> {
+        val queries = RelatedContentRules.searchQueries(seed.title, seed.altTitles)
+        if (queries.isEmpty()) {
+            return emptyList()
+        }
+        val sets = queries.mapNotNull { query ->
+            relatedAttempt {
+                session.sources.getList(seed.source.name, 0, null, SourceFilter(query = query))
+                    .filter { candidate ->
+                        RelatedContentRules.isSearchCandidate(
+                            query,
+                            RelatedCandidate(candidate.title, candidate.altTitles),
+                        )
+                    }
+            }?.takeIf { it.isNotEmpty() }
+        }
+        return RelatedContentRules.smallestResult(sets)
+    }
+
+    /** A related request that failed (unsupported, offline, damaged source) means "nothing to show", not an error. */
+    private suspend fun <T> relatedAttempt(block: suspend () -> T): T? = try {
+        block()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        null
     }
 
     /**
@@ -1427,6 +1502,8 @@ class DesktopController(
     }
 
     internal fun dismissDetails() = navigate {
+        // Closing the page ends its related search too; nothing on screen would show the answer.
+        relatedJob?.cancel()
         val origin = state.value.detailsOrigin ?: DesktopScreen.EXPLORE
         val library = if (origin == DesktopScreen.LIBRARY || origin == DesktopScreen.HISTORY) {
             session.library.snapshot(origin == DesktopScreen.HISTORY)
@@ -1438,7 +1515,8 @@ class DesktopController(
         } else state.value.feed
         val feedContents = if (feed !== state.value.feed) feedContentsOnIo(feed) else state.value.feedContents
         mutableState.update { it.copy(screen = origin, content = null, detailsOrigin = null,
-            detailsExpanded = false, library = library, homeHistory = homeHistory, feed = feed, feedContents = feedContents) }
+            detailsExpanded = false, library = library, homeHistory = homeHistory, feed = feed, feedContents = feedContents,
+            relatedWorks = emptyList(), relatedLoading = false) }
     }
 
     fun addFavourite() = action {
@@ -2027,6 +2105,7 @@ class DesktopController(
      * while it is off, and what was already recorded stays on the statistics page.
      */
     fun servicesSettings(value: org.skepsun.kototoro.desktop.runtime.DesktopServicesSettings) {
+        val previous = state.value.services
         val saved = servicesPreferences.save(value)
         session.library.statsRecording = value.statsEnabled
         mutableState.update {
@@ -2034,6 +2113,11 @@ class DesktopController(
                 services = value,
                 error = if (saved) it.error else desktopText("services.saveFailed"),
             )
+        }
+        // `related_manga` is read when details opens, so an open page follows the switch instead of waiting for a reopen.
+        if (previous.relatedContent != value.relatedContent) {
+            state.value.content?.let(::loadRelatedWorks)
+                ?: mutableState.update { it.copy(relatedWorks = emptyList(), relatedLoading = false) }
         }
     }
 

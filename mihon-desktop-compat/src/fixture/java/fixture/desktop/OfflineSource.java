@@ -53,7 +53,9 @@ public final class OfflineSource extends HttpSource implements ConfigurableSourc
         return Observable.just(new MangasPage(Collections.singletonList(manga), false));
     }
     @Override public Observable<MangasPage> fetchSearchManga(int page, String query, FilterList filters) {
-        SManga manga = new SMangaImpl(); manga.setTitle("search " + query); manga.setUrl("/manga");
+        // A hit carries its own URL, like a real search does: the details page's related search drops results that are
+        // the same work as the one that asked, and this fixture must be able to answer with a different work.
+        SManga manga = new SMangaImpl(); manga.setTitle("search " + query); manga.setUrl("/search?q=" + query);
         return Observable.just(new MangasPage(Collections.singletonList(manga), false));
     }
     @Override public Observable<SManga> fetchMangaDetails(SManga original) { return Observable.just(original); }

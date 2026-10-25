@@ -323,6 +323,14 @@ npm run docs:build
   两个键沿用 Android 的 `stats_on`/`reading_time`（存 `desktop_services`），`stats_on` 关掉后阅读仍写历史与进度、
   只是 `SourceLibrary.statsRecording` 让会话与统计行不再落盘，`reading_time` 决定详情页是否画“预计剩余”那一行
   （Android 算了这份估计却没有界面渲染，Windows 把它摆进详情事实里），见计划 §180。
+  同一页还有 Android 的“相关漫画”（`related_manga`，键同名、存 `desktop_services`、默认开）：关掉后详情页不再问来源。
+  详情页的相关作品列表（`details-related`，标题用 `details_related_works`）走独立 `relatedJob`，先试
+  `SourceRuntime.getRelated`，失败/为空就退回搜索（`core-domain` 的 `RelatedContentRules` 生成标题/别名查询、
+  只留标题命中的结果、取最小组；Android 的 `RelatedContentSearchFallback` 已改为同一份代码），
+  再用 `core-domain` 的 `RelatedWorkRules` 滤掉作品自己（同 id、同 URL 身份、同严格标题键配同一张封面路径，
+  Android 的 `RelatedContentUseCase` 也改成调它，两端只各自提供 `RelatedWorkKey` 投影），
+  Windows 侧 `desktop-runtime` 的 `desktopRelatedWorks` 只多一层去重；卡片点击进那部作品的详情。
+  Mihon 桌面 host 没有相关 API，所以 Windows 上大多数来源走的就是搜索回退，见计划 §191。
   统计页（`stats-back`）对应 Android 的 `StatsScreen`：周期切换、类型筛选（全部/漫画/小说/视频）、
   总时长/活跃天数/会话/作品、连续天数、每日活动、时段分布、类型占比、作品榜与清空确认。数据来自
   `core-library` 的 `ReadingSessionTracker`——阅读器各处自动保存经 `SourceLibrary.recordPage` 统一 tick，

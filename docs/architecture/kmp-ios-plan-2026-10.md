@@ -8689,3 +8689,74 @@ Android 的数据清理页（`DataCleanupSettingsScreen`）最后还有一个“
 （页面块要等图片预算回收才真正落盘），所以只报删掉的章数；Android 的自动删除挂在 WorkManager/启动服务上，
 Windows 是会话打开时同步跑一次；章节表只取库里恢复的那份（离线优先），没有 Android 那种“表里没有就现拉远端章节列表”
 的回退，所以一部从没在桌面端打开过详情的作品不会被这一步判定。
+
+## 191. 详情页的相关作品与「相关漫画」开关（对齐 Android 的 `related_manga` / `RelatedContentUseCase`）（2026-10-25）
+
+Android 的详情页在简介/标签下面还有一条“相关作品”（`details_related_works`）横向列表，点一张就换到那部作品；
+它由服务页的 `related_manga` 开关（`services` 分组，摘要 `related_manga_summary`）决定要不要问来源。
+数据来自 `RelatedContentUseCase`：先让来源自己给相关列表（Mihon 的 `fetchRelatedMangaList`，`supportsRelatedMangas`
+且没被扩展禁用时），否则退回 `RelatedContentSearchFallback`——拿作品的主标题与别名（再加标题里的词，最多 6 个查询）
+逐个搜索，只留“标题或别名里出现过这个查询”的结果，最后取结果最少的那一组。取回来之后还要把作品自己滤掉：
+同 id、同 URL/公开 URL 身份、或同标题配同一张封面（按 URL 路径比较，换域名也算同一张图）。Windows 之前这整块
+都没有，服务页注释里也把 `related_manga` 写成“没有 Windows 行为”。
+
+本切片把这条链路补上，并把可以共享的规则真的搬进 `core-domain`：
+
+- `core-domain` 新增 `details/domain/RelatedContentRules.kt`：`searchQueries(title, altTitles)`（主标题 → 别名 →
+  标题里的词，去重去空、最多 `MAX_QUERIES = 6`）、`isSearchCandidate(query, RelatedCandidate)`（标题或别名包含该查询，
+  忽略大小写）、`smallestResult(sets)`（结果最少的一组，空输入给空表）。Android 的
+  `core/parser/RelatedContentSearchFallback.kt` 改成调用这三个函数，只留自己的 `id/url/publicUrl` 去重，
+  所以两端的位置与取舍规则是同一份代码，不再各写一遍。
+- `core-domain` 还新增 `tracking/domain/TitleKeys.kt`：`normalize`（去首尾空白、小写、标点/符号变空格、折叠空白）
+  与 `normalize(value, sourceNames)` / `stripTrailingSourceSuffix`（去掉与来源名重复的 `(来源名)` 尾巴）。
+  Android 的 `tracking/discovery/domain/TitleSimilarity.kt` 里 `normalizeStrictTitleKey` 与
+  `stripTrailingSourceTitleSuffix` 现在只是它的薄封装（模糊评分要用 `java.text.Normalizer`，仍留在 Android）。
+- `core-domain` 再新增 `details/domain/RelatedWorkRules.kt`：`filterCurrentWork(seed, candidates, key)` 就是
+  Android 的 `filterCurrentWorkFromRelated`——别的来源的候选一律保留；同来源时丢掉同 id、
+  `ContentIdentityKeys.hasSameIdentity(...)` 命中的、以及 `TitleKeys` 严格标题相同且封面路径相同的
+  （封面按 http(s) 的路径比，换域名也算同一张图）。两端只各自提供投影：Android 的 `RelatedContentUseCase.kt`
+  现在把 `Content` 投成 `RelatedWorkKey`，Windows 的 `desktopRelatedWorks(seed, candidates)` 把 `SourceContent`
+  投成同一结构，所以“什么算作品自己”这条规则只有一份。封面路径的取法为了留在 `commonMain` 没有用
+  `java.net.URI`（`compileCommonMainKotlinMetadata` 会拒绝），改成纯字符串切 scheme/host 再截 query/fragment。
+- `desktop-runtime` 新增 `DesktopRelatedContent.kt`：`desktopRelatedWorks` 在共享规则之上只多加一件事——
+  按 `来源:id:url` 去重，同一部作品在来源里列两次也只出一张卡。
+- `DesktopServicesSettings` 加 `relatedContent`（Android 的 `KEY_RELATED_MANGA = "related_manga"`，默认开，
+  存 `desktop_services`）；服务页在推荐行下面多一行 `services-related-manga`，标题/摘要都用 Android 原句。
+- `DesktopController` 在 `detailsOnIo` 末尾调 `loadRelatedWorks(content)`：先清空列表、置 `relatedLoading`，
+  在独立的 `relatedJob` 上跑（不进 `action{}`/`navigate{}` 的门，页面在等的时候照样能点）。
+  取数据先试 `session.sources.getRelated(seed)`（parser 插件与将来的 host 能用），失败或空就用
+  `session.sources.getList(name, 0, null, SourceFilter(query = ...))` 走 `RelatedContentRules` 那套搜索回退，
+  最后过 `desktopRelatedWorks`。`related_manga` 关着时直接空表且不发请求；写回状态前核对
+  `content.id` 与来源名，慢回来的旧请求不会覆盖新作品。切开关时如果详情还开着，立刻按新值重取或清空；
+  `dismissDetails` 关掉页面时取消 `relatedJob` 并清空列表，不会有关掉的页面还在后台搜索 6 个查询。
+- 一天里最关键的一条：**Mihon 的桌面 host 根本不给相关列表**（`MihonSourceRuntime.getRelated` 直接抛
+  `SourceOperationUnsupportedException`），所以 Windows 上绝大多数来源唯一的路径就是搜索回退——这也正是 Android
+  对 `!supportsRelatedMangas` 扩展的做法，行为与手机一致，而不是“开关打开但永远空白”。
+- 界面 `DesktopDetailsRelated.kt`：只有拿到结果或还在加载时才出现（没相关作品的作品页面不会多一块空白），
+  标题用 `details_related_works`，加载时标题旁一个小进度圈，卡片是 96dp 宽的 2:3 封面 + 两行标题 + 来源名，
+  点击 `controller.details(work)`；整块 `testTag` 是 `details-related`、卡片 `details-related:<id>`。
+
+验证：
+
+- `core-domain`：`RelatedContentRulesTest` 5 个用例（标题/别名/词与去重、单字丢弃与 6 个上限、空标题、
+  候选判定含别名、最小组与空输入）；`TitleKeysTest` 4 个用例（大小写/标点/空白、来源名尾巴被去掉、
+  别的括号尾巴保留、空括号不切标题）；`RelatedWorkRulesTest` 5 个用例（同 id/同 URL/同公开 URL 都算自己、
+  同标题配同一张封面路径（含换域名带 query）算同一部、不同标题或不同封面保留、别的来源同 id 不算自己、
+  没有封面时不能只按标题判同）。前者 `:core-domain:compileCommonMainKotlinMetadata` 通过，规则可移植。
+- Android：`RelatedContentUseCaseTest` 2 个用例在改用共享规则后仍然通过，`TitleSimilarityTest`（10）、
+  `TitleNormalizerTest`（6）也通过，`RelatedContentSearchFallback` 换成 `RelatedContentRules` 后
+  `:app:compileDebugKotlin` 通过。
+- `desktop-runtime`：`DesktopRelatedContentTest` 6 个用例（同 id/同 URL/同公开 URL 都丢、同标题不同封面保留、
+  同标题同封面换域名也丢、不同标题同封面保留、别的来源同 id 不算自己、重复项合成一张卡、
+  `related_manga` 默认开且能来回存取）。
+- `desktop-app` 真实窗口探针 `DesktopServicesProbe`：详情页等 `relatedLoading` 结束，断言
+  `state.relatedWorks` 非空、`details-related` 与第一张卡存在（截图 `details-related.png`）；
+  服务页断言 `services-related-manga` 行与 Android 的两个字符串存在，点一下确认开关关掉、列表立刻清空、
+  `desktop_services` 里存的是 `related_manga=false`，再点回开并等列表重新填上（截图 `services-page-related-on.png`），
+  最后再关一次并留在关的状态，让读阶段断言重启后 `relatedContent == false`、`related_manga == false`。
+  探针能拿到结果靠的是 `OfflineSource.fetchSearchManga` 现在给搜索结果一个自己的 URL（`/search?q=...`）：
+  之前搜索与热门共用 `/manga`，而 Mihon 的 id 由 URL 派生，回退搜索会把作品自己当成“同一部”滤掉。
+
+与 Android 不同的地方：Android 的相关列表是 Compose 的 `LazyRow` 而不是分页，Windows 同样一次只取一组结果；
+“什么算作品自己”的判断现在是同一份 `RelatedWorkRules`，Windows 只多一层去重；Android 还有“浏览记录推荐”
+（`browse_tracking_recommendations`）那条来源，它依赖整个 tracking-discovery 子系统，桌面仍然没有。
