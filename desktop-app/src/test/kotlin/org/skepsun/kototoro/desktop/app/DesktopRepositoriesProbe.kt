@@ -271,6 +271,8 @@ internal object DesktopRepositoriesProbe {
                     onNodeWithTag("source-enable-list").performScrollToNode(hasTestTag(offSwitchTag))
                     onNodeWithTag(offSwitchTag).assertIsOff()
                     onNodeWithTag("source-switch-done").performClick(); idle()
+                    onNodeWithTag("installed-list")
+                        .performScrollToNode(hasTestTag("extension-uninstall:${metadata.packageName}"))
                     onNodeWithTag("extension-uninstall:${metadata.packageName}").performClick(); idle()
                     onNodeWithTag("extension-uninstall-confirm").performClick(); idle()
                     check(session.registry.installed().isEmpty())
