@@ -6160,3 +6160,137 @@ TV 分支要按"视觉即控件"重新合并，而不是复用触屏的命中区
 3. 动作行 DOWN 停在 OK 之后不回环（第九十三轮遗留 1）。
 4. 带正文段落的消息型对话框没单独复验 `bodyLarge`（第九十二轮遗留 3）。
 5. 发丝边取的是 `outlineVariant`（实测 `(142,144,153)`），是否在锐化较重的电视上产生光晕，真机才能定。
+## 第九十六轮：焦点黑洞的真名是 `SelectionContainer`（2026-10-25）
+
+### 起念
+
+第九十五轮把"详情页按 DOWN 环凭空消失"记成遗留，还留了个猜测：找不到候选时焦点会退到父级
+`focusGroup`。这一轮专门去证伪那个猜测——因为"焦点退到父级"解释不了一件事：黑洞里按 CENTER
+什么都不会发生，可父级 `focusGroup` 通常会把按键交给第一个孩子。
+
+### 现场
+
+两个可复现的黑洞：
+
+| # | 起点 | 按一下 DOWN 之后 |
+| --- | --- | --- |
+| 1 | 顶部"分享"胶囊 `[672,32][760,128]` | 环全屏消失，再按一下才落到阅读段 `[532,228][748,324]` |
+| 2 | 左栏 `1/2` 行 `[494,580][920,676]` | 环消失，继续按 DOWN 也不回来（UP 能回到 `1/2`） |
+
+黑洞状态下截图（`r96g1.png`，第九十五轮）与前后帧的唯一差别是背景动画，页面本身一字未动；
+按 CENTER 也没有反应——目标**没有点击动作**，符合"容器"。
+
+先逐个证伪，每一步都留了证据：
+
+- **左栏滚动容器？** 给 `Column(verticalScroll)` 加 `focusProperties { canFocus = false }`，
+  再用 `onFocusChanged` 打日志。logcat 证明它确实不再是停靠点
+  （`leftScroll isFocused=false hasFocus=false`），**黑洞照旧**。这条改动撤回了。
+- **标题/简介的 `clickable(enabled = false)`？** TV 上干脆不挂这个可点修饰符，
+  `uiautomator` 里那个 `TextView [296,149][944,245] ... cl=true` 也随之消失，
+  **黑洞照旧**。所以"禁用的 clickable 也算停靠点"这个假设是错的（浅层探针很容易看错）。
+- **`KototoroPullToRefreshBox` / `TabletDetailsPanes` / 全局 `clearFocus()`？**
+  静态排查即排除：前者只是 `Box(nestedScroll)`，后者是纯 `Row`，全仓 `clearFocus()` 只有 4 处且不在详情页。
+
+定位靠的是把日志打在两棵子树上：宽屏根节点 `Box` 与左栏滚动容器。
+
+```text
+wideRoot hasFocus=false isFocused=false     ← 焦点离开了整个宽屏内容
+leftScroll isFocused=false hasFocus=true    ← 同一毫秒，焦点进了滚动容器的子树
+wideRoot hasFocus=true  isFocused=false
+```
+
+`hasFocus=true` 而 `isFocused=false` 说明目标**是左栏内容的子孙节点**；同时它不在无障碍树里
+（那一次的 dump 里，`cl=true && en=false` 全屏只有标题与"No description"两个节点，且整棵树的
+`focused` 都是 false）。合起来只剩一种东西：**有焦点目标、但没有语义、也不画环的 Compose 内部节点**。
+
+翻 `DetailsHeader.kt` 就看见了：
+
+```kotlin
+SelectionContainer(modifier = Modifier.fillMaxWidth()) {   // 标题，L443
+    Text(text = titleForDisplay, ...)
+}
+...
+SelectionContainer {                                        // 简介，L710
+    Text(text = descriptionForDisplay, ...)
+}
+```
+
+`SelectionContainer` 为了支持键盘选区，自身就是一个 `focusable` 节点：十尺外没有鼠标，
+它既不能选、也不画环，于是完美的黑洞。两个 `SelectionContainer`、两个黑洞，位置也对得上
+（标题在顶栏与来源胶囊之间，简介在 `1/2` 行下方）。
+
+### 改法
+
+TV 上让它不可聚焦，其余一律不动：
+
+```kotlin
+SelectionContainer(
+    modifier = Modifier
+        // `SelectionContainer` 自己就是一个没有环的焦点目标（键盘选区要能拿到焦点），
+        // 遥控器从顶栏往下按会先掉进它，画面上的环凭空消失。电视上没有鼠标选区，直接跳过。
+        .focusProperties { if (isTvPresentation) canFocus = false }
+        .fillMaxWidth(),
+) {
+    Text(text = titleForDisplay, ...)
+}
+```
+
+三处同样处理：标题、简介、以及 `SupplementalMetadataDescription`（补充信息那一整块可选文本）。
+选 `focusProperties` 而不是 `if (isTv) …else SelectionContainer` 的条件组合，是因为前者只多一行、
+不改组合树形状，手机/平板的选区行为逐字节不变（lambda 里 `isTvPresentation` 为假时什么也不做）。
+
+### 量出来的差别
+
+| 量 | 第九十五轮末 | 本轮 |
+| --- | --- | --- |
+| 胶囊 → DOWN 落到阅读段 | 2 下（中间空一脚） | **1 下** |
+| 阅读段 → UP 回胶囊 | 2 下 | **1 下** |
+| `1/2` 行 → DOWN | 环消失，再按几下都不回来 | **环留在 `1/2`**（连按 3 下不变） |
+| 黑洞时的无障碍焦点节点 | 0（目标根本不在树里） | 目标已不存在 |
+| 环上像素（阅读段 / `1/2` 行） | — | 108 / 180 |
+
+焦点走查（`emulator-5554`，`r96f1.png` / `r96f2.png`）：
+
+```text
+Continue → LEFT×6 → 分享胶囊 → DOWN → 阅读段 [532,228][748,324]
+        → UP → 分享胶囊
+        → DOWN → 阅读段 → DOWN → Reading 芯片 [563,310][663,406]
+        → DOWN → 1/2 行 [494,580][920,676] → DOWN ×3 → 仍在 1/2 → UP → Reading 芯片
+```
+
+像素反查：聚焦阅读段时环边带 108 个蓝色像素，聚焦 `1/2` 行时 180 个；未聚焦的元数据段
+`[302,228][518,310]` 与未聚焦时的 `1/2` 行都是 0——环跟着焦点走，没有"看不见的停靠点"残留。
+
+行为复验：在 `Reading` 状态芯片上按 CENTER，弹出 Planned/Reading/Re-reading/Completed/On hold/Dropped
+下拉，环落在第一项——可点路径没被这次改动碰到。
+
+### 更正与顺带发现
+
+- **更正第九十五轮**：黑洞既不是滚动容器，也不是 `focusGroup` 兜底；顺带纠正一个更常见的误判——
+  `clickable(enabled = false)` 在 Compose 1.12 上**不是**遥控停靠点（把修饰符摘掉前后行为一致）。
+- `SelectionContainer` 全仓 6 处（不含导入）：本轮修了详情页 3 处，剩下 `VideoPlayerInfoDialog.kt:90`、
+  `CrashLogDetailScreen.kt:85`、`GlobalTagBlacklistScreen.kt:257`，以及小说阅读器的
+  `NovelSelectionContainer`（4 个调用点，阅读器整体还没审计过）——都进遗留。
+- 两次冷启动都直接看到 `Continue` 上的白环，不再需要先按两下方向键（第九十五轮之前的"冷启动无环"）。
+
+### 教训
+
+**"看不见的停靠点"多半是 API 自带的。** 组件库为了键盘/触屏加的可聚焦节点（选区、滚动、文本域外壳）
+在十尺外既没有环也没有语义，却照样吃掉一次方向键。查这类黑洞，先问一句
+"能不能用 `focusProperties { canFocus = false }` 把它摘掉"，比顺着布局猜父级快得多。
+
+**`onFocusChanged` 打日志能定"哪棵子树"，不能定"哪个节点"。** 容器上报 `hasFocus=true` 表示焦点在它
+的子孙里，只有配合"目标不在无障碍树里"这条信息，才能把范围缩到"无语义焦点节点"。
+
+**别用无障碍属性判断焦点目标。** 那个 `en=false fo=false cl=true` 的标题节点两次把我带偏：
+它既不是黑洞（摘掉无效），也说明不了谁是黑洞。
+
+### 遗留
+
+1. `SelectionContainer` 其余 3 处（`VideoPlayerInfoDialog` / `CrashLogDetailScreen` / `GlobalTagBlacklistScreen`）
+   与小说阅读器 `NovelSelectionContainer`，同一族但未复验是否形成停靠点。
+2. `SupplementalMetadataDescription` 的修复是按类比做的：种子内容没有补充信息，没实测到那个分支。
+3. 动作行 DOWN 停在 OK 之后不回环（第九十三轮遗留 1）。
+4. `Metadata source` / `Reading source` 侧栏面板只有 90% 不透明（第九十五轮遗留 2）。
+5. 带正文段落的消息型对话框没单独复验 `bodyLarge`（第九十二轮遗留 3）。
+6. 发丝边取的是 `outlineVariant`（实测 `(142,144,153)`），锐化较重的电视上是否产生光晕，真机才能定。

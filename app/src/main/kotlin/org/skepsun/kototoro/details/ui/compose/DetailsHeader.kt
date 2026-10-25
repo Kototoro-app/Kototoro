@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -69,6 +70,7 @@ import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.ui.compose.KototoroLinearProgressIndicator
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.isDarkTheme
@@ -169,6 +171,7 @@ fun DetailsHeader(
     onManageTrackingSuggestion: (org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult) -> Unit,
 ) {
     val context = LocalContext.current
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val isDarkTheme = MaterialTheme.colorScheme.isDarkTheme()
     val immersiveTitleColor = if (isDarkTheme) Color.White else Color.Black
@@ -437,7 +440,13 @@ fun DetailsHeader(
                     },
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                SelectionContainer(modifier = Modifier.fillMaxWidth()) {
+                SelectionContainer(
+                    modifier = Modifier
+                        // `SelectionContainer` 自己就是一个没有环的焦点目标（键盘选区要能拿到焦点），
+                        // 遥控器从顶栏往下按会先掉进它，画面上的环凭空消失。电视上没有鼠标选区，直接跳过。
+                        .focusProperties { if (isTvPresentation) canFocus = false }
+                        .fillMaxWidth(),
+                ) {
                     Text(
                         text = titleForDisplay,
                         style = MaterialTheme.typography.headlineSmall.copy(
@@ -698,7 +707,12 @@ fun DetailsHeader(
                 if (isSupplementalMetadataSelected && hasSupplementalMetadataDescription) {
                     SupplementalMetadataDescription(properties = visibleSupplementalMetadataProperties)
                 } else {
-                    SelectionContainer {
+                    SelectionContainer(
+                        // 同上：简介的选区容器在电视上同样是看不见的停靠点。
+                        modifier = Modifier.focusProperties {
+                            if (isTvPresentation) canFocus = false
+                        },
+                    ) {
                         Text(
                             text = descriptionForDisplay,
                             style = MaterialTheme.typography.bodyMedium,
@@ -863,7 +877,11 @@ private fun DetailsViewToggle(
 private fun SupplementalMetadataDescription(
     properties: List<Pair<String, String>>,
 ) {
-    SelectionContainer {
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    SelectionContainer(
+        // 同上：补充信息也是一整块可选文本，遥控器上不该为它多留一个看不见的停靠点。
+        modifier = Modifier.focusProperties { if (isTvPresentation) canFocus = false },
+    ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             properties.forEach { (label, value) ->
                 Row(
