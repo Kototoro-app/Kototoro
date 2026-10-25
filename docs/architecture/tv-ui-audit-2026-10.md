@@ -7274,3 +7274,58 @@ DOWN 就有地方去——缺的只是那一行。
 
 **改焦点模型先量纵向。** 方案 A 的横向（RIGHT）全通，一按 DOWN 就发现断链；一条主要路径要走到底再定稿，
 只看一屏截图会被骗。
+
+## 第一百一十一轮：搜索框聚焦了，得让人看见（2026-10-25）
+
+### 现象
+
+`CA10`：焦点已经落在面板的搜索框上（a11y `focused=true`、`android.widget.EditText`，`[32,556][1888,652]`），
+但画面上**没有任何变化**——和没聚焦时一模一样。遥控器走到这里像是"卡住了"：唯一的反馈是没有反馈。
+
+### 根因
+
+`SourceSearchField` 的焦点反馈只有容器底色，而 expressive 主题下两条分支取的是同一个颜色：
+
+```kotlin
+val containerColor = if (expressive) {
+    if (isFocused) {
+        searchFieldColors.containerColor.detailsButtonContainerColor()
+    } else {
+        searchFieldColors.containerColor.detailsButtonContainerColor()
+    }
+} else if (isFocused) { … } else { … }
+```
+
+也就是说默认主题里这行 `isFocused` 判断是死代码，焦点在画面上不可见。面板里其它停靠点（站点选项卡、
+结果卡、按钮）都有 2dp 主色环，唯独这个面积最大的控件没有。
+
+### 修法
+
+在 `BasicTextField` 自己的 modifier 链上补
+`tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)`：它不新增焦点目标（输入框自己
+有），只观察同一个目标并画环——和结果卡、选项卡用的是同一条"环在前面、focusable 由后面的控件提供"
+的写法。`tvFocusable` 在非 TV 上直接返回原 modifier，手机/平板的输入框一字未改。
+
+### 证据
+
+* `CA10`（修前，sha `061fdb22`）：a11y 已经 `focused=true`，画面无环；
+* `CB10`（修后，sha `0945b321`）：同一个焦点位置，搜索框整圈亮蓝胶囊环，键盘仍未弹出——只读态保持，
+  第一百零九轮的修复没有被破坏；
+* `CC10`（sha `4d8a781b`）：CENTER 打开 Gboard，环仍然画在输入框上，编辑态也能看出光标在哪个控件里；
+* `CC11` 与第一百一十轮的 `NA10` **逐字节相同**（sha `e6ea6d10`）：BACK 收键盘、DOWN 到结果卡后环已经
+  消失，卡片环与走位跟前一轮完全一致——新环不会在失焦后残留，也没有改变遍历。
+
+### 遗留
+
+1. 聚焦时主色环贴在容器描边上，视觉偏粗；要不要在编辑态换成更淡的环，和上一轮"TV 卡片上没有 Migrate
+   字样"的提示一起在下一轮定。
+2. 面板里 "Sign in" 链接 `[1714,708][1888,752]` 和各站点区域是否也有环，尚未逐个核对。
+
+### 教训
+
+**焦点反馈不能只靠主题分支。** 一行 `if (isFocused)` 在默认主题里可能两条分支算出同一个值——这类"看着
+有、其实没有"的反馈只有对比截图才抓得住：同一位置、同一 a11y 状态，两张 PNG 的 hash 相同就是没变化。
+
+**一个面板要统一口径。** 同一个面板里别的停靠点都有环，漏掉面积最大的那个控件就会让遥控器"消失"一瞬。
+补环要走 `tvFocusable` 这条既有路径，而不是每个控件各自手搓 `drawWithContent`（见 `SwipeableFilterChip`
+里那份自绘环的历史遗留）。

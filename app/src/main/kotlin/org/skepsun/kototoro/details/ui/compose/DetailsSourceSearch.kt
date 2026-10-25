@@ -134,6 +134,15 @@ internal fun SourceSearchField(
                 onValueChange = onValueChange,
                 modifier = Modifier
                     .fillMaxSize()
+                    // The container tint above is the only focus feedback this field has, and in the
+                    // expressive theme both of its branches resolve to the same colour, so a focused
+                    // field looks exactly like an unfocused one and the remote appears to vanish here.
+                    // Give it the same outline every other TV stop has (no extra focus target - the
+                    // text field owns the one below).
+                    .tvFocusable(
+                        shape = RoundedCornerShape(999.dp),
+                        addFocusTarget = false,
+                    )
                     .onFocusChanged { isFocused = it.isFocused }
                     .then(tvEditing.fieldModifier)
                     .tvTextInputFocusEscape(),
