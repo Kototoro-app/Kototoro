@@ -37,7 +37,7 @@ private struct RecordsPage: View {
     @State private var lastStatsRequest: String?
 
     private var filterKind: String? {
-        if spacesEnabled { return space.isEmpty ? nil : space }
+        if spacesEnabled { return ContentSpace.kind(space) }
         return ContentKindPicker.effective(pageKind, available: availableKinds)
     }
 
@@ -83,6 +83,7 @@ private struct RecordsPage: View {
     /// The content space (or this page's switch) and the in-place search over titles and authors.
     private func matches(_ content: IosSourceContent, ignoringKind: Bool = false) -> Bool {
         if !ignoringKind, let filterKind, content.mediaKind != filterKind { return false }
+        if spacesEnabled && !ContentSpace.admits(content, sources: sources.sources) { return false }
         let text = query.trimmingCharacters(in: .whitespaces)
         return text.isEmpty || content.title.localizedCaseInsensitiveContains(text) ||
             content.authors.contains { $0.localizedCaseInsensitiveContains(text) }
@@ -443,7 +444,11 @@ private struct RecordsTimeline: View {
     var body: some View {
         let items = (events.map { TimelineItem(id: $0.id, content: $0.content, timestamp: $0.timestamp, kind: .event($0)) }
             + downloadItems).filter { item in
-                switch filter {
+                // Android's adult filter targets: reading history and the updates feed.
+                if item.event != nil, AdultContentFilter.hides(item.content, in: item.isUpdate ? .feed : .history) {
+                    return false
+                }
+                return switch filter {
                 case .all: true
                 case .reading: item.event != nil && !item.isUpdate
                 case .updates: item.isUpdate

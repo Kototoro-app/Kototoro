@@ -29,6 +29,189 @@ final class SuggestionsTests: XCTestCase {
         XCTAssertEqual(field.value as? String, "放送作品 201")
     }
 
+    /// The app lock covers the app while locked, explains when the device has no authentication to offer, and the
+    /// background update switch persists (after the system notification prompt).
+    @MainActor
+    func testAppLockAndBackgroundUpdateSettings() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-app_lock_enabled", "YES"]
+        app.launch()
+        let lock = app.descendants(matching: .any)["appLock.screen"]
+        XCTAssertTrue(lock.waitForExistence(timeout: 15), app.debugDescription)
+        // The simulator has no passcode: authentication fails and the app stays covered.
+        XCTAssertTrue(app.buttons["appLock.unlock"].waitForExistence(timeout: 10))
+        attach(app, "应用锁")
+        app.terminate()
+
+        app.launchArguments = []
+        app.launch()
+        XCTAssertFalse(lock.waitForExistence(timeout: 3))
+        app.mainTab("设置").tap()
+        let toggle = app.switches["settings.appLock"]
+        for _ in 0..<4 where !toggle.exists { app.swipeUp() }
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10), app.debugDescription)
+        toggle.tap()
+        // Without a passcode or enrolled biometrics the lock cannot be turned on: either the app explains that, or
+        // the system authentication fails (or is cancelled) and the switch stays off.
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        if app.alerts["无法开启应用锁"].waitForExistence(timeout: 5) { app.alerts.buttons["好"].tap() }
+        let cancel = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["取消", "Cancel"])).firstMatch
+        if cancel.waitForExistence(timeout: 2) { cancel.tap() }
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertEqual(toggle.value as? String, "0", "The lock is not enabled without a successful authentication")
+
+        // The update section sits above the content filters: start again from the top of Settings.
+        app.terminate()
+        app.launch()
+        app.mainTab("设置").tap()
+        let updates = app.switches["settings.backgroundUpdates"]
+        for _ in 0..<5 where !updates.isHittable { app.swipeUp() }
+        // The switch sits at the trailing end of a wide row.
+        func flip() { updates.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap() }
+        if updates.value as? String == "1" { flip() }
+        flip()
+        let allow = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["允许", "Allow"])).firstMatch
+        if allow.waitForExistence(timeout: 5) { allow.tap() }
+        XCTAssertEqual(updates.value as? String, "1")
+        app.terminate()
+        app.launch()
+        app.mainTab("设置").tap()
+        for _ in 0..<4 where !updates.isHittable { app.swipeUp() }
+        XCTAssertTrue(updates.waitForExistence(timeout: 10))
+        XCTAssertEqual(updates.value as? String, "1", "The background update switch survives a relaunch")
+        flip()
+    }
+
+    /// The GitHub mirror choice persists and the reachability test reports every mirror (time or timeout).
+    @MainActor
+    func testGitHubMirrorChoicePersistsAndProbes() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        func openMirrors() {
+            app.mainTab("设置").tap()
+            let entry = app.buttons["settings.githubMirror"]
+            for _ in 0..<5 where !entry.exists { app.swipeUp() }
+            XCTAssertTrue(entry.waitForExistence(timeout: 10), app.debugDescription)
+            entry.tap()
+        }
+        openMirrors()
+        let mirror = app.buttons["mirror.gh_proxy_com"]
+        XCTAssertTrue(mirror.waitForExistence(timeout: 10), app.debugDescription)
+        mirror.tap()
+        XCTAssertTrue(mirror.isSelected)
+        app.terminate()
+        app.launch()
+        openMirrors()
+        XCTAssertTrue(mirror.waitForExistence(timeout: 10))
+        XCTAssertTrue(mirror.isSelected, "The mirror choice survives a relaunch")
+        let probe = app.buttons["mirror.probe"]
+        for _ in 0..<3 where !probe.isHittable { app.swipeUp() }
+        probe.tap()
+        // The probe row may scroll out of the lazily drawn list; the reported times are what counts.
+        let reported = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            app.staticTexts.matching(NSPredicate(format: "label ENDSWITH %@ OR label CONTAINS %@ OR label == %@",
+                                                 " ms", " ms ·", "超时")).count > 0
+        }, object: nil)
+        wait(for: [reported], timeout: 30)
+        attach(app, "GitHub 镜像测速")
+        app.swipeDown(); app.swipeDown()
+        app.buttons["mirror.native"].tap()
+    }
+
+    /// WebDAV backup against Scripts/serve-webdav-fixture.py: connect with Basic credentials, upload under Android's
+    /// name, list it, and merge it back through the backup preview.
+    @MainActor
+    func testWebDavBackupUploadsListsAndRestores() async throws {
+        guard (try? await URLSession.shared.data(from: URL(string: "http://127.0.0.1:8766/__files")!)) != nil else {
+            throw XCTSkip("Start serve-webdav-fixture.py first")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        app.mainTab("设置").tap()
+        let entry = app.buttons["settings.webdav"]
+        for _ in 0..<4 where !entry.exists { app.swipeUp() }
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), app.debugDescription)
+        entry.tap()
+        func fill(_ id: String, _ text: String) {
+            let field = app.descendants(matching: .any)[id]
+            XCTAssertTrue(field.waitForExistence(timeout: 5), app.debugDescription)
+            field.tap()
+            if let value = field.value as? String, !value.isEmpty, value != field.placeholderValue {
+                field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count))
+            }
+            field.typeText(text)
+        }
+        fill("webdav.server", "http://127.0.0.1:8766")
+        fill("webdav.path", "backups")
+        fill("webdav.user", "kototoro")
+        fill("webdav.password", "secret")
+        app.buttons["webdav.test"].tap()
+        let message = app.staticTexts["webdav.message"]
+        XCTAssertTrue(message.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertEqual(message.label, "连接成功", app.debugDescription)
+        app.buttons["webdav.upload"].tap()
+        let uploaded = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "已上传 kototoro-v3-work-v1-")).firstMatch
+        XCTAssertTrue(uploaded.waitForExistence(timeout: 60), app.debugDescription)
+        let file = app.buttons.matching(identifier: "webdav.file").firstMatch
+        for _ in 0..<4 where !file.isHittable { app.swipeUp() }
+        XCTAssertTrue(file.waitForExistence(timeout: 10), app.debugDescription)
+        attach(app, "WebDAV 备份")
+        file.tap()
+        let restore = app.buttons["webdav.restore"]
+        for _ in 0..<4 where !restore.exists { app.swipeDown() }
+        XCTAssertTrue(restore.waitForExistence(timeout: 30), app.debugDescription)
+        restore.tap()
+        let merged = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "已合并")).firstMatch
+        XCTAssertTrue(merged.waitForExistence(timeout: 60), app.debugDescription)
+    }
+
+    /// Android's tag blacklist: catalog tags and free-form titles are hidden, kept across launches and cleared.
+    @MainActor
+    func testTagBlacklistSelectsCatalogAndCustomTagsAndPersists() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-global_tag_blacklist", "()"]
+        app.launch()
+        openTagBlacklist(app)
+        let search = app.searchFields["搜索标签"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10), app.debugDescription)
+        search.tap()
+        search.typeText("恐怖")
+        let horror = app.buttons["tags.blacklist.genre.horror"]
+        XCTAssertTrue(horror.waitForExistence(timeout: 5), app.debugDescription)
+        horror.tap()
+        XCTAssertTrue(horror.isSelected, app.debugDescription)
+        search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 2) + "测试自定义词")
+        let addRaw = app.buttons["tags.blacklist.addRaw"]
+        XCTAssertTrue(addRaw.waitForExistence(timeout: 5), app.debugDescription)
+        addRaw.tap()
+        attach(app, "标签黑名单")
+
+        app.terminate()
+        app.launchArguments = []
+        app.launch()
+        openTagBlacklist(app)
+        let count = app.descendants(matching: .any)["tags.blacklist.count"]
+        XCTAssertTrue(count.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(count.label.contains("2") || (count.value as? String) == "2", count.debugDescription)
+        XCTAssertTrue(app.staticTexts["测试自定义词"].exists || app.buttons["测试自定义词"].exists, app.debugDescription)
+        app.navigationBars.buttons["清空"].tap()
+        app.buttons.matching(NSPredicate(format: "label == %@", "清空")).allElementsBoundByIndex.last?.tap()
+        XCTAssertTrue(app.navigationBars.buttons["清空"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.navigationBars.buttons["清空"].isEnabled, app.debugDescription)
+    }
+
+    private func openTagBlacklist(_ app: XCUIApplication) {
+        app.mainTab("设置").tap()
+        let row = app.buttons["settings.tagBlacklist"]
+        for _ in 0..<6 where !(row.exists && row.isHittable) { app.swipeUp() }
+        XCTAssertTrue(row.waitForExistence(timeout: 10), app.debugDescription)
+        row.tap()
+    }
+
     @MainActor
     func testGlobalSearchFiltersRemainVisibleWhileTyping() {
         continueAfterFailure = false

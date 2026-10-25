@@ -70,21 +70,32 @@ enum ContentSpace {
     static let enabledKey = "space.enabled"
 
     /// What a page filters by: the app-wide space while spaces are on, otherwise the page's own switch.
+    @MainActor
     static func filter(enabled: Bool, space: String, page: String, available: Set<String>) -> String? {
-        enabled ? (space.isEmpty ? nil : space) : ContentKindPicker.effective(page, available: available)
+        enabled ? kind(space) : ContentKindPicker.effective(page, available: available)
     }
 
+    @MainActor
     static func title(_ kind: String) -> String {
-        SourceFilterOption.kinds.first { $0.id == kind }?.title ?? String(localized: "全部")
+        if isCustom(kind) { return CustomSpaceStore.shared.space(kind)?.title ?? String(localized: "全部") }
+        return SourceFilterOption.kinds.first { $0.id == kind }?.title ?? String(localized: "全部")
     }
 
+    @MainActor
     static func icon(_ kind: String) -> String {
-        SourceFilterOption.kinds.first { $0.id == kind }?.icon ?? "square.stack"
+        if isCustom(kind) { return "square.grid.2x2" }
+        return SourceFilterOption.kinds.first { $0.id == kind }?.icon ?? "square.stack"
     }
 
-    static func matches(_ kind: String, _ mediaKind: String) -> Bool { kind.isEmpty || kind == mediaKind }
+    /// Whether a work of [mediaKind] belongs to Space [kind] (built-in kind or custom Space id).
+    @MainActor
+    static func matches(_ kind: String, _ mediaKind: String) -> Bool {
+        guard let wanted = self.kind(kind) else { return true }
+        return wanted == mediaKind
+    }
 
     /// The latest history entry the app-wide space admits; every kind while spaces are off.
+    @MainActor
     static func latest(in history: [IosLibraryEntry], enabled: Bool, space: String) -> IosLibraryEntry? {
         history.first { !enabled || matches(space, $0.content.mediaKind) }
     }
@@ -169,6 +180,7 @@ extension View {
 
 private struct ContentSpacePanel: View {
     @Binding var selection: String
+    @ObservedObject private var customSpaces = CustomSpaceStore.shared
     let resume: (IosLibraryEntry) -> Void
     @EnvironmentObject private var library: LibraryModel
     @EnvironmentObject private var sources: SourcesModel
@@ -182,6 +194,12 @@ private struct ContentSpacePanel: View {
                 VStack(spacing: 10) {
                     card("")
                     ForEach(SourceFilterOption.kinds, id: \.id) { kind in card(kind.id) }
+                    ForEach(customSpaces.enabledSpaces, id: \.id) { space in card(space.id) }
+                    NavigationLink { CustomSpacesView() } label: {
+                        Label("管理自定义空间", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.glass)
+                    .accessibilityIdentifier("space.manage")
                 }
                 .padding(16)
             }
@@ -202,7 +220,7 @@ private struct ContentSpacePanel: View {
         let selected = selection == kind
         let latest = library.history.first { ContentSpace.matches(kind, $0.content.mediaKind) }
         let artwork = library.spaceArtwork[kind] ?? latest?.content
-        let id = kind.isEmpty ? "ALL" : kind
+        let id = kind.isEmpty ? "ALL" : ContentSpace.isCustom(kind) ? "CUSTOM.\(ContentSpace.title(kind))" : kind
         return VStack(alignment: .leading, spacing: 0) {
             Button {
                 selection = kind
@@ -257,7 +275,8 @@ private struct ContentSpacePanel: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 14)
             } else {
-                Text(kind.isEmpty ? "汇总查看漫画、小说与视频" : "浏览来源与作品库")
+                Text(kind.isEmpty ? "汇总查看漫画、小说与视频" : ContentSpace.isCustom(kind)
+                     ? (CustomSpaceStore.shared.space(kind).map(CustomSpaceText.summary) ?? "") : "浏览来源与作品库")
                     .font(.caption)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 14)
@@ -300,6 +319,10 @@ struct ContentSpaceSettingsSection: View {
     var body: some View {
         Section {
             Toggle("内容空间", isOn: $enabled).accessibilityIdentifier("settings.spaces")
+            if enabled {
+                NavigationLink { CustomSpacesView() } label: { Text("自定义空间") }
+                    .accessibilityIdentifier("settings.customSpaces")
+            }
         } footer: {
             Text(enabled ? "浏览、作品库与记录共用导航栏中的空间选择。"
                          : "各页面在顶部分别切换内容类型。")

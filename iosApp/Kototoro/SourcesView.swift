@@ -322,7 +322,7 @@ struct SourcesView: View {
 
     /// The content space, or this page's own switch while spaces are off.
     private var kind: String? {
-        if spacesEnabled { return space.isEmpty ? nil : space }
+        if spacesEnabled { return ContentSpace.kind(space) }
         return ContentKindPicker.effective(pageKind, available: availableKinds)
     }
 
@@ -335,6 +335,7 @@ struct SourcesView: View {
             guard model.isEnabled(source) else { return false }
             if !showAdult && source.isAdult { return false }
             if let selectedKind, source.mediaKind != selectedKind { return false }
+            if spacesEnabled && !ContentSpace.admits(source) { return false }
             let eco = SourceFilterOption.ecosystemKey(source)
             if hidden.contains(eco) { return false }
             if !text.isEmpty {

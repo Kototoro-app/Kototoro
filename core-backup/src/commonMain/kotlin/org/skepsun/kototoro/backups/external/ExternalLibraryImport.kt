@@ -428,7 +428,13 @@ class ExternalLibraryImport(
 
         fun generateChapterId(record: ExternalBackupContentRecord, chapterUrl: String): Long {
             val type = if (record.contentType == ContentType.VIDEO) "episode" else "chapter"
-            return "${record.sourceName}|$type|$chapterUrl".hashCode().toLong() and Long.MAX_VALUE
+            // Mihon chapter identities include the parent manga URL, matching the loaded chapter list.
+            val identity = if (record.sourceName.startsWith("MIHON_") && record.contentType != ContentType.VIDEO) {
+                "${record.url}|$chapterUrl"
+            } else {
+                chapterUrl
+            }
+            return "${record.sourceName}|$type|$identity".hashCode().toLong() and Long.MAX_VALUE
         }
 
         private fun normalizeSourceName(value: String): String {

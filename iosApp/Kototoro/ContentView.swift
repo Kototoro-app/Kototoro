@@ -40,33 +40,29 @@ struct ContentView: View {
                 List {
                     Section {
                         NavigationLink { RepositoriesView() } label: {
-                            HStack {
-                                Label("仓库与扩展", systemImage: "shippingbox")
-                                if repositories.updatesCount > 0 {
-                                    Spacer()
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "arrow.triangle.2.circlepath")
-                                            .font(.caption2)
-                                        Text("\(repositories.updatesCount)")
-                                            .font(.caption2.bold())
-                                    }
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(Color.orange.opacity(0.18))
-                                    .foregroundStyle(.orange)
-                                    .clipShape(Capsule())
-                                }
-                            }
+                            Label("仓库与扩展", systemImage: "shippingbox")
                         }
+                        // The tab already carries the count; the row repeats it with the system badge only.
+                        .badge(repositories.updatesCount)
                         NavigationLink { ReaderDownloadsView() } label: { Label("下载", systemImage: "arrow.down.circle") }
                             .accessibilityIdentifier("settings.downloads")
+                        NavigationLink { DownloadSettingsView() } label: { Label("下载设置", systemImage: "slider.horizontal.3") }
+                            .accessibilityIdentifier("settings.downloadSettings")
                         NavigationLink { BackupView() } label: { Label("备份与恢复", systemImage: "externaldrive") }
                             .accessibilityIdentifier("settings.backup")
                         NavigationLink { GoogleDriveSyncView(model: library.googleDrive) } label: {
                             Label("Google Drive 同步", systemImage: "arrow.triangle.2.circlepath.icloud")
                         }.accessibilityIdentifier("settings.googleDrive")
+                        NavigationLink { WebDavSyncView() } label: {
+                            Label("WebDAV 备份", systemImage: "externaldrive.connected.to.line.below")
+                        }.accessibilityIdentifier("settings.webdav")
                         NavigationLink { TrackingSitesView() } label: { Label("追踪网站", systemImage: "link") }
                             .accessibilityIdentifier("settings.tracking")
+                    }
+                    Section("更新") { BackgroundUpdateSettingsRows() }
+                    Section("网络") {
+                        NavigationLink { GitHubMirrorView() } label: { Label("GitHub 镜像", systemImage: "arrow.triangle.branch") }
+                            .accessibilityIdentifier("settings.githubMirror")
                     }
                     Section("本地存储") {
                         NavigationLink { ReaderStorageView() } label: { Label("存储管理", systemImage: "internaldrive") }
@@ -76,6 +72,31 @@ struct ContentView: View {
                                 .accessibilityIdentifier("database.ready")
                         } else {
                             Text("正在打开数据库…")
+                        }
+                    }
+                    Section("内容过滤") {
+                        NavigationLink { TagBlacklistView() } label: {
+                            Label("标签黑名单", systemImage: "tag.slash")
+                        }
+                        .badge(TagFilterStore.shared.selected.count)
+                        .accessibilityIdentifier("settings.tagBlacklist")
+                        ReadingIncognitoSettingsRows()
+                        AppLockToggle()
+                        NavigationLink { AdultContentFilterView() } label: {
+                            Label("成人内容过滤", systemImage: "eye.slash")
+                        }
+                        .accessibilityIdentifier("settings.adultFilter")
+                    }
+                    if let rules = library.library?.replaceRules, let notes = library.library?.notes {
+                        Section("阅读") {
+                            NavigationLink { NotesOverviewView(notes: notes) } label: {
+                                Label("笔记", systemImage: "note.text")
+                            }
+                            .accessibilityIdentifier("settings.notes")
+                            NavigationLink { ReplaceRulesView(rules: rules) } label: {
+                                Label("文本替换规则", systemImage: "text.badge.checkmark")
+                            }
+                            .accessibilityIdentifier("settings.replaceRules")
                         }
                     }
                     ContentSpaceSettingsSection()
@@ -107,6 +128,9 @@ struct ContentView: View {
         .spaceSwitcherPresentation { resumed = $0 }
         .continueReadingPresentation(opened: $resumed)
         .environment(\.openContinueReading) { resumed = $0 }
+        .task(id: "\(library.recordsRevision)|\(library.history.count)|\(sources.runtime != nil)") {
+            await WidgetSnapshot.write(history: library.history, runtime: sources.runtime)
+        }
         .task(id: "\(latest?.content.sourceName ?? "")|\(latest?.content.id ?? "")|\(sources.runtime != nil)") {
             ContinueReadingCover.shared.image = nil
             guard let latest, let runtime = sources.runtime else { return }
@@ -126,17 +150,26 @@ struct ContentView: View {
             await library.refreshMissingSources(installed: sources.sources.map(\.name))
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { downloads.setForeground(false) }
+            if phase == .background { downloads.setForeground(false); BackgroundUpdates.shared.schedule() }
             else if phase == .active {
                 downloads.setForeground(true)
                 Task { await repositories.checkForUpdates(force: false) }
                 Task { await library.googleDrive.sync(library, automatic: true) }
+                Task { await WebDavConfig.backUpIfDue(library.library) }
             }
         }
         .onOpenURL { url in
             // ASWebAuthenticationSession owns these callbacks; they must never open the repository importer.
             guard !TrackingAccountsModel.isAuthorizationCallback(url) else { return }
             guard url.scheme != GoogleDriveOAuth.configured?.scheme else { return }
+            // The home-screen widget opens a work of the history (kototoro://continue?key=…).
+            if url.scheme == "kototoro", url.host == "continue" {
+                let key = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "key" }?.value
+                if let entry = library.history.first(where: { ContentMarks.key($0.content) == key }) {
+                    resumed = CategoryContent(content: entry.content)
+                }
+                return
+            }
             // Files shared to the app ("用 Kototoro 打开") become local works; links add repositories.
             guard url.isFileURL else { incomingLink = IncomingRepositoryLink(address: url.absoluteString); return }
             guard let runtime = sources.runtime else { return }
@@ -172,6 +205,10 @@ struct ContentView: View {
             await sources.load()
             await library.refresh()
             await storage.trimAutomatically()
+            await CustomSpaceStore.shared.load(database)
+            BackgroundUpdates.shared.library = library
+            BackgroundUpdates.shared.sources = sources
+            if ProcessInfo.processInfo.environment["KOTOTORO_RUN_UPDATE_REFRESH"] == "1" { await BackgroundUpdates.shared.run() }
             await repositories.checkForUpdates(force: false)
         }
     }

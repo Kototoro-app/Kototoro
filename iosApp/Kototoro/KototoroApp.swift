@@ -12,7 +12,9 @@ struct KototoroApp: App {
         WindowGroup {
             ContentView(library: library)
                 .scrollEdgeEffectStyle(.soft, for: .top)
+                .modifier(AppLockGate())
                 .task { await library.load() }
         }
+        .backgroundTask(.appRefresh(BackgroundUpdates.identifier)) { await BackgroundUpdates.shared.run() }
     }
 }

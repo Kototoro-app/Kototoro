@@ -18,6 +18,9 @@
   * fixture_reader_zoom_neighbours.cbz — short pages for visible-neighbour zoom rebasing.
   * fixture_storage_comic.cbz / fixture_storage_tasks.cbz — cache cleanup and offline file ownership.
   * fixture_novel_controls.txt — long chapters for novel controls, paging and floating action preferences.
+  * fixture_reader_text.cbz — speech bubbles with printed text, for page OCR + translation (needs Pillow).
+  * fixture_pdf.pdf — a two-page PDF, imported as a comic (needs Pillow).
+  * fixture_show/ — a folder with two episodes of the fixture video, imported as one video work.
 
 Usage: stage-picker-fixtures.py <simulator id> (ffmpeg is required for the local video fixture)
 """
@@ -81,6 +84,31 @@ def png(width, height, rgb, columns=None):
 
 
 novel = "简介：本地导入测试用的小说，内容很短但足够测试。\n第一章 本地开端\n　　这是第一章的正文。\n第二章 本地结尾\n　　这是第二章的正文。\n"
+def text_page(bubbles):
+    """A gray page with white speech bubbles holding [bubbles] (lines of text); None without Pillow."""
+    try:
+        from io import BytesIO
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        return None
+    font = None
+    for path in ("/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/System/Library/Fonts/Helvetica.ttc"):
+        if os.path.exists(path):
+            font = ImageFont.truetype(path, 44)
+            break
+    image = Image.new("RGB", (900, 1350), (205, 205, 205))
+    draw = ImageDraw.Draw(image)
+    for (x, y, lines) in bubbles:
+        width = max(draw.textlength(line, font=font) for line in lines) + 120
+        height = 60 * len(lines) + 90
+        draw.ellipse((x, y, x + width, y + height), fill=(255, 255, 255), outline=(0, 0, 0), width=5)
+        for row, line in enumerate(lines):
+            draw.text((x + 60, y + 45 + 60 * row), line, fill=(0, 0, 0), font=font)
+    out = BytesIO()
+    image.save(out, "PNG")
+    return out.getvalue()
+
+
 video = pathlib.Path(__file__).resolve().parents[1] / "build" / "local-video-fixture" / "fixture_video.mp4"
 if not video.exists():
     video.parent.mkdir(parents=True, exist_ok=True)
@@ -93,6 +121,10 @@ if not video.exists():
     ], check=True)
 for storage in storages:
     shutil.copyfile(video, os.path.join(storage, video.name))
+    show = os.path.join(storage, "fixture_show")
+    os.makedirs(show, exist_ok=True)
+    for episode in ("第1集.mp4", "第2集.mp4"):
+        shutil.copyfile(video, os.path.join(show, episode))
     with open(os.path.join(storage, "fixture_broken_video.mp4"), "wb") as file:
         file.write(b"not a video")
     path = os.path.join(storage, "fixture_mihon.tachibk")
@@ -196,6 +228,18 @@ for storage in storages:
                                  png(720, heights[(page - 1) % len(heights)], (180 + page % 3 * 20, 40, 40)))
     with open(os.path.join(storage, "fixture_novel.txt"), "wb") as file:
         file.write(novel.encode("gb18030"))
+    pages = [text_page([(80, 120, ["Where are you going?", "Wait for me!"]), (300, 760, ["The train leaves", "at noon."])]),
+             text_page([(120, 300, ["I found the key", "under the bridge."])])]
+    try:
+        from PIL import Image
+        sheets = [Image.new("RGB", (600, 850), color) for color in ((230, 80, 80), (80, 120, 230))]
+        sheets[0].save(os.path.join(storage, "fixture_pdf.pdf"), save_all=True, append_images=sheets[1:])
+    except ImportError:
+        pass
+    if all(pages):
+        with zipfile.ZipFile(os.path.join(storage, "fixture_reader_text.cbz"), "w") as archive:
+            for number, page in enumerate(pages, 1):
+                archive.writestr(f"{number:03}.png", page)
     with open(os.path.join(storage, "fixture_novel_controls.txt"), "w", encoding="utf-8") as file:
         for chapter in range(1, 3):
             file.write(f"第{chapter}章 阅读控件\n")

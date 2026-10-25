@@ -8,7 +8,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
-import org.skepsun.kototoro.parsers.util.md5
+import org.skepsun.kototoro.core.prefs.AppPasswordHash
 import javax.inject.Inject
 
 private const val PASSWORD_COMPARE_DELAY = 1_000L
@@ -34,9 +34,10 @@ class ProtectViewModel @Inject constructor(
             return
         }
         job = launchLoadingJob {
-            val passwordHash = password.md5()
-            val appPasswordHash = settings.appPassword
-            if (passwordHash == appPasswordHash) {
+            val stored = settings.appPassword
+            if (AppPasswordHash.verify(password, stored)) {
+                // A password stored by an earlier version as plain MD5 is upgraded on the first successful unlock.
+                if (AppPasswordHash.needsUpgrade(stored)) settings.appPassword = AppPasswordHash.hash(password)
                 unlock()
             } else {
                 delay(PASSWORD_COMPARE_DELAY)

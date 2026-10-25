@@ -318,4 +318,23 @@ class LocalSourceRuntimeTest {
         assertTrue(runtime.getList("LOCAL_VIDEO", 0, null, null).isEmpty())
         assertTrue(File(dir, "store/items").listFiles().orEmpty().isEmpty())
     }
+
+    @Test
+    fun aVideoFolderBecomesOneWorkWithAnEpisodePerFileAndKeepsItsIdOnReimport() = runTest {
+        val folder = File(dir, "show").apply { mkdirs() }
+        val files = listOf("Ep10.mp4", "Ep2.mp4", "cover.jpg", "Ep1.mkv").map { name ->
+            File(folder, name).apply { writeBytes(name.encodeToByteArray()) }
+        }.map { it.toOkioPath() to it.name }
+        val runtime = runtime()
+        val first = runtime.importVideoFolder(files, "Show")
+        val details = runtime.getDetails(first, SourceDetailsFetchMode.ALLOW_CACHE)
+        // Natural order, pictures skipped.
+        assertEquals(listOf("Ep1", "Ep2", "Ep10"), details.chapters!!.map { it.title })
+        val page = runtime.getPages(details.chapters!![2], null).single()
+        assertTrue(page.url.startsWith("file://") && page.url.endsWith("/episodes/2.mp4"), page.url)
+        assertEquals(first.id, runtime.importVideoFolder(files.reversed(), "Show").id)
+        assertThrows(IllegalArgumentException::class.java) {
+            kotlinx.coroutines.runBlocking { runtime.importVideoFolder(listOf(files[2]), "Pictures") }
+        }
+    }
 }

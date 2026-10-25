@@ -28,6 +28,8 @@ data class DownloadState(
     val isPartial: Boolean = false,
     val timestamp: Long = System.currentTimeMillis(),
     val isCompleted: Boolean = false,
+    val byteProgress: DownloadByteProgress? = null,
+    val currentChapterTitle: String? = null,
 ) {
 
     val max: Int = totalChapters * totalPages
@@ -57,6 +59,10 @@ data class DownloadState(
         .putBoolean(DATA_INDETERMINATE, isIndeterminate)
         .putBoolean(DATA_PAUSED, isPaused)
         .putBoolean(DATA_COMPLETED, isCompleted)
+        .putLong(DATA_DOWNLOADED_BYTES, byteProgress?.downloadedBytes ?: -1L)
+        .putLong(DATA_TOTAL_BYTES, byteProgress?.totalBytes ?: -1L)
+        .putBoolean(DATA_TOTAL_BYTES_ESTIMATED, byteProgress?.isTotalEstimated == true)
+        .putString(DATA_CURRENT_CHAPTER_TITLE, currentChapterTitle)
         .build()
 
     companion object {
@@ -75,6 +81,10 @@ data class DownloadState(
         private const val DATA_INDETERMINATE = "indeterminate"
         private const val DATA_PAUSED = "paused"
         private const val DATA_COMPLETED = "completed"
+        private const val DATA_DOWNLOADED_BYTES = "downloaded_bytes"
+        private const val DATA_TOTAL_BYTES = "total_bytes"
+        private const val DATA_TOTAL_BYTES_ESTIMATED = "total_bytes_estimated"
+        private const val DATA_CURRENT_CHAPTER_TITLE = "current_chapter_title"
 
         fun getContentId(data: Data): Long = data.getLong(DATA_MANGA_ID, 0L)
 
@@ -103,6 +113,17 @@ data class DownloadState(
         fun getDownloadedChapters(data: Data): Int = data.getInt(DATA_CHAPTERS, 0)
 
         fun isPartial(data: Data): Boolean = data.getBoolean(DATA_PARTIAL, false)
+
+        fun getByteProgress(data: Data): DownloadByteProgress? {
+            val downloadedBytes = data.getLong(DATA_DOWNLOADED_BYTES, -1L).takeIf { it >= 0 } ?: return null
+            return DownloadByteProgress(
+                downloadedBytes = downloadedBytes,
+                totalBytes = data.getLong(DATA_TOTAL_BYTES, -1L).takeIf { it > 0 },
+                isTotalEstimated = data.getBoolean(DATA_TOTAL_BYTES_ESTIMATED, false),
+            )
+        }
+
+        fun getCurrentChapterTitle(data: Data): String? = data.getString(DATA_CURRENT_CHAPTER_TITLE)
 
         fun getTaskKind(data: Data): DownloadTaskKind =
             data.getString(DATA_TASK_KIND)?.let { DownloadTaskKind.entries.find(it) } ?: DownloadTaskKind.DOWNLOAD

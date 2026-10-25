@@ -14,6 +14,8 @@ kotlin {
             api project(':core-source')
             // Shared backup DTOs; the merge into the v84 tables lives here for every non-Android platform.
             api project(':core-backup')
+            // WebDAV backup protocol (the sync orchestration over it lives here for Windows and iOS).
+            api project(':core-net')
             implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.coroutines.get()}"
             implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
         }

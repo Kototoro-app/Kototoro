@@ -45,4 +45,19 @@ class NovelPageSegmentsTest {
 		assertEquals(NovelSegmentPosition(2, 1), segments.positionOf(4, 1))
 		assertNull(segments.positionOf(9))
 	}
+
+	@Test
+	fun translatedBlocksShowTheirTranslationOrBothLines() {
+		val only = blocks.withNovelTranslations(mapOf(1 to "Part A"), NovelTranslationDisplayMode.TRANSLATION_ONLY)
+		val first = assertIs<NovelPageSegment.Text>(buildNovelPageSegments(only, true, 0).first())
+		assertEquals("第一章 开始\n　　Part A\n　　乙段", first.text)
+		assertEquals(2, first.blockAt(first.text.indexOf("乙段")))
+
+		val both = blocks.withNovelTranslations(mapOf(1 to "Part A", 2 to " "), NovelTranslationDisplayMode.BILINGUAL)
+		val bilingual = assertIs<NovelPageSegment.Text>(buildNovelPageSegments(both, false, 0).first())
+		assertEquals("第一章 开始\n甲段\nPart A\n乙段", bilingual.text)
+		assertEquals(1, bilingual.blockAt(bilingual.text.indexOf("Part A")))
+		// Positions keep the original chapter's offsets.
+		assertEquals(blocks[1].sourceRange, both[1].sourceRange)
+	}
 }

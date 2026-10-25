@@ -84,14 +84,18 @@ extension IosFilterValue {
 /// the source's state / rating / type / demographic / language options.
 struct SourceFilterSheet: View {
     let panel: IosFilterPanel
+    /// The source whose saved filters the sheet offers; none without one.
+    var sourceName: String? = nil
     let onApply: (BrowseFilter) -> Void
     @State private var draft: BrowseFilter
     @State private var tagQuery = ""
     @State private var expandedGroups: Set<String> = []
     @Environment(\.dismiss) private var dismiss
 
-    init(panel: IosFilterPanel, initial: BrowseFilter, onApply: @escaping (BrowseFilter) -> Void) {
+    init(panel: IosFilterPanel, initial: BrowseFilter, sourceName: String? = nil,
+         onApply: @escaping (BrowseFilter) -> Void) {
         self.panel = panel
+        self.sourceName = sourceName
         self.onApply = onApply
         _draft = State(initialValue: initial)
     }
@@ -99,6 +103,9 @@ struct SourceFilterSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let sourceName, !panel.isEmpty {
+                    SavedFiltersSection(source: sourceName, panel: panel, draft: $draft)
+                }
                 if panel.sortOrders.count > 1 {
                     Section("排序") {
                         Picker("排序方式", selection: Binding(get: { draft.order ?? panel.defaultSortOrder },

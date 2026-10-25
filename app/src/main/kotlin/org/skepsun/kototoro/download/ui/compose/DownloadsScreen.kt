@@ -41,6 +41,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.util.ext.getThemeColor
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.download.ui.list.DownloadItemModel
+import org.skepsun.kototoro.download.ui.list.formatDownloadSize
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.download.ui.list.DownloadsViewModel
 import org.skepsun.kototoro.download.ui.list.chapters.DownloadChapter
@@ -376,6 +377,16 @@ fun DownloadItemRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+
+                    formatDownloadSize(item.byteProgress, item.currentChapterTitle)?.let { size ->
+                        Text(
+                            text = size,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
 
                     if (item.workState == WorkInfo.State.RUNNING) {
                         val detailsText = when {

@@ -372,50 +372,19 @@ private fun findNovelTextRangeNear(
     text: String,
     selectedText: String,
     expectedStart: Int?,
-): IntRange? {
-    if (text.isEmpty() || selectedText.isEmpty()) return null
-    var searchStart = 0
-    var closest: IntRange? = null
-    var closestDistance = Int.MAX_VALUE
-    while (searchStart < text.length) {
-        val matchStart = text.indexOf(selectedText, searchStart)
-        if (matchStart < 0) break
-        val matchEnd = (matchStart + selectedText.length).coerceAtMost(text.length)
-        val candidate = matchStart until matchEnd
-        val distance = expectedStart?.let { abs(matchStart - it) } ?: 0
-        if (distance < closestDistance) {
-            closest = candidate
-            closestDistance = distance
-        }
-        searchStart = matchStart + 1
-    }
-    return closest
-}
+): IntRange? = org.skepsun.kototoro.reader.novel.findNovelTextRangeNear(text, selectedText, expectedStart)
 
 /**
  * Converts a persisted, half-open source range into the local range rendered by one text block.
  * A marking can cross page or paragraph boundaries, so every block must render its intersection.
  */
+/** Shared with iOS (reader-novel). */
 internal fun resolveNovelMarkingLocalRange(
     sourceRange: IntRange?,
     markingStart: Int,
     markingEnd: Int,
     textLength: Int,
-): IntRange? {
-    if (textLength <= 0 || markingEnd <= markingStart) return null
-
-    if (sourceRange == null) return null
-
-    val sourceStart = sourceRange.first
-    val sourceEndExclusive = sourceRange.last + 1
-    val overlapStart = maxOf(sourceStart, markingStart)
-    val overlapEnd = minOf(sourceEndExclusive, markingEnd)
-    if (overlapEnd <= overlapStart) return null
-
-    val localStart = (overlapStart - sourceStart).coerceIn(0, textLength)
-    val localEnd = (overlapEnd - sourceStart).coerceIn(localStart, textLength)
-    return if (localEnd > localStart) localStart until localEnd else null
-}
+): IntRange? = org.skepsun.kototoro.reader.novel.resolveNovelMarkingLocalRange(sourceRange, markingStart, markingEnd, textLength)
 
 private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectNovelMarkingTap(
     layoutResult: () -> TextLayoutResult?,
@@ -453,45 +422,9 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectNo
     }
 }
 
+/** Shared with iOS (reader-novel). */
 internal fun findNovelTextRange(
     source: String,
     selected: String,
     preferredStart: Int = 0,
-): IntRange? {
-    val cleanSelection = selected.trim()
-    if (cleanSelection.isEmpty()) return null
-    val exactStart = source.indexOf(cleanSelection, preferredStart.coerceAtLeast(0))
-        .takeIf { it >= 0 }
-        ?: source.indexOf(cleanSelection)
-    if (exactStart >= 0) return exactStart until exactStart + cleanSelection.length
-
-    val normalizedSource = normalizeNovelText(source)
-    val normalizedSelection = normalizeNovelText(cleanSelection).first
-    val normalizedStart = normalizedSource.first.indexOf(normalizedSelection)
-    if (normalizedStart < 0) return null
-    val offsets = normalizedSource.second
-    val start = offsets[normalizedStart]
-    val end = offsets[normalizedStart + normalizedSelection.length - 1] + 1
-    return start until end
-}
-
-private fun normalizeNovelText(text: String): Pair<String, IntArray> {
-    val normalized = StringBuilder(text.length)
-    val offsets = ArrayList<Int>(text.length)
-    var pendingWhitespace = false
-    for (index in text.indices) {
-        val char = text[index]
-        if (char.isWhitespace()) {
-            pendingWhitespace = normalized.isNotEmpty()
-            continue
-        }
-        if (pendingWhitespace) {
-            normalized.append(' ')
-            offsets += index - 1
-            pendingWhitespace = false
-        }
-        normalized.append(char)
-        offsets += index
-    }
-    return normalized.toString() to offsets.toIntArray()
-}
+): IntRange? = org.skepsun.kototoro.reader.novel.findNovelTextRange(source, selected, preferredStart)

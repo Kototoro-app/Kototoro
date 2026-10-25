@@ -2149,6 +2149,419 @@ final class LocalImportTests: XCTestCase {
         attach("本地小说阅读")
     }
 
+    /// A page crop saved as a note appears in Settings → Notes with its thought, opens its page, and can be deleted;
+    /// a video note keeps its time point and frame.
+    @MainActor
+    func testCropAndVideoNotesAppearInTheNotesOverview() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_text", reuse: true)
+        openFirstChapter(title: "fixture_reader_text")
+        let page = app.images["reader.image"].firstMatch
+        XCTAssertTrue(page.waitForExistence(timeout: 30), app.debugDescription)
+        app.buttons["reader.more"].tap()
+        app.segmentedControls.buttons["快捷"].tap()
+        app.buttons["reader.action.crop"].tap()
+        let note = app.textFields["crop.note"]
+        XCTAssertTrue(note.waitForExistence(timeout: 10), app.debugDescription)
+        let canvas = app.windows.firstMatch
+        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.25))
+            .press(forDuration: 0.1, thenDragTo: canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.4)))
+        note.tap()
+        note.typeText("第一格的对白")
+        app.buttons["crop.saveNote"].tap()
+        XCTAssertTrue(note.waitForNonExistence(timeout: 10), app.debugDescription)
+        // The reader hides the tab bar; start the video from the tab root.
+        app.terminate()
+        app.launch()
+        importFile(source: "LOCAL_VIDEO", file: "fixture_video", reuse: true)
+        let read = app.detailsReadButton()
+        XCTAssertTrue(read.waitForExistence(timeout: 20), app.debugDescription)
+        read.tap()
+        let playing = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in self.playedSeconds >= 3 }, object: nil)
+        wait(for: [playing], timeout: 30)
+        showVideoControls()
+        app.buttons["player.note"].tap()
+        let videoNote = app.textFields["写下想法（可选）"]
+        XCTAssertTrue(videoNote.waitForExistence(timeout: 10), app.debugDescription)
+        videoNote.typeText("片头")
+        app.buttons["保存"].tap()
+        XCTAssertTrue(app.staticTexts["已存为笔记"].waitForExistence(timeout: 15), app.debugDescription)
+        app.buttons["好"].tap()
+        showVideoControls()
+        app.buttons["player.close"].tap()
+
+        app.terminate()
+        app.launch()
+        app.mainTab("设置").tap()
+        let entry = app.buttons["settings.notes"]
+        for _ in 0..<6 where !entry.exists { app.swipeUp() }
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), app.debugDescription)
+        entry.tap()
+        let comic = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@",
+                                                     "notes.work", "fixture_reader_text")).firstMatch
+        XCTAssertTrue(comic.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@",
+                                                       "notes.work", "fixture_video")).firstMatch.exists)
+        attach("笔记总览")
+        comic.tap()
+        let item = app.descendants(matching: .any).matching(identifier: "notes.item").firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.staticTexts["第一格的对白"].exists, app.debugDescription)
+        attach("作品笔记")
+        item.tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30), app.debugDescription)
+        app.buttons["reader.back"].tap()
+        for _ in 0..<5 where item.waitForExistence(timeout: 3) {
+            item.swipeLeft()
+            app.buttons["删除"].tap()
+        }
+        XCTAssertFalse(item.exists, app.debugDescription)
+    }
+
+    /// A replacement rule added in Settings rewrites the novel text; deleting it restores the original.
+    @MainActor
+    func testReplaceRuleRewritesNovelText() throws {
+        app.mainTab("设置").tap()
+        let entry = app.buttons["settings.replaceRules"]
+        for _ in 0..<6 where !entry.exists { app.swipeUp() }
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), app.debugDescription)
+        entry.tap()
+        app.buttons["replaceRules.add"].tap()
+        let pattern = app.textFields["replaceRules.pattern"]
+        XCTAssertTrue(pattern.waitForExistence(timeout: 10), app.debugDescription)
+        pattern.tap()
+        pattern.typeText("晨光")
+        let replacement = app.textFields["replaceRules.replacement"]
+        replacement.tap()
+        replacement.typeText("夕阳")
+        app.buttons["replaceRules.save"].tap()
+        let row = app.descendants(matching: .any).matching(identifier: "replaceRules.row").firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), app.debugDescription)
+        attach("替换规则")
+
+        importFile(source: "LOCAL_NOVEL", file: "fixture_novel_controls", reuse: true)
+        openFirstChapter(title: "fixture_novel_controls")
+        let rewritten = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "夕阳落在书页上")).firstMatch
+        XCTAssertTrue(rewritten.waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "晨光")).firstMatch.exists)
+        // Back at the tab root (the details page hides the tab bar) to remove the rule.
+        app.terminate()
+        app.launch()
+        app.mainTab("设置").tap()
+        for _ in 0..<6 where !entry.exists { app.swipeUp() }
+        entry.tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        // Every rule goes, so no other test reads rewritten text.
+        for _ in 0..<5 where row.exists {
+            row.swipeLeft()
+            app.buttons.matching(NSPredicate(format: "label IN %@", ["删除", "Delete"])).firstMatch.tap()
+            Thread.sleep(forTimeInterval: 1)
+        }
+        XCTAssertTrue(row.waitForNonExistence(timeout: 10), app.debugDescription)
+    }
+
+    /// A folder of videos imports as one work with an episode per file.
+    @MainActor
+    func testVideoFolderImportsAsEpisodes() throws {
+        app.mainTab("浏览").tap()
+        let space = app.buttons["space.menu"]
+        if space.waitForExistence(timeout: 3) {
+            space.tap()
+            app.buttons["space.select.VIDEO"].tap()
+        }
+        let field = app.pageSearchField()
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        if let text = field.value as? String, text != field.placeholderValue, !text.isEmpty {
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: text.count + 2))
+        }
+        field.typeText("本地\n")
+        let source = app.buttons["source.LOCAL_VIDEO"]
+        XCTAssertTrue(source.waitForExistence(timeout: 30), app.debugDescription)
+        source.tap()
+        let folderButton = app.buttons["browse.importFolder"]
+        XCTAssertTrue(folderButton.waitForExistence(timeout: 10), app.debugDescription)
+        folderButton.tap()
+        for title in ["我的iPhone", "我的 iPhone", "On My iPhone"] {
+            let location = app.cells.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+            if location.waitForExistence(timeout: 5) && location.isHittable { location.tap(); break }
+        }
+        let folder = app.cells.matching(NSPredicate(format: "label CONTAINS %@", "fixture_show")).firstMatch
+        // The picker lists files alphabetically and loads rows as they scroll in.
+        for _ in 0..<8 where !(folder.exists && folder.isHittable) {
+            (app.collectionViews.firstMatch.exists ? app.collectionViews.firstMatch : app.tables.firstMatch).swipeUp()
+        }
+        XCTAssertTrue(folder.waitForExistence(timeout: 15), app.debugDescription)
+        folder.tap()
+        let open = app.buttons.matching(NSPredicate(format: "label IN %@", ["打开", "Open"])).firstMatch
+        XCTAssertTrue(open.waitForExistence(timeout: 10), app.debugDescription)
+        open.tap()
+        let done = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "共 2 集")).firstMatch
+        XCTAssertTrue(done.waitForExistence(timeout: 60), app.debugDescription)
+        attach("视频文件夹导入")
+    }
+
+    /// A PDF imports as a comic: its pages open in the reader.
+    @MainActor
+    func testPdfImportsAsAComic() throws {
+        importFile(source: "LOCAL", file: "fixture_pdf")
+        openFirstChapter(title: "fixture_pdf")
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30), app.debugDescription)
+        attach("PDF 导入")
+    }
+
+    /// The library filter sheet counts chosen groups on its button and clears them.
+    @MainActor
+    func testLibraryFilterCountsAndClears() throws {
+        app.mainTab("作品库").tap()
+        let filter = app.buttons["library.filter"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 15), app.debugDescription)
+        filter.tap()
+        let reading = app.segmentedControls["library.filter.reading"]
+        XCTAssertTrue(reading.waitForExistence(timeout: 10), app.debugDescription)
+        reading.buttons["读完"].tap()
+        app.buttons["library.filter.macro.SFW"].tap()
+        attach("作品库筛选")
+        app.buttons["完成"].tap()
+        XCTAssertTrue(filter.waitForExistence(timeout: 5))
+        XCTAssertTrue(filter.label.contains("2"), filter.label)
+        filter.tap()
+        app.buttons["library.filter.clear"].tap()
+        app.buttons["完成"].tap()
+        XCTAssertFalse(filter.label.contains("2"), filter.label)
+    }
+
+    /// A custom Space made in the switcher appears as a card, becomes the app-wide space, and deleting it returns
+    /// to all content.
+    @MainActor
+    func testCustomSpaceCanBeCreatedSelectedAndDeleted() throws {
+        app.terminate()
+        app.launchArguments += ["-space.enabled", "YES"]
+        app.launch()
+        app.mainTab("浏览").tap()
+        let menu = app.buttons["space.menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 15), app.debugDescription)
+        menu.tap()
+        let manage = app.buttons["space.manage"]
+        for _ in 0..<4 where !manage.isHittable { app.swipeUp() }
+        manage.tap()
+        let leftover = app.buttons["spaces.custom.测试空间"]
+        if leftover.waitForExistence(timeout: 2) { leftover.swipeLeft(); app.buttons["删除"].tap() }
+        app.buttons["spaces.add"].tap()
+        let title = app.textFields["spaces.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5), app.debugDescription)
+        title.tap(); title.typeText("测试空间")
+        app.buttons["spaces.type.MANGA"].tap()
+        let native = app.buttons["spaces.kind.NATIVE"]
+        for _ in 0..<4 where !(native.exists && native.isHittable) { app.swipeUp() }
+        native.tap()
+        app.buttons["spaces.save"].tap()
+        let row = app.buttons["spaces.custom.测试空间"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10), app.debugDescription)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let card = app.buttons["space.select.CUSTOM.测试空间"]
+        for _ in 0..<4 where !card.isHittable { app.swipeUp() }
+        XCTAssertTrue(card.waitForExistence(timeout: 10), app.debugDescription)
+        card.tap()
+        XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        XCTAssertTrue(menu.label.contains("测试空间"), menu.label)
+        attach("自定义空间")
+
+        menu.tap()
+        for _ in 0..<4 where !manage.isHittable { app.swipeUp() }
+        manage.tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.swipeLeft()
+        app.buttons["删除"].tap()
+        XCTAssertTrue(row.waitForNonExistence(timeout: 10), app.debugDescription)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["space.close"].tap()
+        XCTAssertTrue(menu.label.contains("全部"), menu.label)
+    }
+
+    /// The estimated time left shows for a comic and not for a novel, whose "pages" are lines.
+    @MainActor
+    func testTimeLeftShowsForComicsOnly() throws {
+        importFile(source: "LOCAL", file: "fixture_reader_chapters", reuse: true)
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 30), app.debugDescription)
+        let left = app.staticTexts["details.timeLeft"]
+        XCTAssertTrue(left.waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertTrue(left.label.hasPrefix("剩余约"), left.label)
+        attach("剩余时间")
+        app.terminate()
+        app.launch()
+        importFile(source: "LOCAL_NOVEL", file: "fixture_novel_controls", reuse: true)
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertFalse(left.waitForExistence(timeout: 5), "Novels get no page-based estimate")
+    }
+
+    /// "划线当前段" highlights the paragraph being read, it shows in the work's notes, and removing it works.
+    @MainActor
+    func testNovelParagraphHighlightAppearsInNotes() throws {
+        openNovelControls(mode: "SCROLL")
+        app.buttons["novel.more"].tap()
+        let mark = app.buttons["novel.markParagraph"]
+        XCTAssertTrue(mark.waitForExistence(timeout: 10), app.debugDescription)
+        let wasMarked = mark.label.contains("取消")
+        if wasMarked { mark.tap(); XCTAssertTrue(app.buttons["划线当前段"].waitForExistence(timeout: 10)) }
+        app.buttons["novel.markParagraph"].tap()
+        XCTAssertTrue(app.buttons["取消本段划线"].waitForExistence(timeout: 10), app.debugDescription)
+        app.buttons["novel.panel.close"].tap()
+        attach("小说划线")
+        app.buttons["novel.back"].tap()
+
+        app.terminate()
+        app.launch()
+        app.mainTab("设置").tap()
+        let entry = app.buttons["settings.notes"]
+        for _ in 0..<6 where !entry.exists { app.swipeUp() }
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), app.debugDescription)
+        entry.tap()
+        let work = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@",
+                                                    "notes.work", "fixture_novel_controls")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 10), app.debugDescription)
+        work.tap()
+        let marking = app.descendants(matching: .any).matching(identifier: "notes.marking").firstMatch
+        XCTAssertTrue(marking.waitForExistence(timeout: 10), app.debugDescription)
+        attach("笔记中的划线")
+        for _ in 0..<5 where marking.waitForExistence(timeout: 2) {
+            marking.swipeLeft()
+            app.buttons["删除"].tap()
+        }
+        XCTAssertFalse(marking.exists, app.debugDescription)
+    }
+
+    /// Searching the chapter lists matching lines and jumps to the chosen one.
+    @MainActor
+    func testNovelChapterSearchJumpsToTheMatch() throws {
+        openNovelControls(mode: "PAGED")
+        app.buttons["novel.more"].tap()
+        let search = app.buttons["novel.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10), app.debugDescription)
+        search.tap()
+        let field = app.searchFields["搜索本章正文"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10), app.debugDescription)
+        field.tap()
+        field.typeText("第30段")
+        let result = app.buttons.matching(identifier: "novel.search.result").firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(app.buttons.matching(identifier: "novel.search.result").count, 1)
+        result.tap()
+        let page = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "第30段")).firstMatch
+        XCTAssertTrue(page.waitForExistence(timeout: 10), app.debugDescription)
+        attach("本章搜索跳转")
+    }
+
+    /// Reading aloud shows its bar, the reader follows the spoken line, and stopping removes the bar.
+    @MainActor
+    func testNovelReadAloudFollowsTheSpokenLine() throws {
+        // Independent of where an earlier test left the chapter: only the change of position counts.
+        app.terminate()
+        app.launchArguments += ["-novel.reader.mode", "SCROLL"]
+        app.launch()
+        importFile(source: "LOCAL_NOVEL", file: "fixture_novel_controls", reuse: true)
+        openFirstChapter(title: "fixture_novel_controls")
+        let progress = app.sliders["novel.progress"]
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in progress.exists && progress.isEnabled },
+                                             object: nil)], timeout: 30)
+        progress.adjust(toNormalizedSliderPosition: 0.2)
+        Thread.sleep(forTimeInterval: 1)
+        let start = progress.value as? String
+        app.buttons["novel.more"].tap()
+        let speak = app.buttons["novel.speak"]
+        XCTAssertTrue(speak.waitForExistence(timeout: 10), app.debugDescription)
+        speak.tap()
+        let bar = app.descendants(matching: .any)["novel.speechBar"]
+        XCTAssertTrue(bar.waitForExistence(timeout: 10), app.debugDescription)
+        let next = app.buttons["novel.speech.next"]
+        next.tap()
+        next.tap()
+        next.tap()
+        let moved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            (progress.value as? String).map { $0 != start } ?? false
+        }, object: nil)
+        wait(for: [moved], timeout: 15)
+        attach("小说朗读")
+        app.buttons["novel.speech.stop"].tap()
+        XCTAssertTrue(bar.waitForNonExistence(timeout: 5), app.debugDescription)
+    }
+
+    /// Page translation recognizes the bubbles with Vision and paints the translation over them; the fixture
+    /// translator stands in for the system one, which the simulator does not have.
+    @MainActor
+    func testMangaPageTranslationRecognizesAndReplacesBubbles() throws {
+        app.launchEnvironment["KOTOTORO_TRANSLATION_FIXTURE"] = "1"
+        app.launchArguments += ["-novel.translation.target", "zh"]
+        app.terminate()
+        app.launch()
+        importFile(source: "LOCAL", file: "fixture_reader_text", reuse: true)
+        openFirstChapter(title: "fixture_reader_text")
+        let page = app.images["reader.image"].firstMatch
+        XCTAssertTrue(page.waitForExistence(timeout: 30), app.debugDescription)
+        attach("页面翻译前")
+        app.buttons["reader.more"].tap()
+        app.segmentedControls.buttons["快捷"].tap()
+        let translate = app.buttons["reader.action.translate"]
+        XCTAssertTrue(translate.waitForExistence(timeout: 10), app.debugDescription)
+        translate.tap()
+        let translated = app.images.matching(NSPredicate(format: "label CONTAINS %@", "[zh] Where are you going")).firstMatch
+        XCTAssertTrue(translated.waitForExistence(timeout: 60), app.debugDescription)
+        XCTAssertTrue(translated.label.contains("[zh] The train leaves"), translated.label)
+        attach("页面翻译后")
+    }
+
+    /// Incognito reading says so and leaves the saved position alone; normal reading saves it again.
+    @MainActor
+    func testIncognitoReadingKeepsTheSavedPosition() throws {
+        openNovelControls(mode: "SCROLL")
+        app.buttons["novel.back"].tap()
+
+        app.terminate()
+        app.launchArguments += ["-incognito", "YES"]
+        app.launch()
+        importFile(source: "LOCAL_NOVEL", file: "fixture_novel_controls", reuse: true)
+        openFirstChapter(title: "fixture_novel_controls")
+        XCTAssertTrue(app.descendants(matching: .any)["reader.incognitoNotice"].waitForExistence(timeout: 10),
+                      app.debugDescription)
+        let progress = app.sliders["novel.progress"]
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in progress.exists && progress.isEnabled },
+                                              object: nil)
+        wait(for: [ready], timeout: 30)
+        progress.adjust(toNormalizedSliderPosition: 0.65)
+        Thread.sleep(forTimeInterval: 1.5)
+        attach("无痕阅读")
+        app.buttons["novel.back"].tap()
+        openFirstChapter(title: "fixture_novel_controls")
+        XCTAssertTrue(progress.waitForExistence(timeout: 30))
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in progress.isEnabled }, object: nil)],
+             timeout: 30)
+        XCTAssertEqual(progress.value as? String, "0%", "Incognito reading must not move the saved position")
+    }
+
+    /// Translated lines replace or (bilingual) follow the original on the pages; the original returns on demand.
+    /// The simulator has no system translator, so the fixture translator tags each line.
+    @MainActor
+    func testNovelTranslationLaysOutBilingualPages() throws {
+        app.launchEnvironment["KOTOTORO_TRANSLATION_FIXTURE"] = "1"
+        app.launchArguments += ["-novel.translation.target", "en", "-novel.translation.bilingual", "YES"]
+        openNovelControls(mode: "PAGED")
+        let page = app.staticTexts["novel.firstParagraph"]
+        XCTAssertFalse(page.label.contains("[en]"), page.label)
+        app.buttons["novel.more"].tap()
+        let translate = app.buttons["novel.translate"]
+        XCTAssertTrue(translate.waitForExistence(timeout: 10), app.debugDescription)
+        translate.tap()
+        XCTAssertTrue(translate.label.contains("原文"), app.debugDescription)
+        app.buttons["novel.panel.close"].tap()
+        let translated = NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "[en] 第1段", "　　第1段")
+        XCTAssertTrue(app.staticTexts.matching(translated).firstMatch.waitForExistence(timeout: 10), app.debugDescription)
+        attach("小说双语翻译分页")
+        app.buttons["novel.more"].tap()
+        app.buttons["novel.translate"].tap()
+        app.buttons["novel.panel.close"].tap()
+        let restored = NSPredicate { _, _ in !page.label.contains("[en]") && page.label.contains("第1段") }
+        wait(for: [XCTNSPredicateExpectation(predicate: restored, object: nil)], timeout: 10)
+    }
+
     @MainActor
     func testNovelFloatingActionsPersistAndOperateFromTheMorePanel() throws {
         openNovelControls(mode: "SCROLL")

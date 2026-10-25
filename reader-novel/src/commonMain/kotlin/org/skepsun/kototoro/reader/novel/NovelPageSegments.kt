@@ -85,9 +85,14 @@ fun buildNovelPageSegments(
             is NovelDocumentBlock.Text -> {
                 if (starts.isEmpty()) firstBlock = index else text.append(separator)
                 starts += text.length
-                if (indentEnabled && indentLine(index, block.original)) text.append(NOVEL_PARAGRAPH_INDENT)
-                contentStarts += text.length
-                text.append(block.original)
+                val indent = indentEnabled && indentLine(index, block.original)
+                // A translated block shows its translation, or both lines when bilingual, as one block.
+                block.displayLines.forEachIndexed { line, value ->
+                    if (line > 0) text.append(separator)
+                    if (indent) text.append(NOVEL_PARAGRAPH_INDENT)
+                    if (line == 0) contentStarts += text.length
+                    text.append(value)
+                }
             }
         }
     }

@@ -25,37 +25,21 @@ class BookNotesRepository @Inject constructor(
         database.getBookmarksDao().observe(),
         database.getMediaNoteDao().observeAll(),
     ) { markings, bookmarksMap, mediaNotes ->
-        val markingsByManga = markings.groupBy { it.mangaId }
-        val mediaNotesByManga = mediaNotes.groupBy { it.mangaId }
-        val allMangaIds = (markingsByManga.keys + bookmarksMap.keys.map { it.manga.id } + mediaNotesByManga.keys).distinct()
-        if (allMangaIds.isEmpty()) return@combine emptyList<BookNotesSummary>()
+        // Counts come from the rule iOS shares; works are looked up by id once instead of scanning the keys per work.
+        val worksById = bookmarksMap.keys.associateBy { it.manga.id }
+        val counts = summarizeBookNotes(
+            markings,
+            bookmarksMap.entries.associate { (work, marks) -> work.manga.id to marks },
+            mediaNotes,
+        )
+        if (counts.isEmpty()) return@combine emptyList<BookNotesSummary>()
+        val ids = counts.map { it.mangaId }
+        val historyMap = database.getHistoryDao().findAllByMangaIds(ids).associateBy { it.mangaId }
 
-        val historyMap = database.getHistoryDao().findAllByMangaIds(allMangaIds).associateBy { it.mangaId }
-
-        val missingMangaIds = allMangaIds.filter { id -> bookmarksMap.none { it.key.manga.id == id } }
-        val fetchedMangaMap = if (missingMangaIds.isNotEmpty()) {
-            missingMangaIds.mapNotNull { id -> database.getMangaDao().find(id) }.associateBy { it.manga.id }
-        } else {
-            emptyMap()
-        }
-
-        allMangaIds.mapNotNull { mangaId ->
-            val mangaWithTags = bookmarksMap.keys.find { it.manga.id == mangaId } ?: fetchedMangaMap[mangaId]
-            val manga = mangaWithTags?.toContent() ?: return@mapNotNull null
-
-            val bookMarkings = markingsByManga[mangaId].orEmpty()
-            val bookBookmarks = bookmarksMap[mangaWithTags].orEmpty()
-            val bookMediaNotes = mediaNotesByManga[mangaId].orEmpty()
-
-            val highlightCount = bookMarkings.count { it.note.isNullOrBlank() } +
-                bookMediaNotes.count { it.note.isNullOrBlank() }
-            val thoughtCount = bookMarkings.count { !it.note.isNullOrBlank() } +
-                bookMediaNotes.count { !it.note.isNullOrBlank() }
-            val bookmarkCount = bookBookmarks.size
-            val totalCount = highlightCount + thoughtCount + bookmarkCount
-
-            if (totalCount == 0) return@mapNotNull null
-
+        counts.mapNotNull { count ->
+            val mangaId = count.mangaId
+            val manga = (worksById[mangaId] ?: database.getMangaDao().find(mangaId))?.toContent()
+                ?: return@mapNotNull null
             val history = historyMap[mangaId]
             val progressPercent = history?.percent
             val progressText = when {
@@ -66,24 +50,18 @@ class BookNotesRepository @Inject constructor(
                 history != null -> context.getString(R.string.status_reading)
                 else -> null
             }
-
-            val lastMarkingTime = bookMarkings.maxOfOrNull { it.updatedAt } ?: 0L
-            val lastBookmarkTime = bookBookmarks.maxOfOrNull { it.createdAt } ?: 0L
-            val lastMediaNoteTime = bookMediaNotes.maxOfOrNull { it.updatedAt } ?: 0L
-            val lastTime = maxOf(lastMarkingTime, lastBookmarkTime, lastMediaNoteTime)
-
             BookNotesSummary(
                 mangaId = mangaId,
                 title = manga.title,
                 coverUrl = manga.coverUrl,
                 contentType = manga.source.contentType,
-                totalCount = totalCount,
-                highlightCount = highlightCount,
-                thoughtCount = thoughtCount,
-                bookmarkCount = bookmarkCount,
+                totalCount = count.total,
+                highlightCount = count.highlights,
+                thoughtCount = count.thoughts,
+                bookmarkCount = count.bookmarks,
                 readingProgressPercent = progressPercent,
                 readingProgressText = progressText,
-                lastUpdatedAt = lastTime,
+                lastUpdatedAt = count.lastUpdatedAt,
                 isNsfw = manga.isNsfw(),
                 source = manga.source.name,
             )
