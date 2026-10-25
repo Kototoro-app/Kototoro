@@ -8949,3 +8949,36 @@ Windows 此前只有详情页里的“选择书签”面板，没有“全部书
   历史行与写进程留下的一模一样，返回详情再回书签页，全选 + 删除后书架与数据库都空、显示空态。
 - `:desktop-runtime:test` 187 条 0 失败（`DesktopNavigationSettingsTest` 与 `DesktopBackgroundSettingsTest`
   的枚举断言随新目标/新导航项一起更新）；`:desktop-app:verifyDesktopStrings` 通过，960 键 / 960 条被引用。
+
+## 196. 滚轮与触控板滚动不再拖走锚定面板（issue #601）（2026-10-25）
+
+用户报告（#601，Windows 2.3.2 / Windows 11 / Lenovo IdeaPad Slim 3）：在阅读器里用触控板双指滚动章节列表，
+章节面板反而一直开开合合，根本滚不动。原因在共享的 `core-ui` 锚定面板而不是 Windows 外壳：
+
+### 根因
+- `StableAnchoredSheetLayout` 的嵌套滚动回调把任何 `NestedScrollSource.UserInput` 的纵向增量先交给面板：
+  `onPreScroll` 只在“面板没有在拖、且已完全展开”时才放手，`onPostScroll` 在内容到顶后继续接。面板不在 `Full`
+  锚点时，第一格滚轮就被 `dispatchNestedDelta` 吃掉去挪面板，列表拿到 0。
+- 滚轮/双指滚动以 `PointerEventType.Scroll` 到达，没有按下事件，于是 `hasNestedDrag()` 变真后
+  `onPreFling` 的 `settle` 把面板往下一个锚点送，到 `Hidden` 就 `onDismissRequest`——面板关闭；反向再滚又打开。
+  触屏拖动本来就该这样（Android 上就是拖着收面板），所以问题只出在“没有按下的滚动”被当成了拖动。
+
+### 修法（共享，Android 接鼠标时同样受益）
+- `StableSheetState` 记住“最近一次指针输入是不是只有滚动”：`noteScrollInput()`/`notePressedInput()`，
+  `isScrollOnlyPointer()`；`onPreScroll`/`onPostScroll` 第一行在这个状态下直接返回 `Offset.Zero`，
+  面板不再吞滚轮，`hasNestedDrag()` 也不会被滚轮点亮。
+- 面板根节点用一个 `Modifier.pointerInput` 在 `PointerEventPass.Initial` 上观察事件类型（父节点先于内容收到，
+  所以判定总在内容派发嵌套滚动之前）：`Scroll` 置位、`Press` 清位。真实拖动（有按下）仍保留 Android 的
+  “拖列表到顶继续往下收面板”行为，滚轮/触控板永远只滚列表。
+- 标题/芯片上的 `anchoredDraggable`（`dragModifier`）走的是按下拖动，不经过这条判定，没有改动。
+
+### 验证
+- `:desktop-app:test --tests=*StableSheetWheelScrollTest*`（新增，2 条）：在共享面板里放一个 `LazyColumn`，
+  滚轮上下滚必须滚动列表且 `onDismissRequest` 一次都不触发（修复前该条红：列表不动，增量被面板吃掉）；
+  另一条按下拖标题，面板仍必须真的下移、列表不动——保证没有把 Android 的收起手势一起关掉。
+- `:desktop-app:test --tests=*DesktopChapterPanelScrollTest*`（新增）：`manga-directory` 探针在真实阅读器的
+  章节面板里多了一步滚轮（`scroll(4f)` 后列表位置必须前进、面板必须还在、页码与导航不变）与反向大步滚（面板仍在），
+  随后原有拖动/筛选/网格/搜索步骤照旧。
+- 全量：`:desktop-app:test` 292 条 0 失败、`:desktop-runtime:test` 187 条 0 失败、`:core-domain:jvmTest` 261 条 0 失败、
+  `:desktop-app:verifyDesktopStrings` 960 键 / 960 被引用、`:core-ui:compileCommonMainKotlinMetadata` 与
+  `:app:compileDebugKotlin` 通过。

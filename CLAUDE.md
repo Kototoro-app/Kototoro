@@ -247,6 +247,10 @@ npm run docs:build
   选择栏是全选/清除/删除，成人目标 `sources.nsfw.bookmarks` 滤掉整部作品；共享规则是
   `DesktopBookmarkShelf.desktopBookmarkShelf`（`SourceLibrary.bookmarkGroups` 回填章节标题），
   Android 的 SAVE（PageSaveHelper）在 Windows 无对应管线所以选择栏只留删除，见计划 §195。
+  共享锚定面板的滚轮/触控板滚动曾把章节面板滚走并关闭（issue #601）：`StableSheetState` 现在按最近的指针输入类型
+  区分（`noteScrollInput`/`notePressedInput`，面板根节点在 initial pass 上观察 `Scroll`/`Press`），只有按下的拖动才让
+  嵌套滚动挪面板，所以滚轮永远滚列表、拖标题仍收起；回归用 `StableSheetWheelScrollTest` 与 `DesktopChapterPanelScrollTest`
+  （真实阅读器章节面板里的滚轮步），见计划 §196。
   .pb/新版 JSON 仓库添加/列表/搜索、JAR 安装/更新/导入及身份恢复；新产物保存到应用管理的 SHA 目录。
   仓库可“忘记”（只删索引条目，已安装扩展与 JAR 保留，重新添加即恢复）。
   来源浏览/搜索、详情、收藏、分页图片阅读、历史与源设置，以及可选网页/HTML/JS 调试。
