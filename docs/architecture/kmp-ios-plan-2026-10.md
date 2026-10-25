@@ -9277,3 +9277,41 @@ Windows 的可用性改进，也是一次把安卓私有控件提取成共享代
   `NETWORK_REQUESTS=0`。
 - 全量：`:desktop-app:test` 307 条 0 失败（4 跳过，比 §202 多出新的 1 条）；
   `:desktop-app:verifyDesktopStrings` 961 键 / 961 被引用通过。
+
+## 204. Windows 阅读器补「连续（横向）」模式与方向开关（2026-10-25）
+
+### 实现
+- `DesktopReaderMode` 多一个 `CONTINUOUS_HORIZONTAL`（安卓 `continuous_horizontal`），并给出两个派生判定：
+  `isContinuous`（两种连续模式都滚条带，取代原来各处对 `CONTINUOUS` 的等值比较——裁剪生效、自动跨章让位、
+  键盘让位、滚动操作接受、阅读设置页的行取舍）与 `isVerticalStrip`（只有竖条有「条漫间隙」）。
+- 条带几何抽成 `DesktopStripLayout`（`scene`/`extent(index)`/`frame(first, offset)`）：竖条仍是
+  `DesktopScrollLayout`（`VerticalReaderScene`），横条是新的 `DesktopHorizontalScrollLayout`，包 reader-core 的
+  `HorizontalReaderScene`——页面按窗口高度适配，几何提示依次取下载索引的显示尺寸、图片实际尺寸，最后退到
+  `Estimated(0.7f)`；`reversed` 同时决定场景的 `RIGHT_TO_LEFT` 与 `LazyRow(reverseLayout = true)`，所以第 0 页
+  永远贴在自己那一侧的边沿，历史偏移仍从页面阅读方向的起始边量（`intraPageOffsetPx`）。
+- `DesktopScrollReader` 在同一份 `LazyListState` 上换轴：`LazyRow` + `HorizontalScrollbar`、横条给自己留底部
+  16dp 的滚动条槽、页面 `fillMaxHeight().width(extent)`；鼠标只有竖轮，横条把滚轮 delta 手动映射到自己的轴上
+  （每单位 48dp），拖动/甩动取 `dx` 乘方向符号，`DirectionRight/Left`、`PageDown/PageUp`、空格按一屏 90% 走，
+  `MoveHome/End` 走章首页尾；`LazyColumn` 那条路径不动。
+- 模式照旧存阅读偏好的 `mode` 键（枚举名），方向用安卓自己的 `reader_continuous_horizontal_reversed`
+  （`DesktopReaderSettings.continuousHorizontalReversed`，追加为最后一个字段，默认 `false`），关章重进由
+  `restoredReaderSettings` 读回。
+- 共享面板因此多出第五个模式芯片（文案直接取安卓 `continuous_horizontal`），该模式下「布局」页出现安卓的
+  「反向」开关（新标签 `reader-options-horizontal-reversed`）；阅读设置页的模式对话框照 `DesktopReaderMode.entries`
+  自动多一项，裁剪/动画按 `isContinuous` 生效，「条漫间隙」行只在竖条出现，横条既无间隙也无那一行。
+
+### 与 Android 的差异
+- 安卓横条按方向切两个场景实例；Windows 只有一个 `LazyRow`，方向是数据（`reversed`）而不是两套组件，
+  但页面顺序、贴边与历史偏移的语义相同。
+- 「反向」开关和安卓一样只在阅读器侧面板，不放进阅读设置页（§202/§203 那两行在设置页）。
+- 横条没有「条漫间隙」：安卓 `webtoon_gaps` 只作用于 WEBTOON，Windows 用 `isVerticalStrip` 保持同一范围。
+
+### 验证
+- 新增 `DesktopHorizontalStripTest`（探针 `reader-horizontal-strip`，真实 fixture 扩展 + 真实阅读器，约 10 s）：
+  从侧面板选「连续（横向）」后断言阅读模式与 `reader-scroll-list`，页 0 与页 1 顶边齐平、页 1 在页 0 右侧、
+  页高等同条带高、宽高比仍是 fixture 的 400x600；在 `reader-viewport` 上滚一格真的把条带推走（页索引或页内
+  像素变），面板「反向」开关打开后下一页跑到左边，关章写进历史的正是那一页与像素位，重进后模式、方向与位置
+  一起恢复，最后把开关关回去、顺序回到从左到右。截图 `reader-horizontal-strip-left-to-right.png` 与
+  `-reversed.png` 也留在 `build/reports/desktop-smoke` 里供肉眼核对。
+- 全量：`:desktop-app:test` 308 条 0 失败（4 跳过，比 §203 多出新的 1 条）；
+  `:desktop-app:verifyDesktopStrings` 961 键 / 961 被引用通过（无新桌面文案键）。

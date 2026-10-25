@@ -119,7 +119,7 @@ internal class DesktopScrollOperations(private val state: MutableStateFlow<Deskt
     }
 
     private fun accepts(snapshot: DesktopAppState, chapterId: Long) = snapshot.screen == DesktopScreen.READER &&
-        snapshot.chapter?.id == chapterId && snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS
+        snapshot.chapter?.id == chapterId && snapshot.readerSettings.mode.isContinuous
 
     private data class Position(val content: Long, val chapter: Long, val first: Int, val offset: Float, val last: Int)
 }

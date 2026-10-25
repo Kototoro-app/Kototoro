@@ -457,6 +457,7 @@ fun ReaderLayoutOptionsPage(
                         label = strings.continuousHorizontalReversed,
                         checked = state.continuousHorizontalReversed,
                         onCheckedChange = callbacks.onContinuousHorizontalReversedChanged,
+                        modifier = Modifier.testTag("reader-options-horizontal-reversed"),
                     )
                 }
             }

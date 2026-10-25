@@ -2937,7 +2937,7 @@ class DesktopController(
             readerLastVisible = index, readerAtEnd = false, readerNavigation = it.readerNavigation + 1, readerScrollReady = false,
             readerVisiblePages = emptyList(), readerLoading = emptySet(), readerFailedPages = emptyMap(),
             bookmarks = session.library.bookmarks(content.id)) }
-        val loaded = if (candidate.readerSettings.mode == DesktopReaderMode.CONTINUOUS) {
+        val loaded = if (candidate.readerSettings.mode.isContinuous) {
             val image = session.readerImage(pages[index])
             candidate.copy(readerImages = mapOf(pages[index].id to image))
         } else loadPagedOnIo(candidate, index)
@@ -2952,7 +2952,7 @@ class DesktopController(
         if (snapshot.screen != DesktopScreen.READER) return@action
         val content = requireNotNull(snapshot.content)
         val chapter = requireNotNull(snapshot.chapter)
-        if (snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS && !snapshot.readerScrollReady) return@action
+        if (snapshot.readerSettings.mode.isContinuous && !snapshot.readerScrollReady) return@action
         session.library.toggleBookmark(content, chapter, snapshot.pages[snapshot.pageIndex], snapshot.pageIndex,
             snapshot.pages.size, snapshot.readerScroll)
         val bookmarks = session.library.bookmarks(content.id)
@@ -3120,7 +3120,7 @@ class DesktopController(
 
     fun turnPage(forward: Boolean) = action {
         val snapshot = state.value
-        val continuousMode = snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS
+        val continuousMode = snapshot.readerSettings.mode.isContinuous
         val boundary = if (continuousMode) snapshot.readerScrollReady &&
             (if (forward) snapshot.readerAtEnd else snapshot.pageIndex == 0 && snapshot.readerScroll == 0f)
             else readerLayout(snapshot).turnIndex(forward) == null
@@ -3141,14 +3141,14 @@ class DesktopController(
         val snapshot = state.value
         if (snapshot.screen != DesktopScreen.READER || snapshot.chapter?.id != chapterId ||
             snapshot.readerNavigation != navigation || !snapshot.readerSettings.automaticChapter ||
-            snapshot.readerSettings.mode != DesktopReaderMode.CONTINUOUS || !snapshot.readerScrollReady) return@action
+            !snapshot.readerSettings.mode.isContinuous || !snapshot.readerScrollReady) return@action
         val boundary = if (forward) snapshot.readerAtEnd else snapshot.pageIndex == 0 && snapshot.readerScroll == 0f
         if (boundary) snapshot.adjacentChapter(forward)?.let { readOnIo(it, startAtEnd = !forward) }
     }
 
     fun reloadPage(): Job {
         val snapshot = state.value
-        return if (snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS && snapshot.chapter != null) {
+        return if (snapshot.readerSettings.mode.isContinuous && snapshot.chapter != null) {
             continuous.load(snapshot.chapter.id, snapshot.readerVisiblePages.ifEmpty { listOf(snapshot.pageIndex) }, true)
         } else action { pageOnIo(state.value.pageIndex, refresh = true) }
     }
@@ -3221,6 +3221,8 @@ class DesktopController(
             "crop_paged" to SourcePreferenceValue.Toggle(settings.cropPaged),
             "crop_continuous" to SourcePreferenceValue.Toggle(settings.cropContinuous),
             "webtoon_gaps" to SourcePreferenceValue.Toggle(settings.webtoonGaps),
+            "reader_continuous_horizontal_reversed" to
+                SourcePreferenceValue.Toggle(settings.continuousHorizontalReversed),
             "as_speed" to SourcePreferenceValue.FloatBits(settings.autoScrollSpeed.toRawBits()),
             "double_cover" to SourcePreferenceValue.Toggle(settings.doublePageCover),
         ) + tapGridPreferences(settings.tapGrid)))
@@ -3285,6 +3287,8 @@ class DesktopController(
                 ?: org.skepsun.kototoro.reader.core.ReaderAutoScroll.DEFAULT_SPEED,
             (snapshot["double_cover"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             restoredTapGrid(snapshot),
+            // Android's own key for the horizontal strip's reading direction.
+            (snapshot["reader_continuous_horizontal_reversed"] as? SourcePreferenceValue.Toggle)?.value ?: false,
         ).also { session.upscale = it.upscale; session.cropPages = it.cropActive }
     }
 
@@ -3337,7 +3341,7 @@ class DesktopController(
     private suspend fun pageOnIo(index: Int, refresh: Boolean = false) {
         val snapshot = state.value
         if (index !in snapshot.pages.indices) return
-        if (snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS) {
+        if (snapshot.readerSettings.mode.isContinuous) {
             mutableState.update { it.copy(readerTargetPage = index, readerTargetScroll = 0f,
                 readerNavigation = it.readerNavigation + 1, readerScrollReady = false, readerAtEnd = false) }
             return
@@ -3377,7 +3381,7 @@ class DesktopController(
      * keeps a single slot ahead instead and stops the next chapter from being fetched while it is still far away.
      */
     private fun prefetchAroundSlot(snapshot: DesktopAppState) {
-        if (snapshot.screen != DesktopScreen.READER || snapshot.readerSettings.mode == DesktopReaderMode.CONTINUOUS) return
+        if (snapshot.screen != DesktopScreen.READER || snapshot.readerSettings.mode.isContinuous) return
         val layout = readerLayout(snapshot)
         val frame = layout.frame ?: return
         val reduce = snapshot.readerSettings.reducePagePreloading

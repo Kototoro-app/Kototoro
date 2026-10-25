@@ -42,7 +42,8 @@ internal enum class DesktopQuickAction(val label: String) {
 
 /** Android's reader options the Windows engine supports; the rest of the panel's rows are hidden. */
 internal val DesktopReaderOptionsFeatures = ReaderOptionsFeatures(
-    modes = listOf(ReaderMode.STANDARD, ReaderMode.REVERSED, ReaderMode.VERTICAL, ReaderMode.WEBTOON),
+    modes = listOf(ReaderMode.STANDARD, ReaderMode.REVERSED, ReaderMode.VERTICAL, ReaderMode.WEBTOON,
+        ReaderMode.CONTINUOUS_HORIZONTAL),
     doublePageFoldable = false,
     doublePageSensitivity = false,
     splitPages = false,
@@ -90,6 +91,7 @@ internal fun DesktopReaderOptionsPanel(
     val callbacks = ComposeReaderOptionsCallbacks(
         onDismiss = onDismiss,
         onModeChanged = { update(settings.withReaderMode(it)) },
+        onContinuousHorizontalReversedChanged = { update(settings.copy(continuousHorizontalReversed = it)) },
         onAnimationChanged = { update(settings.copy(animation = it)) },
         onZoomModeChanged = { update(settings.copy(fitMode = it)) },
         onDoublePageChanged = { update(settings.copy(mode = if (it) DesktopReaderMode.DOUBLE else DesktopReaderMode.SINGLE)) },
@@ -99,8 +101,7 @@ internal fun DesktopReaderOptionsPanel(
         onChapterTitleAtBottomChanged = { update(settings.copy(chapterTitleAtBottom = it)) },
         onPreloadReductionChanged = { update(settings.copy(reducePagePreloading = it)) },
         onCropPagesChanged = {
-            update(if (settings.mode == DesktopReaderMode.CONTINUOUS) settings.copy(cropContinuous = it)
-                else settings.copy(cropPaged = it))
+            update(if (settings.mode.isContinuous) settings.copy(cropContinuous = it) else settings.copy(cropPaged = it))
         },
         onSuperResolutionChanged = { enabled ->
             update(settings.copy(upscale = settings.upscale.copy(
@@ -161,6 +162,7 @@ internal fun DesktopReaderSettings.toOptionsState(fullscreen: Boolean) = Compose
     fullscreen = fullscreen,
     pageNumbers = pageNumbers,
     chapterTitleAtBottom = chapterTitleAtBottom,
+    continuousHorizontalReversed = continuousHorizontalReversed,
     preloadReduction = reducePagePreloading,
     cropPages = cropActive,
     superResolution = upscale.model != null,
@@ -168,21 +170,21 @@ internal fun DesktopReaderSettings.toOptionsState(fullscreen: Boolean) = Compose
     background = background.toShared(),
 )
 
-/** Android's reading mode of the desktop settings: continuous is the webtoon mode. */
-internal val DesktopReaderSettings.readerMode: ReaderMode get() = when {
-    mode == DesktopReaderMode.CONTINUOUS -> ReaderMode.WEBTOON
-    vertical -> ReaderMode.VERTICAL
-    rightToLeft -> ReaderMode.REVERSED
-    else -> ReaderMode.STANDARD
+/** Android's reading mode of the desktop settings: the two continuous modes are the webtoon and the horizontal strip. */
+internal val DesktopReaderSettings.readerMode: ReaderMode get() = when (mode) {
+    DesktopReaderMode.CONTINUOUS_HORIZONTAL -> ReaderMode.CONTINUOUS_HORIZONTAL
+    DesktopReaderMode.CONTINUOUS -> ReaderMode.WEBTOON
+    else -> if (vertical) ReaderMode.VERTICAL else if (rightToLeft) ReaderMode.REVERSED else ReaderMode.STANDARD
 }
 
 internal fun DesktopReaderSettings.withReaderMode(target: ReaderMode): DesktopReaderSettings {
-    val paged = if (mode == DesktopReaderMode.CONTINUOUS) DesktopReaderMode.SINGLE else mode
+    val paged = if (mode.isContinuous) DesktopReaderMode.SINGLE else mode
     return when (target) {
         ReaderMode.STANDARD -> copy(mode = paged, rightToLeft = false, vertical = false)
         ReaderMode.REVERSED -> copy(mode = paged, rightToLeft = true, vertical = false)
         ReaderMode.VERTICAL -> copy(mode = paged, rightToLeft = false, vertical = true)
-        ReaderMode.WEBTOON, ReaderMode.CONTINUOUS_HORIZONTAL -> copy(mode = DesktopReaderMode.CONTINUOUS)
+        ReaderMode.WEBTOON -> copy(mode = DesktopReaderMode.CONTINUOUS)
+        ReaderMode.CONTINUOUS_HORIZONTAL -> copy(mode = DesktopReaderMode.CONTINUOUS_HORIZONTAL)
     }
 }
 

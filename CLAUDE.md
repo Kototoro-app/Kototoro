@@ -297,6 +297,18 @@ npm run docs:build
   Windows 只打开后者（没有安卓那种页面位图内存缓存可关），阅读设置页「页面」节同样多一行（文案用安卓
   `reader_reduce_page_preloading`/`_summary`）；回归用 `DesktopPreloadReductionTest`（探针 `preload-reduction`：5 页章节默认读出
   `{0,1,2}`、侧面板打开开关后重进只剩 `{0,1}`，设置页点开关断言状态并写回默认）。
+  安卓的「连续（横向）」阅读模式也补上了（§204）：`DesktopReaderMode` 多一个 `CONTINUOUS_HORIZONTAL`，并给出
+  `isContinuous`/`isVerticalStrip` 两个派生判定（原来各处对 `CONTINUOUS` 的等值比较都换成前者，裁剪、自动跨章让位、
+  键盘让位、滚动操作与设置页的行取舍因此自动跟上）；条带几何抽成 `DesktopStripLayout`（`scene`/`extent`/`frame`），
+  竖条仍是 `VerticalReaderScene`，横条是 `DesktopHorizontalScrollLayout` 包 reader-core 的 `HorizontalReaderScene`
+  （按窗口高度适配页面，`reversed` 同时给场景 `RIGHT_TO_LEFT` 与 `LazyRow(reverseLayout = true)`，所以第 0 页永远
+  贴在自己那一侧），`DesktopScrollReader` 在同一份 `LazyListState` 上换轴：`LazyRow` + 横向滚动条 + 底部 16dp 槽，
+  滚轮只有竖轮所以手动按 48dp/格映射到横轴，拖动/甩动取 `dx` 乘方向符号，左右方向键、PageDown/Up 与空格按一屏
+  90% 走；模式仍存 `mode` 键，方向用安卓自己的 `reader_continuous_horizontal_reversed`
+  （`continuousHorizontalReversed`，追加为最后一个字段），共享面板多出第五个模式芯片（文案 `continuous_horizontal`）
+  与该模式专属的「反向」开关（`reader-options-horizontal-reversed`），阅读设置页的模式对话框自动多一项、间隙行只在
+  竖条出现；回归用 `DesktopHorizontalStripTest`（探针 `reader-horizontal-strip`：一页一行、顶边齐平、按 400x600
+  适配窗口高度，滚轮推走条带，反向开关让下一页跑到左边，关章后模式/方向/像素位一起恢复）。
   .pb/新版 JSON 仓库添加/列表/搜索、JAR 安装/更新/导入及身份恢复；新产物保存到应用管理的 SHA 目录。
   仓库可“忘记”（只删索引条目，已安装扩展与 JAR 保留，重新添加即恢复）。
   来源浏览/搜索、详情、收藏、分页图片阅读、历史与源设置，以及可选网页/HTML/JS 调试。

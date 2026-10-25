@@ -41,7 +41,8 @@ internal fun DesktopReader(controller: DesktopController, state: DesktopAppState
         controller.backToDetails()
     }
     val settings = state.readerSettings
-    val continuous = settings.mode == DesktopReaderMode.CONTINUOUS
+    val continuous = settings.mode.isContinuous
+    val horizontalStrip = settings.mode == DesktopReaderMode.CONTINUOUS_HORIZONTAL
     val layout = remember(state.pages, state.chapter, state.readerImages, state.readerGeometry, settings,
         state.pageIndex) {
         DesktopReaderLayout(state.pages, state.chapter?.id ?: 0L, state.readerImages, settings, state.pageIndex,
@@ -100,7 +101,8 @@ internal fun DesktopReader(controller: DesktopController, state: DesktopAppState
             // Android's "show menu" action opens the reader options with the controls.
             val showMenu = { controlsVisible = true; panel = DesktopReaderPanel.OPTIONS }
             if (continuous) DesktopScrollReader(controller, state, focus, closing, Modifier.fillMaxSize(),
-                onToggleControls = onToggleControls, autoScroll, showMenu)
+                onToggleControls = onToggleControls, autoScroll, showMenu, horizontal = horizontalStrip,
+                reversed = settings.continuousHorizontalReversed)
             else DesktopReaderCanvas(controller, state, focus, enabled, Modifier.fillMaxSize(), controlsVisible,
                 onToggleControls = onToggleControls, autoScroll, showMenu)
             DesktopReaderChrome(controller, state, controlsVisible, enabled, continuous, layout, autoScroll,

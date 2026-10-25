@@ -203,6 +203,10 @@ object DesktopAppProbe {
                 DesktopWebtoonGapsProbe.run(args)
                 return
             }
+            if (args[0] == "reader-horizontal-strip") {
+                DesktopHorizontalStripProbe.run(args)
+                return
+            }
             if (args[0] == "reader-title-bottom") {
                 DesktopReaderTitleBottomProbe.run(args)
                 return

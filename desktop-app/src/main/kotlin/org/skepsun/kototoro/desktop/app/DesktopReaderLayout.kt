@@ -5,7 +5,23 @@ import org.skepsun.kototoro.core.source.SourceChapterNavigation
 import org.skepsun.kototoro.reader.core.*
 import java.nio.file.Path
 
-enum class DesktopReaderMode { SINGLE, DOUBLE, CONTINUOUS }
+enum class DesktopReaderMode {
+    SINGLE,
+    DOUBLE,
+
+    /** Android's webtoon mode: the pages scroll in one vertical strip. */
+    CONTINUOUS,
+
+    /** Android's continuous horizontal mode: the pages scroll in one horizontal strip, read left to right. */
+    CONTINUOUS_HORIZONTAL,
+    ;
+
+    /** Whether the reader scrolls a strip instead of turning pages (both continuous modes do). */
+    val isContinuous: Boolean get() = this == CONTINUOUS || this == CONTINUOUS_HORIZONTAL
+
+    /** Whether the strip runs down the window (webtoon) rather than across it. */
+    val isVerticalStrip: Boolean get() = this == CONTINUOUS
+}
 
 /** Android's `R.dimen.webtoon_pages_gap`, the gap "gaps in webtoon mode" puts between continuous pages. */
 internal const val WEBTOON_PAGE_GAP_DP = 24
@@ -52,9 +68,15 @@ data class DesktopReaderSettings(
     val doublePageCover: Boolean = false,
     val tapGrid: Map<org.skepsun.kototoro.reader.domain.TapGridArea, org.skepsun.kototoro.reader.ui.tapgrid.TapActions> =
         org.skepsun.kototoro.reader.ui.tapgrid.TapGridConfig.defaults,
+    /**
+     * Android's `reader_continuous_horizontal_reversed`: the horizontal strip is read right to left, so the first page
+     * sits at the right edge. Android keeps it apart from the mode for the same reason its scene engine does — the mode
+     * says how pages are laid out, this says which way they are read.
+     */
+    val continuousHorizontalReversed: Boolean = false,
 ) {
     /** Whether pages are cropped in the current reading mode. */
-    val cropActive: Boolean get() = if (mode == DesktopReaderMode.CONTINUOUS) cropContinuous else cropPaged
+    val cropActive: Boolean get() = if (mode.isContinuous) cropContinuous else cropPaged
 }
 
 /** Android's `ReaderColorFilter`, applied with the shared [org.skepsun.kototoro.reader.domain.ReaderColorMatrix]. */

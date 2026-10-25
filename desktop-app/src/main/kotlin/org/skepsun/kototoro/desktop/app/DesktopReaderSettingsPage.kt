@@ -42,7 +42,9 @@ import kotlin.math.roundToInt
 internal fun DesktopReaderSettingsPage(controller: DesktopController, state: DesktopAppState) {
     val settings = state.readerSettings
     val active = !state.busy
-    val continuous = settings.mode == DesktopReaderMode.CONTINUOUS
+    val continuous = settings.mode.isContinuous
+    // Android's "gaps in webtoon mode" only has a meaning where pages stack vertically.
+    val webtoon = settings.mode.isVerticalStrip
     var dialog by remember { mutableStateOf<ReaderSettingsDialog?>(null) }
     Column(
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -80,7 +82,7 @@ internal fun DesktopReaderSettingsPage(controller: DesktopController, state: Des
                 SettingsSwitchRow(desktopText("reader.setting.doubleCover"), null, settings.doublePageCover, active,
                     { controller.readerSettings(settings.copy(doublePageCover = it)) },
                     testTag = "reader-setting-double-cover")
-            } else {
+            } else if (webtoon) {
                 // Android's "gaps in webtoon mode" only has a meaning where pages stack vertically.
                 SettingsRowDivider()
                 SettingsSwitchRow(AndroidStrings["webtoon_gaps"], AndroidStrings["webtoon_gaps_summary"],

@@ -8,6 +8,8 @@ import androidx.compose.foundation.gestures.animateScrollBy
 import org.skepsun.kototoro.reader.ui.compose.readerTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.Text
@@ -35,23 +37,35 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/** Virtualized full-width items and viewport semantics share one VerticalReaderScene. */
+/**
+ * Virtualized full-size items and viewport semantics share one scene: [VerticalReaderScene] for Android's webtoon mode
+ * and [org.skepsun.kototoro.reader.core.HorizontalReaderScene] for its continuous horizontal mode, which only differ in
+ * the axis the strip runs along and the direction it is read in.
+ */
 @Composable
 internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAppState, focus: FocusRequester,
     closing: Boolean, modifier: Modifier, onToggleControls: () -> Unit = {},
-    autoScroll: DesktopReaderAutoScroll = remember { DesktopReaderAutoScroll() }, onShowMenu: () -> Unit = {}) {
+    autoScroll: DesktopReaderAutoScroll = remember { DesktopReaderAutoScroll() }, onShowMenu: () -> Unit = {},
+    horizontal: Boolean = false, reversed: Boolean = false) {
     BoxWithConstraints(modifier) {
         val density = LocalDensity.current
         val viewportHeight = maxHeight.coerceAtLeast(1.dp)
+        // One gutter for the scrollbar: at the end of the horizontal strip it takes height, at the side of the vertical
+        // one it takes width. The scene has to see the same box the list draws into, or the anchors drift from the pages.
         val gutter = with(density) { 16.dp.roundToPx() }
-        val width = (constraints.maxWidth - gutter).coerceAtLeast(1)
-        val height = with(density) { viewportHeight.roundToPx() }.coerceAtLeast(1)
+        val width = (constraints.maxWidth - if (horizontal) 0 else gutter).coerceAtLeast(1)
+        val height = (with(density) { viewportHeight.roundToPx() } - if (horizontal) gutter else 0).coerceAtLeast(1)
+        val forwardExtent = if (horizontal) width.toFloat() else height.toFloat()
         // Android's `webtoon_gaps`: pages stack flush by default and gain the webtoon gap when the switch is on. The
         // scene spacing and the list arrangement must stay the same value, or the anchors drift from what is drawn.
-        val gap = if (state.readerSettings.webtoonGaps) WEBTOON_PAGE_GAP_DP.dp else 0.dp
+        // The horizontal strip has no such switch on Android, so its pages stay flush.
+        val gap = if (!horizontal && state.readerSettings.webtoonGaps) WEBTOON_PAGE_GAP_DP.dp else 0.dp
         val spacing = with(density) { gap.roundToPx() }
-        val layout = remember(state.pages, state.readerImages, state.readerGeometry, width, height, spacing) {
-            DesktopScrollLayout(state.pages, state.readerImages, width, height, spacing, state.readerGeometry)
+        val layout: DesktopStripLayout = remember(state.pages, state.readerImages, state.readerGeometry, width, height,
+            spacing, horizontal, reversed) {
+            if (horizontal) DesktopHorizontalScrollLayout(state.pages, state.readerImages, width, height, spacing,
+                reversed, state.readerGeometry)
+            else DesktopScrollLayout(state.pages, state.readerImages, width, height, spacing, state.readerGeometry)
         }
         val chapterId = state.chapter?.id ?: return@BoxWithConstraints
         val list = remember(chapterId) { LazyListState(state.pageIndex.coerceIn(state.pages.indices), 0) }
@@ -78,10 +92,13 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
                 true
             }
         }
-        val boundaryConnection = remember(list) { object : NestedScrollConnection {
+        // A finger or a wheel moves the strip along its axis; the list state itself counts a positive delta as "forward",
+        // and a right-to-left strip is laid out the other way round, so the drag that reveals the next page swaps sides.
+        fun axisOf(offset: Offset): Float = if (horizontal) offset.x else offset.y
+        val boundaryConnection = remember(list, horizontal) { object : NestedScrollConnection {
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (source != NestedScrollSource.UserInput || consumed.y != 0f || available.y == 0f) return Offset.Zero
-                val forward = available.y < 0f
+                if (source != NestedScrollSource.UserInput || axisOf(consumed) != 0f || axisOf(available) == 0f) return Offset.Zero
+                val forward = axisOf(available) < 0f
                 val atBoundary = if (forward) !list.canScrollForward else !list.canScrollBackward
                 return if (atBoundary && boundaryEvent(forward)) available else Offset.Zero
             }
@@ -113,13 +130,13 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
             if (state.busy || restored) return@LaunchedEffect
             controller.continuousImages(chapterId, listOf(target.first)).join()
             if (state.pages[target.first].id !in controller.state.value.readerImages) return@LaunchedEffect
-            val pageHeight = currentLayout.geometries[target.first].sceneBounds.height.roundToInt()
-            list.scrollToItem(target.first, target.second.roundToInt().coerceIn(0, (pageHeight - 1).coerceAtLeast(0)))
+            val pageExtent = currentLayout.extent(target.first).roundToInt()
+            list.scrollToItem(target.first, target.second.roundToInt().coerceIn(0, (pageExtent - 1).coerceAtLeast(0)))
             restored = true
             focus.requestFocus()
         }
         val prediction = remember { org.skepsun.kototoro.reader.core.ReaderPrediction() }
-        LaunchedEffect(chapterId, state.readerNavigation, width) {
+        LaunchedEffect(chapterId, state.readerNavigation, width, horizontal) {
             snapshotFlow {
                 val info = list.layoutInfo
                 val geometry = currentLayout
@@ -128,8 +145,7 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
                 val frame = geometry.frame(list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset)
                 val first = frame.progress.activePageId?.let(geometry.scene::indexOf) ?: -1
                 val last = frame.progress.lastVisiblePageId?.let(geometry.scene::indexOf) ?: -1
-                val matched = info.visibleItemsInfo.all { item -> geometry.geometries.getOrNull(item.index)
-                    ?.sceneBounds?.height?.roundToInt() == item.size }
+                val matched = info.visibleItemsInfo.all { item -> geometry.extent(item.index).roundToInt() == item.size }
                 ObservedViewport(indices, first, frame.progress.intraPageOffsetPx, last, !list.canScrollForward,
                     restored && matched && !snapshot.busy,
                     indices.all { snapshot.pages[it].id in snapshot.readerImages &&
@@ -151,24 +167,57 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
         val tapHandlers = rememberTapGridHandlers(focus, autoScroll) { area, long ->
             if (!closing && restored) performTapAction(
                 org.skepsun.kototoro.reader.ui.tapgrid.TapGridConfig.action(state.readerSettings.tapGrid, area, long),
-                { forward -> scope.launch { list.animateScrollBy(height * if (forward) .9f else -.9f) } },
+                { forward -> scope.launch { list.animateScrollBy(forwardExtent * if (forward) .9f else -.9f) } },
                 controller, onToggleControls, onShowMenu)
+        }
+        val pageContent: LazyListScope.() -> Unit = {
+            itemsIndexed(state.pages, key = { _, page -> page.id }) { index, page ->
+                val extent = with(density) { layout.extent(index).toDp() }
+                val item = (if (horizontal) Modifier.fillMaxHeight().width(extent) else Modifier.fillMaxWidth().height(extent))
+                    .testTag("reader-page:${page.id}")
+                if (page.id in state.readerFailedPages && page.id !in state.readerImages) {
+                    Box(item, contentAlignment = Alignment.Center) {
+                        TextButton({ controller.reloadPage() }, enabled = page.id !in state.readerLoading,
+                            modifier = Modifier.testTag("reader-page-retry:${page.id}")) {
+                            Text(desktopText("reader.pageLoadRetry"))
+                        }
+                    }
+                } else {
+                    val image = state.readerImages[page.id]
+                    if (image?.tiled == true) DesktopTiledImage(image,
+                        visibleFrame.visibleNodes.firstOrNull { it.pageId.value == page.id }, modifier = item)
+                    else ReaderImage(image, index, item)
+                }
+            }
         }
         Column {
             Box(Modifier.fillMaxWidth().height(viewportHeight).background(LocalDesktopReaderPageStyle.current.background).clipToBounds()
                 .nestedScroll(boundaryConnection)
-                .pointerInput(list) {
+                .pointerInput(list, horizontal) {
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
                             if (event.type != PointerEventType.Scroll) continue
                             autoScroll.interacted()
                             val change = event.changes.firstOrNull { !it.isConsumed } ?: continue
-                            val delta = change.scrollDelta.y
+                            // A mouse only has a vertical wheel, so it moves the horizontal strip too; a touchpad's
+                            // sideways swipe adds to it.
+                            val delta = if (horizontal) change.scrollDelta.y + change.scrollDelta.x else change.scrollDelta.y
                             if (delta == 0f) continue
                             val forward = delta > 0f
                             val atBoundary = if (forward) !list.canScrollForward else !list.canScrollBackward
-                            if (atBoundary && boundaryEvent(forward)) change.consume()
+                            if (!atBoundary) {
+                                // The vertical list already scrolls on the wheel; a horizontal one only moves with a
+                                // tilted wheel or a touchpad swipe, which no reader has to hand, so the wheel is mapped
+                                // onto the strip's own axis here.
+                                if (horizontal) {
+                                    change.consume()
+                                    val step = with(density) { 48.dp.toPx() } * delta
+                                    scope.launch { scroll(step) }
+                                }
+                            } else if (boundaryEvent(forward)) {
+                                change.consume()
+                            }
                         }
                     }
                 }
@@ -176,12 +225,15 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
                     if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) {
                         false
                     } else {
+                        val step = with(density) { 48.dp.toPx() }
                         val command: (suspend () -> Unit)? = when (event.key) {
-                            Key.DirectionDown -> { { scroll(with(density) { 48.dp.toPx() }) } }
-                            Key.DirectionUp -> { { scroll(-with(density) { 48.dp.toPx() }) } }
-                            Key.PageDown -> { { scroll(height * .9f) } }
-                            Key.PageUp -> { { scroll(-height * .9f) } }
-                            Key.Spacebar -> { { scroll(height * if (event.isShiftPressed) -.9f else .9f) } }
+                            Key.DirectionDown -> { { scroll(step) } }
+                            Key.DirectionUp -> { { scroll(-step) } }
+                            Key.DirectionRight -> if (horizontal) { { scroll(forwardExtent * .9f) } } else null
+                            Key.DirectionLeft -> if (horizontal) { { scroll(-forwardExtent * .9f) } } else null
+                            Key.PageDown -> { { scroll(forwardExtent * .9f) } }
+                            Key.PageUp -> { { scroll(-forwardExtent * .9f) } }
+                            Key.Spacebar -> { { scroll(forwardExtent * if (event.isShiftPressed) -.9f else .9f) } }
                             Key.MoveHome -> { { controller.page(0).join() } }
                             Key.MoveEnd -> { { controller.page(state.pages.lastIndex).join() } }
                             else -> null
@@ -198,7 +250,7 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
                 .readerTapGestures(tapHandlers.interaction, tapHandlers.tap, tapHandlers.longTap,
                     with(density) { 48.dp.toPx() }, tapHandlers.longTap)
                 // The list scrolls under touch already; a mouse drag scrolls it too, and a flick keeps it moving.
-                .pointerInput(list, restored, closing) {
+                .pointerInput(list, restored, closing, horizontal, reversed) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         if (down.type != androidx.compose.ui.input.pointer.PointerType.Mouse || !restored || closing) return@awaitEachGesture
@@ -210,47 +262,48 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
                             if (!change.pressed) break
-                            val dy = change.position.y - change.previousPosition.y
-                            travelled += dy
+                            // Positive is "toward the next page" for both strips: up for the vertical one, and toward
+                            // the reading direction — left to right, or right to left — for the horizontal one.
+                            val advance = if (horizontal) {
+                                (change.position.x - change.previousPosition.x) * (if (reversed) 1f else -1f)
+                            } else {
+                                -(change.position.y - change.previousPosition.y)
+                            }
+                            travelled += advance
                             if (!dragged && kotlin.math.abs(travelled) < viewConfiguration.touchSlop) continue
                             dragged = true
                             velocity.addPosition(change.uptimeMillis, change.position)
-                            list.dispatchRawDelta(-dy)
+                            list.dispatchRawDelta(advance)
                             change.consume()
                         }
                         if (!dragged) return@awaitEachGesture
-                        val speed = -velocity.calculateVelocity().y
-                        val forward = travelled < 0f
+                        val raw = velocity.calculateVelocity()
+                        val speed = if (horizontal) raw.x * (if (reversed) 1f else -1f) else -raw.y
+                        val forward = travelled > 0f
                         if ((if (forward) !list.canScrollForward else !list.canScrollBackward) && boundaryEvent(forward)) {
                             return@awaitEachGesture
                         }
                         scope.launch { list.scroll { with(fling) { performFling(speed) } } }
                     }
                 }) {
-                LazyColumn(state = list, userScrollEnabled = !closing && restored,
-                    verticalArrangement = Arrangement.spacedBy(gap), modifier = Modifier.fillMaxSize()
-                        .padding(end = 16.dp).testTag("reader-scroll-list")) {
-                    itemsIndexed(state.pages, key = { _, page -> page.id }) { index, page ->
-                        val item = Modifier.fillMaxWidth().height(with(density) {
-                            layout.geometries[index].sceneBounds.height.toDp()
-                        }).testTag("reader-page:${page.id}")
-                        if (page.id in state.readerFailedPages && page.id !in state.readerImages) {
-                            Box(item, contentAlignment = Alignment.Center) {
-                                TextButton({ controller.reloadPage() }, enabled = page.id !in state.readerLoading,
-                                    modifier = Modifier.testTag("reader-page-retry:${page.id}")) {
-                                    Text(desktopText("reader.pageLoadRetry"))
-                                }
-                            }
-                        } else {
-                            val image = state.readerImages[page.id]
-                            if (image?.tiled == true) DesktopTiledImage(image,
-                                visibleFrame.visibleNodes.firstOrNull { it.pageId.value == page.id }, modifier = item)
-                            else ReaderImage(image, index, item)
-                        }
+                if (horizontal) {
+                    LazyRow(state = list, userScrollEnabled = !closing && restored, reverseLayout = reversed,
+                        horizontalArrangement = Arrangement.spacedBy(gap), modifier = Modifier.fillMaxSize()
+                            .padding(bottom = 16.dp).testTag("reader-scroll-list"), content = pageContent)
+                } else {
+                    LazyColumn(state = list, userScrollEnabled = !closing && restored,
+                        verticalArrangement = Arrangement.spacedBy(gap), modifier = Modifier.fillMaxSize()
+                            .padding(end = 16.dp).testTag("reader-scroll-list"), content = pageContent)
+                }
+                if (restored) {
+                    if (horizontal) {
+                        HorizontalScrollbar(adapter = rememberScrollbarAdapter(list),
+                            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().testTag("reader-scrollbar"))
+                    } else {
+                        VerticalScrollbar(adapter = rememberScrollbarAdapter(list),
+                            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().testTag("reader-scrollbar"))
                     }
                 }
-                if (restored) VerticalScrollbar(adapter = rememberScrollbarAdapter(list),
-                    modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().testTag("reader-scrollbar"))
             }
         }
     }
