@@ -7083,3 +7083,77 @@ DOWN 就有地方去——缺的只是那一行。
 **注释里写着"anchored on X"的 requester，往往只对了一半的调用方可见。** 收藏页那份注释准确描述了
 标签 → 排序控件这一条链，但 shell 那边要的是"这个 requester 是谁"，而不是"它挂在哪儿"。
 发现两套 seam 指向同一个控件时，优先把它登记成一等公民，而不是再 `remember` 一个新的。
+
+## 第一百零八轮：详情页"元数据来源"面板从死站变回可走（2026-10-25）
+
+### 现象
+
+详情页左侧信息条的两个来源药丸（`[302,228][518,310]` / `[532,228][748,324]`）按 CENTER 打开
+"Metadata source" 底部面板后，遥控器就废了：面板里第一张选项卡片带着一圈蓝边（像是焦点），
+按一次 DOWN 之后**整张面板再没有焦点环**，再按 DOWN 两次画面一字不差（`GT11 == GT12 == GT13`），
+只有 BACK 能退出。a11y 树给出了铁证：`focused="true"` 的节点是 `[0,0][1920,1080]` 的整窗根，
+它的 text 里塞着面板标题与结果标题——焦点落在窗口本身，不在任何控件上。
+
+### 根因（三层，第 3 层是修掉前两层后才暴露的）
+
+1. `DetailsSourceOverlayDialog` 把"点遮罩关闭、点面板吞掉点击"做成了 `Modifier.clickable`：遮罩是
+   `fillMaxSize()`，面板是 `fillMaxWidth() + fillMaxHeight(0.92f)`。`clickable` 自带焦点目标，于是 TV 上
+   凭空多出两个**覆盖整屏、没有焦点环、四个方向都没有邻居**的站点。D-pad 从卡片往下走一步就掉进遮罩。
+2. 面板里真正能点的东西一个焦点环都没有：`SourceOptionCard` 只有 `combinedClickable`，它身上那圈蓝边是
+   `isActiveSource` / `isSelected` 的**选中边框**（2.dp primary，alpha 0.7 / 0.5），跟焦点无关；
+   `TrackingSearchResultCard`、`ReadingSearchResultCard`、`SourceOptionSheetRow`、
+   `TrackingSearchResultRow`、`ReadingSearchResultRow` 五个结果项同样只有 `clickable`。
+3. 把第 1 层两个孩子去掉后，对话框的"第一个可聚焦项"变成了 `SourceSearchField` 里的 `BasicTextField`，
+   于是**面板一打开就弹软键盘**，D-pad 立刻转去操作键盘。
+
+### 修法
+
+三处，全部只改变 TV 表现：
+
+1. `DetailsSourceSearch.kt` · `DetailsSourceOverlayDialog`：`isTvPresentation` 为真时，遮罩与面板吞点击
+   这两条 `clickable` 整条返回 `Modifier`（TV 没有触摸，关闭入口是 BACK）。手机/平板分支一字未动。
+2. 同一个文件里 5 个搜索结果项 + `DetailsHeaderInfoPanel.kt` 的 `SourceOptionCard` 补
+   `tvFocusable(shape = …, addFocusTarget = false)`，紧贴在 `clickable`/`combinedClickable` 之前，
+   形状各用自己的圆角（卡片 `if (expressive) 24.dp else 18.dp`、选项卡 `if (expressive) 20.dp else 12.dp`、
+   行 `20.dp`）。
+3. `DetailsSourceSheets.kt` · `MetadataSourceSheet`：第一个选项卡片挂 `FocusRequester`，TV 时在打开后的
+   前 10 帧内请求一次焦点（`withFrameNanos` 重试，attach 失败就下一帧）。面板打开时焦点落在卡片上，
+   软键盘不弹；搜索框只有用户主动走过去才会拿到焦点。
+
+### 证据
+
+**修前**（`GS10`–`GT13`）：面板打开时卡片有蓝边（实为选中边框），一次 DOWN 后无环，三次 DOWN 画面全同。
+
+**修后**（本机 1920×1080 @320，`JA10`–`JE10`）：
+
+* `JA10`：面板打开，选项卡片 `[32,254][256,518]` 带**真正的焦点环**（`tvFocusable` 的 2.dp primary 描边，
+  贴着卡片外框），**没有软键盘**；
+* `JA11`：DOWN → 搜索框 `[32,508][1888,604]`（`android.widget.EditText`）拿到焦点，软键盘弹出（见遗留 1）；
+* `JB10` + `focus.py`：软键盘打开时再按 DOWN，**键盘自己吃掉按键**（截图里 `a` 键高亮），焦点仍在输入框；
+* `JC10`（focusable 清单）：选项卡 `[32,206][256,470]`、8 张结果卡 `[36,732][252,984]`…
+  `[1716,732][1888,984]` 全部 `focusable="true" clickable="true"`——环和可达性都到位；
+* `JD10`：BACK 收起软键盘后再 DOWN，焦点落到第 3 张结果卡 `[589,780][805,1032]`
+  （`desc=Manga Sadou: Manga de yomu sauna-dou`），卡片画出蓝色焦点环，横向列表还自动滚动把卡片露出来；
+* `JE10`：BACK 关闭面板，焦点回到元数据药丸 `[302,228][518,310]`，截图与打开面板前的 `GX10`
+  **逐字节相同**（sha256 前缀 `5725cf5fab34`），没有残留态。
+
+### 遗留
+
+1. **搜索框一聚焦就弹软键盘，且键盘会抢走 D-pad**（`JA11`/`JB10`）。TV 上应该"先聚焦、按 CENTER 才弹键盘"，
+   否则用户按两下 DOWN 就以为面板坏了。下一轮在 `SourceSearchField` 上做（`isTv` 时先不 show IME，
+   CENTER/click 再 show）。这也是仓库里既有的"IME-open D-pad"待办的一个实例。
+2. 结果卡片行在 TV 上被面板底部裁掉大半（`height(142.dp)` 封面 + 标题 + Migrate 按钮，只看得见灰封面），
+   `LazyColumn` 本身能滚，但焦点停在横向卡片行里时往下不会滚到下一节，需要在卡片行上接"下沿越界即交还"。
+3. `SourceOptionSheetRow` / `TrackingSearchResultRow` / `ReadingSearchResultRow` 三个"行"变体在本机这条
+   路径上没有渲染（面板走的是卡片变体），只做了代码级对齐，没上机验证。
+4. 换源面板（读源药丸）走的是同一个 `DetailsSourceOverlayDialog` 与同一批结果卡组件，按代码共享
+   本轮修复对它同样生效，但没有单独上机复测。
+
+### 教训
+
+**看起来像焦点环的框，可能只是"已选中"边框。** 选项卡片那圈 2.dp 蓝边在第一版截图里骗过了我，让我以为
+"卡片有环、只是 DOWN 之后丢了"。分辨方法是看**边框形状是否贴外框**（焦点环按 `tvFocusable` 的约定
+会缩进半个描边、贴着节点外沿），以及 a11y 里 `focused="true"` 到底落在谁身上。
+
+**装饰用的 `clickable` 在 TV 上是隐藏的焦点站。** 遮罩、吞点击的容器、整屏手势层都该在 TV 分支让位；
+把它们留给触摸，是"零行为改动"的最小修法。

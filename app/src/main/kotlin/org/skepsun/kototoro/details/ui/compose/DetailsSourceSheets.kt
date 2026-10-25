@@ -29,13 +29,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
@@ -50,6 +54,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.model.ContentSourceInfo
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
@@ -100,6 +105,20 @@ fun MetadataSourceSheet(
         }
     }
     val context = LocalContext.current
+    // The sheet's first focusable is its search field, so opening it with the D-pad would land on the
+    // text field and pull up the soft keyboard, which then owns every key. Start on the first option
+    // tile instead - that card is the reason the sheet was opened.
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val initialFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(isTvPresentation, currentOptions.size) {
+        if (!isTvPresentation || currentOptions.isEmpty()) return@LaunchedEffect
+        repeat(10) {
+            withFrameNanos { }
+            if (runCatching { initialFocusRequester.requestFocus() }.isSuccess) {
+                return@LaunchedEffect
+            }
+        }
+    }
         DetailsSourceOverlayDialog(
             onDismissRequest = onDismissRequest,
         ) { panelDragModifier ->
@@ -128,7 +147,7 @@ fun MetadataSourceSheet(
                         itemsIndexed(
                             items = currentOptions,
                             key = { index, option -> "${option.key}:$index" },
-                        ) { _, option ->
+                        ) { index, option ->
                                 val linked = option.trackingService?.let { svc ->
                                     linkedTrackingItems.firstOrNull { it.service == svc && it.remoteId == option.remoteId }
                                 }
@@ -138,6 +157,11 @@ fun MetadataSourceSheet(
                                 modifier = Modifier.onGloballyPositioned { menuAnchorBounds = it.boundsInRoot() },
                             ) {
                                 SourceOptionCard(
+                                    modifier = if (index == 0 && isTvPresentation) {
+                                        Modifier.focusRequester(initialFocusRequester)
+                                    } else {
+                                        Modifier
+                                    },
                                     displayModel = option.resolveDisplayModel(
                                         role = DetailsSourceRole.METADATA,
                                         currentContent = currentContent,

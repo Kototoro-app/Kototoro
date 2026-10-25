@@ -69,6 +69,8 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
@@ -179,6 +181,11 @@ internal fun DetailsSourceOverlayDialog(
 ) {
     var panelOffsetY by remember { mutableFloatStateOf(0f) }
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    // The scrim and the panel below are tap targets only: they dismiss on an outside tap and swallow
+    // taps on the panel. Both are clickable, so on TV the D-pad can land on the invisible sheet
+    // background and stay there (no ring, no neighbour in any direction) - the sheet then eats every
+    // key until BACK. There is no touch on TV, so skip those two nodes there entirely.
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val panelColors = rememberGlassSurfaceColors(
         style = GlassDefaults.regularStyle(),
         glassPrefs = rememberDetailsSourceOverlayGlassPrefs(),
@@ -213,10 +220,16 @@ internal fun DetailsSourceOverlayDialog(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.18f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismissRequest,
+                .then(
+                    if (isTvPresentation) {
+                        Modifier
+                    } else {
+                        Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDismissRequest,
+                        )
+                    },
                 ),
             contentAlignment = Alignment.BottomCenter,
         ) {
@@ -225,11 +238,17 @@ internal fun DetailsSourceOverlayDialog(
                     .fillMaxWidth()
                     .fillMaxHeight(0.92f)
                     .offset { IntOffset(0, panelOffsetY.roundToInt()) }
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {},
-                ),
+                    .then(
+                        if (isTvPresentation) {
+                            Modifier
+                        } else {
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {},
+                            )
+                        },
+                    ),
                 shape = RoundedCornerShape(topStart = if (expressive) 36.dp else 28.dp, topEnd = if (expressive) 36.dp else 28.dp),
                 color = panelColors.containerColor.detailsPanelContainerColor(),
                 border = panelColors.border,
@@ -429,6 +448,7 @@ private fun SourceOptionSheetRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .tvFocusable(shape = RoundedCornerShape(20.dp), addFocusTarget = false)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -472,6 +492,7 @@ private fun TrackingSearchResultRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .tvFocusable(shape = RoundedCornerShape(20.dp), addFocusTarget = false)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -562,6 +583,10 @@ private fun TrackingSearchResultCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .tvFocusable(
+                    shape = RoundedCornerShape(if (expressive) 24.dp else 18.dp),
+                    addFocusTarget = false,
+                )
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onBindClick,
@@ -698,6 +723,7 @@ private fun ReadingSearchResultRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .tvFocusable(shape = RoundedCornerShape(20.dp), addFocusTarget = false)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -788,6 +814,10 @@ private fun ReadingSearchResultCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .tvFocusable(
+                    shape = RoundedCornerShape(if (expressive) 24.dp else 18.dp),
+                    addFocusTarget = false,
+                )
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onMigrateClick,

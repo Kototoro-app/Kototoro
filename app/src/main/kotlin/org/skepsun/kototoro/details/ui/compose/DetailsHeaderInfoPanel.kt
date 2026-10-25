@@ -835,6 +835,10 @@ internal fun SourceOptionCard(
     Surface(
         modifier = modifier
             .width(112.dp)
+            .tvFocusable(
+                shape = RoundedCornerShape(if (expressive) 20.dp else 12.dp),
+                addFocusTarget = false,
+            )
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
