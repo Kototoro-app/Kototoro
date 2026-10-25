@@ -7646,3 +7646,33 @@ Compose 的方向性焦点搜索只在"严格位于当前节点矩形某个方�
 **"把行拆成兄弟"比"给图标补焦点"更接近问题本质。** 上一轮一度想给 `IconButton` 补 `tvFocusable`——
 那不会有任何效果，因为拦路的是焦点树的形状而不是图标自己缺东西。真正的修法是把"可点的那块"缩到
 它该有的范围，让每个想被遥控器够到的东西都成为同一层的节点。
+
+## 第一百一十八轮：同一个坑的第二处——开关行的锁图标（2026-10-25）
+
+`SettingsPreferenceComponents.kt:360` 的 `SettingsSwitchPreference` 与上一轮修的 `SettingsChoicePreference`
+是同一个形状：整行 `.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)` + `.toggleable(role = Switch)`，
+而 `locked`/`onLockClick` 的锁图标（L412-420）是这行的孩子。所以来源锁定这类行在电视上会"行能开关、锁图标够不着"。
+
+修法与上一轮一致：`isTvPresentation` 时外层 `Row` 不带 `tvFocusable`/`toggleable`（只补 `fillMaxWidth`），
+开关下沉到正文 `Column`（`role = Switch` 与 CENTER 行为不变，只是换承载节点），锁图标因此成为兄弟；
+非电视分支原样保留两段修饰符。
+
+### 设备证据（emulator-5554，1920x1080@320）
+
+* 构建 `:app:assembleDebug` BUILD SUCCESSFUL in 1m59s，`adb install -r` Success；
+* 设置 → Appearance → Lists：`Preview card on tap` 开关行拿到焦点，矩形 `[886,228][1744,360]`——
+  正好是正文那块（开关本体在 1744 右侧之外），说明焦点确实落在承载 `toggleable` 的节点上；
+* 同页 DOWN 到 `List mode|Grid` 选择行、CENTER 打开对话框、焦点落在 `List` 选项上，
+  上一轮修的 Interface style 正文焦点 `[886,228][1608,324]` 也仍然成立——两处改动互不影响。
+
+### 还没做完的部分
+
+锁图标本身的可达性（进"内容来源"页、在锁定行上按 RIGHT、CENTER 弹出锁定提示）这轮没走到，
+`Preview card on tap` 的开关状态也没能从 a11y dump 里断言（开关的 checked 不在文本节点上）。
+这两条留给下一轮补验，任务先挂着不关。
+
+### 教训
+
+同一个组件文件里两处同构问题，说明"整行一个焦点目标"是这个代码库的默认写法，而不是偶发失误。
+真正该改的可能是 `settingsPreferenceLayout` 这一层——等第三处出现时就把"行体承载焦点、行尾控件做兄弟"
+做成公共修饰符，别每发现一处补一处。

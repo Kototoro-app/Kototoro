@@ -368,14 +368,25 @@ fun SettingsSwitchPreference(
     onLockClick: (() -> Unit)? = null,
     onCheckedChange: (Boolean) -> Unit,
 ) {
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     Row(
         modifier = Modifier
-            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
-            .toggleable(
-                value = checked,
-                enabled = enabled,
-                role = Role.Switch,
-                onValueChange = onCheckedChange,
+            .then(if (isTvPresentation) Modifier.fillMaxWidth() else Modifier)
+            .then(
+                if (isTvPresentation) {
+                    // 与 SettingsChoicePreference 同理：整行既当焦点目标又装着行尾的锁按钮时，方向键
+                    // 永远走不进自己矩形里的孩子，锁图标就成了够不着的死键。电视上把开关让给正文。
+                    Modifier
+                } else {
+                    Modifier
+                        .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+                        .toggleable(
+                            value = checked,
+                            enabled = enabled,
+                            role = Role.Switch,
+                            onValueChange = onCheckedChange,
+                        )
+                },
             )
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
@@ -386,7 +397,22 @@ fun SettingsSwitchPreference(
             tone = SettingsIconTone.SECONDARY_VARIANT,
         )
         Column(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (isTvPresentation) {
+                        Modifier
+                            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+                            .toggleable(
+                                value = checked,
+                                enabled = enabled,
+                                role = Role.Switch,
+                                onValueChange = onCheckedChange,
+                            )
+                    } else {
+                        Modifier
+                    },
+                ),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
