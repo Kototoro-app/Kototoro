@@ -5890,3 +5890,97 @@ Surface(
 4. 卡片宽度现在是固定 640 dp：在 1280×720 这类更小的电视上（逻辑宽度约 853 dp）仍占 75%，没有按屏幕
    比例收缩。
 5. 对话框背后的页面行仍保留自己的蓝色焦点环（打开对话框时有两个环），未处理。
+
+## 第九十三轮：BACK 之后那一下 CENTER 不该白按（2026-10-25）
+
+### 起念
+
+第九十二轮结尾量到的现象：BACK 收起键盘后，第一下 CENTER 什么也没发生，第二下键盘才回来。
+
+| 步骤 | 输入框 | 底部条带（键盘判定） |
+| --- | --- | --- |
+| BACK 关掉键盘 | `[400,216]` | mean 32.0（`r92-b3.png`） |
+| CENTER | `[400,216]` | mean 32.0，与上一张像素相同（`r92-b4.png`） |
+| CENTER（第二次） | `[400,216]` | mean 37.7、max 189（`r92-b5.png`） |
+
+代码里这是一个显式的两段式设计（`rememberTvTextFieldReadOnlyState`）：
+
+```kotlin
+if (editing) {
+    editing = false          // 只把状态翻回去，键盘要等下一按
+} else {
+    editing = true
+    showKeyboard()
+}
+```
+
+### 机制：被关掉的输入会话不会复活
+
+BACK 关掉键盘时字段仍持有焦点，所以 `onFocusChanged` 不会把 `editing` 归位，应用侧一直以为在编辑。
+平台这边，用户手动关掉的那条输入连接已经退役，对它再 `show()` 是空操作；代码注释里当时写的
+"重建输入会话才真的能把键盘带回来"是对的，问题只在于它把重建交给观众按第二下。
+
+两次按键之间，唯一的区别是中间**渲染过一帧 `readOnly = true`**：字段重新组合成只读、再翻回可编辑，
+平台据此建了一条新的输入连接。
+
+### 修法：把"两帧"换成"两次按键"
+
+```kotlin
+.tvTextInputStartEditing {
+    if (editing) {
+        editing = false
+        rearm++          // 让下面这个效应再跑一次
+    } else {
+        editing = true
+        showKeyboard?.invoke() ?: keyboardController?.show()
+    }
+}
+...
+LaunchedEffect(rearm) {
+    if (rearm > 0) {
+        withFrameNanos { }        // 先让 readOnly 的一帧真的画出去
+        editing = true
+        showKeyboard?.invoke() ?: keyboardController?.show()
+    }
+}
+```
+
+`withFrameNanos` 是这里的关键：如果只是连着写 `editing = false; editing = true`，同一个快照里等于没变，
+只读那一帧根本不会出现，平台也就不会重建连接。等一帧，让只读状态被组合、绘制，再翻回可编辑，重建才会发生。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 输入框 | 焦点 | 底部条带 |
+| --- | --- | --- | --- |
+| 打开对话框 | `[400,472][1520,584]` | EditText | 33.3（无键盘） |
+| CENTER 首次进编辑 | `[400,216][1520,328]` | EditText | 37.7 / max 189（键盘） |
+| BACK | `[400,216]` | EditText | 32.0（键盘收起，卡片不动） |
+| **CENTER（第一下）** | `[400,216]` | EditText | **37.7 / max 189（键盘回来了）** |
+| BACK + CENTER（第二轮） | `[400,216]` | EditText | 32.0 → 37.7（同样一下就回来） |
+| 输入 `Y` | `'1080p, 720p, 480pY'` | EditText | 37.7（按键真的进了字段） |
+| BACK + DOWN | `[400,216]` | View `[1428,376][1520,472]`（OK） | 32.0（离开字段照旧） |
+
+值真的写下去了：CENTER 确认后 `shared_prefs` 里 `downloads_video_quality` 变成 `1080p, 720p, 480pY`；
+再打开、Clear、OK 之后回到默认 `1080p, 720p, 480p`（`DownloadsSettingsRoute` 的空白归一化）。
+
+### 教训
+
+**"按一下没反应"通常是应用状态和系统状态不同步。** 应用以为在编辑、系统已经把输入连接退役，两边各说各话；
+把两次按键之间的差别（只读一帧）自动化，比让人多按一次更接近正确修复。
+
+**同一个快照里的连续赋值等于没赋值。** Compose 里 `state = false; state = true` 不会产生只读的一帧，
+必须等一帧（`withFrameNanos`）才能让中间状态真的被组合；这类"状态跳板"都是这个套路。
+
+### 本轮的操作失误（记录在案）
+
+导航时焦点停在 `Downloading over cellular network` 行上，我按 CENTER 想打开另一个对话框，结果进的是单选
+对话框，随后 LEFT/CENTER 选中了 `Ask every time`。核对过 `shared_prefs`：这个键根本没有落盘（本来就是这个
+默认值），只是测试路径上的误按。实验把 `downloads_video_quality` 改成过 `1080p, 720p, 480pY`，本轮结束前已
+清回默认值。
+
+### 遗留
+
+1. 共享 holder 的第二处调用（自定义空间的名称输入，全屏表单）没有在设备上复验，只是同一份代码。
+2. 动作行里 DOWN 停在 OK 之后不再回环（`r93-9` 焦点不动），是可接受的终点还是该绕回 Cancel，留待定。
+3. 卡片与遮罩后页面的对比度仍只有 19 级（第九十二轮遗留 2）。
+4. 带正文段落的消息型对话框没有单独复验 `bodyLarge`（第九十二轮遗留 3）。
