@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BasicAlertDialog
@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
@@ -241,12 +242,23 @@ internal fun SettingsDialogActionButton(
             addFocusTarget = false,
         ),
     ) {
+        // A television is watched from across the room, so the action labels take the size the rest
+        // of the TV settings list already uses instead of the phone's 14 sp.
         Text(
             text = text,
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = if (LocalUiPresentationConfig.current.isTv) 16.sp else 14.sp,
+            ),
         )
     }
 }
+
+/**
+ * Width of a dialog card on TV: two thirds of a 1920 px screen, wide enough that a body sentence
+ * fits on one line and narrow enough that the eye does not have to travel across the whole screen.
+ */
+private val TvDialogWidth = 640.dp
 
 /**
  * The dialog box itself, on TV.
@@ -254,6 +266,15 @@ internal fun SettingsDialogActionButton(
  * Material3's own dialog content is shaped for a phone: a narrow card whose action row wraps in a
  * flow row. The same slots are laid out here instead, in the room a television has, so the action
  * row never wraps, and the card carries the glass tokens the rest of the TV chrome uses.
+ *
+ * The card takes a television width instead of hugging its title. A card that wraps its own text
+ * moves its edges for every dialog, and a long body sentence then wraps into a narrow column beside
+ * a wide empty card. `requiredWidth` is deliberate: Compose's dialog layout caps its content at
+ * 560 dp (`DialogMaxWidth`), and this card is wider than that cap. The dialog window itself is
+ * full-screen and nothing clips a child to that content box, so the card simply draws past it and
+ * stays centred. Body text uses `bodyLarge` rather than the phone-sized `bodyMedium`, and the action
+ * labels 16 sp: this card is only ever drawn at ten-foot distance, where 14 sp is below the size the
+ * rest of the TV settings list already uses.
  */
 @Composable
 private fun TvDialogCard(
@@ -272,9 +293,7 @@ private fun TvDialogCard(
         shape = shape,
         color = containerColor,
         tonalElevation = tonalElevation,
-        modifier = Modifier
-            .padding(horizontal = 48.dp)
-            .widthIn(min = 320.dp, max = 560.dp),
+        modifier = Modifier.requiredWidth(TvDialogWidth),
     ) {
         Column(
             modifier = Modifier.padding(start = 28.dp, top = 28.dp, end = 28.dp, bottom = 16.dp),
@@ -291,7 +310,7 @@ private fun TvDialogCard(
             Spacer(Modifier.height(20.dp))
             CompositionLocalProvider(
                 LocalContentColor provides bodyColor,
-                LocalTextStyle provides MaterialTheme.typography.bodyMedium,
+                LocalTextStyle provides MaterialTheme.typography.bodyLarge,
             ) {
                 body()
             }
