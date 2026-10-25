@@ -458,8 +458,8 @@ fun ExploreSelectionTopBar(
                         IconButton(
                             onClick = { showOverflowMenu = true },
                             modifier = Modifier
-                                    .focusRequester(overflowAnchorFocus)
-                                    .size(topBarControlHeight).tvIconButtonRing(),
+                                .focusRequester(overflowAnchorFocus)
+                                .size(topBarControlHeight).tvIconButtonRing(),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,

@@ -1209,12 +1209,12 @@ fun SettingsReorderPreference(
                                 )
                                 IconButton(
                                     onClick = {
-                                            if (index > 0) {
-                                                pendingValue = pendingValue.toMutableList().apply {
-                                                    add(index - 1, removeAt(index))
-                                                }
+                                        if (index > 0) {
+                                            pendingValue = pendingValue.toMutableList().apply {
+                                                add(index - 1, removeAt(index))
                                             }
-                                        },
+                                        }
+                                    },
                                     enabled = index > 0,
                                     modifier = Modifier.tvIconButtonRing(),
                                 ) {
@@ -1225,12 +1225,12 @@ fun SettingsReorderPreference(
                                 }
                                 IconButton(
                                     onClick = {
-                                            if (index < pendingValue.lastIndex) {
-                                                pendingValue = pendingValue.toMutableList().apply {
-                                                    add(index + 1, removeAt(index))
-                                                }
+                                        if (index < pendingValue.lastIndex) {
+                                            pendingValue = pendingValue.toMutableList().apply {
+                                                add(index + 1, removeAt(index))
                                             }
-                                        },
+                                        }
+                                    },
                                     enabled = index < pendingValue.lastIndex,
                                     modifier = Modifier.tvIconButtonRing(),
                                 ) {

@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -34,6 +35,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
@@ -124,12 +126,22 @@ fun Modifier.tvFocusable(
                 Modifier.drawWithContent {
                     drawContent()
                     if (isFocused) {
-                        val outline = shape.createOutline(size, layoutDirection, this)
-                        drawOutline(
-                            outline = outline,
-                            color = resolvedRingColor,
-                            style = Stroke(width = borderWidth.toPx()),
+                        // A stroke is centred on the outline, so half of it would land outside the
+                        // node and be cut by a tight container (a 44 dp icon inside a 47 dp pill).
+                        // Shrink the outline by one stroke so the whole ring stays inside the node.
+                        val strokeWidth = borderWidth.toPx()
+                        val outlineSize = Size(
+                            width = (size.width - strokeWidth).coerceAtLeast(1f),
+                            height = (size.height - strokeWidth).coerceAtLeast(1f),
                         )
+                        val outline = shape.createOutline(outlineSize, layoutDirection, this)
+                        translate(left = strokeWidth / 2f, top = strokeWidth / 2f) {
+                            drawOutline(
+                                outline = outline,
+                                color = resolvedRingColor,
+                                style = Stroke(width = strokeWidth),
+                            )
+                        }
                     }
                 }
             } else {

@@ -152,17 +152,17 @@ private fun ImageActionButton(
         onClick = onClick,
         enabled = enabled,
         colors = IconButtonDefaults.iconButtonColors(
-                contentColor = MaterialTheme.colorScheme.onSurface,
-            ),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
         modifier = modifier
-                .size(48.dp)
-                .shadow(
-                    elevation = 1.dp,
-                    shape = CircleShape,
-                )
-                .background(MaterialTheme.colorScheme.surface, CircleShape)
-                .clip(CircleShape)
-                .semantics { this.contentDescription = contentDescription }.tvIconButtonRing(),
+            .size(48.dp)
+            .shadow(
+                elevation = 1.dp,
+                shape = CircleShape,
+            )
+            .background(MaterialTheme.colorScheme.surface, CircleShape)
+            .clip(CircleShape)
+            .semantics { this.contentDescription = contentDescription }.tvIconButtonRing(),
     ) {
         content()
     }

@@ -5260,3 +5260,79 @@ Kotlin 不允许命名实参与位置实参混用，所以**带位置实参的�
    `addFocusTarget` 是默认 `true`，与“环在 `clickable` 之前 + 不加焦点节点”的规则相反；没有上机证据前不改。
 5. `Clear history` 那 4 个手拼单选行其实已经有 `tvFocusable(shape = ClearHistoryRowShape, addFocusTarget = false)`，
    “4 个隐形停点”的旧结论要重新验。
+
+## 第八十六轮：图标按钮环统一形状、环不再被容器切掉（2026-10-25）
+
+### 症状
+
+第八十五轮把 135 个图标按钮一次性接进 `tvIconButtonRing()`，电视上"停得住但看不见"的站少了，但留下两类问题：
+
+1. **改法本身太重**：批量脚本把整条 `IconButton(...)` 重新排版，64 个文件 385 增 / 184 删，把原本已经
+   分行的实参链整体右移 4 格，24 处续行对不齐（`.editorconfig` 的 4 空格/120 列规则没被违反，但 diff 里
+   全是噪音，review 时看不出哪一处是真的加了环）。
+2. **环被容器切掉**：`Stroke` 是描在轮廓线**中心**上的，`tvFocusable` 又按节点原始尺寸建轮廓，于是 2 dp 的环
+   有一半（1 dp）画到节点外。单看一个按钮没问题，但详情页左栏那枚胶囊（`[679,40][943,134]`，47 dp 高）
+   里放的是 44 dp 的按钮，只要对焦，环的上下各 1 dp 就被胶囊裁掉——截图 `crop86-share.png` 里顶端是一道平切的缺口，
+   看上去像画坏了的圈，而不是"焦点在这里"。
+
+### 改动
+
+- `core-ui/.../adaptive/TvFocus.kt`：`tvFocusable` 画环时把轮廓按一个描边宽收缩并平移半个描边，
+  环整体落在节点以内：
+
+  ```kotlin
+  val strokeWidth = borderWidth.toPx()
+  val outlineSize = Size(
+      width = (size.width - strokeWidth).coerceAtLeast(1f),
+      height = (size.height - strokeWidth).coerceAtLeast(1f),
+  )
+  val outline = shape.createOutline(outlineSize, layoutDirection, this)
+  translate(left = strokeWidth / 2f, top = strokeWidth / 2f) {
+      drawOutline(outline = outline, color = resolvedRingColor, style = Stroke(width = strokeWidth))
+  }
+  ```
+
+  这是所有环（图标按钮、页签、芯片、选择栏）共用的原语，改一处，全部不会再越界。
+- 重跑 135 个站点的迁移，这次用**最小 diff** 的三条规则（脚本不进仓库）：已有 `modifier` 值就在链尾追加
+  `.tvIconButtonRing()`，只有投影超过 120 列才折行；实参已经一行一个的，只插入一行 `modifier = Modifier.tvIconButtonRing(),`；
+  只有实参内联在首行的那种才重新排版（续行整体保持原有缩进）。相对"未迁移的基线"，变动从 385/184 降到
+  287/152，24 处错位降到 14 处，且这 14 处都是改动前就在的（`DetailsSourceSheets.kt`、
+  `ScrobblingInfoSheetContent.kt`、`SourceGroupsDialog.kt`、`SourceTestDialog.kt`）。落到提交上更好看：
+  相对已提交的第八十五轮版本只有 10 个文件、44 增 46 删（其余 60 个文件的最小 diff 版与已提交内容逐字一致）。
+- `DetailsDock.kt` 里 3 处胶囊内按钮补成 `RoundedCornerShape(12.dp)`，和同一个 dock 里已有的手写环
+  （12 dp / 16 dp 两档）对齐；默认的 `CircleShape` 在这枚 42 dp 方按钮上会画成一个圆，和胶囊的圆角语言不一致。
+- `VideoScreenLockOverlay.kt` 的链在上一版里被拆成缺 `.` 的续行（`tvIconButtonRing(),` 单独一行），
+  本轮重新生成成正常的 `.size(64.dp).background(...).tvIconButtonRing(),`。
+
+### 设备验证（emulator-5554，1920×1080 @320）
+
+| 步骤 | 证据 | 观察 |
+| --- | --- | --- |
+| 历史 → `TV Audit Manga 11` → 左栏胶囊对焦 share | `r86-15.png`、`crop86-share2.png` | 环完整（44×44 dp），不再被胶囊平切；蓝色 bbox 由改前的 92×88 px 收到 88×88 px |
+| 左栏胶囊 ⋮ | `r86-13.png` | 环完整，同上 44×44 dp |
+| 右栏工具条 search | `r86-19.png`、`crop86-search2.png` | 48×48 dp 的 `RoundedCornerShape(12.dp)` 环，四边都在按钮内 |
+| 右栏工具条 ⋮ | `r86-29.png`、`crop86-dots2.png` | 同上，环贴着工具条的圆角内沿，没有被裁 |
+| 章节行长按进批量模式 → UP → 译 | `r86-22.png`、`crop86-selbar.png` | 紧排四图标行（译/删除/全选/⋮）里 12 dp 环完整可见 |
+| 批量模式 LEFT → ✕ | `r86-23.png`、`crop86-selclose.png` | 52 dp 节点上的 12 dp 环完整 |
+| 章节行尾的"译"图标 | `r86-32.png` | 行内 48 dp 圆形环（`CircleShape` 默认档）正常 |
+| 阅读器 CENTER → RIGHT → ⋮ / LEFT ×2 → 返回 | `r86-35.png`、`r86-36.png`、`crop86-readerdots.png` | 两枚 48 dp 圆形环与第八十五轮一致，未被本轮的收缩改坏 |
+| 设置页 UP → 返回 / RIGHT → 搜索 | `r86-38.png`、`r86-39.png` | 两枚 48 dp 环正常（回归） |
+
+构建：`:app:assembleDebug` BUILD SUCCESSFUL（1 m 46 s）。像素统计用 `.tmp-bluebox.py`（按"蓝 > 170、蓝-红 > 70、
+蓝-绿 > 40"筛出焦点环的 bbox），不靠肉眼估。
+
+### 遗留
+
+1. **详情页右栏那排图标页签（☰ / ▦ / 🔖）聚焦时仍然没有环**。`ChaptersPagesTabsContent.kt` 的
+   `DetailsTabsRow` 已经给 `Tab(modifier = Modifier.tvTabRing())`，第四十九轮也在设置页的
+   `PrimaryTabRow` 页签上截到过环，但这里对焦到 ▦ `[1074,54][1158,150]`、🔖 `[1158,54][1254,150]` 时，
+   同一区域的蓝色像素只剩选中页签自己的图标（`r86-5.png` 实测 bbox 只有 18×16 dp），也就是
+   **环一格都没画**。同一个原语在设置页能画、在这排画不出来，怀疑是 `SecondaryTabRow` 的子组合/测量把
+   `Tab` 的 modifier 放到了另一个节点上（或这一排的 `Tab` 没有拿到 `isTv`）。下一轮要先定位再改，
+   不要靠"再套一层 tvFocusable"糊过去。
+2. 左栏胶囊的两枚环（share / ⋮）现在完整了，但相对胶囊底色仍偏高约 2 dp（环中心 79.5 px，胶囊中心 87 px）——
+   是胶囊内容的排版偏差，不是环的问题，纯视觉小瑕疵，暂不动。
+3. `SwipeableFilterChip` 自绘的芯片环仍然是 `.clickable` **之后** + `addFocusTarget` 默认 `true`（第八十五轮遗留 4），
+   留待芯片专项轮。
+4. 本轮只验了按钮类站点；61 个芯片站点里的"紧排"场景（如 Favorites 快筛那一排）没有重截图，
+   但收缩只影响 1 dp，且芯片用的是同一个 `drawWithContent`。

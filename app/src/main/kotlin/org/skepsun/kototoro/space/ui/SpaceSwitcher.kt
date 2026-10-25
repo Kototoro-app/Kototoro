@@ -634,8 +634,8 @@ private fun SpaceSidekickCardContent(
                 onClick = onResume,
                 enabled = enabled,
                 modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(48.dp).tvIconButtonRing(),
+                    .align(Alignment.BottomEnd)
+                    .size(48.dp).tvIconButtonRing(),
             ) {
                 Surface(
                     modifier = Modifier.size(42.dp),

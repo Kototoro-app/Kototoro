@@ -458,9 +458,9 @@ private fun PlayerIconButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
-                .size(if (isTvPresentation) 48.dp else 36.dp)
-                .then(focusModifier)
-                .semantics { this.contentDescription = contentDescription }.tvIconButtonRing(),
+            .size(if (isTvPresentation) 48.dp else 36.dp)
+            .then(focusModifier)
+            .semantics { this.contentDescription = contentDescription }.tvIconButtonRing(),
         content = icon,
     )
 }

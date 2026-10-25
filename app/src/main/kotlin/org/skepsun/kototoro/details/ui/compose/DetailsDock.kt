@@ -866,7 +866,7 @@ private fun PageGridSizeControlsRow(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f),
             ),
         ) {
-            IconButton(onClick = onBackClick, modifier = Modifier.tvIconButtonRing()) {
+            IconButton(onClick = onBackClick, modifier = Modifier.tvIconButtonRing(RoundedCornerShape(12.dp))) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.back),
@@ -974,8 +974,8 @@ private fun ExpandedPaneUtilityDock(
                 onClick = onSearchClick,
                 enabled = isSearchEnabled,
                 modifier = Modifier
-                        .width(42.dp)
-                        .height(42.dp).tvIconButtonRing(),
+                    .width(42.dp)
+                    .height(42.dp).tvIconButtonRing(RoundedCornerShape(12.dp)),
             ) {
                 Icon(
                     imageVector = Icons.Default.Search,
@@ -991,8 +991,8 @@ private fun ExpandedPaneUtilityDock(
                 IconButton(
                     onClick = { expanded = true },
                     modifier = Modifier
-                            .width(42.dp)
-                            .height(42.dp).tvIconButtonRing(),
+                        .width(42.dp)
+                        .height(42.dp).tvIconButtonRing(RoundedCornerShape(12.dp)),
                 ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,

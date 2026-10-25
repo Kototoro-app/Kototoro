@@ -76,12 +76,12 @@ class TrackingDiscoverActivity : BaseComposeActivity() {
                             if (scheduleCategory != null) {
                                 IconButton(
                                     onClick = {
-                                            router.openTrackingDiscoveryCategory(
-                                                activeService ?: initialService,
-                                                scheduleCategory.id,
-                                                scheduleCategory.nameResId,
-                                            )
-                                        },
+                                        router.openTrackingDiscoveryCategory(
+                                            activeService ?: initialService,
+                                            scheduleCategory.id,
+                                            scheduleCategory.nameResId,
+                                        )
+                                    },
                                     modifier = Modifier.tvIconButtonRing(),
                                 ) {
                                     Icon(
