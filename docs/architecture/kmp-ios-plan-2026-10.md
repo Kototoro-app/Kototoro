@@ -8386,3 +8386,64 @@ Android 的“来源设置 → 概览”最后一行是“设置向导”（`set
   ——两者都要在同一张来源设置页上滚动找行，新行不能把已有的行挤出可达范围。
 - 仍待：`handle_links`（Android 概览组里的“处理链接”，Windows 没有注册 `http/https` 的关联入口）、
   把重排对话框换成真正的拖拽、Android 统一来源页的批量选择与仓库筛选分组。
+
+## 184. Windows 来源测试页（对齐 Android 的 `SourceTester` / `SourceTestDialog`）（2026-10-24）
+
+Android 的“来源设置”与统一来源页各有一个“测试全部”（`source_test_all`），点开是 `SourceTestDialog`：
+`SourceTester`（`settings/sources/test/SourceTester.kt`）对每个已启用来源依次问七件事——主列表、封面、详情、
+章节、页面、随机、搜索——每步给出 PASS/FAIL/SKIP/CLOUDFLARE 与耗时，跑完汇总“可用/不可用/Cloudflare”，
+还能导出 JSON、禁用失败的来源。Windows 之前没有任何对应物：来源出问题只能靠逐个点进去看错误提示，
+诊断信息还带 requestId，用户没法一眼比较“到底是哪几家挂了”。
+
+- 六个步骤而不是七个（`DesktopSourceTester.kt`）：
+  - RANDOM 丢弃：`core-source` 的 `SourceRuntime` 契约里没有随机操作（浏览页的“换一批”是页内重排），
+    没有可问的东西就不假装问了；`source_test_step_random` 这一行不会出现。
+  - LIST/COVERS/DETAILS/CHAPTERS/PAGES/SEARCH 与 Android 同序同名，字符串直接用 Android 的
+    `source_test_step_*`、`source_test_msg_*`、`source_test_status_*`（中文 catalog 里这批键没有译文，
+    所以中文界面下步骤名与判定仍是英文——与手机上的表现一致，不手工翻译，见 Weblate 规矩）。
+  - 超时与并发照搬 Android：单步 20 s（`source_test_msg_timeout`）、单个来源 90 s
+    （`source_test_msg_total_timeout`）、同时三个来源；某步失败后已排到的后续步骤不再执行，
+    并按“前一步失败”填 SKIP（`source_test_msg_prev_failed`），不是中断整轮。
+  - 无操作支持的步骤（`UNSUPPORTED_OPERATION`）读 SKIP（`source_test_msg_unsupported`），与 Android 同规则；
+    Cloudflare/挑战读独立的 CHALLENGE（`source_test_status_cloudflare`），**不**在跑测中途弹浏览器窗口——
+    需要人工过验证的来源正是这一页要列出来的东西，让用户在无人的跑测里点掉它反而是错的行为。
+- 三种内容类型走三条 PAGES 判定（Android 的 PAGES 只有图片一种）：
+  - `DesktopReaderKind.PAGES`：`getPages` 后只下载第一张图，下载成功才算 PASS（`source_test_msg_pages`）；
+  - `NOVEL`：`getChapterContent` 的 html 非空（`source_test_msg_text_chapter`）；
+  - `VIDEO`：`getPages` 给出流地址后 `DesktopSession.probeUrl` GET 一次，状态码成功才算
+    `source_test_msg_video_stream`（“stream reachable”这句话必须真的验过），失败写 `source_test_msg_stream_failed`。
+  - COVERS 复用 `session.covers.load(content, refresh = true)`，与网格同一条管线，所以 TVBox/CMS 那种
+    “协议不返回封面、只有 URL”的来源也走 Session 的直连兜底，PASS 意味着图片真的落盘了。
+- 页面（`DesktopSourceTestPage.kt`，`DesktopScreen.SOURCE_TEST`，标题 `source_test_title`）：Windows 的设置页
+  都是平铺页而不是对话框（§158–183 一路如此），六个步骤 × N 个来源也塞不进一个弹窗，所以做成独立页；
+  入口在“扩展与仓库”的已安装区末尾（`extension-test-sources`，标题 `source_test_title`、摘要 `extensions.testSourcesSummary`），
+  因为“来源”本来就住在那一页。返回回“扩展与仓库”。
+  - 进度块：`LinearProgressIndicator`（`source-test-bar`）、“N / M checked”（`source_test_progress`）、
+    正在跑的是谁（`source_test_running`，固定两行避免按钮跳动）、跑完的汇总（`source_test_summary`）、
+    取消说明（`source_test_cancelled_note`）；按钮在不跑时是“测试全部”（`source-test-run`，禁用条件是没有已启用来源），
+    跑着时换成“取消”（`source-test-cancel`），旁边是“导出结果”（`source_test_export`，写剪贴板，
+    失败时用 DesktopClipboard 的兜底提示）与“禁用失败的来源”（`source_test_disable_failed`，跑完且有 FAIL 才出现）。
+  - 结果区按来源一行（`source-test-result:<name>`）：标题、判定（`source-test-verdict:<name>`）、“N 步”，
+    点开逐行列出步骤名、判定（`source-test-step:<name>:<STEP>`）、耗时与消息——顺序与 Android 对话框一致。
+  - 进度放在 `DesktopSourceTester.progress` 这个独立 StateFlow 里（不进 `DesktopAppState`，同 §162 的镜像测速），
+    页面 `collectAsState()` 直接读；跑测是通过 `scope.launch` 起的，**不走** `action{}` 的 gate，
+    所以一轮几分钟的跑测不会把窗口其余部分锁成 busy。
+  - 进入页面即 `sourceTester.reset()`：第二次进来看到的是一张空表，而不是上一轮里某个已经卸载来源的判定。
+- “禁用失败的来源”写的就是来源开关对话框那份 `disabled_sources`（`session.setSourcesEnabled`），
+  失败的来源随即离开来源栏/网格/筛选器，收藏进度与下载都保留；Android 的 `disableFailed()` 是同一语义。
+- 导出与 Android 的 `exportJson()` 同形：`{"generated":ISO,"sources":[{"name","status","steps":{STEP:pass|fail|skip|challenge},"messages":{…}}]}`，
+  状态小写、消息只给 FAIL/CHALLENGE，一份 JSON 可以逐行对照两个平台。
+- 一个真实现象：CMS 站点整体坏掉（目录返回 500 或读不懂的文档）在 Windows 侧读成 UNSUPPORTED——`MacCmsSourceRuntime`
+  的 `provider()` 找不到能解析出分类/条目的候选地址就抛 `SourceOperationUnsupportedException`——所以那种来源的
+  LIST 是 SKIP 而不是 FAIL。这不是本页的取舍，而是该 runtime 自己的判定语义；测试夹具因此让“坏站点”的**某一集**返回
+  500，FAIL 出现在真正失败的那一步上。
+- 验证：`DesktopSourceTestProbe`（`sourcetest` 单段，空数据根，内建 `com.sun.net.httpserver` 假站点）——
+  导入两个 CMS 来源（一个正常、一个剧集地址 500）→ 扩展与仓库 → `extension-test-sources` → 断言进了 `SOURCE_TEST`
+  → 点“测试全部” → 断言 2/2 完成、正常来源六步全 PASS（含真的下了封面、真的是 200 的流），坏来源只有 PAGES FAIL
+  且消息是 `Stream failed: HTTP 500`、其后 SEARCH 仍然执行（证明单步失败不中断）→ 断言页面上的判定、展开的步骤行、
+  汇总行都在 → 导出 JSON 含 `"status":"pass"`、`"status":"fail"`、`"messages":{"PAGES":"Stream failed: HTTP 500"}`
+  → 点“禁用失败的来源”后坏来源进 `disabled_sources`、正常来源仍在 `enabledSources` → 返回再进页面，上一轮结果已清空。
+  截图 `sourcetest-{source-test-idle,source-test-results,source-test-disabled}.png` 都已逐张看过。
+- 回归：整套 `:desktop-app:test` 重跑（48 个用例）通过——新行与新页都不影响既有的来源设置、安装策略、JSON 来源与
+  仓库路径。
+- 仍待（本切片之外）：Android 统一来源页的批量选择、仓库筛选与分组、真正的拖拽重排、`handle_links`。

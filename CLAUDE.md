@@ -273,6 +273,13 @@ npm run docs:build
   打开的就是“更多”页那三个单选对话框；Android 的权限页与空间页在桌面没有对应能力，整页不搬，
   向导也不会像手机那样首次启动自动弹出，只能从这一行进入），完成页的两个跳转落到“扩展与仓库”与“图书馆备份”，
   见计划 §183。
+  “扩展与仓库”的已安装区末尾还有 Android 的来源测试（`extension-test-sources` → `DesktopScreen.SOURCE_TEST`，
+  标题用 `source_test_title`）：对每个已启用来源依次问主列表/封面/详情/章节/页面/搜索六步，
+  判定 PASS/FAIL/SKIP/CHALLENGE、单步 20 s 与单源 90 s 超时、同时三个来源都照 Android 的 `SourceTester`；
+  RANDOM 一步没有 Windows 操作所以不跑，PAGES 按内容类型分开验（图片真下载、小说正文非空、视频流地址 GET 200），
+  挑战只报告不弹浏览器；进度在自己的 StateFlow 里（不进 `DesktopAppState`，不占 `action{}` 的 gate），
+  可取消、可导出与 Android `exportJson` 同形的 JSON、可“禁用失败的来源”（写同一份 `disabled_sources`），
+  见计划 §184。
   概览下方的“远程来源”节是 Android `remote_sources` 分组里的“插件去重优先级顺序”（`jar_priority_order`）：
   单文件 JAR 去重规则 `JarSourcePriority.kt` 已与 Android 共享到 `core-domain`，Windows 把同一把键写进
   `desktop_extensions`（值是 parser 插件 id 的逗号分隔列表，Android 侧是 JAR 文件名），

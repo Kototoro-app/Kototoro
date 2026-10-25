@@ -66,7 +66,8 @@ internal fun DesktopExtensionsPanel(controller: DesktopController, closing: Bool
     // and the installed rows are laid out inline so a short window scrolls to them instead of clipping them away.
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val listHeight = (maxHeight - 340.dp).coerceAtLeast(260.dp)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .testTag("extensions-page"),
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             SettingsSectionHeader(desktopText("extensions.repositories"))
             SettingsGroup {
@@ -349,6 +350,17 @@ private fun InstalledExtensions(
                     modifier = Modifier.weight(1f).testTag("extension-update-all"),
                 ) { Text(desktopText("extensions.updateAll", updates.size)) }
             }
+            SettingsRowDivider()
+            // Android's "test all" button for the enabled sources (plan §184): one row, its own page, since six steps
+            // per source need far more room than a dialog row has here.
+            SettingsValueRow(
+                title = AndroidStrings["source_test_title"],
+                summary = desktopText("extensions.testSourcesSummary"),
+                value = null,
+                enabled = enabled,
+                onClick = { controller.showSourceTest() },
+                testTag = "extension-test-sources",
+            )
         }
         // Composed on demand rather than in a nested lazy list: a second scroll viewport inside a page this short left the
         // removal buttons clipped and unreachable, and the installed set is small enough to lay out row by row.

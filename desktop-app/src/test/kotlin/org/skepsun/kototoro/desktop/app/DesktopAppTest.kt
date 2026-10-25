@@ -141,6 +141,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `the source test page runs every step against a local CMS site and exports the run`() {
+        probe("sourcetest", directory.resolve("中文 source test"), 180)
+    }
+
+    @Test
     fun `a parser marked broken stays installed and the show broken sources switch hides and offers it`() {
         val root = directory.resolve("中文 broken sources")
         probe("brokensource-write", root, 150)

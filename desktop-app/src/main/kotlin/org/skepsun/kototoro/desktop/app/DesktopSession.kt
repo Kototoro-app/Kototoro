@@ -414,6 +414,23 @@ class DesktopSession private constructor(
         }
     }
 
+    /**
+     * Answers one URL through the shared client without downloading its body: null when it answered, the reason
+     * otherwise. The source tester uses it for video episodes, whose "page" is a stream rather than an image, so the
+     * only proof a stream works is that the host answers — the player itself would be the alternative, and a test page
+     * must not start one.
+     */
+    internal suspend fun probeUrl(url: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val request = okhttp3.Request.Builder().url(url).get().build()
+            jsonClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) null else "HTTP ${response.code}"
+            }
+        } catch (error: java.io.IOException) {
+            error.message ?: error.javaClass.simpleName
+        }
+    }
+
     /** Plain GET of a cover URL into the image directory, for sources whose protocol has no cover operation. */
     private suspend fun downloadedCover(content: SourceContent, large: Boolean): SourceCoverArtifact {
         val url = (if (large) content.largeCoverUrl ?: content.coverUrl else content.coverUrl)

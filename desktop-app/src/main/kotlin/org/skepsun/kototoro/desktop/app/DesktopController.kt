@@ -84,7 +84,7 @@ enum class DesktopScreen {
     HOME, FEED, EXPLORE, LIBRARY, HISTORY, DETAILS, READER, NOVEL, VIDEO, PREFERENCES, BROWSER, DOWNLOADS, BACKUPS,
     RECOMMENDATIONS, EXTENSIONS, READER_SETTINGS, SOURCE_SETTINGS, TAG_BLACKLIST, READING_STATS, MORE, STORAGE,
     PLAYBACK_SETTINGS, PROXY_SETTINGS, CHANGELOG, CRASH_LOGS, REPLACE_RULES, DICTIONARY_RULES,
-    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD,
+    DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD, SOURCE_TEST,
 }
 
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
@@ -342,6 +342,13 @@ class DesktopController(
     internal val replaceRules = replaceRuleOperations.state
     private val dictionaryRuleOperations = DesktopDictionaryRuleOperations(scope, session)
     internal val dictionaryRules = dictionaryRuleOperations.state
+    /** Android's `SourceTester`: the run behind 扩展与仓库 → 测试来源, kept out of `DesktopAppState` (§184). */
+    internal val sourceTester = DesktopSourceTester(
+        sources = session.sources,
+        loadCover = { content -> session.covers.load(content, refresh = true) },
+        probeUrl = session::probeUrl,
+    )
+    private var sourceTestJob: Job? = null
     /** Android's WebDAV backup destination: same shared protocol, uploaded by hand or by the timer below. */
     private val webDav = DesktopWebDavOperations(session.storage, backups)
     internal val webDavUi = webDav.ui
@@ -2074,6 +2081,60 @@ class DesktopController(
 
     /** Android's setup wizard, which 来源设置 opens from its overview group. */
     fun showSetupWizard() = navigate { mutableState.update { it.copy(screen = DesktopScreen.SETUP_WIZARD) } }
+
+    /**
+     * Android's "test all sources" page, reached from 扩展与仓库. Entering it forgets the previous run so a second visit
+     * starts clean instead of showing verdicts from a source that has since been uninstalled.
+     */
+    fun showSourceTest() = navigate {
+        sourceTester.reset()
+        mutableState.update { it.copy(screen = DesktopScreen.SOURCE_TEST) }
+    }
+
+    /**
+     * Starts a run over the sources the browse rail offers (Android tests the enabled ones; `state.sources` is exactly
+     * that set). It is *not* an [action]: the run can take minutes and must stay cancellable from its own page while
+     * the rest of the window keeps rendering, so its progress lives in [DesktopSourceTester.progress] and the page
+     * collects it directly, the way the GitHub mirror sweep works.
+     */
+    fun startSourceTest() {
+        if (sourceTestJob?.isActive == true) return
+        val targets = mutableState.value.enabledSources.map {
+            SourceTestTarget(it.source.name, it.displayName)
+        }
+        if (targets.isEmpty()) return
+        sourceTestJob = scope.launch { sourceTester.testAll(targets) }
+    }
+
+    fun cancelSourceTest() {
+        sourceTestJob?.cancel()
+    }
+
+    /** Android's "export": the run as JSON on the clipboard, with the dialog fallback when the clipboard refuses. */
+    fun copySourceTestResults() {
+        val text = sourceTester.progress.value.toExportJson()
+        if (DesktopClipboard.write(text)) {
+            mutableState.update { it.copy(message = desktopText("sourceTest.copied")) }
+        } else {
+            mutableState.update { it.copy(message = desktopText("sourceTest.copyFailed")) }
+        }
+    }
+
+    /** Android's `disableFailed`: the FAIL rows join `disabled_sources`, so they leave the rail until re-enabled. */
+    fun disableFailedSources() = action {
+        val failed = sourceTester.progress.value.failedSources.map { it.sourceName }
+        require(failed.isNotEmpty()) { desktopText("sourceTest.nothingFailed") }
+        session.setSourcesEnabled(failed, false)
+        val disabled = session.disabledSources()
+        mutableState.update { previous ->
+            val hidden = previous.selectedSource?.takeIf { it.source.name in disabled }
+            previous.copy(disabledSources = disabled,
+                selectedSource = if (hidden != null) null else previous.selectedSource,
+                descriptor = if (hidden != null) null else previous.descriptor,
+                items = if (hidden != null) emptyList() else previous.items,
+                message = desktopText("sourceTest.disabledFailed", failed.size))
+        }
+    }
 
     /** Android's playback settings screen: the player's backdrop, decoder mode and control-overlay opacities. */
     fun showPlaybackSettings() = navigate { mutableState.update { it.copy(screen = DesktopScreen.PLAYBACK_SETTINGS) } }
