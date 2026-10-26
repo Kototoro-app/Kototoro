@@ -174,6 +174,7 @@ private fun MihonBackupManga.toRecord(
     if (!favorite && history == null) {
         return null
     }
+    val progress = resolveMangaHistory(history, chapters, favoriteTimestamp)
     return ExternalBackupContentRecord(
         app = app,
         sourceName = sourceName,
@@ -196,8 +197,9 @@ private fun MihonBackupManga.toRecord(
         chaptersCount = totalCount,
         readEntriesCount = completedCount,
         progressPercent = progressPercent,
-        historyChapterUrl = history?.url,
-        historyTimestamp = history?.lastRead?.takeIf { it > 0L },
+        historyChapterUrl = progress?.chapterUrl,
+        historyTimestamp = progress?.timestamp,
+        historyPage = progress?.page ?: 0,
     )
 }
 
@@ -218,6 +220,7 @@ private fun AniyomiBackupManga.toRecord(
     if (!favorite && history == null) {
         return null
     }
+    val progress = resolveMangaHistory(history, chapters, favoriteTimestamp)
     return ExternalBackupContentRecord(
         app = app,
         sourceName = sourceName,
@@ -240,9 +243,44 @@ private fun AniyomiBackupManga.toRecord(
         chaptersCount = totalCount,
         readEntriesCount = completedCount,
         progressPercent = progressPercent,
-        historyChapterUrl = history?.url,
-        historyTimestamp = history?.lastRead?.takeIf { it > 0L },
+        historyChapterUrl = progress?.chapterUrl,
+        historyTimestamp = progress?.timestamp,
+        historyPage = progress?.page ?: 0,
     )
+}
+
+/**
+ * The chapter URL and timestamp to restore as reading history. A dated history entry always wins; titles marked
+ * read by hand or by a tracker have no history, so the furthest read chapter stands in, dated when the title was
+ * added to the library so it sorts below real history.
+ */
+private class MangaHistory(val chapterUrl: String, val timestamp: Long, val page: Int)
+
+private fun resolveMangaHistory(
+    history: MihonBackupHistory?,
+    chapters: List<MihonBackupChapter>,
+    favoriteTimestamp: Long?,
+): MangaHistory? {
+    if (history != null && history.lastRead > 0L) {
+        val page = chapters.firstOrNull { it.url == history.url }?.resumePage() ?: 0
+        return MangaHistory(history.url, history.lastRead, page)
+    }
+    val chapter = chapters.furthestReadChapter() ?: return null
+    return MangaHistory(chapter.url, favoriteTimestamp ?: 1L, chapter.resumePage())
+}
+
+// Same zero-based index as the reader's page list; an out-of-range page opens the chapter from its start.
+private fun MihonBackupChapter.resumePage(): Int = lastPageRead.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+
+private fun List<MihonBackupChapter>.furthestReadChapter(): MihonBackupChapter? {
+    val read = filter { it.read }
+    val numbered = read.filter { it.chapterNumber > 0f }
+    return if (numbered.isNotEmpty()) {
+        // Mihon's source order counts from the newest chapter, so ties go to the lower order.
+        numbered.maxWithOrNull(compareBy<MihonBackupChapter> { it.chapterNumber }.thenByDescending { it.sourceOrder })
+    } else {
+        read.minByOrNull { it.sourceOrder }
+    }
 }
 
 private fun List<MihonBackupCategory>.toFavoriteCategoryRecords(): List<ExternalBackupFavoriteCategoryRecord> {

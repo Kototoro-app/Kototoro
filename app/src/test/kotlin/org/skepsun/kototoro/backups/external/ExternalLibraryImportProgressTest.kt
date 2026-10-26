@@ -111,6 +111,7 @@ class ExternalLibraryImportProgressTest {
             val history = rows.getValue(ExternalLibraryImport.generateContentId(record))
             assertEquals(chapter.id, history.chapterId, "Imported history must resolve to a loaded chapter")
             assertEquals(0.5f, history.percent)
+            assertEquals(7, history.page, "Imported history must resume at the backed-up page")
             assertEquals(2, history.chaptersCount)
             assertEquals(record.historyTimestamp, history.updatedAt)
         }
@@ -125,7 +126,7 @@ class ExternalLibraryImportProgressTest {
                     url = mangaUrl,
                     title = mangaUrl,
                     chapters = listOf(
-                        MihonBackupChapter(url = "/chapter/1", name = "Chapter 1", read = true),
+                        MihonBackupChapter(url = "/chapter/1", name = "Chapter 1", read = true, lastPageRead = 7),
                         MihonBackupChapter(url = "/chapter/2", name = "Chapter 2"),
                     ),
                     history = listOf(MihonBackupHistory(url = "/chapter/1", lastRead = 1_700_000_100_000L)),

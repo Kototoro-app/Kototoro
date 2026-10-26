@@ -203,4 +203,75 @@ class ExternalBackupDecodingTest {
             super.close()
         }
     }
+
+    private fun decodeSingle(manga: MihonBackupManga): ExternalBackupContentRecord {
+        val payload = decodeMihonOrAniyomiBackup(encode(MihonBackup(backupManga = listOf(manga))), ExternalBackupApp.MIHON)
+        return payload!!.records.single()
+    }
+
+    @Test
+    fun `titles read without history restore the furthest read chapter`() {
+        val record = decodeSingle(
+            MihonBackupManga(
+                source = mangaDexId,
+                url = "/manga/42",
+                dateAdded = 1_700_000_000_000L,
+                chapters = listOf(
+                    MihonBackupChapter(url = "/ch/3", chapterNumber = 3f, sourceOrder = 0),
+                    MihonBackupChapter(url = "/ch/2b", read = true, lastPageRead = 4, chapterNumber = 2f, sourceOrder = 1),
+                    MihonBackupChapter(url = "/ch/2a", read = true, chapterNumber = 2f, sourceOrder = 2),
+                    MihonBackupChapter(url = "/ch/1", read = true, chapterNumber = 1f, sourceOrder = 3),
+                ),
+            ),
+        )
+        assertEquals("/ch/2b", record.historyChapterUrl)
+        assertEquals(1_700_000_000_000L, record.historyTimestamp)
+        assertEquals(4, record.historyPage)
+    }
+
+    @Test
+    fun `unnumbered read chapters fall back to the newest by source order`() {
+        val record = decodeSingle(
+            MihonBackupManga(
+                source = mangaDexId,
+                url = "/manga/42",
+                chapters = listOf(
+                    MihonBackupChapter(url = "/extra", sourceOrder = 0),
+                    MihonBackupChapter(url = "/oneshot-2", read = true, sourceOrder = 1),
+                    MihonBackupChapter(url = "/oneshot-1", read = true, sourceOrder = 2),
+                ),
+            ),
+        )
+        assertEquals("/oneshot-2", record.historyChapterUrl)
+        assertEquals(1L, record.historyTimestamp)
+    }
+
+    @Test
+    fun `a real history entry wins over read chapters and unread titles get none`() {
+        val withHistory = decodeSingle(
+            MihonBackupManga(
+                source = mangaDexId,
+                url = "/manga/42",
+                chapters = listOf(
+                    MihonBackupChapter(url = "/ch/2", read = true, chapterNumber = 2f),
+                    MihonBackupChapter(url = "/ch/1", read = false, lastPageRead = 17, chapterNumber = 1f),
+                ),
+                history = listOf(MihonBackupHistory(url = "/ch/1", lastRead = 1_700_000_500_000L)),
+            ),
+        )
+        assertEquals("/ch/1", withHistory.historyChapterUrl)
+        assertEquals(1_700_000_500_000L, withHistory.historyTimestamp)
+        assertEquals(17, withHistory.historyPage)
+
+        val unread = decodeSingle(
+            MihonBackupManga(
+                source = mangaDexId,
+                url = "/manga/42",
+                chapters = listOf(MihonBackupChapter(url = "/ch/1", chapterNumber = 1f)),
+            ),
+        )
+        assertNull(unread.historyChapterUrl)
+        assertNull(unread.historyTimestamp)
+        assertEquals(0, unread.historyPage)
+    }
 }
