@@ -43,9 +43,16 @@ struct ReaderDownloadsView: View {
                 .accessibilityIdentifier("download.entry.\(entry.id)")
             }
             Section {
-                NavigationLink("存储管理", destination: ReaderStorageView()).accessibilityIdentifier("downloads.storage")
+                NavigationLink { DownloadSettingsView() } label: {
+                    Label("下载设置", systemImage: "slider.horizontal.3")
+                }
+                .accessibilityIdentifier("downloads.settings")
+                NavigationLink { ReaderStorageView() } label: {
+                    Label("存储管理", systemImage: "internaldrive")
+                }
+                .accessibilityIdentifier("downloads.storage")
+            } footer: {
                 Text("仅在应用前台下载，进入后台会暂停。继续时校验已保存的内容并从未完成处恢复；移除任务保留已下载文件。")
-                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .overlay {

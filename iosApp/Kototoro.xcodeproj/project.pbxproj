@@ -81,6 +81,7 @@
 		C0FFEE000000000000000009 /* NovelSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE00000000000000000A /* NovelSpeech.swift */; };
 		C0FFEE00000000000000000B /* ReplaceRulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE00000000000000000C /* ReplaceRulesView.swift */; };
 		C0FFEE00000000000000000D /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE00000000000000000E /* NotesView.swift */; };
+		C0FFEE0000000000000000A1 /* NovelMarkingStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE0000000000000000A2 /* NovelMarkingStyle.swift */; };
 		C0FFEE00000000000000000F /* SavedFilters.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000010 /* SavedFilters.swift */; };
 		C0FFEE000000000000000011 /* DownloadSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000012 /* DownloadSettings.swift */; };
 		C0FFEE000000000000000013 /* WebDavSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000014 /* WebDavSyncView.swift */; };
@@ -238,6 +239,7 @@
 		C0FFEE00000000000000000A /* NovelSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelSpeech.swift; sourceTree = "<group>"; };
 		C0FFEE00000000000000000C /* ReplaceRulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplaceRulesView.swift; sourceTree = "<group>"; };
 		C0FFEE00000000000000000E /* NotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesView.swift; sourceTree = "<group>"; };
+		C0FFEE0000000000000000A2 /* NovelMarkingStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelMarkingStyle.swift; sourceTree = "<group>"; };
 		C0FFEE000000000000000010 /* SavedFilters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedFilters.swift; sourceTree = "<group>"; };
 		C0FFEE000000000000000012 /* DownloadSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadSettings.swift; sourceTree = "<group>"; };
 		C0FFEE000000000000000014 /* WebDavSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebDavSyncView.swift; sourceTree = "<group>"; };
@@ -375,6 +377,7 @@
 				C0FFEE00000000000000000A /* NovelSpeech.swift */,
 				C0FFEE00000000000000000C /* ReplaceRulesView.swift */,
 				C0FFEE00000000000000000E /* NotesView.swift */,
+				C0FFEE0000000000000000A2 /* NovelMarkingStyle.swift */,
 				C0FFEE000000000000000010 /* SavedFilters.swift */,
 				C0FFEE000000000000000012 /* DownloadSettings.swift */,
 				C0FFEE000000000000000014 /* WebDavSyncView.swift */,
@@ -678,6 +681,7 @@
 				C0FFEE000000000000000009 /* NovelSpeech.swift in Sources */,
 				C0FFEE00000000000000000B /* ReplaceRulesView.swift in Sources */,
 				C0FFEE00000000000000000D /* NotesView.swift in Sources */,
+				C0FFEE0000000000000000A1 /* NovelMarkingStyle.swift in Sources */,
 				C0FFEE00000000000000000F /* SavedFilters.swift in Sources */,
 				C0FFEE000000000000000011 /* DownloadSettings.swift in Sources */,
 				C0FFEE000000000000000013 /* WebDavSyncView.swift in Sources */,

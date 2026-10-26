@@ -992,6 +992,16 @@
         }
       }
     },
+    "下载设置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download Settings"
+          }
+        }
+      }
+    },
     "下载队列": {
       "localizations": {
         "en": {
@@ -1104,6 +1114,16 @@
         }
       }
     },
+    "个位置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "positions"
+          }
+        }
+      }
+    },
     "为你推荐": {
       "localizations": {
         "en": {
@@ -1150,6 +1170,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "The bookmark's chapter no longer exists. Refresh the chapters or check the source."
+          }
+        }
+      }
+    },
+    "书签对应的章节已不存在，请打开作品刷新章节。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The bookmarked chapter no longer exists. Open the work to refresh its chapters."
+          }
+        }
+      }
+    },
+    "书签操作失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bookmark Action Failed"
+          }
+        }
+      }
+    },
+    "书签概览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bookmarks Overview"
           }
         }
       }
@@ -1271,6 +1321,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Only works with tracking turned on are synced. Site status, score and notes keep their settings; failures show a retry option in the work's details."
+          }
+        }
+      }
+    },
+    "仅在应用前台下载，进入后台会暂停。继续时校验已保存的内容并从未完成处恢复；移除任务保留已下载文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloads run only while the app is in the foreground and pause in the background. Resuming verifies saved content and continues where it stopped; removing a task keeps downloaded files."
           }
         }
       }
@@ -2369,6 +2429,16 @@
         }
       }
     },
+    "共享…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share…"
+          }
+        }
+      }
+    },
     "关于": {
       "localizations": {
         "en": {
@@ -2600,6 +2670,16 @@
         }
       }
     },
+    "写下你的想法": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write your thoughts"
+          }
+        }
+      }
+    },
     "分享": {
       "localizations": {
         "en": {
@@ -2731,6 +2811,16 @@
         }
       }
     },
+    "划线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Highlight"
+          }
+        }
+      }
+    },
     "列表": {
       "localizations": {
         "en": {
@@ -2821,6 +2911,16 @@
         }
       }
     },
+    "删除书签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Bookmark"
+          }
+        }
+      }
+    },
     "删除会立即生效，不受“取消”影响。": {
       "localizations": {
         "en": {
@@ -2867,6 +2967,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Delete category?"
+          }
+        }
+      }
+    },
+    "删除划线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Highlight"
           }
         }
       }
@@ -3247,6 +3357,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "History & downloads"
+          }
+        }
+      }
+    },
+    "历史、书签与下载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History, Bookmarks & Downloads"
           }
         }
       }
@@ -6371,6 +6491,16 @@
         }
       }
     },
+    "拷贝": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy"
+          }
+        }
+      }
+    },
     "按 Android 版的规则导入：扩展来源保持原有标识，未安装的扩展在安装后即可继续阅读；Venera 的来源按名称匹配已有来源。": {
       "localizations": {
         "en": {
@@ -7824,6 +7954,16 @@
         }
       }
     },
+    "暖阳橙": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warm Orange"
+          }
+        }
+      }
+    },
     "更多": {
       "localizations": {
         "en": {
@@ -8638,6 +8778,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Entries with the same title or alternative title (ignoring case, punctuation and Traditional/Simplified Chinese), or linked by you to the same tracking-site entry, count as duplicates."
+          }
+        }
+      }
+    },
+    "样式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Style"
           }
         }
       }
@@ -9557,6 +9707,16 @@
         }
       }
     },
+    "波浪线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wavy Line"
+          }
+        }
+      }
+    },
     "活跃天": {
       "localizations": {
         "en": {
@@ -9687,6 +9847,16 @@
         }
       }
     },
+    "涉及作品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Works"
+          }
+        }
+      }
+    },
     "涉及章节": {
       "localizations": {
         "en": {
@@ -9713,6 +9883,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fade"
+          }
+        }
+      }
+    },
+    "淡雅粉": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soft Pink"
           }
         }
       }
@@ -9787,6 +9967,16 @@
         }
       }
     },
+    "添加批注": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Note"
+          }
+        }
+      }
+    },
     "添加来源": {
       "localizations": {
         "en": {
@@ -9803,6 +9993,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Add links detect the type automatically; when entering a URL directly, choose the repository type."
+          }
+        }
+      }
+    },
+    "清新绿": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fresh Green"
           }
         }
       }
@@ -10318,6 +10518,16 @@
         }
       }
     },
+    "直线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Straight Line"
+          }
+        }
+      }
+    },
     "相似度阈值": {
       "localizations": {
         "en": {
@@ -10424,6 +10634,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Migrate and remove original favorites and history"
+          }
+        }
+      }
+    },
+    "示例文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sample text"
           }
         }
       }
@@ -10983,6 +11203,16 @@
         }
       }
     },
+    "经典黄": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Classic Yellow"
+          }
+        }
+      }
+    },
     "绑定并使用此作品的信息": {
       "localizations": {
         "en": {
@@ -11069,6 +11299,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cache limit"
+          }
+        }
+      }
+    },
+    "编辑批注": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit Note"
           }
         }
       }
@@ -12662,6 +12902,16 @@
         }
       }
     },
+    "长按选中文字后选择“划线”。轻点已有划线可选中它，并修改颜色、样式、批注或删除。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touch and hold to select text, then choose Highlight. Tap a highlight to select it and change its color, style or note, or delete it."
+          }
+        }
+      }
+    },
     "阅读": {
       "localizations": {
         "en": {
@@ -12882,6 +13132,16 @@
         }
       }
     },
+    "雅致蓝": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elegant Blue"
+          }
+        }
+      }
+    },
     "需处理（%lld）": {
       "localizations": {
         "en": {
@@ -13023,12 +13283,32 @@
         }
       }
     },
+    "颜色": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color"
+          }
+        }
+      }
+    },
     "首次阅读 · ": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "First read · "
+          }
+        }
+      }
+    },
+    "马克笔": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marker"
           }
         }
       }

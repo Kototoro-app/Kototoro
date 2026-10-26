@@ -2,19 +2,27 @@ import KototoroShared
 import SwiftUI
 
 private enum TimelineFilter: String, CaseIterable {
-    case all, reading, updates, downloads
+    case all, reading, bookmarks, updates, downloads
 
     var title: String {
         switch self {
         case .all: String(localized: "全部")
         case .reading: String(localized: "阅读")
+        case .bookmarks: String(localized: "书签")
         case .updates: String(localized: "更新")
         case .downloads: String(localized: "下载")
         }
     }
 }
 
-/// Reading, updates and completed downloads share one filterable timeline.
+/// A saved reading position with its work (Android's bookmarks shelf), placed on the timeline when it was saved.
+struct RecordBookmark: Identifiable {
+    let content: IosSourceContent
+    let bookmark: IosBookmark
+    var id: String { "bookmark.\(content.id).\(bookmark.id)" }
+}
+
+/// Reading, bookmarks, updates and completed downloads share one filterable timeline.
 struct LibraryRecordsView: View {
     var body: some View {
         NavigationStack { RecordsPage() }
@@ -35,6 +43,7 @@ private struct RecordsPage: View {
     @AppStorage("records.statsRange") private var range = ReadingStatsRange.month
     @State private var selectedDay: String?
     @State private var lastStatsRequest: String?
+    @State private var bookmarkGroups: [IosBookmarkGroup] = []
 
     private var filterKind: String? {
         if spacesEnabled { return ContentSpace.kind(space) }
@@ -103,6 +112,20 @@ private struct RecordsPage: View {
         }
     }
 
+    /// Bookmarks saved within the statistics window, in this page's scope, without works the adult filter hides from
+    /// bookmarks.
+    private func scopedBookmarks(_ snapshot: IosStatsDashboard) -> [RecordBookmark] {
+        bookmarkGroups.flatMap { group -> [RecordBookmark] in
+            guard matches(group.content), !AdultContentFilter.hides(group.content, in: .bookmarks) else { return [] }
+            return group.bookmarks.filter { $0.createdAt >= snapshot.windowFrom && $0.createdAt <= snapshot.windowUntil }
+                .map { RecordBookmark(content: group.content, bookmark: $0) }
+        }
+    }
+
+    private func loadBookmarks() async {
+        bookmarkGroups = (try? await library.library?.bookmarkGroups()) ?? []
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -117,7 +140,7 @@ private struct RecordsPage: View {
                             .padding(.horizontal)
                     } else {
                         RecordsOverview(snapshot: snapshot, downloads: scopedDownloads(snapshot),
-                                        filter: timelineFilter)
+                                        bookmarks: scopedBookmarks(snapshot), filter: timelineFilter)
                             .padding(.horizontal)
                     }
                 }
@@ -208,9 +231,11 @@ private struct RecordsPage: View {
             if let runtime = sources.runtime { await library.checkUpdates(runtime) }
             else { await library.refresh() }
             await downloaded.load(queue: downloadQueue)
+            await loadBookmarks()
             await stats.load(library.library, range: range, kind: effectiveKind, query: query)
             lastStatsRequest = statsRequest
         }
+        .task(id: library.recordsRevision) { await loadBookmarks() }
         .task(id: statsRequest) {
             guard lastStatsRequest != statsRequest else { return }
             if !query.isEmpty {
@@ -249,7 +274,8 @@ private struct RecordsPage: View {
             } else {
                 RecordsTimeline(events: snapshot.timeline.filter {
                     selectedDay == nil || ReadingStatsFormat.day(ReadingStatsFormat.date($0.timestamp)) == selectedDay
-                }, downloads: downloads, filter: timelineFilter, runtime: runtime)
+                }, downloads: downloads, bookmarks: scopedBookmarks(snapshot), filter: timelineFilter, runtime: runtime,
+                   onBookmarksChanged: loadBookmarks)
             }
         } else if stats.loading {
             ProgressView().frame(maxWidth: .infinity).padding()
@@ -262,6 +288,7 @@ private struct RecordsPage: View {
 private struct RecordsOverview: View {
     let snapshot: IosStatsDashboard
     let downloads: [DownloadedWork]
+    let bookmarks: [RecordBookmark]
     let filter: TimelineFilter
 
     private var updates: [IosTimelineEvent] { snapshot.timeline.filter(\.isUpdate) }
@@ -273,7 +300,7 @@ private struct RecordsOverview: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(filter == .all ? "本期概览" : filter == .updates ? "更新概览" : "下载概览")
+            Text(filter == .all ? "本期概览" : filter == .updates ? "更新概览" : filter == .bookmarks ? "书签概览" : "下载概览")
                 .font(.caption).foregroundStyle(.secondary)
             if filter == .all {
                 HStack(alignment: .top, spacing: 12) {
@@ -288,6 +315,14 @@ private struct RecordsOverview: View {
                            value: String(localized: "\(downloads.reduce(0) { $0 + $1.chapterCount }) 章"),
                            detail: String(localized: "\(downloads.count) 部作品"))
                         .accessibilityIdentifier("records.summary.downloads")
+                }
+            } else if filter == .bookmarks {
+                HStack(spacing: 12) {
+                    metric(String(localized: "书签"), symbol: "bookmark",
+                           value: bookmarks.count.formatted(), detail: String(localized: "个位置"))
+                        .accessibilityIdentifier("records.summary.bookmarks")
+                    metric(String(localized: "涉及作品"), symbol: "books.vertical",
+                           value: Set(bookmarks.map { $0.content.contentKey }).count.formatted(), detail: String(localized: "部作品"))
                 }
             } else if filter == .updates {
                 HStack(spacing: 12) {
@@ -401,10 +436,16 @@ private struct RecordUpdateDownloadButton: View {
 private struct RecordsTimeline: View {
     let events: [IosTimelineEvent]
     let downloads: [DownloadedWork]
+    let bookmarks: [RecordBookmark]
     let filter: TimelineFilter
     let runtime: IosSources
+    let onBookmarksChanged: () async -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var selected: TimelineItem?
+    /// A bookmark opened in its reader, or a work opened from a bookmark's menu.
+    @State private var reading: PlaybackRequest?
+    @State private var openedWork: IosSourceContent?
+    @State private var bookmarkError: String?
     @EnvironmentObject private var library: LibraryModel
     @State private var seenEvents = Set<String>()
 
@@ -413,6 +454,7 @@ private struct RecordsTimeline: View {
         enum Kind {
             case event(IosTimelineEvent)
             case download(count: Int)
+            case bookmark(IosBookmark)
         }
         let id: String
         let content: IosSourceContent
@@ -422,6 +464,7 @@ private struct RecordsTimeline: View {
         var event: IosTimelineEvent? { if case .event(let event) = kind { event } else { nil } }
         var isUpdate: Bool { event?.isUpdate == true }
         var downloadCount: Int? { if case .download(let count) = kind { count } else { nil } }
+        var bookmark: IosBookmark? { if case .bookmark(let bookmark) = kind { bookmark } else { nil } }
     }
     private struct TimelineDayGroup {
         let date: String
@@ -443,7 +486,9 @@ private struct RecordsTimeline: View {
 
     var body: some View {
         let items = (events.map { TimelineItem(id: $0.id, content: $0.content, timestamp: $0.timestamp, kind: .event($0)) }
-            + downloadItems).filter { item in
+            + downloadItems
+            + bookmarks.map { TimelineItem(id: $0.id, content: $0.content, timestamp: $0.bookmark.createdAt, kind: .bookmark($0.bookmark)) })
+            .filter { item in
                 // Android's adult filter targets: reading history and the updates feed.
                 if item.event != nil, AdultContentFilter.hides(item.content, in: item.isUpdate ? .feed : .history) {
                     return false
@@ -451,6 +496,7 @@ private struct RecordsTimeline: View {
                 return switch filter {
                 case .all: true
                 case .reading: item.event != nil && !item.isUpdate
+                case .bookmarks: item.bookmark != nil
                 case .updates: item.isUpdate
                 case .downloads: item.downloadCount != nil
                 }
@@ -471,7 +517,7 @@ private struct RecordsTimeline: View {
             LazyVStack(spacing: 20) {
                 if filter == .all {
                     HStack {
-                        Text("历史 & 下载").frame(maxWidth: .infinity)
+                        Text("历史、书签与下载").frame(maxWidth: .infinity)
                         Color.clear.frame(width: 24, height: 1)
                         Text("发现更新").frame(maxWidth: .infinity)
                     }
@@ -507,6 +553,11 @@ private struct RecordsTimeline: View {
             }
             .padding(.horizontal)
             .accessibilityIdentifier("records.timeline")
+            .navigationDestination(item: $reading) { DetailsReaderDestination(runtime: runtime, request: $0) }
+            .navigationDestination(item: $openedWork) { SourceDetailsView(runtime: runtime, content: $0) }
+            .alert("书签操作失败", isPresented: Binding(get: { bookmarkError != nil }, set: { if !$0 { bookmarkError = nil } })) {
+                Button("好") { bookmarkError = nil }
+            } message: { Text(bookmarkError ?? "") }
             .sheet(item: $selected) { item in
                 NavigationStack {
                     List {
@@ -559,8 +610,41 @@ private struct RecordsTimeline: View {
     }
 
     private func kindTitle(_ item: TimelineItem) -> String {
-        item.downloadCount != nil ? String(localized: "下载") : item.isUpdate ? String(localized: "发现更新")
+        item.bookmark != nil ? String(localized: "书签")
+            : item.downloadCount != nil ? String(localized: "下载") : item.isUpdate ? String(localized: "发现更新")
             : String(localized: "阅读")
+    }
+
+    /// Opens the reader at [bookmark], with the work's stored chapters (works on the timeline come without them).
+    private func open(_ bookmark: IosBookmark, of content: IosSourceContent) {
+        Task {
+            let details = (try? await library.library?.storedDetails(content: content)) ?? content
+            guard let chapter = details.chapters.first(where: { $0.id == bookmark.chapterId }) else {
+                bookmarkError = String(localized: "书签对应的章节已不存在，请打开作品刷新章节。")
+                return
+            }
+            reading = PlaybackRequest(content: details, chapter: chapter, initialBookmark: bookmark)
+        }
+    }
+
+    private func remove(_ bookmark: IosBookmark, of content: IosSourceContent) {
+        Task {
+            guard let database = library.library else { return }
+            do {
+                try await database.removeBookmark(content: content, bookmark: bookmark)
+                if content.mediaKind != "NOVEL" { try? await BookmarkImages.remove(content: content, bookmark: bookmark) }
+                await onBookmarksChanged()
+            } catch { bookmarkError = error.localizedDescription }
+        }
+    }
+
+    /// The bookmark's place: chapter, page or paragraph, and how far into the chapter.
+    private func bookmarkPlace(_ bookmark: IosBookmark, of content: IosSourceContent) -> String {
+        let percent = bookmark.percent.isFinite ? Int(min(max(bookmark.percent, 0), 1) * 100) : 0
+        let position = content.mediaKind == "NOVEL" ? String(localized: "第 \(bookmark.index + 1) 段")
+            : String(localized: "第 \(bookmark.index + 1) 页")
+        let chapter = bookmark.chapterTitle.isEmpty ? nil : bookmark.chapterTitle
+        return ([chapter, position, "\(percent)%"] as [String?]).compactMap { $0 }.joined(separator: " · ")
     }
 
     private func timeTitle(_ item: TimelineItem) -> String {
@@ -583,6 +667,7 @@ private struct RecordsTimeline: View {
     private func eventRow(_ item: TimelineItem, alignment: HorizontalAlignment, showsKind: Bool) -> some View {
         VStack(alignment: alignment, spacing: 6) {
             Button {
+                if let bookmark = item.bookmark { open(bookmark, of: item.content); return }
                 selected = item
                 if let event = item.event, event.isUpdate {
                     Task {
@@ -603,7 +688,14 @@ private struct RecordsTimeline: View {
                         Text(item.content.title).font(.subheadline.weight(.medium)).lineLimit(2)
                             .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
                         if showsKind { Text(kindTitle(item)).font(.caption).foregroundStyle(.secondary) }
-                        if let count = item.downloadCount {
+                        if let bookmark = item.bookmark {
+                            Label(bookmarkPlace(bookmark, of: item.content), systemImage: "bookmark.fill")
+                                .font(.caption).foregroundStyle(.tint).lineLimit(1)
+                            if item.content.mediaKind == "NOVEL" && !bookmark.textPreview.isEmpty {
+                                Text(bookmark.textPreview).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                                    .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
+                            }
+                        } else if let count = item.downloadCount {
                             Label("下载 \(count) 章", systemImage: "arrow.down.circle")
                                 .font(.caption).foregroundStyle(.tint).lineLimit(1)
                         } else if let event = item.event {
@@ -647,6 +739,13 @@ private struct RecordsTimeline: View {
                 .padding(.vertical, 3).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .contextMenu {
+                if let bookmark = item.bookmark {
+                    Button("继续阅读", systemImage: "book") { open(bookmark, of: item.content) }
+                    Button("打开作品", systemImage: "info.circle") { openedWork = item.content }
+                    Button("删除书签", systemImage: "trash", role: .destructive) { remove(bookmark, of: item.content) }
+                }
+            }
             .accessibilityIdentifier("timeline.\(item.id)")
             if let event = item.event, event.isUpdate {
                 RecordUpdateDownloadButton(event: event, runtime: runtime)

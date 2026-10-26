@@ -139,26 +139,89 @@ final class NovelReaderModel: NSObject, ObservableObject {
 
     /// Highlights `start until end` of the chapter text, or removes the highlights the range touches.
     func toggleMarking(start: Int, end: Int) async {
-        guard let library, let document = sourceDocument, end > start else { return }
+        guard let library, end > start else { return }
         let touched = markingRanges.filter { $0.start < Int32(end) && Int32(start) < $0.end }
         if touched.isEmpty {
-            let text = (document.text(start: Int32(start), end: Int32(end)) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { return }
-            _ = try? await library.markings.toggle(content: content, chapter: chapter, start: Int32(start), end: Int32(end), text: text)
-        } else {
-            for range in touched { try? await library.markings.delete(id: range.id) }
+            _ = await addMarking(start: start, end: end)
+            return
         }
+        for range in touched { try? await library.markings.delete(id: range.id) }
+        await refreshMarkings()
+    }
+
+    /// Highlights `start until end` with the current color and shape, opening the note editor when [withNote].
+    @discardableResult
+    func addMarking(start: Int, end: Int, withNote: Bool = false) async -> IosNovelMarking? {
+        guard let library, let document = sourceDocument, end > start else { return nil }
+        let text = (document.text(start: Int32(start), end: Int32(end)) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        let exists = markings.contains { $0.start == Int32(start) && $0.end == Int32(end) }
+        if !exists {
+            _ = try? await library.markings.toggle(content: content, chapter: chapter, start: Int32(start), end: Int32(end),
+                                                   text: text, color: Int32(NovelMarkingDefaults.color.rawValue),
+                                                   style: Int32(NovelMarkingDefaults.line.rawValue))
+        }
+        await refreshMarkings()
+        let added = markings.first { $0.start == Int32(start) && $0.end == Int32(end) }
+        if withNote { editingMarking = added }
+        return added
+    }
+
+    /// The saved highlight with [id] in this chapter.
+    func marking(_ id: Int64) -> IosNovelMarking? { markings.first { $0.id == id } }
+
+    /// A highlight being given a note (the reader shows its editor).
+    @Published var editingMarking: IosNovelMarking?
+
+    /// Changes a highlight's color and shape; new highlights take them too (Android keeps the last ones chosen).
+    func restyleMarking(_ id: Int64, color: NovelMarkingColor, line: NovelMarkingLine) async {
+        guard let library else { return }
+        NovelMarkingDefaults.color = color
+        NovelMarkingDefaults.line = line
+        try? await library.markings.updateStyle(id: id, color: Int32(color.rawValue), style: Int32(line.rawValue))
+        await refreshMarkings()
+    }
+
+    func saveMarkingNote(_ id: Int64, note: String) async {
+        guard let library else { return }
+        try? await library.markings.updateNote(id: id, note: note.trimmingCharacters(in: .whitespacesAndNewlines))
+        await refreshMarkings()
+    }
+
+    func deleteMarking(_ id: Int64) async {
+        guard let library else { return }
+        try? await library.markings.delete(id: id)
+        await refreshMarkings()
+    }
+
+    /// Reads the highlights again and redraws them where the reader is: highlights never change the layout, so the
+    /// paged reader keeps its page and the scrolling reader its offset.
+    private func refreshMarkings() async {
         await loadMarkings()
-        // The paged reader lays the chapter out again with the new highlights, at the same place.
-        target = NovelReadingTarget(block: visibleIndex, scroll: pagedScroll ?? document.scroll(index: Int32(visibleIndex)),
-                                    atEnd: false)
         revision += 1
+    }
+
+    /// [ranges] with each highlight's color and shape.
+    func decorated(_ ranges: [IosTextRange]) -> [NovelHighlight] {
+        guard !ranges.isEmpty else { return [] }
+        return ranges.compactMap { range in
+            guard let marking = marking(range.id) else { return nil }
+            return NovelHighlight(id: range.id, start: Int(range.start), end: Int(range.end),
+                                  color: .of(marking.color), line: .of(marking.style))
+        }
     }
 
     /// Highlights within line [index] (the scrolling reader).
     func lineHighlights(_ index: Int) -> [IosTextRange] {
         guard !markingRanges.isEmpty, let document else { return [] }
         return document.lineHighlights(index: Int32(index), ranges: markingRanges)
+    }
+
+    /// The chapter offset of [offset] in line [index], or nil when the line cannot hold highlights (a translation or
+    /// a line rewritten by a replacement rule).
+    func chapterOffset(line index: Int, offset: Int) -> Int? {
+        guard translation(index) == nil, let range = document?.lineRange(index: Int32(index)) else { return nil }
+        return Int(range.start) + min(max(0, offset), Int(range.end - range.start))
     }
 
     /// Highlights or clears the whole of line [index] (the scrolling reader's long press).
@@ -591,7 +654,10 @@ struct NovelReaderView: View {
                             if tap.location.x > geometry.size.width / 3,
                                tap.location.x < geometry.size.width * 2 / 3,
                                tap.location.y > geometry.size.height / 3,
-                               tap.location.y < geometry.size.height * 2 / 3 { toggleChrome() }
+                               tap.location.y < geometry.size.height * 2 / 3 {
+                                // A tap on a highlight opens its menu instead; the text view sees it in the same pass.
+                                DispatchQueue.main.async { if !NovelTextView.tappedHighlightRecently { toggleChrome() } }
+                            }
                         })
                 }
                 if !chromeHidden { chrome(height: geometry.size.height).transition(.opacity) }
@@ -615,6 +681,11 @@ struct NovelReaderView: View {
                     activeSheet = nil
                     Task { await model.jump(to: index) }
                 }
+            }
+        }
+        .sheet(item: $model.editingMarking) { marking in
+            NovelMarkingNoteSheet(marking: marking) { note in
+                Task { await model.saveMarkingNote(marking.id, note: note) }
             }
         }
         .alert("无法下载", isPresented: Binding(get: { downloadError != nil }, set: { if !$0 { downloadError = nil } })) {
@@ -791,8 +862,7 @@ struct NovelReaderView: View {
                                systemImage: model.isBookmarked ? "bookmark.fill" : "bookmark") { perform(.bookmark) }
                             .disabled(model.blocks.isEmpty || model.isLoading)
                             .accessibilityIdentifier("novel.bookmark")
-                        // The paged reader marks a selection from its menu; this marks the paragraph being read, in either
-                        // mode (the scrolling reader's selectable text takes no custom menu items).
+                        // A selection is highlighted from its menu; this marks the whole paragraph being read.
                         let marked = !model.lineHighlights(model.visibleIndex).isEmpty
                         Button(marked ? "取消本段划线" : "划线当前段", systemImage: "highlighter") {
                             Task { await model.toggleLineMarking(model.visibleIndex) }
@@ -844,28 +914,27 @@ struct NovelReaderView: View {
             .accessibilityIdentifier("novel.morePanel")
     }
 
-    /// One line of the scrolling reader, with the book's alignment, heading size and emphasis when enabled.
-    /// [plain] lines (translations and the original above them) leave out the book's styles, which belong to the original.
-    private func scrollLine(_ text: String, index: Int, style: NovelStyle, plain: Bool = false) -> some View {
+    /// One line of the scrolling reader, with the book's alignment, heading size, emphasis and readings when enabled.
+    /// [plain] lines (translations and the original above them) leave out the book's styles, which belong to the
+    /// original, and hold no highlights. Text is selectable: a selection can be highlighted or noted, and tapping a
+    /// highlight selects it and offers its color, shape, note and removal, as in the paged reader.
+    private func scrollLine(_ text: String, index: Int, style: NovelStyle, plain: Bool = false,
+                            secondary: Bool = false) -> some View {
         let book: (runs: [NovelRun], layout: NovelLineLayout?) = style.bookStyles && !plain ? model.lineStyle(index) : ([], nil)
         let indented = style.indent && !IosNovelStyle.shared.isTitleLine(line: text) && (book.layout?.indent ?? true)
         let prefix = indented ? "\u{3000}\u{3000}" : ""
-        let align: TextAlignment = switch book.layout?.align {
-        case .center: .center
-        case .right: .trailing
-        default: .leading
+        let shift = (prefix as NSString).length
+        let attributed = style.line(text, prefix: prefix, runs: book.runs, layout: book.layout,
+                                    highlights: plain ? [] : model.decorated(model.lineHighlights(index)),
+                                    secondary: secondary)
+        return NovelPageText(text: attributed, fitsWidth: true, markings: plain ? nil : model) { range, withNote in
+            guard let start = model.chapterOffset(line: index, offset: range.location - shift),
+                  let end = model.chapterOffset(line: index, offset: NSMaxRange(range) - shift) else { return }
+            Task { await model.addMarking(start: start, end: end, withNote: withNote) }
         }
-        let frame: Alignment = switch align {
-        case .center: .center
-        case .trailing: .trailing
-        default: .leading
-        }
-        return Text(style.styledLine(prefix + text, runs: book.runs, shift: (prefix as NSString).length,
-                                     highlights: plain ? [] : model.lineHighlights(index)))
-            .lineSpacing(style.lineGap * (book.layout?.scale ?? 1))
-            .multilineTextAlignment(align)
-            .frame(maxWidth: .infinity, alignment: frame)
-            .textSelection(.enabled)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
+        .accessibilityAddTraits(.isStaticText)
     }
 
     private func scrollReader(_ style: NovelStyle) -> some View {
@@ -903,8 +972,7 @@ struct NovelReaderView: View {
                         if let translated = model.translation(index) {
                             VStack(alignment: .leading, spacing: style.paragraphGap) {
                                 if translationBilingual {
-                                    scrollLine(text, index: index, style: style, plain: true)
-                                        .foregroundStyle(style.colors.secondaryText)
+                                    scrollLine(text, index: index, style: style, plain: true, secondary: true)
                                 }
                                 scrollLine(translated, index: index, style: style, plain: true)
                             }
@@ -1119,8 +1187,6 @@ struct NovelColors: Equatable {
     let uiText: UIColor
     let uiSecondaryText: UIColor
     let uiBackground: UIColor
-    /// The theme's highlight, for saved highlights.
-    let uiHighlight: UIColor
 
     init(theme: String, dark: Bool) {
         let colors = IosNovelStyle.shared.colors(theme: theme, dark: dark)
@@ -1129,7 +1195,6 @@ struct NovelColors: Equatable {
         secondaryText = Color(uiColor: UIColor(argb: colors.secondaryText))
         uiText = UIColor(argb: colors.text)
         uiSecondaryText = UIColor(argb: colors.secondaryText)
-        uiHighlight = UIColor(argb: colors.highlight).withAlphaComponent(0.35)
         uiBackground = UIColor(argb: colors.background)
     }
 }
@@ -1197,11 +1262,9 @@ struct NovelStyle: Equatable {
         }
     }
 
-    /// Extra space between lines for SwiftUI text, matching [lineHeight].
-    var lineGap: CGFloat { max(0, lineHeight - uiFont.lineHeight) }
-
-    /// Space between paragraphs in the scrolling reader: one line gap plus the blank lines.
-    var paragraphGap: CGFloat { lineGap + CGFloat(paragraphSpacing) * lineHeight }
+    /// Space between paragraphs in the scrolling reader: the blank lines, as the paged reader leaves them. Each line
+    /// is already [lineHeight] tall there, its gap included.
+    var paragraphGap: CGFloat { CGFloat(paragraphSpacing) * lineHeight }
 
     func attributes() -> [NSAttributedString.Key: Any] {
         let font = uiFont
@@ -1215,15 +1278,8 @@ struct NovelStyle: Equatable {
 
     /// [text] with the reader's attributes and the book's line layouts and inline styles laid over them.
     func attributed(_ text: String, runs: [NovelRun], lines: [NovelLineLayout],
-                    highlights: [IosTextRange] = []) -> NSAttributedString {
+                    highlights: [NovelHighlight] = []) -> NSAttributedString {
         let result = NSMutableAttributedString(string: text, attributes: attributes())
-        for highlight in highlights {
-            let start = min(max(0, Int(highlight.start)), result.length)
-            let end = min(max(start, Int(highlight.end)), result.length)
-            if end > start {
-                result.addAttribute(.backgroundColor, value: colors.uiHighlight, range: NSRange(location: start, length: end - start))
-            }
-        }
         let length = result.length
         func clamp(_ range: NSRange) -> NSRange? {
             let start = min(max(0, range.location), length)
@@ -1276,6 +1332,7 @@ struct NovelStyle: Equatable {
                 result.addAttribute(.baselineOffset, value: CGFloat(run.vertical) * CGFloat(fontSize) * 0.35, range: range)
             }
         }
+        result.addNovelHighlights(highlights)
         return result
     }
 
@@ -1308,28 +1365,17 @@ struct NovelStyle: Equatable {
         return UIFont(descriptor: descriptor, size: base.pointSize)
     }
 
-    /// A line of the scrolling reader with the book's inline styles (readings are left out there).
-    func styledLine(_ text: String, runs: [NovelRun], shift: Int, highlights: [IosTextRange] = []) -> AttributedString {
-        var result = AttributedString(text)
-        result.font = Font(uiFont)
-        let length = (text as NSString).length
-        for highlight in highlights {
-            let start = min(max(0, Int(highlight.start) + shift), length)
-            let end = min(max(start, Int(highlight.end) + shift), length)
-            guard end > start, let stringRange = Range(NSRange(location: start, length: end - start), in: text),
-                  let range = Range(stringRange, in: result) else { continue }
-            result[range].backgroundColor = Color(uiColor: colors.uiHighlight)
-        }
-        guard !runs.isEmpty else { return result }
-        for run in runs where run.ruby == nil {
-            let start = min(max(0, run.range.location + shift), length)
-            let end = min(max(start, run.range.location + run.range.length + shift), length)
-            guard end > start, let stringRange = Range(NSRange(location: start, length: end - start), in: text),
-                  let range = Range(stringRange, in: result) else { continue }
-            result[range].font = Font(styledFont(run))
-            if run.underline { result[range].underlineStyle = .single }
-            if run.strike { result[range].strikethroughStyle = .single }
-            if run.vertical != 0 { result[range].baselineOffset = CGFloat(run.vertical) * CGFloat(fontSize) * 0.35 }
+    /// A line of the scrolling reader: [text] after [prefix] (the indent), with the book's line layout and styles and
+    /// the highlights in the line's own offsets. [secondary] draws it in the theme's secondary color.
+    func line(_ text: String, prefix: String, runs: [NovelRun], layout: NovelLineLayout?,
+              highlights: [NovelHighlight], secondary: Bool = false) -> NSAttributedString {
+        let shift = (prefix as NSString).length
+        let whole = prefix + text
+        let lines = layout.map { [NovelLineLayout(range: NSRange(location: 0, length: (whole as NSString).length), from: $0)] } ?? []
+        let result = NSMutableAttributedString(attributedString: attributed(
+            whole, runs: runs.map { $0.shifted(by: shift) }, lines: lines, highlights: highlights.map { $0.shifted(by: shift) }))
+        if secondary {
+            result.addAttribute(.foregroundColor, value: colors.uiSecondaryText, range: NSRange(location: 0, length: result.length))
         }
         return result
     }
@@ -1353,6 +1399,16 @@ struct NovelRun {
         bold = run.bold; italic = run.italic; underline = run.underline; strike = run.strike
         vertical = Int(run.vertical); scale = CGFloat(run.scale); ruby = run.ruby; secondary = run.secondary
     }
+
+    private init(_ run: NovelRun, range: NSRange) {
+        self.range = range
+        bold = run.bold; italic = run.italic; underline = run.underline; strike = run.strike
+        vertical = run.vertical; scale = run.scale; ruby = run.ruby; secondary = run.secondary
+    }
+
+    func shifted(by offset: Int) -> NovelRun {
+        NovelRun(self, range: NSRange(location: range.location + offset, length: range.length))
+    }
 }
 
 /// The book's layout of one line: alignment, the largest font scale on it, whether it carries readings.
@@ -1368,6 +1424,12 @@ struct NovelLineLayout {
         range = NSRange(location: Int(line.start), length: Int(line.end - line.start))
         align = [NSTextAlignment.natural, .center, .right, .justified][min(3, max(0, Int(line.align)))]
         scale = CGFloat(line.scale); ruby = line.ruby; heading = Int(line.heading); indent = line.indent
+    }
+
+    /// [layout] over [range] instead of its own.
+    init(range: NSRange, from layout: NovelLineLayout) {
+        self.range = range
+        align = layout.align; scale = layout.scale; ruby = layout.ruby; heading = layout.heading; indent = layout.indent
     }
 }
 
@@ -1390,7 +1452,7 @@ struct NovelLayoutSegment {
     let imageUrl: String?
     let runs: [NovelRun]
     let lines: [NovelLineLayout]
-    var highlights: [IosTextRange] = []
+    var highlights: [NovelHighlight] = []
 }
 
 /// Pages laid out with TextKit 2 and split into whole lines by the rule Android's paged reader uses.
@@ -1533,7 +1595,7 @@ struct NovelPagedReader: View {
         VStack(spacing: 0) {
             Group {
                 if let text = page.text {
-                    NovelPageText(text: text) { range in mark(page, range: range) }
+                    NovelPageText(text: text, markings: model) { range, withNote in mark(page, range: range, withNote: withNote) }
                         .frame(width: content.width, height: content.height, alignment: .topLeading)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(text.string)
@@ -1565,14 +1627,14 @@ struct NovelPagedReader: View {
         }
     }
 
-    /// Highlights (or clears) a selection on [page]; [range] is in the page's text.
-    private func mark(_ page: NovelLaidOutPage, range: NSRange) {
+    /// Highlights a selection on [page], opening the note editor when [withNote]; [range] is in the page's text.
+    private func mark(_ page: NovelLaidOutPage, range: NSRange, withNote: Bool) {
         guard let source = model.pages(indent: style.indent, spacing: style.paragraphSpacing, bookStyles: style.bookStyles)
         else { return }
         let segment = Int32(page.segment)
         let start = source.sourceOffset(segment: segment, offset: Int32(page.textStart + range.location))
         let end = source.sourceOffset(segment: segment, offset: Int32(page.textStart + range.location + range.length))
-        Task { await model.toggleMarking(start: Int(start), end: Int(end)) }
+        Task { await model.addMarking(start: Int(start), end: Int(end), withNote: withNote) }
     }
 
     private func relayout(size: CGSize) async {
@@ -1589,7 +1651,7 @@ struct NovelPagedReader: View {
             return NovelLayoutSegment(text: source.text(segment: segment), imageUrl: source.imageUrl(segment: segment),
                                       runs: source.styles(segment: segment).map(NovelRun.init),
                                       lines: source.paragraphs(segment: segment).map(NovelLineLayout.init),
-                                      highlights: source.highlights(segment: segment, ranges: model.markingRanges))
+                                      highlights: model.decorated(source.highlights(segment: segment, ranges: model.markingRanges)))
         }
         let style = style
         let laidOut = await Task.detached(priority: .userInitiated) {
@@ -1752,6 +1814,8 @@ struct NovelPager<Page: View>: UIViewControllerRepresentable {
 
         @objc func tapped(_ gesture: UITapGestureRecognizer) {
             guard let view = gesture.view else { return }
+            // The page text opens the menu of a tapped highlight itself.
+            if NovelTextView.highlight(at: gesture.location(in: view), in: view) { return }
             if let selected = Self.selectedText(in: view) {
                 selected.selectedTextRange = nil
                 return
@@ -1787,32 +1851,154 @@ struct NovelPager<Page: View>: UIViewControllerRepresentable {
 }
 
 /// Page text drawn by TextKit 2 with the attributes it was measured with, so every line the paginator counted fits.
-/// It is selectable; links are not followed.
+/// It is selectable; links are not followed. A selection's menu offers highlighting it (or highlighting it with a
+/// note); tapping a saved highlight selects it and offers its color, shape, note and removal, as Apple Books does.
+/// [fitsWidth] sizes the view to its text at the proposed width (the scrolling reader's lines).
 struct NovelPageText: UIViewRepresentable {
     let text: NSAttributedString
-    /// Highlights the selected range (Android's text marking), offered in the selection menu.
-    var onMark: ((NSRange) -> Void)? = nil
+    var fitsWidth = false
+    /// The reader holding the highlights; nil for text that takes none.
+    var markings: NovelReaderModel? = nil
+    /// Highlights the selected range, with a note when the flag is set.
+    var onMark: ((NSRange, Bool) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    final class Coordinator: NSObject, UITextViewDelegate {
+    final class Coordinator: NSObject, UITextViewDelegate, NSTextLayoutManagerDelegate, UIEditMenuInteractionDelegate,
+        UIGestureRecognizerDelegate {
         var parent: NovelPageText
+        weak var textView: NovelTextView?
+        /// The highlight whose menu the tap opened.
+        private var menuMarking: (id: Int64, range: NSRange)?
         init(_ parent: NovelPageText) { self.parent = parent }
 
         func textView(_ textView: UITextView, editMenuForTextIn range: NSRange,
                       suggestedActions: [UIMenuElement]) -> UIMenu? {
-            guard let onMark = parent.onMark, range.length > 0 else { return nil }
-            let mark = UIAction(title: String(localized: "划线"), image: UIImage(systemName: "highlighter")) { _ in
-                onMark(range)
-                textView.selectedRange = NSRange(location: range.location, length: 0)
+            guard range.length > 0 else { return nil }
+            if let id = Self.marking(exactly: range, in: textView.attributedText) {
+                return markingMenu(id, suggested: suggestedActions)
             }
-            return UIMenu(children: [mark] + suggestedActions)
+            guard let onMark = parent.onMark else { return nil }
+            let clear = { [weak textView] in textView?.selectedRange = NSRange(location: range.location, length: 0) }
+            let mark = UIAction(title: String(localized: "划线"), image: UIImage(systemName: "highlighter")) { _ in
+                onMark(range, false)
+                clear()
+            }
+            let note = UIAction(title: String(localized: "批注"), image: UIImage(systemName: "square.and.pencil")) { _ in
+                onMark(range, true)
+                clear()
+            }
+            return UIMenu(children: [mark, note] + suggestedActions)
+        }
+
+        /// The highlight covering exactly [range], if any.
+        private static func marking(exactly range: NSRange, in text: NSAttributedString) -> Int64? {
+            guard range.location < text.length else { return nil }
+            var effective = NSRange()
+            let value = text.attribute(.novelMarking, at: range.location, longestEffectiveRange: &effective,
+                                       in: NSRange(location: 0, length: text.length)) as? NSNumber
+            return effective == range ? value?.int64Value : nil
+        }
+
+        /// Color and shape submenus, the note and removal, then the system's own actions. The edit menu shows every
+        /// entry as text, so the five colors live in a submenu instead of filling its first page.
+        private func markingMenu(_ id: Int64, suggested: [UIMenuElement]) -> UIMenu? {
+            guard let model = parent.markings, let marking = model.marking(id) else { return nil }
+            let color = NovelMarkingColor.of(marking.color)
+            let line = NovelMarkingLine.of(marking.style)
+            let colors = UIMenu(title: String(localized: "颜色"), image: color.swatch(selected: false),
+                                children: NovelMarkingColor.allCases.map { option in
+                UIAction(title: option.title, image: option.swatch(selected: false),
+                         state: option == color ? .on : .off) { [weak self] _ in
+                    self?.dismissSelection()
+                    Task { await model.restyleMarking(id, color: option, line: line) }
+                }
+            })
+            let shapes = UIMenu(title: String(localized: "样式"), image: UIImage(systemName: line.systemImage),
+                                children: NovelMarkingLine.allCases.map { option in
+                UIAction(title: option.title, image: UIImage(systemName: option.systemImage),
+                         state: option == line ? .on : .off) { [weak self] _ in
+                    self?.dismissSelection()
+                    Task { await model.restyleMarking(id, color: color, line: option) }
+                }
+            })
+            let hasNote = !(marking.note ?? "").isEmpty
+            let note = UIAction(title: hasNote ? String(localized: "编辑批注") : String(localized: "添加批注"),
+                                image: UIImage(systemName: hasNote ? "text.bubble" : "square.and.pencil")) { [weak self] _ in
+                self?.dismissSelection()
+                model.editingMarking = marking
+            }
+            let delete = UIAction(title: String(localized: "删除划线"), image: UIImage(systemName: "trash"),
+                                  attributes: .destructive) { [weak self] _ in
+                self?.dismissSelection()
+                Task { await model.deleteMarking(id) }
+            }
+            return UIMenu(children: [colors, shapes, note, delete] + suggested)
+        }
+
+        private func dismissSelection() {
+            guard let textView else { return }
+            textView.selectedRange = NSRange(location: textView.selectedRange.location, length: 0)
+        }
+
+        // MARK: Tapping a highlight
+
+        @objc func tapped(_ gesture: UITapGestureRecognizer) {
+            guard let textView, gesture.state == .ended else { return }
+            let point = gesture.location(in: textView)
+            guard parent.markings != nil, let (id, range) = textView.highlight(at: point) else { return }
+            NovelTextView.lastHighlightTap = Date()
+            menuMarking = (id, range)
+            if !textView.isFirstResponder { textView.becomeFirstResponder() }
+            textView.selectedRange = range
+            textView.menuInteraction.presentEditMenu(with: UIEditMenuConfiguration(identifier: nil, sourcePoint: point))
+        }
+
+        /// The highlight tap only begins on a highlight, so other taps stay the pager's and the reader's.
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard parent.markings != nil, let textView else { return false }
+            return textView.highlight(at: gestureRecognizer.location(in: textView)) != nil
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+
+        func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration,
+                                 suggestedActions: [UIMenuElement]) -> UIMenu? {
+            guard let textView, let (id, range) = menuMarking else { return nil }
+            let copy = UIAction(title: String(localized: "拷贝"), image: UIImage(systemName: "doc.on.doc")) { [weak self] _ in
+                UIPasteboard.general.string = (textView.attributedText.string as NSString).substring(with: range)
+                self?.dismissSelection()
+            }
+            let share = UIAction(title: String(localized: "共享…"), image: UIImage(systemName: "square.and.arrow.up")) { _ in
+                textView.share(range: range)
+            }
+            return markingMenu(id, suggested: [UIMenu(options: .displayInline, children: [copy, share])])
+        }
+
+        func editMenuInteraction(_ interaction: UIEditMenuInteraction,
+                                 targetRectFor configuration: UIEditMenuConfiguration) -> CGRect {
+            guard let textView, let (_, range) = menuMarking else { return .null }
+            return textView.rect(of: range)
+        }
+
+        func editMenuInteraction(_ interaction: UIEditMenuInteraction, willDismissMenuFor configuration: UIEditMenuConfiguration,
+                                 animator: any UIEditMenuInteractionAnimating) {
+            menuMarking = nil
+        }
+
+        // MARK: Wavy lines
+
+        func textLayoutManager(_ textLayoutManager: NSTextLayoutManager, textLayoutFragmentFor location: any NSTextLocation,
+                               in textElement: NSTextElement) -> NSTextLayoutFragment {
+            NovelMarkingLayoutFragment(textElement: textElement, range: textElement.elementRange)
         }
     }
 
-    func makeUIView(context: Context) -> UITextView {
-        let view = UITextView(usingTextLayoutManager: true)
+    func makeUIView(context: Context) -> NovelTextView {
+        let view = NovelTextView(usingTextLayoutManager: true)
         view.delegate = context.coordinator
+        view.textLayoutManager?.delegate = context.coordinator
         view.isEditable = false
         // Long press selects text for the system menu (copy, look up, translate, share); taps reach the pager.
         view.isSelectable = true
@@ -1820,20 +2006,147 @@ struct NovelPageText: UIViewRepresentable {
         view.backgroundColor = .clear
         view.textContainerInset = .zero
         view.textContainer.lineFragmentPadding = 0
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapped(_:)))
+        tap.delegate = context.coordinator
+        view.addGestureRecognizer(tap)
+        view.menuInteraction = UIEditMenuInteraction(delegate: context.coordinator)
+        view.addInteraction(view.menuInteraction)
+        context.coordinator.textView = view
         return view
     }
 
-    func updateUIView(_ view: UITextView, context: Context) {
+    func updateUIView(_ view: NovelTextView, context: Context) {
         context.coordinator.parent = self
         if view.attributedText != text { view.attributedText = text }
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
-        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: NovelTextView, context: Context) -> CGSize? {
+        guard fitsWidth else { return CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0) }
+        let width = proposal.width ?? uiView.window?.windowScene?.screen.bounds.width ?? 320
+        if uiView.attributedText != text { uiView.attributedText = text }
+        let height = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        return CGSize(width: width, height: ceil(height))
+    }
+}
+
+/// The reader's text view: finds the saved highlight under a point and presents its menu.
+final class NovelTextView: UITextView {
+    var menuInteraction: UIEditMenuInteraction!
+
+    /// When a tap last opened a highlight's menu; the scrolling reader then leaves its controls alone.
+    static var lastHighlightTap: Date?
+
+    static var tappedHighlightRecently: Bool {
+        lastHighlightTap.map { Date().timeIntervalSince($0) < 0.4 } ?? false
+    }
+
+    /// The highlight (id and range) drawn under [point], if any.
+    func highlight(at point: CGPoint) -> (Int64, NSRange)? {
+        let length = attributedText.length
+        guard length > 0, let position = closestPosition(to: point) else { return nil }
+        // The closest caret position lies between two characters, and snaps to the text even from far past it: the
+        // tap must be on the glyphs of one of them.
+        let caret = offset(from: beginningOfDocument, to: position)
+        guard let index = [caret, caret - 1].first(where: { index in
+            index >= 0 && index < length &&
+                rect(of: NSRange(location: index, length: 1)).insetBy(dx: -3, dy: -3).contains(point)
+        }) else { return nil }
+        var effective = NSRange()
+        guard let id = attributedText.attribute(.novelMarking, at: index, longestEffectiveRange: &effective,
+                                                in: NSRange(location: 0, length: attributedText.length)) as? NSNumber
+        else { return nil }
+        return (id.int64Value, effective)
+    }
+
+    /// Whether a tap at [point] in [container] lands on a highlight of a reader text view inside it.
+    static func highlight(at point: CGPoint, in container: UIView) -> Bool {
+        var view = container.hitTest(point, with: nil)
+        while let current = view, current !== container {
+            if let text = current as? NovelTextView {
+                return text.highlight(at: container.convert(point, to: text)) != nil
+            }
+            view = current.superview
+        }
+        return false
+    }
+
+    /// The bounding box of [range]'s glyphs.
+    func rect(of range: NSRange) -> CGRect {
+        guard let start = position(from: beginningOfDocument, offset: range.location),
+              let end = position(from: start, offset: range.length),
+              let textRange = textRange(from: start, to: end) else { return .null }
+        return selectionRects(for: textRange).map(\.rect).filter { !$0.isEmpty }.reduce(CGRect.null) { $0.union($1) }
+    }
+
+    func share(range: NSRange) {
+        let text = (attributedText.string as NSString).substring(with: range)
+        let controller = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+        controller.popoverPresentationController?.sourceView = self
+        controller.popoverPresentationController?.sourceRect = rect(of: range)
+        var presenter = window?.rootViewController
+        while let next = presenter?.presentedViewController { presenter = next }
+        presenter?.present(controller, animated: true)
     }
 }
 
 // MARK: - Settings
+
+/// The color and shape of new highlights (Android's marking palette); a highlight's own menu changes it later.
+struct NovelMarkingSettingsSection: View {
+    @AppStorage(NovelMarkingDefaults.colorKey) private var color = NovelMarkingColor.yellow.rawValue
+    @AppStorage(NovelMarkingDefaults.lineKey) private var line = NovelMarkingLine.underline.rawValue
+
+    var body: some View {
+        Section {
+            HStack(spacing: 0) {
+                ForEach(NovelMarkingColor.allCases) { option in
+                    Button { color = option.rawValue } label: {
+                        Circle().fill(Color(uiColor: option.line))
+                            .frame(width: 28, height: 28)
+                            .overlay {
+                                if color == option.rawValue {
+                                    Image(systemName: "checkmark").font(.caption.weight(.bold)).foregroundStyle(.white)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(option.title)
+                    .accessibilityAddTraits(color == option.rawValue ? .isSelected : [])
+                    .accessibilityIdentifier("novel.settings.markingColor.\(option.rawValue)")
+                }
+            }
+            Picker("样式", selection: $line) {
+                ForEach(NovelMarkingLine.allCases) { option in
+                    Label(option.title, systemImage: option.systemImage).tag(option.rawValue)
+                }
+            }
+            .accessibilityIdentifier("novel.settings.markingLine")
+            NovelPageText(text: sample, fitsWidth: true)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("示例文字")
+                .accessibilityIdentifier("novel.settings.markingPreview")
+        } header: {
+            Text("划线")
+        } footer: {
+            Text("长按选中文字后选择“划线”。轻点已有划线可选中它，并修改颜色、样式、批注或删除。")
+        }
+    }
+
+    /// A sample of the chosen highlight, drawn as the reader draws it.
+    private var sample: NSAttributedString {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineHeightMultiple = 1.5
+        let text = NSMutableAttributedString(string: String(localized: "示例文字"), attributes: [
+            .font: UIFont.preferredFont(forTextStyle: .body), .foregroundColor: UIColor.label, .paragraphStyle: paragraph,
+        ])
+        text.addNovelHighlights([NovelHighlight(id: 0, start: 0, end: text.length,
+                                                color: NovelMarkingColor(rawValue: color) ?? .yellow,
+                                                line: NovelMarkingLine(rawValue: line) ?? .underline)])
+        return text
+    }
+}
 
 /// The Android reader's typography and theme settings, stored per device.
 struct NovelReaderSettingsSheet: View {
@@ -1911,6 +2224,7 @@ struct NovelReaderSettingsSheet: View {
                 } footer: {
                     Text("书籍排版：使用书籍自带的标题、对齐、粗斜体与注音（EPUB 与带样式的正文）。")
                 }
+                NovelMarkingSettingsSection()
                 if let rules = library.library?.replaceRules {
                     Section {
                         NavigationLink { ReplaceRulesView(rules: rules) } label: {
