@@ -230,8 +230,11 @@ class SourceLibrary(
                 requireSameIdentity(requireNotNull(database.getMangaDao().find(content.id)).manga, content)
                 val dao = database.getBookmarksDao()
                 val stored = dao.find(content.id, bookmark.pageId)
-                // A stale card must not delete a replacement bookmark at the same position.
-                require(stored?.desktopBookmark() == bookmark) { "Bookmark has changed or no longer exists" }
+                // A stale card must not delete a replacement bookmark at the same position. The chapter title is
+                // display data that `bookmarkGroups` fills in, not part of the stored bookmark.
+                require(stored?.desktopBookmark()?.copy(chapterTitle = bookmark.chapterTitle) == bookmark) {
+                    "Bookmark has changed or no longer exists"
+                }
                 dao.delete(requireNotNull(stored))
             }
         }

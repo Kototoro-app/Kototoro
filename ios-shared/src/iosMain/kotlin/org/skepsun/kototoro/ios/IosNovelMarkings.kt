@@ -13,9 +13,14 @@ class IosNovelMarkings internal constructor(private val store: NovelMarkingStore
         forWork(content).filter { it.chapterId == chapter.id }
 
     /** Highlights `start until end` of the chapter's converted text, or removes the identical highlight. */
-    suspend fun toggle(content: IosSourceContent, chapter: IosSourceChapter, start: Int, end: Int, text: String): Boolean =
+    suspend fun toggle(content: IosSourceContent, chapter: IosSourceChapter, start: Int, end: Int, text: String,
+        color: Int, style: Int): Boolean =
         store.toggle(content.value.id, chapter.value.id,
-            content.value.chapters.orEmpty().indexOfFirst { it.id == chapter.value.id }.coerceAtLeast(0), start, end, text)
+            content.value.chapters.orEmpty().indexOfFirst { it.id == chapter.value.id }.coerceAtLeast(0), start, end, text,
+            color, style)
+
+    /** Android's color and line style of a highlight (`NovelMarkingColor` / `NovelMarkingStyle` ids). */
+    suspend fun updateStyle(id: Long, color: Int, style: Int) = store.updateStyle(id, color, style)
 
     suspend fun updateNote(id: Long, note: String?) = store.updateNote(id, note)
 
@@ -31,6 +36,10 @@ class IosNovelMarking internal constructor(value: NovelMarkingEntity) {
     val text: String = value.selectedText
     val note: String? = value.note
     val updatedAt: Long = value.updatedAt
+    /** Android's `NovelMarkingColor` id: yellow, green, blue, pink, orange. */
+    val color: Int = value.color
+    /** Android's `NovelMarkingStyle` id: underline, wavy line, marker. */
+    val style: Int = value.style
 }
 
 /** A highlight placed in a chapter or on a page: `start until end` in that text. */

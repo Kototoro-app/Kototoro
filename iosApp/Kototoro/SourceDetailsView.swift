@@ -793,26 +793,12 @@ struct SourceDetailsView: View {
                         }
                     }
                 } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "person.circle")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(shown.authors.joined(separator: "、"))
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                    }
+                    Label(shown.authors.joined(separator: "、"), systemImage: "person.circle")
+                        .lineLimit(1)
                 }
                 .buttonStyle(.plain)
             } else {
-                HStack(spacing: 6) {
-                    Image(systemName: "person.circle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("佚名")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                Label("佚名", systemImage: "person.circle").foregroundStyle(.secondary)
             }
         }
     }
@@ -822,25 +808,43 @@ struct SourceDetailsView: View {
     private func stateItem(_ shown: IosSourceContent) -> some View {
         Group {
             if let state = shown.state {
-                Label(Self.stateTitle(state), systemImage: state == "ONGOING" ? "play.circle" : "checkmark.circle")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Self.stateTint(state))
+                Label {
+                    Text(Self.stateTitle(state))
+                } icon: {
+                    Image(systemName: Self.stateSymbol(state)).foregroundStyle(Self.stateTint(state))
+                }
             } else {
-                Label("状态未知", systemImage: "questionmark.circle")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                Label("状态未知", systemImage: "questionmark.circle").foregroundStyle(.secondary)
             }
         }
     }
 
+    /// Author, state, kind and chapters in two columns; every item is a `DetailsInfoLabelStyle` label, so icons share
+    /// one size, column width and rendering.
     private func infoCard(_ shown: IosSourceContent) -> some View {
         VStack(spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                authorItem(shown)
-                Spacer(minLength: 0)
-                stateItem(shown)
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                GridRow {
+                    authorItem(shown).frame(maxWidth: .infinity, alignment: .leading)
+                    stateItem(shown).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                GridRow {
+                    Label(Self.mediaKindTitle(shownContent.mediaKind), systemImage: Self.mediaKindSymbol(shownContent.mediaKind))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    chapterInfo.frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if let timeLeft {
+                    GridRow {
+                        // Android's estimated time left (shared rule; manga only).
+                        Label(timeLeft, systemImage: "clock")
+                            .foregroundStyle(.secondary)
+                            .gridCellColumns(2)
+                            .accessibilityIdentifier("details.timeLeft")
+                    }
+                }
             }
-            chapterInfo
+            .labelStyle(DetailsInfoLabelStyle())
+            .font(.subheadline)
 
             if let resume = resume, resume.progress > 0 {
                 HStack(spacing: 8) {
@@ -874,37 +878,33 @@ struct SourceDetailsView: View {
     }
 
     private var chapterInfo: some View {
-        HStack(spacing: 12) {
-            Label(Self.mediaKindTitle(shownContent.mediaKind), systemImage: "character.book.closed")
-            Spacer(minLength: 0)
-            let listed = model.isVideo ? model.visibleChapters : model.chapters
-            let totalChapters = listed.count
-            let readChapter = resume.flatMap { position in
-                listed.firstIndex { $0.id == position.chapterId }
-            }.map { $0 + 1 } ?? 0
-            let progressText = totalChapters > 0 ? "\(readChapter)/\(totalChapters)" : "-"
-            if let timeLeft {
-                // Android's estimated time left (shared rule; manga only).
-                Text(timeLeft).font(.caption).foregroundStyle(.secondary)
-                    .accessibilityIdentifier("details.timeLeft")
-            }
+        let listed = model.isVideo ? model.visibleChapters : model.chapters
+        let totalChapters = listed.count
+        let readChapter = resume.flatMap { position in
+            listed.firstIndex { $0.id == position.chapterId }
+        }.map { $0 + 1 } ?? 0
+        let progressText = totalChapters > 0 ? "\(readChapter)/\(totalChapters)" : "-"
+        return Group {
             if totalChapters > 0 {
                 Button {
                     showingAllChapters = true
                 } label: {
-                    HStack(spacing: 6) {
-                        Text(progressText)
-                        Image(systemName: "chevron.right")
-                            .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    Label {
+                        HStack(spacing: 4) {
+                            Text(progressText).monospacedDigit()
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.weight(.semibold)).foregroundStyle(.tertiary)
+                        }
+                    } icon: {
+                        Image(systemName: "list.bullet.circle")
                     }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("全部\(model.isVideo ? "剧集" : "章节")，\(progressText)")
             } else {
-                Text(progressText).foregroundStyle(.secondary)
+                Label(progressText, systemImage: "list.bullet.circle").foregroundStyle(.secondary)
             }
         }
-        .font(.subheadline)
     }
 
     @ViewBuilder
@@ -1250,6 +1250,26 @@ struct SourceDetailsView: View {
         }
     }
 
+    static func stateSymbol(_ state: String) -> String {
+        switch state {
+        case "ONGOING": "play.circle"
+        case "FINISHED": "checkmark.circle"
+        case "ABANDONED": "xmark.circle"
+        case "PAUSED": "pause.circle"
+        case "UPCOMING": "calendar.circle"
+        case "RESTRICTED": "lock.circle"
+        default: "questionmark.circle"
+        }
+    }
+
+    static func mediaKindSymbol(_ kind: String) -> String {
+        switch kind {
+        case "NOVEL": "book.closed.circle"
+        case "VIDEO": "tv.circle"
+        default: "book.circle"
+        }
+    }
+
     static func stateTint(_ state: String) -> Color {
         switch state {
         case "ONGOING": .green
@@ -1319,6 +1339,24 @@ private struct DetailsContentPanel: ViewModifier {
             .overlay {
                 shape.strokeBorder(Color.primary.opacity(contrast == .increased ? 0.2 : 0.06), lineWidth: 0.5)
             }
+    }
+}
+
+/// An item of the details info card: the icon at the text's size in a fixed column, secondary unless the item colors
+/// it (the state), so every item's icon has the same size, alignment and weight.
+struct DetailsInfoLabelStyle: LabelStyle {
+    @ScaledMetric(relativeTo: .subheadline) private var iconWidth: CGFloat = 20
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 6) {
+            configuration.icon
+                .imageScale(.medium)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
+                .frame(width: iconWidth)
+            configuration.title
+                .fontWeight(.medium)
+        }
     }
 }
 

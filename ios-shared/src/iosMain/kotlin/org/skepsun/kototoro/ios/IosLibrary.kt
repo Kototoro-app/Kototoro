@@ -407,6 +407,12 @@ class IosLibrary {
 
     suspend fun bookmarks(content: IosSourceContent): List<IosBookmark> = records.bookmarks(content.value.id).map(::IosBookmark)
 
+    /** Every work with saved positions, in one read (Android's bookmarks shelf); works come back without chapters. */
+    @Throws(Exception::class)
+    suspend fun bookmarkGroups(): List<IosBookmarkGroup> = records.bookmarkGroups().map { group ->
+        IosBookmarkGroup(IosSourceContent(group.content), group.bookmarks.map(::IosBookmark))
+    }
+
     @Throws(Exception::class)
     suspend fun toggleBookmark(content: IosSourceContent, chapter: IosSourceChapter, page: IosSourcePage,
         index: Int, count: Int, scroll: Float) = records.toggleBookmark(content.value, chapter.value, page.value, index, count, scroll)

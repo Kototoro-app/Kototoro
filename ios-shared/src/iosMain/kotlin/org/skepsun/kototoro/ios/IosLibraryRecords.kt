@@ -28,8 +28,13 @@ class IosBookmark internal constructor(internal val value: SourceBookmark) {
     val preview: String get() = value.preview
     val createdAt: Long get() = value.createdAt
     val percent: Float get() = value.percent
+    /** The chapter's stored title; filled for bookmarks read across works (`IosLibrary.bookmarkGroups`). */
+    val chapterTitle: String get() = value.chapterTitle
     val textPreview: String = normalizeNovelBookmarkPreview(value.preview) { novelHtmlToText(it, keepImages = false) }
 }
+
+/** Android's bookmarks shelf: one work (without chapters) and its saved positions. */
+class IosBookmarkGroup internal constructor(val content: IosSourceContent, val bookmarks: List<IosBookmark>)
 
 data class IosUpdate(val content: IosSourceContent, val newChapters: Int, val checkedAt: Long)
 

@@ -152,7 +152,7 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["阅读时段"].waitForExistence(timeout: 5))
         app.buttons["stats.expand"].tap()
         app.selectRecordsFilter("all")
-        XCTAssertTrue(app.staticTexts["历史 & 下载"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["历史、书签与下载"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["发现更新"].exists)
         let event = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
             "timeline.read-", "fixture_comic")).firstMatch
@@ -766,6 +766,50 @@ final class LocalImportTests: XCTestCase {
         attach("详情小说书签恢复段落")
     }
 
+    /// A saved bookmark is listed under the records page's bookmark filter and opens the reader at it.
+    @MainActor
+    func testRecordsListBookmarksAndOpenThem() throws {
+        openNovelControls(mode: "SCROLL")
+        app.buttons["novel.more"].tap()
+        app.segmentedControls.buttons["快捷"].tap()
+        let bookmark = app.buttons["novel.bookmark"]
+        XCTAssertTrue(bookmark.waitForExistence(timeout: 10), app.debugDescription)
+        if bookmark.label == "取消书签" { bookmark.tap() }
+        bookmark.tap()
+        XCTAssertEqual(app.buttons["novel.bookmark"].label, "取消书签")
+        app.buttons["novel.panel.close"].tap()
+        app.buttons["novel.back"].tap()
+        // Back at the tab root: the details page hides the tab bar.
+        for _ in 0..<4 where !app.tabBars.firstMatch.exists {
+            let back = app.navigationBars.buttons["BackButton"]
+            guard back.waitForExistence(timeout: 3) else { break }
+            back.tap()
+        }
+
+        app.mainTab("记录").tap()
+        let filter = app.buttons["timeline.filter.bookmarks"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 10), app.debugDescription)
+        filter.tap()
+        XCTAssertTrue(app.staticTexts["书签概览"].waitForExistence(timeout: 10), app.debugDescription)
+        let item = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                    "timeline.bookmark.", "fixture_novel_controls")).firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(item.label.contains("晨光落在书页上"), item.label)
+        attach("记录中的书签")
+        item.tap()
+        XCTAssertTrue(app.sliders["novel.progress"].waitForExistence(timeout: 20), app.debugDescription)
+        app.buttons["novel.back"].tap()
+
+        // Removing it from the timeline's menu takes it off the list.
+        XCTAssertTrue(item.waitForExistence(timeout: 10), app.debugDescription)
+        let saved = app.buttons[item.identifier]
+        saved.press(forDuration: 1)
+        let delete = app.buttons["删除书签"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), app.debugDescription)
+        delete.tap()
+        XCTAssertTrue(saved.waitForNonExistence(timeout: 10), app.debugDescription)
+    }
+
     @MainActor
     func testDetailsChapterSelectionDownloadsWithoutOpeningReader() throws {
         importFile(source: "LOCAL", file: "fixture_reader_chapters", reuse: true)
@@ -823,7 +867,7 @@ final class LocalImportTests: XCTestCase {
         XCTAssertTrue(work.waitForExistence(timeout: 15), app.debugDescription)
         attach("记录下载筛选")
         app.selectRecordsFilter("all")
-        XCTAssertTrue(app.staticTexts["历史 & 下载"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["历史、书签与下载"].waitForExistence(timeout: 10))
         let download = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
             "timeline.download.", "fixture_reader_chapters")).firstMatch
         XCTAssertTrue(download.waitForExistence(timeout: 10), app.debugDescription)
@@ -2430,6 +2474,89 @@ final class LocalImportTests: XCTestCase {
         XCTAssertFalse(marking.exists, app.debugDescription)
     }
 
+    /// Tapping a highlight selects it and offers its color, shape, note and removal, in both reading modes.
+    @MainActor
+    func testNovelHighlightTapOffersItsActions() throws {
+        for mode in ["SCROLL", "PAGED"] {
+            openNovelControls(mode: mode)
+            app.buttons["novel.more"].tap()
+            let mark = app.buttons["novel.markParagraph"]
+            XCTAssertTrue(mark.waitForExistence(timeout: 10), app.debugDescription)
+            if mark.label.contains("取消") { mark.tap(); XCTAssertTrue(app.buttons["划线当前段"].waitForExistence(timeout: 10)) }
+            app.buttons["novel.markParagraph"].tap()
+            XCTAssertTrue(app.buttons["取消本段划线"].waitForExistence(timeout: 10), app.debugDescription)
+            app.buttons["novel.panel.close"].tap()
+
+            let paragraph = app.staticTexts["novel.firstParagraph"]
+            // The third line: the first may lie under the floating chapter title.
+            let firstLine = paragraph.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0)).withOffset(CGVector(dx: 0, dy: 65))
+            openHighlightMenu(firstLine)
+            XCTAssertTrue(menuItem("添加批注").waitForExistence(timeout: 10), "\(mode): \(app.debugDescription)")
+            attach("划线菜单 \(mode)")
+            XCTAssertTrue(revealMenuItem("删除划线").exists, app.debugDescription)
+            openHighlightMenu(firstLine)
+            menuItem("样式").tap()
+            XCTAssertTrue(menuItem("波浪线").waitForExistence(timeout: 5), app.debugDescription)
+            menuItem("波浪线").tap()
+            openHighlightMenu(firstLine)
+            XCTAssertTrue(menuItem("颜色").waitForExistence(timeout: 10), app.debugDescription)
+            menuItem("颜色").tap()
+            XCTAssertTrue(menuItem("雅致蓝").waitForExistence(timeout: 5), app.debugDescription)
+            menuItem("雅致蓝").tap()
+            attach("蓝色波浪线 \(mode)")
+
+            openHighlightMenu(firstLine)
+            XCTAssertTrue(menuItem("添加批注").waitForExistence(timeout: 10), app.debugDescription)
+            menuItem("添加批注").tap()
+            let field = app.textFields["novel.marking.note.field"].exists
+                ? app.textFields["novel.marking.note.field"] : app.textViews["novel.marking.note.field"]
+            XCTAssertTrue(field.waitForExistence(timeout: 10), app.debugDescription)
+            field.typeText("note \(mode)")
+            app.buttons["novel.marking.note.save"].tap()
+
+            openHighlightMenu(firstLine)
+            XCTAssertTrue(menuItem("编辑批注").waitForExistence(timeout: 10), "The note is kept: \(app.debugDescription)")
+            revealMenuItem("删除划线").tap()
+            app.buttons["novel.more"].tap()
+            XCTAssertTrue(app.buttons["划线当前段"].waitForExistence(timeout: 10), "The highlight is gone: \(app.debugDescription)")
+            app.buttons["novel.panel.close"].tap()
+            // A tap in the middle of plain text still toggles the reading controls.
+            let center = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            center.tap()
+            XCTAssertTrue(app.buttons["novel.back"].waitForNonExistence(timeout: 5), "\(mode): \(app.debugDescription)")
+            center.tap()
+            XCTAssertTrue(app.buttons["novel.back"].waitForExistence(timeout: 5), app.debugDescription)
+            app.buttons["novel.back"].tap()
+        }
+    }
+
+    /// Taps a highlight until its menu shows (a tap while another menu is open only closes that menu).
+    private func openHighlightMenu(_ point: XCUICoordinate) {
+        for _ in 0..<3 {
+            point.tap()
+            if menuItem("颜色").waitForExistence(timeout: 3) { return }
+        }
+    }
+
+    /// An edit menu entry, paging the menu forward until it shows.
+    private func revealMenuItem(_ title: String) -> XCUIElement {
+        let item = menuItem(title)
+        for _ in 0..<4 where !(item.exists && item.isHittable) {
+            let next = app.buttons["下一页"]
+            guard next.exists else { break }
+            next.tap()
+            _ = item.waitForExistence(timeout: 1)
+        }
+        return item
+    }
+
+    /// An edit menu entry: a menu item or, in the compact edit menu, a button.
+    private func menuItem(_ title: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(
+            format: "label == %@ AND (elementType == %d OR elementType == %d)", title,
+            XCUIElement.ElementType.menuItem.rawValue, XCUIElement.ElementType.button.rawValue)).firstMatch
+    }
+
     /// Searching the chapter lists matching lines and jumps to the chosen one.
     @MainActor
     func testNovelChapterSearchJumpsToTheMatch() throws {
@@ -2827,7 +2954,8 @@ final class LocalImportTests: XCTestCase {
     }
 
     private func importFile(source name: String, file: String, reuse: Bool = false, expectImport: Bool = true) {
-        app.tabBars.buttons["浏览"].tap()
+        // The tab bar may be collapsed after scrolling; `mainTab` expands it first.
+        app.mainTab("浏览").tap()
         let kind = name == "LOCAL_NOVEL" ? "NOVEL" : name == "LOCAL_VIDEO" ? "VIDEO" : "MANGA"
         if app.navigationBars.buttons["关闭"].exists { app.navigationBars.buttons["关闭"].tap() }
         let space = app.buttons["space.menu"]

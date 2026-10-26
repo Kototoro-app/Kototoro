@@ -62,14 +62,22 @@ class NovelMarkingStore(
 
     suspend fun forWork(mangaId: Long): List<NovelMarkingEntity> = dao.observe(mangaId).first()
 
-    /** Adds a highlight over `start until end`, or removes the identical one; true when one was added. */
-    suspend fun toggle(mangaId: Long, chapterId: Long, chapterIndex: Int, start: Int, end: Int, text: String): Boolean {
+    /**
+     * Adds a highlight over `start until end`, or removes the identical one; true when one was added. [color] and
+     * [style] are Android's `NovelMarkingColor`/`NovelMarkingStyle` ids (yellow underline by default).
+     */
+    suspend fun toggle(mangaId: Long, chapterId: Long, chapterIndex: Int, start: Int, end: Int, text: String,
+        color: Int = 0, style: Int = 0): Boolean {
         dao.find(mangaId, chapterId, start, end)?.let { dao.delete(it); return false }
         val time = now()
         dao.insert(NovelMarkingEntity(mangaId = mangaId, chapterId = chapterId, chapterIndex = chapterIndex,
-            startOffset = start, endOffset = end, selectedText = text, createdAt = time, updatedAt = time))
+            startOffset = start, endOffset = end, selectedText = text, createdAt = time, updatedAt = time,
+            color = color, style = style))
         return true
     }
+
+    /** Android's restyle of one highlight: its color and line style ids. */
+    suspend fun updateStyle(id: Long, color: Int, style: Int) = dao.updateStyle(id, color, style, now())
 
     suspend fun updateNote(id: Long, note: String?) = dao.updateNote(id, note?.takeIf(String::isNotBlank), now())
 

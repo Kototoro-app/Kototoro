@@ -44,10 +44,9 @@ struct ContentView: View {
                         }
                         // The tab already carries the count; the row repeats it with the system badge only.
                         .badge(repositories.updatesCount)
+                        // The queue and its settings are one page: speed and retries sit under the queue there.
                         NavigationLink { ReaderDownloadsView() } label: { Label("下载", systemImage: "arrow.down.circle") }
                             .accessibilityIdentifier("settings.downloads")
-                        NavigationLink { DownloadSettingsView() } label: { Label("下载设置", systemImage: "slider.horizontal.3") }
-                            .accessibilityIdentifier("settings.downloadSettings")
                         NavigationLink { BackupView() } label: { Label("备份与恢复", systemImage: "externaldrive") }
                             .accessibilityIdentifier("settings.backup")
                         NavigationLink { GoogleDriveSyncView(model: library.googleDrive) } label: {
