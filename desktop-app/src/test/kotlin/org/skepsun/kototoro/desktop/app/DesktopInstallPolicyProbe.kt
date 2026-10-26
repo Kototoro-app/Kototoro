@@ -126,6 +126,7 @@ internal object DesktopInstallPolicyProbe {
                 onNodeWithTag("nav:更多").performClick(); idle()
                 onNodeWithTag("nav:扩展与仓库").performClick(); idle()
                 val address = "http://127.0.0.1:${server.address.port}/index.pb"
+                onNodeWithTag("extension-add").performClick(); idle()
                 onNodeWithTag("repository-url").performTextInput(address)
                 onNodeWithTag("repository-add").performClick(); idle()
                 onNodeWithTag("extension-list").performScrollToNode(hasTestTag("extension-install:${metadata.packageName}"))
@@ -190,6 +191,7 @@ internal object DesktopInstallPolicyProbe {
                 check(controller.state.value.installedExtensions[metadata.packageName] == metadata.versionCode)
                 onNodeWithTag("nav:更多").performClick(); idle()
                 onNodeWithTag("nav:扩展与仓库").performClick(); idle()
+                onNodeWithTag("extensions-tab:1").performClick(); idle()
                 onNodeWithTag("repository:$address").performScrollTo().performClick(); idle()
                 onNodeWithTag("extension-list").performScrollToNode(hasTestTag("extension-install:${metadata.packageName}"))
                 onNodeWithTag("extension-install:${metadata.packageName}").performClick(); idle()

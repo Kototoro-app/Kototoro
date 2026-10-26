@@ -1,21 +1,22 @@
 package org.skepsun.kototoro.settings.compose
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.settings.PreferenceEditMode
+import org.skepsun.kototoro.core.ui.settings.ProxyMode
+import org.skepsun.kototoro.core.ui.settings.ProxySettingsContent
+import org.skepsun.kototoro.core.ui.settings.ProxySettingsUiState
+import org.skepsun.kototoro.core.ui.settings.ProxyTextField
 import java.net.Proxy
 
+/** Android observes/persists preferences; the page and its editors are shared with desktop. */
 @Composable
 fun ProxySettingsScreen(
     settings: AppSettings,
@@ -23,104 +24,32 @@ fun ProxySettingsScreen(
     isTestRunning: Boolean,
     onTestConnection: () -> Unit,
 ) {
-    val proxyType by settings.observeAsState(AppSettings.KEY_PROXY_TYPE) { proxyType }
-    val proxyAddress by settings.observeAsState(AppSettings.KEY_PROXY_ADDRESS) { proxyAddress.orEmpty() }
-    val proxyPort by settings.observeAsState(AppSettings.KEY_PROXY_PORT) {
+    val type by settings.observeAsState(AppSettings.KEY_PROXY_TYPE) { proxyType }
+    val address by settings.observeAsState(AppSettings.KEY_PROXY_ADDRESS) { proxyAddress.orEmpty() }
+    val port by settings.observeAsState(AppSettings.KEY_PROXY_PORT) {
         prefs.getString(AppSettings.KEY_PROXY_PORT, "").orEmpty()
     }
-    val proxyLogin by settings.observeAsState(AppSettings.KEY_PROXY_LOGIN) { proxyLogin.orEmpty() }
-    val proxyPassword by settings.observeAsState(AppSettings.KEY_PROXY_PASSWORD) { proxyPassword.orEmpty() }
-    val isProxyEnabled = proxyType != Proxy.Type.DIRECT
-    val isProxyConfigured = !isProxyEnabled || (
-        proxyAddress.isNotBlank() &&
-            proxyPort.toIntOrNull() in 1..0xFFFF
-        )
-    val typeOptions = listOf(
-        SettingsChoiceOption(Proxy.Type.DIRECT.name, stringResource(R.string.disabled)),
-        SettingsChoiceOption(Proxy.Type.HTTP.name, "HTTP"),
-        SettingsChoiceOption(Proxy.Type.SOCKS.name, "SOCKS"),
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(top = settingsContentTopInset())
+    val login by settings.observeAsState(AppSettings.KEY_PROXY_LOGIN) { proxyLogin.orEmpty() }
+    val password by settings.observeAsState(AppSettings.KEY_PROXY_PASSWORD) { proxyPassword.orEmpty() }
+    ProxySettingsContent(
+        state = ProxySettingsUiState(ProxyMode.valueOf(type.name), address, port, login, password,
+            configured = type == Proxy.Type.DIRECT || address.isNotBlank() && port.toIntOrNull() in 1..65535,
+            testRunning = isTestRunning, testSummary = testSummary),
+        onModeChange = { settings.prefs.edit().putString(AppSettings.KEY_PROXY_TYPE, it.name).apply() },
+        onTextChange = { field, value ->
+            val key = when (field) {
+                ProxyTextField.ADDRESS -> AppSettings.KEY_PROXY_ADDRESS
+                ProxyTextField.PORT -> AppSettings.KEY_PROXY_PORT
+                ProxyTextField.USERNAME -> AppSettings.KEY_PROXY_LOGIN
+                ProxyTextField.PASSWORD -> AppSettings.KEY_PROXY_PASSWORD
+            }
+            settings.prefs.edit().putString(key, value).apply()
+            true
+        },
+        onTestConnection = onTestConnection,
+        editMode = if (LocalUiPresentationConfig.current.isTv) PreferenceEditMode.DIALOG else PreferenceEditMode.INLINE,
+        modifier = Modifier.fillMaxSize().padding(top = settingsContentTopInset())
             .padding(horizontal = SettingsContentHorizontalPadding, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        SettingsPreferenceGroup(title = stringResource(R.string.network)) {
-            item {
-                SettingsChoicePreference(
-                    title = stringResource(R.string.type),
-                    iconRes = R.drawable.ic_dns,
-                    value = proxyType.name,
-                    options = typeOptions,
-                    onValueChange = { value ->
-                        settings.prefs.edit().putString(AppSettings.KEY_PROXY_TYPE, value).apply()
-                    },
-                )
-            }
-            item {
-                SettingsTextInputPreference(
-                    title = stringResource(R.string.address),
-                    iconRes = R.drawable.ic_web,
-                    value = proxyAddress,
-                    enabled = isProxyEnabled,
-                    onValueChange = { value ->
-                        settings.prefs.edit().putString(AppSettings.KEY_PROXY_ADDRESS, value).apply()
-                    },
-                )
-            }
-            item {
-                SettingsTextInputPreference(
-                    title = stringResource(R.string.port),
-                    iconRes = R.drawable.ic_plug,
-                    value = proxyPort,
-                    enabled = isProxyEnabled,
-                    onValueChange = { value ->
-                        settings.prefs.edit().putString(AppSettings.KEY_PROXY_PORT, value).apply()
-                    },
-                )
-            }
-            item {
-                SettingsActionPreference(
-                    title = stringResource(R.string.test_connection),
-                    iconRes = R.drawable.ic_plug,
-                    summary = testSummary ?: if (!isProxyConfigured) {
-                        stringResource(R.string.invalid_proxy_configuration)
-                    } else {
-                        null
-                    },
-                    enabled = isProxyEnabled && isProxyConfigured && !isTestRunning,
-                    onClick = onTestConnection,
-                )
-            }
-        }
-        SettingsPreferenceGroup(title = stringResource(R.string.authorization_optional)) {
-            item {
-                SettingsTextInputPreference(
-                    title = stringResource(R.string.username),
-                    iconRes = R.drawable.ic_user,
-                    value = proxyLogin,
-                    enabled = isProxyEnabled,
-                    onValueChange = { value ->
-                        settings.prefs.edit().putString(AppSettings.KEY_PROXY_LOGIN, value).apply()
-                    },
-                )
-            }
-            item {
-                SettingsTextInputPreference(
-                    title = stringResource(R.string.password),
-                    iconRes = R.drawable.ic_key,
-                    value = proxyPassword,
-                    enabled = isProxyEnabled,
-                    isPassword = true,
-                    onValueChange = { value ->
-                        settings.prefs.edit().putString(AppSettings.KEY_PROXY_PASSWORD, value).apply()
-                    },
-                )
-            }
-        }
-    }
+        renderDialog = { AndroidPreferenceDialog(it) },
+    )
 }

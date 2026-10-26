@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.list.ui.compose
 
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
@@ -403,25 +402,16 @@ fun AppContentListRoute(
     }
 
     pendingMarkAsCompletedItems?.let { itemsToMark ->
-        AlertDialog(
-            onDismissRequest = { pendingMarkAsCompletedItems = null },
-            title = { Text(text = stringResource(org.skepsun.kototoro.R.string.mark_as_completed)) },
-            text = { Text(text = stringResource(org.skepsun.kototoro.R.string.mark_as_completed_prompt)) },
-            confirmButton = {
-                TvTextButton(
-                    onClick = {
-                        onMarkAsCompletedSelection?.invoke(itemsToMark)
-                        pendingMarkAsCompletedItems = null
-                    },
-                ) {
-                    Text(text = stringResource(android.R.string.ok))
-                }
+        ContentActionConfirmationDialog(
+            title = stringResource(org.skepsun.kototoro.R.string.mark_as_completed),
+            message = stringResource(org.skepsun.kototoro.R.string.mark_as_completed_prompt),
+            confirmLabel = stringResource(android.R.string.ok),
+            cancelLabel = stringResource(android.R.string.cancel),
+            onConfirm = {
+                onMarkAsCompletedSelection?.invoke(itemsToMark)
+                pendingMarkAsCompletedItems = null
             },
-            dismissButton = {
-                TvTextButton(onClick = { pendingMarkAsCompletedItems = null }) {
-                    Text(text = stringResource(android.R.string.cancel))
-                }
-            },
+            onDismiss = { pendingMarkAsCompletedItems = null },
         )
     }
 

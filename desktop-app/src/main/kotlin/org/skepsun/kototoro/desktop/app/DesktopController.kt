@@ -841,11 +841,11 @@ class DesktopController(
      * user chose this file, so `ASK_EVERY_TIME` means "install it and show its sources", the question belongs to the
      * catalogue row, which is where a repository names dozens of sources at once.
      */
-    fun importJar(path: Path) = action {
+    fun importJar(path: Path, destination: DesktopScreen = DesktopScreen.EXPLORE) = action {
         val kind = path.installKind()
         val policy = state.value.extensionInstallPolicies.policyFor(kind)
         val extension = session.importJar(path, policy != ExtensionInstallPolicy.INSTALL_ONLY)
-        publishInstallation(extension.label, desktopText("extensions.imported"), DesktopScreen.EXPLORE)
+        publishInstallation(extension.label, desktopText("extensions.imported"), destination)
     }
 
     /**
@@ -920,6 +920,20 @@ class DesktopController(
         require(url.isNotEmpty()) { desktopText("jsonSources.addressRequired") }
         mutableState.update { it.copy(screen = DesktopScreen.EXTENSIONS) }
         val result = session.importJsonSources(url, title?.trim()?.takeIf(String::isNotEmpty))
+        publishJsonSources(result)
+    }
+
+    fun importExtensionFile(path: Path) = if (path.fileName.toString().endsWith(".json", ignoreCase = true)) {
+        action {
+            val content = withContext(Dispatchers.IO) { Files.readString(path) }
+            val result = session.importJsonDocument(content, path.toUri().toString(), path.fileName.toString())
+            publishJsonSources(result)
+        }
+    } else {
+        importJar(path, DesktopScreen.EXTENSIONS)
+    }
+
+    private suspend fun publishJsonSources(result: org.skepsun.kototoro.tvbox.TvBoxImportResult) {
         require(result.sources.isNotEmpty()) {
             result.errors.firstOrNull() ?: desktopText("jsonSources.noneFound")
         }
@@ -929,7 +943,7 @@ class DesktopController(
         require(session.jsonSources.add(stored)) { desktopText("jsonSources.saveFailed") }
         session.reloadJsonSources()
         mutableState.update {
-            it.copy(sources = sourceDescriptors(), jsonSources = session.jsonSourceList(),
+            it.copy(screen = DesktopScreen.EXTENSIONS, sources = sourceDescriptors(), jsonSources = session.jsonSourceList(),
                 message = desktopText("jsonSources.added", result.sources.size) +
                     if (result.skippedSpiderSites > 0) {
                         " · " + desktopText("jsonSources.skipped", result.skippedSpiderSites)
@@ -939,8 +953,10 @@ class DesktopController(
     }
 
     /** Drops an imported JSON source; the works it supplied stay in the library, as Android keeps them. */
-    fun removeJsonSource(id: String) = action {
-        require(session.jsonSources.remove(id)) { desktopText("jsonSources.saveFailed") }
+    fun removeJsonSource(id: String) = removeJsonSources(listOf(id))
+
+    fun removeJsonSources(ids: List<String>) = action {
+        require(session.jsonSources.removeAll(ids.toSet())) { desktopText("jsonSources.saveFailed") }
         session.reloadJsonSources()
         mutableState.update {
             it.copy(sources = sourceDescriptors(), jsonSources = session.jsonSourceList(),

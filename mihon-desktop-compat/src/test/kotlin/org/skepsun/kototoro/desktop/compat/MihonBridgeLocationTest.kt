@@ -11,7 +11,12 @@ class MihonBridgeLocationTest {
 
     @Test
     fun `packaged bridge is discovered relative to Compose resources`() = properties(null) {
-        assertEquals(bridge().toFile(), MihonDesktopPlatform.defaultBridgeExecutable())
+        assertEquals(bridge().toFile(), MihonDesktopPlatform.defaultBridgeExecutable("Windows 11"))
+    }
+
+    @Test
+    fun `macOS never discovers a packaged Windows executable`() = properties(null) {
+        assertNull(MihonDesktopPlatform.defaultBridgeExecutable("Mac OS X"))
     }
 
     @Test

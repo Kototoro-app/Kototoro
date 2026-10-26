@@ -38,7 +38,6 @@ import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.normalized
 
-val LocalMaterialExpressiveComponentsEnabled = staticCompositionLocalOf { false }
 val LocalInterfaceStyle = staticCompositionLocalOf { InterfaceStyle.MATERIAL_3_EXPRESSIVE }
 val LocalBackgroundStyle = staticCompositionLocalOf { BackgroundStyle.DEFAULT }
 val LocalAmoledTheme = staticCompositionLocalOf { false }
@@ -149,6 +148,14 @@ fun KototoroTheme(
         LocalMotionStyle provides stylePolicy.motionStyle,
         LocalSurfaceStyle provides stylePolicy.surfaceStyle,
         LocalBackgroundStyle provides backgroundStyle,
+        LocalIsIosInterfaceStyle provides (effectiveInterfaceStyle == InterfaceStyle.IOS),
+        LocalArtworkBackdrop provides backgroundStyle.artworkBackdrop,
+        org.skepsun.kototoro.settings.compose.LocalSettingsDialogRenderer provides { content ->
+            org.skepsun.kototoro.settings.compose.AndroidPreferenceDialog(content)
+        },
+        org.skepsun.kototoro.settings.compose.LocalSettingsIconResolver provides { id ->
+            org.skepsun.kototoro.core.ui.compose.rememberSafePainter(id)
+        },
         LocalAmoledTheme provides effectiveAmoledTheme,
         org.skepsun.kototoro.reader.ui.compose.panel.LocalReaderPanelGlass provides
             org.skepsun.kototoro.reader.ui.compose.panel.AndroidReaderPanelGlass,

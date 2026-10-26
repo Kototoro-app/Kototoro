@@ -38,7 +38,9 @@ class AndroidUiStrings(private val context: Context) : UiStrings {
             // The application id carries the build suffix; the namespace is what the resources were compiled under.
             context.resources.getIdentifier(name, type, context.packageName)
                 .takeIf { it != 0 }
-                ?: context.resources.getIdentifier(name, type, NAMESPACE)
+                ?: context.resources.getIdentifier(name, type, NAMESPACE).takeIf { it != 0 }
+                // The framework's own strings ("ok"), which the system already translates.
+                ?: context.resources.getIdentifier(name, type, "android")
         }
         return id.takeIf { it != 0 }
     }

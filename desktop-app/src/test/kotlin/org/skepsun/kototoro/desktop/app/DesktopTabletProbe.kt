@@ -2,6 +2,7 @@ package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.asSkiaBitmap
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -40,6 +41,13 @@ internal object DesktopTabletProbe {
                     waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy }
                     waitForIdle()
                     check(controller.state.value.error == null) { controller.state.value.error.orEmpty() }
+                }
+                fun selectionAction(tag: String) {
+                    if (onAllNodesWithTag(tag).fetchSemanticsNodes().isEmpty()) {
+                        onNodeWithTag("library-selection-more").performClick()
+                    }
+                    onNodeWithTag(tag).performClick()
+                    idle()
                 }
                 fun snapshot(label: String) {
                     Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
@@ -207,6 +215,7 @@ internal object DesktopTabletProbe {
                 onNodeWithTag("library-filters").performClick(); idle()
                 onNodeWithTag("library-reading:UNREAD").performClick(); idle()
                 onNodeWithTag("content:${content.id}").assertDoesNotExist()
+                onNodeWithContentDescription(desktopText("library.filterWithCount", 1)).assertExists()
                 snapshot("library-filter")
                 onNodeWithTag("library-filter-reset").performClick(); idle()
                 onNodeWithTag("library-filter-scrollbar").assertExists()
@@ -216,9 +225,18 @@ internal object DesktopTabletProbe {
                 onNodeWithTag("library-category:${category.id}").performClick(); idle()
                 check(controller.state.value.librarySelection.categoryId == category.id)
                 onNodeWithTag("library-filters").performClick(); idle()
-                onNodeWithTag("library-source:${content.source.name}").performScrollTo().performClick(); idle()
+                // Android's facet dropdown: the source list opens as a menu that stays open while sources toggle.
+                onNodeWithTag("library-sources-open").performScrollTo().performClick(); idle()
+                onNodeWithTag("library-source:${content.source.name}").performClick(); idle()
                 check(controller.state.value.librarySelection.filterCount == 2)
                 onNodeWithTag("content:${content.id}").assertExists()
+                snapshotTag("library-filter-panel", "library-filter-sources")
+                onNodeWithTag("library-sources-reset").performClick(); idle()
+                check(controller.state.value.librarySelection.sources.isEmpty())
+                // A click outside the menu closes it and leaves the drawer open.
+                onNodeWithTag("library-filter-panel").performTouchInput { click(Offset(6f, 6f)) }; idle()
+                onNodeWithTag("library-source:${content.source.name}").assertDoesNotExist()
+                onNodeWithTag("library-filter-panel").assertExists()
                 onNodeWithTag("library-filter-reset").performClick(); idle()
                 // Android's tag filter group: seed one tagged work, then narrow the grid down to it.
                 val tag = ContentTag("Drama", "drama", content.source)
@@ -331,7 +349,11 @@ internal object DesktopTabletProbe {
                 onNodeWithTag("content-grid").assertExists()
                 onNodeWithTag("content-list").assertDoesNotExist()
                 // Android edits categories on their own screen; the desktop does it in a dialog over the grid.
+                // Category management sits in the capsule's "more" menu, as Android's page actions do.
+                onNodeWithTag("library-more").performClick(); idle()
+                onNodeWithTag("library-refresh").assertExists()
                 onNodeWithTag("library-categories-manage").performClick(); idle()
+                onNodeWithTag("library-categories-manage").assertDoesNotExist()
                 onNodeWithTag("category-dialog").assertExists()
                 onNodeWithTag("category-new-field").performTextInput("新刊"); idle()
                 onNodeWithTag("category-new-add").performClick(); idle()
@@ -377,7 +399,7 @@ internal object DesktopTabletProbe {
                 onNodeWithTag("library-selection-count").assertExists()
                 onNodeWithTag("content-selected:${content.id}", useUnmergedTree = true).assertExists()
                 snapshot("library-selection")
-                onNodeWithTag("library-selection-categories").performClick(); idle()
+                selectionAction("library-selection-categories")
                 onNodeWithTag("library-category-pick:${category.id}").assertExists()
                 snapshotTag("library-category-pick-dialog", "library-category-pick")
                 onNodeWithTag("library-category-pick:${category.id}").performClick()
@@ -388,7 +410,7 @@ internal object DesktopTabletProbe {
                 onNodeWithTag("library-selection-count").assertDoesNotExist()
                 // Cancelling the removal dialog leaves the shelf untouched.
                 onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
-                onNodeWithTag("library-selection-remove").performClick(); idle()
+                selectionAction("library-selection-remove")
                 onNodeWithTag("library-selection-confirm").assertExists()
                 snapshotTag("library-selection-dialog", "library-selection-remove")
                 onNodeWithTag("library-selection-dismiss").performClick(); idle()
@@ -400,12 +422,12 @@ internal object DesktopTabletProbe {
                 val partial = runBlocking { session.library.progress(content.id) }
                 check(partial != null && partial.percent < 1f) { "the reader left partial progress" }
                 onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
-                onNodeWithTag("library-selection-complete").performClick(); idle()
+                selectionAction("library-selection-complete")
                 onNodeWithTag("library-complete-dialog").assertExists()
                 snapshotTag("library-complete-dialog", "library-selection-complete")
                 onNodeWithTag("library-complete-dismiss").performClick(); idle()
                 check(runBlocking { session.library.progress(content.id) }?.percent == partial.percent)
-                onNodeWithTag("library-selection-complete").performClick(); idle()
+                selectionAction("library-selection-complete")
                 onNodeWithTag("library-complete-confirm").performClick(); idle()
                 val completed = runBlocking { session.library.progress(content.id) }
                 val stored = runBlocking { session.library.find(content.id) }
@@ -417,15 +439,17 @@ internal object DesktopTabletProbe {
                 // Android's batch pin on the favourites shelf: the flag lands on the favourites row, the card grows a
                 // pin badge, and the selected works lead every order until they are unpinned again.
                 onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
-                onNodeWithTag("library-selection-pin").performClick(); idle()
+                selectionAction("library-selection-pin")
                 check(controller.state.value.library.entries.first { it.content.id == content.id }.isPinned)
                 check(runBlocking { session.storage.database.getFavouritesDao().isPinned(listOf(content.id)) } == true)
                 check(controller.state.value.message == desktopText("library.pinnedCount", 1))
                 onNodeWithTag("content-pinned:${content.id}", useUnmergedTree = true).assertExists()
                 snapshot("library-selection-pin")
                 // The button reads as a toggle, as Android's PIN action does once every selected work is pinned.
-                onNodeWithText(desktopText("library.selectionUnpin")).assertExists()
-                onNodeWithTag("library-selection-pin").performClick(); idle()
+                onNodeWithTag("library-selection-pin").assert(
+                    hasContentDescription(desktopText("library.selectionUnpin")) or
+                        hasText(desktopText("library.selectionUnpin")))
+                selectionAction("library-selection-pin")
                 check(!controller.state.value.library.entries.first { it.content.id == content.id }.isPinned)
                 check(runBlocking { session.storage.database.getFavouritesDao().isPinned(listOf(content.id)) } != true)
                 check(controller.state.value.message == desktopText("library.unpinnedCount", 1))
@@ -433,7 +457,7 @@ internal object DesktopTabletProbe {
                 // Android's SHARE on the favourites shelf: the selection's links land on the clipboard, which is
                 // where a Windows share sheet would have put them.
                 val sharedContent = controller.state.value.library.entries.first { it.content.id == content.id }.content
-                onNodeWithTag("library-selection-share").performClick(); idle()
+                selectionAction("library-selection-share")
                 val clipboard = DesktopClipboard.read()
                 check(clipboard != null && clipboard == "${sharedContent.title}\n \n${sharedContent.publicUrl}") {
                     "share text on the clipboard was ${clipboard?.take(120)}"
@@ -447,7 +471,7 @@ internal object DesktopTabletProbe {
                 // whole selection, each work keeping its own progress and its own saved chapters.
                 val beforeKeys = controller.downloads.state.value.mapTo(HashSet()) { it.key }
                 onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
-                onNodeWithTag("library-selection-download").performClick(); idle()
+                selectionAction("library-selection-download")
                 onNodeWithTag("library-download-dialog").assertExists()
                 snapshotTag("library-download-dialog", "library-selection-download")
                 onNodeWithTag("library-download:FIRST:10").performClick(); idle()
@@ -487,7 +511,7 @@ internal object DesktopTabletProbe {
                 check(migrateIndex >= 0) { "the work left the favourites shelf" }
                 onNodeWithTag("content-grid").performScrollToIndex(migrateIndex); idle()
                 onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
-                onNodeWithTag("library-selection-migrate").performClick(); idle()
+                selectionAction("library-selection-migrate")
                 onNodeWithTag("library-migrate-dialog").assertExists()
                 snapshotTag("library-migrate-dialog", "library-selection-migrate")
                 onNodeWithTag("library-migrate-source").performClick(); idle()
@@ -878,7 +902,7 @@ internal object DesktopTabletProbe {
                 runBlocking { controller.library(true).join() }; idle()
                 check(!runBlocking { session.library.isFavourite(content.id) }) { "the row starts unfavourited" }
                 onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
-                onNodeWithTag("library-selection-categories").performClick(); idle()
+                selectionAction("library-selection-categories")
                 onNodeWithTag("library-category-pick-dialog").assertExists()
                 snapshotTag("library-category-pick-dialog", "history-category-pick")
                 onNodeWithTag("library-category-pick:${category.id}").performClick()
@@ -888,7 +912,7 @@ internal object DesktopTabletProbe {
                     .categoryIds.toSet() == setOf(category.id))
                 check(controller.state.value.message == desktopText("library.categoriesUpdated", 1))
                 onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
-                onNodeWithTag("library-selection-categories").performClick(); idle()
+                selectionAction("library-selection-categories")
                 onNodeWithTag("library-category-pick:${category.id}").performClick()
                 onNodeWithTag("library-category-pick-confirm").performClick(); idle()
                 onNodeWithTag("library-category-pick-dialog").assertDoesNotExist()
@@ -897,14 +921,14 @@ internal object DesktopTabletProbe {
                 check(controller.state.value.historySelection.query.isEmpty())
                 // Android's history bar carries SAVE as well, so the batch download is offered on this shelf too.
                 onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
-                onNodeWithTag("library-selection-download").performClick(); idle()
+                selectionAction("library-selection-download")
                 onNodeWithTag("library-download-dialog").assertExists()
                 snapshotTag("library-download-dialog", "history-selection-download")
                 onNodeWithTag("library-download-dismiss").performClick(); idle()
                 onNodeWithTag("library-download-dialog").assertDoesNotExist()
                 onNodeWithTag("library-selection-cancel").performClick(); idle()
                 onNodeWithTag("content:${content.id}").performTouchInput { longClick() }; idle()
-                onNodeWithTag("library-selection-remove").performClick(); idle()
+                selectionAction("library-selection-remove")
                 onNodeWithTag("library-selection-dialog").assertExists()
                 snapshotTag("library-selection-dialog", "history-selection-remove")
                 onNodeWithTag("library-selection-confirm").performClick(); idle()
@@ -912,6 +936,28 @@ internal object DesktopTabletProbe {
                 onNodeWithTag("library-selection-count").assertDoesNotExist()
                 onNodeWithTag("nav:主页").performClick(); idle()
                 onNodeWithTag("home-history:${content.id}").assertDoesNotExist()
+                // The real host hoists shelf positions above routes, so disposing the shelf must not reset it.
+                runBlocking {
+                    repeat(40) { index ->
+                        session.library.addFavourite(content.copy(id = 80_000L + index, title = "Scroll work $index"))
+                    }
+                }
+                onNodeWithTag("nav:收藏").performClick(); idle()
+                controller.librarySelection(DesktopLibrarySelection())
+                controller.libraryDisplay(controller.state.value.libraryDisplay.copy(
+                    listMode = org.skepsun.kototoro.desktop.runtime.DesktopListMode.LIST))
+                idle()
+                onNodeWithTag("content-list").performScrollToIndex(30)
+                fun shelfOffset() = onNodeWithTag("content-list").fetchSemanticsNode().config[
+                    SemanticsProperties.VerticalScrollAxisRange].value()
+                val shelfBeforeLeaving = shelfOffset()
+                check(shelfBeforeLeaving > 0f)
+                onNodeWithTag("nav:更多").performClick(); idle()
+                onNodeWithTag("nav:收藏").performClick(); idle()
+                check(kotlin.math.abs(shelfOffset() - shelfBeforeLeaving) < 1f) {
+                    "Shelf position changed after route disposal: $shelfBeforeLeaving -> ${shelfOffset()}"
+                }
+                snapshot("library-restored-scroll")
             }
         } finally { runBlocking { controller.shutdown() } }
         println("DESKTOP_UI_OK=${args[0]}")

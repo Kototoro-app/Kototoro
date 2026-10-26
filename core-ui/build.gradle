@@ -13,7 +13,7 @@ def readerPanelIcons = ['ic_arrow_forward', 'ic_settings', 'ic_reader_ltr', 'ic_
     'ic_bookmark', 'ic_save', 'ic_crop', 'ic_timer', 'ic_screen_rotation', 'ic_download', 'ic_web', 'ic_translate',
     'ic_tap', 'ic_prev', 'ic_next', 'ic_more_vert', 'ic_zoom_in', 'ic_zoom_out', 'ic_timer_run', 'ic_bookmark_added',
     'ic_screen_rotation_lock', 'ic_current_chapter', 'ic_sort_desc', 'ic_search', 'ic_tts_close', 'ic_delete',
-    'ic_storage', 'ic_save_ok', 'ic_new']
+    'ic_storage', 'ic_save_ok', 'ic_new', 'ic_check', 'ic_notification', 'ic_eye_off', 'ic_lock', 'ic_lock_open']
 def generatedIconSources = layout.buildDirectory.dir('generated/reader-panel-icons/kotlin')
 def generateReaderPanelIcons = tasks.register('generateReaderPanelIcons') {
     def vectors = readerPanelIcons.collect { rootProject.file("app/src/main/res/drawable/${it}.xml") }
@@ -67,7 +67,7 @@ kotlin {
         commonMain.dependencies {
             api compose.runtime
             api compose.foundation
-            api compose.material3
+            api libs.jetbrains.compose.material3
             api project(':backdrop')
             // Paged transition semantics (slot motion inputs) shared with the reader scenes.
             api project(':reader-core')
@@ -108,6 +108,9 @@ def verifyUiStrings = tasks.register('verifyUiStrings') {
     inputs.file(contentTypes)
     outputs.upToDateWhen { false }
     doLast {
+        // Android framework strings (android.R.string) that hosts resolve themselves: Android from the system,
+        // Windows from its own catalog (DesktopUiStrings).
+        def frameworkStrings = ['ok'] as Set
         def declared = new HashSet<String>()
         catalogs.files.each { file ->
             def root = new groovy.xml.XmlParser(false, false).parse(file)
@@ -126,7 +129,7 @@ def verifyUiStrings = tasks.register('verifyUiStrings') {
                 lookup.matcher(line).each { match ->
                     def name = match[1]
                     found << name
-                    if (!(name in declared)) missing << "${file.name}: ${name}".toString()
+                    if (!(name in declared) && !(name in frameworkStrings)) missing << "${file.name}: ${name}".toString()
                 }
             }
         }

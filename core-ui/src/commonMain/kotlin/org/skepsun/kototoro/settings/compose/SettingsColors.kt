@@ -9,8 +9,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.Modifier
-import org.skepsun.kototoro.core.prefs.InterfaceStyle
-import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalIsIosInterfaceStyle
 
 private val IosLightSecondaryLabel = Color(0xFF8E8E93)
 private val IosDarkSecondaryLabel = Color(0xFF98989D)
@@ -20,30 +19,30 @@ private val IosLightChevron = Color(0xFFC7C7CC)
 private val IosDarkChevron = Color(0xFF48484A)
 
 @Composable
-internal fun settingsScreenBackgroundColor(): Color = MaterialTheme.colorScheme.background
+fun settingsScreenBackgroundColor(): Color = MaterialTheme.colorScheme.background
 
 @Composable
-internal fun settingsSectionLabelColor(): Color = if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+fun settingsSectionLabelColor(): Color = if (LocalIsIosInterfaceStyle.current) {
     if (MaterialTheme.colorScheme.background.luminance() < 0.5f) IosDarkSecondaryLabel else IosLightSecondaryLabel
 } else {
     MaterialTheme.colorScheme.primary
 }
 
 @Composable
-internal fun settingsSeparatorColor(): Color = if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+fun settingsSeparatorColor(): Color = if (LocalIsIosInterfaceStyle.current) {
     if (MaterialTheme.colorScheme.background.luminance() < 0.5f) IosDarkSeparator else IosLightSeparator
 } else {
     MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f)
 }
 
 @Composable
-internal fun settingsChevronColor(): Color = if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+fun settingsChevronColor(): Color = if (LocalIsIosInterfaceStyle.current) {
     if (MaterialTheme.colorScheme.background.luminance() < 0.5f) IosDarkChevron else IosLightChevron
 } else {
     MaterialTheme.colorScheme.onSurfaceVariant
 }
 
-internal fun Modifier.settingsIconBackground(
+fun Modifier.settingsIconBackground(
     baseColor: Color,
     shape: Shape,
     isIosStyle: Boolean,

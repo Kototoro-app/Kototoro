@@ -195,15 +195,16 @@ class MihonDesktopPlatform(
         private val processOwner = Any()
         private var claimed = false
         private fun disableBrowser() {
-            WebView.setProviderFactory { throw UnsupportedOperationException("Windows browser bridge is unavailable") }
+            WebView.setProviderFactory { throw UnsupportedOperationException("Desktop browser bridge is unavailable") }
         }
 
-        fun defaultBridgeExecutable(): File? {
+        fun defaultBridgeExecutable(osName: String = System.getProperty("os.name", "")): File? {
             val prop = System.getProperty("kototoro.compat.bridge.exe")
             if (!prop.isNullOrBlank()) {
                 val f = File(prop)
                 return f.takeIf { it.isFile }
             }
+            if (!osName.startsWith("Windows", ignoreCase = true)) return null
             return System.getProperty("compose.application.resources.dir")?.takeIf { it.isNotBlank() }
                 ?.let { File(it, "browser/kototoro-webview-bridge.exe") }?.takeIf { it.isFile }
         }

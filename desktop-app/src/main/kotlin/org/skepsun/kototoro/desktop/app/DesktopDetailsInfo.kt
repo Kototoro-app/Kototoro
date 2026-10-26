@@ -2,8 +2,6 @@ package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -25,6 +23,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.source.SourceContent
+import org.skepsun.kototoro.core.ui.compose.DetailsTagChip
+import org.skepsun.kototoro.core.ui.compose.DetailsTagChips
+import org.skepsun.kototoro.core.ui.compose.DetailsMetadataEntry
+import org.skepsun.kototoro.core.ui.compose.DetailsMetadataGrid
+import androidx.compose.ui.res.painterResource
 import org.skepsun.kototoro.desktop.runtime.DesktopReadingTime
 import org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings
 import java.awt.Toolkit
@@ -66,7 +69,6 @@ internal fun desktopReadingTimeText(value: DesktopReadingTime): String = when {
  * answer are left out instead of showing blanks. A tag the shared warn-list calls extreme keeps the chip but takes
  * the warning tint, the same signal Android's `ContentListMapper.tagTint` gives it.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DesktopDetailsInfo(
     content: SourceContent,
@@ -90,40 +92,34 @@ internal fun DesktopDetailsInfo(
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(desktopText("details.info"), style = MaterialTheme.typography.titleMedium)
-            status?.let { InfoRow(desktopText("details.statusLabel"), it, "details-status") }
-            rating?.let { InfoRow(desktopText("details.ratingLabel"), it, "details-rating") }
-            // Android's reading-time estimate, hidden while its switch is off or the work is too short to estimate.
-            readingTime?.takeUnless { it.isEmpty }?.let {
-                InfoRow(desktopText("details.readingTime"), desktopReadingTimeText(it), "details-reading-time")
+            // Android's details fact grid: icon + value in two columns, the label read out by the icon.
+            val facts = buildList {
+                status?.let {
+                    add(fact(desktopText("details.statusLabel"), it, desktopContentStateIcon(content.state),
+                        "details-status"))
+                }
+                rating?.let { add(fact(desktopText("details.ratingLabel"), it, "icons/ic_star_small.svg", "details-rating")) }
+                // Android's reading-time estimate, hidden while its switch is off or the work is too short to estimate.
+                readingTime?.takeUnless { it.isEmpty }?.let {
+                    add(fact(desktopText("details.readingTime"), desktopReadingTimeText(it), "icons/ic_timer.svg",
+                        "details-reading-time"))
+                }
+                if (altTitles.isNotEmpty()) {
+                    add(fact(desktopText("details.altTitles"), altTitles.joinToString(" · "),
+                        "icons/ic_info_outline.svg", "details-alt-titles"))
+                }
             }
-            if (altTitles.isNotEmpty()) {
-                InfoRow(desktopText("details.altTitles"), altTitles.joinToString(" · "), "details-alt-titles")
-            }
+            if (facts.isNotEmpty()) DetailsMetadataGrid(facts)
             if (tags.isNotEmpty()) {
                 Text(desktopText("details.tags"), color = Muted, fontSize = 12.sp)
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    tags.forEach { tag ->
-                        val warned = warnings.isTagWarning(tag)
-                        val tone = if (warned) Warn else Accent
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = tone.copy(alpha = .12f),
-                            modifier = Modifier
-                                .testTag("details-tag:$tag")
-                                .semantics { if (warned) this[DesktopWarnedTagKey] = true },
-                        ) {
-                            Text(
-                                tag,
-                                fontSize = 12.sp,
-                                color = tone,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            )
-                        }
-                    }
-                }
+                // Android's details tag chips; the warning decision is the shared warn-list behind 高亮敏感类别.
+                DetailsTagChips(
+                    tags = tags.map { tag -> DetailsTagChip(tag, tag, highlighted = warnings.isTagWarning(tag)) },
+                    chipModifier = { chip ->
+                        Modifier.testTag("details-tag:${chip.title}")
+                            .semantics { if (chip.highlighted) this[DesktopWarnedTagKey] = true }
+                    },
+                )
             }
             OutlinedButton(
                 onClick = {
@@ -142,12 +138,18 @@ internal fun DesktopDetailsInfo(
 }
 
 @Composable
-private fun InfoRow(label: String, value: String, tag: String) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.testTag(tag).semantics(mergeDescendants = true) {},
-    ) {
-        Text(label, color = Muted, fontSize = 12.sp)
-        Text(value, style = MaterialTheme.typography.bodyMedium)
-    }
+private fun fact(label: String, value: String, icon: String, tag: String) = DetailsMetadataEntry(
+    label, value, painterResource(icon),
+    modifier = Modifier.testTag(tag).semantics(mergeDescendants = true) {},
+)
+
+/** Android's `ContentState.iconResId`; UPCOMING's clock comes from the Material library, so the timer stands in. */
+private fun desktopContentStateIcon(state: String?): String = when (state) {
+    "ONGOING" -> "icons/ic_play.svg"
+    "FINISHED" -> "icons/ic_state_finished.svg"
+    "ABANDONED" -> "icons/ic_state_abandoned.svg"
+    "PAUSED" -> "icons/ic_action_pause.svg"
+    "UPCOMING" -> "icons/ic_timer.svg"
+    "RESTRICTED" -> "icons/ic_disable.svg"
+    else -> "icons/ic_info_outline.svg"
 }

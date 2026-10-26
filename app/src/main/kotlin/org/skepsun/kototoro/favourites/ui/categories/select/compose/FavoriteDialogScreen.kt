@@ -1,35 +1,20 @@
 package org.skepsun.kototoro.favourites.ui.categories.select.compose
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.state.ToggleableState
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.material.checkbox.MaterialCheckBox
+import org.skepsun.kototoro.list.ui.compose.CategoryChoice
+import org.skepsun.kototoro.list.ui.compose.CategoryChoicesContent
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
@@ -76,36 +61,16 @@ fun FavoriteCategoryDialog(
             )
         },
         text = {
-            Column {
-                if (allCategories.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.empty_favourite_categories),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(vertical = 16.dp),
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.heightIn(max = 360.dp),
-                    ) {
-                        items(
-                            items = allCategories,
-                            key = { it.id },
-                            contentType = { "category_row" },
-                        ) { category ->
-                            val isChecked = category.id in memberCategoryIds
-                            CategoryRow(
-                                category = category,
-                                isChecked = isChecked,
-                                onClick = { onCategoryToggle(category.id, !isChecked) },
-                            )
-                        }
-                    }
-                }
-                ShowAllCategoriesButton(
-                    isVisible = hasHiddenCategories,
-                    onClick = onShowAllCategories,
-                )
-            }
+            CategoryChoicesContent(
+                choices = allCategories.map { category ->
+                    CategoryChoice(category.id, category.title,
+                        if (category.id in memberCategoryIds) ToggleableState.On else ToggleableState.Off,
+                        tracking = category.isTrackingEnabled, hidden = !category.isVisibleInLibrary)
+                },
+                onToggle = onCategoryToggle,
+                hasHiddenCategories = hasHiddenCategories,
+                onShowAll = onShowAllCategories,
+            )
         },
         confirmButton = {
             TvTextButton(onClick = onDismiss) {
@@ -167,16 +132,7 @@ fun FavoriteCategoryDialog(
             )
         },
         text = {
-            Column {
-                FavoriteCategoryDialogContent(
-                    items = items,
-                    onCategoryToggle = onCategoryToggle,
-                )
-                ShowAllCategoriesButton(
-                    isVisible = hasHiddenCategories,
-                    onClick = onShowAllCategories,
-                )
-            }
+            FavoriteCategoryDialogContent(items, onCategoryToggle, hasHiddenCategories, onShowAllCategories)
         },
         confirmButton = {
             TvTextButton(onClick = onDismiss) {
@@ -197,143 +153,26 @@ fun FavoriteCategoryDialog(
 @Composable
 private fun FavoriteCategoryDialogContent(
     items: List<ListModel>,
-    onCategoryToggle: (categoryId: Long, isChecked: Boolean) -> Unit,
+    onCategoryToggle: (Long, Boolean) -> Unit,
+    hasHiddenCategories: Boolean,
+    onShowAllCategories: () -> Unit,
 ) {
-    if (items.size == 1) {
-        when (val item = items.first()) {
-            LoadingState -> {
-                CircularProgressIndicator(modifier = Modifier.padding(vertical = 16.dp))
-                return
-            }
-
-            is EmptyState -> {
-                Text(
-                    text = item.textPrimaryText?.toString()
-                        ?: stringResource(item.textPrimary.takeIf { it != 0 } ?: R.string.empty_favourite_categories),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(vertical = 16.dp),
-                )
-                return
-            }
-        }
-    }
-
-    LazyColumn(
-        modifier = Modifier.heightIn(max = 360.dp),
-    ) {
-        items(
-            items = items.filterIsInstance<ContentCategoryItem>(),
-            key = { it.category.id },
-            contentType = { "category_row" },
-        ) { item ->
-            CategoryRow(
-                item = item,
-                onClick = {
-                    onCategoryToggle(item.category.id, item.checkedState != MaterialCheckBox.STATE_CHECKED)
-                },
-            )
-        }
-    }
-}
-
-@Composable
-private fun CategoryRow(
-    category: FavouriteCategory,
-    isChecked: Boolean,
-    onClick: () -> Unit,
-) {
-    CategoryRow(
-        title = category.title,
-        state = if (isChecked) ToggleableState.On else ToggleableState.Off,
-        showTracker = category.isTrackingEnabled,
-        showHidden = !category.isVisibleInLibrary,
-        onClick = onClick,
-    )
-}
-
-@Composable
-private fun CategoryRow(
-    item: ContentCategoryItem,
-    onClick: () -> Unit,
-) {
-    CategoryRow(
-        title = item.category.title,
-        state = when (item.checkedState) {
-            MaterialCheckBox.STATE_CHECKED -> ToggleableState.On
-            MaterialCheckBox.STATE_INDETERMINATE -> ToggleableState.Indeterminate
-            else -> ToggleableState.Off
+    val empty = items.singleOrNull() as? EmptyState
+    CategoryChoicesContent(
+        choices = items.filterIsInstance<ContentCategoryItem>().map { item ->
+            CategoryChoice(item.category.id, item.category.title,
+                when (item.checkedState) {
+                    MaterialCheckBox.STATE_CHECKED -> ToggleableState.On
+                    MaterialCheckBox.STATE_INDETERMINATE -> ToggleableState.Indeterminate
+                    else -> ToggleableState.Off
+                }, tracking = item.isTrackerEnabled && item.category.isTrackingEnabled,
+                hidden = !item.category.isVisibleInLibrary)
         },
-        showTracker = item.isTrackerEnabled && item.category.isTrackingEnabled,
-        showHidden = !item.category.isVisibleInLibrary,
-        onClick = onClick,
+        onToggle = onCategoryToggle,
+        loading = items.singleOrNull() == LoadingState,
+        emptyMessage = empty?.textPrimaryText?.toString()
+            ?: stringResource(empty?.textPrimary?.takeIf { it != 0 } ?: R.string.empty_favourite_categories),
+        hasHiddenCategories = hasHiddenCategories,
+        onShowAll = onShowAllCategories,
     )
-}
-
-@Composable
-private fun CategoryRow(
-    title: String,
-    state: ToggleableState,
-    showTracker: Boolean,
-    showHidden: Boolean,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TriStateCheckbox(
-            state = state,
-            onClick = null,
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f),
-        )
-
-        if (showTracker) {
-            Icon(
-                painter = painterResource(R.drawable.ic_notification),
-                contentDescription = null,
-                modifier = Modifier.padding(horizontal = 4.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        if (showHidden) {
-            Icon(
-                painter = painterResource(R.drawable.ic_eye_off),
-                contentDescription = null,
-                modifier = Modifier.padding(horizontal = 4.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/**
- * Escape hatch for the Space category filter: the dialog lists what the Space shows, this
- * reveals the rest for this dialog session without touching the Space preference.
- */
-@Composable
-private fun ShowAllCategoriesButton(
-    isVisible: Boolean,
-    onClick: () -> Unit,
-) {
-    if (!isVisible) {
-        return
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        TvTextButton(onClick = onClick) {
-            Text(stringResource(R.string.show_all_categories))
-        }
-    }
 }

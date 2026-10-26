@@ -46,7 +46,9 @@ class DesktopJsonSources(private val store: SourcePreferences) {
         return save(merged.values.toList())
     }
 
-    fun remove(id: String): Boolean = save(all().filterNot { it.id == id })
+    fun remove(id: String): Boolean = removeAll(setOf(id))
+
+    fun removeAll(ids: Set<String>): Boolean = save(all().filterNot { it.id in ids })
 
     private fun save(sources: List<DesktopJsonSource>): Boolean = store.edit(
         SourcePreferenceEdit(changes = mapOf(KEY to SourcePreferenceValue.Text(Json.encodeToString(sources)))),

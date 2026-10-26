@@ -85,6 +85,7 @@ internal object DesktopRepositoriesProbe {
                 onNodeWithTag("nav:扩展与仓库").performClick(); idle()
                 if (write) {
                     val address = "http://127.0.0.1:${requireNotNull(server).address.port}/index.pb"
+                    onNodeWithTag("extension-add").performClick(); idle()
                     onNodeWithTag("repository-url").performTextInput(address)
                     onNodeWithTag("repository-add").performClick(); idle()
                     // APK-only entries are installable (converted on this machine); entries with no package are not.
@@ -104,10 +105,11 @@ internal object DesktopRepositoriesProbe {
                         "the dialog remembered an answer without the checkbox"
                     }
                     check(controller.state.value.sources.any { it.sourceId == 9007199254740993L })
-                    onNodeWithText("已安装").assertExists()
+                    onNodeWithTag("extension-install:${metadata.packageName}").assertTextContains("已安装")
                     // §181: Android's package header expands into the sources it declares; the label opens that
                     // source's own settings, the switch only enables or disables it.
                     val installedName = installedSourceName()
+                    onNodeWithTag("extensions-installed-tab").performClick(); idle()
                     onNodeWithTag("installed-list").performScrollToNode(
                         hasTestTag("extension-sources:${metadata.packageName}"))
                     check(controller.state.value.installedEntries.single().sourceNames == listOf(installedName)) {
@@ -151,11 +153,13 @@ internal object DesktopRepositoriesProbe {
                     currentJar.set(versioned(upgradedVersion))
                     currentIndex.set(currentIndex.get().copy(extensionList = ExtensionStoreIndex.ExtensionList(listOf(
                         extension.copy(versionCode = upgradedVersion)))))
+                    onNodeWithTag("extensions-tab:1").performClick(); idle()
                     onNodeWithTag("repository:$address").performClick(); idle()
                     onNodeWithText("更新").assertExists()
                     onNodeWithTag("extension-install:${metadata.packageName}").performClick(); idle()
                     check(session.registry.installed().single().metadata.versionCode == upgradedVersion)
                     check(requests.get() == 2)
+                    onNodeWithTag("extensions-installed-tab").performClick(); idle()
                     // A newer version found by "检查更新" in the installed list; the superseded artifacts are deleted.
                     val thirdVersion = upgradedVersion + 1
                     currentJar.set(versioned(thirdVersion))
@@ -174,8 +178,8 @@ internal object DesktopRepositoriesProbe {
                     check(controller.state.value.autoUpdateExtensions)
                     // Android's per-source switch: search narrows the dialog's list, and a switched-off source leaves
                     // the rail (browsing, search, suggestions) without being uninstalled.
-                    onNodeWithTag("source-switches-open").performClick(); idle()
-                    onNodeWithTag("source-switch-dialog").assertExists()
+                    onNodeWithTag("extensions-tab:0").performClick(); idle()
+                    onNodeWithTag("source-enable-list").assertExists()
                     val switchTag = "source-enabled:${installedSourceName()}"
                     onNodeWithTag("source-list-query").performTextInput("zzz-no-source"); idle()
                     onNodeWithText("没有匹配的来源").assertExists()
@@ -188,7 +192,7 @@ internal object DesktopRepositoriesProbe {
                     onNodeWithTag("source-enabled-filter:ENABLED").performClick(); idle()
                     onNodeWithTag(switchTag).assertExists()
                     check(controller.state.value.disabledSources.isEmpty())
-                    snapshotTag("source-switch-dialog", "filter-enabled")
+                    snapshotTag("extensions-page", "filter-enabled")
                     onNodeWithTag("source-switches-disable-all").performClick(); idle()
                     onNodeWithTag("source-switch-batch-confirm").assertExists()
                     onNodeWithText("禁用当前筛选结果中的 1 个源？").assertExists()
@@ -214,7 +218,7 @@ internal object DesktopRepositoriesProbe {
                     onNodeWithTag("source-selected:${installedSourceName()}").assertDoesNotExist()
                     check(controller.state.value.disabledSources.isEmpty())
                     onNodeWithTag("source-selection-all").performClick(); idle()
-                    snapshotTag("source-switch-dialog", "selection")
+                    snapshotTag("extensions-page", "selection")
                     onNodeWithTag("source-selection-disable").performClick(); idle()
                     check(controller.state.value.disabledSources == setOf(installedSourceName()))
                     // The write ended the mode, and the filter followed the row to the side it moved to.
@@ -226,7 +230,7 @@ internal object DesktopRepositoriesProbe {
                     onNodeWithTag("source-enabled-filter:ALL").performClick(); idle()
                     onNodeWithTag("source-enable-list").performScrollToNode(hasTestTag(switchTag))
                     onNodeWithTag(switchTag).assertIsOn()
-                    snapshotTag("source-switch-dialog", "sources")
+                    snapshotTag("extensions-page", "sources")
                     // §193: the selection bar's NSFW chip. The only installed source is a plain MANGA, so the chip
                     // reads 标记为 NSFW; one click forces the flag (Android's `setSourcesNsfw`) and ends the mode.
                     onNodeWithTag("source-selection-all").performClick(); idle()
@@ -238,7 +242,7 @@ internal object DesktopRepositoriesProbe {
                     // Now every selectable row reads as adult, so the same chip offers 取消 NSFW.
                     onNodeWithTag("source-selection-all").performClick(); idle()
                     onNodeWithText("取消NSFW").assertExists()
-                    snapshotTag("source-switch-dialog", "nsfw-marked")
+                    snapshotTag("extensions-page", "nsfw-marked")
                     onNodeWithTag("source-selection-nsfw").performClick(); idle()
                     check(controller.state.value.sourceNsfwOverrides.nsfw.isEmpty())
                     check(controller.state.value.sourceNsfwOverrides.sfw == setOf(installedSourceName()))
@@ -269,8 +273,9 @@ internal object DesktopRepositoriesProbe {
                     onNodeWithTag(switchTag).assertIsOff()
                     onNodeWithTag(switchTag).performClick(); idle()
                     check(controller.state.value.disabledSources.isEmpty())
-                    onNodeWithTag("source-switch-done").performClick(); idle()
-                    onNodeWithTag("source-switch-dialog").assertDoesNotExist()
+                    onNodeWithTag("extensions-tab:2").performClick(); idle()
+                    onNodeWithTag("extensions-installed-tab").performClick(); idle()
+                    onNodeWithTag("source-enable-list").assertDoesNotExist()
                     Files.writeString(root.resolve("expected-version.txt"), thirdVersion.toString())
                     snapshot("installed")
                     onNodeWithTag("nav:浏览").performClick(); idle()
@@ -285,13 +290,14 @@ internal object DesktopRepositoriesProbe {
                     // and the offline run proves the store kept it.
                     onNodeWithTag("nav:更多").performClick(); idle()
                     onNodeWithTag("nav:扩展与仓库").performClick(); idle()
-                    onNodeWithTag("source-switches-open").performClick(); idle()
+                    onNodeWithTag("extensions-tab:0").performClick(); idle()
                     val offSwitchTag = "source-enabled:${installedSourceName()}"
                     onNodeWithTag("source-enable-list").performScrollToNode(hasTestTag(offSwitchTag))
                     onNodeWithTag(offSwitchTag).performClick(); idle()
                     check(controller.state.value.disabledSources == setOf(installedSourceName()))
-                    snapshotTag("source-switch-dialog", "source-off")
-                    onNodeWithTag("source-switch-done").performClick(); idle()
+                    snapshotTag("extensions-page", "source-off")
+                    onNodeWithTag("extensions-tab:2").performClick(); idle()
+                    onNodeWithTag("extensions-installed-tab").performClick(); idle()
                     onNodeWithTag("nav:浏览").performClick(); idle()
                     onNodeWithTag("source:MIHON_9007199254740993").assertDoesNotExist()
                     // The rail and the wide grid carry different empty hints; either one proves the source is gone.
@@ -317,18 +323,19 @@ internal object DesktopRepositoriesProbe {
                 }
                 val recorded = session.storage.preferences.open("desktop_extensions").snapshot().getValue(metadata.packageName) as SourcePreferenceValue.Text
                 val jar = SourceProtocolJson.decodeFromString<SourceHostJar>(recorded.value)
-                check(Path.of(jar.path).startsWith(root.resolve("extensions")))
+                check(Path.of(jar.path).startsWith(root.toRealPath().resolve("extensions")))
                 check(Path.of(jar.path) != Path.of(args[2]))
                 if (!write) {
                     // Uninstall from the installed list: sources, install record and artifact all go.
                     onNodeWithTag("nav:更多").performClick(); idle()
                     onNodeWithTag("nav:扩展与仓库").performClick(); idle()
                     // The switch stayed off in the store, and the page opens already showing the disabled source.
-                    onNodeWithTag("source-switches-open").performClick(); idle()
+                    onNodeWithTag("extensions-tab:0").performClick(); idle()
                     val offSwitchTag = "source-enabled:${installedSourceName()}"
                     onNodeWithTag("source-enable-list").performScrollToNode(hasTestTag(offSwitchTag))
                     onNodeWithTag(offSwitchTag).assertIsOff()
-                    onNodeWithTag("source-switch-done").performClick(); idle()
+                    onNodeWithTag("extensions-tab:2").performClick(); idle()
+                    onNodeWithTag("extensions-installed-tab").performClick(); idle()
                     onNodeWithTag("installed-list")
                         .performScrollToNode(hasTestTag("extension-uninstall:${metadata.packageName}"))
                     onNodeWithTag("extension-uninstall:${metadata.packageName}").performClick(); idle()
@@ -340,6 +347,7 @@ internal object DesktopRepositoriesProbe {
                     check(!Files.exists(Path.of(jar.path))) { "artifact kept after uninstall" }
                     // Forgetting the repository drops the index entry; no artifact is touched by it.
                     val removed = controller.state.value.repositories.single().indexUrl
+                    onNodeWithTag("extensions-tab:1").performClick(); idle()
                     onNodeWithTag("repository-remove:$removed").performClick(); idle()
                     check(controller.state.value.repositories.isEmpty())
                     check(session.repositories.saved().isEmpty())

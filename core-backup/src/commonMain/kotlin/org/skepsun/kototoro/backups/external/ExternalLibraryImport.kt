@@ -149,7 +149,7 @@ class ExternalLibraryImport(
                         createdAt = historyTimestamp,
                         updatedAt = historyTimestamp,
                         chapterId = chapterId,
-                        page = 0,
+                        page = resolved.historyPage.coerceAtLeast(0),
                         scroll = 0f,
                         percent = percent,
                         deletedAt = 0L,

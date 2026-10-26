@@ -24,12 +24,28 @@ import org.skepsun.kototoro.core.ui.topbar.TopBarTabItem
 import org.skepsun.kototoro.core.ui.topbar.TopBarTabsRail
 import org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget
 import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
+import org.skepsun.kototoro.core.ui.compose.CompactFilterChip
+import org.skepsun.kototoro.core.ui.topbar.TopBarIconAction
+import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
+import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuText
+import org.skepsun.kototoro.core.ui.compose.CompactFilterChipFlow
+import org.skepsun.kototoro.core.ui.compose.FilterFacetChip
+import org.skepsun.kototoro.core.ui.compose.FilterFacetDropdown
+import org.skepsun.kototoro.core.ui.compose.FilterFacetOption
+import org.skepsun.kototoro.core.ui.compose.FilterPanelGroup
+import org.skepsun.kototoro.core.ui.compose.FilterPanelHeader
+import org.skepsun.kototoro.core.ui.compose.FilterPanelReset
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 
 /** Category ids are database ids (positive); the "all" tab needs one that can never collide. */
 private const val AllCategoriesTab = Long.MIN_VALUE
 
 @Composable
-internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
+internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAppState, enabled: Boolean,
+    collectionState: org.skepsun.kototoro.list.ui.compose.ContentCollectionState) {
     val history = state.screen == DesktopScreen.HISTORY
     val selection = if (history) state.historySelection else state.librarySelection
     var drawer by remember(history) { mutableStateOf(false) }
@@ -104,17 +120,28 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                 TopBarTitleBlock(if (history) desktopText("nav.history") else desktopText("nav.favourites"))
                 DesktopSearchField(selection.query, { update(selection.copy(query = it)) }, desktopText("library.search"), enabled = enabled,
                     modifier = Modifier.weight(1f), tag = "library-query")
+                // Android's action capsule: source filters, then this page's filter panel and its "more" menu.
                 DesktopSourceFilterControls(selection.sourceFilter, state.sources,
-                    { update(selection.copy(sourceFilter = it)) }, enabled, if (history) "history" else "library")
-                OutlinedButton({ drawer = !drawer }, modifier = Modifier.testTag("library-filters")) {
-                    Text(if (selection.filterCount == 0) desktopText("library.filterAndSort")
-                else desktopText("library.filterWithCount", selection.filterCount))
-                }
-                TextButton({ controller.library(history) }, enabled = enabled) { Text(desktopText("common.refresh")) }
-                if (!history) {
-                    TextButton({ managingCategories = true }, enabled = enabled,
-                        modifier = Modifier.testTag("library-categories-manage")) {
-                        Text(desktopText("library.categoriesTitle"))
+                    { update(selection.copy(sourceFilter = it)) }, enabled, if (history) "history" else "library") {
+                    TopBarIconAction(painterResource("icons/ic_sort.svg"),
+                        if (selection.filterCount == 0) desktopText("library.filterAndSort")
+                        else desktopText("library.filterWithCount", selection.filterCount),
+                        { drawer = !drawer }, active = selection.filterCount > 0,
+                        modifier = Modifier.testTag("library-filters"))
+                    var more by remember(history) { mutableStateOf(false) }
+                    Box {
+                        TopBarIconAction(painterResource("icons/ic_more_vert.svg"), desktopText("common.more"),
+                            { more = true }, inactiveTint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.testTag("library-more"))
+                        DropdownMenu(more, { more = false }) {
+                            CompactDropdownMenuItem({ CompactDropdownMenuText(desktopText("common.refresh")) },
+                                { more = false; controller.library(history) }, enabled = enabled,
+                                modifier = Modifier.testTag("library-refresh"))
+                            if (!history) CompactDropdownMenuItem(
+                                { CompactDropdownMenuText(desktopText("library.categoriesTitle")) },
+                                { more = false; managingCategories = true }, enabled = enabled,
+                                modifier = Modifier.testTag("library-categories-manage"))
+                        }
                     }
                 }
             }
@@ -151,120 +178,122 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                         selectedIds = checkedIds.takeIf { it.isNotEmpty() },
                         onToggleSelection = ::toggleSelection,
                         listMode = state.libraryDisplay.listMode,
+                        collectionState = collectionState,
                         metaOf = { content ->
                             content.authors.joinToString().ifBlank {
                                 sourceTitles[content.source.name] ?: content.source.name
                             }
                         })
                 }
-                else Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(if (state.library.entries.isEmpty()) desktopText("library.empty") else desktopText("library.emptyFiltered"),
-                        fontWeight = FontWeight.SemiBold)
-                    if (state.library.entries.isNotEmpty()) TextButton({ update(DesktopLibrarySelection()) },
-                        modifier = Modifier.testTag("library-clear-empty")) { Text(desktopText("library.clearEmpty")) }
-                    else Text(desktopText("library.emptyHint"), color = Muted)
-                }
+                else org.skepsun.kototoro.list.ui.compose.ContentCollectionEmpty(
+                    title = if (state.library.entries.isEmpty()) desktopText("library.empty")
+                        else desktopText("library.emptyFiltered"),
+                    subtitle = if (state.library.entries.isEmpty()) desktopText("library.emptyHint") else null,
+                    actionLabel = if (state.library.entries.isNotEmpty()) desktopText("library.clearEmpty") else null,
+                    onAction = { update(DesktopLibrarySelection()) },
+                    actionModifier = Modifier.testTag("library-clear-empty"),
+                    enabled = enabled,
+                    modifier = Modifier.align(Alignment.Center),
+                )
             }
         }
         if (drawer) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .12f)).clickable { drawer = false })
             Surface(Modifier.align(Alignment.CenterEnd).width(310.dp).fillMaxHeight()
                 .testTag("library-filter-panel"), shape = RoundedCornerShape(20.dp), shadowElevation = 12.dp) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(desktopText("library.filterAndSort"), modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-                        TextButton({ drawer = false }, modifier = Modifier.testTag("library-filter-close")) { Text(desktopText("common.close")) }
-                    }
+                // Android's favourites filter panel, group for group: titled cards of compact chips, a facet
+                // dropdown for the long source list, and the centred reset at the foot.
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterPanelHeader(desktopText("library.filterAndSort"), AndroidStrings["done"], { drawer = false },
+                        doneModifier = Modifier.testTag("library-filter-close"))
                     val scroll = rememberScrollState()
                     Box(Modifier.weight(1f)) {
                         Column(Modifier.fillMaxSize().padding(end = 12.dp).verticalScroll(scroll),
                             verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(desktopText("library.sort"), fontWeight = FontWeight.SemiBold)
-                            DesktopLibraryOrder.entries.forEach { order ->
-                                FilterRadio(order.title, selection.order == order, enabled, "library-order:${order.name}") {
-                                    update(selection.copy(order = order))
+                            FilterPanelGroup(desktopText("library.sort")) {
+                                FilterChoiceChips(DesktopLibraryOrder.entries, { it.title }, { selection.order == it },
+                                    enabled, { "library-order:${it.name}" }) { update(selection.copy(order = it)) }
+                            }
+                            FilterPanelGroup(desktopText("library.layout")) {
+                                FilterChoiceChips(org.skepsun.kototoro.desktop.runtime.DesktopListMode.entries,
+                                    { it.label }, { state.libraryDisplay.listMode == it }, enabled,
+                                    { "library-mode:${it.name}" }) {
+                                    controller.libraryDisplay(state.libraryDisplay.copy(listMode = it))
                                 }
                             }
-                            HorizontalDivider()
-                            Text(desktopText("library.layout"), fontWeight = FontWeight.SemiBold)
-                            org.skepsun.kototoro.desktop.runtime.DesktopListMode.entries.forEach { mode ->
-                                FilterRadio(mode.label, state.libraryDisplay.listMode == mode, enabled,
-                                    "library-mode:${mode.name}") {
-                                    controller.libraryDisplay(state.libraryDisplay.copy(listMode = mode))
+                            FilterPanelGroup(desktopText("library.progress")) {
+                                FilterChoiceChips(DesktopLibraryReading.entries, { it.title },
+                                    { selection.reading == it }, enabled, { "library-reading:${it.name}" }) {
+                                    update(selection.copy(reading = it))
                                 }
                             }
-                            HorizontalDivider()
-                            Text(desktopText("library.progress"), fontWeight = FontWeight.SemiBold)
-                            DesktopLibraryReading.entries.forEach { reading ->
-                                FilterRadio(reading.title, selection.reading == reading, enabled, "library-reading:${reading.name}") {
-                                    update(selection.copy(reading = reading))
+                            val shelfSources = remember(state.library, state.sources) {
+                                state.library.entries.map { it.content.source }.distinctBy { it.name }.map { source ->
+                                    source.name to (state.sources.firstOrNull { it.source.name == source.name }
+                                        ?.displayName ?: source.name)
                                 }
                             }
-                            HorizontalDivider()
-                            Text(desktopText("library.source"), fontWeight = FontWeight.SemiBold)
-                            state.library.entries.map { it.content.source }.distinctBy { it.name }.forEach { source ->
-                                val title = state.sources.firstOrNull { it.source.name == source.name }?.displayName ?: source.name
-                                val selected = source.name in selection.sources
-                                Row(Modifier.fillMaxWidth().testTag("library-source:${source.name}")
-                                    .clickable(enabled = enabled) {
-                                        update(selection.copy(sources = if (selected) selection.sources - source.name
-                                            else selection.sources + source.name))
-                                    }, verticalAlignment = Alignment.CenterVertically) {
-                                    Checkbox(selected, onCheckedChange = null, enabled = enabled)
-                                    Text(title, modifier = Modifier.padding(start = 12.dp))
+                            FilterPanelGroup(desktopText("library.source")) {
+                                val chosen = shelfSources.filter { it.first in selection.sources }
+                                FilterFacetDropdown(
+                                    label = facetLabel(desktopText("library.source"), chosen.map { it.second }),
+                                    options = shelfSources.map { (name, title) ->
+                                        FilterFacetOption(name, title, name in selection.sources)
+                                    },
+                                    onOptionClick = { name ->
+                                        update(selection.copy(sources = if (name in selection.sources)
+                                            selection.sources - name else selection.sources + name))
+                                    },
+                                    resetLabel = AndroidStrings["reset_filter"],
+                                    onReset = { update(selection.copy(sources = emptySet())) },
+                                    optionIcon = { option -> FacetOptionIcon(option.checked) },
+                                    leadingIcon = { FacetIcon("icons/ic_filter_menu.svg") },
+                                    trailingIcon = { FacetIcon("icons/ic_expand_more.svg") },
+                                    enabled = enabled,
+                                    modifier = Modifier.testTag("library-sources-open"),
+                                    optionModifier = { Modifier.testTag("library-source:$it") },
+                                    resetModifier = Modifier.testTag("library-sources-reset"),
+                                )
+                            }
+                            FilterPanelGroup(desktopText("library.tags")) {
+                                // The library's tag list is long and searchable, so the facet opens the tag picker.
+                                FilterFacetChip(
+                                    label = if (selection.tags.isEmpty()) desktopText("library.tagsChoose")
+                                        else desktopText("library.tagsSelected", selection.tags.size),
+                                    selected = selection.tags.isNotEmpty(),
+                                    onClick = { pickingTags = true },
+                                    leadingIcon = { FacetIcon("icons/ic_tag.svg") },
+                                    trailingIcon = { FacetIcon("icons/ic_expand_more.svg") },
+                                    enabled = enabled && tagChoices.isNotEmpty(),
+                                    modifier = Modifier.testTag("library-tags-open"),
+                                )
+                            }
+                            if (stateChoices.isNotEmpty()) FilterPanelGroup(desktopText("library.state")) {
+                                FilterToggleChips(stateChoices, { desktopContentStatusLabel(it) ?: it },
+                                    { it in selection.states }, enabled, { "library-state:$it" }) { name ->
+                                    update(selection.copy(states = if (name in selection.states)
+                                        selection.states - name else selection.states + name))
                                 }
                             }
-                            HorizontalDivider()
-                            Text(desktopText("library.tags"), fontWeight = FontWeight.SemiBold)
-                            OutlinedButton({ pickingTags = true }, enabled = enabled && tagChoices.isNotEmpty(),
-                                modifier = Modifier.fillMaxWidth().testTag("library-tags-open")) {
-                                Text(if (selection.tags.isEmpty()) desktopText("library.tagsChoose")
-                                else desktopText("library.tagsSelected", selection.tags.size))
-                            }
-                            if (stateChoices.isNotEmpty()) {
-                                HorizontalDivider()
-                                Text(desktopText("library.state"), fontWeight = FontWeight.SemiBold)
-                                stateChoices.forEach { name ->
-                                    val selected = name in selection.states
-                                    Row(Modifier.fillMaxWidth().testTag("library-state:$name")
-                                        .clickable(enabled = enabled) {
-                                            update(selection.copy(states = if (selected) selection.states - name
-                                                else selection.states + name))
-                                        }, verticalAlignment = Alignment.CenterVertically) {
-                                        Checkbox(selected, onCheckedChange = null, enabled = enabled)
-                                        Text(desktopContentStatusLabel(name) ?: name,
-                                            modifier = Modifier.padding(start = 12.dp))
-                                    }
+                            FilterPanelGroup(desktopText("library.download")) {
+                                FilterChoiceChips(DesktopLibraryDownload.entries, { it.title },
+                                    { selection.download == it }, enabled, { "library-download:${it.name}" }) {
+                                    update(selection.copy(download = it))
                                 }
                             }
-                            HorizontalDivider()
-                            Text(desktopText("library.download"), fontWeight = FontWeight.SemiBold)
-                            DesktopLibraryDownload.entries.forEach { download ->
-                                FilterRadio(download.title, selection.download == download, enabled,
-                                    "library-download:${download.name}") {
-                                    update(selection.copy(download = download))
-                                }
-                            }
-                            HorizontalDivider()
-                            Text(desktopText("library.quick"), fontWeight = FontWeight.SemiBold)
-                            DesktopLibraryMacro.choices(history).forEach { macro ->
-                                val selected = macro in selection.macros
-                                Row(Modifier.fillMaxWidth().testTag("library-macro:${macro.name}")
-                                    .clickable(enabled = enabled) {
-                                        update(selection.copy(macros = if (selected) selection.macros - macro
-                                            else selection.macros + macro))
-                                    }, verticalAlignment = Alignment.CenterVertically) {
-                                    Checkbox(selected, onCheckedChange = null, enabled = enabled)
-                                    Text(macro.title, modifier = Modifier.padding(start = 12.dp))
+                            FilterPanelGroup(desktopText("library.quick")) {
+                                FilterToggleChips(DesktopLibraryMacro.choices(history), { it.title },
+                                    { it in selection.macros }, enabled, { "library-macro:${it.name}" }) { macro ->
+                                    update(selection.copy(macros = if (macro in selection.macros)
+                                        selection.macros - macro else selection.macros + macro))
                                 }
                             }
                         }
                         VerticalScrollbar(rememberScrollbarAdapter(scroll), modifier = Modifier.align(Alignment.CenterEnd)
                             .fillMaxHeight().testTag("library-filter-scrollbar"))
                     }
-                    OutlinedButton({ update(DesktopLibrarySelection()) }, enabled = enabled,
-                        modifier = Modifier.fillMaxWidth().testTag("library-filter-reset")) { Text(desktopText("library.resetFilters")) }
+                    FilterPanelReset(desktopText("library.resetFilters"), { update(DesktopLibrarySelection()) },
+                        enabled = enabled, modifier = Modifier.testTag("library-filter-reset"))
                 }
             }
         }
@@ -354,11 +383,44 @@ private val org.skepsun.kototoro.desktop.runtime.DesktopListMode.label: String
         org.skepsun.kototoro.desktop.runtime.DesktopListMode.LIST -> desktopText("library.layout.list")
     }
 
+/** One chip per value, exactly one of them selected (Android's single-choice quick-filter groups). */
 @Composable
-private fun FilterRadio(title: String, selected: Boolean, enabled: Boolean, tag: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().testTag(tag).clickable(enabled = enabled, onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically) {
-        RadioButton(selected, onClick = null, enabled = enabled)
-        Text(title, modifier = Modifier.padding(start = 12.dp))
+private fun <T> FilterChoiceChips(values: List<T>, title: (T) -> String, selected: (T) -> Boolean, enabled: Boolean,
+    tag: (T) -> String, onPick: (T) -> Unit) {
+    CompactFilterChipFlow {
+        values.forEach { value ->
+            CompactFilterChip(selected(value), { onPick(value) }, title(value), enabled = enabled,
+                modifier = Modifier.testTag(tag(value)).semantics { role = Role.RadioButton })
+        }
     }
+}
+
+/** One chip per value, any of them on: the groups combine with "or" inside, as Android's chips do. */
+@Composable
+private fun <T> FilterToggleChips(values: List<T>, title: (T) -> String, selected: (T) -> Boolean, enabled: Boolean,
+    tag: (T) -> String, onToggle: (T) -> Unit) {
+    CompactFilterChipFlow {
+        values.forEach { value ->
+            CompactFilterChip(selected(value), { onToggle(value) }, title(value), enabled = enabled,
+                modifier = Modifier.testTag(tag(value)))
+        }
+    }
+}
+
+/** Android's facet label: the group title, its one chosen value, or `title · n`. */
+private fun facetLabel(title: String, chosen: List<String>): String = when (chosen.size) {
+    0 -> title
+    1 -> chosen.single()
+    else -> AndroidStrings.format("filter_group_selected_count", title, chosen.size)
+}
+
+@Composable
+private fun FacetIcon(path: String) {
+    Icon(painterResource(path), contentDescription = null, modifier = Modifier.size(18.dp))
+}
+
+@Composable
+private fun FacetOptionIcon(checked: Boolean) {
+    if (checked) Icon(painterResource("icons/ic_check.svg"), null, tint = MaterialTheme.colorScheme.primary)
+    else Spacer(Modifier.size(24.dp))
 }

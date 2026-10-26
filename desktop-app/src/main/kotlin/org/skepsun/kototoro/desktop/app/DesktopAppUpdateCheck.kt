@@ -30,11 +30,15 @@ internal object DesktopAppUpdateCheck {
         val stamped = DesktopAppVersion.load()
         val version = if (channelOverride == null) stamped else stamped.copy(
             channel = DesktopUpdateChannel.from(channelOverride))
-        val layout = runCatching { locateInstallLayout() }.getOrNull()
+        val windowsPackages = org.skepsun.kototoro.desktop.runtime.DesktopPlatform.current.supportsWindowsPackages
+        val layout = if (windowsPackages) runCatching { locateInstallLayout() }.getOrNull() else null
         val result = Properties()
         var published: DesktopUpdateRelease? = null
         var failure: Throwable? = null
         try {
+            require(windowsPackages) {
+                "Application update packages are currently available for Windows only"
+            }
             require(version.version != DesktopPackageVersion.UNKNOWN) {
                 "This copy carries no version stamp (desktop-version.properties), so it cannot compare itself"
             }

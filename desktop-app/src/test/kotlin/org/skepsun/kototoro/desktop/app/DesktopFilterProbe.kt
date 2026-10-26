@@ -54,6 +54,11 @@ internal object DesktopFilterProbe {
                         .single { it.name == name }
                     return onNodeWithTag("filter:${node.id}$suffix")
                 }
+                // Popular and latest are the first rows of the results bar's sort menu, as in Android's sort list.
+                fun listing(which: String) {
+                    onNodeWithTag("source-sort").performClick(); waitForIdle()
+                    onNodeWithTag("source-listing:$which").performClick()
+                }
                 fun choice(name: String, index: Int) {
                     // A short option set is chips on both hosts, so the option itself is the button.
                     control(name, ":option:$index").performScrollTo().performClick()
@@ -72,7 +77,7 @@ internal object DesktopFilterProbe {
                 onNodeWithTag("source:MIHON_9007199254740997").performClick()
                 received("popular:1")
                 onNodeWithTag("source-query").performTextReplacement("未应用查询")
-                onNodeWithText("热门").performClick()
+                listing("popular")
                 received("popular:1")
                 check(onNodeWithTag("source-query").fetchSemanticsNode().config[SemanticsProperties.EditableText].text.isEmpty())
                 open()
@@ -114,23 +119,23 @@ internal object DesktopFilterProbe {
                 control("排序", ":clear").performScrollTo().performClick()
                 onNodeWithTag("filter-apply").performClick()
                 received("1|新查询|false|2|alternate|中文作者|null")
-                onNodeWithText("最新").performClick()
+                listing("latest")
                 received("latest:1")
                 check(controller.state.value.appliedFilters.isEmpty() && controller.state.value.query.isEmpty())
                 check(onNodeWithTag("source-query").fetchSemanticsNode().config[SemanticsProperties.EditableText].text.isEmpty())
                 onNodeWithText("下一批").performClick()
                 received("latest:2")
-                onNodeWithText("热门").performClick()
+                listing("popular")
                 received("popular:1")
                 // A slow source keeps the window usable: navigation is enabled and replaces the pending request.
                 System.setProperty("fixture.filters.slow", "true")
-                onNodeWithText("最新").performClick()
+                listing("latest")
                 waitUntil(timeoutMillis = 15_000) {
                     controller.state.value.busy && System.getProperty("fixture.filters.last") == "latest:1"
                 }
                 waitForIdle()
                 onNodeWithTag("nav:收藏").assertIsEnabled()
-                onNodeWithText("热门").assertIsEnabled()
+                onNodeWithTag("source-sort").assertIsEnabled()
                 val slowStarted = System.nanoTime()
                 onNodeWithTag("nav:收藏").performClick()
                 waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy }
@@ -145,7 +150,7 @@ internal object DesktopFilterProbe {
                 }
                 settled()
                 check(controller.state.value.browseOrder != "UPDATED") { "The cancelled request was committed" }
-                onNodeWithText("热门").performClick()
+                listing("popular")
                 received("popular:1")
                 open()
                 edit()
@@ -177,7 +182,7 @@ internal object DesktopFilterProbe {
                 onNodeWithTag("filter-apply").performClick()
                 received("1||false|2|alternate|中文作者|1:true")
                 // Success and failure must both restore the extension's cached FilterList defaults.
-                onNodeWithText("热门").performClick()
+                listing("popular")
                 received("popular:1")
                 open()
                 val definitions = MihonFilterRules.flatten(controller.state.value.dynamicFilters!!.nodes)
@@ -194,7 +199,7 @@ internal object DesktopFilterProbe {
                 settled()
                 check(controller.state.value.dynamicFilters == null && controller.state.value.appliedFilters.isEmpty() &&
                     controller.state.value.query.isEmpty() && controller.state.value.browseOrder == null)
-                onNodeWithText("最新").assertDoesNotExist()
+                check("UPDATED" !in controller.state.value.descriptor?.sortOrders.orEmpty()) { "latest is offered" }
                 onNodeWithTag("source-list").performScrollToNode(hasTestTag("source:MIHON_9007199254740997"))
                 onNodeWithTag("source:MIHON_9007199254740997").performClick()
                 received("popular:1")

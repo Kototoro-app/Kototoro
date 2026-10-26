@@ -17,6 +17,8 @@ internal object DesktopRuntimeCheck {
         val result = Properties()
         result.setProperty("java.home", System.getProperty("java.home"))
         result.setProperty("java.version", System.getProperty("java.version"))
+        val platform = org.skepsun.kototoro.desktop.runtime.DesktopPlatform.current
+        result.setProperty("platform", platform.displayName)
         try {
             runBlocking {
                 DesktopSession.open(root).use { session ->
@@ -58,6 +60,12 @@ internal object DesktopRuntimeCheck {
                         check(it.getColor(1, 2) == 0xFF00FF00.toInt())
                     }
                     result.setProperty("image", "ok")
+                    if (platform == org.skepsun.kototoro.desktop.runtime.DesktopPlatform.MACOS) {
+                        result.setProperty("browser", "unsupported")
+                        result.setProperty("player.embedded", "unsupported")
+                        result.setProperty("upscale.native", "unsupported")
+                        return@use
+                    }
                     val bridge = MihonDesktopPlatform.defaultBridgeExecutable()
                     result.setProperty("browser.executable", bridge?.absolutePath ?: "unavailable")
                     val browser = requireNotNull(session.browser) { "Packaged WebView2 bridge is unavailable" }

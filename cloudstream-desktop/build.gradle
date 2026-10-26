@@ -22,7 +22,7 @@ java {
 
 // Android classes (Context, SharedPreferences, Log, ...) come from the caller-supplied compatibility runtime, as for
 // :mihon-desktop-compat; plugins and the host shims below link against the same classes at runtime.
-def compatibilityRoot = providers.gradleProperty('mihonCompatibilityDirectory').map { new File(it) }.getOrNull()
+def compatibilityRoot = providers.gradleProperty('mihonCompatibilityDirectory').map { rootProject.file(it) }.getOrNull()
 def compatibilityApi = compatibilityRoot == null ? files() :
 	files(new File(compatibilityRoot, 'AndroidCompat-1.0.jar'), new File(compatibilityRoot, 'android-jar-1.0.0.jar'))
 // Without the directory the shims fail with unresolved `android.*`; check (and pin) it first, as that module does.

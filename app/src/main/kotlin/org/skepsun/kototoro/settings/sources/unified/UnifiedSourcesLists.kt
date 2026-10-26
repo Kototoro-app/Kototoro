@@ -929,98 +929,46 @@ private fun UnifiedRepositoryCard(
     onAdd: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    ElevatedCard(
-        modifier = modifier.fillMaxWidth(),
+    org.skepsun.kototoro.core.ui.extensions.ExtensionRepositoryCard(
+        title = item.name,
+        location = item.url,
+        modifier = modifier,
         shape = style.cardShape,
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = if (expressive) {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            } else {
-                MaterialTheme.colorScheme.surface
-            },
-        ),
-        elevation = CardDefaults.elevatedCardElevation(
-            defaultElevation = style.cardElevation,
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(unifiedCardContentPadding),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh, style.iconShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        painter = rememberSafePainter(item.kind.packageIconRes()),
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
+        iconShape = style.iconShape,
+        elevation = style.cardElevation,
+        containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow
+            else MaterialTheme.colorScheme.surface,
+        error = item.lastError?.takeIf(String::isNotBlank)?.let {
+            stringResource(R.string.unified_sources_repository_last_refresh_failed, it)
+        },
+        leading = {
+            Icon(painter = rememberSafePainter(item.kind.packageIconRes()), contentDescription = null,
+                modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+        },
+        badges = {
+            CompactTag(text = item.kind.displayLabel())
+            CompactTag(text = item.locationType.displayLabel())
+            if (item.isConfigured && item.lastError.isNullOrBlank()) {
+                CompactTag(text = stringResource(R.string.installed), tone = CompactTagTone.TestedAvailable)
+            }
+        },
+        actions = {
+            if (item.isConfigured) {
+                if (onRefresh != null) {
+                    CompactActionChip(onClick = onRefresh,
+                        label = { Text(stringResource(R.string.refresh_action)) })
                 }
-                Text(
-                    text = item.name,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                if (item.isConfigured) {
-                    if (onRefresh != null) {
-                        CompactActionChip(
-                            onClick = onRefresh,
-                            label = { Text(stringResource(R.string.refresh_action)) },
-                        )
-                    }
-                    if (onDelete != null) {
-                        CompactActionChip(
-                            onClick = onDelete,
-                            label = { Text(stringResource(R.string.delete)) },
-                        )
-                    }
-                } else if (item.isPreset && onAdd != null) {
-                    Button(
-                        onClick = onAdd,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
-                        modifier = Modifier.height(30.dp),
-                    ) {
-                        Text(stringResource(R.string.add), style = MaterialTheme.typography.labelSmall)
-                    }
+                if (onDelete != null) {
+                    CompactActionChip(onClick = onDelete, label = { Text(stringResource(R.string.delete)) })
+                }
+            } else if (item.isPreset && onAdd != null) {
+                Button(onClick = onAdd, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                    modifier = Modifier.height(30.dp)) {
+                    Text(stringResource(R.string.add), style = MaterialTheme.typography.labelSmall)
                 }
             }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                CompactTag(text = item.kind.displayLabel())
-                CompactTag(text = item.locationType.displayLabel())
-                if (item.isConfigured && item.lastError.isNullOrBlank()) {
-                    CompactTag(text = stringResource(R.string.installed), tone = CompactTagTone.TestedAvailable)
-                }
-            }
-            Text(
-                text = item.url,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            item.lastError?.takeIf { it.isNotBlank() }?.let { error ->
-                Text(
-                    text = stringResource(R.string.unified_sources_repository_last_refresh_failed, error),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
+        },
+    )
 }
 
 @Composable

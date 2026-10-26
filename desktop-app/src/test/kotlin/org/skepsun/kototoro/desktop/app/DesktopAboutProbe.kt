@@ -45,39 +45,49 @@ internal object DesktopAboutProbe {
                 idle()
 
                 // Android's switch, on the about card: checked when this copy follows the nightly repository.
-                val switch = onNodeWithTag("app-update-unstable").performScrollTo()
-                switch.assertExists()
-                check(controller.state.value.update.updateChannel ==
-                    desktopUpdateChannel(controller.state.value.update.version,
-                        controller.state.value.update.settings.unstable)) { "the card and the updater disagree" }
-                if (stamped == DesktopUpdateChannel.NIGHTLY) {
-                    // A nightly install cannot go back to releases, so the switch is shown locked and on.
-                    check(!controller.state.value.update.unstableEditable) { "a nightly copy exposed the switch" }
-                    check(controller.state.value.update.updateChannel == DesktopUpdateChannel.NIGHTLY) {
-                        "a nightly copy stopped following its own channel"
+                if (org.skepsun.kototoro.desktop.runtime.DesktopPlatform.current.supportsWindowsPackages) {
+                    val switch = onNodeWithTag("app-update-unstable").performScrollTo()
+                    switch.assertExists()
+                    check(controller.state.value.update.updateChannel ==
+                        desktopUpdateChannel(controller.state.value.update.version,
+                            controller.state.value.update.settings.unstable)) { "the card and the updater disagree" }
+                    if (stamped == DesktopUpdateChannel.NIGHTLY) {
+                        // A nightly install cannot go back to releases, so the switch is shown locked and on.
+                        check(!controller.state.value.update.unstableEditable) { "a nightly copy exposed the switch" }
+                        check(controller.state.value.update.updateChannel == DesktopUpdateChannel.NIGHTLY) {
+                            "a nightly copy stopped following its own channel"
+                        }
+                    } else {
+                        check(controller.state.value.update.unstableEditable) { "a release copy locked the switch" }
+                        val before = controller.state.value.update
+                        check(before.updateChannel == DesktopUpdateChannel.RELEASE) { "started on ${before.updateChannel}" }
+                        switch.performClick()
+                        waitUntil(timeoutMillis = 10_000) { controller.state.value.update.settings.unstable }
+                        idle()
+                        val after = controller.state.value.update
+                        check(after.updateChannel == DesktopUpdateChannel.NIGHTLY) { "the switch did not move: ${after.updateChannel}" }
+                        // The old channel's answers must not survive the move, or the card would describe another channel.
+                        check(after.changelog == null && after.available == null) { "the previous channel's answers stayed" }
+                        // A restart reads the same toggle back; the setting lives in the same store as the other toggles.
+                        session.storage.preferences.open("desktop_app_updates").snapshot().let { values ->
+                            val stored = DesktopUpdateSettings.from(values)
+                            check(stored.unstable) { "the switch was not persisted: $values" }
+                        }
+                        switch.performClick()
+                        waitUntil(timeoutMillis = 10_000) { !controller.state.value.update.settings.unstable }
+                        idle()
+                        check(controller.state.value.update.updateChannel == DesktopUpdateChannel.RELEASE) {
+                            "turning the switch back off did not return to releases"
+                        }
                     }
+
                 } else {
-                    check(controller.state.value.update.unstableEditable) { "a release copy locked the switch" }
-                    val before = controller.state.value.update
-                    check(before.updateChannel == DesktopUpdateChannel.RELEASE) { "started on ${before.updateChannel}" }
-                    switch.performClick()
-                    waitUntil(timeoutMillis = 10_000) { controller.state.value.update.settings.unstable }
-                    idle()
-                    val after = controller.state.value.update
-                    check(after.updateChannel == DesktopUpdateChannel.NIGHTLY) { "the switch did not move: ${after.updateChannel}" }
-                    // The old channel's answers must not survive the move, or the card would describe another channel.
-                    check(after.changelog == null && after.available == null) { "the previous channel's answers stayed" }
-                    // A restart reads the same toggle back; the setting lives in the same store as the other toggles.
-                    session.storage.preferences.open("desktop_app_updates").snapshot().let { values ->
-                        val stored = DesktopUpdateSettings.from(values)
-                        check(stored.unstable) { "the switch was not persisted: $values" }
-                    }
-                    switch.performClick()
-                    waitUntil(timeoutMillis = 10_000) { !controller.state.value.update.settings.unstable }
-                    idle()
-                    check(controller.state.value.update.updateChannel == DesktopUpdateChannel.RELEASE) {
-                        "turning the switch back off did not return to releases"
-                    }
+                    onNodeWithTag("app-update-unavailable").performScrollTo().assertExists()
+                    onNodeWithTag("app-update-unstable").assertDoesNotExist()
+                    onNodeWithTag("app-update-check").assertDoesNotExist()
+                    controller.checkAppUpdate()
+                    check(!controller.state.value.update.checking)
+                    check(controller.state.value.update.available == null)
                 }
 
                 // Android's support group: five rows, each naming the address it opens.

@@ -12,7 +12,10 @@ import org.skepsun.kototoro.core.ui.text.UiStrings
  */
 internal object DesktopUiStrings : UiStrings {
 
-    override fun string(name: String): String = AndroidStrings[name]
+    override fun string(name: String): String = FRAMEWORK[name]?.let(::desktopText) ?: AndroidStrings[name]
+
+    /** Android framework strings the shared screens name (`android.R.string.*`), from the desktop's own catalog. */
+    private val FRAMEWORK = mapOf("ok" to "common.ok")
 
     override fun format(name: String, vararg args: Any?): String = AndroidStrings.format(name, *args)
 

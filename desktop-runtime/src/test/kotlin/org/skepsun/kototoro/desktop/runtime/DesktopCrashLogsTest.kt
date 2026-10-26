@@ -31,7 +31,7 @@ class DesktopCrashLogsTest {
         assertTrue(text.startsWith("=== Crash Report ==="), text)
         assertTrue(text.contains("App Version: 2.3.1"), text)
         assertTrue(text.contains("Thread: ${Thread.currentThread().name}"), text)
-        assertTrue(text.contains("Windows: "), text)
+        assertTrue(text.contains("${DesktopPlatform.current.displayName}: "), text)
         assertTrue(text.contains("=== Stack Trace ==="), text)
         assertTrue(text.contains("java.lang.IllegalStateException: reader failed"), text)
         assertTrue(text.contains("=== Caused by ==="), text)

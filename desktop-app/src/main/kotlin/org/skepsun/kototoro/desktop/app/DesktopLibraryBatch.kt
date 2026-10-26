@@ -1,18 +1,10 @@
 package org.skepsun.kototoro.desktop.app
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -21,11 +13,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.list.ui.compose.ContentSelectionToolbar
+import org.skepsun.kototoro.list.ui.compose.SelectionAction
+import org.skepsun.kototoro.list.ui.compose.SelectionToolbarItem
+import org.skepsun.kototoro.list.ui.compose.ContentActionConfirmationDialog
+import org.skepsun.kototoro.list.ui.compose.CategoryChoice
+import org.skepsun.kototoro.list.ui.compose.CategoryChoicesContent
+import androidx.compose.ui.state.ToggleableState
 import org.skepsun.kototoro.core.library.SourceLibraryCategory
 
 /**
@@ -52,57 +49,52 @@ internal fun DesktopLibrarySelectionBar(
     onRemove: () -> Unit,
     onCancel: () -> Unit,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.testTag("library-selection-bar")) {
-        Text(
-            text = desktopText("library.selectionCount", count),
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.testTag("library-selection-count"),
-        )
-        TextButton({ onSelectAll() }, enabled = enabled, modifier = Modifier.testTag("library-selection-all")) {
-            Text(desktopText("library.selectionAll"))
-        }
-        if (onAssignCategories != null) {
-            TextButton({ onAssignCategories() }, enabled = enabled,
-                modifier = Modifier.testTag("library-selection-categories")) {
-                Text(desktopText("library.selectionCategories"))
-            }
-        }
-        TextButton({ onMarkCompleted() }, enabled = enabled,
-            modifier = Modifier.testTag("library-selection-complete")) {
-            Text(desktopText("library.selectionComplete"))
-        }
-        // Android offers the pin on the favourites shelf only: history has no favourites row to carry the flag.
-        if (onTogglePin != null) {
-            TextButton({ onTogglePin() }, enabled = enabled, modifier = Modifier.testTag("library-selection-pin")) {
-                Text(if (allPinned) desktopText("library.selectionUnpin") else desktopText("library.selectionPin"))
-            }
-        }
-        // Android's SHARE sits on the favourites shelf only; history keeps Android's own set of actions.
-        if (onShare != null) {
-            TextButton({ onShare() }, enabled = enabled, modifier = Modifier.testTag("library-selection-share")) {
-                Text(desktopText("library.selectionShare"))
-            }
-        }
-        // SAVE is on both of Android's shelves, so the batch download is offered everywhere.
-        TextButton({ onDownload() }, enabled = enabled, modifier = Modifier.testTag("library-selection-download")) {
-            Text(desktopText("library.selectionDownload"))
-        }
-        // MIGRATE exists on Android's favourites bar; a work has to be matched by eye, so Windows offers it for one
-        // selected work at a time and greys the button out otherwise.
-        if (onMigrate != null) {
-            TextButton({ onMigrate() }, enabled = enabled && count == 1,
-                modifier = Modifier.testTag("library-selection-migrate")) {
-                Text(desktopText("library.migrate"))
-            }
-        }
-        TextButton({ onRemove() }, enabled = enabled, modifier = Modifier.testTag("library-selection-remove")) {
-            Text(if (history) desktopText("library.selectionRemoveHistory") else desktopText("library.selectionRemove"))
-        }
-        TextButton({ onCancel() }, modifier = Modifier.testTag("library-selection-cancel")) {
-            Text(desktopText("common.cancel"))
-        }
+    val operations = buildMap<SelectionAction, () -> Unit> {
+        put(SelectionAction.SELECT_ALL, onSelectAll)
+        if (onAssignCategories != null) put(SelectionAction.FAVOURITE, onAssignCategories)
+        put(SelectionAction.MARK_AS_COMPLETED, onMarkCompleted)
+        if (onTogglePin != null) put(SelectionAction.PIN, onTogglePin)
+        if (onShare != null) put(SelectionAction.SHARE, onShare)
+        put(SelectionAction.SAVE, onDownload)
+        if (onMigrate != null) put(SelectionAction.MIGRATE, onMigrate)
+        put(SelectionAction.REMOVE, onRemove)
     }
+    ContentSelectionToolbar(
+        countLabel = desktopText("library.selectionCount", count),
+        items = operations.keys.map { action ->
+            val (title, tag) = when (action) {
+                SelectionAction.SELECT_ALL -> desktopText("library.selectionAll") to "all"
+                SelectionAction.FAVOURITE -> desktopText("library.selectionCategories") to "categories"
+                SelectionAction.MARK_AS_COMPLETED -> desktopText("library.selectionComplete") to "complete"
+                SelectionAction.PIN -> (if (allPinned) desktopText("library.selectionUnpin")
+                    else desktopText("library.selectionPin")) to "pin"
+                SelectionAction.SHARE -> desktopText("library.selectionShare") to "share"
+                SelectionAction.SAVE -> desktopText("library.selectionDownload") to "download"
+                SelectionAction.MIGRATE -> desktopText("library.migrate") to "migrate"
+                SelectionAction.REMOVE -> (if (history) desktopText("library.selectionRemoveHistory")
+                    else desktopText("library.selectionRemove")) to "remove"
+                SelectionAction.EDIT_OVERRIDE -> error("Not offered by the desktop library")
+            }
+            val icon = when (action) {
+                SelectionAction.PIN -> androidx.compose.ui.res.painterResource(
+                    if (allPinned) "icons/ic_unpin.svg" else "icons/ic_pin.svg")
+                SelectionAction.SAVE -> androidx.compose.ui.res.painterResource("icons/ic_download.svg")
+                SelectionAction.REMOVE -> if (history) androidx.compose.ui.graphics.vector.rememberVectorPainter(
+                    org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons.Delete)
+                    else androidx.compose.ui.res.painterResource("icons/ic_heart_outline.svg")
+                else -> null
+            }
+            SelectionToolbarItem(action, title, icon, enabled = action != SelectionAction.MIGRATE || count == 1,
+                tag = "library-selection-$tag")
+        },
+        preferredInline = listOf(SelectionAction.PIN, SelectionAction.REMOVE, SelectionAction.SAVE),
+        onClear = onCancel,
+        onAction = { operations[it]?.invoke() },
+        enabled = enabled,
+        tagPrefix = "library-selection",
+        surface = { _, body -> DesktopControlSurface(Modifier,
+            androidx.compose.foundation.shape.RoundedCornerShape(50), body) },
+    )
 }
 
 /**
@@ -145,23 +137,14 @@ internal fun DesktopCategoryPickerDialog(
         onDismissRequest = onDismiss,
         title = { Text(desktopText("library.categoriesPickTitle", count)) },
         text = {
-            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())
-                .testTag("library-category-pick-dialog"),
-                verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                if (categories.isEmpty()) Text(desktopText("library.categoriesEmpty"))
-                categories.forEach { category ->
-                    val checked = category.id in picked
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled) {
-                            picked = if (checked) picked - category.id else picked + category.id
-                        }.testTag("library-category-pick:${category.id}"),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Checkbox(checked = checked, onCheckedChange = null, enabled = enabled)
-                        Text(category.title, modifier = Modifier.padding(start = 8.dp))
-                    }
-                }
-            }
+            CategoryChoicesContent(
+                choices = categories.map { CategoryChoice(it.id, it.title,
+                    if (it.id in picked) ToggleableState.On else ToggleableState.Off) },
+                onToggle = { id, checked -> picked = if (checked) picked + id else picked - id },
+                enabled = enabled,
+                emptyMessage = desktopText("library.categoriesEmpty"),
+                tagPrefix = "library-category-pick",
+            )
         },
         confirmButton = {
             Button({ onConfirm(picked) }, enabled = enabled,
@@ -181,29 +164,12 @@ internal fun DesktopCategoryPickerDialog(
 @Composable
 internal fun DesktopRemoveSelectionDialog(count: Int, history: Boolean, enabled: Boolean,
     onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(if (history) desktopText("library.selectionRemoveHistory") else desktopText("library.selectionRemove"))
-        },
-        text = {
-            Column(Modifier.testTag("library-selection-dialog"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(desktopText("library.selectionCount", count))
-                Text(if (history) desktopText("library.selectionRemoveHistoryDetail")
-                else desktopText("library.selectionRemoveDetail"))
-            }
-        },
-        confirmButton = {
-            Button({ onConfirm() }, enabled = enabled, modifier = Modifier.testTag("library-selection-confirm")) {
-                Text(if (history) desktopText("library.selectionRemoveHistory") else desktopText("library.selectionRemove"))
-            }
-        },
-        dismissButton = {
-            TextButton({ onDismiss() }, modifier = Modifier.testTag("library-selection-dismiss")) {
-                Text(desktopText("common.cancel"))
-            }
-        },
-    )
+    val title = if (history) desktopText("library.selectionRemoveHistory") else desktopText("library.selectionRemove")
+    ContentActionConfirmationDialog(title = title,
+        message = if (history) desktopText("library.selectionRemoveHistoryDetail") else desktopText("library.selectionRemoveDetail"),
+        confirmLabel = title, selectionLabel = desktopText("library.selectionCount", count),
+        cancelLabel = desktopText("common.cancel"), enabled = enabled,
+        onConfirm = onConfirm, onDismiss = onDismiss, tagPrefix = "library-selection")
 }
 
 /**
@@ -213,26 +179,10 @@ internal fun DesktopRemoveSelectionDialog(count: Int, history: Boolean, enabled:
 @Composable
 internal fun DesktopMarkCompletedDialog(count: Int, enabled: Boolean,
     onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(desktopText("library.selectionComplete")) },
-        text = {
-            Column(Modifier.testTag("library-complete-dialog"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(desktopText("library.selectionCount", count))
-                Text(desktopText("library.completePrompt"))
-            }
-        },
-        confirmButton = {
-            Button({ onConfirm() }, enabled = enabled, modifier = Modifier.testTag("library-complete-confirm")) {
-                Text(desktopText("library.selectionComplete"))
-            }
-        },
-        dismissButton = {
-            TextButton({ onDismiss() }, modifier = Modifier.testTag("library-complete-dismiss")) {
-                Text(desktopText("common.cancel"))
-            }
-        },
-    )
+    ContentActionConfirmationDialog(title = desktopText("library.selectionComplete"),
+        message = desktopText("library.completePrompt"), confirmLabel = desktopText("library.selectionComplete"),
+        selectionLabel = desktopText("library.selectionCount", count), cancelLabel = desktopText("common.cancel"),
+        enabled = enabled, onConfirm = onConfirm, onDismiss = onDismiss, tagPrefix = "library-complete")
 }
 
 /**

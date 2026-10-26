@@ -35,6 +35,9 @@ internal object DesktopJsonSourcesProbe {
             graphics.dispose()
             java.io.ByteArrayOutputStream().also { javax.imageio.ImageIO.write(image, "png", it) }.toByteArray()
         }
+        // Browse states: the list endpoint can fail with 500, or hold one request until the probe has seen the skeleton.
+        val failList = java.util.concurrent.atomic.AtomicBoolean(false)
+        val holdList = java.util.concurrent.atomic.AtomicReference<java.util.concurrent.CountDownLatch?>(null)
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
             createContext("/cover.png") { exchange ->
                 exchange.responseHeaders.add("Content-Type", "image/png")
@@ -43,6 +46,12 @@ internal object DesktopJsonSourcesProbe {
             }
             createContext("/api.php/provide/vod") { exchange ->
                 requests.incrementAndGet()
+                holdList.getAndSet(null)?.await(20, java.util.concurrent.TimeUnit.SECONDS)
+                if (failList.get()) {
+                    exchange.sendResponseHeaders(500, -1)
+                    exchange.close()
+                    return@createContext
+                }
                 val port = address.port
                 val body = """
                     {"class":[{"type_id":"1","type_name":"电影"}],
@@ -61,7 +70,7 @@ internal object DesktopJsonSourcesProbe {
         val session = runBlocking { DesktopSession.open(root) }
         val controller = DesktopController(session)
         try {
-            runDesktopComposeUiTest(width = 1120, height = 850) {
+            runDesktopComposeUiTest(width = if (args[0] == "json-sources-narrow") 920 else 1120, height = 850) {
                 setContent { DesktopApp(controller) }
                 fun idle() {
                     waitUntil(timeoutMillis = 20_000) { !controller.state.value.busy }
@@ -88,12 +97,20 @@ internal object DesktopJsonSourcesProbe {
                 check(controller.state.value.jsonSources.isEmpty())
                 idle()
                 openExtensions()
-                onNodeWithTag("json-source-add").performClick(); idle()
-                onNodeWithTag("json-source-address")
+                onNodeWithTag("extension-add").performClick(); idle()
+                onNodeWithTag("repository-add").assertIsNotEnabled()
+                onNodeWithTag("extension-add-tvbox").performClick(); idle()
+                val unavailable = "http://127.0.0.1:${server.address.port}/missing.json"
+                onNodeWithTag("repository-url").performTextInput(unavailable)
+                onNodeWithTag("repository-add").performClick(); idle()
+                onNodeWithTag("extension-add-error").assertExists()
+                onNodeWithTag("repository-url").assertTextContains(unavailable)
+                onNodeWithTag("repository-url").performTextClearance()
+                onNodeWithTag("repository-url")
                     .performTextInput("http://127.0.0.1:${server.address.port}/api.php/provide/vod")
                 onNodeWithTag("json-source-name").performTextInput(NAME)
-                snapshotTag("json-source-dialog", "json-source-dialog")
-                onNodeWithTag("json-source-save").performClick(); idle()
+                snapshotTag("extension-add-dialog", "extension-add-dialog")
+                onNodeWithTag("repository-add").performClick(); idle()
                 check(controller.state.value.error == null) { controller.state.value.error.orEmpty() }
                 val stored = controller.state.value.jsonSources.singleOrNull()
                 check(stored != null) { "expected one stored JSON source, got ${controller.state.value.jsonSources}" }
@@ -110,8 +127,24 @@ internal object DesktopJsonSourcesProbe {
                 onNodeWithTag("nav:浏览").performClick(); idle()
                 onNodeWithTag("nav:浏览").performClick(); idle()
                 onNodeWithTag("source-list").performScrollToNode(hasTestTag("source:${stored.id}"))
+                // Android's list states: a failed first page is the error card with retry, a pending one the skeleton.
+                failList.set(true)
                 onNodeWithTag("source:${stored.id}").performClick()
+                idle()
+                onNodeWithTag("browse-error").assertExists()
+                snapshot("json-source-error")
+                failList.set(false)
+                val held = java.util.concurrent.CountDownLatch(1)
+                holdList.set(held)
+                onNodeWithTag("browse-retry").performClick()
+                waitUntil(timeoutMillis = 20_000) {
+                    onAllNodesWithTag("browse-loading").fetchSemanticsNodes().isNotEmpty()
+                }
+                onNodeWithTag("browse-error").assertDoesNotExist()
+                snapshot("json-source-loading")
+                held.countDown()
                 waitUntil(timeoutMillis = 20_000) { controller.state.value.items.isNotEmpty() }
+                onNodeWithTag("browse-loading").assertDoesNotExist()
                 waitForIdle()
                 check(controller.state.value.error == null) { controller.state.value.error.orEmpty() }
                 check(requests.get() > 0) { "the CMS site was never asked for a list" }
@@ -131,6 +164,22 @@ internal object DesktopJsonSourcesProbe {
                 check(controller.state.value.jsonSources.isEmpty())
                 check(controller.state.value.sources.none { it.source.name == stored.id })
                 snapshot("json-sources-empty")
+                // Local TVBox files use the same add flow and group their sites by the stored origin.
+                val file = root.resolve("local-tvbox.json")
+                Files.writeString(file, """{"sites":[
+                    {"key":"local-a","name":"Local A","type":1,"api":"http://127.0.0.1:${server.address.port}/api.php/provide/vod"},
+                    {"key":"local-b","name":"Local B","type":1,"api":"http://127.0.0.1:${server.address.port}/api.php/provide/vod"}]}""")
+                controller.importExtensionFile(file); idle()
+                check(controller.state.value.jsonSources.size == 2)
+                onNodeWithTag("extensions-tab:1").performClick(); idle()
+                onNodeWithText("local-tvbox.json").assertExists()
+                snapshot("repositories")
+                onNodeWithTag("repository-remove:${file.toUri()}").performClick(); idle()
+                check(controller.state.value.jsonSources.size == 2)
+                onNodeWithTag("repository-remove-confirm").performClick(); idle()
+                check(controller.state.value.jsonSources.isEmpty())
+                check(controller.state.value.sources.none { it.ecosystem == SourceEcosystem.TVBOX })
+
             }
         } finally {
             runBlocking { controller.shutdown() }

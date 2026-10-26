@@ -28,7 +28,11 @@ class DesktopDataPaths private constructor(val root: Path) {
         ): Path {
             val home = Path.of(userHome)
             require(home.isAbsolute) { "User home must be absolute" }
-            if (!osName.startsWith("Windows", ignoreCase = true)) return home.resolve(".kototoro")
+            when (DesktopPlatform.detect(osName)) {
+                DesktopPlatform.MACOS -> return home.resolve("Library/Application Support/Kototoro")
+                DesktopPlatform.WINDOWS -> Unit
+                else -> return home.resolve(".kototoro")
+            }
             val configured = environment["LOCALAPPDATA"]?.takeIf(String::isNotBlank)
             val local = configured?.let(Path::of) ?: home.resolve("AppData").resolve("Local")
             require(local.isAbsolute) { "LOCALAPPDATA must be absolute" }

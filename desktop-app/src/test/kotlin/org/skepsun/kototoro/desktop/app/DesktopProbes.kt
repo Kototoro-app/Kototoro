@@ -11,9 +11,14 @@ import java.util.concurrent.TimeUnit
  * separate process, and the classpath/fixture paths come from the Gradle test setup.
  */
 internal object DesktopProbes {
+    val javaExecutable: String
+        get() = Path.of(System.getProperty("java.home"), "bin",
+            if (org.skepsun.kototoro.desktop.runtime.DesktopPlatform.current ==
+                org.skepsun.kototoro.desktop.runtime.DesktopPlatform.WINDOWS) "java.exe" else "java").toString()
+
     fun run(mode: String, root: Path, seconds: Long = 60) {
         val output = Files.createDirectories(Path.of("build/reports/desktop-smoke")).resolve("$mode.log")
-        val process = ProcessBuilder(Path.of(System.getProperty("java.home"), "bin/java.exe").toString(),
+        val process = ProcessBuilder(javaExecutable,
             "-Xms32m", "-Xmx768m",
             "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
             // `runTest` gives a UI body 60 s by default, which a wide probe on a busy machine can cross even when

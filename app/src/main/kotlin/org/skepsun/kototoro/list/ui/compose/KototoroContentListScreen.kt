@@ -11,15 +11,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
@@ -144,62 +141,6 @@ private suspend fun scrollToTopAfterPagingSettles(
     }.first { isIdle -> isIdle }
     withFrameNanos { }
     scrollToTop()
-}
-
-@Composable
-private fun LoadMoreOnNearEndEffect(
-    state: LazyGridState,
-    enabled: Boolean,
-    visibleThreshold: Int,
-    onLoadMore: () -> Unit,
-) {
-    val loadMoreItemCount by remember(state, enabled, visibleThreshold) {
-        derivedStateOf {
-            val layoutInfo = state.layoutInfo
-            val totalItemsCount = layoutInfo.totalItemsCount
-            val lastVisibleIndex = layoutInfo.visibleItemsInfo.maxOfOrNull { it.index } ?: -1
-            if (enabled && totalItemsCount > 0 && lastVisibleIndex >= totalItemsCount - visibleThreshold) {
-                totalItemsCount
-            } else {
-                -1
-            }
-        }
-    }
-    var lastRequestedItemCount by remember(enabled) { mutableIntStateOf(-1) }
-    LaunchedEffect(loadMoreItemCount) {
-        if (loadMoreItemCount > 0 && loadMoreItemCount != lastRequestedItemCount) {
-            lastRequestedItemCount = loadMoreItemCount
-            onLoadMore()
-        }
-    }
-}
-
-@Composable
-private fun LoadMoreOnNearEndEffect(
-    state: LazyListState,
-    enabled: Boolean,
-    visibleThreshold: Int,
-    onLoadMore: () -> Unit,
-) {
-    val loadMoreItemCount by remember(state, enabled, visibleThreshold) {
-        derivedStateOf {
-            val layoutInfo = state.layoutInfo
-            val totalItemsCount = layoutInfo.totalItemsCount
-            val lastVisibleIndex = layoutInfo.visibleItemsInfo.maxOfOrNull { it.index } ?: -1
-            if (enabled && totalItemsCount > 0 && lastVisibleIndex >= totalItemsCount - visibleThreshold) {
-                totalItemsCount
-            } else {
-                -1
-            }
-        }
-    }
-    var lastRequestedItemCount by remember(enabled) { mutableIntStateOf(-1) }
-    LaunchedEffect(loadMoreItemCount) {
-        if (loadMoreItemCount > 0 && loadMoreItemCount != lastRequestedItemCount) {
-            lastRequestedItemCount = loadMoreItemCount
-            onLoadMore()
-        }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -406,12 +347,6 @@ fun KototoroContentListScreen(
                                 actualGridState.scrollToItem(0)
                             }
                         }
-                        LoadMoreOnNearEndEffect(
-                            state = actualGridState,
-                            enabled = canLoadMore,
-                            visibleThreshold = loadMoreVisibleThreshold,
-                            onLoadMore = onLoadMore,
-                        )
                         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                             val gridSpacing = GridSpacing
                             val innerHorizontalPadding = innerPadding.calculateLeftPadding(LayoutDirection.Ltr) +
@@ -440,87 +375,70 @@ fun KototoroContentListScreen(
                                 bottom = innerPadding.calculateBottomPadding(),
                             )
 
-                            LazyVerticalGrid(
+                            ContentCollectionGrid(
+                                count = itemCount,
+                                key = ::itemKey,
+                                contentType = ::itemContentType,
+                                fullSpan = { peekItem(it) !is ContentGridModel },
                                 columns = GridCells.Fixed(gridColumns),
                                 state = actualGridState,
                                 contentPadding = gridContentPadding,
                                 horizontalArrangement = Arrangement.spacedBy(gridSpacing),
                                 verticalArrangement = Arrangement.spacedBy(gridSpacing),
-                                modifier = Modifier
-                                    .fillMaxSize()
+                                canLoadMore = canLoadMore,
+                                visibleThreshold = loadMoreVisibleThreshold,
+                                onLoadMore = onLoadMore,
+                                header = listHeader?.let { header -> {
+                                    Box(Modifier.fillMaxWidth().horizontalBleed(GridHorizontalPadding)) { header() }
+                                } },
+                                modifier = Modifier.fillMaxSize()
                                     .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
-                            ) {
-                                if (listHeader != null) {
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .horizontalBleed(GridHorizontalPadding),
-                                        ) {
-                                            listHeader()
-                                        }
-                                    }
-                                }
-
-                                items(
-                                    count = itemCount,
-                                    key = ::itemKey,
-                                    span = { index ->
-                                        val listModel = peekItem(index)
-                                        if (listModel is ContentGridModel) {
-                                            GridItemSpan(1)
-                                        } else {
-                                            GridItemSpan(maxLineSpan)
-                                        }
-                                    },
-                                    contentType = ::itemContentType,
-                                ) { index ->
-                                    val listModel = getItem(index) ?: return@items
-                                    if (listModel is ContentGridModel) {
-                                        Box(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            contentAlignment = Alignment.TopCenter,
-                                        ) {
-                                            KototoroContentCardGrid(
-                                                item = listModel,
-                                                isSelected = listModel.id in selectedItemsIds,
-                                                isHighlighted = listModel.id == highlightedItemId,
-                                                onClick = { coverBounds ->
-                                                    onPrepareItemTransition(listModel, coverBounds)
-                                                    onItemClick(listModel)
-                                                },
-                                                onLongClick = { onItemLongClick(listModel) },
-                                                sharedTransitionEnabled = sharedTransitionEnabled,
-                                                sharedElementInstanceKey = sharedElementInstanceKey,
-                                                showSourceInfo = showSourceOnCards,
-                                                gridScale = effectiveGridScale,
-                                                cardStyle = effectivePosterStyle,
-                                                compactOverlay = listMode.hasTitleOverlay,
-                                                cellContentPadding = PaddingValues(0.dp),
-                                                uiPrefs = cardUiPrefs,
-                                                focusRequester = firstContentFocusRequester.takeIf {
-                                                    isTvPresentation && listModel.id == focusTargetId
-                                                },
-                                                onFocused = { focusedContentId = listModel.id },
-                                                modifier = Modifier.width(effectivePosterStyle.itemWidth),
-                                            )
-                                        }
-                                    } else {
-                                        SupplementaryListItem(
+                            ) { index ->
+                                val listModel = getItem(index) ?: return@ContentCollectionGrid
+                                if (listModel is ContentGridModel) {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentAlignment = Alignment.TopCenter,
+                                    ) {
+                                        KototoroContentCardGrid(
                                             item = listModel,
-                                            listMode = listMode,
+                                            isSelected = listModel.id in selectedItemsIds,
+                                            isHighlighted = listModel.id == highlightedItemId,
+                                            onClick = { coverBounds ->
+                                                onPrepareItemTransition(listModel, coverBounds)
+                                                onItemClick(listModel)
+                                            },
+                                            onLongClick = { onItemLongClick(listModel) },
+                                            sharedTransitionEnabled = sharedTransitionEnabled,
+                                            sharedElementInstanceKey = sharedElementInstanceKey,
+                                            showSourceInfo = showSourceOnCards,
                                             gridScale = effectiveGridScale,
-                                            horizontalBleed = GridHorizontalPadding,
-                                            onQuickFilterOptionClick = onQuickFilterOptionClick,
-                                            showQuickFilterInline = showQuickFilterInline,
-                                            leadingContent = quickFilterLeadingContent,
-                                            onEmptyActionClick = onEmptyActionClick,
-                                            onRetry = onRetry,
-                                            onSecondaryAction = secondaryAction,
+                                            cardStyle = effectivePosterStyle,
+                                            compactOverlay = listMode.hasTitleOverlay,
+                                            cellContentPadding = PaddingValues(0.dp),
+                                            uiPrefs = cardUiPrefs,
+                                            focusRequester = firstContentFocusRequester.takeIf {
+                                                isTvPresentation && listModel.id == focusTargetId
+                                            },
+                                            onFocused = { focusedContentId = listModel.id },
+                                            modifier = Modifier.width(effectivePosterStyle.itemWidth),
                                         )
                                     }
-
+                                } else {
+                                    SupplementaryListItem(
+                                        item = listModel,
+                                        listMode = listMode,
+                                        gridScale = effectiveGridScale,
+                                        horizontalBleed = GridHorizontalPadding,
+                                        onQuickFilterOptionClick = onQuickFilterOptionClick,
+                                        showQuickFilterInline = showQuickFilterInline,
+                                        leadingContent = quickFilterLeadingContent,
+                                        onEmptyActionClick = onEmptyActionClick,
+                                        onRetry = onRetry,
+                                        onSecondaryAction = secondaryAction,
+                                    )
                                 }
+
                             }
                             if (showScrollbar) {
                                 VerticalScrollbar(
@@ -537,69 +455,58 @@ fun KototoroContentListScreen(
                                 actualListState.scrollToItem(0)
                             }
                         }
-                        LoadMoreOnNearEndEffect(
-                            state = actualListState,
-                            enabled = canLoadMore,
-                            visibleThreshold = loadMoreVisibleThreshold,
-                            onLoadMore = onLoadMore,
-                        )
-                        LazyColumn(
+                        ContentCollectionColumn(
+                            count = itemCount,
+                            key = ::itemKey,
+                            contentType = ::itemContentType,
                             state = actualListState,
                             contentPadding = innerPadding,
-                            modifier = Modifier
-                                .fillMaxSize()
+                            header = listHeader,
+                            canLoadMore = canLoadMore,
+                            visibleThreshold = loadMoreVisibleThreshold,
+                            onLoadMore = onLoadMore,
+                            modifier = Modifier.fillMaxSize()
                                 .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
-                        ) {
-                            if (listHeader != null) {
-                                item {
-                                    listHeader()
-                                }
-                            }
-                            items(
-                                count = itemCount,
-                                key = ::itemKey,
-                                contentType = ::itemContentType,
-                            ) { index ->
-                                val listModel = getItem(index) ?: return@items
-                                VerticalRailAnimatedVisibility(
-                                    animationKey = itemKey(index),
-                                    index = index,
-                                    listState = actualListState,
-                                    isAnimationEnabled = isVerticalCardListAnimationEnabled,
-                                ) { animatedModifier ->
-                                    if (listModel is ContentCompactListModel) {
-                                        KototoroContentCardList(
+                        ) { index ->
+                            val listModel = getItem(index) ?: return@ContentCollectionColumn
+                            VerticalRailAnimatedVisibility(
+                                animationKey = itemKey(index),
+                                index = index,
+                                listState = actualListState,
+                                isAnimationEnabled = isVerticalCardListAnimationEnabled,
+                            ) { animatedModifier ->
+                                if (listModel is ContentCompactListModel) {
+                                    KototoroContentCardList(
+                                        item = listModel,
+                                        isSelected = listModel.id in selectedItemsIds,
+                                        isHighlighted = listModel.id == highlightedItemId,
+                                        sharedTransitionEnabled = sharedTransitionEnabled,
+                                        sharedElementInstanceKey = sharedElementInstanceKey,
+                                        uiPrefs = cardUiPrefs,
+                                        focusRequester = firstContentFocusRequester.takeIf {
+                                            isTvPresentation && listModel.id == focusTargetId
+                                        },
+                                        onFocused = { focusedContentId = listModel.id },
+                                        onClick = { coverBounds ->
+                                            onPrepareItemTransition(listModel, coverBounds)
+                                            onItemClick(listModel)
+                                        },
+                                        onLongClick = { onItemLongClick(listModel) },
+                                        modifier = animatedModifier,
+                                    )
+                                } else {
+                                    Box(modifier = animatedModifier) {
+                                        SupplementaryListItem(
                                             item = listModel,
-                                            isSelected = listModel.id in selectedItemsIds,
-                                            isHighlighted = listModel.id == highlightedItemId,
-                                            sharedTransitionEnabled = sharedTransitionEnabled,
-                                            sharedElementInstanceKey = sharedElementInstanceKey,
-                                            uiPrefs = cardUiPrefs,
-                                            focusRequester = firstContentFocusRequester.takeIf {
-                                                isTvPresentation && listModel.id == focusTargetId
-                                            },
-                                            onFocused = { focusedContentId = listModel.id },
-                                            onClick = { coverBounds ->
-                                                onPrepareItemTransition(listModel, coverBounds)
-                                                onItemClick(listModel)
-                                            },
-                                            onLongClick = { onItemLongClick(listModel) },
-                                            modifier = animatedModifier,
+                                            listMode = listMode,
+                                            gridScale = effectiveGridScale,
+                                            onQuickFilterOptionClick = onQuickFilterOptionClick,
+                                            showQuickFilterInline = showQuickFilterInline,
+                                            leadingContent = quickFilterLeadingContent,
+                                            onEmptyActionClick = onEmptyActionClick,
+                                            onRetry = onRetry,
+                                            onSecondaryAction = secondaryAction,
                                         )
-                                    } else {
-                                        Box(modifier = animatedModifier) {
-                                            SupplementaryListItem(
-                                                item = listModel,
-                                                listMode = listMode,
-                                                gridScale = effectiveGridScale,
-                                                onQuickFilterOptionClick = onQuickFilterOptionClick,
-                                                showQuickFilterInline = showQuickFilterInline,
-                                                leadingContent = quickFilterLeadingContent,
-                                                onEmptyActionClick = onEmptyActionClick,
-                                                onRetry = onRetry,
-                                                onSecondaryAction = secondaryAction,
-                                            )
-                                        }
                                     }
                                 }
                             }
@@ -618,69 +525,58 @@ fun KototoroContentListScreen(
                                 actualListState.scrollToItem(0)
                             }
                         }
-                        LoadMoreOnNearEndEffect(
-                            state = actualListState,
-                            enabled = canLoadMore,
-                            visibleThreshold = loadMoreVisibleThreshold,
-                            onLoadMore = onLoadMore,
-                        )
-                        LazyColumn(
+                        ContentCollectionColumn(
+                            count = itemCount,
+                            key = ::itemKey,
+                            contentType = ::itemContentType,
                             state = actualListState,
                             contentPadding = innerPadding,
-                            modifier = Modifier
-                                .fillMaxSize()
+                            header = listHeader,
+                            canLoadMore = canLoadMore,
+                            visibleThreshold = loadMoreVisibleThreshold,
+                            onLoadMore = onLoadMore,
+                            modifier = Modifier.fillMaxSize()
                                 .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
-                        ) {
-                            if (listHeader != null) {
-                                item {
-                                    listHeader()
-                                }
-                            }
-                            items(
-                                count = itemCount,
-                                key = ::itemKey,
-                                contentType = ::itemContentType,
-                            ) { index ->
-                                val listModel = getItem(index) ?: return@items
-                                VerticalRailAnimatedVisibility(
-                                    animationKey = itemKey(index),
-                                    index = index,
-                                    listState = actualListState,
-                                    isAnimationEnabled = isVerticalCardListAnimationEnabled,
-                                ) { animatedModifier ->
-                                    if (listModel is ContentDetailedListModel) {
-                                        KototoroContentCardDetailedList(
+                        ) { index ->
+                            val listModel = getItem(index) ?: return@ContentCollectionColumn
+                            VerticalRailAnimatedVisibility(
+                                animationKey = itemKey(index),
+                                index = index,
+                                listState = actualListState,
+                                isAnimationEnabled = isVerticalCardListAnimationEnabled,
+                            ) { animatedModifier ->
+                                if (listModel is ContentDetailedListModel) {
+                                    KototoroContentCardDetailedList(
+                                        item = listModel,
+                                        isSelected = listModel.id in selectedItemsIds,
+                                        isHighlighted = listModel.id == highlightedItemId,
+                                        sharedTransitionEnabled = sharedTransitionEnabled,
+                                        sharedElementInstanceKey = sharedElementInstanceKey,
+                                        uiPrefs = cardUiPrefs,
+                                        focusRequester = firstContentFocusRequester.takeIf {
+                                            isTvPresentation && listModel.id == focusTargetId
+                                        },
+                                        onFocused = { focusedContentId = listModel.id },
+                                        onClick = { coverBounds ->
+                                            onPrepareItemTransition(listModel, coverBounds)
+                                            onItemClick(listModel)
+                                        },
+                                        onLongClick = { onItemLongClick(listModel) },
+                                        modifier = animatedModifier,
+                                    )
+                                } else {
+                                    Box(modifier = animatedModifier) {
+                                        SupplementaryListItem(
                                             item = listModel,
-                                            isSelected = listModel.id in selectedItemsIds,
-                                            isHighlighted = listModel.id == highlightedItemId,
-                                            sharedTransitionEnabled = sharedTransitionEnabled,
-                                            sharedElementInstanceKey = sharedElementInstanceKey,
-                                            uiPrefs = cardUiPrefs,
-                                            focusRequester = firstContentFocusRequester.takeIf {
-                                                isTvPresentation && listModel.id == focusTargetId
-                                            },
-                                            onFocused = { focusedContentId = listModel.id },
-                                            onClick = { coverBounds ->
-                                                onPrepareItemTransition(listModel, coverBounds)
-                                                onItemClick(listModel)
-                                            },
-                                            onLongClick = { onItemLongClick(listModel) },
-                                            modifier = animatedModifier,
+                                            listMode = listMode,
+                                            gridScale = effectiveGridScale,
+                                            onQuickFilterOptionClick = onQuickFilterOptionClick,
+                                            showQuickFilterInline = showQuickFilterInline,
+                                            leadingContent = quickFilterLeadingContent,
+                                            onEmptyActionClick = onEmptyActionClick,
+                                            onRetry = onRetry,
+                                            onSecondaryAction = secondaryAction,
                                         )
-                                    } else {
-                                        Box(modifier = animatedModifier) {
-                                            SupplementaryListItem(
-                                                item = listModel,
-                                                listMode = listMode,
-                                                gridScale = effectiveGridScale,
-                                                onQuickFilterOptionClick = onQuickFilterOptionClick,
-                                                showQuickFilterInline = showQuickFilterInline,
-                                                leadingContent = quickFilterLeadingContent,
-                                                onEmptyActionClick = onEmptyActionClick,
-                                                onRetry = onRetry,
-                                                onSecondaryAction = secondaryAction,
-                                            )
-                                        }
                                     }
                                 }
                             }
@@ -1240,41 +1136,19 @@ private fun EmptyStateCard(
     item: EmptyState,
     onEmptyActionClick: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (item.icon != 0) {
-            Icon(
-                painter = painterResource(item.icon),
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        val titleText = item.textPrimaryText?.toString()
-        Text(
-            text = titleText ?: stringResource(item.textPrimary),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        val subtitleText = item.textSecondaryText?.toString()
-        if (item.textSecondary != 0 || !subtitleText.isNullOrBlank()) {
-            Text(
-                text = subtitleText ?: stringResource(item.textSecondary),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (item.actionStringRes != 0) {
-            Button(onClick = onEmptyActionClick) {
-                Text(stringResource(item.actionStringRes))
-            }
-        }
-    }
+    val subtitleText = item.textSecondaryText?.toString()
+    ContentCollectionEmpty(
+        title = item.textPrimaryText?.toString() ?: stringResource(item.textPrimary),
+        subtitle = if (item.textSecondary != 0 || !subtitleText.isNullOrBlank()) {
+            subtitleText ?: stringResource(item.textSecondary)
+        } else null,
+        icon = if (item.icon != 0) ({
+            Icon(painterResource(item.icon), contentDescription = null, modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }) else null,
+        actionLabel = if (item.actionStringRes != 0) stringResource(item.actionStringRes) else null,
+        onAction = onEmptyActionClick,
+    )
 }
 
 @Composable
@@ -1283,38 +1157,21 @@ private fun ErrorStateCard(
     onRetry: () -> Unit,
     onSecondaryAction: (Throwable) -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Icon(
-            painter = painterResource(if (item.icon != 0) item.icon else R.drawable.ic_error_large),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.error,
-        )
-        Text(
-            text = stringResource(R.string.error_occurred),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Text(
-            text = item.exception.localizedMessage ?: item.exception.javaClass.simpleName.orEmpty(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (item.canRetry) {
-            Button(onClick = onRetry) {
-                Text(stringResource(item.buttonText.takeIf { it != 0 } ?: R.string.retry))
-            }
-        }
-        if (item.secondaryButtonText != 0) {
-            TvTextButton(onClick = { onSecondaryAction(item.exception) }) {
-                Text(stringResource(item.secondaryButtonText))
-            }
-        }
-    }
+    ContentCollectionError(
+        title = stringResource(R.string.error_occurred),
+        message = item.exception.localizedMessage ?: item.exception.javaClass.simpleName.orEmpty(),
+        icon = {
+            Icon(
+                painter = painterResource(if (item.icon != 0) item.icon else R.drawable.ic_error_large),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+            )
+        },
+        retryLabel = if (item.canRetry) stringResource(item.buttonText.takeIf { it != 0 } ?: R.string.retry) else null,
+        onRetry = onRetry,
+        secondaryLabel = if (item.secondaryButtonText != 0) stringResource(item.secondaryButtonText) else null,
+        onSecondary = { onSecondaryAction(item.exception) },
+    )
 }
 
 @Composable
@@ -1328,7 +1185,10 @@ private fun LoadingStateItem(
         ListMode.MOVIE_GRID,
         ListMode.COMPACT_MOVIE_GRID -> GridLoadingSkeleton(listMode = listMode, gridScale = gridScale)
         ListMode.LIST,
-        ListMode.DETAILED_LIST -> LinearLoadingSkeleton(isDetailed = listMode == ListMode.DETAILED_LIST)
+        ListMode.DETAILED_LIST -> ContentListLoadingSkeleton(
+            detailed = listMode == ListMode.DETAILED_LIST,
+            contentPadding = PaddingValues(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 8.dp),
+        )
     }
 }
 
@@ -1341,101 +1201,15 @@ private fun GridLoadingSkeleton(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = GridHorizontalPadding, vertical = 8.dp),
+            .padding(horizontal = GridHorizontalPadding),
     ) {
-        val columns = resolveGridColumnCount(maxWidth, posterStyle.itemWidth, GridSpacing)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(GridSpacing),
-        ) {
-            repeat(columns) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    SkeletonBlock(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(posterStyle.itemWidth / posterStyle.posterHeight),
-                    )
-                    if (!listMode.hasTitleOverlay) {
-                        SkeletonBlock(
-                            modifier = Modifier.fillMaxWidth(0.92f).height(12.dp),
-                        )
-                        SkeletonBlock(
-                            modifier = Modifier.fillMaxWidth(0.68f).height(12.dp),
-                        )
-                    }
-                }
-            }
-        }
+        ContentGridLoadingSkeleton(
+            columns = resolveGridColumnCount(maxWidth, posterStyle.itemWidth, GridSpacing),
+            posterAspectRatio = posterStyle.itemWidth / posterStyle.posterHeight,
+            spacing = GridSpacing,
+            titleBelowPoster = !listMode.hasTitleOverlay,
+        )
     }
-}
-
-@Composable
-private fun LinearLoadingSkeleton(
-    isDetailed: Boolean,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        repeat(3) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.Top,
-            ) {
-                SkeletonBlock(
-                    modifier = Modifier
-                        .width(if (isDetailed) 96.dp else 84.dp)
-                        .height(if (isDetailed) 132.dp else 116.dp)
-                )
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    SkeletonBlock(
-                        modifier = Modifier
-                            .fillMaxWidth(0.72f)
-                            .height(14.dp)
-                    )
-                    SkeletonBlock(
-                        modifier = Modifier
-                            .fillMaxWidth(0.92f)
-                            .height(12.dp)
-                    )
-                    SkeletonBlock(
-                        modifier = Modifier
-                            .fillMaxWidth(0.84f)
-                            .height(12.dp)
-                    )
-                    if (isDetailed) {
-                        SkeletonBlock(
-                            modifier = Modifier
-                                .fillMaxWidth(0.58f)
-                                .height(12.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SkeletonBlock(
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .background(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
-                shape = MaterialTheme.shapes.medium,
-            ),
-    )
 }
 
 @Composable

@@ -1665,16 +1665,10 @@ class SettingsActivity :
                 )
             }
             is SettingsDialogState.ProxyTestResult -> {
-                SettingsAlertDialog(
-                    title = stringResource(R.string.proxy),
-                    onDismissRequest = { dismissSettingsDialog(dialog) },
-                    text = { Text(dialog.message) },
-                    confirmButton = {
-                        SettingsDialogActionButton(
-                            text = stringResource(android.R.string.ok),
-                            onClick = { dismissSettingsDialog(dialog) },
-                        )
-                    },
+                org.skepsun.kototoro.core.ui.settings.ProxyTestResultDialog(
+                    message = dialog.message,
+                    onDismiss = { dismissSettingsDialog(dialog) },
+                    renderDialog = { org.skepsun.kototoro.settings.compose.AndroidPreferenceDialog(it) },
                 )
             }
         }

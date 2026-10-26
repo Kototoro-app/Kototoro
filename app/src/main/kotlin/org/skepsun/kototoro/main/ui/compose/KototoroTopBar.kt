@@ -106,6 +106,7 @@ import org.skepsun.kototoro.core.ui.topbar.TopBarFilterRail
 import org.skepsun.kototoro.core.ui.topbar.TopBarSearchPillContent
 import org.skepsun.kototoro.core.ui.topbar.TopBarTabsRail
 import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
+import org.skepsun.kototoro.core.ui.topbar.TopBarIconAction
 import org.skepsun.kototoro.core.ui.topbar.compactRailEdgeFade
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
@@ -439,7 +440,9 @@ fun KototoroTopBar(
                                         topBarMenuAnchorBounds = it.boundsInRoot()
                                     },
                                 ) {
-                                    IconButton(
+                                    TopBarIconAction(
+                                        icon = painterResource(R.drawable.ic_more_vert),
+                                        contentDescription = stringResource(R.string.more),
                                         onClick = {
                                             // The dismiss layer above leaves a hole
                                             // over this anchor, so a tap lands here
@@ -454,29 +457,12 @@ fun KototoroTopBar(
                                         },
                                         modifier = Modifier
                                             .focusRequester(moreMenuAnchorFocus)
-                                            .size(topBarControlHeight)
-                                            .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)
                                             .tvDownFocusLink(contentDownFocus),
-                                        colors = IconButtonDefaults.iconButtonColors(
-                                            containerColor = Color.Transparent,
-                                            contentColor = MaterialTheme.colorScheme.onSurface,
-                                        ),
-                                    ) {
-                                        Box {
-                                            Icon(
-                                                painterResource(R.drawable.ic_more_vert),
-                                                contentDescription = stringResource(R.string.more),
-                                                modifier = Modifier.size(topBarIconSize),
-                                            )
-                                            if (isAppUpdateAvailable) {
-                                                UpdateBadgeDot(
-                                                    modifier = Modifier
-                                                        .align(Alignment.TopEnd)
-                                                        .size(8.dp),
-                                                )
-                                            }
-                                        }
-                                    }
+                                        badge = isAppUpdateAvailable,
+                                        size = topBarControlHeight,
+                                        iconSize = topBarIconSize,
+                                        inactiveTint = MaterialTheme.colorScheme.onSurface,
+                                    )
                                     GlassDropdownMenu(
                                         expanded = isMoreMenuExpanded,
                                         onDismissRequest = { isMoreMenuExpanded = false },

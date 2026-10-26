@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.desktop.runtime.DesktopDataPaths
+import org.skepsun.kototoro.desktop.runtime.DesktopPlatform
 import java.awt.Dimension
 import java.nio.file.Path
 import kotlin.system.exitProcess
@@ -94,7 +95,7 @@ internal fun runDesktop(args: Array<String>) {
             finally { withContext(NonCancellable + Dispatchers.IO) { acquired?.close() } }
         }
         Window(
-            title = "Kototoro · Windows",
+            title = "Kototoro · ${DesktopPlatform.current.displayName}",
             state = windowState,
             onCloseRequest = requestExit,
         ) {
