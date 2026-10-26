@@ -140,7 +140,7 @@ internal object DesktopProxyProbe {
                 }
                 idle()
                 check(session.proxy.settings.value.type == DesktopProxyType.DIRECT)
-                onNodeWithTag("proxy-settings-back").performScrollTo().performClick()
+                onNodeWithTag("proxy-settings-back").performClick()
                 idle()
                 check(controller.state.value.screen == DesktopScreen.STORAGE) { "the page's back returns to the hub" }
                 onNodeWithTag("storage-settings-back").performScrollTo().performClick()

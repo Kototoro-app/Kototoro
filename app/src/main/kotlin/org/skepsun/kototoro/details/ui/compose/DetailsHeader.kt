@@ -1,6 +1,13 @@
 package org.skepsun.kototoro.details.ui.compose
 
 
+import org.skepsun.kototoro.core.ui.compose.ExpandableDescriptionText
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import org.skepsun.kototoro.core.ui.compose.DetailsMetadataEntry
+import org.skepsun.kototoro.core.ui.compose.DetailsMetadataGrid
 import android.text.format.Formatter
 import android.widget.Toast
 import androidx.compose.animation.animateContentSize
@@ -39,6 +46,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import org.skepsun.kototoro.core.ui.compose.DetailsTagChip
+import org.skepsun.kototoro.core.ui.compose.DetailsTagChips
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.focusProperties
@@ -301,7 +310,6 @@ fun DetailsHeader(
     val description = displayDescription.ifBlank { fallbackDescription }
     val descriptionForDisplay = description.take(MAX_RENDERED_DESCRIPTION_LENGTH)
     val collapsedDescriptionMaxLines = 3
-    var canExpandDescription by remember(description) { mutableStateOf(false) }
     var isSupplementalMetadataSelected by rememberSaveable(
         metadataSourceOption?.key,
         hasSupplementalMetadataDescription,
@@ -615,34 +623,20 @@ fun DetailsHeader(
                         .fillMaxWidth(),
                 ) {
                     if (infoItems.isNotEmpty()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 9.dp),
-                            verticalArrangement = Arrangement.spacedBy(7.dp),
-                        ) {
-                            infoItems.chunked(2).forEach { rowItems ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
-                                    rowItems.forEach { item ->
-                                        MetadataItem(
-                                            label = item.label,
-                                            value = item.value,
-                                            iconRes = item.iconRes,
-                                            modifier = Modifier.weight(1f),
-                                            valueMuted = item.valueMuted,
-                                            onClick = item.onClick,
-                                            showNavigationIndicator = item.showNavigationIndicator,
-                                        )
-                                    }
-                                    if (rowItems.size == 1) {
-                                        Spacer(modifier = Modifier.weight(1f))
-                                    }
-                                }
-                            }
-                        }
+                        val navigationIcon = rememberVectorPainter(Icons.AutoMirrored.Filled.KeyboardArrowRight)
+                        DetailsMetadataGrid(
+                            entries = infoItems.map { item ->
+                                DetailsMetadataEntry(
+                                    label = item.label,
+                                    value = item.value,
+                                    icon = item.iconRes?.let { rememberSafePainter(it) },
+                                    valueMuted = item.valueMuted,
+                                    onClick = item.onClick,
+                                    navigationIcon = navigationIcon.takeIf { item.showNavigationIndicator },
+                                )
+                            },
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                        )
                     }
                     if (showProgress) {
                         Row(
@@ -713,54 +707,11 @@ fun DetailsHeader(
                             if (isTvPresentation) canFocus = false
                         },
                     ) {
-                        Text(
+                        ExpandableDescriptionText(
                             text = descriptionForDisplay,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .tvFocusable(
-                                    shape = RoundedCornerShape(8.dp),
-                                    enabled = canExpandDescription,
-                                    addFocusTarget = false,
-                                )
-                                .clickable(
-                                    enabled = canExpandDescription,
-                                    role = Role.Button,
-                                ) {
-                                    isDescriptionExpanded = !isDescriptionExpanded
-                                }
-                                .animateContentSize()
-                                .then(
-                                    if (canExpandDescription && !isDescriptionExpanded) {
-                                        Modifier
-                                            .graphicsLayer {
-                                                compositingStrategy = CompositingStrategy.Offscreen
-                                            }
-                                            .drawWithContent {
-                                                drawContent()
-                                                drawRect(
-                                                    brush = Brush.verticalGradient(
-                                                        colors = listOf(Color.Black, Color.Transparent),
-                                                        startY = size.height * 0.62f,
-                                                        endY = size.height,
-                                                    ),
-                                                    blendMode = BlendMode.DstIn,
-                                                )
-                                            }
-                                    } else {
-                                        Modifier
-                                    },
-                                ),
-                            maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else collapsedDescriptionMaxLines,
-                            overflow = TextOverflow.Ellipsis,
-                            onTextLayout = { textLayoutResult ->
-                                val hasCollapsedOverflow = textLayoutResult.hasVisualOverflow ||
-                                    textLayoutResult.lineCount > collapsedDescriptionMaxLines
-                                if (canExpandDescription != hasCollapsedOverflow) {
-                                    canExpandDescription = hasCollapsedOverflow
-                                }
-                            },
+                            expanded = isDescriptionExpanded,
+                            onExpandedChange = { isDescriptionExpanded = it },
+                            collapsedMaxLines = collapsedDescriptionMaxLines,
                         )
                     }
                 }
@@ -768,54 +719,12 @@ fun DetailsHeader(
         }
 
         if (!content?.tags.isNullOrEmpty()) {
-            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 24.dp) {
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(5.dp),
-                    ) {
-                        content?.tags.orEmpty().forEach { tag ->
-                            val isSensitiveTag = isSensitiveDetailsTag(tag)
-                            SuggestionChip(
-                                onClick = { onTagClick(tag) },
-                                modifier = Modifier
-                                    .heightIn(min = 24.dp)
-                                    .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false),
-                                shape = RoundedCornerShape(8.dp),
-                                label = {
-                                    Text(
-                                        text = tag.title,
-                                        style = MaterialTheme.typography.labelSmall.copy(lineHeight = 12.sp),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                },
-                                colors = SuggestionChipDefaults.suggestionChipColors(
-                                    containerColor = if (isSensitiveTag) {
-                                        Color(0xFFE3B341).copy(alpha = 0.22f)
-                                    } else {
-                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.48f)
-                                    },
-                                    labelColor = if (isSensitiveTag) {
-                                        MaterialTheme.colorScheme.onSurface
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    },
-                                ),
-                                border = SuggestionChipDefaults.suggestionChipBorder(
-                                    enabled = true,
-                                    borderColor = if (isSensitiveTag) {
-                                        Color(0xFFE3B341).copy(alpha = 0.68f)
-                                    } else {
-                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
-                                    },
-                                ),
-                            )
-                        }
-                    }
-                }
-            }
+            DetailsTagChips(
+                tags = content?.tags.orEmpty().map { tag ->
+                    DetailsTagChip(tag, tag.title, highlighted = isSensitiveDetailsTag(tag))
+                },
+                onTagClick = onTagClick,
+            )
         }
     }
 }

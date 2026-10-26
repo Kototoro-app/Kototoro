@@ -380,55 +380,6 @@ fun GlassDropdownMenu(
 }
 
 @Composable
-internal fun CompactDropdownMenuItem(
-    text: @Composable () -> Unit,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    leadingIcon: (@Composable (() -> Unit))? = null,
-    trailingIcon: (@Composable (() -> Unit))? = null,
-) {
-    val isTvPresentation = LocalUiPresentationConfig.current.isTv
-    CompositionLocalProvider(
-        LocalTextStyle provides if (isTvPresentation) {
-            MaterialTheme.typography.titleMedium
-        } else {
-            MaterialTheme.typography.labelLarge
-        },
-    ) {
-        Row(
-            modifier = modifier
-                .height(if (isTvPresentation) TV_MENU_ITEM_HEIGHT_DP.dp else 48.dp)
-                .fillMaxWidth()
-                .tvFocusable(
-                    enabled = enabled,
-                    shape = RoundedCornerShape(12.dp),
-                    addFocusTarget = false,
-                )
-                .alpha(if (enabled) 1f else 0.38f)
-                .clickable(enabled = enabled, onClick = onClick)
-                .padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            leadingIcon?.let {
-                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
-                    it()
-                }
-            }
-            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
-                text()
-            }
-            trailingIcon?.let {
-                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
-                    it()
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun CompactMenuContent(
     scrollState: androidx.compose.foundation.ScrollState,
     content: @Composable ColumnScope.() -> Unit,
@@ -444,39 +395,5 @@ private fun CompactMenuContent(
     }
 }
 
-@Composable
-internal fun CompactDropdownMenuText(
-    text: String,
-    modifier: Modifier = Modifier,
-) {
-    Text(
-        text = text,
-        modifier = modifier,
-        // Item and header labels share this helper, so the TV scale lives here as well; heads-up
-        // section labels inside a menu would otherwise stay phone-sized next to body-sized items.
-        style = if (LocalUiPresentationConfig.current.isTv) {
-            MaterialTheme.typography.titleMedium
-        } else {
-            MaterialTheme.typography.labelLarge
-        },
-    )
-}
-
-@Composable
-internal fun CompactDropdownMenuDivider(
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .padding(horizontal = 12.dp, vertical = 4.dp)
-            .width(96.dp)
-            .height(1.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f)),
-    )
-}
-
 /** Keeps the visible plate out of a television's overscan band. */
 private const val TV_MENU_EDGE_INSET_DP = 24
-
-/** Menu rows grow on TV so a label stays readable from across the room. */
-private const val TV_MENU_ITEM_HEIGHT_DP = 56

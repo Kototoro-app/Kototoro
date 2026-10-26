@@ -1,18 +1,19 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.ui.extensions.ExtensionManagementTab
+
+import org.skepsun.kototoro.core.ui.extensions.ExtensionManagementTabs
+import kotlinx.coroutines.launch
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,7 +24,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,180 +49,98 @@ import org.skepsun.kototoro.core.ui.settings.SettingsSplitSwitchRow
 import org.skepsun.kototoro.core.ui.settings.SettingsSwitchRow
 import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
 
-/**
- * Extension management, drawn with the same settings vocabulary as the Android screens: one labelled card per
- * section, rows separated by a hairline, and a control on the row instead of loose widgets stacked on the page.
- *
- * Android's "扩展管理" is a tabbed unified screen (repositories, JSON sources, APK extensions, JAR parsers). The Windows
- * host covers the repository part, the JAR/APK extensions that come from it, and the imported JSON sources it can
- * serve (TVBox / Apple CMS links, added from this page and routed to the shared CMS runtime).
- */
+/** The Android source/repository/package structure, using the same CMP tabs and repository cards. */
 @Composable
 internal fun DesktopExtensionsPanel(controller: DesktopController, closing: Boolean) {
     val state by controller.state.collectAsState()
-    var address by remember { mutableStateOf("") }
-    var query by remember { mutableStateOf("") }
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(0) }
+    var query by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
     var adding by remember { mutableStateOf(false) }
-    var url by remember { mutableStateOf("") }
-    var title by remember { mutableStateOf("") }
-    var switchingSources by remember { mutableStateOf(false) }
-    val enabled = !state.busy && !closing
-    // Repositories, JSON sources, the catalog and the installed rows do not fit one window at once, and a fixed column
-    // left the two lists with no height at all — an unreachable list is invisible to both the user and the UI tests. The
-    // page scrolls instead: the catalog keeps a height derived from the window so a tall window still uses its space,
-    // and the installed rows are laid out inline so a short window scrolls to them instead of clipping them away.
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val listHeight = (maxHeight - 340.dp).coerceAtLeast(260.dp)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .testTag("extensions-page"),
-            verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            SettingsSectionHeader(desktopText("extensions.repositories"))
-            SettingsGroup {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Text(
-                        text = desktopText("extensions.repositoryDetail"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        OutlinedTextField(
-                            value = address,
-                            onValueChange = { address = it },
-                            label = { Text(desktopText("extensions.repositoryAddress")) },
-                            placeholder = { Text("https://example.com/index.pb") },
-                            singleLine = true,
-                            enabled = enabled,
-                            modifier = Modifier.weight(1f).testTag("repository-url"),
-                        )
-                        Button(
-                            onClick = { controller.fetchRepository(address) },
-                            enabled = enabled && address.isNotBlank(),
-                            modifier = Modifier.testTag("repository-add"),
-                        ) { Text(desktopText("extensions.addRepository")) }
+    var addError by remember { mutableStateOf<String?>(null) }
+    var importing by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var available by remember { mutableStateOf(false) }
+    val enabled = !state.busy && !closing && !importing
+    fun submit(job: kotlinx.coroutines.Job, onSuccess: () -> Unit) {
+        importing = true
+        addError = null
+        scope.launch {
+            job.join()
+            importing = false
+            addError = controller.state.value.error
+            if (addError == null) { adding = false; onSuccess() }
+        }
+    }
+    val importedRepositories = remember(state.jsonSources) { importedSourceRepositories(state.jsonSources) }
+    androidx.compose.runtime.LaunchedEffect(state.extensionCatalog) {
+        if (state.extensionCatalog != null) { tab = 2; available = true }
+    }
+    Column(Modifier.fillMaxSize().testTag("extensions-page"),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ExtensionManagementTabs(
+                tabs = listOf(
+                    ExtensionManagementTab(
+                        AndroidStrings.format("sources_tab_title", state.sources.size), state.sources.size),
+                    ExtensionManagementTab(
+                        AndroidStrings.format("repositories_tab_title", state.repositories.size + importedRepositories.size),
+                        state.repositories.size + importedRepositories.size),
+                    ExtensionManagementTab(
+                        AndroidStrings.format("packages_tab_title", state.installedEntries.size), state.installedEntries.size,
+                        state.extensionUpdates.size),
+                ),
+                selectedTab = tab,
+                onTabClick = { tab = it },
+            )
+            androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+            Button({ addError = null; adding = true }, enabled = enabled, modifier = Modifier.testTag("extension-add")) {
+                Text(desktopText("extensions.add"))
+            }
+        }
+        when (tab) {
+            0 -> ManagedSources(controller, state, enabled)
+            1 -> DesktopExtensionRepositories(controller, state, importedRepositories, enabled, { adding = true })
+            2 -> Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    FilterChip(!available, { available = false }, { Text(desktopText("extensions.installed")) },
+                        modifier = Modifier.testTag("extensions-installed-tab"))
+                    FilterChip(available, { available = true }, { Text(desktopText("extensions.available")) },
+                        modifier = Modifier.testTag("extensions-available-tab"))
+                    androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                    TextButton({ controller.checkExtensionUpdates() }, enabled = enabled,
+                        modifier = Modifier.testTag("extension-check-updates")) { Text(desktopText("extensions.checkUpdates")) }
+                    if (state.extensionUpdates.isNotEmpty()) {
+                        Button({ controller.applyUpdates() }, enabled = enabled,
+                            modifier = Modifier.testTag("extension-update-all")) {
+                            Text(desktopText("extensions.updateAll", state.extensionUpdates.size))
+                        }
                     }
                 }
-                state.repositories.forEach { repo ->
-                    SettingsRowDivider()
-                    SettingsActionRow(
-                        title = repo.name,
-                        summary = repo.indexUrl,
-                        verticalPadding = 6.dp,
-                    ) {
-                        TextButton(
-                            onClick = { address = repo.indexUrl; controller.fetchRepository(repo.indexUrl) },
-                            enabled = enabled,
-                            modifier = Modifier.testTag("repository:${repo.indexUrl}"),
-                        ) { Text(desktopText("common.refresh"), maxLines = 1) }
-                        TextButton(
-                            onClick = { controller.removeRepository(repo) },
-                            enabled = enabled,
-                            modifier = Modifier.testTag("repository-remove:${repo.indexUrl}"),
-                        ) { Text(desktopText("extensions.removeRepository"), maxLines = 1) }
-                    }
+                if (available) {
+                    ExtensionCatalog(controller, state, query, { query = it }, enabled, Modifier.weight(1f))
+                } else {
+                    InstalledExtensions(controller, state, enabled,
+                        Modifier.weight(1f))
                 }
-            }
-            // Android's unified source screen, reachable from the extension manager; the row carries the counts.
-            SettingsGroup {
-                SettingsValueRow(
-                    title = desktopText("sourceList.title"),
-                    summary = desktopText("sourceList.openSummary"),
-                    value = desktopText("sourceList.count", state.enabledSources.size, state.sources.size),
-                    enabled = enabled && state.sources.isNotEmpty(),
-                    onClick = { switchingSources = true },
-                    testTag = "source-switches-open",
-                )
-            }
-            // Android's unified screen also hosts the imported JSON sources; Windows serves the TVBox/Apple CMS family.
-            SettingsSectionHeader(desktopText("jsonSources.title"))
-            SettingsGroup {
-                state.jsonSources.takeIf { it.isNotEmpty() }?.forEach { source ->
-                    SettingsActionRow(
-                        title = source.name,
-                        summary = source.api ?: source.id,
-                        verticalPadding = 6.dp,
-                    ) {
-                        TextButton(
-                            onClick = { controller.removeJsonSource(source.id) },
-                            enabled = enabled,
-                            modifier = Modifier.testTag("json-source-remove:${source.id}"),
-                        ) { Text(desktopText("jsonSources.remove"), maxLines = 1) }
-                    }
-                    SettingsRowDivider()
-                }
-                SettingsActionRow(
-                    title = desktopText("jsonSources.add"),
-                    summary = desktopText("jsonSources.addSummary"),
-                    verticalPadding = 6.dp,
-                ) {
-                    TextButton(
-                        onClick = { url = ""; title = ""; adding = true },
-                        enabled = enabled,
-                        modifier = Modifier.testTag("json-source-add"),
-                    ) { Text(desktopText("jsonSources.import")) }
-                }
-                SettingsRowDivider()
-                SettingsInfoRow(desktopText("jsonSources.note"), null)
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                ExtensionCatalog(controller, state, query, { query = it }, enabled,
-                    Modifier.weight(1f).height(listHeight))
-                InstalledExtensions(controller, state, enabled, Modifier.width(380.dp))
             }
         }
     }
-    // Android's unified screen lists the sources themselves, each with the switch that takes it out of browsing
-    // without uninstalling anything (§174). The list is a dialog rather than a page block: a real install has dozens
-    // of sources, and the catalogue row above owns the height budget the window gives this page.
-    if (switchingSources) SourceSwitchDialog(controller, state, enabled) { switchingSources = false }
-    // Android's `ConfirmPackageInstall`: a row whose kind is still set to "ask every time" waits here for the answer.
     state.installPrompt?.let { request ->
         DesktopInstallPromptDialog(request, { enable, remember -> controller.resolveInstallPrompt(enable, remember) },
             { controller.dismissInstallPrompt() })
     }
-    if (adding) {
-        AlertDialog(
-            onDismissRequest = { adding = false },
-            modifier = Modifier.testTag("json-source-dialog"),
-            title = { Text(desktopText("jsonSources.add")) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(desktopText("jsonSources.addDetail"), style = MaterialTheme.typography.bodySmall)
-                    OutlinedTextField(
-                        value = url,
-                        onValueChange = { url = it },
-                        label = { Text(desktopText("jsonSources.address")) },
-                        placeholder = { Text(desktopText("jsonSources.addressHint")) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("json-source-address"),
-                    )
-                    OutlinedTextField(
-                        value = title,
-                        onValueChange = { title = it },
-                        label = { Text(desktopText("jsonSources.name")) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("json-source-name"),
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { adding = false; controller.importJsonSource(url, title) },
-                    modifier = Modifier.testTag("json-source-save"),
-                ) { Text(desktopText("jsonSources.import")) }
-            },
-            dismissButton = {
-                TextButton({ adding = false }, modifier = Modifier.testTag("json-source-cancel")) {
-                    Text(desktopText("common.cancel"))
-                }
-            },
-        )
-    }
+    if (adding) DesktopExtensionImportDialog(
+        enabled = enabled,
+        error = addError,
+        onDismiss = { adding = false },
+        onRepository = { address -> submit(controller.fetchRepository(address)) { tab = 2; available = true } },
+        onSource = { address, name -> submit(controller.importJsonSource(address, name)) { tab = 0 } },
+        onFile = { path -> submit(controller.importExtensionFile(path)) {
+            tab = if (path.fileName.toString().endsWith(".json", ignoreCase = true)) 0 else 2
+            available = false
+        } },
+    )
 }
 
 @Composable
@@ -258,7 +176,8 @@ private fun ExtensionCatalog(
             }
             if (extensions.isEmpty()) {
                 Box(Modifier.weight(1f).fillMaxWidth()) {
-                    SettingsInfoRow(desktopText("extensions.catalogEmpty"), null)
+                    SettingsInfoRow(if (query.isNotBlank()) desktopText("extensions.noResults")
+                        else desktopText("extensions.catalogEmpty"), null)
                 }
             } else {
                 LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("extension-list")) {
@@ -329,9 +248,16 @@ private fun InstalledExtensions(
     var confirm by remember { mutableStateOf<DesktopInstalledEntry?>(null) }
     // Android's UnifiedPackageList keeps its expanded packages in the screen's own state; the same here, keyed by id.
     var expanded by remember { mutableStateOf(emptySet<String>()) }
+    var query by remember { mutableStateOf("") }
+    val entries = state.installedEntries.filter {
+        query.isBlank() || it.label.contains(query, true) || it.id.contains(query, true) ||
+            it.sourceNames.any { name -> name.contains(query, true) }
+    }
     val updates = state.extensionUpdates.associateBy { it.extension.packageName }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SettingsSectionHeader(desktopText("extensions.installedCount", state.installedEntries.size))
+        DesktopSearchField(query, { query = it }, desktopText("extensions.search"),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), tag = "installed-extension-search")
         SettingsGroup {
             SettingsSwitchRow(
                 title = desktopText("extensions.autoUpdate"),
@@ -341,22 +267,6 @@ private fun InstalledExtensions(
                 onCheckedChange = { controller.setAutoUpdateExtensions(it) },
                 testTag = "extension-auto-update",
             )
-            SettingsRowDivider()
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    onClick = { controller.checkExtensionUpdates() },
-                    enabled = enabled,
-                    modifier = Modifier.weight(1f).testTag("extension-check-updates"),
-                ) { Text(desktopText("extensions.checkUpdates")) }
-                Button(
-                    onClick = { controller.applyUpdates() },
-                    enabled = enabled && updates.isNotEmpty(),
-                    modifier = Modifier.weight(1f).testTag("extension-update-all"),
-                ) { Text(desktopText("extensions.updateAll", updates.size)) }
-            }
             SettingsRowDivider()
             // Android's "test all" button for the enabled sources (plan §184): one row, its own page, since six steps
             // per source need far more room than a dialog row has here.
@@ -371,11 +281,12 @@ private fun InstalledExtensions(
         }
         // Composed on demand rather than in a nested lazy list: a second scroll viewport inside a page this short left the
         // removal buttons clipped and unreachable, and the installed set is small enough to lay out row by row.
-        SettingsGroup(Modifier.fillMaxWidth().testTag("installed-list")) {
-            if (state.installedEntries.isEmpty()) {
-                SettingsInfoRow(desktopText("extensions.installedEmpty"), null)
+        SettingsGroup(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).testTag("installed-list")) {
+            if (entries.isEmpty()) {
+                SettingsInfoRow(if (query.isNotBlank()) desktopText("extensions.noResults")
+                    else desktopText("extensions.installedEmpty"), null)
             } else {
-                state.installedEntries.forEachIndexed { index, entry ->
+                entries.forEachIndexed { index, entry ->
                     if (index > 0) SettingsRowDivider()
                     val update = updates[entry.id]
                     val hidden = expanded - entry.id
@@ -409,7 +320,7 @@ private fun InstalledExtensions(
                         }
                         if (update != null) {
                             TextButton(
-                                onClick = { controller.applyUpdates() },
+                                onClick = { controller.applyUpdates(listOf(update)) },
                                 enabled = enabled,
                                 modifier = Modifier.testTag("extension-update:${entry.id}"),
                             ) { Text(desktopText("extensions.update")) }
@@ -468,11 +379,10 @@ private fun InstalledExtensions(
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SourceSwitchDialog(
+private fun ManagedSources(
     controller: DesktopController,
     state: DesktopAppState,
     enabled: Boolean,
-    onDismiss: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf(DesktopSourceEnabledFilter.ALL) }
@@ -502,176 +412,161 @@ private fun SourceSwitchDialog(
         controller.setSourcesNsfw(names, isNsfw)
         selected = emptySet()
     }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = Modifier.testTag("source-switch-dialog"),
-        title = { Text(desktopText("sourceList.header", state.enabledSources.size, state.sources.size)) },
-        text = {
-            Column(Modifier.width(520.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    label = { Text(desktopText("sourceList.search")) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().testTag("source-list-query"),
-                )
-                // Android's UnifiedEnabledFilter: all / enabled / disabled, applied on top of the search.
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DesktopSourceEnabledFilter.entries.forEach { option ->
-                        FilterChip(
-                            selected = option == filter,
-                            onClick = { filter = option },
-                            label = { Text(AndroidStrings[option.stringName()]) },
-                            modifier = Modifier.testTag("source-enabled-filter:${option.name}"),
-                        )
-                    }
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            label = { Text(desktopText("sourceList.search")) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().testTag("source-list-query"),
+        )
+        // Filtering and bulk controls share one toolbar; the source list owns the remaining viewport.
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DesktopSourceEnabledFilter.entries.forEach { option ->
+                FilterChip(selected = option == filter, onClick = { filter = option },
+                    label = { Text(AndroidStrings[option.stringName()]) },
+                    modifier = Modifier.testTag("source-enabled-filter:${option.name}"))
+            }
+            androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+            TextButton({ selected = toggleVisibleSourceSelection(selected, entries) },
+                enabled = enabled && entries.isNotEmpty(), modifier = Modifier.testTag("source-selection-all")) {
+                Text(AndroidStrings[if (everyVisibleSourceSelected(selected, entries)) "deselect_all" else "select_all"])
+            }
+            if (selecting) {
+                Text(AndroidStrings.format("selected_count", selected.size),
+                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("source-selection-count"))
+            } else {
+                TextButton({ pendingBatch = true },
+                    enabled = enabled && entries.any { it.source.name in state.disabledSources },
+                    modifier = Modifier.testTag("source-switches-enable-all")) {
+                    Text(AndroidStrings["unified_sources_enable_all"])
                 }
-                if (entries.isEmpty()) {
-                    Text(desktopText("sourceList.empty"), style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp).testTag("source-enable-list")) {
-                        itemsIndexed(entries, key = { _, listing -> listing.source.name }) { index, listing ->
-                            if (index > 0) SettingsRowDivider()
-                            val name = listing.source.name
-                            val summary = listOf(
-                                DesktopSourceLabels.contentType(listing.source.contentType),
-                                DesktopSourceLabels.ecosystem(listing.ecosystem),
-                                listing.source.locale,
-                            ).joinToString(" · ")
-                            if (selecting) {
-                                // Android shares one row for both modes: in selection mode the whole row is the
-                                // checkbox, so a tap joins or leaves the selection instead of flipping the switch.
-                                val isSelected = name in selected
-                                SettingsActionRow(
-                                    title = listing.displayName,
-                                    summary = summary,
-                                    modifier = Modifier
-                                        .toggleable(
-                                            value = isSelected,
-                                            enabled = enabled,
-                                            role = Role.Checkbox,
-                                        ) { selected = toggleSourceSelection(selected, name) }
-                                        .testTag("source-selected:$name"),
-                                ) {
-                                    Checkbox(checked = isSelected, onCheckedChange = null, enabled = enabled)
-                                }
-                            } else {
-                                SettingsSwitchRow(
-                                    title = listing.displayName,
-                                    summary = summary,
-                                    checked = name !in state.disabledSources,
+                TextButton({ pendingBatch = false },
+                    enabled = enabled && entries.any { it.source.name !in state.disabledSources },
+                    modifier = Modifier.testTag("source-switches-disable-all")) {
+                    Text(AndroidStrings["unified_sources_disable_all"])
+                }
+            }
+        }
+        if (selecting) {
+            // Android's `onEnableSelectedSources`/`onDisableSelectedSources`/`onToggleSelectedSourcesNsfw`/
+            // `onTestSelectedSources`: one write for the whole selection, and the mode ends with it.
+            val nsfwAction = selectedSourcesNsfwAction(selected, state.sources, state.sourceNsfwOverrides)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                TextButton(
+                    onClick = { applySelection(true, selected) },
+                    enabled = enabled,
+                    modifier = Modifier.testTag("source-selection-enable"),
+                ) { Text(AndroidStrings["enable"]) }
+                TextButton(
+                    onClick = { applySelection(false, selected) },
+                    enabled = enabled,
+                    modifier = Modifier.testTag("source-selection-disable"),
+                ) { Text(AndroidStrings["disable"]) }
+                TextButton(
+                    onClick = {
+                        when (nsfwAction) {
+                            SelectedSourcesNsfwAction.SET_NSFW -> applyNsfwSelection(true, selected)
+                            SelectedSourcesNsfwAction.SET_SFW -> applyNsfwSelection(false, selected)
+                            SelectedSourcesNsfwAction.CHOOSE -> pendingNsfw = true
+                            SelectedSourcesNsfwAction.NONE -> Unit
+                        }
+                    },
+                    enabled = enabled && nsfwAction != SelectedSourcesNsfwAction.NONE,
+                    modifier = Modifier.testTag("source-selection-nsfw"),
+                ) { Text(AndroidStrings[selectedSourcesNsfwLabel(nsfwAction)]) }
+                TextButton(
+                    onClick = {
+                        val names = selected.toList()
+                        selected = emptySet()
+                        // The tester owns its own page and forgets a stale run on entry, so navigate first
+                        // and start the run over the selection (Android's `testSources(ids)`).
+                        controller.showSourceTest()
+                        controller.startSourceTest(names)
+                    },
+                    enabled = enabled,
+                    modifier = Modifier.testTag("source-selection-test"),
+                ) { Text(AndroidStrings["source_test_action"]) }
+                // Android's 删除 asks first, with the package count and the JAR packages it refuses to touch.
+                TextButton(
+                    onClick = { pendingDelete = sourceDeletePlan(selected, state.installedEntries) },
+                    enabled = enabled,
+                    modifier = Modifier.testTag("source-selection-delete"),
+                ) { Text(AndroidStrings["delete"]) }
+                TextButton(
+                    onClick = { selected = emptySet() },
+                    enabled = enabled,
+                    modifier = Modifier.testTag("source-selection-close"),
+                ) { Text(desktopText("common.cancel")) }
+            }
+        }
+        if (entries.isEmpty()) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(if (state.sources.isEmpty()) desktopText("extensions.sourcesEmpty")
+                    else desktopText("sourceList.empty"), style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            LazyColumn(Modifier.fillMaxWidth().weight(1f)
+                .testTag("source-enable-list")) {
+                itemsIndexed(entries, key = { _, listing -> listing.source.name }) { index, listing ->
+                    if (index > 0) SettingsRowDivider()
+                    val name = listing.source.name
+                    val summary = listOf(
+                        DesktopSourceLabels.contentType(listing.source.contentType),
+                        DesktopSourceLabels.ecosystem(listing.ecosystem),
+                        listing.source.locale,
+                    ).joinToString(" · ")
+                    if (selecting) {
+                        // Android shares one row for both modes: in selection mode the whole row is the
+                        // checkbox, so a tap joins or leaves the selection instead of flipping the switch.
+                        val isSelected = name in selected
+                        SettingsActionRow(
+                            title = listing.displayName,
+                            summary = summary,
+                            modifier = Modifier
+                                .toggleable(
+                                    value = isSelected,
                                     enabled = enabled,
-                                    onCheckedChange = { controller.setSourceEnabled(name, it) },
-                                    testTag = "source-enabled:$name",
-                                )
+                                    role = Role.Checkbox,
+                                ) { selected = toggleSourceSelection(selected, name) }
+                                .testTag("source-selected:$name"),
+                        ) {
+                            Checkbox(checked = isSelected, onCheckedChange = null, enabled = enabled)
+                        }
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            SettingsSplitSwitchRow(
+                                title = listing.displayName,
+                                summary = summary,
+                                checked = name !in state.disabledSources,
+                                enabled = enabled,
+                                onCheckedChange = { controller.setSourceEnabled(name, it) },
+                                onClick = { controller.sourceSettings(name) },
+                                modifier = Modifier.weight(1f),
+                                testTag = "source-settings:$name",
+                                switchTag = "source-enabled:$name",
+                            )
+                            state.jsonSources.firstOrNull { it.id == name }?.let { source ->
+                                androidx.compose.material3.IconButton({ controller.removeJsonSource(source.id) },
+                                    enabled = enabled, modifier = Modifier.testTag("json-source-remove:${source.id}")) {
+                                    androidx.compose.material3.Icon(
+                                        org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons.Delete,
+                                        contentDescription = desktopText("jsonSources.remove"),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             }
                         }
                     }
                 }
-                // Android's selection bar, in its own order: the count, 全选/取消全选, then the actions. 全选 doubles as
-                // the only way into selection mode here — Android enters it with a long press, which a mouse user has
-                // no reason to try on a settings row.
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    TextButton(
-                        onClick = { selected = toggleVisibleSourceSelection(selected, entries) },
-                        enabled = enabled && entries.isNotEmpty(),
-                        modifier = Modifier.testTag("source-selection-all"),
-                    ) {
-                        val all = everyVisibleSourceSelected(selected, entries)
-                        Text(AndroidStrings[if (all) "deselect_all" else "select_all"])
-                    }
-                    if (selecting) {
-                        Text(
-                            text = AndroidStrings.format("selected_count", selected.size),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.testTag("source-selection-count"),
-                        )
-                    }
-                }
-                if (selecting) {
-                    // Android's `onEnableSelectedSources`/`onDisableSelectedSources`/`onToggleSelectedSourcesNsfw`/
-                    // `onTestSelectedSources`: one write for the whole selection, and the mode ends with it.
-                    val nsfwAction = selectedSourcesNsfwAction(selected, state.sources, state.sourceNsfwOverrides)
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        TextButton(
-                            onClick = { applySelection(true, selected) },
-                            enabled = enabled,
-                            modifier = Modifier.testTag("source-selection-enable"),
-                        ) { Text(AndroidStrings["enable"]) }
-                        TextButton(
-                            onClick = { applySelection(false, selected) },
-                            enabled = enabled,
-                            modifier = Modifier.testTag("source-selection-disable"),
-                        ) { Text(AndroidStrings["disable"]) }
-                        TextButton(
-                            onClick = {
-                                when (nsfwAction) {
-                                    SelectedSourcesNsfwAction.SET_NSFW -> applyNsfwSelection(true, selected)
-                                    SelectedSourcesNsfwAction.SET_SFW -> applyNsfwSelection(false, selected)
-                                    SelectedSourcesNsfwAction.CHOOSE -> pendingNsfw = true
-                                    SelectedSourcesNsfwAction.NONE -> Unit
-                                }
-                            },
-                            enabled = enabled && nsfwAction != SelectedSourcesNsfwAction.NONE,
-                            modifier = Modifier.testTag("source-selection-nsfw"),
-                        ) { Text(AndroidStrings[selectedSourcesNsfwLabel(nsfwAction)]) }
-                        TextButton(
-                            onClick = {
-                                val names = selected.toList()
-                                selected = emptySet()
-                                onDismiss()
-                                // The tester owns its own page and forgets a stale run on entry, so navigate first
-                                // and start the run over the selection (Android's `testSources(ids)`).
-                                controller.showSourceTest()
-                                controller.startSourceTest(names)
-                            },
-                            enabled = enabled,
-                            modifier = Modifier.testTag("source-selection-test"),
-                        ) { Text(AndroidStrings["source_test_action"]) }
-                        // Android's 删除 asks first, with the package count and the JAR packages it refuses to touch.
-                        TextButton(
-                            onClick = { pendingDelete = sourceDeletePlan(selected, state.installedEntries) },
-                            enabled = enabled,
-                            modifier = Modifier.testTag("source-selection-delete"),
-                        ) { Text(AndroidStrings["delete"]) }
-                        TextButton(
-                            onClick = { selected = emptySet() },
-                            enabled = enabled,
-                            modifier = Modifier.testTag("source-selection-close"),
-                        ) { Text(desktopText("common.cancel")) }
-                    }
-                } else {
-                    // The bulk pair also follows the filter, like Android's confirmation counts it does. Its labels are
-                    // Android's toolbar pair (Enable all / Disable all), not the chips' 启用/禁用, which are filters here.
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(
-                            onClick = { pendingBatch = true },
-                            enabled = enabled && entries.any { it.source.name in state.disabledSources },
-                            modifier = Modifier.testTag("source-switches-enable-all"),
-                        ) { Text(AndroidStrings["unified_sources_enable_all"]) }
-                        TextButton(
-                            onClick = { pendingBatch = false },
-                            enabled = enabled && entries.any { it.source.name !in state.disabledSources },
-                            modifier = Modifier.testTag("source-switches-disable-all"),
-                        ) { Text(AndroidStrings["unified_sources_disable_all"]) }
-                    }
-                }
             }
-        },
-        confirmButton = {
-            Button(onClick = onDismiss, modifier = Modifier.testTag("source-switch-done")) {
-                Text(desktopText("common.ok"))
-            }
-        },
-    )
+        }
+    }
     pendingBatch?.let { enable ->
         val names = entries.map { it.source.name }
         val key = if (enable) "enable" else "disable"

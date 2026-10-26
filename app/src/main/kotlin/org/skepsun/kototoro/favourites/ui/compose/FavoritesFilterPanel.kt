@@ -1,47 +1,41 @@
 package org.skepsun.kototoro.favourites.ui.compose
 
 import android.content.Context
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.DropdownMenu
-import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.BaseApp
+import org.skepsun.kototoro.core.ui.compose.CompactFilterChip
+import org.skepsun.kototoro.core.ui.compose.CompactFilterChipFlow
+import org.skepsun.kototoro.core.ui.compose.FilterFacetChip
+import org.skepsun.kototoro.core.ui.compose.FilterFacetDropdown
+import org.skepsun.kototoro.core.ui.compose.FilterFacetOption
 import org.skepsun.kototoro.core.ui.compose.FilterPanelGroup
+import org.skepsun.kototoro.core.ui.compose.FilterPanelHeader
+import org.skepsun.kototoro.core.ui.compose.FilterPanelReset
+import org.skepsun.kototoro.core.ui.compose.FilterPanelSwitchRow
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.widgets.ChipModel
@@ -66,8 +60,11 @@ import org.skepsun.kototoro.list.ui.model.QuickFilterGroup
  *  - a reset action that clears the quick filter and source tags.
  *
  * [close] dismisses the popup (typically from the "Done" row).
+ *
+ * The group cards, header, switch rows, compact chips and facet dropdown come from `core-ui`'s shared
+ * filter panel, which the desktop library drawer renders too; this file keeps the Android quick-filter
+ * mapping, resources and the single-choice source-type menu.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FavoritesFilterPanelContent(
     quickFilter: QuickFilter?,
@@ -99,21 +96,11 @@ fun FavoritesFilterPanelContent(
             .padding(horizontal = 6.dp, vertical = 2.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(R.string.filter),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f),
-            )
-            TvTextButton(onClick = close) {
-                Text(stringResource(R.string.done))
-            }
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        FilterPanelHeader(
+            title = stringResource(R.string.filter),
+            doneLabel = stringResource(R.string.done),
+            onDone = close,
+        )
 
         FilterPanelGroup {
             FilterPanelSwitchRow(
@@ -171,16 +158,7 @@ fun FavoritesFilterPanelContent(
             }
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 2.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            TvTextButton(onClick = onResetFilters) {
-                Text(stringResource(R.string.reset_filter))
-            }
-        }
+        FilterPanelReset(label = stringResource(R.string.reset_filter), onClick = onResetFilters)
     }
 }
 
@@ -200,7 +178,6 @@ private fun QuickFilterGroupDropdown(
     entryPoint: BaseApp.BaseAppEntryPoint?,
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
 ) {
-    var expanded by remember(group.key) { mutableStateOf(false) }
     val selectedItems = group.items.filter(ChipModel::isChecked)
     val label = when (selectedItems.size) {
         0 -> stringResource(group.titleResId)
@@ -211,85 +188,46 @@ private fun QuickFilterGroupDropdown(
             selectedItems.size,
         )
     }
-
-    Box {
-        FilterChip(
-            selected = selectedItems.isNotEmpty(),
-            onClick = { expanded = true },
-            modifier = Modifier
-                .fillMaxWidth()
-                .tvFocusable(shape = FilterControlRingShape, addFocusTarget = false),
-            leadingIcon = {
-                Icon(
-                    painter = painterResource(group.iconResId),
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-            },
-            trailingIcon = {
-                Icon(
-                    painter = painterResource(R.drawable.ic_expand_more),
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-            },
-            label = {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                )
-            },
-        )
-        DropdownMenu(
-            containerColor = MaterialTheme.colorScheme.popupMenuContainerColor(),
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            group.items.forEach { chip ->
-                val option = chip.data as? ListFilterOption ?: return@forEach
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = buildChipLabel(context, chip, entryPoint),
-                            maxLines = 1,
-                        )
-                    },
-                    onClick = { onQuickFilterOptionClick(option) },
-                    // M3 dropdown rows only draw a pressed tint, so a remote stop would look like nothing happened.
-                    modifier = Modifier.tvFocusable(shape = FilterControlRingShape, addFocusTarget = false),
-                    leadingIcon = {
-                        Icon(
-                            painter = painterResource(
-                                if (chip.isChecked) R.drawable.ic_check else chip.icon,
-                            ),
-                            contentDescription = null,
-                            tint = if (chip.isChecked) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                        )
-                    },
-                )
+    val chipsByOption = group.items.mapNotNull { chip -> (chip.data as? ListFilterOption)?.let { it to chip } }.toMap()
+    FilterFacetDropdown(
+        label = label,
+        options = chipsByOption.map { (option, chip) ->
+            FilterFacetOption(option, buildChipLabel(context, chip, entryPoint), chip.isChecked)
+        },
+        onOptionClick = onQuickFilterOptionClick,
+        resetLabel = stringResource(R.string.reset_filter),
+        onReset = {
+            selectedItems.forEach { chip ->
+                (chip.data as? ListFilterOption)?.let(onQuickFilterOptionClick)
             }
-            HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.reset_filter)) },
-                onClick = {
-                    selectedItems.forEach { chip ->
-                        (chip.data as? ListFilterOption)?.let(onQuickFilterOptionClick)
-                    }
+        },
+        optionIcon = { option ->
+            Icon(
+                painter = painterResource(if (option.checked) R.drawable.ic_check else chipsByOption.getValue(option.key).icon),
+                contentDescription = null,
+                tint = if (option.checked) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
                 },
-                modifier = Modifier.tvFocusable(
-                    enabled = selectedItems.isNotEmpty(),
-                    shape = FilterControlRingShape,
-                    addFocusTarget = false,
-                ),
-                enabled = selectedItems.isNotEmpty(),
             )
-        }
-    }
+        },
+        leadingIcon = {
+            Icon(
+                painter = painterResource(group.iconResId),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+        },
+        trailingIcon = {
+            Icon(
+                painter = painterResource(R.drawable.ic_expand_more),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+        },
+        menuContainerColor = MaterialTheme.colorScheme.popupMenuContainerColor(),
+    )
 }
 
 @Composable
@@ -311,12 +249,10 @@ private fun SourceTagFilterDropdown(
     }
 
     Box {
-        FilterChip(
+        FilterFacetChip(
+            label = label,
             selected = selectedTags.isNotEmpty(),
             onClick = { expanded = true },
-            modifier = Modifier
-                .fillMaxWidth()
-                .tvFocusable(shape = FilterControlRingShape, addFocusTarget = false),
             leadingIcon = {
                 Icon(
                     painter = rememberSafePainter(R.drawable.ic_filter_menu),
@@ -329,13 +265,6 @@ private fun SourceTagFilterDropdown(
                     painter = painterResource(R.drawable.ic_expand_more),
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
-                )
-            },
-            label = {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
                 )
             },
         )
@@ -402,7 +331,6 @@ private fun SourceTagFilterDropdown(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun QuickFilterItemChips(
     chips: List<ChipModel>,
@@ -410,10 +338,7 @@ private fun QuickFilterItemChips(
     entryPoint: BaseApp.BaseAppEntryPoint?,
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
 ) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
+    CompactFilterChipFlow {
         chips.forEach { chip ->
             val option = chip.data as? ListFilterOption
             CompactFilterChip(
@@ -424,58 +349,5 @@ private fun QuickFilterItemChips(
                 icon = chipIcon(chip),
             )
         }
-    }
-}
-
-@Composable
-private fun CompactFilterChip(
-    selected: Boolean,
-    onClick: () -> Unit,
-    label: String,
-    icon: (@Composable () -> Unit)? = null,
-    enabled: Boolean = true,
-) {
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 28.dp) {
-        FilterChip(
-            selected = selected,
-            onClick = onClick,
-            enabled = enabled,
-            modifier = Modifier
-                .heightIn(min = 28.dp)
-                .tvFocusable(enabled = enabled, shape = FilterControlRingShape, addFocusTarget = false),
-            leadingIcon = icon,
-            label = {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            },
-        )
-    }
-}
-
-@Composable
-private fun FilterPanelSwitchRow(
-    title: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .heightIn(min = 44.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = title,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-        )
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-        )
     }
 }

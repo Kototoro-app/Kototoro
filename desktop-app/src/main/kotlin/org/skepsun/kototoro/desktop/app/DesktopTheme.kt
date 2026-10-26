@@ -10,7 +10,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.text.LocalUiStrings
@@ -80,6 +79,11 @@ internal fun DesktopTheme(appearance: DesktopAppearance = DesktopAppearance.SYST
         CompositionLocalProvider(LocalContentColor provides colorScheme.onSurface,
             LocalDesktopDark provides dark,
             LocalDesktopInterfaceStyle provides interfaceStyle, LocalInterfaceStyleTokens provides tokens,
+            // The shared components' style switches: the desktop's Material style is Android's Expressive one.
+            org.skepsun.kototoro.core.ui.theme.LocalIsIosInterfaceStyle provides
+                (interfaceStyle == DesktopInterfaceStyle.IOS),
+            org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled provides
+                (interfaceStyle == DesktopInterfaceStyle.MATERIAL),
             // Android's own catalog for the screens both hosts share (see DesktopUiStrings).
             LocalUiStrings provides DesktopUiStrings, content = content)
     }
@@ -95,14 +99,10 @@ internal fun desktopCanvasBrush(): Brush = Brush.verticalGradient(listOf(
 @Composable
 internal fun DesktopSearchField(value: String, onValueChange: (String) -> Unit, placeholder: String,
     modifier: Modifier = Modifier, enabled: Boolean = true, tag: String? = null) {
-    DesktopControlSurface(modifier, RoundedCornerShape(28.dp)) {
-        TextField(value, onValueChange, enabled = enabled, singleLine = true,
-            placeholder = { Text(placeholder) }, leadingIcon = {
-                Icon(painterResource("icons/ic_search.svg"), null, tint = Muted, modifier = Modifier.size(22.dp))
-            }, colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent,
-                focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-                disabledIndicatorColor = Color.Transparent), modifier = Modifier.fillMaxWidth()
-                    .then(if (tag != null) Modifier.testTag(tag) else Modifier))
-    }
+    org.skepsun.kototoro.core.ui.settings.SettingsSearchField(
+        query = value, onQueryChange = onValueChange, placeholder = placeholder, enabled = enabled,
+        modifier = modifier, height = 56.dp,
+        inputModifier = if (tag != null) Modifier.testTag(tag) else Modifier,
+        surface = { bounds, content -> DesktopControlSurface(bounds, RoundedCornerShape(28.dp)) { content() } },
+    )
 }

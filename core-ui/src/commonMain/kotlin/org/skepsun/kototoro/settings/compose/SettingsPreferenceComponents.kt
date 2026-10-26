@@ -1,6 +1,17 @@
 package org.skepsun.kototoro.settings.compose
 
-import androidx.annotation.DrawableRes
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.core.ui.settings.PreferenceDialogContent
+import org.skepsun.kototoro.core.ui.settings.PreferenceDialog
+import androidx.compose.runtime.staticCompositionLocalOf
+import org.skepsun.kototoro.core.ui.theme.LocalIsIosInterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalArtworkBackdrop
+import org.skepsun.kototoro.core.ui.theme.ArtworkBackdrop
+import org.skepsun.kototoro.core.ui.text.uiString
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,19 +34,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.ListAlt
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Checklist
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Reorder
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.ToggleOn
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -61,8 +59,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -72,8 +68,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
-import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvTextFieldReadOnlyState
@@ -82,17 +76,22 @@ import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.adaptive.tvSliderDpad
 import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
-import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
-import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+
+/**
+ * Resolves the `iconRes` a settings row was given into a painter. Android hands its drawable resolver in at the theme
+ * root, so its many call sites keep passing `R.drawable` ids; a host without resource ids passes `icon` instead and
+ * leaves this resolving nothing.
+ */
+val LocalSettingsIconResolver = staticCompositionLocalOf<@Composable (Int) -> Painter?> { { null } }
 
 data class SettingsChoiceOption<T>(
     val value: T,
     val label: String,
 )
 
-internal enum class SettingsIconTone(val iosColor: Color) {
+enum class SettingsIconTone(val iosColor: Color) {
     PRIMARY(Color(0xFF007AFF)),
     SECONDARY(Color(0xFF34C759)),
     TERTIARY(Color(0xFFFF9500)),
@@ -102,7 +101,7 @@ internal enum class SettingsIconTone(val iosColor: Color) {
 }
 
 @Composable
-internal fun SettingsIconTone.containerColor(isIosStyle: Boolean): Color {
+fun SettingsIconTone.containerColor(isIosStyle: Boolean): Color {
     if (isIosStyle) return iosColor
     val scheme = MaterialTheme.colorScheme
     return when (this) {
@@ -116,7 +115,7 @@ internal fun SettingsIconTone.containerColor(isIosStyle: Boolean): Color {
 }
 
 @Composable
-internal fun SettingsIconTone.contentColor(isIosStyle: Boolean): Color {
+fun SettingsIconTone.contentColor(isIosStyle: Boolean): Color {
     if (isIosStyle) return Color.White
     val scheme = MaterialTheme.colorScheme
     return when (this) {
@@ -130,12 +129,13 @@ internal fun SettingsIconTone.contentColor(isIosStyle: Boolean): Color {
 }
 
 @Composable
-internal fun SettingsLeadingIcon(
+fun SettingsLeadingIcon(
     imageVector: ImageVector,
-    @DrawableRes iconRes: Int? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
     tone: SettingsIconTone,
 ) {
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val isIosStyle = LocalIsIosInterfaceStyle.current
     val tokens = LocalInterfaceStyleTokens.current
     val contentColor = tone.contentColor(isIosStyle)
     Box(
@@ -148,9 +148,10 @@ internal fun SettingsLeadingIcon(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        if (iconRes != null) {
+        val painter = icon ?: iconRes?.let { LocalSettingsIconResolver.current(it) }
+        if (painter != null) {
             Icon(
-                painter = rememberSafePainter(iconRes),
+                painter = painter,
                 contentDescription = null,
                 tint = contentColor,
                 modifier = Modifier.size(if (isIosStyle) 18.dp else 20.dp),
@@ -168,8 +169,8 @@ internal fun SettingsLeadingIcon(
 }
 
 @Composable
-internal fun settingsSwitchColors(): SwitchColors {
-    return if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+fun settingsSwitchColors(): SwitchColors {
+    return if (LocalIsIosInterfaceStyle.current) {
         SwitchDefaults.colors(
             checkedThumbColor = Color.White,
             checkedTrackColor = MaterialTheme.colorScheme.primary,
@@ -201,7 +202,7 @@ fun SettingsGroupLabel(
 }
 
 @Composable
-internal fun SettingsUpdateBadge(modifier: Modifier = Modifier) {
+fun SettingsUpdateBadge(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .size(8.dp)
@@ -213,7 +214,8 @@ internal fun SettingsUpdateBadge(modifier: Modifier = Modifier) {
 fun SettingsActionPreference(
     title: String,
     summary: String? = null,
-    @DrawableRes iconRes: Int? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
     enabled: Boolean = true,
     showChevron: Boolean = true,
     showUpdateBadge: Boolean = false,
@@ -228,8 +230,9 @@ fun SettingsActionPreference(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingsLeadingIcon(
-            imageVector = Icons.Filled.Settings,
+            imageVector = SettingsMaterialIcons.Settings,
             iconRes = iconRes,
+            icon = icon,
             tone = SettingsIconTone.PRIMARY,
         )
         Column(
@@ -256,7 +259,7 @@ fun SettingsActionPreference(
         if (showChevron) {
             Spacer(modifier = Modifier.width(8.dp))
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = SettingsMaterialIcons.KeyboardArrowRight,
                 contentDescription = null,
                 tint = settingsChevronColor(),
             )
@@ -269,7 +272,8 @@ fun SettingsSplitSwitchPreference(
     title: String,
     checked: Boolean,
     summary: String? = null,
-    @DrawableRes iconRes: Int? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
     enabled: Boolean = true,
     onClick: (() -> Unit)? = null,
     onCheckedChange: (Boolean) -> Unit,
@@ -292,8 +296,9 @@ fun SettingsSplitSwitchPreference(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SettingsLeadingIcon(
-                imageVector = Icons.Filled.Tune,
+                imageVector = SettingsMaterialIcons.Tune,
                 iconRes = iconRes,
+                icon = icon,
                 tone = SettingsIconTone.SECONDARY,
             )
             Column(
@@ -327,7 +332,8 @@ fun SettingsSplitSwitchPreference(
 fun SettingsInfoPreference(
     title: String,
     summary: String,
-    @DrawableRes iconRes: Int? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
 ) {
     Row(
         modifier = Modifier
@@ -335,8 +341,9 @@ fun SettingsInfoPreference(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingsLeadingIcon(
-            imageVector = Icons.Filled.Info,
+            imageVector = SettingsMaterialIcons.Info,
             iconRes = iconRes,
+            icon = icon,
             tone = SettingsIconTone.TERTIARY,
         )
         Column(
@@ -362,7 +369,8 @@ fun SettingsSwitchPreference(
     checked: Boolean,
     summary: String? = null,
     styleHint: String? = null,
-    @DrawableRes iconRes: Int? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
     enabled: Boolean = true,
     locked: Boolean = false,
     onLockClick: (() -> Unit)? = null,
@@ -392,8 +400,9 @@ fun SettingsSwitchPreference(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingsLeadingIcon(
-            imageVector = Icons.Filled.ToggleOn,
+            imageVector = SettingsMaterialIcons.ToggleOn,
             iconRes = iconRes,
+            icon = icon,
             tone = SettingsIconTone.SECONDARY_VARIANT,
         )
         Column(
@@ -438,8 +447,8 @@ fun SettingsSwitchPreference(
         if (onLockClick != null) {
             IconButton(onClick = onLockClick, modifier = Modifier.tvIconButtonRing()) {
                 Icon(
-                    painter = painterResource(if (locked) R.drawable.ic_lock else R.drawable.ic_lock_open),
-                    contentDescription = stringResource(if (locked) R.string.source_lock_locked else R.string.source_lock_unlocked),
+                    painter = rememberVectorPainter(if (locked) ReaderPanelIcons.Lock else ReaderPanelIcons.LockOpen),
+                    contentDescription = uiString(if (locked) "source_lock_locked" else "source_lock_unlocked"),
                     tint = if (locked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -461,14 +470,15 @@ fun <T> SettingsChoicePreference(
     options: List<SettingsChoiceOption<T>>,
     summary: String? = null,
     styleHint: String? = null,
-    @DrawableRes iconRes: Int? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
     enabled: Boolean = true,
     onSettingsClick: (() -> Unit)? = null,
     settingsContentDescription: String? = null,
-    settingsIcon: ImageVector = Icons.Filled.Settings,
+    settingsIcon: ImageVector = SettingsMaterialIcons.Settings,
     onSecondarySettingsClick: (() -> Unit)? = null,
     secondarySettingsContentDescription: String? = null,
-    secondarySettingsIcon: ImageVector = Icons.Filled.Tune,
+    secondarySettingsIcon: ImageVector = SettingsMaterialIcons.Tune,
     dialogFooter: (@Composable () -> Unit)? = null,
     onValueChange: (T) -> Unit,
 ) {
@@ -496,8 +506,9 @@ fun <T> SettingsChoicePreference(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingsLeadingIcon(
-            imageVector = Icons.AutoMirrored.Filled.ListAlt,
+            imageVector = SettingsMaterialIcons.ListAlt,
             iconRes = iconRes,
+            icon = icon,
             tone = SettingsIconTone.PRIMARY_VARIANT,
         )
         Column(
@@ -561,7 +572,7 @@ fun <T> SettingsChoicePreference(
             }
         }
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            imageVector = SettingsMaterialIcons.KeyboardArrowRight,
             contentDescription = null,
             tint = settingsChevronColor(),
         )
@@ -592,7 +603,7 @@ fun <T> SettingsChoiceDialog(
     onDismissRequest: () -> Unit,
     onValueChange: (T) -> Unit,
 ) {
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val isIosStyle = LocalIsIosInterfaceStyle.current
     SettingsAlertDialog(
         title = title,
         onDismissRequest = onDismissRequest,
@@ -625,7 +636,7 @@ fun <T> SettingsChoiceDialog(
                         )
                         if (isIosStyle && selected) {
                             Icon(
-                                imageVector = Icons.Filled.Check,
+                                imageVector = SettingsMaterialIcons.Check,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                             )
@@ -645,7 +656,7 @@ fun <T> SettingsChoiceDialog(
         },
         confirmButton = {
             SettingsDialogActionButton(
-                text = stringResource(android.R.string.ok),
+                text = uiString("ok"),
                 onClick = onDismissRequest,
             )
         },
@@ -659,7 +670,8 @@ fun <T> SettingsMultiChoicePreference(
     options: List<SettingsChoiceOption<T>>,
     emptySelectionText: String,
     summary: String? = null,
-    @DrawableRes iconRes: Int? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
     maxSelections: Int? = null,
     enabled: Boolean = true,
     onValueChange: (Set<T>) -> Unit,
@@ -683,8 +695,9 @@ fun <T> SettingsMultiChoicePreference(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingsLeadingIcon(
-            imageVector = Icons.Filled.Checklist,
+            imageVector = SettingsMaterialIcons.Checklist,
             iconRes = iconRes,
+            icon = icon,
             tone = SettingsIconTone.TERTIARY_VARIANT,
         )
         Column(
@@ -713,14 +726,14 @@ fun <T> SettingsMultiChoicePreference(
         }
         Spacer(modifier = Modifier.width(8.dp))
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            imageVector = SettingsMaterialIcons.KeyboardArrowRight,
             contentDescription = null,
             tint = settingsChevronColor(),
         )
     }
 
     if (isDialogVisible) {
-        val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+        val isIosStyle = LocalIsIosInterfaceStyle.current
         SettingsAlertDialog(
             title = title,
             onDismissRequest = { isDialogVisible = false },
@@ -776,7 +789,7 @@ fun <T> SettingsMultiChoicePreference(
                             )
                             if (isIosStyle && checked) {
                                 Icon(
-                                    imageVector = Icons.Filled.Check,
+                                    imageVector = SettingsMaterialIcons.Check,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                 )
@@ -790,7 +803,7 @@ fun <T> SettingsMultiChoicePreference(
             },
             confirmButton = {
                 SettingsDialogActionButton(
-                    text = stringResource(android.R.string.ok),
+                    text = uiString("ok"),
                     onClick = {
                         onValueChange(pendingValues)
                         isDialogVisible = false
@@ -799,7 +812,7 @@ fun <T> SettingsMultiChoicePreference(
             },
             dismissButton = {
                 SettingsDialogActionButton(
-                    text = stringResource(android.R.string.cancel),
+                    text = uiString("cancel"),
                     onClick = { isDialogVisible = false },
                 )
             },
@@ -814,7 +827,8 @@ fun SettingsSliderPreference(
     valueRange: IntRange,
     step: Int,
     summary: String? = null,
-    @DrawableRes iconRes: Int? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
     enabled: Boolean = true,
     valueText: (Int) -> String,
     onValueChange: (Int) -> Unit,
@@ -842,8 +856,9 @@ fun SettingsSliderPreference(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SettingsLeadingIcon(
-                imageVector = Icons.Filled.Tune,
+                imageVector = SettingsMaterialIcons.Tune,
                 iconRes = iconRes,
+                icon = icon,
                 tone = SettingsIconTone.SECONDARY_VARIANT,
             )
             Column(
@@ -910,7 +925,8 @@ fun SettingsTextInputPreference(
     summary: String? = null,
     placeholder: String? = null,
     isPassword: Boolean = false,
-    @DrawableRes iconRes: Int? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
     enabled: Boolean = true,
     onValueChange: (String) -> Unit,
 ) {
@@ -928,6 +944,7 @@ fun SettingsTextInputPreference(
             placeholder = placeholder,
             isPassword = isPassword,
             iconRes = iconRes,
+            icon = icon,
             enabled = enabled,
             onValueChange = onValueChange,
         )
@@ -943,8 +960,9 @@ fun SettingsTextInputPreference(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SettingsLeadingIcon(
-                imageVector = Icons.Filled.Edit,
+                imageVector = SettingsMaterialIcons.Edit,
                 iconRes = iconRes,
+                icon = icon,
                 tone = SettingsIconTone.TERTIARY_VARIANT,
             )
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -990,7 +1008,8 @@ fun SettingsDialogTextPreference(
     placeholder: String? = null,
     suggestions: List<SettingsChoiceOption<String>> = emptyList(),
     isPassword: Boolean = false,
-    @DrawableRes iconRes: Int? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
     enabled: Boolean = true,
     onValueChange: (String) -> Unit,
 ) {
@@ -1001,7 +1020,7 @@ fun SettingsDialogTextPreference(
         isPassword && value.isNotEmpty() -> "\u2022".repeat(value.length.coerceAtMost(8))
         value.isNotBlank() -> value
         !placeholder.isNullOrBlank() -> placeholder
-        else -> stringResource(R.string.not_specified)
+        else -> uiString("not_specified")
     }
 
     Row(
@@ -1016,8 +1035,9 @@ fun SettingsDialogTextPreference(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingsLeadingIcon(
-            imageVector = Icons.Filled.Edit,
+            imageVector = SettingsMaterialIcons.Edit,
             iconRes = iconRes,
+            icon = icon,
             tone = SettingsIconTone.TERTIARY,
         )
         Column(
@@ -1046,14 +1066,14 @@ fun SettingsDialogTextPreference(
         }
         Spacer(modifier = Modifier.width(8.dp))
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            imageVector = SettingsMaterialIcons.KeyboardArrowRight,
             contentDescription = null,
             tint = settingsChevronColor(),
         )
     }
 
     if (isDialogVisible) {
-        val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+        val isIosStyle = LocalIsIosInterfaceStyle.current
         val isTvPresentation = LocalUiPresentationConfig.current.isTv
         val fieldExit = rememberTvFieldExit()
         // TV keeps the dialog's field read-only until the centre key asks for editing: an editable
@@ -1091,9 +1111,9 @@ fun SettingsDialogTextPreference(
                                 ) {
                                     Icon(
                                         imageVector = if (isSuggestionsExpanded) {
-                                            Icons.Filled.KeyboardArrowUp
+                                            SettingsMaterialIcons.KeyboardArrowUp
                                         } else {
-                                            Icons.Filled.KeyboardArrowDown
+                                            SettingsMaterialIcons.KeyboardArrowDown
                                         },
                                         contentDescription = null,
                                     )
@@ -1110,7 +1130,7 @@ fun SettingsDialogTextPreference(
                     )
                     if (suggestions.isNotEmpty() && isTvPresentation) {
                         SettingsDialogActionButton(
-                            text = stringResource(R.string.options),
+                            text = uiString("options"),
                             onClick = { isSuggestionsExpanded = !isSuggestionsExpanded },
                         )
                     }
@@ -1138,7 +1158,7 @@ fun SettingsDialogTextPreference(
             confirmButton = {
                 SettingsDialogActionButton(
                     modifier = fieldExit.targetModifier,
-                    text = stringResource(android.R.string.ok),
+                    text = uiString("ok"),
                     onClick = {
                         onValueChange(pendingValue)
                         isSuggestionsExpanded = false
@@ -1149,7 +1169,7 @@ fun SettingsDialogTextPreference(
             dismissButton = {
                 val cancel = @Composable {
                     SettingsDialogActionButton(
-                        text = stringResource(android.R.string.cancel),
+                        text = uiString("cancel"),
                         onClick = {
                             isSuggestionsExpanded = false
                             isDialogVisible = false
@@ -1167,7 +1187,7 @@ fun SettingsDialogTextPreference(
                         // one LEFT away. It stays enabled even on an empty value on purpose; disabling
                         // it would remove the focus target from under the ring mid-dialog.
                         SettingsDialogActionButton(
-                            text = stringResource(R.string.clear),
+                            text = uiString("clear"),
                             onClick = { pendingValue = "" },
                         )
                     }
@@ -1185,15 +1205,16 @@ fun SettingsReorderPreference(
     value: List<String>,
     summary: String? = null,
     emptyValueText: String,
-    @DrawableRes iconRes: Int? = null,
+    iconRes: Int? = null,
+    icon: Painter? = null,
     enabled: Boolean = true,
     onValueChange: (List<String>) -> Unit,
 ) {
     var isDialogVisible by remember { mutableStateOf(false) }
     var pendingValue by remember(value) { mutableStateOf(value) }
     val displayValue = value.joinToString(", ").ifBlank { emptyValueText }
-    val moveUpLabel = stringResource(R.string.move_up)
-    val moveDownLabel = stringResource(R.string.move_down)
+    val moveUpLabel = uiString("move_up")
+    val moveDownLabel = uiString("move_down")
 
     Row(
         modifier = Modifier
@@ -1207,8 +1228,9 @@ fun SettingsReorderPreference(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingsLeadingIcon(
-            imageVector = Icons.Filled.Reorder,
+            imageVector = SettingsMaterialIcons.Reorder,
             iconRes = iconRes,
+            icon = icon,
             tone = SettingsIconTone.PRIMARY_VARIANT,
         )
         Column(
@@ -1237,7 +1259,7 @@ fun SettingsReorderPreference(
         }
         Spacer(modifier = Modifier.width(8.dp))
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            imageVector = SettingsMaterialIcons.KeyboardArrowRight,
             contentDescription = null,
             tint = settingsChevronColor(),
         )
@@ -1287,7 +1309,7 @@ fun SettingsReorderPreference(
                                     modifier = Modifier.tvIconButtonRing(),
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Filled.KeyboardArrowUp,
+                                        imageVector = SettingsMaterialIcons.KeyboardArrowUp,
                                         contentDescription = moveUpLabel,
                                     )
                                 }
@@ -1303,7 +1325,7 @@ fun SettingsReorderPreference(
                                     modifier = Modifier.tvIconButtonRing(),
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Filled.KeyboardArrowDown,
+                                        imageVector = SettingsMaterialIcons.KeyboardArrowDown,
                                         contentDescription = moveDownLabel,
                                     )
                                 }
@@ -1317,7 +1339,7 @@ fun SettingsReorderPreference(
             },
             confirmButton = {
                 SettingsDialogActionButton(
-                    text = stringResource(android.R.string.ok),
+                    text = uiString("ok"),
                     onClick = {
                         onValueChange(pendingValue)
                         isDialogVisible = false
@@ -1326,7 +1348,7 @@ fun SettingsReorderPreference(
             },
             dismissButton = {
                 SettingsDialogActionButton(
-                    text = stringResource(android.R.string.cancel),
+                    text = uiString("cancel"),
                     onClick = { isDialogVisible = false },
                 )
             },
@@ -1354,8 +1376,8 @@ fun SettingsGroupDivider(
 }
 
 @Composable
-internal fun Modifier.settingsPreferenceLayout(enabled: Boolean): Modifier {
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+fun Modifier.settingsPreferenceLayout(enabled: Boolean): Modifier {
+    val isIosStyle = LocalIsIosInterfaceStyle.current
     val tokens = LocalInterfaceStyleTokens.current
     // Legacy MATERIAL_3 was normalized to MATERIAL_3_EXPRESSIVE, so the branch below always
     // applies; keep the iOS vs Material split via tokens only.
@@ -1364,3 +1386,63 @@ internal fun Modifier.settingsPreferenceLayout(enabled: Boolean): Modifier {
         .heightIn(min = if (isIosStyle) 56.dp else tokens.controlHeight)
         .padding(horizontal = 16.dp, vertical = if (isIosStyle) 8.dp else 10.dp)
 }
+
+/**
+ * How the settings components show their dialogs. Android renders [PreferenceDialogContent] through its own
+ * settings dialog (window blur, TV card, back handling) at the theme root; a host that sets nothing gets the shared
+ * Material dialog.
+ */
+val LocalSettingsDialogRenderer = staticCompositionLocalOf<@Composable (PreferenceDialogContent) -> Unit> {
+    { content -> PreferenceDialog(content) }
+}
+
+/** The settings components' dialog call, routed to the host's renderer. */
+@Composable
+private fun SettingsAlertDialog(
+    title: String,
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    dismissButton: (@Composable () -> Unit)? = null,
+    bodyEditing: Boolean = false,
+    text: @Composable () -> Unit,
+) {
+    LocalSettingsDialogRenderer.current(
+        PreferenceDialogContent(
+            title = title,
+            onDismiss = onDismissRequest,
+            bodyEditing = bodyEditing,
+            text = text,
+            confirmButton = confirmButton,
+            dismissButton = dismissButton,
+        ),
+    )
+}
+
+@Composable
+fun SettingsDialogActionButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+) {
+    TextButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.tvFocusable(
+            enabled = enabled,
+            shape = RoundedCornerShape(10.dp),
+            addFocusTarget = false,
+        ),
+    ) {
+        // A television is watched from across the room, so the action labels take the size the rest
+        // of the TV settings list already uses instead of the phone's 14 sp.
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = if (LocalUiPresentationConfig.current.isTv) 16.sp else 14.sp,
+            ),
+        )
+    }
+}
+

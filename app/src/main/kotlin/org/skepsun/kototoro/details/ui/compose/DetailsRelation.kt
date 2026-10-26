@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.details.ui.compose
 
 
+import org.skepsun.kototoro.list.ui.compose.ContentRailSection
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
@@ -112,38 +113,22 @@ internal fun DetailsRelatedContentSection(
     onItemClick: (ContentListModel) -> Unit,
 ) {
     val cardStyle = compactPosterRailCardStyle(gridScale = 1f)
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 12.dp, bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text(
-            text = stringResource(R.string.details_related_works),
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = outerHorizontalPadding),
+    ContentRailSection(
+        title = stringResource(R.string.details_related_works),
+        count = items.size,
+        key = { index -> "${items[index].source.name}:${items[index].id}:${items[index].manga.url}:$index" },
+        modifier = Modifier.padding(top = 12.dp, bottom = 16.dp),
+        horizontalPadding = outerHorizontalPadding,
+    ) { index ->
+        val item = items[index]
+        KototoroContentCard(
+            model = item,
+            sharedTransitionEnabled = false,
+            cardStyle = cardStyle,
+            onClick = { onItemClick(item) },
+            onLongClick = {},
+            modifier = Modifier.width(cardStyle.itemWidth + 8.dp),
         )
-        LazyRow(
-            modifier = if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(horizontal = outerHorizontalPadding),
-        ) {
-            items(
-                count = items.size,
-                key = { index -> "${items[index].source.name}:${items[index].id}:${items[index].manga.url}:$index" },
-            ) { index ->
-                val item = items[index]
-                KototoroContentCard(
-                    model = item,
-                    sharedTransitionEnabled = false,
-                    cardStyle = cardStyle,
-                    onClick = { onItemClick(item) },
-                    onLongClick = {},
-                    modifier = Modifier.width(cardStyle.itemWidth + 8.dp),
-                )
-            }
-        }
     }
 }
 

@@ -51,6 +51,9 @@ class DesktopAppTest {
 
     @Test
     fun `the changelog page lists the channel's published notes and returns to the about card`() {
+        // The changelog belongs to the Windows package updater; other platforms show "unavailable" instead.
+        assumeTrue(org.skepsun.kototoro.desktop.runtime.DesktopPlatform.current.supportsWindowsPackages,
+            "no Windows package updater on this platform")
         probe("changelog", directory.resolve("中文 changelog"), 180)
     }
 
@@ -173,6 +176,7 @@ class DesktopAppTest {
     @Test
     fun `a JSON CMS source imports from the extensions page browses and is removed again`() {
         probe("json-sources", directory.resolve("中文 json source"), 120)
+        probe("json-sources-narrow", directory.resolve("中文 json source narrow"), 120)
     }
 
     @Test

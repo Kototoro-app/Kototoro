@@ -24,7 +24,7 @@ def compatibilityLauncher = javaToolchains.launcherFor {
 }
 
 def compatibilityDirectory = providers.gradleProperty('mihonCompatibilityDirectory')
-def compatibilityRoot = compatibilityDirectory.map { new File(it) }.getOrNull()
+def compatibilityRoot = compatibilityDirectory.map { rootProject.file(it) }.getOrNull()
 def pinFile = file('compatibility-pins.properties')
 def runtimePinFile = file('windows-runtime-pins.properties')
 def compatibilityFiles = compatibilityRoot == null ? files() : files({
@@ -188,6 +188,7 @@ def bridgeSource = file('src/bridge/csharp/KototoroWebViewBridge.cs')
 def bridgeExe = layout.buildDirectory.file('bridge/kototoro-webview-bridge.exe')
 def sdkExtracted = rootProject.layout.projectDirectory.dir('build/webview2-sdk/1.0.4258.31/extracted').asFile
 def compileWebViewBridge = tasks.register('compileWebViewBridge') {
+    onlyIf { System.getProperty('os.name', '').startsWith('Windows') }
     inputs.file(bridgeSource)
     inputs.dir(sdkExtracted)
     outputs.file(bridgeExe)

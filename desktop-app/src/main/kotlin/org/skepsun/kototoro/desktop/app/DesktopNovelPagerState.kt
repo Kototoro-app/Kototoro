@@ -49,7 +49,9 @@ internal class DesktopNovelPagerState(startBlock: Int) {
         val index = desktopNovelPageOf(pages, block)
         if (index < 0) return false
         page = index
-        anchorBlock = block
+        // The anchor is the page's first block, as after a turn: a reflow then keeps this page's top on screen
+        // instead of re-anchoring on [block] and dropping the paragraphs above it.
+        anchorBlock = pages[index].first
         return true
     }
 

@@ -11,6 +11,9 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.jsonsource.OriginGroup
 import org.skepsun.kototoro.core.source.SourceEcosystem
 import org.skepsun.kototoro.core.source.SourceListing
+import org.skepsun.kototoro.core.ui.topbar.SourceTypeMenuEntry
+import org.skepsun.kototoro.core.ui.topbar.SourceTypeMenuItems
+import org.skepsun.kototoro.core.ui.topbar.TopBarIconAction
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -107,10 +110,14 @@ data class DesktopSourceFilter(
     }
 }
 
-/** Android's right-hand top bar pill: content-type menu and source-type menu, highlighted when active. */
+/**
+ * Android's right-hand top bar pill: content-type menu and source-type menu, highlighted when active. A page adds its
+ * own buttons to the end of the same pill through [actions], as Android's "more" sits in that capsule.
+ */
 @Composable
 internal fun DesktopSourceFilterControls(filter: DesktopSourceFilter, sources: List<SourceListing>,
-    onChange: (DesktopSourceFilter) -> Unit, enabled: Boolean, tagPrefix: String) {
+    onChange: (DesktopSourceFilter) -> Unit, enabled: Boolean, tagPrefix: String,
+    actions: @Composable RowScope.() -> Unit = {}) {
     val enabledTags = remember(sources) { DesktopSourceFilter.enabledTags(sources) }
     val enabledTabs = remember(sources) { DesktopSourceFilter.enabledTabs(sources) }
     DesktopControlSurface(Modifier.height(44.dp), RoundedCornerShape(percent = 50)) {
@@ -136,32 +143,23 @@ internal fun DesktopSourceFilterControls(filter: DesktopSourceFilter, sources: L
             }
             var tagMenu by remember { mutableStateOf(false) }
             Box {
-                IconButton({ tagMenu = true }, enabled = enabled, modifier = Modifier.testTag("$tagPrefix-source-tags")) {
-                    Icon(painterResource(filter.tags.singleOrNull()?.desktopIcon() ?: "icons/ic_filter_menu.svg"),
-                        contentDescription = desktopText("source.type"), modifier = Modifier.size(20.dp),
-                        tint = if (filter.tags.isNotEmpty()) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                TopBarIconAction(painterResource(filter.tags.singleOrNull()?.desktopIcon() ?: "icons/ic_filter_menu.svg"),
+                    desktopText("source.type"), { tagMenu = true }, active = filter.tags.isNotEmpty(), enabled = enabled,
+                    modifier = Modifier.testTag("$tagPrefix-source-tags"))
                 DropdownMenu(tagMenu && enabled, { tagMenu = false }) {
-                    DropdownMenuItem({ Text(desktopText("common.all")) }, onClick = { tagMenu = false; onChange(filter.toggle(null)) },
-                        leadingIcon = { Checkbox(filter.tags.isEmpty(), onCheckedChange = null) },
-                        modifier = Modifier.testTag("$tagPrefix-source-tag:all"))
-                    SourceTag.menuOrder(DesktopSourceTagEntries, filter.tags).forEach { tag ->
-                        val selected = tag in filter.tags
-                        DropdownMenuItem({ Text(tag.desktopTitle()) }, onClick = { tagMenu = false; onChange(filter.toggle(tag)) },
-                            enabled = tag in enabledTags, modifier = Modifier.testTag("$tagPrefix-source-tag:${tag.id}"),
-                            leadingIcon = {
-                                Icon(painterResource(tag.desktopIcon()), null, modifier = Modifier.size(18.dp),
-                                    tint = if (selected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.onSurfaceVariant)
-                            },
-                            trailingIcon = if (selected) {
-                                { Icon(painterResource("icons/ic_check.svg"), null, tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)) }
-                            } else null)
-                    }
+                    SourceTypeMenuItems(
+                        allLabel = desktopText("common.all"),
+                        entries = SourceTag.menuOrder(DesktopSourceTagEntries, filter.tags).map { tag ->
+                            SourceTypeMenuEntry(tag, tag.desktopTitle(), painterResource(tag.desktopIcon()),
+                                selected = tag in filter.tags, enabled = tag in enabledTags)
+                        },
+                        onSelect = { tag -> tagMenu = false; onChange(filter.toggle(tag)) },
+                        allModifier = Modifier.testTag("$tagPrefix-source-tag:all"),
+                        entryModifier = { Modifier.testTag("$tagPrefix-source-tag:${it.id}") },
+                    )
                 }
             }
+            actions()
         }
     }
 }

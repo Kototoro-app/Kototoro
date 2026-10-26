@@ -20,12 +20,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.ui.text.input.TextFieldValue
 import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -41,8 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,7 +52,6 @@ import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
-import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
@@ -181,80 +175,9 @@ internal fun SettingsCompactSearchField(
     modifier: Modifier = Modifier,
     autofocus: Boolean = false,
 ) {
-    val focusRequester = remember { FocusRequester() }
-    var textFieldValue by remember { mutableStateOf(TextFieldValue(query)) }
-    // 受控 value（String 重载）会在外部异步回传时重置内部 selection，出现
-    // “首字符跑到光标后面 / 移动光标后再输入又错位”。这里本地持有
-    // TextFieldValue：onValueChange 原样保留用户 selection，避免与 IME 竞争。
-    // 外部 query 仅在真正的“替换”时才同步回本地（否则异步回显比用户输入慢时
-    // 会误把刚打的字符抹掉）：
-    //  - query 为空而本地还有字 → 外部清空（退出搜索/清除）
-    //  - query 非空且既不包含本地、本地也不以其开头 → 外部注入新值
-    LaunchedEffect(query) {
-        val localText = textFieldValue.text
-        val shouldSync = when {
-            query.isEmpty() && localText.isNotEmpty() -> true
-            query.isNotEmpty() &&
-                !localText.startsWith(query) &&
-                !query.startsWith(localText) -> true
-            else -> false
-        }
-        if (shouldSync) {
-            textFieldValue = TextFieldValue(query)
-        }
-    }
-    LaunchedEffect(autofocus) {
-        if (autofocus) {
-            focusRequester.requestFocus()
-        }
-    }
-    Surface(
-        modifier = modifier.height(40.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    ) {
-        BasicTextField(
-            value = textFieldValue,
-            onValueChange = { newValue: TextFieldValue ->
-                textFieldValue = newValue
-                onQueryChange(newValue.text)
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .focusRequester(focusRequester)
-                .tvTextInputFocusEscape(),
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-            decorationBox = { innerTextField ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Search,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(modifier = Modifier.weight(1f)) {
-                        if (query.isEmpty()) {
-                            Text(
-                                text = stringResource(R.string.search),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        innerTextField()
-                    }
-                }
-            },
-        )
-    }
+    org.skepsun.kototoro.core.ui.settings.SettingsSearchField(
+        query = query, onQueryChange = onQueryChange, modifier = modifier, autofocus = autofocus,
+    )
 }
 
 @Composable

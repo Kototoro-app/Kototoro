@@ -20,7 +20,8 @@ def desktopIcons = ['ic_bookmark', 'ic_explore_normal', 'ic_history', 'ic_downlo
     'ic_source_builtin', 'ic_source_mihon', 'ic_source_aniyomi', 'ic_source_tsundoku', 'ic_source_cloudstream',
     'ic_source_tvbox',
     'ic_home', 'ic_feed', 'ic_updated', 'ic_suggestion', 'ic_read', 'ic_arrow_forward', 'ic_settings', 'ic_dice',
-    'ic_storage', 'ic_pin', 'ic_content_video', 'ic_code', 'ic_delete_all']
+    'ic_storage', 'ic_pin', 'ic_unpin', 'ic_content_video', 'ic_code', 'ic_delete_all', 'ic_expand_more', 'ic_tag', 'ic_sort', 'ic_error_large',
+    'ic_state_finished', 'ic_state_abandoned', 'ic_action_pause', 'ic_timer', 'ic_disable', 'ic_info_outline']
 def desktopIconResources = layout.buildDirectory.dir('generated/android-icons')
 def prepareDesktopIcons = tasks.register('prepareDesktopIcons') {
     def vectors = desktopIcons.collect { rootProject.file("app/src/main/res/drawable/${it}.xml") }
@@ -332,7 +333,17 @@ dependencies.add(compatibilityFiles.name,
 def runtimeJavaVersion = providers.gradleProperty('mihonCompatibilityJavaVersion').map { it.toInteger() }.getOrElse(21)
 def desktopLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(runtimeJavaVersion) }
 def bundleWindowsRuntime = providers.gradleProperty('withWindowsDistribution').isPresent()
-def windowsPackageVersion = providers.gradleProperty('desktopPackageVersion').getOrElse('0.1.0')
+def bundleMacosRuntime = providers.gradleProperty('withMacosDistribution').isPresent()
+def bundleDesktopRuntime = bundleWindowsRuntime || bundleMacosRuntime
+if (bundleWindowsRuntime && bundleMacosRuntime) {
+    throw new GradleException('Select only one desktop distribution platform')
+}
+if (bundleMacosRuntime && !System.getProperty('os.name').startsWith('Mac')) {
+    throw new GradleException('macOS distribution requires a macOS build host')
+}
+// jpackage on macOS requires a positive major version; Windows keeps its existing local-preview default.
+def windowsPackageVersion = providers.gradleProperty('desktopPackageVersion')
+    .getOrElse(System.getProperty('os.name').startsWith('Mac') ? '1.0.0' : '0.1.0')
 
 // The Windows client checks for its own updates, so the build stamps what this copy *is* — version name, package
 // version and release channel — into the resources. The default version name is the application's, read from its
@@ -551,24 +562,39 @@ def prepareWindowsResources = tasks.register('prepareWindowsResources', Copy) {
     }
 }
 
+// Both hosts use exactly the same pinned compatibility runtime and ordered JARs. Only native resources differ.
+def macosResources = layout.buildDirectory.dir('macos-resources')
+def prepareMacosResources = tasks.register('prepareMacosResources', Copy) {
+    dependsOn ':mihon-desktop-compat:verifyWindowsRuntime'
+    from(rootProject.file('LICENSE')) { rename { 'PROJECT_LICENSE' }; into 'common' }
+    from('distribution/MACOS_PREVIEW.md') { into 'common' }
+    from(runtimePins) { into 'common' }
+    into macosResources
+}
+
 compose.desktop {
     application {
         mainClass = 'org.skepsun.kototoro.desktop.app.DesktopMainKt'
         javaHome = desktopLauncher.get().metadata.installationPath.asFile.absolutePath
-        if (bundleWindowsRuntime) {
+        if (bundleDesktopRuntime) {
             disableDefaultConfiguration()
             mainJar.set(tasks.named('jar').flatMap { it.archiveFile })
             fromFiles(packagedRuntimeArtifacts)
-            dependsOn(prepareWindowsResources.get())
+            dependsOn((bundleMacosRuntime ? prepareMacosResources : prepareWindowsResources).get())
         }
         nativeDistributions {
             packageName = 'Kototoro'
             packageVersion = windowsPackageVersion
-            description = 'Kototoro Windows local preview'
+            description = 'Kototoro desktop local preview'
             vendor = 'Kototoro'
             includeAllModules = true
-            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi)
+            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg)
             if (bundleWindowsRuntime) appResourcesRootDir.set(windowsResources)
+            if (bundleMacosRuntime) appResourcesRootDir.set(macosResources)
+            macOS {
+                bundleID = 'org.skepsun.kototoro.desktop'
+            }
             windows {
                 perUserInstall = true
                 // A sibling directory avoids merging program uninstall rules with the user data directory.
@@ -585,18 +611,22 @@ compose.desktop {
 
 tasks.withType(org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask).configureEach {
     if (bundleWindowsRuntime) dependsOn prepareWindowsResources
+    if (bundleMacosRuntime) dependsOn prepareMacosResources
     doFirst {
-        if (!bundleWindowsRuntime) throw new GradleException('Supply -PwithWindowsDistribution to bundle the verified Windows runtime')
+        if (!bundleDesktopRuntime) {
+            throw new GradleException('Supply -PwithWindowsDistribution or -PwithMacosDistribution to bundle the verified runtime')
+        }
     }
 }
 
 tasks.withType(org.jetbrains.compose.desktop.application.tasks.AbstractJLinkTask).configureEach { link ->
     // Compose 1.12.0 defaults to stripping commands. Keep the bundled JVM usable for local support/probes.
-    if (bundleWindowsRuntime) link.'getStripNativeCommands$compose'().set(false)
+    if (bundleDesktopRuntime) link.'getStripNativeCommands$compose'().set(false)
 }
 
 tasks.matching { it.name == 'prepareAppResources' }.configureEach {
     if (bundleWindowsRuntime) dependsOn prepareWindowsResources
+    if (bundleMacosRuntime) dependsOn prepareMacosResources
 }
 
 def bridgePath = providers.gradleProperty('desktopBridgeExecutable').getOrNull()

@@ -161,6 +161,9 @@ class DesktopSession private constructor(
     /** Follows the shared TVBox import rules: multi-repository links, CMS APIs and documents all land here. */
     internal suspend fun importJsonSources(url: String, title: String?) =
         org.skepsun.kototoro.tvbox.TvBoxImport.importFromUrl(jsonHttp, url, title)
+    internal suspend fun importJsonDocument(content: String, locator: String, title: String?) =
+        org.skepsun.kototoro.tvbox.TvBoxImport.importDocument(jsonHttp, content, locator, title)
+
     val sources: SourceRuntime = SourceProtocolClient(
         SourceEndpoint(
             RoutedSourceRuntime(listOf(

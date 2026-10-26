@@ -1742,33 +1742,16 @@ internal fun HistoryTopLevelRouteContent(
         }
 
         pendingMarkAsReadItems?.let { itemsToMark ->
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { pendingMarkAsReadItems = null },
-                title = {
-                    androidx.compose.material3.Text(
-                        text = stringResource(org.skepsun.kototoro.R.string.mark_as_completed),
-                    )
+            org.skepsun.kototoro.list.ui.compose.ContentActionConfirmationDialog(
+                title = stringResource(org.skepsun.kototoro.R.string.mark_as_completed),
+                message = stringResource(org.skepsun.kototoro.R.string.mark_as_completed_prompt),
+                confirmLabel = stringResource(android.R.string.ok),
+                cancelLabel = stringResource(android.R.string.cancel),
+                onConfirm = {
+                    viewModel.markAsRead(itemsToMark.toSet())
+                    pendingMarkAsReadItems = null
                 },
-                text = {
-                    androidx.compose.material3.Text(
-                        text = stringResource(org.skepsun.kototoro.R.string.mark_as_completed_prompt),
-                    )
-                },
-                confirmButton = {
-                    androidx.compose.material3.TextButton(
-                        onClick = {
-                            viewModel.markAsRead(itemsToMark.toSet())
-                            pendingMarkAsReadItems = null
-                        },
-                    ) {
-                        androidx.compose.material3.Text(text = stringResource(android.R.string.ok))
-                    }
-                },
-                dismissButton = {
-                    androidx.compose.material3.TextButton(onClick = { pendingMarkAsReadItems = null }) {
-                        androidx.compose.material3.Text(text = stringResource(android.R.string.cancel))
-                    }
-                },
+                onDismiss = { pendingMarkAsReadItems = null },
             )
         }
     }

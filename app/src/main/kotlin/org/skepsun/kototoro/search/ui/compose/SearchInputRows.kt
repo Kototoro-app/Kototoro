@@ -27,6 +27,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import org.skepsun.kototoro.core.ui.topbar.SourceResultsTopBar
+import org.skepsun.kototoro.core.ui.topbar.TopBarActionItem
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.HorizontalDivider
@@ -228,294 +231,100 @@ internal fun SourceListTopActionsRow(
     val tokens = LocalInterfaceStyleTokens.current
     val controlSize = tokens.topBarButtonSize
     val iconSize = tokens.topBarIconSize
-    BoxWithConstraints(
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        val maxWidthDp = maxWidth.value
-        val showRandomDirect = maxWidthDp >= 420f
-        val showDisplayDirect = maxWidthDp >= 476f
-        val showSettingsDirect = maxWidthDp >= 532f
-        val shouldShowOverflow = !showRandomDirect || !showDisplayDirect || !showSettingsDirect || isFilterApplied
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(tokens.mainTopBarHeight)
-                .padding(horizontal = CompactTopBarHorizontalPadding)
-                .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
-        ) {
-            TopBarControlSurface(
-                modifier = Modifier.wrapContentWidth(),
-            ) {
+    val isTv = LocalUiPresentationConfig.current.isTv
+    SourceResultsTopBar(
+        title = sourceTitle,
+        onBack = onBackClick,
+        backIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null) },
+        backLabel = stringResource(R.string.back),
+        actions = listOf(
+            TopBarActionItem(
+                key = "filter",
+                icon = painterResource(R.drawable.ic_filter_menu),
+                label = currentSortLabel,
+                onClick = onFilterClick,
+                badge = isFilterApplied,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
+            TopBarActionItem(
+                key = "search",
+                icon = rememberVectorPainter(Icons.Default.Search),
+                label = stringResource(R.string.search),
+                onClick = onSearchClick,
+            ),
+            TopBarActionItem(
+                key = "random",
+                icon = painterResource(R.drawable.ic_dice),
+                label = stringResource(R.string.random),
+                onClick = onRandomClick,
+                enabled = !isRandomLoading,
+                minWidth = 420.dp,
+            ),
+            TopBarActionItem(
+                key = "display",
+                icon = painterResource(listMode.iconRes()),
+                label = stringResource(R.string.display_options),
+                onClick = onShowDisplayOptionsSheet,
+                minWidth = 476.dp,
+                dividerBefore = true,
+            ),
+            TopBarActionItem(
+                key = "settings",
+                icon = painterResource(R.drawable.ic_settings),
+                label = stringResource(R.string.settings),
+                onClick = onSettingsClick,
+                minWidth = 532.dp,
+            ),
+        ) + listOfNotNull(
+            TopBarActionItem(
+                key = "reset",
+                icon = rememberVectorPainter(Icons.Default.Clear),
+                label = stringResource(R.string.reset_filter),
+                onClick = onResetFilterClick,
+                overflowOnly = true,
+                dividerBefore = true,
+            ).takeIf { isFilterApplied },
+        ),
+        moreIcon = rememberVectorPainter(Icons.Default.MoreVert),
+        moreLabel = stringResource(R.string.more),
+        surface = { modifier, content -> TopBarControlSurface(modifier = modifier, content = content) },
+        menuHost = { expanded, onDismiss, anchor, content ->
+            GlassDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = onDismiss,
+                offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
+                shape = RoundedRectangle(28.dp),
+                style = GlassDefaults.subtleStyle(),
+                useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                anchorBounds = anchor.bounds,
+                anchorFocusRequester = anchor.focusRequester,
+                content = content,
+            )
+        },
+        modifier = Modifier
+            .padding(horizontal = CompactTopBarHorizontalPadding)
+            .then(if (isTv) Modifier.focusGroup() else Modifier),
+        height = tokens.mainTopBarHeight,
+        controlSize = controlSize,
+        iconSize = iconSize,
+        itemSpacing = CompactTopBarItemSpacing,
+        chromeAlpha = topBarAlpha,
+        capsuleLeading = activeSpaceId?.let { spaceId ->
+            {
                 IconButton(
-                    onClick = onBackClick,
+                    onClick = onSpaceSwitcherClick,
                     modifier = Modifier
                         .size(controlSize)
                         .tvFocusable(shape = CircleShape, addFocusTarget = false),
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.back),
+                    SpaceSwitcherIcon(
+                        activeSpaceId = spaceId,
                         modifier = Modifier.size(iconSize),
                     )
                 }
             }
-            Text(
-                text = sourceTitle,
-                modifier = Modifier
-                    .weight(1f)
-                    .alpha(topBarAlpha),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-
-            TopBarControlSurface(
-                modifier = Modifier.wrapContentWidth(),
-            ) {
-                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides controlSize) {
-                    Row(
-                        modifier = Modifier
-                            .height(controlSize)
-                            .padding(horizontal = 2.dp)
-                            .alpha(topBarAlpha),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        activeSpaceId?.let { spaceId ->
-                            IconButton(
-                                onClick = onSpaceSwitcherClick,
-                                modifier = Modifier
-                                    .size(controlSize)
-                                    .tvFocusable(shape = CircleShape, addFocusTarget = false),
-                            ) {
-                                SpaceSwitcherIcon(
-                                    activeSpaceId = spaceId,
-                                    modifier = Modifier.size(iconSize),
-                                )
-                            }
-                        }
-                        BadgedBox(
-                            badge = {
-                                if (isFilterApplied) {
-                                    Badge()
-                                }
-                            },
-                        ) {
-                            IconButton(
-                                onClick = onFilterClick,
-                                modifier = Modifier
-                                    .size(controlSize)
-                                    .tvFocusable(shape = CircleShape, addFocusTarget = false),
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_filter_menu),
-                                    contentDescription = currentSortLabel,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(iconSize),
-                                )
-                            }
-                        }
-
-                        IconButton(
-                            onClick = onSearchClick,
-                            modifier = Modifier
-                                .size(controlSize)
-                                .tvFocusable(shape = CircleShape, addFocusTarget = false),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = stringResource(R.string.search),
-                                modifier = Modifier.size(iconSize),
-                            )
-                        }
-
-                        if (showRandomDirect) {
-                            IconButton(
-                                onClick = onRandomClick,
-                                enabled = !isRandomLoading,
-                                modifier = Modifier
-                                    .size(controlSize)
-                                    .tvFocusable(enabled = !isRandomLoading, shape = CircleShape, addFocusTarget = false),
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_dice),
-                                    contentDescription = stringResource(R.string.random),
-                                    modifier = Modifier.size(iconSize),
-                                )
-                            }
-                        }
-
-                        if (showDisplayDirect) {
-                            IconButton(
-                                onClick = onShowDisplayOptionsSheet,
-                                modifier = Modifier
-                                    .size(controlSize)
-                                    .tvFocusable(shape = CircleShape, addFocusTarget = false),
-                            ) {
-                                Icon(
-                                    painter = painterResource(listMode.iconRes()),
-                                    contentDescription = stringResource(R.string.list_options),
-                                    modifier = Modifier.size(iconSize),
-                                )
-                            }
-                        }
-
-                        if (showSettingsDirect) {
-                            IconButton(
-                                onClick = onSettingsClick,
-                                modifier = Modifier
-                                    .size(controlSize)
-                                    .tvFocusable(shape = CircleShape, addFocusTarget = false),
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_settings),
-                                    contentDescription = stringResource(R.string.settings),
-                                    modifier = Modifier.size(iconSize),
-                                )
-                            }
-                        }
-
-                        if (shouldShowOverflow) {
-                            MoreActionsButton(
-                                showRandomAction = !showRandomDirect,
-                                showDisplayActions = !showDisplayDirect,
-                                showSettingsAction = !showSettingsDirect,
-                                listMode = listMode,
-                                gridSize = gridSize,
-                                isFilterApplied = isFilterApplied,
-                                isRandomLoading = isRandomLoading,
-                                onRandomClick = onRandomClick,
-                                onResetFilterClick = onResetFilterClick,
-                                onSettingsClick = onSettingsClick,
-                                onShowDisplayOptionsSheet = onShowDisplayOptionsSheet,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-@Composable
-private fun MoreActionsButton(
-    showRandomAction: Boolean,
-    showDisplayActions: Boolean,
-    showSettingsAction: Boolean,
-    listMode: ListMode,
-    gridSize: Int,
-    isFilterApplied: Boolean,
-    isRandomLoading: Boolean,
-    onRandomClick: () -> Unit,
-    onResetFilterClick: () -> Unit,
-    onSettingsClick: () -> Unit,
-    onShowDisplayOptionsSheet: () -> Unit,
-) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    var anchorBounds by remember { mutableStateOf<Rect?>(null) }
-    // On TV the menu lives in the root overlay, so without this the ring would drop to the
-    // navigation rail when the menu closes instead of staying on the button that opened it.
-    val moreAnchorFocus = remember { FocusRequester() }
-    val tokens = LocalInterfaceStyleTokens.current
-
-    Box(
-        modifier = Modifier.onGloballyPositioned { anchorBounds = it.boundsInRoot() },
-    ) {
-        IconButton(
-            onClick = { expanded = true },
-            modifier = Modifier
-                .focusRequester(moreAnchorFocus)
-                .size(tokens.topBarButtonSize)
-                .tvFocusable(shape = CircleShape, addFocusTarget = false),
-        ) {
-            Icon(
-                imageVector = Icons.Default.MoreVert,
-                contentDescription = stringResource(R.string.more),
-                modifier = Modifier.size(tokens.topBarIconSize),
-            )
-        }
-        GlassDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
-            shape = RoundedRectangle(28.dp),
-            style = GlassDefaults.subtleStyle(),
-            useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
-            anchorBounds = anchorBounds,
-            anchorFocusRequester = moreAnchorFocus,
-        ) {
-            if (showRandomAction) {
-                CompactDropdownMenuItem(
-                    text = { Text(stringResource(R.string.random)) },
-                    leadingIcon = {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_dice),
-                            contentDescription = null,
-                        )
-                    },
-                    enabled = !isRandomLoading,
-                    onClick = {
-                        expanded = false
-                        onRandomClick()
-                    },
-                )
-            }
-
-            if (showSettingsAction) {
-                CompactDropdownMenuItem(
-                    text = { Text(stringResource(R.string.settings)) },
-                    leadingIcon = {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_settings),
-                            contentDescription = null,
-                        )
-                    },
-                    onClick = {
-                        expanded = false
-                        onSettingsClick()
-                    },
-                )
-            }
-
-            if (showDisplayActions) {
-                HorizontalDivider()
-                CompactDropdownMenuItem(
-                    text = { Text(stringResource(R.string.display_options)) },
-                    leadingIcon = {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_grid),
-                            contentDescription = null,
-                        )
-                    },
-                    onClick = {
-                        expanded = false
-                        onShowDisplayOptionsSheet()
-                    },
-                )
-            }
-
-            if (isFilterApplied) {
-                HorizontalDivider()
-                CompactDropdownMenuItem(
-                    text = { Text(stringResource(R.string.reset_filter)) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Clear,
-                            contentDescription = null,
-                        )
-                    },
-                    onClick = {
-                        expanded = false
-                        onResetFilterClick()
-                    },
-                )
-            }
-        }
-    }
+        },
+    )
 }
 
 @Composable

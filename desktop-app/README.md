@@ -1,4 +1,51 @@
- Windows desktop application
+ Desktop application (Windows / macOS)
+
+## macOS 本机开发
+
+Windows 与 macOS 使用同一个 `desktop-app` 入口、Compose 页面、Controller、数据库与源运行时；
+系统能力在现有平台服务边界适配，不复制 UI 或业务实现。macOS 当前提供本机开发与未签名本地预览。
+浏览器桥、内嵌视频、原生 ncnn 超分及应用自动更新尚未适配；依赖网页 JS 或人机验证的源暂不可用。
+视频可通过已安装的 mpv 外部播放；此路径不提供应用内播放进度回写。
+
+运行需要 JDK 21 和与 Windows 相同、通过 SHA-256 验证的 29 个兼容运行时 JAR。
+已有兼容目录可直接使用；也可以从已下载的 Windows 桌面 ZIP 中提取纯 JVM 产物，
+脚本只接受锁定哈希的 JAR，不提取 Windows JVM、EXE 或 DLL：
+
+```bash
+python3 "desktop-app/prepare-compatibility.py" "/absolute/path/Kototoro-windows.zip"
+bash "desktop-app/run-macos.sh"
+# 或指定已有兼容目录，以及独立调试数据目录：
+bash "desktop-app/run-macos.sh" "/absolute/path/compatibility" \
+    "-PdesktopDataDirectory=/absolute/path/debug-data"
+```
+
+默认数据目录为 `~/Library/Application Support/Kototoro`。命令行 `--data-dir` 或
+Gradle 的 `desktopDataDirectory` 可以覆盖；已有 `~/.kototoro` 不自动迁移。
+在 IDE 中调试同一 `DesktopMainKt`，使用 JDK 21，并将兼容 JAR 加入运行 classpath；
+也可运行 `bash "desktop-app/run-macos.sh" "/absolute/path/compatibility" --debug-jvm`，
+然后在 IDE 中用 Remote JVM Debug 连接 `localhost:5005`。
+
+生成自带 JVM 的本机 `.app`（将最后的 task 改为 `:desktop-app:packageDmg` 可生成 DMG）：
+
+```bash
+./gradlew -PwithDesktopApp -PwithMacosDistribution \
+    "-PmihonCompatibilityDirectory=build/desktop-compatibility" \
+    :desktop-app:createDistributable --console=plain
+```
+
+输出位于 `desktop-app/build/compose/binaries/main/app/Kototoro.app`。
+可对实际打包产物执行本地存储、兼容运行时、备份和图片解码检查：
+
+```bash
+"desktop-app/build/compose/binaries/main/app/Kototoro.app/Contents/MacOS/Kototoro" \
+    --data-dir "/absolute/path/runtime-check-data" --check-runtime "/absolute/path/runtime-check.properties"
+```
+
+检查报告明确记录未适配能力为 `unsupported`；Windows 打包检查继续要求浏览器、播放器与超分组件全部通过。
+macOS 本地预览尚未签名、公证，不代表完成公开发行准备。打包参考
+[Compose 官方文档](https://kotlinlang.org/docs/multiplatform/compose-native-distribution.html)。
+
+## Windows
 
 Windows/JVM 的 Compose Desktop 应用入口，复用 `desktop-runtime` 的共享 Room v84 数据库、
 `core-source` JSON 契约和 `source-host` Mihon 执行器。提供扩展仓库、JAR 安装/更新/导入、来源浏览/搜索、详情、
@@ -134,11 +181,15 @@ Backdrop 已恢复为固定 2.0.0 的 Android/JVM KMP 模块，保留两处本�
 
 ## 扩展仓库
 
-“更多 → 扩展与仓库”可输入完整 `index.pb`、新版 `index.json`、旧版 `index.min.json` 或仓库根地址，点击“添加 / 读取仓库”。
+“更多 → 扩展与仓库”沿用 Android 的“来源／仓库／扩展包”标签页。标签栏与仓库卡片由
+`core-ui/commonMain` 提供，Android 和 Windows/macOS 调用同一组件。来源列表统一管理所有来源，
+包括 TVBox/CMS；仓库列表按配置中已有的来源地址聚合导入站点，支持刷新和确认后批量移除。
+右上角“添加”统一处理扩展仓库、TVBox/CMS 链接，以及本地 JAR/APK/CS3/JSON 文件。
+扩展仓库链接支持完整 `index.pb`、新版 `index.json`、旧版 `index.min.json` 或仓库根地址。
 根地址依次请求 `index.pb`、`index.json`、`index.min.json`，仅在 HTTP 404 时回退；带查询参数时需提供完整索引地址。
 旧版数组（Aniyomi、早期 Keiyoushi/Tsundoku 仓库）没有仓库头，名称取自地址的 owner/仓库名，条目只有 APK。
 支持 gzip、相对扩展列表地址和相对 JAR 地址，JSON 的 64 位编号与版本保持整数精度。
-仓库列表保存到应用偏好，点击仓库名称刷新，再按扩展名称、来源名称或语言搜索并安装/更新。
+仓库列表保存到应用偏好，在仓库卡片选择“浏览扩展”，再按扩展名称、来源名称或语言搜索并安装/更新。
 
 有 `resources.jarUrl` 时下载 JVM JAR；只发布 APK 的条目下载 APK 后在本机由 `dex-convert` 转成 JVM JAR
 （同时修复 R8 内联构造器留下的 JVM 校验问题），按钮显示“安装（转换 APK）”。清单决定生态：

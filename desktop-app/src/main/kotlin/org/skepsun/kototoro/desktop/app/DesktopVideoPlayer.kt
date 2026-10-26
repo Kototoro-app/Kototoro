@@ -92,7 +92,7 @@ internal fun DesktopVideoPlayer(controller: DesktopController, state: DesktopApp
     }
     Column(Modifier.fillMaxSize().background(rememberVideoBackdrop(state)).testTag("video-player")) {
         val found = library
-        if (found == null) {
+        if (found == null || !MpvLocator.supportsEmbeddedPlayback) {
             MissingLibrary(controller, video, state, dataRoot, onRetry = { library = MpvLocator.find(dataRoot) }, onBack = back)
         } else {
             PlayerContent(controller, state, video, found, closing, fullscreen, onToggleFullscreen, back)
@@ -401,31 +401,40 @@ private fun EnhancementMenu(enhancement: MpvEnhancement, enabled: Boolean, onCha
 private fun MissingLibrary(controller: DesktopController, video: DesktopVideo, state: DesktopAppState, dataRoot: Path,
     onRetry: () -> Unit, onBack: () -> Unit) {
     val folder = MpvLocator.suggestedDirectory(dataRoot)
-    val external = remember { MpvLocator.findExecutable() }
+    var external by remember { mutableStateOf(MpvLocator.findExecutable()) }
     var notice by remember { mutableStateOf<String?>(null) }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Surface(color = PlayerPanel, shape = RoundedCornerShape(12.dp), modifier = Modifier.widthIn(max = 720.dp)) {
             Column(Modifier.padding(24.dp).testTag("video-missing-library"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(desktopText("video.libmpvMissing"), color = PlayerText, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                Text(desktopText("video.libmpvHint"), color = PlayerMuted)
-                Text(folder.toString(), color = PlayerText)
+                Text(if (MpvLocator.supportsEmbeddedPlayback) desktopText("video.libmpvMissing")
+                    else desktopText("video.externalRequired"),
+                    color = PlayerText, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                Text(if (MpvLocator.supportsEmbeddedPlayback) desktopText("video.libmpvHint")
+                    else desktopText("video.externalHint"),
+                    color = PlayerMuted)
+                if (MpvLocator.supportsEmbeddedPlayback) Text(folder.toString(), color = PlayerText)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button({
-                        runCatching { Files.createDirectories(folder); java.awt.Desktop.getDesktop().open(folder.toFile()) }
-                            .onFailure { notice = desktopText("video.openFolderFailed", it.message ?: it.javaClass.simpleName) }
-                    }) { Text(desktopText("video.openFolder")) }
-                    OutlinedButton(onRetry, modifier = Modifier.testTag("video-retry-library")) { Text(desktopText("video.detectAgain")) }
+                    if (MpvLocator.supportsEmbeddedPlayback) {
+                        Button({
+                            runCatching { Files.createDirectories(folder); java.awt.Desktop.getDesktop().open(folder.toFile()) }
+                                .onFailure { notice = desktopText("video.openFolderFailed", it.message ?: it.javaClass.simpleName) }
+                        }) { Text(desktopText("video.openFolder")) }
+                    }
+                    OutlinedButton({ onRetry(); external = MpvLocator.findExecutable() },
+                        modifier = Modifier.testTag("video-retry-library")) { Text(desktopText("video.detectAgain")) }
                     OutlinedButton({
                         Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(video.stream.url), null)
                         notice = desktopText("video.urlCopied")
                     }) { Text(desktopText("video.copyUrl")) }
-                    if (external != null) OutlinedButton({
-                        val stream = video.stream.toMpvStream(video.startSeconds,
-                            listOfNotNull(state.content?.title, video.chapter.title).joinToString(" · "))
-                        runCatching { ProcessBuilder(MpvLocator.commandLine(external, stream)).start() }
-                            .onSuccess { notice = desktopText("video.externalOpened") }
-                            .onFailure { notice = desktopText("video.externalFailed", it.message ?: it.javaClass.simpleName) }
-                    }) { Text(desktopText("video.playExternal")) }
+                    external?.let { executable ->
+                        OutlinedButton({
+                            val stream = video.stream.toMpvStream(video.startSeconds,
+                                listOfNotNull(state.content?.title, video.chapter.title).joinToString(" · "))
+                            runCatching { ProcessBuilder(MpvLocator.commandLine(executable, stream)).start() }
+                                .onSuccess { notice = desktopText("video.externalOpened") }
+                                .onFailure { notice = desktopText("video.externalFailed", it.message ?: it.javaClass.simpleName) }
+                        }) { Text(desktopText("video.playExternal")) }
+                    }
                     TextButton(onBack) { Text(desktopText("video.backToDetails")) }
                 }
                 notice?.let { Text(it, color = PlayerMuted) }

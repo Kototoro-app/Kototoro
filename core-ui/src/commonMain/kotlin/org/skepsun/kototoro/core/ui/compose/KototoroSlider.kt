@@ -36,9 +36,7 @@ import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Capsule
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
-import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStylePolicy
-import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
-import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalIsIosInterfaceStyle
 
 val LocalLiquidGlassBackdrop = staticCompositionLocalOf<Backdrop?> { null }
 val LocalLiquidGlassLayerBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
@@ -58,8 +56,7 @@ fun KototoroSlider(
     trackHeight: Dp? = null,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
-    val stylePolicy = LocalInterfaceStylePolicy.current
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val isIosStyle = LocalIsIosInterfaceStyle.current
     val backdrop = LocalLiquidGlassBackdrop.current
     val interactionSource = remember { MutableInteractionSource() }
     Slider(
@@ -77,7 +74,7 @@ fun KototoroSlider(
                 interactionSource = interactionSource,
                 color = if (enabled) colors.thumbColor else colors.disabledThumbColor,
                 isIosStyle = isIosStyle,
-                useExpandedThumb = stylePolicy.useExpandedTouchTargets,
+                useExpandedThumb = true, // both interface styles expand the touch target
                 compact = compactThumb,
                 backdrop = backdrop,
             )
@@ -96,70 +93,9 @@ fun KototoroSlider(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** The slider thumb both styles draw; public so Android's range slider (newer Material API) reuses it. */
 @Composable
-fun KototoroRangeSlider(
-    value: ClosedFloatingPointRange<Float>,
-    onValueChange: (ClosedFloatingPointRange<Float>) -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
-    steps: Int = 0,
-    onValueChangeFinished: (() -> Unit)? = null,
-    colors: SliderColors = SliderDefaults.colors(),
-) {
-    val tokens = LocalInterfaceStyleTokens.current
-    val stylePolicy = LocalInterfaceStylePolicy.current
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val backdrop = LocalLiquidGlassBackdrop.current
-    val startInteractionSource = remember { MutableInteractionSource() }
-    val endInteractionSource = remember { MutableInteractionSource() }
-    RangeSlider(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier,
-        enabled = enabled,
-        valueRange = valueRange,
-        steps = steps,
-        onValueChangeFinished = onValueChangeFinished,
-        colors = colors,
-        startThumbInteractionSource = startInteractionSource,
-        endThumbInteractionSource = endInteractionSource,
-        startThumb = {
-            KototoroSliderThumb(
-                interactionSource = startInteractionSource,
-                color = if (enabled) colors.thumbColor else colors.disabledThumbColor,
-                isIosStyle = isIosStyle,
-                useExpandedThumb = stylePolicy.useExpandedTouchTargets,
-                compact = false,
-                backdrop = backdrop,
-            )
-        },
-        endThumb = {
-            KototoroSliderThumb(
-                interactionSource = endInteractionSource,
-                color = if (enabled) colors.thumbColor else colors.disabledThumbColor,
-                isIosStyle = isIosStyle,
-                useExpandedThumb = stylePolicy.useExpandedTouchTargets,
-                compact = false,
-                backdrop = backdrop,
-            )
-        },
-        track = { state ->
-            SliderDefaults.Track(
-                rangeSliderState = state,
-                modifier = Modifier.height(tokens.sliderTrackHeight),
-                enabled = enabled,
-                colors = colors,
-                thumbTrackGapSize = 0.dp,
-                trackInsideCornerSize = tokens.sliderTrackHeight / 2,
-            )
-        },
-    )
-}
-
-@Composable
-private fun KototoroSliderThumb(
+fun KototoroSliderThumb(
     interactionSource: MutableInteractionSource,
     color: Color,
     isIosStyle: Boolean,
@@ -193,7 +129,7 @@ private fun KototoroSliderThumb(
         } else {
             6.dp
         },
-        animationSpec = KototoroMotion.ThumbSpring,
+        animationSpec = ThumbSpring,
         label = "sliderThumbWidth",
     )
     val height by animateDpAsState(
@@ -206,7 +142,7 @@ private fun KototoroSliderThumb(
         } else {
             visualSize
         },
-        animationSpec = KototoroMotion.ThumbSpring,
+        animationSpec = ThumbSpring,
         label = "sliderThumbHeight",
     )
     val thumbShape = Capsule()
@@ -269,3 +205,8 @@ private fun KototoroSliderThumb(
         )
     }
 }
+
+/** Android's `KototoroMotion.ThumbSpring`. */
+private val ThumbSpring = androidx.compose.animation.core.spring<androidx.compose.ui.unit.Dp>(
+    dampingRatio = 0.72f, stiffness = 520f,
+)

@@ -1,15 +1,21 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.ui.topbar.SourceResultsTopBar
+import org.skepsun.kototoro.list.ui.compose.ContentCollectionError
+import org.skepsun.kototoro.list.ui.compose.ContentGridLoadingSkeleton
+import org.skepsun.kototoro.core.ui.topbar.TopBarActionItem
+import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
+import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
@@ -38,6 +44,13 @@ import org.skepsun.kototoro.list.ui.compose.ContentCardBadgePill
 import org.skepsun.kototoro.list.ui.compose.ContentCardBadgeText
 import org.skepsun.kototoro.list.ui.compose.ContentCardBadgeTone
 import org.skepsun.kototoro.list.ui.compose.ContentCardBottomProgressBar
+import org.skepsun.kototoro.list.ui.compose.ContentCardPresentation
+import org.skepsun.kototoro.list.ui.compose.ContentCompactCard
+import org.skepsun.kototoro.list.ui.compose.ContentPosterCard
+import org.skepsun.kototoro.list.ui.compose.ContentCollectionGrid
+import org.skepsun.kototoro.list.ui.compose.ContentCollectionColumn
+import org.skepsun.kototoro.list.ui.compose.ContentCollectionState
+import org.skepsun.kototoro.list.ui.compose.rememberContentCollectionState
 import org.skepsun.kototoro.list.ui.compose.TabletPosterCover
 import org.skepsun.kototoro.list.ui.compose.contentCardBadgeMetricsFor
 import org.skepsun.kototoro.list.ui.compose.rememberCoverRimBorderBrush
@@ -67,6 +80,8 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
     val challenges = controller.session.browserChallenges
     val challenge = challenges?.pending?.collectAsState()?.value
     val browserScope = rememberCoroutineScope()
+    val favouritesCollection = rememberContentCollectionState()
+    val historyCollection = rememberContentCollectionState()
     val reading = state.screen == DesktopScreen.READER || state.screen == DesktopScreen.NOVEL ||
         state.screen == DesktopScreen.VIDEO
     val listState = if (state.screen == DesktopScreen.DETAILS && state.detailsOrigin != null) {
@@ -120,7 +135,8 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                             DesktopScreen.UPDATED -> DesktopUpdatesPage(controller, state, !closing)
                             DesktopScreen.SUGGESTIONS -> DesktopSuggestionsPage(controller, state, !closing)
                             DesktopScreen.EXPLORE -> Browse(controller, listState, !closing)
-                            DesktopScreen.LIBRARY, DesktopScreen.HISTORY -> DesktopLibraryPanel(controller, listState, !closing)
+                            DesktopScreen.LIBRARY, DesktopScreen.HISTORY -> DesktopLibraryPanel(controller, listState, !closing,
+                                if (listState.screen == DesktopScreen.HISTORY) historyCollection else favouritesCollection)
                             DesktopScreen.DETAILS -> Details(controller, state)
                             DesktopScreen.READER -> DesktopReader(controller, state, closing, fullscreen, onToggleFullscreen)
                             DesktopScreen.NOVEL -> DesktopNovelReader(controller, state, closing, fullscreen, onToggleFullscreen)
@@ -196,27 +212,13 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
         DesktopSourceFilterControls(
             state.exploreFilter, state.enabledSources, controller::exploreFilter, enabled, "rail",
         )
-        LazyColumn(Modifier.weight(1f).testTag("source-list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(Modifier.weight(1f).testTag("source-list")) {
             items(sources, key = { it.source.name }) { source ->
-                SourceRailTile(source, state, enabled, controller, Modifier.fillMaxWidth())
+                // Android's source list row; the picked source wears the selection container.
+                DesktopSourceRow(controller, source, enabled,
+                    selected = state.selectedSource?.source?.name == source.source.name)
             }
             if (sources.isEmpty()) item { Text(desktopText("browse.sourcesEmpty"), fontSize = 12.sp, color = Muted) }
-        }
-    }
-}
-
-/** One rail entry, used by both layouts so a source tile behaves the same in list and grid mode. */
-@Composable
-private fun SourceRailTile(source: SourceListing, state: DesktopAppState, enabled: Boolean,
-    controller: DesktopController, modifier: Modifier) {
-    val selected = state.selectedSource?.source?.name == source.source.name
-    Surface(color = if (selected) Accent.copy(alpha = .10f) else Color.Transparent,
-        shape = RoundedCornerShape(8.dp), modifier = modifier) {
-        Column(Modifier.fillMaxWidth().testTag("source:${source.source.name}")
-            .clickable(enabled = enabled) { controller.selectSource(source) }.padding(12.dp)) {
-            Text(source.displayName, maxLines = 2, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
-            Text("${DesktopSourceLabels.ecosystem(source.ecosystem)} · ${source.source.locale.ifBlank { desktopText("common.multilingual") }}" +
-                " · ${DesktopSourceLabels.contentType(source.source.contentType)}", fontSize = 12.sp, color = Muted)
         }
     }
 }
@@ -297,54 +299,80 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
     var query by remember(state.selectedSource.source.name, state.query) { mutableStateOf(state.query) }
     if (state.filterDialogOpen) DesktopFilters(controller, state, query)
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton({ controller.exitSource() }, enabled = enabled, modifier = Modifier.testTag("source-back")) {
-                // Android's forward arrow, mirrored.
-                Icon(painterResource("icons/ic_arrow_forward.svg"), contentDescription = desktopText("browse.backToSources"), tint = Ink,
+        // Android's source-results top bar: back, the source's name and the action capsule (sort, filters, settings).
+        val orders = state.descriptor?.sortOrders.orEmpty()
+        val popular = state.descriptor == null || "POPULARITY" in orders
+        val latest = "UPDATED" in orders
+        val currentOrder = state.browseOrder ?: state.descriptor?.defaultSortOrder.orEmpty()
+        SourceResultsTopBar(
+            title = state.selectedSource.displayName,
+            onBack = { if (enabled) controller.exitSource() },
+            // Android's forward arrow, mirrored.
+            backIcon = {
+                Icon(painterResource("icons/ic_arrow_forward.svg"), contentDescription = null, tint = Ink,
                     modifier = Modifier.size(22.dp).graphicsLayer(scaleX = -1f))
-            }
-            Text(state.selectedSource.displayName, style = MaterialTheme.typography.headlineMedium, color = Ink,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
+            },
+            backLabel = desktopText("browse.backToSources"),
+            actions = listOfNotNull(
+                TopBarActionItem(
+                    key = "sort",
+                    icon = painterResource("icons/ic_sort.svg"),
+                    label = desktopText("browse.sort", DesktopSourceLabels.sortOrder(currentOrder)),
+                    enabled = enabled,
+                    modifier = Modifier.testTag("source-sort"),
+                    menu = { dismiss ->
+                        // Mihon's two listings first, then every order a parser plugin declares.
+                        if (popular) CompactDropdownMenuItem({ CompactDropdownMenuText(desktopText("browse.popular")) },
+                            { dismiss(); query = ""; controller.browseUnfiltered() },
+                            modifier = Modifier.testTag("source-listing:popular"))
+                        if (latest) CompactDropdownMenuItem({ CompactDropdownMenuText(desktopText("browse.latest")) },
+                            { dismiss(); query = ""; controller.browseUnfiltered(latest = true) },
+                            modifier = Modifier.testTag("source-listing:latest"))
+                        val others = orders.filter { it != "POPULARITY" && it != "UPDATED" }
+                        if (others.isNotEmpty()) {
+                            if (popular || latest) HorizontalDivider()
+                            orders.forEach { order ->
+                                CompactDropdownMenuItem({ CompactDropdownMenuText(DesktopSourceLabels.sortOrder(order)) },
+                                    { dismiss(); controller.browseOrdered(order) },
+                                    modifier = Modifier.testTag("source-sort:$order"),
+                                    trailingIcon = if (order == state.browseOrder) {
+                                        { Icon(painterResource("icons/ic_check.svg"), null,
+                                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)) }
+                                    } else null)
+                            }
+                        }
+                    },
+                ),
+                TopBarActionItem(
+                    key = "filters",
+                    icon = painterResource("icons/ic_filter_menu.svg"),
+                    label = if (state.appliedFilters.isEmpty()) desktopText("browse.filters")
+                        else desktopText("browse.filtersApplied"),
+                    onClick = { controller.filters() },
+                    enabled = enabled,
+                    badge = state.appliedFilters.isNotEmpty(),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("source-filters"),
+                ).takeIf { state.descriptor?.isDynamicFilteringSupported == true },
+                TopBarActionItem(
+                    key = "settings",
+                    icon = painterResource("icons/ic_settings.svg"),
+                    label = desktopText("browse.sourceSettings"),
+                    onClick = { controller.preferences() },
+                    enabled = enabled,
+                    modifier = Modifier.testTag("source-settings"),
+                ).takeIf { state.descriptor?.isPreferencesSupported == true },
+            ),
+            moreIcon = painterResource("icons/ic_more_vert.svg"),
+            moreLabel = desktopText("common.more"),
+            surface = { modifier, content -> DesktopControlSurface(modifier, RoundedCornerShape(percent = 50), content) },
+            menuHost = { expanded, onDismiss, _, content -> DropdownMenu(expanded, onDismiss, content = content) },
+            backModifier = Modifier.testTag("source-back"),
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             DesktopSearchField(query, { query = it }, desktopText("browse.searchWorks"), enabled = enabled,
                 modifier = Modifier.weight(1f), tag = "source-query")
             Button({ controller.browse(0, query) }, enabled = enabled) { Text(desktopText("browse.search")) }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            val orders = state.descriptor?.sortOrders.orEmpty()
-            if (state.descriptor == null || "POPULARITY" in orders) {
-                OutlinedButton({ query = ""; controller.browseUnfiltered() }, enabled = enabled) { Text(desktopText("browse.popular")) }
-            }
-            if ("UPDATED" in orders) {
-                OutlinedButton({ query = ""; controller.browseUnfiltered(latest = true) }, enabled = enabled) { Text(desktopText("browse.latest")) }
-            }
-            // Sources with more than the two Mihon orders (all parser plugins) get the full list.
-            if (orders.any { it != "POPULARITY" && it != "UPDATED" }) {
-                var expanded by remember(state.selectedSource.source.name) { mutableStateOf(false) }
-                Box {
-                    OutlinedButton({ expanded = true }, enabled = enabled, modifier = Modifier.testTag("source-sort")) {
-                        Text(desktopText("browse.sort",
-                            DesktopSourceLabels.sortOrder(state.browseOrder ?: state.descriptor?.defaultSortOrder.orEmpty())))
-                    }
-                    DropdownMenu(expanded && enabled, { expanded = false }) {
-                        orders.forEach { order ->
-                            DropdownMenuItem(onClick = { expanded = false; controller.browseOrdered(order) },
-                                modifier = Modifier.testTag("source-sort:$order"),
-                                text = { Text(DesktopSourceLabels.sortOrder(order)) })
-                        }
-                    }
-                }
-            }
-            if (state.descriptor?.isDynamicFilteringSupported == true) {
-                OutlinedButton({ controller.filters() }, enabled = enabled,
-                    modifier = Modifier.testTag("source-filters")) {
-                    Text(if (state.appliedFilters.isEmpty()) desktopText("browse.filters") else desktopText("browse.filtersApplied"))
-                }
-            }
-            if (state.descriptor?.isPreferencesSupported == true) {
-                OutlinedButton({ controller.preferences() }, enabled = enabled) { Text(desktopText("browse.sourceSettings")) }
-            }
         }
         // Android's ExploreRepository filters every browse page through the global tag blacklist; the page in the
         // state stays untouched so paging and the endless list still follow what the source returned.
@@ -355,8 +383,31 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
         // Android's paging list keeps fetching as you scroll: the grid's own footer composes only once its last rows are
         // reached, and each composition asks for the next batch — no manual 下一批 and no polling of the layout.
         Box(Modifier.weight(1f)) {
-            ContentGrid(visibleItems, enabled, controller.session.covers, controller::details,
-                onReachEnd = { controller.browseNextPage() }, endReached = state.browseExhausted)
+            when {
+                // Android's list states for a page with nothing to show yet: skeletons while the first batch loads,
+                // the error card with retry when it failed; the shared empty state only once the source answered.
+                state.items.isEmpty() && state.busy -> BoxWithConstraints(Modifier.fillMaxWidth()
+                    .testTag("browse-loading")) {
+                    // The grid's own Adaptive(112dp) cells and 8dp gaps, so the skeleton sits where the cards will.
+                    ContentGridLoadingSkeleton(columns = ((maxWidth.value + 8f) / 120f).toInt(),
+                        posterAspectRatio = 96f / 136f, contentPadding = PaddingValues(0.dp))
+                }
+                state.items.isEmpty() && state.error != null -> ContentCollectionError(
+                    title = AndroidStrings["error_occurred"],
+                    message = state.error,
+                    icon = {
+                        Icon(painterResource("icons/ic_error_large.svg"), contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error)
+                    },
+                    retryLabel = AndroidStrings["retry"],
+                    onRetry = { controller.browse(state.offset, state.query) },
+                    enabled = enabled,
+                    modifier = Modifier.align(Alignment.Center).testTag("browse-error"),
+                    retryModifier = Modifier.testTag("browse-retry"),
+                )
+                else -> ContentGrid(visibleItems, enabled, controller.session.covers, controller::details,
+                    onReachEnd = { controller.browseNextPage() }, endReached = state.browseExhausted)
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton({ controller.browse((state.offset - 1).coerceAtLeast(0)) },
@@ -383,91 +434,81 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
     listMode: org.skepsun.kototoro.desktop.runtime.DesktopListMode =
         org.skepsun.kototoro.desktop.runtime.DesktopListMode.GRID,
     metaOf: (SourceContent) -> String = { it.authors.joinToString().ifBlank { it.source.name } },
-    /**
-     * Android's endless list: the grid's footer is composed only when the last rows are reached, and every composition
-     * asks for one more batch — the same trigger Paging uses, without pressing a button.
-     */
+    /** Shared near-end loading requests one more batch per observed item count. */
     onReachEnd: (() -> Unit)? = null,
     /** Set when the source has no more batches: the footer then stops asking and the row below says so. */
-    endReached: Boolean = false) {
+    endReached: Boolean = false, collectionState: ContentCollectionState? = null) {
     if (contents.isEmpty()) { EmptyPanel(desktopText("browse.noWorks"), desktopText("browse.noWorksDetail")); return }
     if (listMode == org.skepsun.kototoro.desktop.runtime.DesktopListMode.LIST) {
         ContentRowList(contents, enabled, covers, onOpen, progressOf, newChaptersOf, pinnedOf,
-            selectedIds, onToggleSelection, metaOf)
+            selectedIds, onToggleSelection, metaOf, collectionState?.list)
         return
     }
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
     val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle, isDark = LocalDesktopDark.current)
-    LazyVerticalGrid(columns = GridCells.Adaptive(112.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize().testTag("content-grid")) {
-        items(contents, key = { it.id }) { content ->
-            val selecting = selectedIds != null
-            val isSelected = selectedIds?.contains(content.id) == true
-            BoxWithConstraints(Modifier.fillMaxWidth().testTag("content:${content.id}")
-                .combinedClickable(enabled = enabled,
-                    onClick = { if (selecting) onToggleSelection(content) else onOpen(content) },
-                    onLongClick = { onToggleSelection(content) })) {
-                val style = CompactPosterCardStyle(maxWidth, maxWidth * (136f / 96f), 12.dp)
-                val metrics = remember(maxWidth) { contentCardBadgeMetricsFor(maxWidth) }
-                val percent = progressOf(content)?.takeIf { ReadingProgress.isValid(it) }
-                // Android's compact grid lifts the bottom badges clear of the title on the scrim.
-                val bottomLift = (style.posterHeight.value * 0.28f).dp.coerceIn(32.dp, 44.dp)
-                TabletPosterCover(content.title, style, rimBorderBrush = rimBorderBrush,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(96f / 136f),
-                    cover = { DesktopCover(content, covers, Modifier.matchParentSize()) },
-                    overlays = {
-                        if (isSelected) Surface(Modifier.align(Alignment.TopStart).padding(start = 5.dp, top = 5.dp)
-                            .size(22.dp).testTag("content-selected:${content.id}"),
-                            shape = RoundedCornerShape(percent = 50), color = MaterialTheme.colorScheme.primary) {
-                            Icon(painterResource("icons/ic_check.svg"), null,
-                                tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(3.dp))
-                        }
-                        // Android pins the unread counter to the top-right corner, a lone number in the
-                        // accent pill (KototoroContentCard), and the language pill to the bottom-left.
-                        val newChapters = newChaptersOf(content)
-                        if (newChapters > 0) {
-                            ContentCardBadgePill(ContentCardBadgeTone.COUNTER, isIosStyle, metrics,
-                                Modifier.align(Alignment.TopEnd).padding(end = 5.dp, top = 5.dp)
-                                    .testTag("content-new-chapters:${content.id}")
-                                    .semantics {
-                                        contentDescription = desktopText("library.newChapters", newChapters)
-                                    }) { colors ->
-                                ContentCardBadgeText(newChapters.toString(), colors.content, metrics)
-                            }
-                        }
-                        val locale = content.source.locale.substringBefore('-').substringBefore('_').uppercase()
-                        if (locale.isNotBlank()) ContentCardBadgePill(ContentCardBadgeTone.NEUTRAL, isIosStyle, metrics,
-                            Modifier.align(Alignment.BottomStart).padding(start = 5.dp, bottom = bottomLift + 5.dp)
-                                .testTag("content-language:${content.id}")) { colors ->
-                            ContentCardBadgeText(locale, colors.content, metrics)
-                        }
-                        // Android draws a pin icon among the card badges (KototoroContentCard's "pin" badge);
-                        // the bottom-right corner is the only slot the other pills leave free.
-                        if (pinnedOf(content)) Icon(painterResource("icons/ic_pin.svg"),
-                            desktopText("library.pinned"),
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.align(Alignment.BottomEnd)
-                                .padding(end = 5.dp, bottom = bottomLift + 5.dp).size(18.dp)
-                                .testTag("content-pinned:${content.id}"))
-                    },
-                    progress = {
-                        if (percent != null) ContentCardBottomProgressBar(percent, ReadingProgress.isCompleted(percent),
-                            Modifier.align(Alignment.BottomCenter).testTag("content-progress:${content.id}"))
-                    },
-                )
+    ContentCollectionGrid(count = contents.size, key = { contents[it].id },
+        columns = GridCells.Adaptive(112.dp), state = collectionState?.grid ?: rememberLazyGridState(),
+        verticalArrangement = Arrangement.spacedBy(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxSize().testTag("content-grid"),
+        canLoadMore = onReachEnd != null && !endReached,
+        onLoadMore = { onReachEnd?.invoke() },
+        footer = if (onReachEnd != null && !endReached) ({
+            Box(Modifier.fillMaxWidth().height(40.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp).testTag("content-loading"), strokeWidth = 2.dp)
             }
-        }
-        if (onReachEnd != null) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                // Composed only when the grid reaches its last rows, and re-composed after every appended batch.
-                if (!endReached) {
-                    LaunchedEffect(contents.size) { onReachEnd() }
-                    Box(Modifier.fillMaxWidth().height(40.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp).testTag("content-loading"),
-                            strokeWidth = 2.dp)
+        }) else null,
+    ) { index ->
+        val content = contents[index]
+        val selecting = selectedIds != null
+        val isSelected = selectedIds?.contains(content.id) == true
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val style = CompactPosterCardStyle(maxWidth, maxWidth * (136f / 96f), 12.dp)
+            val metrics = remember(maxWidth) { contentCardBadgeMetricsFor(maxWidth) }
+            val percent = progressOf(content)?.takeIf { ReadingProgress.isValid(it) }
+            // Android's compact grid lifts the bottom badges clear of the title on the scrim.
+            val bottomLift = (style.posterHeight.value * 0.28f).dp.coerceIn(32.dp, 44.dp)
+            ContentPosterCard(ContentCardPresentation(content.id, content.title), style,
+                rimBorderBrush = rimBorderBrush,
+                onClick = { if (selecting) onToggleSelection(content) else onOpen(content) },
+                onLongClick = { onToggleSelection(content) },
+                enabled = enabled, isSelected = isSelected, compactOverlay = true,
+                cellContentPadding = PaddingValues(0.dp),
+                modifier = Modifier.testTag("content:${content.id}"),
+                cover = { DesktopCover(content, covers, Modifier.matchParentSize()) },
+                overlays = {
+                    // Android pins the unread counter to the top-right corner, a lone number in the
+                    // accent pill (KototoroContentCard), and the language pill to the bottom-left.
+                    val newChapters = newChaptersOf(content)
+                    if (newChapters > 0) {
+                        ContentCardBadgePill(ContentCardBadgeTone.COUNTER, isIosStyle, metrics,
+                            Modifier.align(Alignment.TopEnd).padding(end = 5.dp, top = 5.dp)
+                                .testTag("content-new-chapters:${content.id}")
+                                .semantics {
+                                    contentDescription = desktopText("library.newChapters", newChapters)
+                                }) { colors ->
+                            ContentCardBadgeText(newChapters.toString(), colors.content, metrics)
+                        }
                     }
-                }
-            }
+                    val locale = content.source.locale.substringBefore('-').substringBefore('_').uppercase()
+                    if (locale.isNotBlank()) ContentCardBadgePill(ContentCardBadgeTone.NEUTRAL, isIosStyle, metrics,
+                        Modifier.align(Alignment.BottomStart).padding(start = 5.dp, bottom = bottomLift + 5.dp)
+                            .testTag("content-language:${content.id}")) { colors ->
+                        ContentCardBadgeText(locale, colors.content, metrics)
+                    }
+                    // Android draws a pin icon among the card badges (KototoroContentCard's "pin" badge);
+                    // the bottom-right corner is the only slot the other pills leave free.
+                    if (pinnedOf(content)) Icon(painterResource("icons/ic_pin.svg"),
+                        desktopText("library.pinned"),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.align(Alignment.BottomEnd)
+                            .padding(end = 5.dp, bottom = bottomLift + 5.dp).size(18.dp)
+                            .testTag("content-pinned:${content.id}"))
+                },
+                progress = {
+                    if (percent != null) ContentCardBottomProgressBar(percent, ReadingProgress.isCompleted(percent),
+                        Modifier.align(Alignment.BottomCenter).testTag("content-progress:${content.id}"))
+                },
+            )
         }
     }
 }
@@ -480,50 +521,42 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
 private fun ContentRowList(contents: List<SourceContent>, enabled: Boolean, covers: DesktopCovers,
     onOpen: (SourceContent) -> Unit, progressOf: (SourceContent) -> Float?, newChaptersOf: (SourceContent) -> Int,
     pinnedOf: (SourceContent) -> Boolean,
-    selectedIds: Set<Long>?, onToggleSelection: (SourceContent) -> Unit, metaOf: (SourceContent) -> String) {
+    selectedIds: Set<Long>?, onToggleSelection: (SourceContent) -> Unit, metaOf: (SourceContent) -> String,
+    listState: LazyListState? = null) {
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
     val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle, isDark = LocalDesktopDark.current)
-    LazyColumn(Modifier.fillMaxSize().testTag("content-list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(contents, key = { it.id }) { content ->
-            val selecting = selectedIds != null
-            val isSelected = selectedIds?.contains(content.id) == true
-            val percent = progressOf(content)?.takeIf { ReadingProgress.isValid(it) }
-            val newChapters = newChaptersOf(content)
-            Surface(modifier = Modifier.fillMaxWidth().testTag("content:${content.id}")
-                .combinedClickable(enabled = enabled,
-                    onClick = { if (selecting) onToggleSelection(content) else onOpen(content) },
-                    onLongClick = { onToggleSelection(content) }),
-                shape = RoundedCornerShape(16.dp),
-                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                else MaterialTheme.colorScheme.surface) {
-                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    TabletPosterCover(content.title, CompactPosterCardStyle(64.dp, 88.dp, 10.dp),
-                        rimBorderBrush = rimBorderBrush, modifier = Modifier.width(64.dp).height(88.dp),
-                        cover = { DesktopCover(content, covers, Modifier.matchParentSize()) })
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (isSelected) Icon(painterResource("icons/ic_check.svg"), null, tint = Accent,
-                                modifier = Modifier.size(18.dp).testTag("content-selected:${content.id}"))
-                            if (pinnedOf(content)) Icon(painterResource("icons/ic_pin.svg"),
-                                desktopText("library.pinned"), tint = Accent,
-                                modifier = Modifier.size(16.dp).testTag("content-pinned:${content.id}"))
-                            Text(content.title, fontWeight = FontWeight.SemiBold, maxLines = 2,
-                                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                            if (newChapters > 0) Text(desktopText("library.newChapters", newChapters),
-                                fontSize = 12.sp, color = Accent,
-                                modifier = Modifier.testTag("content-new-chapters:${content.id}"))
-                        }
-                        val meta = metaOf(content)
-                        if (meta.isNotBlank()) Text(meta, fontSize = 12.sp, color = Muted, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis)
-                        if (percent != null) ContentCardBottomProgressBar(percent, ReadingProgress.isCompleted(percent),
-                            Modifier.fillMaxWidth().testTag("content-progress:${content.id}"))
-                    }
-                }
-            }
-        }
+    ContentCollectionColumn(count = contents.size, key = { contents[it].id },
+        state = listState ?: rememberLazyListState(), modifier = Modifier.fillMaxSize().testTag("content-list"),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) { index ->
+        val content = contents[index]
+        val selecting = selectedIds != null
+        val isSelected = selectedIds?.contains(content.id) == true
+        val percent = progressOf(content)?.takeIf { ReadingProgress.isValid(it) }
+        val newChapters = newChaptersOf(content)
+        ContentCompactCard(
+            ContentCardPresentation(content.id, content.title, subtitle = metaOf(content)),
+            onClick = { if (selecting) onToggleSelection(content) else onOpen(content) },
+            onLongClick = { onToggleSelection(content) },
+            enabled = enabled, isSelected = isSelected,
+            modifier = Modifier.testTag("content:${content.id}"),
+            cover = {
+                TabletPosterCover(content.title, CompactPosterCardStyle(48.dp, 72.dp, 10.dp),
+                    rimBorderBrush = rimBorderBrush, modifier = Modifier.width(48.dp).height(72.dp),
+                    cover = { DesktopCover(content, covers, Modifier.matchParentSize()) }, compactOverlay = false)
+            },
+            titleLeading = {
+                if (pinnedOf(content)) Icon(painterResource("icons/ic_pin.svg"),
+                    desktopText("library.pinned"), tint = Accent,
+                    modifier = Modifier.size(16.dp).testTag("content-pinned:${content.id}"))
+            },
+            status = {
+                if (newChapters > 0) Text(desktopText("library.newChapters", newChapters),
+                    fontSize = 12.sp, color = Accent,
+                    modifier = Modifier.padding(top = 5.dp).testTag("content-new-chapters:${content.id}"))
+                if (percent != null) ContentCardBottomProgressBar(percent, ReadingProgress.isCompleted(percent),
+                    Modifier.fillMaxWidth().padding(top = 5.dp).testTag("content-progress:${content.id}"))
+            },
+        )
     }
 }
 

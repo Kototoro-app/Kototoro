@@ -1,5 +1,12 @@
 package org.skepsun.kototoro.settings.compose
 
+import org.skepsun.kototoro.core.ui.theme.LocalIsIosInterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalArtworkBackdrop
+import org.skepsun.kototoro.core.ui.theme.ArtworkBackdrop
+import org.skepsun.kototoro.core.ui.text.uiString
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -11,9 +18,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -28,23 +32,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import org.skepsun.kototoro.core.prefs.InterfaceStyle
-import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
-import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.ArtworkSurfaceRole
 import org.skepsun.kototoro.core.ui.theme.artworkAwareContainerColor
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 
-internal enum class SettingsGroupItemPosition {
+enum class SettingsGroupItemPosition {
     SINGLE,
     FIRST,
     MIDDLE,
     LAST,
 }
 
-internal fun resolveSettingsGroupItemPosition(index: Int, total: Int): SettingsGroupItemPosition {
+fun resolveSettingsGroupItemPosition(index: Int, total: Int): SettingsGroupItemPosition {
     require(total > 0) { "A settings group must contain at least one item" }
     require(index in 0 until total) { "Item index $index is outside a group of $total items" }
     return when {
@@ -107,7 +108,7 @@ fun SettingsItemGroup(
     if (itemCount == 0) return
 
     val tokens = LocalInterfaceStyleTokens.current
-    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
+    val isArtworkBackground = (LocalArtworkBackdrop.current != ArtworkBackdrop.NONE)
     val containerColor = if (isArtworkBackground) {
         // Settings groups are content cards over artwork — join the shared layering
         // for both interface styles instead of an iOS-only hardcoded alpha.
@@ -115,7 +116,7 @@ fun SettingsItemGroup(
     } else {
         MaterialTheme.colorScheme.surfaceContainer
     }
-    if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+    if (LocalIsIosInterfaceStyle.current) {
         Surface(
             modifier = modifier.fillMaxWidth(),
             shape = RoundedCornerShape(tokens.settingsGroupOuterCornerRadius),
@@ -190,10 +191,10 @@ fun SettingsCollapsiblePreferenceGroup(
     var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
 
     val tokens = LocalInterfaceStyleTokens.current
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val isIosStyle = LocalIsIosInterfaceStyle.current
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val horizontalPadding = if (expressive || isIosStyle) 16.dp else 20.dp
-    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
+    val isArtworkBackground = (LocalArtworkBackdrop.current != ArtworkBackdrop.NONE)
     val containerColor = if (isArtworkBackground) {
         MaterialTheme.colorScheme.surfaceContainerLow.artworkAwareContainerColor(ArtworkSurfaceRole.Card)
     } else {
@@ -238,9 +239,9 @@ fun SettingsCollapsiblePreferenceGroup(
                 }
                 Icon(
                     imageVector = if (expanded) {
-                        Icons.Filled.KeyboardArrowUp
+                        SettingsMaterialIcons.KeyboardArrowUp
                     } else {
-                        Icons.Filled.KeyboardArrowDown
+                        SettingsMaterialIcons.KeyboardArrowDown
                     },
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -9,7 +9,13 @@ import java.nio.file.Path
  * by default; the UI tells the user which folder to drop `libmpv-2.dll` into.
  */
 object MpvLocator {
-    val libraryNames = listOf("libmpv-2.dll", "mpv-2.dll", "libmpv.so.2", "libmpv.so", "libmpv.2.dylib", "libmpv.dylib")
+    // macOS needs the libmpv render API; an AWT component pointer is not a supported mpv --wid target there.
+    val supportsEmbeddedPlayback: Boolean get() = !com.sun.jna.Platform.isMac()
+    val libraryNames = when {
+        com.sun.jna.Platform.isWindows() -> listOf("libmpv-2.dll", "mpv-2.dll")
+        com.sun.jna.Platform.isMac() -> listOf("libmpv.2.dylib", "libmpv.dylib")
+        else -> listOf("libmpv.so.2", "libmpv.so")
+    }
 
     fun find(userDataDirectory: Path? = null): Path? = candidates(userDataDirectory).firstOrNull { Files.isRegularFile(it) }
 
@@ -19,6 +25,10 @@ object MpvLocator {
             System.getProperty("compose.application.resources.dir")?.takeIf(String::isNotBlank)
                 ?.let { add(Path.of(it, "mpv")) }
             userDataDirectory?.let { add(it.resolve("mpv")) }
+            if (com.sun.jna.Platform.isMac()) {
+                add(Path.of("/opt/homebrew/lib"))
+                add(Path.of("/usr/local/lib"))
+            }
             System.getenv("PATH").orEmpty().split(java.io.File.pathSeparatorChar).filter(String::isNotBlank)
                 .forEach { entry -> runCatching { Path.of(entry) }.getOrNull()?.let(::add) }
         }
@@ -28,10 +38,12 @@ object MpvLocator {
     }
 
     /** A standalone mpv player on PATH, used to hand a stream over when the library is missing. */
-    fun findExecutable(): Path? = System.getenv("PATH").orEmpty().split(java.io.File.pathSeparatorChar)
+    fun findExecutable(): Path? = (System.getenv("PATH").orEmpty().split(java.io.File.pathSeparatorChar) +
+        if (com.sun.jna.Platform.isMac()) listOf("/opt/homebrew/bin", "/usr/local/bin") else emptyList())
         .filter(String::isNotBlank).flatMap { entry ->
-            listOf("mpv.exe", "mpv").mapNotNull { name -> runCatching { Path.of(entry, name) }.getOrNull() }
-        }.firstOrNull { Files.isRegularFile(it) }
+            val name = if (com.sun.jna.Platform.isWindows()) "mpv.exe" else "mpv"
+            listOfNotNull(runCatching { Path.of(entry, name) }.getOrNull())
+        }.firstOrNull { Files.isRegularFile(it) && Files.isExecutable(it) }
 
     /** mpv command-line arguments for [stream]; headers and side tracks travel the same way as in the library. */
     fun commandLine(executable: Path, stream: MpvStream): List<String> = buildList {

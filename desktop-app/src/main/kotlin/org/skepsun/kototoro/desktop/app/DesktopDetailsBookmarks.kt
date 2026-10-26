@@ -29,6 +29,9 @@ import org.skepsun.kototoro.bookmarks.domain.parseNovelBookmarkPreview
 import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.desktop.runtime.DesktopBookmark
+import org.skepsun.kototoro.core.ui.compose.DetailsBookmarkCard
+import org.skepsun.kototoro.core.ui.compose.DetailsBookmarkText
+import androidx.compose.ui.res.painterResource
 
 /** Cards stay small enough that a page decode never competes with the reader's own page budget. */
 private const val THUMBNAIL_PIXELS = 400_000L
@@ -118,88 +121,39 @@ internal fun DesktopDetailsBookmarks(controller: DesktopController, state: Deskt
             Text(desktopText("reader.bookmarksEmpty"), color = Muted, fontSize = 13.sp)
             return@Column
         }
-        if (!pageReader) {
-            // A novel position has text, not a page image: Android's card shows its excerpt instead.
-            val previews = remember(state.bookmarks) {
-                state.bookmarks.associate { it.pageId to parseNovelBookmarkPreview(it.preview) }
-            }
-            LazyColumn(Modifier.fillMaxSize().testTag("details-bookmarks-list"),
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(bookmarks, key = { it.pageId }) { bookmark ->
-                    val checked = bookmark.pageId in selection
-                    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.testTag("details-bookmark:${bookmark.pageId}")) {
-                        Row(Modifier.fillMaxWidth().clickable(enabled = enabled) {
-                            if (selecting) toggle(bookmark.pageId) else controller.openDetailsBookmark(bookmark)
-                        }.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (selecting) Checkbox(checked = checked, onCheckedChange = { toggle(bookmark.pageId) },
-                                enabled = enabled, modifier = Modifier.testTag("bookmark-check:${bookmark.pageId}"))
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(content.chapters?.firstOrNull { it.id == bookmark.chapterId }?.title
-                                    ?: desktopText("reader.chapterMissing"), maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
-                                if (!bookmark.isChapterOnly()) {
-                                    Text(previews[bookmark.pageId].orEmpty(), color = Muted, fontSize = 12.sp,
-                                        maxLines = 3, overflow = TextOverflow.Ellipsis)
-                                }
-                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    Text(bookmarkLabel(bookmark), color = Accent, fontSize = 12.sp,
-                                        modifier = Modifier.weight(1f))
-                                    if (!selecting) {
-                                        TextButton(onClick = { controller.removeBookmark(bookmark) },
-                                            enabled = enabled,
-                                            modifier = Modifier.testTag("bookmark-delete:${bookmark.pageId}")) {
-                                            Text(desktopText("details.bookmarkDelete"), fontSize = 11.sp,
-                                                maxLines = 1)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            return@Column
+        // Android's bookmarks tab: one grid of 0.7 cards for page images and novel excerpts alike; a click opens the
+        // position, a long press starts selecting, and while selecting a click toggles the card.
+        val previews = remember(state.bookmarks) {
+            state.bookmarks.associate { it.pageId to parseNovelBookmarkPreview(it.preview) }
         }
         LazyVerticalGrid(GridCells.Adaptive(150.dp), modifier = Modifier.fillMaxSize().testTag("details-bookmarks-grid"),
-            horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(bottom = 16.dp)) {
             items(bookmarks, key = { it.pageId }) { bookmark ->
-                BookmarkCard(controller, content, bookmark, enabled, selecting, bookmark.pageId in selection, toggle)
-            }
-        }
-    }
-}
-
-@Composable
-private fun BookmarkCard(controller: DesktopController, content: SourceContent, bookmark: DesktopBookmark,
-    enabled: Boolean, selecting: Boolean, checked: Boolean, toggle: (Long) -> Unit) {
-    val chapter = content.chapters?.firstOrNull { it.id == bookmark.chapterId }
-    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.testTag("details-bookmark:${bookmark.pageId}")) {
-        Column(Modifier.fillMaxWidth().clickable(enabled = enabled && (selecting || chapter != null)) {
-            if (selecting) toggle(bookmark.pageId) else controller.openDetailsBookmark(bookmark)
-        }.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.fillMaxWidth().aspectRatio(3f / 4f).clip(RoundedCornerShape(10.dp))
-                .background(Accent.copy(alpha = .06f)).testTag("bookmark-thumb:${bookmark.pageId}")) {
-                BookmarkThumbnail(controller, content, chapter, bookmark, Modifier.fillMaxSize())
-                if (selecting) {
-                    Checkbox(checked = checked, onCheckedChange = { toggle(bookmark.pageId) }, enabled = enabled,
-                        modifier = Modifier.align(Alignment.TopEnd).testTag("bookmark-check:${bookmark.pageId}"))
-                }
-            }
-            Text(chapter?.title ?: desktopText("reader.chapterMissing"), maxLines = 2,
-                overflow = TextOverflow.Ellipsis, fontSize = 13.sp)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(bookmarkLabel(bookmark), color = Accent, fontSize = 12.sp,
-                    modifier = Modifier.weight(1f), maxLines = 1)
-                if (!selecting) {
-                    TextButton(onClick = { controller.removeBookmark(bookmark) }, enabled = enabled,
-                        modifier = Modifier.testTag("bookmark-delete:${bookmark.pageId}")) {
-                        Text(desktopText("details.bookmarkDelete"), fontSize = 11.sp, maxLines = 1)
-                    }
-                }
+                val chapter = content.chapters?.firstOrNull { it.id == bookmark.chapterId }
+                val chapterTitle = chapter?.title ?: AndroidStrings.format("bookmark_position", bookmark.page + 1)
+                DetailsBookmarkCard(
+                    selected = bookmark.pageId in selection,
+                    percent = bookmark.percent,
+                    onClick = {
+                        if (selecting) toggle(bookmark.pageId)
+                        else if (chapter != null) controller.openDetailsBookmark(bookmark)
+                    },
+                    onLongClick = {
+                        selecting = true
+                        toggle(bookmark.pageId)
+                    },
+                    selectedIcon = painterResource("icons/ic_check.svg"),
+                    enabled = enabled,
+                    modifier = Modifier.testTag("details-bookmark:${bookmark.pageId}"),
+                    pageLabel = if (bookmark.isChapterOnly()) null else "P.${bookmark.page + 1}",
+                    text = if (pageReader) null else DetailsBookmarkText(chapterTitle,
+                        previews[bookmark.pageId].orEmpty().ifBlank {
+                            if (bookmark.isChapterOnly()) bookmarkLabel(bookmark)
+                            else AndroidStrings["bookmark_preview_unavailable"]
+                        }),
+                    image = { BookmarkThumbnail(controller, content, chapter, bookmark, Modifier.fillMaxSize()) },
+                )
             }
         }
     }

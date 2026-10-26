@@ -568,7 +568,7 @@ internal object DesktopParserProbe {
                     onNodeWithTag("reader-back").performClick(); idle()
                     expandDetails()
                     onNodeWithTag("details-tab:BOOKMARKS").performClick(); idle()
-                    onNodeWithTag("details-bookmarks-list").assertExists()
+                    onNodeWithTag("details-bookmarks-grid").assertExists()
                     onNodeWithTag("details-bookmark:${jump.pageId}").assertExists().performClick(); idle()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.NOVEL }
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.novel?.firstVisible == jump.page }
@@ -577,7 +577,10 @@ internal object DesktopParserProbe {
                     expandDetails()
                     onNodeWithTag("details-tab:BOOKMARKS").performClick(); idle()
                     snapshot("details-bookmarks-novel")
-                    onNodeWithTag("bookmark-delete:${jump.pageId}").performClick(); idle()
+                    // Android's selection: a long press selects the card, the bar's delete removes it.
+                    onNodeWithTag("details-bookmark:${jump.pageId}").performTouchInput { longClick() }; idle()
+                    onNodeWithTag("details-bookmarks-count").assertTextContains("已选 1 个书签")
+                    onNodeWithTag("details-bookmarks-select-delete").performClick(); idle()
                     check(controller.state.value.bookmarks.size == 1)
                     check(controller.state.value.bookmarks.none { it.pageId == jump.pageId })
                     check(runBlocking { session.library.bookmarks(controller.state.value.content!!.id) }
@@ -600,6 +603,8 @@ internal object DesktopParserProbe {
                     runBlocking { controller.showExtensions().join() }
                     idle()
                     val tsuki = controller.state.value.installedEntries.single { it.kind == DesktopInstalledKind.PARSER && it.ecosystem.name == "UMA" }
+                    // Installed packages live on the packages tab of Android's three-tab extension manager.
+                    onNodeWithTag("extensions-tab:2").performClick(); idle()
                     onNodeWithTag("installed-list").performScrollToNode(hasTestTag("extension-uninstall:${tsuki.id}"))
                     onNodeWithTag("extension-uninstall:${tsuki.id}").performClick(); idle()
                     onNodeWithTag("extension-uninstall-confirm").performClick(); idle()

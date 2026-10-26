@@ -77,6 +77,18 @@ class DesktopNovelPaginationTest {
     }
 
     @Test
+    fun `a reflow after a jump keeps the jumped page's first block on screen`() {
+        val pager = DesktopNovelPagerState(startBlock = 0)
+        pager.rebind(listOf(0..1, 2..17, 18..30))
+        assertTrue(pager.jumpToBlock(16))
+        assertEquals(2..17, pager.range)
+        assertEquals(2, pager.anchorBlock)
+        // Larger text: block 2 now opens a page of its own run, and the page keeps it rather than jumping to 16.
+        pager.rebind(listOf(0..1, 2..9, 10..15, 16..29, 30..30))
+        assertEquals(2..9, pager.range)
+    }
+
+    @Test
     fun `jumping to a block and back to an empty chapter is safe`() {
         val pager = DesktopNovelPagerState(startBlock = 0)
         assertTrue(pager.isEmpty)

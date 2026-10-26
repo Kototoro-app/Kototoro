@@ -106,7 +106,7 @@ class DesktopCrashLogs(
         writer.println("=== Crash Report ===")
         writer.println("Time: ${headerTime.format(Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()))}")
         writer.println("App Version: ${version.ifBlank { "unknown" }}")
-        writer.println("Windows: ${System.getProperty("os.name").orEmpty()} " +
+        writer.println("${DesktopPlatform.current.displayName}: ${System.getProperty("os.name").orEmpty()} " +
             "${System.getProperty("os.version").orEmpty()} (${System.getProperty("os.arch").orEmpty()})")
         writer.println("Java: ${System.getProperty("java.version").orEmpty()} " +
             "(${System.getProperty("java.vendor").orEmpty()})")

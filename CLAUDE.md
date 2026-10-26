@@ -136,6 +136,13 @@ npm run docs:build
 
 ## 项目架构
 
+### UI 演进约束
+
+Android 与桌面的 UI 按 CMP 共享呈现演进；Windows 与 macOS 始终共用 `desktop-app`。
+新增页面、改版现有桌面页面、修复跨端 UI 或提取组件前，必须阅读
+[`docs/architecture/shared-ui-guidelines.md`](docs/architecture/shared-ui-guidelines.md)。
+优先把现有 Android 呈现提取到 `core-ui/commonMain` 并让两端实际消费，逐步收敛既有独立实现。
+
 ### 模块结构
 - `app/` - 主应用模块，包含所有功能实现（compose + view）
 - `parser-api/` - 共享的解析器接口定义（KMP：纯叶子模型在 `commonMain`；`Content*` 等带二进制兼容垫片的类和 `org.koitharu.kotatsu.parsers.*` 外部 ABI 在 `androidMain`，不要改动其 JVM 签名）
@@ -330,17 +337,18 @@ npm run docs:build
   每个已装来源的“优先/排除”打开 Android 自己的来源选择器（`DesktopSuggestionSources.kt`：搜索框、内容类型与
   来源类型两组芯片、待定选择与清空/取消/确定，摘要只写前三个名字加 `+N`），标签用文本对话框；
   更新检查的频率也改成单选对话框。单选/多选/文本三种设置对话框集中在 `DesktopSettingsDialogs.kt`，
-  源设置页共用，见计划 §136、§173。“更多 → 扩展与仓库”同样用这套节/行走廊（仓库、来源、目录、已安装四块，
-  仓库行尾是刷新/忘记、已安装行尾是“来源 · N”/更新/卸载，自动更新是整行开关），行内控件由共享
-  `SettingsActionRow` 承载（整页可滚动，目录列表按窗口高度取高，已安装行是页内 inline 行而不是嵌套滚动列表），
-  见计划 §137。已安装的包可以按 Android 的 `UnifiedPackageList` 展开成它声明的来源（
+  源设置页共用，见计划 §136、§173。“更多 → 扩展与仓库”已收敛为 Android 的来源/仓库/扩展包三页；
+  标签栏 `ExtensionManagementTabs` 和仓库卡片 `ExtensionRepositoryCard` 位于 `core-ui/commonMain`，
+  Android 与桌面实际共用。统一添加入口接入仓库、TVBox/CMS 链接和 JAR/APK/CS3/JSON 文件；
+  TVBox 站点按已有 `sourceLocator` 聚合为仓库，来源启停/选择在来源页，扩展包页区分已安装/可安装。
+  当前共享的是这些组件，尚未宣称整张扩展管理页面已共用。已安装的包仍可展开成它声明的来源（
   `DesktopInstalledEntry.sourceNames` 现算自 registry，包行 `extension-sources:<id>` 切换展开，
   来源行是 `SettingsSplitSwitchRow`：标题进该来源自己的设置页 `controller.sourceSettings(name)`，
-  行尾开关只切 `disabled_sources`，摘要写内容类型 · 生态 · 语言，见计划 §181）。“来源”一行打开 Android 的来源开关对话框（搜索框 + 全部/启用/禁用三个筛选芯片 + 逐个来源的启用开关 +
+  行尾开关只切 `disabled_sources`，摘要写内容类型 · 生态 · 语言，见计划 §181）。“来源”标签页提供搜索框、全部/启用/禁用筛选和逐个来源的启用开关；
   按当前筛选结果“全部启用/全部禁用”并先弹 Android 的确认框，纯筛选逻辑在 `DesktopSourceSwitch.kt`，
   `disabled_sources` 存在 `desktop_extensions`，`DesktopAppState.disabledSources`/`enabledSources` 把“已装”与
-  “可用”分开，关掉的来源不再出现在来源栏/来源网格/筛选器/搜索建议/换源候选，但它的收藏进度与下载都保留），
-  见计划 §174、§175。对话框里另有 Android 的选中态（`UnifiedSourceSelectionBar`）：Android 用长按进入，Windows 让
+  “可用”分开，关掉的来源不再出现在来源栏/来源网格/筛选器/搜索建议/换源候选，但它的收藏进度与下载都保留，
+  见计划 §174、§175。来源页另有 Android 的选中态（`UnifiedSourceSelectionBar`）：Android 用长按进入，Windows 让
   “全选”兼作入口，进入后行变整行复选、`已选 N` 配启用/禁用/NSFW/测试/删除，测试走 `startSourceTest(选中的名字)` 只跑选中的来源
   （Android 的 `testSources(ids)`），见计划 §192。选择栏的「删除」也补齐了：折叠规则
   `SelectedSourcesDeletePlan`/`SourceDeletionCandidate`/`selectedSourcesDeletePlan` 已下沉 `core-domain`（每个包只出现一次、

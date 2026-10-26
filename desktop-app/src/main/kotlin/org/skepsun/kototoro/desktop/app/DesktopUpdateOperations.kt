@@ -69,7 +69,8 @@ internal class DesktopUpdateOperations(
     private val scope: CoroutineScope,
 ) {
     private val preferences = session.storage.preferences.open("desktop_app_updates")
-    private val installer = DesktopUpdateInstaller(locateInstallLayout())
+    private val windowsPackages = org.skepsun.kototoro.desktop.runtime.DesktopPlatform.current.supportsWindowsPackages
+    private val installer = DesktopUpdateInstaller(if (windowsPackages) locateInstallLayout() else null)
     private val mutex = Mutex()
     private var downloaded: DesktopDownloadedUpdate? = null
 
@@ -106,6 +107,7 @@ internal class DesktopUpdateOperations(
     }
 
     private fun client(): DesktopAppUpdateClient? {
+        if (!windowsPackages) return null
         val version = state.value.update.version.version
         if (version.compareTo(org.skepsun.kototoro.desktop.runtime.DesktopPackageVersion.UNKNOWN) <= 0) return null
         return DesktopAppUpdateClient(version, state.value.update.updateChannel,
@@ -114,6 +116,7 @@ internal class DesktopUpdateOperations(
 
     /** Starts a check in the background; [silent] keeps a start-up check from replacing the window's own message. */
     fun check(silent: Boolean = false) {
+        if (!windowsPackages) return
         if (state.value.update.checking) return
         val client = client() ?: run {
             if (!silent) state.update { it.copy(update = it.update.copy(error = desktopText("update.versionUnknown"))) }
@@ -211,6 +214,7 @@ internal class DesktopUpdateOperations(
 
     /** Checks in the background when the setting allows it; called by the periodic job loop. */
     fun checkInBackground() {
+        if (!windowsPackages) return
         if (!state.value.update.settings.autoCheck) return
         if (state.value.update.available != null || state.value.update.downloaded != null) return
         check(silent = true)

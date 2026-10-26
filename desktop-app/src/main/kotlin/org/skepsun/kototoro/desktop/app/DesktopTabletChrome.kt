@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.ui.compose.ExpandableDescriptionText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -316,7 +317,10 @@ internal fun DesktopTabletDetails(controller: DesktopController, state: DesktopA
                     Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(desktopText("details.synopsis"), style = MaterialTheme.typography.titleMedium)
-                            Text(it.replace(Regex("<[^>]*>"), ""), color = Muted, style = MaterialTheme.typography.bodyMedium)
+                            // Android's description: three lines fading out, a click on the text unfolds it all.
+                            var expanded by remember(content.id) { mutableStateOf(false) }
+                            ExpandableDescriptionText(it.replace(Regex("<[^>]*>"), ""), expanded, { expanded = it },
+                                modifier = Modifier.testTag("details-description"))
                         }
                     }
                 }

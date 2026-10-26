@@ -76,13 +76,11 @@ internal object DesktopSourceOrderProbe {
                     onNodeWithTag("nav:扩展与仓库").performScrollTo().performClick()
                     waitUntil(timeoutMillis = 20_000) { controller.state.value.screen == DesktopScreen.EXTENSIONS }
                     idle()
-                    onNodeWithTag("json-source-add").performScrollTo().performClick()
-                    idle()
-                    onNodeWithTag("json-source-address")
-                        .performTextInput("http://127.0.0.1:${server.address.port}/api.php/provide/vod")
+                    onNodeWithTag("extension-add").performClick(); idle()
+                    onNodeWithTag("extension-add-tvbox").performClick(); idle()
+                    onNodeWithTag("repository-url").performTextInput("http://127.0.0.1:${server.address.port}/api.php/provide/vod")
                     onNodeWithTag("json-source-name").performTextInput(name)
-                    onNodeWithTag("json-source-save").performClick()
-                    idle()
+                    onNodeWithTag("repository-add").performClick(); idle()
                 }
                 check(controller.state.value.jsonSources.isEmpty())
                 idle()

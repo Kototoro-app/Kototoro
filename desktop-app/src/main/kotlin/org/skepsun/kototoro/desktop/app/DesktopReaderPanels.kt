@@ -269,6 +269,8 @@ private fun SuperResolutionOptions(controller: DesktopController, settings: Desk
         Text(if (installed) desktopText("reader.upscaleAnime4kReady")
             else desktopText("reader.upscaleAnime4kMissing"), fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f))
+    } else if (!org.skepsun.kototoro.desktop.runtime.DesktopPlatform.current.supportsNativeUpscaling) {
+        Text(desktopText("reader.upscalePlatformUnavailable"), fontSize = 12.sp)
     } else if (installed) {
         Text(desktopText("reader.upscaleToolInstalled", tool.title), fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f))

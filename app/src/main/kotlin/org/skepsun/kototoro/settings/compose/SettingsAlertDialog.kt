@@ -228,34 +228,6 @@ internal fun SettingsAlertDialog(
     }
 }
 
-@Composable
-internal fun SettingsDialogActionButton(
-    text: String,
-    onClick: () -> Unit,
-    enabled: Boolean = true,
-    modifier: Modifier = Modifier,
-) {
-    TextButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier.tvFocusable(
-            enabled = enabled,
-            shape = RoundedCornerShape(10.dp),
-            addFocusTarget = false,
-        ),
-    ) {
-        // A television is watched from across the room, so the action labels take the size the rest
-        // of the TV settings list already uses instead of the phone's 14 sp.
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge.copy(
-                fontWeight = FontWeight.SemiBold,
-                fontSize = if (LocalUiPresentationConfig.current.isTv) 16.sp else 14.sp,
-            ),
-        )
-    }
-}
-
 /**
  * Width of a dialog card on TV: two thirds of a 1920 px screen, wide enough that a body sentence
  * fits on one line and narrow enough that the eye does not have to travel across the whole screen.

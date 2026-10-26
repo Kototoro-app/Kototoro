@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.source.SourceListing
 import org.skepsun.kototoro.core.ui.source.TabletSourceTile
+import org.skepsun.kototoro.core.ui.source.SourceListRow
 import org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget
 import org.skepsun.kototoro.desktop.runtime.isNsfwSource
 import org.skepsun.kototoro.explore.ui.compose.sourceQuickAccessMetrics
@@ -85,28 +86,32 @@ internal fun DesktopSourceGrid(controller: DesktopController, state: DesktopAppS
             }
         } else {
             // Android's list mode: one source per row instead of a tile grid; the same tap target and tags.
-            LazyColumn(Modifier.weight(1f).testTag("source-list-rows"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(Modifier.weight(1f).testTag("source-list-rows")) {
                 groups.forEach { (language, entries) ->
                     if (language.isNotEmpty()) item(key = "header:$language") { SourceGroupHeader(language) }
                     items(entries, key = { it.source.name }) { source ->
-                        Surface(color = Color.Transparent, shape = RoundedCornerShape(12.dp)) {
-                            Row(Modifier.fillMaxWidth().testTag("source:${source.source.name}")
-                                .then(if (enabled) Modifier.clickable { controller.selectSource(source) }
-                                else Modifier).padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                DesktopSourceIcon(controller, source, Modifier.size(40.dp), 20.sp)
-                                Column(Modifier.weight(1f)) {
-                                    Text(source.displayName, maxLines = 1, fontWeight = FontWeight.SemiBold)
-                                    Text(source.desktopSupportingText(), fontSize = 12.sp, color = Muted)
-                                }
-                            }
-                        }
+                        DesktopSourceRow(controller, source, enabled, selected = false)
                     }
                 }
             }
         }
     }
+}
+
+/** Android's source list row (`KototoroSourceCard`), used by the list mode here and by the browse rail. */
+@Composable
+internal fun DesktopSourceRow(controller: DesktopController, source: SourceListing, enabled: Boolean, selected: Boolean,
+    modifier: Modifier = Modifier) {
+    SourceListRow(
+        title = source.displayName,
+        summary = source.desktopSupportingText(),
+        icon = { iconModifier -> DesktopSourceIcon(controller, source, iconModifier, 18.sp) },
+        modifier = modifier.testTag("source:${source.source.name}"),
+        selected = selected,
+        expressive = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS,
+        enabled = enabled,
+        onClick = { controller.selectSource(source) },
+    )
 }
 
 @Composable
@@ -137,7 +142,7 @@ internal fun DesktopSourceIcon(controller: DesktopController, source: SourceList
     }
 }
 
-private fun SourceListing.desktopSupportingText(): String =
+internal fun SourceListing.desktopSupportingText(): String =
     "${DesktopSourceLabels.ecosystem(ecosystem)} · " +
         "${source.locale.ifBlank { desktopText("common.multilingual") }} · " +
         DesktopSourceLabels.contentType(source.contentType)

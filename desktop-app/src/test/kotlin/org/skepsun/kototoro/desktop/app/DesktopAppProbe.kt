@@ -151,7 +151,7 @@ object DesktopAppProbe {
                 DesktopTabletProbe.run(args)
                 return
             }
-            if (args[0] == "json-sources") {
+            if (args[0] == "json-sources" || args[0] == "json-sources-narrow") {
                 DesktopJsonSourcesProbe.run(args)
                 return
             }
@@ -274,7 +274,8 @@ object DesktopAppProbe {
                     settled()
                     check(controller.state.value.items.single().title == "search 离线")
                     snapshot("search")
-                    onNodeWithText("热门").performClick()
+                    onNodeWithTag("source-sort").performClick(); waitForIdle()
+                    onNodeWithTag("source-listing:popular").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.query.isEmpty() }
                     settled()
                     val content = controller.state.value.items.single()
@@ -310,7 +311,7 @@ object DesktopAppProbe {
                     onNodeWithTag("source:MIHON_9007199254740993").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.EXPLORE }
                     settled()
-                    onNodeWithText("源设置").performClick()
+                    onNodeWithTag("source-settings").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.PREFERENCES }
                     settled()
                     val preferenceNodes = requireNotNull(controller.state.value.preferences).nodes

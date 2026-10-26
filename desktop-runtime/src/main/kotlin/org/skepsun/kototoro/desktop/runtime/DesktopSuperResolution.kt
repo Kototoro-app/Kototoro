@@ -95,6 +95,7 @@ esources/upscale/<tool>), preferred over downloaded ones. */
         model.tool?.let { executable(it) != null } ?: (shaderUpscaler?.invoke() != null)
 
     fun executable(tool: DesktopUpscaleTool): Path? = listOfNotNull(bundled, tools)
+        .takeIf { DesktopPlatform.current.supportsNativeUpscaling }.orEmpty()
         .map { it.resolve(tool.name.lowercase()).resolve(tool.executable) }.firstOrNull { Files.isRegularFile(it) }
 
     suspend fun install(tool: DesktopUpscaleTool, progress: (Long, Long) -> Unit = { _, _ -> }): Path =

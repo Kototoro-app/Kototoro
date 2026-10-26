@@ -104,17 +104,17 @@ internal object DesktopSourceTestProbe {
                 }
                 idle()
                 openExtensions()
-                onNodeWithTag("json-source-add").performClick(); idle()
-                onNodeWithTag("json-source-address")
-                    .performTextInput("http://127.0.0.1:${server.address.port}/api.php/provide/vod")
+                onNodeWithTag("extension-add").performClick(); idle()
+                onNodeWithTag("extension-add-tvbox").performClick(); idle()
+                onNodeWithTag("repository-url").performTextInput("http://127.0.0.1:${server.address.port}/api.php/provide/vod")
                 onNodeWithTag("json-source-name").performTextInput(NAME)
-                onNodeWithTag("json-source-save").performClick(); idle()
+                onNodeWithTag("repository-add").performClick(); idle()
                 check(controller.state.value.error == null) { controller.state.value.error.orEmpty() }
-                onNodeWithTag("json-source-add").performClick(); idle()
-                onNodeWithTag("json-source-address")
-                    .performTextInput("http://127.0.0.1:${server.address.port}/broken.php")
+                onNodeWithTag("extension-add").performClick(); idle()
+                onNodeWithTag("extension-add-tvbox").performClick(); idle()
+                onNodeWithTag("repository-url").performTextInput("http://127.0.0.1:${server.address.port}/broken.php")
                 onNodeWithTag("json-source-name").performTextInput(BAD_NAME)
-                onNodeWithTag("json-source-save").performClick(); idle()
+                onNodeWithTag("repository-add").performClick(); idle()
                 check(controller.state.value.error == null) { controller.state.value.error.orEmpty() }
                 val stored = controller.state.value.jsonSources.firstOrNull { it.name == NAME }
                     ?: error("expected the working JSON source, got ${controller.state.value.jsonSources}")
@@ -127,8 +127,8 @@ internal object DesktopSourceTestProbe {
                 check(controller.state.value.enabledSources.map { it.source.name }.containsAll(listOf(stored.id, broken.id)))
 
                 // The extensions page row: Android's "test all", as a page of its own here.
-                onNodeWithTag("extensions-page")
-                    .performScrollToNode(hasTestTag("extension-test-sources"))
+                // The test row sits on the packages tab, under the installed list's auto-update switch.
+                onNodeWithTag("extensions-tab:2").performClick(); idle()
                 onNodeWithTag("extension-test-sources").performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.SOURCE_TEST) {
                     "expected the source test page, got ${controller.state.value.screen}"
@@ -203,8 +203,8 @@ internal object DesktopSourceTestProbe {
                 // Re-entering forgets the run, so a second visit does not show verdicts for a source now switched off.
                 onNodeWithTag("source-test-back").performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.EXTENSIONS)
-                onNodeWithTag("extensions-page")
-                    .performScrollToNode(hasTestTag("extension-test-sources"))
+                // The test row sits on the packages tab, under the installed list's auto-update switch.
+                onNodeWithTag("extensions-tab:2").performClick(); idle()
                 onNodeWithTag("extension-test-sources").performClick(); idle()
                 check(!controller.sourceTester.progress.value.finished) { "the previous run was kept" }
                 check(controller.sourceTester.progress.value.results.isEmpty())

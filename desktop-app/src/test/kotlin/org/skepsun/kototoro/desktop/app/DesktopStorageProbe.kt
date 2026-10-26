@@ -89,7 +89,7 @@ internal object DesktopStorageProbe {
                 onNodeWithTag("proxy-settings-open").performScrollTo().performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.PROXY_SETTINGS }
                 idle()
-                onNodeWithTag("proxy-settings-back").performScrollTo().performClick()
+                onNodeWithTag("proxy-settings-back").performClick()
                 idle()
                 check(controller.state.value.screen == DesktopScreen.STORAGE) { "the proxy page returns to the hub" }
 

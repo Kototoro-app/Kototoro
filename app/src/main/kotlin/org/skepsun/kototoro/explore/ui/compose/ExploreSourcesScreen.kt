@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import org.skepsun.kototoro.core.ui.source.SourceListRow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.focus.FocusRequester
@@ -531,7 +532,6 @@ fun KototoroSourceCard(
     val summary = item.source.getSummary(context)
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val cardShape = RoundedCornerShape(if (expressive) 20.dp else 12.dp)
-    val listShape = RoundedCornerShape(if (expressive) 22.dp else 0.dp)
     val iconShape = RoundedCornerShape(if (expressive) 14.dp else 8.dp)
     val containerColor = when {
         isSelected -> MaterialTheme.colorScheme.secondaryContainer
@@ -588,56 +588,26 @@ fun KototoroSourceCard(
             }
         }
     } else {
-        Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(horizontal = if (expressive) 8.dp else 0.dp, vertical = if (expressive) 3.dp else 0.dp)
-                .background(containerColor, listShape)
-                .padding(vertical = if (expressive) 10.dp else 12.dp, horizontal = if (expressive) 14.dp else 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shape = iconShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
+        SourceListRow(
+            title = title,
+            summary = summary,
+            icon = { iconModifier ->
                 ContentSourceIcon(
                     source = item.source,
-                    modifier = Modifier.size(28.dp),
+                    modifier = iconModifier,
                     contentDescription = title,
                 )
+            },
+            modifier = modifier,
+            selected = isSelected,
+            expressive = expressive,
+            badge = {
                 SourceAvailabilityBadge(
                     availability = item.source.availability,
                     modifier = Modifier.align(Alignment.TopEnd),
                 )
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                    color = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (!summary.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = summary,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
+            },
+        )
     }
 }
 

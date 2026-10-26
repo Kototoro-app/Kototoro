@@ -1161,6 +1161,7 @@ private fun GlassTuningPreview() {
             LocalLiquidGlassBackdrop provides previewBackdrop,
             LocalLiquidGlassLayerBackdrop provides previewBackdrop,
             LocalInterfaceStyle provides InterfaceStyle.IOS,
+            org.skepsun.kototoro.core.ui.theme.LocalIsIosInterfaceStyle provides true,
             LocalAmoledTheme provides backdrop.oled,
         ) {
             MaterialTheme(colorScheme = scheme) {

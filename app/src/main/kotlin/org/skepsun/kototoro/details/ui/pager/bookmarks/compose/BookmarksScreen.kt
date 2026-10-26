@@ -1,5 +1,8 @@
 package org.skepsun.kototoro.details.ui.pager.bookmarks.compose
 
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import org.skepsun.kototoro.core.ui.compose.DetailsBookmarkCard
+import org.skepsun.kototoro.core.ui.compose.DetailsBookmarkText
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -91,107 +94,38 @@ private fun BookmarkCard(
     val contentType = bookmark.manga.source.getContentType()
     val isNovel = contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL
 
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .aspectRatio(0.7f)
-            // A bookmark page is the panel body's only stop, so it needs the ring the clickable owns.
-            // onFocusChanged only sees the focus target that follows it, hence the order.
-            .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick,
-            ),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.artworkAwareContainerColor(),
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isArtworkBackground) 0.dp else 1.dp),
-        border = if (isSelected) BorderStroke(4.dp, MaterialTheme.colorScheme.primary) else null,
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (isNovel) {
-                val previewText = remember(bookmark.imageUrl) {
-                    extractNovelBookmarkPreview(bookmark.imageUrl)
-                }
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(8.dp),
-                ) {
-                    Text(
-                        text = bookmark.chapterTitle.orEmpty().ifBlank {
-                            stringResource(R.string.bookmark_position, bookmark.page + 1)
-                        },
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = previewText.ifBlank { stringResource(R.string.bookmark_preview_unavailable) },
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 15.sp),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 5,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            } else {
-                AsyncImage(
-                    model = imageModel,
-                    contentDescription = "Bookmark Thumbnail",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            if (bookmark.percent > 0) {
-                CircularProgressIndicator(
-                    progress = { bookmark.percent },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(8.dp)
-                        .size(24.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = Color.Black.copy(alpha = 0.5f),
-                )
-            }
-
-            if (!isNovel) {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(4.dp),
-                    shape = RoundedCornerShape(4.dp),
-                    color = Color.Black.copy(alpha = 0.6f),
-                ) {
-                    Text(
-                        text = "P.${bookmark.page + 1}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                    )
-                }
-            }
-
-            if (isSelected) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Selected",
-                        tint = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .size(48.dp),
-                    )
-                }
-            }
-        }
+    val previewText = remember(bookmark.imageUrl, isNovel) {
+        if (isNovel) extractNovelBookmarkPreview(bookmark.imageUrl) else ""
     }
+    DetailsBookmarkCard(
+        selected = isSelected,
+        percent = bookmark.percent,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        selectedIcon = rememberVectorPainter(Icons.Default.CheckCircle),
+        modifier = modifier,
+        pageLabel = "P.${bookmark.page + 1}",
+        text = if (isNovel) {
+            DetailsBookmarkText(
+                title = bookmark.chapterTitle.orEmpty().ifBlank {
+                    stringResource(R.string.bookmark_position, bookmark.page + 1)
+                },
+                excerpt = previewText.ifBlank { stringResource(R.string.bookmark_preview_unavailable) },
+            )
+        } else {
+            null
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.artworkAwareContainerColor(),
+        elevation = if (isArtworkBackground) 0.dp else 1.dp,
+        image = {
+            AsyncImage(
+                model = imageModel,
+                contentDescription = "Bookmark Thumbnail",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        },
+    )
 }
 
 @Composable

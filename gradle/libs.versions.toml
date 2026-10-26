@@ -113,6 +113,10 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 # so this override pulls the newer library; revert the override once a BOM pins 1.5.x.
 androidx-compose-material3-expressive = { group = "androidx.compose.material3", name = "material3", version = "1.5.0-alpha26" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+# Shared (core-ui) Material3 for Android/desktop. CMP decoupled Material3 from the plugin after 1.9.0; 1.12.0-alpha03
+# builds on CMP foundation/runtime 1.12.0-beta01 (same line as the 1.12.x plugin) and tracks androidx material3
+# 1.5.0-alpha22, close to the 1.5.0-alpha26 the app pins above.
+jetbrains-compose-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version = "1.12.0-alpha03" }
 androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 androidx-navigation3-runtime = { group = "androidx.navigation3", name = "navigation3-runtime", version.ref = "navigation3" }
 androidx-navigation3-ui = { group = "androidx.navigation3", name = "navigation3-ui", version.ref = "navigation3" }
