@@ -543,112 +543,31 @@ final class LocalImportTests: XCTestCase {
     }
 
     @MainActor
-    func testGripOnTheScreenEdgeNeitherSlowsNorPinchesAPageSwipe() throws {
+    func testReaderEdgeSwipeGoesBackOnlyFromTheEdgeBand() throws {
         importFile(source: "LOCAL", file: "fixture_comic", reuse: true)
+        let window = app.windows.firstMatch
+        func swipe(from x: CGFloat) {
+            window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: 0.5)).press(forDuration: 0.1,
+                thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)),
+                withVelocity: .slow, thenHoldForDuration: 0.1)
+        }
+        // Right to left reads forward with the same rightward drag as the swipe back: only the edge band goes back.
         app.detailsReadButton().tap()
         XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 20))
-        selectReaderMode("默认（从左到右）")
-        let frame = app.windows.firstMatch.frame
-        // A slow swipe across 70% of the page, held still before lifting: it turns the page only if the scroll
-        // follows the thumb alone. Followed at half speed (the centre of thumb and grip), it springs back. A grip that
-        // lands before the thumb still reaches the scroll view, so only grips landing during the swipe are covered.
-        let cases: [(CGFloat?, Bool)] = [(nil, false), (frame.maxX - 6, false), (frame.minX + 6, false)]
-        for (gripX, gripFirst) in cases {
-            app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0)
-            waitForPage("1")
-            let start = gripFirst ? 0.4 : 0.0
-            let moves = (1...10).map { step in
-                (CGPoint(x: frame.width * (0.85 - 0.07 * Double(step)), y: frame.midY), start + 0.1 * Double(step))
-            }
-            var touches = [SyntheticTouch(down: CGPoint(x: frame.width * 0.85, y: frame.midY), at: start, moves: moves,
-                                          liftAt: start + 1.4)]
-            if let gripX {
-                // Both lift together: when one synthesized finger lifts first, the simulator hands the remaining
-                // finger's path to the other touch object, which would drag the thumb back to the grip.
-                touches.append(SyntheticTouch(down: CGPoint(x: gripX, y: frame.height * 0.7), at: gripFirst ? 0 : 0.2,
-                                              liftAt: start + 1.4))
-            }
-            synthesizeTouches(touches)
-            XCTContext.runActivity(named: "grip \(gripX.map { "\($0)" } ?? "none"), first \(gripFirst)") { _ in
-                waitForPage("2")
-            }
-            let page = app.images.matching(NSPredicate(
-                format: "identifier == %@ AND label CONTAINS %@", "reader.image", "第 2 页"
-            )).firstMatch
-            XCTAssertLessThanOrEqual(page.frame.width, frame.width + 1, "the grip zoomed the page")
-        }
-        attach("边缘握持不影响翻页")
-    }
+        selectReaderMode("从右到左")
+        app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0)
+        waitForPage("1")
+        swipe(from: 0.15)
+        waitForPage("2")
+        XCTAssertTrue(app.images["reader.image"].firstMatch.exists, "a drag away from the edge left the reader")
+        swipe(from: 0.005)
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 10), app.debugDescription)
 
-    @MainActor
-    func testContinuousStripFollowsTheThumbWithARestingEdgeGrip() throws {
-        importFile(source: "LOCAL", file: "fixture_reader_long", reuse: true)
-        openFirstChapter(title: "fixture_reader_long")
-        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30))
+        app.detailsReadButton().tap()
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 20))
         selectReaderMode("条漫")
-        let canvas = app.scrollViews["reader.canvas"]
-        let frame = app.windows.firstMatch.frame
-        let page = app.images["reader.image"].firstMatch
-        var baseline: CGFloat = 0
-        let cases: [(CGFloat?, Bool)] = [
-            (nil, false), (frame.maxX - 6, false), (frame.maxX - 6, true),
-            (frame.minX + 6, false), (frame.minX + 6, true),
-        ]
-        for (gripX, gripFirst) in cases {
-            if !app.buttons["reader.more"].exists { canvas.tap() }
-            app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 1)
-            app.sliders["reader.progress"].adjust(toNormalizedSliderPosition: 0)
-            hideReaderControls(canvas)
-            let before = page.frame.minY
-            let start = gripFirst ? 0.4 : 0.0
-            // Reverse twice without lifting the thumb. A resting palm must not change the scroll's distance.
-            let stops: [CGFloat] = [0.76, 0.40, 0.66, 0.32]
-            var moves: [(CGPoint, Double)] = []
-            for segment in 0..<(stops.count - 1) {
-                for step in 1...12 {
-                    let y = stops[segment] + (stops[segment + 1] - stops[segment]) * CGFloat(step) / 12
-                    moves.append((CGPoint(x: frame.width * 0.65, y: frame.height * y),
-                                  start + Double(segment * 12 + step) * 0.04))
-                }
-            }
-            // A slow final adjustment removes fling velocity from the distance comparison.
-            let final = CGPoint(x: frame.width * 0.65, y: frame.height * stops.last!)
-            moves.append((CGPoint(x: final.x, y: final.y + 1), start + 1.6))
-            moves.append((final, start + 1.7))
-            let end = start + 1.8
-            var touches = [SyntheticTouch(down: CGPoint(x: frame.width * 0.65, y: frame.height * stops[0]),
-                                          at: start, moves: moves, liftAt: end)]
-            if let gripX {
-                touches.append(SyntheticTouch(down: CGPoint(x: gripX, y: frame.height * 0.7),
-                                              at: gripFirst ? 0 : 0.2, liftAt: end))
-            }
-            let began = Date()
-            synthesizeTouches(touches)
-            var lastTop = page.frame.minY
-            var lastMovement = Date()
-            // Measure the rendered page, not the accessible progress text, which can lag a multi-touch drag.
-            let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-                let top = page.frame.minY
-                if abs(top - lastTop) > 1 { lastMovement = Date(); lastTop = top }
-                return Date().timeIntervalSince(began) > end + 0.3 && Date().timeIntervalSince(lastMovement) > 0.6
-            }, object: nil)
-            XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 8), .completed, "\(canvas.value ?? "")")
-            let distance = before - page.frame.minY
-            if gripX == nil {
-                baseline = distance
-                XCTAssertGreaterThan(baseline, frame.height * 0.35)
-            } else {
-                XCTAssertEqual(distance, baseline, accuracy: 20,
-                               "grip x=\(gripX!), first=\(gripFirst): the strip stopped following the thumb")
-            }
-            XCTAssertTrue(waitForZoom(canvas, "100%"), "A resting grip must not zoom the strip")
-        }
-        // A single intentional edge swipe must still return to details after all of the grip sessions.
-        let window = app.windows.firstMatch
-        window.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.5)).press(forDuration: 0.1,
-            thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.5)),
-            withVelocity: .slow, thenHoldForDuration: 0.1)
-        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 10))
+        swipe(from: 0.005)
+        XCTAssertTrue(app.detailsReadButton().waitForExistence(timeout: 10), app.debugDescription)
     }
 
     @MainActor

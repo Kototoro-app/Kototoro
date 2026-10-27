@@ -1494,7 +1494,6 @@ struct SourceReaderView: View {
         }
         .background(settings.background.ignoresSafeArea())
         .background(EdgeSwipeBack())
-        .overlay(ReaderGripGuard().ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar, .tabBar)
         .statusBarHidden(!controls)
         .onAppear { isReaderVisible = true; model.setReadingActive(scenePhase == .active); updateIdleTimer() }
@@ -2112,8 +2111,11 @@ private final class ReaderBackgroundSave {
 
 /// Hiding the navigation bar also turns off the navigation controller's left-edge swipe back. While the reader
 /// is on screen this restores that edge gesture (not the full-width content swipe, which would fight page turns),
-/// and hands the previous delegate back when it leaves.
+/// and hands the previous delegate back when it leaves. Only touches that land in a narrow band at the leading edge
+/// reach it, so a broad thumb further in never holds the reader's drags waiting for the swipe back to fail.
 struct EdgeSwipeBack: UIViewControllerRepresentable {
+    static let band: CGFloat = 20
+
     func makeUIViewController(context: Context) -> Controller { Controller() }
     func updateUIViewController(_ controller: Controller, context: Context) {}
 
@@ -2145,140 +2147,19 @@ struct EdgeSwipeBack: UIViewControllerRepresentable {
             (navigationController?.viewControllers.count ?? 0) > 1
         }
 
-        /// The page scroll view and the reader's drags wait for the edge swipe, which fails at once for any touch that
-        /// does not start at the screen edge, so turning pages is unaffected.
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard let window = touch.window else { return false }
+            let x = touch.location(in: window).x
+            return window.effectiveUserInterfaceLayoutDirection == .rightToLeft
+                ? x >= window.bounds.width - EdgeSwipeBack.band
+                : x <= EdgeSwipeBack.band
+        }
+
+        /// A drag that starts in the edge band waits for the swipe back, so a page turn cannot take it first. Touches
+        /// elsewhere never reach the swipe back, and the reader's gestures start without waiting.
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                                shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool { other !== gestureRecognizer }
     }
-}
-
-/// Reading one-handed, a gripping finger or the palm rests on a side edge while the thumb reads: touches in these
-/// side bands are grips when another finger is down.
-enum ReaderGripEdge {
-    static let width: CGFloat = 32
-
-    static func contains(_ x: CGFloat, width viewport: CGFloat) -> Bool {
-        viewport > width * 2 && (x < width || x > viewport - width)
-    }
-
-    /// A pinch needs two fingers away from the side bands, so a grip that landed before the thumb cannot zoom.
-    static func allowsPinch(_ pinch: UIPinchGestureRecognizer) -> Bool {
-        guard let window = pinch.view?.window else { return true }
-        let inner = (0..<pinch.numberOfTouches).filter { index in
-            !contains(pinch.location(ofTouch: index, in: window).x, width: window.bounds.width)
-        }
-        return inner.count >= 2
-    }
-}
-
-/// The strip's scroll view, which refuses pinches started by a grip ([ReaderGripEdge.allowsPinch]).
-final class ReaderStripScrollView: UIScrollView {
-    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        if let pinch = pinchGestureRecognizer, gestureRecognizer === pinch, !ReaderGripEdge.allowsPinch(pinch) {
-            return false
-        }
-        return super.gestureRecognizerShouldBegin(gestureRecognizer)
-    }
-}
-
-/// Keeps a resting grip out of the reader's gestures. A transparent layer over the reader that touches pass through,
-/// except a grip: an edge touch landing while another finger is down stops here, so no scroll view, pinch or tap ever
-/// sees it. (Ignoring a touch after a scroll view has taken it does not work: its pan keeps following the centre of
-/// both fingers.) A grip that landed first was already handed out; see [ReaderGripFilter.releaseRestingGrips].
-struct ReaderGripGuard: UIViewRepresentable {
-    func makeUIView(context: Context) -> Host { Host() }
-    func updateUIView(_ view: Host, context: Context) {}
-
-    final class Host: UIView {
-        private let filter = ReaderGripFilter()
-
-        override init(frame: CGRect) {
-            super.init(frame: frame)
-            backgroundColor = .clear
-        }
-
-        @available(*, unavailable)
-        required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            filter.view?.removeGestureRecognizer(filter)
-            window?.addGestureRecognizer(filter)
-        }
-
-        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-            guard let window, event?.type == .touches, self.point(inside: point, with: event) else { return nil }
-            let edge = ReaderGripEdge.contains(convert(point, to: nil).x, width: window.bounds.width)
-            if edge { return filter.hasDrivingTouch ? self : nil }
-            filter.releaseRestingGrips()
-            return nil
-        }
-    }
-}
-
-/// Follows every touch in the reader's window, to tell [ReaderGripGuard] which fingers are down and which are grips:
-/// an edge touch is ignored while a touch away from the edges is down, whichever landed first,
-/// and stays ignored until it lifts. A swipe that starts at the edge still drives, since no other touch is down.
-/// It never recognizes and never delays or cancels touches.
-final class ReaderGripFilter: UIGestureRecognizer, UIGestureRecognizerDelegate {
-    private var live = Set<UITouch>()
-    private var edges = Set<UITouch>()
-    private var ignored = Set<UITouch>()
-
-    init() {
-        super.init(target: nil, action: nil)
-        cancelsTouchesInView = false
-        delaysTouchesBegan = false
-        delaysTouchesEnded = false
-        delegate = self
-    }
-
-    /// A finger the reader's gestures follow is down, so an edge touch landing now is a grip.
-    var hasDrivingTouch: Bool { !live.subtracting(ignored).isEmpty }
-
-    /// A grip that landed first already belongs to the strip's native pan. `ignore` leaves UIKit following both
-    /// fingers, so reset that pan during hit testing, before the new thumb is delivered. The old touches stay out
-    /// until they lift, and the thumb starts a fresh drag. A pending left-edge back swipe must also stop waiting.
-    func releaseRestingGrips() {
-        for grip in live.intersection(edges).subtracting(ignored) {
-            ignored.insert(grip)
-            for gesture in grip.gestureRecognizers ?? [] {
-                let stripPan = (gesture.view as? ReaderStripScrollView)?.panGestureRecognizer
-                let pendingBack = gesture is UIScreenEdgePanGestureRecognizer && gesture.state == .possible
-                guard gesture === stripPan || pendingBack else { continue }
-                gesture.isEnabled = false
-                gesture.isEnabled = true
-            }
-        }
-    }
-
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-        guard let window = view?.window ?? view as? UIWindow else { return }
-        for touch in touches {
-            let edge = ReaderGripEdge.contains(touch.location(in: nil).x, width: window.bounds.width)
-            if edge {
-                if hasDrivingTouch { ignored.insert(touch) }
-                edges.insert(touch)
-            }
-            live.insert(touch)
-        }
-    }
-
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) { lift(touches) }
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) { lift(touches) }
-
-    override func reset() {
-        super.reset()
-        live.removeAll(); edges.removeAll(); ignored.removeAll()
-    }
-
-    private func lift(_ touches: Set<UITouch>) {
-        live.subtract(touches)
-        if live.isEmpty { state = .failed }
-    }
-
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
-                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 }
 
 private struct ReaderPageTransition: ViewModifier {
@@ -2539,7 +2420,6 @@ private struct ReaderPageZoom<Content: View>: UIViewRepresentable {
         view.showsVerticalScrollIndicator = false
         view.showsHorizontalScrollIndicator = false
         view.contentInsetAdjustmentBehavior = .never
-        view.isDirectionalLockEnabled = true
         view.scrollsToTop = false
         view.backgroundColor = .clear
         view.clipsToBounds = true
@@ -2696,16 +2576,8 @@ private struct ReaderPageZoom<Content: View>: UIViewRepresentable {
 }
 
 /// Keeps the hosted pages a child of the reader's view controller, so their sheets (a challenge's browser) present.
-/// Like the strip, it refuses pinches started by a grip ([ReaderGripEdge.allowsPinch]).
 final class ReaderZoomScrollView: UIScrollView {
     weak var host: UIViewController?
-
-    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        if let pinch = pinchGestureRecognizer, gestureRecognizer === pinch, !ReaderGripEdge.allowsPinch(pinch) {
-            return false
-        }
-        return super.gestureRecognizerShouldBegin(gestureRecognizer)
-    }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()

@@ -498,7 +498,7 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
     private let settings: ReaderSettings
     var onTap: (CGPoint) -> Void = { _ in }
 
-    private let scrollView = ReaderStripScrollView()
+    private let scrollView = UIScrollView()
     private let content = UIView()
     /// Page views by slot identity (chapter-local page), so a page keeps its view while the window changes around it.
     private var cells: [String: ReaderStripPageView] = [:]
@@ -562,7 +562,6 @@ final class ReaderStripController: UIViewController, UIScrollViewDelegate, UIGes
         scrollView.showsVerticalScrollIndicator = false
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.scrollsToTop = false
-        scrollView.isDirectionalLockEnabled = true
         scrollView.alwaysBounceVertical = vertical
         scrollView.alwaysBounceHorizontal = !vertical
         scrollView.backgroundColor = .clear

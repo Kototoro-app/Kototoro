@@ -67,8 +67,8 @@ struct SyntheticTouch {
     let liftAt: Double
 }
 
-/// XCUICoordinate only drives one finger. Several concurrent fingers (a thumb swiping while a grip rests on the screen
-/// edge) go through XCTest's own event synthesis, the private API WebDriverAgent uses for multi-touch actions.
+/// XCUICoordinate drives one straight drag. Paths that turn mid-contact, or several fingers at once, go through
+/// XCTest's own event synthesis, the private API WebDriverAgent uses for multi-touch actions.
 func synthesizeTouches(_ touches: [SyntheticTouch], file: StaticString = #filePath, line: UInt = #line) {
     typealias Alloc = @convention(c) (AnyClass, Selector) -> Unmanaged<AnyObject>
     typealias InitPath = @convention(c) (AnyObject, Selector, CGPoint, Double) -> Unmanaged<AnyObject>
