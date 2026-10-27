@@ -7043,6 +7043,56 @@
         }
       }
     },
+    "播放时长": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watch time"
+          }
+        }
+      }
+    },
+    "播放时间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Played at"
+          }
+        }
+      }
+    },
+    "播放次数": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessions"
+          }
+        }
+      }
+    },
+    "播放统计": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback statistics"
+          }
+        }
+      }
+    },
+    "播放记录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback record"
+          }
+        }
+      }
+    },
     "播放速度": {
       "localizations": {
         "en": {
@@ -7658,6 +7708,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Old paper"
+          }
+        }
+      }
+    },
+    "旧版播放统计": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legacy playback statistics"
           }
         }
       }
@@ -13289,6 +13350,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Color"
+          }
+        }
+      }
+    },
+    "首次播放 · ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First played · "
           }
         }
       }

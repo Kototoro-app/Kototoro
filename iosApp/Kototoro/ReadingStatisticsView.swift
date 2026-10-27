@@ -216,6 +216,8 @@ struct ContentReadingStatsSheet: View {
     @StateObject private var model = ReadingStatsModel()
     @State private var selectedDay: String?
 
+    private var isVideo: Bool { content.mediaKind == "VIDEO" }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -231,11 +233,11 @@ struct ContentReadingStatsSheet: View {
                                 Spacer()
                                 if work.hasProgress { Text(String(localized: "当前进度 \(Int(work.progress * 100))%")) }
                             }.font(.caption).foregroundStyle(.secondary)
-                            Text(String(localized: "首次阅读 · ") + ReadingStatsFormat.date(work.firstActivityAt).formatted(date: .abbreviated, time: .omitted))
+                            Text((isVideo ? String(localized: "首次播放 · ") : String(localized: "首次阅读 · ")) + ReadingStatsFormat.date(work.firstActivityAt).formatted(date: .abbreviated, time: .omitted))
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         let events = snapshot.timeline.filter { selectedDay == nil || ReadingStatsFormat.day(ReadingStatsFormat.date($0.timestamp)) == selectedDay }
-                        Text("阅读记录").font(.headline)
+                        Text(isVideo ? "播放记录" : "阅读记录").font(.headline)
                         if events.isEmpty {
                             ContentUnavailableView("暂无阅读统计", systemImage: "chart.bar",
                                 description: Text("阅读漫画、小说或播放视频后，时长会自动记录。历史进度无法还原过去的时长。"))
@@ -256,7 +258,7 @@ struct ContentReadingStatsSheet: View {
                 }.padding()
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("阅读统计").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(isVideo ? "播放统计" : "阅读统计").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
             .task { await model.load(library.library, range: .all, kind: "ALL", contentId: content.id) }
         }

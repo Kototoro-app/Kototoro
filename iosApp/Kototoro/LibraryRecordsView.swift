@@ -7,7 +7,7 @@ private enum TimelineFilter: String, CaseIterable {
     var title: String {
         switch self {
         case .all: String(localized: "全部")
-        case .reading: String(localized: "阅读")
+        case .reading: String(localized: "历史")
         case .bookmarks: String(localized: "书签")
         case .updates: String(localized: "更新")
         case .downloads: String(localized: "下载")
@@ -409,17 +409,26 @@ private struct RecordUpdateDownloadButton: View {
                     } catch { self.error = error.localizedDescription }
                 }
             } label: {
-                Label(preparing ? String(localized: "正在加入队列")
+                // An icon on the row's time line; the state is spelled out for VoiceOver.
+                let running = entries.contains(where: { $0.state == .running })
+                Group {
+                    if preparing || running {
+                        ProgressView().controlSize(.mini)
+                    } else {
+                        Image(systemName: chapters.isEmpty || !pending.isEmpty ? "arrow.down.circle"
+                              : !active.isEmpty ? "arrow.down.circle.dotted" : "checkmark.circle")
+                    }
+                }
+                .font(.body)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+                .accessibilityLabel(preparing ? String(localized: "正在加入队列")
                       : chapters.isEmpty || !pending.isEmpty ? String(localized: "下载更新")
-                      : entries.contains(where: { $0.state == .running }) ? String(localized: "正在下载")
-                      : !active.isEmpty ? String(localized: "已排队") : String(localized: "已下载"),
-                      systemImage: !chapters.isEmpty && pending.isEmpty && active.isEmpty
-                          ? "checkmark.circle" : "arrow.down.circle")
+                      : running ? String(localized: "正在下载")
+                      : !active.isEmpty ? String(localized: "已排队") : String(localized: "已下载"))
             }
             .disabled(preparing || (!chapters.isEmpty && pending.isEmpty))
-            .font(.caption)
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .buttonStyle(.borderless)
             .accessibilityIdentifier("records.downloadUpdate.\(content.id)")
             .task(id: entries.filter { $0.state == .completed }.count) { refreshOffline() }
             .alert("下载更新失败", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
@@ -571,10 +580,11 @@ private struct RecordsTimeline: View {
                                     LabeledContent("来源更新时间", value: sourceUpdateDate(event))
                                 }
                                 if event.duration > 0 {
-                                    LabeledContent("阅读时长", value: ReadingStatsFormat.duration(event.duration))
+                                    LabeledContent(isVideo(item) ? "播放时长" : "阅读时长",
+                                                   value: ReadingStatsFormat.duration(event.duration))
                                 }
                                 if !event.isUpdate && event.count > 0 {
-                                    LabeledContent("阅读次数", value: "\(event.count)")
+                                    LabeledContent(isVideo(item) ? "播放次数" : "阅读次数", value: "\(event.count)")
                                 }
                                 Text(event.detail).font(.subheadline)
                             } else if let count = item.downloadCount {
@@ -613,8 +623,11 @@ private struct RecordsTimeline: View {
     private func kindTitle(_ item: TimelineItem) -> String {
         item.bookmark != nil ? String(localized: "书签")
             : item.downloadCount != nil ? String(localized: "下载") : item.isUpdate ? String(localized: "发现更新")
-            : String(localized: "阅读")
+            : isVideo(item) ? String(localized: "播放") : String(localized: "阅读")
     }
+
+    /// Videos are played, not read: their history uses the playback wording.
+    private func isVideo(_ item: TimelineItem) -> Bool { item.content.mediaKind == "VIDEO" }
 
     /// Opens the reader at [bookmark], with the work's stored chapters (works on the timeline come without them).
     private func open(_ bookmark: IosBookmark, of content: IosSourceContent) {
@@ -650,12 +663,12 @@ private struct RecordsTimeline: View {
 
     private func timeTitle(_ item: TimelineItem) -> String {
         item.downloadCount != nil ? String(localized: "下载时间") : item.isUpdate ? String(localized: "发现更新时间")
-            : String(localized: "阅读时间")
+            : isVideo(item) ? String(localized: "播放时间") : String(localized: "阅读时间")
     }
 
     private func recordTitle(_ item: TimelineItem) -> String {
         item.downloadCount != nil ? String(localized: "下载记录") : item.isUpdate ? String(localized: "更新记录")
-            : String(localized: "阅读记录")
+            : isVideo(item) ? String(localized: "播放记录") : String(localized: "阅读记录")
     }
 
     private func lane(_ items: [TimelineItem], alignment: HorizontalAlignment) -> some View {
@@ -666,77 +679,78 @@ private struct RecordsTimeline: View {
     }
 
     private func eventRow(_ item: TimelineItem, alignment: HorizontalAlignment, showsKind: Bool) -> some View {
-        VStack(alignment: alignment, spacing: 4) {
-            Button {
-                if let bookmark = item.bookmark { open(bookmark, of: item.content); return }
-                selected = item
-                if let event = item.event, event.isUpdate {
-                    Task {
-                        do {
-                            try await library.library?.markUpdateSeen(event: event)
-                            seenEvents.insert(event.id)
-                        } catch { /* A later refresh can retry acknowledging this reminder. */ }
-                    }
+        Button {
+            if let bookmark = item.bookmark { open(bookmark, of: item.content); return }
+            selected = item
+            if let event = item.event, event.isUpdate {
+                Task {
+                    do {
+                        try await library.library?.markUpdateSeen(event: event)
+                        seenEvents.insert(event.id)
+                    } catch { /* A later refresh can retry acknowledging this reminder. */ }
                 }
-            } label: {
-                let cover = CoverImage(runtime: runtime, content: item.content)
-                    .frame(width: 32, height: 48)
-                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                    .accessibilityHidden(true)
-                HStack(alignment: .top, spacing: 8) {
-                    if alignment == .leading { cover }
-                    VStack(alignment: alignment, spacing: 2) {
-                        let unseen = item.event.map { $0.isUpdate && $0.isUnseen && !seenEvents.contains($0.id) } ?? false
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            if unseen {
-                                Circle().fill(.red).frame(width: 6, height: 6)
-                                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] }
-                                    .accessibilityLabel("未查看更新")
-                            }
-                            Text(item.content.title).font(.subheadline.weight(.medium)).lineLimit(2)
+            }
+        } label: {
+            let cover = CoverImage(runtime: runtime, content: item.content)
+                .frame(width: 32, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .accessibilityHidden(true)
+            HStack(alignment: .top, spacing: 8) {
+                if alignment == .leading { cover }
+                VStack(alignment: alignment, spacing: 2) {
+                    let unseen = item.event.map { $0.isUpdate && $0.isUnseen && !seenEvents.contains($0.id) } ?? false
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        if unseen {
+                            Circle().fill(.red).frame(width: 6, height: 6)
+                                .alignmentGuide(.firstTextBaseline) { $0[.bottom] }
+                                .accessibilityLabel("未查看更新")
+                        }
+                        Text(item.content.title).font(.subheadline.weight(.medium)).lineLimit(2)
+                            .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
+                    }
+                    if let bookmark = item.bookmark {
+                        Label(bookmarkPlace(bookmark, of: item.content), systemImage: "bookmark.fill")
+                            .font(.caption).foregroundStyle(.tint).lineLimit(1)
+                        if item.content.mediaKind == "NOVEL" && !bookmark.textPreview.isEmpty {
+                            Text(bookmark.textPreview).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                                 .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
                         }
-                        if let bookmark = item.bookmark {
-                            Label(bookmarkPlace(bookmark, of: item.content), systemImage: "bookmark.fill")
-                                .font(.caption).foregroundStyle(.tint).lineLimit(1)
-                            if item.content.mediaKind == "NOVEL" && !bookmark.textPreview.isEmpty {
-                                Text(bookmark.textPreview).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                                    .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
-                            }
-                        } else if let count = item.downloadCount {
-                            Label("下载 \(count) 章", systemImage: "arrow.down.circle")
-                                .font(.caption).foregroundStyle(.tint).lineLimit(1)
-                        } else if let event = item.event {
-                            if event.isUpdate {
-                                updateSummary(event).font(.caption).lineLimit(2)
-                                    .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
-                                Text(sourceUpdateDate(event)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                            } else {
-                                Text(event.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                if event.hasProgress { progressLine(event) }
-                            }
+                    } else if let count = item.downloadCount {
+                        Label("下载 \(count) 章", systemImage: "arrow.down.circle")
+                            .font(.caption).foregroundStyle(.tint).lineLimit(1)
+                    } else if let event = item.event {
+                        if event.isUpdate {
+                            updateSummary(event).font(.caption).lineLimit(2)
+                                .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
+                            Text(sourceUpdateDate(event)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                        } else {
+                            Text(event.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            if event.hasProgress { progressLine(event) }
                         }
-                        Text(metaLine(item, showsKind: showsKind)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                     }
-                    .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
-                    if alignment == .trailing { cover }
+                    Text(metaLine(item, showsKind: showsKind)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                        // Leaves room for the update's download icon at the row's far edge.
+                        .padding(alignment == .leading ? .trailing : .leading, item.isUpdate ? 32 : 0)
                 }
                 .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
-                .padding(.vertical, 2).contentShape(Rectangle())
+                if alignment == .trailing { cover }
             }
-            .buttonStyle(.plain)
-            .contextMenu {
-                if let bookmark = item.bookmark {
-                    Button("继续阅读", systemImage: "book") { open(bookmark, of: item.content) }
-                    Button("打开作品", systemImage: "info.circle") { openedWork = item.content }
-                    Button("删除书签", systemImage: "trash", role: .destructive) { remove(bookmark, of: item.content) }
-                }
+            .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
+            .padding(.vertical, 2).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            if let bookmark = item.bookmark {
+                Button("继续阅读", systemImage: "book") { open(bookmark, of: item.content) }
+                Button("打开作品", systemImage: "info.circle") { openedWork = item.content }
+                Button("删除书签", systemImage: "trash", role: .destructive) { remove(bookmark, of: item.content) }
             }
-            .accessibilityIdentifier("timeline.\(item.id)")
+        }
+        .accessibilityIdentifier("timeline.\(item.id)")
+        // A sibling of the row button, aligned with its time line, so the two taps stay separate.
+        .overlay(alignment: alignment == .leading ? .bottomTrailing : .bottomLeading) {
             if let event = item.event, event.isUpdate {
-                // Sits under the text column rather than the cover.
-                RecordUpdateDownloadButton(event: event, runtime: runtime)
-                    .padding(alignment == .leading ? .leading : .trailing, 40)
+                RecordUpdateDownloadButton(event: event, runtime: runtime).offset(y: 6)
             }
         }
     }

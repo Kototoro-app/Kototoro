@@ -157,11 +157,15 @@ class IosStatistics internal constructor(private val owner: IosLibrary) {
                         it.startedAt < dayEnd && it.startedAt + it.duration > day.startedAt
                     }.maxOfOrNull { it.startedAt + it.duration }
                     val timestamp = minOf(now, dayEnd, latest?.endAt ?: legacyEnd ?: (day.startedAt + 1)) - 1
+                    // Videos are played, not read.
+                    val video = work.content.mediaKind == "VIDEO"
                     val detail = latest?.let { chapters[it.mangaId to it.endChapterId]?.title }
-                        ?: if (!work.hasTimedStats) work.chapterTitle else localized("旧版阅读统计")
+                        ?: if (!work.hasTimedStats) work.chapterTitle
+                        else localized(if (video) "旧版播放统计" else "旧版阅读统计")
                     timeline += IosTimelineEvent("read-${work.content.id}-${day.date}", work.content,
                         if (!work.hasTimedStats) work.updatedAt else timestamp, false,
-                        detail?.takeIf(String::isNotBlank) ?: localized("阅读记录"), day.duration, dailySessions.size,
+                        detail?.takeIf(String::isNotBlank) ?: localized(if (video) "播放记录" else "阅读记录"),
+                        day.duration, dailySessions.size,
                         latest != null || (!work.hasTimedStats && work.hasProgress),
                         latest?.endPercent ?: if (!work.hasTimedStats) work.progress else 0f)
                 }
