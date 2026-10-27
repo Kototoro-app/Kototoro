@@ -35,9 +35,9 @@ ARTIFACTS = [
      "https://github.com/keiyoushi/extensions/releases/download/24bc6c2/tachiyomi-zh.zaimanhua-v1.6.0.apk",
      "f6605e36a7d1453b60814bb6f7340a8f724183b11ee3f95e02d9542753ba81fe"),
     # Cloudflare-protected site (comix.to): the automatic hidden-browser pass and the manual verification.
-    ("tachiyomi-en.comix-v1.6.46.apk",
-     "https://github.com/keiyoushi/extensions/releases/download/b5d2cd5/tachiyomi-en.comix-v1.6.46.apk",
-     "3166a50b565a5bc92c8ad8e4fb64a916695c2c4201e2d7ac465a333da461e3a0"),
+    ("tachiyomi-en.comix-v1.6.59.apk",
+     "https://github.com/keiyoushi/extensions/releases/download/949dea2/tachiyomi-en.comix-v1.6.59.apk",
+     "042127481c1928d2ca7cfb519e0943df21a31c7824b789db0bc7c1692b4e770e"),
     ("tachiyomi-en.allnovelfull-v1.6.19.apk",
      "https://github.com/NovelSourcery/extensions/releases/download/ba92ea4/tachiyomi-en.allnovelfull-v1.6.19.apk",
      "3f1d1e774069974e85007e09c487f0d9c5cc3928126d47c660222ea7d82c1c8b"),

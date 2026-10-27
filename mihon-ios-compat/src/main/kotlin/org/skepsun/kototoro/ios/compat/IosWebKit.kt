@@ -67,6 +67,18 @@ object IosWebKit {
      */
     fun install() {
         WebView.setProviderFactory { view -> IosWebViewProvider(view) }
+        org.skepsun.kototoro.ios.shims.IosBrowserPresentation.setHost(
+            object : org.skepsun.kototoro.ios.shims.IosBrowserPresentation.Host {
+                override fun show(view: android.view.View, width: Int, height: Int, densityDpi: Int) {
+                    val provider = views.values.firstOrNull { it.owns(view) }
+                        ?: throw UnsupportedOperationException("Presentation content is not a native WebView")
+                    provider.present(true, width, height, densityDpi)
+                }
+                override fun hide(view: android.view.View) {
+                    views.values.firstOrNull { it.owns(view) }?.present(false)
+                }
+            },
+        )
         val instance: Field = android.webkit.CookieManager::class.java.getDeclaredField("INSTANCE")
         instance.isAccessible = true
         instance.set(null, IosCookieManager())

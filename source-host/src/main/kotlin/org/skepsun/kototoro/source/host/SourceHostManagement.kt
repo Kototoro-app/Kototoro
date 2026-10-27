@@ -22,6 +22,7 @@ internal data class HostManagementResult(
     val managementVersion: Int = 1,
     val installed: List<HostInstalled> = emptyList(),
     val sourceTitles: Map<String, String> = emptyMap(),
+    val icon: String? = null,
 )
 @Serializable
 internal data class HostInstalled(val packageName: String, val versionCode: Long, val sha256: String, val ecosystem: String,
@@ -55,6 +56,10 @@ internal class SourceHostManagement(
     fun exchange(request: String): String {
         val input = json.decodeFromString<HostManagementRequest>(request)
         require(input.managementVersion == 1) { "Unsupported management protocol" }
+        if (input.operation == "icon") {
+            val icon = registry.icon(input.packageName)?.let { java.util.Base64.getEncoder().encodeToString(it) }
+            return json.encodeToString(HostManagementResult(icon = icon))
+        }
         when (input.operation) {
             "list" -> Unit
             "install" -> install(input)

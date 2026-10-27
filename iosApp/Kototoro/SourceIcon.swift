@@ -2,8 +2,7 @@ import ImageIO
 import KototoroShared
 import SwiftUI
 
-/// Site icon for an extension source (favicon of the source's own base address), with a monogram fallback.
-/// Resolved addresses and icons persist in Caches, so each source is described and fetched once.
+/// APK artwork for Mihon-family sources, and site icons for other sources, with a monogram fallback.
 struct SourceIcon: View {
     let runtime: IosSources?
     let source: IosSource
@@ -36,7 +35,7 @@ struct SourceIcon: View {
         .accessibilityHidden(true)
         .task(id: source.name) {
             guard image == nil, let runtime else { return }
-            if let loaded = await SourceIconStore.shared.load(source.name, runtime: runtime) {
+            if let loaded = await SourceIconStore.shared.load(source, runtime: runtime) {
                 withAnimation(.easeOut(duration: 0.2)) { image = loaded }
             }
         }
@@ -59,8 +58,8 @@ final class SourceIconStore {
     private var memory: [String: UIImage] = [:]
     private var inFlight: [String: Task<UIImage?, Never>] = [:]
     private let directory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-        .appendingPathComponent("source-icons", isDirectory: true)
-    /// A failed lookup is retried after a week, not on every appearance of the row.
+        .appendingPathComponent("source-icons-v2", isDirectory: true)
+    /// Failed website lookups are retried after a week; local artwork can become available after an install.
     private static let retryInterval: TimeInterval = 7 * 24 * 3600
     func clearMemory() { memory.removeAll() }
 
@@ -71,21 +70,32 @@ final class SourceIconStore {
         return image
     }
 
-    func load(_ name: String, runtime: IosSources) async -> UIImage? {
+    func load(_ source: IosSource, runtime: IosSources) async -> UIImage? {
+        let name = source.name
+        let packagedIcon = ["MIHON", "ANIYOMI", "TSUNDOKU"].contains(source.ecosystem)
         if let image = cached(name) { return image }
-        let failedKey = "source.icon.failed.\(name)"
+        let failedKey = "source.icon.v2.failed.\(name)"
         let failedAt = UserDefaults.standard.double(forKey: failedKey)
-        if failedAt > 0, Date().timeIntervalSince1970 - failedAt < Self.retryInterval { return nil }
+        if !packagedIcon, failedAt > 0, Date().timeIntervalSince1970 - failedAt < Self.retryInterval { return nil }
         if let running = inFlight[name] { return await running.value }
         let targetFile = file(name)
         let task = Task.detached(priority: .utility) { () -> UIImage? in
             try? await withReaderStorage { () async throws -> UIImage? in
-                // Favicons are background icon requests with their own dedicated gate, completely isolated from covers.
                 guard await RequestGate.icons.enter() else { return nil }
                 defer { Task { await RequestGate.icons.leave() } }
-                guard let homepage = try? await runtime.homepage(sourceName: name),
-                      let base = URL(string: homepage), base.host() != nil else { return nil }
-                let image = await Self.fetch(base)
+                let image: UIImage?
+                if packagedIcon {
+                    let request = try JSONSerialization.data(withJSONObject: [
+                        "managementVersion": 1, "operation": "icon", "packageName": source.group,
+                    ])
+                    let response = try await runtime.manage(requestJson: String(decoding: request, as: UTF8.self))
+                    let result = try JSONSerialization.jsonObject(with: Data(response.utf8)) as? [String: Any]
+                    image = (result?["icon"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { UIImage(data: $0) }
+                } else {
+                    guard let homepage = try? await runtime.homepage(sourceName: name),
+                          let base = URL(string: homepage), base.host() != nil else { return nil }
+                    image = await Self.fetch(base)
+                }
                 if let image, let data = image.pngData(), let file = targetFile {
                     try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
                     try? data.write(to: file, options: .atomic)
@@ -97,7 +107,7 @@ final class SourceIconStore {
         let image = await task.value
         inFlight[name] = nil
         if let image { memory[name] = image; UserDefaults.standard.removeObject(forKey: failedKey) }
-        else if !Task.isCancelled { UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: failedKey) }
+        else if !packagedIcon, !Task.isCancelled { UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: failedKey) }
         return image
     }
 

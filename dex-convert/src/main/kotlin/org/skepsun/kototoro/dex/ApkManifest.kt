@@ -19,6 +19,7 @@ data class ApkManifest(
     val label: String?,
     val features: Set<String>,
     val metaData: Map<String, String>,
+    val icon: String? = null,
 ) {
     /** The same data as the plain-text manifest the JVM extension inspectors read from Keiyoushi-style jars. */
     fun toText(): String = buildString {
@@ -39,6 +40,8 @@ data class ApkManifest(
 object ApkManifestReader {
     private const val MAXIMUM_BYTES = 4 * 1024 * 1024
     private const val MAXIMUM_STRINGS = 200_000
+
+    internal fun readResourceStrings(buffer: ByteBuffer, chunk: Int): List<String> = Decoder(buffer).readStrings(chunk)
 
     fun read(apk: Path): ApkManifest {
         val bytes = try {
@@ -80,7 +83,7 @@ object ApkManifestReader {
 
     // Attribute resource ids of the android: namespace, for manifests whose pool keeps no attribute names.
     private val KNOWN_ATTRIBUTES = mapOf(
-        0x01010001 to "label", 0x01010003 to "name", 0x01010024 to "value",
+        0x01010001 to "label", 0x01010002 to "icon", 0x01010003 to "name", 0x01010024 to "value",
         0x0101021b to "versionCode", 0x0101021c to "versionName",
     )
 
@@ -96,6 +99,7 @@ object ApkManifestReader {
             var versionCode = 0L
             var versionName: String? = null
             var label: String? = null
+            var icon: String? = null
             val features = linkedSetOf<String>()
             val meta = linkedMapOf<String, String>()
             val path = ArrayDeque<String>()
@@ -128,7 +132,10 @@ object ApkManifestReader {
                                 versionName = attributes["versionName"]
                             }
                             name == "uses-feature" && parent == "manifest" -> attributes["name"]?.let(features::add)
-                            name == "application" && parent == "manifest" -> label = attributes["label"]?.takeUnless { it.startsWith("@") }
+                            name == "application" && parent == "manifest" -> {
+                                label = attributes["label"]?.takeUnless { it.startsWith("@") }
+                                icon = attributes["icon"]
+                            }
                             name == "meta-data" && parent == "application" -> {
                                 val key = attributes["name"]
                                 if (key != null && key !in meta) meta[key] = attributes["value"].orEmpty()
@@ -142,11 +149,11 @@ object ApkManifestReader {
             }
             return ApkManifest(
                 packageName ?: throw ApkManifestException("The manifest has no package name"),
-                versionCode, versionName.orEmpty(), label, features, meta,
+                versionCode, versionName.orEmpty(), label, features, meta, icon,
             )
         }
 
-        private fun readStrings(chunk: Int): List<String> {
+        fun readStrings(chunk: Int): List<String> {
             val count = buffer.getInt(chunk + 8)
             val flags = buffer.getInt(chunk + 16)
             val stringsStart = buffer.getInt(chunk + 20)

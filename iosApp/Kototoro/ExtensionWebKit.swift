@@ -259,6 +259,7 @@ private final class BridgedWebView: NSObject, WKNavigationDelegate, WKUIDelegate
         webView.uiDelegate = self
         webView.alpha = 0.01
         webView.isUserInteractionEnabled = false
+        webView.accessibilityElementsHidden = true
         UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first?
             .insertSubview(webView, at: 0)
         observations = [
@@ -285,6 +286,24 @@ private final class BridgedWebView: NSObject, WKNavigationDelegate, WKUIDelegate
 
     func perform(_ operation: String, _ payload: [String: Any]) -> String? {
         switch operation {
+        case "presentation":
+            return bridge.onMain {
+                if payload["shown"] as? Bool == true {
+                    guard let width = payload["width"] as? Double, let height = payload["height"] as? Double,
+                          let dpi = payload["densityDpi"] as? Double,
+                          width > 0, height > 0, dpi > 0, width <= 16384, height <= 16384,
+                          let window = UIApplication.shared.connectedScenes.compactMap({
+                              ($0 as? UIWindowScene)?.keyWindow
+                          }).first else { return "unavailable:Native browser presentation has no window" }
+                    webView.frame = CGRect(x: 0, y: 0, width: width * 160 / dpi, height: height * 160 / dpi)
+                    if webView.superview !== window { window.insertSubview(webView, at: 0) }
+                    webView.setNeedsLayout()
+                    webView.layoutIfNeeded()
+                } else {
+                    webView.removeFromSuperview()
+                }
+                return ""
+            }
         case "load":
             guard let url = (payload["url"] as? String).flatMap(URL.init(string:)) else { return nil }
             var request = URLRequest(url: url)
@@ -309,6 +328,18 @@ private final class BridgedWebView: NSObject, WKNavigationDelegate, WKUIDelegate
             }
         case "evaluate":
             return evaluate(payload["script"] as? String ?? "")
+        case "touch":
+            guard let action = payload["action"] as? Int, (0...3).contains(action),
+                  let x = payload["x"] as? Double, let y = payload["y"] as? Double,
+                  x.isFinite, y.isFinite else { return nil }
+            return evaluate("""
+            (function(){var x=\(x),y=\(y),a=\(action),e=document.elementFromPoint(x,y);if(!e)return false;
+            var types=['pointerdown','pointerup','pointermove','pointercancel'];
+            e.dispatchEvent(new PointerEvent(types[a],{bubbles:true,clientX:x,clientY:y,pointerId:1,
+                pointerType:'touch',isPrimary:true,buttons:a===1||a===3?0:1}));
+            if(a===1)e.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,clientX:x,clientY:y}));
+            return true;})();
+            """)
         case "interfaces":
             let described = payload["interfaces"] as? [String: [[String: Any]]] ?? [:]
             bridge.onMain {

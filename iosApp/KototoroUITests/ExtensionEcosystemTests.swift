@@ -711,6 +711,28 @@ final class ExtensionEcosystemTests: XCTestCase {
         attach("Comix browse and preferences")
     }
 
+    /// Verifies fresh details even when a saved directory is displayed during the source refresh.
+    @MainActor
+    func testComixDetailsAndChaptersLoad() throws {
+        app.terminate()
+        app.launchArguments += ["-sources.showAdult", "YES", "-space.kind", "", "-sources.hiddenEcosystems", "",
+                                "-sources.hiddenKinds", "", "-sources.newOnly", "NO"]
+        app.launchEnvironment["KOTOTORO_SOURCE_DIAGNOSTICS"] = "1"
+        app.launch()
+        app.mainTab("浏览").tap()
+        openFirstItem(source: "MIHON_7537715367149829912", search: "Comix")
+        let chapter = revealChapter(in: app, timeout: 240)
+        let error = element("details.error")
+        let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            error.exists || (chapter.exists && !self.element("details.loading").exists &&
+                !self.element("details.updating").exists)
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 240), .completed)
+        XCTAssertFalse(error.exists, app.debugDescription)
+        XCTAssertTrue(chapter.exists, app.debugDescription)
+        attach("Comix fresh details and chapters")
+    }
+
     /// A real Cloudflare-protected site (Comix, comix.to): a challenge on the listing is shown as such and cleared by
     /// the automatic hidden-browser pass, after which the listing, details and a chapter's pages load. Needs network.
     @MainActor
@@ -756,11 +778,48 @@ final class ExtensionEcosystemTests: XCTestCase {
         sleep(3)
         attach("Comix browse")
         first.tap()
-        openFirstChapter()
-        let image = app.images["reader.image"].firstMatch
-        waitForEither(image, element("reader.error"), timeout: 120)
-        if !image.exists { attach("Comix reader error") }
-        XCTAssertTrue(image.exists, "Comix pages failed: \(app.debugDescription)")
+        // Comix harvests the entire paginated directory through its browser before returning details.
+        openFirstChapter(timeout: 240)
+        let normalReading = app.buttons["正常阅读"]
+        if normalReading.waitForExistence(timeout: 5) { normalReading.tap() }
+        let readerError = element("reader.error"), pageError = element("reader.pageError.0")
+        func visiblePage(_ number: Int) -> XCUIElement? {
+            let images = app.images.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@",
+                                                         "reader.image", "第 \(number) 页"))
+            let window = app.windows.firstMatch.frame
+            return images.allElementsBoundByIndex.first {
+                $0.isHittable && $0.frame.intersection(window).height > 40
+            }
+        }
+        let loaded = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            visiblePage(1) != nil || readerError.exists || pageError.exists
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [loaded], timeout: 240), .completed)
+        XCTAssertFalse(readerError.exists, app.debugDescription)
+        XCTAssertFalse(pageError.exists, app.debugDescription)
+        XCTAssertNotNil(visiblePage(1), "The current page must display an image, not only preload a neighbour")
+        // This chapter starts with a genuinely black spacer image. Verify another page before taking the screenshot.
+        let progress = app.sliders["reader.progress"]
+        if !progress.isHittable {
+            app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(progress.waitForExistence(timeout: 5))
+        progress.adjust(toNormalizedSliderPosition: 0.5)
+        let currentPage = app.staticTexts["reader.currentPage"]
+        let moved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            (Int(currentPage.value as? String ?? "0") ?? 0) > 1
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [moved], timeout: 10), .completed, app.debugDescription)
+        let number = Int(currentPage.value as? String ?? "0") ?? 0
+        let targetError = element("reader.pageError.\(number - 1)")
+        let nextLoaded = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            visiblePage(number) != nil || readerError.exists || targetError.exists
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [nextLoaded], timeout: 120), .completed)
+        XCTAssertFalse(readerError.exists, app.debugDescription)
+        XCTAssertFalse(targetError.exists, app.debugDescription)
+        XCTAssertNotNil(visiblePage(number))
+        sleep(1) // Let the visible image reach the compositor before capturing it.
         attach("Comix reader")
     }
 
@@ -980,8 +1039,8 @@ final class ExtensionEcosystemTests: XCTestCase {
         first.tap()
     }
 
-    private func openFirstChapter() {
-        let chapter = revealChapter(in: app, timeout: 90)
+    private func openFirstChapter(timeout: TimeInterval = 90) {
+        let chapter = revealChapter(in: app, timeout: timeout)
         XCTAssertTrue(chapter.exists, "Details failed: \(app.debugDescription)")
         attach("details")
         chapter.tap()

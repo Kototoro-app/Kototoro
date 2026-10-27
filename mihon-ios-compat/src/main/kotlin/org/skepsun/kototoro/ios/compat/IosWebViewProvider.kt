@@ -65,6 +65,13 @@ internal class IosWebViewProvider(private val view: WebView) : WebViewProvider {
     private fun command(operation: String, payload: JsonObject = JsonObject(emptyMap())): String =
         if (destroyed) "" else IosWebKit.command(operation, id, payload)
 
+    internal fun owns(candidate: android.view.View): Boolean = view === candidate
+
+    internal fun present(shown: Boolean, width: Int = 0, height: Int = 0, densityDpi: Int = 160) {
+        command("presentation", payload("shown" to shown, "width" to width, "height" to height,
+            "densityDpi" to densityDpi))
+    }
+
     // MARK: Navigation
 
     override fun loadUrl(url: String) = loadUrl(url, null)
@@ -127,6 +134,7 @@ internal class IosWebViewProvider(private val view: WebView) : WebViewProvider {
 
     override fun destroy() {
         if (destroyed) return
+        (view.parent as? android.view.ViewGroup)?.removeView(view)
         command("destroy")
         destroyed = true
         IosWebKit.unregister(id)
@@ -307,7 +315,19 @@ internal class IosWebViewProvider(private val view: WebView) : WebViewProvider {
         callback?.let { IosWebKit.post { it.onComplete(requestId) } }
     }
 
-    private val viewDelegate = inert(WebViewProvider.ViewDelegate::class.java)
+    private val viewDelegate = Proxy.newProxyInstance(
+        WebViewProvider.ViewDelegate::class.java.classLoader, arrayOf(WebViewProvider.ViewDelegate::class.java),
+    ) { _, method, arguments ->
+        if (method.name == "onTouchEvent") {
+            val event = arguments?.firstOrNull() as? android.view.MotionEvent
+            if (event == null) false else {
+                val density = view.resources.displayMetrics.density
+                command("touch", payload("action" to event.actionMasked, "x" to event.x / density, "y" to event.y / density))
+                true
+            }
+        } else method.invoke(inertViewDelegate, *(arguments ?: emptyArray()))
+    } as WebViewProvider.ViewDelegate
+    private val inertViewDelegate = inert(WebViewProvider.ViewDelegate::class.java)
     private val scrollDelegate = inert(WebViewProvider.ScrollDelegate::class.java)
     override fun getViewDelegate(): WebViewProvider.ViewDelegate = viewDelegate
     override fun getScrollDelegate(): WebViewProvider.ScrollDelegate = scrollDelegate

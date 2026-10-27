@@ -289,6 +289,7 @@ final class SourceDetailsModel: ObservableObject {
                 apply(result)
                 fetched = true
                 if fetchedResult.chapterCount > 0 { DetailsCache.put(result) }
+                isLoading = false
                 await loadRelated()
             }
         } catch {
@@ -382,6 +383,7 @@ struct SourceDetailsView: View {
             if let recordError { Text(recordError).foregroundStyle(.red) }
             if model.isLoading && model.details == nil {
                 ProgressView("正在读取详情…").frame(maxWidth: .infinity).listRowBackground(Color.clear)
+                    .accessibilityIdentifier("details.loading")
             } else if model.isLoading {
                 // A cached or saved list is already shown and usable; the source is being asked again.
                 Label { Text("正在更新章节…") } icon: { ProgressView() }

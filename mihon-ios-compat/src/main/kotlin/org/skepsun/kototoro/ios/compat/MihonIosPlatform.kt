@@ -242,6 +242,7 @@ private class IosApplication(private val root: Path, private val preferences: Mi
     override fun getNoBackupFilesDir(): File = backup
     override fun getSystemService(name: String): Any = when (name) {
         Context.ACTIVITY_SERVICE -> org.skepsun.kototoro.ios.shims.IosServices.activityManager()
+        Context.DISPLAY_SERVICE -> org.skepsun.kototoro.ios.shims.IosServices.displayManager()
         else -> throw UnsupportedOperationException("iOS service: $name")
     }
     override fun getResources(): android.content.res.Resources = android.content.res.Resources.getSystem()

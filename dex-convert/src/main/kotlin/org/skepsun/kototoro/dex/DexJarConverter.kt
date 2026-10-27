@@ -53,7 +53,7 @@ data class DexConversionReport(
 /** Converts every `classes*.dex` of an APK or DEX-only plugin jar into one class-file jar. */
 object DexJarConverter {
     /** Bump when the library or its settings change: converted artifacts are cached under this version. */
-    const val VERSION = 6
+    const val VERSION = 7
 
     private const val MAXIMUM_DEX_BYTES = 128L * 1024 * 1024
     private const val MAXIMUM_BROKEN_RECORDED = 64
