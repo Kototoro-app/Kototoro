@@ -91,7 +91,7 @@ internal fun VideoAnnotationDialog(
     val keyboardController = LocalSoftwareKeyboardController.current
     val noteFieldFocusRequester = remember { FocusRequester() }
     val saveNoteFocusRequester = remember { FocusRequester() }
-    val formattedTime = remember(state.positionMs) { formatDuration(state.positionMs) }
+    val formattedTime = remember(state.positionMs) { formatPlaybackTime(state.positionMs) }
     val imageBitmap = remember(state.bitmap) { state.bitmap.asImageBitmap() }
     // Enter (hardware remote or IME Done) ends editing and hands the remote to "save note"; up/down
     // still reach the field again, so the dialog is never a dead end.

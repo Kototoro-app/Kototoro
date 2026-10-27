@@ -16,16 +16,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import org.skepsun.kototoro.core.download.DownloadPolicy
+import org.skepsun.kototoro.core.ui.settings.DownloadSpeedSettingsContent
+import org.skepsun.kototoro.core.ui.settings.DownloadSpeedSettingsUiState
 import org.skepsun.kototoro.core.ui.settings.SettingsGroup
 import org.skepsun.kototoro.core.ui.settings.SettingsInfoRow
-import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
-import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
-import org.skepsun.kototoro.core.ui.settings.SettingsSliderRow
 
 /**
  * Android's download settings screen, restricted to the section Windows can honour: how many pages one chapter fetches
- * at a time, how many series run at once, the spacing between requests and how a failed page is retried.
+ * at a time, how many series run at once, the spacing between requests and how a failed page is retried. The five
+ * sliders and their ranges come from the shared [DownloadSpeedSettingsContent], so Android's page and this one cannot
+ * drift apart.
  *
  * Every row writes the preference the queue reads (`DesktopDownloadSettings`), and the queue reads it per chapter and
  * per page, so a change applies to the next request while the page is still open. Android's other rows are platform
@@ -50,47 +50,21 @@ internal fun DesktopDownloadSettingsPage(controller: DesktopController, state: D
             }
             Text(AndroidStrings["downloads"], style = MaterialTheme.typography.headlineSmall)
         }
-        SettingsSectionHeader(AndroidStrings["download_speed_and_retries"])
-        SettingsGroup {
-            SettingsSliderRow(
-                AndroidStrings["download_threads"], AndroidStrings["download_threads_summary"], settings.threads,
-                DownloadPolicy.THREADS_MIN..DownloadPolicy.THREADS_MAX, { it.toString() }, active,
-                { controller.saveDownloadSettings(settings.copy(threads = it)) },
-                testTag = "download-setting-threads",
-            )
-            SettingsRowDivider()
-            SettingsSliderRow(
-                AndroidStrings["download_max_active_series"], AndroidStrings["download_max_active_series_summary"],
-                settings.maxActiveSeries,
-                1..DownloadPolicy.MAX_ACTIVE_SERIES_UNLIMITED,
-                { if (it >= DownloadPolicy.MAX_ACTIVE_SERIES_UNLIMITED) AndroidStrings["download_max_active_series_uncapped"] else it.toString() },
-                active, { controller.saveDownloadSettings(settings.copy(maxActiveSeries = it)) },
-                testTag = "download-setting-series",
-            )
-            SettingsRowDivider()
-            SettingsSliderRow(
-                AndroidStrings["download_request_delay"], AndroidStrings["download_request_delay_summary"],
-                settings.requestDelayMs, 0..DownloadPolicy.REQUEST_DELAY_MAX_MS, { "$it ms" }, active,
-                { controller.saveDownloadSettings(settings.copy(requestDelayMs = it)) },
-                testTag = "download-setting-request-delay",
-            )
-            SettingsRowDivider()
-            SettingsSliderRow(
-                AndroidStrings["download_retry_count"], AndroidStrings["download_retry_count_summary"],
-                settings.retryCount, DownloadPolicy.RETRY_COUNT_MIN..DownloadPolicy.RETRY_COUNT_MAX,
-                { it.toString() }, active,
-                { controller.saveDownloadSettings(settings.copy(retryCount = it)) },
-                testTag = "download-setting-retry-count",
-            )
-            SettingsRowDivider()
-            SettingsSliderRow(
-                AndroidStrings["download_retry_delay"], AndroidStrings["download_retry_delay_summary"],
-                settings.retryDelayMs,
-                DownloadPolicy.RETRY_DELAY_MIN_MS..DownloadPolicy.RETRY_DELAY_MAX_MS, { "$it ms" }, active,
-                { controller.saveDownloadSettings(settings.copy(retryDelayMs = it)) },
-                testTag = "download-setting-retry-delay",
-            )
-        }
+        DownloadSpeedSettingsContent(
+            state = DownloadSpeedSettingsUiState(
+                threads = settings.threads,
+                maxActiveSeries = settings.maxActiveSeries,
+                requestDelayMs = settings.requestDelayMs,
+                retryCount = settings.retryCount,
+                retryDelayMs = settings.retryDelayMs,
+            ),
+            onThreadsChange = { controller.saveDownloadSettings(settings.copy(threads = it)) },
+            onMaxActiveSeriesChange = { controller.saveDownloadSettings(settings.copy(maxActiveSeries = it)) },
+            onRequestDelayChange = { controller.saveDownloadSettings(settings.copy(requestDelayMs = it)) },
+            onRetryCountChange = { controller.saveDownloadSettings(settings.copy(retryCount = it)) },
+            onRetryDelayChange = { controller.saveDownloadSettings(settings.copy(retryDelayMs = it)) },
+            enabled = active,
+        )
         SettingsGroup {
             SettingsInfoRow(desktopText("downloadsSettings.parity"),
                 desktopText("downloadsSettings.parityDetail"),

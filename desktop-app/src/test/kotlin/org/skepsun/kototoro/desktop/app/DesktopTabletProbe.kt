@@ -483,7 +483,15 @@ internal object DesktopTabletProbe {
                 check(queued.all { it.record.contentId == content.id }) {
                     "the batch touched other works: ${queued.map { it.record.contentId }.distinct()}"
                 }
-                check(controller.state.value.message == desktopText("downloads.batchQueued", queued.size)) {
+                // The queue falls idle right after the batch, and the background reclaim posts its own notice in
+                // that window; Android shows that as a toast, Windows has a single message slot, so either may be
+                // what the user is looking at when the batch itself has already been queued.
+                val queuedMessage = desktopText("downloads.batchQueued", queued.size)
+                val reclaimPrefix = desktopText("downloads.cleanupAuto", 0, 0).substringBefore('0')
+                check(
+                    controller.state.value.message == queuedMessage ||
+                        controller.state.value.message?.startsWith(reclaimPrefix) == true,
+                ) {
                     "message was '${controller.state.value.message}', error '${controller.state.value.error}'"
                 }
                 // Leave the fixture without downloads again: stop whatever is still running, then drop the records.
@@ -635,24 +643,24 @@ internal object DesktopTabletProbe {
                 check(controller.state.value.screen == DesktopScreen.READER_SETTINGS)
                 snapshot("reader-settings")
                 onNodeWithTag("reader-setting-mode").performScrollTo().performClick(); idle()
-                onNodeWithTag("reader-mode:DOUBLE").performClick(); idle()
+                onNodeWithTag("reader-mode-option:DOUBLE").performClick(); idle()
                 check(controller.state.value.readerSettings.mode == DesktopReaderMode.DOUBLE)
                 onNodeWithTag("reader-setting-direction").performScrollTo().performClick(); idle()
                 onNodeWithTag("reader-direction:RTL").performClick(); idle()
                 check(controller.state.value.readerSettings.rightToLeft && !controller.state.value.readerSettings.vertical)
                 onNodeWithTag("reader-setting-fit").performScrollTo().performClick(); idle()
-                onNodeWithTag("reader-fit:FIT_WIDTH").performClick(); idle()
+                onNodeWithTag("reader-fit-option:FIT_WIDTH").performClick(); idle()
                 check(controller.state.value.readerSettings.fitMode ==
                     org.skepsun.kototoro.reader.core.ZoomMode.FIT_WIDTH)
                 onNodeWithTag("reader-setting-background").performScrollTo().performClick(); idle()
-                onNodeWithTag("reader-background:BLACK").performClick(); idle()
+                onNodeWithTag("reader-background-option:BLACK").performClick(); idle()
                 check(controller.state.value.readerSettings.background == DesktopReaderBackground.BLACK)
                 onNodeWithTag("reader-setting-page-numbers").performScrollTo().performClick(); idle()
                 check(controller.state.value.readerSettings.pageNumbers)
                 onNodeWithTag("reader-setting-auto-chapter").performScrollTo().performClick(); idle()
                 check(controller.state.value.readerSettings.automaticChapter)
                 onNodeWithTag("reader-setting-animation").performScrollTo().performClick(); idle()
-                onNodeWithTag("reader-animation:NONE").performClick(); idle()
+                onNodeWithTag("reader-animation-option:NONE").performClick(); idle()
                 check(controller.state.value.readerSettings.animation ==
                     org.skepsun.kototoro.core.prefs.ReaderAnimation.NONE)
                 onNodeWithTag("reader-settings-back").performScrollTo().performClick(); idle()
@@ -663,8 +671,8 @@ internal object DesktopTabletProbe {
                 check(controller.state.value.screen == DesktopScreen.SOURCE_SETTINGS)
                 snapshot("source-settings")
                 onNodeWithTag("source-setting-sort").performScrollTo().performClick(); idle()
-                snapshotTag("source-settings-dialog", "source-settings-sort")
-                onNodeWithTag("source-sort:TITLE").performClick(); idle()
+                snapshotTag("source-sort-dialog", "source-settings-sort")
+                onNodeWithTag("source-sort-option:TITLE").performClick(); idle()
                 check(controller.state.value.sourceSettings.sort ==
                     org.skepsun.kototoro.desktop.runtime.DesktopSourceSort.TITLE)
                 check((session.storage.preferences.open("desktop_background").snapshot()["sources_sort"]
@@ -690,7 +698,7 @@ internal object DesktopTabletProbe {
                     org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget.HISTORY))
                 snapshotTag("source-nsfw-dialog", "source-nsfw-targets")
                 onNodeWithTag("source-nsfw-dialog-close").performClick(); idle()
-                onNodeWithTag("source-settings-back").performScrollTo().performClick(); idle()
+                onNodeWithTag("source-settings-back").performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.MORE)
                 // Android's global tag blacklist has its own screen. The chips are the shared taxonomy, the search
                 // field narrows the catalogue, and the stored strings are what every shelf deriver matches.
@@ -726,7 +734,7 @@ internal object DesktopTabletProbe {
                     as? org.skepsun.kototoro.core.source.SourcePreferenceValue.Toggle)?.value == false)
                 onNodeWithTag("source-setting-tags-warnings").performScrollTo().performClick(); idle()
                 check(controller.state.value.sourceSettings.tagsWarnings)
-                onNodeWithTag("source-settings-back").performScrollTo().performClick(); idle()
+                onNodeWithTag("source-settings-back").performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.MORE)
                 // An adult tracked work: Android's stored rating feeds both feed targets, one surface at a time.
                 onNodeWithTag("nav:订阅").performClick(); idle()
@@ -760,7 +768,7 @@ internal object DesktopTabletProbe {
                 check(!controller.state.value.sourceSettings.hidesNsfw(
                     org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget.FEED))
                 onNodeWithTag("source-nsfw-dialog-close").performClick(); idle()
-                onNodeWithTag("source-settings-back").performScrollTo().performClick(); idle()
+                onNodeWithTag("source-settings-back").performClick(); idle()
                 onNodeWithTag("nav:订阅").performClick(); idle()
                 onNodeWithTag("feed-row:${adultRow.logId}").assertExists()
                 onNodeWithTag("feed-updated:${content.id}").assertDoesNotExist()
@@ -772,7 +780,7 @@ internal object DesktopTabletProbe {
                 check(!controller.state.value.sourceSettings.hidesNsfw(
                     org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget.UPDATES))
                 onNodeWithTag("source-nsfw-dialog-close").performClick(); idle()
-                onNodeWithTag("source-settings-back").performScrollTo().performClick(); idle()
+                onNodeWithTag("source-settings-back").performClick(); idle()
                 onNodeWithTag("nav:订阅").performClick(); idle()
                 onNodeWithTag("feed-updated:${content.id}").assertExists()
                 runBlocking { session.storage.database.getMangaDao().updateContentRating(content.id, false, null) }
@@ -849,7 +857,7 @@ internal object DesktopTabletProbe {
                     as? org.skepsun.kototoro.core.source.SourcePreferenceValue.Text)?.value == "2.0")
                 onNodeWithTag("settings-tracker-dialog").assertDoesNotExist()
                 onNodeWithTag("services-open").performScrollTo().performClick(); idle()
-                onNodeWithTag("settings-recommendations-open").performScrollTo().performClick(); idle()
+                onNodeWithTag("services-suggestions").performScrollTo().performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.RECOMMENDATIONS)
                 onNodeWithTag("settings-suggestions-enabled").assertExists()
                 onNodeWithTag("settings-suggestions-exclude-tags").assertExists()

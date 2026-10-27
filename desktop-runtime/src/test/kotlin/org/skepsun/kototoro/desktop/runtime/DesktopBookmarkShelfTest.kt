@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.desktop.runtime
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.core.source.SourceRef
@@ -56,5 +58,13 @@ class DesktopBookmarkShelfTest {
         val saved = listOf(bookmark(1, 10, page = 4), bookmark(1, 10, page = 1))
         val shelf = desktopBookmarkShelf(listOf(DesktopBookmarkGroup(content(1, "作品"), saved)), hideNsfw = false)
         assertEquals(listOf(4, 1), shelf.single().bookmarks.map { it.page })
+    }
+
+    @Test
+    fun `a position saved under the chapter id is a chapter bookmark`() {
+        val page = DesktopBookmark(1, pageId = 107, chapterId = 3, page = 6, scroll = 0, createdAt = 1, percent = 0.4f)
+        val chapter = DesktopBookmark(1, pageId = 3, chapterId = 3, page = 0, scroll = 0, createdAt = 1, percent = 0f)
+        assertFalse(page.isChapterBookmark)
+        assertTrue(chapter.isChapterBookmark)
     }
 }

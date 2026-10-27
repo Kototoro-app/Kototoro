@@ -37,6 +37,13 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.sourcetest.SourceTestProgressHeader
+import org.skepsun.kototoro.core.ui.sourcetest.SourceTestResultLine
+import org.skepsun.kototoro.core.ui.sourcetest.SourceTestResultRow
+import org.skepsun.kototoro.core.ui.sourcetest.SourceTestStepLine
+import org.skepsun.kototoro.core.ui.sourcetest.SourceTestVerdict
+import org.skepsun.kototoro.core.ui.text.LocalUiStrings
+import org.skepsun.kototoro.core.ui.text.UiStrings
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
 
@@ -88,51 +95,39 @@ internal fun SourceTestDialog(
 		dismissButton = closeButton,
 		text = {
 			Column(modifier = Modifier.fillMaxWidth()) {
-				val fraction = if (progress.total == 0) 1f else progress.done.toFloat() / progress.total
-				LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
-				Spacer(modifier = Modifier.height(8.dp))
-				Text(
-					text = stringResource(R.string.source_test_progress, progress.done, progress.total),
-					style = MaterialTheme.typography.bodyMedium,
-				)
-				Text(
-					text = if (!progress.finished && progress.running.isNotEmpty()) {
+				val passedCount = progress.results.count { it.overall == StepStatus.PASS }
+				val unavailableCount = progress.results.count { it.overall == StepStatus.FAIL }
+				val cloudflareCount = progress.results.count { it.overall == StepStatus.CLOUDFLARE }
+				// Android's progress block, now shared with the Windows source test page.
+				SourceTestProgressHeader(
+					done = progress.done,
+					total = progress.total,
+					progressLabel = stringResource(R.string.source_test_progress, progress.done, progress.total),
+					runningLabel = if (!progress.finished && progress.running.isNotEmpty()) {
 						stringResource(R.string.source_test_running, progress.running.joinToString())
 					} else {
 						""
 					},
-					style = MaterialTheme.typography.bodySmall,
-					color = MaterialTheme.colorScheme.onSurfaceVariant,
-					minLines = 2,
-					maxLines = 2,
-					overflow = TextOverflow.Ellipsis,
-				)
-				val passedCount = progress.results.count { it.overall == StepStatus.PASS }
-				val unavailableCount = progress.results.count { it.overall == StepStatus.FAIL }
-				val cloudflareCount = progress.results.count { it.overall == StepStatus.CLOUDFLARE }
-				Text(
-					text = if (progress.finished) {
+					summaryLabel = if (progress.finished) {
 						stringResource(R.string.source_test_summary, passedCount, unavailableCount, cloudflareCount)
 					} else {
 						""
 					},
-					style = MaterialTheme.typography.bodyMedium,
-					fontWeight = FontWeight.SemiBold,
-					minLines = 1,
+					cancelledNote = if (progress.finished && progress.cancelled) {
+						stringResource(R.string.source_test_cancelled_note)
+					} else {
+						null
+					},
 				)
-				if (progress.finished && progress.cancelled) {
-					Text(
-						text = stringResource(R.string.source_test_cancelled_note),
-						style = MaterialTheme.typography.bodySmall,
-						color = MaterialTheme.colorScheme.onSurfaceVariant,
-					)
-				}
 				Spacer(modifier = Modifier.height(8.dp))
+				val strings = LocalUiStrings.current
 				LazyColumn(modifier = Modifier.fillMaxWidth().height(360.dp)) {
 					items(progress.results, key = { it.sourceKey }) { result ->
 						SourceTestResultRow(
-							result = result,
-							disabled = result.sourceKey in progress.disabledKeys,
+							result = result.toLine(
+								strings = strings,
+								disabled = result.sourceKey in progress.disabledKeys,
+							),
 							expanded = result.sourceKey in expandedKeys,
 							onToggle = {
 								expandedKeys = if (result.sourceKey in expandedKeys) {
@@ -140,6 +135,14 @@ internal fun SourceTestDialog(
 								} else {
 									expandedKeys + result.sourceKey
 								}
+							},
+							// The chevron is Android's alone: a dialog row has no step count to trade it for.
+							expandIcon = { expanded ->
+								Icon(
+									imageVector = Icons.Filled.ExpandMore,
+									contentDescription = null,
+									modifier = Modifier.rotate(if (expanded) 180f else 0f),
+								)
 							},
 						)
 						HorizontalDivider()
@@ -164,107 +167,53 @@ internal fun SourceTestDialog(
 	)
 }
 
-@Composable
-private fun SourceTestResultRow(
-	result: SourceTestResult,
-	disabled: Boolean,
-	expanded: Boolean,
-	onToggle: () -> Unit,
-) {
-	val colors = MaterialTheme.colorScheme
-	val verdictColor = if (disabled) colors.onSurfaceVariant else statusColor(result.overall)
-	val verdictText = if (disabled) {
-		stringResource(R.string.source_test_disabled)
+/**
+ * One result projected into the shared row: the verdict labels come from Android's catalog, and Android marks a source
+ * the run just switched off instead of leaving a verdict that no longer holds.
+ */
+private fun SourceTestResult.toLine(strings: UiStrings, disabled: Boolean): SourceTestResultLine = SourceTestResultLine(
+	key = sourceKey,
+	title = title,
+	verdict = overall.toVerdict(),
+	verdictLabel = if (disabled) {
+		strings.string("source_test_disabled")
 	} else {
-		stringResource(statusLabelRes(result.overall))
-	}
-	Column(
-		modifier = Modifier
-			.fillMaxWidth()
-			.clickable(onClick = onToggle)
-			.padding(vertical = 8.dp),
-	) {
-		Row(verticalAlignment = Alignment.CenterVertically) {
-			Text(
-				text = result.title,
-				style = MaterialTheme.typography.bodyLarge,
-				maxLines = 1,
-				overflow = TextOverflow.Ellipsis,
-				modifier = Modifier.weight(1f),
-			)
-			Text(
-				text = verdictText,
-				style = MaterialTheme.typography.labelLarge,
-				color = verdictColor,
-				modifier = Modifier.padding(horizontal = 8.dp),
-			)
-			Icon(
-				imageVector = Icons.Filled.ExpandMore,
-				contentDescription = null,
-				modifier = Modifier.rotate(if (expanded) 180f else 0f),
-			)
-		}
-		if (expanded) {
-			SourceTestStep.entries.forEach { step ->
-				val stepResult = result.steps[step] ?: return@forEach
-				Row(
-					verticalAlignment = Alignment.CenterVertically,
-					modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 6.dp),
-				) {
-					Text(
-						text = stringResource(stepLabelRes(step)),
-						style = MaterialTheme.typography.bodySmall,
-						modifier = Modifier.weight(1f),
-					)
-					Text(
-						text = stringResource(statusLabelRes(stepResult.status)),
-						style = MaterialTheme.typography.labelMedium,
-						color = statusColor(stepResult.status),
-					)
-					Text(
-						text = "${stepResult.durationMs} ms",
-						style = MaterialTheme.typography.labelSmall,
-						color = colors.onSurfaceVariant,
-						modifier = Modifier.padding(start = 8.dp),
-					)
-				}
-				if (stepResult.message.isNotBlank()) {
-					Text(
-						text = stepResult.message,
-						style = MaterialTheme.typography.bodySmall,
-						color = colors.onSurfaceVariant,
-						modifier = Modifier.fillMaxWidth().padding(start = 12.dp),
-					)
-				}
-			}
-		}
-	}
+		strings.string(statusLabelKey(overall))
+	},
+	disabled = disabled,
+	steps = SourceTestStep.entries.mapNotNull { step ->
+		val stepResult = steps[step] ?: return@mapNotNull null
+		SourceTestStepLine(
+			key = step.name,
+			label = strings.string(stepLabelKey(step)),
+			verdict = stepResult.status.toVerdict(),
+			verdictLabel = strings.string(statusLabelKey(stepResult.status)),
+			durationMs = stepResult.durationMs,
+			message = stepResult.message,
+		)
+	},
+)
+
+private fun StepStatus.toVerdict(): SourceTestVerdict = when (this) {
+	StepStatus.PASS -> SourceTestVerdict.PASS
+	StepStatus.FAIL -> SourceTestVerdict.FAIL
+	StepStatus.SKIP -> SourceTestVerdict.SKIP
+	StepStatus.CLOUDFLARE -> SourceTestVerdict.CHALLENGE
 }
 
-@Composable
-private fun statusColor(status: StepStatus): Color {
-	val colors = MaterialTheme.colorScheme
-	return when (status) {
-		StepStatus.PASS -> colors.primary
-		StepStatus.FAIL -> colors.error
-		StepStatus.SKIP -> colors.onSurfaceVariant
-		StepStatus.CLOUDFLARE -> colors.tertiary
-	}
+private fun statusLabelKey(status: StepStatus): String = when (status) {
+	StepStatus.PASS -> "source_test_status_pass"
+	StepStatus.FAIL -> "source_test_status_fail"
+	StepStatus.SKIP -> "source_test_status_skip"
+	StepStatus.CLOUDFLARE -> "source_test_status_cloudflare"
 }
 
-private fun statusLabelRes(status: StepStatus): Int = when (status) {
-	StepStatus.PASS -> R.string.source_test_status_pass
-	StepStatus.FAIL -> R.string.source_test_status_fail
-	StepStatus.SKIP -> R.string.source_test_status_skip
-	StepStatus.CLOUDFLARE -> R.string.source_test_status_cloudflare
-}
-
-private fun stepLabelRes(step: SourceTestStep): Int = when (step) {
-	SourceTestStep.LIST -> R.string.source_test_step_list
-	SourceTestStep.COVERS -> R.string.source_test_step_covers
-	SourceTestStep.DETAILS -> R.string.source_test_step_details
-	SourceTestStep.CHAPTERS -> R.string.source_test_step_chapters
-	SourceTestStep.PAGES -> R.string.source_test_step_pages
-	SourceTestStep.RANDOM -> R.string.source_test_step_random
-	SourceTestStep.SEARCH -> R.string.source_test_step_search
+private fun stepLabelKey(step: SourceTestStep): String = when (step) {
+	SourceTestStep.LIST -> "source_test_step_list"
+	SourceTestStep.COVERS -> "source_test_step_covers"
+	SourceTestStep.DETAILS -> "source_test_step_details"
+	SourceTestStep.CHAPTERS -> "source_test_step_chapters"
+	SourceTestStep.PAGES -> "source_test_step_pages"
+	SourceTestStep.RANDOM -> "source_test_step_random"
+	SourceTestStep.SEARCH -> "source_test_step_search"
 }

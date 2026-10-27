@@ -1,12 +1,7 @@
 package org.skepsun.kototoro.settings.about.crashlog
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -20,11 +15,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.crashlog.CrashLogReportContent
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 
 /**
@@ -42,12 +38,12 @@ fun CrashLogDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = "Crash Log Detail") }, // TODO: use stringResource
+                title = { Text(text = stringResource(R.string.crash_logs)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateUp, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Navigate back",
+                            contentDescription = stringResource(R.string.back),
                         )
                     }
                 },
@@ -55,13 +51,13 @@ fun CrashLogDetailScreen(
                     IconButton(onClick = onCopy, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.Outlined.ContentCopy,
-                            contentDescription = "Copy to clipboard",
+                            contentDescription = stringResource(R.string.copy),
                         )
                     }
                     IconButton(onClick = onShare, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.Outlined.Share,
-                            contentDescription = "Share",
+                            contentDescription = stringResource(R.string.share),
                         )
                     }
                 },
@@ -74,27 +70,11 @@ fun CrashLogDetailScreen(
         },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        /** Scrollable monospace text replaces the [ScrollView] + [TextView] from [activity_crash_log_detail.xml]. */
-        val scrollState = rememberScrollState()
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-        ) {
-            SelectionContainer {
-                Text(
-                    text = logContent,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(scrollState),
-                )
-            }
-        }
+        // The report body is shared with the desktop host, which shows it inside a dialog instead of a second screen.
+        CrashLogReportContent(
+            text = logContent,
+            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+        )
     }
 }
 

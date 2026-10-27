@@ -29,6 +29,7 @@ import org.skepsun.kototoro.bookmarks.domain.parseNovelBookmarkPreview
 import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.desktop.runtime.DesktopBookmark
+import org.skepsun.kototoro.desktop.runtime.isChapterBookmark
 import org.skepsun.kototoro.core.ui.compose.DetailsBookmarkCard
 import org.skepsun.kototoro.core.ui.compose.DetailsBookmarkText
 import androidx.compose.ui.res.painterResource
@@ -36,16 +37,6 @@ import androidx.compose.ui.res.painterResource
 /** Cards stay small enough that a page decode never competes with the reader's own page budget. */
 private const val THUMBNAIL_PIXELS = 400_000L
 private const val THUMBNAIL_DIMENSION = 1024
-
-/** Android stores a chapter bookmark under the chapter id, without a page of its own. */
-private fun DesktopBookmark.isChapterOnly() = pageId == chapterId
-
-@Composable
-private fun bookmarkLabel(bookmark: DesktopBookmark): String = if (bookmark.isChapterOnly()) {
-    desktopText("details.chapterBookmarkLabel")
-} else {
-    desktopText("common.pageOf", bookmark.page + 1, (bookmark.percent * 100).toInt())
-}
 
 /**
  * Android shows the saved positions of a work as page thumbnails in a details tab. The same list here
@@ -146,10 +137,10 @@ internal fun DesktopDetailsBookmarks(controller: DesktopController, state: Deskt
                     selectedIcon = painterResource("icons/ic_check.svg"),
                     enabled = enabled,
                     modifier = Modifier.testTag("details-bookmark:${bookmark.pageId}"),
-                    pageLabel = if (bookmark.isChapterOnly()) null else "P.${bookmark.page + 1}",
+                    pageLabel = if (bookmark.isChapterBookmark) null else "P.${bookmark.page + 1}",
                     text = if (pageReader) null else DetailsBookmarkText(chapterTitle,
                         previews[bookmark.pageId].orEmpty().ifBlank {
-                            if (bookmark.isChapterOnly()) bookmarkLabel(bookmark)
+                            if (bookmark.isChapterBookmark) desktopBookmarkLabel(bookmark)
                             else AndroidStrings["bookmark_preview_unavailable"]
                         }),
                     image = { BookmarkThumbnail(controller, content, chapter, bookmark, Modifier.fillMaxSize()) },

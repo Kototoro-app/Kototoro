@@ -39,7 +39,7 @@ internal fun BoxScope.DesktopNovelReaderChrome(
     pageStatus: Pair<Int, Int>? = null,
 ) {
     val colors = remember(theme) {
-        NovelReaderChromeColors(Color(theme.background), Color(theme.text), Color(theme.muted))
+        NovelReaderChromeColors(Color(theme.palette.background), Color(theme.palette.text), Color(theme.palette.secondaryText))
     }
     val base = MaterialTheme.colorScheme
     val scheme = remember(base, colors) { novelChromeColorScheme(base, colors) }

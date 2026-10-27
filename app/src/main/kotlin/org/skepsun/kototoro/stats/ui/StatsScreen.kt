@@ -8,7 +8,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -70,6 +69,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.stats.StatsKindOption
+import org.skepsun.kototoro.core.ui.stats.StatsKindSelector
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.util.KototoroColors
 import org.skepsun.kototoro.core.util.ext.mangaExtra
@@ -80,11 +81,15 @@ import org.skepsun.kototoro.settings.compose.SettingsTopBarScaffold
 import org.skepsun.kototoro.stats.domain.StatsContentKind
 import org.skepsun.kototoro.stats.domain.StatsDailyActivity
 import org.skepsun.kototoro.stats.domain.StatsDashboard
-import org.skepsun.kototoro.stats.domain.StatsKindSummary
+import org.skepsun.kototoro.core.ui.stats.StatsActivityCard
+import org.skepsun.kototoro.core.ui.stats.StatsKindBreakdownCard
+import org.skepsun.kototoro.core.ui.stats.StatsKindShare
+import org.skepsun.kototoro.core.ui.stats.StatsSummaryCard
+import org.skepsun.kototoro.core.ui.stats.StatsTimeDistributionCard
+import org.skepsun.kototoro.core.ui.stats.statsDurationText
 import org.skepsun.kototoro.stats.domain.StatsPeriod
 import org.skepsun.kototoro.stats.domain.StatsRecord
 import java.time.format.DateTimeFormatter
-import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -259,49 +264,25 @@ private fun ContentKindSelector(
     onKindSelected: (StatsContentKind) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    // Android's segmented pill is the shared one now (Windows draws the same control on its statistics page); this
+    // host only adds its 40dp height and the remote's focus ring.
+    StatsKindSelector(
+        options = StatsContentKind.entries.map { StatsKindOption(it.name, it.label()) },
+        selectedKey = selectedKind.name,
+        onSelect = { key ->
+            StatsContentKind.entries.firstOrNull { it.name == key }?.let(onKindSelected)
+        },
         modifier = modifier,
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            StatsContentKind.entries.forEach { kind ->
-                val selected = selectedKind == kind
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        // A bare clickable pill shows only the faint state layer Material draws for a
-                        // focused container; the ring is the only thing a remote user can see. The
-                        // selected pill is filled with the same primary colour the ring uses, so it
-                        // needs the on-container colour instead - otherwise its ring is invisible.
-                        .tvFocusable(
-                            shape = RoundedCornerShape(percent = 50),
-                            addFocusTarget = false,
-                            ringColor = if (selected) MaterialTheme.colorScheme.onPrimary else Color.Unspecified,
-                        )
-                        .height(40.dp)
-                        .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                        .clickable { onKindSelected(kind) }
-                        .padding(horizontal = 13.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = kind.label(),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.onPrimary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
-            }
-        }
-    }
+        pillHeight = 40.dp,
+        optionModifier = { _, selected ->
+            Modifier.tvFocusable(
+                shape = RoundedCornerShape(percent = 50),
+                addFocusTarget = false,
+                // The selected pill is filled with the ring colour, so it needs the on-container colour instead.
+                ringColor = if (selected) MaterialTheme.colorScheme.onPrimary else Color.Unspecified,
+            )
+        },
+    )
 }
 
 @Composable
@@ -337,22 +318,33 @@ private fun StatsDashboardContent(
             SummaryCard(dashboard = dashboard, period = period, selectedKind = selectedKind)
         }
         item {
-            ActivityCard(
-                activity = dashboard.dailyActivity,
+            StatsActivityCard(
+                dayCount = dashboard.dailyActivity.size,
                 streak = dashboard.currentStreak,
-            )
+            ) {
+                ActivityHeatmap(dashboard.dailyActivity)
+            }
         }
         if (dashboard.hourlyActivity.any { it > 0L }) {
             item {
-                TimeDistributionCard(
+                StatsTimeDistributionCard(
                     hourlyActivity = dashboard.hourlyActivity,
-                    period = period,
+                    periodLabel = stringResource(period.titleResId),
                 )
             }
         }
         if (selectedKind == StatsContentKind.ALL && dashboard.kindSummaries.size > 1) {
             item {
-                KindBreakdownCard(dashboard.kindSummaries)
+                StatsKindBreakdownCard(
+                    kinds = dashboard.kindSummaries.map { summary ->
+                        StatsKindShare(
+                            key = summary.kind.name,
+                            label = summary.kind.label(),
+                            color = summary.kind.color(),
+                            duration = summary.duration,
+                        )
+                    },
+                )
             }
         }
         item {
@@ -390,114 +382,14 @@ private fun SummaryCard(
     period: StatsPeriod,
     selectedKind: StatsContentKind,
 ) {
-    Surface(
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "${stringResource(period.titleResId)} · ${selectedKind.label()}",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
-                )
-                Text(
-                    text = formatStatsDuration(dashboard.totalDuration),
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Text(
-                    text = stringResource(R.string.stats_total_time),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SummaryMetric(
-                    value = dashboard.activeDays.toString(),
-                    label = stringResource(R.string.stats_active_days),
-                    modifier = Modifier.weight(1f),
-                )
-                SummaryDivider()
-                SummaryMetric(
-                    value = dashboard.sessionCount.toString(),
-                    label = stringResource(R.string.stats_sessions),
-                    modifier = Modifier.weight(1f),
-                )
-                SummaryDivider()
-                SummaryMetric(
-                    value = dashboard.workCount.toString(),
-                    label = stringResource(R.string.stats_works),
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SummaryDivider() {
-    Box(
-        modifier = Modifier
-            .width(1.dp)
-            .height(34.dp)
-            .background(MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.16f)),
+    // The plate is the shared one: both hosts draw Android's eyebrow, total and three counts from the same numbers.
+    StatsSummaryCard(
+        eyebrow = "${stringResource(period.titleResId)} · ${selectedKind.label()}",
+        totalDuration = dashboard.totalDuration,
+        activeDays = dashboard.activeDays,
+        sessions = dashboard.sessionCount,
+        works = dashboard.workCount,
     )
-}
-
-@Composable
-private fun SummaryMetric(value: String, label: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-        )
-    }
-}
-
-@Composable
-private fun ActivityCard(activity: List<StatsDailyActivity>, streak: Int) {
-    StatsSectionCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                Text(
-                    text = stringResource(R.string.stats_activity),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = stringResource(R.string.stats_activity_days, activity.size),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.weight(1f))
-            if (streak > 0) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                ) {
-                    Text(
-                        text = stringResource(R.string.stats_streak, streak),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-        ActivityHeatmap(activity)
-    }
 }
 
 @Composable
@@ -561,118 +453,6 @@ private fun ActivityHeatmap(activity: List<StatsDailyActivity>) {
 }
 
 @Composable
-private fun TimeDistributionCard(
-    hourlyActivity: List<Long>,
-    period: StatsPeriod,
-) {
-    val buckets = remember(hourlyActivity) {
-        hourlyActivity.chunked(3).map { it.sum() }
-    }
-    val peakIndex = buckets.indices.maxByOrNull { buckets[it] } ?: 0
-    val maxDuration = buckets.maxOrNull()?.coerceAtLeast(1L) ?: 1L
-
-    StatsSectionCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.stats_time_distribution),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = stringResource(
-                        R.string.stats_time_distribution_subtitle,
-                        stringResource(period.titleResId),
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Surface(
-                shape = RoundedCornerShape(50),
-                color = MaterialTheme.colorScheme.secondaryContainer,
-            ) {
-                Text(
-                    text = stringResource(
-                        R.string.stats_peak_period,
-                        formatHourRange(peakIndex * 3, peakIndex * 3 + 3),
-                    ),
-                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-            }
-        }
-        Spacer(Modifier.height(18.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth().height(126.dp),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            buckets.forEachIndexed { index, duration ->
-                Column(
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Box(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        contentAlignment = Alignment.BottomCenter,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .width(22.dp)
-                                .fillMaxHeight(
-                                    if (duration == 0L) 0.04f
-                                    else (duration.toFloat() / maxDuration.toFloat()).coerceAtLeast(0.12f),
-                                )
-                                .clip(RoundedCornerShape(topStart = 7.dp, topEnd = 7.dp))
-                                .background(
-                                    if (duration == 0L) MaterialTheme.colorScheme.surfaceContainerHighest
-                                    else MaterialTheme.colorScheme.primary.copy(
-                                        alpha = 0.35f + 0.65f * duration.toFloat() / maxDuration.toFloat(),
-                                    ),
-                                ),
-                        )
-                    }
-                    Spacer(Modifier.height(7.dp))
-                    Text(
-                        text = if (index % 2 == 0) "%02d".format(index * 3) else "",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp)) {
-            Text(
-                text = stringResource(R.string.stats_time_midnight),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = stringResource(R.string.stats_time_noon),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = stringResource(R.string.stats_time_late_night),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun formatHourRange(startHour: Int, endHour: Int): String = stringResource(
-    R.string.stats_hour_range,
-    startHour,
-    endHour,
-)
-
-@Composable
 private fun activityColor(duration: Long, maxDuration: Long): Color {
     val intensity = duration.toFloat() / maxDuration.toFloat()
     return when {
@@ -681,42 +461,6 @@ private fun activityColor(duration: Long, maxDuration: Long): Color {
         intensity < 0.55f -> MaterialTheme.colorScheme.primary.copy(alpha = 0.52f)
         intensity < 0.8f -> MaterialTheme.colorScheme.primary.copy(alpha = 0.76f)
         else -> MaterialTheme.colorScheme.primary
-    }
-}
-
-@Composable
-private fun KindBreakdownCard(summaries: List<StatsKindSummary>) {
-    val total = summaries.sumOf { it.duration }.coerceAtLeast(1L)
-    StatsSectionCard {
-        Text(
-            text = stringResource(R.string.stats_content_breakdown),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(Modifier.height(14.dp))
-        summaries.forEachIndexed { index, summary ->
-            if (index > 0) Spacer(Modifier.height(14.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .size(10.dp)
-                        .background(summary.kind.color(), CircleShape),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(summary.kind.label(), style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = "${formatStatsDuration(summary.duration)} · ${summary.duration * 100 / total}%",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            StatsProgressBar(
-                progress = summary.duration.toFloat() / total.toFloat(),
-                modifier = Modifier.fillMaxWidth().padding(top = 7.dp).height(7.dp),
-                color = summary.kind.color(),
-            )
-        }
     }
 }
 
@@ -803,7 +547,7 @@ private fun WorkStatsCard(
                     )
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        text = formatStatsDuration(record.duration),
+                        text = statsDurationText(record.duration),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                     )
@@ -863,16 +607,6 @@ private fun StatsProgressBar(
 }
 
 @Composable
-private fun StatsSectionCard(content: @Composable ColumnScope.() -> Unit) {
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(18.dp), content = content)
-    }
-}
-
-@Composable
 private fun StatsRecord.supportingText(): String {
     val sessionsText = stringResource(R.string.stats_sessions_count, sessions)
     if (units <= 0) return sessionsText
@@ -899,18 +633,6 @@ private fun StatsContentKind.color(): Color = when (this) {
     StatsContentKind.MANGA -> MaterialTheme.colorScheme.primary
     StatsContentKind.NOVEL -> MaterialTheme.colorScheme.tertiary
     StatsContentKind.VIDEO -> MaterialTheme.colorScheme.secondary
-}
-
-@Composable
-private fun formatStatsDuration(durationMs: Long): String {
-    val totalMinutes = TimeUnit.MILLISECONDS.toMinutes(durationMs).coerceAtLeast(0L)
-    val hours = totalMinutes / 60
-    val minutes = totalMinutes % 60
-    return when {
-        hours > 0L && minutes > 0L -> stringResource(R.string.stats_duration_hours_minutes, hours, minutes)
-        hours > 0L -> stringResource(R.string.stats_duration_hours, hours)
-        else -> stringResource(R.string.stats_duration_minutes, minutes)
-    }
 }
 
 /**

@@ -1,19 +1,23 @@
 package org.skepsun.kototoro.settings.compose
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.ui.settings.DataCleanupContent
+import org.skepsun.kototoro.core.ui.settings.DataCleanupRow
+import org.skepsun.kototoro.core.ui.settings.DataCleanupSection
 
+/**
+ * Android's data removal page. The sections, the rows and the read-chapter switch are the shared [DataCleanupContent]
+ * Windows draws too; this screen only knows which of Android's operations are available right now (an empty cache, a
+ * browser that is not installed) and which drawable each row leads with.
+ */
 @Composable
 fun DataCleanupSettingsScreen(
     settings: AppSettings,
@@ -72,188 +76,111 @@ fun DataCleanupSettingsScreen(
     onDeleteReadChapters: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(top = settingsContentTopInset())
-            .padding(horizontal = SettingsContentHorizontalPadding, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        SettingsPreferenceGroup(title = stringResource(R.string.local_storage)) {
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_local_manga_storage),
-                iconRes = R.drawable.ic_storage,
-                enabled = isLocalMangaEnabled,
-                showChevron = false,
-                onClick = onClearLocalManga,
-            ) }
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_local_novel_storage),
-                iconRes = R.drawable.ic_storage,
-                enabled = isLocalNovelsEnabled,
-                showChevron = false,
-                onClick = onClearLocalNovels,
-            ) }
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_local_video_storage),
-                iconRes = R.drawable.ic_storage,
-                enabled = isLocalVideosEnabled,
-                showChevron = false,
-                onClick = onClearLocalVideos,
-            ) }
-        }
-        SettingsPreferenceGroup(title = stringResource(R.string.cache)) {
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_thumbs_cache),
-                iconRes = R.drawable.ic_images,
-                summary = thumbsCacheSummary,
-                enabled = isThumbsCacheEnabled,
-                showChevron = false,
-                onClick = onClearThumbsCache,
-            ) }
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_favicons_cache),
-                iconRes = R.drawable.ic_web,
-                summary = faviconsCacheSummary,
-                enabled = isFaviconsCacheEnabled,
-                showChevron = false,
-                onClick = onClearFaviconsCache,
-            ) }
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_pages_cache),
-                iconRes = R.drawable.ic_book_page,
-                summary = pagesCacheSummary,
-                enabled = isPagesCacheEnabled,
-                showChevron = false,
-                onClick = onClearPagesCache,
-            ) }
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_novel_cache),
-                iconRes = R.drawable.ic_read,
-                summary = novelCacheSummary,
-                enabled = isNovelCacheEnabled,
-                showChevron = false,
-                onClick = onClearNovelCache,
-            ) }
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_video_cache),
-                iconRes = R.drawable.ic_content_video,
-                summary = videoCacheSummary,
-                enabled = isVideoCacheEnabled,
-                showChevron = false,
-                onClick = onClearVideoCache,
-            ) }
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_video_proxy_cache),
-                iconRes = R.drawable.ic_dns,
-                summary = videoProxyCacheSummary,
-                enabled = isVideoProxyCacheEnabled,
-                showChevron = false,
-                onClick = onClearVideoProxyCache,
-            ) }
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_torrent_cache),
-                iconRes = R.drawable.ic_network_cellular,
-                summary = torrentCacheSummary,
-                enabled = isTorrentCacheEnabled,
-                showChevron = false,
-                onClick = onClearTorrentCache,
-            ) }
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_danmaku_cache),
-                iconRes = R.drawable.ic_danmaku,
-                summary = danmakuCacheSummary,
-                enabled = isDanmakuCacheEnabled,
-                showChevron = false,
-                onClick = onClearDanmakuCache,
-            ) }
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_tts_audio_cache),
-                iconRes = R.drawable.ic_voice_input,
-                summary = ttsCacheSummary,
-                enabled = isTtsCacheEnabled,
-                showChevron = false,
-                onClick = onClearTtsCache,
-            ) }
-            item { SettingsActionPreference(
-                title = stringResource(R.string.reader_super_resolution_clear_cache),
-                iconRes = R.drawable.ic_zoom_in,
-                summary = superResolutionCacheSummary,
-                enabled = isSuperResolutionCacheEnabled,
-                showChevron = false,
-                onClick = onClearSuperResolutionCache,
-            ) }
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_network_cache),
-                iconRes = R.drawable.ic_web,
-                summary = networkCacheSummary,
-                enabled = isNetworkCacheEnabled,
-                showChevron = false,
-                onClick = onClearNetworkCache,
-            ) }
-        }
-        SettingsPreferenceGroup(title = stringResource(R.string.privacy)) {
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_search_history),
-                iconRes = R.drawable.ic_search,
-                summary = searchHistorySummary,
-                enabled = isSearchHistoryEnabled,
-                showChevron = false,
-                onClick = onClearSearchHistory,
-            ) }
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_updates_feed),
-                iconRes = R.drawable.ic_feed,
-                summary = updatesFeedSummary,
-                enabled = isUpdatesFeedEnabled,
-                showChevron = false,
-                onClick = onClearUpdatesFeed,
-            ) }
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_database),
-                iconRes = R.drawable.ic_database,
-                summary = stringResource(R.string.clear_database_summary),
-                enabled = isMangaDataEnabled,
-                showChevron = false,
-                onClick = onClearDatabase,
-            ) }
-            item { SettingsActionPreference(
-                title = stringResource(R.string.clear_cookies),
-                iconRes = R.drawable.ic_cookie,
-                summary = stringResource(R.string.clear_cookies_summary),
-                showChevron = false,
-                onClick = onClearCookies,
-            ) }
+    val localStorage = DataCleanupSection(
+        key = "local_storage",
+        title = stringResource(R.string.local_storage),
+        rows = listOf(
+            DataCleanupRow("clear_local_manga", stringResource(R.string.clear_local_manga_storage),
+                enabled = isLocalMangaEnabled, onClick = onClearLocalManga,
+                leadingIcon = painterResource(R.drawable.ic_storage)),
+            DataCleanupRow("clear_local_novels", stringResource(R.string.clear_local_novel_storage),
+                enabled = isLocalNovelsEnabled, onClick = onClearLocalNovels,
+                leadingIcon = painterResource(R.drawable.ic_storage)),
+            DataCleanupRow("clear_local_videos", stringResource(R.string.clear_local_video_storage),
+                enabled = isLocalVideosEnabled, onClick = onClearLocalVideos,
+                leadingIcon = painterResource(R.drawable.ic_storage)),
+        ),
+    )
+    val cache = DataCleanupSection(
+        key = "cache",
+        title = stringResource(R.string.cache),
+        rows = listOf(
+            DataCleanupRow("clear_thumbs_cache", stringResource(R.string.clear_thumbs_cache),
+                summary = thumbsCacheSummary, enabled = isThumbsCacheEnabled, onClick = onClearThumbsCache,
+                leadingIcon = painterResource(R.drawable.ic_images)),
+            DataCleanupRow("clear_favicons_cache", stringResource(R.string.clear_favicons_cache),
+                summary = faviconsCacheSummary, enabled = isFaviconsCacheEnabled, onClick = onClearFaviconsCache,
+                leadingIcon = painterResource(R.drawable.ic_web)),
+            DataCleanupRow("clear_pages_cache", stringResource(R.string.clear_pages_cache),
+                summary = pagesCacheSummary, enabled = isPagesCacheEnabled, onClick = onClearPagesCache,
+                leadingIcon = painterResource(R.drawable.ic_book_page)),
+            DataCleanupRow("clear_novel_cache", stringResource(R.string.clear_novel_cache),
+                summary = novelCacheSummary, enabled = isNovelCacheEnabled, onClick = onClearNovelCache,
+                leadingIcon = painterResource(R.drawable.ic_read)),
+            DataCleanupRow("clear_video_cache", stringResource(R.string.clear_video_cache),
+                summary = videoCacheSummary, enabled = isVideoCacheEnabled, onClick = onClearVideoCache,
+                leadingIcon = painterResource(R.drawable.ic_content_video)),
+            DataCleanupRow("clear_video_proxy_cache", stringResource(R.string.clear_video_proxy_cache),
+                summary = videoProxyCacheSummary, enabled = isVideoProxyCacheEnabled,
+                onClick = onClearVideoProxyCache, leadingIcon = painterResource(R.drawable.ic_dns)),
+            DataCleanupRow("clear_torrent_cache", stringResource(R.string.clear_torrent_cache),
+                summary = torrentCacheSummary, enabled = isTorrentCacheEnabled, onClick = onClearTorrentCache,
+                leadingIcon = painterResource(R.drawable.ic_network_cellular)),
+            DataCleanupRow("clear_danmaku_cache", stringResource(R.string.clear_danmaku_cache),
+                summary = danmakuCacheSummary, enabled = isDanmakuCacheEnabled, onClick = onClearDanmakuCache,
+                leadingIcon = painterResource(R.drawable.ic_danmaku)),
+            DataCleanupRow("clear_tts_cache", stringResource(R.string.clear_tts_audio_cache),
+                summary = ttsCacheSummary, enabled = isTtsCacheEnabled, onClick = onClearTtsCache,
+                leadingIcon = painterResource(R.drawable.ic_voice_input)),
+            DataCleanupRow("clear_super_resolution_cache",
+                stringResource(R.string.reader_super_resolution_clear_cache),
+                summary = superResolutionCacheSummary, enabled = isSuperResolutionCacheEnabled,
+                onClick = onClearSuperResolutionCache, leadingIcon = painterResource(R.drawable.ic_zoom_in)),
+            DataCleanupRow("clear_network_cache", stringResource(R.string.clear_network_cache),
+                summary = networkCacheSummary, enabled = isNetworkCacheEnabled, onClick = onClearNetworkCache,
+                leadingIcon = painterResource(R.drawable.ic_web)),
+        ),
+    )
+    val privacy = DataCleanupSection(
+        key = "privacy",
+        title = stringResource(R.string.privacy),
+        rows = buildList {
+            add(DataCleanupRow("clear_search_history", stringResource(R.string.clear_search_history),
+                summary = searchHistorySummary, enabled = isSearchHistoryEnabled, onClick = onClearSearchHistory,
+                leadingIcon = painterResource(R.drawable.ic_search)))
+            add(DataCleanupRow("clear_updates_feed", stringResource(R.string.clear_updates_feed),
+                summary = updatesFeedSummary, enabled = isUpdatesFeedEnabled, onClick = onClearUpdatesFeed,
+                leadingIcon = painterResource(R.drawable.ic_feed)))
+            add(DataCleanupRow("clear_database", stringResource(R.string.clear_database),
+                summary = stringResource(R.string.clear_database_summary), enabled = isMangaDataEnabled,
+                onClick = onClearDatabase, leadingIcon = painterResource(R.drawable.ic_database)))
+            add(DataCleanupRow("clear_cookies", stringResource(R.string.clear_cookies),
+                summary = stringResource(R.string.clear_cookies_summary), onClick = onClearCookies,
+                leadingIcon = painterResource(R.drawable.ic_cookie)))
+            // Android only offers the WebView row where a browser can exist at all.
             if (isBrowserVisible) {
-                item { SettingsActionPreference(
-                    title = stringResource(R.string.clear_browser_data),
-                    iconRes = R.drawable.ic_web,
-                    summary = stringResource(R.string.clear_browser_data_summary),
-                    enabled = isWebviewClearEnabled,
-                    showChevron = false,
-                    onClick = onClearBrowserData,
-                ) }
+                add(DataCleanupRow("clear_browser_data", stringResource(R.string.clear_browser_data),
+                    summary = stringResource(R.string.clear_browser_data_summary), enabled = isWebviewClearEnabled,
+                    onClick = onClearBrowserData, leadingIcon = painterResource(R.drawable.ic_web)))
             }
-        }
-        SettingsPreferenceGroup(title = stringResource(R.string.chapters)) {
-            item { SettingsActionPreference(
-                title = stringResource(R.string.delete_read_chapters),
-                iconRes = R.drawable.ic_delete,
-                summary = stringResource(R.string.delete_read_chapters_summary),
-                enabled = isChaptersClearEnabled,
-                showChevron = false,
-                onClick = onDeleteReadChapters,
-            ) }
-            item { SettingsSwitchPreference(
-                title = stringResource(R.string.delete_read_chapters_auto),
-                iconRes = R.drawable.ic_timer,
-                summary = stringResource(R.string.runs_on_app_start),
-                checked = settings.prefs.getBoolean(AppSettings.KEY_CHAPTERS_CLEAR_AUTO, false),
+        },
+    )
+    val chaptersClearAuto = settings.prefs.getBoolean(AppSettings.KEY_CHAPTERS_CLEAR_AUTO, false)
+    val chapters = DataCleanupSection(
+        key = "chapters",
+        title = stringResource(R.string.chapters),
+        rows = listOf(
+            DataCleanupRow("delete_read_chapters", stringResource(R.string.delete_read_chapters),
+                summary = stringResource(R.string.delete_read_chapters_summary), enabled = isChaptersClearEnabled,
+                onClick = onDeleteReadChapters, leadingIcon = painterResource(R.drawable.ic_delete)),
+            DataCleanupRow("delete_read_chapters_auto", stringResource(R.string.delete_read_chapters_auto),
+                summary = stringResource(R.string.runs_on_app_start), checked = chaptersClearAuto,
                 onCheckedChange = { checked ->
                     settings.prefs.edit().putBoolean(AppSettings.KEY_CHAPTERS_CLEAR_AUTO, checked).apply()
                 },
-            ) }
-        }
-    }
+                leadingIcon = painterResource(R.drawable.ic_timer)),
+        ),
+    )
+    DataCleanupContent(
+        sections = listOf(localStorage, cache, privacy, chapters),
+        modifier = modifier.fillMaxSize(),
+        // The page scrolls under the settings top bar, so the inset has to travel inside the scroll container.
+        contentPadding = PaddingValues(
+            start = SettingsContentHorizontalPadding,
+            end = SettingsContentHorizontalPadding,
+            top = settingsContentTopInset(),
+            bottom = 8.dp,
+        ),
+        tagPrefix = "data-cleanup",
+    )
 }

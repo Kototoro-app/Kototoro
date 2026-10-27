@@ -10,14 +10,16 @@ import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import org.skepsun.kototoro.core.prefs.ReaderInfoBarLayout
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarAlignment
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarCutout
+import org.skepsun.kototoro.reader.ui.compose.design.readerInfoBarMeasurePolicy
 
 class ReaderInfoBarMeasureTest {
 
     @Test
     fun `cutout compressed progress is measured once with its final width`() {
         val progress = Child(140)
-        measure(ReaderInfoBarLayout.SPLIT, ReaderInfoBarCutout(100, 150), progress)
+        measure(ReaderInfoBarAlignment.SPLIT, ReaderInfoBarCutout(100, 150), progress)
         assertEquals(1, progress.measurements.size)
         assertEquals(26, progress.measurements.single().maxWidth)
     }
@@ -25,7 +27,7 @@ class ReaderInfoBarMeasureTest {
     @Test
     fun `zero available progress width does not trigger a second measure`() {
         val progress = Child(140)
-        measure(ReaderInfoBarLayout.SPLIT, ReaderInfoBarCutout(80, 232), progress)
+        measure(ReaderInfoBarAlignment.SPLIT, ReaderInfoBarCutout(80, 232), progress)
         assertEquals(1, progress.measurements.size)
         assertEquals(0, progress.measurements.single().maxWidth)
     }
@@ -34,17 +36,17 @@ class ReaderInfoBarMeasureTest {
     fun `split progress is measured once when content alone limits its width`() {
         val progress = Child(140)
 
-        measure(ReaderInfoBarLayout.SPLIT, null, progress)
+        measure(ReaderInfoBarAlignment.SPLIT, null, progress)
 
         assertEquals(88, progress.measurements.single().maxWidth)
     }
 
     @Test
     fun `progress keeps its intrinsic width when it fits in either layout`() {
-        for (layout in ReaderInfoBarLayout.entries) {
+        for (alignment in ReaderInfoBarAlignment.entries) {
             val progress = Child(30)
 
-            measure(layout, null, progress)
+            measure(alignment, null, progress)
 
             assertEquals(30, progress.measurements.single().maxWidth)
         }
@@ -56,7 +58,7 @@ class ReaderInfoBarMeasureTest {
         val progress = Child(30)
         val system = Child(40)
 
-        measure(ReaderInfoBarLayout.CENTERED, ReaderInfoBarCutout(100, 150), progress, system, reading)
+        measure(ReaderInfoBarAlignment.CENTERED, ReaderInfoBarCutout(100, 150), progress, system, reading)
 
         assertEquals(84, reading.measurements.single().maxWidth)
         assertEquals(30, progress.measurements.single().maxWidth)
@@ -72,14 +74,14 @@ class ReaderInfoBarMeasureTest {
             ReaderInfoBarCutout(170, 240),
             ReaderInfoBarCutout(80, 232),
         )
-        for (layout in ReaderInfoBarLayout.entries) {
+        for (alignment in ReaderInfoBarAlignment.entries) {
             for (cutout in cutouts) {
                 for (hasProgress in listOf(false, true)) {
                     for (hasSystem in listOf(false, true)) {
                         val progress = if (hasProgress) Child(140) else null
                         val system = if (hasSystem) Child(40) else null
                         val reading = Child(80)
-                        measure(layout, cutout, progress, system, reading)
+                        measure(alignment, cutout, progress, system, reading)
                         assertEquals(1, reading.measurements.size)
                         progress?.let { assertEquals(1, it.measurements.size) }
                         system?.let { assertEquals(1, it.measurements.size) }
@@ -90,7 +92,7 @@ class ReaderInfoBarMeasureTest {
     }
 
     private fun measure(
-        layout: ReaderInfoBarLayout,
+        alignment: ReaderInfoBarAlignment,
         cutout: ReaderInfoBarCutout?,
         progress: Child?,
         system: Child? = Child(40),
@@ -99,7 +101,7 @@ class ReaderInfoBarMeasureTest {
         val scope = mockk<MeasureScope> {
             every { layout(any(), any(), any(), any()) } returns mockk<MeasureResult>()
         }
-        val policy = readerInfoBarMeasurePolicy(layout, 8, 8, 0, 8, 4, cutout, progress != null, system != null)
+        val policy = readerInfoBarMeasurePolicy(alignment, 8, 8, 0, 8, 4, cutout, progress != null, system != null)
         with(policy) {
             scope.measure(
                 listOfNotNull(reading.measurable, progress?.measurable, system?.measurable),

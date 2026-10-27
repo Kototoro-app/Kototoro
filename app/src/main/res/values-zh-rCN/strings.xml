@@ -236,6 +236,8 @@
     <string name="replace_rule_order">顺序</string>
     <string name="replace_rule_timeout">超时（毫秒）</string>
     <string name="replace_rule_regex">正则表达式</string>
+    <string name="replace_rule_mode_regex">正则</string>
+    <string name="replace_rule_mode_text">纯文本</string>
     <string name="replace_rule_scope_title">应用于标题</string>
     <string name="replace_rule_scope_content">应用于正文</string>
     <string name="replace_rule_invalid">匹配模式为空或不是有效的正则表达式</string>

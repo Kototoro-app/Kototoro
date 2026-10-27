@@ -1,12 +1,18 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.skia.Image
 import org.skepsun.kototoro.desktop.runtime.DesktopCrashLogs
+import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -19,6 +25,8 @@ internal object DesktopCrashLogsProbe {
     @OptIn(ExperimentalTestApi::class)
     fun run(args: Array<String>) {
         val directory = Path.of(args[1])
+        // The screenshots keep the list and the report readable for review; the probe reads the same nodes either way.
+        val reportsDir = Path.of(args[3])
         val session = runBlocking { DesktopSession.open(directory) }
         val controller = DesktopController(session)
         try {
@@ -41,6 +49,16 @@ internal object DesktopCrashLogsProbe {
 
             runDesktopComposeUiTest(width = 1260, height = 850) {
                 setContent { DesktopApp(controller) }
+                // The report is its own window root, so a dialog snapshot takes the surface instead of "the root".
+                fun snapshot(label: String, node: SemanticsNodeInteraction = onRoot()) {
+                    Image.makeFromBitmap(node.captureToImage().asSkiaBitmap()).use { image ->
+                        image.encodeToData()?.use {
+                            Files.createDirectories(reportsDir).resolve("${args[0]}-$label.png").let { output ->
+                                Files.write(output, it.bytes)
+                            }
+                        }
+                    }
+                }
                 fun idle() {
                     waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy }
                     waitForIdle()
@@ -59,6 +77,7 @@ internal object DesktopCrashLogsProbe {
                 reports.forEach { report ->
                     onNodeWithTag("crash-log:${report.name}").assertExists()
                 }
+                snapshot("list")
                 // Newest first: the report written second is the row on top and the one the dialog shows.
                 onNodeWithTag("crash-log:${reports.first().name}").performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.crashLogs.value.detail != null }
@@ -67,6 +86,7 @@ internal object DesktopCrashLogsProbe {
                     "the dialog showed another report"
                 }
                 onNodeWithTag("crash-log-text").assertExists()
+                snapshot("report", onNodeWithTag("crash-log-report"))
 
                 // Deleting closes the dialog and takes the file away, not just the row.
                 onNodeWithTag("crash-log-delete").performClick()
@@ -82,6 +102,7 @@ internal object DesktopCrashLogsProbe {
                 waitUntil(timeoutMillis = 15_000) { controller.crashLogs.value.files?.isEmpty() == true }
                 idle()
                 onNodeWithTag("crash-logs-empty").assertExists()
+                snapshot("empty")
                 check(logs.files().isEmpty()) { "clear left ${logs.files().map { it.name }}" }
 
                 // Back goes to "more", where the row lives.

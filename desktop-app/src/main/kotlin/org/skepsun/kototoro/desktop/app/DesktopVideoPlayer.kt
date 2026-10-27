@@ -23,6 +23,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sun.jna.Native
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -33,6 +35,10 @@ import org.skepsun.kototoro.desktop.player.MpvLocator
 import org.skepsun.kototoro.desktop.player.MpvShaderLibrary
 import org.skepsun.kototoro.desktop.player.MpvPlayer
 import org.skepsun.kototoro.desktop.player.MpvState
+import org.skepsun.kototoro.video.ui.compose.VideoSeekFeedback
+import org.skepsun.kototoro.video.ui.compose.VideoSeekFeedbackState
+import org.skepsun.kototoro.video.ui.compose.formatPlaybackTime
+import org.skepsun.kototoro.video.ui.compose.videoSeekFeedbackState
 import java.awt.Canvas
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -191,54 +197,69 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
         val current = player ?: return
         scope.launch(Dispatchers.IO) { runCatching { block(current) } }
     }
-    Column(Modifier.fillMaxSize().focusRequester(focus).focusable().onPreviewKeyEvent { event ->
-        if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isAltPressed) return@onPreviewKeyEvent false
-        when (event.key) {
-            Key.Spacebar, Key.K -> { control { it.togglePause() }; true }
-            Key.DirectionLeft, Key.J -> { control { it.seek(if (event.isShiftPressed) -30.0 else -5.0, relative = true) }; true }
-            Key.DirectionRight, Key.L -> { control { it.seek(if (event.isShiftPressed) 30.0 else 5.0, relative = true) }; true }
-            Key.DirectionUp -> { control { it.setVolume(mpv.volume + 5) }; true }
-            Key.DirectionDown -> { control { it.setVolume(mpv.volume - 5) }; true }
-            Key.M -> { control { it.setMuted(!mpv.muted) }; true }
-            Key.N -> { if (hasNext) controller.changeVideoEpisode(true); true }
-            Key.F, Key.F11 -> { onToggleFullscreen?.invoke(); true }
-            Key.Escape -> { if (episodesOpen) episodesOpen = false else back(); true }
-            else -> false
+    // The seeking bubble of Android's player; a fixed jump seeks and reports itself, a longer one replaces the last.
+    var seekFeedback by remember { mutableStateOf<VideoSeekFeedbackState?>(null) }
+    var seekFeedbackJob by remember { mutableStateOf<Job?>(null) }
+    val jump: (Double) -> Unit = { offset ->
+        desktopSeekFeedback(mpv.position, mpv.duration, offset)?.let { feedback ->
+            control { it.seek(offset, relative = true) }
+            seekFeedback = feedback
+            seekFeedbackJob?.cancel()
+            seekFeedbackJob = scope.launch { delay(1000); seekFeedback = null }
         }
-    }) {
-        Row(Modifier.fillMaxWidth().height(56.dp).background(PlayerPanel).padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(back) { Text(desktopText("video.backToDetails"), color = PlayerText) }
-            Column(Modifier.weight(1f)) {
-                Text(state.content?.title.orEmpty(), color = PlayerText, fontWeight = FontWeight.SemiBold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(video.chapter.title ?: desktopText("common.episodeTitle", video.chapter.number), color = PlayerMuted, fontSize = 12.sp,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().focusRequester(focus).focusable().onPreviewKeyEvent { event ->
+            if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isAltPressed) return@onPreviewKeyEvent false
+            when (event.key) {
+                Key.Spacebar, Key.K -> { control { it.togglePause() }; true }
+                Key.DirectionLeft, Key.J -> { jump(if (event.isShiftPressed) -30.0 else -5.0); true }
+                Key.DirectionRight, Key.L -> { jump(if (event.isShiftPressed) 30.0 else 5.0); true }
+                Key.DirectionUp -> { control { it.setVolume(mpv.volume + 5) }; true }
+                Key.DirectionDown -> { control { it.setVolume(mpv.volume - 5) }; true }
+                Key.M -> { control { it.setMuted(!mpv.muted) }; true }
+                Key.N -> { if (hasNext) controller.changeVideoEpisode(true); true }
+                Key.F, Key.F11 -> { onToggleFullscreen?.invoke(); true }
+                Key.Escape -> { if (episodesOpen) episodesOpen = false else back(); true }
+                else -> false
             }
-            TextButton({ castOpen = true }, enabled = player != null, modifier = Modifier.testTag("video-cast")) {
-                Text(if (state.cast != null) desktopText("video.casting") else desktopText("video.cast"), color = PlayerText)
+        }) {
+            Row(Modifier.fillMaxWidth().height(56.dp).background(PlayerPanel).padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(back) { Text(desktopText("video.backToDetails"), color = PlayerText) }
+                Column(Modifier.weight(1f)) {
+                    Text(state.content?.title.orEmpty(), color = PlayerText, fontWeight = FontWeight.SemiBold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(video.chapter.title ?: desktopText("common.episodeTitle", video.chapter.number), color = PlayerMuted, fontSize = 12.sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                TextButton({ castOpen = true }, enabled = player != null, modifier = Modifier.testTag("video-cast")) {
+                    Text(if (state.cast != null) desktopText("video.casting") else desktopText("video.cast"), color = PlayerText)
+                }
+                TextButton({ episodesOpen = !episodesOpen }, modifier = Modifier.testTag("video-episodes")) {
+                    Text(desktopText("video.episodes"), color = PlayerText)
+                }
+                TextButton({ onToggleFullscreen?.invoke() }, enabled = onToggleFullscreen != null) {
+                    Text(if (fullscreen) desktopText("video.exitFullscreen") else desktopText("video.fullscreen"), color = PlayerText)
+                }
             }
-            TextButton({ episodesOpen = !episodesOpen }, modifier = Modifier.testTag("video-episodes")) {
-                Text(desktopText("video.episodes"), color = PlayerText)
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                val backdrop = rememberVideoBackdrop(state)
+                Box(Modifier.weight(1f).fillMaxHeight().background(backdrop)) {
+                    SwingPanel(background = backdrop, factory = { canvas }, modifier = Modifier.fillMaxSize().testTag("video-surface"))
+                }
+                if (episodesOpen) EpisodeList(controller, state, video, Modifier.width(300.dp).fillMaxHeight())
             }
-            TextButton({ onToggleFullscreen?.invoke() }, enabled = onToggleFullscreen != null) {
-                Text(if (fullscreen) desktopText("video.exitFullscreen") else desktopText("video.fullscreen"), color = PlayerText)
+            val active = state.cast
+            if (active != null) {
+                CastControls(active, onEnd = { controller.endCast() })
+            } else {
+                Controls(video, mpv, failure ?: enhancementError, hasPrevious, hasNext, !closing && player != null, controller, ::control,
+                    state.videoEnhancement, state.videoSettings, jump)
             }
         }
-        Row(Modifier.weight(1f).fillMaxWidth()) {
-            val backdrop = rememberVideoBackdrop(state)
-            Box(Modifier.weight(1f).fillMaxHeight().background(backdrop)) {
-                SwingPanel(background = backdrop, factory = { canvas }, modifier = Modifier.fillMaxSize().testTag("video-surface"))
-            }
-            if (episodesOpen) EpisodeList(controller, state, video, Modifier.width(300.dp).fillMaxHeight())
-        }
-        val active = state.cast
-        if (active != null) {
-            CastControls(active, onEnd = { controller.endCast() })
-        } else {
-            Controls(video, mpv, failure ?: enhancementError, hasPrevious, hasNext, !closing && player != null, controller, ::control,
-                state.videoEnhancement, state.videoSettings)
-        }
+        // Compose content cannot cover mpv's native window, so the bubble floats over the controls, not the picture.
+        seekFeedback?.let { VideoSeekFeedback(it, Modifier.fillMaxWidth().height(120.dp).align(Alignment.BottomCenter)) }
     }
     if (castOpen) {
         CastDialog(onDismiss = { castOpen = false }) { device ->
@@ -266,7 +287,7 @@ private fun EpisodeList(controller: DesktopController, state: DesktopAppState, v
 @Composable
 private fun Controls(video: DesktopVideo, mpv: MpvState, failure: String?, hasPrevious: Boolean, hasNext: Boolean,
     enabled: Boolean, controller: DesktopController, control: ((MpvPlayer) -> Unit) -> Unit, enhancement: MpvEnhancement,
-    settings: DesktopVideoSettings) {
+    settings: DesktopVideoSettings, jump: (Double) -> Unit) {
     Column(Modifier.fillMaxWidth().testTag("video-controls")) {
         // Android draws a black gradient out of the control bar (`bg_video_bottom_gradient`), the second opacity.
         if (settings.gradientOpacity > 0f) {
@@ -281,7 +302,7 @@ private fun Controls(video: DesktopVideo, mpv: MpvState, failure: String?, hasPr
                     ),
             )
         }
-        ControlsBar(video, mpv, failure, hasPrevious, hasNext, enabled, controller, control, enhancement, settings)
+        ControlsBar(video, mpv, failure, hasPrevious, hasNext, enabled, controller, control, enhancement, settings, jump)
     }
 }
 
@@ -289,7 +310,7 @@ private fun Controls(video: DesktopVideo, mpv: MpvState, failure: String?, hasPr
 @Composable
 private fun ControlsBar(video: DesktopVideo, mpv: MpvState, failure: String?, hasPrevious: Boolean, hasNext: Boolean,
     enabled: Boolean, controller: DesktopController, control: ((MpvPlayer) -> Unit) -> Unit, enhancement: MpvEnhancement,
-    settings: DesktopVideoSettings) {
+    settings: DesktopVideoSettings, jump: (Double) -> Unit) {
     var dragging by remember { mutableStateOf<Float?>(null) }
     Column(
         Modifier
@@ -305,7 +326,8 @@ private fun ControlsBar(video: DesktopVideo, mpv: MpvState, failure: String?, ha
         status?.let { Text(it, color = if (failure != null || mpv.error != null) Color(0xFFFF8A80) else PlayerMuted,
             fontSize = 12.sp, modifier = Modifier.testTag("video-status")) }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(clock(dragging?.toDouble() ?: mpv.position), color = PlayerText, fontSize = 13.sp)
+            Text(formatPlaybackTime(((dragging?.toDouble() ?: mpv.position) * 1000).toLong(), padMinutes = true),
+                color = PlayerText, fontSize = 13.sp)
             Slider(
                 value = (dragging ?: mpv.position.toFloat()).coerceIn(0f, mpv.duration.toFloat().coerceAtLeast(1f)),
                 onValueChange = { dragging = it },
@@ -314,13 +336,13 @@ private fun ControlsBar(video: DesktopVideo, mpv: MpvState, failure: String?, ha
                 enabled = enabled && mpv.duration > 0,
                 modifier = Modifier.weight(1f).padding(horizontal = 12.dp).testTag("video-seek"),
             )
-            Text(clock(mpv.duration), color = PlayerText, fontSize = 13.sp)
+            Text(formatPlaybackTime((mpv.duration * 1000).toLong(), padMinutes = true), color = PlayerText, fontSize = 13.sp)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             PlayerButton(desktopText("video.previousEpisode"), enabled && hasPrevious) { controller.changeVideoEpisode(false) }
-            PlayerButton("-10s", enabled) { control { it.seek(-10.0, relative = true) } }
+            PlayerButton("-10s", enabled, "video-rewind") { jump(-10.0) }
             PlayerButton(if (mpv.paused) desktopText("video.play") else desktopText("video.pause"), enabled, "video-play") { control { it.togglePause() } }
-            PlayerButton("+10s", enabled) { control { it.seek(10.0, relative = true) } }
+            PlayerButton("+10s", enabled, "video-forward") { jump(10.0) }
             PlayerButton(desktopText("video.nextEpisode"), enabled && hasNext) { controller.changeVideoEpisode(true) }
             Spacer(Modifier.weight(1f))
             Menu(desktopText("video.quality", video.label(video.selected)), video.streams.indices.map { video.label(it) to (it == video.selected) },
@@ -443,12 +465,17 @@ private fun MissingLibrary(controller: DesktopController, video: DesktopVideo, s
     }
 }
 
-private fun clock(seconds: Double): String {
-    val total = if (seconds.isFinite() && seconds > 0) seconds.toLong() else 0L
-    val hours = total / 3600
-    val minutes = total % 3600 / 60
-    val rest = total % 60
-    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, rest) else "%02d:%02d".format(minutes, rest)
+/**
+ * The bubble a fixed jump shows, or null while the length is unknown (nothing to seek in yet). The jump sentence is
+ * Android's own wording, so both players say the same thing; [videoSeekFeedbackState] keeps the rest identical.
+ */
+internal fun desktopSeekFeedback(position: Double, duration: Double, offset: Double): VideoSeekFeedbackState? {
+    if (!(duration > 0.0) || offset == 0.0) return null
+    val seconds = kotlin.math.abs(offset).toInt()
+    val delta = AndroidStrings.format(
+        if (offset > 0) "video_fast_forward_time" else "video_rewind_time", seconds.toString())
+    val target = (position + offset).coerceIn(0.0, duration)
+    return videoSeekFeedbackState((target * 1000).toLong(), (duration * 1000).toLong(), delta)
 }
 
 private fun trimSpeed(speed: Double) = if (speed % 1.0 == 0.0) speed.toInt().toString() else speed.toString().trimEnd('0')
@@ -532,12 +559,13 @@ private fun CastControls(cast: DesktopCast, onEnd: () -> Unit) {
     Column(Modifier.fillMaxWidth().background(PlayerPanel).padding(horizontal = 16.dp, vertical = 8.dp).testTag("cast-controls")) {
         Text(desktopText("video.castTo", cast.renderer.device.name, castState(status.state)), color = PlayerText, fontSize = 13.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(clock(dragging?.toDouble() ?: status.position), color = PlayerText, fontSize = 13.sp)
+            Text(formatPlaybackTime(((dragging?.toDouble() ?: status.position) * 1000).toLong(), padMinutes = true),
+                color = PlayerText, fontSize = 13.sp)
             Slider((dragging ?: status.position.toFloat()).coerceIn(0f, status.duration.toFloat().coerceAtLeast(1f)),
                 { dragging = it }, valueRange = 0f..status.duration.toFloat().coerceAtLeast(1f), enabled = status.duration > 0,
                 onValueChangeFinished = { dragging?.let { target -> remote { it.seek(target.toDouble()) } }; dragging = null },
                 modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
-            Text(clock(status.duration), color = PlayerText, fontSize = 13.sp)
+            Text(formatPlaybackTime((status.duration * 1000).toLong(), padMinutes = true), color = PlayerText, fontSize = 13.sp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             PlayerButton("-10s", true) { remote { it.seek((status.position - 10).coerceAtLeast(0.0)) } }

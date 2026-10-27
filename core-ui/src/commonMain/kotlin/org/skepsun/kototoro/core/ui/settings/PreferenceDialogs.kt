@@ -33,9 +33,12 @@ class PreferenceDialogContent(
 )
 
 @Composable
-fun PreferenceDialog(content: PreferenceDialogContent) {
+fun PreferenceDialog(content: PreferenceDialogContent) = PreferenceDialog(content, Modifier)
+
+@Composable
+fun PreferenceDialog(content: PreferenceDialogContent, modifier: Modifier) {
     AlertDialog(onDismissRequest = content.onDismiss, title = { Text(content.title) }, text = content.text,
-        confirmButton = content.confirmButton, dismissButton = content.dismissButton)
+        confirmButton = content.confirmButton, dismissButton = content.dismissButton, modifier = modifier)
 }
 
 data class PreferenceChoice<T>(val value: T, val label: String)

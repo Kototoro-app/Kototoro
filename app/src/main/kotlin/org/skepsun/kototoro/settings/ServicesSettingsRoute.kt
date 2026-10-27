@@ -1,21 +1,12 @@
 package org.skepsun.kototoro.settings
 
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
-import javax.inject.Inject
-import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
-import org.skepsun.kototoro.core.ui.theme.KototoroTheme
+import org.skepsun.kototoro.core.ui.settings.ServicesSettingsUiState
 import org.skepsun.kototoro.settings.compose.ServicesSettingsScreen
-import org.skepsun.kototoro.settings.compose.ServicesSettingsUiState
 
 @Composable
 fun ServicesSettingsRoute(
@@ -24,7 +15,6 @@ fun ServicesSettingsRoute(
     onStatsClick: () -> Unit,
     onDiscordSettingsClick: () -> Unit,
 ) {
-    val context = LocalContext.current
     val suggestionsEnabled = settings.observeAsState(AppSettings.KEY_SUGGESTIONS) { isSuggestionsEnabled }.value
     val isBrowseTrackingRecommendationsEnabled =
         settings.observeAsState(AppSettings.KEY_BROWSE_TRACKING_RECOMMENDATIONS) { isBrowseTrackingRecommendationsEnabled }.value
@@ -39,22 +29,15 @@ fun ServicesSettingsRoute(
         settings.observeAsState(AppSettings.KEY_READING_TIME) { isReadingTimeEstimationEnabled }.value
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val state = ServicesSettingsUiState(
-        suggestionsSummary = if (suggestionsEnabled) {
-            context.getString(R.string.enabled)
-        } else {
-            context.getString(R.string.disabled)
-        },
-        isBrowseTrackingRecommendationsEnabled = isBrowseTrackingRecommendationsEnabled,
-        isBrowseMoreTrackingRecommendationsEnabled = isBrowseMoreTrackingRecommendationsEnabled,
-        isRelatedContentEnabled = isRelatedContentEnabled,
-        isStatsEnabled = isStatsEnabled,
-        isReadingTimeEstimationEnabled = isReadingTimeEstimationEnabled,
-    )
-
     ServicesSettingsScreen(
-        servicesTitle = context.getString(R.string.services),
-        state = state,
+        state = ServicesSettingsUiState(
+            suggestionsEnabled = suggestionsEnabled,
+            relatedContent = isRelatedContentEnabled,
+            statsEnabled = isStatsEnabled,
+            readingTimeEstimation = isReadingTimeEstimationEnabled,
+            browseTracking = isBrowseTrackingRecommendationsEnabled,
+            browseMoreTracking = isBrowseMoreTrackingRecommendationsEnabled,
+        ),
         snackbarHostState = snackbarHostState,
         onSuggestionsClick = onSuggestionsClick,
         onBrowseTrackingRecommendationsChange = { settings.isBrowseTrackingRecommendationsEnabled = it },

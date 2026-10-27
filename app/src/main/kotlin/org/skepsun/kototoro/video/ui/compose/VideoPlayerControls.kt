@@ -320,12 +320,12 @@ fun VideoPlayerBottomControls(
                     modifier = Modifier.weight(1f).padding(start = 8.dp),
                 )
                 Text(
-                    text = formatDuration(state.positionMs),
+                    text = formatPlaybackTime(state.positionMs),
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.padding(start = 8.dp),
                 )
                 Text(text = "/", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 2.dp))
-                Text(text = formatDuration(state.durationMs), style = MaterialTheme.typography.labelMedium)
+                Text(text = formatPlaybackTime(state.durationMs), style = MaterialTheme.typography.labelMedium)
             }
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val showSecondaryActions = maxWidth >= 600.dp * LocalDensity.current.fontScale
@@ -614,14 +614,5 @@ private fun PlayerTextButton(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
     ) {
         Text(text = text, color = PlayerControlsForeground, style = MaterialTheme.typography.labelLarge)
-    }
-}
-
-internal fun formatDuration(valueMs: Long): String {
-    val seconds = (valueMs.coerceAtLeast(0L) / 1000L).toInt()
-    return if (seconds >= 3600) {
-        "%d:%02d:%02d".format(seconds / 3600, (seconds % 3600) / 60, seconds % 60)
-    } else {
-        "%d:%02d".format(seconds / 60, seconds % 60)
     }
 }

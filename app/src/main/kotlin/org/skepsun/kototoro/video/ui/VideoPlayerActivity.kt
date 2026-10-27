@@ -179,6 +179,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerAction
+import org.skepsun.kototoro.video.ui.compose.formatPlaybackTime
+import org.skepsun.kototoro.video.ui.compose.videoSeekFeedbackState
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerControlState
 import org.skepsun.kototoro.video.ui.compose.SubtitleBackgroundStyle
 import org.skepsun.kototoro.video.ui.compose.SubtitleFontFamily
@@ -3018,7 +3020,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             val pos = videoPlayer?.positionMs ?: return
             introEndMs = pos
             appSettings.setIntroEndMs(currentMangaId, pos)
-            showPlayerMessage(getString(R.string.video_skip_intro_set, formatTimeMs(pos)))
+            showPlayerMessage(getString(R.string.video_skip_intro_set, formatPlaybackTime(pos, padMinutes = true)))
         }
         updateIntroOutroButtonState()
     }
@@ -3033,24 +3035,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             val pos = videoPlayer?.positionMs ?: return
             outroStartMs = pos
             appSettings.setOutroStartMs(currentMangaId, pos)
-            showPlayerMessage(getString(R.string.video_skip_outro_set, formatTimeMs(pos)))
+            showPlayerMessage(getString(R.string.video_skip_outro_set, formatPlaybackTime(pos, padMinutes = true)))
         }
         updateIntroOutroButtonState()
     }
 
     private fun updatePlaybackMenu() {
         syncComposeControlState()
-    }
-
-    // 简单时间格式化（mm:ss ?hh:mm:ss?
-    // forceHours: 当总时长包含小时时，强制显示小时位保持格式一?
-    private fun formatTimeMs(ms: Long, forceHours: Boolean = false): String {
-        val totalSec = (ms / 1000).coerceAtLeast(0)
-        val hours = (totalSec / 3600)
-        val minutes = ((totalSec % 3600) / 60)
-        val seconds = (totalSec % 60)
-        return if (hours > 0 || forceHours) String.format("%02d:%02d:%02d", hours, minutes, seconds)
-        else String.format("%02d:%02d", minutes, seconds)
     }
 
     private fun applyPlaybackBackground() {
@@ -5065,22 +5056,16 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private fun showSeekFeedback(posMs: Long, durationMs: Long, seekOffsetMs: Long) {
         seekFeedbackDismissJob?.cancel()
         seekFeedbackDismissJob = null
-        val showHours = durationMs >= 3600_000L
-        val timeStr = formatTimeMs(posMs, showHours) + " / " + formatTimeMs(durationMs, showHours)
-
         val offsetSec = (kotlin.math.abs(seekOffsetMs) / 1000).toInt()
-        val deltaStr = if (seekOffsetMs > 0) {
+        val delta = if (seekOffsetMs > 0) {
             getString(org.skepsun.kototoro.R.string.video_fast_forward_time, offsetSec.toString())
         } else if (seekOffsetMs < 0) {
             getString(org.skepsun.kototoro.R.string.video_rewind_time, offsetSec.toString())
         } else {
             ""
         }
-
-        seekFeedbackState = VideoSeekFeedbackState(
-            text = if (deltaStr.isNotEmpty()) "$deltaStr\n$timeStr" else timeStr,
-            progress = if (durationMs > 0) posMs.toFloat() / durationMs.toFloat() else 0f,
-        )
+        // The bubble's shape (jump sentence, padded clock, hour digits taken from the length) is shared with desktop.
+        seekFeedbackState = videoSeekFeedbackState(posMs, durationMs, delta)
     }
 
     private fun hideSeekFeedback() {

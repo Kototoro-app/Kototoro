@@ -1,36 +1,30 @@
 package org.skepsun.kototoro.settings.compose
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
+import org.skepsun.kototoro.core.ui.settings.ServicesSettingsAction
+import org.skepsun.kototoro.core.ui.settings.ServicesSettingsContent
+import org.skepsun.kototoro.core.ui.settings.ServicesSettingsRowIcons
+import org.skepsun.kototoro.core.ui.settings.ServicesSettingsUiState
 
-data class ServicesSettingsUiState(
-    val suggestionsSummary: String,
-    val isBrowseTrackingRecommendationsEnabled: Boolean,
-    val isBrowseMoreTrackingRecommendationsEnabled: Boolean,
-    val isRelatedContentEnabled: Boolean,
-    val isStatsEnabled: Boolean,
-    val isReadingTimeEstimationEnabled: Boolean,
-)
-
+/**
+ * Android observes the preferences and keeps the page's snackbar host; the rows themselves come from the shared
+ * [ServicesSettingsContent] that desktop consumes too. Android-only rows travel as state/action slots: the
+ * browse-tracking pair (Windows has no carousel to feed) and the Discord RPC door.
+ */
 @Composable
 fun ServicesSettingsScreen(
-    servicesTitle: String,
     state: ServicesSettingsUiState,
     snackbarHostState: SnackbarHostState,
     onSuggestionsClick: () -> Unit,
@@ -51,91 +45,33 @@ fun ServicesSettingsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
-        val listState = rememberLazyListState()
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(
-                start = SettingsContentHorizontalPadding,
-                end = SettingsContentHorizontalPadding,
-                top = settingsContentTopInset(),
-                bottom = innerPadding.calculateBottomPadding() +
-                    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
+        ServicesSettingsContent(
+            state = state,
+            onSuggestionsClick = onSuggestionsClick,
+            onRelatedContentChange = onRelatedContentChange,
+            onStatsClick = onStatsClick,
+            onStatsEnabledChange = onStatsEnabledChange,
+            onReadingTimeChange = onReadingTimeChange,
+            modifier = Modifier.fillMaxSize()
+                .padding(innerPadding)
+                .padding(top = settingsContentTopInset())
+                .padding(horizontal = SettingsContentHorizontalPadding, vertical = 20.dp),
+            onBrowseTrackingChange = onBrowseTrackingRecommendationsChange,
+            onBrowseMoreTrackingChange = onBrowseMoreTrackingRecommendationsChange,
+            icons = ServicesSettingsRowIcons(
+                suggestions = painterResource(R.drawable.ic_suggestion),
+                browseTracking = painterResource(R.drawable.ic_suggestion),
+                browseMoreTracking = painterResource(R.drawable.ic_updated),
+                relatedContent = painterResource(R.drawable.ic_heart_outline),
+                stats = painterResource(R.drawable.ic_bar_chart),
+                readingTime = painterResource(R.drawable.ic_timer),
+                discord = painterResource(R.drawable.ic_discord),
             ),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item(key = "services") {
-                SettingsPreferenceGroup(title = servicesTitle) {
-                    item {
-                        SettingsActionPreference(
-                            title = stringResource(R.string.suggestions),
-                            iconRes = R.drawable.ic_suggestion,
-                            summary = state.suggestionsSummary,
-                            onClick = onSuggestionsClick,
-                        )
-                    }
-                    item {
-                        SettingsSwitchPreference(
-                            title = stringResource(R.string.browse_tracking_recommendations),
-                            iconRes = R.drawable.ic_suggestion,
-                            checked = state.isBrowseTrackingRecommendationsEnabled,
-                            summary = stringResource(R.string.browse_tracking_recommendations_summary),
-                            onCheckedChange = onBrowseTrackingRecommendationsChange,
-                        )
-                    }
-                    if (state.isBrowseTrackingRecommendationsEnabled) {
-                        item {
-                            SettingsSwitchPreference(
-                                title = stringResource(R.string.browse_more_tracking_recommendations),
-                                iconRes = R.drawable.ic_updated,
-                                checked = state.isBrowseMoreTrackingRecommendationsEnabled,
-                                summary = stringResource(R.string.browse_more_tracking_recommendations_summary),
-                                onCheckedChange = onBrowseMoreTrackingRecommendationsChange,
-                            )
-                        }
-                    }
-                    item {
-                        SettingsSwitchPreference(
-                            title = stringResource(R.string.related_manga),
-                            iconRes = R.drawable.ic_heart_outline,
-                            checked = state.isRelatedContentEnabled,
-                            summary = stringResource(R.string.related_manga_summary),
-                            onCheckedChange = onRelatedContentChange,
-                        )
-                    }
-                    item {
-                        SettingsSplitSwitchPreference(
-                            title = stringResource(R.string.reading_stats),
-                            iconRes = R.drawable.ic_bar_chart,
-                            checked = state.isStatsEnabled,
-                            summary = if (state.isStatsEnabled) {
-                                stringResource(R.string.enabled)
-                            } else {
-                                stringResource(R.string.disabled)
-                            },
-                            onClick = onStatsClick,
-                            onCheckedChange = onStatsEnabledChange,
-                        )
-                    }
-                    item {
-                        SettingsSwitchPreference(
-                            title = stringResource(R.string.reading_time_estimation),
-                            iconRes = R.drawable.ic_timer,
-                            checked = state.isReadingTimeEstimationEnabled,
-                            summary = stringResource(R.string.reading_time_estimation_summary),
-                            onCheckedChange = onReadingTimeChange,
-                        )
-                    }
-                    item {
-                        SettingsActionPreference(
-                            title = stringResource(R.string.discord_rpc),
-                            summary = stringResource(R.string.discord_rpc_summary),
-                            iconRes = R.drawable.ic_discord,
-                            onClick = onDiscordSettingsClick,
-                        )
-                    }
-                }
-            }
-        }
+            discordSettings = ServicesSettingsAction(
+                title = stringResource(R.string.discord_rpc),
+                summary = stringResource(R.string.discord_rpc_summary),
+                onClick = onDiscordSettingsClick,
+            ),
+        )
     }
 }

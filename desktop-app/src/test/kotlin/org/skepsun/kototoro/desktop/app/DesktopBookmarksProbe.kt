@@ -73,9 +73,13 @@ internal object DesktopBookmarksProbe {
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.BOOKMARKS }
                     idle()
                     // Android's selection bar: SELECT ALL then REMOVE, one message afterwards.
+                    // The selection bar is Android's shared toolbar now: count, select-all and removal in one pill.
+                    onNodeWithTag("bookmarks-bar").assertExists()
+                    onNodeWithTag("bookmarks-count").assertTextContains("1 个书签")
                     onNodeWithTag("bookmarks-select-all").performClick()
                     idle()
                     check(controller.state.value.bookmarkShelfSelection == setOf(bookmark.pageId))
+                    onNodeWithTag("bookmarks-count").assertTextContains("已选 1 个书签")
                     onNodeWithTag("bookmarks-select-delete").performClick()
                     waitUntil(timeoutMillis = 15_000) { controller.state.value.bookmarkGroups.isEmpty() }
                     idle()

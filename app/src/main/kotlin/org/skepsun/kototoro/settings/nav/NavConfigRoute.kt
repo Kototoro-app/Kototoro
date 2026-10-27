@@ -30,7 +30,6 @@ fun NavConfigRoute(
         canAddAction = canAddAction,
         onAddItem = viewModel::addItem,
         onRemoveItem = viewModel::removeItem,
-        onMoveItem = viewModel::moveItem,
         onReorder = viewModel::reorder,
         modifier = modifier,
     )

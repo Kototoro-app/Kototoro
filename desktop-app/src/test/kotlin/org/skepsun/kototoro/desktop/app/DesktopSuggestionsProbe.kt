@@ -1,7 +1,10 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -12,6 +15,8 @@ import org.skepsun.kototoro.desktop.runtime.DesktopNavigationSettings
 import org.skepsun.kototoro.desktop.runtime.DesktopSuggestionFilter
 import org.skepsun.kototoro.desktop.runtime.acceptsSuggestionFilters
 import org.skepsun.kototoro.desktop.runtime.desktopSuggestionFilters
+import org.jetbrains.skia.Image
+import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -57,6 +62,16 @@ internal object DesktopSuggestionsProbe {
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.sources.size == 1 }
                 runBlocking { controller.home().join() }
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.HOME }
+                fun snapshot(label: String) {
+                    Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
+                        image.encodeToData()?.use {
+                            Files.write(
+                                Files.createDirectories(Path.of(args[3])).resolve("${args[0]}-$label.png"),
+                                it.bytes,
+                            )
+                        }
+                    }
+                }
                 idle()
                 // Recommendations start switched off, so the rail asks for them exactly like Android's empty card.
                 check(controller.state.value.suggestions.isEmpty()) { "the root starts without suggestions" }
@@ -72,6 +87,10 @@ internal object DesktopSuggestionsProbe {
                 idle()
                 onNodeWithTag("suggestions-panel").assertExists()
                 onNodeWithTag("suggestions-summary").assertExists()
+                // The shared page-summary card: Android's own title/subtitle and two pills, one of them the refresh.
+                onNodeWithText(AndroidStrings["suggestions_header_title"]).assertExists()
+                onNodeWithTag("suggestions-refresh").assertExists()
+                snapshot("suggestions")
                 check(controller.state.value.suggestions.size == stored.size) { "the page re-read the same rows" }
                 val first = stored.first()
                 onNodeWithTag("content:${first.id}").assertExists()

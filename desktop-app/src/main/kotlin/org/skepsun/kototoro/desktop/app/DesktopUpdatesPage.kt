@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -29,7 +28,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
+import org.skepsun.kototoro.core.ui.page.PageSummaryAction
+import org.skepsun.kototoro.core.ui.page.PageSummaryHeader
 import org.skepsun.kototoro.desktop.runtime.DesktopNsfwTarget
 import org.skepsun.kototoro.desktop.runtime.DesktopUpdateGroup
 import org.skepsun.kototoro.desktop.runtime.desktopUpdateGroups
@@ -67,23 +67,49 @@ internal fun DesktopUpdatesPage(controller: DesktopController, state: DesktopApp
     }
     val summary = remember(groups) { desktopUpdatesSummary(groups) }
     Column(Modifier.fillMaxSize().testTag("updates-panel"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Android's UpdatesHeaderCard: the summary line and its two pills, on the shared page-summary card.
+        val hasUpdates = groups.isNotEmpty()
+        PageSummaryHeader(
+            title = if (hasUpdates) AndroidStrings["updated_header_title"] else AndroidStrings["updated_header_up_to_date"],
+            subtitle = if (hasUpdates) {
+                AndroidStrings.format("updated_header_summary", summary.works, summary.newChapters)
+            } else {
+                AndroidStrings["updated_header_up_to_date_subtitle"]
+            },
+            icon = painterResource("icons/ic_updated.svg"),
+            horizontalPadding = 0.dp,
+            modifier = Modifier.testTag("updates-summary"),
+        ) {
+            if (hasUpdates) {
+                // Check for updates is the icon-only pill Android shows beside the emphasised mark-all-read.
+                PageSummaryAction(
+                    text = null,
+                    icon = painterResource("icons/ic_sync.svg"),
+                    contentDescription = AndroidStrings["check_for_updates"],
+                    enabled = enabled,
+                    onClick = { controller.checkUpdates() },
+                    modifier = Modifier.testTag("updates-check"),
+                )
+                PageSummaryAction(
+                    text = AndroidStrings["updated_header_all_read"],
+                    emphasized = true,
+                    enabled = enabled,
+                    onClick = { controller.markUpdatesRead(groups) },
+                    modifier = Modifier.testTag("updates-mark-all-read"),
+                )
+            } else {
+                PageSummaryAction(
+                    text = AndroidStrings["check_for_updates"],
+                    icon = painterResource("icons/ic_sync.svg"),
+                    enabled = enabled,
+                    onClick = { controller.checkUpdates() },
+                    modifier = Modifier.testTag("updates-check"),
+                )
+            }
+        }
+        // Android keeps the source/ecosystem filters off the header card, so this row stays its own line.
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TopBarTitleBlock(
-                title = AndroidStrings["updated"],
-                subtitle = summary.takeIf { it.works > 0 }
-                    ?.let { AndroidStrings.format("updated_header_summary", it.works, it.newChapters) },
-                maxWidth = 280.dp,
-                modifier = Modifier.testTag("updates-summary"),
-            )
-            Spacer(Modifier.weight(1f))
             DesktopSourceFilterControls(filter, state.sources, controller::feedFilter, enabled, "updates")
-            Button({ controller.checkUpdates() }, enabled = enabled, modifier = Modifier.testTag("updates-check")) {
-                Text(desktopText("feed.checkUpdates"))
-            }
-            TextButton({ controller.markUpdatesRead(groups) }, enabled = enabled && groups.isNotEmpty(),
-                modifier = Modifier.testTag("updates-mark-all-read")) {
-                Text(AndroidStrings["updated_header_all_read"])
-            }
         }
         if (state.trackedCategories == 0) {
             Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.secondaryContainer,
@@ -99,11 +125,8 @@ internal fun DesktopUpdatesPage(controller: DesktopController, state: DesktopApp
             }
         }
         if (groups.isEmpty()) {
-            Column(Modifier.weight(1f).fillMaxWidth().testTag("updates-empty"),
-                verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(AndroidStrings["updated_header_up_to_date"], style = MaterialTheme.typography.titleMedium)
-                Text(AndroidStrings["updated_header_up_to_date_subtitle"], color = Muted, fontSize = 13.sp)
-            }
+            // The card above already carries Android's "up to date" line, so the body is only the empty placeholder.
+            Box(Modifier.weight(1f).fillMaxWidth().testTag("updates-empty"))
         } else {
             LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("updates-list"),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {

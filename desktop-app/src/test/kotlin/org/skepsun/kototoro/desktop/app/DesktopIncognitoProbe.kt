@@ -69,7 +69,7 @@ internal object DesktopIncognitoProbe {
                 onNodeWithTag("source-incognito-dialog").assertExists()
                 // Default is Android's ASK, so the row never claims a decision nobody made.
                 check(controller.state.value.sourceSettings.incognitoForNsfw == DesktopTriState.ASK)
-                onNodeWithTag("source-incognito:ENABLED").performClick()
+                onNodeWithTag("source-incognito-option:ENABLED").performClick()
                 idle()
                 onNodeWithTag("source-incognito-dialog").assertDoesNotExist()
                 check(controller.state.value.sourceSettings.incognitoForNsfw == DesktopTriState.ENABLED)
@@ -81,10 +81,10 @@ internal object DesktopIncognitoProbe {
                 onNodeWithText(AndroidStrings["enable"]).assertExists()
                 onNodeWithTag("source-setting-incognito-nsfw").performScrollTo().performClick()
                 idle()
-                onNodeWithTag("source-incognito:DISABLED").performClick()
+                onNodeWithTag("source-incognito-option:DISABLED").performClick()
                 idle()
                 check(controller.state.value.sourceSettings.incognitoForNsfw == DesktopTriState.DISABLED)
-                onNodeWithTag("source-settings-back").performScrollTo().performClick()
+                onNodeWithTag("source-settings-back").performClick()
                 idle()
                 check(controller.state.value.screen == DesktopScreen.MORE)
             }

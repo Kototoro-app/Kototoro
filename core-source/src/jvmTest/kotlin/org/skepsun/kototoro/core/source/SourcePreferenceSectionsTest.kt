@@ -1,19 +1,22 @@
-package org.skepsun.kototoro.desktop.app
+package org.skepsun.kototoro.core.source
 
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import org.skepsun.kototoro.core.source.*
 
 /**
  * The protocol tree arrives flat-ish: sources report `PreferenceCategory`s as titled GROUP nodes, mix loose rows in
- * between and let the host append its own `host:` rows at the end. Android folds that into sections before drawing;
- * these cases pin the same folding for the Windows screen.
+ * between and let the host append its own `host:` rows. Android folds that into sections before drawing; the shared
+ * folding therefore lives next to the DTOs so every host that draws the tree gets the same sections.
  */
-class DesktopSourcePreferencesTest {
+class SourcePreferenceSectionsTest {
     private fun node(id: String, kind: SourcePreferenceKind, title: String = "", visible: Boolean = true,
         children: List<SourcePreferenceNode> = emptyList(), choices: List<SourcePreferenceChoice> = emptyList(),
-        value: SourcePreferenceValue? = null) = SourcePreferenceNode(id = id, key = id, title = title, summary = "",
-            kind = kind, enabled = true, visible = visible, value = value, choices = choices, children = children)
+        value: SourcePreferenceValue? = null, secret: Boolean = false, summary: String = "") =
+        SourcePreferenceNode(id = id, key = id, title = title, summary = summary,
+            kind = kind, enabled = true, visible = visible, value = value, choices = choices, children = children,
+            isSecret = secret)
 
     @Test
     fun `host rows lead the default section while a titled group keeps its own`() {
@@ -91,5 +94,48 @@ class DesktopSourcePreferencesTest {
         ), "Settings")
         assertEquals(listOf("Shown"), sections.map { it.title })
         assertTrue(sourcePreferenceSections(emptyList(), "Settings").isEmpty())
+    }
+
+    @Test
+    fun `a row's title falls back to its key and value labels follow Android`() {
+        val titles = node("source:untitled", SourcePreferenceKind.TEXT)
+        assertEquals("source:untitled", sourcePreferenceRowTitle(titles))
+        assertEquals("User-Agent", sourcePreferenceRowTitle(node("host:user_agent", SourcePreferenceKind.TEXT,
+            title = "User-Agent")))
+
+        val choice = node("source:mirror", SourcePreferenceKind.CHOICE,
+            choices = listOf(SourcePreferenceChoice("Mirror A", "a"), SourcePreferenceChoice("Mirror B", "b")),
+            value = SourcePreferenceValue.Text("b"))
+        // Android prints the entry's label, not the stored value.
+        assertEquals("Mirror B", sourcePreferenceChoiceLabel(choice))
+        assertEquals("Mirror B", sourcePreferenceValueLabel(choice))
+
+        val custom = node("source:mirror", SourcePreferenceKind.CHOICE,
+            choices = listOf(SourcePreferenceChoice("Mirror A", "a")), value = SourcePreferenceValue.Text("custom"))
+        // A custom mirror is not in the list, so its raw value is the only name it has.
+        assertEquals("custom", sourcePreferenceChoiceLabel(custom))
+        assertNull(sourcePreferenceChoiceLabel(node("source:mirror", SourcePreferenceKind.CHOICE)))
+
+        val multi = node("source:kinds", SourcePreferenceKind.MULTI_CHOICE,
+            choices = listOf(SourcePreferenceChoice("Manga", "m"), SourcePreferenceChoice("Novel", "n"),
+                SourcePreferenceChoice("Video", "v")),
+            value = SourcePreferenceValue.TextSet(setOf("v", "m")))
+        assertEquals("Manga, Video", sourcePreferenceMultiChoiceLabel(multi))
+        assertNull(sourcePreferenceMultiChoiceLabel(node("source:kinds", SourcePreferenceKind.MULTI_CHOICE)))
+        // A set of values the source no longer offers still shows how many are selected.
+        val stale = node("source:kinds", SourcePreferenceKind.MULTI_CHOICE,
+            value = SourcePreferenceValue.TextSet(setOf("x", "y")))
+        assertEquals("2", sourcePreferenceMultiChoiceLabel(stale))
+
+        assertEquals("secret", sourcePreferenceTextLabel(node("source:token", SourcePreferenceKind.TEXT,
+            value = SourcePreferenceValue.Text("secret"))))
+        assertEquals("••••••", sourcePreferenceTextLabel(node("source:token", SourcePreferenceKind.TEXT,
+            value = SourcePreferenceValue.Text("secret"), secret = true)))
+        // Twelve bullets at most, so a long secret does not widen the row.
+        assertEquals("•".repeat(12), sourcePreferenceTextLabel(node("source:token", SourcePreferenceKind.TEXT,
+            value = SourcePreferenceValue.Text("x".repeat(40)), secret = true)))
+        assertNull(sourcePreferenceTextLabel(node("source:token", SourcePreferenceKind.TEXT)))
+        assertNull(sourcePreferenceValueLabel(node("source:login", SourcePreferenceKind.ACTION)))
+        assertNull(sourcePreferenceValueLabel(node("source:about", SourcePreferenceKind.INFO)))
     }
 }

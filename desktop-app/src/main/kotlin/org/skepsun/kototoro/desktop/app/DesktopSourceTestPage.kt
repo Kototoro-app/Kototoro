@@ -26,6 +26,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.sourcetest.SourceTestProgressHeader
+import org.skepsun.kototoro.core.ui.sourcetest.SourceTestResultLine
+import org.skepsun.kototoro.core.ui.sourcetest.SourceTestResultRow
+import org.skepsun.kototoro.core.ui.sourcetest.SourceTestStepLine
+import org.skepsun.kototoro.core.ui.sourcetest.SourceTestVerdict
 import org.skepsun.kototoro.core.ui.settings.SettingsGroup
 import org.skepsun.kototoro.core.ui.settings.SettingsInfoRow
 import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
@@ -64,48 +69,35 @@ internal fun DesktopSourceTestPage(controller: DesktopController, state: Desktop
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 if (progress.total > 0) {
-                    LinearProgressIndicator(
-                        progress = { if (progress.total == 0) 1f else progress.done.toFloat() / progress.total },
-                        modifier = Modifier.fillMaxWidth().testTag("source-test-bar"),
-                    )
-                    Text(
-                        AndroidStrings.format("source_test_progress", progress.done, progress.total),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.testTag("source-test-progress"),
-                    )
-                    Text(
-                        if (!progress.finished && progress.running.isNotEmpty()) {
+                    val passed = progress.results.count { it.overall == SourceTestStatus.PASS }
+                    val unavailable = progress.results.count { it.overall == SourceTestStatus.FAIL }
+                    val challenged = progress.results.count { it.overall == SourceTestStatus.CHALLENGE }
+                    // Android's progress block, now the shared one: bar, "N / M checked", the source being asked, the
+                    // pass/fail/challenge summary and the cancelled note, in Android's own wording.
+                    SourceTestProgressHeader(
+                        done = progress.done,
+                        total = progress.total,
+                        progressLabel = AndroidStrings.format("source_test_progress", progress.done, progress.total),
+                        runningLabel = if (!progress.finished && progress.running.isNotEmpty()) {
                             AndroidStrings.format("source_test_running", progress.running.joinToString())
                         } else {
                             ""
                         },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        // A fixed two lines keeps the buttons below from jumping while sources report in.
-                        minLines = 2,
-                        maxLines = 2,
-                    )
-                    val passed = progress.results.count { it.overall == SourceTestStatus.PASS }
-                    val unavailable = progress.results.count { it.overall == SourceTestStatus.FAIL }
-                    val challenged = progress.results.count { it.overall == SourceTestStatus.CHALLENGE }
-                    Text(
-                        if (progress.finished) {
+                        summaryLabel = if (progress.finished) {
                             AndroidStrings.format("source_test_summary", passed, unavailable, challenged)
                         } else {
                             ""
                         },
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.testTag("source-test-summary"),
+                        cancelledNote = if (progress.finished && progress.cancelled) {
+                            AndroidStrings["source_test_cancelled_note"]
+                        } else {
+                            null
+                        },
+                        barTag = "source-test-bar",
+                        progressTag = "source-test-progress",
+                        summaryTag = "source-test-summary",
+                        cancelledTag = "source-test-cancelled",
                     )
-                    if (progress.finished && progress.cancelled) {
-                        Text(
-                            AndroidStrings["source_test_cancelled_note"],
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.testTag("source-test-cancelled"),
-                        )
-                    }
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -145,7 +137,7 @@ internal fun DesktopSourceTestPage(controller: DesktopController, state: Desktop
             } else {
                 progress.results.forEachIndexed { index, result ->
                     if (index > 0) SettingsRowDivider()
-                    SourceTestResultRow(
+                    SourceTestRowLine(
                         result = result,
                         expanded = result.sourceName in expanded,
                         onToggle = {
@@ -163,61 +155,46 @@ internal fun DesktopSourceTestPage(controller: DesktopController, state: Desktop
 }
 
 /**
- * One source's row: the title, its verdict and the step count, expandable into the six step lines Android shows in the
- * dialog (label, verdict, duration, and the message under the failing ones).
+ * One source's row, projected into the shared [SourceTestResultRow]: the labels come from Android's catalog and the
+ * step count is the one thing Windows adds to the shape, so a run covering six steps says so without expanding it.
  */
 @Composable
-private fun SourceTestResultRow(result: SourceTestResult, expanded: Boolean, onToggle: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clickable(onClick = onToggle)
-        .padding(horizontal = 16.dp, vertical = 8.dp)
-        .testTag("source-test-result:${result.sourceName}")) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(result.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            Text(
-                result.overall.label(),
-                style = MaterialTheme.typography.labelLarge,
-                color = result.overall.color(),
-                modifier = Modifier.padding(horizontal = 8.dp).testTag(
-                    "source-test-verdict:${result.sourceName}"),
-            )
-            Text(
-                desktopText("sourceTest.stepCount", result.steps.size),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (expanded) {
-            SourceTestStep.entries.forEach { step ->
-                val stepResult = result.steps[step] ?: return@forEach
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(step.label(), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                    Text(
-                        stepResult.status.label(),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = stepResult.status.color(),
-                        modifier = Modifier.testTag("source-test-step:${result.sourceName}:${step.name}"),
-                    )
-                    Text(
-                        "${stepResult.durationMs} ms",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
-                if (stepResult.message.isNotBlank()) {
-                    Text(
-                        stepResult.message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.fillMaxWidth().padding(start = 12.dp),
-                    )
-                }
-            }
-        }
-    }
+private fun SourceTestRowLine(result: SourceTestResult, expanded: Boolean, onToggle: () -> Unit) {
+    SourceTestResultRow(
+        result = result.toLine(),
+        expanded = expanded,
+        onToggle = onToggle,
+        rowTag = "source-test-result:${result.sourceName}",
+        verdictTag = "source-test-verdict:${result.sourceName}",
+        stepTag = { stepKey -> "source-test-step:${result.sourceName}:$stepKey" },
+    )
+}
+
+private fun SourceTestResult.toLine(): SourceTestResultLine = SourceTestResultLine(
+    key = sourceName,
+    title = title,
+    verdict = overall.toVerdict(),
+    verdictLabel = overall.label(),
+    trailingLabel = desktopText("sourceTest.stepCount", steps.size),
+    steps = SourceTestStep.entries.mapNotNull { step ->
+        val stepResult = steps[step] ?: return@mapNotNull null
+        SourceTestStepLine(
+            key = step.name,
+            label = step.label(),
+            verdict = stepResult.status.toVerdict(),
+            verdictLabel = stepResult.status.label(),
+            durationMs = stepResult.durationMs,
+            message = stepResult.message,
+        )
+    },
+)
+
+/** Android's `StepStatus` and Windows' `SourceTestStatus` name the same four outcomes. */
+private fun SourceTestStatus.toVerdict(): SourceTestVerdict = when (this) {
+    SourceTestStatus.PASS -> SourceTestVerdict.PASS
+    SourceTestStatus.FAIL -> SourceTestVerdict.FAIL
+    SourceTestStatus.SKIP -> SourceTestVerdict.SKIP
+    SourceTestStatus.CHALLENGE -> SourceTestVerdict.CHALLENGE
 }
 
 /** Android's `statusLabelRes` for the four verdicts; the challenge label is Android's Cloudflare one, renamed. */
@@ -226,13 +203,6 @@ private fun SourceTestStatus.label(): String = when (this) {
     SourceTestStatus.FAIL -> AndroidStrings["source_test_status_fail"]
     SourceTestStatus.SKIP -> AndroidStrings["source_test_status_skip"]
     SourceTestStatus.CHALLENGE -> AndroidStrings["source_test_status_cloudflare"]
-}
-
-private fun SourceTestStatus.color(): Color = when (this) {
-    SourceTestStatus.PASS -> Color(0xFF2E7D32)
-    SourceTestStatus.FAIL -> Color(0xFFC62828)
-    SourceTestStatus.SKIP -> Color(0xFF616161)
-    SourceTestStatus.CHALLENGE -> Color(0xFFEF6C00)
 }
 
 /** Android's `stepLabelRes` for the steps this host actually runs. */

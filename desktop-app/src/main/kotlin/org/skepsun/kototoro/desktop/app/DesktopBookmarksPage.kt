@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -25,6 +24,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.bookmarks.domain.parseNovelBookmarkPreview
+import org.skepsun.kototoro.list.ui.compose.ContentCollectionHeader
+import org.skepsun.kototoro.list.ui.compose.ContentSelectionToolbar
+import org.skepsun.kototoro.list.ui.compose.SelectionAction
+import org.skepsun.kototoro.list.ui.compose.SelectionToolbarItem
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import org.skepsun.kototoro.desktop.runtime.DesktopBookmark
 import org.skepsun.kototoro.desktop.runtime.DesktopBookmarkGroup
 
@@ -44,23 +49,33 @@ internal fun DesktopBookmarksPage(controller: DesktopController, state: DesktopA
     val selection = state.bookmarkShelfSelection
     val total = remember(groups) { groups.sumOf { it.bookmarks.size } }
     Column(Modifier.fillMaxSize().testTag("bookmarks-panel"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(if (selection.isEmpty()) desktopText("reader.bookmarksCount", total)
+        // Android's selection bar, shared with the library shelves: count, select-all and the removal, with the close
+        // button clearing the selection (the text "clear" it replaces).
+        ContentSelectionToolbar(
+            countLabel = if (selection.isEmpty()) desktopText("reader.bookmarksCount", total)
             else desktopText("details.bookmarksSelectedCount", selection.size),
-                modifier = Modifier.weight(1f).testTag("bookmarks-count"),
-                style = MaterialTheme.typography.titleMedium, color = Muted, maxLines = 1,
-                overflow = TextOverflow.Ellipsis)
-            TextButton({ controller.selectAllBookmarkShelf(true) },
-                enabled = enabled && groups.isNotEmpty() && selection.size < total,
-                modifier = Modifier.testTag("bookmarks-select-all")) { Text(desktopText("details.selectAll")) }
-            TextButton({ controller.selectAllBookmarkShelf(false) }, enabled = enabled && selection.isNotEmpty(),
-                modifier = Modifier.testTag("bookmarks-select-none")) { Text(desktopText("downloads.selectNone")) }
-            OutlinedButton(controller::removeSelectedBookmarkShelf, enabled = enabled && selection.isNotEmpty(),
-                modifier = Modifier.testTag("bookmarks-select-delete")) {
-                Text(desktopText("details.bookmarksDeleteSelected", selection.size))
-            }
-        }
+            items = listOf(
+                SelectionToolbarItem(SelectionAction.SELECT_ALL, desktopText("details.selectAll"),
+                    enabled = enabled && groups.isNotEmpty() && selection.size < total,
+                    tag = "bookmarks-select-all"),
+                SelectionToolbarItem(SelectionAction.REMOVE,
+                    desktopText("details.bookmarksDeleteSelected", selection.size),
+                    icon = rememberVectorPainter(ReaderPanelIcons.Delete),
+                    enabled = enabled && selection.isNotEmpty(),
+                    tag = "bookmarks-select-delete"),
+            ),
+            preferredInline = listOf(SelectionAction.SELECT_ALL, SelectionAction.REMOVE),
+            onClear = { controller.selectAllBookmarkShelf(false) },
+            onAction = { action ->
+                when (action) {
+                    SelectionAction.SELECT_ALL -> controller.selectAllBookmarkShelf(true)
+                    SelectionAction.REMOVE -> controller.removeSelectedBookmarkShelf()
+                    else -> Unit
+                }
+            },
+            enabled = enabled,
+            tagPrefix = "bookmarks",
+        )
         if (groups.isEmpty()) {
             // Android's empty page: the same two lines, the second saying how a bookmark is made.
             Column(Modifier.fillMaxSize().testTag("bookmarks-empty"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -82,17 +97,20 @@ internal fun DesktopBookmarksPage(controller: DesktopController, state: DesktopA
 private fun BookmarkGroupSection(controller: DesktopController, group: DesktopBookmarkGroup, enabled: Boolean,
     selection: Set<Long>) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        // Android's ListHeader: the work's title, and a click on it opens the work's details.
-        Row(Modifier.fillMaxWidth().testTag("bookmark-group:${group.content.id}"),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(group.content.title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(desktopText("reader.bookmarksCount", group.bookmarks.size), color = Muted, fontSize = 12.sp)
-            TextButton({ if (enabled) controller.details(group.content) }, enabled = enabled,
-                modifier = Modifier.testTag("bookmark-group-more:${group.content.id}")) {
-                Text(AndroidStrings["more"])
-            }
-        }
+        // Android's ListHeader, now the shared heading: the count and the "more" button are Windows' own trailing end.
+        ContentCollectionHeader(
+            title = group.content.title,
+            modifier = Modifier.testTag("bookmark-group:${group.content.id}"),
+            metaLabel = desktopText("reader.bookmarksCount", group.bookmarks.size),
+            horizontalPadding = 0.dp,
+            verticalPadding = 0.dp,
+            trailing = {
+                TextButton({ if (enabled) controller.details(group.content) }, enabled = enabled,
+                    modifier = Modifier.testTag("bookmark-group-more:${group.content.id}")) {
+                    Text(AndroidStrings["more"])
+                }
+            },
+        )
         group.bookmarks.forEach { bookmark ->
             val checked = bookmark.pageId in selection
             Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface,
@@ -112,16 +130,9 @@ private fun BookmarkGroupSection(controller: DesktopController, group: DesktopBo
                                 overflow = TextOverflow.Ellipsis)
                         }
                     }
-                    Text(shelfLabel(bookmark), color = Accent, fontSize = 12.sp, maxLines = 1)
+                    Text(desktopBookmarkLabel(bookmark), color = Accent, fontSize = 12.sp, maxLines = 1)
                 }
             }
         }
     }
-}
-
-/** Android stores a chapter bookmark under the chapter id, without a page of its own. */
-private fun shelfLabel(bookmark: DesktopBookmark): String = if (bookmark.pageId == bookmark.chapterId) {
-    desktopText("details.chapterBookmarkLabel")
-} else {
-    desktopText("common.pageOf", bookmark.page + 1, (bookmark.percent * 100).toInt())
 }

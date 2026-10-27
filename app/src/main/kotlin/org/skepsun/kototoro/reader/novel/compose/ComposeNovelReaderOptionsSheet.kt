@@ -305,14 +305,13 @@ private fun NovelReadingPage(
     update: NovelSettingsUpdate,
 ) = ReaderOptionsPageList {
     item {
-        ReaderOptionSection(stringResource(R.string.novel_reading_mode)) {
-            ReaderChoiceChips(
-                options = listOf(stringResource(R.string.novel_mode_paged), stringResource(R.string.novel_mode_scroll)),
-                selectedIndex = if (settings.readingMode == ReadingMode.PAGED) 0 else 1,
-                onSelected = { update { copy(readingMode = if (it == 0) ReadingMode.PAGED else ReadingMode.SCROLL) } },
-                icon = { NovelReadingModeIcon(it) },
-            )
-        }
+        NovelReadingModeOptions(
+            paged = settings.readingMode == ReadingMode.PAGED,
+            onPagedChange = { paged ->
+                update { copy(readingMode = if (paged) ReadingMode.PAGED else ReadingMode.SCROLL) }
+            },
+            icon = { NovelReadingModeIcon(it) },
+        )
     }
     if (settings.readingMode == ReadingMode.PAGED) {
         item {

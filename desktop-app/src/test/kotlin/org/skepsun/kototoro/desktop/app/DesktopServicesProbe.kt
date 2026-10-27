@@ -134,7 +134,7 @@ internal object DesktopServicesProbe {
                 onNodeWithTag("services-open").performScrollTo().assertExists().performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.SERVICES }
                 idle()
-                onNodeWithTag("settings-recommendations-open").performScrollTo().assertExists()
+                onNodeWithTag("services-suggestions").performScrollTo().assertExists()
                 onNodeWithTag("services-related-manga").assertExists()
                 onNodeWithText(AndroidStrings["related_manga"]).assertExists()
                 onNodeWithText(AndroidStrings["related_manga_summary"]).assertExists()

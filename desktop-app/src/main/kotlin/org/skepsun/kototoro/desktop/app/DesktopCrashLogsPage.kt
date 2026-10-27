@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.desktop.app
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,14 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -27,15 +20,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.skepsun.kototoro.desktop.runtime.DesktopCrashLogFile
+import org.skepsun.kototoro.core.ui.crashlog.CrashLogEntry
+import org.skepsun.kototoro.core.ui.crashlog.CrashLogReportContent
+import org.skepsun.kototoro.core.ui.crashlog.CrashLogsContent
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -55,8 +50,7 @@ internal fun DesktopCrashLogsPage(controller: DesktopController, state: DesktopA
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton({ controller.backFromCrashLogs() }, enabled = active,
                 modifier = Modifier.testTag("crash-logs-back")) { Text(desktopText("common.back")) }
-            Spacer(Modifier.width(12.dp))
-            Text(AndroidStrings["crash_logs"], style = MaterialTheme.typography.titleLarge)
+            // No title here: the shell already names the page, as on the replace-rules and data-cleanup pages.
             Spacer(Modifier.weight(1f))
             OutlinedButton({ controller.clearCrashLogs() }, enabled = active && !ui.files.isNullOrEmpty(),
                 modifier = Modifier.testTag("crash-logs-clear")) { Text(AndroidStrings["clear"]) }
@@ -65,46 +59,30 @@ internal fun DesktopCrashLogsPage(controller: DesktopController, state: DesktopA
             modifier = Modifier.testTag("crash-logs-summary"))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         val files = ui.files
-        when {
-            // Null means the directory has not been read yet: an empty list is a real answer, "not asked" is not.
-            files == null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
-                Text(desktopText("crashLogs.loading"), style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.testTag("crash-logs-loading"))
-            }
-
-            files.isEmpty() -> Text(desktopText("crashLogs.empty"), style = MaterialTheme.typography.bodySmall,
-                color = Muted, modifier = Modifier.testTag("crash-logs-empty"))
-
-            else -> LazyColumn(Modifier.fillMaxWidth().testTag("crash-logs-list")) {
-                items(files, key = { it.name }) { log ->
-                    CrashLogRow(log, enabled = active, onClick = { controller.openCrashLog(log) })
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                }
+        // Null means the directory has not been read yet: an empty list is a real answer, "not asked" is not.
+        val entries = remember(files) {
+            files.orEmpty().map { log ->
+                CrashLogEntry(
+                    id = log.name,
+                    title = crashLogTime(log.modifiedAt),
+                    summary = log.summary,
+                    // Android's rows carry no size; the page has the room for it and the reports are few.
+                    sizeLabel = desktopCacheSize(log.sizeBytes),
+                )
             }
         }
+        CrashLogsContent(
+            entries = entries,
+            loading = files == null,
+            emptyText = desktopText("crashLogs.empty"),
+            loadingText = desktopText("crashLogs.loading"),
+            enabled = active,
+            onOpen = { entry -> files?.firstOrNull { it.name == entry.id }?.let(controller::openCrashLog) },
+            loadingTag = "crash-logs-loading",
+            emptyTag = "crash-logs-empty",
+        )
     }
     ui.detail?.let { detail -> DesktopCrashLogDetailDialog(detail, controller) }
-}
-
-@Composable
-private fun CrashLogRow(log: DesktopCrashLogFile, enabled: Boolean, onClick: () -> Unit) {
-    Surface(
-        shape = RoundedCornerShape(12.dp), tonalElevation = 1.dp,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).testTag("crash-log:${log.name}")
-            .clickable(enabled = enabled, onClick = onClick),
-    ) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(crashLogTime(log.modifiedAt), style = MaterialTheme.typography.bodyLarge)
-                Spacer(Modifier.weight(1f))
-                Text(desktopCacheSize(log.sizeBytes), fontSize = 11.sp, color = Muted)
-            }
-            Text(log.summary, style = MaterialTheme.typography.bodySmall, color = Muted, maxLines = 2,
-                overflow = TextOverflow.Ellipsis)
-        }
-    }
 }
 
 /** The whole report, selectable and copyable; Android's detail screen with its copy and share actions. */
@@ -112,6 +90,9 @@ private fun CrashLogRow(log: DesktopCrashLogFile, enabled: Boolean, onClick: () 
 private fun DesktopCrashLogDetailDialog(detail: DesktopCrashLogDetail, controller: DesktopController) {
     AlertDialog(
         onDismissRequest = { controller.closeCrashLogDetail() },
+        // Material3's dialog caps itself at the platform width; a stack trace reads better with the extra room.
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.width(760.dp),
         title = {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(crashLogTime(detail.log.modifiedAt), style = MaterialTheme.typography.titleMedium)
@@ -119,17 +100,12 @@ private fun DesktopCrashLogDetailDialog(detail: DesktopCrashLogDetail, controlle
             }
         },
         text = {
-            Surface(shape = RoundedCornerShape(12.dp), tonalElevation = 1.dp,
-                modifier = Modifier.width(680.dp)) {
-                SelectionContainer {
-                    Text(
-                        detail.text,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                        modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())
-                            .padding(12.dp).testTag("crash-log-text"),
-                    )
-                }
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                tonalElevation = 1.dp,
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).testTag("crash-log-report"),
+            ) {
+                CrashLogReportContent(detail.text, Modifier.padding(12.dp))
             }
         },
         confirmButton = {

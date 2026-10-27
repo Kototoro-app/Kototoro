@@ -54,6 +54,10 @@ import org.skepsun.kototoro.core.parser.tvbox.TVBoxRepository
 import org.skepsun.kototoro.core.parser.tvbox.TVBoxSupportStatusClassifier
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.SourceSettings
+import org.skepsun.kototoro.core.source.SourcePreferenceKind
+import org.skepsun.kototoro.core.source.SourcePreferenceNode
+import org.skepsun.kototoro.core.source.SourcePreferenceValue
+import org.skepsun.kototoro.core.source.sourcePreferenceSections
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
@@ -70,6 +74,7 @@ import org.skepsun.kototoro.settings.compose.SourceSettingsChoiceRowUiState
 import org.skepsun.kototoro.settings.compose.SourceSettingsInfoRowUiState
 import org.skepsun.kototoro.settings.compose.SourceSettingsRowUiState
 import org.skepsun.kototoro.settings.compose.SourceSettingsScreen
+import org.skepsun.kototoro.settings.compose.SourcePreferencesSectionUiState
 import org.skepsun.kototoro.settings.compose.SourceSettingsSectionUiState
 import org.skepsun.kototoro.settings.compose.SourceSettingsSwitchRowUiState
 import org.skepsun.kototoro.settings.compose.SourceSettingsTextRowUiState
@@ -208,6 +213,8 @@ private class SourceSettingsRouteController(
     private val viewModel: SourceSettingsViewModel,
 ) {
     private val sourcePreferencesName: String by lazy { resolveSourcePreferencesName() }
+    /** One bridge per page: the nodes a row was built from are the preferences its dialog writes back to. */
+    private val preferenceNodes: PreferenceScreenNodes by lazy { PreferenceScreenNodes(context) }
     val sourcePrefs: SharedPreferences by lazy {
         context.getSharedPreferences(sourcePreferencesName, Context.MODE_PRIVATE)
     }
@@ -273,7 +280,7 @@ private class SourceSettingsRouteController(
             )
         }
 
-        sections += buildExternalPreferenceSections(externalPreferenceScreen)
+        buildExternalPreferenceSection(externalPreferenceScreen)?.let(sections::add)
 
         buildTvBoxRows(repository).takeIf { it.isNotEmpty() }?.let { rows ->
             sections += SourceSettingsSectionUiState(
@@ -364,32 +371,46 @@ private class SourceSettingsRouteController(
         }
     }
 
-    private fun buildExternalPreferenceSections(
+    /**
+     * The source's own preferences (`setupPreferenceScreen`) as the shared protocol tree: `PreferenceScreenNodes` maps
+     * the androidx controls, `sourcePreferenceSections` folds them into Android's sections, and the shared
+     * `SourcePreferencesContent` draws them. A preference the shared page cannot edit becomes an UNSUPPORTED row, and
+     * the extension-wide compatibility notice is one INFO row at the top of the default section instead of its own card.
+     */
+    private fun buildExternalPreferenceSection(
         screen: PreferenceScreen?,
-    ): List<SourceSettingsSectionUiState> {
-        val preferenceScreen = screen ?: return emptyList()
-        var hasUnsupportedPreference = false
-        val sections = ComposePreferenceAdapter(
-            context = context,
-            sharedPreferencesName = sourcePreferencesName,
-        ).buildSections(preferenceScreen) {
-            hasUnsupportedPreference = true
+    ): SourceSettingsSectionUiState? {
+        val preferenceScreen = screen ?: return null
+        var hasUnsupported = false
+        val nodes = preferenceNodes.nodes(preferenceScreen) { hasUnsupported = true }
+            .let { if (hasUnsupported) listOf(compatibilityNoticeNode()) + it else it }
+        val sections = sourcePreferenceSections(nodes, context.getString(R.string.settings))
+        if (sections.isEmpty()) {
+            return null
         }
-        if (!hasUnsupportedPreference) {
-            return sections
-        }
-        return sections + SourceSettingsSectionUiState(
-            id = "external_preference_compat",
-            title = context.getString(R.string.settings),
-            rows = listOf(
-                SourceSettingsInfoRowUiState(
-                    id = "external_preference_compat_info",
-                    title = context.getString(R.string.settings_source_compat_title),
-                    summary = context.getString(R.string.settings_source_compat_summary),
-                ),
+        return SourceSettingsSectionUiState(
+            id = "external_preferences",
+            title = "",
+            rows = emptyList(),
+            preferences = SourcePreferencesSectionUiState(
+                sections = sections,
+                active = true,
+                unsupportedText = context.getString(R.string.settings_source_compat_title),
+                onWrite = preferenceNodes::write,
+                onAction = preferenceNodes::action,
             ),
         )
     }
+
+    private fun compatibilityNoticeNode() = SourcePreferenceNode(
+        id = "compat:notice",
+        key = null,
+        title = context.getString(R.string.settings_source_compat_title),
+        summary = context.getString(R.string.settings_source_compat_summary),
+        kind = SourcePreferenceKind.INFO,
+        enabled = true,
+        visible = true,
+    )
 
     fun buildExternalPreferenceScreen(repository: MihonMangaRepository): PreferenceScreen? {
         val mihonSource = repository.mihonSource as? eu.kanade.tachiyomi.source.ConfigurableSource ?: return null

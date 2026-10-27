@@ -100,10 +100,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.MeasurePolicy
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -136,6 +134,13 @@ import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChapterTitleChip
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChromeTopBar
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarAlignment
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarBounds
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarCutout
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarInsets
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarRow
+import org.skepsun.kototoro.reader.ui.compose.design.resolveReaderInfoBarRoundedCornerPadding
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarText
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderFloatingControlButton
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderZoomControls
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
@@ -148,7 +153,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.reader.ui.ReaderActionsCallbacks
 import org.skepsun.kototoro.reader.ui.ReaderActionsUiState
-import org.skepsun.kototoro.reader.ui.autoScrollSpeedMultiplier
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderAutoScrollSpeedControl
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlTokens
@@ -166,8 +171,6 @@ import org.skepsun.kototoro.reader.ui.compose.design.readerControlContentColor
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import kotlin.math.roundToInt
-import kotlin.math.ceil
-import kotlin.math.sqrt
 
 private val ReaderTopImmersiveFeatherExtension = 72.dp
 private val ReaderBottomImmersiveFeatherExtension = 48.dp
@@ -971,16 +974,10 @@ private fun ReaderAutoScrollPanel(state: ReaderAutoScrollUiState, callbacks: Rea
                 modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
             )
         }
-        Text(text = stringResource(R.string.speed_value, autoScrollSpeedMultiplier(state.speed)))
-        Slider(
-            value = state.speed,
-            onValueChange = callbacks.onSpeedChanged,
-            valueRange = 0f..1f,
-            modifier = Modifier.tvSliderDpad(
-                value = state.speed,
-                valueRange = 0f..1f,
-                onValueChange = callbacks.onSpeedChanged,
-            ),
+        ReaderAutoScrollSpeedControl(
+            speed = state.speed,
+            onSpeedChange = callbacks.onSpeedChanged,
+            commitOnRelease = false,
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.reader_autoscroll_fab), modifier = Modifier.weight(1f))
@@ -1134,422 +1131,100 @@ private fun ReaderCutoutAwareInfoBarLayout(
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
     val view = LocalView.current
+    val baseHorizontalPadding = with(density) { ReaderInfoBarHorizontalPadding.roundToPx() }
+    val verticalPadding = with(density) { ReaderInfoBarVerticalPadding.roundToPx() }
+    val obstructionSpacing = with(density) { ReaderInfoBarObstructionSpacing.roundToPx() }
     // Reading the Compose inset values keeps this branch in sync when immersive mode or rotation changes.
     val displayCutoutInsets = WindowInsets.displayCutout
     val hasDisplayCutoutInsets = displayCutoutInsets.getLeft(density, layoutDirection) > 0 ||
         displayCutoutInsets.getTop(density) > 0 ||
         displayCutoutInsets.getRight(density, layoutDirection) > 0 ||
         displayCutoutInsets.getBottom(density) > 0
-    val displayCutouts = if (
-        avoidDisplayCutout && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && hasDisplayCutoutInsets
-    ) {
-        view.rootWindowInsets?.displayCutout?.boundingRects.orEmpty()
-    } else {
-        emptyList()
-    }
-    val topLeftRoundedCorner = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        view.rootWindowInsets?.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT)
-    } else {
-        null
-    }
-    val topRightRoundedCorner = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        view.rootWindowInsets?.getRoundedCorner(RoundedCorner.POSITION_TOP_RIGHT)
-    } else {
-        null
-    }
-    var boundsInWindow by remember { mutableStateOf<IntRect?>(null) }
-    val localCutout = boundsInWindow?.let { barBounds ->
-        displayCutouts
-            .asSequence()
-            .filter { cutout ->
-                cutout.right > barBounds.left && cutout.left < barBounds.right &&
-                    cutout.bottom > barBounds.top && cutout.top < barBounds.bottom
-            }
-            .maxByOrNull { cutout ->
-                minOf(cutout.right, barBounds.right) - maxOf(cutout.left, barBounds.left)
-            }
-            ?.let { cutout ->
-                ReaderInfoBarCutout(
-                    left = (cutout.left - barBounds.left).coerceAtLeast(0),
-                    right = (cutout.right - barBounds.left).coerceAtMost(barBounds.width),
-                )
-            }
-    }
-    val baseHorizontalPadding = with(density) { ReaderInfoBarHorizontalPadding.roundToPx() }
-    val verticalPadding = with(density) { ReaderInfoBarVerticalPadding.roundToPx() }
-    val obstructionSpacing = with(density) { ReaderInfoBarObstructionSpacing.roundToPx() }
-    val itemSpacing = with(density) { ReaderInfoBarItemSpacing.roundToPx() }
-    val contentTopInWindow = boundsInWindow?.top?.plus(verticalPadding)
-    val leftPadding = maxOf(
-        baseHorizontalPadding,
-        boundsInWindow?.let { bounds ->
-            topLeftRoundedCorner?.let { corner ->
-                resolveReaderInfoBarRoundedCornerPadding(
-                    edgeDistanceToCenter = corner.center.x - bounds.left,
-                    cornerCenterY = corner.center.y,
-                    radius = corner.radius,
-                    contentTopY = contentTopInWindow ?: bounds.top,
-                    spacing = obstructionSpacing,
-                )
-            }
-        } ?: 0,
-    )
-    val rightPadding = maxOf(
-        baseHorizontalPadding,
-        boundsInWindow?.let { bounds ->
-            topRightRoundedCorner?.let { corner ->
-                resolveReaderInfoBarRoundedCornerPadding(
-                    edgeDistanceToCenter = bounds.right - corner.center.x,
-                    cornerCenterY = corner.center.y,
-                    radius = corner.radius,
-                    contentTopY = contentTopInWindow ?: bounds.top,
-                    spacing = obstructionSpacing,
-                )
-            }
-        } ?: 0,
-    )
-
-    Layout(
-        content = {
-            readingStatus()
-            progressStatus?.invoke()
-            systemStatus?.invoke()
+    ReaderInfoBarRow(
+        alignment = when (layout) {
+            ReaderInfoBarLayout.CENTERED -> ReaderInfoBarAlignment.CENTERED
+            ReaderInfoBarLayout.SPLIT -> ReaderInfoBarAlignment.SPLIT
         },
-        modifier = Modifier
-            .fillMaxWidth()
-            .onGloballyPositioned { coordinates ->
-                val position = coordinates.positionInWindow()
-                val updatedBounds = IntRect(
-                    left = position.x.roundToInt(),
-                    top = position.y.roundToInt(),
-                    right = position.x.roundToInt() + coordinates.size.width,
-                    bottom = position.y.roundToInt() + coordinates.size.height,
-                )
-                if (boundsInWindow != updatedBounds) boundsInWindow = updatedBounds
-            },
-        measurePolicy = readerInfoBarMeasurePolicy(
-            layout = layout,
-            leftPadding = leftPadding,
-            rightPadding = rightPadding,
-            verticalPadding = verticalPadding,
-            obstructionSpacing = obstructionSpacing,
-            itemSpacing = itemSpacing,
-            localCutout = localCutout,
-            hasProgressStatus = progressStatus != null,
-            hasSystemStatus = systemStatus != null,
-        ),
+        readingStatus = readingStatus,
+        progressStatus = progressStatus,
+        systemStatus = systemStatus,
+        itemSpacing = ReaderInfoBarItemSpacing,
+        obstructionSpacing = ReaderInfoBarObstructionSpacing,
+        insets = { bounds ->
+            val topLeftRoundedCorner = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                view.rootWindowInsets?.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT)
+            } else {
+                null
+            }
+            val topRightRoundedCorner = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                view.rootWindowInsets?.getRoundedCorner(RoundedCorner.POSITION_TOP_RIGHT)
+            } else {
+                null
+            }
+            val contentTopInWindow = bounds?.top?.plus(verticalPadding)
+            val leftPadding = maxOf(
+                baseHorizontalPadding,
+                bounds?.let { bar ->
+                    topLeftRoundedCorner?.let { corner ->
+                        resolveReaderInfoBarRoundedCornerPadding(
+                            edgeDistanceToCenter = corner.center.x - bar.left,
+                            cornerCenterY = corner.center.y,
+                            radius = corner.radius,
+                            contentTopY = contentTopInWindow ?: bar.top,
+                            spacing = obstructionSpacing,
+                        )
+                    }
+                } ?: 0,
+            )
+            val rightPadding = maxOf(
+                baseHorizontalPadding,
+                bounds?.let { bar ->
+                    topRightRoundedCorner?.let { corner ->
+                        resolveReaderInfoBarRoundedCornerPadding(
+                            edgeDistanceToCenter = bar.right - corner.center.x,
+                            cornerCenterY = corner.center.y,
+                            radius = corner.radius,
+                            contentTopY = contentTopInWindow ?: bar.top,
+                            spacing = obstructionSpacing,
+                        )
+                    }
+                } ?: 0,
+            )
+            ReaderInfoBarInsets(left = leftPadding, right = rightPadding, vertical = verticalPadding)
+        },
+        cutout = { bounds ->
+            val displayCutouts = if (
+                avoidDisplayCutout && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && hasDisplayCutoutInsets
+            ) {
+                view.rootWindowInsets?.displayCutout?.boundingRects.orEmpty()
+            } else {
+                emptyList()
+            }
+            resolveDisplayCutout(bounds, displayCutouts)
+        },
     )
 }
 
-internal fun readerInfoBarMeasurePolicy(
-    layout: ReaderInfoBarLayout,
-    leftPadding: Int,
-    rightPadding: Int,
-    verticalPadding: Int,
-    obstructionSpacing: Int,
-    itemSpacing: Int,
-    localCutout: ReaderInfoBarCutout?,
-    hasProgressStatus: Boolean,
-    hasSystemStatus: Boolean,
-): MeasurePolicy = MeasurePolicy { measurables, constraints ->
-    val width = constraints.maxWidth
-    val contentHeightLimit = (constraints.maxHeight - verticalPadding * 2).coerceAtLeast(0)
-    val childConstraints = Constraints(
-        minWidth = 0,
-        maxWidth = (width - leftPadding - rightPadding).coerceAtLeast(0),
-        minHeight = 0,
-        maxHeight = contentHeightLimit,
-    )
-    var measurableIndex = 1
-    val progressMeasurable = if (hasProgressStatus) measurables.getOrNull(measurableIndex++) else null
-    val systemPlaceable = if (hasSystemStatus) {
-        measurables.getOrNull(measurableIndex)?.measure(childConstraints)
-    } else {
-        null
-    }
-    val systemWidth = systemPlaceable?.width ?: 0
-    // Resolve the final cutout-constrained width before measuring progress; Compose only allows one measurement.
-    val progressWidth = progressMeasurable?.maxIntrinsicWidth(contentHeightLimit)
-        ?.coerceIn(0, childConstraints.maxWidth) ?: 0
-    val trailingWidth = if (layout == ReaderInfoBarLayout.CENTERED && progressWidth > 0) {
-        itemSpacing + progressWidth + systemWidth
-    } else {
-        systemWidth
-    }
-    val readingMeasurable = measurables.first()
-    val desiredReadingWidth = readingMeasurable
-        .maxIntrinsicWidth(contentHeightLimit)
-        .coerceAtMost((childConstraints.maxWidth - trailingWidth).coerceAtLeast(0))
-    val placement = resolveReaderInfoBarPlacement(
-        width = width,
-        desiredReadingWidth = desiredReadingWidth,
-        systemStatusWidth = trailingWidth,
-        layout = layout,
-        leftPadding = leftPadding,
-        rightPadding = rightPadding,
-        cutout = localCutout,
-        cutoutSpacing = obstructionSpacing,
-    )
-    val readingPlaceable = readingMeasurable.measure(
-        childConstraints.copy(maxWidth = placement.readingWidth),
-    )
-    val progressPlacement = progressMeasurable?.let {
-        if (layout == ReaderInfoBarLayout.CENTERED) {
-            ReaderInfoBarItemPlacement(
-                x = placement.systemStatusX + itemSpacing,
-                width = progressWidth,
-            )
-        } else {
-            resolveReaderInfoBarProgressPlacement(
-                readingEnd = placement.readingX + readingPlaceable.width,
-                systemStatusX = placement.systemStatusX,
-                desiredProgressWidth = progressWidth,
-                cutout = localCutout,
-                cutoutSpacing = obstructionSpacing,
+/** The biggest display cutout the bar actually runs into, in bar-local x coordinates. */
+private fun resolveDisplayCutout(
+    bounds: ReaderInfoBarBounds?,
+    displayCutouts: List<android.graphics.Rect>,
+): ReaderInfoBarCutout? = bounds?.let { barBounds ->
+    displayCutouts
+        .asSequence()
+        .filter { cutout ->
+            cutout.right > barBounds.left && cutout.left < barBounds.right &&
+                cutout.bottom > barBounds.top && cutout.top < barBounds.bottom
+        }
+        .maxByOrNull { cutout ->
+            minOf(cutout.right, barBounds.right) - maxOf(cutout.left, barBounds.left)
+        }
+        ?.let { cutout ->
+            ReaderInfoBarCutout(
+                left = (cutout.left - barBounds.left).coerceAtLeast(0),
+                right = (cutout.right - barBounds.left).coerceAtMost(barBounds.width),
             )
         }
-    }
-    val progressPlaceable = progressPlacement?.let { progress ->
-        progressMeasurable.measure(childConstraints.copy(maxWidth = progress.width))
-    }
-    val resolvedSystemStatusX = if (layout == ReaderInfoBarLayout.CENTERED && progressPlaceable != null) {
-        progressPlacement.x + progressPlaceable.width
-    } else {
-        placement.systemStatusX
-    }
-    val contentHeight = maxOf(
-        readingPlaceable.height,
-        progressPlaceable?.height ?: 0,
-        systemPlaceable?.height ?: 0,
-    )
-    val height = (contentHeight + verticalPadding * 2).coerceIn(constraints.minHeight, constraints.maxHeight)
-    layout(width, height) {
-        readingPlaceable.place(
-            x = placement.readingX,
-            y = (height - readingPlaceable.height) / 2,
-        )
-        systemPlaceable?.place(
-            x = resolvedSystemStatusX,
-            y = (height - systemPlaceable.height) / 2,
-        )
-        progressPlaceable?.place(
-            x = progressPlacement.x,
-            y = (height - progressPlaceable.height) / 2,
-        )
-    }
-}
-
-@Immutable
-internal data class ReaderInfoBarCutout(
-    val left: Int,
-    val right: Int,
-)
-
-@Immutable
-internal data class ReaderInfoBarPlacement(
-    val readingX: Int,
-    val readingWidth: Int,
-    val systemStatusX: Int,
-)
-
-@Immutable
-internal data class ReaderInfoBarItemPlacement(
-    val x: Int,
-    val width: Int,
-)
-
-internal fun resolveReaderInfoBarProgressPlacement(
-    readingEnd: Int,
-    systemStatusX: Int,
-    desiredProgressWidth: Int,
-    cutout: ReaderInfoBarCutout?,
-    cutoutSpacing: Int,
-): ReaderInfoBarItemPlacement {
-    val availableStart = readingEnd + cutoutSpacing
-    val availableEnd = (systemStatusX - cutoutSpacing).coerceAtLeast(availableStart)
-    val overlappingCutout = cutout?.takeIf {
-        it.right > availableStart && it.left < availableEnd
-    }
-    if (overlappingCutout == null) {
-        val width = desiredProgressWidth.coerceIn(0, availableEnd - availableStart)
-        return ReaderInfoBarItemPlacement(
-            x = availableStart + (availableEnd - availableStart - width) / 2,
-            width = width,
-        )
-    }
-
-    val leftEnd = (overlappingCutout.left - cutoutSpacing).coerceIn(availableStart, availableEnd)
-    val rightStart = (overlappingCutout.right + cutoutSpacing).coerceIn(availableStart, availableEnd)
-    val leftWidth = leftEnd - availableStart
-    val rightWidth = availableEnd - rightStart
-    return if (rightWidth >= leftWidth) {
-        ReaderInfoBarItemPlacement(
-            x = rightStart,
-            width = desiredProgressWidth.coerceIn(0, rightWidth),
-        )
-    } else {
-        val width = desiredProgressWidth.coerceIn(0, leftWidth)
-        ReaderInfoBarItemPlacement(
-            x = leftEnd - width,
-            width = width,
-        )
-    }
-}
-
-internal fun resolveReaderInfoBarRoundedCornerPadding(
-    edgeDistanceToCenter: Int,
-    cornerCenterY: Int,
-    radius: Int,
-    contentTopY: Int,
-    spacing: Int,
-): Int {
-    if (radius <= 0 || edgeDistanceToCenter <= 0) return 0
-    val verticalDistance = (cornerCenterY - contentTopY).coerceIn(0, radius)
-    val visibleRadiusAtContentTop = sqrt(
-        radius.toDouble() * radius - verticalDistance.toDouble() * verticalDistance,
-    )
-    val clippedInset = edgeDistanceToCenter - visibleRadiusAtContentTop
-    return if (clippedInset > 0) ceil(clippedInset + spacing).toInt() else 0
-}
-
-internal fun resolveReaderInfoBarPlacement(
-    width: Int,
-    desiredReadingWidth: Int,
-    systemStatusWidth: Int,
-    layout: ReaderInfoBarLayout,
-    leftPadding: Int,
-    rightPadding: Int,
-    cutout: ReaderInfoBarCutout?,
-    cutoutSpacing: Int,
-): ReaderInfoBarPlacement {
-    val contentLeft = leftPadding
-    val contentRight = (width - rightPadding).coerceAtLeast(contentLeft)
-    val availableWidth = contentRight - contentLeft
-    val readingWidth = desiredReadingWidth.coerceIn(0, (availableWidth - systemStatusWidth).coerceAtLeast(0))
-    val naturalSystemX = when (layout) {
-        ReaderInfoBarLayout.CENTERED -> (width - readingWidth - systemStatusWidth) / 2 + readingWidth
-        ReaderInfoBarLayout.SPLIT -> contentRight - systemStatusWidth
-    }
-    val naturalReadingX = when (layout) {
-        ReaderInfoBarLayout.CENTERED -> naturalSystemX - readingWidth
-        ReaderInfoBarLayout.SPLIT -> contentLeft
-    }
-    val protectedCutout = cutout?.let {
-        ReaderInfoBarCutout(
-            left = (it.left - cutoutSpacing).coerceIn(contentLeft, contentRight),
-            right = (it.right + cutoutSpacing).coerceIn(contentLeft, contentRight),
-        )
-    }?.takeIf { it.left < it.right }
-        ?: return ReaderInfoBarPlacement(naturalReadingX, readingWidth, naturalSystemX)
-
-    val leftWidth = (protectedCutout.left - contentLeft).coerceAtLeast(0)
-    val rightWidth = (contentRight - protectedCutout.right).coerceAtLeast(0)
-
-    if (layout == ReaderInfoBarLayout.SPLIT) {
-        val readingPlacement = resolveReaderEdgeAnchoredItem(
-            itemWidth = readingWidth,
-            contentLeft = contentLeft,
-            contentRight = contentRight,
-            cutout = protectedCutout,
-            anchorAtStart = true,
-        )
-        val systemPlacement = resolveReaderEdgeAnchoredItem(
-            itemWidth = systemStatusWidth,
-            contentLeft = contentLeft,
-            contentRight = contentRight,
-            cutout = protectedCutout,
-            anchorAtStart = false,
-        )
-        return ReaderInfoBarPlacement(
-            readingX = readingPlacement.x,
-            readingWidth = readingPlacement.width,
-            systemStatusX = systemPlacement.x,
-        )
-    }
-
-    fun overlaps(x: Int, itemWidth: Int): Boolean =
-        itemWidth > 0 && x < protectedCutout.right && x + itemWidth > protectedCutout.left
-
-    if (!overlaps(naturalReadingX, readingWidth) && !overlaps(naturalSystemX, systemStatusWidth)) {
-        return ReaderInfoBarPlacement(naturalReadingX, readingWidth, naturalSystemX)
-    }
-
-    val totalWidth = readingWidth + systemStatusWidth
-    if (readingWidth <= leftWidth && systemStatusWidth <= rightWidth) {
-        return ReaderInfoBarPlacement(
-            readingX = if (layout == ReaderInfoBarLayout.CENTERED) {
-                protectedCutout.left - readingWidth
-            } else {
-                contentLeft
-            },
-            readingWidth = readingWidth,
-            systemStatusX = if (layout == ReaderInfoBarLayout.CENTERED) {
-                protectedCutout.right
-            } else {
-                contentRight - systemStatusWidth
-            },
-        )
-    }
-    if (totalWidth <= leftWidth) {
-        val start = if (layout == ReaderInfoBarLayout.CENTERED) {
-            contentLeft + (leftWidth - totalWidth) / 2
-        } else {
-            contentLeft
-        }
-        return ReaderInfoBarPlacement(start, readingWidth, start + readingWidth)
-    }
-    if (totalWidth <= rightWidth) {
-        val start = if (layout == ReaderInfoBarLayout.CENTERED) {
-            protectedCutout.right + (rightWidth - totalWidth) / 2
-        } else {
-            contentRight - totalWidth
-        }
-        return ReaderInfoBarPlacement(start, readingWidth, start + readingWidth)
-    }
-
-    val systemOnRight = systemStatusWidth <= rightWidth || systemStatusWidth > leftWidth
-    val safeReadingWidth = if (systemOnRight) leftWidth else rightWidth
-    val resolvedReadingWidth = readingWidth.coerceAtMost(safeReadingWidth)
-    return if (systemOnRight) {
-        ReaderInfoBarPlacement(
-            readingX = contentLeft,
-            readingWidth = resolvedReadingWidth,
-            systemStatusX = protectedCutout.right,
-        )
-    } else {
-        ReaderInfoBarPlacement(
-            readingX = protectedCutout.right,
-            readingWidth = resolvedReadingWidth,
-            systemStatusX = protectedCutout.left - systemStatusWidth,
-        )
-    }
-}
-
-private fun resolveReaderEdgeAnchoredItem(
-    itemWidth: Int,
-    contentLeft: Int,
-    contentRight: Int,
-    cutout: ReaderInfoBarCutout,
-    anchorAtStart: Boolean,
-): ReaderInfoBarItemPlacement {
-    val naturalX = if (anchorAtStart) contentLeft else contentRight - itemWidth
-    val overlapsCutout = itemWidth > 0 && naturalX < cutout.right && naturalX + itemWidth > cutout.left
-    if (!overlapsCutout) return ReaderInfoBarItemPlacement(naturalX, itemWidth)
-
-    val beforeWidth = (cutout.left - contentLeft).coerceAtLeast(0)
-    val afterWidth = (contentRight - cutout.right).coerceAtLeast(0)
-    if (anchorAtStart) {
-        if (itemWidth <= beforeWidth) return ReaderInfoBarItemPlacement(contentLeft, itemWidth)
-        if (itemWidth <= afterWidth) return ReaderInfoBarItemPlacement(cutout.right, itemWidth)
-    } else {
-        if (itemWidth <= afterWidth) return ReaderInfoBarItemPlacement(contentRight - itemWidth, itemWidth)
-        if (itemWidth <= beforeWidth) return ReaderInfoBarItemPlacement(cutout.left - itemWidth, itemWidth)
-    }
-    return if (beforeWidth >= afterWidth) {
-        ReaderInfoBarItemPlacement(contentLeft, itemWidth.coerceAtMost(beforeWidth))
-    } else {
-        ReaderInfoBarItemPlacement(cutout.right, itemWidth.coerceAtMost(afterWidth))
-    }
 }
 
 @Composable

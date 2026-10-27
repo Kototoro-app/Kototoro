@@ -42,6 +42,10 @@ import org.skepsun.kototoro.core.prefs.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.prefs.GitHubMirrorStrategy
 import org.skepsun.kototoro.core.ui.settings.SettingsActionRow
 import org.skepsun.kototoro.core.ui.settings.SettingsGroup
+import org.skepsun.kototoro.core.ui.storage.StorageUsageItem
+import org.skepsun.kototoro.core.ui.storage.StorageUsageRow
+import org.skepsun.kototoro.core.ui.storage.StorageUsageTotal
+import org.skepsun.kototoro.core.ui.storage.StorageUsageTotals
 import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
 import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
 import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
@@ -80,13 +84,15 @@ internal fun DesktopStorageSettingsPage(controller: DesktopController, state: De
                 StorageUsageBar(usage,
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                         .testTag("storage-usage-chart"))
-                Text(
-                    text = desktopText("storage.summary", desktopCacheSize(usage.usedBytes),
-                        desktopCacheSize(usage.availableBytes), desktopCacheSize(usage.volumeBytes)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f),
-                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp)
-                        .testTag("storage-usage-summary"),
+                // Android's two figures plus the volume size Windows also knows, in the shared totals row.
+                StorageUsageTotals(
+                    totals = listOf(
+                        StorageUsageTotal(AndroidStrings["storage_usage"], desktopCacheSize(usage.usedBytes)),
+                        StorageUsageTotal(AndroidStrings["available"], desktopCacheSize(usage.availableBytes)),
+                        StorageUsageTotal(desktopText("storage.volume"), desktopCacheSize(usage.volumeBytes)),
+                    ),
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    tag = "storage-usage-summary",
                 )
                 val protected = state.imageCache.protectedBytes.takeIf { it > 0L }
                 // The app's own slices, largest first, then the volume's free space last as Android lists it.
@@ -96,7 +102,17 @@ internal fun DesktopStorageSettingsPage(controller: DesktopController, state: De
                 rows.forEachIndexed { index, item ->
                     if (index > 0) SettingsRowDivider()
                     val kept = protected.takeIf { item.category == DesktopStorageCategory.IMAGES }
-                    StorageUsageRow(item, storageCategoryTitle(item.category, kept))
+                    // The shared legend row; the group's own 16dp gutter comes from the wrapper, not the row.
+                    StorageUsageRow(
+                        item = StorageUsageItem(
+                            id = item.category.name,
+                            label = storageCategoryTitle(item.category, kept),
+                            sizeLabel = desktopCacheSize(item.bytes),
+                            shareLabel = String.format(Locale.ROOT, "%.1f%%", item.percent),
+                            color = storageColor(item.category),
+                        ),
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                    )
                 }
             }
         }
@@ -218,26 +234,6 @@ private fun StorageUsageBar(usage: DesktopStorageUsage, modifier: Modifier = Mod
             drawRect(storageColor(slice.category), Offset(left, 0f), Size(width, size.height))
             left += width
         }
-    }
-}
-
-@Composable
-private fun StorageUsageRow(item: DesktopStorageUsage.Item, title: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
-            .testTag("storage-usage:${item.category}"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Box(Modifier.size(10.dp).clip(CircleShape).background(storageColor(item.category)))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-        }
-        Text(
-            text = "${desktopCacheSize(item.bytes)} · ${String.format(Locale.ROOT, "%.1f%%", item.percent)}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f),
-        )
     }
 }
 

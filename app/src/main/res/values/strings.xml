@@ -205,6 +205,8 @@
     <string name="replace_rule_order">Order</string>
     <string name="replace_rule_timeout">Timeout (ms)</string>
     <string name="replace_rule_regex">Regular expression</string>
+    <string name="replace_rule_mode_regex">Regex</string>
+    <string name="replace_rule_mode_text">Plain text</string>
     <string name="replace_rule_scope_title">Apply to titles</string>
     <string name="replace_rule_scope_content">Apply to content</string>
     <string name="replace_rule_invalid">Pattern is empty or not a valid regular expression</string>

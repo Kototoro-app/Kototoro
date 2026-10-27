@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
+import org.skepsun.kototoro.core.ui.page.PageSummaryHeader
 import org.skepsun.kototoro.main.ui.compose.rememberMainContentFocusAnchorRequester
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.list.ui.ContentListViewModel
@@ -243,8 +244,8 @@ private fun HistoryStatsPlaceholderCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    org.skepsun.kototoro.core.ui.compose.PageSummaryHeader(
-        iconRes = R.drawable.ic_bar_chart,
+    PageSummaryHeader(
+        icon = painterResource(R.drawable.ic_bar_chart),
         title = stringResource(R.string.reading_stats),
         subtitle = stringResource(R.string.stats_total_time),
         onClick = onClick,

@@ -1,10 +1,14 @@
 package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.ui.test.*
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
+import androidx.compose.ui.graphics.asSkiaBitmap
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.skia.Image
 import org.skepsun.kototoro.stats.domain.ReadingStatsPeriod
 import org.skepsun.kototoro.stats.domain.StatsContentKind
+import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -21,6 +25,23 @@ internal object DesktopStatsProbe {
             runBlocking { controller.importJar(Path.of(args[2])).join() }
             runDesktopComposeUiTest(width = 1260, height = 850) {
                 setContent { DesktopApp(controller) }
+                fun snapshot(label: String) {
+                    Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
+                        image.encodeToData()?.use {
+                            val output = Files.createDirectories(Path.of(args[3])).resolve("${args[0]}-$label.png")
+                            Files.write(output, it.bytes)
+                        }
+                    }
+                }
+                // A dialog is a second root, so the work sheet is captured from the newest root instead of onRoot().
+                fun snapshotDialog(label: String) {
+                    Image.makeFromBitmap(onAllNodes(isRoot()).onLast().captureToImage().asSkiaBitmap()).use { image ->
+                        image.encodeToData()?.use {
+                            val output = Files.createDirectories(Path.of(args[3])).resolve("${args[0]}-$label.png")
+                            Files.write(output, it.bytes)
+                        }
+                    }
+                }
                 fun idle() {
                     waitUntil(timeoutMillis = 15_000) { !controller.state.value.busy }
                     waitForIdle()
@@ -61,6 +82,20 @@ internal object DesktopStatsProbe {
                 check(stats.works.any { it.content.id == content.id }) { "the stop is listed under its work" }
                 check(stats.totalDuration > 0) { "the stop has a duration, not an empty dashboard" }
                 onNodeWithTag("stats-total").assertExists()
+                snapshot("stats-dashboard")
+                // The activity, hour and kind cards are the ones Android draws, from the shared module: the day count
+                // and the streak pill come from the shared header, and the breakdown names its kind.
+                onNodeWithTag("stats-activity-days").performScrollTo().assertExists()
+                onNodeWithTag("stats-activity-streak").assertExists()
+                snapshot("stats-activity")
+                if (stats.hourlyActivity.any { it > 0L }) {
+                    onNodeWithTag("stats-hours").performScrollTo().assertExists()
+                    onNodeWithTag("stats-hour:0").assertExists()
+                }
+                if (stats.works.map { it.kind }.distinct().size > 1) {
+                    onNodeWithTag("stats-kinds").performScrollTo().assertExists()
+                    snapshot("stats-kinds")
+                }
                 onNodeWithTag("stats-work:${content.id}").performScrollTo().assertExists()
 
                 // Android's period switch asks the library for another window, not another row.
@@ -99,7 +134,11 @@ internal object DesktopStatsProbe {
                     "the work sheet is an overlay of the statistics screen"
                 }
                 onNodeWithTag("content-stats-chart").assertExists()
+                onNodeWithTag("content-stats-chart").assertWidthIsAtLeast(200.dp)
+                onNodeWithTag("content-stats-chart").assertHeightIsAtLeast(150.dp)
                 onNodeWithTag("content-stats-first").assertExists()
+                // The chart is now the shared one, so this frame is the same drawing Android's sheet makes.
+                snapshotDialog("stats-work")
                 onNodeWithTag("content-stats-total").assertExists()
                 onNodeWithTag("content-stats-sessions").assertExists()
                 onNodeWithTag("content-stats-units").assertExists()
@@ -122,6 +161,7 @@ internal object DesktopStatsProbe {
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.readingStats?.works?.isEmpty() == true }
                 idle()
                 onNodeWithTag("stats-empty").performScrollTo().assertExists()
+                snapshot("stats-cleared")
                 check(runBlocking { session.library.history() }.isNotEmpty()) { "clearing statistics keeps the history" }
 
                 onNodeWithTag("stats-back").performScrollTo().performClick()

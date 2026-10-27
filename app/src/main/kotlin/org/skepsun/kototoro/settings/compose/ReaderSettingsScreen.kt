@@ -23,6 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -38,11 +39,29 @@ import org.skepsun.kototoro.core.prefs.ReaderControl
 import org.skepsun.kototoro.core.prefs.ReaderInfoBarLayout
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.settings.NovelRuleSettingsRows
+import org.skepsun.kototoro.core.ui.settings.PreferenceChoice
+import org.skepsun.kototoro.core.ui.settings.ReaderCropSetting
+import org.skepsun.kototoro.core.ui.settings.ReaderWebtoonSettingsContent
+import org.skepsun.kototoro.core.ui.settings.ReaderPreloadSettingsRow
+import org.skepsun.kototoro.core.ui.settings.ReaderDisplaySettingsContent
+import org.skepsun.kototoro.core.ui.settings.ReaderDisplaySettingsIcons
+import org.skepsun.kototoro.core.ui.settings.ReaderDisplaySettingsUiState
+import org.skepsun.kototoro.core.ui.settings.ReaderZoomSettingsContent
+import org.skepsun.kototoro.core.ui.settings.ReaderZoomSettingsIcons
+import org.skepsun.kototoro.core.ui.settings.ReaderZoomSettingsUiState
+import org.skepsun.kototoro.core.ui.settings.ReaderModeSettingsContent
+import org.skepsun.kototoro.core.ui.settings.ReaderModeSettingsIcons
+import org.skepsun.kototoro.core.ui.settings.ReaderModeSettingsUiState
+import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
 import org.skepsun.kototoro.reader.novel.NovelPageTurnAnimation
 import org.skepsun.kototoro.reader.novel.NovelReaderSettings
 import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
 import org.skepsun.kototoro.reader.novel.NovelTranslationDisplayMode
 import org.skepsun.kototoro.reader.novel.ReadingMode
+import org.skepsun.kototoro.reader.novel.compose.NovelReadingModeOptions
+import org.skepsun.kototoro.reader.novel.compose.NovelReaderValueOption
+import org.skepsun.kototoro.reader.novel.compose.NovelTypographyControls
 import kotlinx.coroutines.launch
 
 private const val READER_SETTINGS_COMMON_PAGE = 0
@@ -78,7 +97,10 @@ fun ReaderSettingsScreen(
     val resources = context.resources
     var novelSettings by remember(context) { mutableStateOf(NovelReaderSettings.load(context)) }
     fun updateNovelSettings(transform: NovelReaderSettings.() -> NovelReaderSettings) {
-        novelSettings = novelSettings.transform().normalized().also { it.save(context) }
+        val updated = novelSettings.transform().normalized()
+        if (updated != novelSettings) {
+            novelSettings = updated.also { it.save(context) }
+        }
     }
 
     val readerModeNames = ReaderMode.entries.map { it.name }
@@ -179,40 +201,21 @@ fun ReaderSettingsScreen(
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 item {
-                                    SettingsActionPreference(
-                                        title = stringResource(R.string.replace_rules),
-                                        summary = stringResource(R.string.replace_rules_summary),
-                                        iconRes = R.drawable.ic_filter_menu,
-                                        onClick = onReplaceRulesClick,
+                                    NovelRuleSettingsRows(
+                                        onReplaceRulesClick = onReplaceRulesClick,
+                                        onDictionaryRulesClick = onDictionaryRulesClick,
+                                        replaceRulesIcon = painterResource(R.drawable.ic_filter_menu),
+                                        dictionaryRulesIcon = painterResource(R.drawable.ic_book_page),
                                     )
                                 }
 
                                 item {
-                                    SettingsActionPreference(
-                                        title = stringResource(R.string.dictionary_rules),
-                                        summary = stringResource(R.string.dictionary_rules_summary),
-                                        iconRes = R.drawable.ic_book_page,
-                                        onClick = onDictionaryRulesClick,
-                                    )
-                                }
-
-                                item {
-                                    SettingsChoicePreference(
-                                        title = stringResource(R.string.novel_reading_mode),
-                                        iconRes = R.drawable.ic_reader_vertical,
-                                        value = novelSettings.readingMode.name,
-                                        options = listOf(
-                                            SettingsChoiceOption(
-                                                ReadingMode.PAGED.name,
-                                                stringResource(R.string.novel_mode_paged),
-                                            ),
-                                            SettingsChoiceOption(
-                                                ReadingMode.SCROLL.name,
-                                                stringResource(R.string.novel_mode_scroll),
-                                            ),
-                                        ),
-                                        onValueChange = { value ->
-                                            updateNovelSettings { copy(readingMode = ReadingMode.valueOf(value)) }
+                                    NovelReadingModeOptions(
+                                        paged = novelSettings.readingMode == ReadingMode.PAGED,
+                                        onPagedChange = { paged ->
+                                            updateNovelSettings {
+                                                copy(readingMode = if (paged) ReadingMode.PAGED else ReadingMode.SCROLL)
+                                            }
                                         },
                                     )
                                 }
@@ -297,28 +300,25 @@ fun ReaderSettingsScreen(
                                 }
 
                                 item {
-                                    SettingsSliderPreference(
-                                        title = stringResource(R.string.novel_font_size),
-                                        iconRes = R.drawable.ic_format_size,
-                                        value = (novelSettings.fontSizeSp * 2).toInt(),
-                                        valueRange = (NovelReaderSettings.FONT_SIZE_RANGE.start * 2).toInt()..
-                                            (NovelReaderSettings.FONT_SIZE_RANGE.endInclusive * 2).toInt(),
-                                        step = 1,
-                                        valueText = { "%.1fsp".format(it / 2f) },
-                                        onValueChange = { value -> updateNovelSettings { copy(fontSizeSp = value / 2f) } },
-                                    )
-                                }
-
-                                item {
-                                    SettingsSliderPreference(
-                                        title = stringResource(R.string.novel_line_spacing),
-                                        iconRes = R.drawable.ic_line_spacing,
-                                        value = (novelSettings.lineSpacing * 10).toInt(),
-                                        valueRange = (NovelReaderSettings.LINE_SPACING_RANGE.start * 10).toInt()..
-                                            (NovelReaderSettings.LINE_SPACING_RANGE.endInclusive * 10).toInt(),
-                                        step = 1,
-                                        valueText = { "%.1f".format(it / 10f) },
-                                        onValueChange = { value -> updateNovelSettings { copy(lineSpacing = value / 10f) } },
+                                    NovelTypographyControls(
+                                        fontSize = NovelReaderValueOption(
+                                            label = stringResource(R.string.novel_font_size),
+                                            valueLabel = "%.1fsp".format(novelSettings.fontSizeSp),
+                                            value = novelSettings.fontSizeSp,
+                                            range = NovelReaderSettings.FONT_SIZE_RANGE,
+                                            step = NovelReaderSettings.FONT_SIZE_STEP,
+                                            onValueChange = { value -> updateNovelSettings { copy(fontSizeSp = value) } },
+                                            tag = "novel-settings-font-size",
+                                        ),
+                                        lineSpacing = NovelReaderValueOption(
+                                            label = stringResource(R.string.novel_line_spacing),
+                                            valueLabel = "%.1f".format(novelSettings.lineSpacing),
+                                            value = novelSettings.lineSpacing,
+                                            range = NovelReaderSettings.LINE_SPACING_RANGE,
+                                            step = NovelReaderSettings.LINE_SPACING_STEP,
+                                            onValueChange = { value -> updateNovelSettings { copy(lineSpacing = value) } },
+                                            tag = "novel-settings-line-spacing",
+                                        ),
                                     )
                                 }
 
@@ -630,51 +630,35 @@ private fun ReaderMangaSettingsPage(
         }
     }
 
-    SettingsPreferenceGroup(
-        title = stringResource(R.string.reader_settings_group_reading_mode),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 20.dp),
-    ) {
-        item {
-            SettingsChoicePreference(
-                title = stringResource(R.string.default_mode),
-                iconRes = R.drawable.ic_book_page,
-                options = stringArrayResource(R.array.reader_modes).mapIndexed { index, label ->
-                    SettingsChoiceOption(readerModeNames[index], label)
-                },
-                value = settings.observeAsState(AppSettings.KEY_READER_MODE) {
-                    prefs.getString(AppSettings.KEY_READER_MODE, "") ?: ""
-                }.value,
-                onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_MODE, it) } },
-            )
-        }
-        item {
-            SettingsSwitchPreference(
-                title = stringResource(R.string.detect_reader_mode),
-                summary = stringResource(R.string.detect_reader_mode_summary),
-                iconRes = R.drawable.ic_auto_fix,
-                checked = settings.observeAsState(AppSettings.KEY_READER_MODE_DETECT) {
-                    isReaderModeDetectionEnabled
-                }.value,
-                onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_MODE_DETECT, it) } },
-            )
-        }
-        item {
-            SettingsChoicePreference(
-                title = stringResource(R.string.reader_background),
-                iconRes = R.drawable.ic_images,
-                options = stringArrayResource(R.array.reader_backgrounds).mapIndexed { index, label ->
-                    SettingsChoiceOption(readerBackgroundNames[index], label)
-                },
-                value = settings.observeAsState(AppSettings.KEY_READER_BACKGROUND) {
-                    prefs.getString(AppSettings.KEY_READER_BACKGROUND, ReaderBackground.AUTO.name)
-                        ?: ReaderBackground.AUTO.name
-                }.value,
-                onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_BACKGROUND, it) } },
-            )
-        }
-        item {
+    ReaderModeSettingsContent(
+        state = ReaderModeSettingsUiState(
+            mode = settings.observeAsState(AppSettings.KEY_READER_MODE) {
+                prefs.getString(AppSettings.KEY_READER_MODE, "") ?: ""
+            }.value,
+            detectMode = settings.observeAsState(AppSettings.KEY_READER_MODE_DETECT) {
+                isReaderModeDetectionEnabled
+            }.value,
+            background = settings.observeAsState(AppSettings.KEY_READER_BACKGROUND) {
+                prefs.getString(AppSettings.KEY_READER_BACKGROUND, ReaderBackground.AUTO.name)
+                    ?: ReaderBackground.AUTO.name
+            }.value,
+        ),
+        modeOptions = stringArrayResource(R.array.reader_modes).mapIndexed { index, label ->
+            PreferenceChoice(readerModeNames[index], label)
+        },
+        backgroundOptions = stringArrayResource(R.array.reader_backgrounds).mapIndexed { index, label ->
+            PreferenceChoice(readerBackgroundNames[index], label)
+        },
+        onModeChange = { prefs.edit { putString(AppSettings.KEY_READER_MODE, it) } },
+        onDetectModeChange = { prefs.edit { putBoolean(AppSettings.KEY_READER_MODE_DETECT, it) } },
+        onBackgroundChange = { prefs.edit { putString(AppSettings.KEY_READER_BACKGROUND, it) } },
+        modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+        icons = ReaderModeSettingsIcons(
+            mode = painterResource(R.drawable.ic_book_page),
+            detectMode = painterResource(R.drawable.ic_auto_fix),
+            background = painterResource(R.drawable.ic_images),
+        ),
+        platformSettings = {
             SettingsChoicePreference(
                 title = stringResource(R.string.screen_orientation),
                 iconRes = R.drawable.ic_screen_rotation,
@@ -684,10 +668,9 @@ private fun ReaderMangaSettingsPage(
                 value = settings.observeAsState(AppSettings.KEY_READER_ORIENTATION) {
                     prefs.getString(AppSettings.KEY_READER_ORIENTATION, "") ?: ""
                 }.value,
-                onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_ORIENTATION, it) } },
+                onValueChange = { prefs.edit { putString(AppSettings.KEY_READER_ORIENTATION, it) } },
             )
-        }
-        item {
+            SettingsRowDivider()
             SettingsSwitchPreference(
                 title = stringResource(R.string.fullscreen_mode),
                 summary = stringResource(R.string.reader_fullscreen_summary),
@@ -695,31 +678,45 @@ private fun ReaderMangaSettingsPage(
                 checked = settings.observeAsState(AppSettings.KEY_READER_FULLSCREEN) {
                     isReaderFullscreenEnabled
                 }.value,
-                onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_FULLSCREEN, it) } },
+                onCheckedChange = { prefs.edit { putBoolean(AppSettings.KEY_READER_FULLSCREEN, it) } },
             )
-        }
-    }
+        },
+        renderDialog = { AndroidPreferenceDialog(it) },
+    )
 
-    SettingsPreferenceGroup(
-        title = stringResource(R.string.reader_settings_group_zoom_scroll),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 20.dp),
-    ) {
-        item {
-            SettingsChoicePreference(
-                title = stringResource(R.string.scale_mode),
-                iconRes = R.drawable.ic_zoom_in,
-                options = stringArrayResource(R.array.zoom_modes).mapIndexed { index, label ->
-                    SettingsChoiceOption(zoomModeNames[index], label)
-                },
-                value = settings.observeAsState(AppSettings.KEY_ZOOM_MODE) {
-                    prefs.getString(AppSettings.KEY_ZOOM_MODE, "") ?: ""
-                }.value,
-                onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_ZOOM_MODE, it) } },
-            )
-        }
-        item {
+    ReaderZoomSettingsContent(
+        state = ReaderZoomSettingsUiState(
+            fitMode = settings.observeAsState(AppSettings.KEY_ZOOM_MODE) {
+                prefs.getString(AppSettings.KEY_ZOOM_MODE, "") ?: ""
+            }.value,
+            animation = settings.observeAsState(AppSettings.KEY_READER_ANIMATION) {
+                prefs.getString(AppSettings.KEY_READER_ANIMATION, "") ?: ""
+            }.value,
+        ),
+        fitOptions = stringArrayResource(R.array.zoom_modes).mapIndexed { index, label ->
+            PreferenceChoice(zoomModeNames[index], label)
+        },
+        animationOptions = stringArrayResource(R.array.reader_animation).mapIndexed { index, label ->
+            PreferenceChoice(readerAnimationNames[index], label)
+        },
+        crop = ReaderCropSetting.ByReaderType(
+            selected = settings.observeAsState(AppSettings.KEY_READER_CROP) {
+                prefs.getStringSet(AppSettings.KEY_READER_CROP, emptySet()) ?: emptySet()
+            }.value,
+            options = stringArrayResource(R.array.reader_crop).mapIndexed { index, label ->
+                PreferenceChoice(readerCropNames[index], label)
+            },
+            onChange = { prefs.edit { putStringSet(AppSettings.KEY_READER_CROP, it) } },
+        ),
+        onFitChange = { prefs.edit { putString(AppSettings.KEY_ZOOM_MODE, it) } },
+        onAnimationChange = { prefs.edit { putString(AppSettings.KEY_READER_ANIMATION, it) } },
+        modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+        icons = ReaderZoomSettingsIcons(
+            fit = painterResource(R.drawable.ic_zoom_in),
+            crop = painterResource(R.drawable.ic_aspect_ratio),
+            animation = painterResource(R.drawable.ic_animation),
+        ),
+        platformZoomControls = {
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_zoom_buttons),
                 summary = stringResource(R.string.reader_zoom_buttons_summary),
@@ -727,37 +724,10 @@ private fun ReaderMangaSettingsPage(
                 checked = settings.observeAsState(AppSettings.KEY_READER_ZOOM_BUTTONS) {
                     prefs.getBoolean(AppSettings.KEY_READER_ZOOM_BUTTONS, false)
                 }.value,
-                onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_ZOOM_BUTTONS, it) } },
+                onCheckedChange = { prefs.edit { putBoolean(AppSettings.KEY_READER_ZOOM_BUTTONS, it) } },
             )
-        }
-        item {
-            SettingsMultiChoicePreference(
-                title = stringResource(R.string.crop_pages),
-                iconRes = R.drawable.ic_aspect_ratio,
-                options = stringArrayResource(R.array.reader_crop).mapIndexed { index, label ->
-                    SettingsChoiceOption(readerCropNames[index], label)
-                },
-                values = settings.observeAsState(AppSettings.KEY_READER_CROP) {
-                    prefs.getStringSet(AppSettings.KEY_READER_CROP, emptySet()) ?: emptySet()
-                }.value,
-                emptySelectionText = stringResource(R.string.none),
-                onValueChange = { settings.prefs.edit { putStringSet(AppSettings.KEY_READER_CROP, it) } },
-            )
-        }
-        item {
-            SettingsChoicePreference(
-                title = stringResource(R.string.pages_animation),
-                iconRes = R.drawable.ic_animation,
-                options = stringArrayResource(R.array.reader_animation).mapIndexed { index, label ->
-                    SettingsChoiceOption(readerAnimationNames[index], label)
-                },
-                value = settings.observeAsState(AppSettings.KEY_READER_ANIMATION) {
-                    prefs.getString(AppSettings.KEY_READER_ANIMATION, "") ?: ""
-                }.value,
-                onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_ANIMATION, it) } },
-            )
-        }
-        item {
+        },
+        platformScrollControls = {
             SettingsSwitchPreference(
                 title = stringResource(R.string.enable_pull_gesture_title),
                 summary = stringResource(R.string.enable_pull_gesture_summary),
@@ -765,18 +735,20 @@ private fun ReaderMangaSettingsPage(
                 checked = settings.observeAsState(AppSettings.KEY_WEBTOON_PULL_GESTURE) {
                     prefs.getBoolean(AppSettings.KEY_WEBTOON_PULL_GESTURE, false)
                 }.value,
-                onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_WEBTOON_PULL_GESTURE, it) } },
+                onCheckedChange = { prefs.edit { putBoolean(AppSettings.KEY_WEBTOON_PULL_GESTURE, it) } },
             )
-        }
-    }
+        },
+        renderDialog = { AndroidPreferenceDialog(it) },
+    )
 
-    SettingsPreferenceGroup(
-        title = stringResource(R.string.reader_settings_group_webtoon),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 20.dp),
-    ) {
-        item {
+    ReaderWebtoonSettingsContent(
+        gaps = settings.observeAsState(AppSettings.KEY_WEBTOON_GAPS) {
+            prefs.getBoolean(AppSettings.KEY_WEBTOON_GAPS, false)
+        }.value,
+        onGapsChange = { prefs.edit { putBoolean(AppSettings.KEY_WEBTOON_GAPS, it) } },
+        modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+        gapsIcon = painterResource(R.drawable.ic_line_spacing),
+        platformControls = {
             SettingsSwitchPreference(
                 title = stringResource(R.string.webtoon_zoom),
                 summary = stringResource(R.string.webtoon_zoom_summary),
@@ -786,8 +758,7 @@ private fun ReaderMangaSettingsPage(
                 }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_WEBTOON_ZOOM, it) } },
             )
-        }
-        item {
+            SettingsRowDivider()
             SettingsSliderPreference(
                 title = stringResource(R.string.default_webtoon_zoom_out),
                 iconRes = R.drawable.ic_zoom_out,
@@ -805,8 +776,7 @@ private fun ReaderMangaSettingsPage(
                 valueText = { it.toString() },
                 onValueChange = { settings.prefs.edit { putInt(AppSettings.KEY_WEBTOON_ZOOM_OUT, it) } },
             )
-        }
-        item {
+            SettingsRowDivider()
             SettingsSliderPreference(
                 title = stringResource(R.string.webtoon_volume_key_scroll_distance),
                 summary = stringResource(R.string.webtoon_volume_key_scroll_distance_summary),
@@ -822,19 +792,8 @@ private fun ReaderMangaSettingsPage(
                     settings.prefs.edit { putInt(AppSettings.KEY_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE, it) }
                 },
             )
-        }
-        item {
-            SettingsSwitchPreference(
-                title = stringResource(R.string.webtoon_gaps),
-                summary = stringResource(R.string.webtoon_gaps_summary),
-                iconRes = R.drawable.ic_line_spacing,
-                checked = settings.observeAsState(AppSettings.KEY_WEBTOON_GAPS) {
-                    prefs.getBoolean(AppSettings.KEY_WEBTOON_GAPS, false)
-                }.value,
-                onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_WEBTOON_GAPS, it) } },
-            )
-        }
-    }
+        },
+    )
 
     SettingsPreferenceGroup(
         title = stringResource(R.string.reader_settings_group_controls),
@@ -917,13 +876,23 @@ private fun ReaderMangaSettingsPage(
         }
     }
 
-    SettingsPreferenceGroup(
-        title = stringResource(R.string.reader_settings_group_display),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 20.dp),
-    ) {
-        item {
+    ReaderDisplaySettingsContent(
+        state = ReaderDisplaySettingsUiState(
+            chapterTitleAtBottom = settings.observeAsState(AppSettings.KEY_READER_CHAPTER_TITLE_BOTTOM) {
+                isReaderChapterTitleAtBottom
+            }.value,
+            pageNumbers = settings.observeAsState(AppSettings.KEY_PAGES_NUMBERS) {
+                prefs.getBoolean(AppSettings.KEY_PAGES_NUMBERS, false)
+            }.value,
+        ),
+        onChapterTitleAtBottomChange = { prefs.edit { putBoolean(AppSettings.KEY_READER_CHAPTER_TITLE_BOTTOM, it) } },
+        onPageNumbersChange = { prefs.edit { putBoolean(AppSettings.KEY_PAGES_NUMBERS, it) } },
+        modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+        icons = ReaderDisplaySettingsIcons(
+            chapterTitleAtBottom = painterResource(R.drawable.ic_format_size),
+            pageNumbers = painterResource(R.drawable.ic_list_detailed),
+        ),
+        platformControlsBefore = {
             SettingsSwitchPreference(
                 title = stringResource(R.string.keep_screen_on),
                 summary = stringResource(R.string.keep_screen_on_summary),
@@ -933,8 +902,7 @@ private fun ReaderMangaSettingsPage(
                 }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_SCREEN_ON, it) } },
             )
-        }
-        item {
+            SettingsRowDivider()
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_multitask),
                 summary = stringResource(R.string.reader_multitask_summary),
@@ -944,8 +912,7 @@ private fun ReaderMangaSettingsPage(
                 }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_MULTITASK, it) } },
             )
-        }
-        item {
+            SettingsRowDivider()
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_chapter_toast),
                 summary = stringResource(R.string.reader_chapter_toast_summary),
@@ -955,32 +922,8 @@ private fun ReaderMangaSettingsPage(
                 }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_CHAPTER_TOAST, it) } },
             )
-        }
-        item {
-            SettingsSwitchPreference(
-                title = stringResource(R.string.reader_chapter_title_at_bottom),
-                summary = stringResource(R.string.reader_chapter_title_at_bottom_summary),
-                iconRes = R.drawable.ic_format_size,
-                checked = settings.observeAsState(AppSettings.KEY_READER_CHAPTER_TITLE_BOTTOM) {
-                    isReaderChapterTitleAtBottom
-                }.value,
-                onCheckedChange = {
-                    settings.prefs.edit { putBoolean(AppSettings.KEY_READER_CHAPTER_TITLE_BOTTOM, it) }
-                },
-            )
-        }
-        item {
-            SettingsSwitchPreference(
-                title = stringResource(R.string.show_pages_numbers),
-                summary = stringResource(R.string.show_pages_numbers_summary),
-                iconRes = R.drawable.ic_list_detailed,
-                checked = settings.observeAsState(AppSettings.KEY_PAGES_NUMBERS) {
-                    prefs.getBoolean(AppSettings.KEY_PAGES_NUMBERS, false)
-                }.value,
-                onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_PAGES_NUMBERS, it) } },
-            )
-        }
-        item {
+        },
+        platformControlsAfter = {
             SettingsSwitchPreference(
                 title = stringResource(R.string.enhanced_colors),
                 summary = stringResource(R.string.enhanced_colors_summary),
@@ -990,8 +933,8 @@ private fun ReaderMangaSettingsPage(
                 }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_32BIT_COLOR, it) } },
             )
-        }
-    }
+        },
+    )
 
     SettingsPreferenceGroup(
         title = stringResource(R.string.pages_saving),
@@ -1076,16 +1019,12 @@ private fun ReaderMangaSettingsPage(
             )
         }
         item {
-            SettingsSwitchPreference(
-                title = stringResource(R.string.reader_reduce_page_preloading),
-                summary = stringResource(R.string.reader_reduce_page_preloading_summary),
-                iconRes = R.drawable.ic_off_small,
-                checked = settings.observeAsState(AppSettings.KEY_READER_REDUCE_PRELOAD) {
+            ReaderPreloadSettingsRow(
+                reduced = settings.observeAsState(AppSettings.KEY_READER_REDUCE_PRELOAD) {
                     prefs.getBoolean(AppSettings.KEY_READER_REDUCE_PRELOAD, false)
                 }.value,
-                onCheckedChange = {
-                    settings.prefs.edit { putBoolean(AppSettings.KEY_READER_REDUCE_PRELOAD, it) }
-                },
+                onReducedChange = { prefs.edit { putBoolean(AppSettings.KEY_READER_REDUCE_PRELOAD, it) } },
+                icon = painterResource(R.drawable.ic_off_small),
             )
         }
         item {

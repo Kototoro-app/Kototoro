@@ -21,6 +21,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import org.skepsun.kototoro.reader.core.ZoomMode
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderAutoScrollSpeedControl
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.tapgrid.ReaderTapGridConfigGrid
 import org.skepsun.kototoro.reader.ui.tapgrid.TapAction
@@ -91,16 +92,9 @@ internal fun DesktopReaderSidePanel(controller: DesktopController, state: Deskto
                 OutlinedButton({ controller.reloadPage() }, enabled = enabled,
                     modifier = Modifier.testTag("reader-reload")) { Text(desktopText("reader.reload")) }
                 HorizontalDivider()
-                var speed by remember(settings.autoScrollSpeed) { mutableFloatStateOf(settings.autoScrollSpeed) }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(desktopText("reader.autoScrollSpeed"), fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f))
-                    Text("×${"%.1f".format(org.skepsun.kototoro.reader.core.ReaderAutoScroll.speedMultiplier(speed))}",
-                        color = MaterialTheme.colorScheme.primary)
-                }
-                Slider(speed, { speed = it }, valueRange = 0f..1f, enabled = enabled,
-                    onValueChangeFinished = { controller.readerSettings(settings.copy(autoScrollSpeed = speed)) },
-                    modifier = Modifier.fillMaxWidth().testTag("reader-option-autoscroll-speed"))
+                ReaderAutoScrollSpeedControl(settings.autoScrollSpeed,
+                    { controller.readerSettings(settings.copy(autoScrollSpeed = it)) }, enabled = enabled,
+                    title = desktopText("reader.autoScrollSpeed"), sliderTag = "reader-option-autoscroll-speed")
                 HorizontalDivider()
                 TapGridOptions(controller, settings, enabled)
                 HorizontalDivider()

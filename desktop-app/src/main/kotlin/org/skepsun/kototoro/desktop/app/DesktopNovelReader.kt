@@ -95,8 +95,8 @@ internal fun DesktopNovelReader(controller: DesktopController, state: DesktopApp
         if (!paged) return@LaunchedEffect
         pager.range?.let { range -> controller.novelProgress(novel.chapter.id, range.first, range.last) }
     }
-    CompositionLocalProvider(LocalContentColor provides Color(colors.text)) {
-        Box(Modifier.fillMaxSize().background(Color(colors.background)).testTag("novel-reader")
+    CompositionLocalProvider(LocalContentColor provides Color(colors.palette.text)) {
+        Box(Modifier.fillMaxSize().background(Color(colors.palette.background)).testTag("novel-reader")
             .focusRequester(focus).focusable().onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) {
                     return@onPreviewKeyEvent false
@@ -240,8 +240,8 @@ internal fun NovelBlockView(
             modifier = Modifier.padding(bottom = (settings.fontSize * .7f).dp))
         is NovelBlock.Heading -> Text(block.text, style = styles.heading(block.level),
             modifier = Modifier.padding(top = 12.dp, bottom = 16.dp))
-        NovelBlock.Rule -> Divider(Modifier.padding(vertical = 16.dp), color = Color(colors.muted).copy(alpha = .4f))
-        is NovelBlock.Image -> NovelInlineImage(controller, block.url, Color(colors.muted),
+        NovelBlock.Rule -> Divider(Modifier.padding(vertical = 16.dp), color = Color(colors.palette.secondaryText).copy(alpha = .4f))
+        is NovelBlock.Image -> NovelInlineImage(controller, block.url, Color(colors.palette.secondaryText),
             maxImageHeight?.let(::desktopNovelImageHeight))
     }
 }
@@ -273,5 +273,5 @@ private fun NovelInlineImage(controller: DesktopController, url: String, muted: 
 /** Outlined buttons follow the reading theme instead of the window theme. */
 @Composable
 private fun themedOutline(theme: DesktopNovelTheme) = ButtonDefaults.outlinedButtonColors(
-    containerColor = Color.Transparent, contentColor = Color(theme.text),
-    disabledContentColor = Color(theme.muted).copy(alpha = .6f))
+    containerColor = Color.Transparent, contentColor = Color(theme.palette.text),
+    disabledContentColor = Color(theme.palette.secondaryText).copy(alpha = .6f))

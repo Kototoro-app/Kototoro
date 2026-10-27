@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -29,7 +29,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -37,12 +36,17 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.library.LibraryReadingStats
 import org.skepsun.kototoro.core.library.LibraryReadingStatsWork
 import org.skepsun.kototoro.core.source.SourceContent
-import org.skepsun.kototoro.core.ui.settings.SettingsGroup
-import org.skepsun.kototoro.core.ui.settings.SettingsRowDivider
-import org.skepsun.kototoro.core.ui.settings.SettingsSectionHeader
-import org.skepsun.kototoro.core.ui.settings.SettingsValueRow
 import org.skepsun.kototoro.stats.domain.ReadingDayStats
 import org.skepsun.kototoro.stats.domain.ReadingStatsPeriod
+import org.skepsun.kototoro.core.ui.stats.StatsActivityCard
+import org.skepsun.kototoro.core.ui.stats.StatsCard
+import org.skepsun.kototoro.core.ui.stats.StatsKindOption
+import org.skepsun.kototoro.core.ui.stats.StatsKindSelector
+import org.skepsun.kototoro.core.ui.stats.StatsSummaryCard
+import org.skepsun.kototoro.core.ui.stats.StatsKindBreakdownCard
+import org.skepsun.kototoro.core.ui.stats.StatsKindShare
+import org.skepsun.kototoro.core.ui.stats.StatsTimeDistributionCard
+import org.skepsun.kototoro.core.ui.stats.statsDurationText
 import org.skepsun.kototoro.stats.domain.StatsContentKind
 
 /**
@@ -131,39 +135,45 @@ internal fun DesktopReadingStatsContent(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).testTag("stats-empty"))
             return@Column
         }
-        SettingsGroup(Modifier.testTag("stats-summary")) {
-            SettingsValueRow(AndroidStrings["stats_total_time"], null, formatStatsDuration(stats.totalDuration), false,
-                {}, testTag = "stats-total")
-            SettingsRowDivider()
-            SettingsValueRow(AndroidStrings["stats_active_days"], null, stats.activeDays.toString(), false, {},
-                testTag = "stats-active-days")
-            SettingsRowDivider()
-            SettingsValueRow(AndroidStrings["stats_sessions"], null, stats.sessionCount.toString(), false, {},
-                testTag = "stats-sessions")
-            SettingsRowDivider()
-            SettingsValueRow(AndroidStrings["stats_works"], null, stats.works.size.toString(), false, {},
-                testTag = "stats-works")
-            if (stats.currentStreak > 0) {
-                SettingsRowDivider()
-                SettingsValueRow(AndroidStrings["stats_streak"], null,
-                    AndroidStrings.format("stats_streak", stats.currentStreak), false, {},
-                    testTag = "stats-streak")
-            }
+        // Android's summary plate: the period and kind as an eyebrow, the total large, the three counts under it. The
+        // streak is no longer a row of its own — Android shows it as the pill on the activity card below.
+        StatsSummaryCard(
+            eyebrow = "${period.title()} · ${kind.title()}",
+            totalDuration = stats.totalDuration,
+            activeDays = stats.activeDays,
+            sessions = stats.sessionCount,
+            works = stats.works.size,
+            modifier = Modifier.testTag("stats-summary"),
+        )
+        // The cards below are the shared ones Android draws; only the day plot stays with this host.
+        StatsActivityCard(
+            dayCount = stats.dailyActivity.size,
+            streak = stats.currentStreak,
+            modifier = Modifier.testTag("stats-activity"),
+        ) {
+            ActivityBars(stats.dailyActivity)
         }
-        SettingsSectionHeader(AndroidStrings["stats_activity"])
-        ActivityCard(stats.dailyActivity, stats.currentStreak)
         if (stats.hourlyActivity.any { it > 0L }) {
-            SettingsSectionHeader(AndroidStrings["stats_time_distribution"])
-            TimeDistributionCard(stats.hourlyActivity)
+            StatsTimeDistributionCard(
+                hourlyActivity = stats.hourlyActivity,
+                periodLabel = period.title(),
+                modifier = Modifier.testTag("stats-hours"),
+            )
         }
         val kinds = stats.works.groupBy { it.kind }.map { (kind, works) -> kind to works.sumOf { it.duration } }
             .sortedByDescending { it.second }
         if (kinds.size > 1) {
-            SettingsSectionHeader(AndroidStrings["stats_content_breakdown"])
-            KindBreakdownCard(kinds)
+            StatsKindBreakdownCard(
+                kinds = kinds.map { (kind, duration) ->
+                    StatsKindShare(kind.name, kind.title(), kind.color(), duration)
+                },
+                modifier = Modifier.testTag("stats-kinds"),
+            )
         }
-        SettingsSectionHeader(AndroidStrings["stats_top_works"])
-        StatsSectionCard(Modifier.testTag("stats-works-list")) {
+        StatsCard(Modifier.testTag("stats-works-list")) {
+            Text(AndroidStrings["stats_top_works"], style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(14.dp))
             stats.works.forEachIndexed { index, work ->
                 if (index > 0) Spacer(Modifier.height(10.dp))
                 WorkStatsRow(active, index + 1, work, covers) { onWork(work.content) }
@@ -199,128 +209,49 @@ private fun ReadingStatsPeriod.title(): String = AndroidStrings[when (this) {
 }]
 
 /**
- * Android's `ContentKindSelector`: the period menu and this pill sit in one sideways-scrolling row, a chip per content
- * type with the selected one filled with the primary colour. Windows runs no separate manga/novel/video surfaces, so
- * this filter and the type breakdown are where the distinction shows.
+ * Android's `ContentKindSelector`, now the shared segmented pill: Windows runs no separate manga/novel/video surfaces,
+ * so this filter and the type breakdown are where the distinction shows. The host keeps the tags its probe looks up
+ * and disables the row while an action is running.
  */
 @Composable
 private fun KindSelector(selected: StatsContentKind, active: Boolean, onKind: (StatsContentKind) -> Unit) {
-    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = Modifier.testTag("stats-kind-filter")) {
-        Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            StatsContentKind.entries.forEach { candidate ->
-                val isSelected = candidate == selected
-                Box(Modifier.height(36.dp).clip(RoundedCornerShape(50))
-                    .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                    .clickable(enabled = active) { onKind(candidate) }
-                    .padding(horizontal = 13.dp).testTag("stats-kind-option:${candidate.name}"),
-                    contentAlignment = Alignment.Center) {
-                    Text(candidate.title(), style = MaterialTheme.typography.labelLarge,
-                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-    }
+    StatsKindSelector(
+        options = StatsContentKind.entries.map { StatsKindOption(it.name, it.title()) },
+        selectedKey = selected.name,
+        onSelect = { key -> StatsContentKind.entries.firstOrNull { it.name == key }?.let(onKind) },
+        modifier = Modifier.testTag("stats-kind-filter"),
+        enabled = active,
+        optionModifier = { option, _ -> Modifier.testTag("stats-kind-option:${option.key}") },
+    )
 }
 
-/** Android's `formatStatsDuration`: hours with the minutes that matter, minutes alone under an hour. */
-internal fun formatStatsDuration(durationMs: Long): String {
-    val totalMinutes = (durationMs / 60_000L).coerceAtLeast(0L)
-    val hours = totalMinutes / 60
-    val minutes = totalMinutes % 60
-    return when {
-        hours > 0L && minutes > 0L -> AndroidStrings.format("stats_duration_hours_minutes", hours, minutes)
-        hours > 0L -> AndroidStrings.format("stats_duration_hours", hours)
-        else -> AndroidStrings.format("stats_duration_minutes", minutes)
-    }
-}
+/** Android's `formatStatsDuration`, now the shared renderer so both hosts round the same way. */
+internal fun formatStatsDuration(durationMs: Long): String = statsDurationText(durationMs, DesktopUiStrings)
 
 /**
- * Android's activity card: one column per visible day, height relative to the busiest day. A period of 90 days (and the
- * all-time view) is a dense heatmap there; Windows keeps the same bars but the columns carry the date they stand for.
+ * The day plot: one column per visible day, height relative to the busiest day. Android draws a heat of squares with
+ * weekday initials over the same list; the shared card around this plot carries Android's title, day count and streak
+ * pill, so only the plot itself differs.
  */
 @Composable
-private fun ActivityCard(activity: List<ReadingDayStats>, streak: Int) {
+private fun ActivityBars(activity: List<ReadingDayStats>) {
     val max = activity.maxOfOrNull { it.duration }?.coerceAtLeast(1L) ?: 1L
-    StatsSectionCard(Modifier.testTag("stats-activity")) {
-        Text(AndroidStrings.format("stats_activity_days", activity.size),
-            style = MaterialTheme.typography.bodySmall, color = Muted,
-            modifier = Modifier.testTag("stats-activity-days"))
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth().height(96.dp), horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalAlignment = Alignment.Bottom) {
-            activity.forEach { day ->
-                Box(Modifier.weight(1f).fillMaxSize().testTag("stats-day:${day.date}"),
-                    contentAlignment = Alignment.BottomCenter) {
-                    val fraction = if (day.duration <= 0L) 0f else (day.duration.toFloat() / max)
-                    Box(Modifier.fillMaxWidth().fillMaxSize(fraction.coerceAtLeast(.04f)).background(
-                        if (day.duration > 0L) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceContainerHighest,
-                        RoundedCornerShape(3.dp),
-                    ))
-                }
-            }
-        }
-        if (streak > 0) {
-            Spacer(Modifier.height(8.dp))
-            Text(AndroidStrings.format("stats_streak", streak), style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.tertiary)
-        }
-    }
-}
-
-/** Android's "reading times": the same 24 hours grouped in the shared derivation, peak first. */
-@Composable
-private fun TimeDistributionCard(hourly: List<Long>) {
-    val peak = hourly.indices.maxByOrNull { hourly[it] } ?: 0
-    StatsSectionCard(Modifier.testTag("stats-hours")) {
-        Text(AndroidStrings.format("stats_peak_period", hourLabel(peak)),
-            style = MaterialTheme.typography.bodySmall, color = Muted)
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.Bottom) {
-            hourly.forEachIndexed { hour, duration ->
-                Box(Modifier.weight(1f).testTag("stats-hour:$hour"), contentAlignment = Alignment.BottomCenter) {
-                    val fraction = duration.toFloat() / (hourly.maxOrNull()?.coerceAtLeast(1L) ?: 1L)
-                    Box(Modifier.fillMaxWidth().fillMaxSize(fraction.coerceAtLeast(.02f)).background(
-                        MaterialTheme.colorScheme.secondary.copy(alpha = .7f), RoundedCornerShape(2.dp)))
-                }
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-        Row(Modifier.fillMaxWidth()) {
-            Text(AndroidStrings["stats_time_midnight"], style = MaterialTheme.typography.labelSmall, color = Muted)
-            Spacer(Modifier.weight(1f))
-            Text(AndroidStrings["stats_time_noon"], style = MaterialTheme.typography.labelSmall, color = Muted)
-            Spacer(Modifier.weight(1f))
-            Text(AndroidStrings["stats_time_late_night"], style = MaterialTheme.typography.labelSmall, color = Muted)
-        }
-    }
-}
-
-private fun hourLabel(hour: Int): String = AndroidStrings.format("stats_hour_range", hour, (hour + 1) % 24)
-
-/** Android's type breakdown: a colour dot, the type, its share in time and the same share as a bar. */
-@Composable
-private fun KindBreakdownCard(kinds: List<Pair<StatsContentKind, Long>>) {
-    val total = kinds.sumOf { it.second }.coerceAtLeast(1L)
-    StatsSectionCard(Modifier.testTag("stats-kinds")) {
-        kinds.forEachIndexed { index, (kind, duration) ->
-            if (index > 0) Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("stats-kind:${kind.name}")) {
-                Box(Modifier.size(10.dp).background(kind.color(), CircleShape))
-                Spacer(Modifier.width(8.dp))
-                Text(kind.title(), style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.weight(1f))
-                Text("${formatStatsDuration(duration)} · ${duration * 100 / total}%",
-                    style = MaterialTheme.typography.labelLarge, color = Muted)
-            }
-            Spacer(Modifier.height(6.dp))
-            Box(Modifier.fillMaxWidth().height(6.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest,
-                RoundedCornerShape(50))) {
-                Box(Modifier.fillMaxWidth(duration.toFloat() / total).fillMaxSize().background(kind.color(),
-                    RoundedCornerShape(50)))
+    Row(
+        Modifier.fillMaxWidth().height(96.dp).testTag("stats-activity-bars"),
+        horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        activity.forEach { day ->
+            // A three-day window on a wide card would otherwise draw three slabs; the strip keeps Android's square-ish
+            // proportions and stays centred.
+            Box(Modifier.weight(1f, fill = false).widthIn(max = 44.dp).fillMaxHeight()
+                .testTag("stats-day:${day.date}"), contentAlignment = Alignment.BottomCenter) {
+                val fraction = if (day.duration <= 0L) 0f else (day.duration.toFloat() / max)
+                Box(Modifier.fillMaxWidth().fillMaxSize(fraction.coerceAtLeast(.04f)).background(
+                    if (day.duration > 0L) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surfaceContainerHighest,
+                    RoundedCornerShape(3.dp),
+                ))
             }
         }
     }
@@ -376,14 +307,6 @@ private fun StatsContentKind.color(): Color = when (this) {
     StatsContentKind.ALL, StatsContentKind.MANGA -> MaterialTheme.colorScheme.primary
     StatsContentKind.NOVEL -> MaterialTheme.colorScheme.tertiary
     StatsContentKind.VIDEO -> MaterialTheme.colorScheme.secondary
-}
-
-@Composable
-private fun StatsSectionCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) { content() }
-    }
 }
 
 /** The one confirmation Android shows before clearing; the shared dialogs only cover settings pages. */

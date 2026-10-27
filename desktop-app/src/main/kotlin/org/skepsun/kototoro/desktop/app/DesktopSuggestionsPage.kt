@@ -6,27 +6,26 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.skepsun.kototoro.core.ui.topbar.TopBarTitleBlock
+import org.skepsun.kototoro.core.ui.page.PageSummaryAction
+import org.skepsun.kototoro.core.ui.page.PageSummaryHeader
 import org.skepsun.kototoro.desktop.runtime.DesktopSuggestionFilter
 import org.skepsun.kototoro.desktop.runtime.desktopSuggestedContents
 import org.skepsun.kototoro.desktop.runtime.desktopSuggestionFilters
@@ -53,22 +52,32 @@ internal fun DesktopSuggestionsPage(controller: DesktopController, state: Deskto
     val filters = state.suggestionFilters
     val visible = remember(items, filters) { desktopSuggestedContents(items, filters) }
     Column(Modifier.fillMaxSize().testTag("suggestions-panel"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TopBarTitleBlock(
-                title = AndroidStrings["suggestions"],
-                subtitle = AndroidStrings["suggestions_header_subtitle"],
-                maxWidth = 320.dp,
-                modifier = Modifier.testTag("suggestions-summary"),
+        // Android's suggestions header card (same accent tile, wash and pills) instead of a bare title row.
+        PageSummaryHeader(
+            title = AndroidStrings["suggestions_header_title"],
+            subtitle = AndroidStrings["suggestions_header_subtitle"],
+            icon = painterResource("icons/ic_explore_normal.svg"),
+            accent = MaterialTheme.colorScheme.tertiary,
+            horizontalPadding = 0.dp,
+            modifier = Modifier.testTag("suggestions-summary"),
+        ) {
+            PageSummaryAction(
+                text = desktopText("settings.suggestions"),
+                icon = painterResource("icons/ic_settings.svg"),
+                accent = MaterialTheme.colorScheme.tertiary,
+                enabled = enabled,
+                onClick = { controller.showRecommendations() },
+                modifier = Modifier.testTag("suggestions-settings"),
             )
-            Spacer(Modifier.weight(1f))
-            TextButton({ controller.showRecommendations() }, enabled = enabled,
-                modifier = Modifier.testTag("suggestions-settings")) {
-                Text(desktopText("settings.suggestions"))
-            }
-            Button({ controller.refreshSuggestions() }, enabled = enabled && settings.enabled && !state.suggestionsGenerating,
-                modifier = Modifier.testTag("suggestions-refresh")) {
-                Text(AndroidStrings["suggestions_header_refresh"])
-            }
+            PageSummaryAction(
+                text = AndroidStrings["suggestions_header_refresh"],
+                icon = painterResource("icons/ic_sync.svg"),
+                emphasized = true,
+                accent = MaterialTheme.colorScheme.tertiary,
+                enabled = enabled && settings.enabled && !state.suggestionsGenerating,
+                onClick = { controller.refreshSuggestions() },
+                modifier = Modifier.testTag("suggestions-refresh"),
+            )
         }
         if (!settings.enabled) {
             // Android's tab keeps leading to a page that asks for the feature instead of hiding the destination.

@@ -2,6 +2,7 @@ package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
@@ -73,6 +74,8 @@ internal object DesktopStorageProbe {
 
                 onNodeWithTag("storage-usage-chart").assertExists()
                 onNodeWithTag("storage-usage-summary").assertExists()
+                // The breakdown rows are the shared ones Android's legend draws, and so is the totals row.
+                snapshot("usage")
                 onNodeWithTag("storage-usage:IMAGES").assertExists()
                 onNodeWithTag("storage-usage:LOGS").assertExists()
                 // The volume's free space is always there, even when this copy holds nothing.
@@ -119,11 +122,26 @@ internal object DesktopStorageProbe {
                 // sweep's rows are the runtime's, so the state the page shows comes from the same flow the dialog reads.
                 onNodeWithTag("github-mirror-probe").performScrollTo().assertExists()
                 onNodeWithTag("github-mirror-probe-start").performClick()
-                waitUntil(timeoutMillis = 10_000) { session.githubMirror.probeState.value is GitHubMirrorProbeState.Running }
+                // This sweep talks to the real mirrors, so it can be finished before the next frame. "Started" is
+                // therefore any state other than the idle one it began in; the socket abort itself is covered
+                // deterministically by the runtime test `cancelling a sweep aborts its sockets and goes idle`.
+                waitUntil(timeoutMillis = 10_000) {
+                    session.githubMirror.probeState.value !is GitHubMirrorProbeState.Idle
+                }
                 idle()
-                onNodeWithTag("github-mirror-probe-cancel").performClick()
-                waitUntil(timeoutMillis = 10_000) { session.githubMirror.probeState.value == GitHubMirrorProbeState.Idle }
+                if (session.githubMirror.probeState.value is GitHubMirrorProbeState.Running) {
+                    // The rows are disabled while a page operation is in flight, and a click on a disabled button is a
+                    // silent no-op, so the button must be enabled before it means anything.
+                    onNodeWithTag("github-mirror-probe-cancel").assertIsEnabled()
+                    onNodeWithTag("github-mirror-probe-cancel").performClick()
+                }
+                waitUntil(timeoutMillis = 10_000) {
+                    session.githubMirror.probeState.value !is GitHubMirrorProbeState.Running
+                }
                 idle()
+                check(session.githubMirror.probeResults.value.isNotEmpty()) {
+                    "results: ${session.githubMirror.probeResults.value}"
+                }
                 onNodeWithTag("github-mirror-probe-start").assertExists()
 
                 // Android's data-removal page, one press below the hub. Its rows act on this data root: the image sweep

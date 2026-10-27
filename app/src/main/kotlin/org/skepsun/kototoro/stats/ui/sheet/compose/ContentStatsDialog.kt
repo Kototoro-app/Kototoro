@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.stats.ui.sheet.compose
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -32,11 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -48,6 +43,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.stats.ContentStatsBarChart
+import org.skepsun.kototoro.core.ui.stats.statsDurationText
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
@@ -61,7 +58,6 @@ import org.skepsun.kototoro.stats.domain.StatsContentKind
 import org.skepsun.kototoro.stats.ui.sheet.ContentStatsViewModel
 import androidx.collection.IntList
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import java.util.concurrent.TimeUnit
 
 private fun IntList.toList(): List<Int> = buildList { this@toList.forEach { add(it) } }
 
@@ -305,7 +301,7 @@ private fun ContentStatsBody(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             ContentStatsMetric(
-                value = formatContentStatsDuration(totalDuration),
+                value = statsDurationText(totalDuration),
                 label = stringResource(R.string.stats_total_time),
                 modifier = Modifier.weight(1f),
             )
@@ -390,103 +386,17 @@ private fun StatsContentKind.unitLabel(): String = when (this) {
 }
 
 @Composable
-private fun formatContentStatsDuration(durationMs: Long): String {
-    val totalMinutes = TimeUnit.MILLISECONDS.toMinutes(durationMs).coerceAtLeast(0L)
-    val hours = totalMinutes / 60
-    val minutes = totalMinutes % 60
-    return when {
-        hours > 0L && minutes > 0L -> stringResource(R.string.stats_duration_hours_minutes, hours, minutes)
-        hours > 0L -> stringResource(R.string.stats_duration_hours, hours)
-        else -> stringResource(R.string.stats_duration_minutes, minutes)
-    }
-}
-
-@Composable
 private fun ContentStatsBarChart(
     stats: List<Int>,
     barColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    if (stats.isEmpty()) {
-        Box(
-            modifier = modifier,
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = stringResource(R.string.empty_stats_text),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        return
-    }
-
-    val minBarSpacingDp = 12.dp
-    val barWidthDp = 12.dp
-    val outlineColor = MaterialTheme.colorScheme.outlineVariant
-    val dashedPathEffect = remember {
-        PathEffect.dashPathEffect(floatArrayOf(15f, 15f), 0f)
-    }
-
-    Canvas(modifier = modifier) {
-        val width = size.width
-        val height = size.height
-        val minBarSpacing = minBarSpacingDp.toPx()
-        val barWidth = barWidthDp.toPx()
-        val maxRawWidth = stats.size * (barWidth + minBarSpacing) + minBarSpacing
-        val windowSize = kotlin.math.ceil(maxRawWidth / width).toInt().coerceAtLeast(1)
-        val compressedBars = stats.chunked(windowSize) { chunk ->
-            chunk.average().toInt()
-        }
-        val maxValue = compressedBars.maxOrNull()?.toFloat() ?: 0f
-
-        if (maxValue <= 0f) {
-            return@Canvas
-        }
-
-        val step = computeValueStep(height, maxValue)
-        for (value in 0..maxValue.toInt() step step) {
-            val y = height - (height * value / maxValue)
-            drawLine(
-                color = outlineColor,
-                start = Offset(0f, y),
-                end = Offset(width, y),
-                strokeWidth = 1.dp.toPx(),
-                pathEffect = dashedPathEffect,
-            )
-        }
-
-        drawLine(
-            color = outlineColor,
-            start = Offset(0f, height),
-            end = Offset(width, height),
-            strokeWidth = 2.dp.toPx(),
-        )
-
-        val spacing = (width - (barWidth * compressedBars.size)) / (compressedBars.size + 1)
-        val cornerRadius = barWidth / 2f
-
-        compressedBars.forEachIndexed { index, value ->
-            if (value <= 0) {
-                return@forEachIndexed
-            }
-            val barHeight = (height * value / maxValue).coerceAtLeast(barWidth)
-            val x = spacing + index * (barWidth + spacing)
-            drawRoundRect(
-                color = barColor,
-                topLeft = Offset(x, height - barHeight),
-                size = Size(barWidth, barHeight),
-                cornerRadius = CornerRadius(cornerRadius, cornerRadius),
-            )
-        }
-    }
-}
-
-private fun computeValueStep(heightPx: Float, maxValue: Float): Int {
-    val minSpacePx = 60f
-    var step = 1
-    while (heightPx / (maxValue / step) <= minSpacePx) {
-        step++
-    }
-    return step
+    // The chart geometry is shared with the Windows dialog (`core-ui`'s ContentStatsBarChart): same 12dp bars,
+    // average compression, dashed gridlines and solid baseline.
+    ContentStatsBarChart(
+        values = stats,
+        barColor = barColor,
+        emptyText = stringResource(R.string.empty_stats_text),
+        modifier = modifier,
+    )
 }

@@ -81,7 +81,8 @@ class DesktopReadingStatsPageTest {
         onNodeWithTag("stats-active-days").assertIsDisplayed()
         onNodeWithTag("stats-sessions").assertIsDisplayed()
         onNodeWithTag("stats-works").assertIsDisplayed()
-        onNodeWithTag("stats-streak").assertIsDisplayed()
+        // The streak is the pill the shared activity card draws, the way Android shows it.
+        onNodeWithTag("stats-activity-streak").assertIsDisplayed()
         onNodeWithTag("stats-activity-days").assertIsDisplayed()
         onNodeWithTag("stats-kinds").performScrollTo().assertIsDisplayed()
         onNodeWithTag("stats-work:1").performScrollTo().performClick()

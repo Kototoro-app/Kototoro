@@ -488,7 +488,7 @@ private fun NovelNotesTabContent(
                                         item.page + 1,
                                     )
                                     is BookNoteItem.VideoNote -> {
-                                        val time = org.skepsun.kototoro.video.ui.compose.formatDuration(item.positionMs)
+                                        val time = org.skepsun.kototoro.video.ui.compose.formatPlaybackTime(item.positionMs)
                                         val quote = item.quoteText?.let { "\n${context.getString(R.string.book_notes_quote_prefix, it)}" }.orEmpty()
                                         val note = item.note?.let { "$it\n" }.orEmpty()
                                         "${note}${item.chapterTitle} $time$quote"

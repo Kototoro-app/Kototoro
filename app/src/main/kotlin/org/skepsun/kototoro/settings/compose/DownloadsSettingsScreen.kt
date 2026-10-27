@@ -14,13 +14,16 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.DownloadFormat
 import org.skepsun.kototoro.core.prefs.TriStateOption
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
+import org.skepsun.kototoro.core.ui.settings.DownloadSpeedSettingsContent
+import org.skepsun.kototoro.core.ui.settings.DownloadSpeedSettingsRowIcons
+import org.skepsun.kototoro.core.ui.settings.DownloadSpeedSettingsUiState
 
 data class DownloadsSettingsUiState(
     val mangaDirectoriesSummary: String,
@@ -147,69 +150,27 @@ fun DownloadsSettingsScreen(
                 }
             }
             item(key = "download_speed") {
-                val uncappedText = stringResource(R.string.download_max_active_series_uncapped)
-                SettingsPreferenceGroup(title = stringResource(R.string.download_speed_and_retries)) {
-                    item {
-                        SettingsSliderPreference(
-                            title = stringResource(R.string.download_threads),
-                            iconRes = R.drawable.ic_network_cellular,
-                            value = state.downloadThreads,
-                            valueRange = 1..10,
-                            step = 1,
-                            summary = stringResource(R.string.download_threads_summary),
-                            valueText = { it.toString() },
-                            onValueChange = onDownloadThreadsChange,
-                        )
-                    }
-                    item {
-                        SettingsSliderPreference(
-                            title = stringResource(R.string.download_max_active_series),
-                            iconRes = R.drawable.ic_list_group,
-                            value = state.downloadMaxActiveSeries,
-                            valueRange = 1..AppSettings.UNLIMITED_SERIES,
-                            step = 1,
-                            summary = stringResource(R.string.download_max_active_series_summary),
-                            valueText = { if (it == AppSettings.UNLIMITED_SERIES) uncappedText else it.toString() },
-                            onValueChange = onDownloadMaxActiveSeriesChange,
-                        )
-                    }
-                    item {
-                        SettingsSliderPreference(
-                            title = stringResource(R.string.download_request_delay),
-                            iconRes = R.drawable.ic_schedule,
-                            value = state.downloadRequestDelayMs,
-                            valueRange = 0..5000,
-                            step = 100,
-                            summary = stringResource(R.string.download_request_delay_summary),
-                            valueText = { "$it ms" },
-                            onValueChange = onDownloadRequestDelayChange,
-                        )
-                    }
-                    item {
-                        SettingsSliderPreference(
-                            title = stringResource(R.string.download_retry_count),
-                            iconRes = R.drawable.ic_retry,
-                            value = state.downloadRetryCount,
-                            valueRange = 1..10,
-                            step = 1,
-                            summary = stringResource(R.string.download_retry_count_summary),
-                            valueText = { it.toString() },
-                            onValueChange = onDownloadRetryCountChange,
-                        )
-                    }
-                    item {
-                        SettingsSliderPreference(
-                            title = stringResource(R.string.download_retry_delay),
-                            iconRes = R.drawable.ic_schedule,
-                            value = state.downloadRetryDelayMs,
-                            valueRange = 500..10_000,
-                            step = 500,
-                            summary = stringResource(R.string.download_retry_delay_summary),
-                            valueText = { "$it ms" },
-                            onValueChange = onDownloadRetryDelayChange,
-                        )
-                    }
-                }
+                DownloadSpeedSettingsContent(
+                    state = DownloadSpeedSettingsUiState(
+                        threads = state.downloadThreads,
+                        maxActiveSeries = state.downloadMaxActiveSeries,
+                        requestDelayMs = state.downloadRequestDelayMs,
+                        retryCount = state.downloadRetryCount,
+                        retryDelayMs = state.downloadRetryDelayMs,
+                    ),
+                    onThreadsChange = onDownloadThreadsChange,
+                    onMaxActiveSeriesChange = onDownloadMaxActiveSeriesChange,
+                    onRequestDelayChange = onDownloadRequestDelayChange,
+                    onRetryCountChange = onDownloadRetryCountChange,
+                    onRetryDelayChange = onDownloadRetryDelayChange,
+                    icons = DownloadSpeedSettingsRowIcons(
+                        threads = painterResource(R.drawable.ic_network_cellular),
+                        maxActiveSeries = painterResource(R.drawable.ic_list_group),
+                        requestDelay = painterResource(R.drawable.ic_schedule),
+                        retryCount = painterResource(R.drawable.ic_retry),
+                        retryDelay = painterResource(R.drawable.ic_schedule),
+                    ),
+                )
             }
             item(key = "pages_saving") {
                 SettingsPreferenceGroup(title = pagesSavingTitle) {

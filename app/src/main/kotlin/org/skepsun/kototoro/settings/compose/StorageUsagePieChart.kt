@@ -5,7 +5,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,12 +15,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,10 +36,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.storage.StorageUsageItem
+import org.skepsun.kototoro.core.ui.storage.StorageUsageRow
+import org.skepsun.kototoro.core.ui.storage.StorageUsageTotal
+import org.skepsun.kototoro.core.ui.storage.StorageUsageTotals
 import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.settings.userdata.storage.StorageUsage
 import org.skepsun.kototoro.settings.userdata.storage.StorageUsageCategory
@@ -415,46 +414,23 @@ private fun StorageUsageSummaryBar(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = stringResource(R.string.storage_usage),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = FileSize.BYTES.format(context, totalAppBytes),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-
+    val totals = buildList {
+        add(
+            StorageUsageTotal(
+                label = context.getString(R.string.storage_usage),
+                valueLabel = FileSize.BYTES.format(context, totalAppBytes),
+            ),
+        )
         if (availableBytes > 0L) {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.available),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = FileSize.BYTES.format(context, availableBytes),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
+            add(
+                StorageUsageTotal(
+                    label = context.getString(R.string.available),
+                    valueLabel = FileSize.BYTES.format(context, availableBytes),
+                ),
+            )
         }
     }
+    StorageUsageTotals(totals, modifier)
 }
 
 @Composable
@@ -472,54 +448,19 @@ private fun StorageUsageLegend(
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         slices.forEach { slice ->
-            val isSelected = selectedCategory == slice.category
-            Surface(
-                onClick = {
-                    onSelectCategory(if (isSelected) null else slice.category)
+            StorageUsageRow(
+                item = StorageUsageItem(
+                    id = slice.category.name,
+                    label = slice.label,
+                    sizeLabel = FileSize.BYTES.format(context, slice.bytes),
+                    shareLabel = String.format(Locale.getDefault(), "%.1f%%", slice.fraction * 100f),
+                    color = slice.color,
+                ),
+                selected = selectedCategory == slice.category,
+                onSelect = {
+                    onSelectCategory(if (selectedCategory == slice.category) null else slice.category)
                 },
-                shape = RoundedCornerShape(10.dp),
-                color = if (isSelected) {
-                    slice.color.copy(alpha = 0.14f)
-                } else {
-                    Color.Transparent
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .background(slice.color, CircleShape),
-                    )
-                    Text(
-                        text = slice.label,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = FileSize.BYTES.format(context, slice.bytes),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = String.format(Locale.getDefault(), "%.1f%%", slice.fraction * 100f),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.widthIn(min = 44.dp),
-                        textAlign = TextAlign.End,
-                    )
-                }
-            }
+            )
         }
     }
 }

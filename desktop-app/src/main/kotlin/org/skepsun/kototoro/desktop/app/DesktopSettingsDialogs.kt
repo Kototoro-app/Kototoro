@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -28,6 +27,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.core.ui.settings.PreferenceChoice
+import org.skepsun.kototoro.core.ui.settings.PreferenceMultiChoiceDialog
 
 /**
  * The dialogs Android's settings screens open for a preference that cannot be edited inline: a single choice list, a
@@ -81,28 +82,22 @@ internal fun DesktopMultiChoiceSettingsDialog(
     options: List<Pair<String, String>>,
     selected: Set<String>,
     enabled: Boolean,
-    onToggle: (value: String, checked: Boolean) -> Unit,
+    onValueChange: (Set<String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(Modifier.width(420.dp).heightIn(max = 420.dp).verticalScroll(rememberScrollState()).testTag(bodyTag)) {
-                SettingsDialogSummary(summary)
-                options.forEach { (label, value) ->
-                    val checked = value in selected
-                    Row(Modifier.fillMaxWidth().clickable(enabled = enabled) { onToggle(value, checked) }
-                        .padding(vertical = 4.dp).testTag("$optionTagPrefix:$value"), verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = checked, onCheckedChange = null, enabled = enabled)
-                        Text(label, modifier = Modifier.padding(start = 8.dp))
-                    }
-                }
-            }
+    PreferenceMultiChoiceDialog(
+        title = title,
+        summary = summary,
+        selected = selected,
+        options = options.map { (label, value) ->
+            PreferenceChoice(value, label)
         },
-        confirmButton = {
-            TextButton(onDismiss, modifier = Modifier.testTag("$bodyTag-close")) { Text(desktopText("common.close")) }
-        },
+        enabled = enabled,
+        commitOnToggle = true,
+        dialogTag = bodyTag,
+        optionTagPrefix = optionTagPrefix,
+        onValueChange = onValueChange,
+        onDismiss = onDismiss,
     )
 }
 

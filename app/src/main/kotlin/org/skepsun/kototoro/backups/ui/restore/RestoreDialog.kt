@@ -1,23 +1,15 @@
 package org.skepsun.kototoro.backups.ui.restore
 
 import android.net.Uri
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -27,6 +19,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.data.BackupRepository
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
+import org.skepsun.kototoro.core.ui.backups.BackupRestoreMode
+import org.skepsun.kototoro.core.ui.backups.BackupRestoreModeList
+import org.skepsun.kototoro.core.ui.backups.BackupRestoreSection
+import org.skepsun.kototoro.core.ui.backups.BackupRestoreSectionList
 
 @Composable
 fun RestoreDialogRoute(
@@ -49,6 +45,9 @@ fun RestoreDialogRoute(
     val entries by viewModel.availableEntries.collectAsStateWithLifecycle()
     val restoreMode by viewModel.restoreMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // The shared rows only carry ids, so the platform keeps the mapping back to its own models.
+    val entriesById = entries.associateBy { it.section.name }
+    val modesById = BackupRepository.RestoreMode.entries.associateBy { it.name }
     AlertDialog(
         onDismissRequest = {},
         title = {
@@ -59,26 +58,35 @@ fun RestoreDialogRoute(
                 CircularProgressIndicator()
             } else {
                 Column {
-                    RestoreModeSelector(
-                        selected = restoreMode,
-                        onSelect = viewModel::onRestoreModeChange,
+                    BackupRestoreModeList(
+                        modes = BackupRepository.RestoreMode.entries.map { mode ->
+                            BackupRestoreMode(
+                                id = mode.name,
+                                title = stringResource(mode.restoreModeTitleRes),
+                                summary = stringResource(mode.restoreModeSummaryRes),
+                            )
+                        },
+                        selectedId = restoreMode.name,
+                        enabled = true,
+                        onSelect = { id -> modesById[id]?.let(viewModel::onRestoreModeChange) },
+                        modifier = Modifier.padding(bottom = 4.dp),
+                        tagPrefix = "restore-mode",
                     )
                     LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                        items(entries, key = { it.section }) { item ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable(enabled = item.isEnabled) { viewModel.onItemClick(item) }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Checkbox(
-                                    checked = item.isChecked,
-                                    enabled = item.isEnabled,
-                                    onCheckedChange = { viewModel.onItemClick(item) },
-                                )
-                                Text(stringResource(item.titleResId))
-                            }
+                        item {
+                            BackupRestoreSectionList(
+                                sections = entries.map { item ->
+                                    BackupRestoreSection(
+                                        id = item.section.name,
+                                        title = stringResource(item.titleResId),
+                                        checked = item.isChecked,
+                                        enabled = item.isEnabled,
+                                    )
+                                },
+                                enabled = true,
+                                onToggle = { id -> entriesById[id]?.let(viewModel::onItemClick) },
+                                tagPrefix = "restore-section",
+                            )
                         }
                     }
                 }
@@ -102,49 +110,15 @@ fun RestoreDialogRoute(
     )
 }
 
-@Composable
-private fun RestoreModeSelector(
-    selected: BackupRepository.RestoreMode,
-    onSelect: (BackupRepository.RestoreMode) -> Unit,
-) {
-    Column(modifier = Modifier.padding(bottom = 4.dp)) {
-        RestoreModeOption(
-            titleResId = R.string.restore_mode_replace_existing,
-            summaryResId = R.string.restore_mode_replace_existing_summary,
-            isSelected = selected == BackupRepository.RestoreMode.SNAPSHOT_REPLACE,
-            onClick = { onSelect(BackupRepository.RestoreMode.SNAPSHOT_REPLACE) },
-        )
-        RestoreModeOption(
-            titleResId = R.string.restore_mode_merge_with_existing,
-            summaryResId = R.string.restore_mode_merge_with_existing_summary,
-            isSelected = selected == BackupRepository.RestoreMode.MERGE,
-            onClick = { onSelect(BackupRepository.RestoreMode.MERGE) },
-        )
+/** The two restore modes' Android strings, next to the enum so a new mode cannot be added without its labels. */
+private val BackupRepository.RestoreMode.restoreModeTitleRes: Int
+    get() = when (this) {
+        BackupRepository.RestoreMode.SNAPSHOT_REPLACE -> R.string.restore_mode_replace_existing
+        BackupRepository.RestoreMode.MERGE -> R.string.restore_mode_merge_with_existing
     }
-}
 
-@Composable
-private fun RestoreModeOption(
-    titleResId: Int,
-    summaryResId: Int,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RadioButton(selected = isSelected, onClick = null)
-        Column {
-            Text(stringResource(titleResId), style = MaterialTheme.typography.bodyMedium)
-            Text(
-                stringResource(summaryResId),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+private val BackupRepository.RestoreMode.restoreModeSummaryRes: Int
+    get() = when (this) {
+        BackupRepository.RestoreMode.SNAPSHOT_REPLACE -> R.string.restore_mode_replace_existing_summary
+        BackupRepository.RestoreMode.MERGE -> R.string.restore_mode_merge_with_existing_summary
     }
-}

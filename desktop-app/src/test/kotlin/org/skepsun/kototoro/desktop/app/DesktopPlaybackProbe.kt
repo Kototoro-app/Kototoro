@@ -43,7 +43,7 @@ internal object DesktopPlaybackProbe {
                 // The decoder choice is what libmpv gets as `hwdec`; picking software must say so in the state.
                 onNodeWithTag("playback-setting-decoder").performScrollTo().performClick()
                 onNodeWithTag("playback-decoder-dialog").assertExists()
-                onNodeWithTag("playback-decoder:SOFTWARE_PREFERRED").performClick()
+                onNodeWithTag("playback-decoder-option:SOFTWARE_PREFERRED").performClick()
                 idle()
                 onNodeWithTag("playback-decoder-dialog").assertDoesNotExist()
                 check(controller.state.value.videoSettings.decoderMode == DesktopVideoDecoderMode.SOFTWARE_PREFERRED) {
@@ -53,8 +53,8 @@ internal object DesktopPlaybackProbe {
                 // The backdrop list is Android's five video backgrounds: no AUTO, and DEFAULT first.
                 onNodeWithTag("playback-setting-background").performScrollTo().performClick()
                 onNodeWithTag("playback-background-dialog").assertExists()
-                onNodeWithTag("playback-background:AUTO").assertDoesNotExist()
-                onNodeWithTag("playback-background:WHITE").performClick()
+                onNodeWithTag("playback-background-option:AUTO").assertDoesNotExist()
+                onNodeWithTag("playback-background-option:WHITE").performClick()
                 idle()
                 check(controller.state.value.videoSettings.background == DesktopReaderBackground.WHITE) {
                     "background: ${controller.state.value.videoSettings}"
@@ -75,7 +75,7 @@ internal object DesktopPlaybackProbe {
                     "gradient alpha: ${controller.state.value.videoSettings}"
                 }
 
-                onNodeWithTag("playback-settings-back").performScrollTo().performClick()
+                onNodeWithTag("playback-settings-back").performClick()
                 idle()
                 check(controller.state.value.screen == DesktopScreen.MORE) { "the page's back returns to more" }
             }

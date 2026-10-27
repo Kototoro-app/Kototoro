@@ -1,22 +1,12 @@
 package org.skepsun.kototoro.settings.about.crashlog
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -25,11 +15,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
+import androidx.compose.ui.res.stringResource
+import org.skepsun.kototoro.core.diagnostics.crashLogSummaryLine
+import org.skepsun.kototoro.core.ui.crashlog.CrashLogEntry
+import org.skepsun.kototoro.core.ui.crashlog.CrashLogsContent
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import java.io.File
 import java.text.SimpleDateFormat
@@ -50,15 +41,16 @@ fun CrashLogScreen(
     onClearAll: () -> Unit,
     onNavigateUp: () -> Unit,
 ) {
+    val entries = remember(logFiles) { crashLogEntries(logFiles) }
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = "Crash Logs") }, // TODO: use stringResource when ResourceManager is wired
+                title = { Text(text = stringResource(R.string.crash_logs)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateUp, modifier = Modifier.tvIconButtonRing()) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Navigate back",
+                            contentDescription = stringResource(R.string.back),
                         )
                     }
                 },
@@ -67,7 +59,7 @@ fun CrashLogScreen(
                         IconButton(onClick = onClearAll, modifier = Modifier.tvIconButtonRing()) {
                             Icon(
                                 imageVector = Icons.Outlined.Delete,
-                                contentDescription = "Clear all crash logs",
+                                contentDescription = stringResource(R.string.clear_crash_logs),
                             )
                         }
                     }
@@ -81,110 +73,41 @@ fun CrashLogScreen(
         },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        if (logFiles.isEmpty()) {
-            /** Empty state — matches the centered [TextView] from [activity_crash_log.xml]. */
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "No crash logs", // TODO: use stringResource(R.string.no_crash_logs)
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        } else {
-            /** LazyColumn replaces the [RecyclerView] with [DividerItemDecoration]. */
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(bottom = 16.dp),
-            ) {
-                items(logFiles, key = { it.absolutePath }) { file ->
-                    CrashLogItem(
-                        file = file,
-                        onClick = { onLogClick(file) },
-                    )
-                    HorizontalDivider()
-                }
-            }
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            CrashLogsContent(
+                entries = entries,
+                // Android reads the directory before it draws, so "loading" is the desktop host's answer to give.
+                loading = false,
+                emptyText = stringResource(R.string.no_crash_logs),
+                enabled = true,
+                onOpen = { entry -> logFiles.firstOrNull { it.name == entry.id }?.let(onLogClick) },
+            )
         }
     }
 }
+
+/** The rows' view of a report: Android's own timestamp format and the shared first-exception-line rule. */
+private fun crashLogEntries(files: List<File>): List<CrashLogEntry> {
+    val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+    return files.map { file ->
+        CrashLogEntry(
+            id = file.name,
+            title = dateFormat.format(Date(file.lastModified())),
+            summary = crashLogSummary(file),
+        )
+    }
+}
+
+private const val SUMMARY_BYTES = 8 * 1024
 
 /**
- * List item composable replacing [item_crash_log.xml]:
- * - Vertical [LinearLayout] with 16dp padding + selectableItemBackground
- * - bodyLarge title (date timestamp)
- * - bodySmall subtitle (first exception line), maxLines=2, ellipsize, secondary color
+ * The subtitle of a report: the first 8 KiB are enough for the line the list shows, and reading only them keeps the
+ * twenty-report cap from parsing every trace on the main thread.
  */
-@Composable
-private fun CrashLogItem(
-    file: File,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-        Text(
-            text = dateFormat.format(Date(file.lastModified())),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-
-        val content = file.readText()
-        val firstException = content.lines()
-            .firstOrNull { it.contains("Exception") || it.contains("Error") }
-            ?.trim()
-            ?: file.name
-
-        Text(
-            text = firstException,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+private fun crashLogSummary(file: File): String = runCatching {
+    file.inputStream().use { stream ->
+        val buffer = ByteArray(SUMMARY_BYTES)
+        val read = stream.read(buffer).coerceAtLeast(0)
+        crashLogSummaryLine(String(buffer, 0, read, Charsets.UTF_8), file.name)
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun CrashLogItemPreview() {
-    // Preview uses a temp file to demonstrate the item layout.
-    val tempFile = java.io.File.createTempFile("crash_preview_", ".log").apply {
-        writeText("java.lang.NullPointerException: Attempt to invoke virtual method...\n\tat org.example.Test.method(Test.kt:42)")
-        deleteOnExit()
-    }
-    MaterialTheme {
-        Column {
-            CrashLogItem(
-                file = tempFile,
-                onClick = {},
-            )
-            HorizontalDivider()
-        }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun CrashLogScreenEmptyPreview() {
-    MaterialTheme {
-        CrashLogScreen(
-            logFiles = emptyList(),
-            onLogClick = {},
-            onClearAll = {},
-            onNavigateUp = {},
-        )
-    }
-}
+}.getOrDefault(file.name)

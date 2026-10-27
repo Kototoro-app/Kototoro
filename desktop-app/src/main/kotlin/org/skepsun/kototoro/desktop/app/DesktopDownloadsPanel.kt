@@ -9,6 +9,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.downloads.DownloadQueueAction
+import org.skepsun.kototoro.core.ui.downloads.DownloadQueueCard
+import org.skepsun.kototoro.core.ui.downloads.DownloadQueueItemUiModel
+import org.skepsun.kototoro.core.ui.downloads.DownloadQueueStatus
+import org.skepsun.kototoro.core.ui.downloads.downloadQueueBatchStateOf
 import javax.swing.JFileChooser
 
 @Composable
@@ -19,13 +24,9 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
     val preview by controller.cleanupPreview.collectAsState()
     val usage = remember(downloads) { desktopDownloadUsage(downloads.map { it.record }) }
     val autoCleanup by controller.autoCleanupDownloads.collectAsState()
-    val selected = remember(downloads, selection) {
-        downloads.filter { it.key in selection }
-    }
-    val selectedActive = selected.count { it.status.isActive }
-    val selectedPaused = selected.count { it.status == DesktopDownloadStatus.PAUSED }
-    val selectedFailed = selected.count { it.status == DesktopDownloadStatus.FAILED }
-    val selectedRemovable = selected.count { !it.status.isActive }
+    // One queue row per chapter, shaped the way Android draws it; the batch bar reads the same rows.
+    val rows = remember(downloads, selection) { downloads.map { it to it.toQueueItem(selection) } }
+    val batch = remember(rows) { downloadQueueBatchStateOf(rows.map { it.second }.filter { it.isSelected }) }
     val completedCount = downloads.count { it.status == DesktopDownloadStatus.COMPLETE }
     // A finished chapter publishes blobs after the page was opened; re-read the cache figures once the queue settles.
     val activeCount = downloads.count { it.status.isActive }
@@ -70,21 +71,21 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
                     modifier = Modifier.testTag("download-selected-count"))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(controller::pauseSelectedDownloads, enabled = !closing && selectedActive > 0,
+                OutlinedButton(controller::pauseSelectedDownloads, enabled = !closing && batch.pausable > 0,
                     modifier = Modifier.testTag("download-batch-pause")) {
-                    Text(desktopText("downloads.batchPause", selectedActive))
+                    Text(desktopText("downloads.batchPause", batch.pausable))
                 }
                 OutlinedButton(controller::resumeSelectedDownloads, enabled = !closing && !state.busy &&
-                    selectedPaused > 0, modifier = Modifier.testTag("download-batch-resume")) {
-                    Text(desktopText("downloads.batchResume", selectedPaused))
+                    batch.resumable > 0, modifier = Modifier.testTag("download-batch-resume")) {
+                    Text(desktopText("downloads.batchResume", batch.resumable))
                 }
                 OutlinedButton(controller::retrySelectedDownloads, enabled = !closing && !state.busy &&
-                    selectedFailed > 0, modifier = Modifier.testTag("download-batch-retry")) {
-                    Text(desktopText("downloads.batchRetry", selectedFailed))
+                    batch.retryable > 0, modifier = Modifier.testTag("download-batch-retry")) {
+                    Text(desktopText("downloads.batchRetry", batch.retryable))
                 }
-                OutlinedButton(controller::removeSelectedDownloads, enabled = !closing && selectedRemovable > 0,
+                OutlinedButton(controller::removeSelectedDownloads, enabled = !closing && batch.removable > 0,
                     modifier = Modifier.testTag("download-batch-remove")) {
-                    Text(desktopText("downloads.batchRemove", selectedRemovable))
+                    Text(desktopText("downloads.batchRemove", batch.removable))
                 }
                 OutlinedButton({
                     val chooser = JFileChooser().apply {
@@ -101,59 +102,100 @@ internal fun DesktopDownloadsPanel(controller: DesktopController, closing: Boole
             }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(downloads, key = { it.key }) { item ->
+            items(rows, key = { it.first.key }) { (item, row) ->
                 val record = item.record
                 val active = item.status.isActive
-                val checked = item.key in selection
-                Card(Modifier.fillMaxWidth().testTag("download:${item.key}"),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)) {
-                    Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Checkbox(checked = checked, onCheckedChange = { controller.toggleDownloadSelection(item.key) },
+                DownloadQueueCard(
+                    item = row,
+                    actions = downloadRowActions(controller, item, closing, state.busy),
+                    leading = {
+                        Checkbox(checked = row.isSelected, onCheckedChange = { controller.toggleDownloadSelection(item.key) },
                             enabled = !closing, modifier = Modifier.testTag("download-select:${item.key}"))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(record.contentTitle)
-                            Text(record.chapter.title ?: desktopText("common.chapterTitle", record.chapter.number))
-                            record.chapter.branch?.let { Text(it) }
-                            Text(when (item.status) {
-                                DesktopDownloadStatus.QUEUED -> desktopText("downloads.status.QUEUED")
-                                DesktopDownloadStatus.DOWNLOADING -> desktopText("downloads.status.DOWNLOADING")
-                                DesktopDownloadStatus.PAUSED -> desktopText("downloads.status.PAUSED")
-                                DesktopDownloadStatus.COMPLETE -> desktopText("downloads.status.COMPLETE")
-                                DesktopDownloadStatus.FAILED -> desktopText("downloads.status.FAILED")
-                            }, modifier = Modifier.testTag("download-status:${item.key}"))
-                            Text(desktopText("downloads.pages", record.completedPages, record.pages.size))
-                            item.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                if (active) OutlinedButton({ controller.downloads.pause(item.key) }, enabled = !closing,
-                                    modifier = Modifier.testTag("download-pause:${item.key}")) { Text(desktopText("downloads.pause")) }
-                                else OutlinedButton({ controller.resumeDownload(record) }, enabled = !closing && !state.busy,
-                                    modifier = Modifier.testTag("download-resume:${item.key}")) {
-                                    Text(if (item.status == DesktopDownloadStatus.COMPLETE) desktopText("downloads.verify") else desktopText("downloads.resume"))
-                                }
-                                Button({ controller.readDownload(record) }, enabled = !closing && !state.busy &&
-                                    item.status == DesktopDownloadStatus.COMPLETE,
-                                    modifier = Modifier.testTag("download-read:${item.key}")) { Text(desktopText("downloads.readOffline")) }
-                                if (item.status == DesktopDownloadStatus.COMPLETE) {
-                                    OutlinedButton({
-                                        val chooser = JFileChooser().apply {
-                                            fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
-                                            dialogTitle = desktopText("downloads.export")
-                                        }
-                                        if (chooser.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) {
-                                            controller.exportDownload(record, chooser.selectedFile.toPath())
-                                        }
-                                    }, enabled = !closing && !state.busy,
-                                        modifier = Modifier.testTag("download-export:${item.key}")) {
-                                        Text(desktopText("downloads.export"))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                    },
+                )
             }
         }
     }
+}
+
+/** The row's buttons: what the desktop queue can do with this chapter right now, labelled by the desktop catalog. */
+private fun downloadRowActions(
+    controller: DesktopController,
+    item: DesktopDownloadState,
+    closing: Boolean,
+    busy: Boolean,
+): List<DownloadQueueAction> {
+    val key = item.key
+    val actions = mutableListOf<DownloadQueueAction>()
+    if (item.status.isActive) {
+        actions += DownloadQueueAction(desktopText("downloads.pause"), { controller.downloads.pause(key) },
+            enabled = !closing, tag = "download-pause:$key")
+    } else {
+        actions += DownloadQueueAction(
+            if (item.status == DesktopDownloadStatus.COMPLETE) desktopText("downloads.verify") else desktopText("downloads.resume"),
+            { controller.resumeDownload(item.record) },
+            enabled = !closing && !busy, tag = "download-resume:$key",
+        )
+    }
+    actions += DownloadQueueAction(desktopText("downloads.readOffline"), { controller.readDownload(item.record) },
+        enabled = !closing && !busy && item.status == DesktopDownloadStatus.COMPLETE,
+        filled = true, tag = "download-read:$key")
+    if (item.status == DesktopDownloadStatus.COMPLETE) {
+        actions += DownloadQueueAction(desktopText("downloads.export"), {
+            val chooser = JFileChooser().apply {
+                fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+                dialogTitle = desktopText("downloads.export")
+            }
+            if (chooser.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) {
+                controller.exportDownload(item.record, chooser.selectedFile.toPath())
+            }
+        }, enabled = !closing && !busy, tag = "download-export:$key")
+    }
+    return actions
+}
+
+/**
+ * The queue row as the shared card draws it. Identity, page progress and the flags a batch action reads live in the
+ * queue, so the row only carries text: the desktop catalog has the labels, the queue has the facts.
+ */
+private fun DesktopDownloadState.toQueueItem(selection: Set<String>): DownloadQueueItemUiModel {
+    val record = this.record
+    val chapterTitle = record.chapter.title ?: desktopText("common.chapterTitle", record.chapter.number)
+    val subtitle = listOfNotNull(chapterTitle, record.chapter.branch).joinToString(" · ")
+    val pages = record.pages.size
+    return DownloadQueueItemUiModel(
+        key = key,
+        title = record.contentTitle,
+        subtitle = subtitle,
+        status = when (status) {
+            DesktopDownloadStatus.QUEUED -> DownloadQueueStatus.QUEUED
+            DesktopDownloadStatus.DOWNLOADING -> DownloadQueueStatus.DOWNLOADING
+            DesktopDownloadStatus.PAUSED -> DownloadQueueStatus.PAUSED
+            DesktopDownloadStatus.COMPLETE -> DownloadQueueStatus.COMPLETE
+            DesktopDownloadStatus.FAILED -> DownloadQueueStatus.FAILED
+        },
+        statusText = when (status) {
+            DesktopDownloadStatus.QUEUED -> desktopText("downloads.status.QUEUED")
+            DesktopDownloadStatus.DOWNLOADING -> desktopText("downloads.status.DOWNLOADING")
+            DesktopDownloadStatus.PAUSED -> desktopText("downloads.status.PAUSED")
+            DesktopDownloadStatus.COMPLETE -> desktopText("downloads.status.COMPLETE")
+            DesktopDownloadStatus.FAILED -> desktopText("downloads.status.FAILED")
+        },
+        infoText = desktopText("downloads.pages", record.completedPages, pages),
+        detailText = error,
+        detailIsError = error != null,
+        percent = if (status == DesktopDownloadStatus.DOWNLOADING && pages > 0) {
+            record.completedPages.toFloat() / pages
+        } else {
+            null
+        },
+        isSelected = key in selection,
+        canPause = status.isActive,
+        canResume = status == DesktopDownloadStatus.PAUSED,
+        // The desktop queue removes a chapter instead of cancelling it, so only a settled row is removable.
+        canCancel = false,
+        canRemove = !status.isActive,
+    )
 }
 
 /**

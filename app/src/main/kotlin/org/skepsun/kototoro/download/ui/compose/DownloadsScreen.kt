@@ -37,6 +37,14 @@ import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.CompactContentCoverShape
 import org.skepsun.kototoro.core.ui.compose.TvDropdownMenuItem
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
+import org.skepsun.kototoro.core.ui.downloads.DownloadQueueAction
+import org.skepsun.kototoro.core.ui.downloads.DownloadQueueBatchItem
+import org.skepsun.kototoro.core.ui.downloads.DownloadQueueCard
+import org.skepsun.kototoro.core.ui.downloads.DownloadQueueChapterUiModel
+import org.skepsun.kototoro.core.ui.downloads.DownloadQueueItemUiModel
+import org.skepsun.kototoro.core.ui.downloads.DownloadQueueStatus
+import org.skepsun.kototoro.core.ui.downloads.downloadQueueBatchState
+import org.skepsun.kototoro.core.ui.text.uiString
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.util.ext.getThemeColor
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
@@ -77,19 +85,11 @@ fun AppDownloadsRoute(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             if (inSelectionMode) {
-                val snapshot = viewModel.snapshot(androidx.collection.MutableLongSet().apply {
-                    selectionIds.forEach { add(it) }
-                })
-                var canPause = true
-                var canResume = true
-                var canCancel = true
-                var canRemove = true
-                for (item in snapshot) {
-                    canPause = canPause and item.canPause
-                    canResume = canResume and item.canResume
-                    canCancel = canCancel and !item.workState.isFinished
-                    canRemove = canRemove and item.workState.isFinished
-                }
+                val batch = downloadQueueBatchState(
+                    viewModel.snapshot(
+                        androidx.collection.MutableLongSet().apply { selectionIds.forEach { add(it) } },
+                    ).map { it.toBatchItem() },
+                )
 
                 TopAppBar(
                     title = { Text(text = selectionIds.size.toString()) },
@@ -108,7 +108,7 @@ fun AppDownloadsRoute(
                         ) {
                             Icon(Icons.Default.CheckCircle, contentDescription = "Select All")
                         }
-                        if (canPause) {
+                        if (batch.canPause) {
                             IconButton(
                                 onClick = {
                                     viewModel.pause(selectionIds)
@@ -119,7 +119,7 @@ fun AppDownloadsRoute(
                                 Icon(painterResource(R.drawable.ic_pause), contentDescription = "Pause")
                             }
                         }
-                        if (canResume) {
+                        if (batch.canResume) {
                             IconButton(
                                 onClick = {
                                     viewModel.resume(selectionIds)
@@ -130,7 +130,7 @@ fun AppDownloadsRoute(
                                 Icon(Icons.Default.PlayArrow, contentDescription = "Resume")
                             }
                         }
-                        if (canCancel) {
+                        if (batch.canCancel) {
                             IconButton(
                                 onClick = {
                                     viewModel.cancel(selectionIds)
@@ -141,7 +141,7 @@ fun AppDownloadsRoute(
                                 Icon(Icons.Default.Close, contentDescription = "Cancel")
                             }
                         }
-                        if (canRemove) {
+                        if (batch.canRemove) {
                             IconButton(
                                 onClick = {
                                     viewModel.remove(selectionIds)
@@ -290,8 +290,6 @@ fun AppDownloadsRoute(
                             onPauseClick = { viewModel.pause(setOf(item.id.mostSignificantBits)) },
                             onResumeClick = { viewModel.resume(setOf(item.id.mostSignificantBits)) },
                             onCancelClick = { viewModel.cancel(setOf(item.id.mostSignificantBits)) },
-                            onSkipClick = { }, // need to handle from Worker? We leave it for now
-                            onSkipAllClick = { }
                         )
                     }
                 }
@@ -300,9 +298,8 @@ fun AppDownloadsRoute(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun DownloadItemRow(
+private fun DownloadItemRow(
     item: DownloadItemModel,
     isSelected: Boolean,
     onItemClick: () -> Unit,
@@ -311,187 +308,105 @@ fun DownloadItemRow(
     onPauseClick: () -> Unit,
     onResumeClick: () -> Unit,
     onCancelClick: () -> Unit,
-    onSkipClick: () -> Unit,
-    onSkipAllClick: () -> Unit
 ) {
     val context = LocalContext.current
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .combinedClickable(
-                onClick = onItemClick,
-                onLongClick = onItemLongClick
-            ),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(modifier = Modifier.padding(bottom = 12.dp)) {
-            Row(modifier = Modifier.padding(start = 12.dp, top = 12.dp, end = 12.dp)) {
-                AsyncImage(
-                    model = item.displayManga?.coverUrl?.takeIfUsableImageUri(),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CompactContentCoverShape)
-                )
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = item.displayManga?.title ?: item.executionManga?.title ?: stringResource(R.string.unknown),
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-
-                        val chapters = item.chapters.collectAsStateWithLifecycle().value
-                        if (!chapters.isNullOrEmpty()) {
-                            IconButton(onClick = onExpandClick, modifier = Modifier.size(32.dp).tvIconButtonRing()) {
-                                Icon(
-                                    imageVector = if (item.isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                    contentDescription = stringResource(if (item.isExpanded) R.string.collapse else R.string.expand)
-                                )
-                            }
-                        }
-                    }
-
-                    val statusText = when (item.workState) {
-                        WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> stringResource(R.string.queued)
-                        WorkInfo.State.RUNNING -> stringResource(if (item.isPaused) R.string.paused else item.taskKind.activeStatusResId)
-                        WorkInfo.State.SUCCEEDED -> stringResource(
-                            if (item.isPartial) R.string.download_partial else item.taskKind.completedStatusResId,
-                        )
-                        WorkInfo.State.FAILED -> stringResource(R.string.error_occurred)
-                        WorkInfo.State.CANCELLED -> stringResource(R.string.canceled)
-                    }
-
-                    Text(
-                        text = statusText,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    formatDownloadSize(item.byteProgress, item.currentChapterTitle)?.let { size ->
-                        Text(
-                            text = size,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-
-                    if (item.workState == WorkInfo.State.RUNNING) {
-                        val detailsText = when {
-                            item.isPaused -> item.getErrorMessage(context)?.toString() ?: ""
-                            item.isStuck -> stringResource(R.string.stuck)
-                            else -> item.getEtaString()?.toString() ?: ""
-                        }
-                        if (detailsText.isNotEmpty()) {
-                            Text(
-                                text = detailsText,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (item.error != null) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 4,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    } else if (item.workState == WorkInfo.State.SUCCEEDED && item.chaptersDownloaded > 0) {
-                        Text(
-                            text = "${item.chaptersDownloaded} chapters", // Quick fallback
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else if (item.workState == WorkInfo.State.FAILED) {
-                        Text(
-                            text = item.getErrorMessage(context)?.toString() ?: "",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Red
-                        )
-                    }
-                }
-
-                if (item.workState == WorkInfo.State.RUNNING && !item.isIndeterminate) {
-                    Text(
-                        text = "${(item.percent * 100).toInt()}%",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.align(Alignment.Bottom)
-                    )
-                }
-            }
-
-            if (item.workState == WorkInfo.State.RUNNING) {
-                if (item.isIndeterminate) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 12.dp, end = 12.dp))
-                } else {
-                    LinearProgressIndicator(
-                        progress = { item.percent },
-                        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 12.dp, end = 12.dp),
-                    )
-                }
-            }
-
-            val chapters = item.chapters.collectAsStateWithLifecycle().value
-            if (item.isExpanded && !chapters.isNullOrEmpty()) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 12.dp)
-                        .heightIn(max = 240.dp)
-                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
-                ) {
-                    items(chapters) { chapter ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (chapter.number != null) {
-                                Text(
-                                    text = chapter.number,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.width(32.dp)
-                                )
-                            }
-                            Text(
-                                text = chapter.name,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (chapter.isDownloaded) {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                if (item.workState == WorkInfo.State.ENQUEUED || item.workState == WorkInfo.State.BLOCKED) {
-                    OutlinedButton(onClick = onCancelClick, modifier = Modifier.padding(start = 8.dp)) { Text(stringResource(android.R.string.cancel)) }
-                } else if (item.workState == WorkInfo.State.RUNNING) {
-                    if (item.canPause) OutlinedButton(onClick = onPauseClick, modifier = Modifier.padding(start = 8.dp)) { Text(stringResource(R.string.pause)) }
-                    if (item.isPaused) OutlinedButton(onClick = onResumeClick, modifier = Modifier.padding(start = 8.dp)) { Text(stringResource(if (item.error == null) R.string.resume else R.string.retry)) }
-                    OutlinedButton(onClick = onCancelClick, modifier = Modifier.padding(start = 8.dp)) { Text(stringResource(android.R.string.cancel)) }
-                } else if (item.workState == WorkInfo.State.FAILED) {
-                    OutlinedButton(onClick = onResumeClick, modifier = Modifier.padding(start = 8.dp)) { Text(stringResource(R.string.retry)) }
-                }
-            }
+    val chapters = item.chapters.collectAsStateWithLifecycle().value.orEmpty()
+    val detailText = when {
+        item.workState == WorkInfo.State.RUNNING -> when {
+            item.isPaused -> item.getErrorMessage(context)?.toString()
+            item.isStuck -> stringResource(R.string.stuck)
+            else -> item.getEtaString()?.toString()
         }
+        item.workState == WorkInfo.State.SUCCEEDED && item.chaptersDownloaded > 0 ->
+            uiString("chapters_count_info", item.chaptersDownloaded)
+        item.workState == WorkInfo.State.FAILED -> item.getErrorMessage(context)?.toString()
+        else -> null
     }
+    val actions = mutableListOf<DownloadQueueAction>()
+    when (item.workState) {
+        WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> actions += DownloadQueueAction(
+            label = stringResource(android.R.string.cancel),
+            onClick = onCancelClick,
+            tag = "download-cancel:${item.id}",
+        )
+        WorkInfo.State.RUNNING -> {
+            if (item.canPause) actions += DownloadQueueAction(
+                label = stringResource(R.string.pause),
+                onClick = onPauseClick,
+                tag = "download-pause:${item.id}",
+            )
+            if (item.isPaused) actions += DownloadQueueAction(
+                label = stringResource(if (item.error == null) R.string.resume else R.string.retry),
+                onClick = onResumeClick,
+                tag = "download-resume:${item.id}",
+            )
+            actions += DownloadQueueAction(
+                label = stringResource(android.R.string.cancel),
+                onClick = onCancelClick,
+                tag = "download-cancel:${item.id}",
+            )
+        }
+        WorkInfo.State.FAILED -> actions += DownloadQueueAction(
+            label = stringResource(R.string.retry),
+            onClick = onResumeClick,
+            tag = "download-resume:${item.id}",
+        )
+        else -> Unit
+    }
+    DownloadQueueCard(
+        item = DownloadQueueItemUiModel(
+            key = item.id.toString(),
+            title = item.displayManga?.title ?: item.executionManga?.title ?: stringResource(R.string.unknown),
+            subtitle = item.currentChapterTitle,
+            status = item.workState.toQueueStatus(),
+            statusText = stringResource(
+                when (item.workState) {
+                    WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> R.string.queued
+                    WorkInfo.State.RUNNING -> if (item.isPaused) R.string.paused else item.taskKind.activeStatusResId
+                    WorkInfo.State.SUCCEEDED -> if (item.isPartial) R.string.download_partial else item.taskKind.completedStatusResId
+                    WorkInfo.State.FAILED -> R.string.error_occurred
+                    WorkInfo.State.CANCELLED -> R.string.canceled
+                },
+            ),
+            infoText = formatDownloadSize(item.byteProgress),
+            detailText = detailText,
+            detailIsError = item.error != null,
+            percent = if (item.workState == WorkInfo.State.RUNNING && !item.isIndeterminate) item.percent else null,
+            isSelected = isSelected,
+            isExpanded = item.isExpanded,
+            chapters = chapters.map { DownloadQueueChapterUiModel(it.number, it.name, it.isDownloaded) },
+            canPause = item.canPause,
+            canResume = item.canResume,
+            canCancel = !item.workState.isFinished,
+            canRemove = item.workState.isFinished,
+        ),
+        modifier = Modifier.padding(horizontal = 16.dp),
+        onClick = onItemClick,
+        onLongClick = onItemLongClick,
+        onToggleExpanded = onExpandClick,
+        actions = actions,
+        cover = {
+            AsyncImage(
+                model = item.displayManga?.coverUrl?.takeIfUsableImageUri(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+            )
+        },
+    )
 }
+
+private fun WorkInfo.State.toQueueStatus(): DownloadQueueStatus = when (this) {
+    WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> DownloadQueueStatus.QUEUED
+    WorkInfo.State.RUNNING -> DownloadQueueStatus.DOWNLOADING
+    WorkInfo.State.SUCCEEDED -> DownloadQueueStatus.COMPLETE
+    WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> DownloadQueueStatus.FAILED
+}
+
+/** The selection bar only shows an action when every selected row supports it, so it asks for the shared rule. */
+private fun DownloadItemModel.toBatchItem(): DownloadQueueBatchItem = DownloadQueueBatchItem(
+    status = workState.toQueueStatus(),
+    canPause = canPause,
+    canResume = canResume,
+    canCancel = !workState.isFinished,
+    canRemove = workState.isFinished,
+)

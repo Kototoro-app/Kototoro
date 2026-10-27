@@ -1,8 +1,5 @@
 package org.skepsun.kototoro.details.ui.pager.bookmarks.compose
 
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import org.skepsun.kototoro.core.ui.compose.DetailsBookmarkCard
-import org.skepsun.kototoro.core.ui.compose.DetailsBookmarkText
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,7 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
@@ -48,85 +44,19 @@ import androidx.annotation.StringRes
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
-import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.bookmarks.domain.Bookmark
-import org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview
-import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
-import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.bookmarks.ui.compose.BookmarkCard
 import org.skepsun.kototoro.core.ui.compose.SelectionActionBar
 import org.skepsun.kototoro.core.ui.compose.SelectionBarIconButton
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
-import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
-import org.skepsun.kototoro.core.ui.theme.artworkAwareContainerColor
 import org.skepsun.kototoro.list.ui.model.EmptyState
 import org.skepsun.kototoro.list.ui.model.ListHeader
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
-import java.io.File
-
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-private fun BookmarkCard(
-    bookmark: Bookmark,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val context = LocalContext.current
-    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
-    val snapshotFile = remember(bookmark) {
-        File(context.filesDir, "bookmarks/manga_${bookmark.manga.id}_chapter_${bookmark.chapterId}_page_${bookmark.page}.jpg")
-    }
-    val imageModel = remember(bookmark, snapshotFile) {
-        when {
-            snapshotFile.exists() && snapshotFile.length() > 0 -> snapshotFile.toUri().toString()
-            bookmark.imageUrl.startsWith("file://") -> bookmark.imageUrl
-            else -> bookmark.toContentPage()
-        }
-    }
-
-    val contentType = bookmark.manga.source.getContentType()
-    val isNovel = contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL
-
-    val previewText = remember(bookmark.imageUrl, isNovel) {
-        if (isNovel) extractNovelBookmarkPreview(bookmark.imageUrl) else ""
-    }
-    DetailsBookmarkCard(
-        selected = isSelected,
-        percent = bookmark.percent,
-        onClick = onClick,
-        onLongClick = onLongClick,
-        selectedIcon = rememberVectorPainter(Icons.Default.CheckCircle),
-        modifier = modifier,
-        pageLabel = "P.${bookmark.page + 1}",
-        text = if (isNovel) {
-            DetailsBookmarkText(
-                title = bookmark.chapterTitle.orEmpty().ifBlank {
-                    stringResource(R.string.bookmark_position, bookmark.page + 1)
-                },
-                excerpt = previewText.ifBlank { stringResource(R.string.bookmark_preview_unavailable) },
-            )
-        } else {
-            null
-        },
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.artworkAwareContainerColor(),
-        elevation = if (isArtworkBackground) 0.dp else 1.dp,
-        image = {
-            AsyncImage(
-                model = imageModel,
-                contentDescription = "Bookmark Thumbnail",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        },
-    )
-}
 
 @Composable
 fun BookmarksScreen(

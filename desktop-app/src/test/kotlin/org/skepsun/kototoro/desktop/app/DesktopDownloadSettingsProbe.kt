@@ -91,7 +91,7 @@ internal object DesktopDownloadSettingsProbe {
                 // The queue reloads the stored value, so a change made on the page is what the next request sees.
                 check(controller.downloadSettings.value == stored()) { "the page and the queue disagree" }
 
-                onNodeWithTag("downloads-settings-back").performClick()
+                onNodeWithTag("downloads-settings-back").performScrollTo().performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.MORE }
                 idle()
             }

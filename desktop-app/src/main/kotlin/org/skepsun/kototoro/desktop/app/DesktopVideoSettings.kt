@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.desktop.app
 
+import org.skepsun.kototoro.core.ui.settings.PlaybackSettingsRanges
+
 /**
  * Android's `VideoDecoderMode`, which libmpv expresses as its `hwdec` pair: Windows has no media3 renderers to switch
  * between, but the user's question is the same one — may a file be decoded on the GPU, and if that fails, what then.
@@ -61,8 +63,9 @@ data class DesktopVideoSettings(
     val gradientOpacity: Float get() = gradientAlpha.coerceIn(0, 100) / 100f
 
     companion object {
-        const val MIN_CONTROLS_ALPHA = 30
-        val CONTROLS_ALPHA_RANGE = MIN_CONTROLS_ALPHA..100
-        val GRADIENT_ALPHA_RANGE = 0..100
+        /** Both ranges live beside the shared page rows, so a host cannot drift from what it renders. */
+        val MIN_CONTROLS_ALPHA = PlaybackSettingsRanges.controlsAlpha.first
+        val CONTROLS_ALPHA_RANGE = PlaybackSettingsRanges.controlsAlpha
+        val GRADIENT_ALPHA_RANGE = PlaybackSettingsRanges.gradientAlpha
     }
 }

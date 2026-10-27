@@ -7,13 +7,18 @@ plugins {
     id 'org.jetbrains.compose' version '1.12.0'
 }
 
-// Android's own vector drawables, generated into shared ImageVectors so both hosts draw the same reader-panel icons.
+// Android's own vector drawables, generated into shared ImageVectors so both hosts draw the same reader-panel and
+// settings-row icons.
 def readerPanelIcons = ['ic_arrow_forward', 'ic_settings', 'ic_reader_ltr', 'ic_reader_rtl', 'ic_reader_vertical',
     'ic_gesture_vertical', 'ic_move_horizontal', 'ic_fullscreen', 'ic_swap_vert', 'ic_size_large', 'ic_grid',
     'ic_bookmark', 'ic_save', 'ic_crop', 'ic_timer', 'ic_screen_rotation', 'ic_download', 'ic_web', 'ic_translate',
     'ic_tap', 'ic_prev', 'ic_next', 'ic_more_vert', 'ic_zoom_in', 'ic_zoom_out', 'ic_timer_run', 'ic_bookmark_added',
     'ic_screen_rotation_lock', 'ic_current_chapter', 'ic_sort_desc', 'ic_search', 'ic_tts_close', 'ic_delete',
-    'ic_storage', 'ic_save_ok', 'ic_new', 'ic_check', 'ic_notification', 'ic_eye_off', 'ic_lock', 'ic_lock_open']
+    'ic_storage', 'ic_save_ok', 'ic_new', 'ic_check', 'ic_notification', 'ic_eye_off', 'ic_lock', 'ic_lock_open',
+    // The replace-rule page's action and rule rows.
+    'ic_book_page', 'ic_disable', 'ic_import', 'ic_cloud_upload', 'ic_reorder_handle',
+    // The setup wizard's page header and its two jumps on the done page.
+    'ic_welcome', 'ic_backup_restore', 'ic_palette']
 def generatedIconSources = layout.buildDirectory.dir('generated/reader-panel-icons/kotlin')
 def generateReaderPanelIcons = tasks.register('generateReaderPanelIcons') {
     def vectors = readerPanelIcons.collect { rootProject.file("app/src/main/res/drawable/${it}.xml") }
@@ -68,9 +73,15 @@ kotlin {
             api compose.runtime
             api compose.foundation
             api libs.jetbrains.compose.material3
+            // The wizard header slides its title when a host turns the page, as Android's AnimatedContent does.
+            api compose.animation
+            implementation libs.reorderable
             api project(':backdrop')
             // Paged transition semantics (slot motion inputs) shared with the reader scenes.
             api project(':reader-core')
+            // The source protocol's preference tree: the shared per-source settings page draws it, so the DTOs (and
+            // the folding rules next to them) are the only protocol shape a shared page may see.
+            api project(':core-source')
             implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
         }
         // System back for shared sheets (the Windows host handles Esc itself).

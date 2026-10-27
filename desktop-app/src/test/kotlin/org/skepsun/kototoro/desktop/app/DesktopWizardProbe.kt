@@ -23,7 +23,7 @@ import java.nio.file.Path
  *
  * - 来源设置 closes its overview group with Android's 设置向导 row, and the row opens the wizard screen;
  * - page one repeats Android's intro (app title, the repository/extension/source concepts, the disclaimer) with the
- *   wizard's own progress label and a disabled back button;
+ *   shared header's "Step N of M" counter and a disabled back button;
  * - page two edits the two settings Windows has in place of Android's transition/panorama switches, and picking a theme
  *   there stores it in the same `desktop_appearance` key 更多 writes;
  * - page three is Android's done page: the extension-management and restore-backup entries land on the two Windows
@@ -67,8 +67,9 @@ internal object DesktopWizardProbe {
                     expectScreen(DesktopScreen.SETUP_WIZARD, "设置向导")
                 }
                 fun expectStep(index: Int) {
-                    onNodeWithTag("wizard-progress")
-                        .assertTextEquals(desktopText("sources.wizardStep", index, 3))
+                    // The step counter is Android's `wizard_step_counter`, drawn by the shared page header.
+                    onNodeWithTag("wizard-step-counter")
+                        .assertTextEquals(AndroidStrings.format("welcome_step_counter", index, 3))
                 }
                 fun next() {
                     onNodeWithTag("wizard-next").performScrollTo().performClick()

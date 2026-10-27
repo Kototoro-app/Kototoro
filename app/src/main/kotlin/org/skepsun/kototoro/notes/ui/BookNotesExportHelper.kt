@@ -100,7 +100,7 @@ object BookNotesExportHelper {
                         }
                     }
                     is BookNoteItem.VideoNote -> {
-                        val duration = org.skepsun.kototoro.video.ui.compose.formatDuration(note.positionMs)
+                        val duration = org.skepsun.kototoro.video.ui.compose.formatPlaybackTime(note.positionMs)
                         sb.appendLine("⏱ $duration")
                         sb.appendLine()
                         if (!note.quoteText.isNullOrBlank()) {

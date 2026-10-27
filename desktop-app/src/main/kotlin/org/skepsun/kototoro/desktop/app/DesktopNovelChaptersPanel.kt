@@ -47,13 +47,13 @@ internal fun DesktopNovelChaptersPanel(
     val theme = state.novelSettings.theme
     val base = MaterialTheme.colorScheme
     val colors = remember(theme) {
-        NovelReaderChromeColors(Color(theme.background), Color(theme.text), Color(theme.muted))
+        NovelReaderChromeColors(Color(theme.palette.background), Color(theme.palette.text), Color(theme.palette.secondaryText))
     }
     val scheme = remember(base, colors) { novelChromeColorScheme(base, colors) }
     MaterialTheme(colorScheme = scheme) {
         ReaderPanelHost(
             colors = readerPanelColors(colors.background, colors.content, colors.secondary, colors.content,
-                isDark = theme == DesktopNovelTheme.DARK),
+                isDark = theme.palette.isDark),
             surfaceMode = ReaderPanelSurfaceMode.Opaque,
             onDismissRequest = onDismiss,
             openExpanded = true,

@@ -7,7 +7,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,7 +29,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -56,6 +54,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.settings.ExtensionInstallPromptDialog
+import org.skepsun.kototoro.settings.compose.AndroidPreferenceDialog
 import org.skepsun.kototoro.core.extensions.SelectedSourcesDeletePlan
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.rememberTvFieldExit
@@ -115,59 +115,18 @@ internal fun UnifiedInstallChoiceDialog(
     onChoice: (ExtensionInstallPolicy, Boolean) -> Unit,
 ) {
     var rememberChoice by rememberSaveable(kind) { mutableStateOf(false) }
-    SettingsAlertDialog(
-        title = stringResource(R.string.extension_install_choice_title, name),
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            SettingsDialogActionButton(
-                text = stringResource(R.string.extension_install_and_enable),
-                onClick = {
-                    onChoice(ExtensionInstallPolicy.INSTALL_AND_ENABLE, rememberChoice)
-                },
-            )
+    ExtensionInstallPromptDialog(
+        name = name,
+        sourceCount = sourceCount,
+        kindLabel = stringResource(kind.dialogLabelResId()),
+        rememberChoice = rememberChoice,
+        onRememberChange = { rememberChoice = it },
+        onChoose = { enable ->
+            onChoice(if (enable) ExtensionInstallPolicy.INSTALL_AND_ENABLE else ExtensionInstallPolicy.INSTALL_ONLY,
+                rememberChoice)
         },
-        dismissButton = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SettingsDialogActionButton(
-                    text = stringResource(android.R.string.cancel),
-                    onClick = onDismiss,
-                )
-                SettingsDialogActionButton(
-                    text = stringResource(R.string.extension_install_only),
-                    onClick = {
-                        onChoice(ExtensionInstallPolicy.INSTALL_ONLY, rememberChoice)
-                    },
-                )
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = if (sourceCount > 0) {
-                        stringResource(R.string.extension_install_choice_message, sourceCount)
-                    } else {
-                        stringResource(R.string.extension_install_choice_message_unknown)
-                    },
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .combinedClickable(onClick = { rememberChoice = !rememberChoice }),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Checkbox(
-                        checked = rememberChoice,
-                        onCheckedChange = { rememberChoice = it },
-                    )
-                    Text(
-                        text = stringResource(
-                            R.string.extension_install_remember_choice,
-                            stringResource(kind.dialogLabelResId()),
-                        ),
-                    )
-                }
-            }
-        },
+        onDismiss = onDismiss,
+        renderDialog = { AndroidPreferenceDialog(it) },
     )
 }
 

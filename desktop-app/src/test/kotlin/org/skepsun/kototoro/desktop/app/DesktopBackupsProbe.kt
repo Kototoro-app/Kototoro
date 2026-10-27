@@ -133,8 +133,14 @@ internal object DesktopBackupsProbe {
                     runBlocking { controller.previewLibraryBackup(file).join() }
                     idle()
                     onNodeWithTag("backup-preview").assertExists()
+                    // The section lines are the shared restore rows Android draws, read-only on this host.
+                    onNodeWithTag("backup-restore-section:BOOKMARKS").assertExists()
+                    onNodeWithTag("backup-restore-section:STATS").assertExists()
                     onNodeWithText("书签：1 条").assertExists()
                     onNodeWithText("阅读统计：1 条").assertExists()
+                    onNodeWithTag("backup-restore-section:BOOKMARKS").performScrollTo().performClick()
+                    idle()
+                    check(controller.backupPreview.value != null)
                     check(runBlocking { session.library.favourites() }.isEmpty())
                     check(runBlocking { session.library.progress(Long.MAX_VALUE) } == null)
                     check(runBlocking { session.storage.database.getBookmarksDao().find(Long.MAX_VALUE, Long.MIN_VALUE) } == null)

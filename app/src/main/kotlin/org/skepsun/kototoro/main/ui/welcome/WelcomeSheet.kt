@@ -99,6 +99,10 @@ import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
 import org.skepsun.kototoro.core.ui.glass.GlassTuningController
 import org.skepsun.kototoro.core.ui.glass.rememberGlassTuning
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
+import org.skepsun.kototoro.core.ui.wizard.WizardDonePage
+import org.skepsun.kototoro.core.ui.wizard.WizardIntroPage
+import org.skepsun.kototoro.core.ui.wizard.WizardPageHeader
+import org.skepsun.kototoro.core.ui.wizard.WizardSectionCard
 import org.skepsun.kototoro.core.util.ext.tryLaunch
 import org.skepsun.kototoro.settings.compose.glass.GlassPreset
 
@@ -536,61 +540,8 @@ private fun WizardPrimaryButtonContent(
 
 @Composable
 private fun WelcomeIntroStep() {
-    WizardPageHeader(
-        step = WIZARD_PAGE_INTRO + 1,
-        totalSteps = WIZARD_PAGE_COUNT,
-        title = stringResource(R.string.welcome_intro_app_title),
-        summary = stringResource(R.string.welcome_intro_body),
-        icon = rememberSafePainter(R.drawable.ic_welcome),
-        prominent = true,
-    )
-
-    WizardSectionCard(title = stringResource(R.string.welcome_intro_concepts_title)) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            IntroConceptItem(
-                title = stringResource(R.string.welcome_intro_repo_label),
-                summary = stringResource(R.string.welcome_intro_repo_body),
-            )
-            IntroConceptItem(
-                title = stringResource(R.string.welcome_intro_extension_label),
-                summary = stringResource(R.string.welcome_intro_extension_body),
-            )
-            IntroConceptItem(
-                title = stringResource(R.string.welcome_intro_source_label),
-                summary = stringResource(R.string.welcome_intro_source_body),
-            )
-        }
-    }
-
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.errorContainer,
-        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text(
-            text = stringResource(R.string.welcome_intro_disclaimer),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(16.dp),
-        )
-    }
-}
-
-@Composable
-private fun IntroConceptItem(title: String, summary: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = summary,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    // The page itself is shared with the desktop host: the same resource names, header and cards.
+    WizardIntroPage(step = WIZARD_PAGE_INTRO + 1, totalSteps = WIZARD_PAGE_COUNT)
 }
 
 @Composable
@@ -598,70 +549,12 @@ private fun WelcomeDoneStep(
     onRestoreBackup: () -> Unit,
     onOpenExtensionManagement: () -> Unit,
 ) {
-    WizardPageHeader(
+    WizardDonePage(
         step = WIZARD_PAGE_DONE + 1,
         totalSteps = WIZARD_PAGE_COUNT,
-        title = stringResource(R.string.welcome_done_title_finished),
-        summary = stringResource(R.string.welcome_done_summary_finished),
-        icon = rememberSafePainter(R.drawable.ic_check),
-        prominent = true,
-        containerColor = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        onOpenExtensionManagement = onOpenExtensionManagement,
+        onRestoreBackup = onRestoreBackup,
     )
-
-    WizardSectionCard {
-        Text(
-            text = stringResource(R.string.welcome_done_body_finished),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        FilledTonalButton(
-            onClick = onOpenExtensionManagement,
-            modifier = Modifier
-                .fillMaxWidth()
-                .tvFocusable(shape = ButtonDefaults.shape, addFocusTarget = false),
-        ) {
-            Icon(
-                painter = rememberSafePainter(R.drawable.ic_settings),
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.welcome_open_extension_management))
-        }
-    }
-
-    WizardSectionCard(
-        title = stringResource(R.string.restore_backup),
-        summary = stringResource(R.string.welcome_restore_summary),
-    ) {
-        FilledTonalButton(
-            onClick = onRestoreBackup,
-            modifier = Modifier
-                .fillMaxWidth()
-                .tvFocusable(shape = ButtonDefaults.shape, addFocusTarget = false),
-        ) {
-            Icon(
-                painter = rememberSafePainter(R.drawable.ic_backup_restore),
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.restore_backup))
-        }
-    }
-
-    WizardSectionCard(
-        title = stringResource(R.string.welcome_done_advice_title),
-        summary = stringResource(R.string.welcome_done_advice_summary),
-    ) {
-        Text(
-            text = stringResource(R.string.welcome_done_advice_body),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
 }
 
 @Composable

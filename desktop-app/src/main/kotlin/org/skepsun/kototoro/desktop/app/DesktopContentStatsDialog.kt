@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.desktop.app
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,16 +17,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.library.LibraryContentStats
+import org.skepsun.kototoro.core.ui.stats.ContentStatsBarChart
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.stats.domain.StatsContentKind
 import androidx.compose.material3.Button as M3Button
@@ -112,45 +108,18 @@ private fun StatsContentKind.statsColor(): Color = when (this) {
 }
 
 /**
- * Android's `ContentStatsBarChart` over the ninety-day series: bars compressed by averaging when they no longer fit the
- * card, dashed value gridlines and a solid baseline. Days without reading stay empty so the gaps read as gaps.
+ * Android's `ContentStatsBarChart` over the ninety-day series: the shared [ContentStatsBarChart] draws it (the same
+ * 12dp bars, average compression, dashed gridlines and solid baseline the Android sheet uses), here as reading
+ * seconds from the shared derivation.
  */
 @Composable
 private fun ContentStatsChart(stats: LibraryContentStats, kindColor: Color) {
     val seconds = stats.dailyActivity.map { (it.duration / 1_000L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt() }
-    if (seconds.all { it <= 0 }) {
-        Box(Modifier.fillMaxWidth().height(200.dp).testTag("content-stats-chart"), contentAlignment = Alignment.Center) {
-            Text(AndroidStrings["empty_stats_text"], style = MaterialTheme.typography.bodySmall, color = Muted)
-        }
-        return
-    }
-    val outline = MaterialTheme.colorScheme.outlineVariant
-    val dashed = PathEffect.dashPathEffect(floatArrayOf(15f, 15f), 0f)
-    Canvas(Modifier.fillMaxWidth().height(200.dp).testTag("content-stats-chart")) {
-        val minSpacing = 12.dp.toPx()
-        val barWidth = 12.dp.toPx()
-        val rawWidth = seconds.size * (barWidth + minSpacing) + minSpacing
-        val windowSize = (rawWidth / size.width).toInt().coerceAtLeast(1)
-        val bars = seconds.chunked(windowSize) { chunk -> chunk.average().toInt() }
-        val maxValue = (bars.maxOrNull() ?: 0).toFloat()
-        if (maxValue <= 0f) return@Canvas
-        var step = 1
-        while (size.height / (maxValue / step) <= 60f) step++
-        for (value in 0..maxValue.toInt() step step) {
-            val y = size.height - (size.height * value / maxValue)
-            drawLine(outline, Offset(0f, y), Offset(size.width, y), 1.dp.toPx(), pathEffect = dashed)
-        }
-        drawLine(outline, Offset(0f, size.height), Offset(size.width, size.height), 2.dp.toPx())
-        val spacing = (size.width - barWidth * bars.size) / (bars.size + 1)
-        bars.forEachIndexed { index, value ->
-            if (value <= 0) return@forEachIndexed
-            val barHeight = (size.height * value / maxValue).coerceAtLeast(barWidth)
-            drawRoundRect(
-                color = kindColor,
-                topLeft = Offset(spacing + index * (barWidth + spacing), size.height - barHeight),
-                size = Size(barWidth, barHeight),
-                cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f),
-            )
-        }
-    }
+    ContentStatsBarChart(
+        values = seconds,
+        barColor = kindColor,
+        emptyText = AndroidStrings["empty_stats_text"],
+        modifier = Modifier.fillMaxWidth().height(200.dp),
+        testTag = "content-stats-chart",
+    )
 }

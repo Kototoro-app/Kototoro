@@ -51,6 +51,10 @@ object DesktopAppProbe {
                 DesktopStorageProbe.run(args)
                 return
             }
+            if (args[0] == "cleanup") {
+                DesktopCleanupProbe.run(args)
+                return
+            }
             if (args[0] == "changelog") {
                 DesktopChangelogProbe.run(args)
                 return
@@ -73,6 +77,18 @@ object DesktopAppProbe {
             }
             if (args[0] == "downloadsettings") {
                 DesktopDownloadSettingsProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("reader-settings-")) {
+                DesktopReaderSettingsProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("novel-settings-")) {
+                DesktopNovelSettingsProbe.run(args)
+                return
+            }
+            if (args[0].startsWith("sources-settings-")) {
+                DesktopSourcesSettingsProbe.run(args)
                 return
             }
             if (args[0].startsWith("jarpriority-")) {

@@ -25,7 +25,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,6 +35,10 @@ import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChromeTopBar
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderChapterTitleChip
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarAlignment
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarInsets
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarRow
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderInfoBarText
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderFloatingControlButton
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelIcons
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressBar
@@ -173,17 +179,40 @@ internal fun BoxScope.DesktopReaderChrome(
             }
         }
     }
-    // Android's info bar while the chrome is hidden: the chapter and the visible pages.
+    // Android's info bar while the chrome is hidden: the shared row with the chapter and the visible pages. The bar
+    // keeps Android's outlined text, so the chapter stays readable over a light page as well as a dark one.
     AnimatedVisibility(!controlsVisible, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.TopCenter)) {
         val visible = if (continuous) (state.pageIndex..state.readerLastVisible).toList() else layout.indices
         val range = if (visible.size > 1) "${visible.first() + 1}–${visible.last() + 1}" else "${state.pageIndex + 1}"
         val color = LocalDesktopReaderPageStyle.current.text.copy(alpha = .78f)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 4.dp)
-            .testTag("reader-info-bar")) {
-            Text(state.chapter?.title.orEmpty(), color = color, fontSize = 12.sp, maxLines = 1,
-                overflow = TextOverflow.Ellipsis)
-            Text("$range / ${state.pages.size}", color = color, fontSize = 12.sp,
-                modifier = Modifier.testTag("reader-progress"))
-        }
+        val style = TextStyle(color = color, fontSize = 12.sp, fontFeatureSettings = "tnum")
+        val density = LocalDensity.current
+        ReaderInfoBarRow(
+            alignment = ReaderInfoBarAlignment.CENTERED,
+            readingStatus = {
+                ReaderInfoBarText(
+                    text = state.chapter?.title.orEmpty(),
+                    style = style,
+                    outlineColor = Color.White,
+                    drawOutline = true,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+            progressStatus = {
+                Text("$range / ${state.pages.size}", color = color, fontSize = 12.sp,
+                    modifier = Modifier.testTag("reader-progress"))
+            },
+            // Android's info-bar paddings; the bar sits at the very top, so no corner or cutout moves it in.
+            insets = {
+                val density = density
+                ReaderInfoBarInsets(
+                    left = with(density) { 20.dp.roundToPx() },
+                    right = with(density) { 20.dp.roundToPx() },
+                    vertical = with(density) { 6.dp.roundToPx() },
+                )
+            },
+            modifier = Modifier.testTag("reader-info-bar"),
+        )
     }
 }

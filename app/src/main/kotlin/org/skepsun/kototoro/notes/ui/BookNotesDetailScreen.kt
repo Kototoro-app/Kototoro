@@ -374,7 +374,7 @@ fun BookNotesDetailScreen(
                                         item.page + 1,
                                     )
                                     is BookNoteItem.VideoNote -> {
-                                        val time = org.skepsun.kototoro.video.ui.compose.formatDuration(item.positionMs)
+                                        val time = org.skepsun.kototoro.video.ui.compose.formatPlaybackTime(item.positionMs)
                                         val quote = item.quoteText?.let { "\n${context.getString(R.string.book_notes_quote_prefix, it)}" }.orEmpty()
                                         val note = item.note?.let { "$it\n" }.orEmpty()
                                         "${note}${item.chapterTitle} $time$quote"
@@ -822,7 +822,7 @@ internal fun BookNoteCard(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                         }
-                        val formattedTime = org.skepsun.kototoro.video.ui.compose.formatDuration(item.positionMs)
+                        val formattedTime = org.skepsun.kototoro.video.ui.compose.formatPlaybackTime(item.positionMs)
                         Text(
                             text = "${item.chapterTitle} · $formattedTime",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
@@ -1020,7 +1020,7 @@ internal fun createExcerptData(item: BookNoteItem, manga: Content?): NovelExcerp
             }
         }
         is BookNoteItem.VideoNote -> {
-            val formattedTime = org.skepsun.kototoro.video.ui.compose.formatDuration(item.positionMs)
+            val formattedTime = org.skepsun.kototoro.video.ui.compose.formatPlaybackTime(item.positionMs)
             val hasQuote = !item.quoteText.isNullOrBlank()
             val text = if (hasQuote) item.quoteText.orEmpty() else ""
             NovelExcerptData(

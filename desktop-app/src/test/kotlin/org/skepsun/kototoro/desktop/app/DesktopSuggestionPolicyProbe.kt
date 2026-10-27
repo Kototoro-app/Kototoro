@@ -83,7 +83,7 @@ internal object DesktopSuggestionPolicyProbe {
                 onNodeWithTag("nav:更多").performClick(); idle()
                 // Android files the recommendations entry under 服务, not directly under 更多.
                 onNodeWithTag("services-open").performScrollTo().performClick(); idle()
-                onNodeWithTag("settings-recommendations-open").performScrollTo().performClick(); idle()
+                onNodeWithTag("services-suggestions").performScrollTo().performClick(); idle()
                 // Android's three worker rows use Android's own titles and summaries, and Android disables them while
                 // recommendations themselves are off.
                 onNodeWithTag("settings-suggestions-wifi").performScrollTo().assertExists()
@@ -157,7 +157,7 @@ internal object DesktopSuggestionPolicyProbe {
                 onNodeWithTag("nav:更多").performClick(); idle()
                 // Android files the recommendations entry under 服务, not directly under 更多.
                 onNodeWithTag("services-open").performScrollTo().performClick(); idle()
-                onNodeWithTag("settings-recommendations-open").performScrollTo().performClick(); idle()
+                onNodeWithTag("services-suggestions").performScrollTo().performClick(); idle()
                 onNodeWithTag("settings-suggestions-wifi").performScrollTo().assertExists()
                 snapshot("worker-rows-after-runs")
             }

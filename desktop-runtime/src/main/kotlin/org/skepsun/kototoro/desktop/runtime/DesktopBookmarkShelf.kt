@@ -19,3 +19,10 @@ fun desktopBookmarkShelf(groups: List<DesktopBookmarkGroup>, hideNsfw: Boolean):
                 .thenBy { it.content.title },
         )
         .toList()
+
+/**
+ * Android stores a chapter bookmark under the chapter id, without a page of its own. Both Windows surfaces label such
+ * a position by its chapter instead of by a page number, and the details pane draws no page corner for it either.
+ */
+val DesktopBookmark.isChapterBookmark: Boolean
+    get() = pageId == chapterId

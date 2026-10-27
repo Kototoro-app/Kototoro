@@ -9,6 +9,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.backups.domain.BackupSection
+import org.skepsun.kototoro.core.ui.backups.BackupRestoreSection
+import org.skepsun.kototoro.core.ui.backups.BackupRestoreSectionList
 import java.util.Date
 import java.text.DateFormat
 import java.util.Locale
@@ -48,7 +50,20 @@ internal fun DesktopBackupsPanel(controller: DesktopController, closing: Boolean
             Text(desktopText("backups.file", archive.filename))
             Text(desktopText("backups.time", DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT,
                 DesktopStrings.locale).format(Date(archive.index.createdAt))))
-            for ((section, count) in archive.counts) Text(desktopText("backups.sectionCount", label(section), count))
+            // Android's restore preview rows, with this host's entry counts under each section name. The rows are read
+            // only here: Windows restores the whole archive, so it must not offer a selection it cannot honour.
+            BackupRestoreSectionList(
+                sections = archive.counts.map { (section, count) ->
+                    BackupRestoreSection(
+                        id = section.name,
+                        title = desktopText("backups.sectionCount", label(section), count),
+                        checked = true,
+                    )
+                },
+                enabled = enabled,
+                interactive = false,
+                onToggle = {},
+            )
             if (archive.otherEntries.isNotEmpty()) {
                 Text(desktopText("backups.otherEntries", archive.otherEntries.size))
                 Text(archive.otherEntries.joinToString { label(BackupSection.of(it)) })

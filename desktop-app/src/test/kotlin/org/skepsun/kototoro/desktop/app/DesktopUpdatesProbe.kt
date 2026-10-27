@@ -1,10 +1,13 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.skia.Image
 import org.skepsun.kototoro.desktop.runtime.DesktopTriState
 import org.skepsun.kototoro.tracker.data.TrackEntity
+import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -59,10 +62,25 @@ internal object DesktopUpdatesProbe {
                 onNodeWithTag("feed-updated-more").performClick()
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.screen == DesktopScreen.UPDATED }
                 idle()
+                fun snapshot(label: String) {
+                    Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
+                        image.encodeToData()?.use {
+                            Files.write(
+                                Files.createDirectories(Path.of(args[3])).resolve("${args[0]}-$label.png"),
+                                it.bytes,
+                            )
+                        }
+                    }
+                }
                 onNodeWithTag("updates-panel").assertExists()
                 onNodeWithTag("update-row:${work.id}").assertExists()
                 // Android's header card: "N works updated · M new chapters".
                 onNodeWithText(AndroidStrings.format("updated_header_summary", 1, 2), substring = true).assertExists()
+                // The shared page-summary card: an icon-only check pill beside the emphasised mark-all-read.
+                onNodeWithTag("updates-summary").assertExists()
+                onNodeWithTag("updates-check").assertExists()
+                onNodeWithTag("updates-mark-all-read").assertExists()
+                snapshot("header")
                 onNodeWithTag("update-chapters:${work.id}", useUnmergedTree = true)
                     .assertTextContains(desktopText("common.newChapters", 2), substring = true)
                 // Opening a card is Android's `openTracked`: it acknowledges the notice (logs read) and shows the work.
@@ -83,6 +101,9 @@ internal object DesktopUpdatesProbe {
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.feed.updateRowsByOwnerId.isEmpty() }
                 idle()
                 onNodeWithTag("updates-empty").assertExists()
+                // No rows left, so the card itself carries Android's "up to date" title and subtitle.
+                onNodeWithText(AndroidStrings["updated_header_up_to_date"]).assertExists()
+                snapshot("empty")
                 check(runBlocking { session.storage.database.getTracksDao().find(work.id)?.newChapters } == 0)
                 check(runBlocking { session.library.progress(work.id) } == progress) { "only the reminder goes" }
                 // The header's 全部标为已读 does the same for every work at once.

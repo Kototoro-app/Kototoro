@@ -40,6 +40,11 @@ class DesktopAppTest {
     }
 
     @Test
+    fun `the data cleanup page clears what this data root holds and arms Android's auto sweep`() {
+        probe("cleanup", directory.resolve("中文 cleanup"), 150)
+    }
+
+    @Test
     fun `the proxy page routes the real client and its test row reports Android's result`() {
         probe("proxy", directory.resolve("中文 proxy"), 150)
     }

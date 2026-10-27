@@ -1,6 +1,5 @@
-package org.skepsun.kototoro.core.ui.compose
+package org.skepsun.kototoro.core.ui.page
 
-import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,37 +23,40 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 private val PageSummaryShape = RoundedCornerShape(20.dp)
 private val PageSummaryIconShape = RoundedCornerShape(12.dp)
 
 /**
- * The one summary header the top-level list pages (updates, suggestions, history, ...)
- * put above their content: an accent icon tile, a title with a short (up to two lines) subtitle and a
- * few trailing pill actions (subtitle up to two lines), on a translucent card with a faint accent wash.
+ * The one summary header the top-level list pages put above their content (Android's updates, suggestions, history
+ * and notes pages): an accent icon tile, a title with a short subtitle and a few trailing pill actions, on a
+ * translucent card with a faint accent wash.
  *
- * Pages used to carry near-identical private copies of this card that drifted apart in
- * padding, icon treatment and action style; keeping it here keeps them in step.
+ * The host supplies the icon as a [Painter] and its own edge padding: Android's chrome uses 12dp, the desktop pages
+ * sit inside their own gutters. Used to be an Android-only copy in `app`, which is why the desktop page headers were
+ * hand-built rows with a plain title block instead.
  */
 @Composable
 fun PageSummaryHeader(
-    @DrawableRes iconRes: Int,
     title: String,
     subtitle: String?,
     modifier: Modifier = Modifier,
+    icon: Painter? = null,
     accent: Color = MaterialTheme.colorScheme.primary,
+    horizontalPadding: Dp = 12.dp,
     onClick: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = AppLayoutTokens.screenHorizontalPadding, vertical = 4.dp)
+            .padding(horizontal = horizontalPadding, vertical = 4.dp)
             .clip(PageSummaryShape)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         shape = PageSummaryShape,
@@ -73,19 +75,21 @@ fun PageSummaryHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(PageSummaryIconShape)
-                    .background(accent.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = painterResource(iconRes),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = accent,
-                )
+            if (icon != null) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(PageSummaryIconShape)
+                        .background(accent.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = accent,
+                    )
+                }
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -117,19 +121,21 @@ fun PageSummaryHeader(
 }
 
 /**
- * Pill action of a [PageSummaryHeader]. [emphasized] fills it with the accent for the
- * page's primary action; the default is a tonal pill. A null [text] draws an icon-only
- * circle, which then needs a [contentDescription].
+ * Pill action of a [PageSummaryHeader]. [emphasized] fills it with the accent for the page's primary action; the
+ * default is a tonal pill. A null [text] draws an icon-only circle, which then needs a [contentDescription]. The icon
+ * comes either as a [Painter] (Android resources, the desktop's generated SVG set) or as an [imageVector].
+ * [enabled] mirrors the host's busy state, which on Android used to stop a handler instead of the pill.
  */
 @Composable
 fun PageSummaryAction(
     text: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    @DrawableRes iconRes: Int? = null,
-    icon: ImageVector? = null,
+    icon: Painter? = null,
+    imageVector: ImageVector? = null,
     contentDescription: String? = null,
     emphasized: Boolean = false,
+    enabled: Boolean = true,
     accent: Color = MaterialTheme.colorScheme.primary,
 ) {
     val container = if (emphasized) accent else accent.copy(alpha = 0.12f)
@@ -137,6 +143,7 @@ fun PageSummaryAction(
     Surface(
         onClick = onClick,
         modifier = modifier.height(32.dp),
+        enabled = enabled,
         shape = CircleShape,
         color = container,
         contentColor = content,
@@ -146,15 +153,15 @@ fun PageSummaryAction(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            if (iconRes != null) {
+            if (icon != null) {
                 Icon(
-                    painter = painterResource(iconRes),
+                    painter = icon,
                     contentDescription = contentDescription,
                     modifier = Modifier.size(16.dp),
                 )
-            } else if (icon != null) {
+            } else if (imageVector != null) {
                 Icon(
-                    imageVector = icon,
+                    imageVector = imageVector,
                     contentDescription = contentDescription,
                     modifier = Modifier.size(16.dp),
                 )

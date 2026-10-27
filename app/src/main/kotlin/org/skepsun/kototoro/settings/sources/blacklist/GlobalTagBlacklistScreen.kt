@@ -1,71 +1,49 @@
 package org.skepsun.kototoro.settings.sources.blacklist
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.displayName
 import org.skepsun.kototoro.core.ui.adaptive.TvTextButton
 import org.skepsun.kototoro.core.ui.adaptive.tvIconButtonRing
-import org.skepsun.kototoro.core.ui.adaptive.tvTextInputFocusEscape
+import org.skepsun.kototoro.core.ui.settings.BlacklistTagUiModel
+import org.skepsun.kototoro.core.ui.settings.BlacklistedTagsContent
 import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
 import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+/**
+ * Android's global tag blacklist. The grid, the chips and the "add this pattern" action are the shared
+ * [BlacklistedTagsContent] the desktop page also draws; this screen keeps the phone's top bar (back, CLEAR) and the
+ * long-press aliases dialog, which the desktop version extends with the key and the English label.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GlobalTagBlacklistScreen(
     state: GlobalTagBlacklistUiState,
@@ -76,15 +54,7 @@ fun GlobalTagBlacklistScreen(
     onClear: () -> Unit,
     onNavigateUp: () -> Unit,
 ) {
-    var aliasDetailsTag by remember { mutableStateOf<GlobalTagBlacklistItem?>(null) }
-    var queryValue by rememberSaveable(stateSaver = TextFieldValue.Saver) {
-        mutableStateOf(TextFieldValue(query, selection = TextRange(query.length)))
-    }
-    LaunchedEffect(query) {
-        if (query != queryValue.text) {
-            queryValue = TextFieldValue(query, selection = TextRange(query.length))
-        }
-    }
+    var aliasDetailsTag by remember { mutableStateOf<BlacklistTagUiModel?>(null) }
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
@@ -121,125 +91,20 @@ fun GlobalTagBlacklistScreen(
                 .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
                 .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
         ) {
-            OutlinedTextField(
-                value = queryValue,
-                onValueChange = { value ->
-                    queryValue = value
-                    onQueryChange(value.text)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp).tvTextInputFocusEscape(),
-                placeholder = { Text(stringResource(R.string.search)) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(
-                            onClick = {
-                                queryValue = TextFieldValue("")
-                                onQueryChange("")
-                            },
-                            modifier = Modifier.tvIconButtonRing(),
-                        ) {
-                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
-                        }
-                    }
-                },
-                singleLine = true,
+            BlacklistedTagsContent(
+                available = state.tags.map { it.toUiModel() },
+                selected = state.selectedItems.map { it.toUiModel() },
+                query = query,
+                onQueryChange = onQueryChange,
+                onToggle = onToggleTag,
+                onShowDetails = { aliasDetailsTag = it },
+                // Android offers the raw pattern as soon as the field says something.
+                rawPatternLabel = query.trim()
+                    .takeIf { query.isNotBlank() }
+                    ?.let { stringResource(R.string.add_tag_pattern, it) },
+                onAddRawPattern = onAddQuery,
+                tagPrefix = "blacklist-tag",
             )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.available),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text(
-                    text = stringResource(R.string.selected_count, state.selectedTags.size),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            if (query.isNotBlank()) {
-                TvTextButton(
-                    onClick = onAddQuery,
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                ) {
-                    Text(stringResource(R.string.add_tag_pattern, query.trim()))
-                }
-            }
-
-            if (state.tags.isEmpty() && state.selectedItems.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.nothing_found),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(24.dp),
-                )
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 104.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    if (state.selectedItems.isNotEmpty()) {
-                        item(
-                            key = "selected_tags",
-                            span = { GridItemSpan(maxLineSpan) },
-                        ) {
-                            Text(
-                                text = stringResource(R.string.selected_count, state.selectedItems.size),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
-                            )
-                        }
-                        items(
-                            items = state.selectedItems,
-                            key = { tag -> "selected:${tag.key}" },
-                        ) { tag ->
-                            BlacklistTagChip(
-                                tag = tag,
-                                selected = true,
-                                onClick = { onToggleTag(tag.key) },
-                                onLongClick = { aliasDetailsTag = tag },
-                            )
-                        }
-                    }
-                    state.tags.groupBy(GlobalTagBlacklistItem::category).forEach { (category, tags) ->
-                        item(
-                            key = "category:${category.id}",
-                            span = { GridItemSpan(maxLineSpan) },
-                        ) {
-                            Text(
-                                text = category.displayName(),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
-                            )
-                        }
-                        items(
-                            items = tags,
-                            key = GlobalTagBlacklistItem::key,
-                        ) { tag ->
-                            BlacklistTagChip(
-                                tag = tag,
-                                selected = false,
-                                onClick = { onToggleTag(tag.key) },
-                                onLongClick = { aliasDetailsTag = tag },
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -266,71 +131,11 @@ fun GlobalTagBlacklistScreen(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun BlacklistTagChip(
-    tag: GlobalTagBlacklistItem,
-    selected: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-) {
-    val showAliasesLabel = stringResource(R.string.show_aliases)
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .semantics { this.selected = selected }
-            .combinedClickable(
-                role = Role.Checkbox,
-                onClick = onClick,
-                onLongClickLabel = showAliasesLabel,
-                onLongClick = onLongClick,
-            ),
-        shape = MaterialTheme.shapes.small,
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-        contentColor = if (selected) {
-            MaterialTheme.colorScheme.onSecondaryContainer
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (selected) {
-                MaterialTheme.colorScheme.secondaryContainer
-            } else {
-                MaterialTheme.colorScheme.outlineVariant
-            },
-        ),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Column {
-                Text(
-                    text = tag.label,
-                    style = MaterialTheme.typography.labelLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (tag.aliases.isNotEmpty()) {
-                    Text(
-                        text = tag.aliases.joinToString(" · "),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            if (selected) {
-                Icon(
-                    imageVector = Icons.Default.Clear,
-                    contentDescription = stringResource(R.string.remove),
-                    modifier = Modifier.size(FilterChipDefaults.IconSize),
-                )
-            }
-        }
-    }
-}
+/** The view model's item as the shared grid takes it: the category's display name is the only thing it adds. */
+private fun GlobalTagBlacklistItem.toUiModel() = BlacklistTagUiModel(
+    key = key,
+    label = label,
+    aliases = aliases,
+    categoryId = category.name,
+    categoryName = category.displayName(),
+)

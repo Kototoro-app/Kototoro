@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.reader.novel.compose.NovelReadingModeOptions
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderQuickLayer
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderThemeSwatch
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderValueOption
@@ -45,11 +46,11 @@ internal fun DesktopNovelOptionsPanel(
     )
     ReaderOptionsPanelHost(
         colors = readerPanelColors(
-            base = Color(theme.background),
-            content = Color(theme.text),
-            contentSecondary = Color(theme.muted),
-            accent = Color(theme.text),
-            isDark = theme == DesktopNovelTheme.DARK,
+            base = Color(theme.palette.background),
+            content = Color(theme.palette.text),
+            contentSecondary = Color(theme.palette.secondaryText),
+            accent = Color(theme.palette.text),
+            isDark = theme.palette.isDark,
         ),
         surfaceMode = ReaderPanelSurfaceMode.Opaque,
         onDismissRequest = onDismiss,
@@ -59,7 +60,7 @@ internal fun DesktopNovelOptionsPanel(
             NovelReaderQuickLayer(
                 fontSize = fontSize.copy(tag = "novel-quick-font-size"),
                 themes = DesktopNovelTheme.entries.map {
-                    NovelReaderThemeSwatch(it.name, it.title, Color(it.background), Color(it.text))
+                    NovelReaderThemeSwatch(it.name, it.title, Color(it.palette.background), Color(it.palette.text))
                 },
                 selectedTheme = theme.name,
                 onThemeSelected = { controller.novelSettings(settings.copy(theme = DesktopNovelTheme.valueOf(it))) },
@@ -110,10 +111,9 @@ internal fun DesktopNovelOptionsPanel(
                         ReaderOptionsPageList {
                             item {
                                 ReaderOptionGroup {
-                                    ReaderOptionSwitchRow(
-                                        label = desktopText("novel.pagedMode"),
-                                        checked = settings.paged,
-                                        onCheckedChange = { controller.novelSettings(settings.copy(paged = it)) },
+                                    NovelReadingModeOptions(
+                                        paged = settings.paged,
+                                        onPagedChange = { controller.novelSettings(settings.copy(paged = it)) },
                                         modifier = Modifier.testTag("novel-paged-mode"),
                                     )
                                 }

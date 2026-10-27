@@ -11,6 +11,9 @@ import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.source.SourceContent
 import org.skepsun.kototoro.core.source.SourceContentImage
 import org.skepsun.kototoro.desktop.runtime.NovelBlock
+import org.skepsun.kototoro.reader.novel.NovelReaderColors
+import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
+import org.skepsun.kototoro.reader.novel.novelReaderColors
 
 /** What the reader shows for one novel chapter; [firstVisible]/[lastVisible] are block indexes, not pixels. */
 data class DesktopNovel(
@@ -31,11 +34,19 @@ data class DesktopNovel(
     fun titleOf(chapter: SourceChapter): String? = chapterTitles[chapter.id] ?: chapter.title
 }
 
-enum class DesktopNovelTheme(val background: Long, val text: Long, val muted: Long) {
-    LIGHT(0xFFFFFFFF, 0xFF1B2635, 0xFF687385),
-    SEPIA(0xFFF4ECD8, 0xFF3A2F20, 0xFF7A6A52),
-    GREEN(0xFFCCE8CF, 0xFF1F3A25, 0xFF4F7357),
-    DARK(0xFF15191F, 0xFFD5D9E0, 0xFF8E97A6);
+enum class DesktopNovelTheme(val preset: NovelReaderThemePreset) {
+    LIGHT(NovelReaderThemePreset.PAPER),
+    SEPIA(NovelReaderThemePreset.SEPIA),
+    GREEN(NovelReaderThemePreset.MOSS),
+    DARK(NovelReaderThemePreset.SLATE);
+
+    /**
+     * Android's own palette for this theme, so the Windows reader shows the surface and text color Android shows.
+     * [DARK] is the dark variant of Android's slate theme; the other three are the light variants of paper, sepia and
+     * moss. The enum names are persisted in preferences and in source preference values, so they stay as they are.
+     */
+    val palette: NovelReaderColors
+        get() = novelReaderColors(preset, isDarkTheme = this == DARK)
 
     /** Resolved per call, so an already-open options panel follows a language switch. */
     val title: String

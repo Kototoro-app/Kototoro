@@ -19,24 +19,24 @@ import org.skepsun.kototoro.desktop.runtime.NovelBlock
  * text actually ends instead of following an approximation that drifts with the font.
  */
 internal class DesktopNovelTextStyles(settings: DesktopNovelSettings) {
-    private val colors = settings.theme
+    private val palette = settings.theme.palette
     private val family = if (settings.serif) FontFamily.Serif else FontFamily.Default
     private val fontSize = settings.fontSize
 
     val body = TextStyle(
-        color = Color(colors.text),
+        color = Color(palette.text),
         fontSize = fontSize.sp,
         lineHeight = (fontSize * settings.lineSpacing).sp,
         fontFamily = family,
     )
 
     fun heading(level: Int) = TextStyle(
-        color = Color(colors.text),
+        color = Color(palette.text),
         fontSize = (fontSize + (7 - level).coerceIn(1, 6) * 2).sp,
         fontFamily = family,
         fontWeight = FontWeight.Bold,
     )
-    val muted: Color = Color(colors.muted)
+    val muted: Color = Color(palette.secondaryText)
 }
 
 internal fun DesktopNovelSettings.desktopNovelStyles() = DesktopNovelTextStyles(this)

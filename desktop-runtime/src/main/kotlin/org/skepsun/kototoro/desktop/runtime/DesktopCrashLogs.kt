@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.desktop.runtime
 
+import org.skepsun.kototoro.core.diagnostics.crashLogSummaryLine
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.nio.charset.StandardCharsets
@@ -140,18 +141,14 @@ class DesktopCrashLogs(
     }
 
     /**
-     * The line Android's list shows: the first stack-trace line that names an exception.
-     *
-     * Read through the file's first [SUMMARY_BYTES] only, because the list can hold twenty reports and none of them
-     * needs to be parsed whole to be listed.
+     * The line Android's list shows, from the report's first [SUMMARY_BYTES] only: the list can hold twenty reports and
+     * none of them needs to be parsed whole to be listed. The rule itself is shared with Android
+     * (`crashLogSummaryLine`), so both hosts name a report the same way.
      */
     private fun summary(path: Path): String = try {
         Files.newInputStream(path).use { input ->
             val head = input.readNBytes(SUMMARY_BYTES).toString(StandardCharsets.UTF_8)
-            head.lineSequence().map { it.trim() }
-                .firstOrNull { it.contains("Exception") || it.contains("Error") }
-                ?: head.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
-                ?: path.fileName.toString()
+            crashLogSummaryLine(head, path.fileName.toString())
         }
     } catch (_: Exception) {
         path.fileName.toString()

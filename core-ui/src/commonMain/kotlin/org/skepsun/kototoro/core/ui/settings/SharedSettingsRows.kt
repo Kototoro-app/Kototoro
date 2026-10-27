@@ -91,6 +91,7 @@ fun SettingsSwitchRow(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     testTag: String? = null,
+    leadingIcon: Painter? = null,
 ) {
     Row(
         modifier = modifier
@@ -101,6 +102,14 @@ fun SettingsSwitchRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        if (leadingIcon != null) {
+            Icon(
+                painter = leadingIcon,
+                contentDescription = null,
+                tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp),
+            )
+        }
         SettingsRowText(title, summary, Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
@@ -242,6 +251,7 @@ fun SettingsSplitSwitchRow(
     modifier: Modifier = Modifier,
     testTag: String? = null,
     switchTag: String? = null,
+    leadingIcon: Painter? = null,
 ) {
     Row(
         modifier = modifier.fillMaxWidth().padding(end = 16.dp),
@@ -254,7 +264,20 @@ fun SettingsSplitSwitchRow(
                 .clickable(enabled = enabled, onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (leadingIcon != null) {
+                Icon(
+                    painter = leadingIcon,
+                    contentDescription = null,
+                    tint = if (enabled) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.size(24.dp),
+                )
+            }
             SettingsRowText(title, summary, Modifier.weight(1f))
         }
         Switch(

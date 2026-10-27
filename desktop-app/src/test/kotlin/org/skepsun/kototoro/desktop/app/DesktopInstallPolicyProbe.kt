@@ -163,24 +163,22 @@ internal object DesktopInstallPolicyProbe {
                 snapshotTag("install-behavior-dialog", "sheet")
                 // One kind's answer, stored under Android's own type name.
                 onNodeWithTag("install-behavior-row:JAR").performClick(); idle()
-                onNodeWithTag("install-behavior-choice").assertExists()
+                onNodeWithTag("install-behavior-policy-dialog").assertExists()
                 // The kind is named in the title, so a click on the wrong row cannot pass for the right one.
                 onNodeWithText("JAR · 扩展安装行为").assertExists()
-                snapshotTag("install-behavior-choice", "choice")
-                onNodeWithTag("install-behavior-option:INSTALL_ONLY").performClick(); idle()
+                snapshotTag("install-behavior-policy-dialog", "choice")
+                onNodeWithTag("install-behavior-policy-option:INSTALL_ONLY").performClick(); idle()
                 check(session.extensionInstallPolicies()["JAR"] == ExtensionInstallPolicy.INSTALL_ONLY) {
                     session.extensionInstallPolicies().toString()
                 }
                 // The batch row answers for every kind at once, and back to "ask" empties the stored set again.
-                onNodeWithTag("install-behavior-batch").performClick(); idle()
-                onNodeWithTag("install-behavior-option:INSTALL_AND_ENABLE").performClick(); idle()
+                onNodeWithTag("install-behavior-batch:INSTALL_AND_ENABLE").performClick(); idle()
                 check(storedPolicies(session).size == DesktopInstallKind.entries.size) { storedPolicies(session).toString() }
                 onNodeWithTag("install-behavior-row:TSUNDOKU").assertTextContains("安装并启用", substring = true)
-                onNodeWithTag("install-behavior-batch").performClick(); idle()
-                onNodeWithTag("install-behavior-option:ASK_EVERY_TIME").performClick(); idle()
+                onNodeWithTag("install-behavior-batch:ASK_EVERY_TIME").performClick(); idle()
                 check(storedPolicies(session).isEmpty()) { "batch reset kept ${storedPolicies(session)}" }
                 onNodeWithTag("install-behavior-row:JAR").performClick(); idle()
-                onNodeWithTag("install-behavior-option:INSTALL_ONLY").performClick(); idle()
+                onNodeWithTag("install-behavior-policy-option:INSTALL_ONLY").performClick(); idle()
                 onNodeWithTag("install-behavior-close").performClick(); idle()
                 onNodeWithTag("install-behavior-dialog").assertDoesNotExist()
                 // An update is not a fresh install: Android installs it without asking and the switches stay put.

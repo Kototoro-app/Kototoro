@@ -4,6 +4,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.core.ui.settings.PreferenceDialogContent
 import org.skepsun.kototoro.core.ui.settings.PreferenceDialog
+import org.skepsun.kototoro.core.ui.settings.PreferenceChoice
+import org.skepsun.kototoro.core.ui.settings.PreferenceMultiChoiceDialog
 import androidx.compose.runtime.staticCompositionLocalOf
 import org.skepsun.kototoro.core.ui.theme.LocalIsIosInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalArtworkBackdrop
@@ -34,7 +36,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -219,10 +220,11 @@ fun SettingsActionPreference(
     enabled: Boolean = true,
     showChevron: Boolean = true,
     showUpdateBadge: Boolean = false,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
             .clickable(enabled = enabled, onClick = onClick)
@@ -275,11 +277,13 @@ fun SettingsSplitSwitchPreference(
     iconRes: Int? = null,
     icon: Painter? = null,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    switchModifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -324,6 +328,7 @@ fun SettingsSplitSwitchPreference(
             enabled = enabled,
             onCheckedChange = onCheckedChange,
             colors = settingsSwitchColors(),
+            modifier = switchModifier,
         )
     }
 }
@@ -334,9 +339,10 @@ fun SettingsInfoPreference(
     summary: String,
     iconRes: Int? = null,
     icon: Painter? = null,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .settingsPreferenceLayout(enabled = true),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -677,7 +683,6 @@ fun <T> SettingsMultiChoicePreference(
     onValueChange: (Set<T>) -> Unit,
 ) {
     var isDialogVisible by remember { mutableStateOf(false) }
-    var pendingValues by remember(values) { mutableStateOf(values) }
     val selectedLabel = options
         .filter { it.value in values }
         .joinToString { it.label }
@@ -688,7 +693,6 @@ fun <T> SettingsMultiChoicePreference(
             .fillMaxWidth()
             .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
             .clickable(enabled = enabled) {
-                pendingValues = values
                 isDialogVisible = true
             }
             .settingsPreferenceLayout(enabled),
@@ -733,89 +737,15 @@ fun <T> SettingsMultiChoicePreference(
     }
 
     if (isDialogVisible) {
-        val isIosStyle = LocalIsIosInterfaceStyle.current
-        SettingsAlertDialog(
+        PreferenceMultiChoiceDialog(
             title = title,
-            onDismissRequest = { isDialogVisible = false },
-            text = {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 320.dp),
-                ) {
-                    itemsIndexed(options, contentType = { _, _ -> "checkbox_option" }) { index, option ->
-                        val checked = option.value in pendingValues
-                        val optionEnabled = checked || maxSelections == null || pendingValues.size < maxSelections
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = if (isIosStyle) 48.dp else 0.dp)
-                                .tvFocusable(
-                                    enabled = optionEnabled,
-                                    shape = RoundedCornerShape(10.dp),
-                                    addFocusTarget = false,
-                                )
-                                .toggleable(
-                                    value = checked,
-                                    enabled = optionEnabled,
-                                    onValueChange = { checked ->
-                                        pendingValues = if (checked) {
-                                            pendingValues + option.value
-                                        } else {
-                                            pendingValues - option.value
-                                        }
-                                    },
-                                )
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            if (!isIosStyle) {
-                                Checkbox(
-                                    checked = checked,
-                                    onCheckedChange = null,
-                                    enabled = optionEnabled,
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            Text(
-                                text = option.label,
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = if (optionEnabled) {
-                                    MaterialTheme.colorScheme.onSurface
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                },
-                            )
-                            if (isIosStyle && checked) {
-                                Icon(
-                                    imageVector = SettingsMaterialIcons.Check,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                        if (isIosStyle && index != options.lastIndex) {
-                            SettingsGroupDivider(startPadding = 0.dp, endPadding = 0.dp)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                SettingsDialogActionButton(
-                    text = uiString("ok"),
-                    onClick = {
-                        onValueChange(pendingValues)
-                        isDialogVisible = false
-                    },
-                )
-            },
-            dismissButton = {
-                SettingsDialogActionButton(
-                    text = uiString("cancel"),
-                    onClick = { isDialogVisible = false },
-                )
-            },
+            selected = values,
+            options = options.map { PreferenceChoice(it.value, it.label) },
+            onValueChange = onValueChange,
+            onDismiss = { isDialogVisible = false },
+            enabled = enabled,
+            maxSelections = maxSelections,
+            renderDialog = LocalSettingsDialogRenderer.current,
         )
     }
 }
@@ -1211,17 +1141,13 @@ fun SettingsReorderPreference(
     onValueChange: (List<String>) -> Unit,
 ) {
     var isDialogVisible by remember { mutableStateOf(false) }
-    var pendingValue by remember(value) { mutableStateOf(value) }
     val displayValue = value.joinToString(", ").ifBlank { emptyValueText }
-    val moveUpLabel = uiString("move_up")
-    val moveDownLabel = uiString("move_down")
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
             .clickable(enabled = enabled) {
-                pendingValue = value
                 isDialogVisible = true
             }
             .settingsPreferenceLayout(enabled),
@@ -1266,92 +1192,18 @@ fun SettingsReorderPreference(
     }
 
     if (isDialogVisible) {
-        SettingsAlertDialog(
-            title = title,
+        org.skepsun.kototoro.core.ui.compose.ReorderEditorDialog(
+            items = value.map {
+                org.skepsun.kototoro.core.ui.compose.ReorderItem(it, it.removeSuffix(".jar"))
+            },
             onDismissRequest = { isDialogVisible = false },
-            text = {
-                if (pendingValue.isEmpty()) {
-                    Text(
-                        text = emptyValueText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 360.dp),
-                    ) {
-                        itemsIndexed(pendingValue, key = { _, item -> item }) { index: Int, item: String ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = item.removeSuffix(".jar"),
-                                    modifier = Modifier.weight(1f),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                IconButton(
-                                    onClick = {
-                                        if (index > 0) {
-                                            pendingValue = pendingValue.toMutableList().apply {
-                                                add(index - 1, removeAt(index))
-                                            }
-                                        }
-                                    },
-                                    enabled = index > 0,
-                                    modifier = Modifier.tvIconButtonRing(),
-                                ) {
-                                    Icon(
-                                        imageVector = SettingsMaterialIcons.KeyboardArrowUp,
-                                        contentDescription = moveUpLabel,
-                                    )
-                                }
-                                IconButton(
-                                    onClick = {
-                                        if (index < pendingValue.lastIndex) {
-                                            pendingValue = pendingValue.toMutableList().apply {
-                                                add(index + 1, removeAt(index))
-                                            }
-                                        }
-                                    },
-                                    enabled = index < pendingValue.lastIndex,
-                                    modifier = Modifier.tvIconButtonRing(),
-                                ) {
-                                    Icon(
-                                        imageVector = SettingsMaterialIcons.KeyboardArrowDown,
-                                        contentDescription = moveDownLabel,
-                                    )
-                                }
-                            }
-                            if (index != pendingValue.lastIndex) {
-                                SettingsSectionDivider()
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                SettingsDialogActionButton(
-                    text = uiString("ok"),
-                    onClick = {
-                        onValueChange(pendingValue)
-                        isDialogVisible = false
-                    },
-                )
-            },
-            dismissButton = {
-                SettingsDialogActionButton(
-                    text = uiString("cancel"),
-                    onClick = { isDialogVisible = false },
-                )
-            },
+            onSave = { onValueChange(it) },
+            enabled = enabled,
+            allowEmptySave = true,
+            showMoveButtons = true,
+            title = title,
+            summary = summary.orEmpty(),
+            emptyText = emptyValueText,
         )
     }
 }

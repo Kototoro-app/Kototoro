@@ -1,13 +1,10 @@
 package org.skepsun.kototoro.settings.compose
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
@@ -19,8 +16,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.settings.SourcesSettingsContent
+import org.skepsun.kototoro.core.ui.settings.SourcesSettingsContentState
+import org.skepsun.kototoro.core.ui.settings.SourcesSettingsTitles
+import org.skepsun.kototoro.core.ui.settings.SourcesSettingsIcons
+import org.skepsun.kototoro.core.ui.settings.PreferenceChoice
 import org.skepsun.kototoro.core.prefs.TriStateOption
 import org.skepsun.kototoro.core.ui.compose.KototoroSnackbarHost
 import org.skepsun.kototoro.explore.data.SourcesSortOrder
@@ -114,9 +117,35 @@ fun SourcesSettingsScreen(
             }
         } ?: stringResource(R.string.custom)
 
-        val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
-        LazyColumn(
-            state = listState,
+        SourcesSettingsContent(
+            state = SourcesSettingsContentState(
+                sortOrder = state.sourcesSortOrder.name,
+                customSort = state.sourcesSortOrder == SourcesSortOrder.MANUAL,
+                gridMode = null,
+                groupByLanguage = state.isSourcesGroupedByLanguage,
+                showBrokenSources = state.isShowBrokenSources,
+                installBehaviorSummary = extensionInstallBehaviorSummary,
+                incognitoMode = state.incognitoModeForNsfw.name,
+                blacklistedTagCount = state.blacklistedTagCount,
+                tagsWarnings = state.isTagsWarningsEnabled,
+                mirrorSwitching = state.isMirrorSwitchingEnabled,
+                handleLinks = state.isHandleLinksEnabled,
+            ),
+            titles = SourcesSettingsTitles(overviewTitle, remoteSourcesTitle, adultFilteringTitle, moreTitle),
+            sortOptions = sortOrderOptions.map { PreferenceChoice(it.value.name, it.label) },
+            incognitoOptions = incognitoOptions.map { PreferenceChoice(it.value.name, it.label) },
+            onSortChange = { onSourcesSortOrderChange(SourcesSortOrder.valueOf(it)) },
+            onGridChange = onSourcesGridModeChange,
+            onGroupByLanguageChange = onSourcesGroupedByLanguageChange,
+            onReorderClick = onReorderSourcesClick,
+            onWizardClick = onSetupWizardClick,
+            onShowBrokenChange = onShowBrokenSourcesChange,
+            onInstallBehaviorClick = { isExtensionInstallSheetVisible = true },
+            onIncognitoChange = { onIncognitoModeForNsfwChange(TriStateOption.valueOf(it)) },
+            onBlacklistClick = onGlobalTagBlacklistClick,
+            onTagsWarningsChange = onTagsWarningsEnabledChange,
+            onMirrorChange = onMirrorSwitchingChange,
+            onHandleLinksChange = onHandleLinksEnabledChange,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
@@ -125,127 +154,42 @@ fun SourcesSettingsScreen(
                 bottom = innerPadding.calculateBottomPadding() +
                     WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
             ),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item(key = "overview") {
-                SettingsPreferenceGroup(title = overviewTitle) {
-                    item { SettingsChoicePreference(
-                        title = stringResource(R.string.sort_order),
-                        iconRes = R.drawable.ic_sort,
-                        value = state.sourcesSortOrder,
-                        options = sortOrderOptions,
-                        onValueChange = onSourcesSortOrderChange,
-                    ) }
-                    if (state.sourcesSortOrder == SourcesSortOrder.MANUAL) {
-                        item { SettingsActionPreference(
-                            title = stringResource(R.string.reorder),
-                            summary = stringResource(R.string.reorder_hint),
-                            iconRes = R.drawable.ic_reorder_handle,
-                            onClick = onReorderSourcesClick,
-                        ) }
-                    }
-                    item { SettingsActionPreference(
-                        title = stringResource(R.string.show_in_grid_view),
-                        summary = stringResource(R.string.browse_display_options_summary),
-                        iconRes = R.drawable.ic_grid,
-                        showChevron = false,
-                        onClick = {},
-                    ) }
-                    item { SettingsSwitchPreference(
-                        title = stringResource(R.string.group_sources_by_language),
-                        iconRes = R.drawable.ic_language,
-                        checked = state.isSourcesGroupedByLanguage,
-                        summary = stringResource(R.string.group_sources_by_language_summary),
-                        onCheckedChange = onSourcesGroupedByLanguageChange,
-                    ) }
-                    item { SettingsActionPreference(
-                        title = stringResource(R.string.setup_wizard),
-                        iconRes = R.drawable.ic_welcome,
-                        summary = stringResource(R.string.setup_wizard_summary),
-                        onClick = onSetupWizardClick,
-                    ) }
-                }
-            }
-            item(key = "remote_sources") {
-                SettingsPreferenceGroup(title = remoteSourcesTitle) {
-                    item { SettingsReorderPreference(
-                        title = stringResource(R.string.jar_priority_order_title),
-                        iconRes = R.drawable.ic_tap_reorder,
-                        value = state.jarPriorityOrder,
-                        summary = stringResource(R.string.jar_priority_order_summary),
-                        emptyValueText = stringResource(R.string.not_specified),
-                        onValueChange = onJarPriorityOrderChange,
-                    ) }
-                    item { SettingsSwitchPreference(
-                        title = stringResource(R.string.show_broken_sources),
-                        iconRes = R.drawable.ic_error_small,
-                        checked = state.isShowBrokenSources,
-                        summary = stringResource(R.string.show_broken_sources_summary),
-                        onCheckedChange = onShowBrokenSourcesChange,
-                    ) }
-                    item { SettingsActionPreference(
-                        title = stringResource(R.string.extension_install_behavior),
-                        iconRes = R.drawable.ic_extension,
-                        summary = extensionInstallBehaviorSummary,
-                        onClick = { isExtensionInstallSheetVisible = true },
-                    ) }
-                }
-            }
-            item(key = "adult_filtering") {
-                SettingsPreferenceGroup(title = adultFilteringTitle) {
-                    item { SettingsMultiChoicePreference(
-                        title = stringResource(R.string.disable_nsfw),
-                        iconRes = R.drawable.ic_nsfw,
-                        values = state.adultContentFilterTargets,
-                        options = adultContentFilterOptions,
-                        emptySelectionText = stringResource(R.string.none),
-                        onValueChange = onAdultContentFilterTargetsChange,
-                    ) }
-                    item { SettingsChoicePreference(
-                        title = stringResource(R.string.incognito_for_nsfw),
-                        iconRes = R.drawable.ic_incognito,
-                        value = state.incognitoModeForNsfw,
-                        options = incognitoOptions,
-                        onValueChange = onIncognitoModeForNsfwChange,
-                    ) }
-                    item { SettingsActionPreference(
-                        title = stringResource(R.string.blacklisted_tags),
-                        iconRes = R.drawable.ic_tag,
-                        summary = if (state.blacklistedTagCount == 0) {
-                            stringResource(R.string.blacklisted_tags_summary)
-                        } else {
-                            stringResource(R.string.selected_count, state.blacklistedTagCount)
-                        },
-                        onClick = onGlobalTagBlacklistClick,
-                    ) }
-                }
-            }
-            item(key = "more") {
-                SettingsPreferenceGroup(title = moreTitle) {
-                    item { SettingsSwitchPreference(
-                        title = stringResource(R.string.tags_warnings),
-                        iconRes = R.drawable.ic_alert_outline,
-                        checked = state.isTagsWarningsEnabled,
-                        summary = stringResource(R.string.tags_warnings_summary),
-                        onCheckedChange = onTagsWarningsEnabledChange,
-                    ) }
-                    item { SettingsSwitchPreference(
-                        title = stringResource(R.string.mirror_switching),
-                        iconRes = R.drawable.ic_swap_vert,
-                        checked = state.isMirrorSwitchingEnabled,
-                        summary = stringResource(R.string.mirror_switching_summary),
-                        onCheckedChange = onMirrorSwitchingChange,
-                    ) }
-                    item { SettingsSwitchPreference(
-                        title = stringResource(R.string.handle_links),
-                        iconRes = R.drawable.ic_open_external,
-                        checked = state.isHandleLinksEnabled,
-                        summary = stringResource(R.string.handle_links_summary),
-                        onCheckedChange = onHandleLinksEnabledChange,
-                    ) }
-                }
-            }
-        }
+            icons = SourcesSettingsIcons(
+                sort = painterResource(R.drawable.ic_sort),
+                reorder = painterResource(R.drawable.ic_reorder_handle),
+                grid = painterResource(R.drawable.ic_grid),
+                language = painterResource(R.drawable.ic_language),
+                wizard = painterResource(R.drawable.ic_welcome),
+                broken = painterResource(R.drawable.ic_error_small),
+                install = painterResource(R.drawable.ic_extension),
+                incognito = painterResource(R.drawable.ic_incognito),
+                blacklist = painterResource(R.drawable.ic_tag),
+                warnings = painterResource(R.drawable.ic_alert_outline),
+                mirror = painterResource(R.drawable.ic_swap_vert),
+                links = painterResource(R.drawable.ic_open_external),
+            ),
+            jarPriorityEditor = {
+                SettingsReorderPreference(
+                    title = stringResource(R.string.jar_priority_order_title),
+                    iconRes = R.drawable.ic_tap_reorder,
+                    value = state.jarPriorityOrder,
+                    summary = stringResource(R.string.jar_priority_order_summary),
+                    emptyValueText = stringResource(R.string.not_specified),
+                    onValueChange = onJarPriorityOrderChange,
+                )
+            },
+            adultFilterEditor = {
+                SettingsMultiChoicePreference(
+                    title = stringResource(R.string.disable_nsfw),
+                    iconRes = R.drawable.ic_nsfw,
+                    values = state.adultContentFilterTargets,
+                    options = adultContentFilterOptions,
+                    emptySelectionText = stringResource(R.string.none),
+                    onValueChange = onAdultContentFilterTargetsChange,
+                )
+            },
+            renderDialog = { AndroidPreferenceDialog(it) },
+        )
 
         if (isExtensionInstallSheetVisible) {
             ExtensionInstallBehaviorSheet(
