@@ -419,6 +419,7 @@ private struct RecordUpdateDownloadButton: View {
             .disabled(preparing || (!chapters.isEmpty && pending.isEmpty))
             .font(.caption)
             .buttonStyle(.bordered)
+            .controlSize(.small)
             .accessibilityIdentifier("records.downloadUpdate.\(content.id)")
             .task(id: entries.filter { $0.state == .completed }.count) { refreshOffline() }
             .alert("下载更新失败", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
@@ -514,7 +515,7 @@ private struct RecordsTimeline: View {
                 return TimelineDayGroup(date: date, all: dayItems, history: dayItems.filter { !$0.isUpdate },
                                         updates: dayItems.filter(\.isUpdate))
             }
-            LazyVStack(spacing: 20) {
+            LazyVStack(spacing: 14) {
                 if filter == .all {
                     HStack {
                         Text("历史、书签与下载").frame(maxWidth: .infinity)
@@ -526,12 +527,12 @@ private struct RecordsTimeline: View {
                     .background(Color(uiColor: .systemGroupedBackground))
                 }
                 ForEach(dayGroups, id: \.date) { group in
-                    VStack(alignment: filter == .all ? .center : .leading, spacing: 12) {
+                    VStack(alignment: filter == .all ? .center : .leading, spacing: 8) {
                         Text(dayTitle(group.date, items: group.all))
                             .font(.caption.weight(.medium)).padding(.horizontal, 10).padding(.vertical, 4)
                             .background(Color(uiColor: .systemGroupedBackground), in: Capsule())
                         if dynamicTypeSize.isAccessibilitySize || filter != .all {
-                            VStack(alignment: .leading, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 6) {
                                 ForEach(group.all) { item in
                                     eventRow(item, alignment: .leading, showsKind: true)
                                 }
@@ -539,7 +540,7 @@ private struct RecordsTimeline: View {
                             .padding(.leading, filter == .all ? 0 : 16)
                             .background(Color(uiColor: .systemGroupedBackground))
                         } else {
-                            HStack(alignment: .top, spacing: 24) {
+                            HStack(alignment: .top, spacing: 20) {
                                 lane(group.history, alignment: .trailing)
                                 lane(group.updates, alignment: .leading)
                             }
@@ -658,14 +659,14 @@ private struct RecordsTimeline: View {
     }
 
     private func lane(_ items: [TimelineItem], alignment: HorizontalAlignment) -> some View {
-        VStack(alignment: alignment, spacing: 10) {
+        VStack(alignment: alignment, spacing: 6) {
             ForEach(items) { item in eventRow(item, alignment: alignment, showsKind: false) }
         }
         .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
     }
 
     private func eventRow(_ item: TimelineItem, alignment: HorizontalAlignment, showsKind: Bool) -> some View {
-        VStack(alignment: alignment, spacing: 6) {
+        VStack(alignment: alignment, spacing: 4) {
             Button {
                 if let bookmark = item.bookmark { open(bookmark, of: item.content); return }
                 selected = item
@@ -684,10 +685,17 @@ private struct RecordsTimeline: View {
                     .accessibilityHidden(true)
                 HStack(alignment: .top, spacing: 8) {
                     if alignment == .leading { cover }
-                    VStack(alignment: alignment, spacing: 4) {
-                        Text(item.content.title).font(.subheadline.weight(.medium)).lineLimit(2)
-                            .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
-                        if showsKind { Text(kindTitle(item)).font(.caption).foregroundStyle(.secondary) }
+                    VStack(alignment: alignment, spacing: 2) {
+                        let unseen = item.event.map { $0.isUpdate && $0.isUnseen && !seenEvents.contains($0.id) } ?? false
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            if unseen {
+                                Circle().fill(.red).frame(width: 6, height: 6)
+                                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] }
+                                    .accessibilityLabel("未查看更新")
+                            }
+                            Text(item.content.title).font(.subheadline.weight(.medium)).lineLimit(2)
+                                .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
+                        }
                         if let bookmark = item.bookmark {
                             Label(bookmarkPlace(bookmark, of: item.content), systemImage: "bookmark.fill")
                                 .font(.caption).foregroundStyle(.tint).lineLimit(1)
@@ -699,44 +707,22 @@ private struct RecordsTimeline: View {
                             Label("下载 \(count) 章", systemImage: "arrow.down.circle")
                                 .font(.caption).foregroundStyle(.tint).lineLimit(1)
                         } else if let event = item.event {
-                            if event.isUpdate && event.isUnseen && !seenEvents.contains(event.id) {
-                                Circle().fill(.red).frame(width: 6, height: 6).accessibilityLabel("未查看更新")
-                            }
-                            Text(event.isUpdate ? (event.count < 0 ? String(localized: "有章节更新")
-                                : String(localized: "新增 \(event.count) 章节")) : event.detail)
-                                .font(.caption).foregroundStyle(event.isUpdate ? Color.orange : .secondary).lineLimit(1)
-                            if event.isUpdate && event.pendingCount >= 0 {
-                                Text(event.pendingCount == 0 ? String(localized: "已读完")
-                                     : String(localized: "待读 \(event.pendingCount) 章"))
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
                             if event.isUpdate {
-                                Text(sourceUpdateDate(event)).font(.caption).foregroundStyle(.secondary)
-                            }
-                            if !event.isUpdate && event.hasProgress {
-                                VStack(alignment: alignment, spacing: 3) {
-                                    ProgressView(value: Double(min(max(event.progress, 0), 1)))
-                                        .progressViewStyle(.linear)
-                                    Text(event.content.mediaKind == "VIDEO"
-                                         ? String(localized: "本集进度 \(Int(min(max(event.progress, 0), 1) * 100))%")
-                                         : String(localized: "本章进度 \(Int(min(max(event.progress, 0), 1) * 100))%"))
-                                        .font(.caption2).foregroundStyle(.secondary)
-                                }
-                                .accessibilityIdentifier("timeline.progress.\(event.id)")
+                                updateSummary(event).font(.caption).lineLimit(2)
+                                    .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
+                                Text(sourceUpdateDate(event)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                            } else {
+                                Text(event.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                if event.hasProgress { progressLine(event) }
                             }
                         }
-                        HStack(spacing: 4) {
-                            Text(ReadingStatsFormat.date(item.timestamp), format: .dateTime.hour().minute())
-                            if let duration = item.event?.duration, duration > 0 {
-                                Text("· " + ReadingStatsFormat.duration(duration))
-                            }
-                        }.font(.caption2).foregroundStyle(.secondary)
+                        Text(metaLine(item, showsKind: showsKind)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
                     if alignment == .trailing { cover }
                 }
-                .frame(maxWidth: .infinity, minHeight: 56, alignment: alignment == .leading ? .leading : .trailing)
-                .padding(.vertical, 3).contentShape(Rectangle())
+                .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
+                .padding(.vertical, 2).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .contextMenu {
@@ -748,9 +734,42 @@ private struct RecordsTimeline: View {
             }
             .accessibilityIdentifier("timeline.\(item.id)")
             if let event = item.event, event.isUpdate {
+                // Sits under the text column rather than the cover.
                 RecordUpdateDownloadButton(event: event, runtime: runtime)
+                    .padding(alignment == .leading ? .leading : .trailing, 40)
             }
         }
+    }
+
+    /// The update's new chapters and what is still unread, on one line.
+    private func updateSummary(_ event: IosTimelineEvent) -> Text {
+        let added = Text(event.count < 0 ? String(localized: "有章节更新") : String(localized: "新增 \(event.count) 章节"))
+            .foregroundStyle(.orange)
+        guard event.pendingCount >= 0 else { return added }
+        let pending = Text(event.pendingCount == 0 ? String(localized: "已读完")
+                           : String(localized: "待读 \(event.pendingCount) 章")).foregroundStyle(.secondary)
+        return Text("\(added) · \(pending)")
+    }
+
+    /// A thin progress bar with its percentage beside it.
+    private func progressLine(_ event: IosTimelineEvent) -> some View {
+        let percent = Int(min(max(event.progress, 0), 1) * 100)
+        return HStack(spacing: 6) {
+            ProgressView(value: Double(percent) / 100).progressViewStyle(.linear)
+            Text("\(percent)%").font(.caption2).monospacedDigit().foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(event.content.mediaKind == "VIDEO" ? String(localized: "本集进度 \(percent)%")
+                            : String(localized: "本章进度 \(percent)%"))
+        .accessibilityIdentifier("timeline.progress.\(event.id)")
+    }
+
+    /// Kind (when the lanes don't already say it), time and reading duration.
+    private func metaLine(_ item: TimelineItem, showsKind: Bool) -> String {
+        var parts = [ReadingStatsFormat.date(item.timestamp).formatted(.dateTime.hour().minute())]
+        if showsKind { parts.insert(kindTitle(item), at: 0) }
+        if let duration = item.event?.duration, duration > 0 { parts.append(ReadingStatsFormat.duration(duration)) }
+        return parts.joined(separator: " · ")
     }
 
     private func dayTitle(_ date: String, items: [TimelineItem]) -> String {
