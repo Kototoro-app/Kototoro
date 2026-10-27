@@ -249,6 +249,8 @@ struct ReaderMorePanel: View {
     let status: String?
     let downloading: Bool
     let onAction: (String) -> Void
+    /// Called when a page translation option changes, so translated pages are redone with it.
+    var onTranslationOptions: () -> Void = {}
     @State private var section = 0
     @State private var savedDefault = false
 
@@ -267,6 +269,7 @@ struct ReaderMorePanel: View {
         VStack {
             Picker("选项", selection: $section) {
                 Text("快捷").tag(0); Text("布局").tag(1); Text("显示").tag(2); Text("控件").tag(3)
+                Text("翻译").tag(4)
             }.pickerStyle(.segmented).padding(.horizontal, 12)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
@@ -322,6 +325,8 @@ struct ReaderMorePanel: View {
                         Toggle("书页阴影", isOn: $settings.value.bookEffect)
                         Text("亮度"); Slider(value: $settings.value.brightness, in: -0.5...0.5)
                         Text("对比度"); Slider(value: $settings.value.contrast, in: 0.5...2)
+                    } else if section == 4 {
+                        PageTranslationSettingsView(onChange: onTranslationOptions)
                     } else {
                         Toggle("阅读时保持屏幕常亮", isOn: $settings.value.keepScreenOn)
                             .accessibilityIdentifier("reader.option.keepScreenOn")

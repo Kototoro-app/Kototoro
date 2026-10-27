@@ -1,6 +1,28 @@
 import XCTest
 
 extension XCUIApplication {
+    /// Opens Settings and follows [path], the identifiers of the entries to tap, scrolling each page to its entry.
+    func openSettings(_ path: String..., file: StaticString = #filePath, line: UInt = #line) {
+        mainTab("设置").tap()
+        for id in path {
+            let entry = buttons[id]
+            for _ in 0..<6 where !(entry.exists && entry.isHittable) { swipeUp() }
+            XCTAssertTrue(entry.waitForExistence(timeout: 10), debugDescription, file: file, line: line)
+            entry.tap()
+        }
+    }
+
+    /// Records → Bookmarks → the notes overview of every work.
+    func openNotes(file: StaticString = #filePath, line: UInt = #line) {
+        mainTab("记录").tap()
+        let filter = buttons["timeline.filter.bookmarks"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 15), debugDescription, file: file, line: line)
+        filter.tap()
+        let entry = buttons["records.notes"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), debugDescription, file: file, line: line)
+        entry.tap()
+    }
+
     /// All record kinds stay on the same timeline.
     func selectRecordsFilter(_ filter: String) {
         buttons["timeline.filter.\(filter)"].tap()

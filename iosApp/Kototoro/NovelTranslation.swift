@@ -10,9 +10,16 @@ enum NovelTranslationSettings {
     static let bilingualKey = "novel.translation.bilingual"
     /// A `Locale.Language` identifier; empty follows the system language.
     static let targetKey = "novel.translation.target"
+    /// The novels' original language as a `Locale.Language` identifier; empty recognizes it from each chapter.
+    static let sourceKey = "novel.translation.source"
 
     static func target(_ stored: String) -> Locale.Language {
         stored.isEmpty ? Locale.current.language : Locale.Language(identifier: stored)
+    }
+
+    /// The chosen original language of novels, if any.
+    static func chosenSource(_ stored: String) -> Locale.Language? {
+        stored.isEmpty ? nil : Locale.Language(identifier: stored)
     }
 
     /// The chapter's language, recognized from its first lines; the system translator needs a known source to
@@ -69,8 +76,9 @@ enum NovelTranslationCache {
         return directory.appending(path: "\(digest).json")
     }
 
-    static func key(content: String, chapter: String, target: Locale.Language) -> String {
-        "\(content)|\(chapter)|\(target.minimalIdentifier)"
+    /// A chosen [source] keeps its own translations; recognized ones share the key translations always had.
+    static func key(content: String, chapter: String, target: Locale.Language, source: Locale.Language? = nil) -> String {
+        "\(content)|\(chapter)|\(target.minimalIdentifier)" + (source.map { "|\($0.minimalIdentifier)" } ?? "")
     }
 
     static func load(_ key: String) -> [Int: String] {
@@ -145,11 +153,49 @@ extension NovelReaderModel {
     }
 }
 
-/// Translation settings of the reader's settings sheet: how translations are shown and the target language.
-struct NovelTranslationSettingsSection: View {
-    @AppStorage(NovelTranslationSettings.bilingualKey) private var bilingual = false
-    @AppStorage(NovelTranslationSettings.targetKey) private var target = ""
+/// A language of the system translator, or "" for [automatic]; values are `Locale.Language` minimal identifiers.
+struct TranslationLanguagePicker: View {
+    let title: LocalizedStringKey
+    @Binding var selection: String
+    let automatic: String
     @State private var languages: [Locale.Language] = []
+
+    var body: some View {
+        Picker(title, selection: $selection) {
+            Text(automatic).tag("")
+            ForEach(languages, id: \.minimalIdentifier) { language in
+                Text(NovelTranslationSettings.title(language)).tag(language.minimalIdentifier)
+            }
+            // A stored language the list does not offer (yet) still shows by name.
+            if !selection.isEmpty, !languages.contains(where: { $0.minimalIdentifier == selection }) {
+                Text(NovelTranslationSettings.title(Locale.Language(identifier: selection))).tag(selection)
+            }
+        }
+        .task {
+            languages = await LanguageAvailability().supportedLanguages
+                .sorted { NovelTranslationSettings.title($0) < NovelTranslationSettings.title($1) }
+        }
+    }
+}
+
+/// The target language every translation uses, novels and manga pages alike.
+struct TranslationTargetPicker: View {
+    @AppStorage(NovelTranslationSettings.targetKey) private var target = ""
+
+    var body: some View {
+        TranslationLanguagePicker(
+            title: "目标语言", selection: $target,
+            automatic: String(localized: "跟随系统（\(NovelTranslationSettings.title(Locale.current.language))）"))
+    }
+}
+
+/// Novel translation settings: how translations are shown, the original language and (in the reader's sheet) the
+/// target language.
+struct NovelTranslationSettingsSection: View {
+    var showsTarget = true
+    var header: LocalizedStringKey = "翻译"
+    @AppStorage(NovelTranslationSettings.bilingualKey) private var bilingual = false
+    @AppStorage(NovelTranslationSettings.sourceKey) private var source = ""
     @State private var cleared = false
 
     var body: some View {
@@ -159,26 +205,21 @@ struct NovelTranslationSettingsSection: View {
                 Text("双语对照").tag(true)
             }
             .accessibilityIdentifier("novel.settings.translationMode")
-            Picker("目标语言", selection: $target) {
-                Text("跟随系统（\(NovelTranslationSettings.title(Locale.current.language))）").tag("")
-                ForEach(languages, id: \.minimalIdentifier) { language in
-                    Text(NovelTranslationSettings.title(language)).tag(language.minimalIdentifier)
-                }
+            if showsTarget {
+                TranslationTargetPicker()
+                    .accessibilityIdentifier("novel.settings.translationTarget")
             }
-            .accessibilityIdentifier("novel.settings.translationTarget")
+            TranslationLanguagePicker(title: "原文语言", selection: $source, automatic: String(localized: "自动识别"))
+                .accessibilityIdentifier("novel.settings.translationSource")
             Button(cleared ? "已清除翻译缓存" : "清除翻译缓存", role: .destructive) {
                 NovelTranslationCache.clear()
                 cleared = true
             }
             .disabled(cleared)
         } header: {
-            Text("翻译")
+            Text(header)
         } footer: {
-            Text("使用 iOS 系统翻译。首次翻译某种语言时会提示下载语言包，之后可离线翻译；译文按章节缓存在本机。")
-        }
-        .task {
-            languages = await LanguageAvailability().supportedLanguages
-                .sorted { NovelTranslationSettings.title($0) < NovelTranslationSettings.title($1) }
+            Text("使用 iOS 系统翻译。首次翻译某种语言时会提示下载语言包，之后可离线翻译；译文按章节缓存在本机。原文语言默认按每章正文自动识别，识别不准时可手动指定。")
         }
     }
 }

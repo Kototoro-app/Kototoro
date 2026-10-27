@@ -868,7 +868,7 @@ final class ExtensionEcosystemTests: XCTestCase {
         sleep(1)
         attach("Panorama back at top")
         XCTAssertTrue(app.staticTexts["details.title"].isHittable)
-        app.tabBars.buttons["设置"].tap()
+        app.openSettings("settings.details")
         XCTAssertTrue(app.switches["settings.panorama"].waitForExistence(timeout: 10))
         attach("Panorama settings")
     }

@@ -2154,11 +2154,7 @@ final class LocalImportTests: XCTestCase {
 
         app.terminate()
         app.launch()
-        app.mainTab("设置").tap()
-        let entry = app.buttons["settings.notes"]
-        for _ in 0..<6 where !entry.exists { app.swipeUp() }
-        XCTAssertTrue(entry.waitForExistence(timeout: 10), app.debugDescription)
-        entry.tap()
+        app.openNotes()
         let comic = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@",
                                                      "notes.work", "fixture_reader_text")).firstMatch
         XCTAssertTrue(comic.waitForExistence(timeout: 10), app.debugDescription)
@@ -2374,11 +2370,7 @@ final class LocalImportTests: XCTestCase {
 
         app.terminate()
         app.launch()
-        app.mainTab("设置").tap()
-        let entry = app.buttons["settings.notes"]
-        for _ in 0..<6 where !entry.exists { app.swipeUp() }
-        XCTAssertTrue(entry.waitForExistence(timeout: 10), app.debugDescription)
-        entry.tap()
+        app.openNotes()
         let work = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@",
                                                     "notes.work", "fixture_novel_controls")).firstMatch
         XCTAssertTrue(work.waitForExistence(timeout: 10), app.debugDescription)
@@ -2555,6 +2547,46 @@ final class LocalImportTests: XCTestCase {
         attach("页面翻译后")
     }
 
+    /// The translation tab of the options panel tunes recognition; a changed option translates the pages again
+    /// with it, and the defaults come back with one button.
+    @MainActor
+    func testMangaPageTranslationOptionsRetranslatePages() throws {
+        app.launchEnvironment["KOTOTORO_TRANSLATION_FIXTURE"] = "1"
+        app.launchArguments += ["-novel.translation.target", "zh", "-manga.translation.language", "en-US"]
+        app.terminate()
+        app.launch()
+        importFile(source: "LOCAL", file: "fixture_reader_text", reuse: true)
+        openFirstChapter(title: "fixture_reader_text")
+        XCTAssertTrue(app.images["reader.image"].firstMatch.waitForExistence(timeout: 30), app.debugDescription)
+        app.buttons["reader.more"].tap()
+        app.segmentedControls.buttons["快捷"].tap()
+        app.buttons["reader.action.translate"].tap()
+        let translated = app.images.matching(NSPredicate(format: "label CONTAINS %@", "[zh] Where are you going")).firstMatch
+        XCTAssertTrue(translated.waitForExistence(timeout: 60), app.debugDescription)
+
+        if !app.segmentedControls.buttons["翻译"].exists { app.buttons["reader.more"].tap() }
+        app.segmentedControls.buttons["翻译"].tap()
+        let language = app.buttons["reader.translation.language"]
+        XCTAssertTrue(language.waitForExistence(timeout: 10), app.debugDescription)
+        // The stored "en-US" matches the picker's English entry, so the chosen language shows.
+        XCTAssertTrue(language.label.contains("英语"), language.label)
+        XCTAssertTrue(app.sliders["reader.translation.confidence"].exists)
+        XCTAssertTrue(app.sliders["reader.translation.spacing"].exists)
+        let correction = app.switches["reader.translation.correction"]
+        // Start from the defaults whatever an earlier run left behind.
+        app.buttons["reader.translation.reset"].tap()
+        XCTAssertEqual(correction.value as? String, "1")
+        correction.switches.firstMatch.tap()
+        XCTAssertEqual(correction.value as? String, "0")
+        attach("翻译选项")
+        // The original shows while the page is recognized again, then the new translation replaces it.
+        XCTAssertTrue(translated.waitForExistence(timeout: 60), app.debugDescription)
+
+        app.buttons["reader.translation.reset"].tap()
+        XCTAssertEqual(correction.value as? String, "1")
+        XCTAssertTrue(translated.waitForExistence(timeout: 60), app.debugDescription)
+    }
+
     /// Incognito reading says so and leaves the saved position alone; normal reading saves it again.
     @MainActor
     func testIncognitoReadingKeepsTheSavedPosition() throws {
@@ -2606,6 +2638,43 @@ final class LocalImportTests: XCTestCase {
         app.buttons["novel.panel.close"].tap()
         let restored = NSPredicate { _, _ in !page.label.contains("[en]") && page.label.contains("第1段") }
         wait(for: [XCTNSPredicateExpectation(predicate: restored, object: nil)], timeout: 10)
+    }
+
+    /// Settings → Translation holds the shared target language, the novels' options and the manga page options; the
+    /// original language chosen there is the one novels translate from.
+    @MainActor
+    func testTranslationSettingsPageSetsTheNovelSourceLanguage() throws {
+        app.launchEnvironment["KOTOTORO_TRANSLATION_FIXTURE"] = "1"
+        app.launchArguments += ["-novel.translation.target", "en", "-novel.translation.source", "ja",
+                                "-novel.translation.bilingual", "NO"]
+        app.terminate()
+        app.launch()
+        app.openSettings("settings.translation")
+        let target = app.buttons["settings.translation.target"]
+        XCTAssertTrue(target.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(target.label.contains("英语"), target.label)
+        let source = app.buttons["novel.settings.translationSource"]
+        XCTAssertTrue(source.label.contains("日语"), source.label)
+        XCTAssertTrue(app.buttons["reader.translation.language"].exists, app.debugDescription)
+        XCTAssertTrue(app.switches["reader.translation.correction"].exists, app.debugDescription)
+        attach("翻译设置页")
+        // The recognition sliders sit one level down.
+        let tuning = app.buttons["settings.translation.tuning"]
+        for _ in 0..<4 where !(tuning.exists && tuning.isHittable) { app.swipeUp() }
+        tuning.tap()
+        XCTAssertTrue(app.sliders["reader.translation.confidence"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.sliders["reader.translation.spacing"].exists, app.debugDescription)
+        XCTAssertTrue(app.buttons["reader.translation.reset"].exists, app.debugDescription)
+        attach("识别调整")
+
+        openNovelControls(mode: "PAGED")
+        app.buttons["novel.more"].tap()
+        let translate = app.buttons["novel.translate"]
+        XCTAssertTrue(translate.waitForExistence(timeout: 10), app.debugDescription)
+        translate.tap()
+        app.buttons["novel.panel.close"].tap()
+        let translated = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "[ja→en] ")).firstMatch
+        XCTAssertTrue(translated.waitForExistence(timeout: 10), app.debugDescription)
     }
 
     @MainActor

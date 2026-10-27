@@ -11,39 +11,85 @@ struct PageTextBlock: Equatable {
     var vertical: Bool
 }
 
+/// The recognition options of page translation, shared by every work. Each value is read when translation starts or
+/// the options change, so the reader re-recognizes its pages with the new ones.
+struct PageTranslationOptions: Equatable {
+    /// A `Locale.Language` identifier for Vision; empty detects the language on each page.
+    static let languageKey = "manga.translation.language"
+    static let correctionKey = "manga.translation.correction"
+    /// Lines recognized with less confidence (0...1) are left as they are.
+    static let confidenceKey = "manga.translation.confidence"
+    /// How far apart two lines may sit and still form one bubble, in line thicknesses.
+    static let spacingKey = "manga.translation.spacing"
+    static let spacingRange = 0.3...1.8
+    static let defaultSpacing = 0.9
+    static let confidenceRange = 0.0...0.9
+
+    var language: Locale.Language?
+    var correction = true
+    var confidence: Float = 0
+    var spacing: CGFloat = CGFloat(Self.defaultSpacing)
+
+    static var current: PageTranslationOptions {
+        let defaults = UserDefaults.standard
+        let language = defaults.string(forKey: languageKey) ?? ""
+        return PageTranslationOptions(
+            language: language.isEmpty ? nil : Locale.Language(identifier: language),
+            correction: defaults.object(forKey: correctionKey) as? Bool ?? true,
+            confidence: Float(min(max(defaults.double(forKey: confidenceKey), confidenceRange.lowerBound),
+                                  confidenceRange.upperBound)),
+            spacing: CGFloat(min(max(defaults.object(forKey: spacingKey) as? Double ?? defaultSpacing,
+                                     spacingRange.lowerBound), spacingRange.upperBound)))
+    }
+
+    /// The languages Vision recognizes at the accuracy translation uses.
+    static var supportedLanguages: [Locale.Language] {
+        var request = RecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        return request.supportedRecognitionLanguages
+    }
+}
+
 /// Android's manga OCR + translation done with the system: Vision finds the text, the Translation framework
 /// translates each bubble, and the translation is painted over the original at the same place. The rendered page
 /// keeps the original's size, so the reader's layout does not change when it is swapped in.
 enum PageTextRecognizer {
     /// Lines found on [image], merged into bubbles.
-    static func blocks(in image: UIImage) async throws -> [PageTextBlock] {
+    static func blocks(in image: UIImage, options: PageTranslationOptions) async throws -> [PageTextBlock] {
         guard let cgImage = image.cgImage else { return [] }
         var request = RecognizeTextRequest()
         request.recognitionLevel = .accurate
-        request.automaticallyDetectsLanguage = true
-        request.usesLanguageCorrection = true
+        if let language = options.language {
+            request.automaticallyDetectsLanguage = false
+            request.recognitionLanguages = [language]
+        } else {
+            request.automaticallyDetectsLanguage = true
+        }
+        request.usesLanguageCorrection = options.correction
         let observations = try await request.perform(on: cgImage, orientation: .up)
         let lines = observations.compactMap { observation -> PageTextBlock? in
-            guard let text = observation.topCandidates(1).first?.string,
-                  text.contains(where: \.isLetter) else { return nil }
+            guard let candidate = observation.topCandidates(1).first, candidate.confidence >= options.confidence,
+                  candidate.string.contains(where: \.isLetter) else { return nil }
+            let text = candidate.string
             let box = observation.boundingBox.cgRect
             let rect = CGRect(x: box.minX, y: 1 - box.maxY, width: box.width, height: box.height)
             // Vision reports a vertical column as a tall, narrow line.
             let aspect = rect.height * CGFloat(cgImage.height) / max(1, rect.width * CGFloat(cgImage.width))
             return PageTextBlock(rect: rect, text: text, vertical: aspect > 2.2 && text.count > 1)
         }
-        return merge(lines, aspect: CGFloat(cgImage.width) / max(1, CGFloat(cgImage.height)))
+        return merge(lines, aspect: CGFloat(cgImage.width) / max(1, CGFloat(cgImage.height)), spacing: options.spacing)
     }
 
-    /// Lines close to each other (within about half a line) belong to one bubble. [aspect] is the page's width over
-    /// its height, so distances compare in the same units horizontally and vertically.
-    static func merge(_ lines: [PageTextBlock], aspect: CGFloat) -> [PageTextBlock] {
+    /// Lines close to each other (within [spacing] lines, about one by default) belong to one bubble. [aspect] is the
+    /// page's width over its height, so distances compare in the same units horizontally and vertically.
+    static func merge(_ lines: [PageTextBlock], aspect: CGFloat,
+                      spacing: CGFloat = CGFloat(PageTranslationOptions.defaultSpacing)) -> [PageTextBlock] {
         /// Whether two lines of one direction sit within about one line of each other. The thicker line sets the
         /// distance: a line without ascenders ("at noon.") gets a much shorter box than the line above it.
         func near(_ a: PageTextBlock, _ b: PageTextBlock) -> Bool {
             guard a.vertical == b.vertical else { return false }
             let thickness = a.vertical ? max(a.rect.width, b.rect.width) : max(a.rect.height, b.rect.height)
-            let pad = thickness * 0.9
+            let pad = thickness * spacing
             let padX = a.vertical ? pad : pad / max(aspect, 0.01)
             let padY = a.vertical ? pad * max(aspect, 0.01) : pad
             return a.rect.insetBy(dx: -padX / 2, dy: -padY / 2).intersects(b.rect.insetBy(dx: -padX / 2, dy: -padY / 2))
@@ -199,6 +245,9 @@ final class ReaderPageTranslator: ObservableObject {
     private var wake: AsyncStream<Void>.Continuation?
     private var target = NovelTranslationSettings.target(
         UserDefaults.standard.string(forKey: NovelTranslationSettings.targetKey) ?? "")
+    private var options = PageTranslationOptions.current
+    /// Bumped when the options change, so recognition and translation started before are dropped.
+    private var generation = 0
     private static let fixture = ProcessInfo.processInfo.environment["KOTOTORO_TRANSLATION_FIXTURE"] == "1"
 
     func toggle() {
@@ -209,7 +258,31 @@ final class ReaderPageTranslator: ObservableObject {
         } else {
             target = NovelTranslationSettings.target(
                 UserDefaults.standard.string(forKey: NovelTranslationSettings.targetKey) ?? "")
+            options = .current
         }
+    }
+
+    /// Re-reads the target language and recognition options; when they changed, the loaded pages are recognized and
+    /// translated again with them (the originals show meanwhile).
+    func reloadOptions() {
+        let target = NovelTranslationSettings.target(
+            UserDefaults.standard.string(forKey: NovelTranslationSettings.targetKey) ?? "")
+        let options = PageTranslationOptions.current
+        guard target != self.target || options != self.options else { return }
+        self.target = target
+        self.options = options
+        guard enabled else { return }
+        generation += 1
+        recognized = [:]
+        finished = []
+        rendered = [:]
+        texts = [:]
+        recognizing = false
+        configuration = nil
+        status = .idle
+        onRendered?()
+        updateStatus()
+        recognizeNext()
     }
 
     /// Asks for page [key] (its loaded [image]) to be translated; repeated requests are ignored.
@@ -234,8 +307,11 @@ final class ReaderPageTranslator: ObservableObject {
               let key = order.first(where: { recognized[$0] == nil && !finished.contains($0) }),
               let image = sources[key] else { return }
         recognizing = true
+        let generation = generation
+        let options = options
         Task {
-            let blocks = (try? await PageTextRecognizer.blocks(in: image)) ?? []
+            let blocks = (try? await PageTextRecognizer.blocks(in: image, options: options)) ?? []
+            guard generation == self.generation else { return }
             recognized[key] = blocks
             recognizing = false
             if blocks.isEmpty {
@@ -254,7 +330,7 @@ final class ReaderPageTranslator: ObservableObject {
     /// The first page with text tells the source language the session is prepared for.
     private func startSession(sample: [String]) {
         guard configuration == nil else { return }
-        let source = NovelTranslationSettings.source(of: sample)
+        let source = options.language ?? NovelTranslationSettings.source(of: sample)
         if let source, NovelTranslationSettings.matches(source, target) {
             status = .sameLanguage
             return
@@ -279,6 +355,7 @@ final class ReaderPageTranslator: ObservableObject {
             for await _ in stream {
                 while enabled, let key = order.first(where: { recognized[$0]?.isEmpty == false && !finished.contains($0) }),
                       let image = sources[key], let blocks = recognized[key] {
+                    let generation = generation
                     let requests = blocks.enumerated().map {
                         TranslationSession.Request(sourceText: $0.element.text, clientIdentifier: String($0.offset))
                     }
@@ -292,6 +369,7 @@ final class ReaderPageTranslator: ObservableObject {
                     let page = await Task.detached(priority: .userInitiated) {
                         PageTranslationRenderer.render(image, blocks: blocks, translations: texts)
                     }.value
+                    guard generation == self.generation else { break }
                     finish(key, image: page, texts: texts)
                 }
             }
@@ -299,6 +377,210 @@ final class ReaderPageTranslator: ObservableObject {
         } catch {
             status = .failed(String(localized: "翻译失败：\(error.localizedDescription)"))
         }
+    }
+}
+
+/// Vision's recognition language for manga pages, or "" to detect it on each page. Tagged by the full identifier:
+/// zh-Hans and zh-Hant stay distinct, and a stored "en-US" matches the English entry.
+struct PageRecognitionLanguagePicker: View {
+    @AppStorage(PageTranslationOptions.languageKey) private var language = ""
+    @State private var languages: [Locale.Language] = []
+
+    var body: some View {
+        Picker("原文语言", selection: Binding(
+            get: { language.isEmpty ? "" : Locale.Language(identifier: language).maximalIdentifier },
+            set: { language = $0 })) {
+            Text("自动识别").tag("")
+            ForEach(languages, id: \.maximalIdentifier) { language in
+                Text(NovelTranslationSettings.title(language)).tag(language.maximalIdentifier)
+            }
+        }
+        .task {
+            languages = PageTranslationOptions.supportedLanguages
+                .sorted { NovelTranslationSettings.title($0) < NovelTranslationSettings.title($1) }
+        }
+    }
+}
+
+/// A slider that shows its value while dragged and stores it only when released, so translated pages are redone
+/// once per change.
+struct CommittingSlider: View {
+    let title: LocalizedStringKey
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+    let text: (Double) -> String
+    @State private var draft: Double?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            LabeledContent(title) { Text(text(draft ?? value)).monospacedDigit() }
+            Slider(value: Binding(get: { draft ?? value }, set: { draft = $0 }), in: range, step: step) { editing in
+                if !editing, let committed = draft {
+                    draft = nil
+                    value = committed
+                }
+            }
+            .accessibilityValue(text(draft ?? value))
+        }
+    }
+}
+
+/// The stored recognition options of manga page translation, with the controls both settings surfaces show.
+struct PageTranslationOptionControls: DynamicProperty {
+    @AppStorage(PageTranslationOptions.languageKey) var language = ""
+    @AppStorage(PageTranslationOptions.correctionKey) var correction = true
+    @AppStorage(PageTranslationOptions.confidenceKey) var confidence = 0.0
+    @AppStorage(PageTranslationOptions.spacingKey) var spacing = PageTranslationOptions.defaultSpacing
+
+    static let languageNote: LocalizedStringKey = "指定原文语言后识别更准，也作为翻译的源语言；日文漫画选择日语可避免被识别成中文。"
+    static let correctionNote: LocalizedStringKey = "按词典修正识别结果；拟声词或艺术字被改错时可以关闭。"
+    static let confidenceNote: LocalizedStringKey = "低于该置信度的文字不翻译，用于去掉背景纹理、水印等误识别。"
+    static let spacingNote: LocalizedStringKey = "相距在该行距以内的文字合并为一个气泡翻译。相邻气泡被合在一起时调小，同一气泡被拆开时调大。"
+
+    /// A value that changes when any option does.
+    var signature: String { "\(language)|\(correction)|\(confidence)|\(spacing)" }
+
+    var correctionToggle: some View {
+        Toggle("语言纠错", isOn: $correction).accessibilityIdentifier("reader.translation.correction")
+    }
+
+    var confidenceSlider: some View {
+        CommittingSlider(title: "最低置信度", value: $confidence, range: PageTranslationOptions.confidenceRange, step: 0.05) {
+            $0 == 0 ? String(localized: "不过滤") : $0.formatted(.percent.precision(.fractionLength(0)))
+        }
+        .accessibilityIdentifier("reader.translation.confidence")
+    }
+
+    var spacingSlider: some View {
+        CommittingSlider(title: "气泡合并距离", value: $spacing, range: PageTranslationOptions.spacingRange, step: 0.1) {
+            String(localized: "\($0.formatted(.number.precision(.fractionLength(1)))) 行")
+        }
+        .accessibilityIdentifier("reader.translation.spacing")
+    }
+
+    var resetButton: some View {
+        Button("恢复默认") {
+            language = ""
+            correction = true
+            confidence = 0
+            spacing = PageTranslationOptions.defaultSpacing
+        }
+        .accessibilityIdentifier("reader.translation.reset")
+    }
+
+    /// Resets only the sliders (the language and correction sit on the page above).
+    var tuningResetButton: some View {
+        Button("恢复默认") {
+            confidence = 0
+            spacing = PageTranslationOptions.defaultSpacing
+        }
+        .accessibilityIdentifier("reader.translation.reset")
+    }
+}
+
+/// The translation page of the reader's options panel: the target language (shared with novels) and how Vision reads
+/// the page. [onChange] runs after a value is committed.
+struct PageTranslationSettingsView: View {
+    var onChange: () -> Void
+    @AppStorage(NovelTranslationSettings.targetKey) private var target = ""
+    private let options = PageTranslationOptionControls()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            LabeledContent("目标语言") {
+                TranslationTargetPicker().labelsHidden().accessibilityIdentifier("reader.translation.target")
+            }
+            LabeledContent("原文语言") {
+                PageRecognitionLanguagePicker().labelsHidden().accessibilityIdentifier("reader.translation.language")
+            }
+            note(PageTranslationOptionControls.languageNote)
+            options.correctionToggle
+            note(PageTranslationOptionControls.correctionNote)
+            options.confidenceSlider
+            note(PageTranslationOptionControls.confidenceNote)
+            options.spacingSlider
+            note(PageTranslationOptionControls.spacingNote)
+            options.resetButton.buttonStyle(.glass)
+        }
+        .onChange(of: "\(target)|\(options.signature)") { onChange() }
+    }
+
+    private func note(_ text: LocalizedStringKey) -> some View {
+        Text(text).font(.caption).foregroundStyle(.secondary)
+    }
+}
+
+/// Settings → Translation: the shared target language, each kind's original language, then the cache. The page
+/// recognition sliders sit one level down, where only someone fixing a page goes.
+struct TranslationSettingsView: View {
+    @AppStorage(NovelTranslationSettings.bilingualKey) private var bilingual = false
+    @AppStorage(NovelTranslationSettings.sourceKey) private var novelSource = ""
+    private let options = PageTranslationOptionControls()
+    @State private var cleared = false
+
+    var body: some View {
+        Form {
+            Section {
+                TranslationTargetPicker().accessibilityIdentifier("settings.translation.target")
+            } footer: {
+                Text("小说与漫画共用目标语言。")
+            }
+            Section("小说") {
+                TranslationLanguagePicker(title: "原文语言", selection: $novelSource,
+                                          automatic: String(localized: "自动识别"))
+                    .accessibilityIdentifier("novel.settings.translationSource")
+                Picker("显示方式", selection: $bilingual) {
+                    Text("仅译文").tag(false)
+                    Text("双语对照").tag(true)
+                }
+                .accessibilityIdentifier("novel.settings.translationMode")
+            }
+            Section {
+                PageRecognitionLanguagePicker().accessibilityIdentifier("reader.translation.language")
+                options.correctionToggle
+                NavigationLink { PageRecognitionTuningPage() } label: { Text("识别调整") }
+                    .accessibilityIdentifier("settings.translation.tuning")
+            } header: {
+                Text("漫画")
+            } footer: {
+                Text("原文语言识别不准时手动指定；拟声词被改错时可关闭纠错。")
+            }
+            Section {
+                Button(cleared ? "已清除翻译缓存" : "清除翻译缓存", role: .destructive) {
+                    NovelTranslationCache.clear()
+                    cleared = true
+                }
+                .disabled(cleared)
+            } footer: {
+                Text("使用 iOS 系统翻译，语言包下载后可离线使用。小说译文按章节缓存在本机。")
+            }
+        }
+        .navigationTitle("翻译")
+    }
+}
+
+/// How Vision's lines become bubbles and which of them are kept.
+struct PageRecognitionTuningPage: View {
+    private let options = PageTranslationOptionControls()
+
+    var body: some View {
+        Form {
+            Section {
+                options.confidenceSlider
+            } footer: {
+                Text(PageTranslationOptionControls.confidenceNote)
+            }
+            Section {
+                options.spacingSlider
+            } footer: {
+                Text(PageTranslationOptionControls.spacingNote)
+            }
+            Section {
+                options.tuningResetButton
+            }
+        }
+        .navigationTitle("识别调整")
     }
 }
 

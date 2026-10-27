@@ -180,22 +180,19 @@ private struct RecordsPage: View {
                 }
                 if timelineFilter == .downloads {
                     NavigationLink { ReaderDownloadsView() } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Label("下载列表", systemImage: "list.bullet")
-                                Text("所有内容空间的下载任务").font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption.weight(.semibold))
-                        }
-                        .font(.subheadline)
-                        .padding(14)
-                        .background(Color(uiColor: .secondarySystemGroupedBackground),
-                                    in: RoundedRectangle(cornerRadius: 14))
+                        entryCard("下载列表", symbol: "list.bullet", detail: "所有内容空间的下载任务")
                     }
                     .buttonStyle(.plain)
                     .padding(.horizontal)
                     .accessibilityIdentifier("records.downloads.queue")
+                }
+                if timelineFilter == .bookmarks, let notes = library.library?.notes {
+                    NavigationLink { NotesOverviewView(notes: notes) } label: {
+                        entryCard("书签与笔记", symbol: "note.text", detail: "按作品查看划线、页面笔记与书签")
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal)
+                    .accessibilityIdentifier("records.notes")
                 }
                 if let error = stats.error {
                     Text(error).font(.footnote).foregroundStyle(.red).padding(.horizontal)
@@ -252,6 +249,21 @@ private struct RecordsPage: View {
         .onChange(of: range) { _, _ in selectedDay = nil }
         .onChange(of: effectiveKind) { _, _ in selectedDay = nil }
         .onChange(of: timelineFilter) { _, _ in selectedDay = nil }
+    }
+
+    /// A page this filter leads to, shown above its timeline.
+    private func entryCard(_ title: LocalizedStringKey, symbol: String, detail: LocalizedStringKey) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 3) {
+                Label(title, systemImage: symbol)
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+        }
+        .font(.subheadline)
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
     }
 
     @ViewBuilder
