@@ -17,13 +17,16 @@ def prepare(archive: Path, destination: Path) -> None:
             entries = [entry for entry in bundle.infolist()
                        if re.sub(r"-[0-9a-f]{16,64}(?=\.jar$)", "",
                                  re.sub(r"^\d{3}-", "", Path(entry.filename).name)) == name]
-            if len(entries) != 1:
-                raise ValueError(f"Archive must contain exactly one {name}")
-            if entries[0].file_size > 128 * 1024 * 1024:
-                raise ValueError(f"Runtime artifact exceeds size limit: {name}")
-            data = bundle.read(entries[0])
-            if hashlib.sha256(data).hexdigest() != expected:
-                raise ValueError(f"Runtime SHA-256 mismatch: {name}")
+            if not entries:
+                raise ValueError(f"Archive is missing {name}")
+            # Packaged JVM dependencies can also appear in the ordered compatibility classpath. Accept duplicate
+            # names only when every copy matches the same pin, never by silently choosing the first entry.
+            for entry in entries:
+                if entry.file_size > 128 * 1024 * 1024:
+                    raise ValueError(f"Runtime artifact exceeds size limit: {name}")
+                data = bundle.read(entry)
+                if hashlib.sha256(data).hexdigest() != expected:
+                    raise ValueError(f"Runtime SHA-256 mismatch: {name}")
             verified[name] = data
     # Validate the entire input before writing anything; never extract archive paths or unpinned native binaries.
     destination.mkdir(parents=True, exist_ok=True)

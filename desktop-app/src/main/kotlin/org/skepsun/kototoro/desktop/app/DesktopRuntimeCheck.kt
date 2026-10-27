@@ -60,9 +60,10 @@ internal object DesktopRuntimeCheck {
                         check(it.getColor(1, 2) == 0xFF00FF00.toInt())
                     }
                     result.setProperty("image", "ok")
-                    if (platform == org.skepsun.kototoro.desktop.runtime.DesktopPlatform.MACOS) {
+                    if (platform != org.skepsun.kototoro.desktop.runtime.DesktopPlatform.WINDOWS) {
                         result.setProperty("browser", "unsupported")
-                        result.setProperty("player.embedded", "unsupported")
+                        result.setProperty("player.embedded", if (platform ==
+                            org.skepsun.kototoro.desktop.runtime.DesktopPlatform.LINUX) "unbundled" else "unsupported")
                         result.setProperty("upscale.native", "unsupported")
                         return@use
                     }

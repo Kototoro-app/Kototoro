@@ -79,6 +79,24 @@ for the tested image plus the portable ZIP and MSI. The self check needs Vulkan:
 software driver such as Mesa lavapipe. More detail is in
 [desktop-app/README.md](https://github.com/Kototoro-app/Kototoro/blob/devel/desktop-app/README.md).
 
+### Linux desktop app
+
+Linux uses the same JVM `desktop-app`, controllers, and runtime as Windows/macOS. Shared Android/desktop UI
+continues to live in `core-ui/commonMain`; do not add Linux page copies. Source development requires JDK 21,
+the pinned compatibility JARs, and an X11 session (Xvfb works for the offline smoke tests).
+
+```bash
+python3 "desktop-app/prepare-compatibility.py" "/absolute/path/Kototoro-windows.zip"
+bash "desktop-app/run-linux.sh" "-PdesktopDataDirectory=/absolute/path/linux-debug-data"
+bash "desktop-app/smoke-linux.sh"
+```
+
+The smoke command reuses existing desktop probes for browsing, reading, process restart, screenshots, and production
+window shutdown. `-PwithLinuxDistribution` enables a bundled JVM image and `.deb` packaging; `packageDeb` runs the
+relocated-image integration test before packaging. Native browser/upscaling/update services remain unavailable. See
+[Linux server development](https://github.com/Kototoro-app/Kototoro/blob/devel/desktop-app/README.md#linux-服务器开发)
+for display setup, reports, and proxy options.
+
 ### iOS app
 
 Requires an Apple Silicon Mac with **Xcode 27** (the app uses the iOS 27 SDK; deployment target iOS 26) and

@@ -70,6 +70,61 @@ def prepareDesktopIcons = tasks.register('prepareDesktopIcons') {
 sourceSets.main.resources.srcDir(desktopIconResources)
 tasks.named('processResources').configure { dependsOn prepareDesktopIcons }
 
+// One Android-owned source for native launchers and the running desktop window. No platform artwork copies.
+def androidAppIcon = rootProject.file('app/src/main/ic_launcher-playstore.png')
+def desktopAppIcons = layout.buildDirectory.dir('generated/app-icons')
+def prepareDesktopAppIcons = tasks.register('prepareDesktopAppIcons') {
+    inputs.file(androidAppIcon)
+    outputs.dir(desktopAppIcons)
+    doLast {
+        def root = desktopAppIcons.get().asFile
+        def resources = new File(root, 'resources/icons')
+        resources.mkdirs()
+        new File(resources, 'app.png').bytes = androidAppIcon.bytes
+        def source = javax.imageio.ImageIO.read(androidAppIcon)
+        def png = { int size ->
+            def image = new java.awt.image.BufferedImage(size, size, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+            def graphics = image.createGraphics()
+            try {
+                graphics.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+                    java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+                graphics.drawImage(source, 0, 0, size, size, null)
+            } finally { graphics.dispose() }
+            def bytes = new ByteArrayOutputStream()
+            try { javax.imageio.ImageIO.write(image, 'png', bytes) } finally { image.flush() }
+            bytes.toByteArray()
+        }
+        try {
+            def sizes = [16, 32, 48, 64, 128, 256]
+            def images = sizes.collect { png(it) }
+            int offset = 6 + 16 * sizes.size()
+            def ico = java.nio.ByteBuffer.allocate(offset + images.sum { it.length })
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            ico.putShort(0 as short).putShort(1 as short).putShort(sizes.size() as short)
+            sizes.eachWithIndex { size, index ->
+                ico.put((size == 256 ? 0 : size) as byte).put((size == 256 ? 0 : size) as byte)
+                    .put(0 as byte).put(0 as byte).putShort(1 as short).putShort(32 as short)
+                    .putInt(images[index].length).putInt(offset)
+                offset += images[index].length
+            }
+            images.each { ico.put(it) }
+            new File(root, 'Kototoro.ico').bytes = ico.array()
+            def entries = ['icp4': 16, 'icp5': 32, 'icp6': 64, 'ic07': 128, 'ic08': 256, 'ic09': 512]
+                .collect { type, size ->
+                    byte[] data = png(size)
+                    java.nio.ByteBuffer.allocate(data.length + 8).put(type.getBytes('US-ASCII'))
+                        .putInt(data.length + 8).put(data).array()
+                }
+            def icns = java.nio.ByteBuffer.allocate(8 + entries.sum { it.length })
+            icns.put('icns'.getBytes('US-ASCII')).putInt(icns.capacity())
+            entries.each { icns.put(it) }
+            new File(root, 'Kototoro.icns').bytes = icns.array()
+        } finally { source.flush() }
+    }
+}
+sourceSets.main.resources.srcDir(prepareDesktopAppIcons.map { desktopAppIcons.get().dir('resources') })
+tasks.named('processResources').configure { dependsOn prepareDesktopAppIcons }
+
 // Android's own string resources for the screens both hosts share, so Windows shows the same text as Android.
 //
 // The Windows UI language is resolved at runtime (see DesktopStrings): `follow the system`, or a language picked in
@@ -334,12 +389,16 @@ def runtimeJavaVersion = providers.gradleProperty('mihonCompatibilityJavaVersion
 def desktopLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(runtimeJavaVersion) }
 def bundleWindowsRuntime = providers.gradleProperty('withWindowsDistribution').isPresent()
 def bundleMacosRuntime = providers.gradleProperty('withMacosDistribution').isPresent()
-def bundleDesktopRuntime = bundleWindowsRuntime || bundleMacosRuntime
-if (bundleWindowsRuntime && bundleMacosRuntime) {
+def bundleLinuxRuntime = providers.gradleProperty('withLinuxDistribution').isPresent()
+def bundleDesktopRuntime = bundleWindowsRuntime || bundleMacosRuntime || bundleLinuxRuntime
+if ([bundleWindowsRuntime, bundleMacosRuntime, bundleLinuxRuntime].count { it } > 1) {
     throw new GradleException('Select only one desktop distribution platform')
 }
 if (bundleMacosRuntime && !System.getProperty('os.name').startsWith('Mac')) {
     throw new GradleException('macOS distribution requires a macOS build host')
+}
+if (bundleLinuxRuntime && !System.getProperty('os.name').startsWith('Linux')) {
+    throw new GradleException('Linux distribution requires a Linux build host')
 }
 // jpackage on macOS requires a positive major version; Windows keeps its existing local-preview default.
 def windowsPackageVersion = providers.gradleProperty('desktopPackageVersion')
@@ -562,7 +621,7 @@ def prepareWindowsResources = tasks.register('prepareWindowsResources', Copy) {
     }
 }
 
-// Both hosts use exactly the same pinned compatibility runtime and ordered JARs. Only native resources differ.
+// All desktop hosts use the same pinned compatibility runtime and ordered JARs. Only native resources differ.
 def macosResources = layout.buildDirectory.dir('macos-resources')
 def prepareMacosResources = tasks.register('prepareMacosResources', Copy) {
     dependsOn ':mihon-desktop-compat:verifyWindowsRuntime'
@@ -571,6 +630,16 @@ def prepareMacosResources = tasks.register('prepareMacosResources', Copy) {
     from(runtimePins) { into 'common' }
     into macosResources
 }
+def linuxResources = layout.buildDirectory.dir('linux-resources')
+def prepareLinuxResources = tasks.register('prepareLinuxResources', Copy) {
+    dependsOn ':mihon-desktop-compat:verifyWindowsRuntime'
+    from(rootProject.file('LICENSE')) { rename { 'PROJECT_LICENSE' }; into 'common' }
+    from('distribution/LINUX_PREVIEW.md') { into 'common' }
+    from(runtimePins) { into 'common' }
+    into linuxResources
+}
+def prepareDistributionResources = bundleLinuxRuntime ? prepareLinuxResources :
+    (bundleMacosRuntime ? prepareMacosResources : prepareWindowsResources)
 
 compose.desktop {
     application {
@@ -580,7 +649,7 @@ compose.desktop {
             disableDefaultConfiguration()
             mainJar.set(tasks.named('jar').flatMap { it.archiveFile })
             fromFiles(packagedRuntimeArtifacts)
-            dependsOn((bundleMacosRuntime ? prepareMacosResources : prepareWindowsResources).get())
+            dependsOn(prepareDistributionResources.get())
         }
         nativeDistributions {
             packageName = 'Kototoro'
@@ -589,13 +658,23 @@ compose.desktop {
             vendor = 'Kototoro'
             includeAllModules = true
             targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
-                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg)
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
             if (bundleWindowsRuntime) appResourcesRootDir.set(windowsResources)
             if (bundleMacosRuntime) appResourcesRootDir.set(macosResources)
+            if (bundleLinuxRuntime) appResourcesRootDir.set(linuxResources)
+            linux {
+                packageName = 'kototoro'
+                shortcut = true
+                menuGroup = 'Office'
+                iconFile.set(rootProject.layout.projectDirectory.file('app/src/main/ic_launcher-playstore.png'))
+            }
             macOS {
                 bundleID = 'org.skepsun.kototoro.desktop'
+                iconFile.set(desktopAppIcons.map { it.file('Kototoro.icns') })
             }
             windows {
+                iconFile.set(desktopAppIcons.map { it.file('Kototoro.ico') })
                 perUserInstall = true
                 // A sibling directory avoids merging program uninstall rules with the user data directory.
                 installationPath = 'Kototoro-App'
@@ -610,11 +689,11 @@ compose.desktop {
 }
 
 tasks.withType(org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask).configureEach {
-    if (bundleWindowsRuntime) dependsOn prepareWindowsResources
-    if (bundleMacosRuntime) dependsOn prepareMacosResources
+    dependsOn prepareDesktopAppIcons
+    if (bundleDesktopRuntime) dependsOn prepareDistributionResources
     doFirst {
         if (!bundleDesktopRuntime) {
-            throw new GradleException('Supply -PwithWindowsDistribution or -PwithMacosDistribution to bundle the verified runtime')
+            throw new GradleException('Supply -PwithWindowsDistribution, -PwithMacosDistribution or -PwithLinuxDistribution to bundle the verified runtime')
         }
     }
 }
@@ -625,8 +704,7 @@ tasks.withType(org.jetbrains.compose.desktop.application.tasks.AbstractJLinkTask
 }
 
 tasks.matching { it.name == 'prepareAppResources' }.configureEach {
-    if (bundleWindowsRuntime) dependsOn prepareWindowsResources
-    if (bundleMacosRuntime) dependsOn prepareMacosResources
+    if (bundleDesktopRuntime) dependsOn prepareDistributionResources
 }
 
 def bridgePath = providers.gradleProperty('desktopBridgeExecutable').getOrNull()
@@ -693,7 +771,40 @@ tasks.withType(Test).configureEach {
     dependsOn ':mihon-desktop-compat:animeFixtureJar'
 }
 
-tasks.named('test') { exclude '**/DesktopDistributionTest.class' }
+tasks.named('test') { exclude '**/DesktopDistributionTest.class', '**/LinuxDistributionTest.class' }
+if (bundleLinuxRuntime) {
+    tasks.register('linuxDistributionTest', Test) {
+        dependsOn tasks.named('createDistributable'), tasks.named('testClasses')
+        inputs.dir(layout.buildDirectory.dir('compose/binaries/main/app/Kototoro'))
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+        include '**/LinuxDistributionTest.class'
+        systemProperty 'kototoro.desktop.distribution', layout.buildDirectory.dir('compose/binaries/main/app/Kototoro').get().asFile
+        systemProperty 'kototoro.desktop.probe.classes', sourceSets.test.output.classesDirs.asPath
+    }
+    tasks.matching { it.name == 'packageDeb' }.configureEach {
+        // Ship the same image that passed the relocation/runtime/window checks.
+        appImage.set(layout.buildDirectory.dir('compose/binaries/main/app/Kototoro'))
+        // With --app-image, Compose omits --icon and jpackage otherwise replaces our icon with Java's default.
+        freeArgs.addAll(['--icon', rootProject.file('app/src/main/ic_launcher-playstore.png').absolutePath])
+        dependsOn 'linuxDistributionTest'
+    }
+    tasks.register('linuxDebContentsCheck', Exec) {
+        dependsOn 'packageDeb'
+        // jpackage names the architecture after the host; arm64 builds use Debian's arm64 suffix.
+        def architecture = System.getProperty('os.arch') in ['aarch64', 'arm64'] ? 'arm64' : 'amd64'
+        def deb = layout.buildDirectory.file("compose/binaries/main/deb/kototoro_${windowsPackageVersion}_${architecture}.deb")
+        inputs.file('inspect-linux-deb.py')
+        inputs.file(deb)
+        inputs.file(androidAppIcon)
+        inputs.dir(layout.buildDirectory.dir('compose/binaries/main/app/Kototoro'))
+        commandLine 'python3', file('inspect-linux-deb.py').absolutePath,
+            '--package', deb.get().asFile.absolutePath,
+            '--image', layout.buildDirectory.dir('compose/binaries/main/app/Kototoro').get().asFile.absolutePath,
+            '--icon', androidAppIcon.absolutePath,
+            '--output', layout.buildDirectory.dir('reports/linux-deb').get().asFile.absolutePath
+    }
+}
 if (bundleWindowsRuntime) {
     // The jpackage launcher resolves its runtime, and the bundled ncnn tools open their images, through ANSI APIs.
     // Give every shipped executable the UTF-8 code page so paths outside the system code page (install directory,

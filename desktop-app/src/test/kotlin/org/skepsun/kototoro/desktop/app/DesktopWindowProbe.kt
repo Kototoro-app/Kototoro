@@ -35,6 +35,13 @@ internal object DesktopWindowProbe {
                 SwingUtilities.invokeAndWait {
                     check(requireNotNull(window).width >= 920)
                     check(requireNotNull(window).height >= 620)
+                    // The running window must use Android's launcher artwork, not AWT's default icon.
+                    val icons = (window as? java.awt.Frame)?.iconImages.orEmpty()
+                    val iconSizes = icons.map { it.getWidth(null) to it.getHeight(null) }
+                    check(iconSizes.isNotEmpty()) { "Production window has no application icon" }
+                    check(iconSizes.any { (width, height) -> width >= 128 && width == height }) {
+                        "Production window icon is not the Android app icon: $iconSizes"
+                    }
                     window!!.dispatchEvent(WindowEvent(window, WindowEvent.WINDOW_CLOSING))
                 }
             } catch (error: Throwable) { failure.set(error) }

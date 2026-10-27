@@ -1,4 +1,103 @@
- Desktop application (Windows / macOS)
+# Desktop application (Windows / macOS / Linux)
+
+## Linux 服务器开发
+
+Linux 沿用 Windows/macOS 的同一个 JVM `desktop-app`、Controller、数据库及来源运行时；
+Android 与桌面共享的呈现继续放在 `core-ui/commonMain`，遵循
+[CMP 共享 UI 指导](../docs/architecture/shared-ui-guidelines.md)，不新增 Linux 页面副本。
+提供源码运行、离线冒烟、自带 JVM 的应用目录及 `.deb` 本地预览包。
+浏览器桥、随包播放器、原生超分和自动更新尚未适配。
+
+需要可供 Gradle 发现的 JDK 21、X11 图形会话，以及现有锁定哈希的 29 个兼容 JAR。
+从已下载的官方 Windows 桌面 ZIP 中提取共享 JVM 运行时；所有同名副本都必须匹配锁定哈希，
+不提取 Windows JVM、EXE 或 DLL：
+
+```bash
+python3 "desktop-app/prepare-compatibility.py" "/absolute/path/Kototoro-windows.zip"
+./gradlew -PwithDesktopApp \
+    "-PmihonCompatibilityDirectory=build/desktop-compatibility" \
+    :desktop-app:compileKotlin --console=plain --no-configuration-cache
+bash "desktop-app/run-linux.sh" \
+    "-PdesktopDataDirectory=/absolute/path/linux-debug-data"
+```
+
+默认数据目录沿用 `~/.kototoro`；开发时建议显式指定独立目录。
+首个位置参数可以指定已有兼容目录，之后的参数传给 Gradle；例如
+`bash "desktop-app/run-linux.sh" "/absolute/path/compatibility" --debug-jvm`。
+调试器通过 SSH 隧道连接服务器 `localhost:5005`。
+人工调试可连接已有 X11 桌面，或使用通过 SSH 隧道访问的 VNC/noVNC 会话。
+只有 Wayland 环境时需提供 XWayland/X11 显示；启动脚本不会创建远程桌面服务。
+
+无桌面的服务器使用 Xvfb 与 `xauth` 运行既有离线探针：
+
+```bash
+bash "desktop-app/smoke-linux.sh"
+# 有 X11 显示时直接使用，否则自动通过 xvfb-run 启动虚拟显示。
+# 如将 Xvfb 解包在项目 build/linux-tools 中，可仅对这条命令添加路径：
+PATH="$PWD/build/linux-tools/usr/bin:$PATH" bash "desktop-app/smoke-linux.sh"
+```
+
+冒烟入口复用 `DesktopAppTest`，验证浏览、搜索、详情、收藏、阅读、返回、偏好保存及第二进程恢复，
+并验证生产窗口关闭、数据库释放；使用临时数据和离线 fixture，不依赖在线来源或 Windows 浏览器桥。
+探针日志与截图输出到 `desktop-app/build/reports/desktop-smoke`，JUnit 报告位于
+`desktop-app/build/reports/tests/test/index.html`。测试失败时先检查探针日志，不能只看构建成功与否。
+Xvfb 结果不代表 GPU 播放、Wayland、高 DPI 或实际桌面性能已通过验收。
+
+网络受限时在 Gradle 命令或脚本末尾追加：
+`-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=7890 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7890`。
+开发辅助下载、解包工具、测试数据和截图保留在忽略的 `build/` 目录，Gradle 依赖继续使用常规缓存。
+
+2026-10-27 已在 Ubuntu 24.04 x86_64、JDK 21、Xvfb 下完成 `:desktop-app:compileKotlin`，
+冒烟入口的两项测试均通过（无跳过），并检查了详情与重启后阅读截图；运行时提取的四项 Python
+回归测试通过。生产窗口在 Xvfb 中无法创建 OpenGL 上下文后成功回退到软件渲染。
+本次未验证人工远程桌面会话、真实在线来源、GPU 播放或其他操作系统。
+
+### Linux 打包与产物自检
+
+打包沿用 Compose 官方的 `jpackage` 流程，必须在 Linux 主机执行，使用 JDK 21；
+生成 `.deb` 还需系统提供 `dpkg-deb`、`fakeroot` 等 Debian 打包工具。
+启用 `withLinuxDistribution` 后，兼容 JAR 的成员与哈希必须全部通过现有锁定校验。
+
+```bash
+# 仅生成自带 JVM 的应用目录，不需要显示服务。
+./gradlew -PwithDesktopApp -PwithLinuxDistribution \
+    "-PmihonCompatibilityDirectory=build/desktop-compatibility" \
+    :desktop-app:createDistributable --console=plain --no-configuration-cache
+
+# 生成 .deb 并检查包内内容；已有桌面会话时可省略 xvfb-run。
+xvfb-run -a -s "-screen 0 1600x1200x24 -nolisten tcp" \
+    ./gradlew -PwithDesktopApp -PwithLinuxDistribution \
+    "-PmihonCompatibilityDirectory=build/desktop-compatibility" \
+    :desktop-app:linuxDebContentsCheck --console=plain --no-configuration-cache
+```
+
+应用入口为 `desktop-app/build/compose/binaries/main/app/Kototoro/bin/Kototoro`，
+`.deb` 输出在 `desktop-app/build/compose/binaries/main/deb/`。包名为 `kototoro`，
+本地预览默认包版本为 `0.1.0`，可用 `-PdesktopPackageVersion=2.3.2` 显式指定。
+打包复用 Android 的现有应用图标，不附带 Windows 浏览器桥、播放和超分二进制。
+Windows `.ico`、macOS `.icns`、Linux `.deb` 图标与运行窗口图标都从
+`app/src/main/ic_launcher-playstore.png` 生成，不维护桌面端图标副本；探针会检查生产窗口的
+AWT 图标尺寸，`:desktop-app:linuxDebContentsCheck` 同时校验 `.deb` 图标与该 Android 源文件一致。
+
+`:desktop-app:linuxDistributionTest` 会复制应用到含中文与空格的目录，清除子进程的开发 Java
+配置，并使用包内 JVM 验证 classpath 顺序、来源导入与第二进程恢复、数据库、备份、图片解码、
+错误退出及生产窗口启动/关闭。`.deb` 使用该测试通过的同一应用目录；日志和自检报告位于
+`desktop-app/build/reports/linux-distribution/`。
+`:desktop-app:linuxDebContentsCheck` 进一步解包 `.deb`，比对受测目录中的文件字节、图标和执行权限，
+检查桌面入口，再从解包后的启动器执行运行时自检；报告位于 `desktop-app/build/reports/linux-deb/`。
+
+可直接通过应用入口检查运行时（此模式不需要显示服务）：
+
+```bash
+"desktop-app/build/compose/binaries/main/app/Kototoro/bin/Kototoro" \
+    --data-dir "/absolute/path/linux-runtime-check-data" \
+    --check-runtime "/absolute/path/linux-runtime-check.properties"
+```
+
+报告中的 `browser=unsupported`、`upscale.native=unsupported`、`player.embedded=unbundled`
+表示当前预览包未提供相应组件，不表示这些能力已通过验证。`.deb` 可生成不等于已经完成跨发行版
+兼容性验收；当前构建主机为 Ubuntu 24.04 x86_64。打包参考
+[Compose 官方文档](https://kotlinlang.org/docs/multiplatform/compose-native-distribution.html)。
 
 ## macOS 本机开发
 

@@ -37,6 +37,8 @@ app/keystore/
 *.sh
 !scripts/build_cloudstream_runtime.sh
 !desktop-app/run-macos.sh
+!desktop-app/run-linux.sh
+!desktop-app/smoke-linux.sh
 !.github/scripts/publish_gitcode_release.sh
 *.log
 __pycache__/
