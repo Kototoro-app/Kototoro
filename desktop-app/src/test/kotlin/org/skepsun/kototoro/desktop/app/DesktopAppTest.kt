@@ -99,7 +99,7 @@ class DesktopAppTest {
     @Test
     fun `reader pages are upscaled by the installed ncnn programs and the choice persists`() {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("kototoro.ncnn.dir") != null, "no -PncnnDirectory")
-        probe("upscale", directory.resolve("中文 upscale"), 300)
+        probe("upscale", directory.resolve("中文 upscale"), 600)
     }
     @Test
     fun `an anime episode plays in the window switches quality continues and records history`() {

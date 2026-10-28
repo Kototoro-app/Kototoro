@@ -24,7 +24,8 @@ internal object DesktopUpscaleProbe {
             runDesktopComposeUiTest(width = 1260, height = 850) {
                 setContent { DesktopApp(controller) }
                 fun settled(allowError: Boolean = false) {
-                    waitUntil(timeoutMillis = 60_000) { !controller.state.value.busy }
+                    // ncnn on CI's software Vulkan (lavapipe) needs about a minute for a 4x page; leave it room.
+                    waitUntil(timeoutMillis = 180_000) { !controller.state.value.busy }
                     waitForIdle()
                     if (!allowError) check(controller.state.value.error == null) { controller.state.value.error.orEmpty() }
                 }

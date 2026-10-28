@@ -731,6 +731,20 @@ tasks.matching { it.name == 'createDistributable' }.configureEach {
         if (!helper.isFile() || !helper.setExecutable(true, false)) {
             throw new GradleException('Cannot make the packaged WKWebView bridge executable')
         }
+        // jpackage ad-hoc signs the image only on Apple Silicon (arm64 cannot run unsigned code). An Intel image comes
+        // out unsigned, and the self-updater refuses an update that does not pass `codesign --verify --deep --strict`,
+        // so sign it the same way here; an image that already verifies is left as jpackage made it.
+        def app = helper.parentFile.parentFile.parentFile.parentFile.parentFile
+        def codesign = { List<String> arguments ->
+            def process = new ProcessBuilder(['/usr/bin/codesign'] + arguments).redirectErrorStream(true).start()
+            def output = process.inputStream.text
+            [process.waitFor(), output]
+        }
+        if (codesign(['--verify', '--deep', '--strict', app.absolutePath])[0] != 0) {
+            def (signed, signOutput) = codesign(['--force', '--deep', '--sign', '-', app.absolutePath])
+            def (verified, verifyOutput) = codesign(['--verify', '--deep', '--strict', app.absolutePath])
+            if (signed != 0 || verified != 0) throw new GradleException("Cannot ad-hoc sign ${app}: ${signOutput}${verifyOutput}")
+        }
     }
 }
 
