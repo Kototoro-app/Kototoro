@@ -130,7 +130,7 @@ def prepare(archive_path, output, pins, architecture):
                 raise ValueError(f"Dependency is missing from the pinned libmpv archive: {name}")
             library = prepared / name
             library.write_bytes(files[source])
-            run("/usr/bin/lipo", "-verify_arch", architecture, str(library))
+            run("/usr/bin/lipo", str(library), "-verify_arch", architecture)
             links = dependencies(library)
             replacements = []
             for link in links:
