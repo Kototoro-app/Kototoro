@@ -13,6 +13,8 @@ struct SourceChangeView: View {
     @StateObject private var searchModel = GlobalSearchModel()
     @State private var query: String
     @State private var selectedSources: Set<String> = []
+    /// Until the picker is answered every candidate is searched; an emptied answer never means "all".
+    @State private var sourcesChosen = false
     @State private var showingSourceFilter = false
 
     init(runtime: IosSources, content: IosSourceContent, onChanged: @escaping (IosSourceContent) -> Void) {
@@ -30,10 +32,12 @@ struct SourceChangeView: View {
     }
 
     private var activeSources: [IosSource] {
-        if selectedSources.isEmpty {
-            return candidateSources
-        }
-        return candidateSources.filter { selectedSources.contains($0.name) }
+        sourcesChosen ? candidateSources.filter { selectedSources.contains($0.name) } : candidateSources
+    }
+
+    private var summary: String {
+        if activeSources.isEmpty { return "未选择检索源" }
+        return "在 \(activeSources.count) 个来源中检索可替换的作品"
     }
 
     var body: some View {
@@ -42,8 +46,16 @@ struct SourceChangeView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(content.title).font(.headline)
-                        Text("在 \(activeSources.count) 个来源中检索可替换的作品")
+                        Text(summary)
                             .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+
+                if activeSources.isEmpty {
+                    Section {
+                        Text(candidateSources.isEmpty ? "没有其他可用来源。先在扩展管理安装或启用同类型来源。"
+                             : "在「筛选源」中至少选择一个来源后再搜索。")
+                            .font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
 
@@ -111,16 +123,23 @@ struct SourceChangeView: View {
                     Button {
                         showingSourceFilter = true
                     } label: {
-                        Label("筛选源", systemImage: selectedSources.isEmpty ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                        Label(sourcesChosen ? "筛选源（\(activeSources.count)）" : "筛选源",
+                              systemImage: sourcesChosen ? "line.3.horizontal.decrease.circle.fill"
+                                                         : "line.3.horizontal.decrease.circle")
                     }
+                    .accessibilityIdentifier("sourceChange.sources")
                 }
             }
             .sheet(isPresented: $showingSourceFilter) {
-                SourceMultiSelectSheet(
+                SourceSelectionSheet(
+                    title: String(localized: "选择检索源"),
                     sources: candidateSources,
-                    selected: $selectedSources,
-                    onApplied: { triggerSearch(force: true) }
-                )
+                    selected: sourcesChosen ? selectedSources : Set(candidateSources.map(\.name))
+                ) { chosen in
+                    sourcesChosen = true
+                    selectedSources = chosen
+                    triggerSearch(force: true)
+                }
             }
             .task {
                 triggerSearch(force: false)
@@ -135,64 +154,6 @@ struct SourceChangeView: View {
             return
         }
         searchModel.search(text, sources: activeSources, runtime: runtime)
-    }
-}
-
-private struct SourceMultiSelectSheet: View {
-    let sources: [IosSource]
-    @Binding var selected: Set<String>
-    let onApplied: () -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Button(selected.isEmpty || selected.count < sources.count ? "全选全部来源" : "清除选择（默认全部）") {
-                        if selected.count == sources.count {
-                            selected.removeAll()
-                        } else {
-                            selected = Set(sources.map(\.name))
-                        }
-                    }
-                }
-                Section("可选来源 (\(sources.count))") {
-                    ForEach(sources, id: \.name) { source in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(source.title)
-                                Text(source.locale).font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if selected.contains(source.name) || selected.isEmpty {
-                                Image(systemName: "checkmark").foregroundColor(.accentColor)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if selected.isEmpty {
-                                selected = Set(sources.map(\.name))
-                            }
-                            if selected.contains(source.name) {
-                                selected.remove(source.name)
-                            } else {
-                                selected.insert(source.name)
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle("选择检索源")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") {
-                        dismiss()
-                        onApplied()
-                    }
-                }
-            }
-        }
     }
 }
 

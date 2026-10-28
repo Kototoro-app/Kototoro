@@ -307,13 +307,13 @@ struct BatchMigrationView: View {
     @AppStorage("sources.showAdult") private var showAdult = false
     @StateObject private var model: BatchMigrationModel
     @State private var selectedSources: Set<String> = []
+    /// Until the picker is answered every eligible source is searched; an emptied answer stays empty.
+    @State private var sourcesChosen = false
     @State private var keepOriginal = true
     @State private var confirming = false
     @State private var selecting: String?
     @State private var customQuery = ""
     @State private var choosingSources = false
-    @State private var sourceQuery = ""
-    @FocusState private var sourceSearchFocused: Bool
 
     init(contents: [IosSourceContent]) { _model = StateObject(wrappedValue: BatchMigrationModel(contents: contents)) }
 
@@ -324,13 +324,11 @@ struct BatchMigrationView: View {
                 (showAdult || !$0.isAdult || model.rows.contains { $0.original.contentType.hasPrefix("HENTAI_") })
         })
     }
-    private var active: [IosSource] { eligible.filter { selectedSources.contains($0.name) } }
+    private var active: [IosSource] {
+        sourcesChosen ? eligible.filter { selectedSources.contains($0.name) } : eligible
+    }
     private func sourceTitle(_ key: String) -> String {
         sources.sources.first { $0.name == key }?.title ?? library.missingSources.first { $0.key == key }?.title ?? key
-    }
-    private var visibleSources: [IosSource] {
-        let text = sourceQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        return eligible.filter { text.isEmpty || $0.title.localizedCaseInsensitiveContains(text) }
     }
 
     var body: some View {
@@ -407,7 +405,16 @@ struct BatchMigrationView: View {
             }
         } message: { Text("仅处理已选择目标的作品。可以停止后续任务，已完成的结果会保留。") }
         .sheet(isPresented: Binding(get: { selecting != nil }, set: { if !$0 { selecting = nil } })) { candidatePicker }
-        .sheet(isPresented: $choosingSources) { sourcePicker }
+        .sheet(isPresented: $choosingSources) {
+            SourceSelectionSheet(
+                title: String(localized: "选择新来源"),
+                sources: eligible,
+                selected: sourcesChosen ? selectedSources : Set(eligible.map(\.name))
+            ) { chosen in
+                sourcesChosen = true
+                selectedSources = chosen
+            }
+        }
     }
 
     private func search() {
@@ -450,53 +457,6 @@ struct BatchMigrationView: View {
                     .accessibilityIdentifier("migration.execute")
             }
         }.padding().frame(maxWidth: .infinity, alignment: .leading).background(.bar)
-    }
-
-    private var sourcePicker: some View {
-        NavigationStack {
-            List {
-                Section {
-                    TextField("搜索新来源", text: $sourceQuery)
-                        .focused($sourceSearchFocused).submitLabel(.search)
-                        .onSubmit { sourceSearchFocused = false }
-                        .accessibilityIdentifier("migration.sources.query")
-                    let keys = Set(visibleSources.map(\.name))
-                    Button(!keys.isEmpty && keys.isSubset(of: selectedSources) ? "取消选择当前结果" : "全选搜索结果") {
-                        sourceSearchFocused = false
-                        selectedSources = BatchSelection.toggling(visible: keys, in: selectedSources)
-                    }.disabled(keys.isEmpty)
-                    Button("清空选择") { selectedSources.removeAll() }
-                }
-                Section("已启用的同类型来源") {
-                    ForEach(visibleSources, id: \.name) { source in
-                        Button {
-                            sourceSearchFocused = false
-                            if !selectedSources.insert(source.name).inserted { selectedSources.remove(source.name) }
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(source.title).foregroundStyle(.primary)
-                                    Text("\(ContentSpace.title(source.mediaKind)) · \(SourceLanguage.title(source.locale))")
-                                        .font(.caption).foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: selectedSources.contains(source.name) ? "checkmark.circle.fill" : "circle")
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .accessibilityAddTraits(selectedSources.contains(source.name) ? .isSelected : [])
-                        .accessibilityIdentifier("migration.targetSource.\(source.name)")
-                    }
-                }
-            }
-            .navigationTitle("选择新来源")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成（\(active.count)）") { choosingSources = false }
-                        .accessibilityIdentifier("migration.sources.done")
-                }
-            }
-        }
     }
 
     private var candidatePicker: some View {

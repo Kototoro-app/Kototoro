@@ -139,15 +139,21 @@ final class ProductFlowTests: XCTestCase {
         originSearch.tap(); originSearch.typeText(firstSource)
         XCTAssertTrue(origin.waitForExistence(timeout: 10)); origin.tap()
         app.buttons["migration.sources"].tap()
-        let targetSearch = app.textFields["migration.sources.query"]
+        let done = app.buttons["sourceSelection.done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 10))
+        XCTAssertTrue(done.isEnabled, "The eligible sources stand selected until the picker is answered")
+        app.buttons["sourceSelection.clear"].tap()
+        XCTAssertFalse(done.isEnabled, "Clearing the selection must not quietly fall back to every source")
+        let targetSearch = app.textFields["sourceSelection.query"]
         XCTAssertTrue(targetSearch.waitForExistence(timeout: 10))
         targetSearch.tap(); targetSearch.typeText(secondSource)
-        targetSearch.typeText("\n")
         let targetSource = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
-                                                             "migration.targetSource.", secondSource)).firstMatch
-        XCTAssertTrue(targetSource.waitForExistence(timeout: 10)); targetSource.tap()
+                                                             "sourceSelection.source.", secondSource)).firstMatch
+        XCTAssertTrue(targetSource.waitForExistence(timeout: 10))
+        XCTAssertFalse(targetSource.isSelected, "A cleared picker leaves every row unselected")
+        targetSource.tap()
         XCTAssertTrue(targetSource.isSelected, app.debugDescription)
-        app.buttons["migration.sources.done"].tap()
+        done.tap()
         XCTAssertTrue(app.buttons["migration.search"].isEnabled, app.debugDescription)
         app.buttons["migration.search"].tap()
         let workRows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "migration.work."))
@@ -207,6 +213,74 @@ final class ProductFlowTests: XCTestCase {
         app.terminate(); app.launch()
         app.mainTab("作品库").tap()
         XCTAssertTrue(app.buttons["recovery.notice"].waitForExistence(timeout: 15))
+    }
+
+    /// The change-source search shares its picker with batch migration: clearing the selection must stay cleared
+    /// instead of silently searching every source again, and the search field narrows the candidate rows.
+    @MainActor
+    func testChangeSourcePickerRequiresASelectionAndFiltersByName() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-space.enabled", "NO"]
+        app.launch()
+        let tag = String(UUID().uuidString.prefix(6))
+        // The fixture names its two sites by the run tag, so each run imports a distinct pair.
+        let originSource = "使用排序\(tag)甲"
+        let targetSource = "使用排序\(tag)乙"
+        importVideoSite(app, url: "http://127.0.0.1:8765/usage-sites.json?run=\(tag)", title: nil)
+        // The browse catalog reads imported sites on launch; searching right after the back navigation misses them.
+        app.terminate(); app.launch()
+        app.mainTab("浏览").tap()
+        let search = app.pageSearchField()
+        search.tap(); search.typeText(originSource)
+        let source = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                      "source.JSON_TVBOX_", originSource)).firstMatch
+        XCTAssertTrue(source.waitForExistence(timeout: 15), app.debugDescription); source.tap()
+        let work = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "source.content.")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 60), app.debugDescription)
+        work.tap()
+        XCTAssertTrue(app.staticTexts["details.title"].waitForExistence(timeout: 20), app.debugDescription)
+        app.buttons["details.more"].tap()
+        XCTAssertTrue(app.buttons["details.changeSource"].waitForExistence(timeout: 5), app.debugDescription)
+        app.buttons["details.changeSource"].tap()
+        let picker = app.buttons["sourceChange.sources"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 10), app.debugDescription)
+        picker.tap()
+        let done = app.buttons["sourceSelection.done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(done.isEnabled, "Every other eligible source is searched until the picker is answered")
+        app.buttons["sourceSelection.clear"].tap()
+        XCTAssertFalse(done.isEnabled, "Clearing the picker must not fall back to every source")
+        app.buttons["sourceSelection.selectVisible"].tap()
+        XCTAssertTrue(done.isEnabled, "Selecting the visible rows must satisfy the requirement")
+
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "sourceSelection.source."))
+        XCTAssertGreaterThan(rows.count, 0, app.debugDescription)
+        let query = app.textFields["sourceSelection.query"]
+        XCTAssertTrue(query.waitForExistence(timeout: 5), app.debugDescription)
+        query.tap(); query.typeText("no-such-source-\(tag)")
+        XCTAssertTrue(rows.firstMatch.waitForNonExistence(timeout: 5), "The search field filters the rows")
+        app.buttons["sourceSelection.query.clear"].tap()
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5))
+        query.tap(); query.typeText(targetSource)
+        let target = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                      "sourceSelection.source.", targetSource)).firstMatch
+        XCTAssertTrue(target.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertEqual(rows.count, 1, "Only the matching source remains listed")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Change-source picker filters by name"; shot.lifetime = .keepAlways; self.add(shot)
+        app.buttons["sourceSelection.clear"].tap()
+        rows.firstMatch.tap()
+        XCTAssertTrue(done.isEnabled, "The filtered row alone satisfies the requirement")
+        done.tap()
+        XCTAssertTrue(app.navigationBars["换源"].waitForExistence(timeout: 5), "Applying returns to the search page")
+        XCTAssertTrue(app.staticTexts["在 1 个来源中检索可替换的作品"].waitForExistence(timeout: 5),
+                      "The answered picker searches only the chosen source")
+        app.buttons["sourceChange.sources"].tap()
+        XCTAssertTrue(app.buttons["清空选择"].waitForExistence(timeout: 5), "Reopening keeps the answer")
+        app.buttons["取消"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["换源"].waitForExistence(timeout: 5), "Cancelling keeps the search screen")
     }
 
     @MainActor
