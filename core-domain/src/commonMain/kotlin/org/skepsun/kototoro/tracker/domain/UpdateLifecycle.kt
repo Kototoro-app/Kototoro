@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.ChapterEntity
+import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
 
 /** A chapter's immutable discovery snapshot and monotonic completed-reading state. */
@@ -105,4 +106,61 @@ suspend fun MangaDatabase.completePendingUpdates(mangaId: Long, now: Long) {
     }
     getTracksDao().clearCounter(mangaId)
     dao.markUnreadAsReadByOwner(mangaId)
+}
+
+/**
+ * Android's `TrackingRepository.updateReadChapter` fallback for counters written before v86: the badge counts
+ * chapters but its log carries no identities, so there is nothing for [completeUpdateChapter] to complete and
+ * reading could never lower it. The position in the branch stands in for those identities: the counter becomes the
+ * chapters after the one being read, so reaching the end of the branch clears it. Counters whose logs carry
+ * identities are left alone, because those rows own the badge chapter by chapter.
+ *
+ * Called with the same reading position Android's history save uses; returns the counter it left, or null when the
+ * row is untouched because nothing about the position changed the answer.
+ */
+suspend fun MangaDatabase.recomputeLegacyUpdateCounter(
+    mangaId: Long,
+    chapterId: Long,
+): Int? {
+    val track = getTracksDao().find(mangaId) ?: return null
+    if (track.newChapters == 0) return null
+    val dao = getTrackLogsDao()
+    if (dao.findByOwner(mangaId).any { it.chapterMetadata.isNotBlank() }) return null
+    val chapters = getChaptersDao().findAll(mangaId)
+    val current = chapters.firstOrNull { it.chapterId == chapterId } ?: return null
+    val branch = chapters.filter { it.branch == current.branch }
+    val index = branch.indexOfFirst { it.chapterId == chapterId }
+    if (index < 0) return null
+    // The counter covers the tail of the branch, so a chapter inside that tail is what the badge is about.
+    if (index < branch.size - track.newChapters) return null
+    val last = branch.last()
+    val pending = branch.lastIndex - index
+    if (pending == track.newChapters && last.chapterId == track.lastChapterId) return null
+    getTracksDao().upsert(TrackEntity(
+        mangaId = track.mangaId,
+        lastChapterId = last.chapterId,
+        newChapters = pending,
+        lastCheckTime = track.lastCheckTime,
+        lastChapterDate = track.lastChapterDate,
+        lastResult = track.lastResult,
+        lastError = track.lastError,
+    ))
+    if (pending == 0) dao.markUnreadAsReadByOwner(mangaId)
+    return pending
+}
+
+/**
+ * Reconciles badges that predate chapter identities with the reading position already stored. Reading is the only
+ * thing that lowers such a counter, so a device that finished these works while the counters were identity-less is
+ * left with badges nothing will ever clear; the next check repairs them from the position the reader left behind.
+ * The stored position is only a proxy for what was read, so a chapter that is no longer listed leaves the row alone,
+ * and rows whose logs carry identities belong to [completeUpdateChapter] and are never touched here.
+ */
+suspend fun MangaDatabase.repairLegacyUpdateCounters(): Int {
+    var repaired = 0
+    for (track in getTracksDao().findUpdated()) {
+        val history = getHistoryDao().find(track.mangaId) ?: continue
+        if (recomputeLegacyUpdateCounter(track.mangaId, history.chapterId) != null) repaired++
+    }
+    return repaired
 }

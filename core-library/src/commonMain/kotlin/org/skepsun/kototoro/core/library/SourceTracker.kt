@@ -11,6 +11,7 @@ import org.skepsun.kototoro.tracker.domain.afterFailedCheck
 import org.skepsun.kototoro.tracker.domain.afterSuccessfulCheck
 import org.skepsun.kototoro.tracker.domain.compareTrackedChapters
 import org.skepsun.kototoro.tracker.domain.recordUpdateBatch
+import org.skepsun.kototoro.tracker.domain.repairLegacyUpdateCounters
 import org.skepsun.kototoro.tracker.domain.trackedLastChapterDate
 
 data class SourceTrackReport(val checked: Int, val withUpdates: Int, val failed: Int, val newChapters: Int)
@@ -53,6 +54,9 @@ class SourceTracker(
 
     suspend fun checkAll(onProgress: suspend (done: Int, total: Int) -> Unit = { _, _ -> }): SourceTrackReport {
         val ids = syncAnchors()
+        database.useWriterConnection { connection ->
+            connection.immediateTransaction { database.repairLegacyUpdateCounters() }
+        }
         var withUpdates = 0
         var failed = 0
         var newChapters = 0

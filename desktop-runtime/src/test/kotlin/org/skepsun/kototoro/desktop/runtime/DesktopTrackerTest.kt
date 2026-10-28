@@ -132,6 +132,58 @@ class DesktopTrackerTest {
     }
 
     @Test
+    fun `a badge from before chapters carried identities clears when the newest chapter is read`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = DesktopLibrary(runtime.database) { source }
+            val remote = work((1L..4L).map { chapter(it) })
+            library.addFavourite(remote)
+            // A row written before v86 carried chapter identities: the count still owns the badge, but its log has
+            // no chapters to complete, so nothing the reader wrote could ever lower it.
+            runtime.database.getTracksDao().upsert(TrackEntity(mangaId = 10, lastChapterId = 2L, newChapters = 2,
+                lastCheckTime = 5_000_000L, lastChapterDate = 2_000L, lastResult = TrackEntity.RESULT_HAS_UPDATE,
+                lastError = null))
+            runtime.database.getTrackLogsDao().insert(TrackLogEntity(mangaId = 10, chapters = "第 3 话\n第 4 话",
+                createdAt = 5_000_000L, isUnread = true, chapterMetadata = ""))
+            assertEquals(1, runtime.database.getTracksDao().findUpdated().size)
+
+            library.recordPage(remote, chapter(3), 0, 2)
+            assertEquals(1, runtime.database.getTracksDao().find(10)?.newChapters,
+                "reading the first of the two counted chapters leaves the one after it")
+
+            library.recordPage(remote, chapter(4), 1, 2)
+            assertEquals(0, runtime.database.getTracksDao().find(10)?.newChapters)
+            assertTrue(runtime.database.getTracksDao().findUpdated().isEmpty(), "the badge is gone")
+            assertFalse(runtime.database.getTrackLogsDao().findByOwner(10).single().isUnread)
+            assertEquals(1, runtime.database.getTrackLogsDao().count(), "the counter's history is kept")
+        }
+    }
+
+    @Test
+    fun `a device that read before counters carried identities is repaired by the next check`() = runBlocking<Unit> {
+        DesktopRuntime.open(directory).use { runtime ->
+            val library = DesktopLibrary(runtime.database) { source }
+            val remote = work((1L..4L).map { chapter(it) })
+            val tracker = DesktopTracker(runtime.database, library, { remote }, { null })
+            library.addFavourite(remote)
+            // The work was finished while tracking only kept a plain count.
+            library.recordPage(remote, chapter(4), 1, 2)
+            runtime.database.getTracksDao().upsert(TrackEntity(mangaId = 10, lastChapterId = 2L, newChapters = 2,
+                lastCheckTime = 5_000_000L, lastChapterDate = 2_000L, lastResult = TrackEntity.RESULT_HAS_UPDATE,
+                lastError = null))
+            runtime.database.getTrackLogsDao().insert(TrackLogEntity(mangaId = 10, chapters = "第 3 话\n第 4 话",
+                createdAt = 5_000_000L, isUnread = true, chapterMetadata = ""))
+            assertEquals(1, runtime.database.getTracksDao().findUpdated().size)
+
+            tracker.checkAll()
+
+            assertEquals(0, runtime.database.getTracksDao().find(10)?.newChapters,
+                "the stored position is at the end of the branch, so nothing is unread")
+            assertTrue(runtime.database.getTracksDao().findUpdated().isEmpty())
+            assertFalse(runtime.database.getTrackLogsDao().findByOwner(10).single().isUnread)
+        }
+    }
+
+    @Test
     fun `the reader's branch decides which chapters count`() = runBlocking<Unit> {
         DesktopRuntime.open(directory).use { runtime ->
             val library = DesktopLibrary(runtime.database) { source }

@@ -17,6 +17,7 @@ import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.tracker.domain.completeUpdateChapter
+import org.skepsun.kototoro.tracker.domain.recomputeLegacyUpdateCounter
 import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.migration.domain.MigrationChapter
 import org.skepsun.kototoro.migration.domain.MigrationContentInput
@@ -558,6 +559,12 @@ class SourceLibrary(
                 val write = if (statsRecording) readingSessions.onPage(content.id, stored.id, page, percent, now) else null
                 if (lastVisiblePage == pageCount - 1 && (part == null || part.index == part.count - 1)) {
                     database.completeUpdateChapter(content.id, stored.id, now)
+                }
+                // Android saves every reading position through `updateReadChapter`, which also rebuilds a badge whose
+                // chapters predate identities; without that call such a counter outlives the reading forever. The
+                // counter only depends on the chapter read, so staying on one page does not re-read the chapter list.
+                if (previous?.chapterId != chapter.id || lastVisiblePage == pageCount - 1) {
+                    database.recomputeLegacyUpdateCounter(content.id, stored.id)
                 }
                 write
             }

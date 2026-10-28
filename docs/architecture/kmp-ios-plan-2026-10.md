@@ -9585,3 +9585,26 @@ Android 的 1.6 s 只对要求减速的来源生效，共享源契约没有这�
 - 朗读接入 `MPNowPlayingInfoCenter` 与 `MPRemoteCommandCenter`：锁屏与控制中心显示作品/当前段落，可暂停/继续、上一段/下一段。
 - 不适用 iOS 的项（理由记入对照表）：DLNA（iOS 用 AirPlay，且需多播审批权限）、系统后台下载（页面经进程内扩展运行时获取）、
   CBR/7z（无系统解压支持、RAR 许可受限）。
+
+## 216. iOS 收藏角标读完后不清除：v86 前没有章节身份的更新计数（2026-10-28）
+
+- 根因：收藏卡片右上角的新章节数字只来自 `tracks.chapters_new`（`IosLibrary.updates()` → `IosUpdate.newChapters`），
+  而 v86 之后计数只由带章节身份的 `track_logs.chapter_metadata` 驱动——`SourceLibrary.recordPage` 只在最后一页调用
+  `completeUpdateChapter`（按身份把该章标为读完）再由 `refreshPendingUpdateCount` 重算。身份改造之前写入的行
+  `chapter_metadata` 为空，没有任何可完成的章节，于是阅读只写历史、计数永远不动：真机上 MATO SEIHEI NO SLAVE(11) 与
+  「保护同伴死了20年后…」(13) 的 history 已经 percent=1.0，角标还在，86 个角标全部属于这类行。
+- Android 的 `TrackingRepository.updateReadChapter` 一直有第二条路：没有身份时按分支位置重算计数。该规则此前没进共享层，
+  所以 iOS/Windows 的共享阅读路径缺这一段。新增 `core-domain` 的 `recomputeLegacyUpdateCounter`：计数器代表分支末尾的
+  N 章，读到其中第 k 章就把计数改成它之后的章节数（`branch.lastIndex - index`），读到最后一条即 0，并把锚点
+  `lastChapterId` 挪到分支末章；清 0 时把该作品的通知标为已读。`SourceLibrary.recordPage` 每记录一页都调用它
+  （与 Android 的历史写入一致），带身份的计数完全不受影响（有任何一条日志带身份就跳过）。
+- 只判定位置、不用 `history.percent` 判“读完”：保存的 percent 可能早于后来发现的新章节，位置法在新章节到来后仍然成立。
+- 已经读完又不会再打开的作品：`repairLegacyUpdateCounters()` 在 `SourceTracker.checkAll()` 开头跑一次（iOS 后台更新 /
+  手动“检查更新”与 Windows 更新检查共用），用保存的阅读位置修无身份计数；位置所在章节已不在章节表里的行保持不动
+  （Android 也一样），21 个无历史的角标不动。
+- 验证：`DesktopTrackerTest` 新增两例（读到计数尾部第 3 新章只留 2、读末章清零并标记通知已读；检查时 repair 把已读完的
+  旧角标清掉）全绿，`:core-domain:jvmTest`、`:core-library:jvmTest`、`:desktop-runtime:test` 通过；
+  `IosProductTest.aBadgeFromBeforeChaptersCarriedIdentitiesClearsWhenTheNewestChapterIsRead` 在 iOS 模拟器通过。
+  在真机数据库副本上重放：MATO 11→0、保护同伴 13→0（通知各少一条），读计数尾部第 3 新章 11→2；repair 在 219 条 track /
+  86 个角标的真实库上改了 31 行、清掉 4 个角标。`IosProductTest.novelChaptersDownloadButVideoIsRefused` 是视频下载
+  落地后失效的旧断言（干净工作树同样失败），与本次改动无关。

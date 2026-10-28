@@ -121,6 +121,30 @@ class IosProductTest {
     }
 
     @Test
+    fun aBadgeFromBeforeChaptersCarriedIdentitiesClearsWhenTheNewestChapterIsRead() = runBlocking {
+        withDatabase { path ->
+            val library = IosLibrary(path)
+            try {
+                val item = IosSourceContent(content)
+                library.setFavourite(item, true)
+                library.saveDetails(item)
+                // Rows migrated from v85: the count is the whole badge, and the log has no chapters to complete.
+                library.database.getTracksDao().upsert(org.skepsun.kototoro.tracker.data.TrackEntity(
+                    mangaId = content.id, lastChapterId = 0, newChapters = 1, lastCheckTime = 1,
+                    lastChapterDate = 1, lastResult = org.skepsun.kototoro.tracker.data.TrackEntity.RESULT_HAS_UPDATE,
+                    lastError = null))
+                library.database.getTrackLogsDao().insert(org.skepsun.kototoro.tracker.data.TrackLogEntity(
+                    mangaId = content.id, chapters = "第一话", createdAt = 1, isUnread = true))
+                assertEquals(1, library.updates().single().newChapters)
+
+                library.recordPosition(item, IosSourceChapter(chapter), 3, 4, 0f)
+
+                assertTrue(library.updates().isEmpty(), "the badge outlived the chapter it counted")
+            } finally { library.close() }
+        }
+    }
+
+    @Test
     fun readerCoreOwnsSpreadGeometryAndContinuousProgress() {
         val reader = IosReader()
         reader.configure(4, 800, 600, 1, true, true, 0)
