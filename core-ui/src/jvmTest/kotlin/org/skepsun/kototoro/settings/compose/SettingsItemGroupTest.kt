@@ -1,35 +1,38 @@
 package org.skepsun.kototoro.settings.compose
 
-import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 class SettingsItemGroupTest {
 
     @Test
     fun `single item owns the complete group outline`() {
-        resolveSettingsGroupItemPosition(index = 0, total = 1) shouldBe SettingsGroupItemPosition.SINGLE
+        assertEquals(SettingsGroupItemPosition.SINGLE, resolveSettingsGroupItemPosition(index = 0, total = 1))
     }
 
     @Test
     fun `multiple items resolve stable outer and inner positions`() {
-        List(4) { index -> resolveSettingsGroupItemPosition(index, total = 4) } shouldBe listOf(
-            SettingsGroupItemPosition.FIRST,
-            SettingsGroupItemPosition.MIDDLE,
-            SettingsGroupItemPosition.MIDDLE,
-            SettingsGroupItemPosition.LAST,
+        assertEquals(
+            listOf(
+                SettingsGroupItemPosition.FIRST,
+                SettingsGroupItemPosition.MIDDLE,
+                SettingsGroupItemPosition.MIDDLE,
+                SettingsGroupItemPosition.LAST,
+            ),
+            List(4) { index -> resolveSettingsGroupItemPosition(index, total = 4) },
         )
     }
 
     @Test
     fun `invalid group coordinates fail fast`() {
-        shouldThrow<IllegalArgumentException> {
+        assertThrows(IllegalArgumentException::class.java) {
             resolveSettingsGroupItemPosition(index = 0, total = 0)
         }
-        shouldThrow<IllegalArgumentException> {
+        assertThrows(IllegalArgumentException::class.java) {
             resolveSettingsGroupItemPosition(index = -1, total = 1)
         }
-        shouldThrow<IllegalArgumentException> {
+        assertThrows(IllegalArgumentException::class.java) {
             resolveSettingsGroupItemPosition(index = 2, total = 2)
         }
     }
@@ -44,7 +47,7 @@ class SettingsItemGroupTest {
         }
         scope.item {}
 
-        scope.items.size shouldBe 2
+        assertEquals(2, scope.items.size)
     }
 
 }
