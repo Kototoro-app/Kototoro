@@ -16,6 +16,16 @@ import java.util.Properties
 
 /** The `--check-update` report: what an installed image tells CI (or a user) about its own update. */
 class DesktopAppUpdateCheckTest {
+    @Test
+    fun `macOS report names the DMG and its native installation kind`() {
+        val app = layout.root.resolve("Kototoro.app")
+        val mac = layout.copy(root = app, executable = app.resolve("Contents/MacOS/Kototoro"),
+            kind = DesktopInstallKind.MACOS_APP)
+        val report = report(version, mac, release("9.0.0", DesktopUpdatePackage.DMG), null)
+        assertEquals("macos_app", report.getProperty("install.kind"))
+        assertEquals("dmg", report.getProperty("available.packages"))
+        assertTrue(report.getProperty("available.asset").endsWith("macos-arm64-release.dmg"))
+    }
     private val version = DesktopAppVersion("2.3.1", "2.3.1", DesktopUpdateChannel.RELEASE)
     private val layout = DesktopInstallLayout(
         root = Path.of("C:/Users/me/AppData/Local/Kototoro-App"),
@@ -137,7 +147,8 @@ class DesktopAppUpdateCheckTest {
         version: String,
         vararg kinds: DesktopUpdatePackage,
     ): DesktopUpdateRelease {
-        val wanted = if (kinds.isEmpty()) DesktopUpdatePackage.entries.toList() else kinds.toList()
+        val wanted = if (kinds.isEmpty()) listOf(DesktopUpdatePackage.PORTABLE_ZIP, DesktopUpdatePackage.MSI) else kinds.toList()
+        val platform = if (DesktopUpdatePackage.DMG in wanted) "macos-arm64" else "windows-x64"
         return DesktopUpdateRelease(
             version = DesktopPackageVersion.parse(version),
             tag = "v$version",
@@ -145,15 +156,19 @@ class DesktopAppUpdateCheckTest {
             publishedAt = null,
             publishedUrl = null,
             packages = wanted.associateWith { kind ->
-                val suffix = if (kind == DesktopUpdatePackage.MSI) "msi" else "zip"
+                val suffix = when (kind) {
+                    DesktopUpdatePackage.MSI -> "msi"
+                    DesktopUpdatePackage.PORTABLE_ZIP -> "zip"
+                    DesktopUpdatePackage.DMG -> "dmg"
+                }
                 DesktopUpdateAsset(
-                    name = "Kototoro-$version-windows-x64-release.$suffix",
-                    downloadUrl = "https://example.invalid/Kototoro-$version-windows-x64-release.$suffix",
+                    name = "Kototoro-$version-$platform-release.$suffix",
+                    downloadUrl = "https://example.invalid/Kototoro-$version-$platform-release.$suffix",
                     sizeBytes = if (kind == DesktopUpdatePackage.MSI) 4096 else 2048,
                     kind = kind,
                 )
             },
-            checksumsUrl = "https://example.invalid/Kototoro-$version-windows-x64-release.sha256",
+            checksumsUrl = "https://example.invalid/Kototoro-$version-$platform-release.sha256",
         )
     }
 }

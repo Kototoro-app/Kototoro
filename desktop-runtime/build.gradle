@@ -44,6 +44,8 @@ tasks.withType(Test).configureEach {
 	def schemaDir = rootProject.file('app/schemas/org.skepsun.kototoro.core.db.MangaDatabase')
 	systemProperty 'kototoro.schemaDir', schemaDir.absolutePath
 	providers.gradleProperty('ncnnDirectory').orNull?.with { systemProperty 'kototoro.ncnn.dir', it }
+	providers.gradleProperty('macosUpdateDmg').orNull?.with { systemProperty 'kototoro.macos.update.dmg', it }
+	providers.gradleProperty('macosUpdateImage').orNull?.with { systemProperty 'kototoro.macos.update.image', it }
 	// Opt-in: a directory holding real extension APKs (novelfull.apk), as for :dex-convert.
 	providers.gradleProperty('realApkDirectory').orNull?.with { systemProperty 'kototoro.dex.real.apks', it }
 }

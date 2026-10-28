@@ -47,7 +47,7 @@ Linux `libmpv.so.2`/`libmpv.so`/`libmpv.so.1`（`.so` 是开发包给的软链�
 
 嵌入判定：`MpvLocator.supportsEmbeddedPlayback` 在 Linux 为真（AWT 画布在 Linux 上就是 X11 窗口，Wayland 会话经
 XWayland 也仍然有 X11 窗口号，JNA 的 `Native.getComponentID` 给出的正是 mpv `wid` 需要的 drawable），
-macOS 为假（需要 libmpv 的 render API，不接 AWT 指针）。找不到库时视频页不消失，而是给出安装提示、外部 `mpv`
+macOS 已使用 CGL／OpenGL render API（不接 AWT 指针，见 [macOS 原生能力](desktop-macos-native-2026-10.md)）。找不到库时视频页不消失，而是给出安装提示、外部 `mpv`
 handoff（`MpvLocator.findExecutable`，Linux 额外查 `/usr/bin`、`/usr/local/bin`、`/snap/bin`、
 `/var/lib/flatpak/exports/bin`）、复制直链与「重新检测」。
 
@@ -90,7 +90,7 @@ handoff（`MpvLocator.findExecutable`，Linux 额外查 `/usr/bin`、`/usr/local
 
   Linux 的 ubuntu 包不带 `.so`（ncnn 静态链接），只是少了 `.exe` 后缀，且 zip 条目不带 POSIX 权限位，所以
   `unpackVerified` 解包后在非 Windows 上补一次 `rwxr-xr-x`，否则装好了也执行不了。`supportsNativeUpscaling`
-  因此对 Windows 与 Linux 都为真，macOS 为假（上游没有 mac 包），阅读器选项里 macOS 仍显示「平台不支持」。
+  对 Windows、Linux 与 macOS 均为真；macOS 同样有官方包，具体资产与校验见 macOS 原生能力文档。
   Linux 的程序按需下载（不随包分发），安装入口就是阅读器超分那一行的「下载并安装 / 选择压缩包」。
 
 ## 阅读器：哪些是原生的、哪些不是

@@ -69,10 +69,14 @@ internal class DesktopUpdateOperations(
     private val scope: CoroutineScope,
 ) {
     private val preferences = session.storage.preferences.open("desktop_app_updates")
-    private val windowsPackages = org.skepsun.kototoro.desktop.runtime.DesktopPlatform.current.supportsWindowsPackages
-    private val installer = DesktopUpdateInstaller(if (windowsPackages) locateInstallLayout() else null)
+    private val target = org.skepsun.kototoro.desktop.runtime.DesktopUpdateTarget.current()
+    private val installer = DesktopUpdateInstaller(if (target != null) locateInstallLayout()?.takeUnless { layout ->
+        // A custom --data-dir may live inside the bundle. Replacing that image must never replace its user data.
+        session.storage.paths.root.toRealPath().startsWith(layout.root.toRealPath())
+    } else null)
     private val mutex = Mutex()
     private var downloaded: DesktopDownloadedUpdate? = null
+    @Volatile private var installDispatched = false
 
     val stagingDirectory: Path = session.storage.paths.root.resolve("updates")
 
@@ -90,13 +94,14 @@ internal class DesktopUpdateOperations(
 
     fun settings(value: DesktopUpdateSettings) {
         val switched = state.value.update.updateChannel != desktopUpdateChannel(state.value.update.version, value.unstable)
+        if (switched) downloaded = null
         state.update { current ->
             val update = current.update
             // Everything the old channel said — the found release, its notes, the changelog — is another channel's
             // answer once the switch moves, so it is dropped instead of being shown next to the new channel's check.
             current.copy(update = if (switched) {
-                update.copy(settings = value, available = null, progress = null, changelog = null,
-                    changelogError = null, error = null)
+                update.copy(settings = value, available = null, progress = null, downloaded = null, checking = false,
+                    changelog = null, changelogLoading = false, changelogError = null, error = null)
             } else {
                 update.copy(settings = value, error = null)
             })
@@ -107,17 +112,18 @@ internal class DesktopUpdateOperations(
     }
 
     private fun client(): DesktopAppUpdateClient? {
-        if (!windowsPackages) return null
+        if (target == null) return null
         val version = state.value.update.version.version
         if (version.compareTo(org.skepsun.kototoro.desktop.runtime.DesktopPackageVersion.UNKNOWN) <= 0) return null
         return DesktopAppUpdateClient(version, state.value.update.updateChannel,
-            mirror = session.githubMirror::rewrite)
+            mirror = session.githubMirror::rewrite, target = requireNotNull(target))
     }
 
     /** Starts a check in the background; [silent] keeps a start-up check from replacing the window's own message. */
     fun check(silent: Boolean = false) {
-        if (!windowsPackages) return
+        if (target == null) return
         if (state.value.update.checking) return
+        val requestedChannel = state.value.update.updateChannel
         val client = client() ?: run {
             if (!silent) state.update { it.copy(update = it.update.copy(error = desktopText("update.versionUnknown"))) }
             return
@@ -126,6 +132,7 @@ internal class DesktopUpdateOperations(
         scope.launch {
             try {
                 val found = client.check()
+                if (state.value.update.updateChannel != requestedChannel) return@launch
                 state.update { it.copy(update = it.update.copy(checking = false, available = found)) }
                 if (found == null) {
                     if (!silent) state.update { it.copy(message = desktopText("update.upToDate")) }
@@ -136,6 +143,7 @@ internal class DesktopUpdateOperations(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                if (state.value.update.updateChannel != requestedChannel) return@launch
                 state.update { it.copy(update = it.update.copy(checking = false,
                     error = error.message ?: error.javaClass.simpleName)) }
             }
@@ -150,7 +158,9 @@ internal class DesktopUpdateOperations(
         scope.launch {
             try {
                 // An MSI installation upgrades through the MSI; a portable one overwrites its image from the ZIP.
-                val kind = if (layout()?.kind == org.skepsun.kototoro.desktop.runtime.DesktopInstallKind.MSI &&
+                val kind = if (target != org.skepsun.kototoro.desktop.runtime.DesktopUpdateTarget.WINDOWS_X64) {
+                    DesktopUpdatePackage.DMG
+                } else if (layout()?.kind == org.skepsun.kototoro.desktop.runtime.DesktopInstallKind.MSI &&
                     update.available.packageOf(DesktopUpdatePackage.MSI) != null) {
                     DesktopUpdatePackage.MSI
                 } else {
@@ -184,29 +194,51 @@ internal class DesktopUpdateOperations(
         val staged = state.value.update.downloaded ?: return
         if (state.value.update.installing) return
         state.update { it.copy(update = it.update.copy(installing = true, error = null)) }
-        try {
-            val script = installer.apply(staged, stagingDirectory)
-            state.update { it.copy(update = it.update.copy(installing = false),
-                message = desktopText("update.restarting", script.fileName.toString())) }
-            onClose()
-        } catch (error: Exception) {
-            state.update { it.copy(update = it.update.copy(installing = false,
-                error = error.message ?: error.javaClass.simpleName)) }
+        scope.launch {
+            try {
+                val script = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    installer.apply(staged, stagingDirectory,
+                        restartArguments = listOf("--data-dir", session.storage.paths.root.toString()))
+                        .also { installDispatched = true }
+                }
+                state.update { it.copy(update = it.update.copy(installing = false),
+                    message = desktopText("update.restarting", script.fileName.toString())) }
+                onClose()
+            } catch (error: CancellationException) {
+                state.update { it.copy(update = it.update.copy(installing = false)) }
+                throw error
+            } catch (error: Exception) {
+                state.update { it.copy(update = it.update.copy(installing = false,
+                    error = error.message ?: error.javaClass.simpleName)) }
+            }
         }
     }
 
     /** Applies a downloaded package when the window closes, when the user asked for that. */
-    fun installOnExitIfRequested() {
+    suspend fun installOnExitIfRequested() = withContext(kotlinx.coroutines.Dispatchers.IO) {
         val ui = state.value.update
-        if (!ui.settings.installOnExit || ui.downloaded == null) return
-        runCatching { installer.apply(ui.downloaded, stagingDirectory) }
+        if (installDispatched || ui.installing || !ui.settings.installOnExit || ui.downloaded == null) return@withContext
+        runCatching {
+            installer.apply(ui.downloaded, stagingDirectory,
+                restart = ui.downloaded.kind != org.skepsun.kototoro.desktop.runtime.DesktopInstallKind.MACOS_APP)
+            installDispatched = true
+        }
     }
 
     /** Deletes a downloaded package; the staging directory is inside the data root, away from the image. */
     suspend fun discard() = withContext(kotlinx.coroutines.Dispatchers.IO) {
         mutex.withLock {
             val ui = state.value.update
-            ui.downloaded?.packagePath?.let { Files.deleteIfExists(it) }
+            ui.downloaded?.packagePath?.let { path ->
+                require(path.toAbsolutePath().normalize().startsWith(stagingDirectory.toAbsolutePath().normalize()))
+                if (Files.isDirectory(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                    Files.walk(path).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists) }
+                } else Files.deleteIfExists(path)
+            }
+            downloaded?.file?.let { file ->
+                require(file.toAbsolutePath().normalize().startsWith(stagingDirectory.toAbsolutePath().normalize()))
+                Files.deleteIfExists(file)
+            }
             downloaded = null
             state.update { it.copy(update = it.update.copy(downloaded = null, available = null, progress = null)) }
         }
@@ -214,7 +246,7 @@ internal class DesktopUpdateOperations(
 
     /** Checks in the background when the setting allows it; called by the periodic job loop. */
     fun checkInBackground() {
-        if (!windowsPackages) return
+        if (target == null) return
         if (!state.value.update.settings.autoCheck) return
         if (state.value.update.available != null || state.value.update.downloaded != null) return
         check(silent = true)
@@ -226,6 +258,7 @@ internal class DesktopUpdateOperations(
      */
     fun changelog(refresh: Boolean = false) {
         val ui = state.value.update
+        val requestedChannel = ui.updateChannel
         if (ui.changelogLoading) return
         if (!refresh && ui.changelog != null) return
         val client = client() ?: run {
@@ -237,11 +270,13 @@ internal class DesktopUpdateOperations(
         scope.launch {
             try {
                 val releases = client.releases()
+                if (state.value.update.updateChannel != requestedChannel) return@launch
                 state.update { it.copy(update = it.update.copy(changelog = releases, changelogLoading = false)) }
             } catch (error: CancellationException) {
                 state.update { it.copy(update = it.update.copy(changelogLoading = false)) }
                 throw error
             } catch (error: Exception) {
+                if (state.value.update.updateChannel != requestedChannel) return@launch
                 state.update { it.copy(update = it.update.copy(changelogLoading = false,
                     changelogError = error.message ?: error.javaClass.simpleName)) }
             }

@@ -108,8 +108,13 @@ AWT 图标尺寸，`:desktop-app:linuxDebContentsCheck` 同时校验 `.deb` 图�
 
 Windows 与 macOS 使用同一个 `desktop-app` 入口、Compose 页面、Controller、数据库与源运行时；
 系统能力在现有平台服务边界适配，不复制 UI 或业务实现。macOS 当前提供本机开发与未签名本地预览。
-浏览器桥、内嵌视频、原生 ncnn 超分及应用自动更新尚未适配；依赖网页 JS 或人机验证的源暂不可用。
-视频可通过已安装的 mpv 外部播放；此路径不提供应用内播放进度回写。
+macOS 已接入 WKWebView 浏览器桥、libmpv render API 内嵌播放与官方 ncnn 超分。
+开发启动会用 Xcode Command Line Tools 编译浏览器桥，应用预览包随附桥程序；Cookie 由现有 SDK store 统一持久化。
+macOS 安装包随附 libmpv 及 FFmpeg 等动态库依赖，无需另装 Homebrew；支持进度回写、续播、切集和投屏；默认 CGL／OpenGL 呈现已支持 Anime4K／FSR 视频增强。
+GPU 输出仍需读回为 Swing 图像；可用 JVM 参数 `-Dkototoro.mpv.renderer=software` 切回软件排障路径。
+应用自动更新已接入：按芯片和渠道筛选 DMG，校验 SHA-256 与 bundle，退出后替换，失败时回滚。
+生成配套更新资产使用 `:desktop-app:macosUpdatePackage`；Developer ID 签名与公证仍待配置。
+实现及验证见 [macOS 原生能力](../docs/architecture/desktop-macos-native-2026-10.md)。
 
 运行需要 JDK 21 和与 Windows 相同、通过 SHA-256 验证的 29 个兼容运行时 JAR。
 已有兼容目录可直接使用；也可以从已下载的 Windows 桌面 ZIP 中提取纯 JVM 产物，
@@ -370,12 +375,13 @@ Home/End 和 Esc 返回详情。快捷键仅在阅读器焦点范围生效，Ctr
 
 ## 视频播放
 
-视频来源（Aniyomi、kototoro-parsers 的视频源）在应用内用 libmpv 播放：mpv 渲染进内容区里的原生子窗口，
+视频来源（Aniyomi、kototoro-parsers 的视频源）在应用内用 libmpv 播放：Windows/Linux 使用原生子窗口，macOS 默认使用 CGL／OpenGL render API 呈现，
 其余控件为 Compose。支持画质/线路切换（续播当前位置）、字幕与音轨、倍速、音量/静音、±10 秒、
 上一集/下一集、剧集列表、窗口全屏与快捷键（空格/K、←→/J L、Shift 加大步长、↑↓、M、N、F/F11、Esc）。
 流自带的请求头（Referer、User-Agent 等）同样用于字幕/音轨；播完自动进入下一集。观看位置按秒写入共享
 历史（page = 已看秒数，pageCount = 时长），重新打开从历史恢复。
 
+macOS 安装包随附固定版本的 LGPL libmpv 及完整非系统 dylib 依赖，来源与许可见资源目录 `mpv/THIRD_PARTY_PLAYBACK.md`。
 Windows 安装包随附 libmpv（LGPL 构建）与 RealCUGAN / Real-ESRGAN 的 ncnn-vulkan 官方程序，许可与来源见 resources 中的 THIRD_PARTY_PLAYBACK.md。开发运行时不自带 libmpv。查找顺序：`-Dkototoro.libmpv` / `KOTOTORO_LIBMPV` 指定文件、`kototoro.libmpv.dir`、
 打包资源 `mpv/`、数据目录 `mpv/`（缺失时界面给出此路径与“打开文件夹”“重新检测”）、PATH。
 没有 libmpv 时可复制视频地址，或在 PATH 有 `mpv.exe` 时交给外部 mpv（带请求头、字幕与起始位置）。
@@ -393,7 +399,7 @@ Windows 安装包随附 libmpv（LGPL 构建）与 RealCUGAN / Real-ESRGAN 的 n
 也可选择已下载的官方压缩包），以及 Android 的六种 Anime4K 模式（需要 libmpv，离屏运行）。结果缓存在数据目录 `cache/upscale`，失败时显示原图。
 
 程序按平台取同一 release 的资产：Windows 随包（`*.exe`），Linux 下载官方的 `*-ubuntu.zip` 并补上可执行位，
-macOS 上游没有包、该段显示“平台不支持”。Anime4K 离屏渲染走 mpv 的 GPU 输出，需要桌面会话（无显示的 CI 请用 Xvfb）。
+macOS 下载官方的 `*-macos.zip` 并补上可执行位（通用二进制支持 Intel 和 Apple Silicon）。Anime4K 离屏渲染走 mpv 的 GPU 输出，需要桌面会话（无显示的 CI 请用 Xvfb）。
 
 Aniyomi 扩展若实现 `ConfigurableAnimeSource`，与 Mihon 来源一样在“来源设置”中显示原生控件，修改写入 `source_<id>`。
 

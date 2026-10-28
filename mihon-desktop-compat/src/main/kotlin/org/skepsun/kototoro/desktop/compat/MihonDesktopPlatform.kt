@@ -204,9 +204,14 @@ class MihonDesktopPlatform(
                 val f = File(prop)
                 return f.takeIf { it.isFile }
             }
-            if (!osName.startsWith("Windows", ignoreCase = true)) return null
+            val name = when {
+                osName.startsWith("Windows", ignoreCase = true) -> "kototoro-webview-bridge.exe"
+                osName.startsWith("Mac", ignoreCase = true) || osName.equals("Darwin", ignoreCase = true) ->
+                    "kototoro-webview-bridge"
+                else -> return null
+            }
             return System.getProperty("compose.application.resources.dir")?.takeIf { it.isNotBlank() }
-                ?.let { File(it, "browser/kototoro-webview-bridge.exe") }?.takeIf { it.isFile }
+                ?.let { File(it, "browser/$name") }?.takeIf { it.isFile }
         }
     }
 }

@@ -30,25 +30,25 @@ internal object DesktopAppUpdateCheck {
         val stamped = DesktopAppVersion.load()
         val version = if (channelOverride == null) stamped else stamped.copy(
             channel = DesktopUpdateChannel.from(channelOverride))
-        val windowsPackages = org.skepsun.kototoro.desktop.runtime.DesktopPlatform.current.supportsWindowsPackages
-        val layout = if (windowsPackages) runCatching { locateInstallLayout() }.getOrNull() else null
+        val target = org.skepsun.kototoro.desktop.runtime.DesktopUpdateTarget.current()
+        val layout = if (target != null) runCatching { locateInstallLayout() }.getOrNull() else null
         val result = Properties()
         var published: DesktopUpdateRelease? = null
         var failure: Throwable? = null
         try {
-            require(windowsPackages) {
-                "Application update packages are currently available for Windows only"
+            require(target != null) {
+                "Application update packages are unavailable for this platform or architecture"
             }
             require(version.version != DesktopPackageVersion.UNKNOWN) {
                 "This copy carries no version stamp (desktop-version.properties), so it cannot compare itself"
             }
-            published = runBlocking { DesktopAppUpdateClient(version.version, version.channel).newest() }
+            published = runBlocking { DesktopAppUpdateClient(version.version, version.channel, target = requireNotNull(target)).newest() }
         } catch (error: Throwable) {
             failure = error
         } finally {
             desktopUpdateReport(result, version, layout, published, failure)
             report.toAbsolutePath().parent?.let(Files::createDirectories)
-            Files.newBufferedWriter(report).use { result.store(it, "Kototoro Windows update check") }
+            Files.newBufferedWriter(report).use { result.store(it, "Kototoro desktop update check") }
         }
         val error = failure ?: return 0
         System.err.println("update check failed: ${error.message ?: error.javaClass.name}")
@@ -99,7 +99,7 @@ internal object DesktopAppUpdateCheck {
                 target.setProperty("available.packages",
                     published.packages.keys.joinToString(",") { it.name.lowercase() })
                 published.checksumsUrl?.let { target.setProperty("available.checksums", it) }
-                published.packageOf(DesktopUpdatePackage.PORTABLE_ZIP)?.let {
+                (published.packageOf(DesktopUpdatePackage.DMG) ?: published.packageOf(DesktopUpdatePackage.PORTABLE_ZIP))?.let {
                     target.setProperty("available.asset", it.name)
                     target.setProperty("available.url", it.downloadUrl)
                 }

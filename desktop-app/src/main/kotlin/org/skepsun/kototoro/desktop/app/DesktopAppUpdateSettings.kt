@@ -35,7 +35,7 @@ internal fun DesktopAppUpdateSection(
             Text(desktopText("more.about"), style = MaterialTheme.typography.titleMedium)
             Text(desktopText("update.version", update.version.versionName.ifEmpty { "—" }),
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("app-update-version"))
-            if (!org.skepsun.kototoro.desktop.runtime.DesktopPlatform.current.supportsWindowsPackages) {
+            if (org.skepsun.kototoro.desktop.runtime.DesktopUpdateTarget.current() == null) {
                 Text(desktopText("update.platformUnavailable"), color = Muted, fontSize = 12.sp,
                     modifier = Modifier.testTag("app-update-unavailable"))
                 return@Column

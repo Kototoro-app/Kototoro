@@ -16,6 +16,7 @@ enum class DesktopInstallKind {
 
     /** A per-user MSI: the update is handed to `msiexec`, which owns upgrade and file replacement. */
     MSI,
+    MACOS_APP,
 }
 
 /** The installed application image: `<root>/Kototoro.exe` beside `app/` and `runtime/`. */
@@ -63,9 +64,16 @@ class DesktopUpdateInstaller(
     ): DesktopStagedUpdate = withContext(Dispatchers.IO) {
         val install = layout ?: throw DesktopUpdateException(
             DesktopRuntimeStrings.text("runtime.update.notInstalled", "this copy is not an installed package, so it cannot update itself"))
+        require((install.kind == DesktopInstallKind.MACOS_APP) == (download.packageKind == DesktopUpdatePackage.DMG)) {
+            "The update package does not match the installation platform"
+        }
         val packagePath = when (download.packageKind) {
             DesktopUpdatePackage.MSI -> download.file
             DesktopUpdatePackage.PORTABLE_ZIP -> expand(download.file, staging)
+            DesktopUpdatePackage.DMG -> {
+                require(install.kind == DesktopInstallKind.MACOS_APP) { "A DMG requires a macOS installation" }
+                MacosAppUpdater.stage(download, staging, install.root)
+            }
         }
         DesktopStagedUpdate(
             release = download.release,
@@ -81,8 +89,19 @@ class DesktopUpdateInstaller(
      * Starts the script that performs the swap once this process exits. The window must close itself afterwards —
      * the script waits for this process and then continues alone.
      */
-    fun apply(staged: DesktopStagedUpdate, logDirectory: Path, restart: Boolean = true): Path {
+    fun apply(staged: DesktopStagedUpdate, logDirectory: Path, restart: Boolean = true,
+        restartArguments: List<String> = emptyList()): Path {
+        require(layout?.root == staged.root && layout.kind == staged.kind) { "The staged update belongs to another installation" }
         Files.createDirectories(logDirectory)
+        if (staged.kind == DesktopInstallKind.MACOS_APP) {
+            MacosAppUpdater.validate(staged.packagePath, staged.root, staged.release.version)
+            val script = logDirectory.resolve("apply-update-${java.util.UUID.randomUUID()}.sh")
+            val log = logDirectory.resolve("update.log")
+            Files.writeString(script, macosUpdateScript(staged, log, restart, restartArguments = restartArguments))
+            ProcessBuilder("/bin/sh", script.toAbsolutePath().toString()).redirectErrorStream(true)
+                .redirectOutput(ProcessBuilder.Redirect.appendTo(log.toFile())).start()
+            return script
+        }
         val script = logDirectory.resolve("apply-update-${System.currentTimeMillis()}.ps1")
         val log = logDirectory.resolve("update.log")
         Files.writeString(script, updateScript(staged, log, restart), Charsets.UTF_8)
@@ -153,6 +172,7 @@ fun locateInstallLayout(
     registryQuery: () -> String? = ::queryUninstallRegistry,
 ): DesktopInstallLayout? {
     val executable = executableFromAppPath(appPath) ?: executableFromClassPath() ?: return null
+    if (executable.fileName.toString() == "Kototoro") return macosInstallLayout(executable)
     val root = executable.parent ?: return null
     val kind = if (registryQuery()?.let(::parseMsiInstallLocation)?.let { it == root.toAbsolutePath().normalize() } == true) {
         DesktopInstallKind.MSI
@@ -176,6 +196,9 @@ private fun executableFromClassPath(): Path? {
     val appDirectory = runCatching { Path.of(location.toURI()) }.getOrNull()?.parent ?: return null
     if (appDirectory.fileName?.toString() != "app" || !Files.isDirectory(appDirectory)) return null
     val root = appDirectory.parent ?: return null
+    if (root.fileName?.toString() == "Contents") {
+        return root.resolve("MacOS/Kototoro").takeIf { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }
+    }
     return root.resolve("Kototoro.exe").takeIf { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }
 }
 
@@ -200,6 +223,7 @@ internal fun updateScript(staged: DesktopStagedUpdate, log: Path, restart: Boole
     val root = staged.root.toString()
     val executable = staged.executable.toString()
     val body = when (staged.kind) {
+        DesktopInstallKind.MACOS_APP -> error("macOS uses macosUpdateScript")
         DesktopInstallKind.PORTABLE -> """
             |${'$'}source = '${staged.packagePath.toString().escapeForPowerShell()}'
             |if (!(Test-Path -LiteralPath (Join-Path ${'$'}source 'Kototoro.exe'))) { throw 'the staged image has no Kototoro.exe' }

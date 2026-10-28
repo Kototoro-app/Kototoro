@@ -1017,8 +1017,14 @@ class DesktopController(
      */
     fun browseNextPage(): Job? {
         val snapshot = state.value
-        if (snapshot.selectedSource == null || snapshot.browseExhausted) return null
-        return action { browseOnIo(state.value.offset + 1, state.value.query, append = true) }
+        if (snapshot.screen != DesktopScreen.EXPLORE || snapshot.selectedSource == null || snapshot.browseExhausted) return null
+        return action {
+            // The retained list can compose its footer while details or a player replaces it. A queued page request
+            // must not navigate back to the source after the user has already opened another screen.
+            val current = state.value
+            if (current.screen == DesktopScreen.EXPLORE && current.selectedSource == snapshot.selectedSource &&
+                !current.browseExhausted) browseOnIo(current.offset + 1, current.query, append = true)
+        }
     }
 
     /** The manual "next batch" button: same append path as the scroll trigger, so both keep the shown rows. */

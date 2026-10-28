@@ -30,7 +30,7 @@ data class DesktopUpscaleAsset(val archive: String, val sha256: String, val exec
 
 /**
  * The official ncnn-vulkan programs the Android app's models come from, pinned by release and SHA-256. Both projects
- * publish a Windows and a Linux build of the same release, so the models match; macOS has no build and stays out.
+ * publish Windows, Linux and macOS builds of the same release, so the models match.
  */
 enum class DesktopUpscaleTool(
     val title: String,
@@ -45,6 +45,9 @@ enum class DesktopUpscaleTool(
         DesktopPlatform.LINUX to DesktopUpscaleAsset(
             "realcugan-ncnn-vulkan-20220728-ubuntu.zip",
             "d745174bd04c0232c89d935b74799311008fda06bea4195f61be5f0f3cc087cb", "realcugan-ncnn-vulkan"),
+        DesktopPlatform.MACOS to DesktopUpscaleAsset(
+            "realcugan-ncnn-vulkan-20220728-macos.zip",
+            "0df908cbb98b480f85897221b96d37b0bdb70f82d81b2c7037fe950dd5c0fa33", "realcugan-ncnn-vulkan"),
     )),
     REALESRGAN("Real-ESRGAN (xinntao)", "xinntao/Real-ESRGAN", "v0.2.5.0", mapOf(
         DesktopPlatform.WINDOWS to DesktopUpscaleAsset(
@@ -53,6 +56,9 @@ enum class DesktopUpscaleTool(
         DesktopPlatform.LINUX to DesktopUpscaleAsset(
             "realesrgan-ncnn-vulkan-20220424-ubuntu.zip",
             "e5aa6eb131234b87c0c51f82b89390f5e3e642b7b70f2b9bbe95b6a285a40c96", "realesrgan-ncnn-vulkan"),
+        DesktopPlatform.MACOS to DesktopUpscaleAsset(
+            "realesrgan-ncnn-vulkan-20220424-macos.zip",
+            "e0ad05580abfeb25f8d8fb55aaf7bedf552c375b5b4d9bd3c8d59764d2cc333a", "realesrgan-ncnn-vulkan"),
     )),
     ;
 

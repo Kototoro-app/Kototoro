@@ -106,6 +106,7 @@ class DesktopAppUpdateClient(
      * is not rewritten: no mirror proxies `api.github.com`, and the version check has to name the files first.
      */
     private val mirror: (String) -> String = { it },
+    private val target: DesktopUpdateTarget = DesktopUpdateTarget.WINDOWS_X64,
 ) {
     /** The newest installable release, or null when the running version is up to date (or nothing is published). */
     suspend fun check(): DesktopAppUpdate? {
@@ -142,7 +143,7 @@ class DesktopAppUpdateClient(
     private suspend fun usableReleases(): List<DesktopUpdateRelease> = withContext(Dispatchers.IO) {
         val body = String(readBytes(URI("https://api.github.com/repos/$repository/releases?per_page=$RELEASES_PER_PAGE"),
             MAXIMUM_RELEASES_BYTES), Charsets.UTF_8)
-        parseReleases(body, channel).filter { it.checksumsUrl != null }
+        parseReleases(body, channel, target).filter { it.checksumsUrl != null }
     }
 
     /** The release's published checksums, keyed by asset file name. */
@@ -168,6 +169,7 @@ class DesktopAppUpdateClient(
         val release = update.available
         val asset = release.packageOf(packageKind) ?: throw DesktopUpdateException(DesktopRuntimeStrings.text(
             "runtime.update.packageMissing", "this release has no %s package", packageKind.name.lowercase(Locale.ROOT)))
+        require(asset.name.matches(Regex("[A-Za-z0-9][A-Za-z0-9.+-]*"))) { "Unsafe update asset name" }
         val expected = checksums(release)[asset.name] ?: throw DesktopUpdateException(DesktopRuntimeStrings.text(
             "runtime.update.checksumMissingFor", "the SHA-256 file does not list %s", asset.name))
         Files.createDirectories(directory)
@@ -213,6 +215,14 @@ class DesktopAppUpdateClient(
             // Every MSI is a compound file; a truncated or HTML-error download fails this check.
             DesktopUpdatePackage.MSI -> Files.newInputStream(file).use { it.readNBytes(MSI_SIGNATURE.size) }
                 .contentEquals(MSI_SIGNATURE)
+            DesktopUpdatePackage.DMG -> Files.newByteChannel(file).use { input ->
+                if (input.size() < 512) false else {
+                    input.position(input.size() - 512)
+                    val signature = java.nio.ByteBuffer.allocate(4)
+                    while (signature.hasRemaining() && input.read(signature) > 0) { }
+                    signature.array().contentEquals("koly".toByteArray(Charsets.US_ASCII))
+                }
+            }
         }
         if (!image) throw DesktopUpdateException(
             DesktopRuntimeStrings.text("runtime.update.notAnImage", "the package is not a Kototoro image"))
@@ -283,7 +293,7 @@ class DesktopAppUpdateClient(
         const val MAXIMUM_CHECKSUM_BYTES = 64 * 1024
         const val DOWNLOAD_BUFFER_BYTES = 64 * 1024
         const val PROGRESS_STEP_BYTES = 256 * 1024L
-        const val USER_AGENT = "Kototoro-Windows"
+        const val USER_AGENT = "Kototoro-Desktop"
         val IMAGE_ENTRY = Regex("(^|.*/)Kototoro\\.exe", RegexOption.IGNORE_CASE)
         val MSI_SIGNATURE = byteArrayOf(0xD0.toByte(), 0xCF.toByte(), 0x11, 0xE0.toByte(),
             0xA1.toByte(), 0xB1.toByte(), 0x1A, 0xE1.toByte())
@@ -320,25 +330,30 @@ private data class GithubRelease(
  * checksum file by the same stem with `.sha256`. Anything else in a release (APKs, iOS builds, patches, the other
  * channel) is ignored instead of guessed at.
  */
-internal fun parseReleases(json: String, channel: DesktopUpdateChannel): List<DesktopUpdateRelease> {
+internal fun parseReleases(json: String, channel: DesktopUpdateChannel,
+    target: DesktopUpdateTarget = DesktopUpdateTarget.WINDOWS_X64): List<DesktopUpdateRelease> {
     val releases = try {
         SourceProtocolJson.decodeFromString<List<GithubRelease>>(json)
     } catch (error: Exception) {
         throw DesktopUpdateException(
             DesktopRuntimeStrings.text("runtime.update.unreadable", "the update data could not be read"), error)
     }
-    return releases.filterNot { it.draft }.mapNotNull { it.toUpdateRelease(channel) }
+    return releases.filterNot { it.draft }.mapNotNull { it.toUpdateRelease(channel, target) }
 }
 
-private fun GithubRelease.toUpdateRelease(channel: DesktopUpdateChannel): DesktopUpdateRelease? {
-    val version = versionOfAssets() ?: return null
-    val stem = "Kototoro-${version.text}-windows-x64-${channel.assetSegment}"
+private fun GithubRelease.toUpdateRelease(channel: DesktopUpdateChannel, target: DesktopUpdateTarget): DesktopUpdateRelease? {
+    val expression = Regex("^Kototoro-([A-Za-z0-9][A-Za-z0-9.+-]*)-${target.assetSegment}-${channel.assetSegment}\\.(?:zip|msi|dmg)$", RegexOption.IGNORE_CASE)
+    val version = assets.firstNotNullOfOrNull { expression.matchEntire(it.name)?.groupValues?.get(1) }
+        ?.let(DesktopPackageVersion::parse)?.takeUnless { it == DesktopPackageVersion.UNKNOWN } ?: return null
+    val stem = "Kototoro-${version.text}-${target.assetSegment}-${channel.assetSegment}"
     val packages = assets.mapNotNull { asset ->
         val kind = when {
             asset.name.endsWith(".zip", ignoreCase = true) -> DesktopUpdatePackage.PORTABLE_ZIP
             asset.name.endsWith(".msi", ignoreCase = true) -> DesktopUpdatePackage.MSI
+            asset.name.endsWith(".dmg", ignoreCase = true) -> DesktopUpdatePackage.DMG
             else -> return@mapNotNull null
         }
+        if ((target == DesktopUpdateTarget.WINDOWS_X64) == (kind == DesktopUpdatePackage.DMG)) return@mapNotNull null
         if (!asset.name.equals(stem + packageSuffix(kind), ignoreCase = true)) return@mapNotNull null
         kind to DesktopUpdateAsset(asset.name, asset.downloadUrl, asset.size, kind)
     }.toMap()
@@ -358,17 +373,8 @@ private fun GithubRelease.toUpdateRelease(channel: DesktopUpdateChannel): Deskto
 private fun packageSuffix(kind: DesktopUpdatePackage) = when (kind) {
     DesktopUpdatePackage.PORTABLE_ZIP -> ".zip"
     DesktopUpdatePackage.MSI -> ".msi"
+    DesktopUpdatePackage.DMG -> ".dmg"
 }
-
-/** The version as the asset name carries it, e.g. `1.9.9`, `1.10.0-beta1` or `N20261022`. */
-private fun GithubRelease.versionOfAssets(): DesktopPackageVersion? {
-    val candidate = assets.firstNotNullOfOrNull { asset ->
-        ASSET_NAME.find(asset.name)?.groupValues?.getOrNull(1)
-    } ?: return null
-    return DesktopPackageVersion.parse(candidate).takeUnless { it == DesktopPackageVersion.UNKNOWN }
-}
-
-private val ASSET_NAME = Regex("^Kototoro-(.+?)-windows-x64-(?:release|nightly)\\.[A-Za-z]+$", RegexOption.IGNORE_CASE)
 
 /**
  * Picks the release to offer: the highest version strictly newer than [current] that carries a package. A stable

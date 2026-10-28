@@ -75,7 +75,13 @@ class MpvLocatorTest {
         Files.createDirectories(userData.resolve("mpv"))
         val library = userData.resolve("mpv").resolve(MpvLocator.libraryNames.first())
         Files.writeString(library, "not a real library")
-        assertEquals(library, MpvLocator.find(userData))
+        // `-PlibmpvDirectory` (the real playback tests) sets a directory that rightly outranks the user data folder.
+        val configured = System.clearProperty("kototoro.libmpv.dir")
+        try {
+            assertEquals(library, MpvLocator.find(userData))
+        } finally {
+            configured?.let { System.setProperty("kototoro.libmpv.dir", it) }
+        }
 
         val candidates = MpvLocator.candidates(userData, emptyMap(), "Linux", "amd64")
         val suggested = candidates.indexOf(userData.resolve("mpv").resolve("libmpv.so.2"))

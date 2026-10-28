@@ -7,18 +7,27 @@ import java.util.concurrent.TimeUnit
 /**
  * Where libmpv may come from, first match wins: an explicit `kototoro.libmpv` path, the `KOTOTORO_LIBMPV` environment
  * variable, the packaged app's `mpv` resources, the user data `mpv` folder, the platform's library directories, then
- * `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH`, PATH and finally whatever `ldconfig` reports. Nothing is bundled by default;
- * the UI tells the user where to put the library.
+ * `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH`, PATH and finally whatever `ldconfig` reports. Windows and macOS distributions bundle the runtime;
+ * development runs may supply a library explicitly.
  *
  * Windows only ever ships `libmpv-2.dll` next to the app, but a Linux distribution installs `libmpv.so.2` through its
  * package manager, so `/usr/lib/<multiarch triplet>` has to be searched: that directory is not on PATH and a player
  * that only looked at PATH would report "libmpv missing" on a machine that has it.
  */
 object MpvLocator {
-    // macOS needs the libmpv render API; an AWT component pointer is not a supported mpv --wid target there.
+    // macOS uses the render API; an AWT component pointer is not a supported mpv --wid target there.
     // On Linux the AWT canvas becomes an X11 window (XWayland under Wayland sessions) and JNA's component id is that
     // X11 drawable, which is what mpv's wid option takes.
-    val supportsEmbeddedPlayback: Boolean get() = !com.sun.jna.Platform.isMac()
+    val supportsEmbeddedPlayback: Boolean get() = true
+    val usesRenderApi: Boolean get() = com.sun.jna.Platform.isMac()
+    val defaultRenderMode: MpvRenderMode
+        get() = if (!usesRenderApi) MpvRenderMode.NONE else {
+            when (System.getProperty("kototoro.mpv.renderer", "opengl")) {
+                "opengl" -> MpvRenderMode.MACOS_OPENGL
+                "software" -> MpvRenderMode.SOFTWARE
+                else -> throw IllegalArgumentException("kototoro.mpv.renderer must be opengl or software")
+            }
+        }
 
     val libraryNames: List<String> get() = libraryNamesFor(System.getProperty("os.name").orEmpty())
 

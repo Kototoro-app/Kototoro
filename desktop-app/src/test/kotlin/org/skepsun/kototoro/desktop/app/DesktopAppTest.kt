@@ -56,9 +56,8 @@ class DesktopAppTest {
 
     @Test
     fun `the changelog page lists the channel's published notes and returns to the about card`() {
-        // The changelog belongs to the Windows package updater; other platforms show "unavailable" instead.
-        assumeTrue(org.skepsun.kototoro.desktop.runtime.DesktopPlatform.current.supportsWindowsPackages,
-            "no Windows package updater on this platform")
+        assumeTrue(org.skepsun.kototoro.desktop.runtime.DesktopUpdateTarget.current() != null,
+            "no package updater on this platform")
         probe("changelog", directory.resolve("中文 changelog"), 180)
     }
 

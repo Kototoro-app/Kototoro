@@ -20,6 +20,16 @@ class MihonBridgeLocationTest {
     }
 
     @Test
+    fun `macOS discovers WKWebView bridge for both Mac and Darwin names`() = properties(null) {
+        val native = Files.createFile(directory.resolve("browser/kototoro-webview-bridge"))
+        for (name in listOf("Mac OS X", "Darwin")) {
+            assertEquals(native.toFile(), MihonDesktopPlatform.defaultBridgeExecutable(name))
+        }
+        assertEquals(bridge().toFile(), MihonDesktopPlatform.defaultBridgeExecutable("Windows 11"))
+        assertNull(MihonDesktopPlatform.defaultBridgeExecutable("Linux"))
+    }
+
+    @Test
     fun `explicit bridge overrides the packaged location`() {
         val explicit = Files.createFile(directory.resolve("explicit.exe"))
         properties(explicit.toString()) { assertEquals(explicit.toFile(), MihonDesktopPlatform.defaultBridgeExecutable()) }

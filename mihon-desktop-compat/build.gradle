@@ -186,6 +186,18 @@ tasks.register('coverFixtureJar', Jar) {
 
 def bridgeSource = file('src/bridge/csharp/KototoroWebViewBridge.cs')
 def bridgeExe = layout.buildDirectory.file('bridge/kototoro-webview-bridge.exe')
+def macBridgeExe = layout.buildDirectory.file('bridge/kototoro-webview-bridge')
+def macBridgeArch = System.getProperty('os.arch') in ['aarch64', 'arm64'] ? 'arm64' : 'x86_64'
+tasks.register('compileMacosWebViewBridge', Exec) {
+    onlyIf { System.getProperty('os.name', '').startsWith('Mac') }
+    inputs.file('src/bridge/swift/KototoroWebViewBridge.swift')
+    inputs.property('target', "${macBridgeArch}-apple-macos11.0")
+    outputs.file(macBridgeExe)
+    doFirst { macBridgeExe.get().asFile.parentFile.mkdirs() }
+    commandLine 'xcrun', 'swiftc', '-swift-version', '5', '-target', "${macBridgeArch}-apple-macos11.0",
+        '-O', '-framework', 'AppKit', '-framework', 'WebKit',
+        file('src/bridge/swift/KototoroWebViewBridge.swift').absolutePath, '-o', macBridgeExe.get().asFile.absolutePath
+}
 def sdkExtracted = rootProject.layout.projectDirectory.dir('build/webview2-sdk/1.0.4258.31/extracted').asFile
 def compileWebViewBridge = tasks.register('compileWebViewBridge') {
     onlyIf { System.getProperty('os.name', '').startsWith('Windows') }
@@ -240,12 +252,14 @@ tasks.withType(Test).configureEach {
     javaLauncher = compatibilityLauncher
     systemProperty 'kototoro.compat.test.classpath', sourceSets.test.runtimeClasspath.asPath
     systemProperty 'kototoro.compat.fixture.jar', fixtureJar.get().archiveFile.get().asFile
-    systemProperty 'kototoro.compat.bridge.exe', bridgeExe.get().asFile.absolutePath
+    systemProperty 'kototoro.compat.bridge.exe',
+        (System.getProperty('os.name', '').startsWith('Mac') ? macBridgeExe : bridgeExe).get().asFile.absolutePath
     inputs.file(fixtureJar.flatMap { it.archiveFile })
     inputs.files(bridgeExe)
     dependsOn verifyCompatibility
     dependsOn fixtureJar
     dependsOn compileWebViewBridge
+    dependsOn tasks.named('compileMacosWebViewBridge')
 }
 
 def sourceHostConfig = providers.gradleProperty('sourceHostConfig').getOrNull()

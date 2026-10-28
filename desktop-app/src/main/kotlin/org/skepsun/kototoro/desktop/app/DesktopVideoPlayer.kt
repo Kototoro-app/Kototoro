@@ -82,6 +82,29 @@ private class VideoCanvas(private val onWindow: (Long?) -> Unit) : Canvas() {
     }
 }
 
+/** A lightweight AWT surface for libmpv render API frames; no Cocoa window pointer escapes into mpv. */
+private class MacVideoPanel : javax.swing.JPanel() {
+    @Volatile var frame: java.awt.image.BufferedImage? = null
+    init { background = java.awt.Color.BLACK }
+    override fun paintComponent(graphics: java.awt.Graphics) {
+        super.paintComponent(graphics)
+        frame?.let { graphics.drawImage(it, 0, 0, width, height, null) }
+    }
+}
+
+private fun createVideoPlayer(library: Path, window: Long?, decoderMode: DesktopVideoDecoderMode): MpvPlayer {
+    // Support aid: -Dkototoro.mpv.log=<file> keeps mpv's own verbose log.
+    val diagnostics = System.getProperty("kototoro.mpv.log")?.takeIf(String::isNotBlank)
+        ?.let { mapOf("log-file" to it, "msg-level" to "all=v") }.orEmpty()
+    // and -Dkototoro.mpv.options=key=value;key=value adds mpv options (support / troubleshooting).
+    val extra = System.getProperty("kototoro.mpv.options").orEmpty().split(';').filter { '=' in it }
+        .associate { it.substringBefore('=').trim() to it.substringAfter('=').trim() }
+    // The playback preference chooses the decoder; an operator-supplied option still wins over it.
+    val decoder = decoderMode.mpvOptions
+    return MpvPlayer(library, window, diagnostics + decoder + extra,
+        renderMode = MpvLocator.defaultRenderMode)
+}
+
 /**
  * The episode player: mpv draws into a native window inside the Compose layout, everything else is Compose. Native
  * calls that can wait on the window thread (creating and destroying the player) never run on the UI thread.
@@ -115,8 +138,12 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
     // Where playback was when the native window went away, so a new window continues from there.
     var resumeAt by remember { mutableStateOf<Double?>(null) }
     val idle = remember { MutableStateFlow(MpvState()) }
+    var canvasActive by remember { mutableStateOf(false) }
+    val canvasGeneration = remember { java.util.concurrent.atomic.AtomicLong() }
     val canvas = remember {
-        VideoCanvas { window ->
+        val onWindow: (Long?) -> Unit = { window ->
+            val generation = canvasGeneration.incrementAndGet()
+            canvasActive = window != null
             val previous = player
             player = null
             if (previous != null) {
@@ -125,26 +152,69 @@ private fun PlayerContent(controller: DesktopController, state: DesktopAppState,
             }
             if (window != null) scope.launch(Dispatchers.IO) {
                 try {
-                    // Support aid: -Dkototoro.mpv.log=<file> keeps mpv's own verbose log.
-                    val diagnostics = System.getProperty("kototoro.mpv.log")?.takeIf(String::isNotBlank)
-                        ?.let { mapOf("log-file" to it, "msg-level" to "all=v") }.orEmpty()
-                    // and -Dkototoro.mpv.options=key=value;key=value adds mpv options (support / troubleshooting).
-                    val extra = System.getProperty("kototoro.mpv.options").orEmpty().split(';').filter { '=' in it }
-                        .associate { it.substringBefore('=').trim() to it.substringAfter('=').trim() }
-                    // The playback preference chooses the decoder; an operator-supplied option still wins over it.
-                    val decoder = state.videoSettings.decoderMode.mpvOptions
-                    player = MpvPlayer(library, window, diagnostics + decoder + extra)
+                    val created = createVideoPlayer(library, window, state.videoSettings.decoderMode)
+                    var accepted = false
+                    try {
+                        javax.swing.SwingUtilities.invokeAndWait {
+                            if (canvasActive && canvasGeneration.get() == generation) {
+                                player = created
+                                accepted = true
+                            }
+                        }
+                    } finally { if (!accepted) created.close() }
                 } catch (error: Throwable) {
                     failure = desktopText("video.playerStartFailed", error.message ?: error.javaClass.simpleName)
                 }
             }
         }
+        if (MpvLocator.usesRenderApi) MacVideoPanel() else VideoCanvas(onWindow)
+    }
+    LaunchedEffect(library) {
+        if (!MpvLocator.usesRenderApi) return@LaunchedEffect
+        var acquired: MpvPlayer? = null
+        try {
+            withContext(Dispatchers.IO) { acquired = createVideoPlayer(library, null, state.videoSettings.decoderMode) }
+            player = acquired
+            kotlinx.coroutines.awaitCancellation()
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            failure = desktopText("video.playerStartFailed", error.message ?: error.javaClass.simpleName)
+        } finally {
+            player = null
+            withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { acquired?.close() }
+        }
+    }
+    LaunchedEffect(player) {
+        val current = player ?: return@LaunchedEffect
+        val surface = canvas as? MacVideoPanel ?: return@LaunchedEffect
+        try {
+            while (true) {
+                val surfaceWidth = surface.width.coerceAtLeast(1)
+                val surfaceHeight = surface.height.coerceAtLeast(1)
+                val scale = minOf(1.0, 1920.0 / surfaceWidth, 1080.0 / surfaceHeight)
+                val width = (surfaceWidth * scale).toInt().coerceAtLeast(1)
+                val height = (surfaceHeight * scale).toInt().coerceAtLeast(1)
+                val image = withContext(Dispatchers.IO) { current.renderFrame(width, height) }
+                surface.frame = image
+                surface.repaint()
+                delay(33)
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            failure = desktopText("video.playerStartFailed", error.message ?: error.javaClass.simpleName)
+        } finally { surface.frame = null }
     }
     DisposableEffect(Unit) {
         onDispose {
+            canvasActive = false
+            canvasGeneration.incrementAndGet()
             val current = player
             player = null
-            if (current != null) Thread({ runCatching { current.close() } }, "mpv-close").start()
+            if (!MpvLocator.usesRenderApi && current != null) {
+                Thread({ runCatching { current.close() } }, "mpv-close").start()
+            }
         }
     }
     val mpv by (player?.state ?: idle).collectAsState()

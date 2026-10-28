@@ -3,10 +3,13 @@ package org.skepsun.kototoro.desktop.app
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.desktop.compat.MihonDesktopPlatform
 import org.skepsun.kototoro.desktop.player.MpvLocator
 import org.skepsun.kototoro.desktop.player.MpvPlayer
 import org.skepsun.kototoro.desktop.player.MpvStream
+import org.skepsun.kototoro.desktop.player.MpvRenderMode
 import org.skepsun.kototoro.desktop.runtime.DesktopLibraryBackup
 import org.skepsun.kototoro.desktop.runtime.DesktopPlatform
 import org.skepsun.kototoro.desktop.runtime.DesktopSuperResolution
@@ -28,6 +31,10 @@ internal object DesktopRuntimeCheck {
         result.setProperty("java.version", System.getProperty("java.version"))
         val platform = DesktopPlatform.current
         result.setProperty("platform", platform.displayName)
+        result.setProperty("updates.target",
+            org.skepsun.kototoro.desktop.runtime.DesktopUpdateTarget.current()?.assetSegment ?: "unsupported")
+        result.setProperty("updates.installation",
+            org.skepsun.kototoro.desktop.runtime.locateInstallLayout()?.kind?.name?.lowercase() ?: "unavailable")
         try {
             runBlocking {
                 DesktopSession.open(root).use { session ->
@@ -71,15 +78,16 @@ internal object DesktopRuntimeCheck {
                     result.setProperty("image", "ok")
                     // Plays a generated stream without a window or a device: the locator, the loader and the demuxer
                     // all have to work for the position to move.
+                    val probeVideo = org.skepsun.kototoro.desktop.player.MpvProbeVideo.write(root.resolve("runtime-check.y4m"))
                     suspend fun playTestStream(library: Path) {
                         MpvPlayer(library).use { player ->
-                            player.load(MpvStream("av://lavfi:testsrc=duration=5:size=64x48:rate=10"))
+                            player.load(MpvStream(probeVideo.toUri().toString()))
                             withTimeout(20_000) {
                                 while (player.state.value.position < 0.3) delay(50)
                             }
                         }
                     }
-                    // libmpv is never shipped: on Linux the distribution provides it, elsewhere the user installs it.
+                    // Windows/macOS images bundle libmpv; Linux may provide it through the distribution.
                     // Probing here keeps `player=ok` honest instead of a static claim, and a missing library is
                     // reported as such rather than failed — the video page still offers the external player.
                     suspend fun probePlayer() {
@@ -97,18 +105,53 @@ internal object DesktopRuntimeCheck {
                             )
                             return
                         }
-                        playTestStream(library)
+                        if (platform == DesktopPlatform.MACOS) {
+                            MpvPlayer(library, options = mapOf("ao" to "null"),
+                                renderMode = MpvLocator.defaultRenderMode).use { player ->
+                                player.load(MpvStream(probeVideo.toUri().toString()))
+                                withTimeout(20_000) {
+                                    var painted = false
+                                    while (!painted) {
+                                        val image = withContext(Dispatchers.IO) { player.renderFrame(64, 48) }
+                                        try {
+                                            painted = (0 until 48 step 4).any { y ->
+                                                (0 until 64 step 4).any { x ->
+                                                    val rgb = image.getRGB(x, y)
+                                                    (rgb shr 16 and 255) != (rgb shr 8 and 255)
+                                                }
+                                            }
+                                        } finally { image.flush() }
+                                        if (!painted) delay(50)
+                                    }
+                                }
+                                result.setProperty("player.render", "ok")
+                            }
+                        } else playTestStream(library)
                         result.setProperty("player", "ok")
                     }
+                    if (platform == DesktopPlatform.MACOS) {
+                        val browser = requireNotNull(session.browser) { "WKWebView bridge is unavailable" }
+                        withTimeout(30_000) {
+                            check(browser.evaluate("<html><head><title>runtime-ready</title></head></html>",
+                                "document.title") == "\"runtime-ready\"")
+                        }
+                        result.setProperty("browser", "ok")
+                        result.setProperty("browser.engine", "WKWebView")
+                    }
                     if (platform != DesktopPlatform.WINDOWS) {
-                        result.setProperty("browser", "unsupported")
-                        // An AWT canvas is an X11 window on Linux (XWayland under Wayland), which is what mpv's wid
-                        // takes; macOS has no such handle and needs the render API instead.
+                        if (platform != DesktopPlatform.MACOS) result.setProperty("browser", "unsupported")
+                        // Linux uses an X11 drawable (XWayland under Wayland); macOS uses render API frames.
                         result.setProperty(
                             "player.embedded",
-                            if (platform == DesktopPlatform.LINUX) "x11-window" else "unsupported",
+                            when (platform) {
+                                DesktopPlatform.LINUX -> "x11-window"
+                                DesktopPlatform.MACOS -> if (MpvLocator.defaultRenderMode == MpvRenderMode.SOFTWARE) {
+                                    "render-api-software"
+                                } else "render-api-opengl"
+                                else -> "unsupported"
+                            },
                         )
-                        // Windows bundles the programs; Linux downloads them on first use, so the capability is
+                        // Windows bundles the programs; other supported hosts download them on first use, so the capability is
                         // there and whether they are installed yet is what the probe reports.
                         result.setProperty(
                             "upscale.native",

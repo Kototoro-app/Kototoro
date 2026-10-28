@@ -11,8 +11,6 @@ import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.core.source.SourceEcosystem
 import org.skepsun.kototoro.desktop.player.MpvLocator
-import org.skepsun.kototoro.desktop.player.MpvPlayer
-import org.skepsun.kototoro.desktop.player.MpvStream
 import java.awt.Canvas
 import java.awt.Container
 import java.awt.Rectangle
@@ -34,17 +32,13 @@ import javax.swing.SwingUtilities
 internal object DesktopVideoProbe {
     fun run(args: Array<String>) {
         val root = Path.of(args[1])
-        val library = requireNotNull(MpvLocator.find(root)) { "no libmpv for the video probe" }
-        val clip = root.resolveSibling("video-probe-clip.mkv")
-        MpvPlayer(library, options = mapOf("o" to clip.toString(), "ovc" to "mjpeg", "of" to "matroska",
-            "keep-open" to "no")).use { encoder ->
-            encoder.load(MpvStream("av://lavfi:testsrc=duration=40:size=320x240:rate=10"))
-            waitUntil("clip encoded") { Files.isRegularFile(clip) && encoder.property("idle-active") == "yes" }
-        }
+        requireNotNull(MpvLocator.find(root)) { "no libmpv for the video probe" }
+        val clip = org.skepsun.kototoro.desktop.player.MpvProbeVideo.write(
+            root.resolveSibling("video-probe-clip.y4m"), seconds = 40)
         val bytes = Files.readAllBytes(clip)
         val requests = mutableListOf<String>()
         val server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0).apply {
-            createContext("/clip.mkv") { exchange ->
+            createContext("/clip.y4m") { exchange ->
                 synchronized(requests) { requests += exchange.requestHeaders.getFirst("Referer").orEmpty() }
                 if (exchange.requestHeaders.getFirst("Referer") != "https://anime.fixture/") {
                     exchange.sendResponseHeaders(403, -1); exchange.close(); return@createContext
@@ -54,7 +48,7 @@ internal object DesktopVideoProbe {
             }
             start()
         }
-        System.setProperty("fixture.anime.video.url", "http://127.0.0.1:${server.address.port}/clip.mkv")
+        System.setProperty("fixture.anime.video.url", "http://127.0.0.1:${server.address.port}/clip.y4m")
         System.setProperty("kototoro.mpv.log", Path.of(args[3]).resolve("video-mpv.log").toString())
         System.getProperty("kototoro.real.mpvoptions")?.let { System.setProperty("kototoro.mpv.options", it) }
         val session = runBlocking { DesktopSession.open(root) }
@@ -63,7 +57,17 @@ internal object DesktopVideoProbe {
         val failure = AtomicReference<Throwable>()
         Thread({
             try { drive(controller, session, Path.of(args[3]), Path.of(System.getProperty("kototoro.desktop.anime.fixture.jar"))) }
-            catch (error: Throwable) { failure.set(error) }
+            catch (error: Throwable) {
+                runCatching {
+                    SwingUtilities.invokeAndWait {
+                        AwtWindow.getWindows().firstOrNull { it.isShowing }?.let { window ->
+                            ImageIO.write(Robot().createScreenCapture(Rectangle(window.locationOnScreen, window.size)),
+                                "png", Path.of(args[3]).resolve("video-failure.png").toFile())
+                        }
+                    }
+                }
+                failure.set(error)
+            }
             finally { finished = true }
         }, "video-probe").apply { isDaemon = true; start() }
         application(exitProcessOnExit = false) {
@@ -107,17 +111,19 @@ internal object DesktopVideoProbe {
             val log = Files.readString(reports.resolve("video-mpv.log"))
             val start = log.lastIndexOf(marker).takeIf { it >= 0 } ?: return false
             val tail = log.substring(start)
-            check(!tail.contains("[e][vo/gpu")) { tail.lines().filter { "[e][vo/gpu" in it }.take(5).joinToString("\n") }
+            check(!tail.contains("[e][vo/gpu") && !tail.contains("[e][libmpv_render")) { tail.lines().filter { "[e][vo/gpu" in it }.take(5).joinToString("\n") }
             return tail.contains(token)
         }
-        controller.setVideoEnhancement(org.skepsun.kototoro.desktop.player.MpvEnhancement(
-            org.skepsun.kototoro.desktop.player.MpvEnhancementMode.ANIME4K_QUALITY))
-        waitUntil("Anime4K passes compiled", 20_000) { compiledAfter("Upscale_CNN_x2_VL.glsl", "conv2d") }
-        controller.setVideoEnhancement(org.skepsun.kototoro.desktop.player.MpvEnhancement(
-            org.skepsun.kototoro.desktop.player.MpvEnhancementMode.FSR, 0.5f))
-        waitUntil("FSR passes compiled", 20_000) { compiledAfter("FSR-1.00.glsl", "FSR_RCAS_LIMIT") }
-        controller.setVideoEnhancement(org.skepsun.kototoro.desktop.player.MpvEnhancement())
-        println("VIDEO_ENHANCEMENT Anime4K and FSR passes ran")
+        if (MpvLocator.defaultRenderMode != org.skepsun.kototoro.desktop.player.MpvRenderMode.SOFTWARE) {
+            controller.setVideoEnhancement(org.skepsun.kototoro.desktop.player.MpvEnhancement(
+                org.skepsun.kototoro.desktop.player.MpvEnhancementMode.ANIME4K_QUALITY))
+            waitUntil("Anime4K passes compiled", 20_000) { compiledAfter("Upscale_CNN_x2_VL.glsl", "conv2d") }
+            controller.setVideoEnhancement(org.skepsun.kototoro.desktop.player.MpvEnhancement(
+                org.skepsun.kototoro.desktop.player.MpvEnhancementMode.FSR, 0.5f))
+            waitUntil("FSR passes compiled", 20_000) { compiledAfter("FSR-1.00.glsl", "FSR_RCAS_LIMIT") }
+            controller.setVideoEnhancement(org.skepsun.kototoro.desktop.player.MpvEnhancement())
+            println("VIDEO_ENHANCEMENT Anime4K and FSR passes ran")
+        }
         val before = video.position
         controller.selectVideoStream(1)
         waitUntil("quality switch continues", 30_000) {
@@ -157,7 +163,10 @@ internal object DesktopVideoProbe {
         idle()
         val next = requireNotNull(controller.state.value.video)
         check(next.chapter.id != first.id && next.startSeconds == 0.0)
-        waitUntil("next episode plays", 30_000) { (controller.state.value.video?.position ?: 0.0) >= 1.0 }
+        waitUntil("next episode plays", 30_000) {
+            check(controller.state.value.screen == DesktopScreen.VIDEO) { "Unexpected screen: ${controller.state.value.screen}" }
+            (controller.state.value.video?.position ?: 0.0) >= 1.0
+        }
         runBlocking { controller.backToDetails().join() }
         idle()
         // The extension's own settings screen: choosing the mirror line changes what it offers first.
@@ -235,10 +244,10 @@ internal object DesktopVideoProbe {
         }
         println("VIDEO_SURFACE ${area.width}x${area.height} colourful=$surface")
     }
-    private fun canvases(container: Container): List<Canvas> = container.components.flatMap { child ->
+    private fun canvases(container: Container): List<java.awt.Component> = container.components.flatMap { child ->
         when (child) {
             is Canvas -> if (child.javaClass.name.contains("VideoCanvas")) listOf(child) else emptyList()
-            is Container -> canvases(child)
+            is Container -> if (child.javaClass.simpleName == "MacVideoPanel") listOf(child) else canvases(child)
             else -> emptyList()
         }
     }

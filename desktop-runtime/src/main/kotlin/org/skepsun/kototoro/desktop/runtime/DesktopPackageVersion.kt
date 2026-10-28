@@ -110,7 +110,22 @@ data class DesktopUpdateAsset(
     val kind: DesktopUpdatePackage,
 )
 
-enum class DesktopUpdatePackage { PORTABLE_ZIP, MSI }
+enum class DesktopUpdatePackage { PORTABLE_ZIP, MSI, DMG }
+
+/** Asset identity is explicit: never offer another OS or CPU's build from the same release. */
+enum class DesktopUpdateTarget(val assetSegment: String) {
+    WINDOWS_X64("windows-x64"), MACOS_ARM64("macos-arm64"), MACOS_X64("macos-x64");
+
+    companion object {
+        fun current(platform: DesktopPlatform = DesktopPlatform.current,
+            architecture: String = System.getProperty("os.arch", "")): DesktopUpdateTarget? = when {
+            platform == DesktopPlatform.WINDOWS && architecture.lowercase() in setOf("amd64", "x86_64") -> WINDOWS_X64
+            platform == DesktopPlatform.MACOS && architecture.lowercase() in setOf("arm64", "aarch64") -> MACOS_ARM64
+            platform == DesktopPlatform.MACOS && architecture.lowercase() in setOf("amd64", "x86_64") -> MACOS_X64
+            else -> null
+        }
+    }
+}
 
 /** A release the Windows client may install, already narrowed to this channel and architecture. */
 data class DesktopUpdateRelease(

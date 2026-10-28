@@ -45,7 +45,7 @@ internal object DesktopAboutProbe {
                 idle()
 
                 // Android's switch, on the about card: checked when this copy follows the nightly repository.
-                if (org.skepsun.kototoro.desktop.runtime.DesktopPlatform.current.supportsWindowsPackages) {
+                if (org.skepsun.kototoro.desktop.runtime.DesktopUpdateTarget.current() != null) {
                     val switch = onNodeWithTag("app-update-unstable").performScrollTo()
                     switch.assertExists()
                     check(controller.state.value.update.updateChannel ==

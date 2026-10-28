@@ -623,9 +623,31 @@ def prepareWindowsResources = tasks.register('prepareWindowsResources', Copy) {
 }
 
 // All desktop hosts use the same pinned compatibility runtime and ordered JARs. Only native resources differ.
+def macosPlaybackResources = layout.buildDirectory.dir('bundled-macos-playback')
+def macosMpvArchitecture = System.getProperty('os.arch') in ['arm64', 'aarch64'] ? 'arm64' : 'x86_64'
+def suppliedMacosMpvArchive = providers.gradleProperty('macosMpvArchive').orNull
+def prepareMacosPlayback = tasks.register('prepareMacosPlayback', Exec) {
+    inputs.file('prepare-macos-mpv.py')
+    inputs.file('distribution/macos-mpv-pins.json')
+    inputs.file('distribution/licenses/lua-5.2.4-LICENSE.txt')
+    inputs.property('architecture', macosMpvArchitecture)
+    if (suppliedMacosMpvArchive != null) inputs.file(suppliedMacosMpvArchive)
+    outputs.dir(macosPlaybackResources)
+    commandLine 'python3', file('prepare-macos-mpv.py').absolutePath,
+        '--pins', file('distribution/macos-mpv-pins.json').absolutePath,
+        '--architecture', macosMpvArchitecture, '--cache', downloadCache.absolutePath,
+        '--output', macosPlaybackResources.get().dir('mpv').asFile.absolutePath
+    if (suppliedMacosMpvArchive != null) args '--archive', file(suppliedMacosMpvArchive).absolutePath
+}
 def macosResources = layout.buildDirectory.dir('macos-resources')
 def prepareMacosResources = tasks.register('prepareMacosResources', Copy) {
     dependsOn ':mihon-desktop-compat:verifyWindowsRuntime'
+    dependsOn ':mihon-desktop-compat:compileMacosWebViewBridge'
+    dependsOn prepareMacosPlayback
+    from(macosPlaybackResources) { into 'macos' }
+    from(project(':mihon-desktop-compat').layout.buildDirectory.file('bridge/kototoro-webview-bridge')) {
+        into 'macos/browser'
+    }
     from(rootProject.file('LICENSE')) { rename { 'PROJECT_LICENSE' }; into 'common' }
     from('distribution/MACOS_PREVIEW.md') { into 'common' }
     from(runtimePins) { into 'common' }
@@ -699,6 +721,19 @@ tasks.withType(org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
     }
 }
 
+// Compose copies app resources through Kotlin File.copyTo, which drops POSIX mode bits. Restore the helper's
+// executable bit in the generated image before packageDmg consumes it; code bytes and signatures stay unchanged.
+def packagedMacosBridge = layout.buildDirectory.file(
+    'compose/binaries/main/app/Kototoro.app/Contents/app/resources/browser/kototoro-webview-bridge')
+tasks.matching { it.name == 'createDistributable' }.configureEach {
+    if (bundleMacosRuntime) doLast {
+        def helper = packagedMacosBridge.get().asFile
+        if (!helper.isFile() || !helper.setExecutable(true, false)) {
+            throw new GradleException('Cannot make the packaged WKWebView bridge executable')
+        }
+    }
+}
+
 tasks.withType(org.jetbrains.compose.desktop.application.tasks.AbstractJLinkTask).configureEach { link ->
     // Compose 1.12.0 defaults to stripping commands. Keep the bundled JVM usable for local support/probes.
     if (bundleDesktopRuntime) link.'getStripNativeCommands$compose'().set(false)
@@ -709,6 +744,12 @@ tasks.matching { it.name == 'prepareAppResources' }.configureEach {
 }
 
 def bridgePath = providers.gradleProperty('desktopBridgeExecutable').getOrNull()
+def macBridgePath = project(':mihon-desktop-compat').layout.buildDirectory
+    .file('bridge/kototoro-webview-bridge').get().asFile.absolutePath
+def mpvRenderer = providers.gradleProperty('mpvRenderer').orNull
+if (mpvRenderer != null && !(mpvRenderer in ['opengl', 'software'])) {
+    throw new GradleException('mpvRenderer must be opengl or software')
+}
 def desktopDataDirectory = providers.gradleProperty('desktopDataDirectory').getOrNull()
 def desktopImportJar = providers.gradleProperty('desktopImportJar').getOrNull()
 def developerClasspath = sourceSets.main.runtimeClasspath + compatibilityFiles
@@ -718,11 +759,18 @@ if (desktopImportJar != null) desktopArguments.addAll(['--import', desktopImport
 tasks.withType(JavaExec).configureEach {
     if (name == 'run') {
         dependsOn ':mihon-desktop-compat:verifyMihonCompatibility'
+        if (System.getProperty('os.name', '').startsWith('Mac')) {
+            dependsOn ':mihon-desktop-compat:compileMacosWebViewBridge'
+        }
         // Compose sets run classpath/args late. Apply developer-only inputs after that configuration.
         doFirst { launch ->
             launch.classpath = developerClasspath
             if (bridgePath != null) launch.systemProperty 'kototoro.compat.bridge.exe', bridgePath
+            else if (System.getProperty('os.name', '').startsWith('Mac')) {
+                launch.systemProperty 'kototoro.compat.bridge.exe', macBridgePath
+            }
             if (libmpvDirectory != null) launch.systemProperty 'kototoro.libmpv.dir', libmpvDirectory
+            if (mpvRenderer != null) launch.systemProperty 'kototoro.mpv.renderer', mpvRenderer
             if (!desktopArguments.isEmpty()) launch.setArgs(desktopArguments)
         }
     }
@@ -739,7 +787,9 @@ tasks.withType(Test).configureEach {
     systemProperty 'kototoro.desktop.reader.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/reader-desktop-fixture.jar').get().asFile
     systemProperty 'kototoro.desktop.cover.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/cover-desktop-fixture.jar').get().asFile
     systemProperty 'kototoro.desktop.filter.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/filter-desktop-fixture.jar').get().asFile
-    systemProperty 'kototoro.desktop.bridge.exe', project(':mihon-desktop-compat').layout.buildDirectory.file('bridge/kototoro-webview-bridge.exe').get().asFile
+    systemProperty 'kototoro.desktop.bridge.exe', project(':mihon-desktop-compat').layout.buildDirectory.file(
+        System.getProperty('os.name', '').startsWith('Mac') ? 'bridge/kototoro-webview-bridge' : 'bridge/kototoro-webview-bridge.exe').get().asFile
+    if (System.getProperty('os.name', '').startsWith('Mac')) dependsOn ':mihon-desktop-compat:compileMacosWebViewBridge'
     // kototoro / kotatsu / Tsuki plugin fixtures: real bytecode built by :parser-host against the shared ABI.
     systemProperty 'kototoro.desktop.anime.fixture.jar', project(':mihon-desktop-compat').layout.buildDirectory.file('fixtures/anime-desktop-fixture.jar').get().asFile
     systemProperty 'kototoro.desktop.parser.fixtures', project(':parser-host').layout.buildDirectory.dir('fixtures').get().asFile
@@ -772,7 +822,53 @@ tasks.withType(Test).configureEach {
     dependsOn ':mihon-desktop-compat:animeFixtureJar'
 }
 
-tasks.named('test') { exclude '**/DesktopDistributionTest.class', '**/LinuxDistributionTest.class' }
+tasks.named('test') {
+    exclude '**/DesktopDistributionTest.class', '**/LinuxDistributionTest.class', '**/MacosDistributionTest.class'
+}
+if (bundleMacosRuntime) {
+    def macosImage = layout.buildDirectory.dir('compose/binaries/main/app/Kototoro.app')
+    tasks.register('macosDistributionTest', Test) {
+        dependsOn tasks.named('createDistributable'), tasks.named('testClasses')
+        inputs.dir(macosImage)
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+        include '**/MacosDistributionTest.class'
+        // POSIX execute bits and the host graphics runtime are not represented by content hashes.
+        outputs.upToDateWhen { false }
+        systemProperty 'kototoro.desktop.distribution', macosImage.get().asFile
+        // `-PmacosDistributionRenderer=software` for hosts without an accelerated OpenGL device (GitHub runners).
+        providers.gradleProperty('macosDistributionRenderer').orNull?.with { systemProperty 'kototoro.desktop.distribution.renderer', it }
+    }
+    tasks.matching { it.name == 'packageDmg' }.configureEach {
+        appImage.set(macosImage)
+        dependsOn 'macosDistributionTest'
+    }
+    def macUpdateArch = System.getProperty('os.arch') in ['arm64', 'aarch64'] ? 'arm64' : 'x64'
+    def macUpdateStem = desktopVersionName.map { "Kototoro-${it}-macos-${macUpdateArch}-${desktopUpdateChannel}" }
+    def macUpdateDmg = layout.buildDirectory.file(macUpdateStem.map { "compose/binaries/main/update/${it}.dmg" })
+    def macUpdateChecksums = layout.buildDirectory.file(macUpdateStem.map { "compose/binaries/main/update/${it}.sha256" })
+    def packagedDmg = layout.buildDirectory.file("compose/binaries/main/dmg/Kototoro-${windowsPackageVersion}.dmg")
+    tasks.register('macosUpdatePackage') {
+        dependsOn 'packageDmg'
+        inputs.file(packagedDmg)
+        inputs.property('stem', macUpdateStem)
+        outputs.file(macUpdateDmg)
+        outputs.file(macUpdateChecksums)
+        doLast {
+            def target = macUpdateDmg.get().asFile
+            target.parentFile.mkdirs()
+            java.nio.file.Files.copy(packagedDmg.get().asFile.toPath(), target.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            def digest = java.security.MessageDigest.getInstance('SHA-256')
+            target.withInputStream { input ->
+                byte[] buffer = new byte[65536]
+                int count
+                while ((count = input.read(buffer)) != -1) digest.update(buffer, 0, count)
+            }
+            macUpdateChecksums.get().asFile.setText("${digest.digest().encodeHex()}  ${target.name}\n", 'UTF-8')
+        }
+    }
+}
 if (bundleLinuxRuntime) {
     tasks.register('linuxDistributionTest', Test) {
         dependsOn tasks.named('createDistributable'), tasks.named('testClasses')

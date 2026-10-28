@@ -60,13 +60,14 @@ class MpvException(message: String) : Exception(message)
 
 /**
  * One libmpv instance. With [windowId] mpv renders into that native window (an AWT canvas' HWND); without it there is
- * no video or audio output at all, which is what the tests use. All calls are thread-safe; a daemon thread drains the
+ * no video or audio output unless [renderMode] selects a render API backend. A daemon thread drains the
  * event queue and another samples the playback properties a few times per second into [state].
  */
 class MpvPlayer(
     library: Path,
     windowId: Long? = null,
     options: Map<String, String> = emptyMap(),
+    val renderMode: MpvRenderMode = MpvRenderMode.NONE,
 ) : Closeable {
     private val native = MpvNative.load(library)
     private val handle: Pointer = native.mpv_create() ?: throw MpvException(createFailureReason())
@@ -77,6 +78,7 @@ class MpvPlayer(
     private val json = Json { ignoreUnknownKeys = true }
     private val events: Thread
     private val sampler: Thread
+    private var renderer: MpvFrameRenderer? = null
 
     init {
         val defaults = linkedMapOf(
@@ -85,7 +87,10 @@ class MpvPlayer(
             "idle" to "yes", "keep-open" to "yes", "sub-auto" to "no", "hwdec" to "auto-safe",
             "cache" to "yes", "demuxer-max-bytes" to "150MiB", "network-timeout" to "30",
         )
-        if (windowId != null) {
+        if (renderMode != MpvRenderMode.NONE) {
+            defaults["vo"] = "libmpv"
+            if (renderMode == MpvRenderMode.SOFTWARE) defaults["hwdec"] = "auto-copy"
+        } else if (windowId != null) {
             defaults["wid"] = windowId.toString()
             defaults["force-window"] = "yes"
             defaults["vo"] = "gpu"
@@ -98,10 +103,15 @@ class MpvPlayer(
                 // A default that fails is our bug; a caller's extra option (`-Dkototoro.mpv.options`, the decoder
                 // preference's `hwdec-fallback`) may name something this libmpv build does not have, which is not.
                 val tolerated = name in options
-                val code = native.mpv_set_option_string(handle, name, value)
+                val code = native.mpv_set_option_string(handle, name, renderOption(name, value))
                 if (!tolerated) check(code, "option $name")
             }
             check(native.mpv_initialize(handle), "initialize")
+            renderer = when (renderMode) {
+                MpvRenderMode.NONE -> null
+                MpvRenderMode.SOFTWARE -> MpvSoftwareRenderer(native, handle)
+                MpvRenderMode.MACOS_OPENGL -> MpvMacOpenGlRenderer(native, handle)
+            }
         } catch (error: Throwable) {
             native.mpv_terminate_destroy(handle)
             throw error
@@ -148,6 +158,7 @@ class MpvPlayer(
 
     /** User shaders applied to the video (see [MpvShaderLibrary]); an empty list turns enhancement off. */
     fun setShaders(files: List<Path>) {
+        if (renderMode == MpvRenderMode.SOFTWARE && files.isNotEmpty()) throw MpvException("GLSL shaders require a GPU renderer")
         if (files.isEmpty()) command("change-list", "glsl-shaders", "clr", "")
         else command("change-list", "glsl-shaders", "set", files.joinToString(java.io.File.pathSeparator) { it.toAbsolutePath().toString() })
     }
@@ -161,7 +172,7 @@ class MpvPlayer(
 
     fun setProperty(name: String, value: String) {
         requireOpen()
-        check(native.mpv_set_property_string(handle, name, value), "set $name")
+        check(native.mpv_set_property_string(handle, name, renderOption(name, value)), "set $name")
     }
 
     fun command(vararg arguments: String) {
@@ -263,10 +274,22 @@ class MpvPlayer(
 
     private fun requireOpen() { if (closed) throw MpvException("player is closed") }
 
+    private fun renderOption(name: String, value: String): String =
+        if (renderMode == MpvRenderMode.SOFTWARE && name == "hwdec" && value in setOf("auto", "auto-safe")) "auto-copy" else value
+
+    /** Called off the UI thread. Dimensions are bounded by the platform presentation adapter. */
+    @Synchronized
+    fun renderFrame(width: Int, height: Int): java.awt.image.BufferedImage {
+        requireOpen()
+        return requireNotNull(renderer) { "Frame rendering is disabled" }.frame(width, height)
+    }
+
     override fun close() {
         synchronized(this) {
             if (closed) return
             closed = true
+            renderer?.close()
+            renderer = null
         }
         native.mpv_wakeup(handle)
         sampler.interrupt()

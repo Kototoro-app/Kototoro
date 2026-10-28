@@ -3,6 +3,8 @@ package org.skepsun.kototoro.desktop.player
 import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
+import com.sun.jna.Structure
+import com.sun.jna.ptr.PointerByReference
 import java.nio.file.Path
 
 /** The part of libmpv's client API (client.h) the player uses; strings are UTF-8 as mpv expects. */
@@ -20,6 +22,9 @@ internal interface MpvNative : Library {
     fun mpv_wait_event(context: Pointer, timeout: Double): Pointer
     fun mpv_wakeup(context: Pointer)
     fun mpv_error_string(error: Int): String
+    fun mpv_render_context_create(context: PointerByReference, handle: Pointer, params: Pointer): Int
+    fun mpv_render_context_render(context: Pointer, params: Pointer): Int
+    fun mpv_render_context_free(context: Pointer)
 
     companion object {
         const val EVENT_NONE = 0
@@ -44,4 +49,21 @@ internal interface MpvNative : Library {
                 mapOf(Library.OPTION_STRING_ENCODING to "UTF-8"))
         }
     }
+}
+
+/** render.h: each parameter is a native enum followed by an aligned data pointer. */
+@Structure.FieldOrder("type", "data")
+internal class MpvRenderParam : Structure() {
+    @JvmField var type: Int = 0
+    @JvmField var data: Pointer? = null
+}
+
+internal fun mpvRenderParameters(vararg values: Pair<Int, Pointer>): MpvRenderParam {
+    val first = MpvRenderParam()
+    val array = first.toArray(values.size + 1)
+    values.forEachIndexed { index, (type, data) ->
+        (array[index] as MpvRenderParam).apply { this.type = type; this.data = data; write() }
+    }
+    array.last().write() // MPV_RENDER_PARAM_INVALID terminator
+    return first
 }

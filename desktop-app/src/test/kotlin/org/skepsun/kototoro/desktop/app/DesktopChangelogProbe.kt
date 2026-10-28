@@ -29,7 +29,8 @@ internal object DesktopChangelogProbe {
             val stamped = controller.state.value.update.version
             val supported = stamped.version != DesktopPackageVersion.UNKNOWN
             val published = if (!supported) Result.failure(IllegalStateException("no version stamp")) else runCatching {
-                runBlocking { DesktopAppUpdateClient(stamped.version, stamped.channel).releases() }
+                runBlocking { DesktopAppUpdateClient(stamped.version, stamped.channel,
+                    target = requireNotNull(org.skepsun.kototoro.desktop.runtime.DesktopUpdateTarget.current())).releases() }
             }
             runDesktopComposeUiTest(width = 1260, height = 850) {
                 setContent { DesktopApp(controller) }
