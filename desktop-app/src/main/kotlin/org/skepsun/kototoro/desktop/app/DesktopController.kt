@@ -438,6 +438,9 @@ class DesktopController(
     /** Android's WebDAV backup destination: same shared protocol, uploaded by hand or by the timer below. */
     private val webDav = DesktopWebDavOperations(session.storage, backups)
     internal val webDavUi = webDav.ui
+    private val googleDrive = DesktopGoogleDriveOperations(session.storage)
+    internal val googleDriveUi = googleDrive.ui
+    private var autoDriveJob: Job? = null
     private var autoBackupJob: Job? = null
     private var autoRestoreJob: Job? = null
     private var mirrorProbeJob: Job? = null
@@ -478,8 +481,13 @@ class DesktopController(
         updates.restore()
         webDav.restore()
         // Only starts a loop when the saved destination has an interval; otherwise it returns immediately.
-        startAutoBackup()
-        startAutoRestore()
+        scope.launch {
+            googleDrive.restore()
+            startAutoBackup()
+            startAutoRestore()
+            if (googleDrive.shouldSyncOnStart() && googleDrive.sync()) refreshAfterDriveSync()
+            startAutoDriveSync()
+        }
         // Android's `chapters_clear_auto` runs the read-chapter sweep whenever the app is opened; the saved chapters are
         // already restored at this point, so the first sweep sees them.
         if (session.chaptersClearAuto()) runCleanupReadChapters(announceEmpty = false)
@@ -2798,6 +2806,69 @@ class DesktopController(
             message = desktopText("backups.merged", processed)) }
     }
 
+    internal fun googleDriveSignIn() = scope.launch {
+        if (googleDrive.signIn()) startAutoDriveSync()
+    }
+
+    internal fun googleDriveSignOut() = scope.launch {
+        autoDriveJob?.cancelAndJoin()
+        if (googleDrive.disconnect()) {
+            startAutoBackup()
+            startAutoRestore()
+        }
+    }
+
+    internal fun googleDriveSettings(
+        enabled: Boolean = googleDriveUi.value.enabled,
+        interval: Int = googleDriveUi.value.intervalMinutes,
+        onStart: Boolean = googleDriveUi.value.syncOnStart,
+    ) = scope.launch {
+        gate.withLock {
+            if (googleDrive.settings(enabled, interval, onStart)) {
+                if (enabled) {
+                    autoBackupJob?.cancelAndJoin()
+                    autoRestoreJob?.cancelAndJoin()
+                } else {
+                    startAutoBackup()
+                    startAutoRestore()
+                }
+                startAutoDriveSync()
+            }
+        }
+    }
+
+    internal fun googleDriveSyncNow() = scope.launch {
+        if (googleDriveUi.value.syncing) return@launch
+        if (googleDrive.sync()) refreshAfterDriveSync()
+        startAutoDriveSync()
+    }
+
+    private suspend fun refreshAfterDriveSync() = gate.withLock {
+        when (mutableState.value.screen) {
+            DesktopScreen.LIBRARY, DesktopScreen.HISTORY -> reloadLibrarySnapshot()
+            DesktopScreen.FEED, DesktopScreen.UPDATED -> loadFeedOnIo()
+            DesktopScreen.HOME -> {
+                val history = session.library.snapshot(history = true)
+                loadFeedOnIo()
+                mutableState.update { it.copy(homeHistory = history) }
+            }
+            else -> Unit
+        }
+    }
+
+    private fun startAutoDriveSync() {
+        autoDriveJob?.cancel()
+        autoDriveJob = scope.launch {
+            while (isActive) {
+                val wait = googleDrive.nextSyncDelay() ?: return@launch
+                if (wait > 0) { delay(wait); continue }
+                if (googleDrive.sync()) refreshAfterDriveSync()
+                // Also covers another manual run holding the sync lock.
+                delay(60_000)
+            }
+        }
+    }
+
     internal fun webDavSettings(value: DesktopWebDavSettings) {
         webDav.settings(value)
         // The interval lives in the settings, so a changed value must take effect without a restart.
@@ -2813,6 +2884,7 @@ class DesktopController(
      */
     private fun startAutoRestore() {
         autoRestoreJob?.cancel()
+        if (googleDriveUi.value.enabled) return
         autoRestoreJob = scope.launch {
             when (val result = webDav.autoRestore()) {
                 is DesktopAutoRestore.Restored -> {
@@ -2839,6 +2911,7 @@ class DesktopController(
      */
     private fun startAutoBackup() {
         autoBackupJob?.cancel()
+        if (googleDriveUi.value.enabled) return
         autoBackupJob = scope.launch {
             while (isActive) {
                 val delayMillis = webDav.autoBackupDelay() ?: return@launch
@@ -2855,13 +2928,15 @@ class DesktopController(
     }
 
     internal fun webDavProbe() = action {
+        if (googleDriveUi.value.enabled) return@action
         webDav.probe()
         mutableState.update { it.copy(message = desktopText("webdav.reachable")) }
     }
 
-    internal fun webDavRefresh() = action { webDav.refresh() }
+    internal fun webDavRefresh() = action { if (!googleDriveUi.value.enabled) webDav.refresh() }
 
     internal fun webDavUpload() = action {
+        if (googleDriveUi.value.enabled) return@action
         val result = webDav.upload()
         val uploaded = if (result.removed.isEmpty()) {
             desktopText("webdav.uploaded", result.name, result.size / 1024)
@@ -2901,6 +2976,7 @@ class DesktopController(
 
     /** The remote file is downloaded, then previewed through the same archive/merge flow a local file uses. */
     internal fun webDavRestore(file: WebDavBackupFile) = action {
+        if (googleDriveUi.value.enabled) return@action
         val path = webDav.download(file)
         val preview = try {
             backups.preview(path)
@@ -2916,6 +2992,7 @@ class DesktopController(
     }
 
     internal fun webDavDelete(file: WebDavBackupFile) = action {
+        if (googleDriveUi.value.enabled) return@action
         webDav.delete(file)
         mutableState.update { it.copy(message = desktopText("webdav.deleted", file.name)) }
     }
@@ -3808,7 +3885,7 @@ class DesktopController(
             finally {
                 // Leaving the app is a reader stop too: Android's onPause closes the statistics session.
                 runCatching { session.library.finishReadingSession() }
-                try { webDav.close() } finally {
+                try { googleDrive.close(); webDav.close() } finally {
                     try {
                         val preview = mutableBackupPreview.value
                         mutableBackupPreview.value = null

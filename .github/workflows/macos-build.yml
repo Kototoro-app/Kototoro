@@ -17,6 +17,10 @@ on:
         default: 'nightly'
         type: string
   workflow_call:
+    secrets:
+      GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET:
+        description: Desktop Google OAuth client configuration
+        required: false
     inputs:
       ref:
         required: true
@@ -42,6 +46,8 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/windows-build.yml
+    secrets:
+      GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET }}
     with:
       ref: ${{ inputs.ref }}
       channel: ${{ inputs.channel }}
@@ -129,6 +135,7 @@ jobs:
           ARCH: ${{ matrix.arch }}
           JDK21: ${{ steps.jdk21.outputs.path }}
           RENDERER: ${{ steps.gl.outputs.renderer }}
+          KOTOTORO_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET }}
         run: |
           set -euo pipefail
           case "$CHANNEL" in release|nightly) ;; *) echo 'Unknown macOS channel.' >&2; exit 1 ;; esac

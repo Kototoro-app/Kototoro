@@ -22,6 +22,7 @@ internal fun DesktopBackupsPanel(controller: DesktopController, closing: Boolean
     val state by controller.state.collectAsState()
     val preview by controller.backupPreview.collectAsState()
     val webDav by controller.webDavUi.collectAsState()
+    val drive by controller.googleDriveUi.collectAsState()
     val enabled = !state.busy && !closing
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(desktopText("backups.title"), style = MaterialTheme.typography.titleLarge)
@@ -77,7 +78,9 @@ internal fun DesktopBackupsPanel(controller: DesktopController, closing: Boolean
             }
         }
         HorizontalDivider()
-        DesktopWebDavSection(controller, webDav, enabled)
+        DesktopGoogleDriveSection(controller, drive, webDav.settings.configured, enabled)
+        HorizontalDivider()
+        DesktopWebDavSection(controller, webDav, enabled && !drive.enabled)
     }
 }
 

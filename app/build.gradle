@@ -427,6 +427,7 @@ dependencies {
 	implementation project(':core-backup')
 	// Shared identity and library-state merge/import rules.
 	implementation project(':core-domain')
+	implementation project(':core-library')
 	// Shared Google Drive HTTP protocol; Android supplies the Ktor OkHttp engine and authorization.
 	implementation project(':core-net')
 	implementation project(':core-cloudflare')

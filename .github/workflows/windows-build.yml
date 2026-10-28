@@ -16,6 +16,10 @@ on:
         default: 'nightly'
         type: string
   workflow_call:
+    secrets:
+      GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET:
+        description: Desktop Google OAuth client configuration
+        required: false
     inputs:
       ref:
         required: true
@@ -148,6 +152,7 @@ jobs:
         env:
           CHANNEL: ${{ inputs.channel }}
           VERSION_NAME: ${{ inputs.version-name }}
+          KOTOTORO_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET }}
         run: |
           if ($env:CHANNEL -notin @('release', 'nightly')) { throw 'Unknown Windows channel.' }
           $versionLines = & "./gradlew.bat" -q printVersionName --no-daemon --console=plain

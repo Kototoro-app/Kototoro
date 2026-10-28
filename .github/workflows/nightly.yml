@@ -135,6 +135,8 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/windows-build.yml
+    secrets:
+      GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET }}
     with:
       ref: ${{ needs.build.outputs.built-sha }}
       channel: nightly
@@ -168,6 +170,8 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/macos-build.yml
+    secrets:
+      GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET }}
     with:
       ref: ${{ needs.build.outputs.built-sha }}
       channel: nightly

@@ -443,6 +443,32 @@ def prepareDesktopVersion = tasks.register('prepareDesktopVersion') {
 sourceSets.main.resources.srcDir(desktopVersionResources)
 tasks.named('processResources').configure { dependsOn prepareDesktopVersion }
 
+// Google requires a desktop client secret for token exchange even with PKCE. Keep its value out of tracked files.
+def desktopGoogleClientSecret = providers.environmentVariable('KOTOTORO_GOOGLE_DESKTOP_CLIENT_SECRET')
+    .map { it.trim() }.filter { !it.isEmpty() }
+    .orElse(providers.fileContents(rootProject.layout.projectDirectory.file('local.properties')).asText.orElse('').map { text ->
+        def properties = new Properties()
+        properties.load(new StringReader(text))
+        properties.getProperty('googleDrive.desktop.clientSecret', '').trim()
+    })
+def desktopGoogleResources = layout.buildDirectory.dir('generated/google-drive-client')
+def prepareDesktopGoogleOAuth = tasks.register('prepareDesktopGoogleOAuth') {
+    // Only a digest participates in task diagnostics; never print the secret as an input value.
+    inputs.property('clientSecretSha256', desktopGoogleClientSecret.map { secret ->
+        java.security.MessageDigest.getInstance('SHA-256').digest(secret.getBytes('UTF-8')).encodeHex().toString()
+    })
+    outputs.dir(desktopGoogleResources)
+    doLast {
+        def properties = new Properties()
+        properties.setProperty('client_secret', desktopGoogleClientSecret.get())
+        def target = desktopGoogleResources.get().file('google-drive-client.properties').asFile
+        target.parentFile.mkdirs()
+        target.withOutputStream { properties.store(it, 'Desktop OAuth client configuration; not user credentials.') }
+    }
+}
+sourceSets.main.resources.srcDir(desktopGoogleResources)
+tasks.named('processResources').configure { dependsOn prepareDesktopGoogleOAuth }
+
 def windowsWixDirectory = providers.gradleProperty('windowsWixDirectory')
     .getOrElse(rootProject.layout.buildDirectory.dir('wix311').get().asFile.absolutePath)
 // Optional: a directory holding libmpv-2.dll (run/tests); distributions bundle it either from here or from the pinned

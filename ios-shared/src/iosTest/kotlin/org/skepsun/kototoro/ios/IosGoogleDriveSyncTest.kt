@@ -232,10 +232,11 @@ class IosGoogleDriveSyncTest {
                             val body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
                             assertContains(body, "kototoro_sync_content_v3.json")
                             assertContains(body, "appDataFolder")
-                            respond("""{"id":"new"}""")
+                            respond("", headers = io.ktor.http.headersOf("Location",
+                                "https://www.googleapis.com/upload/drive/v3/files?upload_id=fixture"))
                         }
-                        request.method.value == "PATCH" -> {
-                            assertEquals("/upload/drive/v3/files/new", request.url.encodedPath)
+                        request.method.value == "PUT" -> {
+                            assertEquals("fixture", request.url.parameters["upload_id"])
                             val upload = IosGoogleDriveSync.decode((request.body as OutgoingContent.ByteArrayContent).bytes())
                             assertEquals(if (legacy) 1 else 0, upload.favourites.size)
                             uploaded = true

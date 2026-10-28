@@ -1250,7 +1250,7 @@ val LocalSettingsDialogRenderer = staticCompositionLocalOf<@Composable (Preferen
 
 /** The settings components' dialog call, routed to the host's renderer. */
 @Composable
-private fun SettingsAlertDialog(
+internal fun SettingsAlertDialog(
     title: String,
     onDismissRequest: () -> Unit,
     confirmButton: @Composable () -> Unit,

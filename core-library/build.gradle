@@ -1,13 +1,20 @@
 // Shared source-backed library persistence; platform owners supply the Room database and source execution.
 plugins {
     id 'org.jetbrains.kotlin.multiplatform'
+    id 'com.android.kotlin.multiplatform.library'
 }
 
 kotlin {
+    androidLibrary {
+        namespace = 'org.skepsun.kototoro.core.library'
+        compileSdk = 37
+        minSdk = 26
+    }
     jvm { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11 } }
     iosArm64()
     iosSimulatorArm64()
     sourceSets {
+        androidMain.kotlin.srcDir('src/jvmMain/kotlin')
         commonMain.dependencies {
             api project(':core-db')
             api project(':core-domain')
@@ -20,5 +27,12 @@ kotlin {
             implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${libs.versions.serialization.get()}"
         }
         commonTest.dependencies { implementation kotlin('test') }
+        jvmTest.dependencies {
+            implementation kotlin('test-junit5')
+            implementation libs.ktor.client.mock
+            runtimeOnly 'org.junit.platform:junit-platform-launcher:1.8.2'
+        }
     }
 }
+
+tasks.withType(Test).configureEach { useJUnitPlatform() }

@@ -34,7 +34,8 @@ xcodebuild -project "iosApp/Kototoro.xcodeproj" -scheme "Kototoro" \
 
 ## 协议与数据边界
 
-- HTTP 复用 `core-net/GoogleDriveSyncApi`；写入 Android 同名的 `kototoro_sync_content_v3.json`，
+- HTTP 复用 `core-net/GoogleDriveSyncApi`，同步编排复用三端共用的 `core-library/GoogleDriveSyncCoordinator`；
+  写入 Android 同名的 `kototoro_sync_content_v3.json`，
   标记为 `schema=2`、`namespace=kototoro.content.v3`、`semantic_schema=1`。
 - 没有 v3 文件时从 `kototoro_sync_work_v2.json` 迁移，保留原文件。旧 `kototoro_sync.json` 不自动导入。
 - 双向同步作品、收藏分类、收藏关系、阅读历史/进度、阅读统计、更新记录。

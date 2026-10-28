@@ -18,7 +18,9 @@ def readerPanelIcons = ['ic_arrow_forward', 'ic_settings', 'ic_reader_ltr', 'ic_
     // The replace-rule page's action and rule rows.
     'ic_book_page', 'ic_disable', 'ic_import', 'ic_cloud_upload', 'ic_reorder_handle',
     // The setup wizard's page header and its two jumps on the done page.
-    'ic_welcome', 'ic_backup_restore', 'ic_palette']
+    'ic_welcome', 'ic_backup_restore', 'ic_palette',
+    // The Google Drive controls are shared by Android and desktop.
+    'ic_bolt', 'ic_delete_all', 'ic_schedule', 'ic_sync', 'ic_user', 'ic_wifi']
 def generatedIconSources = layout.buildDirectory.dir('generated/reader-panel-icons/kotlin')
 def generateReaderPanelIcons = tasks.register('generateReaderPanelIcons') {
     def vectors = readerPanelIcons.collect { rootProject.file("app/src/main/res/drawable/${it}.xml") }

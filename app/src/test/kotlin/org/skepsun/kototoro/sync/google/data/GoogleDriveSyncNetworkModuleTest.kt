@@ -81,24 +81,26 @@ class GoogleDriveSyncNetworkModuleTest {
     }
 
     @Test
-    fun `creation redirects keep legacy POST to GET behavior before PATCH upload`() = runBlocking {
+    fun `real engine publishes a new snapshot through a resumable session`() = runBlocking {
         MockWebServer().use { server ->
             server.start()
-            server.enqueue(MockResponse().setResponseCode(302).addHeader("Location", server.url("/created")))
+            server.enqueue(MockResponse().addHeader("Location",
+                "https://www.googleapis.com/upload/drive/v3/files?upload_id=fixture"))
             server.enqueue(MockResponse().setBody("{\"id\":\"created-id\"}"))
-            server.enqueue(MockResponse().setResponseCode(204))
             createGoogleDriveSyncHttpClient(localClient(server)).use { client ->
                 val payload = "{\"title\":\"葬送\"}".encodeToByteArray()
                 assertEquals("created-id", GoogleDriveSyncApi(client).upload("fixture-token", payload, null))
-                assertEquals("POST", server.takeRequest(5, TimeUnit.SECONDS)!!.method)
-                val redirected = server.takeRequest(5, TimeUnit.SECONDS)!!
-                assertEquals("GET", redirected.method)
-                assertEquals(0L, redirected.bodySize)
+                val started = server.takeRequest(5, TimeUnit.SECONDS)!!
+                assertEquals("POST", started.method)
+                assertEquals("/upload/drive/v3/files?uploadType=resumable&fields=id", started.path)
+                assertEquals(payload.size.toString(), started.getHeader("X-Upload-Content-Length"))
+                assertTrue(started.body.readUtf8().contains("appDataFolder"))
                 val uploaded = server.takeRequest(5, TimeUnit.SECONDS)!!
-                assertEquals("PATCH", uploaded.method)
-                assertEquals("/upload/drive/v3/files/created-id?uploadType=media&fields=id", uploaded.path)
+                assertEquals("PUT", uploaded.method)
+                assertEquals("/upload/drive/v3/files?upload_id=fixture", uploaded.path)
                 assertEquals("application/json; charset=UTF-8", uploaded.getHeader("Content-Type"))
                 assertArrayEquals(payload, uploaded.body.readByteArray())
+                assertEquals(2, server.requestCount)
             }
         }
     }

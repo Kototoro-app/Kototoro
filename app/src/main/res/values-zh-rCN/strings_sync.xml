@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="google_drive_authorization_required">Google 授权未完成或已失效，请重新连接账号。</string>
+    <string name="google_drive_authorization_canceled">Google 授权已取消或超时。</string>
+    <string name="google_drive_browser_failed">无法打开系统浏览器进行 Google 授权。</string>
+    <string name="google_drive_credential_store_failed">无法访问系统凭据存储，请确认其可用且已解锁后重试。</string>
+    <string name="google_drive_settings_failed">无法保存本机同步设置，请检查数据目录后重试。</string>
+    <string name="google_drive_protocol_failed">云端快照已损坏或格式不受支持，未上传任何数据。</string>
+    <string name="google_drive_conflict_failed">其他设备正在更新云端数据，请稍后重试。</string>
+    <string name="google_drive_network_failed">Google Drive 同步失败，请检查网络连接后重试。</string>
+    <string name="google_drive_access_failed">Google Drive 拒绝访问，请检查授权范围和 Drive API 配置。</string>
+    <string name="google_drive_browser_complete">已接收浏览器回调，请返回 Kototoro 查看账号连接结果。</string>
+    <string name="google_drive_browser_rejected">此授权回调已被拒绝，请返回 Kototoro 后重新连接。</string>
+    <string name="google_drive_stage_download">下载中</string>
+    <string name="google_drive_stage_merge">合并中</string>
+    <string name="google_drive_stage_upload">上传中</string>
+    <string name="google_drive_desktop_scope">同步书库、分类、阅读进度、统计和更新记录。云端设置与扩展会保留，桌面暂不应用。自动同步仅在 Kototoro 运行期间执行。</string>
+    <string name="google_drive_authorization_pending">正在等待浏览器中的 Google 授权…</string>
+    <string name="google_drive_client_configuration_failed">Google 拒绝了 OAuth 客户端配置，请检查桌面客户端类型、Google Cloud 项目和同意屏幕设置。</string>
+    <string name="google_drive_client_secret_required">此构建缺少 Google 桌面 OAuth 客户端密钥，请配置后重新构建。重复登录无法解决此问题。</string>
+</resources>

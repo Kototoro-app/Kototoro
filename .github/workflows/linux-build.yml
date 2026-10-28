@@ -18,6 +18,10 @@ on:
         default: ''
         type: string
   workflow_call:
+    secrets:
+      GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET:
+        description: Desktop Google OAuth client configuration
+        required: false
     inputs:
       ref:
         required: true
@@ -180,6 +184,7 @@ jobs:
       - name: Build and verify the image and the .deb
         env:
           PACKAGE_VERSION: ${{ steps.version.outputs.package }}
+          KOTOTORO_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET }}
         run: |
           set -euo pipefail
           : "${JAVA_HOME_21_X64:?the compatibility adapter needs its JDK 21}"
