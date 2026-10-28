@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.list.ui.compose
 
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
@@ -10,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
+import org.skepsun.kototoro.core.ui.gestures.mouseDragScroll
 
 /** Hoist one instance per shelf; grid/list positions survive display-mode and route changes independently. */
 class ContentCollectionState(val grid: LazyGridState, val list: LazyListState)
@@ -44,7 +46,7 @@ fun ContentCollectionGrid(
     CollectionLoadMoreEffect(state, canLoadMore, visibleThreshold, onLoadMore) {
         state.layoutInfo.let { it.totalItemsCount to (it.visibleItemsInfo.maxOfOrNull { row -> row.index } ?: -1) }
     }
-    LazyVerticalGrid(columns, modifier, state, contentPadding,
+    LazyVerticalGrid(columns, modifier.mouseDragScroll(state, Orientation.Vertical), state, contentPadding,
         verticalArrangement = verticalArrangement, horizontalArrangement = horizontalArrangement) {
         if (header != null) item(key = "collection:header", span = { GridItemSpan(maxLineSpan) },
             contentType = "collection:header") { header() }
@@ -75,7 +77,8 @@ fun ContentCollectionColumn(
     CollectionLoadMoreEffect(state, canLoadMore, visibleThreshold, onLoadMore) {
         state.layoutInfo.let { it.totalItemsCount to (it.visibleItemsInfo.maxOfOrNull { row -> row.index } ?: -1) }
     }
-    LazyColumn(modifier, state, contentPadding, verticalArrangement = verticalArrangement) {
+    LazyColumn(modifier.mouseDragScroll(state, Orientation.Vertical), state, contentPadding,
+        verticalArrangement = verticalArrangement) {
         if (header != null) item(key = "collection:header", contentType = "collection:header") { header() }
         items(count, key = key, contentType = contentType, itemContent = itemContent)
         if (footer != null) item(key = "collection:footer", contentType = "collection:footer") { footer() }
