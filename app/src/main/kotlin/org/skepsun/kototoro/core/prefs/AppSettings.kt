@@ -1790,6 +1790,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_SHOW_BROKEN_SOURCES, false)
         set(value) = prefs.edit { putBoolean(KEY_SHOW_BROKEN_SOURCES, value) }
 
+    var isSearchHideEmptySourcesEnabled: Boolean
+        get() = prefs.getBoolean(KEY_SEARCH_HIDE_EMPTY_SOURCES, false)
+        set(value) = prefs.edit { putBoolean(KEY_SEARCH_HIDE_EMPTY_SOURCES, value) }
+
     var isPagesNumbersEnabled: Boolean
         get() = prefs.getBoolean(KEY_PAGES_NUMBERS, false)
         set(value) = prefs.edit { putBoolean(KEY_PAGES_NUMBERS, value) }
@@ -3382,6 +3386,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_SOURCES_ENABLED_ALL = "sources_enabled_all"
         const val KEY_EXTENSIONS_GRID = "extensions_grid"
         const val KEY_SHOW_BROKEN_SOURCES = "show_broken_sources"
+        const val KEY_SEARCH_HIDE_EMPTY_SOURCES = "search_hide_empty_sources"
         const val KEY_JAR_PRIORITY_ORDER = "jar_priority_order"
         const val KEY_EXTENSIONS = "extensions"
         const val KEY_JSON_SOURCES = "json_sources"

@@ -14,12 +14,27 @@ import java.io.IOException
 class SearchResultsStateTest {
 
     @Test
-    fun `hiding empty sources keeps failed sources visible`() {
+    fun `hiding empty sources hides failed sources too`() {
         val failed = section("failed", error = IOException())
         val empty = section("empty")
-        val state = SearchResultsState(sections = listOf(empty, failed), canSearchDisabledSources = false)
-        assertEquals(listOf(failed), state.asListModels(hideEmpty = true))
+        val withResults = section("results", hasContent = true)
+        val state = SearchResultsState(
+            sections = listOf(withResults, empty, failed),
+            canSearchDisabledSources = false,
+        )
+        assertEquals(listOf(withResults), state.asListModels(hideEmpty = true))
+        assertEquals(listOf(withResults, empty, failed), state.asListModels(hideEmpty = false))
+        // The counter still reports the hidden failure, so the progress card can keep offering the retry.
         assertEquals(1, state.failedSources)
+    }
+
+    @Test
+    fun `hiding empty sources with nothing but failures falls back to the empty state`() {
+        val state = SearchResultsState(
+            sections = listOf(section("failed", error = IOException())),
+            canSearchDisabledSources = false,
+        )
+        assertTrue(state.asListModels(hideEmpty = true).single() is EmptyState)
     }
 
     @Test

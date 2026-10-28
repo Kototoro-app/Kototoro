@@ -540,7 +540,11 @@ class DetailsViewModel @Inject constructor(
     val readingSearchHasSearched = MutableStateFlow(false)
     val readingSearchState = MutableStateFlow<LocalSearchState?>(null)
     private val readingSearchFilterState = MutableStateFlow(ReadingSearchFilterState())
-    private val readingSearchScopeFilters = MutableStateFlow(ReadingSearchScopeFilterUiState())
+    private val readingSearchScopeFilters = MutableStateFlow(
+        // Shares the remembered choice with the search screen, so "hide empty sources" does not have to be
+        // ticked again in every source search.
+        ReadingSearchScopeFilterUiState(hideEmpty = settings.isSearchHideEmptySourcesEnabled),
+    )
     private val readingSearchPrimaryUiState = combine(
         readingSearchSources,
         selectedReadingSearchSource,
@@ -3067,6 +3071,9 @@ class DetailsViewModel @Inject constructor(
 
     fun setReadingSearchHideEmpty(enabled: Boolean) {
         readingSearchScopeFilters.update { it.copy(hideEmpty = enabled) }
+        if (settings.isSearchHideEmptySourcesEnabled != enabled) {
+            settings.isSearchHideEmptySourcesEnabled = enabled
+        }
     }
 
     fun setActiveLanguagePreset(presetId: Long) {

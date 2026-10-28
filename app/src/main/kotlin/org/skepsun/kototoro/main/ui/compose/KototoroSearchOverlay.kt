@@ -253,6 +253,10 @@ fun KototoroSearchOverlay(
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val hapticFeedback = LocalHapticFeedback.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val appSettings = remember(context.applicationContext) {
+        org.skepsun.kototoro.core.prefs.AppSettings(context.applicationContext)
+    }
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val navigationBarPadding = WindowInsets.navigationBars.asPaddingValues()
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -263,7 +267,7 @@ fun KototoroSearchOverlay(
     var selectedSourceTypes by remember(initialSourceTypes) { mutableStateOf(initialSourceTypes.ifEmpty { ALL_SOURCE_TYPES }) }
     var selectedContentKinds by remember(initialContentKinds) { mutableStateOf(initialContentKinds.ifEmpty { ALL_SEARCH_CONTENT_KINDS }) }
     var pinnedOnly by remember { mutableStateOf(false) }
-    var hideEmpty by remember { mutableStateOf(false) }
+    var hideEmpty by remember { mutableStateOf(appSettings.isSearchHideEmptySourcesEnabled) }
     var advancedTitle by remember { mutableStateOf("") }
     var advancedTags by remember { mutableStateOf("") }
     var advancedAuthor by remember { mutableStateOf("") }
@@ -332,6 +336,11 @@ fun KototoroSearchOverlay(
             author = advancedAuthor.trim(),
         ).takeIf {
             kind == SearchKind.ADVANCED && (it.title.isNotBlank() || it.tags.isNotBlank() || it.author.isNotBlank())
+        }
+        // The choice is remembered for the next search screen; store it here too, so turning it off in this
+        // sheet wins over the remembered value instead of being re-enabled when the results screen opens.
+        if (appSettings.isSearchHideEmptySourcesEnabled != hideEmpty) {
+            appSettings.isSearchHideEmptySourcesEnabled = hideEmpty
         }
         onSearchWithOptions(
             searchQuery,

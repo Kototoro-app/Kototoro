@@ -67,12 +67,15 @@ class SearchViewModelTest {
     private val secondHelper = mockk<SearchV2Helper>()
     private val localHelper = mockk<SearchV2Helper>()
     private var presetId = 0L
+    private var hideEmptyPref = false
 
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { settings.activeSourcePresetId } answers { presetId }
         every { settings.activeSourcePresetId = any() } answers { presetId = firstArg() }
+        every { settings.isSearchHideEmptySourcesEnabled } answers { hideEmptyPref }
+        every { settings.isSearchHideEmptySourcesEnabled = any() } answers { hideEmptyPref = firstArg() }
         every { settings.globalTagBlacklist } returns emptySet()
         every { settings.observeChanges() } returns emptyFlow()
         every { presets.observeAll() } returns flowOf(emptyList())
@@ -154,6 +157,25 @@ class SearchViewModelTest {
         assertFalse(model.searchState.value.isSearching)
         assertTrue(model.filters.value.hideEmpty)
         coVerify(exactly = 1) { sources.getEnabledSources() }
+    }
+
+    @Test
+    fun `the hide empty choice is remembered by the next search`() = runBlocking {
+        val model = model()
+        model.awaitIdle()
+        model.applyFilters(model.filters.value.copy(hideEmpty = true))
+        assertTrue(hideEmptyPref)
+
+        // A search screen opened without any scope picks the stored choice up again.
+        val remembered = model()
+        remembered.awaitIdle()
+        assertTrue(remembered.filters.value.hideEmpty)
+
+        remembered.applyFilters(remembered.filters.value.copy(hideEmpty = false))
+        assertFalse(hideEmptyPref)
+        val cleared = model()
+        cleared.awaitIdle()
+        assertFalse(cleared.filters.value.hideEmpty)
     }
 
     @Test

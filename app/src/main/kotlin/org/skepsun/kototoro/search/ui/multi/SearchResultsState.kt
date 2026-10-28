@@ -43,7 +43,10 @@ data class SearchResultsState(
     )
 
     internal fun asListModels(hideEmpty: Boolean): List<ListModel> {
-        val visible = if (hideEmpty) sections.filter { it.list.isNotEmpty() || it.error != null } else sections
+        // "Hide empty sources" hides every source that brought nothing back, failed ones included: they have
+        // no results either, and the details source sheet has always dropped its error sections the same way.
+        // The failure counter and the retry-all action stay available through SearchResultsProgress.
+        val visible = if (hideEmpty) sections.filter { it.list.isNotEmpty() } else sections
         if (visible.isEmpty()) {
             return listOf(
                 if (isSearching) LoadingState else EmptyState(

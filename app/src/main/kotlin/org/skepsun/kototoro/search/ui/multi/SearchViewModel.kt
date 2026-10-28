@@ -112,7 +112,9 @@ class SearchViewModel @AssistedInject constructor(
                 ?: sourceTypesFromTags(globalFavoritesState.selectedSourceTags.value),
             contentKinds = searchContentKindsFromNames(contentKindNames) ?: ALL_SEARCH_CONTENT_KINDS,
             pinnedOnly = initialPinnedOnly,
-            hideEmpty = initialHideEmpty,
+            // "Hide empty sources" is remembered across searches: callers that open the search screen without a
+            // scope never pass it, so the stored preference is the fallback that keeps the user's last choice.
+            hideEmpty = initialHideEmpty || appSettings.isSearchHideEmptySourcesEnabled,
             languagePresetId = appSettings.activeSourcePresetId,
         ).normalized(),
     )
@@ -199,6 +201,9 @@ class SearchViewModel @AssistedInject constructor(
         _filters.value = normalized
         if (currentPresetId != normalized.languagePresetId) {
             appSettings.activeSourcePresetId = normalized.languagePresetId
+        }
+        if (appSettings.isSearchHideEmptySourcesEnabled != normalized.hideEmpty) {
+            appSettings.isSearchHideEmptySourcesEnabled = normalized.hideEmpty
         }
         if (scopeChanged) doSearch()
     }
