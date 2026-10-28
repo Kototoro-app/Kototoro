@@ -121,12 +121,16 @@ testing. Simulator workflows, UI tests and real-extension previews are described
 
 ### CI packaging
 
-`release.yml` (on `v*` tags) and `nightly.yml` (daily, devel) build the Android APKs, then call two reusable
-workflows:
+`release.yml` (on `v*` tags) builds the Android APKs, then calls the reusable workflows below and attaches every
+package they produce to the GitHub release. `nightly.yml` (daily, devel) calls the same ones except the Linux package:
 
 - `windows-build.yml` — builds the compatibility JARs from source, installs a pinned software Vulkan driver
   (Khronos loader + Mesa lavapipe, because hosted runners have no GPU), runs the packaged-image test and uploads
   the ZIP (plus the MSI for releases).
+- `macos-build.yml` — reuses the compatibility JARs from the Windows package and uploads the DMG.
+- `linux-build.yml` — runs on Ubuntu 24.04 with the distribution's own `libmpv2` under Xvfb, checks playback and the
+  pinned ncnn upscalers, then builds the app image and the `.deb` and uploads it. Reaching it manually only verifies;
+  the `.deb` is published with version tags.
 - `ios-build.yml` — runs on GitHub's `xcode-27` image, compiles OpenJDK Mobile for the simulator and the device,
   archives the unsigned IPA with the embedded JVM and checks that the bundled JVM host starts.
 

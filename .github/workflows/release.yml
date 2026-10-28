@@ -207,6 +207,37 @@ jobs:
           gh release view "$TAG_NAME" >/dev/null
           gh release upload "$TAG_NAME" release-macos/* --clobber
 
+  linux:
+    needs: build
+    permissions:
+      contents: read
+    uses: ./.github/workflows/linux-build.yml
+    secrets:
+      GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_DESKTOP_CLIENT_SECRET }}
+    with:
+      ref: ${{ needs.build.outputs.built-sha }}
+      compatibility-url: ${{ vars.WINDOWS_COMPATIBILITY_URL }}
+
+  publish-linux:
+    needs: [build, linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.linux.outputs.artifact-name }}
+          path: release-linux
+      - name: Attach the Linux package to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG_NAME" >/dev/null
+          gh release upload "$TAG_NAME" release-linux/* --clobber
+
   ios:
     needs: build
     permissions:

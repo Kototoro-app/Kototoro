@@ -1,10 +1,10 @@
 name: Linux Package
 
 on:
-  # A manual run builds and verifies the Linux desktop port alone: the distribution's own libmpv has to play, the pinned
-  # ncnn programs have to upscale, and the packaged image plus its .deb have to pass the runtime check. Nothing here is
-  # published — Android, Windows and iOS keep their own workflows — so this exists to keep the Linux-native paths from
-  # rotting between releases. `ref` empty builds the branch the run was started from.
+  # The distribution's own libmpv has to play, the pinned ncnn programs have to upscale, and the packaged image plus its
+  # .deb have to pass the runtime check. `release.yml` calls this on a `v*` tag and attaches the .deb to that release; a
+  # manual run only builds and verifies (it publishes nothing), so the Linux-native paths can be checked between
+  # releases. `ref` empty builds the branch the run was started from.
   workflow_dispatch:
     inputs:
       ref:
@@ -30,6 +30,9 @@ on:
         required: false
         default: ''
         type: string
+    outputs:
+      artifact-name:
+        value: ${{ jobs.package.outputs.artifact-name }}
 
 jobs:
   native:
@@ -112,6 +115,8 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
+    outputs:
+      artifact-name: kototoro-linux-${{ github.run_id }}
     env:
       LC_NUMERIC: en_US.UTF-8
     steps:
