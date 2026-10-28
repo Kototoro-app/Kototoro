@@ -67,8 +67,12 @@ final class NovelReaderModel: NSObject, ObservableObject {
     private(set) var translationBilingual = UserDefaults.standard.bool(forKey: NovelTranslationSettings.bilingualKey)
     private var translationTarget = NovelTranslationSettings.target(
         UserDefaults.standard.string(forKey: NovelTranslationSettings.targetKey) ?? "")
+    /// The original language chosen in the settings; nil recognizes it from the chapter.
+    private var translationSource = NovelTranslationSettings.chosenSource(
+        UserDefaults.standard.string(forKey: NovelTranslationSettings.sourceKey) ?? "")
     var translationKey: String {
-        NovelTranslationCache.key(content: content.id, chapter: chapter.id, target: translationTarget)
+        NovelTranslationCache.key(content: content.id, chapter: chapter.id, target: translationTarget,
+                                  source: translationSource)
     }
     @Published private(set) var bookmarks: [IosBookmark] = []
     private(set) var text: IosChapterText?
@@ -250,7 +254,7 @@ final class NovelReaderModel: NSObject, ObservableObject {
     func startSpeech(from index: Int) {
         let texts = spokenTexts
         let language: Locale.Language? = translations.isEmpty || !translationEnabled
-            ? NovelTranslationSettings.source(of: texts.prefix(40).map(\.1)) : translationTarget
+            ? translationSource ?? NovelTranslationSettings.source(of: texts.prefix(40).map(\.1)) : translationTarget
         speech.nowPlayingTitle = "\(content.title) · \(displayTitle)"
         speech.start(texts, from: index, language: language.flatMap(Self.speechLanguage))
     }
@@ -452,12 +456,16 @@ final class NovelReaderModel: NSObject, ObservableObject {
         }
     }
 
-    /// The reader's translation settings changed: re-show (display mode) or re-translate (target language).
-    func updateTranslationSettings(bilingual: Bool, target: String) {
+    /// The reader's translation settings changed: re-show (display mode) or re-translate (target or original
+    /// language).
+    func updateTranslationSettings(bilingual: Bool, target: String, source: String) {
         let language = NovelTranslationSettings.target(target)
+        let original = NovelTranslationSettings.chosenSource(source)
         let retarget = language.minimalIdentifier != translationTarget.minimalIdentifier
+            || original?.minimalIdentifier != translationSource?.minimalIdentifier
         translationBilingual = bilingual
         translationTarget = language
+        translationSource = original
         guard translationEnabled else { return }
         if retarget {
             translationConfiguration = nil
@@ -473,10 +481,11 @@ final class NovelReaderModel: NSObject, ObservableObject {
         translations = NovelTranslationCache.load(translationKey)
         showTranslations()
         let lines = sourceDocument?.translatableTexts.sorted { $0.key.intValue < $1.key.intValue }.map(\.value) ?? []
-        let source = NovelTranslationSettings.source(of: lines)
+        let source = translationSource ?? NovelTranslationSettings.source(of: lines)
         // UI tests: the system translator is unavailable in the simulator, so lines are "translated" by tagging them.
         if ProcessInfo.processInfo.environment["KOTOTORO_TRANSLATION_FIXTURE"] == "1" {
-            let tag = "[\(translationTarget.minimalIdentifier)] "
+            let tag = "[" + (translationSource.map { "\($0.minimalIdentifier)→" } ?? "")
+                + "\(translationTarget.minimalIdentifier)] "
             applyTranslations(Dictionary(uniqueKeysWithValues: (sourceDocument?.translatableTexts ?? [:])
                 .map { ($0.key.intValue, tag + $0.value) }))
             return
@@ -611,6 +620,7 @@ struct NovelReaderView: View {
     @AppStorage(NovelStyle.Key.floatingActions) private var floatingActions = "bookmark"
     @AppStorage(NovelTranslationSettings.bilingualKey) private var translationBilingual = false
     @AppStorage(NovelTranslationSettings.targetKey) private var translationTarget = ""
+    @AppStorage(NovelTranslationSettings.sourceKey) private var translationSource = ""
     @AppStorage(ReplaceRulesRevision.key) private var replaceRulesRevision = 0
     @State private var activeSheet: ReaderSheet?
     @State private var sheetTab = 0
@@ -718,8 +728,9 @@ struct NovelReaderView: View {
             // Edited rules apply to the open chapter at the line being read.
             Task { await model.persist(); await model.load() }
         }
-        .onChange(of: "\(translationBilingual)|\(translationTarget)") { _, _ in
-            model.updateTranslationSettings(bilingual: translationBilingual, target: translationTarget)
+        .onChange(of: "\(translationBilingual)|\(translationTarget)|\(translationSource)") { _, _ in
+            model.updateTranslationSettings(bilingual: translationBilingual, target: translationTarget,
+                                            source: translationSource)
         }
         .readerPresence(directories: [
             ReaderStorageMetadata.directoryID(contentID: model.content.id, chapterID: model.chapter.id)

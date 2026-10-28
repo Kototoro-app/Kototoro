@@ -200,7 +200,6 @@ struct ReaderLoadingSettingsSection: View {
     @AppStorage(ReaderLoading.preloadKey) private var preload = ReaderLoading.Preload.unmetered.rawValue
     @AppStorage(ReaderLoading.threadsKey) private var threads = 3
     @AppStorage(ReaderLoading.prefetchLimitKey) private var prefetchLimit = 6
-    @AppStorage(ReaderHitchMetrics.ratioKey) private var hitchRatio = -1.0
 
     var body: some View {
         Section {
@@ -216,21 +215,10 @@ struct ReaderLoadingSettingsSection: View {
                 LabeledContent("预读页数", value: "\(prefetchLimit)")
             }
             .accessibilityIdentifier("settings.prefetchLimit")
-            LabeledContent("滚动卡顿") {
-                if hitchRatio >= 0 {
-                    Text(verbatim: hitchRatio.formatted(.number.precision(.fractionLength(1))) + " ms/s")
-                } else {
-                    Text("暂无数据")
-                }
-            }
-            .accessibilityIdentifier("settings.scrollHitches")
         } header: {
-            Text("阅读器加载")
+            Text("页面加载")
         } footer: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("线程数为阅读时同时加载的页面数量；预读页数为提前加载的页面数量。省电模式与低数据模式下不预加载。")
-                Text("滚动卡顿为系统统计的本机前一天每秒滚动中卡顿的毫秒数，5 以下为流畅。")
-            }
+            Text("线程数为阅读时同时加载的页面数量；预读页数为提前加载的页面数量。省电模式与低数据模式下不预加载。")
         }
     }
 }

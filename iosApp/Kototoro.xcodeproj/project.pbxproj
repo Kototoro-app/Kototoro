@@ -78,6 +78,7 @@
 		C0FFEE000000000000000003 /* TagFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000004 /* TagFilter.swift */; };
 		C0FFEE000000000000000005 /* ReadingIncognito.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000006 /* ReadingIncognito.swift */; };
 		C0FFEE000000000000000007 /* ReaderPageTranslation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000008 /* ReaderPageTranslation.swift */; };
+		C0FFEE0000000000000000B1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE0000000000000000B2 /* SettingsView.swift */; };
 		C0FFEE000000000000000009 /* NovelSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE00000000000000000A /* NovelSpeech.swift */; };
 		C0FFEE00000000000000000B /* ReplaceRulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE00000000000000000C /* ReplaceRulesView.swift */; };
 		C0FFEE00000000000000000D /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE00000000000000000E /* NotesView.swift */; };
@@ -236,6 +237,7 @@
 		C0FFEE000000000000000004 /* TagFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagFilter.swift; sourceTree = "<group>"; };
 		C0FFEE000000000000000006 /* ReadingIncognito.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingIncognito.swift; sourceTree = "<group>"; };
 		C0FFEE000000000000000008 /* ReaderPageTranslation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPageTranslation.swift; sourceTree = "<group>"; };
+		C0FFEE0000000000000000B2 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C0FFEE00000000000000000A /* NovelSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelSpeech.swift; sourceTree = "<group>"; };
 		C0FFEE00000000000000000C /* ReplaceRulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplaceRulesView.swift; sourceTree = "<group>"; };
 		C0FFEE00000000000000000E /* NotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesView.swift; sourceTree = "<group>"; };
@@ -374,6 +376,7 @@
 				C0FFEE000000000000000004 /* TagFilter.swift */,
 				C0FFEE000000000000000006 /* ReadingIncognito.swift */,
 				C0FFEE000000000000000008 /* ReaderPageTranslation.swift */,
+				C0FFEE0000000000000000B2 /* SettingsView.swift */,
 				C0FFEE00000000000000000A /* NovelSpeech.swift */,
 				C0FFEE00000000000000000C /* ReplaceRulesView.swift */,
 				C0FFEE00000000000000000E /* NotesView.swift */,
@@ -678,6 +681,7 @@
 				C0FFEE000000000000000003 /* TagFilter.swift in Sources */,
 				C0FFEE000000000000000005 /* ReadingIncognito.swift in Sources */,
 				C0FFEE000000000000000007 /* ReaderPageTranslation.swift in Sources */,
+				C0FFEE0000000000000000B1 /* SettingsView.swift in Sources */,
 				C0FFEE000000000000000009 /* NovelSpeech.swift in Sources */,
 				C0FFEE00000000000000000B /* ReplaceRulesView.swift in Sources */,
 				C0FFEE00000000000000000D /* NotesView.swift in Sources */,

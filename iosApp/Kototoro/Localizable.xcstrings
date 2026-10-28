@@ -83,6 +83,16 @@
         }
       }
     },
+    "%@ 行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ lines"
+          }
+        }
+      }
+    },
     "%@完成：%@": {
       "localizations": {
         "en": {
@@ -537,6 +547,16 @@
         }
       }
     },
+    "GitHub 镜像": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub mirror"
+          }
+        }
+      }
+    },
     "Google Drive 同步": {
       "localizations": {
         "en": {
@@ -670,6 +690,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "The User-Agent can't contain line breaks"
+          }
+        }
+      }
+    },
+    "WebDAV 备份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WebDAV backup"
           }
         }
       }
@@ -931,6 +961,16 @@
         }
       }
     },
+    "下载扩展时使用的 GitHub 加速地址。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The GitHub mirror used to download extensions."
+          }
+        }
+      }
+    },
     "下载文件不完整，可重新下载本章": {
       "localizations": {
         "en": {
@@ -1094,6 +1134,16 @@
         }
       }
     },
+    "不过滤": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off"
+          }
+        }
+      }
+    },
     "不限": {
       "localizations": {
         "en": {
@@ -1160,6 +1210,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bookmarks"
+          }
+        }
+      }
+    },
+    "书签与笔记": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bookmarks & Notes"
           }
         }
       }
@@ -1240,6 +1300,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Page shadow"
+          }
+        }
+      }
+    },
+    "云同步": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloud sync"
           }
         }
       }
@@ -1401,6 +1471,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Only new sources in this version"
+          }
+        }
+      }
+    },
+    "仅译文": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translation only"
           }
         }
       }
@@ -1656,6 +1736,16 @@
         }
       }
     },
+    "低于该置信度的文字不翻译，用于去掉背景纹理、水印等误识别。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text recognized with less confidence is left untranslated, which drops misreads such as background textures and watermarks."
+          }
+        }
+      }
+    },
     "佚名": {
       "localizations": {
         "en": {
@@ -1712,6 +1802,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Library unavailable"
+          }
+        }
+      }
+    },
+    "作品更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Work updates"
           }
         }
       }
@@ -1824,6 +1924,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Use %@ info"
+          }
+        }
+      }
+    },
+    "使用 iOS 系统翻译。首次翻译某种语言时会提示下载语言包，之后可离线翻译；译文按章节缓存在本机。原文语言默认按每章正文自动识别，识别不准时可手动指定。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uses iOS system translation. The first translation into a language asks to download its language pack; after that it works offline. Translations are cached per chapter on this device. The original language is recognized from each chapter unless you choose one."
+          }
+        }
+      }
+    },
+    "使用 iOS 系统翻译，语言包下载后可离线使用。小说译文按章节缓存在本机。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uses iOS system translation; language packs work offline once downloaded. Novel translations are cached per chapter on this device."
           }
         }
       }
@@ -2660,6 +2780,16 @@
         }
       }
     },
+    "内容过滤": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Content filters"
+          }
+        }
+      }
+    },
     "再次点击排除该标签。": {
       "localizations": {
         "en": {
@@ -3392,6 +3522,26 @@
         }
       }
     },
+    "原文语言": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original language"
+          }
+        }
+      }
+    },
+    "原文语言识别不准时手动指定；拟声词被改错时可关闭纠错。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose the original language when it is misrecognized; turn off correction when sound effects get changed."
+          }
+        }
+      }
+    },
     "原有离线文件和书签保留在旧作品下。章节优先按卷号、章节号匹配，否则按章节位置匹配。": {
       "localizations": {
         "en": {
@@ -3418,6 +3568,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Original source: %@"
+          }
+        }
+      }
+    },
+    "双语对照": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bilingual"
           }
         }
       }
@@ -3882,6 +4042,16 @@
         }
       }
     },
+    "后台检查更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for updates in background"
+          }
+        }
+      }
+    },
     "后退 10 秒": {
       "localizations": {
         "en": {
@@ -4098,6 +4268,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Open in built-in browser"
+          }
+        }
+      }
+    },
+    "在后台检查收藏作品的新章节并发送通知。检查时机由系统决定，不保证准时。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checks favourites for new chapters in the background and notifies you. The system decides when checks run, so timing is not guaranteed."
           }
         }
       }
@@ -4319,6 +4499,16 @@
         }
       }
     },
+    "备份与同步": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup & Sync"
+          }
+        }
+      }
+    },
     "备份与恢复": {
       "localizations": {
         "en": {
@@ -4493,6 +4683,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "External subtitle %lld"
+          }
+        }
+      }
+    },
+    "外观": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appearance"
           }
         }
       }
@@ -4903,6 +5103,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Novels"
+          }
+        }
+      }
+    },
+    "小说与漫画共用目标语言。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Novels and manga share the target language."
           }
         }
       }
@@ -5457,6 +5667,16 @@
         }
       }
     },
+    "已清除翻译缓存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translation cache cleared"
+          }
+        }
+      }
+    },
     "已看 %d 集": {
       "localizations": {
         "en": {
@@ -5777,6 +5997,16 @@
         }
       }
     },
+    "应用锁": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App lock"
+          }
+        }
+      }
+    },
     "建议更新到最新版本，以获得最佳解析与稳定体验": {
       "localizations": {
         "en": {
@@ -6028,6 +6258,16 @@
         }
       }
     },
+    "恢复默认": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore defaults"
+          }
+        }
+      }
+    },
     "想看": {
       "localizations": {
         "en": {
@@ -6074,6 +6314,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Adult content"
+          }
+        }
+      }
+    },
+    "成人内容过滤": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adult content filter"
           }
         }
       }
@@ -6187,6 +6437,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Open work"
+          }
+        }
+      }
+    },
+    "打开应用或从后台返回时需要面容 ID、触控 ID 或设备密码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opening the app or returning to it asks for Face ID, Touch ID or the device passcode."
           }
         }
       }
@@ -6501,12 +6761,32 @@
         }
       }
     },
+    "指定原文语言后识别更准，也作为翻译的源语言；日文漫画选择日语可避免被识别成中文。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Naming the original language improves recognition and sets the translation's source language; choose Japanese for Japanese manga so it isn't read as Chinese."
+          }
+        }
+      }
+    },
     "按 Android 版的规则导入：扩展来源保持原有标识，未安装的扩展在安装后即可继续阅读；Venera 的来源按名称匹配已有来源。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Imported with the Android rules: extension sources keep their identities, and works from uninstalled extensions open once installed. Venera sources are matched to existing sources by name."
+          }
+        }
+      }
+    },
+    "按作品查看划线、页面笔记与书签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Highlights, page notes and bookmarks by work"
           }
         }
       }
@@ -6537,6 +6817,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "By source type"
+          }
+        }
+      }
+    },
+    "按词典修正识别结果；拟声词或艺术字被改错时可以关闭。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Corrects recognized words with a dictionary; turn it off when sound effects or stylized lettering get changed."
           }
         }
       }
@@ -7254,6 +7544,16 @@
         }
       }
     },
+    "数据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data"
+          }
+        }
+      }
+    },
     "数据库版本": {
       "localizations": {
         "en": {
@@ -7330,6 +7630,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Text"
+          }
+        }
+      }
+    },
+    "文本替换规则": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text replacement rules"
           }
         }
       }
@@ -7668,6 +7978,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Couldn't read the account. Reconnect: %@"
+          }
+        }
+      }
+    },
+    "无痕模式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incognito mode"
+          }
+        }
+      }
+    },
+    "无痕阅读": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incognito reading"
+          }
+        }
+      }
+    },
+    "无痕阅读时不记录历史、进度、统计与追踪；书签和下载不受影响。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incognito reading records no history, progress, statistics or tracking; bookmarks and downloads are unaffected."
           }
         }
       }
@@ -8075,6 +8415,16 @@
         }
       }
     },
+    "最低置信度": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimum confidence"
+          }
+        }
+      }
+    },
     "最新": {
       "localizations": {
         "en": {
@@ -8131,6 +8481,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Updated earliest"
+          }
+        }
+      }
+    },
+    "最短间隔": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimum interval"
           }
         }
       }
@@ -8371,6 +8731,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Local works"
+          }
+        }
+      }
+    },
+    "本地备份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local backup"
           }
         }
       }
@@ -8799,6 +9169,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tag preferences"
+          }
+        }
+      }
+    },
+    "标签黑名单": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tag blacklist"
           }
         }
       }
@@ -9667,6 +10047,16 @@
         }
       }
     },
+    "气泡合并距离": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bubble merge distance"
+          }
+        }
+      }
+    },
     "没有内容": {
       "localizations": {
         "en": {
@@ -10168,6 +10558,16 @@
         }
       }
     },
+    "清除翻译缓存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear translation cache"
+          }
+        }
+      }
+    },
     "清除选择（默认全部）": {
       "localizations": {
         "en": {
@@ -10294,6 +10694,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Page"
+          }
+        }
+      }
+    },
+    "漫画页面": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manga pages"
           }
         }
       }
@@ -10579,6 +10989,16 @@
         }
       }
     },
+    "目标语言": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Target language"
+          }
+        }
+      }
+    },
     "直线": {
       "localizations": {
         "en": {
@@ -10615,6 +11035,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Related"
+          }
+        }
+      }
+    },
+    "相距在该行距以内的文字合并为一个气泡翻译。相邻气泡被合在一起时调小，同一气泡被拆开时调大。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text within this many lines is translated as one bubble. Lower it when neighbouring bubbles are joined; raise it when one bubble is split."
           }
         }
       }
@@ -11546,6 +11976,16 @@
         }
       }
     },
+    "翻译": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translate"
+          }
+        }
+      }
+    },
     "翻页效果": {
       "localizations": {
         "en": {
@@ -11576,6 +12016,16 @@
         }
       }
     },
+    "自动检测": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detect automatically"
+          }
+        }
+      }
+    },
     "自动翻页": {
       "localizations": {
         "en": {
@@ -11602,6 +12052,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Crop borders automatically"
+          }
+        }
+      }
+    },
+    "自动识别": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recognize automatically"
           }
         }
       }
@@ -11886,6 +12346,36 @@
         }
       }
     },
+    "识别语言": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recognition language"
+          }
+        }
+      }
+    },
+    "识别调整": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recognition tuning"
+          }
+        }
+      }
+    },
+    "诊断": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnostics"
+          }
+        }
+      }
+    },
     "试试其他关键词，或调整语言与生态筛选。": {
       "localizations": {
         "en": {
@@ -11974,6 +12464,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Language"
+          }
+        }
+      }
+    },
+    "语言纠错": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Language correction"
           }
         }
       }
@@ -12157,6 +12657,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Follow scrolling"
+          }
+        }
+      }
+    },
+    "跟随系统（%@）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System (%@)"
           }
         }
       }
@@ -12763,6 +13273,16 @@
         }
       }
     },
+    "通用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General"
+          }
+        }
+      }
+    },
     "邮箱或用户名": {
       "localizations": {
         "en": {
@@ -13003,6 +13523,16 @@
         }
       }
     },
+    "阅读器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reader"
+          }
+        }
+      }
+    },
     "阅读器加载": {
       "localizations": {
         "en": {
@@ -13183,6 +13713,16 @@
         }
       }
     },
+    "隐私与安全": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privacy & Security"
+          }
+        }
+      }
+    },
     "隐藏当前章之前的章节": {
       "localizations": {
         "en": {
@@ -13279,6 +13819,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pages & large images"
+          }
+        }
+      }
+    },
+    "页面加载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Page loading"
           }
         }
       }

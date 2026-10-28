@@ -31,8 +31,7 @@ final class GoogleDriveSyncTests: XCTestCase {
     func testConfiguredBuildShowsEnabledConnectWithoutStartingAuthorization() {
         let app = XCUIApplication()
         app.launch()
-        app.tabBars.buttons["设置"].tap()
-        app.buttons["settings.googleDrive"].tap()
+        app.openSettings("settings.backup", "settings.googleDrive")
         XCTAssertTrue(app.buttons["googleDrive.connect"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["googleDrive.unconfigured"].exists)
         XCTAssertTrue(app.buttons["googleDrive.connect"].isEnabled)

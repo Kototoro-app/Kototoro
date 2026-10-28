@@ -1913,7 +1913,8 @@ struct SourceReaderView: View {
                                     isBookmarked: model.isBookmarked,
                                     translating: model.translator.enabled,
                                     status: currentDownloadStatus, downloading: downloading,
-                                    onAction: moreAction)
+                                    onAction: moreAction,
+                                    onTranslationOptions: { model.translator.reloadOptions() })
                 }
             }
             .frame(maxHeight: 540)

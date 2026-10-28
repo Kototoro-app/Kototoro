@@ -43,6 +43,8 @@ struct BackupView: View {
                         case .failure(let failure): error = failure.localizedDescription
                         }
                     }
+            } header: {
+                Text("本地备份")
             } footer: {
                 Text(String(localized: "包含收藏分类、收藏、历史与阅读进度、书签、阅读统计和来源排序，与 Android 版的备份文件互通。")
                      + String(localized: "也可以导入 Mihon/Tachiyomi、Aniyomi（.tachibk）和 Venera 的备份。恢复为合并方式，不会清空现有记录。"))
@@ -74,8 +76,21 @@ struct BackupView: View {
             if let external { externalSection(external) }
             if let report { reportSection(report) }
             if busy { ProgressView().frame(maxWidth: .infinity) }
+            // Below a backup being previewed or imported, which belongs to the buttons above.
+            Section {
+                NavigationLink { GoogleDriveSyncView(model: library.googleDrive) } label: {
+                    Label("Google Drive 同步", systemImage: "arrow.triangle.2.circlepath.icloud")
+                }
+                .accessibilityIdentifier("settings.googleDrive")
+                NavigationLink { WebDavSyncView() } label: {
+                    Label("WebDAV 备份", systemImage: "externaldrive.connected.to.line.below")
+                }
+                .accessibilityIdentifier("settings.webdav")
+            } header: {
+                Text("云同步")
+            }
         }
-        .navigationTitle("备份与恢复")
+        .navigationTitle("备份与同步")
     }
 
     private func export() async {

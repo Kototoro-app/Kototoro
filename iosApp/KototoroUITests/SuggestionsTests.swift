@@ -47,7 +47,7 @@ final class SuggestionsTests: XCTestCase {
         app.launchArguments = []
         app.launch()
         XCTAssertFalse(lock.waitForExistence(timeout: 3))
-        app.mainTab("设置").tap()
+        app.openSettings("settings.privacy")
         let toggle = app.switches["settings.appLock"]
         for _ in 0..<4 where !toggle.exists { app.swipeUp() }
         XCTAssertTrue(toggle.waitForExistence(timeout: 10), app.debugDescription)
@@ -61,10 +61,9 @@ final class SuggestionsTests: XCTestCase {
         Thread.sleep(forTimeInterval: 1)
         XCTAssertEqual(toggle.value as? String, "0", "The lock is not enabled without a successful authentication")
 
-        // The update section sits above the content filters: start again from the top of Settings.
         app.terminate()
         app.launch()
-        app.mainTab("设置").tap()
+        app.openSettings("settings.general")
         let updates = app.switches["settings.backgroundUpdates"]
         for _ in 0..<5 where !updates.isHittable { app.swipeUp() }
         // The switch sits at the trailing end of a wide row.
@@ -76,11 +75,41 @@ final class SuggestionsTests: XCTestCase {
         XCTAssertEqual(updates.value as? String, "1")
         app.terminate()
         app.launch()
-        app.mainTab("设置").tap()
-        for _ in 0..<4 where !updates.isHittable { app.swipeUp() }
+        app.openSettings("settings.general")
         XCTAssertTrue(updates.waitForExistence(timeout: 10))
         XCTAssertEqual(updates.value as? String, "1", "The background update switch survives a relaunch")
         flip()
+    }
+
+    /// Settings is a list of entries only; each opens its page, and Back returns to the list.
+    @MainActor
+    func testSettingsRootEntriesOpenTheirPages() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        app.mainTab("设置").tap()
+        XCTAssertTrue(app.buttons["settings.extensions"].waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertFalse(app.switches.firstMatch.exists, "The settings root holds no controls of its own")
+        attach(app, "设置首页")
+        let pages = [("settings.reader", "阅读器"), ("settings.translation", "翻译"),
+                     ("settings.contentSpaces", "内容空间"), ("settings.details", "详情页"),
+                     ("settings.downloads", "下载"), ("settings.storage", "存储管理"),
+                     ("settings.backup", "备份与同步"), ("settings.tracking", "追踪网站"),
+                     ("settings.privacy", "隐私与安全"), ("settings.general", "通用"), ("settings.about", "关于")]
+        for (id, title) in pages {
+            let entry = app.buttons[id]
+            for _ in 0..<4 where !(entry.exists && entry.isHittable) { app.swipeUp() }
+            XCTAssertTrue(entry.waitForExistence(timeout: 10), app.debugDescription)
+            entry.tap()
+            XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10), "\(id): \(app.debugDescription)")
+            if id == "settings.backup" {
+                XCTAssertTrue(app.buttons["settings.googleDrive"].exists, app.debugDescription)
+                XCTAssertTrue(app.buttons["settings.webdav"].exists, app.debugDescription)
+            }
+            attach(app, title)
+            app.navigationBars[title].buttons.element(boundBy: 0).tap()
+            XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 10), app.debugDescription)
+        }
     }
 
     /// The GitHub mirror choice persists and the reachability test reports every mirror (time or timeout).
@@ -90,11 +119,7 @@ final class SuggestionsTests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         func openMirrors() {
-            app.mainTab("设置").tap()
-            let entry = app.buttons["settings.githubMirror"]
-            for _ in 0..<5 where !entry.exists { app.swipeUp() }
-            XCTAssertTrue(entry.waitForExistence(timeout: 10), app.debugDescription)
-            entry.tap()
+            app.openSettings("settings.general", "settings.githubMirror")
         }
         openMirrors()
         let mirror = app.buttons["mirror.gh_proxy_com"]
@@ -130,11 +155,7 @@ final class SuggestionsTests: XCTestCase {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launch()
-        app.mainTab("设置").tap()
-        let entry = app.buttons["settings.webdav"]
-        for _ in 0..<4 where !entry.exists { app.swipeUp() }
-        XCTAssertTrue(entry.waitForExistence(timeout: 10), app.debugDescription)
-        entry.tap()
+        app.openSettings("settings.backup", "settings.webdav")
         func fill(_ id: String, _ text: String) {
             let field = app.descendants(matching: .any)[id]
             XCTAssertTrue(field.waitForExistence(timeout: 5), app.debugDescription)
@@ -205,11 +226,7 @@ final class SuggestionsTests: XCTestCase {
     }
 
     private func openTagBlacklist(_ app: XCUIApplication) {
-        app.mainTab("设置").tap()
-        let row = app.buttons["settings.tagBlacklist"]
-        for _ in 0..<6 where !(row.exists && row.isHittable) { app.swipeUp() }
-        XCTAssertTrue(row.waitForExistence(timeout: 10), app.debugDescription)
-        row.tap()
+        app.openSettings("settings.privacy", "settings.tagBlacklist")
     }
 
     @MainActor

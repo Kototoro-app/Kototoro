@@ -144,8 +144,6 @@ struct PanoramaSettingsSection: View {
                 Toggle("封面动画", isOn: $animated)
                 if layout == .top { Toggle("跟随滚动", isOn: $scrollLinked) }
             }
-        } header: {
-            Text("详情页")
         } footer: {
             Text(enabled ? "在详情页顶部标题后方显示横幅式的封面背景图；开启“减弱动态效果”时不播放动画。"
                  : "关闭后使用模糊封面作为页面背景。")
