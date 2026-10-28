@@ -19,6 +19,10 @@ import java.nio.file.Path
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
+    // The video surface is Swing interop (a native mpv canvas, or the macOS frame panel), which always stacks above
+    // Compose content drawn into the window; menus and dialogs opened over the picture were hidden behind it. Popup
+    // layers as their own windows stay on top of it. Read once by Compose, so it is set before any Compose class loads.
+    if (System.getProperty("compose.layers.type") == null) System.setProperty("compose.layers.type", "WINDOW")
     try {
         runDesktop(args)
     } catch (error: Throwable) {
