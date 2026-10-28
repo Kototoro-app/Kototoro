@@ -4,7 +4,7 @@
 `core-ui`/`reader-core`/`reader-novel`（见 [CMP 共享 UI 收敛计划](cmp-ui-convergence-plan-2026-10.md)）。
 本文只记录**不能共享**的那一层：必须由宿主操作系统提供、各平台做法不同的能力，逐项写清 Linux 上的实现位置、
 默认行为、验证方式与已知缺口。Linux 预览包的构建与运行说明见
-[desktop-app/README.md](../../desktop-app/README.md)。
+[desktop-app/README.md](https://github.com/Kototoro-app/Kototoro/blob/devel/desktop-app/README.md)。
 
 ## 能力清单
 
