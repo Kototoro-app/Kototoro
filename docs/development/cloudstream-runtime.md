@@ -81,6 +81,11 @@ Kotlin `object`，插件省略可选参数调用 `showToast("…")` 时实际引
 插件在安装前会经过 `CloudstreamPluginCompatibilityChecker` 的 DEX 检查：引用了宿主缺失的类或方法时直接判定为
 不兼容并给出完整签名，而不是等到激活后才抛 `NoSuchMethodError`。新增兼容层成员时应同时补一条该检查的测试。
 
+插件可以把 provider 直接编译进宿主命名空间（例如 `com.lagradost.cloudstream3.ar.youtube.YoutubeProvider`，见 #608），
+这类类和它们的 `$$ExternalSyntheticLambda`、`$load$1` 内部类都在插件自己的 DEX 里。检查器因此先读 `class_defs`
+取出插件声明的类：只有插件**没有**声明的 `com.lagradost.cloudstream3.**` 类才算宿主 API，否则自引用会被误报成
+「缺少宿主类」而整包被隔离。宿主仍然按 `loadClass` 判定可用性，所以插件自带的类不会被当成宿主实现。
+
 ## R8 与验证清单
 
 Cloudstream 插件由外部 JAR 动态加载，R8 无法从 Kototoro 的静态调用图推导完整成员集合。因此正式构建必须保留

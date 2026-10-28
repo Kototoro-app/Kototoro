@@ -124,10 +124,55 @@ class CloudstreamPluginCompatibilityCheckerTest : FunSpec({
             CloudstreamPluginCompatibilityChecker::class.java.classLoader!!,
         ) shouldBe CloudstreamPluginCompatibility.Compatible
     }
+
+    // Plugins such as re-3arabi's YouTube provider are compiled into the host namespace and link against themselves
+    // (issue #608): those classes ship in the plugin's own DEX, so they are not missing host API.
+    test("plugin declaring its own provider in the Cloudstream namespace is accepted") {
+        val provider = "Lcom/lagradost/cloudstream3/ar/youtube/YoutubeProvider;"
+
+        CloudstreamPluginCompatibilityChecker.inspect(
+            createPluginArchive(createExecutableReferenceDex(provider, declaredDescriptor = provider)),
+            CloudstreamPluginCompatibilityChecker::class.java.classLoader!!,
+        ) shouldBe CloudstreamPluginCompatibility.Compatible
+    }
+
+    test("plugin invoking a method of its own Cloudstream-namespace provider is accepted") {
+        val provider = "Lcom/lagradost/cloudstream3/ar/youtube/YoutubeProvider;"
+
+        CloudstreamPluginCompatibilityChecker.inspect(
+            createPluginArchive(
+                createExecutableMethodDex(provider, "search", emptyList(), declaredDescriptor = provider),
+            ),
+            CloudstreamPluginCompatibilityChecker::class.java.classLoader!!,
+        ) shouldBe CloudstreamPluginCompatibility.Compatible
+    }
+
+    test("a missing host class is still rejected next to the plugin's own Cloudstream-namespace classes") {
+        val provider = "Lcom/lagradost/cloudstream3/ar/youtube/YoutubeProvider;"
+        val missing = "Lcom/lagradost/cloudstream3/MainActivity;"
+
+        val result = CloudstreamPluginCompatibilityChecker.inspect(
+            createPluginArchive(
+                createExecutableReferenceDex(provider, declaredDescriptor = provider),
+                createExecutableReferenceDex(
+                    missing,
+                    declaredDescriptor = "Lcom/lagradost/cloudstream3/ar/youtube/OtherProvider;",
+                ),
+            ),
+            CloudstreamPluginCompatibilityChecker::class.java.classLoader!!,
+        ).shouldBeInstanceOf<CloudstreamPluginCompatibility.Incompatible>()
+
+        result.missingHostClasses shouldContainExactly listOf("com.lagradost.cloudstream3.MainActivity")
+    }
 })
 
-private fun createExecutableMethodDex(owner: String, method: String, parameters: List<String>): ByteArray {
-    val descriptors = listOf("Ltest/Plugin;", owner, "V") + parameters
+private fun createExecutableMethodDex(
+    owner: String,
+    method: String,
+    parameters: List<String>,
+    declaredDescriptor: String = "Ltest/Plugin;",
+): ByteArray {
+    val descriptors = listOf(declaredDescriptor, owner, "V") + parameters
     val strings = descriptors + listOf("run", method)
     val stringIdsOffset = 112
     val typeIdsOffset = stringIdsOffset + strings.size * 4
@@ -184,17 +229,22 @@ private fun createExecutableMethodDex(owner: String, method: String, parameters:
 private fun createPluginArchive(typeDescriptors: List<String>) =
 	createPluginArchive(createDex(typeDescriptors))
 
-private fun createPluginArchive(dex: ByteArray) =
+private fun createPluginArchive(vararg dexFiles: ByteArray) =
 	Files.createTempFile("cloudstream-compatibility", ".cs3").toFile().apply {
 		ZipOutputStream(outputStream()).use { zip ->
-			zip.putNextEntry(ZipEntry("classes.dex"))
-			zip.write(dex)
-			zip.closeEntry()
+			dexFiles.forEachIndexed { index, dex ->
+				zip.putNextEntry(ZipEntry(if (index == 0) "classes.dex" else "classes${index + 1}.dex"))
+				zip.write(dex)
+				zip.closeEntry()
+			}
 		}
 	}
 
-private fun createExecutableReferenceDex(targetDescriptor: String): ByteArray {
-	val strings = listOf("Ltest/Plugin;", targetDescriptor, "execute")
+private fun createExecutableReferenceDex(
+	targetDescriptor: String,
+	declaredDescriptor: String = "Ltest/Plugin;",
+): ByteArray {
+	val strings = listOf(declaredDescriptor, targetDescriptor, "execute")
 	val headerSize = 112
 	val stringIdsOffset = headerSize
 	val typeIdsOffset = stringIdsOffset + strings.size * 4
