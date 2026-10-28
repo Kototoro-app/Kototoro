@@ -197,12 +197,15 @@ jobs:
         run: |
           set -euo pipefail
           # The reader's upscale row has to install the pinned programs, upscale, remember the choice and restore it.
+          # Anime4K pages are skipped: llvmpipe needs over a minute for one 800x1200 page, past the app's own limit;
+          # the Anime4K presets themselves run in the player job's MpvPlayerTest on small images.
           xvfb-run -a -s "-screen 0 1600x1200x24 -nolisten tcp" ./gradlew \
             -PwithDesktopApp \
             "-PmihonCompatibilityDirectory=$PWD/build/linux-ci-compatibility" \
             -PmihonCompatibilityJavaVersion=21 \
             "-PncnnDirectory=$PWD/build/linux-ci-upscalers" \
             "-Dorg.gradle.java.installations.paths=$JAVA_HOME_21_X64,$JAVA_HOME_17_X64" \
+            -PskipAnime4KPages \
             :desktop-app:test \
             --tests '*DesktopRuntimeCheckUpscaleTest*' \
             --tests '*DesktopAppTest.reader pages are upscaled*' \

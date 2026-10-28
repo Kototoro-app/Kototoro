@@ -77,7 +77,9 @@ internal object DesktopUpscaleProbe {
                 settled()
                 check(width() == original * 4) { "4x: ${width()}" }
                 // Android's Anime4K page modes run offscreen through libmpv when it is present.
-                if (org.skepsun.kototoro.desktop.player.MpvLocator.find(Path.of(args[1])) != null) {
+                if (System.getProperty("kototoro.desktop.skip.anime4k.pages") != null) {
+                    println("ANIME4K_PAGES skipped (-PskipAnime4KPages)")
+                } else if (org.skepsun.kototoro.desktop.player.MpvLocator.find(Path.of(args[1])) != null) {
                     onNodeWithTag("reader-option-upscale:ANIME4K_B").performScrollTo().performClick()
                     settled()
                     check(width() == original * 2) { "Anime4K B: ${width()}" }

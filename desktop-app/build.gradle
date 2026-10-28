@@ -803,6 +803,8 @@ tasks.withType(Test).configureEach {
     providers.gradleProperty('realDirect').orNull?.with { systemProperty 'kototoro.real.direct', it }
     providers.gradleProperty('mpvOptions').orNull?.with { systemProperty 'kototoro.real.mpvoptions', it }
     providers.gradleProperty('ncnnDirectory').orNull?.with { systemProperty 'kototoro.ncnn.dir', it }
+    // CI's software GPU needs minutes for a full Anime4K page; MpvPlayerTest still covers Anime4K on small images.
+    if (providers.gradleProperty('skipAnime4KPages').isPresent()) systemProperty 'kototoro.desktop.skip.anime4k.pages', 'true'
     if (libmpvDirectory != null) systemProperty 'kototoro.libmpv.dir', libmpvDirectory
     dependsOn ':parser-host:fixtureKototoroJar', ':parser-host:fixtureKotatsuJar', ':parser-host:fixtureTsukiJar',
         ':parser-host:fixtureBrokenJar'
