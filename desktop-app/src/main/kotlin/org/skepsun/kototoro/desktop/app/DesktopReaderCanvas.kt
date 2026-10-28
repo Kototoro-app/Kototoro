@@ -279,18 +279,24 @@ internal fun DesktopReaderCanvas(controller: DesktopController, state: DesktopAp
                         }
                     }
                 }) {
+                // LaunchedEffect(slotIndex) snaps the turn back only after this frame is drawn: until then a key, tap
+                // or button turn would show the new page in place for one frame and then jump back to slide in from
+                // the old one, a flash on every page. Draw that starting offset here already.
+                val pendingTurn = slotIndex - settledSlot
+                val shownTravel = if (animated && !committedByDrag && abs(pendingTurn) == 1 &&
+                    !travel.isRunning && travel.value == 0f) -pendingTurn.toFloat() else travel.value
                 val snapshot = PagedMotionSnapshot(currentSlot = slotIndex, settledSlot = settledSlot,
-                    targetSlot = slotIndex, offsetFraction = travel.value,
+                    targetSlot = slotIndex, offsetFraction = shownTravel,
                     isScrollInProgress = dragging || travel.isRunning)
-                val travelFraction = slotIndex - settledSlot + travel.value
+                val travelFraction = slotIndex - settledSlot + shownTravel
                 val inFlight = abs(travelFraction) > ScenePageTransitionRenderer.COVER_PROGRESS_EPSILON || snapshot.isScrollInProgress
                 val neighbours = (-1..1).mapNotNull { step -> layout.scene.allSlots.getOrNull(slotIndex + step) }
                 for (strip in neighbours) {
                     val input = PagedTransitionResolver.resolve(snapshot, strip.slotIndex, direction,
-                        isCurlUnfolding = travel.value < 0f)
+                        isCurlUnfolding = shownTravel < 0f)
                     val transform = ScenePageTransitionRenderer.transformFor(transition, input, vertical, rightToLeft)
                     // Base strip position: forward slots lie in the reading direction (below, in vertical mode).
-                    val base = (strip.slotIndex - slotIndex - travel.value) * extent * physicalSign
+                    val base = (strip.slotIndex - slotIndex - shownTravel) * extent * physicalSign
                     if (abs(base) >= extent * 1.5f && transition == ScenePageTransition.SLIDE) continue
                     val shift = when (transition) {
                         ScenePageTransition.SLIDE -> 0f
