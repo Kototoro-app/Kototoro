@@ -21,6 +21,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.chips.ChoiceChip
+import androidx.compose.foundation.horizontalScroll
 
 /** Android's tablet preview, with image loading, localized values and actions supplied by each host. */
 @Composable
@@ -41,6 +43,7 @@ fun TabletPreviewContent(
     controlsEnabled: Boolean = true,
     favouriteEnabled: Boolean = true,
     onReadIncognito: (() -> Unit)? = null,
+    onSelectBranch: ((String) -> Unit)? = null,
 ) {
     BoxWithConstraints(modifier.fillMaxSize().testTag("tablet-preview-content")) {
         // Short windows scroll the header with the body; taller windows keep the artwork visible.
@@ -48,7 +51,8 @@ fun TabletPreviewContent(
         Column(Modifier.fillMaxSize().then(if (compact) Modifier.verticalScroll(rememberScrollState()) else Modifier)) {
             TabletPreviewHeader(data, labels, compact, cover, icon, onClose, onOpenDetails, controlsEnabled)
             TabletPreviewBody(data, labels, icon, !compact, isLoading, hasLoadError, onRetry, onRead,
-                onOpenDetails, onAddToFavorites, onOpenChapter, controlsEnabled, favouriteEnabled, onReadIncognito)
+                onOpenDetails, onAddToFavorites, onOpenChapter, controlsEnabled, favouriteEnabled, onReadIncognito,
+                onSelectBranch)
         }
     }
 }
@@ -108,6 +112,7 @@ private fun TabletPreviewBody(
     enabled: Boolean,
     favouriteEnabled: Boolean,
     onReadIncognito: (() -> Unit)?,
+    onSelectBranch: ((String) -> Unit)?,
 ) {
     var descriptionExpanded by rememberSaveable(data.id) { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().then(if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
@@ -157,6 +162,18 @@ private fun TabletPreviewBody(
         if (data.description.isNotBlank()) Text(data.description, style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (descriptionExpanded) Int.MAX_VALUE else 4,
             overflow = TextOverflow.Ellipsis, modifier = Modifier.clickable { descriptionExpanded = !descriptionExpanded })
+        // The details page's branch switch, so a work published in several translations previews the one wanted.
+        if (onSelectBranch != null && data.branches.size > 1) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag("preview-branches"),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                data.branches.forEach { branch ->
+                    ChoiceChip(selected = branch == data.selectedBranch, onClick = { onSelectBranch(branch) },
+                        enabled = enabled, modifier = Modifier.testTag("preview-branch:$branch")) {
+                        Text(branch, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
         data.chapterSections.forEach { section ->
             if (section.chapters.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

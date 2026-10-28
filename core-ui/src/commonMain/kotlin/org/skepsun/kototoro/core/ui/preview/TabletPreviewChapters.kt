@@ -8,17 +8,24 @@ data class TabletPreviewChapterGroups<T>(
     val isSingleGroup: Boolean,
 )
 
+/** The branches (translations, scanlation groups) a work's chapters come in, in list order. */
+fun <T> tabletPreviewBranches(allChapters: List<T>, branch: (T) -> String?): List<String> =
+    allChapters.mapNotNull { branch(it)?.takeIf(String::isNotBlank) }.distinct()
+
+/** [selectedBranch] is the branch picked in the preview; without one (or an unknown one) the first chapter's is used. */
 fun <T> resolveTabletPreviewChapters(
     allChapters: List<T>,
     branch: (T) -> String?,
     number: (T) -> Float,
     uploadDate: (T) -> Long,
+    selectedBranch: String? = null,
 ): TabletPreviewChapterGroups<T> {
     if (allChapters.isEmpty()) {
         return TabletPreviewChapterGroups(emptyList(), emptyList(), null, true)
     }
 
-    val primaryBranch = branch(allChapters.first())
+    val primaryBranch = selectedBranch?.takeIf { selected -> allChapters.any { branch(it) == selected } }
+        ?: branch(allChapters.first())
     val branchChapters = if (primaryBranch != null) {
         val filtered = allChapters.filter { branch(it) == primaryBranch }
         if (filtered.isNotEmpty()) filtered else allChapters

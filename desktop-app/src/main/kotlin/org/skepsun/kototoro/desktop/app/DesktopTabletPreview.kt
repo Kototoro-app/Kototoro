@@ -1,7 +1,10 @@
 package org.skepsun.kototoro.desktop.app
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.painterResource
 import org.skepsun.kototoro.core.source.SourceChapter
 import org.skepsun.kototoro.core.ui.preview.*
@@ -15,12 +18,15 @@ import java.util.Locale
 internal fun DesktopTabletPreview(controller: DesktopController, state: DesktopAppState, enabled: Boolean) {
     val content = state.content ?: return
     val video = DesktopReaderKind.of(content) == DesktopReaderKind.VIDEO
-    val groups = remember(content.chapters) {
-        resolveTabletPreviewChapters(content.chapters.orEmpty(), { it.branch }, { it.number }, { it.uploadDate })
+    // The branch picked in this preview; null follows the first chapter's, as Android's preview does.
+    var branch by remember(content.id) { mutableStateOf<String?>(null) }
+    val branches = remember(content.chapters) { tabletPreviewBranches(content.chapters.orEmpty()) { it.branch } }
+    val groups = remember(content.chapters, branch) {
+        resolveTabletPreviewChapters(content.chapters.orEmpty(), { it.branch }, { it.number }, { it.uploadDate }, branch)
     }
     val chapters = if (groups.isSingleGroup) groups.earliest else groups.latest
     val count = content.chapters?.size ?: 0
-    val data = remember(content, groups, state.sources) {
+    val data = remember(content, groups, branches, state.sources) {
         TabletPreviewData(
             id = content.id, title = content.title, authors = content.authors.take(2).joinToString(" · "),
             sourceTitle = state.sources.firstOrNull { it.source.name == content.source.name }?.displayName
@@ -35,6 +41,8 @@ internal fun DesktopTabletPreview(controller: DesktopController, state: DesktopA
                     chapters.map { it.previewData() }, if (count > chapters.size) desktopText("common.chaptersTotal", count) else null))
                 if (!groups.isSingleGroup) add(TabletPreviewSection(desktopText("details.firstChapters"), groups.earliest.map { it.previewData() }))
             },
+            branches = branches,
+            selectedBranch = groups.firstChapter?.branch,
         )
     }
     TabletPreviewContent(
@@ -55,6 +63,7 @@ internal fun DesktopTabletPreview(controller: DesktopController, state: DesktopA
         onOpenChapter = { id -> content.chapters?.firstOrNull { it.id == id }?.let { controller.read(it) } },
         controlsEnabled = enabled, favouriteEnabled = !state.isFavourite,
         onReadIncognito = if (state.readerIncognito) null else ({ controller.readIncognito() }),
+        onSelectBranch = { branch = it },
     )
 }
 

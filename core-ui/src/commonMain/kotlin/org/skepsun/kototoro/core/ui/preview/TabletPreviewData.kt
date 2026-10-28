@@ -12,6 +12,9 @@ data class TabletPreviewData(
     val chapterCountText: String?,
     val statusLabel: String?,
     val chapterSections: List<TabletPreviewSection>,
+    /** More than one shows Android's branch switch above the chapters (see [tabletPreviewBranches]). */
+    val branches: List<String> = emptyList(),
+    val selectedBranch: String? = null,
 )
 
 data class TabletPreviewSection(
