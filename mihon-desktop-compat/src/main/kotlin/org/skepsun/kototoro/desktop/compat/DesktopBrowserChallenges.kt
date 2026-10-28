@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.desktop.compat
 
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -82,6 +84,27 @@ class DesktopBrowserChallenges internal constructor(
     }
 
     internal val interactionActive: Boolean get() = interactions.get() > 0
+
+    private val mutableBlocked = MutableStateFlow<List<String>>(emptyList())
+
+    /**
+     * Sites (one root URL per host) whose background requests met a challenge nobody was asked to solve: Android's
+     * "captcha required" notification. The app lists them; verifying one is a user action that requests it again.
+     */
+    val blocked = mutableBlocked.asStateFlow()
+
+    internal fun reportBlocked(url: okhttp3.HttpUrl) {
+        val root = url.newBuilder().encodedPath("/").query(null).fragment(null).build().toString()
+        mutableBlocked.update { sites -> if (root in sites) sites else sites + root }
+    }
+
+    /** A host that answers normally again (verified here or anywhere else) leaves the list. */
+    internal fun reportPassed(url: okhttp3.HttpUrl) {
+        if (mutableBlocked.value.isEmpty()) return
+        mutableBlocked.update { sites -> sites.filterNot { it.toHttpUrlOrNull()?.host == url.host } }
+    }
+
+    fun dismissBlocked(site: String) = mutableBlocked.update { it - site }
 
     suspend fun showWindow(id: Long): DesktopBrowserWindow? = withContext(Dispatchers.IO) {
         val engine = synchronized(this@DesktopBrowserChallenges) {

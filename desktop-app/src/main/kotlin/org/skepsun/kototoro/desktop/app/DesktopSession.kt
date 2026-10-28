@@ -473,6 +473,14 @@ class DesktopSession private constructor(
     internal suspend fun prepareDownload(page: SourcePage, revision: String, known: SourceImageArtifact?) =
         downloadRequest { readerImages.prepareDownload(page, revision, known) }
 
+    /**
+     * Requests a site a background load could not get past Cloudflare on. Called from a user action, so the
+     * interceptor solves it hidden or asks the user in the verification window, which stores the clearance.
+     */
+    internal suspend fun verifySite(url: String) = withContext(Dispatchers.IO) {
+        platform.sharedHttpClient().newCall(okhttp3.Request.Builder().url(url).get().build()).execute().close()
+    }
+
     private suspend fun <T> downloadRequest(block: suspend () -> T): T {
         val challenges = browserChallenges
         return if (challenges == null) block() else challenges.withRequestCancellation(block)

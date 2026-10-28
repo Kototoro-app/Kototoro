@@ -82,7 +82,10 @@ internal class DesktopChallengeInterceptor(
         }
         if (chain.call().isCanceled() || challenges.isRequestCancelled()) throw IOException("网页验证请求已取消")
         val response = chain.proceed(request)
-        if (!response.isMihonCloudflareChallenge()) return guarded(response)
+        if (!response.isMihonCloudflareChallenge()) {
+            if (response.isSuccessful) challenges.reportPassed(request.url)
+            return guarded(response)
+        }
         if (request.method !in setOf("GET", "HEAD")) {
             response.close()
             throw IOException("此请求需要网页验证；暂不自动重发 ${request.method} 请求")
@@ -102,7 +105,10 @@ internal class DesktopChallengeInterceptor(
         if (body != null) return guarded(response.newBuilder().body(body).build())
         // Background work (icons, covers, update checks, prefetches) never opens a window; it fails like Android's
         // CloudFlareProtectedException and the next user action on that source asks instead.
-        if (!challenges.interactionActive) throw IOException("此来源需要网页验证，请在浏览或阅读该来源时完成验证")
+        if (!challenges.interactionActive) {
+            challenges.reportBlocked(request.url)
+            throw IOException("此来源需要网页验证，请在浏览或阅读该来源时完成验证")
+        }
         // Fallback: the user verifies in the visible browser.
         challenges.resolve(request, chain.call())
         if (cancelled()) throw IOException("网页验证请求已取消")

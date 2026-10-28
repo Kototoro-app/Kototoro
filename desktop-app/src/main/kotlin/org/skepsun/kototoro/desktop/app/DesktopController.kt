@@ -3608,6 +3608,13 @@ class DesktopController(
 
     fun browser() = navigate { mutableState.update { it.copy(screen = DesktopScreen.BROWSER) } }
 
+    /** Android's "captcha required" notification, tapped: verify [site] now, in the window if it has to be. */
+    fun verifyBlockedSite(site: String) = action {
+        session.verifySite(site)
+        session.browserChallenges?.dismissBlocked(site)
+        mutableState.update { it.copy(message = desktopText("challenge.verified")) }
+    }
+
     fun more() = navigate {
         // The statistics screen's per-work sheet is an overlay of that screen, never of the "more" page.
         mutableState.update { it.copy(screen = DesktopScreen.MORE, contentStats = null) }

@@ -79,6 +79,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
     val state by controller.state.collectAsState()
     val challenges = controller.session.browserChallenges
     val challenge = challenges?.pending?.collectAsState()?.value
+    val blockedSites = challenges?.blocked?.collectAsState()?.value.orEmpty()
     val browserScope = rememberCoroutineScope()
     val favouritesCollection = rememberContentCollectionState()
     val historyCollection = rememberContentCollectionState()
@@ -124,6 +125,11 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                                 windowNotice?.let { Text(it) }
                             }
                         }
+                    }
+                    // Android's "captcha required" notification: background loads never open the window themselves.
+                    if (blockedSites.isNotEmpty() && challenge == null && !reading) {
+                        BlockedSitesNotice(blockedSites, enabled = !closing && !state.busy,
+                            onVerify = controller::verifyBlockedSite, onDismiss = { challenges?.dismissBlocked(it) })
                     }
                     if (state.busy || closing) LinearProgressIndicator(Modifier.fillMaxWidth())
                     state.error?.let { Notice(it, true) }
@@ -263,6 +269,30 @@ private fun Header(state: DesktopAppState) {
     }
     Text(title, style = MaterialTheme.typography.headlineMedium, color = Ink,
         modifier = Modifier.heightIn(min = 40.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+}
+
+@Composable
+private fun BlockedSitesNotice(sites: List<String>, enabled: Boolean, onVerify: (String) -> Unit,
+    onDismiss: (String) -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.testTag("challenge-blocked")) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(desktopText("challenge.blockedTitle", sites.size), style = MaterialTheme.typography.titleSmall)
+            sites.take(3).forEach { site ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(site.removePrefix("https://").removePrefix("http://").trimEnd('/'), maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    TextButton({ onVerify(site) }, enabled = enabled,
+                        modifier = Modifier.testTag("challenge-blocked-verify:$site")) { Text(desktopText("challenge.verify")) }
+                    TextButton({ onDismiss(site) }, modifier = Modifier.testTag("challenge-blocked-dismiss:$site")) {
+                        Text(desktopText("challenge.dismiss"))
+                    }
+                }
+            }
+            if (sites.size > 3) Text(desktopText("challenge.blockedMore", sites.size - 3),
+                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
+        }
+    }
 }
 
 @Composable
