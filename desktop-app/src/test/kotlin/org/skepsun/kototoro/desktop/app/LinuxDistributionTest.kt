@@ -60,8 +60,20 @@ class LinuxDistributionTest {
             assertEquals("ok", result.getProperty("image"))
             assertEquals("1", result.getProperty("sources"))
             assertEquals("unsupported", result.getProperty("browser"))
-            assertEquals("unbundled", result.getProperty("player.embedded"))
-            assertEquals("unsupported", result.getProperty("upscale.native"))
+            // The AWT canvas is an X11 window on Linux, so embedding is possible; libmpv itself is never shipped, so
+            // the report states whether this machine actually has one instead of assuming any.
+            assertEquals("x11-window", result.getProperty("player.embedded"))
+            // ncnn-vulkan has a Linux build, but the program is downloaded on first use like the Windows one, so the
+            // capability is "on-demand" and whether this machine has it is a separate line.
+            assertEquals("on-demand", result.getProperty("upscale.native"))
+            val upscale = result.getProperty("upscale")
+            assertTrue(upscale == "ok" || upscale == "unavailable", "unexpected upscale state: $upscale")
+            val player = result.getProperty("player")
+            assertTrue(player == "ok" || player == "unavailable", "unexpected player state: $player")
+            if (player == "unavailable") {
+                assertEquals("unavailable", result.getProperty("player.library"))
+                assertNotNull(result.getProperty("player.hint"))
+            }
             assertTrue(Path.of(result.getProperty("java.home")).startsWith(image.resolve("lib/runtime")))
             Files.copy(report, reports().resolve("$mode.properties"), StandardCopyOption.REPLACE_EXISTING)
         }

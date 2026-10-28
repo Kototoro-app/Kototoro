@@ -94,8 +94,13 @@ AWT 图标尺寸，`:desktop-app:linuxDebContentsCheck` 同时校验 `.deb` 图�
     --check-runtime "/absolute/path/linux-runtime-check.properties"
 ```
 
-报告中的 `browser=unsupported`、`upscale.native=unsupported`、`player.embedded=unbundled`
-表示当前预览包未提供相应组件，不表示这些能力已通过验证。`.deb` 可生成不等于已经完成跨发行版
+报告中的 `browser=unsupported` 表示当前预览包没有系统 WebView 桥，不表示这类能力已通过验证；
+`upscale.native=on-demand` 表示超分用的是官方 ncnn-vulkan 程序、由用户在阅读器里按需下载（`upscale.realcugan`/
+`upscale.realesrgan` 写程序路径或 `unavailable`，两个都装好并用样张真实放大成功时才写 `upscale=ok`）。
+`player.embedded=x11-window` 只说明 Linux 上 AWT 画布会成为 X11 窗口（Wayland 会话经 XWayland）、可以交给 mpv 的
+`wid` 输出，播放器是否可用另看 `player`/`player.library`：发行版装了 libmpv（Debian/Ubuntu 的 `libmpv2`，或
+`/usr/lib/<multiarch>` 下的 `libmpv.so.2`、`LD_LIBRARY_PATH`、`ldconfig` 缓存）时为 `ok`，没有时是 `unavailable`
+并给出 `player.hint`，此时视频页仍可退到外部 mpv。`.deb` 可生成不等于已经完成跨发行版
 兼容性验收；当前构建主机为 Ubuntu 24.04 x86_64。打包参考
 [Compose 官方文档](https://kotlinlang.org/docs/multiplatform/compose-native-distribution.html)。
 
@@ -386,6 +391,9 @@ Windows 安装包随附 libmpv（LGPL 构建）与 RealCUGAN / Real-ESRGAN 的 n
 
 “阅读设置 → 超分辨率”可选 RealCUGAN 2x（含降噪档）、Real-ESRGAN 4x 动漫、AnimeVideo 2x（官方 ncnn-vulkan 程序，首次使用时下载并校验，约 45 MB，
 也可选择已下载的官方压缩包），以及 Android 的六种 Anime4K 模式（需要 libmpv，离屏运行）。结果缓存在数据目录 `cache/upscale`，失败时显示原图。
+
+程序按平台取同一 release 的资产：Windows 随包（`*.exe`），Linux 下载官方的 `*-ubuntu.zip` 并补上可执行位，
+macOS 上游没有包、该段显示“平台不支持”。Anime4K 离屏渲染走 mpv 的 GPU 输出，需要桌面会话（无显示的 CI 请用 Xvfb）。
 
 Aniyomi 扩展若实现 `ConfigurableAnimeSource`，与 Mihon 来源一样在“来源设置”中显示原生控件，修改写入 `source_<id>`。
 

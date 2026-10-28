@@ -33,9 +33,13 @@ internal interface MpvNative : Library {
 
         private val loaded = mutableMapOf<Path, MpvNative>()
 
-        /** One binding per library file for the whole process; JNA keeps the DLL loaded anyway. */
+        /**
+         * One binding per library file for the whole process; JNA keeps the DLL loaded anyway. The numeric locale is
+         * fixed here because every libmpv entry point (player, Anime4K page rendering) comes through this loader.
+         */
         @Synchronized
         fun load(library: Path): MpvNative = loaded.getOrPut(library.toAbsolutePath().normalize()) {
+            MpvLocale.ensure()
             Native.load(library.toAbsolutePath().toString(), MpvNative::class.java,
                 mapOf(Library.OPTION_STRING_ENCODING to "UTF-8"))
         }

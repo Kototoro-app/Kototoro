@@ -225,7 +225,10 @@ Android 与桌面的 UI 按 CMP 共享呈现演进；Windows 与 macOS 始终共
   `DexRepair` 在转换前修复 R8 内联构造器（`new-instance T` + 祖先 `<init>`），`ApkManifestReader` 解码二进制清单，
   `ApkExtensionConverter` 产出带文本清单的扩展 JAR；`-PrealApkDirectory` 用真实 APK 验证并逐类链接校验。
 - `desktop-player/` - libmpv（JNA）播放器：`MpvPlayer` 可嵌入原生窗口或无输出运行，`MpvLocator` 运行时查找
-  `libmpv-2.dll`（不随仓库分发）；`-PlibmpvDirectory` 启用真实播放测试。
+  平台库（Windows `libmpv-2.dll`、macOS `libmpv.2.dylib`、Linux `libmpv.so.2`；不随仓库分发，Linux 还查
+  发行版库目录、`LD_LIBRARY_PATH` 与 `ldconfig` 缓存，见 `docs/architecture/desktop-linux-native-2026-10.md`）；
+  `MpvLocale` 在建实例前把 `LC_NUMERIC` 切到 `C`（mpv 的硬性要求，Linux 桌面默认不满足），`MpvPlayer` 按
+  `mpv-version` 选 `loadfile` 的参数形式（0.37 不接受 `<index>`/`<options>`）；`-PlibmpvDirectory` 启用真实播放测试。
 - source-host 的 `MihonJarRegistry` 同时承载 Mihon、Tsundoku（`TSUNDOKU_<id>`，`getChapterContent`）与 Aniyomi
   （`ANIYOMI_<id>`，`AniyomiSourceRuntime`；animesource ABI 移植在 `mihon-desktop-compat`）。- `desktop-runtime/` - Windows/JVM 平台存储装配：持久化数据根目录、共享 v84 `MangaDatabase` builder、
   bundled SQLite、图片与偏好 store；没有平行 schema/DAO。`DesktopRuntime.open` 验证 schema 后交付实例，

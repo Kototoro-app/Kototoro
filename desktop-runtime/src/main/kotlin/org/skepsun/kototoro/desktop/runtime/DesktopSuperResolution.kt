@@ -18,27 +18,49 @@ import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.PosixFilePermissions
 import java.security.MessageDigest
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
 import kotlin.io.path.extension
 
-/** The official ncnn-vulkan programs the Android app's models come from, pinned by release and SHA-256. */
+/** One platform's build of a program: the release asset, the SHA-256 it must have, and the executable inside it. */
+data class DesktopUpscaleAsset(val archive: String, val sha256: String, val executable: String)
+
+/**
+ * The official ncnn-vulkan programs the Android app's models come from, pinned by release and SHA-256. Both projects
+ * publish a Windows and a Linux build of the same release, so the models match; macOS has no build and stays out.
+ */
 enum class DesktopUpscaleTool(
     val title: String,
     internal val repository: String,
     internal val tag: String,
-    val asset: String,
-    internal val sha256: String,
-    internal val executable: String,
+    private val assets: Map<DesktopPlatform, DesktopUpscaleAsset>,
 ) {
-    REALCUGAN("RealCUGAN (nihui)", "nihui/realcugan-ncnn-vulkan", "20220728",
-        "realcugan-ncnn-vulkan-20220728-windows.zip",
-        "c6e08d46c11704b1e3a1ada9ddd591cb5005f52f132136c8633ba25def400e01", "realcugan-ncnn-vulkan.exe"),
-    REALESRGAN("Real-ESRGAN (xinntao)", "xinntao/Real-ESRGAN", "v0.2.5.0",
-        "realesrgan-ncnn-vulkan-20220424-windows.zip",
-        "abc02804e17982a3be33675e4d471e91ea374e65b70167abc09e31acb412802d", "realesrgan-ncnn-vulkan.exe"),
+    REALCUGAN("RealCUGAN (nihui)", "nihui/realcugan-ncnn-vulkan", "20220728", mapOf(
+        DesktopPlatform.WINDOWS to DesktopUpscaleAsset(
+            "realcugan-ncnn-vulkan-20220728-windows.zip",
+            "c6e08d46c11704b1e3a1ada9ddd591cb5005f52f132136c8633ba25def400e01", "realcugan-ncnn-vulkan.exe"),
+        DesktopPlatform.LINUX to DesktopUpscaleAsset(
+            "realcugan-ncnn-vulkan-20220728-ubuntu.zip",
+            "d745174bd04c0232c89d935b74799311008fda06bea4195f61be5f0f3cc087cb", "realcugan-ncnn-vulkan"),
+    )),
+    REALESRGAN("Real-ESRGAN (xinntao)", "xinntao/Real-ESRGAN", "v0.2.5.0", mapOf(
+        DesktopPlatform.WINDOWS to DesktopUpscaleAsset(
+            "realesrgan-ncnn-vulkan-20220424-windows.zip",
+            "abc02804e17982a3be33675e4d471e91ea374e65b70167abc09e31acb412802d", "realesrgan-ncnn-vulkan.exe"),
+        DesktopPlatform.LINUX to DesktopUpscaleAsset(
+            "realesrgan-ncnn-vulkan-20220424-ubuntu.zip",
+            "e5aa6eb131234b87c0c51f82b89390f5e3e642b7b70f2b9bbe95b6a285a40c96", "realesrgan-ncnn-vulkan"),
+    )),
+    ;
+
+    /** This platform's build, or null when the project publishes none for it. */
+    fun asset(platform: DesktopPlatform = DesktopPlatform.current): DesktopUpscaleAsset? = assets[platform]
+
+    /** The archives this tool knows, for diagnostics and the install dialog's file filter. */
+    val archives: List<String> get() = assets.values.map { it.archive }
 }
 
 /**
@@ -94,9 +116,13 @@ esources/upscale/<tool>), preferred over downloaded ones. */
     fun available(model: DesktopUpscaleModel): Boolean =
         model.tool?.let { executable(it) != null } ?: (shaderUpscaler?.invoke() != null)
 
-    fun executable(tool: DesktopUpscaleTool): Path? = listOfNotNull(bundled, tools)
-        .takeIf { DesktopPlatform.current.supportsNativeUpscaling }.orEmpty()
-        .map { it.resolve(tool.name.lowercase()).resolve(tool.executable) }.firstOrNull { Files.isRegularFile(it) }
+    fun executable(tool: DesktopUpscaleTool): Path? {
+        val asset = tool.asset() ?: return null
+        return listOfNotNull(bundled, tools)
+            .takeIf { DesktopPlatform.current.supportsNativeUpscaling }.orEmpty()
+            .map { it.resolve(tool.name.lowercase()).resolve(asset.executable) }
+            .firstOrNull { Files.isRegularFile(it) }
+    }
 
     suspend fun install(tool: DesktopUpscaleTool, progress: (Long, Long) -> Unit = { _, _ -> }): Path =
         installation.withLock {
@@ -119,20 +145,44 @@ esources/upscale/<tool>), preferred over downloaded ones. */
     }
 
     private fun unpackVerified(tool: DesktopUpscaleTool, archive: Path): Path {
-                val staging = Files.createTempDirectory(tools, ".unpack-")
-                try {
-                    val digest = sha256(archive)
-                    if (!digest.equals(tool.sha256, ignoreCase = true)) {
-                        throw DesktopUpscaleException(DesktopRuntimeStrings.text("runtime.upscale.archiveSha256", "%s: the downloaded archive failed the SHA-256 check", tool.title))
+        val asset = requireNotNull(tool.asset()) {
+            "${tool.title} has no build for ${DesktopPlatform.current.displayName}"
+        }
+        val staging = Files.createTempDirectory(tools, ".unpack-")
+        try {
+            val digest = sha256(archive)
+            if (!digest.equals(asset.sha256, ignoreCase = true)) {
+                throw DesktopUpscaleException(
+                    DesktopRuntimeStrings.text(
+                        "runtime.upscale.archiveSha256",
+                        "%s: the downloaded archive failed the SHA-256 check",
+                        tool.title,
+                    ),
+                )
+            }
+            unpack(archive, staging)
+            // Zip entries carry no POSIX mode, and the Linux programs are the point of their archive: mark it runnable.
+            if (!DesktopPlatform.current.supportsWindowsPackages) {
+                staging.resolve(asset.executable).takeIf(Files::isRegularFile)?.let { program ->
+                    runCatching {
+                        Files.setPosixFilePermissions(program, PosixFilePermissions.fromString("rwxr-xr-x"))
                     }
-                    unpack(archive, staging)
-                    val target = tools.resolve(tool.name.lowercase())
-                    deleteTree(target)
-                    Files.move(staging, target, StandardCopyOption.ATOMIC_MOVE)
-                    return executable(tool) ?: throw DesktopUpscaleException(DesktopRuntimeStrings.text("runtime.upscale.executableMissing", "%s: %s is missing from the archive", tool.title, tool.executable))
-                } finally {
-                    deleteTree(staging)
                 }
+            }
+            val target = tools.resolve(tool.name.lowercase())
+            deleteTree(target)
+            Files.move(staging, target, StandardCopyOption.ATOMIC_MOVE)
+            return executable(tool) ?: throw DesktopUpscaleException(
+                DesktopRuntimeStrings.text(
+                    "runtime.upscale.executableMissing",
+                    "%s: %s is missing from the archive",
+                    tool.title,
+                    asset.executable,
+                ),
+            )
+        } finally {
+            deleteTree(staging)
+        }
     }
 
     /**
@@ -204,6 +254,9 @@ esources/upscale/<tool>), preferred over downloaded ones. */
     }
 
     private fun download(tool: DesktopUpscaleTool, target: Path, progress: (Long, Long) -> Unit) {
+        val asset = requireNotNull(tool.asset()) {
+            "${tool.title} has no build for ${DesktopPlatform.current.displayName}"
+        }
         val client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20))
             .followRedirects(HttpClient.Redirect.NORMAL).build()
         val failures = mutableListOf<String>()
@@ -214,9 +267,9 @@ esources/upscale/<tool>), preferred over downloaded ones. */
                     .timeout(Duration.ofSeconds(30)).header("Accept", "application/vnd.github+json").GET().build(),
                     HttpResponse.BodyHandlers.ofString())
                 Json.parseToJsonElement(release.body()).jsonObject["assets"]!!.jsonArray
-                    .map { it.jsonObject }.first { it["name"]!!.jsonPrimitive.content == tool.asset }["url"]!!.jsonPrimitive.content
+                    .map { it.jsonObject }.first { it["name"]!!.jsonPrimitive.content == asset.archive }["url"]!!.jsonPrimitive.content
             }.onSuccess { add(it to "application/octet-stream") }.onFailure { failures += "API: ${it.message}" }
-            add(mirror("https://github.com/${tool.repository}/releases/download/${tool.tag}/${tool.asset}") to "*/*")
+            add(mirror("https://github.com/${tool.repository}/releases/download/${tool.tag}/${asset.archive}") to "*/*")
         }
         for ((url, accept) in candidates) {
             try {

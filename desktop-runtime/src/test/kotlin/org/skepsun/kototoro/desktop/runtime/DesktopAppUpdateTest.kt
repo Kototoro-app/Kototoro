@@ -154,6 +154,7 @@ class DesktopAppUpdateTest {
     }
 
     @Test
+    @org.junit.jupiter.api.condition.EnabledOnOs(org.junit.jupiter.api.condition.OS.WINDOWS)
     fun `an MSI registration is told apart from an unpacked image`() {
         val output = """
             |HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\{8F1A-2E44}

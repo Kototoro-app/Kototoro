@@ -260,8 +260,9 @@ private fun SuperResolutionOptions(controller: DesktopController, settings: Desk
     val installed = remember(model, enabled) { controller.session.superResolution.available(model) }
     val tool = model.tool
     if (tool == null) {
-        Text(if (installed) desktopText("reader.upscaleAnime4kReady")
-            else desktopText("reader.upscaleAnime4kMissing"), fontSize = 12.sp,
+        val missing = if (org.skepsun.kototoro.desktop.player.MpvLocator.packagedByDistribution)
+            desktopText("reader.upscaleAnime4kMissingLinux") else desktopText("reader.upscaleAnime4kMissing")
+        Text(if (installed) desktopText("reader.upscaleAnime4kReady") else missing, fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f))
     } else if (!org.skepsun.kototoro.desktop.runtime.DesktopPlatform.current.supportsNativeUpscaling) {
         Text(desktopText("reader.upscalePlatformUnavailable"), fontSize = 12.sp)
@@ -276,7 +277,9 @@ private fun SuperResolutionOptions(controller: DesktopController, settings: Desk
             }
             OutlinedButton({
                 val chooser = javax.swing.JFileChooser().apply {
-                    fileFilter = javax.swing.filechooser.FileNameExtensionFilter(tool.asset, "zip")
+                    fileFilter = javax.swing.filechooser.FileNameExtensionFilter(
+                        tool.archives.joinToString(), "zip",
+                    )
                 }
                 if (chooser.showOpenDialog(null) == javax.swing.JFileChooser.APPROVE_OPTION) {
                     controller.installUpscalerArchive(tool, chooser.selectedFile.toPath())

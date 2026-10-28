@@ -69,7 +69,7 @@ class MpvPlayer(
     options: Map<String, String> = emptyMap(),
 ) : Closeable {
     private val native = MpvNative.load(library)
-    private val handle: Pointer = native.mpv_create() ?: throw MpvException("libmpv could not create a player")
+    private val handle: Pointer = native.mpv_create() ?: throw MpvException(createFailureReason())
     private val mutableState = MutableStateFlow(MpvState())
     val state: StateFlow<MpvState> = mutableState.asStateFlow()
     @Volatile private var closed = false
@@ -122,8 +122,15 @@ class MpvPlayer(
         pending = stream
         mutableState.value = MpvState(loading = true, volume = mutableState.value.volume,
             muted = mutableState.value.muted, speed = mutableState.value.speed)
-        val start = if (stream.startSeconds > 0) "start=${"%.3f".format(java.util.Locale.ROOT, stream.startSeconds)}" else ""
-        command("loadfile", stream.url, "replace", "-1", start)
+        val start = if (stream.startSeconds > 0) "%.3f".format(java.util.Locale.ROOT, stream.startSeconds) else ""
+        if (loadfileTakesOptions) {
+            command("loadfile", stream.url, "replace", "-1", if (start.isEmpty()) "" else "start=$start")
+        } else {
+            // mpv 0.37 and older take only `loadfile <url> <flags>`: an extra argument is an error, not ignored, so
+            // the start position travels as the playback option instead and the file is opened by the next command.
+            setProperty("start", start.ifEmpty { "0" })
+            command("loadfile", stream.url, "replace")
+        }
         stream.title?.let { setProperty("force-media-title", it) }
     }
 
@@ -162,6 +169,15 @@ class MpvPlayer(
         check(native.mpv_command(handle, arrayOf(*arguments, null)), arguments.first())
     }
 
+    /**
+     * Whether `loadfile` accepts the `<index>` and `<options>` arguments. mpv added them in 0.38; the version string is
+     * the only portable way to tell, since the client API version (2.2 here) does not track the release.
+     */
+    private val loadfileTakesOptions: Boolean by lazy {
+        val version = Regex("(\\d+)\\.(\\d+)").find(property("mpv-version").orEmpty())?.destructured
+        version == null || version.component1().toInt() > 0 || version.component2().toInt() >= 38
+    }
+
     private fun eventLoop() {
         while (!closed) {
             val event = native.mpv_wait_event(handle, 0.5)
@@ -194,6 +210,7 @@ class MpvPlayer(
                 command("audio-add", track.url, "auto", track.title ?: track.language, track.language)
             }
         }
+        if (!loadfileTakesOptions) runCatching { setProperty("start", "0") }
         mutableState.update { it.copy(loaded = true, loading = false, error = null) }
         sample()
     }
@@ -257,4 +274,12 @@ class MpvPlayer(
         sampler.join(2000)
         native.mpv_terminate_destroy(handle)
     }
+}
+
+/** Names the usual reason a fresh player cannot be created, so the log is not just "it failed". */
+private fun createFailureReason(): String {
+    MpvLocale.failure?.let { return "libmpv could not create a player: $it" }
+    val locale = MpvLocale.current
+    return if (locale == null || MpvLocale.isC) "libmpv could not create a player"
+    else "libmpv could not create a player: mpv needs the C numeric locale and LC_NUMERIC is $locale"
 }

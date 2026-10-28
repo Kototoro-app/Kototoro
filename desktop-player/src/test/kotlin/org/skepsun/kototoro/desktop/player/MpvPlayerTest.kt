@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpServer
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assumptions.assumeFalse
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -14,8 +15,9 @@ import java.nio.file.Path
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Real libmpv without any window or sound device (opt-in: `-PlibmpvDirectory=<dir with libmpv-2.dll>`). Media is made
- * on the spot from ffmpeg's lavfi test source, so nothing binary is committed and no network is used.
+ * Real libmpv without any window (opt-in: `-PlibmpvDirectory=<dir with libmpv-2.dll>`). Media is made on the spot
+ * from ffmpeg's lavfi test source, so nothing binary is committed and no network is used. Playback is paced by audio
+ * (a video-only file has no clock without a window) and the Anime4K case needs a display for mpv's gpu filter.
  */
 class MpvPlayerTest {
     @TempDir lateinit var directory: Path
@@ -48,15 +50,39 @@ class MpvPlayerTest {
         return output
     }
 
+    /**
+     * A short WAV encoded by libmpv itself. The player has no window and no sound device, so a video-only file has no
+     * clock to pace against and mpv sits at 0:00 — audio (played into a null device) is what keeps playback moving.
+     */
+    private fun audioClip(library: Path, seconds: Int): Path {
+        val output = directory.resolve("clip.wav")
+        MpvPlayer(library, options = mapOf("o" to output.toString(), "of" to "wav", "oac" to "pcm_s16le",
+            "keep-open" to "no", "ao" to "null")).use { encoder ->
+            encoder.load(MpvStream("av://lavfi:sine=frequency=440:duration=$seconds"))
+            waitFor(message = { "encoding did not finish: ${encoder.state.value}" }) {
+                Files.isRegularFile(output) && encoder.property("idle-active") == "yes"
+            }
+        }
+        assertTrue(Files.size(output) > 1000)
+        return output
+    }
+
     @Test
     fun `a generated stream loads plays pauses and seeks`() {
-        MpvPlayer(library()).use { player ->
-            player.load(MpvStream("av://lavfi:testsrc=duration=30:size=160x120:rate=25", title = "测试"))
+        val library = library()
+        // Played from a file this test encodes through libmpv itself: the live lavfi source is not seekable, and
+        // libmpv 0.37 answers a seek on it by restarting the demuxer, which lands at the end of the stream.
+        val clip = audioClip(library, 30)
+        MpvPlayer(library).use { player ->
+            player.load(MpvStream(clip.toString(), title = "测试"))
             waitFor(message = { "not loaded: ${player.state.value}" }) { player.state.value.loaded }
             waitFor(message = { "no duration: ${player.state.value}" }) { player.state.value.duration > 29 }
             waitFor(message = { "not playing: ${player.state.value}" }) { player.state.value.position > 0.3 }
             player.setPaused(true)
             waitFor(message = { "not paused" }) { player.state.value.paused }
+            val held = player.state.value.position
+            Thread.sleep(400)
+            assertEquals(held, player.state.value.position, .05, "paused playback kept moving")
             player.seek(20.0)
             waitFor(message = { "seek ignored: ${player.state.value}" }) { player.state.value.position in 19.5..21.0 }
             player.setSpeed(1.5)
@@ -119,14 +145,19 @@ class MpvPlayerTest {
         MpvPlayer(library()).use { player ->
             val quality = shaders.files(MpvEnhancement(MpvEnhancementMode.ANIME4K_QUALITY))
             player.setShaders(quality)
-            assertEquals(quality.map { it.toAbsolutePath().toString() },
-                player.property("glsl-shaders").orEmpty().split(java.io.File.pathSeparator))
+            // A path list is written with the platform separator and read back comma separated.
+            val readBack = player.property("glsl-shaders").orEmpty()
+                .split(",", java.io.File.pathSeparator).filter(String::isNotEmpty)
+            assertEquals(quality.map { it.toAbsolutePath().toString() }, readBack)
             player.setShaders(emptyList())
             assertEquals("", player.property("glsl-shaders"))
         }
     }
     @Test
     fun `Anime4K image presets render offscreen at their scale and change the picture`() {
+        // The preset encodes through mpv's gpu filter, which creates a real GL/Vulkan context: a display is required
+        // (Xvfb is enough), and without one mpv writes no frame at all.
+        assumeFalse(java.awt.GraphicsEnvironment.isHeadless(), "no display for mpv's gpu filter")
         val library = library()
         val input = directory.resolve("page.png")
         val source = java.awt.image.BufferedImage(120, 180, java.awt.image.BufferedImage.TYPE_INT_RGB)

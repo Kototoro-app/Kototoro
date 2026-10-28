@@ -84,6 +84,7 @@ export default defineConfig({
           { text: "Architecture Roadmap", link: "/architecture/architecture-roadmap" },
           { text: "KMP / iOS Plan", link: "/architecture/kmp-ios-plan-2026-10" },
           { text: "Windows Feature Parity", link: "/architecture/windows-feature-parity-2026-10" },
+          { text: "Linux Native Capabilities", link: "/architecture/desktop-linux-native-2026-10" },
           { text: "iOS Feature Parity", link: "/architecture/ios-android-feature-parity-2026-10" },
           { text: "Reader Scene Closure Plan (2026-09)", link: "/architecture/reader-scene-closure-plan-2026-09" },
           { text: "Favourites Library Plan", link: "/architecture/favourites-komikku-alignment-implementation-plan-2026-09" },

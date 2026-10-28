@@ -431,9 +431,11 @@ private fun MissingLibrary(controller: DesktopController, video: DesktopVideo, s
                 Text(if (MpvLocator.supportsEmbeddedPlayback) desktopText("video.libmpvMissing")
                     else desktopText("video.externalRequired"),
                     color = PlayerText, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                Text(if (MpvLocator.supportsEmbeddedPlayback) desktopText("video.libmpvHint")
-                    else desktopText("video.externalHint"),
-                    color = PlayerMuted)
+                Text(if (MpvLocator.supportsEmbeddedPlayback) {
+                    // A Linux distribution packages libmpv; telling those users to fetch a Windows DLL would be wrong.
+                    if (MpvLocator.packagedByDistribution) desktopText("video.libmpvHintLinux")
+                    else desktopText("video.libmpvHint")
+                } else desktopText("video.externalHint"), color = PlayerMuted)
                 if (MpvLocator.supportsEmbeddedPlayback) Text(folder.toString(), color = PlayerText)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (MpvLocator.supportsEmbeddedPlayback) {

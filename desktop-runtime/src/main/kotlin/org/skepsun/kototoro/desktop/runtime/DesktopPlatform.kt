@@ -8,7 +8,8 @@ enum class DesktopPlatform(val displayName: String) {
     OTHER("Desktop");
 
     val supportsWindowsPackages: Boolean get() = this == WINDOWS
-    val supportsNativeUpscaling: Boolean get() = this == WINDOWS
+    /** ncnn-vulkan ships Windows and Linux programs; the shader path needs libmpv and is checked at runtime. */
+    val supportsNativeUpscaling: Boolean get() = this == WINDOWS || this == LINUX
 
     companion object {
         val current: DesktopPlatform = detect(System.getProperty("os.name", ""))

@@ -37,13 +37,13 @@ class DesktopSuperResolutionTest {
         }
     }
 
-    /** Opt-in: `-PncnnDirectory=<dir with the two official windows zips>`; needs a Vulkan GPU. */
+    /** Opt-in: `-PncnnDirectory=<dir with this platform's two official zips>`; needs a Vulkan GPU. */
     @Test
     fun `the official programs upscale a page by the model's factor and cache the result`() = runBlocking<Unit> {
         val directory = System.getProperty("kototoro.ncnn.dir")
         assumeTrue(directory != null, "no -PncnnDirectory")
         val upscale = DesktopSuperResolution(root)
-        for (tool in DesktopUpscaleTool.entries) upscale.installArchive(tool, Path.of(directory!!, tool.asset))
+        for (tool in DesktopUpscaleTool.entries) upscale.installArchive(tool, Path.of(directory!!, requireNotNull(tool.asset()).archive))
         val input = page(root.resolve("page-without-extension"), 120, 180)
         for ((model, noise) in listOf(DesktopUpscaleModel.REALCUGAN_2X to 1, DesktopUpscaleModel.REALESRGAN_4X_ANIME to -1,
             DesktopUpscaleModel.REALESR_ANIMEVIDEO_2X to -1)) {
