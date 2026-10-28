@@ -59,6 +59,11 @@ class DesktopRepositoriesTest {
         }
     }
 
+    private companion object {
+        // 2009-01-01, inside the DOS timestamp range both zip headers can express.
+        const val FIXTURE_TIME = 1230768000000L
+    }
+
     @TempDir lateinit var directory: Path
     private val index = ExtensionStoreIndex("测试仓库", "FIX", "key", ExtensionStoreIndex.Contact("https://fixture.invalid"),
         ExtensionStoreIndex.ExtensionList(listOf(extension())))
@@ -356,16 +361,18 @@ class DesktopRepositoriesTest {
     }
 
     // Data-only archive for the inspector; actual extension construction is exercised by source-host/UI fixtures.
+    // Entries otherwise default to the current time, which makes two archives with the same content differ byte for
+    // byte: the download/import comparison below then fails whenever the two builds land in different seconds.
     private fun jar(pkg: String = "fixture.extension"): ByteArray = ByteArrayOutputStream().also { output ->
         JarOutputStream(output).use { jar ->
-            jar.putNextEntry(JarEntry("AndroidManifest.xml"))
+            jar.putNextEntry(JarEntry("AndroidManifest.xml").apply { time = FIXTURE_TIME })
             jar.write("""<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$pkg"
               android:versionCode="1" android:versionName="1.6.1"><application android:label="源">
               <meta-data android:name="tachiyomix.extensionLib" android:value="1.6"/>
               <meta-data android:name="tachiyomi.extension.class" android:value=".Source"/>
               <meta-data android:name="tachiyomi.extension.nsfw" android:value="0"/>
               </application></manifest>""".toByteArray()); jar.closeEntry()
-            jar.putNextEntry(JarEntry("${pkg.replace('.', '/')}/Source.class"))
+            jar.putNextEntry(JarEntry("${pkg.replace('.', '/')}/Source.class").apply { time = FIXTURE_TIME })
             jar.write(byteArrayOf(0xca.toByte(), 0xfe.toByte(), 0xba.toByte(), 0xbe.toByte(), 0, 0, 0, 52))
             jar.closeEntry()
         }

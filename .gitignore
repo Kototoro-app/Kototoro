@@ -40,6 +40,7 @@ app/keystore/
 !desktop-app/run-linux.sh
 !desktop-app/smoke-linux.sh
 !.github/scripts/publish_gitcode_release.sh
+!.github/scripts/prepare-linux-ci.sh
 *.log
 __pycache__/
 node_modules/
