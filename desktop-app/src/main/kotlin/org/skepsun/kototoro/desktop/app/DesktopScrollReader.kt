@@ -82,7 +82,7 @@ internal fun DesktopScrollReader(controller: DesktopController, state: DesktopAp
         val boundaryEvent by rememberUpdatedState<(Boolean) -> Boolean> { forward ->
             val snapshot = currentState
             if (closing || !restored || boundaryPending || snapshot.busy || snapshot.error != null ||
-                !snapshot.readerScrollReady || !snapshot.readerSettings.automaticChapter ||
+                !snapshot.readerScrollReady ||
                 snapshot.adjacentChapter(forward) == null) false else {
                 boundaryPending = true
                 scope.launch {

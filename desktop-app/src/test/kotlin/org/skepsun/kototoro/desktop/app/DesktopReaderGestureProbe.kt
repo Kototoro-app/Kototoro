@@ -190,8 +190,6 @@ internal object DesktopReaderGestureProbe {
                 // Near the chapter's end the next chapter is prepared, so reading on opens it without waiting.
                 val chapters = controller.state.value.content!!.chapters!!
                 waitUntil(timeoutMillis = 15_000) { controller.preloadedChapterId == chapters[1].id }
-                runBlocking { controller.readerSettings(controller.state.value.readerSettings.copy(automaticChapter = true)).join() }
-                idle()
                 onNodeWithTag("reader-surface").performKeyInput { pressKey(androidx.compose.ui.input.key.Key.DirectionDown) }
                 waitUntil(timeoutMillis = 15_000) { controller.state.value.chapter?.id == chapters[1].id }; idle()
                 check(controller.preloadedChapterId == null)

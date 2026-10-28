@@ -108,10 +108,6 @@ internal fun DesktopReaderSettingsPage(controller: DesktopController, state: Des
         }
         SettingsSectionHeader(desktopText("reader.settingsTurning"))
         SettingsGroup {
-            SettingsSwitchRow(desktopText("reader.autoAcrossChapters"), null, settings.automaticChapter, active,
-                { controller.readerSettings(settings.copy(automaticChapter = it)) },
-                testTag = "reader-setting-auto-chapter")
-            SettingsRowDivider()
             ReaderAutoScrollSpeedControl(settings.autoScrollSpeed,
                 { controller.readerSettings(settings.copy(autoScrollSpeed = it)) },
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),

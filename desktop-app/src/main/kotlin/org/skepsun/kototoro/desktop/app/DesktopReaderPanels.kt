@@ -84,11 +84,6 @@ internal fun DesktopReaderSidePanel(controller: DesktopController, state: Deskto
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 val settings = state.readerSettings
                 // Android keeps these in its reader settings, opened from the options panel's settings button.
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(desktopText("reader.autoAcrossChapters"), modifier = Modifier.weight(1f))
-                    Switch(settings.automaticChapter, { controller.readerSettings(settings.copy(automaticChapter = it)) },
-                        enabled = enabled, modifier = Modifier.testTag("reader-auto-chapter"))
-                }
                 OutlinedButton({ controller.reloadPage() }, enabled = enabled,
                     modifier = Modifier.testTag("reader-reload")) { Text(desktopText("reader.reload")) }
                 HorizontalDivider()

@@ -30,7 +30,6 @@ data class DesktopReaderSettings(
     val mode: DesktopReaderMode = DesktopReaderMode.SINGLE,
     val rightToLeft: Boolean = false,
     val fitMode: ZoomMode = ZoomMode.FIT_CENTER,
-    val automaticChapter: Boolean = false,
     /** Super-resolution of pages (RealCUGAN / Real-ESRGAN), as in Android's reader settings. */
     val upscale: org.skepsun.kototoro.desktop.runtime.DesktopUpscaleSetting = org.skepsun.kototoro.desktop.runtime.DesktopUpscaleSetting(),
     /** Android's page-turn animation (none / slide / cover / paper curl), same default. */

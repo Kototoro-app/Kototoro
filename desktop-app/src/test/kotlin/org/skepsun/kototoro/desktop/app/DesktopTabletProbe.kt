@@ -657,8 +657,6 @@ internal object DesktopTabletProbe {
                 check(controller.state.value.readerSettings.background == DesktopReaderBackground.BLACK)
                 onNodeWithTag("reader-setting-page-numbers").performScrollTo().performClick(); idle()
                 check(controller.state.value.readerSettings.pageNumbers)
-                onNodeWithTag("reader-setting-auto-chapter").performScrollTo().performClick(); idle()
-                check(controller.state.value.readerSettings.automaticChapter)
                 onNodeWithTag("reader-setting-animation").performScrollTo().performClick(); idle()
                 onNodeWithTag("reader-animation-option:NONE").performClick(); idle()
                 check(controller.state.value.readerSettings.animation ==

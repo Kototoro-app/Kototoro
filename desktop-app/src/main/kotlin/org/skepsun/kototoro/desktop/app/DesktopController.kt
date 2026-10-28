@@ -3201,7 +3201,8 @@ class DesktopController(
             !boundary && it in snapshot.pages.indices
         } else readerLayout(snapshot).turnIndex(forward)
         if (target != null) pageOnIo(target)
-        else if (boundary && snapshot.readerSettings.automaticChapter) {
+        // Android's reader always reads on into the adjacent chapter at a boundary; there is no switch for it.
+        else if (boundary) {
             snapshot.adjacentChapter(forward)?.let { readOnIo(it, startAtEnd = !forward) }
         }
     }
@@ -3213,7 +3214,7 @@ class DesktopController(
     internal fun continuousChapter(forward: Boolean, chapterId: Long, navigation: Long) = action {
         val snapshot = state.value
         if (snapshot.screen != DesktopScreen.READER || snapshot.chapter?.id != chapterId ||
-            snapshot.readerNavigation != navigation || !snapshot.readerSettings.automaticChapter ||
+            snapshot.readerNavigation != navigation ||
             !snapshot.readerSettings.mode.isContinuous || !snapshot.readerScrollReady) return@action
         val boundary = if (forward) snapshot.readerAtEnd else snapshot.pageIndex == 0 && snapshot.readerScroll == 0f
         if (boundary) snapshot.adjacentChapter(forward)?.let { readOnIo(it, startAtEnd = !forward) }
@@ -3277,7 +3278,6 @@ class DesktopController(
             "mode" to SourcePreferenceValue.Text(settings.mode.name),
             "right_to_left" to SourcePreferenceValue.Toggle(settings.rightToLeft),
             "fit_mode" to SourcePreferenceValue.Text(settings.fitMode.name),
-            "automatic_chapter" to SourcePreferenceValue.Toggle(settings.automaticChapter),
             "upscale_model" to SourcePreferenceValue.Text(settings.upscale.model?.name ?: ""),
             "upscale_noise" to SourcePreferenceValue.Integer(settings.upscale.noise),
             "animation" to SourcePreferenceValue.Text(settings.animation.name),
@@ -3312,7 +3312,7 @@ class DesktopController(
         mutableState.update { it.copy(readerSettings = settings,
             readerImages = if (reload) emptyMap() else it.readerImages) }
         if (state.value.screen == DesktopScreen.READER &&
-            previous.copy(automaticChapter = settings.automaticChapter, animation = settings.animation,
+            previous.copy(animation = settings.animation,
                 colorFilter = settings.colorFilter, background = settings.background, pageNumbers = settings.pageNumbers,
                 autoScrollSpeed = settings.autoScrollSpeed, tapGrid = settings.tapGrid) != settings) {
             pageOnIo(state.value.pageIndex)
@@ -3334,7 +3334,6 @@ class DesktopController(
             DesktopReaderMode.entries.firstOrNull { it.name == mode } ?: DesktopReaderMode.SINGLE,
             (snapshot["right_to_left"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             ZoomMode.entries.firstOrNull { it.name == fitMode } ?: ZoomMode.FIT_CENTER,
-            (snapshot["automatic_chapter"] as? SourcePreferenceValue.Toggle)?.value ?: false,
             org.skepsun.kototoro.desktop.runtime.DesktopUpscaleSetting(
                 org.skepsun.kototoro.desktop.runtime.DesktopUpscaleModel.entries.firstOrNull {
                     it.name == (snapshot["upscale_model"] as? SourcePreferenceValue.Text)?.value
