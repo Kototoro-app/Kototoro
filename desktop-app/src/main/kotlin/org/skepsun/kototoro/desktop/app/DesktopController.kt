@@ -110,6 +110,37 @@ enum class DesktopScreen {
     DOWNLOAD_SETTINGS, NAV_CONFIG, DATA_CLEANUP, SERVICES, SETUP_WIZARD, SOURCE_TEST, BOOKMARKS, UPDATED, SUGGESTIONS,
 }
 
+/**
+ * Android's settings sub-pages and the "more" destinations: their header carries the back arrow of Android's top bar.
+ * The value is the test tag each page's own back button used to have, so the UI probes keep finding it.
+ */
+internal val DesktopScreen.settingsBackTag: String?
+    get() = when (this) {
+        DesktopScreen.SERVICES -> "services-back"
+        DesktopScreen.READER_SETTINGS -> "reader-settings-back"
+        DesktopScreen.SOURCE_SETTINGS -> "source-settings-back"
+        DesktopScreen.STORAGE -> "storage-settings-back"
+        DesktopScreen.PLAYBACK_SETTINGS -> "playback-settings-back"
+        DesktopScreen.DOWNLOAD_SETTINGS -> "downloads-settings-back"
+        DesktopScreen.NAV_CONFIG -> "nav-config-back"
+        DesktopScreen.CHANGELOG -> "changelog-back"
+        DesktopScreen.CRASH_LOGS -> "crash-logs-back"
+        DesktopScreen.PROXY_SETTINGS -> "proxy-settings-back"
+        DesktopScreen.DATA_CLEANUP -> "data-cleanup-back"
+        DesktopScreen.REPLACE_RULES -> "replace-rules-back"
+        DesktopScreen.DICTIONARY_RULES -> "dictionary-rules-back"
+        DesktopScreen.TAG_BLACKLIST -> "tag-blacklist-back"
+        DesktopScreen.READING_STATS -> "stats-back"
+        DesktopScreen.SOURCE_TEST -> "source-test-back"
+        DesktopScreen.EXTENSIONS -> "extensions-back"
+        DesktopScreen.BACKUPS -> "backups-back"
+        DesktopScreen.DOWNLOADS -> "downloads-back"
+        DesktopScreen.RECOMMENDATIONS -> "recommendations-back"
+        DesktopScreen.SETUP_WIZARD -> "setup-wizard-back"
+        DesktopScreen.BROWSER -> "browser-back"
+        else -> null
+    }
+
 /** The three screens that own an open chapter, where Android's reading statistics are counted. */
 internal val DesktopScreen.isReading: Boolean
     get() = this == DesktopScreen.READER || this == DesktopScreen.NOVEL || this == DesktopScreen.VIDEO
@@ -3607,6 +3638,17 @@ class DesktopController(
     }
 
     fun browser() = navigate { mutableState.update { it.copy(screen = DesktopScreen.BROWSER) } }
+
+    /** The header's back arrow on a settings sub-page: to the page it was opened from (see [settingsBackTag]). */
+    fun settingsBack(): Job = when (state.value.screen) {
+        DesktopScreen.PROXY_SETTINGS, DesktopScreen.DATA_CLEANUP -> backToStorage()
+        DesktopScreen.REPLACE_RULES -> backFromReplaceRules()
+        DesktopScreen.DICTIONARY_RULES -> backFromDictionaryRules()
+        DesktopScreen.TAG_BLACKLIST, DesktopScreen.SETUP_WIZARD -> showSourceSettings()
+        DesktopScreen.READING_STATS, DesktopScreen.RECOMMENDATIONS -> showServices()
+        DesktopScreen.SOURCE_TEST -> showExtensions()
+        else -> more()
+    }
 
     /** Android's "captcha required" notification, tapped: verify [site] now, in the window if it has to be. */
     fun verifyBlockedSite(site: String) = action {

@@ -197,11 +197,11 @@ internal object DesktopStorageProbe {
                 check((armed as? SourcePreferenceValue.Toggle)?.value == true) { "stored: $armed" }
                 snapshot("data-cleanup-chapters")
 
-                onNodeWithTag("data-cleanup-back").performScrollTo().performClick()
+                onNodeWithTag("data-cleanup-back").performClick()
                 idle()
                 check(controller.state.value.screen == DesktopScreen.STORAGE) { "the cleanup page returns to the hub" }
 
-                onNodeWithTag("storage-settings-back").performScrollTo().performClick()
+                onNodeWithTag("storage-settings-back").performClick()
                 idle()
                 check(controller.state.value.screen == DesktopScreen.MORE) { "the hub's back returns to more" }
             }

@@ -29,8 +29,6 @@ internal fun DesktopServicesPage(controller: DesktopController, state: DesktopAp
     val settings = state.services
     val active = !state.busy
     Column(Modifier.widthIn(max = 760.dp).fillMaxWidth()) {
-        OutlinedButton({ controller.more() }, enabled = active,
-            modifier = Modifier.testTag("services-back")) { Text(desktopText("common.back")) }
         ServicesSettingsContent(
             state = ServicesSettingsUiState(
                 suggestionsEnabled = state.suggestionSettings.enabled,

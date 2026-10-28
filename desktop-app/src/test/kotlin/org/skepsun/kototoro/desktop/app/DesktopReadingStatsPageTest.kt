@@ -56,7 +56,7 @@ class DesktopReadingStatsPageTest {
         setContent {
             DesktopTheme {
                 DesktopReadingStatsContent(stats = null, period = ReadingStatsPeriod.WEEK,
-                    kind = StatsContentKind.ALL, active = true, covers = null, onBack = {}, onPeriod = {},
+                    kind = StatsContentKind.ALL, active = true, covers = null, onPeriod = {},
                     onKind = {}, onWork = {}, onClear = {})
             }
         }
@@ -71,7 +71,7 @@ class DesktopReadingStatsPageTest {
         setContent {
             DesktopTheme {
                 DesktopReadingStatsContent(stats = stats(), period = ReadingStatsPeriod.WEEK,
-                    kind = StatsContentKind.ALL, active = true, covers = null, onBack = {}, onPeriod = {},
+                    kind = StatsContentKind.ALL, active = true, covers = null, onPeriod = {},
                     onKind = {}, onWork = { opened += it.id }, onClear = {})
             }
         }
@@ -97,7 +97,7 @@ class DesktopReadingStatsPageTest {
         setContent {
             DesktopTheme {
                 DesktopReadingStatsContent(stats = stats(), period = period, kind = StatsContentKind.ALL,
-                    active = true, covers = null, onBack = {}, onPeriod = { period = it; picked += it },
+                    active = true, covers = null, onPeriod = { period = it; picked += it },
                     onKind = {}, onWork = {}, onClear = {})
             }
         }
@@ -118,7 +118,7 @@ class DesktopReadingStatsPageTest {
         setContent {
             DesktopTheme {
                 DesktopReadingStatsContent(stats = stats(), period = ReadingStatsPeriod.WEEK, kind = kind,
-                    active = true, covers = null, onBack = {}, onPeriod = {},
+                    active = true, covers = null, onPeriod = {},
                     onKind = { kind = it; picked += it }, onWork = {}, onClear = {})
             }
         }
@@ -137,7 +137,7 @@ class DesktopReadingStatsPageTest {
         setContent {
             DesktopTheme {
                 DesktopReadingStatsContent(stats = stats(), period = ReadingStatsPeriod.WEEK,
-                    kind = StatsContentKind.ALL, active = true, covers = null, onBack = {}, onPeriod = {},
+                    kind = StatsContentKind.ALL, active = true, covers = null, onPeriod = {},
                     onKind = {}, onWork = {}, onClear = { cleared++ })
             }
         }

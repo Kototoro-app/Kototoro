@@ -26,8 +26,6 @@ internal fun DesktopPlaybackSettingsPage(controller: DesktopController, state: D
     val settings = state.videoSettings
     val active = !state.busy
     Column(Modifier.widthIn(max = 760.dp).fillMaxWidth()) {
-        OutlinedButton({ controller.more() }, enabled = active,
-            modifier = Modifier.testTag("playback-settings-back")) { Text(desktopText("common.back")) }
         PlaybackSettingsContent(
             state = PlaybackSettingsUiState(
                 background = settings.background.name,

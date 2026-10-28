@@ -39,8 +39,6 @@ internal fun DesktopReplaceRulesPage(controller: DesktopController, state: Deskt
         Modifier.widthIn(max = 820.dp).fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        OutlinedButton({ controller.backFromReplaceRules() }, enabled = active,
-            modifier = Modifier.testTag("replace-rules-back")) { Text(desktopText("common.back")) }
         ReplaceRulesContent(
             rules = rules?.map(ReplaceRule::toUiModel),
             onAdd = { controller.openReplaceRuleEditor(null) },

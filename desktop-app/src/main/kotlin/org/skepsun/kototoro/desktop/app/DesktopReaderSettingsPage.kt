@@ -54,9 +54,6 @@ internal fun DesktopReaderSettingsPage(controller: DesktopController, state: Des
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        OutlinedButton({ controller.more() }, enabled = active, modifier = Modifier.testTag("reader-settings-back")) {
-            Text(desktopText("common.back"))
-        }
         ReaderModeSettingsContent(
             state = ReaderModeSettingsUiState(settings.mode.name, settings.readerModeDetection, settings.background.name),
             modeOptions = DesktopReaderMode.entries.map { PreferenceChoice(it.name, modeTitle(it)) },

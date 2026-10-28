@@ -42,14 +42,6 @@ internal fun DesktopDownloadSettingsPage(controller: DesktopController, state: D
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton({ controller.more() }, enabled = active,
-                modifier = Modifier.testTag("downloads-settings-back")) {
-                Text(desktopText("common.back"))
-            }
-            Text(AndroidStrings["downloads"], style = MaterialTheme.typography.headlineSmall)
-        }
         DownloadSpeedSettingsContent(
             state = DownloadSpeedSettingsUiState(
                 threads = settings.threads,

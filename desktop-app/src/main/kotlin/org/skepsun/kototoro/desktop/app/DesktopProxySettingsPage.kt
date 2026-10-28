@@ -26,8 +26,6 @@ internal fun DesktopProxySettingsPage(controller: DesktopController, state: Desk
     val settings = state.proxySettings
     val test = state.proxyTest
     Column(Modifier.widthIn(max = 760.dp).fillMaxWidth()) {
-        OutlinedButton({ controller.backToStorage() }, enabled = !state.busy,
-            modifier = Modifier.testTag("proxy-settings-back")) { Text(desktopText("common.back")) }
         ProxySettingsContent(
             state = ProxySettingsUiState(ProxyMode.valueOf(settings.type.name), settings.address, settings.port,
                 settings.login, settings.password, settings.isConfigured, test.running, test.message),

@@ -103,11 +103,6 @@ internal fun DesktopDataCleanupPage(controller: DesktopController, state: Deskto
     DataCleanupContent(
         sections = sections,
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth(),
-        header = {
-            OutlinedButton({ controller.backToStorage() }, modifier = Modifier.testTag("data-cleanup-back")) {
-                Text(AndroidStrings["storage_and_network"])
-            }
-        },
     )
     if (confirmFeed) FeedClearDialog(controller, active) { confirmFeed = false }
     if (confirmReadChapters) {

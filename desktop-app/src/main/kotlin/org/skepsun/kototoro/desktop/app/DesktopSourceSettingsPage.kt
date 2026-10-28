@@ -44,8 +44,6 @@ internal fun DesktopSourceSettingsPage(controller: DesktopController, state: Des
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        OutlinedButton({ controller.more() }, enabled = active,
-            modifier = Modifier.testTag("source-settings-back")) { Text(desktopText("common.back")) }
         SourcesSettingsContent(
             state = SourcesSettingsContentState(
                 sortOrder = settings.sort.name,

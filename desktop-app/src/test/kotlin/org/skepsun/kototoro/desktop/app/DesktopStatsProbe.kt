@@ -164,7 +164,7 @@ internal object DesktopStatsProbe {
                 snapshot("stats-cleared")
                 check(runBlocking { session.library.history() }.isNotEmpty()) { "clearing statistics keeps the history" }
 
-                onNodeWithTag("stats-back").performScrollTo().performClick()
+                onNodeWithTag("stats-back").performClick()
                 idle()
                 // The statistics entry lives on the 服务 page, so its back button returns there.
                 check(controller.state.value.screen == DesktopScreen.SERVICES)

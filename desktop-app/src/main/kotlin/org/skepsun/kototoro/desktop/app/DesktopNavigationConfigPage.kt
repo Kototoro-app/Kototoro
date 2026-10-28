@@ -25,9 +25,6 @@ internal fun DesktopNavigationConfigPage(controller: DesktopController, state: D
     val settings by controller.navSettings.collectAsState()
     val active = !state.busy
     Column(Modifier.widthIn(max = 760.dp).fillMaxWidth()) {
-        OutlinedButton({ controller.more() }, enabled = active, modifier = Modifier.testTag("nav-config-back")) {
-            Text(desktopText("common.back"))
-        }
         NavigationSettingsContent(
             configuredItems = settings.items.mapIndexed { index, item ->
                 NavigationSettingsItem(

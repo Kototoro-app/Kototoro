@@ -41,10 +41,6 @@ internal fun DesktopChangelogPage(controller: DesktopController, state: DesktopA
     val releases = update.changelog
     Column(Modifier.widthIn(max = 820.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton({ controller.backFromChangelog() }, enabled = active,
-                modifier = Modifier.testTag("changelog-back")) { Text(desktopText("common.back")) }
-            Spacer(Modifier.width(12.dp))
-            Text(AndroidStrings["changelog"], style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.weight(1f))
             OutlinedButton({ controller.reloadChangelog() }, enabled = active && !update.changelogLoading,
                 modifier = Modifier.testTag("changelog-reload")) { Text(desktopText("update.changelogReload")) }

@@ -66,7 +66,6 @@ internal fun DesktopReadingStatsPage(controller: DesktopController, state: Deskt
         kind = state.readingStatsKind,
         active = !state.busy,
         covers = controller.session.covers,
-        onBack = controller::showServices,
         onPeriod = controller::readingStatsPeriod,
         onKind = controller::readingStatsKind,
         onWork = controller::showContentStats,
@@ -97,7 +96,6 @@ internal fun DesktopReadingStatsContent(
     active: Boolean,
     /** Null draws the plate Android shows for a work without a cover; the app always has its cache. */
     covers: DesktopCovers?,
-    onBack: () -> Unit,
     onPeriod: (ReadingStatsPeriod) -> Unit,
     onKind: (StatsContentKind) -> Unit,
     onWork: (SourceContent) -> Unit,
@@ -108,9 +106,6 @@ internal fun DesktopReadingStatsContent(
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        OutlinedButton(onBack, enabled = active, modifier = Modifier.testTag("stats-back")) {
-            Text(desktopText("common.back"))
-        }
         // Android puts the period menu and the kind pills in one sideways-scrolling row; a desktop window is wide
         // enough for two rows, and keeping each row a plain one avoids nesting a second scroll viewport in the page.
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag("stats-periods")) {

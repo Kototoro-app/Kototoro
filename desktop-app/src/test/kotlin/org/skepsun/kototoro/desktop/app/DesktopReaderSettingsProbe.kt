@@ -93,7 +93,7 @@ internal object DesktopReaderSettingsProbe {
                     onNodeWithTag("reader-setting-dictionary-rules").performScrollTo().performClick(); idle()
                     check(controller.state.value.screen == DesktopScreen.DICTIONARY_RULES)
                     controller.showReaderSettings(); idle()
-                    onNodeWithTag("reader-settings-back").performScrollTo().performClick(); idle()
+                    onNodeWithTag("reader-settings-back").performClick(); idle()
                     check(controller.state.value.screen == DesktopScreen.MORE)
                     checkSettings(controller)
                 }

@@ -172,7 +172,13 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                     val sourceTitles = remember(state.sources) {
                         state.sources.associate { it.source.name to it.displayName }
                     }
+                    // Android's history list is grouped by date (or reading status); favourites are not.
+                    val groups = remember(entries, history, selection.order) {
+                        val groupOf = if (history) historyGroupOf(selection.order) else null
+                        groupOf?.let { group -> entries.associate { it.content.id to group(it) } }
+                    }
                     ContentGrid(entries.map { it.content }, enabled, controller.session.covers, controller::details,
+                        groupOf = groups?.let { labels -> { content: org.skepsun.kototoro.core.source.SourceContent -> labels[content.id] } },
                         progressOf = { progress[it.id] }, newChaptersOf = { newChapters[it.id] ?: 0 },
                         pinnedOf = { pinned[it.id] == true },
                         selectedIds = checkedIds.takeIf { it.isNotEmpty() },

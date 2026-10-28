@@ -76,8 +76,6 @@ internal fun DesktopTagBlacklistPage(controller: DesktopController, state: Deskt
         header = {
             // The window's own title bar already names the screen, so only the count and Android's "clear" stay here.
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton({ controller.showSourceSettings() }, enabled = active,
-                    modifier = Modifier.testTag("tag-blacklist-back")) { Text(desktopText("common.back")) }
                 // The shared grid already prints Android's selected count, so this row keeps only Android's CLEAR.
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically) {

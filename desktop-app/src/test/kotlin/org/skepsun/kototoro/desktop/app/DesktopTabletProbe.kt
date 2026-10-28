@@ -661,7 +661,7 @@ internal object DesktopTabletProbe {
                 onNodeWithTag("reader-animation-option:NONE").performClick(); idle()
                 check(controller.state.value.readerSettings.animation ==
                     org.skepsun.kototoro.core.prefs.ReaderAnimation.NONE)
-                onNodeWithTag("reader-settings-back").performScrollTo().performClick(); idle()
+                onNodeWithTag("reader-settings-back").performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.MORE)
                 // Android's source settings page: order, overview layout, language groups and the adult targets were
                 // fixed values in the browse page; they are edited here through the shared dialogs.
@@ -723,7 +723,7 @@ internal object DesktopTabletProbe {
                 check((session.storage.preferences.open("desktop_background").snapshot()["global_tag_blacklist"]
                     as? org.skepsun.kototoro.core.source.SourcePreferenceValue.TextSet)?.values.orEmpty().isEmpty())
                 snapshot("tag-blacklist-empty")
-                onNodeWithTag("tag-blacklist-back").performScrollTo().performClick(); idle()
+                onNodeWithTag("tag-blacklist-back").performClick(); idle()
                 check(controller.state.value.screen == DesktopScreen.SOURCE_SETTINGS)
                 // Android's `tags_warnings`: the shared warn-list stays, the switch only decides the details tint.
                 onNodeWithTag("source-setting-tags-warnings").performScrollTo().performClick(); idle()

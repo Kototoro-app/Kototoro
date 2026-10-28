@@ -58,8 +58,6 @@ internal fun DesktopSourceTestPage(controller: DesktopController, state: Desktop
         modifier = Modifier.widthIn(max = 900.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        OutlinedButton({ controller.showExtensions() }, enabled = active,
-            modifier = Modifier.testTag("source-test-back")) { Text(desktopText("common.back")) }
         SettingsGroup {
             SettingsInfoRow(desktopText("sourceTest.intro"),
                 desktopText("sourceTest.steps", state.enabledSources.size))

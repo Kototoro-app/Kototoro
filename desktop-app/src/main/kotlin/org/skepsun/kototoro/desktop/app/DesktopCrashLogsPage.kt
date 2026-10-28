@@ -48,9 +48,7 @@ internal fun DesktopCrashLogsPage(controller: DesktopController, state: DesktopA
     val active = !state.busy
     Column(Modifier.widthIn(max = 820.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton({ controller.backFromCrashLogs() }, enabled = active,
-                modifier = Modifier.testTag("crash-logs-back")) { Text(desktopText("common.back")) }
-            // No title here: the shell already names the page, as on the replace-rules and data-cleanup pages.
+            // No title or back here: the shell's header names the page and goes back.
             Spacer(Modifier.weight(1f))
             OutlinedButton({ controller.clearCrashLogs() }, enabled = active && !ui.files.isNullOrEmpty(),
                 modifier = Modifier.testTag("crash-logs-clear")) { Text(AndroidStrings["clear"]) }

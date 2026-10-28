@@ -126,7 +126,7 @@ internal object DesktopCleanupProbe {
                 check((armed as? SourcePreferenceValue.Toggle)?.value == true) { "stored: $armed" }
                 snapshot("data-cleanup-chapters")
 
-                onNodeWithTag("data-cleanup-back").performScrollTo().performClick()
+                onNodeWithTag("data-cleanup-back").performClick()
                 idle()
                 check(controller.state.value.screen == DesktopScreen.STORAGE) { "the cleanup page returns to the hub" }
             }

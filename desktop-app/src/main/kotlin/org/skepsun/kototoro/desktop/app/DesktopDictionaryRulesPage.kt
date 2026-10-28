@@ -23,10 +23,6 @@ internal fun DesktopDictionaryRulesPage(controller: DesktopController, state: De
     val rules = ui.rules
     Column(Modifier.widthIn(max = 820.dp).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            OutlinedButton({ controller.backFromDictionaryRules() }, enabled = active,
-                modifier = Modifier.testTag("dictionary-rules-back")) { Text(desktopText("common.back")) }
-            Text(AndroidStrings["dictionary_rules"], style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(vertical = 8.dp))
             OutlinedButton({ importDictionaryRules(controller) }, enabled = active,
                 modifier = Modifier.testTag("dictionary-rules-import")) { Text(AndroidStrings["import_button"]) }
             OutlinedButton({ exportDictionaryRules(controller) }, enabled = active && !rules.isNullOrEmpty(),

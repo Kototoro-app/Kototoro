@@ -73,8 +73,6 @@ internal fun DesktopStorageSettingsPage(controller: DesktopController, state: De
         modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        OutlinedButton({ controller.more() }, enabled = active,
-            modifier = Modifier.testTag("storage-settings-back")) { Text(desktopText("common.back")) }
         SettingsSectionHeader(AndroidStrings["storage_usage"])
         SettingsGroup {
             if (usage == null) {

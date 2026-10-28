@@ -99,7 +99,7 @@ fun DesktopApp(controller: DesktopController, closing: Boolean = false, fullscre
                     .padding(if (reading || listState.screen == DesktopScreen.HOME) 0.dp else 24.dp),
                     verticalArrangement = Arrangement.spacedBy(if (reading) 0.dp else 14.dp)) {
                     if (!reading && listState.screen !in setOf(DesktopScreen.LIBRARY, DesktopScreen.HISTORY,
-                            DesktopScreen.EXPLORE, DesktopScreen.HOME, DesktopScreen.FEED)) Header(listState)
+                            DesktopScreen.EXPLORE, DesktopScreen.HOME, DesktopScreen.FEED)) Header(listState, controller, !closing)
                     challenge?.let { pending ->
                         var windowNotice by remember(pending.id) { mutableStateOf<String?>(null) }
                         Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(20.dp)) {
@@ -230,7 +230,7 @@ internal fun DesktopSourcePane(controller: DesktopController, state: DesktopAppS
 }
 
 @Composable
-private fun Header(state: DesktopAppState) {
+private fun Header(state: DesktopAppState, controller: DesktopController, enabled: Boolean) {
     val title = when (state.screen) {
         DesktopScreen.HOME -> desktopText("nav.home")
         DesktopScreen.FEED -> desktopText("nav.subscriptions")
@@ -267,8 +267,17 @@ private fun Header(state: DesktopAppState) {
         DesktopScreen.BROWSER -> desktopText("screens.browser")
         DesktopScreen.MORE -> desktopText("common.more")
     }
-    Text(title, style = MaterialTheme.typography.headlineMedium, color = Ink,
-        modifier = Modifier.heightIn(min = 40.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    // Android's settings top bar: every sub-page goes back from the same place, before its title.
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        state.screen.settingsBackTag?.let { tag ->
+            IconButton({ controller.settingsBack() }, enabled = enabled, modifier = Modifier.testTag(tag)) {
+                Icon(painterResource("icons/ic_arrow_forward.svg"), desktopText("common.back"), tint = Ink,
+                    modifier = Modifier.size(22.dp).graphicsLayer(scaleX = -1f))
+            }
+        }
+        Text(title, style = MaterialTheme.typography.headlineMedium, color = Ink,
+            modifier = Modifier.heightIn(min = 40.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }
 
 @Composable
@@ -467,16 +476,20 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
     /** Shared near-end loading requests one more batch per observed item count. */
     onReachEnd: (() -> Unit)? = null,
     /** Set when the source has no more batches: the footer then stops asking and the row below says so. */
-    endReached: Boolean = false, collectionState: ContentCollectionState? = null) {
+    endReached: Boolean = false, collectionState: ContentCollectionState? = null,
+    /** Android's grouped lists (history by date or progress): a header row whenever the label changes. */
+    groupOf: ((SourceContent) -> String?)? = null) {
     if (contents.isEmpty()) { EmptyPanel(desktopText("browse.noWorks"), desktopText("browse.noWorksDetail")); return }
+    val rows = remember(contents, groupOf) { contentRows(contents, groupOf) }
     if (listMode == org.skepsun.kototoro.desktop.runtime.DesktopListMode.LIST) {
-        ContentRowList(contents, enabled, covers, onOpen, progressOf, newChaptersOf, pinnedOf,
+        ContentRowList(contents, rows, enabled, covers, onOpen, progressOf, newChaptersOf, pinnedOf,
             selectedIds, onToggleSelection, metaOf, collectionState?.list)
         return
     }
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
     val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle, isDark = LocalDesktopDark.current)
-    ContentCollectionGrid(count = contents.size, key = { contents[it].id },
+    ContentCollectionGrid(count = rows.size, key = { rows[it].key(contents) },
+        fullSpan = { rows[it] is ContentRow.Header }, contentType = { rows[it].javaClass },
         columns = GridCells.Adaptive(112.dp), state = collectionState?.grid ?: rememberLazyGridState(),
         verticalArrangement = Arrangement.spacedBy(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxSize().testTag("content-grid"),
@@ -488,7 +501,9 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
             }
         }) else null,
     ) { index ->
-        val content = contents[index]
+        val row = rows[index]
+        if (row is ContentRow.Header) ContentGroupHeader(row.title) else {
+        val content = contents[(row as ContentRow.Work).index]
         val selecting = selectedIds != null
         val isSelected = selectedIds?.contains(content.id) == true
         BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -540,7 +555,38 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
                 },
             )
         }
+        }
     }
+}
+
+/** A grouped list's row: a section title or the work at [Work.index] of the contents. */
+internal sealed interface ContentRow {
+    data class Header(val title: String, val position: Int) : ContentRow
+    data class Work(val index: Int) : ContentRow
+
+    fun key(contents: List<SourceContent>): Any = when (this) {
+        is Header -> "header:$position:$title"
+        is Work -> contents[index].id
+    }
+}
+
+internal fun contentRows(contents: List<SourceContent>, groupOf: ((SourceContent) -> String?)?): List<ContentRow> {
+    if (groupOf == null) return contents.indices.map(ContentRow::Work)
+    val rows = ArrayList<ContentRow>(contents.size + 8)
+    var previous: String? = null
+    contents.forEachIndexed { index, content ->
+        val group = groupOf(content)
+        if (group != null && group != previous) rows += ContentRow.Header(group, rows.size)
+        previous = group
+        rows += ContentRow.Work(index)
+    }
+    return rows
+}
+
+@Composable
+private fun ContentGroupHeader(title: String) {
+    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = Ink,
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp).testTag("content-group:$title"))
 }
 
 /**
@@ -548,17 +594,20 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
  * `content:<id>` tag and the same click/long-press semantics, so selection and navigation stay unchanged.
  */
 @Composable
-private fun ContentRowList(contents: List<SourceContent>, enabled: Boolean, covers: DesktopCovers,
+private fun ContentRowList(contents: List<SourceContent>, rows: List<ContentRow>, enabled: Boolean, covers: DesktopCovers,
     onOpen: (SourceContent) -> Unit, progressOf: (SourceContent) -> Float?, newChaptersOf: (SourceContent) -> Int,
     pinnedOf: (SourceContent) -> Boolean,
     selectedIds: Set<Long>?, onToggleSelection: (SourceContent) -> Unit, metaOf: (SourceContent) -> String,
     listState: LazyListState? = null) {
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
     val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle, isDark = LocalDesktopDark.current)
-    ContentCollectionColumn(count = contents.size, key = { contents[it].id },
+    ContentCollectionColumn(count = rows.size, key = { rows[it].key(contents) },
+        contentType = { rows[it].javaClass },
         state = listState ?: rememberLazyListState(), modifier = Modifier.fillMaxSize().testTag("content-list"),
         verticalArrangement = Arrangement.spacedBy(8.dp)) { index ->
-        val content = contents[index]
+        val row = rows[index]
+        if (row is ContentRow.Header) ContentGroupHeader(row.title) else {
+        val content = contents[(row as ContentRow.Work).index]
         val selecting = selectedIds != null
         val isSelected = selectedIds?.contains(content.id) == true
         val percent = progressOf(content)?.takeIf { ReadingProgress.isValid(it) }
@@ -587,6 +636,7 @@ private fun ContentRowList(contents: List<SourceContent>, enabled: Boolean, cove
                     Modifier.fillMaxWidth().padding(top = 5.dp).testTag("content-progress:${content.id}"))
             },
         )
+        }
     }
 }
 

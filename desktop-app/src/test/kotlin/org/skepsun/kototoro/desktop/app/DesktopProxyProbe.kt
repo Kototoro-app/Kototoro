@@ -143,7 +143,7 @@ internal object DesktopProxyProbe {
                 onNodeWithTag("proxy-settings-back").performClick()
                 idle()
                 check(controller.state.value.screen == DesktopScreen.STORAGE) { "the page's back returns to the hub" }
-                onNodeWithTag("storage-settings-back").performScrollTo().performClick()
+                onNodeWithTag("storage-settings-back").performClick()
                 idle()
                 check(controller.state.value.screen == DesktopScreen.MORE) { "the hub's back returns to more" }
                 val routed = hits.get()
