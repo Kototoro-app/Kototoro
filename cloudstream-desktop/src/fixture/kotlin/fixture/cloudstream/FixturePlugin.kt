@@ -1,6 +1,7 @@
 package fixture.cloudstream
 
 import android.content.Context
+import com.lagradost.cloudstream3.CommonActivity
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
@@ -27,6 +28,9 @@ import com.lagradost.cloudstream3.utils.newExtractorLink
  */
 class FixturePlugin : Plugin() {
     override fun load(context: Context) {
+        // Real plugins compiled against the Cloudstream application emit exactly this bridge call; it keeps the
+        // host's Java `CommonActivity` shim (and its `showToast$default`) on the compatibility check.
+        CommonActivity.`showToast$default`(CommonActivity.INSTANCE, "Fixture Stream ready", null, 2, null)
         registerMainAPI(FixtureProvider())
     }
 }

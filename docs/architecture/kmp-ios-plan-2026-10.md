@@ -4420,8 +4420,11 @@ kototoro/kotatsu/UMA parser 插件复用平台的共享 HTTP 客户端，因此�
 **Windows（新增 `:cloudstream-desktop`，随兼容层开启时编译）**
 - 宿主垫片（插件链接的 `com.lagradost.*` 宿主类）：
   - 与 Android 同一份源码，构建时从 app 拷入，直接对 AndroidCompat 编译：`Plugin`、`AcraApplication`、
-    `CommonActivity`、`ContextHelper`、`VideoClickAction`/`Holder`、`TextUtil`（UiText）、`DataStore`。
+    `ContextHelper`、`VideoClickAction`/`Holder`、`TextUtil`（UiText）、`DataStore`。
     `DataStore` 在拷贝时去掉 androidx 的两处调用，`edit {}` 由桌面同包函数提供。
+  - `CommonActivity` 是 Java（Kotlin 无法声明 `showToast$default`），从 `app/src/main/java` 单独拷入，并用兼容层的
+    Java 21 toolchain 编译（`options.release = 11`，本模块自己的字节码仍为 11）。漏掉它时引用 `showToast("…")`
+    的插件在 Windows 被兼容性检查判定缺宿主类、Android 却照常加载，夹具插件已固定链接该桥方法。
   - 只有 `CloudStreamApp` 是桌面版：成员与 Android 相同，去掉基于 Fragment 的浏览器方法，改用系统浏览器。
 - 运行库：官方 jvmJar 去掉宿主替换的 `Youtube*` 和 `ContextHelper_jvmKt`（与 Android 的处理一致），依赖版本沿用 app 锁定的
   NiceHttp、jackson、jsoup、rhino、ktor-http、datetime、io、cryptography、fuzzywuzzy、gson。

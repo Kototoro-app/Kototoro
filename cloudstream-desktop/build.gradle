@@ -27,21 +27,45 @@ def compatibilityApi = compatibilityRoot == null ? files() :
 	files(new File(compatibilityRoot, 'AndroidCompat-1.0.jar'), new File(compatibilityRoot, 'android-jar-1.0.0.jar'))
 // Without the directory the shims fail with unresolved `android.*`; check (and pin) it first, as that module does.
 tasks.named('compileKotlin') { dependsOn ':mihon-desktop-compat:verifyMihonCompatibility' }
+// The shims are javac-compiled too (Cloudstream's Java activity bridge), and the supplied compatibility runtime is
+// Java 21 bytecode: a Java 17 compiler rejects it, so compile with the same toolchain that module uses and keep the
+// host's own bytecode at 11 like the rest of this module.
+def compatibilityJavaVersion = providers.gradleProperty('mihonCompatibilityJavaVersion')
+	.map { it.toInteger() }.getOrElse(21)
+def compatibilityCompiler = javaToolchains.compilerFor {
+	languageVersion = JavaLanguageVersion.of(compatibilityJavaVersion)
+}
+tasks.named('compileJava') {
+	dependsOn ':mihon-desktop-compat:verifyMihonCompatibility'
+	javaCompiler = compatibilityCompiler
+	options.release = 11
+	options.encoding = 'UTF-8'
+}
 
 // The host shims plugins link against that only need APIs the compatibility runtime has: one source with Android.
-def sharedShims = [
+def sharedKotlinShims = [
 	'com/lagradost/api/ContextHelper.kt',
 	'com/lagradost/cloudstream3/AcraApplication.kt',
-	'com/lagradost/cloudstream3/CommonActivity.kt',
 	'com/lagradost/cloudstream3/plugins/Plugin.kt',
 	'com/lagradost/cloudstream3/actions/VideoClickAction.kt',
 	'com/lagradost/cloudstream3/actions/VideoClickActionHolder.kt',
 	'com/lagradost/cloudstream3/utils/TextUtil.kt',
 	'com/lagradost/cloudstream3/utils/DataStore.kt',
 ]
+// Kotlin cannot declare `showToast$default`, so Cloudstream's activity bridge is Java and lives in `app/src/main/java`.
+// Copying it from its own source set keeps Windows at parity with Android, where plugins calling `showToast("…")` load.
+def sharedJavaShims = [
+	'com/lagradost/cloudstream3/CommonActivity.java',
+]
 def sharedShimDirectory = layout.buildDirectory.dir('generated/cloudstream-shims')
+// A `from` block with an empty include list copies the whole source tree, so each list is applied only when it is
+// non-empty (a shim silently dropped from a list must not drag the rest of `app` into this module).
+def includeShims = { files, List<String> patterns ->
+	if (!patterns.isEmpty()) patterns.each { files.include it }
+}
 def copySharedShims = tasks.register('copySharedCloudstreamShims', Sync) {
-	from(rootProject.file('app/src/main/kotlin')) { sharedShims.each { include it } }
+	from(rootProject.file('app/src/main/kotlin')) { includeShims(delegate, sharedKotlinShims) }
+	from(rootProject.file('app/src/main/java')) { includeShims(delegate, sharedJavaShims) }
 	into sharedShimDirectory
 	// The runtime has no androidx.core / androidx.preference: `edit {}` comes from DesktopSharedPreferences.kt in the
 	// same package, and the default preferences are a named store.
@@ -54,6 +78,7 @@ def copySharedShims = tasks.register('copySharedCloudstreamShims', Sync) {
 	}
 }
 sourceSets.main.kotlin.srcDir(copySharedShims)
+sourceSets.main.java.srcDir(copySharedShims)
 
 // The official library:jvmJar without the classes the host supplies (as :app's prepareCloudstreamRuntimeJar).
 def cloudstreamLibrary = rootProject.file('app/libs/cloudstream3-library-jvm-1.0.1.jar')
