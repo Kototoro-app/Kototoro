@@ -155,6 +155,7 @@ jobs:
       - name: Prepare the pinned build inputs
         env:
           COMPATIBILITY_URL: ${{ inputs.compatibility-url || vars.WINDOWS_COMPATIBILITY_URL }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # The compatibility JARs are ordinary Java libraries, so the archive the Windows job downloads works here.

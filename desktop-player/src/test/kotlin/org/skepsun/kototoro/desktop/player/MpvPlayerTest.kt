@@ -157,12 +157,13 @@ class MpvPlayerTest {
         enhancer.enhance(input, plain, 240, 360, emptyList())
         val reference = javax.imageio.ImageIO.read(plain.toFile())
         // The white page itself, not an empty frame read back before the picture reached the output.
-        assertTrue((reference.getRGB(120, 40) and 0xFF) > 200, Integer.toHexString(reference.getRGB(120, 40)))
+        assertTrue((reference.getRGB(120, 40) and 0xFF) > 200, "reference ${describe(reference)}")
         for (preset in Anime4KImagePreset.entries) {
             val output = directory.resolve("${preset.name}.png")
             val started = System.nanoTime()
             enhancer.enhance(input, output, 120, 180, preset)
             val image = javax.imageio.ImageIO.read(output.toFile())
+            println("${preset.name} ${describe(image)}")
             assertEquals(120 * preset.scale, image.width, preset.name)
             assertEquals(180 * preset.scale, image.height, preset.name)
             if (preset.scale == 2) {
@@ -172,5 +173,16 @@ class MpvPlayerTest {
             }
             println("${preset.name} ${(System.nanoTime() - started) / 1_000_000} ms")
         }
+    }
+
+    /** Enough to tell an empty, upside-down or misplaced frame apart from the white page with its black strokes. */
+    private fun describe(image: java.awt.image.BufferedImage): String {
+        var sum = 0L
+        for (x in 0 until image.width) for (y in 0 until image.height) sum += image.getRGB(x, y) and 0xFF
+        val mean = sum / (image.width.toLong() * image.height)
+        val x = image.width / 2
+        val top = image.height / 9
+        return "${image.width}x${image.height} type=${image.type} mean=$mean " +
+            "top=${Integer.toHexString(image.getRGB(x, top))} mirrored=${Integer.toHexString(image.getRGB(x, image.height - 1 - top))}"
     }
 }

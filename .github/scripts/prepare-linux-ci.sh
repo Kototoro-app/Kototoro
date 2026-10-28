@@ -71,8 +71,13 @@ download() { # url destination [sha256]
     if [[ -n $sha256 && -f $destination ]] && checksum_matches "$destination" "$sha256"; then
         return
     fi
+    # Anonymous API calls share the runner IP's 60/hour limit and fail with 403; the job token lifts it.
+    local auth=()
+    if [[ $url == https://api.github.com/* && -n ${GITHUB_TOKEN:-} ]]; then
+        auth=(--header "Authorization: Bearer $GITHUB_TOKEN")
+    fi
     curl --fail --location --retry 3 --connect-timeout 20 --max-time 900 --silent --show-error \
-        --output "$destination.part" "$url" || fail "download failed: ${url%%\?*}"
+        "${auth[@]}" --output "$destination.part" "$url" || fail "download failed: ${url%%\?*}"
     mv -f "$destination.part" "$destination"
     if [[ -n $sha256 ]]; then
         checksum_matches "$destination" "$sha256" || fail "SHA-256 mismatch: $(basename "$destination")"

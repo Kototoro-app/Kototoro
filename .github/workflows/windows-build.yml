@@ -79,6 +79,7 @@ jobs:
       - name: Prepare pinned Windows build inputs
         env:
           COMPATIBILITY_URL: ${{ inputs.compatibility-url }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if ($env:COMPATIBILITY_URL) {
             & "./.github/scripts/prepare-windows-ci.ps1" -CompatibilityUrl "$env:COMPATIBILITY_URL"

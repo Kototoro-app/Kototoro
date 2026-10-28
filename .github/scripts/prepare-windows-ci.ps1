@@ -19,8 +19,12 @@ function Get-Download([string] $Url, [string] $Destination, [string] $Sha256 = "
     if (!(Test-Path -LiteralPath "$Destination") -or !$Sha256 -or
         (Get-FileHash -LiteralPath "$Destination" -Algorithm SHA256).Hash -ne $Sha256) {
         if (([uri] $Url).Scheme -ne "https") { throw "Build input downloads require HTTPS." }
+        # Anonymous API calls share the runner IP's 60/hour limit and fail with 403; the job token lifts it.
+        $taskAuth = if (([uri] $Url).Host -eq "api.github.com" -and $env:GITHUB_TOKEN) {
+            @("--header", "Authorization: Bearer $env:GITHUB_TOKEN")
+        } else { @() }
         & curl.exe --fail --location --retry 3 --connect-timeout 20 --max-time 300 --silent --show-error `
-            --output "$Destination" "$Url"
+            @taskAuth --output "$Destination" "$Url"
         if ($LASTEXITCODE -ne 0) { throw "Build input download failed." }
     }
     if ($Sha256 -and (Get-FileHash -LiteralPath "$Destination" -Algorithm SHA256).Hash -ne $Sha256) {
