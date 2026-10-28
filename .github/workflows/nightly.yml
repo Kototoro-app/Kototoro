@@ -163,6 +163,40 @@ jobs:
           gh release view "$TAG_NAME" --repo "$NIGHTLY_REPOSITORY" >/dev/null
           gh release upload "$TAG_NAME" release-windows/* --repo "$NIGHTLY_REPOSITORY" --clobber
 
+  macos:
+    needs: [build, windows]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/macos-build.yml
+    with:
+      ref: ${{ needs.build.outputs.built-sha }}
+      channel: nightly
+      version-name: ${{ needs.build.outputs.version-name }}
+      compatibility-artifact: ${{ needs.windows.outputs.artifact-name }}
+
+  publish-macos:
+    needs: [build, macos]
+    if: github.event_name != 'workflow_dispatch' || github.ref_name == 'devel'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: ${{ needs.macos.outputs.artifact-pattern }}
+          path: release-macos
+          merge-multiple: true
+      - name: Attach macOS packages to Nightly Release
+        env:
+          GH_TOKEN: ${{ secrets.NIGHTLY_RELEASE_TOKEN }}
+          TAG_NAME: ${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          gh release view "$TAG_NAME" --repo "$NIGHTLY_REPOSITORY" >/dev/null
+          gh release upload "$TAG_NAME" release-macos/* --repo "$NIGHTLY_REPOSITORY" --clobber
+
   ios:
     needs: build
     permissions:

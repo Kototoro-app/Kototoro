@@ -1,0 +1,189 @@
+name: macOS Package
+
+on:
+  # A manual run builds the macOS DMGs alone. They need the pinned compatibility JARs, which only the Windows package
+  # job produces, so a manual run without `compatibility-artifact` builds Windows first. Leave `ref` empty to build the
+  # branch the run was started from.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit or branch to build'
+        required: false
+        default: ''
+        type: string
+      channel:
+        description: 'Package channel: nightly or release'
+        required: false
+        default: 'nightly'
+        type: string
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+      channel:
+        required: true
+        type: string
+      version-name:
+        required: false
+        default: ''
+        type: string
+      # The Windows package artifact of the same run; the shared JVM compatibility JARs are taken from its ZIP.
+      compatibility-artifact:
+        required: true
+        type: string
+    outputs:
+      artifact-pattern:
+        value: kototoro-macos-${{ inputs.channel }}-*-${{ github.run_id }}
+
+jobs:
+  windows:
+    if: inputs.compatibility-artifact == ''
+    permissions:
+      contents: read
+    uses: ./.github/workflows/windows-build.yml
+    with:
+      ref: ${{ inputs.ref }}
+      channel: ${{ inputs.channel }}
+      version-name: ${{ inputs.version-name }}
+      compatibility-url: ${{ vars.WINDOWS_COMPATIBILITY_URL }}
+
+  build:
+    needs: windows
+    if: ${{ !cancelled() && (needs.windows.result == 'success' || needs.windows.result == 'skipped') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: recursive
+
+      - name: Set up packaging JDK 21
+        id: jdk21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Prepare Android SDK platform
+        run: (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" > /dev/null
+
+      - name: Download Windows package
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.compatibility-artifact || needs.windows.outputs.artifact-name }}
+          path: ${{ runner.temp }}/windows-package
+
+      - name: Extract pinned compatibility JARs
+        run: |
+          set -euo pipefail
+          archives=("$RUNNER_TEMP"/windows-package/*.zip)
+          test "${#archives[@]}" -eq 1 -a -f "${archives[0]}"
+          python3 desktop-app/prepare-compatibility.py "${archives[0]}" --output "$PWD/build/desktop-compatibility"
+
+      # Hosted macOS runners are virtual machines; whether they expose an accelerated OpenGL device depends on the
+      # image. With one the distribution test checks the GPU render path the app uses; without one it checks the
+      # software render API, so the package still proves it plays video with its own libmpv.
+      - name: Probe OpenGL
+        id: gl
+        run: |
+          set -euo pipefail
+          renderer=$(python3 - <<'PY'
+          import ctypes
+          gl = ctypes.CDLL("/System/Library/Frameworks/OpenGL.framework/OpenGL")
+          # The renderer's own request: OpenGL 4.1 core, accelerated, 24-bit colour, 8-bit alpha.
+          attributes = (ctypes.c_int * 8)(99, 0x4100, 73, 8, 24, 11, 8, 0)
+          pixel_format, count, context = ctypes.c_void_p(), ctypes.c_int(), ctypes.c_void_p()
+          ok = gl.CGLChoosePixelFormat(attributes, ctypes.byref(pixel_format), ctypes.byref(count)) == 0 \
+              and pixel_format.value and gl.CGLCreateContext(pixel_format, None, ctypes.byref(context)) == 0
+          print("opengl" if ok and context.value else "software")
+          PY
+          )
+          echo "renderer=$renderer" >> "$GITHUB_OUTPUT"
+          if [ "$renderer" = software ]; then
+            echo "::warning::No accelerated OpenGL on ${{ matrix.runner }}; the distribution test checks software rendering."
+          fi
+
+      - name: Build and test macOS package
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          VERSION_NAME: ${{ inputs.version-name }}
+          ARCH: ${{ matrix.arch }}
+          JDK21: ${{ steps.jdk21.outputs.path }}
+          RENDERER: ${{ steps.gl.outputs.renderer }}
+        run: |
+          set -euo pipefail
+          case "$CHANNEL" in release|nightly) ;; *) echo 'Unknown macOS channel.' >&2; exit 1 ;; esac
+          base_version=$(./gradlew -q printVersionName --no-daemon --console=plain | tail -n 1 | tr -d '[:space:]')
+          if [[ ! "$base_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)([.+-].*)?$ ]]; then
+            echo 'Invalid macOS package version.' >&2; exit 1
+          fi
+          package_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+          version_name="${VERSION_NAME:-$base_version}"
+          [[ "$version_name" =~ ^[A-Za-z0-9][A-Za-z0-9.+-]*$ ]] || { echo 'Invalid asset version.' >&2; exit 1; }
+          ./gradlew -PwithDesktopApp -PwithMacosDistribution \
+            "-PmihonCompatibilityDirectory=$PWD/build/desktop-compatibility" -PmihonCompatibilityJavaVersion=21 \
+            "-PdesktopPackageVersion=$package_version" "-PdesktopVersionName=$version_name" \
+            "-PdesktopChannel=$CHANNEL" "-PmacosDistributionRenderer=$RENDERER" \
+            :desktop-app:macosUpdatePackage :desktop-app:compileTestKotlin \
+            "-Dorg.gradle.java.installations.paths=$JDK21,$JAVA_HOME" \
+            -Dorg.gradle.jvmargs=-Xmx3g -Pkotlin.daemon.jvmargs=-Xmx3g --max-workers=2 \
+            --no-configuration-cache --no-daemon --console=plain --stacktrace
+          # The self-update compares this copy against the published releases, so the stamp must match the asset.
+          launcher='desktop-app/build/compose/binaries/main/app/Kototoro.app/Contents/MacOS/Kototoro'
+          report="$RUNNER_TEMP/update-check.properties"
+          "$launcher" --check-update "$report" --channel "$CHANNEL" &
+          probe=$!
+          for _ in $(seq 180); do kill -0 "$probe" 2>/dev/null || break; sleep 1; done
+          if kill -0 "$probe" 2>/dev/null; then kill "$probe"; echo 'The packaged update check did not finish.' >&2; exit 1; fi
+          wait "$probe" || true
+          test -f "$report" || { echo 'The packaged app wrote no update report.' >&2; exit 1; }
+          cat "$report"
+          stamp() { sed -n "s/^$1=//p" "$report" | tail -n 1; }
+          [ "$(stamp version.name)" = "$version_name" ] || { echo "Stamped version is not $version_name." >&2; exit 1; }
+          [ "$(stamp version.channel)" = "$CHANNEL" ] || { echo "Stamped channel is not $CHANNEL." >&2; exit 1; }
+          [ "$(stamp install.supported)" = true ] && [ "$(stamp install.kind)" = macos_app ] \
+            || { echo 'The packaged app does not recognise itself as a macOS app.' >&2; exit 1; }
+          mkdir -p release-macos
+          stem="Kototoro-$version_name-macos-$ARCH-$CHANNEL"
+          cp "desktop-app/build/compose/binaries/main/update/$stem.dmg" "desktop-app/build/compose/binaries/main/update/$stem.sha256" release-macos/
+          # The DMG is ad-hoc signed and not notarized: Gatekeeper asks the user to confirm the first launch.
+          codesign --verify --deep --strict 'desktop-app/build/compose/binaries/main/app/Kototoro.app'
+
+      - name: Upload macOS package
+        uses: actions/upload-artifact@v6
+        with:
+          name: kototoro-macos-${{ inputs.channel }}-${{ matrix.arch }}-${{ github.run_id }}
+          path: release-macos/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload packaging diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: macos-diagnostics-${{ inputs.channel }}-${{ matrix.arch }}-${{ github.run_id }}
+          path: |
+            desktop-app/build/reports/macos-distribution
+            desktop-app/build/reports/tests/macosDistributionTest
+            desktop-app/build/compose/logs
+          if-no-files-found: ignore

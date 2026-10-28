@@ -171,6 +171,38 @@ jobs:
           gh release view "$TAG_NAME" >/dev/null
           gh release upload "$TAG_NAME" release-windows/* --clobber
 
+  macos:
+    needs: [build, windows]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/macos-build.yml
+    with:
+      ref: ${{ needs.build.outputs.built-sha }}
+      channel: release
+      version-name: ${{ needs.build.outputs.version-name }}
+      compatibility-artifact: ${{ needs.windows.outputs.artifact-name }}
+
+  publish-macos:
+    needs: [build, macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: ${{ needs.macos.outputs.artifact-pattern }}
+          path: release-macos
+          merge-multiple: true
+      - name: Attach macOS packages to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG_NAME" >/dev/null
+          gh release upload "$TAG_NAME" release-macos/* --clobber
+
   ios:
     needs: build
     permissions:
