@@ -76,6 +76,35 @@ internal object DesktopFilterProbe {
                 onNodeWithTag("source-list").performScrollToNode(hasTestTag("source:MIHON_9007199254740997"))
                 onNodeWithTag("source:MIHON_9007199254740997").performClick()
                 received("popular:1")
+                // Android's tag header: the source's tags (here its tri-state genre) sit above the list, a pick lists
+                // again through the source's search with that tag, and the catalogue in the sort menu clears it.
+                if (mode == "filters") {
+                    waitUntil(timeoutMillis = 15_000) { !controller.state.value.browseTagGroups.isNullOrEmpty() }
+                    settled()
+                    val tag = controller.state.value.browseTagGroups!!.flatMap { it.tags }.first { it.title == "冒险" }
+                    onNodeWithTag("browse-tag:${tag.key}").assertIsNotSelected().performClick()
+                    // page 1 of the search path with no query, and the genre control included: the source got the tag.
+                    try {
+                        waitUntil(timeoutMillis = 15_000) {
+                            !controller.state.value.busy && System.getProperty("fixture.filters.last").orEmpty()
+                                .split('|').let { it.size > 3 && it[0] == "1" && it[1].isEmpty() && it[3] == "1" }
+                        }
+                    } catch (error: Throwable) {
+                        throw AssertionError("tag pick: last=${System.getProperty("fixture.filters.last")} " +
+                            "error=${controller.state.value.error} tags=${controller.state.value.browseTags} " +
+                            "tag=$tag", error)
+                    }
+                    settled()
+                    check(controller.state.value.browseTags == setOf(tag))
+                    onNodeWithTag("browse-tag:${tag.key}").assertIsSelected()
+                    onNodeWithTag("source-sort").performClick(); waitForIdle()
+                    onNodeWithTag("source-tags").performClick(); waitForIdle()
+                    onNodeWithTag("browse-catalog-tag:${tag.key}").assertIsSelected()
+                    onNodeWithTag("browse-tags-clear").performClick()
+                    received("popular:1")
+                    check(controller.state.value.browseTags.isEmpty())
+                    onNodeWithText(desktopText("common.close")).performClick(); waitForIdle()
+                }
                 onNodeWithTag("source-query").performTextReplacement("未应用查询")
                 listing("popular")
                 received("popular:1")

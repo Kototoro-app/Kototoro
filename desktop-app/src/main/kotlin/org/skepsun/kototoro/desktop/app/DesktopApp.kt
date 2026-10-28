@@ -337,6 +337,10 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
     }
     var query by remember(state.selectedSource.source.name, state.query) { mutableStateOf(state.query) }
     if (state.filterDialogOpen) DesktopFilters(controller, state, query)
+    var tagCatalog by remember(state.selectedSource.source.name) { mutableStateOf(false) }
+    val tagGroups = state.browseTagGroups.orEmpty()
+    if (tagCatalog && tagGroups.isNotEmpty()) BrowseTagCatalog(tagGroups, state.browseTags, enabled,
+        controller::toggleBrowseTag, { controller.clearBrowseTags() }, { tagCatalog = false })
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // Android's source-results top bar: back, the source's name and the action capsule (sort, filters, settings).
         val orders = state.descriptor?.sortOrders.orEmpty()
@@ -367,6 +371,14 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
                         if (latest) CompactDropdownMenuItem({ CompactDropdownMenuText(desktopText("browse.latest")) },
                             { dismiss(); query = ""; controller.browseUnfiltered(latest = true) },
                             modifier = Modifier.testTag("source-listing:latest"))
+                        // Android's sort button opens the filter sheet, whose tag section this item stands for.
+                        if (tagGroups.isNotEmpty()) {
+                            CompactDropdownMenuItem({ CompactDropdownMenuText(
+                                if (state.browseTags.isEmpty()) AndroidStrings["tags"]
+                                else "${AndroidStrings["tags"]} (${state.browseTags.size})") },
+                                { dismiss(); tagCatalog = true }, modifier = Modifier.testTag("source-tags"))
+                            HorizontalDivider()
+                        }
                         val others = orders.filter { it != "POPULARITY" && it != "UPDATED" }
                         if (others.isNotEmpty()) {
                             if (popular || latest) HorizontalDivider()
@@ -413,6 +425,7 @@ private fun SourceResults(controller: DesktopController, state: DesktopAppState,
                 modifier = Modifier.weight(1f), tag = "source-query")
             Button({ controller.browse(0, query) }, enabled = enabled) { Text(desktopText("browse.search")) }
         }
+        BrowseTagRow(tagGroups, state.browseTags, enabled, controller::toggleBrowseTag) { tagCatalog = true }
         // Android's ExploreRepository filters every browse page through the global tag blacklist; the page in the
         // state stays untouched so paging and the endless list still follow what the source returned.
         val blacklist = remember(state.sourceSettings.tagBlacklist) { state.sourceSettings.tagBlacklistRules() }

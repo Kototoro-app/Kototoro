@@ -315,6 +315,9 @@ data class DesktopAppState(
     val browseOrder: String? = null,
     val dynamicFilters: SourceDynamicFilters? = null,
     val appliedFilters: List<SourceFilterChange> = emptyList(),
+    /** Android's tag filter of the opened source: its tag groups (null until loaded) and the tags picked. */
+    val browseTagGroups: List<org.skepsun.kototoro.core.source.SourceTagGroup>? = null,
+    val browseTags: Set<org.skepsun.kototoro.core.source.SourceTag> = emptySet(),
     val filterDialogOpen: Boolean = false,
     val preferences: SourcePreferenceScreen? = null,
     val isFavourite: Boolean = false,
@@ -1035,8 +1038,42 @@ class DesktopController(
         mutableState.update { it.copy(screen = DesktopScreen.EXPLORE, selectedSource = source,
             descriptor = descriptor, items = emptyList(), offset = 0, pageOffsets = listOf(0), query = "", content = null,
             browseOrder = null, browsePageSize = 0, browseExhausted = false,
-            dynamicFilters = null, appliedFilters = emptyList(), filterDialogOpen = false) }
+            dynamicFilters = null, appliedFilters = emptyList(), filterDialogOpen = false,
+            browseTagGroups = null, browseTags = emptySet()) }
+        loadBrowseTags(source)
         browseOnIo(0, "")
+    }
+
+    /**
+     * Android's filter header reads the source's tags beside the list. Loaded off the action queue: a slow or failing
+     * catalogue never holds up browsing, and a source the user already left ignores the answer.
+     */
+    private fun loadBrowseTags(source: SourceListing) {
+        scope.launch {
+            val groups = try {
+                session.sources.getFilterOptions(source.source.name).effectiveTagGroups.filter { it.tags.isNotEmpty() }
+            } catch (error: CancellationException) { throw error } catch (_: Exception) { emptyList() }
+            catch (_: LinkageError) { emptyList() }
+            mutableState.update {
+                if (it.selectedSource?.source?.name == source.source.name) it.copy(browseTagGroups = groups) else it
+            }
+        }
+    }
+
+    /** Picks or drops one tag and lists again from the first batch, as Android's tag chips do. */
+    fun toggleBrowseTag(tag: org.skepsun.kototoro.core.source.SourceTag) = navigate {
+        val current = state.value.browseTags
+        val multiple = state.value.descriptor?.filterCapabilities?.isMultipleTagsSupported != false
+        val next = when {
+            tag in current -> current - tag
+            multiple -> current + tag
+            else -> setOf(tag)
+        }
+        browseOnIo(0, state.value.query, state.value.browseOrder, state.value.appliedFilters, next)
+    }
+
+    fun clearBrowseTags() = navigate {
+        browseOnIo(0, state.value.query, state.value.browseOrder, state.value.appliedFilters, emptySet())
     }
 
     fun browse(offset: Int = 0, query: String = state.value.query) = navigate { browseOnIo(offset, query) }
@@ -1074,11 +1111,12 @@ class DesktopController(
         mutableState.update { it.copy(screen = DesktopScreen.EXPLORE, selectedSource = null, descriptor = null,
             items = emptyList(), offset = 0, pageOffsets = listOf(0), query = "", content = null, browseOrder = null,
             browsePageSize = 0, browseExhausted = false,
-            dynamicFilters = null, appliedFilters = emptyList(), filterDialogOpen = false) }
+            dynamicFilters = null, appliedFilters = emptyList(), filterDialogOpen = false,
+            browseTagGroups = null, browseTags = emptySet()) }
     }
 
     fun browseUnfiltered(latest: Boolean = false) = navigate {
-        browseOnIo(0, "", supportedOrder(if (latest) "UPDATED" else "POPULARITY"), emptyList())
+        browseOnIo(0, "", supportedOrder(if (latest) "UPDATED" else "POPULARITY"), emptyList(), emptySet())
     }
 
     /** Lists in the given sort order; [order] must be one of the source's declared orders. */
@@ -1106,15 +1144,17 @@ class DesktopController(
         val definition = requireNotNull(state.value.dynamicFilters)
         val validated = MihonFilterRules.changes(definition.nodes, emptySet(), emptySet(), changes,
             strict = true, applyLegacy = false)
-        browseOnIo(0, query, null, validated)
+        // The dialog's own tag controls replace the chips' picks rather than combining with them.
+        browseOnIo(0, query, null, validated, emptySet())
         mutableState.update { it.copy(filterDialogOpen = false) }
     }
 
     private suspend fun browseOnIo(offset: Int, query: String, order: String? = state.value.browseOrder,
-        changes: List<SourceFilterChange> = state.value.appliedFilters, append: Boolean = false) {
+        changes: List<SourceFilterChange> = state.value.appliedFilters,
+        tags: Set<org.skepsun.kototoro.core.source.SourceTag> = state.value.browseTags, append: Boolean = false) {
         val source = requireNotNull(state.value.selectedSource) { desktopText("extensions.selectSourceFirst") }
-        val filter = if (query.isNotBlank() || changes.isNotEmpty()) {
-            SourceFilter(query = query.takeIf { it.isNotBlank() }, dynamicFilters = changes)
+        val filter = if (query.isNotBlank() || changes.isNotEmpty() || tags.isNotEmpty()) {
+            SourceFilter(query = query.takeIf { it.isNotBlank() }, tags = tags, dynamicFilters = changes)
         } else null
         // Page-indexed sources (Mihon) take the batch number; offset-paged ones (parsers) continue after what is shown.
         val previous = state.value
@@ -1138,7 +1178,7 @@ class DesktopController(
                 offset = if (append && endsHere) previous.offset else offset,
                 pageOffsets = if ((append && endsHere) || offset < offsets.size) offsets else offsets + requestOffset,
                 browsePageSize = items.size, browseExhausted = endsHere,
-                query = query, browseOrder = order, appliedFilters = changes)
+                query = query, browseOrder = order, appliedFilters = changes, browseTags = tags)
         }
     }
 
