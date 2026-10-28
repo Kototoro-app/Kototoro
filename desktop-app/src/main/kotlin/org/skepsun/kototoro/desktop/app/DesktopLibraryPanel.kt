@@ -1,5 +1,8 @@
 package org.skepsun.kototoro.desktop.app
 
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.VerticalScrollbar
@@ -128,6 +131,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                         else desktopText("library.filterWithCount", selection.filterCount),
                         { drawer = !drawer }, active = selection.filterCount > 0,
                         modifier = Modifier.testTag("library-filters"))
+                    LibraryDisplayOptions(state.libraryDisplay, enabled, controller::libraryDisplay)
                     var more by remember(history) { mutableStateOf(false) }
                     Box {
                         TopBarIconAction(painterResource("icons/ic_more_vert.svg"), desktopText("common.more"),
@@ -184,6 +188,7 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                         selectedIds = checkedIds.takeIf { it.isNotEmpty() },
                         onToggleSelection = ::toggleSelection,
                         listMode = state.libraryDisplay.listMode,
+                        gridSize = state.libraryDisplay.gridSize,
                         collectionState = collectionState,
                         metaOf = { content ->
                             content.authors.joinToString().ifBlank {
@@ -219,13 +224,6 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
                             FilterPanelGroup(desktopText("library.sort")) {
                                 FilterChoiceChips(DesktopLibraryOrder.entries, { it.title }, { selection.order == it },
                                     enabled, { "library-order:${it.name}" }) { update(selection.copy(order = it)) }
-                            }
-                            FilterPanelGroup(desktopText("library.layout")) {
-                                FilterChoiceChips(org.skepsun.kototoro.desktop.runtime.DesktopListMode.entries,
-                                    { it.label }, { state.libraryDisplay.listMode == it }, enabled,
-                                    { "library-mode:${it.name}" }) {
-                                    controller.libraryDisplay(state.libraryDisplay.copy(listMode = it))
-                                }
                             }
                             FilterPanelGroup(desktopText("library.progress")) {
                                 FilterChoiceChips(DesktopLibraryReading.entries, { it.title },
@@ -383,11 +381,50 @@ internal fun DesktopLibraryPanel(controller: DesktopController, state: DesktopAp
     }
 }
 
-private val org.skepsun.kototoro.desktop.runtime.DesktopListMode.label: String
-    get() = when (this) {
-        org.skepsun.kototoro.desktop.runtime.DesktopListMode.GRID -> desktopText("library.layout.grid")
-        org.skepsun.kototoro.desktop.runtime.DesktopListMode.LIST -> desktopText("library.layout.list")
+/**
+ * Android's "display options" for the shelves, from the top bar: the shared mode chips and, for the poster grids, the
+ * shared grid size slider (core-ui DisplayModeOptions / GridSizeOption).
+ */
+@Composable
+private fun LibraryDisplayOptions(display: DesktopLibraryDisplay, enabled: Boolean,
+    onChange: (DesktopLibraryDisplay) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        TopBarIconAction(painterResource("icons/ic_grid.svg"), AndroidStrings["display_options"], { open = true },
+            inactiveTint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.testTag("library-display"))
+        DropdownMenu(open, { open = false }) {
+            // Esc closes it, as a desktop popup should (the menu only dismisses on an outside click by itself).
+            Column(Modifier.width(360.dp).padding(horizontal = 16.dp, vertical = 8.dp)
+                .onPreviewKeyEvent { event ->
+                    (event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
+                        event.key == androidx.compose.ui.input.key.Key.Escape).also { if (it) open = false }
+                },
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(AndroidStrings["display_options"], style = MaterialTheme.typography.titleMedium)
+                Text(AndroidStrings["list_mode"], style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                val labels = remember { AndroidStrings.array("list_modes") }
+                org.skepsun.kototoro.list.ui.compose.DisplayModeOptions(
+                    currentListMode = display.listMode,
+                    onListModeSelected = { if (enabled) onChange(display.copy(listMode = it)) },
+                    label = { labels.getOrNull(it.ordinal) ?: it.name },
+                    icon = { mode -> painterResource(when (mode) {
+                        org.skepsun.kototoro.core.prefs.ListMode.LIST -> "icons/ic_list.svg"
+                        org.skepsun.kototoro.core.prefs.ListMode.DETAILED_LIST -> "icons/ic_list_detailed.svg"
+                        else -> "icons/ic_grid.svg"
+                    }) },
+                    checkIcon = painterResource("icons/ic_check.svg"),
+                    modes = DesktopLibraryDisplay.MODES,
+                )
+                if (display.listMode.isGrid) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .3f))
+                    org.skepsun.kototoro.list.ui.compose.GridSizeOption(AndroidStrings["grid_size"], display.gridSize,
+                        { if (enabled) onChange(display.copy(gridSize = it)) })
+                }
+            }
+        }
     }
+}
 
 /** One chip per value, exactly one of them selected (Android's single-choice quick-filter groups). */
 @Composable

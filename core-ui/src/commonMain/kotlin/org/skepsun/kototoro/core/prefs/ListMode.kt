@@ -1,8 +1,9 @@
 package org.skepsun.kototoro.core.prefs
 
-import androidx.annotation.Keep
-
-@Keep
+/**
+ * Android's list display modes, shared so the desktop shelves offer the same choice. Android stores the enum name
+ * in its preferences; app/proguard-rules.pro keeps the names in place of the former @Keep.
+ */
 enum class ListMode {
 
     LIST, DETAILED_LIST, GRID, COMPACT_GRID, MOVIE_GRID, COMPACT_MOVIE_GRID;

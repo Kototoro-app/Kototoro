@@ -470,8 +470,10 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
     /** Null is plain browsing; a set turns each card into a selection target, as Android's list does on long press. */
     selectedIds: Set<Long>? = null, onToggleSelection: (SourceContent) -> Unit = {},
     /** Android's list mode: the shelves can render one work per row instead of the poster grid. */
-    listMode: org.skepsun.kototoro.desktop.runtime.DesktopListMode =
-        org.skepsun.kototoro.desktop.runtime.DesktopListMode.GRID,
+    listMode: org.skepsun.kototoro.core.prefs.ListMode =
+        org.skepsun.kototoro.core.prefs.ListMode.COMPACT_GRID,
+    /** Android's grid size, percent of the default card width (the shelves' display options). */
+    gridSize: Int = 100,
     metaOf: (SourceContent) -> String = { it.authors.joinToString().ifBlank { it.source.name } },
     /** Shared near-end loading requests one more batch per observed item count. */
     onReachEnd: (() -> Unit)? = null,
@@ -481,16 +483,19 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
     groupOf: ((SourceContent) -> String?)? = null) {
     if (contents.isEmpty()) { EmptyPanel(desktopText("browse.noWorks"), desktopText("browse.noWorksDetail")); return }
     val rows = remember(contents, groupOf) { contentRows(contents, groupOf) }
-    if (listMode == org.skepsun.kototoro.desktop.runtime.DesktopListMode.LIST) {
+    if (!listMode.isGrid) {
         ContentRowList(contents, rows, enabled, covers, onOpen, progressOf, newChaptersOf, pinnedOf,
-            selectedIds, onToggleSelection, metaOf, collectionState?.list)
+            selectedIds, onToggleSelection, metaOf, collectionState?.list,
+            detailed = listMode == org.skepsun.kototoro.core.prefs.ListMode.DETAILED_LIST)
         return
     }
+    val titleOverlay = listMode.hasTitleOverlay
+    val gridScale = gridSize / 100f
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
     val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle, isDark = LocalDesktopDark.current)
     ContentCollectionGrid(count = rows.size, key = { rows[it].key(contents) },
         fullSpan = { rows[it] is ContentRow.Header }, contentType = { rows[it].javaClass },
-        columns = GridCells.Adaptive(112.dp), state = collectionState?.grid ?: rememberLazyGridState(),
+        columns = GridCells.Adaptive((112 * gridScale).dp), state = collectionState?.grid ?: rememberLazyGridState(),
         verticalArrangement = Arrangement.spacedBy(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxSize().testTag("content-grid"),
         canLoadMore = onReachEnd != null && !endReached,
@@ -511,12 +516,12 @@ internal fun ContentGrid(contents: List<SourceContent>, enabled: Boolean, covers
             val metrics = remember(maxWidth) { contentCardBadgeMetricsFor(maxWidth) }
             val percent = progressOf(content)?.takeIf { ReadingProgress.isValid(it) }
             // Android's compact grid lifts the bottom badges clear of the title on the scrim.
-            val bottomLift = (style.posterHeight.value * 0.28f).dp.coerceIn(32.dp, 44.dp)
+            val bottomLift = if (titleOverlay) (style.posterHeight.value * 0.28f).dp.coerceIn(32.dp, 44.dp) else 0.dp
             ContentPosterCard(ContentCardPresentation(content.id, content.title), style,
                 rimBorderBrush = rimBorderBrush,
                 onClick = { if (selecting) onToggleSelection(content) else onOpen(content) },
                 onLongClick = { onToggleSelection(content) },
-                enabled = enabled, isSelected = isSelected, compactOverlay = true,
+                enabled = enabled, isSelected = isSelected, compactOverlay = titleOverlay, gridScale = gridScale,
                 cellContentPadding = PaddingValues(0.dp),
                 modifier = Modifier.testTag("content:${content.id}"),
                 cover = { DesktopCover(content, covers, Modifier.matchParentSize()) },
@@ -598,7 +603,11 @@ private fun ContentRowList(contents: List<SourceContent>, rows: List<ContentRow>
     onOpen: (SourceContent) -> Unit, progressOf: (SourceContent) -> Float?, newChaptersOf: (SourceContent) -> Int,
     pinnedOf: (SourceContent) -> Boolean,
     selectedIds: Set<Long>?, onToggleSelection: (SourceContent) -> Unit, metaOf: (SourceContent) -> String,
-    listState: LazyListState? = null) {
+    listState: LazyListState? = null,
+    /** Android's DETAILED_LIST: a larger cover and the work's tags under the supporting line. */
+    detailed: Boolean = false) {
+    val coverWidth = if (detailed) 72.dp else 48.dp
+    val coverHeight = if (detailed) 108.dp else 72.dp
     val isIosStyle = LocalDesktopInterfaceStyle.current == DesktopInterfaceStyle.IOS
     val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle, isDark = LocalDesktopDark.current)
     ContentCollectionColumn(count = rows.size, key = { rows[it].key(contents) },
@@ -613,14 +622,15 @@ private fun ContentRowList(contents: List<SourceContent>, rows: List<ContentRow>
         val percent = progressOf(content)?.takeIf { ReadingProgress.isValid(it) }
         val newChapters = newChaptersOf(content)
         ContentCompactCard(
-            ContentCardPresentation(content.id, content.title, subtitle = metaOf(content)),
+            ContentCardPresentation(content.id, content.title, subtitle = metaOf(content),
+                supportingText = if (detailed) content.tags.joinToString(" · ") { it.title }.ifBlank { null } else null),
             onClick = { if (selecting) onToggleSelection(content) else onOpen(content) },
             onLongClick = { onToggleSelection(content) },
             enabled = enabled, isSelected = isSelected,
             modifier = Modifier.testTag("content:${content.id}"),
             cover = {
-                TabletPosterCover(content.title, CompactPosterCardStyle(48.dp, 72.dp, 10.dp),
-                    rimBorderBrush = rimBorderBrush, modifier = Modifier.width(48.dp).height(72.dp),
+                TabletPosterCover(content.title, CompactPosterCardStyle(coverWidth, coverHeight, 10.dp),
+                    rimBorderBrush = rimBorderBrush, modifier = Modifier.width(coverWidth).height(coverHeight),
                     cover = { DesktopCover(content, covers, Modifier.matchParentSize()) }, compactOverlay = false)
             },
             titleLeading = {

@@ -245,8 +245,8 @@ data class DesktopAppState(
     /** Android's services switches that have a Windows meaning: statistics recording and the reading-time estimate. */
     val services: org.skepsun.kototoro.desktop.runtime.DesktopServicesSettings =
         org.skepsun.kototoro.desktop.runtime.DesktopServicesSettings(),
-    val libraryDisplay: org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay =
-        org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay(),
+    val libraryDisplay: DesktopLibraryDisplay =
+        DesktopLibraryDisplay(),
     /** Android's "show updated" feed menu item: whether the tracked-with-new-chapters block is drawn. */
     val feedDisplay: org.skepsun.kototoro.desktop.runtime.DesktopFeedDisplay =
         org.skepsun.kototoro.desktop.runtime.DesktopFeedDisplay(),
@@ -453,7 +453,7 @@ class DesktopController(
                 suggestionSettings = org.skepsun.kototoro.desktop.runtime.DesktopSuggestionSettings.from(saved),
                 trackerSettings = org.skepsun.kototoro.desktop.runtime.DesktopTrackerSettings.from(saved),
             sourceSettings = org.skepsun.kototoro.desktop.runtime.DesktopSourceSettings.from(saved),
-            libraryDisplay = org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay.from(
+            libraryDisplay = DesktopLibraryDisplay.from(
                 libraryPreferences.snapshot(),
             ),
             feedDisplay = org.skepsun.kototoro.desktop.runtime.DesktopFeedDisplay.from(
@@ -2724,7 +2724,7 @@ class DesktopController(
         }
     }
     /** Android's display options: the shelves render either the poster grid or one work per row. */
-    internal fun libraryDisplay(display: org.skepsun.kototoro.desktop.runtime.DesktopLibraryDisplay) {
+    internal fun libraryDisplay(display: DesktopLibraryDisplay) {
         mutableState.update { it.copy(libraryDisplay = display) }
         if (!libraryPreferences.edit(SourcePreferenceEdit(changes = display.toPreferences()))) {
             mutableState.update { it.copy(error = desktopText("library.displaySaveFailed")) }

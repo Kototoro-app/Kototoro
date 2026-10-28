@@ -330,24 +330,46 @@ internal object DesktopTabletProbe {
                 check(controller.state.value.librarySelection.filterCount == 0)
                 onNodeWithTag("library-filter-close").performClick(); idle()
                 onNodeWithTag("content:${content.id}").assertExists()
-                // Android's display options: the shelf can render one work per row, and the choice is remembered.
-                onNodeWithTag("library-filters").performClick(); idle()
-                snapshot("library-display-options")
-                onNodeWithTag("library-mode:LIST").performScrollTo().performClick(); idle()
+                // Android's display options, from the top bar: the shared mode chips and grid size, remembered.
+                fun closeDisplayOptions() {
+                    onNodeWithTag("display-mode:LIST").performKeyInput { pressKey(androidx.compose.ui.input.key.Key.Escape) }
+                    idle()
+                    onNodeWithTag("display-mode:LIST").assertDoesNotExist()
+                }
+                onNodeWithTag("library-display").performClick(); idle()
+                onNodeWithTag("display-mode:MOVIE_GRID").assertDoesNotExist()
+                onNodeWithTag("display-mode:LIST").performClick(); idle()
                 check(controller.state.value.libraryDisplay.listMode ==
-                    org.skepsun.kototoro.desktop.runtime.DesktopListMode.LIST)
-                onNodeWithTag("library-filter-close").performClick(); idle()
+                    org.skepsun.kototoro.core.prefs.ListMode.LIST)
+                // Lists have no grid size.
+                onNodeWithTag("grid-size-slider").assertDoesNotExist()
+                closeDisplayOptions()
                 onNodeWithTag("content-list").assertExists()
                 onNodeWithTag("content-grid").assertDoesNotExist()
                 onNodeWithTag("content:${content.id}").assertExists()
-                check((session.storage.preferences.open("desktop_library").snapshot()["library_list_mode"]
+                check((session.storage.preferences.open("desktop_library").snapshot()["library_display_mode"]
                     as? org.skepsun.kototoro.core.source.SourcePreferenceValue.Text)?.value == "LIST")
                 snapshot("library-list")
-                onNodeWithTag("library-filters").performClick(); idle()
-                onNodeWithTag("library-mode:GRID").performScrollTo().performClick(); idle()
-                onNodeWithTag("library-filter-close").performClick(); idle()
+                onNodeWithTag("library-display").performClick(); idle()
+                onNodeWithTag("display-mode:DETAILED_LIST").performClick(); idle()
+                closeDisplayOptions()
+                onNodeWithTag("content-list").assertExists()
+                snapshot("library-detailed-list")
+                onNodeWithTag("library-display").performClick(); idle()
+                onNodeWithTag("display-mode:GRID").performClick(); idle()
+                onNodeWithTag("grid-size-slider").assertExists()
+                runBlocking { controller.libraryDisplay(controller.state.value.libraryDisplay.copy(gridSize = 150)) }
+                idle()
+                check(controller.state.value.libraryDisplay.gridSize == 150)
+                closeDisplayOptions()
                 onNodeWithTag("content-grid").assertExists()
                 onNodeWithTag("content-list").assertDoesNotExist()
+                snapshot("library-grid-large")
+                onNodeWithTag("library-display").performClick(); idle()
+                onNodeWithTag("display-mode:COMPACT_GRID").performClick(); idle()
+                closeDisplayOptions()
+                controller.libraryDisplay(controller.state.value.libraryDisplay.copy(gridSize = 100)); idle()
+                onNodeWithTag("content-grid").assertExists()
                 // Android edits categories on their own screen; the desktop does it in a dialog over the grid.
                 // Category management sits in the capsule's "more" menu, as Android's page actions do.
                 onNodeWithTag("library-more").performClick(); idle()
@@ -951,7 +973,7 @@ internal object DesktopTabletProbe {
                 onNodeWithTag("nav:收藏").performClick(); idle()
                 controller.librarySelection(DesktopLibrarySelection())
                 controller.libraryDisplay(controller.state.value.libraryDisplay.copy(
-                    listMode = org.skepsun.kototoro.desktop.runtime.DesktopListMode.LIST))
+                    listMode = org.skepsun.kototoro.core.prefs.ListMode.LIST))
                 idle()
                 onNodeWithTag("content-list").performScrollToIndex(30)
                 fun shelfOffset() = onNodeWithTag("content-list").fetchSemanticsNode().config[

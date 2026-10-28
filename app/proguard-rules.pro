@@ -43,6 +43,8 @@
 -keep class org.skepsun.kototoro.core.prefs.ScreenshotsPolicy { *; }
 # Shared progress preference enum replaces its former Android @Keep annotation.
 -keep class org.skepsun.kototoro.core.prefs.ProgressIndicatorMode { *; }
+# Shared list display mode enum (core-ui), stored by name in the preferences.
+-keep class org.skepsun.kototoro.core.prefs.ListMode { *; }
 -keep class org.skepsun.kototoro.backups.ui.periodical.PeriodicalBackupSettingsFragment { *; }
 -keep class org.jsoup.parser.Tag
 -keep class org.jsoup.internal.StringUtil
