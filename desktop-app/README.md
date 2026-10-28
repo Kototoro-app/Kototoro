@@ -6,7 +6,8 @@ Linux 沿用 Windows/macOS 的同一个 JVM `desktop-app`、Controller、数据�
 Android 与桌面共享的呈现继续放在 `core-ui/commonMain`，遵循
 [CMP 共享 UI 指导](../docs/architecture/shared-ui-guidelines.md)，不新增 Linux 页面副本。
 提供源码运行、离线冒烟、自带 JVM 的应用目录及 `.deb` 本地预览包。
-浏览器桥、随包播放器、原生超分和自动更新尚未适配。
+浏览器桥与自动更新尚未适配；播放走发行版的 libmpv、超分在阅读器里按需下载官方 ncnn-vulkan 程序，
+两者都不随包分发（见下文「Linux 打包与产物自检」）。
 
 需要可供 Gradle 发现的 JDK 21、X11 图形会话，以及现有锁定哈希的 29 个兼容 JAR。
 从已下载的官方 Windows 桌面 ZIP 中提取共享 JVM 运行时；所有同名副本都必须匹配锁定哈希，
@@ -500,6 +501,31 @@ CI 使用应用版本作为 MSI 的三段版本，可通过 `-PdesktopPackageVer
 同名参数 `-PdesktopVersionName`（默认取 `app/build.gradle` 的 versionName）与 `-PdesktopChannel`
 （`release`/`nightly`）写入更新面板显示并参与版本比较，CI 直接传发布资产的版本名与频道。
 `-PwindowsWixDirectory` 可指定 MSI 内容检查所用 WiX 3 的 `bin` 目录。
+
+### Linux
+
+`linux-build.yml` 手动（`workflow_dispatch`）或由其他工作流 `uses:` 调用，只构建和验证 Linux 桌面端，
+不发布任何产物；`.deb` 版本取 Android 的 versionName 的三段值。它分两个 job：
+
+- `Linux player and upscaling`：不准备兼容 JAR，只装 `libmpv2`、Xvfb 与 Mesa lavapipe，跑 `:desktop-player:test`
+  和 `:desktop-runtime:test`。`LC_NUMERIC` 设为 `en_US.UTF-8`，让 mpv 真的走到 `MpvLocale` 要修的那条路径；
+  `vulkaninfo` 里找不到 `llvmpipe` 直接失败，否则 ncnn 超分只会在测试里以看不懂的方式失败。
+- `Linux package`：一次调用生成应用目录、用该目录打 `.deb`，再由 `linuxDebContentsCheck` 解包执行运行时自检；
+  另外用真实阅读器 UI 走一遍超分的安装/放大/记忆。`.deb` 作为 Actions artifact 保留 14 天。
+
+兼容 JAR 与 Windows 同源：仓库变量 `WINDOWS_COMPATIBILITY_URL` 有值时用该 ZIP，否则用 JDK 25 从固定的
+Suwayomi/TachiyomiAzIOS 提交重建，最终 29 个 JAR 仍逐个核对 `windows-runtime-pins.properties`。
+`.github/scripts/prepare-linux-ci.sh` 只做这两件事（兼容 JAR 与两个 ncnn release ZIP），WebView2 SDK、
+WiX 等 Windows 专用步骤不搬过来；离线复现时用下面两条，CI 里对应的就是同一条脚本：
+
+```bash
+bash ./.github/scripts/prepare-linux-ci.sh --source-java-home /path/to/jdk-25
+bash ./.github/scripts/prepare-linux-ci.sh --upscalers-only
+bash ./.github/scripts/prepare-linux-ci.sh --compatibility-archive build/desktop-compatibility.zip --upscalers-dir /path/to/zips
+```
+
+Linux job 用的是 Xvfb + 软件渲染的 Ubuntu 24.04 x86_64，不代表真实 GPU 播放、Wayland 会话或跨发行版验收；
+macOS 桌面端目前没有任何 CI。
 
 ## 图书馆备份
 

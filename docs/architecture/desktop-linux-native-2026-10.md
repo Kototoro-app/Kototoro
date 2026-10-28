@@ -155,6 +155,22 @@ handoff（`MpvLocator.findExecutable`，Linux 额外查 `/usr/bin`、`/usr/local
 - Wayland 原生（不经 XWayland）的窗口号、Flatpak/Snap 沙箱里的 `ldconfig`、跨发行版库路径都还没验。
 - `browser=unsupported` 是 WebView2 桥的现状，不代表 Linux 上已有替代实现。
 
+## CI
+
+`.github/workflows/linux-build.yml` 在 `ubuntu-24.04` 上跑同一批命令，手动或由其他工作流调用，不发布产物：
+
+- `Linux player and upscaling`：`apt install libmpv2 xvfb mesa-vulkan-drivers` 后跑 `:desktop-player:test` 与
+  `:desktop-runtime:test`（`-PncnnDirectory` 指向脚本下好的两个官方 zip）。job 级 `LC_NUMERIC=en_US.UTF-8`
+  是故意的：只有非 C 的数字区域才会走到 `MpvLocale` 要修的那条 mpv 崩溃；`vulkaninfo` 里没有 `llvmpipe`
+  直接失败，否则 ncnn 只会以看不懂的方式失败。
+- `Linux package`：`-PwithLinuxDistribution` 生成镜像与 `.deb`（版本取 Android versionName 的三段值），
+  再跑 `linuxDistributionTest`、`linuxDebContentsCheck`，并用真实阅读器 UI 走一遍超分的安装/放大/记忆。
+
+兼容 JAR 由 `.github/scripts/prepare-linux-ci.sh` 准备，取法与 Windows 相同（`WINDOWS_COMPATIBILITY_URL`
+或从固定 Suwayomi/TachiyomiAzIOS 提交用 JDK 25 重建），两个 ncnn release zip 的 SHA-256 与
+`DesktopUpscaleTool` 的固定值一致，`DesktopSuperResolutionTest` 用同一份 check 兜住漂移。
+CI 没有真实 GPU、Wayland 会话或发行版矩阵，`.deb` 也不上传发布页，所以它替代不了下面的人工验收。
+
 ## 后续顺序
 
 1. 在 Fedora/Arch 与 Wayland 会话上各跑一次 `--check-runtime`，确认库路径、`player=ok` 与内嵌渲染；

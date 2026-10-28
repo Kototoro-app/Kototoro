@@ -1,0 +1,237 @@
+name: Linux Package
+
+on:
+  # A manual run builds and verifies the Linux desktop port alone: the distribution's own libmpv has to play, the pinned
+  # ncnn programs have to upscale, and the packaged image plus its .deb have to pass the runtime check. Nothing here is
+  # published — Android, Windows and iOS keep their own workflows — so this exists to keep the Linux-native paths from
+  # rotting between releases. `ref` empty builds the branch the run was started from.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit or branch to build'
+        required: false
+        default: ''
+        type: string
+      compatibility-url:
+        description: 'HTTPS ZIP with the 29 pinned compatibility JARs (empty rebuilds them from the pinned source)'
+        required: false
+        default: ''
+        type: string
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+      compatibility-url:
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  native:
+    # No compatibility JARs are needed here, so this job is cheap and covers exactly the two Linux-only capabilities:
+    # libmpv playback (including the locale and loadfile branches a newer mpv selects) and the ncnn upscaling programs.
+    name: Linux player and upscaling
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      # A desktop-like numeric locale is what breaks mpv's mpv_create on Linux; MpvLocale has to switch it back to C.
+      LC_NUMERIC: en_US.UTF-8
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: recursive
+
+      - name: Set up Gradle JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Prepare Android SDK platform
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37.0'
+
+      - name: Install libmpv, a software display and a software Vulkan device
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libmpv2 xvfb mesa-vulkan-drivers vulkan-tools libgl1-mesa-dri locales \
+            fontconfig libxrender1 libxtst6 libxi6 libxrandr2 libxinerama1 libxcursor1 unzip
+          sudo locale-gen en_US.UTF-8
+          # 24.04 packages mpv 0.37, whose loadfile rejects the 4-argument form; the player picks its call from the
+          # reported version, so the version running here is worth printing.
+          dpkg-query -W -f='${Package} ${Version}\n' libmpv2
+
+      - name: Check that a Vulkan device exists
+        run: |
+          set -euo pipefail
+          summary="$(xvfb-run -a -s "-screen 0 1600x1200x24 -nolisten tcp" vulkaninfo --summary 2>&1 || true)"
+          if ! grep -qi 'llvmpipe' <<<"$summary"; then
+            echo '::error::Vulkan exposes no lavapipe device, so the ncnn upscalers cannot run.'
+            echo "$summary" | head -20
+            exit 1
+          fi
+
+      - name: Fetch the pinned ncnn archives
+        run: bash ./.github/scripts/prepare-linux-ci.sh --upscalers-only
+
+      - name: Play and upscale on Linux
+        run: |
+          set -euo pipefail
+          # Anime4K renders through mpv's GPU filter, which needs a display even when it only writes files.
+          xvfb-run -a -s "-screen 0 1600x1200x24 -nolisten tcp" ./gradlew \
+            :desktop-player:test :desktop-runtime:test \
+            "-PncnnDirectory=$PWD/build/linux-ci-upscalers" \
+            --no-configuration-cache --console=plain --stacktrace --no-daemon
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: linux-native-diagnostics-${{ github.run_id }}
+          path: |
+            desktop-player/build/reports/tests/test
+            desktop-runtime/build/reports/tests/test
+          if-no-files-found: ignore
+
+  package:
+    # The packaged port: the app image, the .deb built from that image, and the reader's real install/upscale flow.
+    name: Linux package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      LC_NUMERIC: en_US.UTF-8
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: recursive
+
+      # The compatibility runtime is rebuilt from the pinned Suwayomi source, which needs JDK 25; the build itself runs
+      # on 17 and the compatibility adapter on 21, exactly as the Windows job arranges them.
+      - name: Set up compatibility JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25.0.1'
+
+      - name: Set up compatibility JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Prepare Android SDK platform
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37.0'
+
+      - name: Install libmpv, a software display and a software Vulkan device
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libmpv2 xvfb mesa-vulkan-drivers vulkan-tools libgl1-mesa-dri locales \
+            fakeroot fontconfig libxrender1 libxtst6 libxi6 libxrandr2 libxinerama1 libxcursor1 unzip
+          sudo locale-gen en_US.UTF-8
+          dpkg-query -W -f='${Package} ${Version}\n' libmpv2
+
+      - name: Prepare the pinned build inputs
+        env:
+          COMPATIBILITY_URL: ${{ inputs.compatibility-url || vars.WINDOWS_COMPATIBILITY_URL }}
+        run: |
+          set -euo pipefail
+          # The compatibility JARs are ordinary Java libraries, so the archive the Windows job downloads works here.
+          if [[ -n "$COMPATIBILITY_URL" ]]; then
+            bash ./.github/scripts/prepare-linux-ci.sh --compatibility-url "$COMPATIBILITY_URL"
+          else
+            : "${JAVA_HOME_25_X64:?the source build needs the JDK 25 installed above}"
+            bash ./.github/scripts/prepare-linux-ci.sh --source-java-home "$JAVA_HOME_25_X64"
+          fi
+
+      - name: Read the package version
+        id: version
+        run: |
+          set -euo pipefail
+          base="$(./gradlew -q printVersionName --console=plain | tail -1 | tr -d '[:space:]')"
+          if [[ ! "$base" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+            echo "::error::Invalid application version '$base'."
+            exit 1
+          fi
+          echo "package=${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}" >>"$GITHUB_OUTPUT"
+
+      - name: Build and verify the image and the .deb
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package }}
+        run: |
+          set -euo pipefail
+          : "${JAVA_HOME_21_X64:?the compatibility adapter needs its JDK 21}"
+          : "${JAVA_HOME_17_X64:?the build needs its JDK 17}"
+          xvfb-run -a -s "-screen 0 1600x1200x24 -nolisten tcp" ./gradlew \
+            -PwithDesktopApp -PwithLinuxDistribution \
+            "-PmihonCompatibilityDirectory=$PWD/build/linux-ci-compatibility" \
+            -PmihonCompatibilityJavaVersion=21 "-PdesktopPackageVersion=$PACKAGE_VERSION" \
+            "-Dorg.gradle.java.installations.paths=$JAVA_HOME_21_X64,$JAVA_HOME_17_X64" \
+            :desktop-app:createDistributable :desktop-app:linuxDistributionTest \
+            :desktop-app:linuxDebContentsCheck \
+            --no-configuration-cache --console=plain --stacktrace --no-daemon
+
+      - name: Upscale a reader page through the real UI
+        run: |
+          set -euo pipefail
+          # The reader's upscale row has to install the pinned programs, upscale, remember the choice and restore it.
+          xvfb-run -a -s "-screen 0 1600x1200x24 -nolisten tcp" ./gradlew \
+            -PwithDesktopApp \
+            "-PmihonCompatibilityDirectory=$PWD/build/linux-ci-compatibility" \
+            -PmihonCompatibilityJavaVersion=21 \
+            "-PncnnDirectory=$PWD/build/linux-ci-upscalers" \
+            "-Dorg.gradle.java.installations.paths=$JAVA_HOME_21_X64,$JAVA_HOME_17_X64" \
+            :desktop-app:test \
+            --tests '*DesktopRuntimeCheckUpscaleTest*' \
+            --tests '*DesktopAppTest.reader pages are upscaled*' \
+            --no-configuration-cache --console=plain --stacktrace --no-daemon
+
+      - name: Read the check reports
+        if: always()
+        run: |
+          set -euo pipefail
+          for file in desktop-app/build/reports/linux-distribution/*.properties; do
+            [[ -f "$file" ]] || continue
+            echo "--- ${file##*/}"
+            cat "$file"
+          done
+
+      - name: Upload the Debian package
+        uses: actions/upload-artifact@v6
+        with:
+          name: kototoro-linux-${{ github.run_id }}
+          path: |
+            desktop-app/build/compose/binaries/main/deb/*.deb
+          if-no-files-found: error
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: linux-diagnostics-${{ github.run_id }}
+          path: |
+            desktop-app/build/reports/linux-distribution
+            desktop-app/build/reports/tests/test
+            desktop-app/build/reports/tests/linuxDistributionTest
+          if-no-files-found: ignore
