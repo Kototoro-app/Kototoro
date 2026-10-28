@@ -213,9 +213,9 @@ class MihonMangaRepository(
             }
         }
 
-        pages.mapIndexed { index, page ->
+        pages.map { page ->
             if (mihonSource !is HttpSource) {
-                return@mapIndexed page.toKotoPage(source, sChapter, chapter.id)
+                return@map page.toKotoPage(source, sChapter, chapter.id)
             }
 
             val headers = try {
@@ -234,6 +234,7 @@ class MihonMangaRepository(
             }
 
             page.toKotoPage(source, sChapter, chapter.id, headers).let { kotoPage ->
+                val index = page.index
                 if (page.imageUrl.isNullOrBlank() && page.url.isNotBlank()) {
                     kotoPage.copy(
                         url = "mihon://resolve?page_url=${java.net.URLEncoder.encode(page.url, "UTF-8")}&index=$index"
@@ -260,7 +261,7 @@ class MihonMangaRepository(
             } else if (url.startsWith("mihon://resolve")) {
                 val pageUrl = uri.getQueryParameter("page_url")
                 if (!pageUrl.isNullOrBlank()) {
-                    val mihonPage = eu.kanade.tachiyomi.source.model.Page(0, pageUrl)
+                    val mihonPage = page.toMihonPage(imageUrl = null)
                     val httpSource = mihonSource as? HttpSource
                     if (httpSource != null) {
                         return@withContext rethrowMihonWrappedExceptions {
@@ -357,12 +358,15 @@ class MihonMangaRepository(
         }
     }
 
-    private fun ContentPage.toMihonPage(imageUrl: String): eu.kanade.tachiyomi.source.model.Page {
+    private fun ContentPage.toMihonPage(imageUrl: String?): Page {
+        var pIndex = id.toInt()
         var pUrl = url
         var pImageUrl = imageUrl
 
         if (url.startsWith("mihon://")) {
             val uri = android.net.Uri.parse(url)
+            // Wrapped pages retain the extension's index separately from the chapter-scoped cache ID.
+            pIndex = uri.getQueryParameter("index")?.toIntOrNull() ?: 0
             val pageUrl = uri.getQueryParameter("page_url")
             if (!pageUrl.isNullOrBlank()) {
                 pUrl = pageUrl
@@ -376,9 +380,9 @@ class MihonMangaRepository(
         }
 
         return Page(
-            index = id.toInt(), // Use id as index
+            index = pIndex,
             url = pUrl,
-            imageUrl = pImageUrl
+            imageUrl = pImageUrl,
         )
     }
 
