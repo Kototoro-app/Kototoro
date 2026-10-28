@@ -18,6 +18,13 @@ private data class DesktopCoverRecord(val artifact: SourceCoverArtifact, val sto
 internal class DesktopCovers(
     private val directory: Path,
     private val preferences: SourcePreferences,
+    /**
+     * Persisted cover records. 256 was fewer than one library plus a little browsing, so shelf covers were dropped
+     * and fetched again on every start; the files themselves stay under the image budget's LRU. Each record is about
+     * 450 bytes and the store rewrites its file per edit, which bounds this well below the 4 MiB namespace limit.
+     */
+    private val maxRecords: Int = 2048,
+    private val clock: () -> Long = System::currentTimeMillis,
     private val fetch: suspend (SourceContent, Boolean) -> SourceCoverArtifact,
 ) : Closeable {
     private class Active(val result: Deferred<Path>, var waiters: Int = 0)
@@ -78,7 +85,12 @@ internal class DesktopCovers(
         val artifact = record.artifact
         if (artifact.contentId != content.id || artifact.source.name != content.source.name) return null
         val stored = verifiedImagePath(directory, artifact.relativePath, artifact.sha256, artifact.byteSize) ?: return null
-        synchronized(lock) { check(!closed); memory[key] = stored }
+        synchronized(lock) {
+            check(!closed); memory[key] = stored
+            // Least recently used, not first stored: the shelves' covers are read on every start and must outlive a
+            // few pages of browsing. Refreshed at most hourly so reading a shelf does not rewrite the index per card.
+            if (clock() - record.storedAt > TOUCH_INTERVAL_MS) write(key, artifact, emptySet())
+        }
         return stored
     }
 
@@ -86,13 +98,17 @@ internal class DesktopCovers(
         check(!closed)
         memory[key] = path
         val snapshot = preferences.snapshot()
-        val removals = if (key !in snapshot && snapshot.size >= 256) {
+        val removals = if (key !in snapshot && snapshot.size >= maxRecords) {
             snapshot.entries.sortedBy { record(it.value)?.storedAt ?: Long.MIN_VALUE }
-                .take(snapshot.size - 255).map { it.key }.toSet()
+                .take(snapshot.size - maxRecords + 1).map { it.key }.toSet()
         } else emptySet()
+        write(key, artifact, removals)
+    }
+
+    private fun write(key: String, artifact: SourceCoverArtifact, removals: Set<String>) {
         preferences.edit(SourcePreferenceEdit(changes = removals.associateWith { null } + mapOf(
             key to SourcePreferenceValue.Text(SourceProtocolJson.encodeToString(
-                DesktopCoverRecord(artifact, System.currentTimeMillis()),
+                DesktopCoverRecord(artifact, clock()),
             )),
         )))
     }
@@ -102,6 +118,10 @@ internal class DesktopCovers(
             SourceProtocolJson.decodeFromString<DesktopCoverRecord>(it.value)
         }
     } catch (_: IllegalArgumentException) { null }
+
+    private companion object {
+        const val TOUCH_INTERVAL_MS = 60 * 60 * 1000L
+    }
 
     override fun close() {
         synchronized(lock) { if (closed) return; closed = true }

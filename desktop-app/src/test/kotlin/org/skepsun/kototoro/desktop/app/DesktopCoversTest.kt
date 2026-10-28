@@ -128,7 +128,7 @@ class DesktopCoversTest {
         FileSourcePreferenceStore(directory.resolve("prefs")).use { prefs ->
             val entries = prefs.open("covers")
             var fail = true
-            DesktopCovers(files.directory, entries) { item, _ ->
+            DesktopCovers(files.directory, entries, maxRecords = 256) { item, _ ->
                 if (fail) throw IOException("authored failure") else artifact(files, item)
             }.use { cache ->
                 assertThrows(IOException::class.java) { runBlocking { cache.load(content) } }
@@ -139,5 +139,28 @@ class DesktopCoversTest {
                 Files.list(files.directory).use { blobs -> assertEquals(1L, blobs.count()) }
             }
         }
+    }
+
+    @Test
+    fun `a cover read again outlives newer browsing when the index is full`() = runBlocking<Unit> {
+        val files = FileSourceImageStore(directory.resolve("images"))
+        val preferences = directory.resolve("prefs")
+        var now = 0L
+        fun item(index: Int) = content.copy(id = index.toLong(), coverUrl = "https://fixture.invalid/$index")
+        // One app start: a cache instance over the same persisted index; returns the covers it had to fetch.
+        suspend fun start(vararg items: Int): List<Long> {
+            val fetched = mutableListOf<Long>()
+            FileSourcePreferenceStore(preferences).use { prefs ->
+                DesktopCovers(files.directory, prefs.open("covers"), maxRecords = 3, clock = { now }) { item, _ ->
+                    fetched += item.id; artifact(files, item)
+                }.use { cache -> items.forEach { cache.load(item(it)) } }
+            }
+            return fetched
+        }
+        assertEquals(listOf(0L, 1L, 2L), start(0, 1, 2))
+        now += 2 * 60 * 60 * 1000L
+        // A later start shows the shelf cover again, then browsing fills the index: an untouched record goes.
+        assertEquals(listOf(3L), start(0, 3))
+        assertEquals(emptyList<Long>(), start(0, 3))
     }
 }
